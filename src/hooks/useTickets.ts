@@ -1,0 +1,89 @@
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { ticketsApi } from "@/api";
+import type {
+  CreateTicketRequest,
+  UpdateTicketRequest,
+  UpdateWorkflowStateRequest,
+  AddCommentRequest,
+  TicketsQuery,
+} from "@/api";
+
+const KEYS = {
+  all: ["tickets"] as const,
+  list: (params: TicketsQuery) => [...KEYS.all, "list", params] as const,
+  byClient: (clientId: string) => [...KEYS.all, "byClient", clientId] as const,
+  detail: (id: string) => [...KEYS.all, "detail", id] as const,
+  comments: (id: string) => [...KEYS.all, "comments", id] as const,
+};
+
+export function useTickets(params: TicketsQuery = {}) {
+  return useQuery({
+    queryKey: KEYS.list(params),
+    queryFn: () => ticketsApi.list(params),
+  });
+}
+
+export function useTicketsByClient(clientId: string, workflowStateId?: string) {
+  return useQuery({
+    queryKey: KEYS.byClient(clientId),
+    queryFn: () => ticketsApi.listByClient(clientId, workflowStateId),
+    enabled: !!clientId,
+  });
+}
+
+export function useTicket(id: string) {
+  return useQuery({
+    queryKey: KEYS.detail(id),
+    queryFn: () => ticketsApi.get(id),
+    enabled: !!id,
+  });
+}
+
+export function useTicketComments(id: string) {
+  return useQuery({
+    queryKey: KEYS.comments(id),
+    queryFn: () => ticketsApi.listComments(id),
+    enabled: !!id,
+  });
+}
+
+export function useCreateTicket() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: CreateTicketRequest) => ticketsApi.create(data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: KEYS.all }),
+  });
+}
+
+export function useUpdateTicket() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: UpdateTicketRequest }) =>
+      ticketsApi.update(id, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: KEYS.all }),
+  });
+}
+
+export function useUpdateTicketWorkflow() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      id,
+      data,
+    }: {
+      id: string;
+      data: UpdateWorkflowStateRequest;
+    }) => ticketsApi.updateWorkflowState(id, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: KEYS.all }),
+  });
+}
+
+export function useAddComment() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: AddCommentRequest }) =>
+      ticketsApi.addComment(id, data),
+    onSuccess: (_d, vars) =>
+      qc.invalidateQueries({ queryKey: KEYS.comments(vars.id) }),
+  });
+}
