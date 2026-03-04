@@ -6,12 +6,15 @@ import { useAgentsByClient } from '@/hooks/useAgents';
 import { Card, DataTable, Badge, Loading, ErrorDisplay, Select } from '@/components/ui';
 import type { Agent } from '@/api';
 import type { Column } from '@/components/ui';
+import { getAgentLastSeen, isAgentOnlineNow } from '@/utils/agentStatus';
+import { useNowTick } from '@/hooks/useNowTick';
 
 export default function AgentList() {
   const clients = useClients();
   const [selectedClient, setSelectedClient] = useState('');
   const agents = useAgentsByClient(selectedClient);
   const navigate = useNavigate();
+  const now = useNowTick(5_000);
 
   const columns: Column<Agent>[] = [
     {
@@ -44,26 +47,31 @@ export default function AgentList() {
     {
       key: 'status',
       header: 'Status',
-      render: a => (
-        <Badge color={a.isOnline ? 'success' : 'slate'}>
+      render: a => {
+        const online = isAgentOnlineNow(a, now);
+        return (
+        <Badge color={online ? 'success' : 'slate'}>
           <span className="flex items-center gap-1">
-            {a.isOnline ? <Wifi className="h-3 w-3" /> : <WifiOff className="h-3 w-3" />}
-            {a.isOnline ? 'Online' : 'Offline'}
+            {online ? <Wifi className="h-3 w-3" /> : <WifiOff className="h-3 w-3" />}
+            {online ? 'Online' : 'Offline'}
           </span>
         </Badge>
-      ),
+        );
+      },
     },
     {
       key: 'lastSeen',
       header: 'Último contato',
-      render: a =>
-        a.lastSeen ? (
+      render: a => {
+        const lastSeen = getAgentLastSeen(a);
+        return lastSeen ? (
           <span className="text-slate-400 text-xs">
-            {new Date(a.lastSeen).toLocaleString('pt-BR')}
+            {new Date(lastSeen).toLocaleString('pt-BR')}
           </span>
         ) : (
           <span className="text-slate-600">—</span>
-        ),
+        );
+      },
     },
   ];
 

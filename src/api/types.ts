@@ -40,9 +40,6 @@ export enum TicketPriority {
 export interface Client {
   id: string;
   name: string;
-  document: string | null;
-  email: string | null;
-  phone: string | null;
   notes: string | null;
   isActive: boolean;
   createdAt: string;
@@ -53,10 +50,6 @@ export interface Site {
   id: string;
   clientId: string;
   name: string;
-  address: string | null;
-  city: string | null;
-  state: string | null;
-  zipCode: string | null;
   notes: string | null;
   isActive: boolean;
   createdAt: string;
@@ -73,6 +66,9 @@ export interface Agent {
   agentVersion: string | null;
   isOnline: boolean;
   lastSeen: string | null;
+  status?: "Online" | "Offline";
+  lastSeenAt?: string | null;
+  lastIpAddress?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -142,6 +138,93 @@ export interface MemoryModuleInfo {
   partNumber: string | null;
   serialNumber: string | null;
   collectedAt: string;
+}
+
+export interface AgentSoftwareInventoryItem {
+  inventoryId: string;
+  agentId: string;
+  softwareId: string;
+  name: string;
+  version: string | null;
+  publisher: string | null;
+  installId: string | null;
+  serial: string | null;
+  source: string | null;
+  collectedAt: string;
+  firstSeenAt: string | null;
+  lastSeenAt: string | null;
+}
+
+export type AgentSoftwareOrder = "asc" | "desc";
+
+export interface AgentSoftwareInventoryPage {
+  items: AgentSoftwareInventoryItem[];
+  count: number;
+  cursor: string | null;
+  nextCursor: string | null;
+  hasMore: boolean;
+  limit: number;
+  search: string | null;
+  order: AgentSoftwareOrder;
+}
+
+export interface SoftwareInventoryCatalogItem {
+  softwareId: string;
+  name: string;
+  publisher: string | null;
+  source: string | null;
+  installedCount: number;
+  firstSeenAt: string | null;
+  lastCollectedAt: string | null;
+  lastSeenAt: string | null;
+  updatedAt: string;
+}
+
+export interface SoftwareInventoryCatalogPage {
+  items: SoftwareInventoryCatalogItem[];
+  count: number;
+  totalInstalled: number;
+  totalSoftware: number;
+  totalAgents: number;
+  cursor: string | null;
+  nextCursor: string | null;
+  hasMore: boolean;
+  limit: number;
+  search: string | null;
+  order: AgentSoftwareOrder;
+}
+
+export interface AgentSoftwareInventorySnapshot {
+  agentId: string;
+  totalInstalled: number;
+  firstSeenAt: string | null;
+  lastCollectedAt: string | null;
+  lastSeenAt: string | null;
+  updatedAt: string;
+}
+
+export interface SoftwareInventorySnapshot {
+  totalInstalled: number;
+  distinctSoftware: number;
+  distinctAgents: number;
+  firstSeenAt: string | null;
+  lastCollectedAt: string | null;
+  lastSeenAt: string | null;
+  updatedAt: string;
+}
+
+export interface SoftwareInventoryTopItem {
+  softwareId: string;
+  name: string;
+  publisher: string | null;
+  source: string | null;
+  installedCount: number;
+}
+
+export interface SoftwareInventoryTopResponse {
+  items: SoftwareInventoryTopItem[];
+  count: number;
+  limit: number;
 }
 
 export interface AgentToken {
@@ -232,9 +315,6 @@ export interface DeployToken {
 
 export interface CreateClientRequest {
   name: string;
-  document: string | null;
-  email: string | null;
-  phone: string | null;
   notes: string | null;
 }
 
@@ -244,10 +324,6 @@ export interface UpdateClientRequest extends CreateClientRequest {
 
 export interface CreateSiteRequest {
   name: string;
-  address: string | null;
-  city: string | null;
-  state: string | null;
-  zipCode: string | null;
   notes: string | null;
 }
 
@@ -333,6 +409,8 @@ export interface CreateWorkflowTransitionRequest {
 }
 
 export interface CreateDeployTokenRequest {
+  clientId: string;
+  siteId: string;
   description: string | null;
   expiresInHours: number | null;
   multiUse: boolean | null;

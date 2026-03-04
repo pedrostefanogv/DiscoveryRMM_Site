@@ -12,6 +12,8 @@ const AgentDetail = lazy(() => import('@/pages/agents/AgentDetail'));
 const TicketList = lazy(() => import('@/pages/tickets/TicketList'));
 const TicketDetail = lazy(() => import('@/pages/tickets/TicketDetail'));
 const LogViewer = lazy(() => import('@/pages/logs/LogViewer'));
+const DeployTokens = lazy(() => import('@/pages/deploy/DeployTokens'));
+const SoftwareInventory = lazy(() => import('@/pages/software/SoftwareInventory'));
 const BrandingSettings = lazy(() => import('@/pages/settings/BrandingSettings'));
 const WorkflowSettings = lazy(() => import('@/pages/settings/WorkflowSettings'));
 
@@ -55,6 +57,14 @@ export const router = createBrowserRouter([
       {
         path: 'logs',
         element: <LazyPage><LogViewer /></LazyPage>,
+      },
+      {
+        path: 'deploy',
+        element: <LazyPage><DeployTokens /></LazyPage>,
+      },
+      {
+        path: 'software-inventory',
+        element: <LazyPage><SoftwareInventory /></LazyPage>,
       },
       {
         path: 'settings',

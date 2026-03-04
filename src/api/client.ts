@@ -1,4 +1,4 @@
-const BASE_URL = import.meta.env.VITE_API_URL ?? "";
+export const API_BASE_URL = import.meta.env.VITE_API_URL ?? "";
 
 class ApiError extends Error {
   constructor(
@@ -11,7 +11,7 @@ class ApiError extends Error {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const url = `${BASE_URL}${path}`;
+  const url = `${API_BASE_URL}${path}`;
   const res = await fetch(url, {
     ...init,
     headers: {

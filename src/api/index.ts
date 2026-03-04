@@ -7,3 +7,4 @@ export { ticketsApi } from "./tickets";
 export { logsApi } from "./logs";
 export { workflowApi } from "./workflow";
 export { deployTokensApi } from "./deploy-tokens";
+export { softwareInventoryApi } from "./software-inventory";

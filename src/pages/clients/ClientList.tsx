@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Building2, Mail, Phone } from 'lucide-react';
+import { Plus, Building2 } from 'lucide-react';
 import { useClients, useCreateClient } from '@/hooks/useClients';
 import { Button, Card, DataTable, Badge, Loading, ErrorDisplay, Modal, Input, TextArea } from '@/components/ui';
 import type { Client, CreateClientRequest } from '@/api';
@@ -24,28 +24,15 @@ export default function ClientList() {
           </div>
           <div>
             <p className="font-medium text-white">{c.name}</p>
-            {c.document && <p className="text-xs text-slate-500">{c.document}</p>}
+            <p className="text-xs text-slate-500">{c.notes ?? 'Sem observações'}</p>
           </div>
         </div>
       ),
     },
     {
-      key: 'email',
-      header: 'Email',
-      render: c => c.email ? (
-        <span className="flex items-center gap-1.5 text-slate-400">
-          <Mail className="h-3.5 w-3.5" /> {c.email}
-        </span>
-      ) : <span className="text-slate-600">—</span>,
-    },
-    {
-      key: 'phone',
-      header: 'Telefone',
-      render: c => c.phone ? (
-        <span className="flex items-center gap-1.5 text-slate-400">
-          <Phone className="h-3.5 w-3.5" /> {c.phone}
-        </span>
-      ) : <span className="text-slate-600">—</span>,
+      key: 'notes',
+      header: 'Observações',
+      render: c => <span className="text-slate-400">{c.notes ?? '—'}</span>,
     },
     {
       key: 'status',
@@ -102,9 +89,6 @@ function CreateClientModal({ open, onClose }: { open: boolean; onClose: () => vo
   const create = useCreateClient();
   const [form, setForm] = useState<CreateClientRequest>({
     name: '',
-    document: null,
-    email: null,
-    phone: null,
     notes: null,
   });
 
@@ -114,7 +98,7 @@ function CreateClientModal({ open, onClose }: { open: boolean; onClose: () => vo
       onSuccess: () => {
         toast.success('Cliente criado com sucesso');
         onClose();
-        setForm({ name: '', document: null, email: null, phone: null, notes: null });
+        setForm({ name: '', notes: null });
       },
       onError: () => toast.error('Erro ao criar cliente'),
     });
@@ -124,11 +108,6 @@ function CreateClientModal({ open, onClose }: { open: boolean; onClose: () => vo
     <Modal open={open} onClose={onClose} title="Novo Cliente">
       <div className="space-y-4">
         <Input label="Nome" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} required />
-        <Input label="Documento (CNPJ/CPF)" value={form.document ?? ''} onChange={e => setForm(f => ({ ...f, document: e.target.value || null }))} />
-        <div className="grid grid-cols-2 gap-4">
-          <Input label="Email" type="email" value={form.email ?? ''} onChange={e => setForm(f => ({ ...f, email: e.target.value || null }))} />
-          <Input label="Telefone" value={form.phone ?? ''} onChange={e => setForm(f => ({ ...f, phone: e.target.value || null }))} />
-        </div>
         <TextArea label="Observações" value={form.notes ?? ''} onChange={e => setForm(f => ({ ...f, notes: e.target.value || null }))} />
         <div className="flex justify-end gap-3 pt-2">
           <Button variant="ghost" onClick={onClose}>Cancelar</Button>

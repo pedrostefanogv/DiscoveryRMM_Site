@@ -5,6 +5,8 @@ import {
   Monitor,
   Ticket,
   ScrollText,
+  KeyRound,
+  AppWindow,
   Settings,
   ChevronLeft,
   ChevronRight,
@@ -18,6 +20,8 @@ const links = [
   { to: '/agents', icon: Monitor, label: 'Agentes' },
   { to: '/tickets', icon: Ticket, label: 'Chamados' },
   { to: '/logs', icon: ScrollText, label: 'Logs' },
+  { to: '/deploy', icon: KeyRound, label: 'Deploy' },
+  { to: '/software-inventory', icon: AppWindow, label: 'Softwares' },
   { to: '/settings', icon: Settings, label: 'Configurações' },
 ];
 

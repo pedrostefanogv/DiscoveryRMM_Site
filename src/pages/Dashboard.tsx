@@ -1,15 +1,29 @@
-import { Users, Monitor, Ticket, AlertTriangle, Wifi, WifiOff } from 'lucide-react';
+import { Users, Monitor, Ticket, AlertTriangle, WifiOff, AppWindow } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { useQueries } from '@tanstack/react-query';
 import { useClients } from '@/hooks/useClients';
 import { useTickets } from '@/hooks/useTickets';
 import { useLogs } from '@/hooks/useLogs';
 import { StatCard, Card, CardHeader, Badge } from '@/components/ui';
 import { Loading, ErrorDisplay } from '@/components/ui';
-import { LogLevel } from '@/api';
+import { agentsApi, LogLevel } from '@/api';
+import { useSoftwareInventorySnapshot } from '@/hooks/useSoftwareInventory';
 
 export default function Dashboard() {
+  const navigate = useNavigate();
+
   const clients = useClients();
   const tickets = useTickets({ limit: 10 });
   const recentLogs = useLogs({ limit: 10 });
+  const softwareSnapshot = useSoftwareInventorySnapshot('global');
+
+  const agentQueries = useQueries({
+    queries: (clients.data ?? []).map((client) => ({
+      queryKey: ['agents', 'byClient', client.id, 'dashboard-total'],
+      queryFn: () => agentsApi.listByClient(client.id),
+      enabled: clients.isSuccess,
+    })),
+  });
 
   if (clients.isLoading) return <Loading />;
   if (clients.isError) return <ErrorDisplay onRetry={() => clients.refetch()} />;
@@ -17,6 +31,11 @@ export default function Dashboard() {
   const clientCount = clients.data?.length ?? 0;
   const ticketList = tickets.data ?? [];
   const logList = recentLogs.data ?? [];
+  const totalAgents = agentQueries.reduce(
+    (acc, query) => acc + (query.data?.length ?? 0),
+    0,
+  );
+  const totalInstalledSoftware = softwareSnapshot.data?.totalInstalled ?? 0;
 
   return (
     <div className="space-y-6">
@@ -36,13 +55,13 @@ export default function Dashboard() {
         <StatCard
           icon={Monitor}
           label="Agentes"
-          value="—"
+          value={totalAgents}
           tone="accent"
         />
         <StatCard
-          icon={Wifi}
-          label="Online"
-          value="—"
+          icon={AppWindow}
+          label="Softwares instalados"
+          value={softwareSnapshot.isLoading ? '—' : totalInstalledSoftware}
           tone="success"
         />
         <StatCard
@@ -52,6 +71,22 @@ export default function Dashboard() {
           tone="warning"
         />
       </div>
+
+      <button
+        type="button"
+        onClick={() => navigate('/software-inventory')}
+        className="w-full rounded-xl border border-white/5 bg-surface p-4 text-left transition-colors hover:border-primary/40 hover:bg-white/5"
+      >
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/15">
+            <AppWindow className="h-5 w-5 text-primary" />
+          </div>
+          <div>
+            <p className="text-sm font-medium text-white">Inventário de Softwares</p>
+            <p className="text-xs text-slate-400">Abrir visão global/cliente/site</p>
+          </div>
+        </div>
+      </button>
 
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Recent Tickets */}

@@ -5,6 +5,9 @@ import type {
   DiskInfo,
   NetworkAdapterInfo,
   MemoryModuleInfo,
+  AgentSoftwareInventoryPage,
+  AgentSoftwareOrder,
+  AgentSoftwareInventorySnapshot,
   AgentCommand,
   AgentToken,
   CreateAgentRequest,
@@ -44,6 +47,26 @@ export const agentsApi = {
 
   reportHardware: (id: string, data: HardwareReportRequest) =>
     api.post<void>(`${BASE}/${id}/hardware`, data),
+
+  // Software inventory
+  getSoftware: (
+    id: string,
+    params?: {
+      cursor?: string;
+      limit?: number;
+      search?: string;
+      order?: AgentSoftwareOrder;
+    },
+  ) =>
+    api.get<AgentSoftwareInventoryPage>(`${BASE}/${id}/software`, {
+      cursor: params?.cursor,
+      limit: params?.limit,
+      search: params?.search,
+      order: params?.order,
+    }),
+
+  getSoftwareSnapshot: (id: string) =>
+    api.get<AgentSoftwareInventorySnapshot>(`${BASE}/${id}/software/snapshot`),
 
   // Commands
   listCommands: (id: string, limit = 50) =>
