@@ -1,16 +1,33 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  ArrowLeft, Cpu, HardDrive, Network, MemoryStick,
-  Terminal, Key, Send, Wifi, WifiOff, AppWindow, Search,
+  ArrowLeft, Cpu, HardDrive, MemoryStick,
+  Terminal, Send, Wifi, WifiOff, AppWindow, Search, Clock,
 } from 'lucide-react';
-import { useAgent, useAgentHardware, useAgentSoftware, useAgentSoftwareSnapshot, useAgentCommands, useAgentTokens, useSendCommand } from '@/hooks/useAgents';
-import { Button, Card, CardHeader, Badge, Loading, ErrorDisplay, Input, Select, DataTable, type Column } from '@/components/ui';
+import { useAgent, useAgentHardware, useAgentSoftware, useAgentSoftwareSnapshot, useAgentCommands, useSendCommand } from '@/hooks/useAgents';
+import { useLogs } from '@/hooks/useLogs';
+import { Button, Card, CardHeader, Badge, Loading, ErrorDisplay, Input, Select, DataTable, StatCard, type Column } from '@/components/ui';
 import type { AgentSoftwareInventoryItem } from '@/api';
-import { CommandType } from '@/api';
+import { CommandType, LogLevel } from '@/api';
 import { isAgentOnlineNow } from '@/utils/agentStatus';
 import { useNowTick } from '@/hooks/useNowTick';
 import toast from 'react-hot-toast';
+
+const levelLabels: Record<number, { label: string; color: 'slate' | 'primary' | 'warning' | 'danger' | 'accent' }> = {
+  [LogLevel.Debug]: { label: 'Debug', color: 'slate' },
+  [LogLevel.Info]: { label: 'Info', color: 'primary' },
+  [LogLevel.Warning]: { label: 'Aviso', color: 'warning' },
+  [LogLevel.Error]: { label: 'Erro', color: 'danger' },
+  [LogLevel.Critical]: { label: 'Crítico', color: 'danger' },
+};
+
+const cmdTypeLabels: Record<number, string> = {
+  [CommandType.Restart]: 'Reiniciar',
+  [CommandType.Shutdown]: 'Desligar',
+  [CommandType.RunScript]: 'Executar Script',
+  [CommandType.Update]: 'Atualizar Agente',
+  [CommandType.CollectInventory]: 'Coletar Inventário',
+};
 
 function formatBytes(bytes: number | null): string {
   if (!bytes) return '—';
@@ -46,7 +63,7 @@ export default function AgentDetail() {
   });
   const softwareSnapshot = useAgentSoftwareSnapshot(id!);
   const commands = useAgentCommands(id!);
-  const tokens = useAgentTokens(id!);
+  const agentLogs = useLogs({ agentId: id, limit: 10 });
   const now = useNowTick(5_000);
 
   if (agent.isLoading) return <Loading />;
@@ -159,31 +176,43 @@ export default function AgentDetail() {
         </Badge>
       </div>
 
-      {/* Hardware Overview */}
+      {/* Stat Cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <HardwareCard
+        <StatCard
           icon={Cpu}
           label="Processador"
-          value={hw.data?.hardware?.processor ?? '—'}
-          sub={hw.data?.hardware ? `${hw.data.hardware.processorCores ?? '?'}C / ${hw.data.hardware.processorThreads ?? '?'}T` : ''}
+          value={hw.data?.hardware?.processor ? `${hw.data.hardware.processorCores ?? '?'}C / ${hw.data.hardware.processorThreads ?? '?'}T` : '—'}
+          tone="primary"
+          trend={hw.data?.hardware?.processor
+            ? <span className="max-w-[120px] truncate text-xs text-slate-400" title={hw.data.hardware.processor}>{hw.data.hardware.processor.split(' ').slice(0, 3).join(' ')}</span>
+            : undefined}
         />
-        <HardwareCard
+        <StatCard
           icon={MemoryStick}
           label="Memória RAM"
           value={formatBytes(hw.data?.hardware?.totalMemoryBytes ?? null)}
-          sub={`${hw.data?.memoryModules?.length ?? 0} módulo(s)`}
+          tone="accent"
+          trend={hw.data?.memoryModules?.length
+            ? <span className="text-xs text-slate-400">{hw.data.memoryModules.length} módulo(s)</span>
+            : undefined}
         />
-        <HardwareCard
+        <StatCard
           icon={HardDrive}
           label="Discos"
           value={`${hw.data?.disks?.length ?? 0} disco(s)`}
-          sub={hw.data?.disks?.map(d => `${d.driveLetter}: ${formatBytes(d.totalSizeBytes)}`).join(', ') ?? ''}
+          tone="warning"
+          trend={hw.data?.disks?.length
+            ? <span className="text-xs text-slate-400">{hw.data.disks.map(d => `${d.driveLetter} ${formatBytes(d.totalSizeBytes)}`).join(' · ')}</span>
+            : undefined}
         />
-        <HardwareCard
-          icon={Network}
-          label="Rede"
-          value={`${hw.data?.networkAdapters?.length ?? 0} adaptador(es)`}
-          sub={hw.data?.networkAdapters?.find(n => n.ipAddress)?.ipAddress ?? ''}
+        <StatCard
+          icon={AppWindow}
+          label="Softwares instalados"
+          value={softwareSnapshot.isLoading ? '—' : (softwareSnapshot.data?.totalInstalled ?? 0)}
+          tone="success"
+          trend={softwareSnapshot.data?.lastCollectedAt
+            ? <span className="text-xs text-slate-400">Coletado {new Date(softwareSnapshot.data.lastCollectedAt).toLocaleDateString('pt-BR')}</span>
+            : undefined}
         />
       </div>
 
@@ -193,37 +222,163 @@ export default function AgentDetail() {
           <CardHeader title="Comandos" subtitle="Enviar e histórico" />
           <CommandPanel agentId={id!} />
           <div className="mt-4 max-h-60 space-y-2 overflow-y-auto">
+            {(commands.data ?? []).length === 0 && (
+              <p className="text-xs text-slate-500">Nenhum comando enviado</p>
+            )}
             {(commands.data ?? []).map(cmd => (
               <div key={cmd.id} className="flex items-center justify-between rounded-lg bg-white/5 px-3 py-2 text-xs">
-                <span className="text-slate-300">
-                  <Terminal className="mr-1.5 inline h-3 w-3" />
-                  Tipo {cmd.commandType}
+                <span className="flex items-center gap-1.5 text-slate-300">
+                  <Terminal className="h-3 w-3 shrink-0" />
+                  {cmdTypeLabels[cmd.commandType] ?? `Tipo ${cmd.commandType}`}
                 </span>
-                <Badge color={cmd.status === 'Completed' ? 'success' : cmd.status === 'Failed' ? 'danger' : 'slate'}>
-                  {cmd.status}
-                </Badge>
+                <div className="flex items-center gap-2">
+                  <span className="text-slate-500">{formatDate(cmd.createdAt)}</span>
+                  <Badge color={cmd.status === 'Completed' ? 'success' : cmd.status === 'Failed' ? 'danger' : 'slate'}>
+                    {cmd.status}
+                  </Badge>
+                </div>
               </div>
             ))}
           </div>
         </Card>
 
-        {/* Tokens */}
+        {/* Discos */}
         <Card>
-          <CardHeader title="Tokens" subtitle={`${tokens.data?.length ?? 0} token(s)`} />
-          <div className="space-y-2">
-            {(tokens.data ?? []).map(tok => (
-              <div key={tok.id} className="flex items-center gap-3 rounded-lg bg-white/5 px-3 py-2">
-                <Key className="h-4 w-4 text-warning shrink-0" />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm text-white font-mono">
-                    {tok.token ? `${tok.token.slice(0, 20)}...` : 'Token indisponível'}
-                  </p>
-                  <p className="text-xs text-slate-500">{tok.description ?? 'Sem descrição'}</p>
+          <CardHeader title="Discos" subtitle={`${hw.data?.disks?.length ?? 0} disco(s)`} />
+          <div className="space-y-3">
+            {(hw.data?.disks ?? []).map(d => {
+              const usedBytes = d.totalSizeBytes - d.freeSpaceBytes;
+              const usedPercent = d.totalSizeBytes > 0 ? Math.round((usedBytes / d.totalSizeBytes) * 100) : 0;
+              const barColor = usedPercent > 90 ? 'bg-danger' : usedPercent > 70 ? 'bg-warning' : 'bg-success';
+              return (
+                <div key={d.id}>
+                  <div className="mb-1 flex items-center justify-between text-xs">
+                    <span className="font-mono font-medium text-white">{d.driveLetter}{d.label ? ` (${d.label})` : ''}</span>
+                    <span className="text-slate-400">{formatBytes(usedBytes)} / {formatBytes(d.totalSizeBytes)} — {usedPercent}%</span>
+                  </div>
+                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/10">
+                    <div className={`h-full rounded-full ${barColor}`} style={{ width: `${usedPercent}%` }} />
+                  </div>
+                  <div className="mt-0.5 flex justify-between text-xs text-slate-500">
+                    <span>{d.fileSystem ?? ''} {d.mediaType ?? ''}</span>
+                    <span>{formatBytes(d.freeSpaceBytes)} livre</span>
+                  </div>
+                </div>
+              );
+            })}
+            {(hw.data?.disks?.length ?? 0) === 0 && !hw.isLoading && (
+              <p className="text-sm text-slate-500">Nenhum disco detectado</p>
+            )}
+          </div>
+        </Card>
+      </div>
+
+      {/* Agent Info + Hardware Detail */}
+      <div className="grid gap-6 lg:grid-cols-3">
+        {/* Info do Agente */}
+        <Card>
+          <CardHeader title="Informações" />
+          <dl className="space-y-3 text-sm">
+            <div>
+              <dt className="text-slate-400">Hostname</dt>
+              <dd className="mt-0.5 font-mono text-white">{a.hostname}</dd>
+            </div>
+            <div>
+              <dt className="text-slate-400">Sistema Operacional</dt>
+              <dd className="mt-0.5 text-white">{a.operatingSystem ?? '—'}</dd>
+            </div>
+            <div>
+              <dt className="text-slate-400">Versão do SO</dt>
+              <dd className="mt-0.5 font-mono text-white">{a.osVersion ?? '—'}</dd>
+            </div>
+            {hw.data?.hardware?.osBuild && (
+              <div>
+                <dt className="text-slate-400">Build</dt>
+                <dd className="mt-0.5 font-mono text-white">{hw.data.hardware.osBuild}</dd>
+              </div>
+            )}
+            <div className="border-t border-white/5 pt-3">
+              <dt className="text-slate-400">Versão do Agente</dt>
+              <dd className="mt-0.5 font-mono text-white">{a.agentVersion ?? '—'}</dd>
+            </div>
+            <div>
+              <dt className="text-slate-400">Último IP</dt>
+              <dd className="mt-0.5 font-mono text-white">{a.lastIpAddress ?? hw.data?.networkAdapters?.find(n => n.ipAddress && !n.ipAddress.startsWith('169.254'))?.ipAddress ?? '—'}</dd>
+            </div>
+            <div>
+              <dt className="text-slate-400">Última vez online</dt>
+              <dd className="mt-0.5 text-white">{a.lastSeen ? formatDate(a.lastSeen) : (a.lastSeenAt ? formatDate(a.lastSeenAt) : '—')}</dd>
+            </div>
+            {hw.data?.hardware?.manufacturer && (
+              <div className="border-t border-white/5 pt-3">
+                <dt className="text-slate-400">Fabricante / Modelo</dt>
+                <dd className="mt-0.5 text-white">{hw.data.hardware.manufacturer} {hw.data.hardware.model ?? ''}</dd>
+              </div>
+            )}
+            {hw.data?.hardware?.serialNumber && (
+              <div>
+                <dt className="text-slate-400">Número de série</dt>
+                <dd className="mt-0.5 font-mono text-white">{hw.data.hardware.serialNumber}</dd>
+              </div>
+            )}
+          </dl>
+        </Card>
+
+        {/* Processador + Memória */}
+        <Card>
+          <CardHeader title="Hardware" />
+          <div className="space-y-4">
+            <div>
+              <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-slate-400">Processador</p>
+              <p className="text-sm text-white">{hw.data?.hardware?.processor ?? '—'}</p>
+              {(hw.data?.hardware?.processorCores || hw.data?.hardware?.processorArchitecture) && (
+                <p className="mt-0.5 text-xs text-slate-500">
+                  {[hw.data.hardware.processorCores && `${hw.data.hardware.processorCores}C / ${hw.data.hardware.processorThreads ?? '?'}T`, hw.data.hardware.processorArchitecture].filter(Boolean).join(' · ')}
+                </p>
+              )}
+            </div>
+            {hw.data?.memoryModules && hw.data.memoryModules.length > 0 && (
+              <div>
+                <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-slate-400">Módulos de Memória</p>
+                <div className="space-y-1.5">
+                  {hw.data.memoryModules.map(m => (
+                    <div key={m.id} className="flex items-center justify-between rounded bg-white/5 px-2.5 py-1.5 text-xs">
+                      <span className="text-slate-300">{m.slot ?? `Slot ${hw.data!.memoryModules.indexOf(m) + 1}`}</span>
+                      <span className="font-mono text-white">{formatBytes(m.capacityBytes)}</span>
+                      {m.speedMhz && <span className="text-slate-500">{m.speedMhz} MHz</span>}
+                    </div>
+                  ))}
                 </div>
               </div>
-            ))}
-            {(tokens.data?.length ?? 0) === 0 && (
-              <p className="text-sm text-slate-500">Nenhum token</p>
+            )}
+            {hw.data?.hardware?.biosManufacturer && (
+              <div>
+                <p className="mb-1 text-xs font-medium uppercase tracking-wide text-slate-400">BIOS</p>
+                <p className="text-xs text-slate-300">{hw.data.hardware.biosManufacturer} — {hw.data.hardware.biosVersion ?? '—'}</p>
+              </div>
+            )}
+          </div>
+        </Card>
+
+        {/* Logs Recentes */}
+        <Card>
+          <CardHeader title="Logs Recentes" />
+          <div className="max-h-72 space-y-2 overflow-y-auto">
+            {(agentLogs.data ?? []).map(log => {
+              const l = levelLabels[log.level] ?? { label: '?', color: 'slate' as const };
+              return (
+                <div key={log.id} className="flex items-start gap-2 rounded-lg bg-white/5 px-3 py-2">
+                  <Badge color={l.color} className="mt-0.5 shrink-0">{l.label}</Badge>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm text-slate-300">{log.message}</p>
+                    <p className="text-xs text-slate-500">{formatDate(log.createdAt)}</p>
+                  </div>
+                </div>
+              );
+            })}
+            {agentLogs.isLoading && <p className="text-sm text-slate-500">Carregando...</p>}
+            {(agentLogs.data?.length ?? 0) === 0 && !agentLogs.isLoading && (
+              <p className="text-sm text-slate-500">Nenhum log registrado</p>
             )}
           </div>
         </Card>
@@ -241,16 +396,12 @@ export default function AgentDetail() {
           <ErrorDisplay onRetry={() => software.refetch()} />
         ) : (
           <>
-            <div className="mb-3 flex flex-col gap-3 text-xs text-slate-400 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-center gap-2">
-                <AppWindow className="h-3.5 w-3.5" />
-                Endpoint: <code className="font-mono">GET /api/Agents/{id}/software?cursor=&lt;guid&gt;&amp;limit=&lt;n&gt;&amp;search=&lt;texto&gt;&amp;order=asc|desc</code>
+            {softwareSnapshot.data?.updatedAt && (
+              <div className="mb-3 flex items-center justify-end gap-2 text-xs text-slate-500">
+                <Clock className="h-3.5 w-3.5" />
+                <span>Última coleta: <span className="text-slate-300">{formatDate(softwareSnapshot.data.updatedAt)}</span></span>
               </div>
-              <div className="flex items-center gap-2">
-                <span>Atualizado:</span>
-                <span className="text-slate-300">{formatDate(softwareSnapshot.data?.updatedAt ?? null)}</span>
-              </div>
-            </div>
+            )}
 
             <div className="mb-4 grid gap-3 md:grid-cols-3">
               <div className="rounded-lg bg-white/5 px-3 py-2">
@@ -326,86 +477,43 @@ export default function AgentDetail() {
       </Card>
 
       {/* Detailed Hardware Tables */}
-      {hw.data?.disks && hw.data.disks.length > 0 && (
-        <Card>
-          <CardHeader title="Discos" />
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead>
-                <tr className="border-b border-white/5 text-xs uppercase text-slate-400">
-                  <th className="px-4 py-2">Drive</th>
-                  <th className="px-4 py-2">Label</th>
-                  <th className="px-4 py-2">FS</th>
-                  <th className="px-4 py-2">Total</th>
-                  <th className="px-4 py-2">Livre</th>
-                  <th className="px-4 py-2">Tipo</th>
-                </tr>
-              </thead>
-              <tbody>
-                {hw.data.disks.map(d => (
-                  <tr key={d.id} className="border-b border-white/5">
-                    <td className="px-4 py-2 text-white font-mono">{d.driveLetter}</td>
-                    <td className="px-4 py-2 text-slate-300">{d.label ?? '—'}</td>
-                    <td className="px-4 py-2 text-slate-400">{d.fileSystem ?? '—'}</td>
-                    <td className="px-4 py-2 text-slate-300">{formatBytes(d.totalSizeBytes)}</td>
-                    <td className="px-4 py-2 text-slate-300">{formatBytes(d.freeSpaceBytes)}</td>
-                    <td className="px-4 py-2 text-slate-400">{d.mediaType ?? '—'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Card>
-      )}
+
 
       {hw.data?.networkAdapters && hw.data.networkAdapters.length > 0 && (
         <Card>
-          <CardHeader title="Adaptadores de Rede" />
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead>
-                <tr className="border-b border-white/5 text-xs uppercase text-slate-400">
-                  <th className="px-4 py-2">Nome</th>
-                  <th className="px-4 py-2">IP</th>
-                  <th className="px-4 py-2">MAC</th>
-                  <th className="px-4 py-2">Gateway</th>
-                  <th className="px-4 py-2">DHCP</th>
-                </tr>
-              </thead>
-              <tbody>
-                {hw.data.networkAdapters.map(n => (
-                  <tr key={n.id} className="border-b border-white/5">
-                    <td className="px-4 py-2 text-white">{n.name}</td>
-                    <td className="px-4 py-2 font-mono text-slate-300">{n.ipAddress ?? '—'}</td>
-                    <td className="px-4 py-2 font-mono text-slate-400">{n.macAddress ?? '—'}</td>
-                    <td className="px-4 py-2 text-slate-400">{n.gateway ?? '—'}</td>
-                    <td className="px-4 py-2">
-                      <Badge color={n.isDhcpEnabled ? 'success' : 'slate'}>
-                        {n.isDhcpEnabled ? 'Sim' : 'Não'}
-                      </Badge>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <CardHeader title="Adaptadores de Rede" subtitle={`${hw.data.networkAdapters.length} adaptador(es)`} />
+          <div className="space-y-2">
+            {hw.data.networkAdapters.map(n => (
+              <div key={n.id} className="rounded-lg bg-white/5 px-3 py-2.5">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-white">{n.name}</p>
+                    {n.macAddress && <p className="font-mono text-xs text-slate-500">{n.macAddress}</p>}
+                  </div>
+                  <Badge color={n.isDhcpEnabled ? 'success' : 'slate'}>{n.isDhcpEnabled ? 'DHCP' : 'Estático'}</Badge>
+                </div>
+                {(n.ipAddress || n.gateway) && (
+                  <div className="mt-1.5 grid grid-cols-2 gap-2 text-xs">
+                    {n.ipAddress && (
+                      <div>
+                        <span className="text-slate-500">IP: </span>
+                        <span className="font-mono text-slate-300">{n.ipAddress}</span>
+                        {n.subnetMask && <span className="text-slate-500"> / {n.subnetMask}</span>}
+                      </div>
+                    )}
+                    {n.gateway && (
+                      <div>
+                        <span className="text-slate-500">Gateway: </span>
+                        <span className="font-mono text-slate-300">{n.gateway}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
         </Card>
       )}
-    </div>
-  );
-}
-
-function HardwareCard({ icon: Icon, label, value, sub }: { icon: typeof Cpu; label: string; value: string; sub: string }) {
-  return (
-    <div className="flex items-center gap-3 rounded-xl border border-white/5 bg-surface p-4">
-      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-        <Icon className="h-5 w-5 text-primary" />
-      </div>
-      <div className="min-w-0 flex-1">
-        <p className="text-xs text-slate-400">{label}</p>
-        <p className="truncate text-sm font-medium text-white">{value}</p>
-        {sub && <p className="truncate text-xs text-slate-500">{sub}</p>}
-      </div>
     </div>
   );
 }
