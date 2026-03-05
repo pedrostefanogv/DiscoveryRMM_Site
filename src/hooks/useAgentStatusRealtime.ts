@@ -11,6 +11,23 @@ type AgentStatusPayload =
 
 const SIGNALR_KEEP_ALIVE_MS = 15_000;
 const SIGNALR_SERVER_TIMEOUT_MS = 60_000;
+const INVALIDATE_MIN_INTERVAL_MS = 1_500;
+
+function createInvalidateThrottler(
+  queryClient: ReturnType<typeof useQueryClient>,
+) {
+  const lastInvalidationByKey = new Map<string, number>();
+
+  return (queryKey: string[], minIntervalMs = INVALIDATE_MIN_INTERVAL_MS) => {
+    const now = Date.now();
+    const key = queryKey.join("|");
+    const last = lastInvalidationByKey.get(key) ?? 0;
+    if (now - last < minIntervalMs) return;
+
+    lastInvalidationByKey.set(key, now);
+    void queryClient.invalidateQueries({ queryKey });
+  };
+}
 
 function applyStatusUpdate(agent: Agent, status: AgentRealtimeStatus): Agent {
   const nowIso = new Date().toISOString();
@@ -69,6 +86,7 @@ export function useAgentStatusRealtime(enabled = true) {
     if (!enabled) return;
 
     let disposed = false;
+    const invalidateThrottled = createInvalidateThrottler(queryClient);
 
     const hubUrl = `${API_BASE_URL}/hubs/agent`;
     const connection = new signalR.HubConnectionBuilder()
@@ -109,11 +127,16 @@ export function useAgentStatusRealtime(enabled = true) {
       );
 
       // Ensure any other agents queries that are currently mounted are refreshed.
-      void queryClient.invalidateQueries({ queryKey: ["agents"] });
+      invalidateThrottled(["agents"]);
+      invalidateThrottled(["realtime", "stats"]);
     };
 
     const onCommandCompleted = () => {
-      // CommandCompleted is consumed by specific screens that need command details.
+      // Keep dashboard and command-related widgets fresh without page reload.
+      invalidateThrottled(["agents"]);
+      invalidateThrottled(["logs"]);
+      invalidateThrottled(["tickets"]);
+      invalidateThrottled(["realtime", "stats"]);
     };
 
     connection.on("AgentStatusChanged", onAgentStatusChanged);

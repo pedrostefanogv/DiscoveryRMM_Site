@@ -2,11 +2,11 @@ import { useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
-import { useAgentStatusRealtime } from '@/hooks/useAgentStatusRealtime';
+import { useAgentStatusRealtime_Combined } from '@/hooks';
 
 export function MainLayout() {
   const [collapsed, setCollapsed] = useState(false);
-  useAgentStatusRealtime(true);
+  useAgentStatusRealtime_Combined(true);
 
   return (
     <div className="flex min-h-screen bg-slate-950">

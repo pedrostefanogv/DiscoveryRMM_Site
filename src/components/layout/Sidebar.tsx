@@ -23,6 +23,10 @@ const links = [
   { to: '/deploy', icon: KeyRound, label: 'Deploy' },
   { to: '/software-inventory', icon: AppWindow, label: 'Softwares' },
   { to: '/settings', icon: Settings, label: 'Configurações' },
+  { to: '/settings/server', icon: Settings, label: 'Config Server' },
+  { to: '/settings/client', icon: Settings, label: 'Config Client' },
+  { to: '/settings/site', icon: Settings, label: 'Config Site' },
+  { to: '/settings/audit', icon: Settings, label: 'Auditoria Config' },
 ];
 
 interface SidebarProps {

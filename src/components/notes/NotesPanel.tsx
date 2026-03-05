@@ -1,0 +1,283 @@
+import { useMemo, useState } from "react";
+import { Pin, Pencil, Trash2, Save, X } from "lucide-react";
+import { Card, CardHeader, Button, Badge, Input, TextArea, Loading, ErrorDisplay } from "@/components/ui";
+import {
+  useAgentNotes,
+  useClientNotes,
+  useSiteNotes,
+  useCreateAgentNote,
+  useCreateClientNote,
+  useCreateSiteNote,
+  useUpdateNote,
+  useDeleteNote,
+} from "@/hooks/useNotes";
+import type { Note } from "@/api";
+import toast from "react-hot-toast";
+
+type EntityType = "client" | "site" | "agent";
+
+interface NotesPanelProps {
+  entityType: EntityType;
+  entityId: string;
+  title?: string;
+  subtitle?: string;
+}
+
+function getNoteDate(note: Note): number {
+  const value = note.updatedAt || note.createdAt;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+export function NotesPanel({ entityType, entityId, title = "Notas", subtitle }: NotesPanelProps) {
+  const notesQuery = entityType === "client"
+    ? useClientNotes(entityId)
+    : entityType === "site"
+      ? useSiteNotes(entityId)
+      : useAgentNotes(entityId);
+
+  const createClientNote = useCreateClientNote();
+  const createSiteNote = useCreateSiteNote();
+  const createAgentNote = useCreateAgentNote();
+  const updateNote = useUpdateNote();
+  const deleteNote = useDeleteNote();
+
+  const [newContent, setNewContent] = useState("");
+  const [newAuthor, setNewAuthor] = useState("Admin");
+  const [newPinned, setNewPinned] = useState(false);
+
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingContent, setEditingContent] = useState("");
+  const [editingAuthor, setEditingAuthor] = useState("Admin");
+  const [editingPinned, setEditingPinned] = useState(false);
+
+  const sortedNotes = useMemo(() => {
+    return [...(notesQuery.data ?? [])].sort((a, b) => {
+      if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1;
+      return getNoteDate(b) - getNoteDate(a);
+    });
+  }, [notesQuery.data]);
+
+  const handleCreate = () => {
+    const content = newContent.trim();
+    if (!content) {
+      toast.error("Informe o conteúdo da nota");
+      return;
+    }
+
+    const payload = {
+      content,
+      author: newAuthor.trim() || null,
+      isPinned: newPinned,
+    };
+
+    const onSuccess = () => {
+      toast.success("Nota criada");
+      setNewContent("");
+      setNewPinned(false);
+    };
+
+    const onError = () => toast.error("Erro ao criar nota");
+
+    if (entityType === "client") {
+      createClientNote.mutate({ clientId: entityId, data: payload }, { onSuccess, onError });
+      return;
+    }
+
+    if (entityType === "site") {
+      createSiteNote.mutate({ siteId: entityId, data: payload }, { onSuccess, onError });
+      return;
+    }
+
+    createAgentNote.mutate({ agentId: entityId, data: payload }, { onSuccess, onError });
+  };
+
+  const startEdit = (note: Note) => {
+    setEditingId(note.id);
+    setEditingContent(note.content);
+    setEditingAuthor(note.author ?? "Admin");
+    setEditingPinned(note.isPinned);
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditingContent("");
+    setEditingAuthor("Admin");
+    setEditingPinned(false);
+  };
+
+  const submitEdit = () => {
+    if (!editingId) return;
+    const content = editingContent.trim();
+    if (!content) {
+      toast.error("Informe o conteúdo da nota");
+      return;
+    }
+
+    updateNote.mutate(
+      {
+        id: editingId,
+        data: {
+          content,
+          author: editingAuthor.trim() || null,
+          isPinned: editingPinned,
+        },
+      },
+      {
+        onSuccess: () => {
+          toast.success("Nota atualizada");
+          cancelEdit();
+        },
+        onError: () => toast.error("Erro ao atualizar nota"),
+      },
+    );
+  };
+
+  const removeNote = (noteId: string) => {
+    if (!confirm("Deseja excluir esta nota?")) return;
+    deleteNote.mutate(noteId, {
+      onSuccess: () => toast.success("Nota excluída"),
+      onError: () => toast.error("Erro ao excluir nota"),
+    });
+  };
+
+  const isCreating = createClientNote.isPending || createSiteNote.isPending || createAgentNote.isPending;
+  const isEditing = updateNote.isPending;
+  const isDeleting = deleteNote.isPending;
+
+  return (
+    <Card>
+      <CardHeader
+        title={title}
+        subtitle={subtitle ?? `${notesQuery.data?.length ?? 0} nota(s)`}
+      />
+
+      {notesQuery.isLoading ? (
+        <Loading message="Carregando notas..." />
+      ) : notesQuery.isError ? (
+        <ErrorDisplay onRetry={() => notesQuery.refetch()} />
+      ) : (
+        <>
+          <div className="space-y-3">
+            {sortedNotes.map((note) => {
+              const isCurrentEdit = editingId === note.id;
+              return (
+                <div key={note.id} className="rounded-lg border border-white/10 bg-white/5 p-3">
+                  {isCurrentEdit ? (
+                    <div className="space-y-3">
+                      <Input
+                        label="Autor"
+                        value={editingAuthor}
+                        onChange={(e) => setEditingAuthor(e.target.value)}
+                        placeholder="Autor da nota"
+                      />
+                      <TextArea
+                        label="Conteúdo"
+                        value={editingContent}
+                        onChange={(e) => setEditingContent(e.target.value)}
+                        rows={4}
+                      />
+                      <label className="flex items-center gap-2 text-sm text-slate-300">
+                        <input
+                          type="checkbox"
+                          checked={editingPinned}
+                          onChange={(e) => setEditingPinned(e.target.checked)}
+                          className="rounded border-white/10 bg-white/5"
+                        />
+                        Fixar nota
+                      </label>
+                      <div className="flex justify-end gap-2">
+                        <Button variant="ghost" size="sm" onClick={cancelEdit}>
+                          <X className="h-4 w-4" />
+                          Cancelar
+                        </Button>
+                        <Button size="sm" onClick={submitEdit} loading={isEditing}>
+                          <Save className="h-4 w-4" />
+                          Salvar
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="mb-2 flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="mb-1 flex items-center gap-2">
+                            <p className="truncate text-sm font-medium text-white">{note.author ?? "Sem autor"}</p>
+                            {note.isPinned && (
+                              <Badge color="warning" className="text-[10px]">
+                                <Pin className="h-3 w-3" />
+                                Fixada
+                              </Badge>
+                            )}
+                          </div>
+                          <p className="text-xs text-slate-500">
+                            {new Date(note.createdAt).toLocaleString("pt-BR")}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => startEdit(note)}
+                            aria-label="Editar nota"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => removeNote(note.id)}
+                            loading={isDeleting}
+                            aria-label="Excluir nota"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                      <p className="whitespace-pre-wrap text-sm text-slate-300">{note.content}</p>
+                    </>
+                  )}
+                </div>
+              );
+            })}
+
+            {sortedNotes.length === 0 && (
+              <p className="text-sm text-slate-500">Nenhuma nota cadastrada</p>
+            )}
+          </div>
+
+          <div className="mt-4 space-y-3 border-t border-white/10 pt-4">
+            <p className="text-sm font-medium text-white">Nova nota</p>
+            <Input
+              label="Autor"
+              value={newAuthor}
+              onChange={(e) => setNewAuthor(e.target.value)}
+              placeholder="Autor da nota"
+            />
+            <TextArea
+              label="Conteúdo"
+              value={newContent}
+              onChange={(e) => setNewContent(e.target.value)}
+              rows={4}
+              placeholder="Escreva a nota"
+            />
+            <label className="flex items-center gap-2 text-sm text-slate-300">
+              <input
+                type="checkbox"
+                checked={newPinned}
+                onChange={(e) => setNewPinned(e.target.checked)}
+                className="rounded border-white/10 bg-white/5"
+              />
+              Fixar nota
+            </label>
+            <div className="flex justify-end">
+              <Button size="sm" onClick={handleCreate} loading={isCreating}>
+                Salvar nota
+              </Button>
+            </div>
+          </div>
+        </>
+      )}
+    </Card>
+  );
+}

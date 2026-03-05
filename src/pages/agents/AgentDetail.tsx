@@ -7,6 +7,7 @@ import {
 import { useAgent, useAgentHardware, useAgentSoftware, useAgentSoftwareSnapshot, useAgentCommands, useSendCommand } from '@/hooks/useAgents';
 import { useLogs } from '@/hooks/useLogs';
 import { Button, Card, CardHeader, Badge, Loading, ErrorDisplay, Input, Select, DataTable, StatCard, type Column } from '@/components/ui';
+import { NotesPanel } from '@/components/notes/NotesPanel';
 import type { AgentSoftwareInventoryItem } from '@/api';
 import { CommandType, LogLevel } from '@/api';
 import { isAgentOnlineNow } from '@/utils/agentStatus';
@@ -249,7 +250,7 @@ export default function AgentDetail() {
             {(hw.data?.disks ?? []).map(d => {
               const usedBytes = d.totalSizeBytes - d.freeSpaceBytes;
               const usedPercent = d.totalSizeBytes > 0 ? Math.round((usedBytes / d.totalSizeBytes) * 100) : 0;
-              const barColor = usedPercent > 90 ? 'bg-danger' : usedPercent > 70 ? 'bg-warning' : 'bg-success';
+              const barColor = usedPercent > 90 ? 'text-danger' : usedPercent > 70 ? 'text-warning' : 'text-success';
               return (
                 <div key={d.id}>
                   <div className="mb-1 flex items-center justify-between text-xs">
@@ -257,7 +258,9 @@ export default function AgentDetail() {
                     <span className="text-slate-400">{formatBytes(usedBytes)} / {formatBytes(d.totalSizeBytes)} — {usedPercent}%</span>
                   </div>
                   <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/10">
-                    <div className={`h-full rounded-full ${barColor}`} style={{ width: `${usedPercent}%` }} />
+                    <svg className="h-full w-full" viewBox="0 0 100 2" preserveAspectRatio="none" role="presentation" aria-hidden="true">
+                      <rect x="0" y="0" width={Math.min(100, Math.max(0, usedPercent))} height="2" className={`${barColor} fill-current`} />
+                    </svg>
                   </div>
                   <div className="mt-0.5 flex justify-between text-xs text-slate-500">
                     <span>{d.fileSystem ?? ''} {d.mediaType ?? ''}</span>
@@ -477,6 +480,12 @@ export default function AgentDetail() {
       </Card>
 
       {/* Detailed Hardware Tables */}
+
+      <NotesPanel
+        entityType="agent"
+        entityId={a.id}
+        title="Notas do Agente"
+      />
 
 
       {hw.data?.networkAdapters && hw.data.networkAdapters.length > 0 && (

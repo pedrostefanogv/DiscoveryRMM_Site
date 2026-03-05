@@ -7,10 +7,11 @@ import { useAgentsByClient } from '@/hooks/useAgents';
 import { useTicketsByClient } from '@/hooks/useTickets';
 import { useLogs } from '@/hooks/useLogs';
 import { Button, Card, CardHeader, Badge, Loading, ErrorDisplay, Modal, Input, TextArea, StatCard } from '@/components/ui';
+import { NotesPanel } from '@/components/notes/NotesPanel';
 import { isAgentOnlineNow } from '@/utils/agentStatus';
 import { useNowTick } from '@/hooks/useNowTick';
 import { useSoftwareInventorySnapshot } from '@/hooks/useSoftwareInventory';
-import { LogLevel, TicketPriority } from '@/api';
+import { LogLevel, TicketPriority, type Site } from '@/api';
 import toast from 'react-hot-toast';
 
 const priorityLabels: Record<number, { label: string; color: 'slate' | 'success' | 'warning' | 'danger' }> = {
@@ -34,6 +35,7 @@ export default function ClientDetail() {
   const [siteModalOpen, setSiteModalOpen] = useState(false);
   const [siteName, setSiteName] = useState('');
   const [siteNotes, setSiteNotes] = useState('');
+  const [notesSite, setNotesSite] = useState<Site | null>(null);
 
   const client = useClient(id!);
   const sites = useSites(id!);
@@ -176,6 +178,14 @@ export default function ClientDetail() {
           </dl>
         </Card>
 
+        <div className="lg:col-span-2">
+          <NotesPanel
+            entityType="client"
+            entityId={c.id}
+            title="Notas do Cliente"
+          />
+        </div>
+
         {/* Sites */}
         <Card>
           <CardHeader
@@ -195,6 +205,13 @@ export default function ClientDetail() {
                   <p className="truncate text-sm font-medium text-white">{site.name}</p>
                   {site.notes && <p className="truncate text-xs text-slate-500">{site.notes}</p>}
                 </div>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setNotesSite(site)}
+                >
+                  Notas
+                </Button>
                 <Badge color={site.isActive ? 'success' : 'slate'}>{site.isActive ? 'Ativo' : 'Inativo'}</Badge>
               </div>
             ))}
@@ -318,6 +335,21 @@ export default function ClientDetail() {
             <Button onClick={handleCreateSite} loading={createSite.isPending}>Salvar</Button>
           </div>
         </div>
+      </Modal>
+
+      <Modal
+        open={!!notesSite}
+        onClose={() => setNotesSite(null)}
+        title={notesSite ? `Notas do Site - ${notesSite.name}` : 'Notas do Site'}
+        maxWidth="max-w-3xl"
+      >
+        {notesSite && (
+          <NotesPanel
+            entityType="site"
+            entityId={notesSite.id}
+            title="Notas do Site"
+          />
+        )}
       </Modal>
     </div>
   );

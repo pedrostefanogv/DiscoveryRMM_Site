@@ -311,6 +311,199 @@ export interface DeployToken {
   createdAt: string;
 }
 
+export interface Note {
+  id: string;
+  clientId: string | null;
+  siteId: string | null;
+  agentId: string | null;
+  content: string;
+  author: string | null;
+  isPinned: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type ConfigurationValue =
+  | string
+  | number
+  | boolean
+  | null
+  | string[]
+  | number[]
+  | Record<string, unknown>;
+
+export type ConfigurationMap = Record<string, ConfigurationValue>;
+
+export type ConfigurationOrigin = "Server" | "Client" | "Site";
+
+export type AppStorePolicyType = "Disabled" | "PreApproved" | "All" | 0 | 1 | 2;
+
+export interface ServerConfiguration {
+  id: string;
+  recoveryEnabled: boolean;
+  discoveryEnabled: boolean;
+  p2pFilesEnabled: boolean;
+  supportEnabled: boolean;
+  knowledgeBaseEnabled: boolean;
+  appStorePolicy: AppStorePolicyType;
+  inventoryIntervalHours: number;
+  autoUpdateSettingsJson: string;
+  tokenExpirationDays: number;
+  maxTokensPerAgent: number;
+  agentHeartbeatIntervalSeconds: number;
+  agentOfflineThresholdSeconds: number;
+  lockedFieldsJson: string;
+  brandingSettingsJson: string;
+  aiIntegrationSettingsJson: string;
+  createdAt: string;
+  updatedAt: string;
+  createdBy?: string | null;
+  updatedBy?: string | null;
+  version: number;
+  [key: string]: ConfigurationValue | null | undefined;
+}
+
+export interface ClientConfiguration {
+  id: string;
+  clientId: string;
+  recoveryEnabled?: boolean | null;
+  discoveryEnabled?: boolean | null;
+  p2pFilesEnabled?: boolean | null;
+  supportEnabled?: boolean | null;
+  appStorePolicy?: AppStorePolicyType | null;
+  aiIntegrationSettingsJson?: string | null;
+  inventoryIntervalHours?: number | null;
+  autoUpdateSettingsJson?: string | null;
+  tokenExpirationDays?: number | null;
+  maxTokensPerAgent?: number | null;
+  agentHeartbeatIntervalSeconds?: number | null;
+  agentOfflineThresholdSeconds?: number | null;
+  createdAt: string;
+  updatedAt: string;
+  createdBy?: string | null;
+  updatedBy?: string | null;
+  version: number;
+  [key: string]: ConfigurationValue | null | undefined;
+}
+
+export interface SiteConfiguration {
+  id: string;
+  siteId: string;
+  clientId: string;
+  recoveryEnabled?: boolean | null;
+  discoveryEnabled?: boolean | null;
+  p2pFilesEnabled?: boolean | null;
+  supportEnabled?: boolean | null;
+  appStorePolicy?: AppStorePolicyType | null;
+  aiIntegrationSettingsJson?: string | null;
+  inventoryIntervalHours?: number | null;
+  autoUpdateSettingsJson?: string | null;
+  timezone?: string | null;
+  location?: string | null;
+  contactPerson?: string | null;
+  contactEmail?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  createdBy?: string | null;
+  updatedBy?: string | null;
+  version: number;
+  [key: string]: ConfigurationValue | null | undefined;
+}
+
+export interface ResolvedConfiguration {
+  siteId?: string | null;
+  clientId?: string | null;
+  recoveryEnabled: boolean;
+  discoveryEnabled: boolean;
+  p2pFilesEnabled: boolean;
+  supportEnabled: boolean;
+  knowledgeBaseEnabled: boolean;
+  appStorePolicy: AppStorePolicyType;
+  inventoryIntervalHours: number;
+  tokenExpirationDays: number;
+  maxTokensPerAgent: number;
+  agentHeartbeatIntervalSeconds: number;
+  agentOfflineThresholdSeconds: number;
+  autoUpdate: Record<string, unknown>;
+  aiIntegration: Record<string, unknown>;
+  inheritance?: Record<string, number>;
+  blockedFields?: string[];
+  resolvedAt: string;
+  [key: string]: ConfigurationValue | null | undefined;
+}
+
+export interface ConfigurationFieldMetadata {
+  sourceType?: number;
+  isLockedByGlobal?: boolean;
+  isLockedByClient?: boolean;
+  isLockedBySite?: boolean;
+  canEditAtClient?: boolean;
+  canEditAtSite?: boolean;
+  canEditAtAgent?: boolean;
+  lockOwnerForClient?: string | null;
+  lockOwnerForSite?: string | null;
+  lockOwnerForAgent?: string | null;
+}
+
+export interface ConfigurationMetadataResponse {
+  fields: Record<string, ConfigurationFieldMetadata>;
+  blockedFields?: string[];
+}
+
+export interface EffectiveConfiguration {
+  values: ConfigurationMap;
+  origins: Record<string, ConfigurationOrigin>;
+}
+
+export interface ConfigurationTemplate {
+  id: string;
+  name: string;
+  description: string | null;
+  type: string;
+  configuration: ConfigurationMap;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateConfigurationTemplateRequest {
+  name: string;
+  description: string | null;
+  type: string;
+  configuration: ConfigurationMap;
+}
+
+export interface ApplyTemplateToClientsRequest {
+  clientIds: string[];
+}
+
+export interface ApplyTemplateToSitesRequest {
+  siteIds: string[];
+}
+
+export interface ConfigurationAuditEntry {
+  id: string;
+  entityType: "Server" | "Client" | "Site";
+  entityId: string;
+  fieldName: string;
+  oldValue?: string | null;
+  newValue?: string | null;
+  reason?: string | null;
+  changedBy?: string | null;
+  changedAt: string;
+  ipAddress?: string | null;
+  entityVersion: number;
+}
+
+export interface ConfigurationAuditQuery {
+  days?: number;
+  limit?: number;
+}
+
+export interface ConfigurationAuditReportQuery {
+  startDate: string;
+  endDate: string;
+}
+
 // ── Request DTOs ───────────────────────────────────────
 
 export interface CreateClientRequest {
@@ -435,6 +628,18 @@ export interface HardwareReportRequest {
   inventoryRaw: unknown;
   inventorySchemaVersion: string | null;
   inventoryCollectedAt: string | null;
+}
+
+export interface CreateNoteRequest {
+  content: string;
+  author: string | null;
+  isPinned?: boolean;
+}
+
+export interface UpdateNoteRequest {
+  content: string;
+  author: string | null;
+  isPinned?: boolean;
 }
 
 // ── Query params ───────────────────────────────────────

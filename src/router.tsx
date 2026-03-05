@@ -16,6 +16,11 @@ const DeployTokens = lazy(() => import('@/pages/deploy/DeployTokens'));
 const SoftwareInventory = lazy(() => import('@/pages/software/SoftwareInventory'));
 const BrandingSettings = lazy(() => import('@/pages/settings/BrandingSettings'));
 const WorkflowSettings = lazy(() => import('@/pages/settings/WorkflowSettings'));
+const ConfigurationSettings = lazy(() => import('@/pages/settings/ConfigurationSettings'));
+const ServerConfigurationPage = lazy(() => import('@/pages/settings/ServerConfigurationPage'));
+const ClientConfigurationPage = lazy(() => import('@/pages/settings/ClientConfigurationPage'));
+const SiteConfigurationPage = lazy(() => import('@/pages/settings/SiteConfigurationPage'));
+const ConfigurationAudit = lazy(() => import('@/pages/settings/ConfigurationAudit'));
 
 function LazyPage({ children }: { children: React.ReactNode }) {
   return <Suspense fallback={<Loading />}>{children}</Suspense>;
@@ -68,11 +73,31 @@ export const router = createBrowserRouter([
       },
       {
         path: 'settings',
+        element: <LazyPage><ConfigurationSettings /></LazyPage>,
+      },
+      {
+        path: 'settings/server',
+        element: <LazyPage><ServerConfigurationPage /></LazyPage>,
+      },
+      {
+        path: 'settings/client',
+        element: <LazyPage><ClientConfigurationPage /></LazyPage>,
+      },
+      {
+        path: 'settings/site',
+        element: <LazyPage><SiteConfigurationPage /></LazyPage>,
+      },
+      {
+        path: 'settings/branding',
         element: <LazyPage><BrandingSettings /></LazyPage>,
       },
       {
         path: 'settings/workflow',
         element: <LazyPage><WorkflowSettings /></LazyPage>,
+      },
+      {
+        path: 'settings/audit',
+        element: <LazyPage><ConfigurationAudit /></LazyPage>,
       },
       {
         path: '*',

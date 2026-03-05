@@ -1,13 +1,53 @@
-import { Users, Monitor, Ticket, AlertTriangle, WifiOff, AppWindow } from 'lucide-react';
+import {
+  Users,
+  Monitor,
+  Ticket,
+  AlertTriangle,
+  WifiOff,
+  AppWindow,
+  Server,
+  Database,
+  Activity,
+  Cpu,
+} from 'lucide-react';
+import type { ComponentType } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQueries } from '@tanstack/react-query';
+import { useQueries, useQuery } from '@tanstack/react-query';
 import { useClients } from '@/hooks/useClients';
 import { useTickets } from '@/hooks/useTickets';
 import { useLogs } from '@/hooks/useLogs';
 import { StatCard, Card, CardHeader, Badge } from '@/components/ui';
 import { Loading, ErrorDisplay } from '@/components/ui';
-import { agentsApi, LogLevel } from '@/api';
+import { agentsApi, LogLevel, getRealtimeStats } from '@/api';
 import { useSoftwareInventorySnapshot } from '@/hooks/useSoftwareInventory';
+
+function formatBytes(value?: number | null): string {
+  if (!value || value <= 0) return '—';
+  const gb = value / (1024 ** 3);
+  if (gb >= 1) return `${gb.toFixed(2)} GB`;
+  const mb = value / (1024 ** 2);
+  return `${mb.toFixed(0)} MB`;
+}
+
+function formatUptime(uptime?: string | number | null): string {
+  if (uptime === null || uptime === undefined) return '—';
+  if (typeof uptime === 'string') return uptime;
+
+  const totalSeconds = Math.max(0, Math.floor(uptime));
+  const days = Math.floor(totalSeconds / 86_400);
+  const hours = Math.floor((totalSeconds % 86_400) / 3_600);
+  const minutes = Math.floor((totalSeconds % 3_600) / 60);
+
+  if (days > 0) return `${days}d ${hours}h`;
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  return `${minutes}m`;
+}
+
+function formatMegabytes(value?: number | null): string {
+  if (!value || value <= 0) return '—';
+  if (value >= 1024) return `${(value / 1024).toFixed(2)} GB`;
+  return `${value.toFixed(2)} MB`;
+}
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -16,6 +56,12 @@ export default function Dashboard() {
   const tickets = useTickets({ limit: 10 });
   const recentLogs = useLogs({ limit: 10 });
   const softwareSnapshot = useSoftwareInventorySnapshot('global');
+  const realtimeStats = useQuery({
+    queryKey: ['realtime', 'stats'],
+    queryFn: getRealtimeStats,
+    refetchInterval: 10_000,
+    refetchIntervalInBackground: true,
+  });
 
   const agentQueries = useQueries({
     queries: (clients.data ?? []).map((client) => ({
@@ -26,16 +72,47 @@ export default function Dashboard() {
   });
 
   if (clients.isLoading) return <Loading />;
-  if (clients.isError) return <ErrorDisplay onRetry={() => clients.refetch()} />;
+  if (clients.isError) {
+    return (
+      <ErrorDisplay
+        message="Nao foi possivel comunicar com o servidor. Verifique se a API esta online e tente novamente."
+        onRetry={() => clients.refetch()}
+      />
+    );
+  }
 
-  const clientCount = clients.data?.length ?? 0;
   const ticketList = tickets.data ?? [];
   const logList = recentLogs.data ?? [];
-  const totalAgents = agentQueries.reduce(
-    (acc, query) => acc + (query.data?.length ?? 0),
-    0,
-  );
   const totalInstalledSoftware = softwareSnapshot.data?.totalInstalled ?? 0;
+  const business = realtimeStats.data?.business;
+  const realtime = realtimeStats.data?.realtime;
+  const database = realtimeStats.data?.database;
+  const processMetrics = realtimeStats.data?.processMetrics;
+  const threadPool = realtimeStats.data?.threadPool;
+  const application = realtimeStats.data?.application;
+  const uptimeValue = application?.uptime ?? application?.uptimeSeconds;
+  const workingSet = processMetrics?.workingSetBytes
+    ? formatBytes(processMetrics.workingSetBytes)
+    : formatMegabytes(processMetrics?.workingSetMb);
+  const gcHeap = processMetrics?.gcHeapBytes
+    ? formatBytes(processMetrics.gcHeapBytes)
+    : formatMegabytes(processMetrics?.gcManagedMemoryMb);
+  const workerAvailable = threadPool?.workerAvailable ?? threadPool?.availableWorkers;
+  const ioAvailable = threadPool?.ioAvailable ?? threadPool?.availableIo;
+  const workerMin = threadPool?.workerMin ?? threadPool?.minWorkers;
+  const ioMin = threadPool?.ioMin ?? threadPool?.minIo;
+
+  const clientCount = business?.available
+    ? (business.clients?.total ?? 0)
+    : (clients.data?.length ?? 0);
+
+  const totalAgents = business?.available
+    ? (business.agents?.total ?? 0)
+    : agentQueries.reduce((acc, query) => acc + (query.data?.length ?? 0), 0);
+
+  const openTicketsCount = business?.available
+    ? (business.tickets?.open ?? 0)
+    : ticketList.length;
 
   return (
     <div className="space-y-6">
@@ -46,47 +123,235 @@ export default function Dashboard() {
 
       {/* Stats */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard
-          icon={Users}
-          label="Clientes"
-          value={clientCount}
-          tone="primary"
-        />
-        <StatCard
-          icon={Monitor}
-          label="Agentes"
-          value={totalAgents}
-          tone="accent"
-        />
-        <StatCard
-          icon={AppWindow}
-          label="Softwares instalados"
-          value={softwareSnapshot.isLoading ? '—' : totalInstalledSoftware}
-          tone="success"
-        />
-        <StatCard
-          icon={Ticket}
-          label="Chamados Abertos"
-          value={ticketList.length}
-          tone="warning"
-        />
+        <button
+          type="button"
+          onClick={() => navigate('/clients')}
+          className="text-left"
+          aria-label="Abrir pagina de clientes"
+          title="Abrir clientes"
+        >
+          <StatCard
+            icon={Users}
+            label="Clientes"
+            value={clientCount}
+            tone="primary"
+          />
+        </button>
+        <button
+          type="button"
+          onClick={() => navigate('/agents')}
+          className="text-left"
+          aria-label="Abrir pagina de agentes"
+          title="Abrir agentes"
+        >
+          <StatCard
+            icon={Monitor}
+            label="Agentes"
+            value={totalAgents}
+            tone="accent"
+            trend={
+              business?.available && business.agents
+                ? (
+                  <span className="text-xs text-slate-400">
+                    {business.agents.online} online / {business.agents.offline} offline
+                  </span>
+                )
+                : undefined
+            }
+          />
+        </button>
+        <button
+          type="button"
+          onClick={() => navigate('/software-inventory')}
+          className="text-left"
+          aria-label="Abrir inventario de softwares"
+          title="Abrir inventario de softwares"
+        >
+          <StatCard
+            icon={AppWindow}
+            label="Softwares instalados"
+            value={softwareSnapshot.isLoading ? '—' : totalInstalledSoftware}
+            tone="success"
+          />
+        </button>
+        <button
+          type="button"
+          onClick={() => navigate('/tickets')}
+          className="text-left"
+          aria-label="Abrir pagina de chamados"
+          title="Abrir chamados"
+        >
+          <StatCard
+            icon={Ticket}
+            label="Chamados Abertos"
+            value={openTicketsCount}
+            tone="warning"
+            trend={
+              business?.available && business.tickets
+                ? (
+                  <span className="text-xs text-slate-400">
+                    {business.tickets.closed} fechados
+                  </span>
+                )
+                : undefined
+            }
+          />
+        </button>
       </div>
 
-      <button
-        type="button"
-        onClick={() => navigate('/software-inventory')}
-        className="w-full rounded-xl border border-white/5 bg-surface p-4 text-left transition-colors hover:border-primary/40 hover:bg-white/5"
-      >
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/15">
-            <AppWindow className="h-5 w-5 text-primary" />
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card>
+          <CardHeader
+            title="Saúde da Plataforma"
+            subtitle="Conectividade em tempo real e infraestrutura"
+          />
+          <div className="space-y-3 text-sm">
+            <div className="flex items-center justify-between rounded-lg bg-white/5 px-3 py-2">
+              <span className="flex items-center gap-2 text-slate-300">
+                <Activity className="h-4 w-4" /> NATS
+              </span>
+              <div className="flex items-center gap-2">
+                <Badge color={realtime?.natsConnected ? 'success' : 'danger'}>
+                  {realtime?.natsConnected ? 'Conectado' : 'Desconectado'}
+                </Badge>
+                {realtime?.natsConnectionState && (
+                  <span className="text-xs text-slate-500">{realtime.natsConnectionState}</span>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between rounded-lg bg-white/5 px-3 py-2">
+              <span className="flex items-center gap-2 text-slate-300">
+                <Database className="h-4 w-4" /> Redis
+              </span>
+              <div className="flex items-center gap-2">
+                <Badge color={realtime?.redisConnected ? 'success' : 'danger'}>
+                  {realtime?.redisConnected ? 'Conectado' : 'Desconectado'}
+                </Badge>
+                {typeof realtime?.redisPingMs === 'number' && (
+                  <span className="text-xs text-slate-500">{realtime.redisPingMs} ms</span>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between rounded-lg bg-white/5 px-3 py-2">
+              <span className="flex items-center gap-2 text-slate-300">
+                <Server className="h-4 w-4" /> Banco de dados
+              </span>
+              <div className="flex items-center gap-2">
+                <Badge color={database?.connected ? 'success' : 'danger'}>
+                  {database?.connected ? 'Conectado' : 'Desconectado'}
+                </Badge>
+                {database?.provider && (
+                  <span className="text-xs text-slate-500">{database.provider}</span>
+                )}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 pt-1 text-xs text-slate-400">
+              <div className="rounded-lg bg-white/5 px-3 py-2">
+                <p className="text-slate-500">SignalR agents</p>
+                <p className="mt-0.5 text-sm font-semibold text-white">
+                  {realtime?.signalrConnectedAgents ?? 0}
+                </p>
+              </div>
+              <div className="rounded-lg bg-white/5 px-3 py-2">
+                <p className="text-slate-500">NATS TCP</p>
+                <p className="mt-0.5 text-sm font-semibold text-white">
+                  {realtime?.natsTcpReachable ? 'Reachable' : 'Unreachable'}
+                </p>
+              </div>
+            </div>
           </div>
-          <div>
-            <p className="text-sm font-medium text-white">Inventário de Softwares</p>
-            <p className="text-xs text-slate-400">Abrir visão global/cliente/site</p>
+        </Card>
+
+        <Card>
+          <CardHeader
+            title="Métricas do Processo"
+            subtitle={application?.environment
+              ? `${application.environment} • ${application.machineName ?? 'host'}`
+              : 'Uso de recursos do backend'}
+          />
+          <div className="grid grid-cols-2 gap-3 text-sm">
+            <MetricTile
+              label="Working Set"
+              value={workingSet}
+              icon={Cpu}
+            />
+            <MetricTile
+              label="GC Heap"
+              value={gcHeap}
+              icon={Database}
+            />
+            <MetricTile
+              label="Threads"
+              value={processMetrics?.threadCount ?? '—'}
+              icon={Activity}
+            />
+            <MetricTile
+              label="Uptime"
+              value={formatUptime(uptimeValue)}
+              icon={Server}
+            />
           </div>
-        </div>
-      </button>
+
+          <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-400">
+            <div className="rounded-lg bg-white/5 px-3 py-2">
+              <p className="text-slate-500">ThreadPool worker</p>
+              <p className="mt-0.5 text-sm font-semibold text-white">
+                {workerAvailable ?? '—'} disp / {workerMin ?? '—'} min
+              </p>
+            </div>
+            <div className="rounded-lg bg-white/5 px-3 py-2">
+              <p className="text-slate-500">ThreadPool IO</p>
+              <p className="mt-0.5 text-sm font-semibold text-white">
+                {ioAvailable ?? '—'} disp / {ioMin ?? '—'} min
+              </p>
+            </div>
+          </div>
+        </Card>
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card>
+          <CardHeader
+            title="Negócio em Tempo Real"
+            subtitle="Contadores agregados do backend"
+          />
+          {!business?.available ? (
+            <p className="text-sm text-slate-500">
+              Métricas de negócio indisponíveis no endpoint no momento.
+            </p>
+          ) : (
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <MetricTile label="Clientes" value={business.clients?.total ?? 0} icon={Users} />
+              <MetricTile label="Sites" value={business.sites?.total ?? 0} icon={Server} />
+              <MetricTile label="Agentes online" value={business.agents?.online ?? 0} icon={Monitor} />
+              <MetricTile label="Agentes offline" value={business.agents?.offline ?? 0} icon={WifiOff} />
+              <MetricTile label="Comandos running" value={business.commands?.running ?? 0} icon={Activity} />
+              <MetricTile label="Comandos falhos" value={business.commands?.failed ?? 0} icon={AlertTriangle} />
+              <MetricTile label="Chamados abertos" value={business.tickets?.open ?? 0} icon={Ticket} />
+              <MetricTile label="Chamados fechados" value={business.tickets?.closed ?? 0} icon={AppWindow} />
+            </div>
+          )}
+        </Card>
+
+        <Card>
+          <CardHeader title="Comandos (Visão Geral)" subtitle="Fila e execução" />
+          {!business?.available ? (
+            <p className="text-sm text-slate-500">Sem dados de comandos no momento.</p>
+          ) : (
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <MetricTile label="Total" value={business.commands?.total ?? 0} icon={Activity} />
+              <MetricTile label="Pending" value={business.commands?.pending ?? 0} icon={Server} />
+              <MetricTile label="Sent" value={business.commands?.sent ?? 0} icon={Monitor} />
+              <MetricTile label="Running" value={business.commands?.running ?? 0} icon={Cpu} />
+              <MetricTile label="Completed" value={business.commands?.completed ?? 0} icon={Database} />
+              <MetricTile label="Failed" value={business.commands?.failed ?? 0} icon={AlertTriangle} />
+            </div>
+          )}
+        </Card>
+      </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Recent Tickets */}
@@ -165,4 +430,24 @@ function LogLevelIcon({ level }: { level: LogLevel }) {
     default:
       return <WifiOff className="h-4 w-4 shrink-0 text-slate-500" />;
   }
+}
+
+function MetricTile({
+  label,
+  value,
+  icon: Icon,
+}: {
+  label: string;
+  value: string | number;
+  icon: ComponentType<{ className?: string }>;
+}) {
+  return (
+    <div className="rounded-lg bg-white/5 px-3 py-2">
+      <div className="flex items-center gap-1.5 text-slate-500">
+        <Icon className="h-3.5 w-3.5" />
+        <span>{label}</span>
+      </div>
+      <p className="mt-1 text-base font-semibold text-white">{value}</p>
+    </div>
+  );
 }
