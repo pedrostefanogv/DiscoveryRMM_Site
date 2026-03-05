@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { getNatsService, type DashboardEvent } from "@/api/nats";
+import { realtimeConfig } from "@/config/realtime";
 import type { Agent } from "@/api";
 
 type AgentRealtimeStatus = "Online" | "Offline";
@@ -22,8 +23,8 @@ function getStringField(
   return null;
 }
 
-const NATS_URL = import.meta.env.VITE_NATS_URL ?? "nats://192.168.1.137:4222";
-const NATS_ENABLED = import.meta.env.VITE_NATS_ENABLED !== "false";
+const NATS_URL = realtimeConfig.natsUrl;
+const NATS_ENABLED = realtimeConfig.useNats && realtimeConfig.natsEnabled;
 const DASHBOARD_EVENTS_SUBJECT = "dashboard.events";
 const INVALIDATE_MIN_INTERVAL_MS = 1_500;
 

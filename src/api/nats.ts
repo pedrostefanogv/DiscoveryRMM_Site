@@ -1,4 +1,16 @@
-import { connect, type NatsConnection, type Subscription } from "nats";
+type NatsConnection = {
+  isClosed: () => boolean;
+  subscribe: (subject: string) => AsyncIterable<{ data: Uint8Array }> & {
+    unsubscribe: () => void;
+  };
+  publish: (subject: string, data: string) => void;
+  close: () => Promise<void>;
+};
+
+type Subscription = {
+  unsubscribe: () => void;
+  [Symbol.asyncIterator]: () => AsyncIterator<{ data: Uint8Array }>;
+};
 
 export interface DashboardEvent {
   eventType: string;
@@ -19,8 +31,39 @@ class NatsService {
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 5;
   private reconnectDelay = 1000;
+  private warnedInvalidUrl = false;
+  private warnedUnavailableClient = false;
 
   constructor(private config: NatsConfig) {}
+
+  private async loadConnect() {
+    try {
+      const packageName = "nats.ws";
+      const mod = await import(/* @vite-ignore */ packageName);
+      return mod.connect as (options: {
+        servers: string[];
+      }) => Promise<NatsConnection>;
+    } catch {
+      if (!this.warnedUnavailableClient) {
+        this.warnedUnavailableClient = true;
+        console.warn(
+          "NATS WebSocket client (nats.ws) nao disponivel. Realtime NATS desativado.",
+        );
+      }
+      return null;
+    }
+  }
+
+  private isBrowserWsUrl(): boolean {
+    if (typeof window === "undefined") {
+      return true;
+    }
+
+    return (
+      this.config.url.startsWith("ws://") ||
+      this.config.url.startsWith("wss://")
+    );
+  }
 
   async connect(): Promise<void> {
     if (this.connection?.isClosed()) {
@@ -29,15 +72,20 @@ class NatsService {
 
     if (this.connection) return;
     if (!this.config.enabled) return;
+    if (!this.config.url) return;
 
-    if (
-      typeof window !== "undefined" &&
-      this.config.url.startsWith("nats://")
-    ) {
-      console.warn(
-        "NATS URL is using nats:// in browser context. Browser clients usually require ws:// or wss:// with NATS websocket enabled.",
-      );
+    if (!this.isBrowserWsUrl()) {
+      if (!this.warnedInvalidUrl) {
+        this.warnedInvalidUrl = true;
+        console.warn(
+          "NATS desativado no browser: configure VITE_NATS_URL com ws:// ou wss://.",
+        );
+      }
+      return;
     }
+
+    const connect = await this.loadConnect();
+    if (!connect) return;
 
     try {
       this.connection = await connect({
@@ -86,7 +134,7 @@ class NatsService {
 
     try {
       const subscription = this.connection.subscribe(subject);
-      this.subscriptions.set(subject, subscription);
+      this.subscriptions.set(subject, subscription as unknown as Subscription);
 
       // Handle incoming messages
       (async () => {

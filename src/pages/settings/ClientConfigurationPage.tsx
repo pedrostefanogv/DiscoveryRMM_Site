@@ -9,16 +9,20 @@ import { useClients } from "@/hooks/useClients";
 import {
   useClientConfig,
   useClientEffectiveConfig,
+  useClientMetadata,
   useDeleteClientConfig,
   usePatchClientConfig,
   useResetClientProperty,
   useUpsertClientConfig,
-} from "@/hooks/useConfigurationApi";
+} from "../../hooks/useConfigurationApi";
 import {
   buildInheritedState,
+  canEditFieldAtScope,
   clientEditableFields,
   formatFieldValue,
+  getFieldMetadata,
   getEffectiveValue,
+  getLockOwnerForScope,
   parseFieldValue,
   resolveClientOrigin,
   validateFieldValue,
@@ -35,6 +39,7 @@ export default function ClientConfigurationPage() {
   const clientsQuery = useClients();
   const localQuery = useClientConfig(clientId);
   const effectiveQuery = useClientEffectiveConfig(clientId);
+  const metadataQuery = useClientMetadata(clientId);
 
   const putMutation = useUpsertClientConfig();
   const patchMutation = usePatchClientConfig();
@@ -77,13 +82,18 @@ export default function ClientConfigurationPage() {
       if (inherits[field.key]) {
         payload[field.key] = null;
       } else {
-        const validation = validateFieldValue(field.kind, value);
+        const fieldMeta = getFieldMetadata(metadataQuery.data?.fields, field.key);
+        if (!canEditFieldAtScope(fieldMeta, "client")) {
+          continue;
+        }
+
+        const validation = validateFieldValue(field.kind, value, field.key);
         if (validation !== true) {
           toast.error(`${field.key}: ${validation}`);
           return;
         }
 
-        payload[field.key] = parseFieldValue(field.kind, value);
+        payload[field.key] = parseFieldValue(field.kind, value, field.key);
       }
     }
 
@@ -106,12 +116,18 @@ export default function ClientConfigurationPage() {
     }
 
     const value = String(getValues(`values.${field.key}` as never) ?? "");
+    const fieldMeta = getFieldMetadata(metadataQuery.data?.fields, field.key);
+    if (!canEditFieldAtScope(fieldMeta, "client")) {
+      toast.error(`Campo ${field.key} bloqueado`);
+      return;
+    }
+
     const payload = inherits[field.key]
       ? { [field.key]: null }
-      : { [field.key]: parseFieldValue(field.kind, value) };
+      : { [field.key]: parseFieldValue(field.kind, value, field.key) };
 
     if (!inherits[field.key]) {
-      const validation = validateFieldValue(field.kind, value);
+      const validation = validateFieldValue(field.kind, value, field.key);
       if (validation !== true) {
         toast.error(validation);
         return;
@@ -152,6 +168,52 @@ export default function ClientConfigurationPage() {
     }
   };
 
+  const primaryFields = clientEditableFields.filter((field) => field.kind !== "json");
+  const jsonFields = clientEditableFields.filter((field) => field.kind === "json");
+
+  const renderFieldEditor = (
+    fieldKey: string,
+    fieldLabel: string,
+    fieldKind: "boolean" | "number" | "string" | "json" | "policy",
+  ) => {
+    const value = String(watch(`values.${fieldKey}` as never) ?? "");
+    const inherited = !!inherits[fieldKey];
+    const fieldMeta = getFieldMetadata(metadataQuery.data?.fields, fieldKey);
+    const canEditField = canEditFieldAtScope(fieldMeta, "client");
+
+    return (
+      <ConfigurationFieldEditor
+        key={fieldKey}
+        fieldKey={fieldKey}
+        fieldLabel={fieldLabel}
+        fieldKind={fieldKind}
+        value={value}
+        inherited={inherited}
+        effectiveValue={getEffectiveValue(effectiveQuery.data, fieldKey)}
+        origin={resolveClientOrigin(localQuery.data, fieldKey)}
+        locked={!canEditField}
+        lockOwner={getLockOwnerForScope(fieldMeta, "client")}
+        saving={patchMutation.isPending}
+        resetLoading={resetPropertyMutation.isPending}
+        onValueChange={(next) => {
+          setValue(`values.${fieldKey}` as never, next as never, {
+            shouldDirty: true,
+          });
+        }}
+        onToggleInherit={(next) => {
+          setInherits((prev) => ({ ...prev, [fieldKey]: next }));
+          if (next) {
+            setValue(`values.${fieldKey}` as never, "" as never, {
+              shouldDirty: true,
+            });
+          }
+        }}
+        onSavePatch={() => savePartial(fieldKey)}
+        onResetProperty={() => resetProperty(fieldKey)}
+      />
+    );
+  };
+
   return (
     <div className="space-y-6">
       <Card>
@@ -186,55 +248,46 @@ export default function ClientConfigurationPage() {
 
             {!clientId && <p className="text-sm text-slate-400">Selecione um cliente para editar a configuração.</p>}
 
-            {clientId && (localQuery.isLoading || effectiveQuery.isLoading) && (
+            {clientId && (localQuery.isLoading || effectiveQuery.isLoading || metadataQuery.isLoading) && (
               <Loading message="Carregando configuração do cliente..." />
             )}
 
-            {clientId && (localQuery.isError || effectiveQuery.isError) && (
+            {clientId && (localQuery.isError || effectiveQuery.isError || metadataQuery.isError) && (
               <ErrorDisplay
-                message={readEntityError(localQuery.error ?? effectiveQuery.error, "client")}
+                message={readEntityError(localQuery.error ?? effectiveQuery.error ?? metadataQuery.error, "client")}
                 onRetry={() => {
                   localQuery.refetch();
                   effectiveQuery.refetch();
+                  metadataQuery.refetch();
                 }}
               />
             )}
 
-            {clientId && !localQuery.isLoading && !effectiveQuery.isLoading && !localQuery.isError && !effectiveQuery.isError && (
-              <div className="space-y-4">
-                {clientEditableFields.map((field) => {
-                  const value = String(watch(`values.${field.key}` as never) ?? "");
-                  const inherited = !!inherits[field.key];
+            {clientId && !localQuery.isLoading && !effectiveQuery.isLoading && !metadataQuery.isLoading && !localQuery.isError && !effectiveQuery.isError && !metadataQuery.isError && (
+              <div className="space-y-6">
+                <section className="space-y-3">
+                  <div>
+                    <h4 className="text-sm font-semibold text-slate-100">Campos principais</h4>
+                    <p className="text-xs text-slate-400">Opcoes, politicas e limites herdados do servidor.</p>
+                  </div>
+                  <div className="grid gap-4 xl:grid-cols-2">
+                    {primaryFields.map((field) =>
+                      renderFieldEditor(field.key, field.label, field.kind),
+                    )}
+                  </div>
+                </section>
 
-                  return (
-                    <ConfigurationFieldEditor
-                      key={field.key}
-                      fieldKey={field.key}
-                      fieldLabel={field.label}
-                      value={value}
-                      inherited={inherited}
-                      effectiveValue={getEffectiveValue(effectiveQuery.data, field.key)}
-                      origin={resolveClientOrigin(localQuery.data, field.key)}
-                      saving={patchMutation.isPending}
-                      resetLoading={resetPropertyMutation.isPending}
-                      onValueChange={(next) => {
-                        setValue(`values.${field.key}` as never, next as never, {
-                          shouldDirty: true,
-                        });
-                      }}
-                      onToggleInherit={(next) => {
-                        setInherits((prev) => ({ ...prev, [field.key]: next }));
-                        if (next) {
-                          setValue(`values.${field.key}` as never, "" as never, {
-                            shouldDirty: true,
-                          });
-                        }
-                      }}
-                      onSavePatch={() => savePartial(field.key)}
-                      onResetProperty={() => resetProperty(field.key)}
-                    />
-                  );
-                })}
+                <section className="space-y-3">
+                  <div>
+                    <h4 className="text-sm font-semibold text-slate-100">Campos JSON</h4>
+                    <p className="text-xs text-slate-400">Overrides estruturados locais para payloads complexos.</p>
+                  </div>
+                  <div className="space-y-4">
+                    {jsonFields.map((field) =>
+                      renderFieldEditor(field.key, field.label, field.kind),
+                    )}
+                  </div>
+                </section>
               </div>
             )}
           </div>

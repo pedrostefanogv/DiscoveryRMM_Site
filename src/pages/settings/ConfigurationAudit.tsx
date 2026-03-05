@@ -7,7 +7,7 @@ import {
   useEntityConfigurationAudit,
   useFieldConfigurationAudit,
   useRecentConfigurationAudit,
-} from "@/hooks/useConfigurationApi";
+} from "../../hooks/useConfigurationApi";
 import type { ConfigurationEntityType } from "@/services/configurationApi";
 
 const PAGE_SIZE = 20;

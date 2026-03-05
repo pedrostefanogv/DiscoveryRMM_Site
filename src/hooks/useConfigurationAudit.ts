@@ -6,7 +6,7 @@ import {
   useEntityConfigurationAudit,
   useFieldConfigurationAudit,
   useRecentConfigurationAudit,
-} from "./useConfigurationApi";
+} from "@/hooks/useConfigurationApi";
 
 export const auditKeys = {
   all: ["config", "audit"] as const,

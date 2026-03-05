@@ -90,10 +90,7 @@ export function useAgentStatusRealtime(enabled = true) {
 
     const hubUrl = `${API_BASE_URL}/hubs/agent`;
     const connection = new signalR.HubConnectionBuilder()
-      .withUrl(hubUrl, {
-        transport: signalR.HttpTransportType.WebSockets,
-        skipNegotiation: true,
-      })
+      .withUrl(hubUrl)
       .withAutomaticReconnect([0, 2_000, 5_000, 10_000, 30_000])
       .withKeepAliveInterval(SIGNALR_KEEP_ALIVE_MS)
       .withServerTimeout(SIGNALR_SERVER_TIMEOUT_MS)

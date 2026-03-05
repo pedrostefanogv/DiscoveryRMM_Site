@@ -56,7 +56,9 @@ function normalizeMetadata(payload: unknown): ConfigurationMetadataResponse {
 
   const record = payload as Record<string, unknown>;
   const fieldsCandidate =
-    record.fields && typeof record.fields === "object" && !Array.isArray(record.fields)
+    record.fields &&
+    typeof record.fields === "object" &&
+    !Array.isArray(record.fields)
       ? (record.fields as Record<string, unknown>)
       : record;
 
@@ -94,7 +96,9 @@ export function resetServerConfig() {
 }
 
 export async function getServerMetadata() {
-  return normalizeMetadata(await api.get<unknown>(`${CONFIG_BASE}/server/metadata`));
+  return normalizeMetadata(
+    await api.get<unknown>(`${CONFIG_BASE}/server/metadata`),
+  );
 }
 
 export function getClientConfig(clientId: string) {

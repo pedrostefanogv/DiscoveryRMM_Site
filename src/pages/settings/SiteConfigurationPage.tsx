@@ -6,20 +6,25 @@ import type { ConfigurationValue } from "@/api";
 import { ConfigurationFieldEditor } from "@/components/configuration";
 import { Button, Card, CardHeader, ErrorDisplay, Loading, Select } from "@/components/ui";
 import {
+  useClientMetadata,
   useClientConfig,
   useDeleteSiteConfig,
   usePatchSiteConfig,
   useResetSiteProperty,
   useSiteConfig,
   useSiteEffectiveConfig,
+  useSiteMetadata,
   useUpsertSiteConfig,
-} from "@/hooks/useConfigurationApi";
+} from "../../hooks/useConfigurationApi";
 import { useClients } from "@/hooks/useClients";
 import { useSites } from "@/hooks/useSites";
 import {
-  buildInheritedState,
+  canEditFieldAtScope,
   formatFieldValue,
+  getFieldMetadata,
   getEffectiveValue,
+  getLockOwnerForScope,
+  isInheritedBySourceType,
   parseFieldValue,
   resolveSiteOrigin,
   siteEditableFields,
@@ -45,6 +50,8 @@ export default function SiteConfigurationPage() {
   const localSiteQuery = useSiteConfig(siteId);
   const effectiveSiteQuery = useSiteEffectiveConfig(siteId);
   const localClientQuery = useClientConfig(clientId);
+  const clientMetadataQuery = useClientMetadata(clientId);
+  const siteMetadataQuery = useSiteMetadata(siteId);
 
   const putMutation = useUpsertSiteConfig();
   const patchMutation = usePatchSiteConfig();
@@ -57,12 +64,17 @@ export default function SiteConfigurationPage() {
     }
 
     for (const field of siteEditableFields) {
-      const value = localSiteQuery.data[field.key] ?? getEffectiveValue(effectiveSiteQuery.data, field.key);
+      const value = getEffectiveValue(effectiveSiteQuery.data, field.key) ?? localSiteQuery.data[field.key];
       setValue(`values.${field.key}` as never, formatFieldValue(value) as never);
     }
 
-    setInherits(buildInheritedState(localSiteQuery.data, siteEditableFields));
-  }, [effectiveSiteQuery.data, localSiteQuery.data, setValue]);
+    const nextInherited: Record<string, boolean> = {};
+    for (const field of siteEditableFields) {
+      const meta = getFieldMetadata(siteMetadataQuery.data?.fields, field.key);
+      nextInherited[field.key] = isInheritedBySourceType(meta, "site");
+    }
+    setInherits(nextInherited);
+  }, [effectiveSiteQuery.data, localSiteQuery.data, setValue, siteMetadataQuery.data?.fields]);
 
   const clientOptions = useMemo(
     () => [
@@ -94,13 +106,18 @@ export default function SiteConfigurationPage() {
       if (inherits[field.key]) {
         payload[field.key] = null;
       } else {
-        const validation = validateFieldValue(field.kind, value);
+        const fieldMeta = getFieldMetadata(siteMetadataQuery.data?.fields, field.key);
+        if (!canEditFieldAtScope(fieldMeta, "site")) {
+          continue;
+        }
+
+        const validation = validateFieldValue(field.kind, value, field.key);
         if (validation !== true) {
           toast.error(`${field.key}: ${validation}`);
           return;
         }
 
-        payload[field.key] = parseFieldValue(field.kind, value);
+        payload[field.key] = parseFieldValue(field.kind, value, field.key);
       }
     }
 
@@ -123,12 +140,18 @@ export default function SiteConfigurationPage() {
     }
 
     const value = String(getValues(`values.${field.key}` as never) ?? "");
+    const fieldMeta = getFieldMetadata(siteMetadataQuery.data?.fields, field.key);
+    if (!canEditFieldAtScope(fieldMeta, "site")) {
+      toast.error(`Campo ${field.key} bloqueado`);
+      return;
+    }
+
     const payload = inherits[field.key]
       ? { [field.key]: null }
-      : { [field.key]: parseFieldValue(field.kind, value) };
+      : { [field.key]: parseFieldValue(field.kind, value, field.key) };
 
     if (!inherits[field.key]) {
-      const validation = validateFieldValue(field.kind, value);
+      const validation = validateFieldValue(field.kind, value, field.key);
       if (validation !== true) {
         toast.error(validation);
         return;
@@ -167,6 +190,58 @@ export default function SiteConfigurationPage() {
     } catch (error) {
       toast.error(readEntityError(error));
     }
+  };
+
+  const primaryFields = siteEditableFields.filter((field) => field.kind !== "json");
+  const jsonFields = siteEditableFields.filter((field) => field.kind === "json");
+
+  const renderFieldEditor = (
+    fieldKey: string,
+    fieldLabel: string,
+    fieldKind: "boolean" | "number" | "string" | "json" | "policy",
+  ) => {
+    const value = String(watch(`values.${fieldKey}` as never) ?? "");
+    const inherited = !!inherits[fieldKey];
+    const fieldMeta = getFieldMetadata(siteMetadataQuery.data?.fields, fieldKey);
+    const canEditField = canEditFieldAtScope(fieldMeta, "site");
+
+    return (
+      <ConfigurationFieldEditor
+        key={fieldKey}
+        fieldKey={fieldKey}
+        fieldLabel={fieldLabel}
+        fieldKind={fieldKind}
+        value={value}
+        inherited={inherited}
+        effectiveValue={getEffectiveValue(effectiveSiteQuery.data, fieldKey)}
+        origin={resolveSiteOrigin(localSiteQuery.data, localClientQuery.data, fieldKey)}
+        locked={!canEditField}
+        lockOwner={
+          getLockOwnerForScope(fieldMeta, "site") ??
+          getLockOwnerForScope(
+            getFieldMetadata(clientMetadataQuery.data?.fields, fieldKey),
+            "site",
+          )
+        }
+        saving={patchMutation.isPending}
+        resetLoading={resetPropertyMutation.isPending}
+        onValueChange={(next) => {
+          setValue(`values.${fieldKey}` as never, next as never, {
+            shouldDirty: true,
+          });
+        }}
+        onToggleInherit={(next) => {
+          setInherits((prev) => ({ ...prev, [fieldKey]: next }));
+          if (next) {
+            setValue(`values.${fieldKey}` as never, "" as never, {
+              shouldDirty: true,
+            });
+          }
+        }}
+        onSavePatch={() => savePartial(fieldKey)}
+        onResetProperty={() => resetProperty(fieldKey)}
+      />
+    );
   };
 
   return (
@@ -223,58 +298,50 @@ export default function SiteConfigurationPage() {
               <ErrorDisplay message={readEntityError(sitesQuery.error)} onRetry={sitesQuery.refetch} />
             )}
 
-            {siteId && (localSiteQuery.isLoading || effectiveSiteQuery.isLoading || localClientQuery.isLoading) && (
+            {siteId && (localSiteQuery.isLoading || effectiveSiteQuery.isLoading || localClientQuery.isLoading || clientMetadataQuery.isLoading || siteMetadataQuery.isLoading) && (
               <Loading message="Carregando configuração do site..." />
             )}
 
-            {siteId && (localSiteQuery.isError || effectiveSiteQuery.isError || localClientQuery.isError) && (
+            {siteId && (localSiteQuery.isError || effectiveSiteQuery.isError || localClientQuery.isError || clientMetadataQuery.isError || siteMetadataQuery.isError) && (
               <ErrorDisplay
                 message={readEntityError(
-                  localSiteQuery.error ?? effectiveSiteQuery.error ?? localClientQuery.error,
+                  localSiteQuery.error ?? effectiveSiteQuery.error ?? localClientQuery.error ?? clientMetadataQuery.error ?? siteMetadataQuery.error,
                 )}
                 onRetry={() => {
                   localSiteQuery.refetch();
                   effectiveSiteQuery.refetch();
                   localClientQuery.refetch();
+                  clientMetadataQuery.refetch();
+                  siteMetadataQuery.refetch();
                 }}
               />
             )}
 
-            {siteId && !localSiteQuery.isLoading && !effectiveSiteQuery.isLoading && !localClientQuery.isLoading && !localSiteQuery.isError && !effectiveSiteQuery.isError && !localClientQuery.isError && (
-              <div className="space-y-4">
-                {siteEditableFields.map((field) => {
-                  const value = String(watch(`values.${field.key}` as never) ?? "");
-                  const inherited = !!inherits[field.key];
+            {siteId && !localSiteQuery.isLoading && !effectiveSiteQuery.isLoading && !localClientQuery.isLoading && !clientMetadataQuery.isLoading && !siteMetadataQuery.isLoading && !localSiteQuery.isError && !effectiveSiteQuery.isError && !localClientQuery.isError && !clientMetadataQuery.isError && !siteMetadataQuery.isError && (
+              <div className="space-y-6">
+                <section className="space-y-3">
+                  <div>
+                    <h4 className="text-sm font-semibold text-slate-100">Campos principais</h4>
+                    <p className="text-xs text-slate-400">Configuracoes operacionais herdadas de cliente e servidor.</p>
+                  </div>
+                  <div className="grid gap-4 xl:grid-cols-2">
+                    {primaryFields.map((field) =>
+                      renderFieldEditor(field.key, field.label, field.kind),
+                    )}
+                  </div>
+                </section>
 
-                  return (
-                    <ConfigurationFieldEditor
-                      key={field.key}
-                      fieldKey={field.key}
-                      fieldLabel={field.label}
-                      value={value}
-                      inherited={inherited}
-                      effectiveValue={getEffectiveValue(effectiveSiteQuery.data, field.key)}
-                      origin={resolveSiteOrigin(localSiteQuery.data, localClientQuery.data, field.key)}
-                      saving={patchMutation.isPending}
-                      resetLoading={resetPropertyMutation.isPending}
-                      onValueChange={(next) => {
-                        setValue(`values.${field.key}` as never, next as never, {
-                          shouldDirty: true,
-                        });
-                      }}
-                      onToggleInherit={(next) => {
-                        setInherits((prev) => ({ ...prev, [field.key]: next }));
-                        if (next) {
-                          setValue(`values.${field.key}` as never, "" as never, {
-                            shouldDirty: true,
-                          });
-                        }
-                      }}
-                      onSavePatch={() => savePartial(field.key)}
-                      onResetProperty={() => resetProperty(field.key)}
-                    />
-                  );
-                })}
+                <section className="space-y-3">
+                  <div>
+                    <h4 className="text-sm font-semibold text-slate-100">Campos JSON</h4>
+                    <p className="text-xs text-slate-400">Payloads estruturados para update e IA no escopo do site.</p>
+                  </div>
+                  <div className="space-y-4">
+                    {jsonFields.map((field) =>
+                      renderFieldEditor(field.key, field.label, field.kind),
+                    )}
+                  </div>
+                </section>
               </div>
             )}
           </div>

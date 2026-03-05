@@ -7,12 +7,15 @@ import {
   getAuditReport,
   getClientConfig,
   getClientEffectiveConfig,
+  getClientMetadata,
   getEntityAudit,
   getFieldAudit,
   getRecentAudit,
   getServerConfig,
+  getServerMetadata,
   getSiteConfig,
   getSiteEffectiveConfig,
+  getSiteMetadata,
   patchClientConfig,
   patchServerConfig,
   patchSiteConfig,
@@ -30,12 +33,17 @@ import {
 
 export const configurationQueryKeys = {
   server: ["config", "server"] as const,
+  serverMetadata: ["config", "server-metadata"] as const,
   client: (clientId: string) => ["config", "client", clientId] as const,
   clientEffective: (clientId: string) =>
     ["config", "client-effective", clientId] as const,
+  clientMetadata: (clientId: string) =>
+    ["config", "client-metadata", clientId] as const,
   site: (siteId: string) => ["config", "site", siteId] as const,
   siteEffective: (siteId: string) =>
     ["config", "site-effective", siteId] as const,
+  siteMetadata: (siteId: string) =>
+    ["config", "site-metadata", siteId] as const,
   agentMe: ["config", "agent-auth", "me"] as const,
   auditRecent: (days = 30, limit = 200) =>
     ["config", "audit", "recent", days, limit] as const,
@@ -74,6 +82,13 @@ export function useServerConfig() {
   });
 }
 
+export function useServerMetadata() {
+  return useQuery({
+    queryKey: configurationQueryKeys.serverMetadata,
+    queryFn: getServerMetadata,
+  });
+}
+
 export function useUpdateServerConfig() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -82,6 +97,9 @@ export function useUpdateServerConfig() {
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: configurationQueryKeys.server,
+      });
+      queryClient.invalidateQueries({
+        queryKey: configurationQueryKeys.serverMetadata,
       });
       invalidateRecentAudit(queryClient);
     },
@@ -97,6 +115,9 @@ export function usePatchServerConfig() {
       queryClient.invalidateQueries({
         queryKey: configurationQueryKeys.server,
       });
+      queryClient.invalidateQueries({
+        queryKey: configurationQueryKeys.serverMetadata,
+      });
       invalidateRecentAudit(queryClient);
     },
   });
@@ -109,6 +130,9 @@ export function useResetServerConfig() {
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: configurationQueryKeys.server,
+      });
+      queryClient.invalidateQueries({
+        queryKey: configurationQueryKeys.serverMetadata,
       });
       invalidateRecentAudit(queryClient);
     },
@@ -131,6 +155,14 @@ export function useClientEffectiveConfig(clientId: string) {
   });
 }
 
+export function useClientMetadata(clientId: string) {
+  return useQuery({
+    queryKey: configurationQueryKeys.clientMetadata(clientId),
+    queryFn: () => getClientMetadata(clientId),
+    enabled: !!clientId,
+  });
+}
+
 export function useUpsertClientConfig() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -147,6 +179,9 @@ export function useUpsertClientConfig() {
       });
       queryClient.invalidateQueries({
         queryKey: configurationQueryKeys.clientEffective(variables.clientId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: configurationQueryKeys.clientMetadata(variables.clientId),
       });
       invalidateRecentAudit(queryClient);
     },
@@ -170,6 +205,9 @@ export function usePatchClientConfig() {
       queryClient.invalidateQueries({
         queryKey: configurationQueryKeys.clientEffective(variables.clientId),
       });
+      queryClient.invalidateQueries({
+        queryKey: configurationQueryKeys.clientMetadata(variables.clientId),
+      });
       invalidateRecentAudit(queryClient);
     },
   });
@@ -185,6 +223,9 @@ export function useDeleteClientConfig() {
       });
       queryClient.invalidateQueries({
         queryKey: configurationQueryKeys.clientEffective(clientId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: configurationQueryKeys.clientMetadata(clientId),
       });
       invalidateRecentAudit(queryClient);
     },
@@ -208,6 +249,9 @@ export function useResetClientProperty() {
       queryClient.invalidateQueries({
         queryKey: configurationQueryKeys.clientEffective(variables.clientId),
       });
+      queryClient.invalidateQueries({
+        queryKey: configurationQueryKeys.clientMetadata(variables.clientId),
+      });
       invalidateRecentAudit(queryClient);
     },
   });
@@ -229,6 +273,14 @@ export function useSiteEffectiveConfig(siteId: string) {
   });
 }
 
+export function useSiteMetadata(siteId: string) {
+  return useQuery({
+    queryKey: configurationQueryKeys.siteMetadata(siteId),
+    queryFn: () => getSiteMetadata(siteId),
+    enabled: !!siteId,
+  });
+}
+
 export function useUpsertSiteConfig() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -245,6 +297,9 @@ export function useUpsertSiteConfig() {
       });
       queryClient.invalidateQueries({
         queryKey: configurationQueryKeys.siteEffective(variables.siteId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: configurationQueryKeys.siteMetadata(variables.siteId),
       });
       invalidateRecentAudit(queryClient);
     },
@@ -268,6 +323,9 @@ export function usePatchSiteConfig() {
       queryClient.invalidateQueries({
         queryKey: configurationQueryKeys.siteEffective(variables.siteId),
       });
+      queryClient.invalidateQueries({
+        queryKey: configurationQueryKeys.siteMetadata(variables.siteId),
+      });
       invalidateRecentAudit(queryClient);
     },
   });
@@ -283,6 +341,9 @@ export function useDeleteSiteConfig() {
       });
       queryClient.invalidateQueries({
         queryKey: configurationQueryKeys.siteEffective(siteId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: configurationQueryKeys.siteMetadata(siteId),
       });
       invalidateRecentAudit(queryClient);
     },
@@ -305,6 +366,9 @@ export function useResetSiteProperty() {
       });
       queryClient.invalidateQueries({
         queryKey: configurationQueryKeys.siteEffective(variables.siteId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: configurationQueryKeys.siteMetadata(variables.siteId),
       });
       invalidateRecentAudit(queryClient);
     },

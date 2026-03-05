@@ -16,4 +16,4 @@ export {
   usePatchSiteConfig as usePatchSiteConfiguration,
   useDeleteSiteConfig as useDeleteSiteConfiguration,
   useResetSiteProperty as useResetSiteConfigurationProperty,
-} from "./useConfigurationApi";
+} from "@/hooks/useConfigurationApi";
