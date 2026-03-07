@@ -14,6 +14,7 @@ import {
   ChevronDown,
   ChevronUp,
   Shield,
+  FileBarChart,
 } from 'lucide-react';
 import { useTheme } from '@/theme/ThemeContext';
 
@@ -24,7 +25,17 @@ const mainLinks = [
   { to: '/tickets', icon: Ticket, label: 'Chamados' },
   { to: '/logs', icon: ScrollText, label: 'Logs' },
   { to: '/deploy', icon: KeyRound, label: 'Deploy' },
-  { to: '/software-inventory', icon: AppWindow, label: 'Softwares' },
+];
+
+const softwareLinks = [
+  { to: '/software/inventory', label: 'Inventário Detalhado' },
+  { to: '/software/automation', label: 'Automação' },
+  { to: '/software/store', label: 'Store' },
+];
+
+const reportsLinks = [
+  { to: '/reports/templates', label: 'Templates' },
+  { to: '/reports/executions', label: 'Execuções' },
 ];
 
 const settingsLinks = [
@@ -45,7 +56,11 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const { branding } = useTheme();
   const location = useLocation();
   const navigate = useNavigate();
+  const softwareIsActive = location.pathname.startsWith('/software') || location.pathname === '/software-inventory';
+  const reportsIsActive = location.pathname.startsWith('/reports');
   const settingsIsActive = location.pathname.startsWith('/settings');
+  const [softwareOpen, setSoftwareOpen] = useState(softwareIsActive);
+  const [reportsOpen, setReportsOpen] = useState(reportsIsActive);
   const [settingsOpen, setSettingsOpen] = useState(settingsIsActive);
 
   return (
@@ -89,6 +104,100 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
             {!collapsed && <span className="truncate">{label}</span>}
           </NavLink>
         ))}
+
+        <button
+          type="button"
+          onClick={() => {
+            if (collapsed) {
+              navigate('/software');
+              return;
+            }
+            setSoftwareOpen(prev => !prev);
+          }}
+          className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+            softwareIsActive
+              ? 'bg-white/10 text-white'
+              : 'text-slate-400 hover:bg-white/5 hover:text-white'
+          }`}
+          aria-label="Abrir submenu de softwares"
+        >
+          <AppWindow className="h-5 w-5 shrink-0" />
+          {!collapsed && (
+            <>
+              <span className="truncate">Softwares</span>
+              <span className="ml-auto">
+                {softwareOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              </span>
+            </>
+          )}
+        </button>
+
+        {!collapsed && softwareOpen && (
+          <div className="ml-8 space-y-1 border-l border-white/10 pl-3">
+            {softwareLinks.map(({ to, label }) => (
+              <NavLink
+                key={to}
+                to={to}
+                className={({ isActive }) =>
+                  `block rounded-md px-2 py-1.5 text-sm transition-colors ${
+                    isActive
+                      ? 'bg-white/10 text-white'
+                      : 'text-slate-400 hover:bg-white/5 hover:text-white'
+                  }`
+                }
+              >
+                {label}
+              </NavLink>
+            ))}
+          </div>
+        )}
+
+        <button
+          type="button"
+          onClick={() => {
+            if (collapsed) {
+              navigate('/reports/templates');
+              return;
+            }
+            setReportsOpen(prev => !prev);
+          }}
+          className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+            reportsIsActive
+              ? 'bg-white/10 text-white'
+              : 'text-slate-400 hover:bg-white/5 hover:text-white'
+          }`}
+          aria-label="Abrir submenu de relatórios"
+        >
+          <FileBarChart className="h-5 w-5 shrink-0" />
+          {!collapsed && (
+            <>
+              <span className="truncate">Relatórios</span>
+              <span className="ml-auto">
+                {reportsOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              </span>
+            </>
+          )}
+        </button>
+
+        {!collapsed && reportsOpen && (
+          <div className="ml-8 space-y-1 border-l border-white/10 pl-3">
+            {reportsLinks.map(({ to, label }) => (
+              <NavLink
+                key={to}
+                to={to}
+                className={({ isActive }) =>
+                  `block rounded-md px-2 py-1.5 text-sm transition-colors ${
+                    isActive
+                      ? 'bg-white/10 text-white'
+                      : 'text-slate-400 hover:bg-white/5 hover:text-white'
+                  }`
+                }
+              >
+                {label}
+              </NavLink>
+            ))}
+          </div>
+        )}
 
         <button
           type="button"

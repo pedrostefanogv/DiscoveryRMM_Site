@@ -1,10 +1,22 @@
 import { useEffect, useState } from "react";
-import { AppWindow, Search } from "lucide-react";
-import { Card, CardHeader, DataTable, ErrorDisplay, Input, Loading, Select, StatCard, Button, type Column } from "@/components/ui";
+import { AppWindow, Eye, Search } from "lucide-react";
+import { Card, CardHeader, DataTable, ErrorDisplay, Input, Loading, Select, StatCard, Button, Modal, Badge, type Column } from "@/components/ui";
 import { useClients } from "@/hooks/useClients";
 import { useSites } from "@/hooks/useSites";
 import { useSoftwareInventoryList, useSoftwareInventorySnapshot, type SoftwareInventoryScope } from "@/hooks/useSoftwareInventory";
-import type { SoftwareInventoryCatalogItem } from "@/api";
+import { agentsApi, clientsApi, sitesApi, type Agent, type SoftwareInventoryCatalogItem } from "@/api";
+import { useNavigate } from "react-router-dom";
+
+interface SoftwareInstallationRow {
+  agentId: string;
+  agentName: string;
+  siteName: string;
+  clientName: string;
+  version: string | null;
+  source: string | null;
+  collectedAt: string;
+  lastSeenAt: string | null;
+}
 
 function formatDate(date: string | null): string {
   if (!date) return "—";
@@ -12,6 +24,7 @@ function formatDate(date: string | null): string {
 }
 
 export default function SoftwareInventory() {
+  const navigate = useNavigate();
   const [scope, setScope] = useState<SoftwareInventoryScope>("global");
   const [selectedClientId, setSelectedClientId] = useState("");
   const [selectedSiteId, setSelectedSiteId] = useState("");
@@ -21,6 +34,12 @@ export default function SoftwareInventory() {
   const [searchApplied, setSearchApplied] = useState("");
   const [page, setPage] = useState(1);
   const [pageCursors, setPageCursors] = useState<Array<string | undefined>>([undefined]);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [detailsSoftware, setDetailsSoftware] = useState<SoftwareInventoryCatalogItem | null>(null);
+  const [detailsRows, setDetailsRows] = useState<SoftwareInstallationRow[]>([]);
+  const [detailsLoading, setDetailsLoading] = useState(false);
+  const [detailsError, setDetailsError] = useState<string | null>(null);
+  const [detailsScannedAgents, setDetailsScannedAgents] = useState(0);
 
   const clients = useClients();
   const sites = useSites(selectedClientId);
@@ -203,7 +222,184 @@ export default function SoftwareInventory() {
       header: "Última coleta",
       render: (item) => formatDate(item.lastCollectedAt ?? item.lastSeenAt),
     },
+    {
+      key: "details",
+      header: "",
+      className: "text-right",
+      render: (item) => (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            void handleOpenSoftwareDetails(item);
+          }}
+          className="rounded-md border border-white/10 p-1.5 text-slate-300 transition-colors hover:border-white/30 hover:bg-white/5 hover:text-white"
+          aria-label={`Ver detalhes de ${item.name}`}
+          title="Ver detalhes de instalação"
+        >
+          <Eye className="h-4 w-4" />
+        </button>
+      ),
+    },
   ];
+
+  const buildSoftwareRowsForAgent = async (
+    software: SoftwareInventoryCatalogItem,
+    agent: Agent,
+    siteLookup: Map<string, { siteName: string; clientName: string }>,
+  ) => {
+    const collectedRows: SoftwareInstallationRow[] = [];
+    let cursorForAgent: string | undefined = undefined;
+
+    while (true) {
+      const pageResult = await agentsApi.getSoftware(agent.id, {
+        cursor: cursorForAgent,
+        limit: 200,
+        order: "desc",
+      });
+
+      const matched = pageResult.items.filter(
+        (row) => row.softwareId === software.softwareId,
+      );
+
+      if (matched.length > 0) {
+        const siteInfo = siteLookup.get(agent.siteId);
+        const agentName = agent.displayName?.trim() || agent.hostname;
+        matched.forEach((row) => {
+          collectedRows.push({
+            agentId: agent.id,
+            agentName,
+            siteName: siteInfo?.siteName ?? "Site desconhecido",
+            clientName: siteInfo?.clientName ?? "Cliente desconhecido",
+            version: row.version,
+            source: row.source,
+            collectedAt: row.collectedAt,
+            lastSeenAt: row.lastSeenAt,
+          });
+        });
+      }
+
+      if (!pageResult.hasMore || !pageResult.nextCursor) {
+        break;
+      }
+
+      cursorForAgent = pageResult.nextCursor;
+    }
+
+    return collectedRows;
+  };
+
+  const handleOpenSoftwareDetails = async (software: SoftwareInventoryCatalogItem) => {
+    setDetailsOpen(true);
+    setDetailsSoftware(software);
+    setDetailsRows([]);
+    setDetailsError(null);
+    setDetailsLoading(true);
+    setDetailsScannedAgents(0);
+
+    try {
+      let scopedClients = clients.data ?? [];
+      let scopedAgents: Agent[] = [];
+      const siteLookup = new Map<string, { siteName: string; clientName: string }>();
+
+      if (scope === "global") {
+        scopedClients = await clientsApi.list(true);
+        const agentsByClient = await Promise.all(
+          scopedClients.map((clientRow) => agentsApi.listByClient(clientRow.id)),
+        );
+        scopedAgents = agentsByClient.flat();
+
+        const sitesByClient = await Promise.all(
+          scopedClients.map(async (clientRow) => ({
+            clientName: clientRow.name,
+            sites: await sitesApi.list(clientRow.id, true),
+          })),
+        );
+
+        sitesByClient.forEach(({ clientName, sites: clientSites }) => {
+          clientSites.forEach((siteRow) => {
+            siteLookup.set(siteRow.id, { siteName: siteRow.name, clientName });
+          });
+        });
+      }
+
+      if (scope === "client") {
+        if (!selectedClientId) throw new Error("Cliente não selecionado.");
+
+        const selectedClientName =
+          scopedClients.find((c) => c.id === selectedClientId)?.name ?? "Cliente";
+
+        const [clientAgents, clientSites] = await Promise.all([
+          agentsApi.listByClient(selectedClientId),
+          sitesApi.list(selectedClientId, true),
+        ]);
+
+        scopedAgents = clientAgents;
+        clientSites.forEach((siteRow) => {
+          siteLookup.set(siteRow.id, {
+            siteName: siteRow.name,
+            clientName: selectedClientName,
+          });
+        });
+      }
+
+      if (scope === "site") {
+        if (!selectedSiteId || !selectedClientId) {
+          throw new Error("Cliente/Site não selecionado.");
+        }
+
+        const selectedClientName =
+          scopedClients.find((c) => c.id === selectedClientId)?.name ?? "Cliente";
+
+        const [siteAgents, clientSites] = await Promise.all([
+          agentsApi.listBySite(selectedSiteId),
+          sitesApi.list(selectedClientId, true),
+        ]);
+
+        scopedAgents = siteAgents;
+        clientSites.forEach((siteRow) => {
+          siteLookup.set(siteRow.id, {
+            siteName: siteRow.name,
+            clientName: selectedClientName,
+          });
+        });
+      }
+
+      const detailedRows: SoftwareInstallationRow[] = [];
+      setDetailsScannedAgents(0);
+      for (const agentRow of scopedAgents) {
+        const rowsForAgent = await buildSoftwareRowsForAgent(software, agentRow, siteLookup);
+        detailedRows.push(...rowsForAgent);
+        setDetailsScannedAgents((prev) => prev + 1);
+      }
+
+      detailedRows.sort((a, b) => {
+        if (a.clientName !== b.clientName) return a.clientName.localeCompare(b.clientName, "pt-BR");
+        if (a.siteName !== b.siteName) return a.siteName.localeCompare(b.siteName, "pt-BR");
+        return a.agentName.localeCompare(b.agentName, "pt-BR");
+      });
+
+      setDetailsRows(detailedRows);
+    } catch {
+      setDetailsError("Não foi possível carregar os detalhes deste software.");
+    } finally {
+      setDetailsLoading(false);
+    }
+  };
+
+  const closeDetails = () => {
+    setDetailsOpen(false);
+    setDetailsSoftware(null);
+    setDetailsRows([]);
+    setDetailsError(null);
+    setDetailsLoading(false);
+    setDetailsScannedAgents(0);
+  };
+
+  const detailsUniqueClients = new Set(detailsRows.map((row) => row.clientName)).size;
+  const detailsUniqueSites = new Set(detailsRows.map((row) => row.siteName)).size;
+  const detailsUniqueAgents = new Set(detailsRows.map((row) => row.agentId)).size;
+  const detailsUniqueVersions = new Set(detailsRows.map((row) => row.version ?? "—")).size;
 
   if (clients.isLoading) return <Loading />;
   if (clients.isError) return <ErrorDisplay onRetry={() => clients.refetch()} />;
@@ -325,6 +521,78 @@ export default function SoftwareInventory() {
           </div>
         )}
       </Card>
+
+      <Modal
+        open={detailsOpen}
+        onClose={closeDetails}
+        title={detailsSoftware ? `Detalhes - ${detailsSoftware.name}` : "Detalhes do software"}
+        maxWidth="max-w-5xl"
+      >
+        {detailsLoading ? (
+          <div className="space-y-3 py-4">
+            <Loading message="Carregando instalações por cliente/site/agente..." />
+            <p className="text-center text-xs text-slate-500">
+              Agentes verificados: {detailsScannedAgents}
+            </p>
+          </div>
+        ) : detailsError ? (
+          <ErrorDisplay message={detailsError} onRetry={() => detailsSoftware && void handleOpenSoftwareDetails(detailsSoftware)} />
+        ) : (
+          <div className="space-y-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge color="primary">Instalações: {detailsRows.length}</Badge>
+              <Badge color="accent">Clientes: {detailsUniqueClients}</Badge>
+              <Badge color="warning">Sites: {detailsUniqueSites}</Badge>
+              <Badge color="success">Agents: {detailsUniqueAgents}</Badge>
+              <Badge color="slate">Versões: {detailsUniqueVersions}</Badge>
+            </div>
+
+            <div className="max-h-[420px] overflow-y-auto rounded-lg border border-white/10">
+              <table className="w-full text-left text-sm">
+                <thead>
+                  <tr className="border-b border-white/10 bg-white/5">
+                    <th className="px-3 py-2 text-xs uppercase tracking-wide text-slate-400">Cliente</th>
+                    <th className="px-3 py-2 text-xs uppercase tracking-wide text-slate-400">Site</th>
+                    <th className="px-3 py-2 text-xs uppercase tracking-wide text-slate-400">Agent</th>
+                    <th className="px-3 py-2 text-xs uppercase tracking-wide text-slate-400">Versão</th>
+                    <th className="px-3 py-2 text-xs uppercase tracking-wide text-slate-400">Fonte</th>
+                    <th className="px-3 py-2 text-xs uppercase tracking-wide text-slate-400">Última coleta</th>
+                    <th className="px-3 py-2 text-xs uppercase tracking-wide text-slate-400"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {detailsRows.map((row) => (
+                    <tr key={`${row.agentId}-${row.version ?? "sem-versao"}-${row.collectedAt}`} className="border-b border-white/5">
+                      <td className="px-3 py-2 text-slate-200">{row.clientName}</td>
+                      <td className="px-3 py-2 text-slate-300">{row.siteName}</td>
+                      <td className="px-3 py-2 text-slate-300">{row.agentName}</td>
+                      <td className="px-3 py-2 font-mono text-slate-300">{row.version ?? "—"}</td>
+                      <td className="px-3 py-2 text-slate-300">{row.source ?? "—"}</td>
+                      <td className="px-3 py-2 text-slate-400">{formatDate(row.lastSeenAt ?? row.collectedAt)}</td>
+                      <td className="px-3 py-2 text-right">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => navigate(`/agents/${row.agentId}`)}
+                          title="Abrir detalhes do agente"
+                        >
+                          Abrir agente
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              {detailsRows.length === 0 && (
+                <div className="flex h-28 items-center justify-center text-sm text-slate-500">
+                  Nenhuma instalação encontrada para este software no escopo atual.
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

@@ -68,3 +68,11 @@ export function useAgentStatusRealtime_Combined(enabled = true) {
  * Export for backward compatibility - apps using the original hook continue to work
  */
 export { useAgentStatusRealtime } from "./useAgentStatusRealtime";
+
+// Reports
+export * from "./useReportDatasets";
+export * from "./useReportTemplates";
+export * from "./useReportExecutions";
+export * from "./useReportFavorites";
+export * from "./useReportTemplateHistory";
+export * from "./useReportNotifications";

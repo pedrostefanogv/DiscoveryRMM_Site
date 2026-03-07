@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Plus, Monitor, Trash2, AppWindow, Building2, Ticket as TicketIcon } from 'lucide-react';
+import { ArrowLeft, Plus, Monitor, Trash2, AppWindow, Building2, Ticket as TicketIcon, Copy, KeyRound } from 'lucide-react';
 import { useClient, useDeleteClient } from '@/hooks/useClients';
 import { useSites, useCreateSite } from '@/hooks/useSites';
 import { useAgentsByClient } from '@/hooks/useAgents';
 import { useTicketsByClient } from '@/hooks/useTickets';
 import { useLogs } from '@/hooks/useLogs';
-import { Button, Card, CardHeader, Badge, Loading, ErrorDisplay, Modal, Input, TextArea, StatCard } from '@/components/ui';
+import { useCreateDeployToken } from '@/hooks/useDeployTokens';
+import { Button, Card, CardHeader, Badge, Loading, ErrorDisplay, Modal, Input, TextArea, StatCard, Select } from '@/components/ui';
 import { NotesPanel } from '@/components/notes/NotesPanel';
 import { isAgentOnlineNow } from '@/utils/agentStatus';
 import { useNowTick } from '@/hooks/useNowTick';
@@ -36,6 +37,11 @@ export default function ClientDetail() {
   const [siteName, setSiteName] = useState('');
   const [siteNotes, setSiteNotes] = useState('');
   const [notesSite, setNotesSite] = useState<Site | null>(null);
+  const [deployModalOpen, setDeployModalOpen] = useState(false);
+  const [deploySiteId, setDeploySiteId] = useState('');
+  const [deployDescription, setDeployDescription] = useState('');
+  const [deployExpiresInHours, setDeployExpiresInHours] = useState<number | null>(24);
+  const [deployMultiUse, setDeployMultiUse] = useState(false);
 
   const client = useClient(id!);
   const sites = useSites(id!);
@@ -46,6 +52,7 @@ export default function ClientDetail() {
   const now = useNowTick(5_000);
   const deleteClient = useDeleteClient();
   const createSite = useCreateSite();
+  const createDeployToken = useCreateDeployToken();
 
   if (client.isLoading) return <Loading />;
   if (client.isError || !client.data) return <ErrorDisplay onRetry={() => client.refetch()} />;
@@ -80,13 +87,59 @@ export default function ClientDetail() {
   };
 
   const totalSites = sites.data?.length ?? 0;
-  const activeSites = (sites.data ?? []).filter((s) => s.isActive).length;
+  const activeSitesList = (sites.data ?? []).filter((s) => s.isActive);
+  const activeSites = activeSitesList.length;
   const totalAgents = agents.data?.length ?? 0;
   const onlineAgents = (agents.data ?? []).filter((a) => isAgentOnlineNow(a, now)).length;
   const totalInstalledSoftware = softwareSnapshot.data?.totalInstalled ?? 0;
   const totalTickets = tickets.data?.length ?? 0;
   const recentTickets = (tickets.data ?? []).slice(0, 6);
   const recentLogs = (logs.data ?? []).slice(0, 8);
+  const generatedDeployToken = createDeployToken.data;
+
+  const resetDeployModal = () => {
+    setDeployModalOpen(false);
+    setDeploySiteId('');
+    setDeployDescription('');
+    setDeployExpiresInHours(24);
+    setDeployMultiUse(false);
+    createDeployToken.reset();
+  };
+
+  const handleCreateDeployToken = () => {
+    if (!deploySiteId) {
+      toast.error('Selecione o site para gerar o token');
+      return;
+    }
+
+    createDeployToken.mutate(
+      {
+        clientId: c.id,
+        siteId: deploySiteId,
+        description: deployDescription.trim() ? deployDescription.trim() : null,
+        expiresInHours: deployExpiresInHours,
+        multiUse: deployMultiUse,
+      },
+      {
+        onSuccess: () => {
+          toast.success('Token de deploy criado com sucesso');
+        },
+        onError: () => {
+          toast.error('Erro ao criar token de deploy');
+        },
+      },
+    );
+  };
+
+  const handleCopyDeployToken = async () => {
+    if (!generatedDeployToken?.token) return;
+    try {
+      await navigator.clipboard.writeText(generatedDeployToken.token);
+      toast.success('Token copiado para a area de transferencia');
+    } catch {
+      toast.error('Nao foi possivel copiar o token');
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -267,6 +320,17 @@ export default function ClientDetail() {
             <CardHeader
               title="Agentes"
               subtitle={`${onlineAgents} online`}
+              action={(
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setDeployModalOpen(true)}
+                  aria-label="Criar token de deploy"
+                  title="Criar token de deploy"
+                >
+                  <KeyRound className="h-4 w-4" />
+                </Button>
+              )}
             />
             <div className="space-y-2">
               {(agents.data ?? []).map(agent => {
@@ -350,6 +414,85 @@ export default function ClientDetail() {
             title="Notas do Site"
           />
         )}
+      </Modal>
+
+      <Modal
+        open={deployModalOpen}
+        onClose={resetDeployModal}
+        title="Criar Token de Deploy"
+      >
+        <div className="space-y-4">
+          <Select
+            label="Site"
+            value={deploySiteId}
+            onChange={(e) => setDeploySiteId(e.target.value)}
+            options={[
+              { value: '', label: activeSitesList.length === 0 ? 'Nenhum site ativo' : 'Selecione um site' },
+              ...activeSitesList.map((site) => ({ value: site.id, label: site.name })),
+            ]}
+            disabled={activeSitesList.length === 0}
+          />
+
+          <TextArea
+            label="Descricao"
+            placeholder="Ex: onboarding de novo agente"
+            value={deployDescription}
+            onChange={(e) => setDeployDescription(e.target.value)}
+            rows={3}
+          />
+
+          <Input
+            label="Expira em (horas)"
+            type="number"
+            min={1}
+            value={deployExpiresInHours ?? ''}
+            onChange={(e) => {
+              const raw = e.target.value;
+              setDeployExpiresInHours(raw === '' ? null : Number(raw));
+            }}
+          />
+
+          <label className="flex items-center gap-2 text-sm text-slate-300">
+            <input
+              type="checkbox"
+              checked={deployMultiUse}
+              onChange={(e) => setDeployMultiUse(e.target.checked)}
+              className="rounded border-white/10 bg-white/5"
+            />
+            Permitir multiuso
+          </label>
+
+          {generatedDeployToken && (
+            <div className="space-y-3 rounded-lg border border-white/10 bg-black/20 p-3">
+              <p className="text-xs uppercase tracking-wide text-slate-400">Token gerado</p>
+              <p className="break-all font-mono text-sm text-slate-200">{generatedDeployToken.token}</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge color={generatedDeployToken.multiUse ? 'accent' : 'slate'}>
+                  {generatedDeployToken.multiUse ? 'Multiuso' : 'Uso unico'}
+                </Badge>
+                <Badge color="slate">
+                  Expira: {generatedDeployToken.expiresAt ? new Date(generatedDeployToken.expiresAt).toLocaleString('pt-BR') : 'Sem expiracao'}
+                </Badge>
+              </div>
+              <div className="flex justify-end">
+                <Button variant="secondary" onClick={handleCopyDeployToken}>
+                  <Copy className="h-4 w-4" /> Copiar Token
+                </Button>
+              </div>
+            </div>
+          )}
+
+          <div className="flex justify-end gap-3 pt-2">
+            <Button variant="ghost" onClick={resetDeployModal}>Cancelar</Button>
+            <Button
+              onClick={handleCreateDeployToken}
+              loading={createDeployToken.isPending}
+              disabled={activeSitesList.length === 0}
+            >
+              <KeyRound className="h-4 w-4" /> Gerar Token
+            </Button>
+          </div>
+        </div>
       </Modal>
     </div>
   );

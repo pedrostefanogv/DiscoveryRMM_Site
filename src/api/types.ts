@@ -764,3 +764,107 @@ export interface TicketsQuery {
   limit?: number;
   offset?: number;
 }
+
+// ── Reports ────────────────────────────────────────────
+
+export enum ReportDatasetType {
+  SoftwareInventory = 0,
+  Logs = 1,
+  ConfigurationAudit = 2,
+  Tickets = 3,
+  AgentHardware = 4,
+}
+
+export enum ReportFormat {
+  Xlsx = 0,
+  Csv = 1,
+  Pdf = 2,
+}
+
+export enum ReportExecutionStatus {
+  Pending = 0,
+  Processing = 1,
+  Completed = 2,
+  Failed = 3,
+}
+
+export interface ReportDataset {
+  type: ReportDatasetType;
+  fields: string[];
+  formats: ReportFormat[];
+}
+
+export interface ReportTemplate {
+  id: string;
+  clientId: string | null;
+  name: string;
+  description: string | null;
+  datasetType: ReportDatasetType;
+  defaultFormat: ReportFormat;
+  layoutJson: string;
+  filtersJson: string | null;
+  isActive: boolean;
+  createdAt: string;
+  createdBy: string | null;
+  updatedAt: string | null;
+  updatedBy: string | null;
+}
+
+export interface ReportExecution {
+  id: string;
+  templateId: string;
+  clientId: string;
+  format: ReportFormat;
+  filtersJson: string | null;
+  status: ReportExecutionStatus;
+  rowCount: number | null;
+  resultContentType: string | null;
+  resultSizeBytes: number | null;
+  resultPath: string | null;
+  errorMessage: string | null;
+  createdAt: string;
+  createdBy: string | null;
+  completedAt: string | null;
+}
+
+export interface CreateReportTemplateRequest {
+  clientId: string | null;
+  name: string;
+  description: string | null;
+  datasetType: ReportDatasetType;
+  defaultFormat: ReportFormat;
+  layoutJson: string;
+  filtersJson: string | null;
+  createdBy: string | null;
+}
+
+export interface UpdateReportTemplateRequest {
+  clientId: string | null;
+  name: string;
+  description: string | null;
+  datasetType: ReportDatasetType;
+  defaultFormat: ReportFormat;
+  layoutJson: string;
+  filtersJson: string | null;
+  isActive: boolean;
+  updatedBy: string | null;
+}
+
+export interface RunReportRequest {
+  templateId: string;
+  clientId: string;
+  format: ReportFormat | null;
+  filtersJson: string | null;
+  createdBy: string | null;
+  runAsync: boolean;
+}
+
+export interface RunReportResponse {
+  executionId: string;
+  status: ReportExecutionStatus;
+  rowCount?: number;
+  contentType?: string;
+  resultSizeBytes?: number;
+  downloadPath?: string;
+  message?: string;
+}

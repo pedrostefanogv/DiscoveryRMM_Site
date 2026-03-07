@@ -13,7 +13,10 @@ const TicketList = lazy(() => import('@/pages/tickets/TicketList'));
 const TicketDetail = lazy(() => import('@/pages/tickets/TicketDetail'));
 const LogViewer = lazy(() => import('@/pages/logs/LogViewer'));
 const DeployTokens = lazy(() => import('@/pages/deploy/DeployTokens'));
+const SoftwareHome = lazy(() => import('@/pages/software/SoftwareHome'));
 const SoftwareInventory = lazy(() => import('@/pages/software/SoftwareInventory'));
+const SoftwareAutomation = lazy(() => import('@/pages/software/SoftwareAutomation'));
+const SoftwareStore = lazy(() => import('@/pages/software/SoftwareStore'));
 const BrandingSettings = lazy(() => import('@/pages/settings/BrandingSettings'));
 const WorkflowSettings = lazy(() => import('@/pages/settings/WorkflowSettings'));
 const DepartmentSettings = lazy(() => import('@/pages/settings/DepartmentSettings'));
@@ -23,6 +26,10 @@ const ServerConfigurationPage = lazy(() => import('@/pages/settings/ServerConfig
 const ClientConfigurationPage = lazy(() => import('@/pages/settings/ClientConfigurationPage'));
 const SiteConfigurationPage = lazy(() => import('@/pages/settings/SiteConfigurationPage'));
 const ConfigurationAudit = lazy(() => import('@/pages/settings/ConfigurationAudit'));
+const ReportTemplateList = lazy(() => import('@/pages/reports/ReportTemplateList'));
+const ReportTemplateForm = lazy(() => import('@/pages/reports/ReportTemplateForm'));
+const RunReport = lazy(() => import('@/pages/reports/RunReport'));
+const ReportExecutionList = lazy(() => import('@/pages/reports/ReportExecutionList'));
 
 function LazyPage({ children }: { children: React.ReactNode }) {
   return <Suspense fallback={<Loading />}>{children}</Suspense>;
@@ -70,8 +77,24 @@ export const router = createBrowserRouter([
         element: <LazyPage><DeployTokens /></LazyPage>,
       },
       {
-        path: 'software-inventory',
+        path: 'software',
+        element: <LazyPage><SoftwareHome /></LazyPage>,
+      },
+      {
+        path: 'software/inventory',
         element: <LazyPage><SoftwareInventory /></LazyPage>,
+      },
+      {
+        path: 'software/automation',
+        element: <LazyPage><SoftwareAutomation /></LazyPage>,
+      },
+      {
+        path: 'software/store',
+        element: <LazyPage><SoftwareStore /></LazyPage>,
+      },
+      {
+        path: 'software-inventory',
+        element: <LazyPage><SoftwareHome /></LazyPage>,
       },
       {
         path: 'settings',
@@ -108,6 +131,26 @@ export const router = createBrowserRouter([
       {
         path: 'settings/audit',
         element: <LazyPage><ConfigurationAudit /></LazyPage>,
+      },
+      {
+        path: 'reports/templates',
+        element: <LazyPage><ReportTemplateList /></LazyPage>,
+      },
+      {
+        path: 'reports/templates/new',
+        element: <LazyPage><ReportTemplateForm /></LazyPage>,
+      },
+      {
+        path: 'reports/templates/:id/edit',
+        element: <LazyPage><ReportTemplateForm /></LazyPage>,
+      },
+      {
+        path: 'reports/run',
+        element: <LazyPage><RunReport /></LazyPage>,
+      },
+      {
+        path: 'reports/executions',
+        element: <LazyPage><ReportExecutionList /></LazyPage>,
       },
       {
         path: '*',

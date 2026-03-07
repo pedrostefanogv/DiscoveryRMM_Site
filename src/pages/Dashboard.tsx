@@ -162,7 +162,7 @@ export default function Dashboard() {
         </button>
         <button
           type="button"
-          onClick={() => navigate('/software-inventory')}
+          onClick={() => navigate('/software/inventory')}
           className="text-left"
           aria-label="Abrir inventario de softwares"
           title="Abrir inventario de softwares"
