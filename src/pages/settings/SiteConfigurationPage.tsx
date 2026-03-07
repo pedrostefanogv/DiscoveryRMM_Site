@@ -204,6 +204,7 @@ export default function SiteConfigurationPage() {
     const inherited = !!inherits[fieldKey];
     const fieldMeta = getFieldMetadata(siteMetadataQuery.data?.fields, fieldKey);
     const canEditField = canEditFieldAtScope(fieldMeta, "site");
+    const fieldDef = siteEditableFields.find((f) => f.key === fieldKey);
 
     return (
       <ConfigurationFieldEditor
@@ -225,6 +226,8 @@ export default function SiteConfigurationPage() {
         }
         saving={patchMutation.isPending}
         resetLoading={resetPropertyMutation.isPending}
+        description={fieldDef?.description}
+        unit={fieldDef?.unit}
         onValueChange={(next) => {
           setValue(`values.${fieldKey}` as never, next as never, {
             shouldDirty: true,

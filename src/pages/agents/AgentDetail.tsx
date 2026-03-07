@@ -1,14 +1,15 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  ArrowLeft, Cpu, HardDrive, MemoryStick,
+  ArrowLeft, Cpu, HardDrive, MemoryStick, Ticket as TicketIcon,
   Terminal, Send, Wifi, WifiOff, AppWindow, Search, Clock,
 } from 'lucide-react';
 import { useAgent, useAgentHardware, useAgentSoftware, useAgentSoftwareSnapshot, useAgentCommands, useSendCommand } from '@/hooks/useAgents';
+import { useTickets } from '@/hooks/useTickets';
 import { useLogs } from '@/hooks/useLogs';
 import { Button, Card, CardHeader, Badge, Loading, ErrorDisplay, Input, Select, DataTable, StatCard, type Column } from '@/components/ui';
 import { NotesPanel } from '@/components/notes/NotesPanel';
-import type { AgentSoftwareInventoryItem } from '@/api';
+import type { AgentSoftwareInventoryItem, Ticket } from '@/api';
 import { CommandType, LogLevel } from '@/api';
 import { isAgentOnlineNow } from '@/utils/agentStatus';
 import { useNowTick } from '@/hooks/useNowTick';
@@ -65,6 +66,7 @@ export default function AgentDetail() {
   const softwareSnapshot = useAgentSoftwareSnapshot(id!);
   const commands = useAgentCommands(id!);
   const agentLogs = useLogs({ agentId: id, limit: 10 });
+    const agentTickets = useTickets({ agentId: id, limit: 5 });
   const now = useNowTick(5_000);
 
   if (agent.isLoading) return <Loading />;
@@ -329,37 +331,61 @@ export default function AgentDetail() {
 
         {/* Processador + Memória */}
         <Card>
-          <CardHeader title="Hardware" />
-          <div className="space-y-4">
-            <div>
-              <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-slate-400">Processador</p>
-              <p className="text-sm text-white">{hw.data?.hardware?.processor ?? '—'}</p>
-              {(hw.data?.hardware?.processorCores || hw.data?.hardware?.processorArchitecture) && (
-                <p className="mt-0.5 text-xs text-slate-500">
-                  {[hw.data.hardware.processorCores && `${hw.data.hardware.processorCores}C / ${hw.data.hardware.processorThreads ?? '?'}T`, hw.data.hardware.processorArchitecture].filter(Boolean).join(' · ')}
-                </p>
-              )}
-            </div>
-            {hw.data?.memoryModules && hw.data.memoryModules.length > 0 && (
-              <div>
-                <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-slate-400">Módulos de Memória</p>
-                <div className="space-y-1.5">
-                  {hw.data.memoryModules.map(m => (
-                    <div key={m.id} className="flex items-center justify-between rounded bg-white/5 px-2.5 py-1.5 text-xs">
-                      <span className="text-slate-300">{m.slot ?? `Slot ${hw.data!.memoryModules.indexOf(m) + 1}`}</span>
-                      <span className="font-mono text-white">{formatBytes(m.capacityBytes)}</span>
-                      {m.speedMhz && <span className="text-slate-500">{m.speedMhz} MHz</span>}
-                    </div>
-                  ))}
+            <CardHeader title="Últimos Chamados" />
+            <div className="space-y-2">
+              {agentTickets.isLoading && (
+                <div className="py-4 text-center text-sm text-slate-400">
+                  Carregando chamados...
                 </div>
-              </div>
-            )}
-            {hw.data?.hardware?.biosManufacturer && (
-              <div>
-                <p className="mb-1 text-xs font-medium uppercase tracking-wide text-slate-400">BIOS</p>
-                <p className="text-xs text-slate-300">{hw.data.hardware.biosManufacturer} — {hw.data.hardware.biosVersion ?? '—'}</p>
-              </div>
-            )}
+              )}
+              {!agentTickets.isLoading && (!agentTickets.data || agentTickets.data.length === 0) && (
+                <div className="py-4 text-center text-sm text-slate-400">
+                  Nenhum chamado encontrado
+                </div>
+              )}
+              {!agentTickets.isLoading && agentTickets.data && agentTickets.data.length > 0 && (
+                <div className="space-y-2">
+                  {agentTickets.data.map(ticket => {
+                    const priorityColors: Record<string, 'slate' | 'success' | 'warning' | 'danger'> = {
+                      Low: 'slate',
+                      Medium: 'success',
+                      High: 'warning',
+                      Critical: 'danger',
+                    };
+                    const priorityLabels: Record<string, string> = {
+                      Low: 'Baixa',
+                      Medium: 'Média',
+                      High: 'Alta',
+                      Critical: 'Crítica',
+                    };
+                    return (
+                      <button
+                        key={ticket.id}
+                        onClick={() => navigate(`/tickets/${ticket.id}`)}
+                        className="w-full rounded-lg bg-white/5 px-3 py-2.5 text-left transition-colors hover:bg-white/10"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <TicketIcon className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                              <p className="truncate text-sm font-medium text-white">
+                                {ticket.title}
+                              </p>
+                            </div>
+                            <p className="mt-1 text-xs text-slate-400">
+                              {new Date(ticket.createdAt).toLocaleDateString('pt-BR')}
+                              {ticket.closedAt && ' • Encerrado'}
+                            </p>
+                          </div>
+                          <Badge color={priorityColors[ticket.priority] ?? 'slate'} className="shrink-0">
+                            {priorityLabels[ticket.priority] ?? ticket.priority}
+                          </Badge>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
           </div>
         </Card>
 

@@ -6,6 +6,8 @@ export { agentsApi } from "./agents";
 export { ticketsApi } from "./tickets";
 export { logsApi } from "./logs";
 export { workflowApi } from "./workflow";
+export { departmentsApi } from "./departments";
+export { workflowProfilesApi } from "./workflowProfiles";
 export { deployTokensApi } from "./deploy-tokens";
 export { softwareInventoryApi } from "./software-inventory";
 export { notesApi } from "./notes";

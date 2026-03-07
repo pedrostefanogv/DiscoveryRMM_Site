@@ -9,7 +9,7 @@ import type {
   TicketsQuery,
 } from "./types";
 
-const BASE = "/api/Tickets";
+const BASE = "/api/tickets";
 
 export const ticketsApi = {
   list: (params: TicketsQuery = {}) =>
@@ -34,4 +34,43 @@ export const ticketsApi = {
 
   addComment: (id: string, data: AddCommentRequest) =>
     api.post<TicketComment>(`${BASE}/${id}/comments`, data),
+
+  // Audit / Timeline
+  getTimeline: (ticketId: string) =>
+    api.get<import("./types").TicketTimelineEntry[]>(
+      `${BASE}/${ticketId}/audit/timeline`,
+    ),
+
+  getTimelineByActivityType: (ticketId: string, activityType: string) =>
+    api.get<import("./types").TicketTimelineEntry[]>(
+      `${BASE}/${ticketId}/audit/timeline/activity-type/${activityType}`,
+    ),
+
+  getTimelineByUser: (ticketId: string, userId: string) =>
+    api.get<import("./types").TicketTimelineEntry[]>(
+      `${BASE}/${ticketId}/audit/timeline/user/${userId}`,
+    ),
+
+  getTimelineDateRange: (ticketId: string, from: string, to: string) =>
+    api.get<import("./types").TicketTimelineEntry[]>(
+      `${BASE}/${ticketId}/audit/timeline/date-range`,
+      { from, to },
+    ),
+
+  getLastTimeline: (ticketId: string) =>
+    api.get<import("./types").TicketTimelineEntry>(
+      `${BASE}/${ticketId}/audit/timeline/last`,
+    ),
+
+  getStatistics: (ticketId: string) =>
+    api.get<import("./types").TicketStatistics>(
+      `${BASE}/${ticketId}/audit/statistics`,
+    ),
+
+  // SLA
+  getSlaStatus: (ticketId: string) =>
+    api.get<import("./types").SlaStatus>(`${BASE}/${ticketId}/sla/status`),
+
+  getSlaDetails: (ticketId: string) =>
+    api.get<import("./types").SlaDetails>(`${BASE}/${ticketId}/sla/details`),
 };

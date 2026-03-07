@@ -43,7 +43,7 @@ interface FormValues {
 const featureIcons: Record<string, React.ReactNode> = {
   recoveryEnabled: <HardDrive className="h-4 w-4" />,
   discoveryEnabled: <Wifi className="h-4 w-4" />,
-  p2pFilesEnabled: <Layers className="h-4 w-4" />,
+  p2PFilesEnabled: <Layers className="h-4 w-4" />,
   supportEnabled: <Activity className="h-4 w-4" />,
   knowledgeBaseEnabled: <ShieldCheck className="h-4 w-4" />,
 };
@@ -164,6 +164,8 @@ export default function ServerConfigurationPage() {
         effectiveValue={serverQuery.data?.[field.key]}
         origin="Server"
         disableInheritance
+        description={field.description}
+        unit={field.unit}
         onValueChange={(next) => {
           setValue(`values.${field.key}` as never, next as never, {
             shouldDirty: true,
@@ -335,12 +337,7 @@ export default function ServerConfigurationPage() {
             </div>
             <div className="grid flex-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
               {agentFields.map((field) => (
-                <div key={field.key} className="space-y-1">
-                  {field.unit && (
-                    <p className="text-xs text-slate-500 font-medium uppercase tracking-wide">
-                      em {field.unit}
-                    </p>
-                  )}
+                <div key={field.key}>
                   {renderFieldEditor(field)}
                 </div>
               ))}
@@ -360,12 +357,7 @@ export default function ServerConfigurationPage() {
             </div>
             <div className="grid flex-1 gap-4 sm:grid-cols-2">
               {tokenFields.map((field) => (
-                <div key={field.key} className="space-y-1">
-                  {field.unit && (
-                    <p className="text-xs text-slate-500 font-medium uppercase tracking-wide">
-                      em {field.unit}
-                    </p>
-                  )}
+                <div key={field.key}>
                   {renderFieldEditor(field)}
                 </div>
               ))}

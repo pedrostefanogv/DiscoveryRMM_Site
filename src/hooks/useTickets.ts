@@ -14,6 +14,9 @@ const KEYS = {
   byClient: (clientId: string) => [...KEYS.all, "byClient", clientId] as const,
   detail: (id: string) => [...KEYS.all, "detail", id] as const,
   comments: (id: string) => [...KEYS.all, "comments", id] as const,
+  timeline: (id: string) => [...KEYS.all, "timeline", id] as const,
+  slaStatus: (id: string) => [...KEYS.all, "sla-status", id] as const,
+  slaDetails: (id: string) => [...KEYS.all, "sla-details", id] as const,
 };
 
 export function useTickets(params: TicketsQuery = {}) {
@@ -44,6 +47,32 @@ export function useTicketComments(id: string) {
     queryKey: KEYS.comments(id),
     queryFn: () => ticketsApi.listComments(id),
     enabled: !!id,
+  });
+}
+
+export function useTicketTimeline(id: string) {
+  return useQuery({
+    queryKey: KEYS.timeline(id),
+    queryFn: () => ticketsApi.getTimeline(id),
+    enabled: !!id,
+  });
+}
+
+export function useSlaStatus(id: string) {
+  return useQuery({
+    queryKey: KEYS.slaStatus(id),
+    queryFn: () => ticketsApi.getSlaStatus(id),
+    enabled: !!id,
+    refetchInterval: 60_000,
+  });
+}
+
+export function useSlaDetails(id: string) {
+  return useQuery({
+    queryKey: KEYS.slaDetails(id),
+    queryFn: () => ticketsApi.getSlaDetails(id),
+    enabled: !!id,
+    refetchInterval: 60_000,
   });
 }
 

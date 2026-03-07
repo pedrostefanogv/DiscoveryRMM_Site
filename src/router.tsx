@@ -16,6 +16,8 @@ const DeployTokens = lazy(() => import('@/pages/deploy/DeployTokens'));
 const SoftwareInventory = lazy(() => import('@/pages/software/SoftwareInventory'));
 const BrandingSettings = lazy(() => import('@/pages/settings/BrandingSettings'));
 const WorkflowSettings = lazy(() => import('@/pages/settings/WorkflowSettings'));
+const DepartmentSettings = lazy(() => import('@/pages/settings/DepartmentSettings'));
+const WorkflowProfileSettings = lazy(() => import('@/pages/settings/WorkflowProfileSettings'));
 const ConfigurationSettings = lazy(() => import('@/pages/settings/ConfigurationSettings'));
 const ServerConfigurationPage = lazy(() => import('@/pages/settings/ServerConfigurationPage'));
 const ClientConfigurationPage = lazy(() => import('@/pages/settings/ClientConfigurationPage'));
@@ -94,6 +96,14 @@ export const router = createBrowserRouter([
       {
         path: 'settings/workflow',
         element: <LazyPage><WorkflowSettings /></LazyPage>,
+      },
+      {
+        path: 'settings/departments',
+        element: <LazyPage><DepartmentSettings /></LazyPage>,
+      },
+      {
+        path: 'settings/workflow-profiles',
+        element: <LazyPage><WorkflowProfileSettings /></LazyPage>,
       },
       {
         path: 'settings/audit',

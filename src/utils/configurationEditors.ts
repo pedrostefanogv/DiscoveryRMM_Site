@@ -48,7 +48,7 @@ export const serverEditableFields: EditableField[] = [
     description: "Permite que agentes descubram dispositivos na rede local.",
   },
   {
-    key: "p2pFilesEnabled",
+    key: "p2PFilesEnabled",
     label: "Transferência P2P de Arquivos",
     kind: "boolean",
     group: "features",
@@ -75,14 +75,16 @@ export const serverEditableFields: EditableField[] = [
     label: "Política da Loja de Aplicativos",
     kind: "policy",
     group: "policy",
-    description: "Define quais aplicativos agentes podem instalar via loja.",
+    description:
+      "Controla quais aplicativos os agentes podem instalar: Desativado (nenhum), Pré-aprovados (lista whitelist) ou Todos.",
   },
   {
     key: "inventoryIntervalHours",
     label: "Intervalo de Inventário",
     kind: "number",
     group: "agent",
-    description: "Com que frequência o agente coleta o inventário de software.",
+    description:
+      "Com qual frequência (em horas) cada agente coleta e envia o inventário de software instalado. Valores menores = atualizações mais frequentes.",
     unit: "horas",
   },
   {
@@ -91,7 +93,7 @@ export const serverEditableFields: EditableField[] = [
     kind: "number",
     group: "agent",
     description:
-      "Frequência com que o agente envia sinal de presença ao servidor.",
+      "Com qual frequência (em segundos) o agente envia um sinal de presença. Define se o agente está ativo e conectado ao servidor.",
     unit: "segundos",
   },
   {
@@ -100,7 +102,7 @@ export const serverEditableFields: EditableField[] = [
     kind: "number",
     group: "agent",
     description:
-      "Tempo sem heartbeat após o qual o agente é considerado offline.",
+      "Tempo máximo (em segundos) sem receber heartbeat antes que o agente seja marcado como offline. Deve ser > que o intervalo de heartbeat.",
     unit: "segundos",
   },
   {
@@ -108,7 +110,8 @@ export const serverEditableFields: EditableField[] = [
     label: "Expiração de Token",
     kind: "number",
     group: "tokens",
-    description: "Tempo de vida de cada token de deploy gerado.",
+    description:
+      "Tempo de vida (em dias) de cada token de deploy. Tokens expirados devem ser regenerados. Valores menores aumentam a segurança mas requerem regeneração frequente.",
     unit: "dias",
   },
   {
@@ -116,7 +119,8 @@ export const serverEditableFields: EditableField[] = [
     label: "Máximo de Tokens por Agente",
     kind: "number",
     group: "tokens",
-    description: "Quantidade máxima de tokens de deploy ativos por agente.",
+    description:
+      "Quantidade máxima de tokens de deploy ativos simultaneamente por agente. Quando atingida, novos tokens exigem remoção de antigos.",
     unit: "tokens",
   },
   {
@@ -155,7 +159,7 @@ export const serverEditableFields: EditableField[] = [
 export const clientEditableFields: EditableField[] = [
   { key: "recoveryEnabled", label: "Recovery Enabled", kind: "boolean" },
   { key: "discoveryEnabled", label: "Discovery Enabled", kind: "boolean" },
-  { key: "p2pFilesEnabled", label: "P2P Files Enabled", kind: "boolean" },
+  { key: "p2PFilesEnabled", label: "P2P Files Enabled", kind: "boolean" },
   { key: "supportEnabled", label: "Support Enabled", kind: "boolean" },
   { key: "appStorePolicy", label: "App Store Policy", kind: "policy" },
   {
@@ -167,6 +171,9 @@ export const clientEditableFields: EditableField[] = [
     key: "inventoryIntervalHours",
     label: "Inventory Interval Hours",
     kind: "number",
+    unit: "horas",
+    description:
+      "Com qual frequência (em horas) cada agente coleta e envia o inventário de software instalado. Valores menores = atualizações mais frequentes.",
   },
   {
     key: "autoUpdateSettingsJson",
@@ -177,24 +184,40 @@ export const clientEditableFields: EditableField[] = [
     key: "tokenExpirationDays",
     label: "Token Expiration Days",
     kind: "number",
+    unit: "dias",
+    description:
+      "Tempo de vida (em dias) de cada token de deploy. Tokens expirados devem ser regenerados. Valores menores aumentam a segurança mas requerem regeneração frequente.",
   },
-  { key: "maxTokensPerAgent", label: "Max Tokens Per Agent", kind: "number" },
+  {
+    key: "maxTokensPerAgent",
+    label: "Max Tokens Per Agent",
+    kind: "number",
+    unit: "tokens",
+    description:
+      "Quantidade máxima de tokens de deploy ativos simultaneamente por agente. Quando atingida, novos tokens exigem remoção de antigos.",
+  },
   {
     key: "agentHeartbeatIntervalSeconds",
     label: "Agent Heartbeat Interval Seconds",
     kind: "number",
+    unit: "segundos",
+    description:
+      "Com qual frequência (em segundos) o agente envia um sinal de presença. Define se o agente está ativo e conectado ao servidor.",
   },
   {
     key: "agentOfflineThresholdSeconds",
     label: "Agent Offline Threshold Seconds",
     kind: "number",
+    unit: "segundos",
+    description:
+      "Tempo máximo (em segundos) sem receber heartbeat antes que o agente seja marcado como offline. Deve ser > que o intervalo de heartbeat.",
   },
 ];
 
 export const siteEditableFields: EditableField[] = [
   { key: "recoveryEnabled", label: "Recovery Enabled", kind: "boolean" },
   { key: "discoveryEnabled", label: "Discovery Enabled", kind: "boolean" },
-  { key: "p2pFilesEnabled", label: "P2P Files Enabled", kind: "boolean" },
+  { key: "p2PFilesEnabled", label: "P2P Files Enabled", kind: "boolean" },
   { key: "supportEnabled", label: "Support Enabled", kind: "boolean" },
   { key: "appStorePolicy", label: "App Store Policy", kind: "policy" },
   {
@@ -206,6 +229,9 @@ export const siteEditableFields: EditableField[] = [
     key: "inventoryIntervalHours",
     label: "Inventory Interval Hours",
     kind: "number",
+    unit: "horas",
+    description:
+      "Com qual frequência (em horas) cada agente coleta e envia o inventário de software instalado. Valores menores = atualizações mais frequentes.",
   },
   {
     key: "autoUpdateSettingsJson",
@@ -293,11 +319,11 @@ export function validateFieldValue(
   }
 
   if (kind === "policy") {
-    if (["Disabled", "PreApproved", "All", "0", "1", "2"].includes(trimmed)) {
+    if (["Disabled", "PreApproved", "All"].includes(trimmed)) {
       return true;
     }
 
-    return "Use Disabled, PreApproved, All, 0, 1 ou 2";
+    return "Use Disabled, PreApproved ou All";
   }
 
   return true;

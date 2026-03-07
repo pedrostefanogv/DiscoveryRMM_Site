@@ -67,3 +67,14 @@ export function useDeleteWorkflowTransition() {
     onSuccess: () => qc.invalidateQueries({ queryKey: KEYS.transitions }),
   });
 }
+
+export function useWorkflowTransitionsFrom(
+  fromStateId: string,
+  clientId?: string,
+) {
+  return useQuery({
+    queryKey: [...KEYS.transitions, "from", fromStateId, clientId],
+    queryFn: () => workflowApi.listTransitionsFrom(fromStateId, clientId),
+    enabled: !!fromStateId,
+  });
+}

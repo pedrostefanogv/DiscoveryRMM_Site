@@ -11,14 +11,14 @@ import { NotesPanel } from '@/components/notes/NotesPanel';
 import { isAgentOnlineNow } from '@/utils/agentStatus';
 import { useNowTick } from '@/hooks/useNowTick';
 import { useSoftwareInventorySnapshot } from '@/hooks/useSoftwareInventory';
-import { LogLevel, TicketPriority, type Site } from '@/api';
+import { LogLevel, type TicketPriority, type Site } from '@/api';
 import toast from 'react-hot-toast';
 
-const priorityLabels: Record<number, { label: string; color: 'slate' | 'success' | 'warning' | 'danger' }> = {
-  [TicketPriority.Low]: { label: 'Baixa', color: 'slate' },
-  [TicketPriority.Medium]: { label: 'Média', color: 'success' },
-  [TicketPriority.High]: { label: 'Alta', color: 'warning' },
-  [TicketPriority.Critical]: { label: 'Crítica', color: 'danger' },
+const priorityLabels: Record<TicketPriority, { label: string; color: 'slate' | 'success' | 'warning' | 'danger' }> = {
+  Low: { label: 'Baixa', color: 'slate' },
+  Medium: { label: 'Média', color: 'success' },
+  High: { label: 'Alta', color: 'warning' },
+  Critical: { label: 'Crítica', color: 'danger' },
 };
 
 const levelLabels: Record<number, { label: string; color: 'slate' | 'primary' | 'warning' | 'danger' | 'accent' }> = {

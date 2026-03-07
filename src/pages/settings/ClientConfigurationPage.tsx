@@ -180,6 +180,7 @@ export default function ClientConfigurationPage() {
     const inherited = !!inherits[fieldKey];
     const fieldMeta = getFieldMetadata(metadataQuery.data?.fields, fieldKey);
     const canEditField = canEditFieldAtScope(fieldMeta, "client");
+    const fieldDef = clientEditableFields.find((f) => f.key === fieldKey);
 
     return (
       <ConfigurationFieldEditor
@@ -195,6 +196,8 @@ export default function ClientConfigurationPage() {
         lockOwner={getLockOwnerForScope(fieldMeta, "client")}
         saving={patchMutation.isPending}
         resetLoading={resetPropertyMutation.isPending}
+        description={fieldDef?.description}
+        unit={fieldDef?.unit}
         onValueChange={(next) => {
           setValue(`values.${fieldKey}` as never, next as never, {
             shouldDirty: true,

@@ -20,3 +20,8 @@ body {
 .sidebar-transition {
   transition: width 200ms ease, transform 200ms ease;
 }
+
+/* SLA progress bar — dynamic width via CSS variable */
+.sla-bar-fill {
+  width: var(--sla-progress, 0%);
+}

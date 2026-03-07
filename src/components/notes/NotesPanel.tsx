@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { Pin, Pencil, Trash2, Save, X } from "lucide-react";
+import { useMemo, useRef, useState } from "react";
+import { Pin, Trash2, Save, X, Plus, ChevronUp, Settings2, Pencil } from "lucide-react";
 import { Card, CardHeader, Button, Badge, Input, TextArea, Loading, ErrorDisplay } from "@/components/ui";
 import {
   useAgentNotes,
@@ -50,6 +50,11 @@ export function NotesPanel({ entityType, entityId, title = "Notas", subtitle }: 
   const [editingContent, setEditingContent] = useState("");
   const [editingAuthor, setEditingAuthor] = useState("Admin");
   const [editingPinned, setEditingPinned] = useState(false);
+
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  const [showCreateForm, setShowCreateForm] = useState(false);
 
   const sortedNotes = useMemo(() => {
     return [...(notesQuery.data ?? [])].sort((a, b) => {
@@ -145,11 +150,39 @@ export function NotesPanel({ entityType, entityId, title = "Notas", subtitle }: 
   const isEditing = updateNote.isPending;
   const isDeleting = deleteNote.isPending;
 
+  const toggleMenu = (noteId: string) =>
+    setOpenMenuId((prev) => (prev === noteId ? null : noteId));
+
+  const handleMenuEdit = (note: Note) => {
+    setOpenMenuId(null);
+    startEdit(note);
+  };
+
+  const handleMenuDelete = (noteId: string) => {
+    setOpenMenuId(null);
+    removeNote(noteId);
+  };
+
+  const hasNotes = sortedNotes.length > 0;
+  const createFormVisible = !hasNotes || showCreateForm;
+
   return (
     <Card>
       <CardHeader
         title={title}
         subtitle={subtitle ?? `${notesQuery.data?.length ?? 0} nota(s)`}
+        action={
+          hasNotes ? (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setShowCreateForm((v) => !v)}
+              aria-label={showCreateForm ? "Fechar formulário" : "Nova nota"}
+            >
+              {showCreateForm ? <ChevronUp className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+            </Button>
+          ) : undefined
+        }
       />
 
       {notesQuery.isLoading ? (
@@ -215,23 +248,40 @@ export function NotesPanel({ entityType, entityId, title = "Notas", subtitle }: 
                           </p>
                         </div>
                         <div className="flex items-center gap-1">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => startEdit(note)}
-                            aria-label="Editar nota"
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => removeNote(note.id)}
-                            loading={isDeleting}
-                            aria-label="Excluir nota"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                          <div className="relative" ref={openMenuId === note.id ? menuRef : null}>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => toggleMenu(note.id)}
+                              aria-label="Opções da nota"
+                              aria-haspopup="true"
+                              aria-expanded={openMenuId === note.id}
+                            >
+                              <Settings2 className="h-4 w-4" />
+                            </Button>
+                            {openMenuId === note.id && (
+                              <div
+                                className="absolute right-0 top-full z-20 mt-1 w-36 overflow-hidden rounded-lg border border-white/10 bg-slate-800 shadow-xl"
+                                onMouseLeave={() => setOpenMenuId(null)}
+                              >
+                                <button
+                                  className="flex w-full items-center gap-2 px-3 py-2 text-sm text-slate-200 hover:bg-white/10 transition-colors"
+                                  onClick={() => handleMenuEdit(note)}
+                                >
+                                  <Pencil className="h-3.5 w-3.5 text-slate-400" />
+                                  Editar
+                                </button>
+                                <button
+                                  className="flex w-full items-center gap-2 px-3 py-2 text-sm text-red-400 hover:bg-white/10 transition-colors"
+                                  onClick={() => handleMenuDelete(note.id)}
+                                  disabled={isDeleting}
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                  Excluir
+                                </button>
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
                       <p className="whitespace-pre-wrap text-sm text-slate-300">{note.content}</p>
@@ -246,7 +296,7 @@ export function NotesPanel({ entityType, entityId, title = "Notas", subtitle }: 
             )}
           </div>
 
-          <div className="mt-4 space-y-3 border-t border-white/10 pt-4">
+          {createFormVisible && <div className="mt-4 space-y-3 border-t border-white/10 pt-4">
             <p className="text-sm font-medium text-white">Nova nota</p>
             <Input
               label="Autor"
@@ -270,12 +320,17 @@ export function NotesPanel({ entityType, entityId, title = "Notas", subtitle }: 
               />
               Fixar nota
             </label>
-            <div className="flex justify-end">
+            <div className="flex justify-end gap-2">
+              {hasNotes && (
+                <Button size="sm" variant="ghost" onClick={() => setShowCreateForm(false)}>
+                  <X className="h-4 w-4" /> Cancelar
+                </Button>
+              )}
               <Button size="sm" onClick={handleCreate} loading={isCreating}>
                 Salvar nota
               </Button>
             </div>
-          </div>
+          </div>}
         </>
       )}
     </Card>

@@ -1,4 +1,5 @@
-import { NavLink } from 'react-router-dom';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
+import { useState } from 'react';
 import {
   LayoutDashboard,
   Users,
@@ -10,11 +11,13 @@ import {
   Settings,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
+  ChevronUp,
   Shield,
 } from 'lucide-react';
 import { useTheme } from '@/theme/ThemeContext';
 
-const links = [
+const mainLinks = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/clients', icon: Users, label: 'Clientes' },
   { to: '/agents', icon: Monitor, label: 'Agentes' },
@@ -22,11 +25,15 @@ const links = [
   { to: '/logs', icon: ScrollText, label: 'Logs' },
   { to: '/deploy', icon: KeyRound, label: 'Deploy' },
   { to: '/software-inventory', icon: AppWindow, label: 'Softwares' },
-  { to: '/settings', icon: Settings, label: 'Configurações' },
-  { to: '/settings/server', icon: Settings, label: 'Config Server' },
-  { to: '/settings/client', icon: Settings, label: 'Config Client' },
-  { to: '/settings/site', icon: Settings, label: 'Config Site' },
-  { to: '/settings/audit', icon: Settings, label: 'Auditoria Config' },
+];
+
+const settingsLinks = [
+  { to: '/settings', label: 'Geral' },
+  { to: '/settings/workflow', label: 'Workflow' },
+  { to: '/settings/workflow-profiles', label: 'SLA e Perfis' },
+  { to: '/settings/departments', label: 'Departamentos' },
+  { to: '/settings/audit', label: 'Auditoria Config' },
+  { to: '/settings/branding', label: 'Branding' },
 ];
 
 interface SidebarProps {
@@ -36,6 +43,10 @@ interface SidebarProps {
 
 export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const { branding } = useTheme();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const settingsIsActive = location.pathname.startsWith('/settings');
+  const [settingsOpen, setSettingsOpen] = useState(settingsIsActive);
 
   return (
     <aside
@@ -61,7 +72,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
 
       {/* Nav Links */}
       <nav className="mt-2 flex-1 space-y-1 px-2 overflow-y-auto">
-        {links.map(({ to, icon: Icon, label }) => (
+        {mainLinks.map(({ to, icon: Icon, label }) => (
           <NavLink
             key={to}
             to={to}
@@ -78,6 +89,54 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
             {!collapsed && <span className="truncate">{label}</span>}
           </NavLink>
         ))}
+
+        <button
+          type="button"
+          onClick={() => {
+            if (collapsed) {
+              navigate('/settings');
+              return;
+            }
+            setSettingsOpen(prev => !prev);
+          }}
+          className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+            settingsIsActive
+              ? 'bg-white/10 text-white'
+              : 'text-slate-400 hover:bg-white/5 hover:text-white'
+          }`}
+          aria-label="Abrir submenu de configurações"
+        >
+          <Settings className="h-5 w-5 shrink-0" />
+          {!collapsed && (
+            <>
+              <span className="truncate">Configurações</span>
+              <span className="ml-auto">
+                {settingsOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              </span>
+            </>
+          )}
+        </button>
+
+        {!collapsed && settingsOpen && (
+          <div className="ml-8 space-y-1 border-l border-white/10 pl-3">
+            {settingsLinks.map(({ to, label }) => (
+              <NavLink
+                key={to}
+                to={to}
+                end={to === '/settings'}
+                className={({ isActive }) =>
+                  `block rounded-md px-2 py-1.5 text-sm transition-colors ${
+                    isActive
+                      ? 'bg-white/10 text-white'
+                      : 'text-slate-400 hover:bg-white/5 hover:text-white'
+                  }`
+                }
+              >
+                {label}
+              </NavLink>
+            ))}
+          </div>
+        )}
       </nav>
 
       {/* Collapse toggle */}

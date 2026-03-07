@@ -18,7 +18,7 @@ import { useTickets } from '@/hooks/useTickets';
 import { useLogs } from '@/hooks/useLogs';
 import { StatCard, Card, CardHeader, Badge } from '@/components/ui';
 import { Loading, ErrorDisplay } from '@/components/ui';
-import { agentsApi, LogLevel, getRealtimeStats } from '@/api';
+import { agentsApi, LogLevel, getRealtimeStats, type TicketPriority } from '@/api';
 import { useSoftwareInventorySnapshot } from '@/hooks/useSoftwareInventory';
 
 function formatBytes(value?: number | null): string {
@@ -409,12 +409,12 @@ export default function Dashboard() {
   );
 }
 
-function PriorityBadge({ priority }: { priority: number }) {
-  const map: Record<number, { label: string; color: 'slate' | 'success' | 'warning' | 'danger' }> = {
-    0: { label: 'Baixa', color: 'slate' },
-    1: { label: 'Média', color: 'success' },
-    2: { label: 'Alta', color: 'warning' },
-    3: { label: 'Crítica', color: 'danger' },
+function PriorityBadge({ priority }: { priority: TicketPriority }) {
+  const map: Record<TicketPriority, { label: string; color: 'slate' | 'success' | 'warning' | 'danger' }> = {
+    Low: { label: 'Baixa', color: 'slate' },
+    Medium: { label: 'Média', color: 'success' },
+    High: { label: 'Alta', color: 'warning' },
+    Critical: { label: 'Crítica', color: 'danger' },
   };
   const { label, color } = map[priority] ?? { label: 'N/A', color: 'slate' as const };
   return <Badge color={color}>{label}</Badge>;

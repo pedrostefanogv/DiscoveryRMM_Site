@@ -28,12 +28,21 @@ export enum CommandType {
   CollectInventory = 4,
 }
 
-export enum TicketPriority {
-  Low = 0,
-  Medium = 1,
-  High = 2,
-  Critical = 3,
-}
+export type TicketPriority = "Low" | "Medium" | "High" | "Critical";
+
+export type TicketActivityType =
+  | "Created"
+  | "StateChanged"
+  | "Assigned"
+  | "Commented"
+  | "SlaWarning"
+  | "SlaBreached"
+  | "Escalated"
+  | "Reopened"
+  | "DepartmentChanged"
+  | "PriorityChanged"
+  | "DescriptionUpdated"
+  | "CategoryChanged";
 
 // ── Base Entities (response shapes) ────────────────────
 
@@ -252,14 +261,69 @@ export interface Ticket {
   clientId: string;
   siteId: string | null;
   agentId: string | null;
+  departmentId: string | null;
+  workflowProfileId: string | null;
   title: string;
   description: string;
   priority: TicketPriority;
   category: string | null;
-  assignedTo: string | null;
+  assignedToUserId: string | null;
   workflowStateId: string | null;
   createdAt: string;
   updatedAt: string;
+  closedAt: string | null;
+}
+
+export interface Department {
+  id: string;
+  clientId: string | null;
+  name: string;
+  description: string | null;
+  inheritFromGlobalId: string | null;
+  sortOrder: number;
+  isActive: boolean;
+}
+
+export interface WorkflowProfile {
+  id: string;
+  clientId: string | null;
+  departmentId: string;
+  name: string;
+  description: string | null;
+  slaHours: number;
+  defaultPriority: TicketPriority | null;
+  isActive: boolean;
+}
+
+export interface TicketTimelineEntry {
+  id: string;
+  ticketId: string;
+  activityType: TicketActivityType;
+  userId: string | null;
+  description: string;
+  metadata: unknown;
+  createdAt: string;
+}
+
+export interface TicketStatistics {
+  totalEvents: number;
+  byActivityType: Record<string, number>;
+}
+
+export interface SlaStatus {
+  slaExpiresAt: string | null;
+  hoursRemaining: number | null;
+  percentUsed: number | null;
+  breached: boolean;
+  status: string;
+}
+
+export interface SlaDetails extends SlaStatus {
+  ticketId: string;
+  createdAt: string;
+  totalSlaHours: number | null;
+  elapsedHours: number | null;
+  warningLevel: "low" | "medium" | "high" | "critical" | null;
 }
 
 export interface TicketComment {
@@ -342,7 +406,7 @@ export interface ServerConfiguration {
   id: string;
   recoveryEnabled: boolean;
   discoveryEnabled: boolean;
-  p2pFilesEnabled: boolean;
+  p2PFilesEnabled: boolean;
   supportEnabled: boolean;
   knowledgeBaseEnabled: boolean;
   appStorePolicy: AppStorePolicyType;
@@ -368,7 +432,7 @@ export interface ClientConfiguration {
   clientId: string;
   recoveryEnabled?: boolean | null;
   discoveryEnabled?: boolean | null;
-  p2pFilesEnabled?: boolean | null;
+  p2PFilesEnabled?: boolean | null;
   supportEnabled?: boolean | null;
   appStorePolicy?: AppStorePolicyType | null;
   aiIntegrationSettingsJson?: string | null;
@@ -392,7 +456,7 @@ export interface SiteConfiguration {
   clientId: string;
   recoveryEnabled?: boolean | null;
   discoveryEnabled?: boolean | null;
-  p2pFilesEnabled?: boolean | null;
+  p2PFilesEnabled?: boolean | null;
   supportEnabled?: boolean | null;
   appStorePolicy?: AppStorePolicyType | null;
   aiIntegrationSettingsJson?: string | null;
@@ -415,7 +479,7 @@ export interface ResolvedConfiguration {
   clientId?: string | null;
   recoveryEnabled: boolean;
   discoveryEnabled: boolean;
-  p2pFilesEnabled: boolean;
+  p2PFilesEnabled: boolean;
   supportEnabled: boolean;
   knowledgeBaseEnabled: boolean;
   appStorePolicy: AppStorePolicyType;
@@ -553,18 +617,55 @@ export interface CreateTicketRequest {
   clientId: string;
   siteId: string | null;
   agentId: string | null;
+  departmentId: string | null;
+  workflowProfileId: string | null;
   title: string;
   description: string;
   priority: TicketPriority;
   category: string | null;
+  assignedToUserId: string | null;
 }
 
 export interface UpdateTicketRequest {
   title: string;
   description: string;
   priority: TicketPriority;
-  assignedTo: string | null;
+  assignedToUserId: string | null;
   category: string | null;
+}
+
+export interface CreateDepartmentRequest {
+  clientId: string | null;
+  name: string;
+  description: string | null;
+  inheritFromGlobalId: string | null;
+  sortOrder: number;
+}
+
+export interface UpdateDepartmentRequest {
+  name: string;
+  description: string | null;
+  inheritFromGlobalId: string | null;
+  sortOrder: number;
+  isActive: boolean;
+}
+
+export interface CreateWorkflowProfileRequest {
+  clientId: string | null;
+  departmentId: string;
+  name: string;
+  description: string | null;
+  slaHours: number;
+  defaultPriority: TicketPriority | null;
+}
+
+export interface UpdateWorkflowProfileRequest {
+  name: string;
+  description: string | null;
+  departmentId: string;
+  slaHours: number;
+  defaultPriority: TicketPriority | null;
+  isActive: boolean;
 }
 
 export interface UpdateWorkflowStateRequest {
@@ -659,6 +760,7 @@ export interface LogsQuery {
 
 export interface TicketsQuery {
   workflowStateId?: string;
+  agentId?: string;
   limit?: number;
   offset?: number;
 }

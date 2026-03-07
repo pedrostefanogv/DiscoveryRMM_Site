@@ -7,8 +7,8 @@ import type {
   CreateWorkflowTransitionRequest,
 } from "./types";
 
-const STATES = "/api/Workflow/states";
-const TRANSITIONS = "/api/Workflow/transitions";
+const STATES = "/api/workflow/states";
+const TRANSITIONS = "/api/workflow/transitions";
 
 export const workflowApi = {
   // States

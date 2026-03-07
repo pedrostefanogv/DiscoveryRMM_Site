@@ -26,6 +26,8 @@ interface ConfigurationFieldEditorProps {
   disableInheritance?: boolean;
   locked?: boolean;
   lockOwner?: string | null;
+  description?: string;
+  unit?: string;
 }
 
 export function ConfigurationFieldEditor({
@@ -46,7 +48,11 @@ export function ConfigurationFieldEditor({
   disableInheritance,
   locked,
   lockOwner,
-}: ConfigurationFieldEditorProps) {  const [showDiff, setShowDiff] = useState(false);  const isReadOnly = !!locked;
+  description,
+  unit,
+}: ConfigurationFieldEditorProps) {
+  const [showDiff, setShowDiff] = useState(false);
+  const isReadOnly = !!locked;
   const inputDisabled = isReadOnly || (!!disableInheritance ? false : inherited);
 
   const numberRanges: Record<string, { min: number; max: number }> = {
@@ -83,22 +89,20 @@ export function ConfigurationFieldEditor({
           onChange={(event) => onValueChange(event.target.value)}
           disabled={inputDisabled}
           options={[
-            { value: "Disabled", label: "Disabled" },
-            { value: "PreApproved", label: "PreApproved" },
-            { value: "All", label: "All" },
-            { value: "0", label: "0 (Disabled)" },
-            { value: "1", label: "1 (PreApproved)" },
-            { value: "2", label: "2 (All)" },
+            { value: "Disabled", label: "🔒 Desativado - Nenhum aplicativo autorizado" },
+            { value: "PreApproved", label: "✅ Pré-aprovados - Apenas aplicativos na lista" },
+            { value: "All", label: "🌍 Todos - Qualquer aplicativo autorizado" },
           ]}
         />
       );
     }
 
     if (fieldKind === "number") {
+      const unitSuffix = unit ? ` (${unit})` : "";
       return (
         <Input
           type="number"
-          label="Valor local"
+          label={`Valor local${unitSuffix}`}
           value={value}
           onChange={(event) => onValueChange(event.target.value)}
           disabled={inputDisabled}
@@ -108,7 +112,7 @@ export function ConfigurationFieldEditor({
           error={error}
           placeholder={
             fieldRange
-              ? `Faixa ${fieldRange.min}..${fieldRange.max}`
+              ? `${fieldRange.min}..${fieldRange.max} ${unit || ""}`
               : "Digite um numero"
           }
         />
@@ -149,10 +153,13 @@ export function ConfigurationFieldEditor({
 
   return (
     <div className="space-y-3 rounded-lg border border-white/5 bg-white/5 p-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="flex-1">
           <p className="text-sm font-semibold text-white">{fieldLabel}</p>
           <p className="font-mono text-xs text-slate-400">{fieldKey}</p>
+          {description && (
+            <p className="mt-1 text-xs text-slate-300">{description}</p>
+          )}
         </div>
 
         {!disableInheritance && (
@@ -175,7 +182,7 @@ export function ConfigurationFieldEditor({
 
         {fieldKind === "number" && fieldRange && !error && (
           <p className="text-xs text-slate-400">
-            Faixa recomendada: {fieldRange.min}..{fieldRange.max}
+            Faixa recomendada: {fieldRange.min}..{fieldRange.max}{unit ? ` ${unit}` : ""}
           </p>
         )}
       </div>
