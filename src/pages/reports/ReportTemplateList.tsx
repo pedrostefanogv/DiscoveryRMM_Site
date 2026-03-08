@@ -9,7 +9,6 @@ import {
   Star,
   Upload,
   Download,
-  History,
 } from "lucide-react";
 import {
   useReportTemplates,
@@ -17,8 +16,6 @@ import {
   useReportDatasets,
   useReportFavorites,
   useCreateReportTemplate,
-  useReportTemplateHistory,
-  useReportNotifications,
 } from "@/hooks";
 import {
   Button,
@@ -29,7 +26,6 @@ import {
   Modal,
 } from "@/components/ui";
 import { ReportNotificationBell } from "@/components/reports/ReportNotificationBell";
-import { ReportTemplateHistoryPanel } from "@/components/reports/ReportTemplateHistoryPanel";
 import type { ReportTemplate } from "@/api/types";
 import type { Column } from "@/components/ui";
 import toast from "react-hot-toast";
@@ -61,42 +57,22 @@ export default function ReportTemplateList() {
 
   const [showInactive, setShowInactive] = useState(false);
   const [showOnlyFavorites, setShowOnlyFavorites] = useState(false);
-  const [showHistory, setShowHistory] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
   const templates = useReportTemplates({
-    clientId,
     isActive: !showInactive ? true : undefined,
   });
   const datasets = useReportDatasets();
   const deleteMutation = useDeleteReportTemplate();
   const createMutation = useCreateReportTemplate();
   const { isFavorite, toggleFavorite } = useReportFavorites();
-  const { addEntry } = useReportTemplateHistory();
-  const { addNotification } = useReportNotifications();
 
   const handleDelete = () => {
     if (!deleteId) return;
 
-    const template = templates.data?.find((item) => item.id === deleteId);
-
     deleteMutation.mutate(deleteId, {
       onSuccess: () => {
         toast.success("Template excluído com sucesso");
-        if (template) {
-          addEntry("deleted", {
-            templateId: template.id,
-            templateName: template.name,
-            details: "Template removido pela interface de relatórios",
-          });
-        }
-        addNotification({
-          title: "Template excluído",
-          message: template
-            ? `O template \"${template.name}\" foi excluído.`
-            : "Um template foi excluído.",
-          type: "warning",
-        });
         setDeleteId(null);
       },
       onError: () => {
@@ -143,16 +119,6 @@ export default function ReportTemplateList() {
     anchor.remove();
     URL.revokeObjectURL(url);
 
-    addEntry("exported", {
-      templateId: "batch-export",
-      templateName: `Exportação (${source.length} templates)`,
-      details: "Templates exportados para arquivo JSON",
-    });
-    addNotification({
-      title: "Exportação concluída",
-      message: `${source.length} template(s) exportado(s) com sucesso.`,
-      type: "success",
-    });
     toast.success("Exportação concluída");
   };
 
@@ -192,7 +158,6 @@ export default function ReportTemplateList() {
 
       const jobs = parsed.templates.map((item) => {
         const payload: CreateReportTemplateRequest = {
-          clientId: clientId ?? null,
           name: item.name,
           description: item.description ?? null,
           datasetType: item.datasetType,
@@ -208,21 +173,6 @@ export default function ReportTemplateList() {
       const results = await Promise.allSettled(jobs);
       const successCount = results.filter((r) => r.status === "fulfilled").length;
       const failedCount = results.length - successCount;
-
-      parsed.templates.forEach((item) => {
-        addEntry("imported", {
-          templateId: "import-item",
-          templateName: item.name,
-          details: "Template importado por arquivo JSON",
-        });
-      });
-
-      addNotification({
-        title: "Importação finalizada",
-        message: `${successCount} importado(s), ${failedCount} com falha.`,
-        type: failedCount > 0 ? "warning" : "success",
-        browserNotify: true,
-      });
 
       if (failedCount > 0) {
         toast.error(
@@ -248,15 +198,7 @@ export default function ReportTemplateList() {
         <button
           onClick={(e) => {
             e.stopPropagation();
-            const wasFavorite = isFavorite(t.id);
             toggleFavorite(t.id, t.name);
-            addEntry(wasFavorite ? "unfavorited" : "favorited", {
-              templateId: t.id,
-              templateName: t.name,
-              details: wasFavorite
-                ? "Template removido dos favoritos"
-                : "Template marcado como favorito",
-            });
           }}
           className="text-slate-400 hover:text-yellow-400 transition-colors"
           aria-label={isFavorite(t.id) ? "Remover dos favoritos" : "Adicionar aos favoritos"}
@@ -373,13 +315,6 @@ export default function ReportTemplateList() {
           <Button variant="secondary" onClick={handleImportClick}>
             <Upload className="h-4 w-4" /> Importar
           </Button>
-          <Button
-            variant="secondary"
-            onClick={() => setShowHistory((prev) => !prev)}
-          >
-            <History className="h-4 w-4" />
-            {showHistory ? "Ocultar Histórico" : "Ver Histórico"}
-          </Button>
           <label className="flex items-center gap-2 text-sm text-slate-400">
             <input
               type="checkbox"
@@ -424,8 +359,6 @@ export default function ReportTemplateList() {
           keyExtractor={(t) => t.id}
         />
       </Card>
-
-      {showHistory && <ReportTemplateHistoryPanel />}
 
       <Modal
         open={!!deleteId}

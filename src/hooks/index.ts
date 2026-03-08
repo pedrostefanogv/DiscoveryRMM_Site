@@ -69,6 +69,11 @@ export function useAgentStatusRealtime_Combined(enabled = true) {
  */
 export { useAgentStatusRealtime } from "./useAgentStatusRealtime";
 
+// Core entities
+export * from "./useClients";
+export * from "./useSites";
+export * from "./useAgents";
+
 // Reports
 export * from "./useReportDatasets";
 export * from "./useReportTemplates";
@@ -76,3 +81,4 @@ export * from "./useReportExecutions";
 export * from "./useReportFavorites";
 export * from "./useReportTemplateHistory";
 export * from "./useReportNotifications";
+export * from "./useReportDownload";

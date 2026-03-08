@@ -8,17 +8,13 @@ import type {
 
 const KEYS = {
   all: ["reportTemplates"] as const,
-  list: (params?: {
-    clientId?: string;
-    datasetType?: ReportDatasetType;
-    isActive?: boolean;
-  }) => [...KEYS.all, "list", params] as const,
+  list: (params?: { datasetType?: ReportDatasetType; isActive?: boolean }) =>
+    [...KEYS.all, "list", params] as const,
   detail: (id: string, clientId?: string) =>
     [...KEYS.all, "detail", id, clientId] as const,
 };
 
 export function useReportTemplates(params?: {
-  clientId?: string;
   datasetType?: ReportDatasetType;
   isActive?: boolean;
 }) {

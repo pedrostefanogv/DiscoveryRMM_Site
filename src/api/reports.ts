@@ -3,6 +3,7 @@ import type {
   ReportDataset,
   ReportTemplate,
   ReportExecution,
+  ReportTemplateHistory,
   CreateReportTemplateRequest,
   UpdateReportTemplateRequest,
   RunReportRequest,
@@ -13,7 +14,10 @@ import type {
 // ── Dataset Catalog ─────────────────────────────────────
 
 export async function getDatasetCatalog(): Promise<ReportDataset[]> {
-  return api.get<ReportDataset[]>("/api/reports/datasets");
+  const response = await api.get<{ value: ReportDataset[] }>(
+    "/api/reports/datasets",
+  );
+  return response.value;
 }
 
 // ── Templates ───────────────────────────────────────────
@@ -25,7 +29,6 @@ export async function createReportTemplate(
 }
 
 export async function getReportTemplates(params?: {
-  clientId?: string;
   datasetType?: ReportDatasetType;
   isActive?: boolean;
 }): Promise<ReportTemplate[]> {
@@ -52,6 +55,16 @@ export async function deleteReportTemplate(id: string): Promise<void> {
   return api.del<void>(`/api/reports/templates/${id}`);
 }
 
+export async function getReportTemplateHistory(
+  id: string,
+  limit?: number,
+): Promise<ReportTemplateHistory[]> {
+  return api.get<ReportTemplateHistory[]>(
+    `/api/reports/templates/${id}/history`,
+    { limit },
+  );
+}
+
 // ── Executions ──────────────────────────────────────────
 
 export async function runReport(
@@ -62,27 +75,39 @@ export async function runReport(
 
 export async function getReportExecution(
   id: string,
-  clientId: string,
+  clientId?: string,
 ): Promise<ReportExecution> {
   return api.get<ReportExecution>(`/api/reports/executions/${id}`, {
     clientId,
   });
 }
 
-export async function getReportExecutions(
-  clientId: string,
-  limit?: number,
-): Promise<ReportExecution[]> {
-  return api.get<ReportExecution[]>("/api/reports/executions", {
-    clientId,
-    limit,
-  });
+export async function getReportExecutions(params?: {
+  clientId?: string;
+  limit?: number;
+}): Promise<ReportExecution[]> {
+  return api.get<ReportExecution[]>("/api/reports/executions", params ?? {});
 }
 
-export function getReportDownloadUrl(id: string, clientId: string): string {
-  const params = new URLSearchParams({ clientId });
+export function getReportDownloadUrl(id: string, clientId?: string): string {
   const baseUrl = import.meta.env.VITE_API_URL ?? "";
-  return `${baseUrl}/api/reports/executions/${id}/download?${params}`;
+  if (clientId) {
+    const params = new URLSearchParams({ clientId });
+    return `${baseUrl}/api/reports/executions/${id}/download?${params}`;
+  }
+  return `${baseUrl}/api/reports/executions/${id}/download`;
+}
+
+export function getReportStreamDownloadUrl(
+  id: string,
+  clientId?: string,
+): string {
+  const baseUrl = import.meta.env.VITE_API_URL ?? "";
+  if (clientId) {
+    const params = new URLSearchParams({ clientId });
+    return `${baseUrl}/api/reports/executions/${id}/download-stream?${params}`;
+  }
+  return `${baseUrl}/api/reports/executions/${id}/download-stream`;
 }
 
 // ── Preview ─────────────────────────────────────────────

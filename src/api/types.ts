@@ -777,21 +777,57 @@ export enum ReportDatasetType {
 
 export enum ReportFormat {
   Xlsx = 0,
-  Csv = 1,
-  Pdf = 2,
+  Pdf = 1,
+  Csv = 2,
 }
 
 export enum ReportExecutionStatus {
   Pending = 0,
-  Processing = 1,
+  Running = 1,
   Completed = 2,
   Failed = 3,
 }
 
+export enum ReportOrientation {
+  Portrait = 0,
+  Landscape = 1,
+}
+
+export enum ReportSortDirection {
+  ASC = 0,
+  DESC = 1,
+}
+
+export type ReportFilterType = "DateTime" | "Long" | "String" | "Boolean";
+
+export interface ReportFilterDefinition {
+  name: string;
+  label: string;
+  type: ReportFilterType;
+  required: boolean;
+  description?: string;
+}
+
+export interface ReportFilterPreset {
+  name: string;
+  [key: string]: any;
+}
+
+export interface ReportExecutionSchema {
+  scope: string;
+  dateMode: string;
+  filters: ReportFilterDefinition[];
+  allowedOrientations: string[];
+  allowedSortFields: string[];
+  allowedSortDirections: string[];
+  sampleFilterPresets?: ReportFilterPreset[];
+}
+
 export interface ReportDataset {
   type: ReportDatasetType;
-  fields: string[];
-  formats: ReportFormat[];
+  name: string;
+  description: string;
+  executionSchema: ReportExecutionSchema;
 }
 
 export interface ReportTemplate {
@@ -800,71 +836,91 @@ export interface ReportTemplate {
   name: string;
   description: string | null;
   datasetType: ReportDatasetType;
+  instructions?: string | null;
+  executionSchema: ReportExecutionSchema;
+  executionSchemaJson?: Record<string, any> | null;
   defaultFormat: ReportFormat;
   layoutJson: string;
   filtersJson: string | null;
   isActive: boolean;
+  version: number;
   createdAt: string;
+  updatedAt: string;
   createdBy: string | null;
-  updatedAt: string | null;
   updatedBy: string | null;
 }
 
 export interface ReportExecution {
   id: string;
   templateId: string;
-  clientId: string;
+  clientId: string | null;
   format: ReportFormat;
   filtersJson: string | null;
   status: ReportExecutionStatus;
-  rowCount: number | null;
+  resultPath: string | null;
   resultContentType: string | null;
   resultSizeBytes: number | null;
-  resultPath: string | null;
+  rowCount: number | null;
   errorMessage: string | null;
+  executionTimeMs: number | null;
   createdAt: string;
+  startedAt: string | null;
+  finishedAt: string | null;
   createdBy: string | null;
-  completedAt: string | null;
 }
 
 export interface CreateReportTemplateRequest {
-  clientId: string | null;
   name: string;
-  description: string | null;
+  description?: string | null;
   datasetType: ReportDatasetType;
-  defaultFormat: ReportFormat;
-  layoutJson: string;
-  filtersJson: string | null;
-  createdBy: string | null;
+  instructions?: string | null;
+  executionSchemaJson?: Record<string, any> | null;
+  defaultFormat?: ReportFormat;
+  layoutJson?: string;
+  filtersJson?: string | null;
+  createdBy?: string | null;
 }
 
 export interface UpdateReportTemplateRequest {
-  clientId: string | null;
-  name: string;
-  description: string | null;
-  datasetType: ReportDatasetType;
-  defaultFormat: ReportFormat;
-  layoutJson: string;
-  filtersJson: string | null;
-  isActive: boolean;
-  updatedBy: string | null;
+  name?: string;
+  description?: string | null;
+  datasetType?: ReportDatasetType;
+  instructions?: string | null;
+  executionSchemaJson?: Record<string, any> | null;
+  defaultFormat?: ReportFormat;
+  layoutJson?: string;
+  filtersJson?: string | null;
+  isActive?: boolean;
+  updatedBy?: string | null;
 }
 
 export interface RunReportRequest {
   templateId: string;
-  clientId: string;
-  format: ReportFormat | null;
-  filtersJson: string | null;
-  createdBy: string | null;
-  runAsync: boolean;
+  format?: ReportFormat;
+  orientation?: string;
+  filtersJson?: Record<string, any> | null;
+  orderBy?: string;
+  orderDirection?: string;
+  createdBy?: string | null;
 }
 
 export interface RunReportResponse {
   executionId: string;
   status: ReportExecutionStatus;
-  rowCount?: number;
-  contentType?: string;
-  resultSizeBytes?: number;
-  downloadPath?: string;
-  message?: string;
+  createdAt: string;
+}
+
+export interface ReportTemplateHistory {
+  id: string;
+  templateId: string;
+  version: number;
+  eventType: "Created" | "Updated" | "Deleted";
+  name: string;
+  datasetType: ReportDatasetType;
+  defaultFormat: ReportFormat;
+  layoutJson: string;
+  filtersJson: string | null;
+  isActive: boolean;
+  createdAt: string;
+  createdBy: string | null;
 }
