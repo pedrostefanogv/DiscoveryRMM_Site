@@ -1,15 +1,11 @@
 import { useState, useCallback } from "react";
 import * as reportsApi from "@/api/reports";
 import { ReportExecutionStatus } from "@/api/types";
-import {
-  getReportDownloadUrl,
-  getReportStreamDownloadUrl,
-} from "@/api/reports";
+import { downloadReportFile } from "@/api/reports";
 import type { ReportExecution } from "@/api/types";
 
 const POLLING_INTERVAL_MS = 2000;
 const MAX_POLLING_ATTEMPTS = 60; // 2 min total
-const STREAM_THRESHOLD_BYTES = 50 * 1024 * 1024;
 
 export interface DownloadProgress {
   status: "idle" | "running" | "completed" | "error";
@@ -20,6 +16,7 @@ export interface DownloadProgress {
 
 interface DownloadReportOptions {
   clientId?: string;
+  fileName?: string;
 }
 
 function normalizeExecutionStatus(
@@ -114,52 +111,29 @@ export function useReportDownload() {
           },
         }));
 
-        const isLargeFile =
-          (execution.resultSizeBytes ?? 0) > STREAM_THRESHOLD_BYTES;
+        // Determine file extension from format or content type
+        const getFileExtension = (exec: ReportExecution): string => {
+          if (exec.resultContentType?.includes("pdf")) return "pdf";
+          if (exec.resultContentType?.includes("spreadsheet")) return "xlsx";
+          if (exec.resultContentType?.includes("csv")) return "csv";
+          // Fallback to PDF
+          return "pdf";
+        };
 
-        if (isLargeFile) {
-          const streamUrl = getReportStreamDownloadUrl(
-            executionId,
-            options?.clientId,
-          );
-          const link = document.createElement("a");
-          link.href = streamUrl;
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-        } else {
-          const downloadUrl = getReportDownloadUrl(
-            executionId,
-            options?.clientId,
-          );
-          const response = await fetch(downloadUrl, {
-            method: "GET",
-            credentials: "include",
-          });
+        const extension = getFileExtension(execution);
+        const fileName =
+          options?.fileName ||
+          `report_${new Date().toISOString().split("T")[0]}.${extension}`;
 
-          if (!response.ok) {
-            throw new Error("Falha ao baixar o arquivo do relatório");
-          }
-
-          const blob = await response.blob();
-          const objectUrl = window.URL.createObjectURL(blob);
-          const link = document.createElement("a");
-          link.href = objectUrl;
-          link.download = `relatorio_${executionId}`;
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-          window.URL.revokeObjectURL(objectUrl);
-        }
+        // Use the helper function from API
+        await downloadReportFile(executionId, fileName, options?.clientId);
 
         setDownloads((prev) => ({
           ...prev,
           [executionId]: {
             status: "completed",
             progress: 100,
-            message: isLargeFile
-              ? "Download em streaming iniciado!"
-              : "Download concluído!",
+            message: "Download concluído!",
           },
         }));
 

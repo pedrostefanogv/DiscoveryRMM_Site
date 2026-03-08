@@ -16,6 +16,16 @@ body {
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
 }
 
+/*
+  Windows pode renderizar dropdown nativo ignorando parcialmente classes utilitárias.
+  Essas regras garantem contraste mínimo para todas as opções de select.
+*/
+select option,
+select optgroup {
+  color: #0f172a;
+  background-color: #ffffff;
+}
+
 /* Transitions for sidebar */
 .sidebar-transition {
   transition: width 200ms ease, transform 200ms ease;

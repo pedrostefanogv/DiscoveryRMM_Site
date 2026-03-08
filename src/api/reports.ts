@@ -1,6 +1,5 @@
 import { api } from "./client";
 import type {
-  ReportDataset,
   ReportTemplate,
   ReportExecution,
   ReportTemplateHistory,
@@ -9,15 +8,13 @@ import type {
   RunReportRequest,
   RunReportResponse,
   ReportDatasetType,
+  DatasetCatalogItem,
 } from "./types";
 
 // ── Dataset Catalog ─────────────────────────────────────
 
-export async function getDatasetCatalog(): Promise<ReportDataset[]> {
-  const response = await api.get<{ value: ReportDataset[] }>(
-    "/api/reports/datasets",
-  );
-  return response.value;
+export async function getDatasetCatalog(): Promise<DatasetCatalogItem[]> {
+  return api.get<DatasetCatalogItem[]>("/api/reports/datasets");
 }
 
 // ── Templates ───────────────────────────────────────────
@@ -90,40 +87,50 @@ export async function getReportExecutions(params?: {
 }
 
 export function getReportDownloadUrl(id: string, clientId?: string): string {
-  const baseUrl = import.meta.env.VITE_API_URL ?? "";
+  // Use relative URLs to properly leverage browser's cookie/session handling
+  // The VITE_API_URL is only for server-to-server API calls, not for browser navigation
   if (clientId) {
     const params = new URLSearchParams({ clientId });
-    return `${baseUrl}/api/reports/executions/${id}/download?${params}`;
+    return `/api/reports/executions/${id}/download?${params}`;
   }
-  return `${baseUrl}/api/reports/executions/${id}/download`;
+  return `/api/reports/executions/${id}/download`;
 }
 
-export function getReportStreamDownloadUrl(
-  id: string,
+// ── Download Helper ─────────────────────────────────────
+
+/**
+ * Downloads a report file using direct redirect for better browser handling
+ */
+export async function downloadReportFile(
+  executionId: string,
+  _fileName?: string,
   clientId?: string,
-): string {
-  const baseUrl = import.meta.env.VITE_API_URL ?? "";
-  if (clientId) {
-    const params = new URLSearchParams({ clientId });
-    return `${baseUrl}/api/reports/executions/${id}/download-stream?${params}`;
+): Promise<void> {
+  const downloadUrl = getReportDownloadUrl(executionId, clientId);
+
+  try {
+    // Use direct window.location for file download to leverage browser's native download handling
+    // This avoids CORS issues and properly maintains authentication cookies
+    window.location.href = downloadUrl;
+  } catch (error) {
+    console.error("Failed to initiate report download:", error);
+    throw new Error(
+      `Failed to download report: ${error instanceof Error ? error.message : "Unknown error"}`,
+    );
   }
-  return `${baseUrl}/api/reports/executions/${id}/download-stream`;
 }
 
-// ── Preview ─────────────────────────────────────────────
+// ── Preview (fallback local) ───────────────────────────
 
 export async function previewReportData(
   datasetType: ReportDatasetType,
   _filters?: string,
   limit: number = 10,
 ): Promise<any[]> {
-  // Simulated preview - in production, this would be a real API endpoint
-  // For now, we'll return mock data based on dataset type
   return new Promise((resolve) => {
     setTimeout(() => {
-      const mockData = generateMockPreviewData(datasetType, limit);
-      resolve(mockData);
-    }, 500);
+      resolve(generateMockPreviewData(datasetType, limit));
+    }, 300);
   });
 }
 
@@ -135,7 +142,7 @@ function generateMockPreviewData(
 
   for (let i = 0; i < limit; i++) {
     switch (datasetType) {
-      case 0: // SoftwareInventory
+      case 0:
         data.push({
           softwareName: `Software ${i + 1}`,
           publisher: `Publisher ${i + 1}`,
@@ -144,7 +151,7 @@ function generateMockPreviewData(
           agentId: `agent-${i + 1}`,
         });
         break;
-      case 1: // Logs
+      case 1:
         data.push({
           level: ["Info", "Warning", "Error"][i % 3],
           message: `Log message ${i + 1}`,
@@ -152,7 +159,7 @@ function generateMockPreviewData(
           timestamp: new Date().toISOString(),
         });
         break;
-      case 2: // ConfigurationAudit
+      case 2:
         data.push({
           fieldName: `field${i + 1}`,
           changedBy: `user${i + 1}@example.com`,
@@ -160,14 +167,14 @@ function generateMockPreviewData(
           reason: `Change reason ${i + 1}`,
         });
         break;
-      case 3: // Tickets
+      case 3:
         data.push({
           priority: ["Low", "Medium", "High", "Critical"][i % 4],
           createdAt: new Date().toISOString(),
           status: ["Open", "In Progress", "Closed"][i % 3],
         });
         break;
-      case 4: // AgentHardware
+      case 4:
         data.push({
           osName: `Windows ${10 + (i % 2)}`,
           processor: `Intel Core i${5 + (i % 4)}`,

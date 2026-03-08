@@ -767,6 +767,8 @@ export interface TicketsQuery {
 
 // ── Reports ────────────────────────────────────────────
 
+// ── Report Enums ──────────────────────────────────────────────
+
 export enum ReportDatasetType {
   SoftwareInventory = 0,
   Logs = 1,
@@ -798,7 +800,109 @@ export enum ReportSortDirection {
   DESC = 1,
 }
 
+export enum ReportScopeType {
+  Global = 0,
+  Client = 1,
+  ClientSite = 2,
+  ClientSiteAgent = 3,
+}
+
+export enum ReportDateMode {
+  None = 0,
+  OptionalRange = 1,
+  RequiredRange = 2,
+}
+
+export enum ReportFilterFieldType {
+  Text = 0,
+  TextExact = 1,
+  Enum = 2,
+  Guid = 3,
+  Integer = 4,
+  Decimal = 5,
+  Date = 6,
+  DateTime = 7,
+  Boolean = 8,
+}
+
+export enum ReportFilterUiComponent {
+  TextInput = 0,
+  TextSearch = 1,
+  Select = 2,
+  MultiSelect = 3,
+  GuidInput = 4,
+  NumberInput = 5,
+  DatePicker = 6,
+  DateTimePicker = 7,
+  Toggle = 8,
+}
+
+export enum NotificationSeverity {
+  Informational = 0,
+  Warning = 1,
+  Critical = 2,
+}
+
+// OrderBy Enums (valores em camelCase para JSON)
+export enum SoftwareInventoryOrderBy {
+  SoftwareName = "softwareName",
+  Publisher = "publisher",
+  Version = "version",
+  LastSeenAt = "lastSeenAt",
+  AgentHostname = "agentHostname",
+  SiteName = "siteName",
+}
+
+export enum LogsOrderBy {
+  Timestamp = "timestamp",
+  Level = "level",
+  Source = "source",
+  Type = "type",
+}
+
+export enum ConfigurationAuditOrderBy {
+  Timestamp = "timestamp",
+  EntityType = "entityType",
+  ChangedBy = "changedBy",
+  FieldName = "fieldName",
+}
+
+export enum TicketsOrderBy {
+  Timestamp = "timestamp",
+  Priority = "priority",
+  SlaBreached = "slaBreached",
+  ClosedAt = "closedAt",
+}
+
+export enum AgentHardwareOrderBy {
+  SiteName = "siteName",
+  AgentHostname = "agentHostname",
+  CollectedAt = "collectedAt",
+  OsName = "osName",
+}
+
+// Legacy type for backward compatibility
 export type ReportFilterType = "DateTime" | "Long" | "String" | "Boolean";
+
+// ── Report Interfaces ──────────────────────────────────────────
+
+export interface ReportFilterField {
+  name: string;
+  label: string;
+  type: ReportFilterFieldType;
+  required: boolean;
+  group: string;
+  description?: string;
+  uiComponent: ReportFilterUiComponent;
+  dependsOn?: string | null;
+  placeholder?: string;
+  defaultValue?: string;
+  allowedValues?: string[];
+  min?: number;
+  max?: number;
+  maxLength?: number;
+  isPartialMatch?: boolean;
+}
 
 export interface ReportFilterDefinition {
   name: string;
@@ -810,17 +914,28 @@ export interface ReportFilterDefinition {
 
 export interface ReportFilterPreset {
   name: string;
-  [key: string]: any;
+  description: string;
+  filtersJson: string;
 }
 
 export interface ReportExecutionSchema {
-  scope: string;
-  dateMode: string;
-  filters: ReportFilterDefinition[];
+  scopeType: ReportScopeType;
+  dateMode: ReportDateMode;
   allowedOrientations: string[];
+  defaultOrientation: string;
   allowedSortFields: string[];
+  defaultSortField: string;
   allowedSortDirections: string[];
+  defaultSortDirection: string;
+  filters: ReportFilterField[];
   sampleFilterPresets?: ReportFilterPreset[];
+}
+
+export interface DatasetCatalogItem {
+  type: string;
+  fields: string[];
+  formats: ReportFormat[];
+  executionSchema: ReportExecutionSchema;
 }
 
 export interface ReportDataset {
@@ -897,17 +1012,19 @@ export interface UpdateReportTemplateRequest {
 export interface RunReportRequest {
   templateId: string;
   format?: ReportFormat;
-  orientation?: string;
-  filtersJson?: Record<string, any> | null;
-  orderBy?: string;
-  orderDirection?: string;
+  filtersJson?: string | null;
   createdBy?: string | null;
+  runAsync: boolean;
 }
 
 export interface RunReportResponse {
   executionId: string;
   status: ReportExecutionStatus;
-  createdAt: string;
+  message?: string;
+  rowCount?: number;
+  contentType?: string;
+  resultSizeBytes?: number;
+  downloadPath?: string;
 }
 
 export interface ReportTemplateHistory {

@@ -1,61 +1,25 @@
-import { ReportDatasetType, type ReportExecutionSchema } from "@/api/types";
+import {
+  ReportDatasetType,
+  ReportScopeType,
+  ReportDateMode,
+  ReportFilterFieldType,
+  ReportFilterUiComponent,
+  type ReportExecutionSchema,
+} from "@/api/types";
 
 /**
  * Schemas padrão de execução por tipo de dataset
- * Baseado na estrutura da API C# BuildDatasetCatalog
+ * Atualizado conforme nova documentação da API (março 2026)
  */
 export const DEFAULT_EXECUTION_SCHEMAS: Record<
   ReportDatasetType,
   ReportExecutionSchema
 > = {
   [ReportDatasetType.SoftwareInventory]: {
-    scope: "CurrentSnapshot",
-    dateMode: "None",
-    filters: [
-      {
-        name: "clientId",
-        label: "Cliente",
-        type: "Long",
-        required: false,
-        description: "Filtrar por cliente específico",
-      },
-      {
-        name: "siteId",
-        label: "Site",
-        type: "Long",
-        required: false,
-        description: "Filtrar por site específico",
-      },
-      {
-        name: "agentId",
-        label: "Agente",
-        type: "Long",
-        required: false,
-        description: "Filtrar por agente específico",
-      },
-      {
-        name: "softwareName",
-        label: "Nome do Software",
-        type: "String",
-        required: false,
-        description: "Busca parcial por nome",
-      },
-      {
-        name: "publisher",
-        label: "Fabricante",
-        type: "String",
-        required: false,
-        description: "Filtro por fabricante",
-      },
-      {
-        name: "version",
-        label: "Versão",
-        type: "String",
-        required: false,
-        description: "Filtra por versão exata ou parcial",
-      },
-    ],
-    allowedOrientations: ["Portrait", "Landscape"],
+    scopeType: ReportScopeType.ClientSiteAgent,
+    dateMode: ReportDateMode.None,
+    allowedOrientations: ["landscape", "portrait"],
+    defaultOrientation: "landscape",
     allowedSortFields: [
       "softwareName",
       "publisher",
@@ -64,333 +28,509 @@ export const DEFAULT_EXECUTION_SCHEMAS: Record<
       "agentHostname",
       "siteName",
     ],
-    allowedSortDirections: ["ASC", "DESC"],
+    defaultSortField: "softwareName",
+    allowedSortDirections: ["asc", "desc"],
+    defaultSortDirection: "asc",
+    filters: [
+      {
+        name: "clientId",
+        label: "Cliente",
+        type: ReportFilterFieldType.Guid,
+        required: false,
+        group: "Escopo",
+        uiComponent: ReportFilterUiComponent.GuidInput,
+        placeholder: "GUID do cliente",
+      },
+      {
+        name: "siteId",
+        label: "Site",
+        type: ReportFilterFieldType.Guid,
+        required: false,
+        group: "Escopo",
+        uiComponent: ReportFilterUiComponent.GuidInput,
+        dependsOn: "clientId",
+        placeholder: "GUID do site",
+      },
+      {
+        name: "agentId",
+        label: "Agente",
+        type: ReportFilterFieldType.Guid,
+        required: false,
+        group: "Escopo",
+        uiComponent: ReportFilterUiComponent.GuidInput,
+        dependsOn: "siteId",
+        placeholder: "GUID do agente",
+      },
+      {
+        name: "softwareName",
+        label: "Nome do Software",
+        type: ReportFilterFieldType.Text,
+        required: false,
+        group: "Filtros",
+        uiComponent: ReportFilterUiComponent.TextSearch,
+        maxLength: 200,
+        isPartialMatch: true,
+        description: "Busca parcial por nome",
+      },
+      {
+        name: "publisher",
+        label: "Fabricante",
+        type: ReportFilterFieldType.Text,
+        required: false,
+        group: "Filtros",
+        uiComponent: ReportFilterUiComponent.TextSearch,
+        maxLength: 200,
+        isPartialMatch: true,
+      },
+      {
+        name: "version",
+        label: "Versão",
+        type: ReportFilterFieldType.Text,
+        required: false,
+        group: "Filtros",
+        uiComponent: ReportFilterUiComponent.TextInput,
+        maxLength: 50,
+      },
+      {
+        name: "limit",
+        label: "Limite de linhas",
+        type: ReportFilterFieldType.Integer,
+        required: false,
+        group: "Saída",
+        uiComponent: ReportFilterUiComponent.NumberInput,
+        defaultValue: "1000",
+        min: 1,
+        max: 10000,
+      },
+    ],
     sampleFilterPresets: [
       {
         name: "Inventário Completo",
-        softwareName: "",
+        description: "Todos os softwares instalados",
+        filtersJson: JSON.stringify({ limit: 5000 }),
       },
       {
-        name: "Por Fabricante (Microsoft)",
-        publisher: "Microsoft",
+        name: "Software Microsoft",
+        description: "Apenas produtos Microsoft",
+        filtersJson: JSON.stringify({ publisher: "Microsoft", limit: 5000 }),
       },
     ],
   },
 
   [ReportDatasetType.Logs]: {
-    scope: "HistoricalTimeSeries",
-    dateMode: "Range",
+    scopeType: ReportScopeType.ClientSiteAgent,
+    dateMode: ReportDateMode.RequiredRange,
+    allowedOrientations: ["landscape", "portrait"],
+    defaultOrientation: "portrait",
+    allowedSortFields: ["timestamp", "level", "source", "type"],
+    defaultSortField: "timestamp",
+    allowedSortDirections: ["asc", "desc"],
+    defaultSortDirection: "desc",
     filters: [
       {
         name: "from",
         label: "Data Inicial",
-        type: "DateTime",
+        type: ReportFilterFieldType.DateTime,
         required: true,
+        group: "Período",
+        uiComponent: ReportFilterUiComponent.DateTimePicker,
         description: "Início do período (obrigatório)",
       },
       {
         name: "to",
         label: "Data Final",
-        type: "DateTime",
+        type: ReportFilterFieldType.DateTime,
         required: true,
+        group: "Período",
+        uiComponent: ReportFilterUiComponent.DateTimePicker,
         description: "Fim do período (obrigatório)",
       },
       {
         name: "clientId",
         label: "Cliente",
-        type: "Long",
+        type: ReportFilterFieldType.Guid,
         required: false,
-        description: "Filtrar por cliente específico",
+        group: "Escopo",
+        uiComponent: ReportFilterUiComponent.GuidInput,
       },
       {
         name: "siteId",
         label: "Site",
-        type: "Long",
+        type: ReportFilterFieldType.Guid,
         required: false,
+        group: "Escopo",
+        uiComponent: ReportFilterUiComponent.GuidInput,
+        dependsOn: "clientId",
       },
       {
         name: "agentId",
         label: "Agente",
-        type: "Long",
+        type: ReportFilterFieldType.Guid,
         required: false,
+        group: "Escopo",
+        uiComponent: ReportFilterUiComponent.GuidInput,
+        dependsOn: "siteId",
       },
       {
         name: "level",
         label: "Nível",
-        type: "String",
+        type: ReportFilterFieldType.Enum,
         required: false,
-        description: "Trace, Info, Warning, Error",
+        group: "Filtros",
+        uiComponent: ReportFilterUiComponent.MultiSelect,
+        allowedValues: ["Debug", "Info", "Warning", "Error", "Critical"],
       },
       {
         name: "source",
         label: "Origem",
-        type: "String",
+        type: ReportFilterFieldType.Text,
         required: false,
-        description: "Origem do evento",
+        group: "Filtros",
+        uiComponent: ReportFilterUiComponent.TextInput,
+        maxLength: 100,
       },
       {
         name: "message",
         label: "Mensagem",
-        type: "String",
+        type: ReportFilterFieldType.Text,
         required: false,
-        description: "Busca parcial no texto",
+        group: "Filtros",
+        uiComponent: ReportFilterUiComponent.TextSearch,
+        maxLength: 500,
+        isPartialMatch: true,
+      },
+      {
+        name: "limit",
+        label: "Limite de linhas",
+        type: ReportFilterFieldType.Integer,
+        required: false,
+        group: "Saída",
+        uiComponent: ReportFilterUiComponent.NumberInput,
+        defaultValue: "1000",
+        min: 1,
+        max: 10000,
       },
     ],
-    allowedOrientations: ["Portrait", "Landscape"],
-    allowedSortFields: ["createdAt", "level", "source", "type"],
-    allowedSortDirections: ["ASC", "DESC"],
     sampleFilterPresets: [
       {
         name: "Últimas 24 horas",
-        from: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
-        to: new Date().toISOString(),
+        description: "Todos os logs das últimas 24 horas",
+        filtersJson: JSON.stringify({
+          from: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+          to: new Date().toISOString(),
+        }),
       },
       {
-        name: "Últimos 7 dias - Erros",
-        from: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
-        to: new Date().toISOString(),
-        level: "Error",
+        name: "Erros (7 dias)",
+        description: "Apenas erros dos últimos 7 dias",
+        filtersJson: JSON.stringify({
+          from: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
+          to: new Date().toISOString(),
+          level: ["Error", "Critical"],
+        }),
       },
     ],
   },
 
   [ReportDatasetType.ConfigurationAudit]: {
-    scope: "GlobalAudit",
-    dateMode: "Range",
+    scopeType: ReportScopeType.Global,
+    dateMode: ReportDateMode.RequiredRange,
+    allowedOrientations: ["landscape", "portrait"],
+    defaultOrientation: "portrait",
+    allowedSortFields: ["timestamp", "entityType", "changedBy", "fieldName"],
+    defaultSortField: "timestamp",
+    allowedSortDirections: ["asc", "desc"],
+    defaultSortDirection: "desc",
     filters: [
       {
         name: "from",
         label: "Data Inicial",
-        type: "DateTime",
+        type: ReportFilterFieldType.DateTime,
         required: true,
-        description: "Início do período de auditoria (obrigatório)",
+        group: "Período",
+        uiComponent: ReportFilterUiComponent.DateTimePicker,
+        description: "Início do período de auditoria",
       },
       {
         name: "to",
         label: "Data Final",
-        type: "DateTime",
+        type: ReportFilterFieldType.DateTime,
         required: true,
-        description: "Fim do período de auditoria (obrigatório)",
+        group: "Período",
+        uiComponent: ReportFilterUiComponent.DateTimePicker,
+        description: "Fim do período de auditoria",
       },
       {
         name: "entityType",
         label: "Tipo de Entidade",
-        type: "String",
+        type: ReportFilterFieldType.Enum,
         required: false,
-        description: "Ex.: Client, Site, ServerConfiguration, Agent",
+        group: "Filtros",
+        uiComponent: ReportFilterUiComponent.Select,
+        allowedValues: ["Server", "Client", "Site", "Agent"],
       },
       {
         name: "entityId",
         label: "ID da Entidade",
-        type: "Long",
+        type: ReportFilterFieldType.Guid,
         required: false,
-        description: "Filtrar por entidade específica",
+        group: "Filtros",
+        uiComponent: ReportFilterUiComponent.GuidInput,
       },
       {
         name: "fieldName",
         label: "Campo Alterado",
-        type: "String",
+        type: ReportFilterFieldType.Text,
         required: false,
-        description: "Nome do campo que foi modificado",
+        group: "Filtros",
+        uiComponent: ReportFilterUiComponent.TextInput,
+        maxLength: 200,
       },
       {
         name: "changedBy",
         label: "Alterado Por",
-        type: "String",
+        type: ReportFilterFieldType.Text,
         required: false,
-        description: "Usuário responsável",
+        group: "Filtros",
+        uiComponent: ReportFilterUiComponent.TextInput,
+        maxLength: 256,
+      },
+      {
+        name: "limit",
+        label: "Limite de linhas",
+        type: ReportFilterFieldType.Integer,
+        required: false,
+        group: "Saída",
+        uiComponent: ReportFilterUiComponent.NumberInput,
+        defaultValue: "1000",
+        min: 1,
+        max: 10000,
       },
     ],
-    allowedOrientations: ["Portrait", "Landscape"],
-    allowedSortFields: ["changedAt", "entityType", "changedBy", "fieldName"],
-    allowedSortDirections: ["ASC", "DESC"],
     sampleFilterPresets: [
       {
-        name: "Auditoria do Mês Atual",
-        from: new Date(
-          new Date().getFullYear(),
-          new Date().getMonth(),
-          1,
-        ).toISOString(),
-        to: new Date(
-          new Date().getFullYear(),
-          new Date().getMonth() + 1,
-          0,
-          23,
-          59,
-          59,
-        ).toISOString(),
+        name: "Mês Atual",
+        description: "Auditoria do mês corrente",
+        filtersJson: JSON.stringify({
+          from: new Date(
+            new Date().getFullYear(),
+            new Date().getMonth(),
+            1,
+          ).toISOString(),
+          to: new Date().toISOString(),
+        }),
       },
       {
         name: "Alterações em Clientes",
-        from: new Date(
-          new Date().getFullYear(),
-          new Date().getMonth(),
-          1,
-        ).toISOString(),
-        to: new Date(
-          new Date().getFullYear(),
-          new Date().getMonth() + 1,
-          0,
-          23,
-          59,
-          59,
-        ).toISOString(),
-        entityType: "Client",
+        description: "Apenas alterações em clientes",
+        filtersJson: JSON.stringify({
+          from: new Date(
+            new Date().getFullYear(),
+            new Date().getMonth(),
+            1,
+          ).toISOString(),
+          to: new Date().toISOString(),
+          entityType: "Client",
+        }),
       },
     ],
   },
 
   [ReportDatasetType.Tickets]: {
-    scope: "CurrentSnapshot",
-    dateMode: "Range",
+    scopeType: ReportScopeType.ClientSiteAgent,
+    dateMode: ReportDateMode.OptionalRange,
+    allowedOrientations: ["landscape", "portrait"],
+    defaultOrientation: "landscape",
+    allowedSortFields: ["timestamp", "priority", "slaBreached", "closedAt"],
+    defaultSortField: "timestamp",
+    allowedSortDirections: ["asc", "desc"],
+    defaultSortDirection: "desc",
     filters: [
       {
         name: "from",
-        label: "Data Inicial (Criados Após)",
-        type: "DateTime",
+        label: "Data Inicial",
+        type: ReportFilterFieldType.DateTime,
         required: false,
-        description: "Mostrar tickets criados após esta data",
+        group: "Período",
+        uiComponent: ReportFilterUiComponent.DateTimePicker,
+        description: "Tickets criados após esta data",
       },
       {
         name: "to",
-        label: "Data Final (Criados Antes)",
-        type: "DateTime",
+        label: "Data Final",
+        type: ReportFilterFieldType.DateTime,
         required: false,
-        description: "Mostrar tickets criados antes desta data",
+        group: "Período",
+        uiComponent: ReportFilterUiComponent.DateTimePicker,
+        description: "Tickets criados antes desta data",
       },
       {
         name: "clientId",
         label: "Cliente",
-        type: "Long",
+        type: ReportFilterFieldType.Guid,
         required: false,
-        description: "Filtrar por cliente específico",
+        group: "Escopo",
+        uiComponent: ReportFilterUiComponent.GuidInput,
       },
       {
         name: "siteId",
         label: "Site",
-        type: "Long",
+        type: ReportFilterFieldType.Guid,
         required: false,
+        group: "Escopo",
+        uiComponent: ReportFilterUiComponent.GuidInput,
+        dependsOn: "clientId",
+      },
+      {
+        name: "agentId",
+        label: "Agente",
+        type: ReportFilterFieldType.Guid,
+        required: false,
+        group: "Escopo",
+        uiComponent: ReportFilterUiComponent.GuidInput,
+        dependsOn: "siteId",
       },
       {
         name: "priority",
         label: "Prioridade",
-        type: "String",
+        type: ReportFilterFieldType.Enum,
         required: false,
-        description: "Low, Medium, High, Critical",
+        group: "Filtros",
+        uiComponent: ReportFilterUiComponent.Select,
+        allowedValues: ["Low", "Medium", "High", "Critical"],
       },
       {
         name: "workflowStateId",
-        label: "Status",
-        type: "Long",
+        label: "Estado do Workflow",
+        type: ReportFilterFieldType.Guid,
         required: false,
-        description: "Estado atual do ticket",
+        group: "Filtros",
+        uiComponent: ReportFilterUiComponent.GuidInput,
       },
       {
         name: "slaBreached",
         label: "SLA Violado",
-        type: "Boolean",
+        type: ReportFilterFieldType.Boolean,
         required: false,
-        description: "true para tickets com SLA violado",
+        group: "Filtros",
+        uiComponent: ReportFilterUiComponent.Toggle,
+      },
+      {
+        name: "limit",
+        label: "Limite de linhas",
+        type: ReportFilterFieldType.Integer,
+        required: false,
+        group: "Saída",
+        uiComponent: ReportFilterUiComponent.NumberInput,
+        defaultValue: "1000",
+        min: 1,
+        max: 10000,
       },
     ],
-    allowedOrientations: ["Portrait", "Landscape"],
-    allowedSortFields: ["createdAt", "priority", "slaBreached", "closedAt"],
-    allowedSortDirections: ["ASC", "DESC"],
     sampleFilterPresets: [
       {
         name: "Últimos 7 dias",
-        from: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
-        to: new Date().toISOString(),
+        description: "Tickets dos últimos 7 dias",
+        filtersJson: JSON.stringify({
+          from: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
+          to: new Date().toISOString(),
+        }),
       },
       {
-        name: "Este mês",
-        from: new Date(
-          new Date().getFullYear(),
-          new Date().getMonth(),
-          1,
-        ).toISOString(),
-        to: new Date(
-          new Date().getFullYear(),
-          new Date().getMonth() + 1,
-          0,
-          23,
-          59,
-          59,
-        ).toISOString(),
-      },
-      {
-        name: "Alta prioridade - Últimos 30 dias",
-        from: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
-        to: new Date().toISOString(),
-        priority: "High",
+        name: "Alta Prioridade",
+        description: "Tickets de alta prioridade",
+        filtersJson: JSON.stringify({
+          priority: "High",
+        }),
       },
       {
         name: "SLA Violado",
-        slaBreached: true,
+        description: "Tickets com SLA violado",
+        filtersJson: JSON.stringify({
+          slaBreached: true,
+        }),
       },
     ],
   },
 
   [ReportDatasetType.AgentHardware]: {
-    scope: "CurrentSnapshot",
-    dateMode: "None",
+    scopeType: ReportScopeType.ClientSiteAgent,
+    dateMode: ReportDateMode.None,
+    allowedOrientations: ["landscape", "portrait"],
+    defaultOrientation: "landscape",
+    allowedSortFields: ["siteName", "agentHostname", "collectedAt", "osName"],
+    defaultSortField: "siteName",
+    allowedSortDirections: ["asc", "desc"],
+    defaultSortDirection: "asc",
     filters: [
       {
         name: "clientId",
         label: "Cliente",
-        type: "Long",
+        type: ReportFilterFieldType.Guid,
         required: false,
-        description: "Filtrar por cliente específico",
+        group: "Escopo",
+        uiComponent: ReportFilterUiComponent.GuidInput,
       },
       {
         name: "siteId",
         label: "Site",
-        type: "Long",
+        type: ReportFilterFieldType.Guid,
         required: false,
-        description: "Filtrar por site específico",
+        group: "Escopo",
+        uiComponent: ReportFilterUiComponent.GuidInput,
+        dependsOn: "clientId",
       },
       {
         name: "agentId",
         label: "Agente",
-        type: "Long",
+        type: ReportFilterFieldType.Guid,
         required: false,
-        description: "Filtrar por agente específico",
+        group: "Escopo",
+        uiComponent: ReportFilterUiComponent.GuidInput,
+        dependsOn: "siteId",
       },
       {
         name: "osName",
         label: "Sistema Operacional",
-        type: "String",
+        type: ReportFilterFieldType.Text,
         required: false,
-        description: "Ex.: Windows 10, Windows Server 2019, Ubuntu",
+        group: "Filtros",
+        uiComponent: ReportFilterUiComponent.TextSearch,
+        maxLength: 200,
+        isPartialMatch: true,
       },
       {
         name: "processor",
         label: "Processador",
-        type: "String",
+        type: ReportFilterFieldType.Text,
         required: false,
-        description: "Filtro por tipo de processador",
+        group: "Filtros",
+        uiComponent: ReportFilterUiComponent.TextSearch,
+        maxLength: 200,
+        isPartialMatch: true,
+      },
+      {
+        name: "limit",
+        label: "Limite de linhas",
+        type: ReportFilterFieldType.Integer,
+        required: false,
+        group: "Saída",
+        uiComponent: ReportFilterUiComponent.NumberInput,
+        defaultValue: "1000",
+        min: 1,
+        max: 10000,
       },
     ],
-    allowedOrientations: ["Portrait", "Landscape"],
-    allowedSortFields: [
-      "siteName",
-      "agentHostname",
-      "collectedAt",
-      "osName",
-      "processor",
-    ],
-    allowedSortDirections: ["ASC", "DESC"],
     sampleFilterPresets: [
       {
-        name: "Inventário Geral",
+        name: "Inventário Completo",
+        description: "Todo o hardware monitorado",
+        filtersJson: JSON.stringify({ limit: 5000 }),
       },
       {
-        name: "Windows - Ordenado por Host",
-        osName: "Windows",
-      },
-      {
-        name: "Coleta Recente",
+        name: "Apenas Windows",
+        description: "Equipamentos Windows",
+        filtersJson: JSON.stringify({ osName: "Windows" }),
       },
     ],
   },
@@ -421,8 +561,10 @@ export function validateCustomSchema(schema: any): {
 } {
   const errors: string[] = [];
 
-  if (!schema.scope) errors.push("Campo 'scope' é obrigatório");
-  if (!schema.dateMode) errors.push("Campo 'dateMode' é obrigatório");
+  if (schema.scopeType === undefined)
+    errors.push("Campo 'scopeType' é obrigatório");
+  if (schema.dateMode === undefined)
+    errors.push("Campo 'dateMode' é obrigatório");
   if (!Array.isArray(schema.filters))
     errors.push("Campo 'filters' deve ser um array");
   if (!Array.isArray(schema.allowedOrientations))
@@ -431,6 +573,12 @@ export function validateCustomSchema(schema: any): {
     errors.push("Campo 'allowedSortFields' deve ser um array");
   if (!Array.isArray(schema.allowedSortDirections))
     errors.push("Campo 'allowedSortDirections' deve ser um array");
+  if (!schema.defaultOrientation)
+    errors.push("Campo 'defaultOrientation' é obrigatório");
+  if (!schema.defaultSortField)
+    errors.push("Campo 'defaultSortField' é obrigatório");
+  if (!schema.defaultSortDirection)
+    errors.push("Campo 'defaultSortDirection' é obrigatório");
 
   // Validar cada filtro
   if (Array.isArray(schema.filters)) {
@@ -439,10 +587,14 @@ export function validateCustomSchema(schema: any): {
         errors.push(`Filtro ${idx + 1}: campo 'name' é obrigatório`);
       if (!filter.label)
         errors.push(`Filtro ${idx + 1}: campo 'label' é obrigatório`);
-      if (!filter.type)
+      if (filter.type === undefined)
         errors.push(`Filtro ${idx + 1}: campo 'type' é obrigatório`);
       if (filter.required === undefined)
         errors.push(`Filtro ${idx + 1}: campo 'required' é obrigatório`);
+      if (!filter.group)
+        errors.push(`Filtro ${idx + 1}: campo 'group' é obrigatório`);
+      if (filter.uiComponent === undefined)
+        errors.push(`Filtro ${idx + 1}: campo 'uiComponent' é obrigatório`);
     });
   }
 
@@ -469,4 +621,29 @@ export function getDatasetTypeDescription(
   };
 
   return descriptions[datasetType] || "Dataset desconhecido";
+}
+
+/**
+ * Obtém valores permitidos para orderBy baseado no dataset type
+ */
+export function getAllowedOrderByValues(
+  datasetType: ReportDatasetType,
+): string[] {
+  return DEFAULT_EXECUTION_SCHEMAS[datasetType].allowedSortFields;
+}
+
+/**
+ * Obtém o valor padrão de orderBy para um dataset
+ */
+export function getDefaultOrderBy(datasetType: ReportDatasetType): string {
+  return DEFAULT_EXECUTION_SCHEMAS[datasetType].defaultSortField;
+}
+
+/**
+ * Obtém a direção padrão de ordenação para um dataset
+ */
+export function getDefaultSortDirection(
+  datasetType: ReportDatasetType,
+): string {
+  return DEFAULT_EXECUTION_SCHEMAS[datasetType].defaultSortDirection;
 }

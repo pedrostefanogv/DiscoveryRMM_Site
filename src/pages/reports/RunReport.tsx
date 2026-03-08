@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { Play, Download, Clock, CheckCircle, XCircle, Code2, Lightbulb, Info } from "lucide-react";
 import {
@@ -13,11 +13,14 @@ import { Button, Card, Loading, Badge, Input } from "@/components/ui";
 import {
   ReportFormat,
   ReportExecutionStatus,
+  ReportScopeType,
+  ReportDateMode,
+  ReportFilterFieldType,
   type RunReportRequest,
-  type ReportFilterDefinition,
+  type ReportFilterField,
   type ReportFilterPreset,
 } from "@/api/types";
-import { getReportDownloadUrl } from "@/api/reports";
+import { downloadReportFile } from "@/api/reports";
 import toast from "react-hot-toast";
 
 const SELECT_CLASSNAME =
@@ -41,6 +44,32 @@ function normalizeExecutionStatus(status: ReportExecutionStatus | string | numbe
   if (normalized === "completed") return ReportExecutionStatus.Completed;
   if (normalized === "failed") return ReportExecutionStatus.Failed;
   return undefined;
+}
+
+// Converte qualquer representação de data/datetime para ISO UTC.
+// Para filtros "to", usa fim do dia (23:59:59Z) quando só data é fornecida.
+function normalizeDateFilterValue(value: unknown, fieldName?: string): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+
+  // Formato de só data (YYYY-MM-DD) → adiciona horário de início ou fim do dia
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    const suffix = fieldName === "to" ? "T23:59:59.000Z" : "T00:00:00.000Z";
+    return `${trimmed}${suffix}`;
+  }
+
+  // datetime-local sem segundos (YYYY-MM-DDTHH:mm)
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(trimmed)) {
+    const date = new Date(`${trimmed}:00`);
+    if (Number.isNaN(date.getTime())) return undefined;
+    return date.toISOString();
+  }
+
+  // datetime com segundos ou ISO completo
+  const date = new Date(trimmed);
+  if (Number.isNaN(date.getTime())) return undefined;
+  return date.toISOString();
 }
 
 const FORMAT_LABELS: Record<ReportFormat, string> = {
@@ -89,6 +118,12 @@ export default function RunReport() {
   const [autoDownload, setAutoDownload] = useState(true);
   const [lastAutoDownloadedExecutionId, setLastAutoDownloadedExecutionId] =
     useState<string | null>(null);
+  const [isDownloading, setIsDownloading] = useState(false);
+
+  // Rastrear se o preset padrão já foi aplicado
+  const presetAppliedRef = useRef(false);
+  // Presets enriquecidos (com from/to) vindos do executionSchemaJson
+  const [enrichedPresets, setEnrichedPresets] = useState<ReportFilterPreset[]>([]);
 
   const template = useReportTemplate(templateId, clientIdParam);
   const runMutation = useRunReport();
@@ -100,7 +135,7 @@ export default function RunReport() {
 
   // Auto-download quando completar
   useEffect(() => {
-    if (!executionId || !execution.data || !autoDownload) return;
+    if (!executionId || !execution.data || !autoDownload || isDownloading) return;
 
     const normalizedStatus = normalizeExecutionStatus(
       execution.data.status as ReportExecutionStatus | string | number,
@@ -110,13 +145,24 @@ export default function RunReport() {
       normalizedStatus === ReportExecutionStatus.Completed &&
       lastAutoDownloadedExecutionId !== executionId
     ) {
-      const url = getReportDownloadUrl(
+      setIsDownloading(true);
+      downloadReportFile(
         executionId,
+        undefined,
         dynamicFilters.clientId || clientIdParam || undefined,
-      );
-      window.open(url, "_blank");
-      setLastAutoDownloadedExecutionId(executionId);
-      toast.success("Relatório pronto! Download iniciado automaticamente.");
+      )
+        .then(() => {
+          setLastAutoDownloadedExecutionId(executionId);
+          toast.success("Relatório pronto! Download iniciado automaticamente.");
+        })
+        .catch((error) => {
+          toast.error(
+            `Erro ao fazer download: ${error instanceof Error ? error.message : "Erro desconhecido"}`,
+          );
+        })
+        .finally(() => {
+          setIsDownloading(false);
+        });
     }
   }, [
     autoDownload,
@@ -125,37 +171,178 @@ export default function RunReport() {
     executionId,
     lastAutoDownloadedExecutionId,
     dynamicFilters.clientId,
+    isDownloading,
   ]);
 
+  // Resetar preset applied ref quando o template mudar
+  useEffect(() => {
+    presetAppliedRef.current = false;
+  }, [templateId]);
+
   // Inicializar orientação, orderBy e orderDirection com valores padrão do schema
+  // Presets são obtidos do executionSchemaJson (string raw) pois o backend perde campos
+  // extras (from, to, etc.) na desserialização do executionSchema.sampleFilterPresets
   useEffect(() => {
     if (!template.data?.executionSchema) return;
-    
+
     const schema = template.data.executionSchema;
-    
+
     if (!orientation && schema.allowedOrientations?.length > 0) {
       setOrientation(schema.allowedOrientations[0]);
     }
-    
     if (!orderBy && schema.allowedSortFields?.length > 0) {
       setOrderBy(schema.allowedSortFields[0]);
     }
-    
     if (!orderDirection && schema.allowedSortDirections?.length > 0) {
       setOrderDirection(schema.allowedSortDirections[0]);
     }
-  }, [template.data, orientation, orderBy, orderDirection]);
+
+    const hasRequiredFields = schema.filters.some((f) => f.required);
+    if (!hasRequiredFields || presetAppliedRef.current) return;
+
+    // Tentar obter presets completos do executionSchemaJson (campo raw)
+    let richPresets: ReportFilterPreset[] | undefined;
+    const rawJson = (template.data as any).executionSchemaJson;
+    if (rawJson) {
+      try {
+        const parsed = typeof rawJson === "string" ? JSON.parse(rawJson) : rawJson;
+        if (Array.isArray(parsed?.sampleFilterPresets)) {
+          richPresets = parsed.sampleFilterPresets;
+        }
+      } catch {
+        // fallback para os presets do schema
+      }
+    }
+
+    const presets = richPresets ?? schema.sampleFilterPresets;
+    if (presets && presets.length > 0) {
+      setEnrichedPresets(presets);
+    }
+    if (!presets || presets.length === 0) return;
+
+    const firstPreset = presets[0] as any;
+    let filterValues: Record<string, any> = {};
+    let presetOrderBy: string | undefined;
+    let presetOrderDir: string | undefined;
+
+    if (typeof firstPreset?.filtersJson === "string") {
+      try {
+        const parsedFilters = JSON.parse(firstPreset.filtersJson);
+        filterValues = parsedFilters ?? {};
+        presetOrderBy = parsedFilters?.orderBy;
+        presetOrderDir = parsedFilters?.orderDirection;
+      } catch {
+        filterValues = {};
+      }
+    } else {
+      const { name: _name, orderBy, orderDirection, ...legacyValues } = firstPreset;
+      void _name;
+      presetOrderBy = orderBy;
+      presetOrderDir = orderDirection;
+      filterValues = legacyValues;
+    }
+
+    // Aplicar orderBy/orderDirection do preset se disponíveis
+    if (presetOrderBy) setOrderBy(presetOrderBy);
+    if (presetOrderDir) setOrderDirection(presetOrderDir);
+
+    // Normalizar datas do preset para formato de data (YYYY-MM-DD) para uso nos inputs type="date"
+    const normalizedFilters: Record<string, any> = {};
+    for (const [key, val] of Object.entries(filterValues)) {
+      if (val === undefined || val === null) continue;
+      const filterDef = schema.filters.find((f) => f.name === key);
+      if (
+        (filterDef?.type === ReportFilterFieldType.DateTime ||
+          filterDef?.type === ReportFilterFieldType.Date) &&
+        typeof val === "string"
+      ) {
+        normalizedFilters[key] = isoToDateInput(val);
+      } else {
+        normalizedFilters[key] = val;
+      }
+    }
+
+    if (Object.keys(normalizedFilters).length > 0) {
+      setDynamicFilters(normalizedFilters);
+    }
+    presetAppliedRef.current = true;
+  }, [template.data?.executionSchema?.scopeType]);
+
 
   const applyPreset = (preset: ReportFilterPreset) => {
-    const { name, ...filters } = preset;
-    setDynamicFilters(filters);
-    toast.success(`Preset "${name}" aplicado`);
+    const presetData = preset as any;
+    let filterValues: Record<string, any> = {};
+    let presetOrderBy: string | undefined;
+    let presetOrderDir: string | undefined;
+
+    if (typeof presetData?.filtersJson === "string") {
+      try {
+        const parsedFilters = JSON.parse(presetData.filtersJson);
+        filterValues = parsedFilters ?? {};
+        presetOrderBy = parsedFilters?.orderBy;
+        presetOrderDir = parsedFilters?.orderDirection;
+      } catch {
+        toast.error("Preset inválido");
+        return;
+      }
+    } else {
+      const { name: _name, orderBy, orderDirection, ...legacyValues } = presetData;
+      void _name;
+      presetOrderBy = orderBy;
+      presetOrderDir = orderDirection;
+      filterValues = legacyValues;
+    }
+
+    if (presetOrderBy) setOrderBy(presetOrderBy);
+    if (presetOrderDir) setOrderDirection(presetOrderDir);
+
+    // Normalizar datas para YYYY-MM-DD (tipo date input)
+    const normalized: Record<string, any> = {};
+    for (const [key, val] of Object.entries(filterValues)) {
+      if (val === undefined || val === null) continue;
+      const filterDef = template.data?.executionSchema.filters.find((f) => f.name === key);
+      if (
+        (filterDef?.type === ReportFilterFieldType.DateTime ||
+          filterDef?.type === ReportFilterFieldType.Date) &&
+        typeof val === "string"
+      ) {
+        normalized[key] = isoToDateInput(val);
+      } else {
+        normalized[key] = val;
+      }
+    }
+    setDynamicFilters(normalized);
+    toast.success(`Preset "${preset.name}" aplicado`);
+  };
+
+  // Converte qualquer valor armazenado (ISO ou date-only) para YYYY-MM-DD (usado no input type="date")
+  const isoToDateInput = (value: string): string => {
+    if (!value) return "";
+    // Já é YYYY-MM-DD
+    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+    // ISO com Z ou timezone → extrair a parte da data em UTC
+    if (/Z$|[+-]\d{2}:\d{2}$/.test(value)) {
+      const d = new Date(value);
+      if (isNaN(d.getTime())) return "";
+      // Usar getUTC* para não distorcer por fuso
+      const yr = d.getUTCFullYear();
+      const mo = String(d.getUTCMonth() + 1).padStart(2, "0");
+      const dy = String(d.getUTCDate()).padStart(2, "0");
+      return `${yr}-${mo}-${dy}`;
+    }
+    // Datetime local sem timezone (YYYY-MM-DDTHH:mm...) → pegar só a parte da data
+    const datePart = value.slice(0, 10);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(datePart)) return datePart;
+    return "";
   };
 
   const handleDynamicFilterChange = (filterName: string, value: any) => {
-    setDynamicFilters(prev => ({
+    const normalizedValue =
+      value === undefined || value === null || value === "" ? undefined : value;
+
+    setDynamicFilters((prev) => ({
       ...prev,
-      [filterName]: value || undefined
+      [filterName]: normalizedValue,
     }));
   };
 
@@ -172,30 +359,60 @@ export default function RunReport() {
         return;
       }
     } else {
-      // Remove valores vazios
+      // Remove valores undefined/null/vazios (mas mantém 0, false, strings ISO)
       filters = Object.fromEntries(
-        Object.entries(dynamicFilters).filter(([_, v]) => v !== undefined && v !== "")
+        Object.entries(dynamicFilters).filter(([_, v]) => {
+          return v !== undefined && v !== null && v !== "";
+        })
       );
+
+      for (const filterDef of template.data.executionSchema.filters) {
+        if (
+          filterDef.type !== ReportFilterFieldType.DateTime &&
+          filterDef.type !== ReportFilterFieldType.Date
+        ) {
+          continue;
+        }
+        const normalizedDate = normalizeDateFilterValue(filters[filterDef.name], filterDef.name);
+        if (normalizedDate !== undefined) {
+          filters[filterDef.name] = normalizedDate;
+        } else {
+          delete filters[filterDef.name];
+        }
+      }
     }
 
     // Validar campos obrigatórios
     const schema = template.data.executionSchema;
-    const requiredFields = schema.filters.filter(f => f.required);
-    const missingFields = requiredFields.filter(f => !filters[f.name]);
+    const requiredFields = schema.filters.filter((f) => f.required);
+    const missingFields = requiredFields.filter(f => {
+      const fieldValue = filters[f.name];
+      // Campo está faltando se for undefined, null ou string vazia (false é válido)
+      return fieldValue === undefined || fieldValue === null || fieldValue === "";
+    });
     
     if (missingFields.length > 0) {
       toast.error(`Campos obrigatórios faltando: ${missingFields.map(f => f.label).join(", ")}`);
       return;
     }
 
+    if (orderBy) {
+      filters.orderBy = orderBy;
+    }
+    if (orderDirection) {
+      filters.orderDirection = orderDirection;
+    }
+    if (orientation) {
+      filters.orientation = orientation;
+    }
+
     const request: RunReportRequest = {
       templateId,
       format: format ?? undefined,
-      orientation: orientation || undefined,
-      filtersJson: Object.keys(filters).length > 0 ? filters : undefined,
-      orderBy: orderBy || undefined,
-      orderDirection: orderDirection || undefined,
+      filtersJson:
+        Object.keys(filters).length > 0 ? JSON.stringify(filters) : undefined,
       createdBy: "user@example.com",
+      runAsync: true,
     };
 
     runMutation.mutate(request, {
@@ -211,11 +428,19 @@ export default function RunReport() {
     });
   };
 
-  const renderFilterInput = (filter: ReportFilterDefinition) => {
+  const renderFilterInput = (filter: ReportFilterField) => {
     const value = dynamicFilters[filter.name] ?? "";
+    // Para campos DateTime, converter ISO de volta para formato datetime-local para exibição
+    const displayValue =
+      (filter.type === ReportFilterFieldType.DateTime ||
+        filter.type === ReportFilterFieldType.Date) &&
+      value
+      ? isoToDateInput(value)
+      : value;
 
     switch (filter.type) {
-      case "DateTime":
+      case ReportFilterFieldType.DateTime:
+      case ReportFilterFieldType.Date:
         return (
           <div key={filter.name}>
             <label className="mb-2 block text-sm font-medium text-slate-300">
@@ -223,18 +448,21 @@ export default function RunReport() {
               {filter.required && <span className="text-red-400 ml-1">*</span>}
             </label>
             <Input
-              type="datetime-local"
-              value={value}
+              type="date"
+              value={displayValue}
               onChange={(e) => handleDynamicFilterChange(filter.name, e.target.value)}
               className="w-full"
             />
             {filter.description && (
               <p className="mt-1 text-xs text-slate-500">{filter.description}</p>
             )}
+            {filter.name === "to" && (
+              <p className="mt-1 text-xs text-slate-500">A data final será considerada até 23:59:59</p>
+            )}
           </div>
         );
 
-      case "Long":
+      case ReportFilterFieldType.Guid:
         // Casos especiais para selects dropdown
         if (filter.name === "clientId") {
           return (
@@ -331,7 +559,28 @@ export default function RunReport() {
           );
         }
 
-        // Número genérico
+        // Campo GUID genérico
+        return (
+          <div key={filter.name}>
+            <label className="mb-2 block text-sm font-medium text-slate-300">
+              {filter.label}
+              {filter.required && <span className="text-red-400 ml-1">*</span>}
+            </label>
+            <Input
+              type="text"
+              value={value}
+              onChange={(e) => handleDynamicFilterChange(filter.name, e.target.value)}
+              placeholder={filter.placeholder || "Informe um GUID"}
+              className="w-full"
+            />
+            {filter.description && (
+              <p className="mt-1 text-xs text-slate-500">{filter.description}</p>
+            )}
+          </div>
+        );
+
+      case ReportFilterFieldType.Integer:
+      case ReportFilterFieldType.Decimal:
         return (
           <div key={filter.name}>
             <label className="mb-2 block text-sm font-medium text-slate-300">
@@ -350,7 +599,35 @@ export default function RunReport() {
           </div>
         );
 
-      case "String":
+      case ReportFilterFieldType.Enum:
+        if (filter.allowedValues && filter.allowedValues.length > 0) {
+          return (
+            <div key={filter.name}>
+              <label className="mb-2 block text-sm font-medium text-slate-300">
+                {filter.label}
+                {filter.required && <span className="text-red-400 ml-1">*</span>}
+              </label>
+              <select
+                value={value}
+                onChange={(e) => handleDynamicFilterChange(filter.name, e.target.value)}
+                className={SELECT_CLASSNAME}
+                aria-label={filter.label}
+              >
+                <option className={SELECT_OPTION_CLASSNAME} value="">
+                  {filter.required ? "Selecione..." : "Todos"}
+                </option>
+                {filter.allowedValues.map((option) => (
+                  <option className={SELECT_OPTION_CLASSNAME} key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+              {filter.description && (
+                <p className="mt-1 text-xs text-slate-500">{filter.description}</p>
+              )}
+            </div>
+          );
+        }
         return (
           <div key={filter.name}>
             <label className="mb-2 block text-sm font-medium text-slate-300">
@@ -369,7 +646,27 @@ export default function RunReport() {
           </div>
         );
 
-      case "Boolean":
+      case ReportFilterFieldType.Text:
+      case ReportFilterFieldType.TextExact:
+        return (
+          <div key={filter.name}>
+            <label className="mb-2 block text-sm font-medium text-slate-300">
+              {filter.label}
+              {filter.required && <span className="text-red-400 ml-1">*</span>}
+            </label>
+            <Input
+              type="text"
+              value={value}
+              onChange={(e) => handleDynamicFilterChange(filter.name, e.target.value)}
+              className="w-full"
+            />
+            {filter.description && (
+              <p className="mt-1 text-xs text-slate-500">{filter.description}</p>
+            )}
+          </div>
+        );
+
+      case ReportFilterFieldType.Boolean:
         return (
           <div key={filter.name}>
             <label className="flex items-center gap-2 text-sm text-slate-300">
@@ -405,12 +702,15 @@ export default function RunReport() {
   }
 
   const schema = template.data.executionSchema || {
-    scope: "Unknown",
-    dateMode: "None",
+    scopeType: ReportScopeType.Global,
+    dateMode: ReportDateMode.None,
     filters: [],
-    allowedOrientations: ["Portrait"],
+    allowedOrientations: ["portrait"],
+    defaultOrientation: "portrait",
     allowedSortFields: [],
-    allowedSortDirections: ["ASC", "DESC"],
+    defaultSortField: "",
+    allowedSortDirections: ["asc", "desc"],
+    defaultSortDirection: "asc",
     sampleFilterPresets: [],
   };
   
@@ -577,13 +877,13 @@ export default function RunReport() {
             <hr className="border-white/10" />
 
             {/* Presets (se disponíveis) */}
-            {!advancedMode && schema.sampleFilterPresets && schema.sampleFilterPresets.length > 0 && (
+            {!advancedMode && enrichedPresets.length > 0 && (
               <div>
                 <label className="mb-2 block text-sm font-medium text-slate-300">
                   Presets Rápidos
                 </label>
                 <div className="flex flex-wrap gap-2">
-                  {schema.sampleFilterPresets.map((preset, idx) => (
+                  {enrichedPresets.map((preset, idx) => (
                     <Button
                       key={idx}
                       variant="secondary"
@@ -591,7 +891,7 @@ export default function RunReport() {
                       onClick={() => applyPreset(preset)}
                     >
                       <Lightbulb className="h-3 w-3" />
-                      {preset.name}
+                      {(preset as any).name}
                     </Button>
                   ))}
                 </div>
@@ -670,7 +970,7 @@ export default function RunReport() {
                 </Badge>
               </div>
 
-              {execution.data.rowCount !== null && (
+              {execution.data.rowCount != null && (
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-slate-400">Linhas:</span>
                   <span className="text-white">
@@ -679,7 +979,7 @@ export default function RunReport() {
                 </div>
               )}
 
-              {execution.data.resultSizeBytes !== null && (
+              {execution.data.resultSizeBytes != null && (
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-slate-400">Tamanho:</span>
                   <span className="text-white">
@@ -689,7 +989,7 @@ export default function RunReport() {
                 </div>
               )}
 
-              {execution.data.executionTimeMs !== null && (
+              {execution.data.executionTimeMs != null && (
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-slate-400">Tempo:</span>
                   <span className="text-white">
@@ -709,16 +1009,27 @@ export default function RunReport() {
               {executionStatus === ReportExecutionStatus.Completed && (
                 <Button
                   className="w-full"
-                  onClick={() => {
-                    const url = getReportDownloadUrl(
-                      executionId,
-                      dynamicFilters.clientId || clientIdParam || undefined
-                    );
-                    window.open(url, "_blank");
+                  disabled={isDownloading}
+                  onClick={async () => {
+                    setIsDownloading(true);
+                    try {
+                      await downloadReportFile(
+                        executionId,
+                        undefined,
+                        dynamicFilters.clientId || clientIdParam || undefined,
+                      );
+                      toast.success("Download iniciado!");
+                    } catch (error) {
+                      toast.error(
+                        `Erro ao fazer download: ${error instanceof Error ? error.message : "Erro desconhecido"}`,
+                      );
+                    } finally {
+                      setIsDownloading(false);
+                    }
                   }}
                 >
                   <Download className="h-4 w-4" />
-                  Baixar Relatório
+                  {isDownloading ? "Baixando..." : "Baixar Relatório"}
                 </Button>
               )}
             </div>
@@ -733,7 +1044,7 @@ export default function RunReport() {
         </Card>
       )}
 
-      {/* Debug: Schema Info */}
+      {/* Debug: Schema Info + Filter State */}
       {schema && (
         <Card className="border-slate-700">
           <details className="cursor-pointer">
@@ -743,7 +1054,7 @@ export default function RunReport() {
             <div className="mt-3 space-y-2 text-xs">
               <div className="grid grid-cols-2 gap-2">
                 <div className="text-slate-500">Scope:</div>
-                <div className="text-slate-300 font-mono">{schema.scope || "N/A"}</div>
+                <div className="text-slate-300 font-mono">{String(schema.scopeType)}</div>
                 
                 <div className="text-slate-500">Date Mode:</div>
                 <div className="text-slate-300 font-mono">{schema.dateMode || "N/A"}</div>
@@ -770,6 +1081,31 @@ export default function RunReport() {
                         {f.label && <span className="text-slate-400"> - {f.label}</span>}
                       </div>
                     ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Estado dos Filtros Obrigatórios */}
+              {schema.filters && schema.filters.some(f => f.required) && (
+                <div className="mt-3 rounded border border-blue-500/20 bg-blue-500/10 p-2">
+                  <div className="text-blue-400 text-xs font-semibold mb-2">📊 Estado dos Campos Obrigatórios:</div>
+                  <div className="space-y-1">
+                    {schema.filters.filter(f => f.required).map((f) => {
+                      const value = dynamicFilters[f.name];
+                      const hasValue = value !== undefined && value !== null && value !== "";
+                      return (
+                        <div key={f.name} className="flex items-center gap-2 text-xs">
+                          <span className={hasValue ? "text-green-400" : "text-red-400"}>
+                            {hasValue ? "✓" : "✗"}
+                          </span>
+                          <span className="text-slate-300 font-mono">{f.name}</span>
+                          <span className="text-slate-500">:</span>
+                          <span className={hasValue ? "text-green-400" : "text-red-400"}>
+                            {hasValue ? `"${String(value).slice(0, 30)}${String(value).length > 30 ? "..." : ""}"` : "vazio"}
+                          </span>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               )}

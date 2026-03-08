@@ -46,7 +46,11 @@ export function Select({ label, options, className = '', id, ...props }: SelectP
         {...props}
       >
         {options.map(opt => (
-          <option key={opt.value} value={opt.value} className="bg-slate-900">
+          <option
+            key={opt.value}
+            value={opt.value}
+            className="bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100"
+          >
             {opt.label}
           </option>
         ))}
