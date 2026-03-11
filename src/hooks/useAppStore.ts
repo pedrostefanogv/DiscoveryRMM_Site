@@ -65,7 +65,11 @@ export function useCreateApproval() {
     mutationFn: (data: CreateAppApprovalRuleRequest) =>
       appStoreApi.createApproval(data),
     onSuccess: () =>
-      qc.invalidateQueries({ queryKey: ["appStore", "approvals"] }),
+      Promise.all([
+        qc.invalidateQueries({ queryKey: ["appStore", "approvals"] }),
+        qc.invalidateQueries({ queryKey: ["appStore", "audit"] }),
+        qc.invalidateQueries({ queryKey: ["appStore", "effective"] }),
+      ]),
   });
 }
 
@@ -75,6 +79,28 @@ export function useDeleteApproval() {
     mutationFn: ({ ruleId, reason }: { ruleId: string; reason?: string }) =>
       appStoreApi.deleteApproval(ruleId, reason),
     onSuccess: () =>
-      qc.invalidateQueries({ queryKey: ["appStore", "approvals"] }),
+      Promise.all([
+        qc.invalidateQueries({ queryKey: ["appStore", "approvals"] }),
+        qc.invalidateQueries({ queryKey: ["appStore", "audit"] }),
+        qc.invalidateQueries({ queryKey: ["appStore", "effective"] }),
+      ]),
+  });
+}
+
+export function useSyncChocolateyCatalog() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => appStoreApi.syncChocolateyCatalog(),
+    onSuccess: () =>
+      qc.invalidateQueries({ queryKey: ["appStore", "catalog"] }),
+  });
+}
+
+export function useSyncWingetCatalog() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => appStoreApi.syncWingetCatalog(),
+    onSuccess: () =>
+      qc.invalidateQueries({ queryKey: ["appStore", "catalog"] }),
   });
 }

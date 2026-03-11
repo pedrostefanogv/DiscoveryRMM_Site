@@ -2,7 +2,6 @@ import { useState, useEffect, useRef } from 'react';
 import {
   Search,
   ShieldCheck,
-  ShieldOff,
   Trash2,
   Plus,
   ChevronLeft,
@@ -35,6 +34,8 @@ import {
   useAppStoreAudit,
   useCreateApproval,
   useDeleteApproval,
+  useSyncChocolateyCatalog,
+  useSyncWingetCatalog,
 } from '@/hooks/useAppStore';
 import { useClients } from '@/hooks/useClients';
 import { useSites } from '@/hooks/useSites';
@@ -47,31 +48,112 @@ import {
   type AppStoreCatalogPackage,
   type AppApprovalRule,
   type CreateAppApprovalRuleRequest,
+  type SyncChocolateyCatalogResponse,
 } from '@/api/types';
 
 // ── PackageIcon ───────────────────────────────────────────────
 
-function PackageIcon({ url, name }: { url?: string | null; name?: string | null }) {
+function extractDomain(raw?: string | null): string | null {
+  if (!raw?.trim()) return null;
+  const value = raw.trim();
+  try {
+    return new URL(value).hostname;
+  } catch {
+    try {
+      return new URL(`https://${value}`).hostname;
+    } catch {
+      return null;
+    }
+  }
+}
+
+function buildIconCandidates(
+  url?: string | null,
+  homepage?: string | null,
+  downloadUrl?: string | null,
+): string[] {
+  const candidates: string[] = [];
+  const domains = [extractDomain(downloadUrl), extractDomain(homepage)].filter(
+    (v): v is string => Boolean(v),
+  );
+  const uniqueDomains = [...new Set(domains)];
+
+  if (url?.trim()) {
+    candidates.push(url.trim());
+  }
+
+  for (const domain of uniqueDomains) {
+    candidates.push(
+      `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=128`,
+      `https://icons.duckduckgo.com/ip3/${domain}.ico`,
+      `https://${domain}/favicon.ico`,
+    );
+  }
+
+  if (homepage?.trim()) {
+    const source = homepage.trim();
+    candidates.push(
+      `https://www.google.com/s2/favicons?domain=${encodeURIComponent(source)}&sz=128`,
+      `https://www.google.com/s2/favicons?domain_url=${encodeURIComponent(source)}&sz=128`,
+      `https://icons.duckduckgo.com/ip3/${encodeURIComponent(source)}.ico`,
+    );
+
+    try {
+      const parsed = new URL(source);
+      candidates.push(
+        `https://www.google.com/s2/favicons?domain=${encodeURIComponent(parsed.hostname)}&sz=128`,
+        `https://icons.duckduckgo.com/ip3/${parsed.hostname}.ico`,
+        `${parsed.protocol}//${parsed.hostname}/favicon.ico`,
+      );
+    } catch {
+      // homepage pode vir em formato inesperado; ignora parse sem quebrar o render.
+    }
+  }
+
+  return [...new Set(candidates)];
+}
+
+function PackageIcon({
+  url,
+  homepage,
+  downloadUrl,
+  name,
+}: {
+  url?: string | null;
+  homepage?: string | null;
+  downloadUrl?: string | null;
+  name?: string | null;
+}) {
+  const sources = buildIconCandidates(url, homepage, downloadUrl);
+  const [sourceIndex, setSourceIndex] = useState(0);
+
+  useEffect(() => {
+    setSourceIndex(0);
+  }, [url, homepage, downloadUrl]);
+
+  const currentSource = sources[sourceIndex] ?? null;
+
   return (
     <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/5">
-      {url ? (
+      {currentSource ? (
         <img
-          src={url}
+          src={currentSource}
           alt={name ?? 'app icon'}
           width={28}
           height={28}
           className="rounded object-contain"
           onError={(e) => {
-            const img = e.currentTarget as HTMLImageElement;
-            img.style.display = 'none';
-            const fallback = img.nextElementSibling as HTMLElement | null;
-            if (fallback) fallback.style.display = 'block';
+            e.currentTarget.style.display = 'none';
+            setSourceIndex((prev) => prev + 1);
+          }}
+          onLoad={(e) => {
+            e.currentTarget.style.display = 'block';
           }}
         />
       ) : null}
       <Package
         className="h-5 w-5 text-slate-500"
-        style={{ display: url ? 'none' : undefined }}
+        style={{ display: currentSource ? 'none' : undefined }}
       />
     </div>
   );
@@ -109,6 +191,8 @@ const limitOptions = [
   { value: '100', label: '100 por página' },
 ];
 
+const APP_STORE_LAST_SYNC_STORAGE_KEY = 'meduza.appStore.lastSyncByType.v1';
+
 function actionBadge(action: AppApprovalActionType) {
   return action === AppApprovalActionType.Allow ? (
     <Badge color="success">Permitido</Badge>
@@ -124,6 +208,32 @@ function scopeLabel(s: AppApprovalScopeType) {
 function formatDate(d: string | null) {
   if (!d) return '—';
   return new Date(d).toLocaleString('pt-BR');
+}
+
+function normalizeInstallationType(value: unknown): AppInstallationType {
+  if (value === AppInstallationType.Winget || value === 0 || value === '0') {
+    return AppInstallationType.Winget;
+  }
+  if (
+    value === AppInstallationType.Chocolatey ||
+    value === 1 ||
+    value === '1'
+  ) {
+    return AppInstallationType.Chocolatey;
+  }
+  if (
+    typeof value === 'string' &&
+    value.trim().toLowerCase() === 'winget'
+  ) {
+    return AppInstallationType.Winget;
+  }
+  if (
+    typeof value === 'string' &&
+    ['chocolatey', 'choco'].includes(value.trim().toLowerCase())
+  ) {
+    return AppInstallationType.Chocolatey;
+  }
+  return AppInstallationType.Winget;
 }
 
 // ── AgentPicker ───────────────────────────────────────────────
@@ -271,6 +381,7 @@ interface ApprovalFormModalProps {
   onClose: () => void;
   prefillPackageId?: string;
   prefillInstallationType?: AppInstallationType;
+  lockPackageId?: boolean;
 }
 
 function ApprovalFormModal({
@@ -278,7 +389,9 @@ function ApprovalFormModal({
   onClose,
   prefillPackageId = '',
   prefillInstallationType = AppInstallationType.Winget,
+  lockPackageId = false,
 }: ApprovalFormModalProps) {
+  const isPackageIdLocked = lockPackageId || Boolean(prefillPackageId.trim());
   const clients = useClients();
   const [scopeType, setScopeType] = useState(AppApprovalScopeType.Global);
   const [selectedClientId, setSelectedClientId] = useState('');
@@ -313,6 +426,12 @@ function ApprovalFormModal({
     ...(sites.data ?? []).map((s) => ({ value: s.id, label: s.name })),
   ];
 
+  useEffect(() => {
+    if (!open) return;
+    setPackageId(prefillPackageId);
+    setInstallationType(prefillInstallationType);
+  }, [open, prefillPackageId, prefillInstallationType]);
+
   async function handleSubmit() {
     if (!packageId.trim()) {
       setError('ID do pacote é obrigatório.');
@@ -327,7 +446,7 @@ function ApprovalFormModal({
       scopeType,
       scopeId,
       installationType,
-      packageId: packageId.trim(),
+      packageId: packageId.trim().toLowerCase(),
       action,
       autoUpdateEnabled: autoUpdate,
       reason: reason.trim() || undefined,
@@ -409,8 +528,21 @@ function ApprovalFormModal({
           label="ID do Pacote"
           placeholder="ex: Microsoft.VSCode"
           value={packageId}
-          onChange={(e) => setPackageId(e.target.value)}
+          readOnly={isPackageIdLocked}
+          disabled={isPackageIdLocked}
+          title={isPackageIdLocked ? 'ID definido pelo pacote selecionado no catálogo' : undefined}
+          className={isPackageIdLocked ? 'cursor-not-allowed opacity-70' : ''}
+          onChange={(e) => {
+            if (isPackageIdLocked) return;
+            setPackageId(e.target.value);
+          }}
         />
+
+        {isPackageIdLocked && (
+          <p className="-mt-2 text-xs text-slate-500">
+            Este ID foi preenchido a partir do pacote selecionado no catálogo.
+          </p>
+        )}
 
         <div className="grid grid-cols-2 gap-3">
           <Select
@@ -490,7 +622,7 @@ function ApprovalsTab() {
   ];
 
   async function handleDelete(rule: AppApprovalRule) {
-    await deleteApproval.mutateAsync({ ruleId: rule.id });
+    await deleteApproval.mutateAsync({ ruleId: rule.ruleId ?? rule.id ?? '' });
     setDeleteTarget(null);
   }
 
@@ -592,7 +724,7 @@ function ApprovalsTab() {
           <div className="divide-y divide-white/5">
             {query.data.items.map((rule) => (
               <div
-                key={rule.id}
+                key={rule.ruleId ?? rule.id}
                 className="flex items-center justify-between px-5 py-3 hover:bg-white/5 transition-colors"
               >
                 <div className="flex-1 min-w-0">
@@ -931,6 +1063,14 @@ interface PackageDetailsModalProps {
 function PackageDetailsModal({ open, onClose, pkg, installationType }: PackageDetailsModalProps) {
   const detailsQuery = useAppStorePackage(pkg?.packageId, installationType);
   const details = detailsQuery.data ?? pkg;
+  const detailsDownloadUrl =
+    details?.installerUrlsByArch
+      ? Object.values(details.installerUrlsByArch).find((value) => Boolean(value)) ?? null
+      : null;
+  const installationLabel =
+    normalizeInstallationType(details?.installationType) === AppInstallationType.Winget
+      ? 'Winget'
+      : 'Chocolatey';
 
   return (
     <Modal
@@ -951,7 +1091,12 @@ function PackageDetailsModal({ open, onClose, pkg, installationType }: PackageDe
         {details && (
           <>
             <div className="flex items-start gap-3 rounded-xl border border-white/10 bg-white/5 p-3">
-              <PackageIcon url={details.icon} name={details.name} />
+              <PackageIcon
+                url={details.icon}
+                homepage={details.homepage}
+                downloadUrl={detailsDownloadUrl}
+                name={details.name}
+              />
               <div className="min-w-0 flex-1">
                 <div className="text-sm font-semibold text-white">{details.name ?? details.packageId}</div>
                 <div className="mt-1 font-mono text-xs text-slate-400">{details.packageId}</div>
@@ -972,7 +1117,7 @@ function PackageDetailsModal({ open, onClose, pkg, installationType }: PackageDe
               <div className="rounded-xl border border-white/10 bg-white/5 p-3">
                 <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Tipo</div>
                 <div className="mt-1 text-sm text-slate-200">
-                  {details.installationType === AppInstallationType.Winget ? 'Winget' : 'Chocolatey'}
+                  {installationLabel}
                 </div>
               </div>
             </div>
@@ -1025,7 +1170,25 @@ function CatalogTab() {
   const [viewMode, setViewMode] = useState<'card' | 'list'>('list');
   const [approvalTarget, setApprovalTarget] = useState<AppStoreCatalogPackage | null>(null);
   const [detailsTarget, setDetailsTarget] = useState<AppStoreCatalogPackage | null>(null);
+  const [lastSyncByType, setLastSyncByType] = useState<
+    Partial<Record<AppInstallationType, SyncChocolateyCatalogResponse>>
+  >(() => {
+    if (typeof window === 'undefined') return {};
+    try {
+      const raw = window.localStorage.getItem(APP_STORE_LAST_SYNC_STORAGE_KEY);
+      if (!raw) return {};
+      const parsed = JSON.parse(raw) as Partial<Record<string, SyncChocolateyCatalogResponse>>;
+      return {
+        [AppInstallationType.Winget]: parsed[String(AppInstallationType.Winget)],
+        [AppInstallationType.Chocolatey]: parsed[String(AppInstallationType.Chocolatey)],
+      };
+    } catch {
+      return {};
+    }
+  });
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const syncChocolatey = useSyncChocolateyCatalog();
+  const syncWinget = useSyncWingetCatalog();
 
   const cursor = cursors[page - 1];
 
@@ -1080,6 +1243,37 @@ function CatalogTab() {
   }
 
   const hasMore = query.data?.hasMore ?? false;
+  const isChocolatey = installationType === AppInstallationType.Chocolatey;
+  const isWinget = installationType === AppInstallationType.Winget;
+  const isCatalogEmpty = (query.data?.totalPackagesInSource ?? 0) === 0;
+  const syncMutation = isChocolatey ? syncChocolatey : syncWinget;
+  const syncLabel = isChocolatey ? 'Chocolatey' : 'Winget';
+  const lastSyncInfo = lastSyncByType[installationType];
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      window.localStorage.setItem(
+        APP_STORE_LAST_SYNC_STORAGE_KEY,
+        JSON.stringify(lastSyncByType),
+      );
+    } catch {
+      // storage pode estar indisponivel em alguns contextos.
+    }
+  }, [lastSyncByType]);
+
+  async function handleSyncCatalog() {
+    try {
+      const syncResult = await syncMutation.mutateAsync();
+      setLastSyncByType((prev) => ({
+        ...prev,
+        [installationType]: syncResult,
+      }));
+      await query.refetch();
+    } catch {
+      // A mensagem de erro detalhada ja e exibida pelo componente de erro global.
+    }
+  }
 
   return (
     <div className="space-y-4">
@@ -1162,7 +1356,47 @@ function CatalogTab() {
           <Button variant="ghost" onClick={resetFilters} title="Limpar filtros">
             <RefreshCw className="h-4 w-4" />
           </Button>
+          {(isChocolatey || isWinget) && (
+            <Button
+              variant="primary"
+              onClick={handleSyncCatalog}
+              loading={syncMutation.isPending}
+              title={`Sincronizar catalogo ${syncLabel}`}
+            >
+              <RefreshCw className="h-4 w-4" /> Sincronizar Catalogo
+            </Button>
+          )}
         </div>
+        {(isChocolatey || isWinget) && (
+          <div className="mt-3 space-y-2">
+            <p className="text-xs text-slate-500">
+              A sincronizacao do catalogo {syncLabel} e idempotente e pode levar alguns minutos.
+            </p>
+            {lastSyncInfo && (
+              <div
+                className={`rounded-lg border px-3 py-2 text-xs ${
+                  lastSyncInfo.success
+                    ? 'border-success/30 bg-success/10 text-slate-300'
+                    : 'border-danger/30 bg-danger/10 text-slate-200'
+                }`}
+              >
+                <p>
+                  Ultima sincronizacao: {formatDate(lastSyncInfo.syncedAt ?? null)}
+                </p>
+                <p>
+                  Pacotes atualizados: {lastSyncInfo.packagesUpserted}
+                  {lastSyncInfo.pagesProcessed !== undefined
+                    ? ` - Paginas: ${lastSyncInfo.pagesProcessed}`
+                    : ''}
+                  {lastSyncInfo.duration ? ` - Duracao: ${lastSyncInfo.duration}` : ''}
+                </p>
+                {!lastSyncInfo.success && lastSyncInfo.error && (
+                  <p className="text-danger">Erro: {lastSyncInfo.error}</p>
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </Card>
 
       {/* Results */}
@@ -1196,7 +1430,20 @@ function CatalogTab() {
         {query.data && query.data.items.length === 0 && (
           <div className="flex flex-col items-center py-16 text-slate-500">
             <Package className="mb-3 h-10 w-10 opacity-30" />
-            <p className="text-sm">Nenhum pacote encontrado.</p>
+            <p className="text-sm">
+              {(isChocolatey || isWinget) && isCatalogEmpty
+                ? `Catalogo ${syncLabel} ainda nao sincronizado.`
+                : 'Nenhum pacote encontrado.'}
+            </p>
+            {(isChocolatey || isWinget) && isCatalogEmpty && (
+              <Button
+                className="mt-3"
+                onClick={handleSyncCatalog}
+                loading={syncMutation.isPending}
+              >
+                <RefreshCw className="h-4 w-4" /> Sincronizar catalogo agora
+              </Button>
+            )}
             {searchApplied && (
               <button type="button" onClick={resetFilters} className="mt-3 text-xs text-primary hover:underline">
                 Limpar busca
@@ -1209,11 +1456,21 @@ function CatalogTab() {
         {query.data && query.data.items.length > 0 && viewMode === 'list' && (
           <div className={`divide-y divide-white/5 transition-opacity ${query.isFetching ? 'opacity-60' : ''}`}>
             {query.data.items.map((pkg) => (
+              
               <div
                 key={pkg.packageId}
                 className="flex items-center gap-4 px-5 py-3 hover:bg-white/5 transition-colors"
               >
-                <PackageIcon url={pkg.icon} name={pkg.name} />
+                <PackageIcon
+                  url={pkg.icon}
+                  homepage={pkg.homepage}
+                  downloadUrl={
+                    pkg.installerUrlsByArch
+                      ? Object.values(pkg.installerUrlsByArch).find((value) => Boolean(value)) ?? null
+                      : null
+                  }
+                  name={pkg.name}
+                />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-sm font-medium text-white">
@@ -1260,7 +1517,16 @@ function CatalogTab() {
                 className="flex flex-col gap-3 rounded-xl border border-white/10 bg-white/5 p-4 transition-colors hover:bg-white/[0.08]"
               >
                 <div className="flex items-start gap-3">
-                  <PackageIcon url={pkg.icon} name={pkg.name} />
+                  <PackageIcon
+                    url={pkg.icon}
+                    homepage={pkg.homepage}
+                    downloadUrl={
+                      pkg.installerUrlsByArch
+                        ? Object.values(pkg.installerUrlsByArch).find((value) => Boolean(value)) ?? null
+                        : null
+                    }
+                    name={pkg.name}
+                  />
                   <div className="min-w-0 flex-1">
                     <div className="text-sm font-semibold leading-tight text-white">
                       <Highlight text={pkg.name ?? pkg.packageId} query={searchApplied} />
@@ -1328,6 +1594,7 @@ function CatalogTab() {
         onClose={() => setApprovalTarget(null)}
         prefillPackageId={approvalTarget?.packageId ?? ''}
         prefillInstallationType={installationType}
+        lockPackageId
       />
 
       <PackageDetailsModal

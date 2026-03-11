@@ -1075,6 +1075,9 @@ export interface AppStoreCatalogPackage {
   version: string | null;
   architecture: string | null;
   installationType: AppInstallationType;
+  installCommand?: string | null;
+  lastUpdated?: string | null;
+  installerUrlsByArch?: Record<string, string>;
   icon?: string | null;
   homepage?: string | null;
   license?: string | null;
@@ -1085,13 +1088,29 @@ export interface AppStoreCatalogPackage {
 export interface AppStoreCatalogPage {
   items: AppStoreCatalogPackage[];
   count: number;
+  generatedAt?: string | null;
+  totalPackagesInSource?: number;
+  returnedItems?: number;
   cursor: string | null;
   nextCursor: string | null;
+  limit?: number;
   hasMore: boolean;
+  search?: string | null;
+  architecture?: string | null;
+}
+
+export interface SyncChocolateyCatalogResponse {
+  success: boolean;
+  packagesUpserted: number;
+  pagesProcessed?: number;
+  syncedAt?: string | null;
+  duration?: string | null;
+  error?: string | null;
 }
 
 export interface AppApprovalRule {
-  id: string;
+  ruleId: string;
+  id?: string;
   scopeType: AppApprovalScopeType;
   scopeId: string | null;
   installationType: AppInstallationType;
@@ -1124,9 +1143,13 @@ export interface CreateAppApprovalRuleRequest {
 
 export interface AppEffectiveEntry {
   packageId: string;
+  name?: string | null;
   packageName: string | null;
+  installCommand?: string | null;
+  installerUrlsByArch?: Record<string, string>;
   action: AppApprovalActionType;
   autoUpdateEnabled: boolean | null;
+  sourceScope?: AppApprovalScopeType;
   resolvedScopeType: AppApprovalScopeType;
   resolvedScopeId: string | null;
   installationType: AppInstallationType;
