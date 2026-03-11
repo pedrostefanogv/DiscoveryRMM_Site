@@ -1041,3 +1041,147 @@ export interface ReportTemplateHistory {
   createdAt: string;
   createdBy: string | null;
 }
+
+// ── App Store ──────────────────────────────────────────────
+
+export enum AppInstallationType {
+  Winget = 0,
+  Chocolatey = 1,
+}
+
+export enum AppApprovalScopeType {
+  Global = 0,
+  Client = 1,
+  Site = 2,
+  Agent = 3,
+}
+
+export enum AppApprovalActionType {
+  Allow = 0,
+  Deny = 1,
+}
+
+export enum AppApprovalAuditChangeType {
+  Created = 0,
+  Updated = 1,
+  Deleted = 2,
+}
+
+export interface AppStoreCatalogPackage {
+  packageId: string;
+  name: string | null;
+  publisher: string | null;
+  description: string | null;
+  version: string | null;
+  architecture: string | null;
+  installationType: AppInstallationType;
+  icon?: string | null;
+  homepage?: string | null;
+  license?: string | null;
+  category?: string | null;
+  tags?: string[] | null;
+}
+
+export interface AppStoreCatalogPage {
+  items: AppStoreCatalogPackage[];
+  count: number;
+  cursor: string | null;
+  nextCursor: string | null;
+  hasMore: boolean;
+}
+
+export interface AppApprovalRule {
+  id: string;
+  scopeType: AppApprovalScopeType;
+  scopeId: string | null;
+  installationType: AppInstallationType;
+  packageId: string;
+  packageName: string | null;
+  action: AppApprovalActionType;
+  autoUpdateEnabled: boolean | null;
+  reason: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AppApprovalRulesResponse {
+  scopeType: AppApprovalScopeType;
+  scopeId: string | null;
+  installationType: AppInstallationType;
+  count: number;
+  items: AppApprovalRule[];
+}
+
+export interface CreateAppApprovalRuleRequest {
+  scopeType: AppApprovalScopeType;
+  scopeId?: string | null;
+  installationType: AppInstallationType;
+  packageId: string;
+  action: AppApprovalActionType;
+  autoUpdateEnabled?: boolean;
+  reason?: string;
+}
+
+export interface AppEffectiveEntry {
+  packageId: string;
+  packageName: string | null;
+  action: AppApprovalActionType;
+  autoUpdateEnabled: boolean | null;
+  resolvedScopeType: AppApprovalScopeType;
+  resolvedScopeId: string | null;
+  installationType: AppInstallationType;
+  iconUrl?: string | null;
+  publisher?: string | null;
+  description?: string | null;
+  version?: string | null;
+}
+
+export interface AppEffectivePage {
+  items: AppEffectiveEntry[];
+  count: number;
+  cursor: string | null;
+  nextCursor: string | null;
+  hasMore: boolean;
+}
+
+export interface AppApprovalAuditEntry {
+  id: string;
+  ruleId: string;
+  packageId: string;
+  packageName: string | null;
+  scopeType: AppApprovalScopeType;
+  scopeId: string | null;
+  installationType: AppInstallationType;
+  action: AppApprovalActionType;
+  autoUpdateEnabled: boolean | null;
+  reason: string | null;
+  changeType: AppApprovalAuditChangeType;
+  changedBy: string | null;
+  changedAt: string;
+}
+
+export interface AppApprovalAuditPage {
+  items: AppApprovalAuditEntry[];
+  count: number;
+  cursor: string | null;
+  nextCursor: string | null;
+  hasMore: boolean;
+}
+
+export interface AppDiffEntry {
+  packageId: string;
+  packageName: string | null;
+  effectiveAction: AppApprovalActionType | null;
+  inheritedAction: AppApprovalActionType | null;
+  ownAction: AppApprovalActionType | null;
+  overridden: boolean;
+  installationType: AppInstallationType;
+}
+
+export interface AppDiffPage {
+  items: AppDiffEntry[];
+  count: number;
+  cursor: string | null;
+  nextCursor: string | null;
+  hasMore: boolean;
+}

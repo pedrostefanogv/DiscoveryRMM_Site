@@ -10,6 +10,13 @@ export { departmentsApi } from "./departments";
 export { workflowProfilesApi } from "./workflowProfiles";
 export { deployTokensApi } from "./deploy-tokens";
 export { softwareInventoryApi } from "./software-inventory";
+export { appStoreApi } from "./app-store";
+export type {
+  CatalogParams,
+  ApprovalsParams,
+  AuditParams,
+  EffectiveParams,
+} from "./app-store";
 export { notesApi } from "./notes";
 export { configurationApi } from "./configuration";
 export { auditApi } from "./audit";
