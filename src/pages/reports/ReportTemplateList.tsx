@@ -9,6 +9,7 @@ import {
   Star,
   Upload,
   Download,
+  History,
 } from "lucide-react";
 import {
   useReportTemplates,
@@ -26,6 +27,7 @@ import {
   Modal,
 } from "@/components/ui";
 import { ReportNotificationBell } from "@/components/reports/ReportNotificationBell";
+import { ReportTemplateHistoryPanel } from "@/components/reports/ReportTemplateHistoryPanel";
 import type { ReportTemplate } from "@/api/types";
 import type { Column } from "@/components/ui";
 import toast from "react-hot-toast";
@@ -58,6 +60,8 @@ export default function ReportTemplateList() {
   const [showInactive, setShowInactive] = useState(false);
   const [showOnlyFavorites, setShowOnlyFavorites] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [historyId, setHistoryId] = useState<string | null>(null);
+  const [historyName, setHistoryName] = useState<string>("");
 
   const templates = useReportTemplates({
     isActive: !showInactive ? true : undefined,
@@ -281,6 +285,18 @@ export default function ReportTemplateList() {
           <Button
             variant="ghost"
             size="sm"
+            onClick={() => {
+              setHistoryId(t.id);
+              setHistoryName(t.name);
+            }}
+            title="Ver histórico de alterações"
+            aria-label="Ver histórico de alterações"
+          >
+            <History className="h-4 w-4 text-slate-300" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={() => setDeleteId(t.id)}
           >
             <Trash2 className="h-4 w-4 text-red-400" />
@@ -383,6 +399,17 @@ export default function ReportTemplateList() {
             </Button>
           </div>
         </div>
+      </Modal>
+
+      <Modal
+        open={!!historyId}
+        onClose={() => {
+          setHistoryId(null);
+          setHistoryName("");
+        }}
+        title={`Histórico de Alterações${historyName ? ` - ${historyName}` : ""}`}
+      >
+        {historyId && <ReportTemplateHistoryPanel templateId={historyId} limit={25} />}
       </Modal>
     </div>
   );

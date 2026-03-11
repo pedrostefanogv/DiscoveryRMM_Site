@@ -8,6 +8,7 @@ import {
   useReportDatasets,
 } from "@/hooks";
 import { Button, Card, Input, TextArea, Loading } from "@/components/ui";
+import { ReportTemplateHistoryPanel } from "@/components/reports/ReportTemplateHistoryPanel";
 import {
   ReportDatasetType,
   ReportFormat,
@@ -828,6 +829,22 @@ export default function ReportTemplateForm() {
             </div>
           </div>
         </Card>
+
+        {isEdit && id && template.data && (
+          <div className="space-y-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h2 className="text-lg font-semibold text-white">
+                  Histórico de Alterações
+                </h2>
+                <p className="text-xs text-slate-400">
+                  Versão atual v{template.data.version} • Última atualização em {new Date(template.data.updatedAt).toLocaleString("pt-BR")}
+                </p>
+              </div>
+            </div>
+            <ReportTemplateHistoryPanel templateId={id} limit={25} />
+          </div>
+        )}
 
         <Card>
           <h2 className="mb-4 text-lg font-semibold text-white">
