@@ -48,6 +48,7 @@ export type SiteConfigurationPayload = Partial<
 >;
 
 export type ConfigurationEntityType = "Server" | "Client" | "Site";
+export type ServerReportingConfiguration = Record<string, unknown>;
 
 function normalizeMetadata(payload: unknown): ConfigurationMetadataResponse {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
@@ -98,6 +99,21 @@ export function resetServerConfig() {
 export async function getServerMetadata() {
   return normalizeMetadata(
     await api.get<unknown>(`${CONFIG_BASE}/server/metadata`),
+  );
+}
+
+export function getServerReportingConfig() {
+  return api.get<ServerReportingConfiguration>(
+    `${CONFIG_BASE}/server/reporting`,
+  );
+}
+
+export function updateServerReportingConfig(
+  payload: ServerReportingConfiguration,
+) {
+  return api.put<ServerReportingConfiguration>(
+    `${CONFIG_BASE}/server/reporting`,
+    payload,
   );
 }
 

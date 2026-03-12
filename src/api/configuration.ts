@@ -9,6 +9,7 @@ import type {
 } from "./types";
 
 const BASE = "/api/configurations";
+export type ServerReportingConfiguration = Record<string, unknown>;
 
 function normalizeEffective(payload: unknown): EffectiveConfiguration {
   if (!isRecord(payload)) {
@@ -37,8 +38,17 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 export const configurationApi = {
   getServer: () => api.get<ServerConfiguration>(`${BASE}/server`),
 
+  getServerMetadata: () =>
+    api.get<Record<string, unknown>>(`${BASE}/server/metadata`),
+
+  getServerReporting: () =>
+    api.get<ServerReportingConfiguration>(`${BASE}/server/reporting`),
+
   putServer: (data: ServerConfiguration) =>
     api.put<ServerConfiguration>(`${BASE}/server`, data),
+
+  putServerReporting: (data: ServerReportingConfiguration) =>
+    api.put<ServerReportingConfiguration>(`${BASE}/server/reporting`, data),
 
   patchServer: (data: Partial<ServerConfiguration>) =>
     api.patch<ServerConfiguration>(`${BASE}/server`, data),
@@ -47,6 +57,9 @@ export const configurationApi = {
 
   getClient: (clientId: string) =>
     api.get<ClientConfiguration>(`${BASE}/clients/${clientId}`),
+
+  getClientMetadata: (clientId: string) =>
+    api.get<Record<string, unknown>>(`${BASE}/clients/${clientId}/metadata`),
 
   getClientEffective: async (clientId: string) =>
     normalizeEffective(
@@ -69,6 +82,9 @@ export const configurationApi = {
 
   getSite: (siteId: string) =>
     api.get<SiteConfiguration>(`${BASE}/sites/${siteId}`),
+
+  getSiteMetadata: (siteId: string) =>
+    api.get<Record<string, unknown>>(`${BASE}/sites/${siteId}/metadata`),
 
   getSiteEffective: async (siteId: string) =>
     normalizeEffective(

@@ -18,6 +18,7 @@ export type {
   EffectiveParams,
 } from "./app-store";
 export { notesApi } from "./notes";
+export { knowledgeApi } from "./knowledge";
 export { configurationApi } from "./configuration";
 export { auditApi } from "./audit";
 export { getNatsService, resetNatsService } from "./nats";

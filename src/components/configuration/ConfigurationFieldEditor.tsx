@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { GitCompare } from "lucide-react";
+import { useMemo, useState } from "react";
+import { ChevronDown, ChevronUp, GitCompare } from "lucide-react";
 import type { ConfigurationValue } from "@/api";
 import { Button, Input, Modal, Select, TextArea } from "@/components/ui";
 import { ConfigDiffViewer } from "./ConfigDiffViewer";
@@ -52,6 +52,7 @@ export function ConfigurationFieldEditor({
   unit,
 }: ConfigurationFieldEditorProps) {
   const [showDiff, setShowDiff] = useState(false);
+  const [showAiAdvanced, setShowAiAdvanced] = useState(false);
   const isReadOnly = !!locked;
   const inputDisabled = isReadOnly || (!!disableInheritance ? false : inherited);
 
@@ -64,6 +65,133 @@ export function ConfigurationFieldEditor({
   };
 
   const fieldRange = numberRanges[fieldKey];
+
+  const structuredJsonField =
+    fieldKind === "json" &&
+    [
+      "aiIntegrationSettingsJson",
+      "autoUpdateSettingsJson",
+      "brandingSettingsJson",
+      "lockedFieldsJson",
+    ].includes(fieldKey);
+
+  const aiParsedValue = useMemo(() => {
+    if (!structuredJsonField) {
+      return null;
+    }
+
+    if (fieldKey === "lockedFieldsJson") {
+      const trimmed = value.trim();
+      if (!trimmed) {
+        return [] as unknown[];
+      }
+
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (Array.isArray(parsed)) {
+          return parsed;
+        }
+      } catch {
+        return null;
+      }
+
+      return null;
+    }
+
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return {} as Record<string, unknown>;
+    }
+
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        return parsed as Record<string, unknown>;
+      }
+      return {} as Record<string, unknown>;
+    } catch {
+      return null;
+    }
+  }, [fieldKey, fieldKind, value]);
+
+  const jsonStringValue = (key: string): string => {
+    if (
+      !aiParsedValue ||
+      Array.isArray(aiParsedValue) ||
+      !(key in aiParsedValue)
+    ) {
+      return "";
+    }
+
+    const raw = aiParsedValue[key];
+    if (typeof raw === "string") {
+      return raw;
+    }
+    if (typeof raw === "number" || typeof raw === "boolean") {
+      return String(raw);
+    }
+    return "";
+  };
+
+  const updateJsonObjectValue = (
+    key: string,
+    next: string,
+    type: "string" | "number" | "boolean",
+  ) => {
+    const base =
+      aiParsedValue && typeof aiParsedValue === "object" && !Array.isArray(aiParsedValue)
+        ? { ...aiParsedValue }
+        : {};
+
+    if (type === "string") {
+      if (!next.trim()) {
+        delete base[key];
+      } else {
+        base[key] = next;
+      }
+    }
+
+    if (type === "number") {
+      if (!next.trim()) {
+        delete base[key];
+      } else {
+        const numeric = Number(next);
+        if (!Number.isNaN(numeric)) {
+          base[key] = numeric;
+        }
+      }
+    }
+
+    if (type === "boolean") {
+      if (!next) {
+        delete base[key];
+      } else {
+        base[key] = next === "true";
+      }
+    }
+
+    onValueChange(JSON.stringify(base, null, 2));
+  };
+
+  const lockedFieldsValue = useMemo(() => {
+    if (fieldKey !== "lockedFieldsJson" || !Array.isArray(aiParsedValue)) {
+      return "";
+    }
+
+    return aiParsedValue
+      .filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+      .join("\n");
+  }, [aiParsedValue, fieldKey]);
+
+  const updateLockedFields = (next: string) => {
+    const values = next
+      .split(/\r?\n/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+
+    const uniqueValues = Array.from(new Set(values));
+    onValueChange(JSON.stringify(uniqueValues, null, 2));
+  };
 
   const renderInput = () => {
     if (fieldKind === "boolean") {
@@ -120,22 +248,361 @@ export function ConfigurationFieldEditor({
     }
 
     if (fieldKind === "json") {
+      const isAiIntegrationField = fieldKey === "aiIntegrationSettingsJson";
+      const isAutoUpdateField = fieldKey === "autoUpdateSettingsJson";
+      const isBrandingField = fieldKey === "brandingSettingsJson";
+      const isLockedFieldsField = fieldKey === "lockedFieldsJson";
+
+      if (isLockedFieldsField && Array.isArray(aiParsedValue)) {
+        return (
+          <TextArea
+            label="Campos bloqueados (um por linha)"
+            value={lockedFieldsValue}
+            onChange={(event) => updateLockedFields(event.target.value)}
+            rows={6}
+            disabled={inputDisabled}
+            placeholder={
+              inherited
+                ? "Herdando do nivel acima"
+                : "supportEnabled\ntokenExpirationDays\naiIntegrationSettingsJson"
+            }
+          />
+        );
+      }
+
+      if (isAiIntegrationField && aiParsedValue && !Array.isArray(aiParsedValue)) {
+        return (
+          <div className="space-y-3">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Input
+                label="Provider"
+                value={jsonStringValue("provider")}
+                onChange={(event) =>
+                  updateJsonObjectValue("provider", event.target.value, "string")
+                }
+                disabled={inputDisabled}
+                placeholder="openai, azure-openai, anthropic..."
+              />
+              <Input
+                label="Model"
+                value={jsonStringValue("model")}
+                onChange={(event) =>
+                  updateJsonObjectValue("model", event.target.value, "string")
+                }
+                disabled={inputDisabled}
+                placeholder="gpt-4.1-mini"
+              />
+              <Select
+                label="Enabled"
+                value={jsonStringValue("enabled")}
+                onChange={(event) =>
+                  updateJsonObjectValue("enabled", event.target.value, "boolean")
+                }
+                disabled={inputDisabled}
+                options={[
+                  { value: "", label: "Padrao do backend" },
+                  { value: "true", label: "Ativado" },
+                  { value: "false", label: "Desativado" },
+                ]}
+              />
+              <Input
+                type="password"
+                label="API Key"
+                value={jsonStringValue("apiKey")}
+                onChange={(event) =>
+                  updateJsonObjectValue("apiKey", event.target.value, "string")
+                }
+                disabled={inputDisabled}
+                placeholder="Preencha apenas para trocar a chave"
+              />
+            </div>
+
+            <div className="rounded-lg border border-white/10 bg-white/[0.02] p-2">
+              <button
+                type="button"
+                onClick={() => setShowAiAdvanced((prev) => !prev)}
+                className="flex w-full items-center justify-between rounded-md px-2 py-1.5 text-xs font-medium text-slate-300 hover:bg-white/5"
+              >
+                <span>Configuracao avancada</span>
+                {showAiAdvanced ? (
+                  <ChevronUp className="h-4 w-4" />
+                ) : (
+                  <ChevronDown className="h-4 w-4" />
+                )}
+              </button>
+
+              {showAiAdvanced && (
+                <div className="mt-2 grid gap-3 sm:grid-cols-2 p-2">
+                  <Input
+                    label="Base URL"
+                    value={jsonStringValue("baseUrl")}
+                    onChange={(event) =>
+                      updateJsonObjectValue("baseUrl", event.target.value, "string")
+                    }
+                    disabled={inputDisabled}
+                    placeholder="https://api.openai.com/v1"
+                  />
+                  <Input
+                    label="Endpoint"
+                    value={jsonStringValue("endpoint")}
+                    onChange={(event) =>
+                      updateJsonObjectValue("endpoint", event.target.value, "string")
+                    }
+                    disabled={inputDisabled}
+                    placeholder="/chat/completions"
+                  />
+                  <Input
+                    label="Deployment"
+                    value={jsonStringValue("deployment")}
+                    onChange={(event) =>
+                      updateJsonObjectValue("deployment", event.target.value, "string")
+                    }
+                    disabled={inputDisabled}
+                    placeholder="nome-do-deployment"
+                  />
+                  <Input
+                    label="Temperature"
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    max="2"
+                    value={jsonStringValue("temperature")}
+                    onChange={(event) =>
+                      updateJsonObjectValue("temperature", event.target.value, "number")
+                    }
+                    disabled={inputDisabled}
+                    placeholder="0.2"
+                  />
+                  <Input
+                    label="Top P"
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    max="1"
+                    value={jsonStringValue("topP")}
+                    onChange={(event) =>
+                      updateJsonObjectValue("topP", event.target.value, "number")
+                    }
+                    disabled={inputDisabled}
+                    placeholder="1"
+                  />
+                  <Input
+                    label="Max Tokens"
+                    type="number"
+                    step="1"
+                    min="1"
+                    value={jsonStringValue("maxTokens")}
+                    onChange={(event) =>
+                      updateJsonObjectValue("maxTokens", event.target.value, "number")
+                    }
+                    disabled={inputDisabled}
+                    placeholder="1024"
+                  />
+                  <Input
+                    label="Presence Penalty"
+                    type="number"
+                    step="0.1"
+                    min="-2"
+                    max="2"
+                    value={jsonStringValue("presencePenalty")}
+                    onChange={(event) =>
+                      updateJsonObjectValue("presencePenalty", event.target.value, "number")
+                    }
+                    disabled={inputDisabled}
+                    placeholder="0"
+                  />
+                  <Input
+                    label="Frequency Penalty"
+                    type="number"
+                    step="0.1"
+                    min="-2"
+                    max="2"
+                    value={jsonStringValue("frequencyPenalty")}
+                    onChange={(event) =>
+                      updateJsonObjectValue("frequencyPenalty", event.target.value, "number")
+                    }
+                    disabled={inputDisabled}
+                    placeholder="0"
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      }
+
+      if (isAutoUpdateField && aiParsedValue && !Array.isArray(aiParsedValue)) {
+        return (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Select
+              label="Enabled"
+              value={jsonStringValue("enabled")}
+              onChange={(event) =>
+                updateJsonObjectValue("enabled", event.target.value, "boolean")
+              }
+              disabled={inputDisabled}
+              options={[
+                { value: "", label: "Padrao do backend" },
+                { value: "true", label: "Ativado" },
+                { value: "false", label: "Desativado" },
+              ]}
+            />
+            <Input
+              label="Channel"
+              value={jsonStringValue("channel")}
+              onChange={(event) =>
+                updateJsonObjectValue("channel", event.target.value, "string")
+              }
+              disabled={inputDisabled}
+              placeholder="stable, beta..."
+            />
+            <Input
+              label="Check Interval Hours"
+              type="number"
+              min="1"
+              step="1"
+              value={jsonStringValue("checkIntervalHours")}
+              onChange={(event) =>
+                updateJsonObjectValue(
+                  "checkIntervalHours",
+                  event.target.value,
+                  "number",
+                )
+              }
+              disabled={inputDisabled}
+              placeholder="24"
+            />
+            <Input
+              label="Rollout Percentage"
+              type="number"
+              min="0"
+              max="100"
+              step="1"
+              value={jsonStringValue("rolloutPercentage")}
+              onChange={(event) =>
+                updateJsonObjectValue(
+                  "rolloutPercentage",
+                  event.target.value,
+                  "number",
+                )
+              }
+              disabled={inputDisabled}
+              placeholder="100"
+            />
+            <Input
+              label="Maintenance Window Start"
+              value={jsonStringValue("maintenanceWindowStart")}
+              onChange={(event) =>
+                updateJsonObjectValue(
+                  "maintenanceWindowStart",
+                  event.target.value,
+                  "string",
+                )
+              }
+              disabled={inputDisabled}
+              placeholder="02:00"
+            />
+            <Input
+              label="Maintenance Window End"
+              value={jsonStringValue("maintenanceWindowEnd")}
+              onChange={(event) =>
+                updateJsonObjectValue(
+                  "maintenanceWindowEnd",
+                  event.target.value,
+                  "string",
+                )
+              }
+              disabled={inputDisabled}
+              placeholder="05:00"
+            />
+          </div>
+        );
+      }
+
+      if (isBrandingField && aiParsedValue && !Array.isArray(aiParsedValue)) {
+        return (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Input
+              label="App Name"
+              value={jsonStringValue("appName")}
+              onChange={(event) =>
+                updateJsonObjectValue("appName", event.target.value, "string")
+              }
+              disabled={inputDisabled}
+              placeholder="Meduza RMM"
+            />
+            <Input
+              label="Logo URL"
+              value={jsonStringValue("logoUrl")}
+              onChange={(event) =>
+                updateJsonObjectValue("logoUrl", event.target.value, "string")
+              }
+              disabled={inputDisabled}
+              placeholder="https://..."
+            />
+            <Input
+              label="Primary Color"
+              value={jsonStringValue("primaryColor")}
+              onChange={(event) =>
+                updateJsonObjectValue("primaryColor", event.target.value, "string")
+              }
+              disabled={inputDisabled}
+              placeholder="#6366f1"
+            />
+            <Input
+              label="Accent Color"
+              value={jsonStringValue("accentColor")}
+              onChange={(event) =>
+                updateJsonObjectValue("accentColor", event.target.value, "string")
+              }
+              disabled={inputDisabled}
+              placeholder="#06b6d4"
+            />
+            <Input
+              label="Sidebar Color"
+              value={jsonStringValue("sidebarColor")}
+              onChange={(event) =>
+                updateJsonObjectValue("sidebarColor", event.target.value, "string")
+              }
+              disabled={inputDisabled}
+              placeholder="#0f172a"
+            />
+            <Input
+              label="Header Color"
+              value={jsonStringValue("headerColor")}
+              onChange={(event) =>
+                updateJsonObjectValue("headerColor", event.target.value, "string")
+              }
+              disabled={inputDisabled}
+              placeholder="#1e293b"
+            />
+          </div>
+        );
+      }
+
       return (
-        <TextArea
-          label="Valor local (JSON)"
-          value={value}
-          onChange={(event) => onValueChange(event.target.value)}
-          rows={6}
-          disabled={inputDisabled}
-          error={error}
-          placeholder={
-            inherited
-              ? "Herdando do nivel acima"
-              : fieldKey === "lockedFieldsJson"
-                ? '["supportEnabled", "tokenExpirationDays"]'
-                : "{\n  \"key\": \"value\"\n}"
-          }
-        />
+        <>
+          {structuredJsonField && (
+            <p className="text-xs text-amber-300">
+              Conteudo legado invalido detectado. Ajuste o JSON para continuar usando os campos estruturados.
+            </p>
+          )}
+          <TextArea
+            label="Valor local (JSON)"
+            value={value}
+            onChange={(event) => onValueChange(event.target.value)}
+            rows={6}
+            disabled={inputDisabled}
+            error={error}
+            placeholder={
+              inherited
+                ? "Herdando do nivel acima"
+                : fieldKey === "lockedFieldsJson"
+                  ? '["supportEnabled", "tokenExpirationDays"]'
+                  : "{\n  \"key\": \"value\"\n}"
+            }
+          />
+        </>
       );
     }
 
@@ -178,6 +645,26 @@ export function ConfigurationFieldEditor({
       )}
 
       <div className="grid gap-3">
+        {fieldKind === "json" && fieldKey === "aiIntegrationSettingsJson" && (
+          <p className="text-xs text-amber-300">
+            ApiKey e write-only: o valor atual nao e retornado pela API. Preencha apenas para trocar a chave.
+          </p>
+        )}
+        {fieldKind === "json" && fieldKey === "autoUpdateSettingsJson" && (
+          <p className="text-xs text-slate-400">
+            Ajuste o comportamento de atualizacao automatica por campos estruturados.
+          </p>
+        )}
+        {fieldKind === "json" && fieldKey === "brandingSettingsJson" && (
+          <p className="text-xs text-slate-400">
+            Personalize nome, logo e cores sem editar JSON manualmente.
+          </p>
+        )}
+        {fieldKind === "json" && fieldKey === "lockedFieldsJson" && (
+          <p className="text-xs text-slate-400">
+            Informe um campo por linha para bloquear override em niveis inferiores.
+          </p>
+        )}
         {renderInput()}
 
         {fieldKind === "number" && fieldRange && !error && (

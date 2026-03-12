@@ -57,7 +57,7 @@ export default function ClientConfigurationPage() {
 
     for (const field of clientEditableFields) {
       const value = localQuery.data[field.key] ?? getEffectiveValue(effectiveQuery.data, field.key);
-      setValue(`values.${field.key}` as never, formatFieldValue(value) as never);
+      setValue(`values.${field.key}` as never, formatFieldValue(value, field.key) as never);
     }
 
     setInherits(buildInheritedState(localQuery.data, clientEditableFields));

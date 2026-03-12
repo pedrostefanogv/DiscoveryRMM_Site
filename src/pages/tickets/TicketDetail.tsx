@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Send, Lock, Unlock, Clock, Activity, ChevronDown } from 'lucide-react';
+import { ArrowLeft, Send, Lock, Unlock, Clock, Activity, ChevronDown, BookOpen } from 'lucide-react';
 import {
   useTicket,
   useTicketComments,
@@ -54,6 +54,10 @@ export default function TicketDetail() {
   const t = ticket.data;
   const p = PRIORITY_META[t.priority] ?? { label: t.priority, color: 'slate' as const };
   const currentState = states.data?.find(s => s.id === t.workflowStateId);
+  const knowledgeQuery = new URLSearchParams();
+  if (t.clientId) knowledgeQuery.set('clientId', t.clientId);
+  if (t.siteId) knowledgeQuery.set('siteId', t.siteId);
+  const knowledgeUrl = `/knowledge${knowledgeQuery.toString() ? `?${knowledgeQuery.toString()}` : ''}`;
 
   return (
     <div className="space-y-6">
@@ -89,6 +93,9 @@ export default function TicketDetail() {
           )}
           <Button size="sm" variant="ghost" onClick={() => setEditing(e => !e)}>
             {editing ? 'Cancelar edição' : 'Editar'}
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => navigate(knowledgeUrl)}>
+            <BookOpen className="h-4 w-4" /> Conhecimento
           </Button>
         </div>
       </div>

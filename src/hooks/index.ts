@@ -82,3 +82,4 @@ export * from "./useReportFavorites";
 export * from "./useReportTemplateHistory";
 export * from "./useReportNotifications";
 export * from "./useReportDownload";
+export * from "./useKnowledge";

@@ -30,6 +30,8 @@ const ReportTemplateList = lazy(() => import('@/pages/reports/ReportTemplateList
 const ReportTemplateForm = lazy(() => import('@/pages/reports/ReportTemplateForm'));
 const RunReport = lazy(() => import('@/pages/reports/RunReport'));
 const ReportExecutionList = lazy(() => import('@/pages/reports/ReportExecutionList'));
+const KnowledgeList = lazy(() => import('@/pages/knowledge/KnowledgeList'));
+const KnowledgeEditor = lazy(() => import('@/pages/knowledge/KnowledgeEditor'));
 
 function LazyPage({ children }: { children: React.ReactNode }) {
   return <Suspense fallback={<Loading />}>{children}</Suspense>;
@@ -151,6 +153,18 @@ export const router = createBrowserRouter([
       {
         path: 'reports/executions',
         element: <LazyPage><ReportExecutionList /></LazyPage>,
+      },
+      {
+        path: 'knowledge',
+        element: <LazyPage><KnowledgeList /></LazyPage>,
+      },
+      {
+        path: 'knowledge/new',
+        element: <LazyPage><KnowledgeEditor /></LazyPage>,
+      },
+      {
+        path: 'knowledge/:id/edit',
+        element: <LazyPage><KnowledgeEditor /></LazyPage>,
       },
       {
         path: '*',

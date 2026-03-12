@@ -8,6 +8,7 @@ import {
   ScrollText,
   KeyRound,
   AppWindow,
+  BookOpen,
   Settings,
   ChevronLeft,
   ChevronRight,
@@ -25,6 +26,7 @@ const mainLinks = [
   { to: '/tickets', icon: Ticket, label: 'Chamados' },
   { to: '/logs', icon: ScrollText, label: 'Logs' },
   { to: '/deploy', icon: KeyRound, label: 'Deploy' },
+  { to: '/knowledge', icon: BookOpen, label: 'Conhecimento' },
 ];
 
 const softwareLinks = [

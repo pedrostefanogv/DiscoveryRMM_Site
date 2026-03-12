@@ -10,7 +10,6 @@ import {
   Key,
   Layers,
   Lock,
-  Paintbrush,
   RotateCcw,
   Save,
   ShieldCheck,
@@ -146,7 +145,9 @@ export default function ServerConfigurationPage() {
   const policyFields = serverEditableFields.filter((f) => f.group === "policy");
   const agentFields = serverEditableFields.filter((f) => f.group === "agent");
   const tokenFields = serverEditableFields.filter((f) => f.group === "tokens");
-  const advancedFields = serverEditableFields.filter((f) => f.group === "advanced");
+  const advancedFields = serverEditableFields.filter(
+    (f) => f.group === "advanced" && f.key !== "brandingSettingsJson",
+  );
 
   const renderFieldEditor = (field: EditableField) => {
     const value = formValues.values?.[field.key] ?? "";
@@ -369,19 +370,17 @@ export default function ServerConfigurationPage() {
         <Card>
           <CardHeader
             title="Configurações Avançadas"
-            subtitle="Estruturas JSON para auto-update, branding, IA e bloqueio de campos."
+            subtitle="Auto-update, IA estruturada e bloqueio de campos. Branding fica em /settings/branding."
           />
           <div className="space-y-6">
             {advancedFields.map((field) => {
               const icons: Record<string, React.ReactNode> = {
                 autoUpdateSettingsJson: <Zap className="h-4 w-4" />,
-                brandingSettingsJson: <Paintbrush className="h-4 w-4" />,
                 aiIntegrationSettingsJson: <Bot className="h-4 w-4" />,
                 lockedFieldsJson: <Lock className="h-4 w-4" />,
               };
               const colors: Record<string, string> = {
                 autoUpdateSettingsJson: "bg-blue-500/20 text-blue-400",
-                brandingSettingsJson: "bg-pink-500/20 text-pink-400",
                 aiIntegrationSettingsJson: "bg-purple-500/20 text-purple-400",
                 lockedFieldsJson: "bg-red-500/20 text-red-400",
               };

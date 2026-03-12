@@ -743,6 +743,63 @@ export interface UpdateNoteRequest {
   isPinned?: boolean;
 }
 
+export type KnowledgeSearchMode = "semantic" | "keyword" | "hybrid";
+
+export interface KnowledgeArticle {
+  id: string;
+  title: string;
+  content: string;
+  category: string | null;
+  tags: string[];
+  author: string | null;
+  clientId: string | null;
+  siteId: string | null;
+  isPublished: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateKnowledgeArticleRequest {
+  title: string;
+  content: string;
+  category: string | null;
+  tags: string[];
+  author: string | null;
+  clientId: string | null;
+  siteId: string | null;
+}
+
+export interface UpdateKnowledgeArticleRequest {
+  title: string;
+  content: string;
+  category: string | null;
+  tags: string[];
+  author: string | null;
+}
+
+export interface KnowledgeListQuery {
+  clientId?: string;
+  siteId?: string;
+  publishedOnly?: boolean;
+  category?: string;
+}
+
+export interface KnowledgeSearchQuery {
+  q: string;
+  clientId?: string;
+  siteId?: string;
+  mode?: KnowledgeSearchMode;
+  maxResults?: number;
+}
+
+export interface LinkTicketKnowledgeRequest {
+  articleId: string;
+}
+
+export interface TicketKnowledgeSuggestQuery {
+  maxResults?: number;
+}
+
 // ── Query params ───────────────────────────────────────
 
 export interface LogsQuery {

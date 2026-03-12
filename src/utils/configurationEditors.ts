@@ -31,6 +31,28 @@ export interface EditableField {
   unit?: string;
 }
 
+const AI_INTEGRATION_FIELD_KEY = "aiIntegrationSettingsJson";
+
+function sanitizeAiIntegrationObject(
+  value: unknown,
+): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+
+  const record = { ...(value as Record<string, unknown>) };
+
+  // ApiKey e apiKey sao write-only: nunca exibir valores existentes.
+  if ("apiKey" in record) {
+    delete record.apiKey;
+  }
+  if ("ApiKey" in record) {
+    delete record.ApiKey;
+  }
+
+  return record;
+}
+
 export const serverEditableFields: EditableField[] = [
   {
     key: "recoveryEnabled",
@@ -144,7 +166,7 @@ export const serverEditableFields: EditableField[] = [
     kind: "json",
     group: "advanced",
     description:
-      "Chave de API, modelo e parâmetros do provedor de inteligência artificial.",
+      "Chave de API, modelo e parâmetros do provedor de IA. A chave é write-only e só deve ser enviada quando informada novamente.",
   },
   {
     key: "lockedFieldsJson",
@@ -166,6 +188,8 @@ export const clientEditableFields: EditableField[] = [
     key: "aiIntegrationSettingsJson",
     label: "AI Integration Settings JSON",
     kind: "json",
+    description:
+      "ApiKey e write-only: mantenha ausente no JSON e inclua somente quando quiser trocar a chave.",
   },
   {
     key: "inventoryIntervalHours",
@@ -224,6 +248,8 @@ export const siteEditableFields: EditableField[] = [
     key: "aiIntegrationSettingsJson",
     label: "AI Integration Settings JSON",
     kind: "json",
+    description:
+      "ApiKey e write-only: mantenha ausente no JSON e inclua somente quando quiser trocar a chave.",
   },
   {
     key: "inventoryIntervalHours",
@@ -246,9 +272,29 @@ export const siteEditableFields: EditableField[] = [
 
 export function formatFieldValue(
   value: ConfigurationValue | undefined | null,
+  fieldKey?: string,
 ): string {
   if (value === null || value === undefined) {
     return "";
+  }
+
+  if (fieldKey === AI_INTEGRATION_FIELD_KEY) {
+    if (typeof value === "string") {
+      try {
+        const parsed = JSON.parse(value);
+        const sanitized = sanitizeAiIntegrationObject(parsed);
+        if (sanitized) {
+          return JSON.stringify(sanitized, null, 2);
+        }
+      } catch {
+        return value;
+      }
+    }
+
+    const sanitized = sanitizeAiIntegrationObject(value);
+    if (sanitized) {
+      return JSON.stringify(sanitized, null, 2);
+    }
   }
 
   if (typeof value === "string") {
@@ -353,7 +399,26 @@ export function parseFieldValue(
       return trimmed || "[]";
     }
 
-    return JSON.parse(trimmed || "{}");
+    const parsed = JSON.parse(trimmed || "{}");
+
+    if (
+      fieldKey === AI_INTEGRATION_FIELD_KEY &&
+      parsed &&
+      typeof parsed === "object" &&
+      !Array.isArray(parsed)
+    ) {
+      const aiPayload = { ...(parsed as Record<string, unknown>) };
+      const apiKeyValue = aiPayload.apiKey ?? aiPayload.ApiKey;
+
+      if (typeof apiKeyValue !== "string" || apiKeyValue.trim().length === 0) {
+        delete aiPayload.apiKey;
+        delete aiPayload.ApiKey;
+      }
+
+      return aiPayload;
+    }
+
+    return parsed;
   }
 
   if (kind === "policy") {
@@ -380,7 +445,10 @@ export function getEffectiveValue(
   }
 
   if (fieldKey === "aiIntegrationSettingsJson") {
-    return effective.aiIntegration;
+    return (
+      sanitizeAiIntegrationObject(effective.aiIntegration) ??
+      effective.aiIntegration
+    );
   }
 
   return effective[fieldKey] as ConfigurationValue | null | undefined;
@@ -433,6 +501,7 @@ export function buildServerDraft(
   for (const field of fields) {
     const raw = formatFieldValue(
       source?.[field.key] as ConfigurationValue | undefined,
+      field.key,
     );
     draft[field.key] = raw !== "" ? raw : fieldDefault(field.kind);
   }

@@ -65,7 +65,7 @@ export default function SiteConfigurationPage() {
 
     for (const field of siteEditableFields) {
       const value = getEffectiveValue(effectiveSiteQuery.data, field.key) ?? localSiteQuery.data[field.key];
-      setValue(`values.${field.key}` as never, formatFieldValue(value) as never);
+      setValue(`values.${field.key}` as never, formatFieldValue(value, field.key) as never);
     }
 
     const nextInherited: Record<string, boolean> = {};

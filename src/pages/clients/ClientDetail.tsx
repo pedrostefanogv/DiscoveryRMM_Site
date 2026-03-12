@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Plus, Monitor, Trash2, AppWindow, Building2, Ticket as TicketIcon, Copy, KeyRound } from 'lucide-react';
+import { ArrowLeft, Plus, Monitor, Trash2, AppWindow, Building2, Ticket as TicketIcon, Copy, KeyRound, BookOpen } from 'lucide-react';
 import { useClient, useDeleteClient } from '@/hooks/useClients';
 import { useSites, useCreateSite } from '@/hooks/useSites';
 import { useAgentsByClient } from '@/hooks/useAgents';
@@ -153,6 +153,13 @@ export default function ClientDetail() {
           <p className="text-sm text-slate-400">Detalhes do Cliente</p>
         </div>
         <Badge color={c.isActive ? 'success' : 'slate'}>{c.isActive ? 'Ativo' : 'Inativo'}</Badge>
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() => navigate(`/knowledge?clientId=${c.id}`)}
+        >
+          <BookOpen className="h-4 w-4" /> Conhecimento
+        </Button>
         <Button variant="danger" size="sm" onClick={handleDelete}>
           <Trash2 className="h-4 w-4" /> Excluir
         </Button>
