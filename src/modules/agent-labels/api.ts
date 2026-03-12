@@ -1,5 +1,7 @@
 import {
   AgentLabel,
+  AgentLabelRuleAgentItem,
+  AgentLabelRuleAgentsResponse,
   AgentLabelRuleDryRunRequest,
   AgentLabelRuleDryRunResponse,
   AgentLabelRuleResponse,
@@ -31,6 +33,40 @@ export const agentLabelsApi = {
   async getRules(includeDisabled = true): Promise<AgentLabelRuleResponse[]> {
     const res = await fetch(`${BASE}/rules?includeDisabled=${includeDisabled}`);
     return toJson<AgentLabelRuleResponse[]>(res);
+  },
+
+  async getRuleAgents(ruleId: string): Promise<AgentLabelRuleAgentsResponse> {
+    const res = await fetch(`${BASE}/rules/${ruleId}/agents`);
+    const raw = await toJson<{
+      ruleId?: string;
+      ruleName?: string;
+      label?: string;
+      description?: string | null;
+      totalAgents?: number;
+      total?: number;
+      count?: number;
+      agents?: AgentLabelRuleAgentItem[];
+      items?: AgentLabelRuleAgentItem[];
+    }>(res);
+
+    const agents = raw.agents ?? raw.items ?? [];
+    const totalAgents =
+      typeof raw.totalAgents === "number"
+        ? raw.totalAgents
+        : typeof raw.total === "number"
+          ? raw.total
+          : typeof raw.count === "number"
+            ? raw.count
+            : agents.length;
+
+    return {
+      ruleId: raw.ruleId ?? ruleId,
+      ruleName: raw.ruleName ?? "",
+      label: raw.label ?? "",
+      description: raw.description ?? null,
+      totalAgents,
+      agents,
+    };
   },
 
   async createRule(

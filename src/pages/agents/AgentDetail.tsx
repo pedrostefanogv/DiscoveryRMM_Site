@@ -1,19 +1,20 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  ArrowLeft, Cpu, HardDrive, MemoryStick, Ticket as TicketIcon,
-  Terminal, Send, Wifi, WifiOff, AppWindow, Search, Clock,
+  ArrowLeft, Cpu, MemoryStick, Ticket as TicketIcon, Tags,
+  Wifi, WifiOff, AppWindow, Search, Clock, HardDrive,
 } from 'lucide-react';
-import { useAgent, useAgentHardware, useAgentSoftware, useAgentSoftwareSnapshot, useAgentCommands, useSendCommand } from '@/hooks/useAgents';
+import { useAgent, useAgentHardware, useAgentSoftware, useAgentSoftwareSnapshot } from '@/hooks/useAgents';
 import { useTickets } from '@/hooks/useTickets';
 import { useLogs } from '@/hooks/useLogs';
 import { Button, Card, CardHeader, Badge, Loading, ErrorDisplay, Input, Select, DataTable, StatCard, type Column } from '@/components/ui';
 import { NotesPanel } from '@/components/notes/NotesPanel';
 import type { AgentSoftwareInventoryItem } from '@/api';
-import { CommandType, LogLevel } from '@/api';
+import { LogLevel } from '@/api';
 import { isAgentOnlineNow } from '@/utils/agentStatus';
 import { useNowTick } from '@/hooks/useNowTick';
-import toast from 'react-hot-toast';
+import { agentLabelsApi } from '@/modules/agent-labels/api';
+import { AgentLabelSourceType, type AgentLabel } from '@/modules/agent-labels/types';
 
 const levelLabels: Record<number, { label: string; color: 'slate' | 'primary' | 'warning' | 'danger' | 'accent' }> = {
   [LogLevel.Debug]: { label: 'Debug', color: 'slate' },
@@ -21,14 +22,6 @@ const levelLabels: Record<number, { label: string; color: 'slate' | 'primary' | 
   [LogLevel.Warning]: { label: 'Aviso', color: 'warning' },
   [LogLevel.Error]: { label: 'Erro', color: 'danger' },
   [LogLevel.Critical]: { label: 'Crítico', color: 'danger' },
-};
-
-const cmdTypeLabels: Record<number, string> = {
-  [CommandType.Restart]: 'Reiniciar',
-  [CommandType.Shutdown]: 'Desligar',
-  [CommandType.RunScript]: 'Executar Script',
-  [CommandType.Update]: 'Atualizar Agente',
-  [CommandType.CollectInventory]: 'Coletar Inventário',
 };
 
 function formatBytes(bytes: number | null): string {
@@ -53,6 +46,9 @@ export default function AgentDetail() {
   const [softwareSearchApplied, setSoftwareSearchApplied] = useState('');
   const [softwarePage, setSoftwarePage] = useState(1);
   const [softwarePageCursors, setSoftwarePageCursors] = useState<Array<string | undefined>>([undefined]);
+  const [automaticLabels, setAutomaticLabels] = useState<AgentLabel[]>([]);
+  const [isLoadingLabels, setIsLoadingLabels] = useState(true);
+  const [labelsError, setLabelsError] = useState<string | null>(null);
 
   const agent = useAgent(id!);
   const hw = useAgentHardware(id!);
@@ -64,10 +60,47 @@ export default function AgentDetail() {
     order: softwareOrder,
   });
   const softwareSnapshot = useAgentSoftwareSnapshot(id!);
-  const commands = useAgentCommands(id!);
   const agentLogs = useLogs({ agentId: id, limit: 10 });
-    const agentTickets = useTickets({ agentId: id, limit: 5 });
+  const agentTickets = useTickets({ agentId: id, limit: 5 });
   const now = useNowTick(5_000);
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    async function loadAgentLabels() {
+      if (!id) {
+        setAutomaticLabels([]);
+        setIsLoadingLabels(false);
+        return;
+      }
+
+      setIsLoadingLabels(true);
+      setLabelsError(null);
+
+      try {
+        const data = await agentLabelsApi.getAgentLabels(id);
+        if (isCancelled) return;
+
+        const automaticOnly = data
+          .filter(item => item.sourceType === AgentLabelSourceType.Automatic)
+          .sort((a, b) => a.label.localeCompare(b.label, 'pt-BR'));
+        setAutomaticLabels(automaticOnly);
+      } catch {
+        if (isCancelled) return;
+        setLabelsError('Falha ao carregar labels automáticas.');
+      } finally {
+        if (!isCancelled) {
+          setIsLoadingLabels(false);
+        }
+      }
+    }
+
+    void loadAgentLabels();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [id]);
 
   if (agent.isLoading) return <Loading />;
   if (agent.isError || !agent.data) return <ErrorDisplay onRetry={() => agent.refetch()} />;
@@ -80,6 +113,11 @@ export default function AgentDetail() {
   const softwareTotalPages = Math.max(1, Math.ceil(softwareTotalCount / softwareLimitReturned));
   const canGoPrevSoftwarePage = softwarePage > 1 && !software.isFetching;
   const canGoNextSoftwarePage = Boolean(software.data?.hasMore && software.data?.nextCursor) && !software.isFetching;
+  const disks = hw.data?.disks ?? [];
+  const totalDiskBytes = disks.reduce((acc, disk) => acc + (disk.totalSizeBytes ?? 0), 0);
+  const freeDiskBytes = disks.reduce((acc, disk) => acc + (disk.freeSpaceBytes ?? 0), 0);
+  const usedDiskBytes = Math.max(0, totalDiskBytes - freeDiskBytes);
+  const diskUsagePercent = totalDiskBytes > 0 ? Math.min(100, Math.round((usedDiskBytes / totalDiskBytes) * 100)) : null;
 
   const resetSoftwarePagination = () => {
     setSoftwarePage(1);
@@ -199,15 +237,37 @@ export default function AgentDetail() {
             ? <span className="text-xs text-slate-400">{hw.data.memoryModules.length} módulo(s)</span>
             : undefined}
         />
-        <StatCard
-          icon={HardDrive}
-          label="Discos"
-          value={`${hw.data?.disks?.length ?? 0} disco(s)`}
-          tone="warning"
-          trend={hw.data?.disks?.length
-            ? <span className="text-xs text-slate-400">{hw.data.disks.map(d => `${d.driveLetter} ${formatBytes(d.totalSizeBytes)}`).join(' · ')}</span>
-            : undefined}
-        />
+        <Card className="border border-cyan-500/20 bg-gradient-to-br from-cyan-500/10 via-slate-900/30 to-slate-900/20 p-4">
+          <div className="mb-3 flex items-center gap-2">
+            <span className="rounded-md bg-cyan-400/15 p-1.5 text-cyan-300">
+              <Tags className="h-4 w-4" />
+            </span>
+            <div>
+              <p className="text-xs uppercase tracking-[0.12em] text-cyan-200/80">Labels automáticas</p>
+              <p className="text-xs text-slate-400">Aplicadas por regras</p>
+            </div>
+          </div>
+
+          {isLoadingLabels ? (
+            <div className="flex flex-wrap gap-2">
+              {Array.from({ length: 4 }).map((_, idx) => (
+                <span key={idx} className="h-6 w-20 animate-pulse rounded-full bg-white/10" />
+              ))}
+            </div>
+          ) : labelsError ? (
+            <p className="text-sm text-danger">Falha ao carregar labels.</p>
+          ) : automaticLabels.length === 0 ? (
+            <p className="text-sm text-slate-400">Nenhuma label automática aplicada.</p>
+          ) : (
+            <div className="max-h-[86px] overflow-y-auto pr-1">
+              <div className="flex flex-wrap gap-2">
+                {automaticLabels.map(item => (
+                  <Badge key={item.id} color="accent">{item.label}</Badge>
+                ))}
+              </div>
+            </div>
+          )}
+        </Card>
         <StatCard
           icon={AppWindow}
           label="Softwares instalados"
@@ -219,62 +279,80 @@ export default function AgentDetail() {
         />
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        {/* Commands */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        <NotesPanel
+          entityType="agent"
+          entityId={a.id}
+          title="Notas do Agente"
+        />
+
+        {/* Disk */}
         <Card>
-          <CardHeader title="Comandos" subtitle="Enviar e histórico" />
-          <CommandPanel agentId={id!} />
-          <div className="mt-4 max-h-60 space-y-2 overflow-y-auto">
-            {(commands.data ?? []).length === 0 && (
-              <p className="text-xs text-slate-500">Nenhum comando enviado</p>
-            )}
-            {(commands.data ?? []).map(cmd => (
-              <div key={cmd.id} className="flex items-center justify-between rounded-lg bg-white/5 px-3 py-2 text-xs">
-                <span className="flex items-center gap-1.5 text-slate-300">
-                  <Terminal className="h-3 w-3 shrink-0" />
-                  {cmdTypeLabels[cmd.commandType] ?? `Tipo ${cmd.commandType}`}
-                </span>
-                <div className="flex items-center gap-2">
-                  <span className="text-slate-500">{formatDate(cmd.createdAt)}</span>
-                  <Badge color={cmd.status === 'Completed' ? 'success' : cmd.status === 'Failed' ? 'danger' : 'slate'}>
-                    {cmd.status}
-                  </Badge>
+          <CardHeader title="Disco" subtitle="Espaço agregado do agente" />
+
+          {disks.length === 0 ? (
+            <p className="text-sm text-slate-500">Sem dados de disco coletados para este agente.</p>
+          ) : (
+            <div className="space-y-4">
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div className="rounded-lg bg-white/5 px-3 py-2">
+                  <p className="text-xs text-slate-500">Usado</p>
+                  <p className="text-sm font-medium text-white">{formatBytes(usedDiskBytes)}</p>
+                </div>
+                <div className="rounded-lg bg-white/5 px-3 py-2">
+                  <p className="text-xs text-slate-500">Livre</p>
+                  <p className="text-sm font-medium text-white">{formatBytes(freeDiskBytes)}</p>
+                </div>
+                <div className="rounded-lg bg-white/5 px-3 py-2">
+                  <p className="text-xs text-slate-500">Total</p>
+                  <p className="text-sm font-medium text-white">{formatBytes(totalDiskBytes)}</p>
                 </div>
               </div>
-            ))}
-          </div>
-        </Card>
 
-        {/* Discos */}
-        <Card>
-          <CardHeader title="Discos" subtitle={`${hw.data?.disks?.length ?? 0} disco(s)`} />
-          <div className="space-y-3">
-            {(hw.data?.disks ?? []).map(d => {
-              const usedBytes = d.totalSizeBytes - d.freeSpaceBytes;
-              const usedPercent = d.totalSizeBytes > 0 ? Math.round((usedBytes / d.totalSizeBytes) * 100) : 0;
-              const barColor = usedPercent > 90 ? 'text-danger' : usedPercent > 70 ? 'text-warning' : 'text-success';
-              return (
-                <div key={d.id}>
-                  <div className="mb-1 flex items-center justify-between text-xs">
-                    <span className="font-mono font-medium text-white">{d.driveLetter}{d.label ? ` (${d.label})` : ''}</span>
-                    <span className="text-slate-400">{formatBytes(usedBytes)} / {formatBytes(d.totalSizeBytes)} — {usedPercent}%</span>
-                  </div>
-                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/10">
-                    <svg className="h-full w-full" viewBox="0 0 100 2" preserveAspectRatio="none" role="presentation" aria-hidden="true">
-                      <rect x="0" y="0" width={Math.min(100, Math.max(0, usedPercent))} height="2" className={`${barColor} fill-current`} />
-                    </svg>
-                  </div>
-                  <div className="mt-0.5 flex justify-between text-xs text-slate-500">
-                    <span>{d.fileSystem ?? ''} {d.mediaType ?? ''}</span>
-                    <span>{formatBytes(d.freeSpaceBytes)} livre</span>
-                  </div>
+              <div>
+                <div className="mb-1 flex items-center justify-between text-xs">
+                  <span className="flex items-center gap-1 text-slate-400">
+                    <HardDrive className="h-3.5 w-3.5" />
+                    Utilização
+                  </span>
+                  <span className="font-medium text-slate-300">{diskUsagePercent ?? 0}%</span>
                 </div>
-              );
-            })}
-            {(hw.data?.disks?.length ?? 0) === 0 && !hw.isLoading && (
-              <p className="text-sm text-slate-500">Nenhum disco detectado</p>
-            )}
-          </div>
+                <progress
+                  className="h-2 w-full overflow-hidden rounded-full [&::-webkit-progress-bar]:bg-white/10 [&::-webkit-progress-value]:bg-cyan-400 [&::-moz-progress-bar]:bg-cyan-400"
+                  value={diskUsagePercent ?? 0}
+                  max={100}
+                />
+              </div>
+
+              <div className="max-h-40 space-y-2 overflow-y-auto">
+                {disks.map((disk) => {
+                  const diskUsedBytes = Math.max(0, disk.totalSizeBytes - disk.freeSpaceBytes);
+                  const diskUsedPercent = disk.totalSizeBytes > 0
+                    ? Math.min(100, Math.round((diskUsedBytes / disk.totalSizeBytes) * 100))
+                    : 0;
+
+                  return (
+                    <div key={disk.id} className="rounded-lg bg-white/5 px-3 py-2 text-xs">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-medium text-slate-200">
+                          {disk.driveLetter}{disk.label ? ` (${disk.label})` : ''}
+                        </span>
+                        <span className="text-slate-400">{diskUsedPercent}% usado</span>
+                      </div>
+                      <progress
+                        className="mt-2 h-1.5 w-full overflow-hidden rounded-full [&::-webkit-progress-bar]:bg-white/10 [&::-webkit-progress-value]:bg-cyan-400 [&::-moz-progress-bar]:bg-cyan-400"
+                        value={diskUsedPercent}
+                        max={100}
+                      />
+                      <p className="mt-1 text-slate-500">
+                        {formatBytes(diskUsedBytes)} usados de {formatBytes(disk.totalSizeBytes)}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </Card>
       </div>
 
@@ -389,28 +467,42 @@ export default function AgentDetail() {
           </div>
         </Card>
 
-        {/* Logs Recentes */}
-        <Card>
-          <CardHeader title="Logs Recentes" />
-          <div className="max-h-72 space-y-2 overflow-y-auto">
-            {(agentLogs.data ?? []).map(log => {
-              const l = levelLabels[log.level] ?? { label: '?', color: 'slate' as const };
-              return (
-                <div key={log.id} className="flex items-start gap-2 rounded-lg bg-white/5 px-3 py-2">
-                  <Badge color={l.color} className="mt-0.5 shrink-0">{l.label}</Badge>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm text-slate-300">{log.message}</p>
-                    <p className="text-xs text-slate-500">{formatDate(log.createdAt)}</p>
+        {/* Adaptadores de Rede */}
+        {hw.data?.networkAdapters && hw.data.networkAdapters.length > 0 && (
+          <Card>
+            <CardHeader title="Adaptadores de Rede" subtitle={`${hw.data.networkAdapters.length} adaptador(es)`} />
+            <div className="space-y-2">
+              {hw.data.networkAdapters.map(n => (
+                <div key={n.id} className="rounded-lg bg-white/5 px-3 py-2.5">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium text-white">{n.name}</p>
+                      {n.macAddress && <p className="font-mono text-xs text-slate-500">{n.macAddress}</p>}
+                    </div>
+                    <Badge color={n.isDhcpEnabled ? 'success' : 'slate'}>{n.isDhcpEnabled ? 'DHCP' : 'Estático'}</Badge>
                   </div>
+                  {(n.ipAddress || n.gateway) && (
+                    <div className="mt-1.5 grid grid-cols-2 gap-2 text-xs">
+                      {n.ipAddress && (
+                        <div>
+                          <span className="text-slate-500">IP: </span>
+                          <span className="font-mono text-slate-300">{n.ipAddress}</span>
+                          {n.subnetMask && <span className="text-slate-500"> / {n.subnetMask}</span>}
+                        </div>
+                      )}
+                      {n.gateway && (
+                        <div>
+                          <span className="text-slate-500">Gateway: </span>
+                          <span className="font-mono text-slate-300">{n.gateway}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
-              );
-            })}
-            {agentLogs.isLoading && <p className="text-sm text-slate-500">Carregando...</p>}
-            {(agentLogs.data?.length ?? 0) === 0 && !agentLogs.isLoading && (
-              <p className="text-sm text-slate-500">Nenhum log registrado</p>
-            )}
-          </div>
-        </Card>
+              ))}
+            </div>
+          </Card>
+        )}
       </div>
 
       {/* Software Inventory */}
@@ -507,89 +599,28 @@ export default function AgentDetail() {
 
       {/* Detailed Hardware Tables */}
 
-      <NotesPanel
-        entityType="agent"
-        entityId={a.id}
-        title="Notas do Agente"
-      />
 
-
-      {hw.data?.networkAdapters && hw.data.networkAdapters.length > 0 && (
-        <Card>
-          <CardHeader title="Adaptadores de Rede" subtitle={`${hw.data.networkAdapters.length} adaptador(es)`} />
-          <div className="space-y-2">
-            {hw.data.networkAdapters.map(n => (
-              <div key={n.id} className="rounded-lg bg-white/5 px-3 py-2.5">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-white">{n.name}</p>
-                    {n.macAddress && <p className="font-mono text-xs text-slate-500">{n.macAddress}</p>}
-                  </div>
-                  <Badge color={n.isDhcpEnabled ? 'success' : 'slate'}>{n.isDhcpEnabled ? 'DHCP' : 'Estático'}</Badge>
+      <Card>
+        <CardHeader title="Logs Recentes" />
+        <div className="max-h-72 space-y-2 overflow-y-auto">
+          {(agentLogs.data ?? []).map(log => {
+            const l = levelLabels[log.level] ?? { label: '?', color: 'slate' as const };
+            return (
+              <div key={log.id} className="flex items-start gap-2 rounded-lg bg-white/5 px-3 py-2">
+                <Badge color={l.color} className="mt-0.5 shrink-0">{l.label}</Badge>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm text-slate-300">{log.message}</p>
+                  <p className="text-xs text-slate-500">{formatDate(log.createdAt)}</p>
                 </div>
-                {(n.ipAddress || n.gateway) && (
-                  <div className="mt-1.5 grid grid-cols-2 gap-2 text-xs">
-                    {n.ipAddress && (
-                      <div>
-                        <span className="text-slate-500">IP: </span>
-                        <span className="font-mono text-slate-300">{n.ipAddress}</span>
-                        {n.subnetMask && <span className="text-slate-500"> / {n.subnetMask}</span>}
-                      </div>
-                    )}
-                    {n.gateway && (
-                      <div>
-                        <span className="text-slate-500">Gateway: </span>
-                        <span className="font-mono text-slate-300">{n.gateway}</span>
-                      </div>
-                    )}
-                  </div>
-                )}
               </div>
-            ))}
-          </div>
-        </Card>
-      )}
-    </div>
-  );
-}
-
-function CommandPanel({ agentId }: { agentId: string }) {
-  const sendCmd = useSendCommand();
-  const [cmdType, setCmdType] = useState('0');
-  const [payload, setPayload] = useState('');
-
-  const cmdOptions = [
-    { value: '0', label: 'Reiniciar' },
-    { value: '1', label: 'Desligar' },
-    { value: '2', label: 'Executar Script' },
-    { value: '3', label: 'Atualizar Agente' },
-    { value: '4', label: 'Coletar Inventário' },
-  ];
-
-  const handleSend = () => {
-    sendCmd.mutate(
-      { id: agentId, data: { commandType: Number(cmdType) as CommandType, payload } },
-      {
-        onSuccess: () => { toast.success('Comando enviado'); setPayload(''); },
-        onError: () => toast.error('Erro ao enviar comando'),
-      },
-    );
-  };
-
-  return (
-    <div className="flex gap-3">
-      <div className="w-44">
-        <Select options={cmdOptions} value={cmdType} onChange={e => setCmdType(e.target.value)} />
-      </div>
-      <Input
-        className="flex-1"
-        placeholder="Payload (opcional)"
-        value={payload}
-        onChange={e => setPayload(e.target.value)}
-      />
-      <Button onClick={handleSend} loading={sendCmd.isPending} size="sm">
-        <Send className="h-4 w-4" />
-      </Button>
+            );
+          })}
+          {agentLogs.isLoading && <p className="text-sm text-slate-500">Carregando...</p>}
+          {(agentLogs.data?.length ?? 0) === 0 && !agentLogs.isLoading && (
+            <p className="text-sm text-slate-500">Nenhum log registrado</p>
+          )}
+        </div>
+      </Card>
     </div>
   );
 }

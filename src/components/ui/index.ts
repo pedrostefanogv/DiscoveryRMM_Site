@@ -6,3 +6,5 @@ export { Modal } from "./Modal";
 export { Input, Select, TextArea } from "./Input";
 export { Loading, ErrorDisplay } from "./Loading";
 export { StatCard } from "./StatCard";
+export { ErrorBoundary } from "../ErrorBoundary";
+export { ErrorPage } from "../ErrorPage";

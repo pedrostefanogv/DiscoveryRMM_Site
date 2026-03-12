@@ -9,6 +9,7 @@ import {
   AgentLabelField,
   AgentLabelLogicalOperator,
   AgentLabelNodeType,
+  type AgentLabelRuleAgentItem,
   type AgentLabelRuleDryRunResponse,
   type AgentLabelRuleExpressionNodeDto,
   type AgentLabelRuleResponse,
@@ -58,22 +59,24 @@ const applyModeOptions = [
 ];
 
 export default function AgentLabelsSettings() {
+  const [viewMode, setViewMode] = useState<'list' | 'create'>('list');
+  const [editingRuleId, setEditingRuleId] = useState<string | null>(null);
   const [rules, setRules] = useState<AgentLabelRuleResponse[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isReprocessing, setIsReprocessing] = useState(false);
   const [isRunningPreview, setIsRunningPreview] = useState(false);
+  const [isLoadingAppliedAgents, setIsLoadingAppliedAgents] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const [name, setName] = useState('');
   const [label, setLabel] = useState('');
+  const [description, setDescription] = useState('');
   const [applyMode, setApplyMode] = useState<AgentLabelApplyMode>(AgentLabelApplyMode.ApplyOnly);
   const [editorMode, setEditorMode] = useState<'visual' | 'json'>('visual');
   const [showJsonInVisual, setShowJsonInVisual] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
-  const [expressionBuilder, setExpressionBuilder] = useState<AgentLabelRuleExpressionNodeDto>(
-    defaultExpression,
-  );
+  const [expressionBuilder, setExpressionBuilder] = useState<AgentLabelRuleExpressionNodeDto>(defaultExpression);
   const [expressionText, setExpressionText] = useState(JSON.stringify(defaultExpression, null, 2));
 
   const [clients, setClients] = useState<Client[]>([]);
@@ -84,10 +87,70 @@ export default function AgentLabelsSettings() {
   const [previewLimit, setPreviewLimit] = useState(25);
   const [previewResults, setPreviewResults] = useState<Array<AgentLabelRuleDryRunResponse & { agentName: string }>>([]);
 
+  const [expandedRuleId, setExpandedRuleId] = useState<string | null>(null);
+  const [appliedAgentsTotal, setAppliedAgentsTotal] = useState(0);
+  const [appliedResults, setAppliedResults] = useState<Array<{
+    agentId: string;
+    agentName: string;
+    status: string;
+    matchedAt: string | null;
+    lastEvaluatedAt: string | null;
+  }>>([]);
+
   const sortedRules = useMemo(
     () => [...rules].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')),
     [rules],
   );
+
+  function resetCreateState() {
+    setEditingRuleId(null);
+    setName('');
+    setLabel('');
+    setDescription('');
+    setApplyMode(AgentLabelApplyMode.ApplyOnly);
+    setEditorMode('visual');
+    setShowJsonInVisual(false);
+    setShowHelp(false);
+    setExpressionBuilder(defaultExpression);
+    setSelectedClientId('');
+    setSelectedSiteId('');
+    setPreviewLimit(25);
+    setPreviewResults([]);
+  }
+
+  function startCreateRule() {
+    resetCreateState();
+    setViewMode('create');
+  }
+
+  function startEditRule(rule: AgentLabelRuleResponse) {
+    const expression = structuredClone(rule.expression);
+    setEditingRuleId(rule.id);
+    setName(rule.name);
+    setLabel(rule.label);
+    setDescription(rule.description ?? '');
+    setApplyMode(rule.applyMode);
+    setEditorMode('visual');
+    setShowJsonInVisual(false);
+    setShowHelp(false);
+    setExpressionBuilder(expression);
+    setExpressionText(JSON.stringify(expression, null, 2));
+    setSelectedClientId('');
+    setSelectedSiteId('');
+    setPreviewResults([]);
+    setViewMode('create');
+  }
+
+  function toggleAppliedAgentsPanel(ruleId: string) {
+    if (expandedRuleId === ruleId) {
+      setExpandedRuleId(null);
+      return;
+    }
+
+    setExpandedRuleId(ruleId);
+    setAppliedAgentsTotal(0);
+    setAppliedResults([]);
+  }
 
   async function loadRules() {
     setError(null);
@@ -96,8 +159,7 @@ export default function AgentLabelsSettings() {
       const data = await agentLabelsApi.getRules(true);
       setRules(data);
     } catch (err) {
-      const message = getApiErrorMessage(err, 'Falha ao carregar regras de labels.');
-      setError(message);
+      setError(getApiErrorMessage(err, 'Falha ao carregar regras de labels.'));
     } finally {
       setIsLoading(false);
     }
@@ -113,7 +175,7 @@ export default function AgentLabelsSettings() {
         const data = await clientsApi.list(false);
         setClients(data);
       } catch {
-        toast.error('Falha ao carregar clientes para prévia.');
+        toast.error('Falha ao carregar clientes para previa.');
       }
     }
 
@@ -136,7 +198,7 @@ export default function AgentLabelsSettings() {
         setAgents([]);
         setPreviewResults([]);
       } catch {
-        toast.error('Falha ao carregar sites para prévia.');
+        toast.error('Falha ao carregar sites para previa.');
       }
     }
 
@@ -156,7 +218,7 @@ export default function AgentLabelsSettings() {
         setAgents(data);
         setPreviewResults([]);
       } catch {
-        toast.error('Falha ao carregar agents para prévia.');
+        toast.error('Falha ao carregar agents para previa.');
       }
     }
 
@@ -167,22 +229,17 @@ export default function AgentLabelsSettings() {
     setExpressionText(JSON.stringify(expressionBuilder, null, 2));
   }, [expressionBuilder]);
 
-  async function handleCreateRule() {
+  async function handleSaveRule() {
     let parsedExpression: AgentLabelRuleExpressionNodeDto;
 
     try {
       parsedExpression = JSON.parse(expressionText) as AgentLabelRuleExpressionNodeDto;
     } catch {
-      toast.error('Expressão inválida: JSON malformado.');
+      toast.error('Expressao invalida: JSON malformado.');
       return;
     }
 
-    const errors = validateRulePayload({
-      name,
-      label,
-      expression: parsedExpression,
-    });
-
+    const errors = validateRulePayload({ name, label, expression: parsedExpression });
     if (errors.length > 0) {
       toast.error(errors[0]);
       return;
@@ -190,22 +247,38 @@ export default function AgentLabelsSettings() {
 
     setIsSaving(true);
     try {
-      await agentLabelsApi.createRule({
-        name: name.trim(),
-        label: label.trim(),
-        applyMode,
-        expression: parsedExpression,
-      });
+      if (editingRuleId) {
+        const currentRule = rules.find(rule => rule.id === editingRuleId);
+        if (!currentRule) {
+          toast.error('Nao foi possivel localizar a regra para edicao.');
+          return;
+        }
 
-      toast.success('Regra criada com sucesso.');
-      setName('');
-      setLabel('');
-      setApplyMode(AgentLabelApplyMode.ApplyOnly);
-      setEditorMode('visual');
-      setExpressionBuilder(defaultExpression);
+        await agentLabelsApi.updateRule(editingRuleId, {
+          name: name.trim(),
+          label: label.trim(),
+          description: normalizeOptionalText(description),
+          isEnabled: currentRule.isEnabled,
+          applyMode,
+          expression: parsedExpression,
+        });
+        toast.success('Regra atualizada com sucesso.');
+      } else {
+        await agentLabelsApi.createRule({
+          name: name.trim(),
+          label: label.trim(),
+          description: normalizeOptionalText(description),
+          applyMode,
+          expression: parsedExpression,
+        });
+        toast.success('Regra criada com sucesso.');
+      }
+
+      resetCreateState();
+      setViewMode('list');
       await loadRules();
     } catch (err) {
-      toast.error(getApiErrorMessage(err, 'Falha ao criar regra.'));
+      toast.error(getApiErrorMessage(err, editingRuleId ? 'Falha ao atualizar regra.' : 'Falha ao criar regra.'));
     } finally {
       setIsSaving(false);
     }
@@ -216,6 +289,7 @@ export default function AgentLabelsSettings() {
       await agentLabelsApi.updateRule(rule.id, {
         name: rule.name,
         label: rule.label,
+        description: rule.description ?? null,
         isEnabled: !rule.isEnabled,
         applyMode: rule.applyMode,
         expression: rule.expression,
@@ -236,7 +310,7 @@ export default function AgentLabelsSettings() {
     try {
       await agentLabelsApi.deleteRule(rule.id);
       setRules(prev => prev.filter(item => item.id !== rule.id));
-      toast.success('Regra excluída.');
+      toast.success('Regra excluida.');
     } catch (err) {
       toast.error(getApiErrorMessage(err, 'Falha ao excluir regra.'));
     }
@@ -261,20 +335,18 @@ export default function AgentLabelsSettings() {
     }
 
     let parsedExpression: AgentLabelRuleExpressionNodeDto;
-
     try {
       parsedExpression = JSON.parse(expressionText) as AgentLabelRuleExpressionNodeDto;
     } catch {
-      toast.error('Expressão inválida: JSON malformado.');
+      toast.error('Expressao invalida: JSON malformado.');
       return;
     }
 
     const validationErrors = validateRulePayload({
-      name: name || 'Prévia',
+      name: name || 'Previa',
       label,
       expression: parsedExpression,
     });
-
     if (validationErrors.length > 0) {
       toast.error(validationErrors[0]);
       return;
@@ -282,7 +354,7 @@ export default function AgentLabelsSettings() {
 
     const scopedAgents = agents.slice(0, Math.min(Math.max(previewLimit, 1), 100));
     if (scopedAgents.length === 0) {
-      toast.error('Nenhum agent encontrado neste site para simulação.');
+      toast.error('Nenhum agent encontrado neste site para simulacao.');
       return;
     }
 
@@ -306,11 +378,33 @@ export default function AgentLabelsSettings() {
 
       setPreviewResults(responses);
       const matchedCount = responses.filter(item => item.matched).length;
-      toast.success(`Prévia concluída: ${matchedCount}/${responses.length} agents com match.`);
+      toast.success(`Previa concluida: ${matchedCount}/${responses.length} agents com match.`);
     } catch (err) {
-      toast.error(getApiErrorMessage(err, 'Falha ao executar prévia da regra.'));
+      toast.error(getApiErrorMessage(err, 'Falha ao executar previa da regra.'));
     } finally {
       setIsRunningPreview(false);
+    }
+  }
+
+  async function handleLoadAppliedAgents(rule: AgentLabelRuleResponse) {
+    setIsLoadingAppliedAgents(true);
+    try {
+      const response = await agentLabelsApi.getRuleAgents(rule.id);
+      const mapped = response.agents.map((agent: AgentLabelRuleAgentItem) => ({
+        agentId: agent.agentId,
+        agentName: agent.displayName || agent.hostname || agent.agentId,
+        status: agent.status || '-',
+        matchedAt: agent.matchedAt,
+        lastEvaluatedAt: agent.lastEvaluatedAt,
+      }));
+
+      setAppliedAgentsTotal(response.totalAgents);
+      setAppliedResults(mapped);
+      toast.success(`Consulta concluida: ${mapped.length} agents retornados pela regra.`);
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Falha ao consultar labels aplicadas.'));
+    } finally {
+      setIsLoadingAppliedAgents(false);
     }
   }
 
@@ -334,7 +428,7 @@ export default function AgentLabelsSettings() {
     try {
       const parsed = JSON.parse(expressionText) as AgentLabelRuleExpressionNodeDto;
       if (parsed.nodeType !== AgentLabelNodeType.Group) {
-        toast.error('A raiz da expressão precisa ser um Group.');
+        toast.error('A raiz da expressao precisa ser um Group.');
         return;
       }
 
@@ -342,7 +436,7 @@ export default function AgentLabelsSettings() {
       setEditorMode('visual');
       toast.success('Editor visual sincronizado com o JSON.');
     } catch {
-      toast.error('Expressão inválida: JSON malformado.');
+      toast.error('Expressao invalida: JSON malformado.');
     }
   }
 
@@ -356,313 +450,399 @@ export default function AgentLabelsSettings() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-white">Labels Automáticas</h1>
-        <p className="text-sm text-slate-400">
-          Gerencie o cadastro e comportamento das regras de labels automáticas para agentes.
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-white">Labels Automaticas</h1>
+          <p className="text-sm text-slate-400">
+            Gerencie o cadastro e comportamento das regras de labels automaticas para agents.
+          </p>
+        </div>
+        {viewMode === 'list' ? (
+          <Button
+            size="sm"
+            onClick={startCreateRule}
+          >
+            Criar Regra
+          </Button>
+        ) : (
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => {
+              resetCreateState();
+              setViewMode('list');
+            }}
+          >
+            Voltar para Lista
+          </Button>
+        )}
       </div>
 
-      <Card>
-        <CardHeader title="Nova Regra" subtitle="Crie uma regra com editor visual ou JSON" />
-
-        <div className="mb-4 flex justify-end">
-          <Button size="sm" variant="ghost" onClick={() => setShowHelp(prev => !prev)}>
-            {showHelp ? 'Recolher ajuda' : 'Ajuda das regras'}
-          </Button>
-        </div>
-
-        {showHelp ? (
-          <div className="mb-4 space-y-3 rounded-xl border border-white/10 bg-white/5 p-4 text-sm text-slate-300">
-            <div>
-              <h3 className="font-semibold text-white">Como a regra funciona</h3>
-              <p>
-                Uma regra tem Nome, Label, Modo de Aplicação e uma expressão lógica. Quando a expressão dá match
-                para um agent, a label pode ser adicionada ou removida conforme o modo.
-              </p>
-            </div>
-
-            <div>
-              <h3 className="font-semibold text-white">Grupo (Group)</h3>
-              <p>
-                O grupo combina filhos usando operador lógico And ou Or. And exige que todas as condições sejam
-                verdadeiras. Or exige ao menos uma.
-              </p>
-              <p className="mt-1 text-xs text-slate-400">
-                No editor visual, use + Condição para regra simples e + Grupo para criar blocos aninhados.
-              </p>
-            </div>
-
-            <div>
-              <h3 className="font-semibold text-white">Condição (Condition)</h3>
-              <p>
-                Cada condição compara Campo, Operador e Valor, por exemplo: OperatingSystem Contains Windows.
-              </p>
-            </div>
-
-            <div>
-              <h3 className="font-semibold text-white">Operadores por tipo</h3>
-              <p>
-                Campos de texto aceitam Contains, StartsWith, EndsWith, Equals, NotEquals e Regex. Campos numéricos
-                aceitam comparações numéricas. Status aceita apenas Equals e NotEquals.
-              </p>
-            </div>
-
-            <div>
-              <h3 className="font-semibold text-white">Modo de aplicação</h3>
-              <p>
-                ApplyOnly apenas adiciona a label quando der match. ApplyAndRemove adiciona quando der match e remove
-                quando deixar de atender a expressão.
-              </p>
-            </div>
-
-            <div>
-              <h3 className="font-semibold text-white">Boas práticas</h3>
-              <p>
-                Use a seção Prévia de Aplicação para validar impacto antes de salvar. Se preferir, edite em JSON e
-                clique em Aplicar JSON no Editor Visual para sincronizar.
-              </p>
-            </div>
-          </div>
-        ) : null}
-
-        <div className="grid gap-4 lg:grid-cols-2">
-          <Input
-            label="Nome"
-            placeholder="Ex.: Windows + VS"
-            value={name}
-            maxLength={200}
-            onChange={event => setName(event.target.value)}
-          />
-          <Input
-            label="Label"
-            placeholder="Ex.: DEV"
-            value={label}
-            maxLength={120}
-            onChange={event => setLabel(event.target.value)}
-          />
-        </div>
-        <div className="mt-4">
-          <Select
-            label="Modo de Aplicação"
-            value={applyMode}
-            options={applyModeOptions}
-            onChange={event => setApplyMode(event.target.value as AgentLabelApplyMode)}
-          />
-        </div>
-
-        <div className="mt-4 flex flex-wrap gap-2">
-          <Button
-            size="sm"
-            variant={editorMode === 'visual' ? 'primary' : 'secondary'}
-            onClick={() => setEditorMode('visual')}
-          >
-            Editor Visual
-          </Button>
-          <Button
-            size="sm"
-            variant={editorMode === 'json' ? 'primary' : 'secondary'}
-            onClick={() => setEditorMode('json')}
-          >
-            Editor JSON
-          </Button>
-          {editorMode === 'visual' ? (
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => setShowJsonInVisual(prev => !prev)}
-            >
-              {showJsonInVisual ? 'Recolher JSON' : 'Mostrar JSON'}
-            </Button>
-          ) : null}
-        </div>
-
-        {editorMode === 'visual' ? (
-          <div className="mt-4 space-y-3 rounded-xl border border-white/10 bg-white/5 p-4">
-            <ExpressionNodeEditor
-              node={expressionBuilder}
-              path={[]}
-              isRoot
-              onUpdateNode={handleUpdateNode}
-              onAddCondition={handleAddCondition}
-              onAddGroup={handleAddGroup}
-              onRemoveNode={handleRemoveNode}
+      {viewMode === 'create' ? (
+        <>
+          <Card>
+            <CardHeader
+              title={editingRuleId ? 'Editar Regra' : 'Nova Regra'}
+              subtitle={editingRuleId ? 'Atualize a regra com editor visual ou JSON' : 'Crie uma regra com editor visual ou JSON'}
             />
-          </div>
-        ) : null}
 
-        {editorMode === 'json' || showJsonInVisual ? (
-          <div className="mt-4">
-            <TextArea
-              label="Expressão (JSON)"
-              rows={12}
-              value={expressionText}
-              onChange={event => setExpressionText(event.target.value)}
-            />
-          </div>
-        ) : null}
-        {editorMode === 'json' ? (
-          <div className="mt-2 flex justify-end">
-            <Button size="sm" variant="secondary" onClick={handleApplyJsonToVisual}>
-              Aplicar JSON no Editor Visual
-            </Button>
-          </div>
-        ) : null}
-        <div className="mt-4 flex justify-end">
-          <Button onClick={() => void handleCreateRule()} loading={isSaving}>
-            Cadastrar Regra
-          </Button>
-        </div>
-      </Card>
+            <div className="mb-4 flex justify-end">
+              <Button size="sm" variant="ghost" onClick={() => setShowHelp(prev => !prev)}>
+                {showHelp ? 'Recolher ajuda' : 'Ajuda das regras'}
+              </Button>
+            </div>
 
-      <Card>
-        <CardHeader
-          title="Prévia de Aplicação"
-          subtitle="Simule em agents de um site antes de salvar ou reprocessar"
-        />
-        <div className="grid gap-4 lg:grid-cols-4">
-          <Select
-            label="Cliente"
-            value={selectedClientId}
-            options={[
-              { value: '', label: 'Selecione...' },
-              ...clients.map(client => ({ value: client.id, label: client.name })),
-            ]}
-            onChange={event => setSelectedClientId(event.target.value)}
-          />
-
-          <Select
-            label="Site"
-            value={selectedSiteId}
-            options={[
-              { value: '', label: 'Selecione...' },
-              ...sites.map(site => ({ value: site.id, label: site.name })),
-            ]}
-            onChange={event => setSelectedSiteId(event.target.value)}
-          />
-
-          <Input
-            label="Limite de agents"
-            type="number"
-            min={1}
-            max={100}
-            value={previewLimit}
-            onChange={event => setPreviewLimit(Number(event.target.value || 1))}
-          />
-
-          <div className="flex items-end">
-            <Button
-              className="w-full"
-              variant="secondary"
-              loading={isRunningPreview}
-              onClick={() => void handleRunPreview()}
-            >
-              Rodar Prévia
-            </Button>
-          </div>
-        </div>
-
-        <div className="mt-4 flex flex-wrap gap-2 text-xs text-slate-400">
-          <span>Agents no site: {agents.length}</span>
-          <span>•</span>
-          <span>Prévia atual: {previewResults.length}</span>
-          <span>•</span>
-          <span>Com match: {previewResults.filter(item => item.matched).length}</span>
-          <span>•</span>
-          <span>Adicionaria label: {previewResults.filter(item => item.wouldAddLabel).length}</span>
-          <span>•</span>
-          <span>Removeria label: {previewResults.filter(item => item.wouldRemoveLabel).length}</span>
-        </div>
-
-        {previewResults.length > 0 ? (
-          <div className="mt-4 overflow-x-auto rounded-lg border border-white/10">
-            <table className="min-w-full divide-y divide-white/10 text-sm">
-              <thead className="bg-white/5">
-                <tr>
-                  <th className="px-3 py-2 text-left font-medium text-slate-300">Agent</th>
-                  <th className="px-3 py-2 text-left font-medium text-slate-300">Match</th>
-                  <th className="px-3 py-2 text-left font-medium text-slate-300">Adicionar</th>
-                  <th className="px-3 py-2 text-left font-medium text-slate-300">Remover</th>
-                  <th className="px-3 py-2 text-left font-medium text-slate-300">Labels automáticas atuais</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/5">
-                {previewResults.map(result => (
-                  <tr key={result.agentId} className="bg-slate-900/20">
-                    <td className="px-3 py-2 text-slate-200">{result.agentName}</td>
-                    <td className="px-3 py-2">
-                      <Badge color={result.matched ? 'success' : 'slate'}>{result.matched ? 'Sim' : 'Não'}</Badge>
-                    </td>
-                    <td className="px-3 py-2">
-                      <Badge color={result.wouldAddLabel ? 'success' : 'slate'}>
-                        {result.wouldAddLabel ? 'Sim' : 'Não'}
-                      </Badge>
-                    </td>
-                    <td className="px-3 py-2">
-                      <Badge color={result.wouldRemoveLabel ? 'warning' : 'slate'}>
-                        {result.wouldRemoveLabel ? 'Sim' : 'Não'}
-                      </Badge>
-                    </td>
-                    <td className="px-3 py-2 text-slate-300">
-                      {result.currentAutomaticLabels.length > 0
-                        ? result.currentAutomaticLabels.join(', ')
-                        : '-'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <p className="mt-4 text-sm text-slate-500">
-            Execute a prévia para ver em quais agents a regra teria efeito.
-          </p>
-        )}
-      </Card>
-
-      <Card>
-        <CardHeader
-          title="Regras Cadastradas"
-          subtitle={`${sortedRules.length} regra(s)`}
-          action={(
-            <Button variant="secondary" size="sm" loading={isReprocessing} onClick={() => void handleReprocessAll()}>
-              Reprocessar Agents
-            </Button>
-          )}
-        />
-
-        {sortedRules.length === 0 ? (
-          <p className="text-sm text-slate-500">Nenhuma regra cadastrada.</p>
-        ) : (
-          <div className="space-y-3">
-            {sortedRules.map(rule => (
-              <div key={rule.id} className="rounded-lg border border-white/10 bg-white/5 p-4">
-                <div className="flex flex-wrap items-center gap-2">
-                  <h3 className="font-medium text-white">{rule.name}</h3>
-                  <Badge color={rule.isEnabled ? 'success' : 'slate'}>
-                    {rule.isEnabled ? 'Habilitada' : 'Desabilitada'}
-                  </Badge>
-                  <Badge color="accent">{rule.label}</Badge>
-                  <Badge color="slate">{rule.applyMode}</Badge>
+            {showHelp ? (
+              <div className="mb-4 space-y-3 rounded-xl border border-white/10 bg-white/5 p-4 text-sm text-slate-300">
+                <div>
+                  <h3 className="font-semibold text-white">Como a regra funciona</h3>
+                  <p>Uma regra tem Nome, Label, Modo de Aplicacao e uma expressao logica.</p>
                 </div>
-
-                <p className="mt-2 text-xs text-slate-400">
-                  Atualizada em {formatDateTime(rule.updatedAt)}
-                </p>
-
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <Button size="sm" variant="ghost" onClick={() => void handleToggleRule(rule)}>
-                    {rule.isEnabled ? 'Desabilitar' : 'Habilitar'}
-                  </Button>
-                  <Button size="sm" variant="danger" onClick={() => void handleDeleteRule(rule)}>
-                    Excluir
-                  </Button>
+                <div>
+                  <h3 className="font-semibold text-white">Grupo (Group)</h3>
+                  <p>Grupo combina filhos com And/Or. And exige todos; Or exige ao menos um.</p>
+                </div>
+                <div>
+                  <h3 className="font-semibold text-white">Condicao (Condition)</h3>
+                  <p>Condicao compara Campo, Operador e Valor.</p>
+                </div>
+                <div>
+                  <h3 className="font-semibold text-white">Boas praticas</h3>
+                  <p>Use a previa para validar impacto antes de salvar.</p>
                 </div>
               </div>
-            ))}
-          </div>
-        )}
-      </Card>
+            ) : null}
+
+            <div className="grid gap-4 lg:grid-cols-2">
+              <Input
+                label="Nome"
+                placeholder="Ex.: Windows + VS"
+                value={name}
+                maxLength={200}
+                onChange={event => setName(event.target.value)}
+              />
+              <Input
+                label="Label"
+                placeholder="Ex.: DEV"
+                value={label}
+                maxLength={120}
+                onChange={event => setLabel(event.target.value)}
+              />
+            </div>
+
+            <div className="mt-4">
+              <TextArea
+                label="Descricao / Observacao"
+                placeholder="Ex.: Regra para identificar maquinas de desenvolvimento"
+                rows={3}
+                value={description}
+                onChange={event => setDescription(event.target.value)}
+              />
+            </div>
+
+            <div className="mt-4">
+              <Select
+                label="Modo de Aplicacao"
+                value={applyMode}
+                options={applyModeOptions}
+                onChange={event => setApplyMode(event.target.value as AgentLabelApplyMode)}
+              />
+            </div>
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                variant={editorMode === 'visual' ? 'primary' : 'secondary'}
+                onClick={() => setEditorMode('visual')}
+              >
+                Editor Visual
+              </Button>
+              <Button
+                size="sm"
+                variant={editorMode === 'json' ? 'primary' : 'secondary'}
+                onClick={() => setEditorMode('json')}
+              >
+                Editor JSON
+              </Button>
+              {editorMode === 'visual' ? (
+                <Button size="sm" variant="ghost" onClick={() => setShowJsonInVisual(prev => !prev)}>
+                  {showJsonInVisual ? 'Recolher JSON' : 'Mostrar JSON'}
+                </Button>
+              ) : null}
+            </div>
+
+            {editorMode === 'visual' ? (
+              <div className="mt-4 space-y-3 rounded-xl border border-white/10 bg-white/5 p-4">
+                <ExpressionNodeEditor
+                  node={expressionBuilder}
+                  path={[]}
+                  isRoot
+                  onUpdateNode={handleUpdateNode}
+                  onAddCondition={handleAddCondition}
+                  onAddGroup={handleAddGroup}
+                  onRemoveNode={handleRemoveNode}
+                />
+              </div>
+            ) : null}
+
+            {editorMode === 'json' || showJsonInVisual ? (
+              <div className="mt-4">
+                <TextArea
+                  label="Expressao (JSON)"
+                  rows={12}
+                  value={expressionText}
+                  onChange={event => setExpressionText(event.target.value)}
+                />
+              </div>
+            ) : null}
+
+            {editorMode === 'json' ? (
+              <div className="mt-2 flex justify-end">
+                <Button size="sm" variant="secondary" onClick={handleApplyJsonToVisual}>
+                  Aplicar JSON no Editor Visual
+                </Button>
+              </div>
+            ) : null}
+
+            <div className="mt-4 flex justify-end gap-2">
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  resetCreateState();
+                  setViewMode('list');
+                }}
+              >
+                Cancelar
+              </Button>
+              <Button onClick={() => void handleSaveRule()} loading={isSaving}>
+                {editingRuleId ? 'Salvar Alteracoes' : 'Cadastrar Regra'}
+              </Button>
+            </div>
+          </Card>
+
+          <Card>
+            <CardHeader title="Previa de Aplicacao" subtitle="Simule em agents de um site antes de salvar" />
+            <div className="grid gap-4 lg:grid-cols-4">
+              <Select
+                label="Cliente"
+                value={selectedClientId}
+                options={[
+                  { value: '', label: 'Selecione...' },
+                  ...clients.map(client => ({ value: client.id, label: client.name })),
+                ]}
+                onChange={event => setSelectedClientId(event.target.value)}
+              />
+
+              <Select
+                label="Site"
+                value={selectedSiteId}
+                options={[
+                  { value: '', label: 'Selecione...' },
+                  ...sites.map(site => ({ value: site.id, label: site.name })),
+                ]}
+                onChange={event => setSelectedSiteId(event.target.value)}
+              />
+
+              <Input
+                label="Limite de agents"
+                type="number"
+                min={1}
+                max={100}
+                value={previewLimit}
+                onChange={event => setPreviewLimit(Number(event.target.value || 1))}
+              />
+
+              <div className="flex items-end">
+                <Button
+                  className="w-full"
+                  variant="secondary"
+                  loading={isRunningPreview}
+                  onClick={() => void handleRunPreview()}
+                >
+                  Rodar Previa
+                </Button>
+              </div>
+            </div>
+
+            <div className="mt-4 flex flex-wrap gap-2 text-xs text-slate-400">
+              <span>Agents no site: {agents.length}</span>
+              <span>•</span>
+              <span>Previa atual: {previewResults.length}</span>
+              <span>•</span>
+              <span>Com match: {previewResults.filter(item => item.matched).length}</span>
+              <span>•</span>
+              <span>Adicionaria label: {previewResults.filter(item => item.wouldAddLabel).length}</span>
+              <span>•</span>
+              <span>Removeria label: {previewResults.filter(item => item.wouldRemoveLabel).length}</span>
+            </div>
+
+            {previewResults.length > 0 ? (
+              <div className="mt-4 overflow-x-auto rounded-lg border border-white/10">
+                <table className="min-w-full divide-y divide-white/10 text-sm">
+                  <thead className="bg-white/5">
+                    <tr>
+                      <th className="px-3 py-2 text-left font-medium text-slate-300">Agent</th>
+                      <th className="px-3 py-2 text-left font-medium text-slate-300">Match</th>
+                      <th className="px-3 py-2 text-left font-medium text-slate-300">Adicionar</th>
+                      <th className="px-3 py-2 text-left font-medium text-slate-300">Remover</th>
+                      <th className="px-3 py-2 text-left font-medium text-slate-300">Labels automaticas atuais</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/5">
+                    {previewResults.map(result => (
+                      <tr key={result.agentId} className="bg-slate-900/20">
+                        <td className="px-3 py-2 text-slate-200">{result.agentName}</td>
+                        <td className="px-3 py-2">
+                          <Badge color={result.matched ? 'success' : 'slate'}>{result.matched ? 'Sim' : 'Nao'}</Badge>
+                        </td>
+                        <td className="px-3 py-2">
+                          <Badge color={result.wouldAddLabel ? 'success' : 'slate'}>
+                            {result.wouldAddLabel ? 'Sim' : 'Nao'}
+                          </Badge>
+                        </td>
+                        <td className="px-3 py-2">
+                          <Badge color={result.wouldRemoveLabel ? 'warning' : 'slate'}>
+                            {result.wouldRemoveLabel ? 'Sim' : 'Nao'}
+                          </Badge>
+                        </td>
+                        <td className="px-3 py-2 text-slate-300">
+                          {result.currentAutomaticLabels.length > 0
+                            ? result.currentAutomaticLabels.join(', ')
+                            : '-'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p className="mt-4 text-sm text-slate-500">Execute a previa para ver em quais agents a regra teria efeito.</p>
+            )}
+          </Card>
+        </>
+      ) : null}
+
+      {viewMode === 'list' ? (
+        <Card>
+          <CardHeader
+            title="Regras Cadastradas"
+            subtitle={`${sortedRules.length} regra(s)`}
+            action={(
+              <div className="flex items-center gap-2">
+                <Button variant="secondary" size="sm" loading={isReprocessing} onClick={() => void handleReprocessAll()}>
+                  Reprocessar Agents
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={startCreateRule}
+                >
+                  Criar Regra
+                </Button>
+              </div>
+            )}
+          />
+
+          {sortedRules.length === 0 ? (
+            <div className="space-y-3">
+              <p className="text-sm text-slate-500">Nenhuma regra cadastrada.</p>
+              <Button
+                size="sm"
+                onClick={startCreateRule}
+              >
+                Criar primeira regra
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {sortedRules.map(rule => (
+                <div key={rule.id} className="rounded-lg border border-white/10 bg-white/5 p-4">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="font-medium text-white">{rule.name}</h3>
+                    <Badge color={rule.isEnabled ? 'success' : 'slate'}>
+                      {rule.isEnabled ? 'Habilitada' : 'Desabilitada'}
+                    </Badge>
+                    <Badge color="accent">{rule.label}</Badge>
+                    <Badge color="slate">{rule.applyMode}</Badge>
+                  </div>
+
+                  <p className="mt-2 text-xs text-slate-400">Atualizada em {formatDateTime(rule.updatedAt)}</p>
+
+                  {rule.description?.trim() ? (
+                    <p className="mt-2 text-sm text-slate-300 whitespace-pre-wrap">{rule.description}</p>
+                  ) : null}
+
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Button size="sm" variant="secondary" onClick={() => startEditRule(rule)}>
+                      Editar
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => void handleToggleRule(rule)}>
+                      {rule.isEnabled ? 'Desabilitar' : 'Habilitar'}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => toggleAppliedAgentsPanel(rule.id)}
+                    >
+                      {expandedRuleId === rule.id ? 'Ocultar Agents com Label' : 'Ver Agents com Label'}
+                    </Button>
+                    <Button size="sm" variant="danger" onClick={() => void handleDeleteRule(rule)}>
+                      Excluir
+                    </Button>
+                  </div>
+
+                  {expandedRuleId === rule.id ? (
+                    <div className="mt-4 space-y-3 rounded-lg border border-white/10 bg-slate-900/30 p-3">
+                      <h4 className="text-sm font-medium text-slate-100">Agents com a label "{rule.label}"</h4>
+                      <div className="flex justify-end">
+                        <Button
+                          variant="secondary"
+                          loading={isLoadingAppliedAgents}
+                          onClick={() => void handleLoadAppliedAgents(rule)}
+                        >
+                          Carregar Todos os Agents
+                        </Button>
+                      </div>
+
+                      <p className="text-xs text-slate-400">
+                        Total informado pela API: {appliedAgentsTotal} • Retornados nesta consulta: {appliedResults.length}
+                      </p>
+
+                      {appliedResults.length > 0 ? (
+                        <div className="overflow-x-auto rounded-lg border border-white/10">
+                          <table className="min-w-full divide-y divide-white/10 text-sm">
+                            <thead className="bg-white/5">
+                              <tr>
+                                <th className="px-3 py-2 text-left font-medium text-slate-300">Agent</th>
+                                <th className="px-3 py-2 text-left font-medium text-slate-300">Status</th>
+                                <th className="px-3 py-2 text-left font-medium text-slate-300">Match em</th>
+                                <th className="px-3 py-2 text-left font-medium text-slate-300">Ultima avaliacao</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-white/5">
+                              {appliedResults.map(item => (
+                                <tr key={item.agentId} className="bg-slate-900/20">
+                                  <td className="px-3 py-2 text-slate-200">{item.agentName}</td>
+                                  <td className="px-3 py-2 text-slate-300">{item.status}</td>
+                                  <td className="px-3 py-2 text-slate-300">{item.matchedAt ? formatDateTime(item.matchedAt) : '-'}</td>
+                                  <td className="px-3 py-2 text-slate-300">{item.lastEvaluatedAt ? formatDateTime(item.lastEvaluatedAt) : '-'}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      ) : (
+                        <p className="text-sm text-slate-500">
+                          Clique em "Carregar Todos os Agents" para listar os agents retornados pela regra sem filtro de cliente/site.
+                        </p>
+                      )}
+                    </div>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+      ) : null}
     </div>
   );
 }
@@ -693,6 +873,11 @@ function getApiErrorMessage(error: unknown, fallback: string): string {
   }
 
   return fallback;
+}
+
+function normalizeOptionalText(value: string): string | null {
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
 }
 
 interface ExpressionNodeEditorProps {
@@ -732,7 +917,7 @@ function ExpressionNodeEditor({
             />
           </div>
           <Button size="sm" variant="secondary" onClick={() => onAddCondition(path)}>
-            + Condição
+            + Condicao
           </Button>
           <Button size="sm" variant="secondary" onClick={() => onAddGroup(path)}>
             + Grupo
@@ -745,7 +930,7 @@ function ExpressionNodeEditor({
         </div>
 
         {children.length === 0 ? (
-          <p className="text-xs text-slate-400">Este grupo ainda não possui filhos.</p>
+          <p className="text-xs text-slate-400">Este grupo ainda nao possui filhos.</p>
         ) : (
           <div className="space-y-3 border-l border-white/10 pl-3">
             {children.map((child, index) => (
@@ -771,7 +956,7 @@ function ExpressionNodeEditor({
   return (
     <div className="space-y-3 rounded-lg border border-white/10 bg-slate-900/40 p-3">
       <div className="flex flex-wrap items-center gap-2">
-        <Badge color="accent">Condição</Badge>
+        <Badge color="accent">Condicao</Badge>
         <Button size="sm" variant="danger" onClick={() => onRemoveNode(path)}>
           Remover
         </Button>

@@ -2,6 +2,7 @@ import { createBrowserRouter, Navigate } from 'react-router-dom';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { lazy, Suspense } from 'react';
 import { Loading } from '@/components/ui';
+import { ErrorPage } from '@/components/ErrorPage';
 
 // Lazy load all pages for code splitting
 const Dashboard = lazy(() => import('@/pages/Dashboard'));
@@ -42,6 +43,7 @@ export const router = createBrowserRouter([
   {
     path: '/',
     element: <MainLayout />,
+    errorElement: <ErrorPage />,
     children: [
       {
         index: true,

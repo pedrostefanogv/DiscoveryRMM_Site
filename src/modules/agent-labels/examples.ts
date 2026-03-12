@@ -12,6 +12,7 @@ export async function createDevRule() {
   const payload = {
     name: "Windows + VS",
     label: "DEV",
+    description: "Aplica a label DEV para agentes Windows com Visual Studio.",
     applyMode: AgentLabelApplyMode.ApplyAndRemove,
     expression: {
       nodeType: AgentLabelNodeType.Group,

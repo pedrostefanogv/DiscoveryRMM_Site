@@ -69,6 +69,7 @@ export interface AgentLabelRuleExpressionNodeDto {
 export interface CreateAgentLabelRuleRequest {
   name: string;
   label: string;
+  description?: string | null;
   applyMode: AgentLabelApplyMode;
   expression: AgentLabelRuleExpressionNodeDto;
 }
@@ -76,6 +77,7 @@ export interface CreateAgentLabelRuleRequest {
 export interface UpdateAgentLabelRuleRequest {
   name: string;
   label: string;
+  description?: string | null;
   isEnabled: boolean;
   applyMode: AgentLabelApplyMode;
   expression: AgentLabelRuleExpressionNodeDto;
@@ -85,6 +87,7 @@ export interface AgentLabelRuleResponse {
   id: string;
   name: string;
   label: string;
+  description?: string | null;
   isEnabled: boolean;
   applyMode: AgentLabelApplyMode;
   expression: AgentLabelRuleExpressionNodeDto;
@@ -115,6 +118,24 @@ export interface AgentLabelRuleDryRunResponse {
   wouldAddLabel: boolean;
   wouldRemoveLabel: boolean;
   currentAutomaticLabels: string[];
+}
+
+export interface AgentLabelRuleAgentItem {
+  agentId: string;
+  hostname: string | null;
+  displayName: string | null;
+  status: string | null;
+  matchedAt: string | null;
+  lastEvaluatedAt: string | null;
+}
+
+export interface AgentLabelRuleAgentsResponse {
+  ruleId: string;
+  ruleName: string;
+  label: string;
+  description: string | null;
+  totalAgents: number;
+  agents: AgentLabelRuleAgentItem[];
 }
 
 export interface ApiValidationError {
