@@ -22,6 +22,11 @@ const cards = [
     description: "Historico de alteracoes por entidade, campo e usuario.",
     to: "/settings/audit",
   },
+  {
+    title: "Labels Automaticas",
+    description: "Cadastro e gerenciamento de regras de tags para agents.",
+    to: "/settings/agent-labels",
+  },
 ];
 
 export default function ConfigurationSettings() {

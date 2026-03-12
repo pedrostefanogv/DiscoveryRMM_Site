@@ -26,6 +26,7 @@ const ServerConfigurationPage = lazy(() => import('@/pages/settings/ServerConfig
 const ClientConfigurationPage = lazy(() => import('@/pages/settings/ClientConfigurationPage'));
 const SiteConfigurationPage = lazy(() => import('@/pages/settings/SiteConfigurationPage'));
 const ConfigurationAudit = lazy(() => import('@/pages/settings/ConfigurationAudit'));
+const AgentLabelsSettings = lazy(() => import('@/pages/settings/AgentLabelsSettings'));
 const ReportTemplateList = lazy(() => import('@/pages/reports/ReportTemplateList'));
 const ReportTemplateForm = lazy(() => import('@/pages/reports/ReportTemplateForm'));
 const RunReport = lazy(() => import('@/pages/reports/RunReport'));
@@ -133,6 +134,10 @@ export const router = createBrowserRouter([
       {
         path: 'settings/audit',
         element: <LazyPage><ConfigurationAudit /></LazyPage>,
+      },
+      {
+        path: 'settings/agent-labels',
+        element: <LazyPage><AgentLabelsSettings /></LazyPage>,
       },
       {
         path: 'reports/templates',

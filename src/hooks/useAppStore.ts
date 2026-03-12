@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { appStoreApi } from "@/api/app-store";
+import { AppInstallationType } from "@/api/types";
 import type { CreateAppApprovalRuleRequest } from "@/api/types";
 import type {
   CatalogParams,
@@ -87,19 +88,11 @@ export function useDeleteApproval() {
   });
 }
 
-export function useSyncChocolateyCatalog() {
+export function useSyncCatalog() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: () => appStoreApi.syncChocolateyCatalog(),
-    onSuccess: () =>
-      qc.invalidateQueries({ queryKey: ["appStore", "catalog"] }),
-  });
-}
-
-export function useSyncWingetCatalog() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: () => appStoreApi.syncWingetCatalog(),
+    mutationFn: (installationType: AppInstallationType) =>
+      appStoreApi.syncCatalog(installationType),
     onSuccess: () =>
       qc.invalidateQueries({ queryKey: ["appStore", "catalog"] }),
   });

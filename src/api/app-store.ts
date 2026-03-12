@@ -51,12 +51,16 @@ function normalizeInstallationType(
   ) {
     return AppInstallationType.Chocolatey;
   }
+  if (value === AppInstallationType.Custom || value === 2 || value === "2") {
+    return AppInstallationType.Custom;
+  }
   if (typeof value === "string") {
     const normalized = value.trim().toLowerCase();
     if (normalized === "winget") return AppInstallationType.Winget;
     if (normalized === "chocolatey" || normalized === "choco") {
       return AppInstallationType.Chocolatey;
     }
+    if (normalized === "custom") return AppInstallationType.Custom;
     if (normalized.includes("winget")) return AppInstallationType.Winget;
     if (normalized.includes("choco")) return AppInstallationType.Chocolatey;
   }
@@ -195,27 +199,13 @@ export interface EffectiveParams {
   cursor?: string;
 }
 
-function installationTypeQueryValue(
-  installationType?: AppInstallationType,
-): "Winget" | "Chocolatey" | undefined {
-  if (installationType === undefined) return undefined;
-  return installationType === AppInstallationType.Chocolatey
-    ? "Chocolatey"
-    : "Winget";
-}
-
 export const appStoreApi = {
-  syncWingetCatalog: () =>
-    api.post<SyncChocolateyCatalogResponse>(`${BASE}/winget/sync`),
-
-  syncChocolateyCatalog: () =>
-    api.post<SyncChocolateyCatalogResponse>(`${BASE}/chocolatey/sync`),
-
+  syncCatalog: (installationType: AppInstallationType) =>
+    api.post<SyncChocolateyCatalogResponse>(
+      `${BASE}/sync?installationType=${installationType}`,
+    ),
   getCatalog: async (params: CatalogParams = {}) => {
-    const queryParams: Record<string, unknown> = {
-      ...params,
-      installationType: installationTypeQueryValue(params.installationType),
-    };
+    const queryParams: Record<string, unknown> = { ...params };
 
     const response = await api.get<RawCatalogPage>(
       `${BASE}/catalog`,
@@ -228,9 +218,8 @@ export const appStoreApi = {
     packageId: string,
     installationType?: AppInstallationType,
   ) => {
-    const queryParams: Record<string, unknown> = {
-      installationType: installationTypeQueryValue(installationType),
-    };
+    const queryParams: Record<string, unknown> =
+      installationType !== undefined ? { installationType } : {};
 
     const response = await api.get<RawCatalogPackage>(
       `${BASE}/catalog/${encodeURIComponent(packageId)}`,

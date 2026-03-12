@@ -1104,6 +1104,7 @@ export interface ReportTemplateHistory {
 export enum AppInstallationType {
   Winget = 0,
   Chocolatey = 1,
+  Custom = 2,
 }
 
 export enum AppApprovalScopeType {
@@ -1157,10 +1158,12 @@ export interface AppStoreCatalogPage {
 }
 
 export interface SyncChocolateyCatalogResponse {
+  installationType?: AppInstallationType | null;
   success: boolean;
   packagesUpserted: number;
   pagesProcessed?: number;
   syncedAt?: string | null;
+  sourceGeneratedAt?: string | null;
   duration?: string | null;
   error?: string | null;
 }
@@ -1201,14 +1204,10 @@ export interface CreateAppApprovalRuleRequest {
 export interface AppEffectiveEntry {
   packageId: string;
   name?: string | null;
-  packageName: string | null;
   installCommand?: string | null;
   installerUrlsByArch?: Record<string, string>;
-  action: AppApprovalActionType;
   autoUpdateEnabled: boolean | null;
   sourceScope?: AppApprovalScopeType;
-  resolvedScopeType: AppApprovalScopeType;
-  resolvedScopeId: string | null;
   installationType: AppInstallationType;
   iconUrl?: string | null;
   publisher?: string | null;
@@ -1218,17 +1217,20 @@ export interface AppEffectiveEntry {
 
 export interface AppEffectivePage {
   items: AppEffectiveEntry[];
-  count: number;
+  scopeType?: AppApprovalScopeType;
+  scopeId?: string | null;
+  installationType?: AppInstallationType;
+  search?: string | null;
+  returnedItems: number;
+  limit: number;
   cursor: string | null;
   nextCursor: string | null;
   hasMore: boolean;
 }
 
 export interface AppApprovalAuditEntry {
-  id: string;
-  ruleId: string;
+  auditId: string;
   packageId: string;
-  packageName: string | null;
   scopeType: AppApprovalScopeType;
   scopeId: string | null;
   installationType: AppInstallationType;
@@ -1242,7 +1244,12 @@ export interface AppApprovalAuditEntry {
 
 export interface AppApprovalAuditPage {
   items: AppApprovalAuditEntry[];
-  count: number;
+  installationType?: AppInstallationType;
+  packageId?: string | null;
+  scopeType?: AppApprovalScopeType;
+  scopeId?: string | null;
+  returnedItems: number;
+  limit: number;
   cursor: string | null;
   nextCursor: string | null;
   hasMore: boolean;

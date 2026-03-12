@@ -34,8 +34,7 @@ import {
   useAppStoreAudit,
   useCreateApproval,
   useDeleteApproval,
-  useSyncChocolateyCatalog,
-  useSyncWingetCatalog,
+  useSyncCatalog,
 } from '@/hooks/useAppStore';
 import { useClients } from '@/hooks/useClients';
 import { useSites } from '@/hooks/useSites';
@@ -164,6 +163,7 @@ function PackageIcon({
 const installationTypeOptions = [
   { value: String(AppInstallationType.Winget), label: 'Winget' },
   { value: String(AppInstallationType.Chocolatey), label: 'Chocolatey' },
+  { value: String(AppInstallationType.Custom), label: 'Custom' },
 ];
 
 const scopeTypeOptions = [
@@ -221,6 +221,9 @@ function normalizeInstallationType(value: unknown): AppInstallationType {
   ) {
     return AppInstallationType.Chocolatey;
   }
+  if (value === AppInstallationType.Custom || value === 2 || value === '2') {
+    return AppInstallationType.Custom;
+  }
   if (
     typeof value === 'string' &&
     value.trim().toLowerCase() === 'winget'
@@ -232,6 +235,12 @@ function normalizeInstallationType(value: unknown): AppInstallationType {
     ['chocolatey', 'choco'].includes(value.trim().toLowerCase())
   ) {
     return AppInstallationType.Chocolatey;
+  }
+  if (
+    typeof value === 'string' &&
+    value.trim().toLowerCase() === 'custom'
+  ) {
+    return AppInstallationType.Custom;
   }
   return AppInstallationType.Winget;
 }
@@ -947,7 +956,7 @@ function AuditTab() {
       <Card padding={false}>
         <div className="border-b border-white/5 px-5 py-4 flex items-center justify-between">
           <span className="text-sm font-medium text-white">
-            {query.data ? `${query.data.count} evento(s)` : 'Histórico de auditoria'}
+            {query.data ? `${query.data.returnedItems} evento(s)` : 'Histórico de auditoria'}
           </span>
           <div className="flex items-center gap-2">
             <Button variant="ghost" size="sm" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1}>
@@ -988,15 +997,12 @@ function AuditTab() {
               </thead>
               <tbody>
                 {query.data.items.map((entry) => (
-                  <tr key={entry.id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                  <tr key={entry.auditId} className="border-b border-white/5 hover:bg-white/5 transition-colors">
                     <td className="whitespace-nowrap px-5 py-2 text-xs text-slate-400">
                       {formatDate(entry.changedAt)}
                     </td>
                     <td className="px-5 py-2">
                       <div className="font-mono text-xs text-slate-300">{entry.packageId}</div>
-                      {entry.packageName && (
-                        <div className="text-xs text-slate-500">{entry.packageName}</div>
-                      )}
                     </td>
                     <td className="px-5 py-2">
                       <Badge color={changeTypeBadgeColor[entry.changeType]}>
@@ -1070,7 +1076,9 @@ function PackageDetailsModal({ open, onClose, pkg, installationType }: PackageDe
   const installationLabel =
     normalizeInstallationType(details?.installationType) === AppInstallationType.Winget
       ? 'Winget'
-      : 'Chocolatey';
+      : normalizeInstallationType(details?.installationType) === AppInstallationType.Chocolatey
+        ? 'Chocolatey'
+        : 'Custom';
 
   return (
     <Modal
@@ -1187,8 +1195,7 @@ function CatalogTab() {
     }
   });
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const syncChocolatey = useSyncChocolateyCatalog();
-  const syncWinget = useSyncWingetCatalog();
+  const syncCatalog = useSyncCatalog();
 
   const cursor = cursors[page - 1];
 
@@ -1246,7 +1253,6 @@ function CatalogTab() {
   const isChocolatey = installationType === AppInstallationType.Chocolatey;
   const isWinget = installationType === AppInstallationType.Winget;
   const isCatalogEmpty = (query.data?.totalPackagesInSource ?? 0) === 0;
-  const syncMutation = isChocolatey ? syncChocolatey : syncWinget;
   const syncLabel = isChocolatey ? 'Chocolatey' : 'Winget';
   const lastSyncInfo = lastSyncByType[installationType];
 
@@ -1264,7 +1270,7 @@ function CatalogTab() {
 
   async function handleSyncCatalog() {
     try {
-      const syncResult = await syncMutation.mutateAsync();
+      const syncResult = await syncCatalog.mutateAsync(installationType);
       setLastSyncByType((prev) => ({
         ...prev,
         [installationType]: syncResult,
@@ -1360,7 +1366,7 @@ function CatalogTab() {
             <Button
               variant="primary"
               onClick={handleSyncCatalog}
-              loading={syncMutation.isPending}
+              loading={syncCatalog.isPending}
               title={`Sincronizar catalogo ${syncLabel}`}
             >
               <RefreshCw className="h-4 w-4" /> Sincronizar Catalogo
@@ -1439,7 +1445,7 @@ function CatalogTab() {
               <Button
                 className="mt-3"
                 onClick={handleSyncCatalog}
-                loading={syncMutation.isPending}
+                loading={syncCatalog.isPending}
               >
                 <RefreshCw className="h-4 w-4" /> Sincronizar catalogo agora
               </Button>
