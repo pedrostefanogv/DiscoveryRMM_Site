@@ -1,12 +1,16 @@
 import { api } from "./client";
 import type {
   Ticket,
+  TicketAttachment,
   TicketComment,
   CreateTicketRequest,
   UpdateTicketRequest,
   UpdateWorkflowStateRequest,
   AddCommentRequest,
   TicketsQuery,
+  PresignedUploadRequest,
+  PresignedUploadResponse,
+  CompleteUploadRequest,
 } from "./types";
 
 const BASE = "/api/tickets";
@@ -73,4 +77,20 @@ export const ticketsApi = {
 
   getSlaDetails: (ticketId: string) =>
     api.get<import("./types").SlaDetails>(`${BASE}/${ticketId}/sla/details`),
+
+  // Attachments
+  listAttachments: (ticketId: string) =>
+    api.get<TicketAttachment[]>(`${BASE}/${ticketId}/attachments`),
+
+  prepareUpload: (ticketId: string, data: PresignedUploadRequest) =>
+    api.post<PresignedUploadResponse>(
+      `${BASE}/${ticketId}/attachments/presigned-upload`,
+      data,
+    ),
+
+  completeUpload: (ticketId: string, data: CompleteUploadRequest) =>
+    api.post<TicketAttachment>(
+      `${BASE}/${ticketId}/attachments/complete-upload`,
+      data,
+    ),
 };

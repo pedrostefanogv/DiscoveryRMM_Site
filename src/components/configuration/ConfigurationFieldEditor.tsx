@@ -28,6 +28,7 @@ interface ConfigurationFieldEditorProps {
   lockOwner?: string | null;
   description?: string;
   unit?: string;
+  hideSaveButton?: boolean;
 }
 
 export function ConfigurationFieldEditor({
@@ -50,6 +51,7 @@ export function ConfigurationFieldEditor({
   lockOwner,
   description,
   unit,
+  hideSaveButton,
 }: ConfigurationFieldEditorProps) {
   const [showDiff, setShowDiff] = useState(false);
   const [showAiAdvanced, setShowAiAdvanced] = useState(false);
@@ -675,28 +677,32 @@ export function ConfigurationFieldEditor({
       </div>
 
       <div className="flex flex-wrap justify-end gap-2">
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={() => setShowDiff(true)}
-          title="Comparar valor local com efetivo"
-        >
-          <GitCompare className="h-3.5 w-3.5" />
-          <span className="hidden sm:inline">Comparar</span>
-        </Button>
-        <Button size="sm" onClick={onSavePatch} loading={saving} disabled={isReadOnly}>
-          Salvar
-        </Button>
-        {onResetProperty && (
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={onResetProperty}
-            loading={resetLoading}
-            disabled={isReadOnly}
-          >
-            Reset
-          </Button>
+        {!hideSaveButton && (
+          <>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setShowDiff(true)}
+              title="Comparar valor local com efetivo"
+            >
+              <GitCompare className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Comparar</span>
+            </Button>
+            <Button size="sm" onClick={onSavePatch} loading={saving} disabled={isReadOnly}>
+              Salvar
+            </Button>
+            {onResetProperty && (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={onResetProperty}
+                loading={resetLoading}
+                disabled={isReadOnly}
+              >
+                Reset
+              </Button>
+            )}
+          </>
         )}
       </div>
 

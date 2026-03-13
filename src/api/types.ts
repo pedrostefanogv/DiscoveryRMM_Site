@@ -800,6 +800,55 @@ export interface TicketKnowledgeSuggestQuery {
   maxResults?: number;
 }
 
+// ── Ticket Attachments ─────────────────────────────────
+
+export interface TicketAttachment {
+  id: string;
+  entityType: string;
+  entityId: string;
+  clientId: string;
+  fileName: string;
+  storageObjectKey: string;
+  storageBucket: string;
+  contentType: string;
+  sizeBytes: number;
+  storageChecksum: string | null;
+  storageProviderType: string;
+  uploadedBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PresignedUploadRequest {
+  fileName: string;
+  contentType: string;
+  sizeBytes: number;
+}
+
+export interface PresignedUploadResponse {
+  attachmentId: string;
+  objectKey: string;
+  uploadUrl: string;
+  httpMethod: string;
+  expiresAtUtc: string;
+}
+
+export interface CompleteUploadRequest {
+  attachmentId: string;
+  objectKey: string;
+  fileName: string;
+  contentType: string;
+  sizeBytes: number;
+  uploadedBy: string;
+}
+
+export interface TicketAttachmentSettings {
+  enabled: boolean;
+  maxFileSizeBytes: number;
+  allowedContentTypes: string[];
+  presignedUploadUrlTtlMinutes: number;
+}
+
 // ── Query params ───────────────────────────────────────
 
 export interface LogsQuery {
@@ -832,6 +881,8 @@ export enum ReportDatasetType {
   ConfigurationAudit = 2,
   Tickets = 3,
   AgentHardware = 4,
+  AgentLabels = 5,
+  KnowledgeBase = 6,
 }
 
 export enum ReportFormat {
@@ -938,6 +989,20 @@ export enum AgentHardwareOrderBy {
   OsName = "osName",
 }
 
+export enum AgentLabelsOrderBy {
+  Label = "label",
+  SourceType = "sourceType",
+  AgentHostname = "agentHostname",
+  UpdatedAt = "updatedAt",
+}
+
+export enum KnowledgeBaseOrderBy {
+  Title = "title",
+  Category = "category",
+  Author = "author",
+  UpdatedAt = "updatedAt",
+}
+
 // Legacy type for backward compatibility
 export type ReportFilterType = "DateTime" | "Long" | "String" | "Boolean";
 
@@ -969,6 +1034,192 @@ export interface ReportFilterDefinition {
   description?: string;
 }
 
+export interface DatasetFilterDefinition {
+  name: string;
+  type: string;
+  required: boolean;
+  label?: string;
+}
+
+export type ReportFormatString =
+  | "pdf"
+  | "xlsx"
+  | "csv"
+  | "Pdf"
+  | "Xlsx"
+  | "Csv";
+export type ReportFormatValue = ReportFormat | ReportFormatString;
+export type PreviewMode = "document" | "html";
+export type ResponseDisposition = "inline" | "attachment";
+export type ScopeTypeString = "global" | "client" | "site" | "agent";
+export type ReportDatasetTypeValue = ReportDatasetType | string;
+
+export interface ReportDatasetFieldMetadata {
+  field: string;
+  label?: string;
+  reference?: string;
+  dataType?: string;
+  isJoinKey?: boolean;
+  defaultAlias?: string;
+  datasetName?: string;
+  description?: string;
+}
+
+export interface ReportDatasetJoinCapability {
+  sourceDatasetType?: ReportDatasetTypeValue;
+  targetDatasetType?: ReportDatasetTypeValue;
+  sourceKey: string;
+  targetKey: string;
+  joinTypes?: string[];
+  description?: string;
+}
+
+export interface LayoutSchemaLimits {
+  maxLayoutJsonLength?: number;
+  maxColumns?: number;
+  maxSections?: number;
+  maxSectionColumns?: number;
+  maxSummaries?: number;
+  maxGroupDetails?: number;
+}
+
+export interface LayoutSchemaResponse {
+  previewModes: PreviewMode[];
+  responseDispositions: ResponseDisposition[];
+  supportedOrientations: string[];
+  supportedColumnFormats: string[];
+  supportedSummaryAggregates: string[];
+  multiSource?: {
+    enabled?: boolean;
+    fieldReferenceMode?: string;
+    dataSources?: Array<{
+      datasetType: ReportDatasetTypeValue;
+      datasetName?: string;
+      defaultAlias?: string;
+      description?: string;
+    }>;
+    joinTypes?: string[];
+    joinRules?: Array<{
+      sourceDatasetType?: ReportDatasetTypeValue;
+      targetDatasetType?: ReportDatasetTypeValue;
+      sourceKey: string;
+      targetKey: string;
+      joinType?: string;
+      description?: string;
+    }>;
+    notes?: string[];
+  };
+  limits?: LayoutSchemaLimits;
+  notes?: string[];
+}
+
+export interface ReportLayoutColumnDefinition {
+  field: string;
+  header?: string;
+  label?: string;
+  format?: string;
+  width?: string;
+  align?: "left" | "center" | "right" | string;
+}
+
+export interface ReportLayoutDetailDefinition {
+  field: string;
+  label: string;
+}
+
+export interface ReportLayoutSummaryDefinition {
+  field?: string;
+  label: string;
+  aggregate: string;
+}
+
+export interface ReportLayoutSectionDefinition {
+  title: string;
+  source?: string;
+  columns: ReportLayoutColumnDefinition[];
+}
+
+export interface ReportLayoutDataSourceJoinDefinition {
+  joinToAlias: string;
+  sourceKey: string;
+  targetKey: string;
+  joinType?: string;
+}
+
+export interface ReportLayoutDataSourceDefinition {
+  datasetType: ReportDatasetTypeValue;
+  alias: string;
+  join?: ReportLayoutDataSourceJoinDefinition;
+}
+
+export interface ReportLayoutStyleDefinition {
+  primaryColor?: string;
+  secondaryColor?: string;
+  accentColor?: string;
+  headerBackgroundColor?: string;
+  headerTextColor?: string;
+  alternateRowColor?: string;
+  borderColor?: string;
+  fontFamily?: string;
+  logoUrl?: string;
+  logoMaxHeightPx?: number;
+  showRowStripes?: boolean;
+}
+
+export interface ReportLayoutDefinition {
+  title: string;
+  subtitle?: string;
+  orientation?: string;
+  logoUrl?: string;
+  dataSources?: ReportLayoutDataSourceDefinition[];
+  groupBy?: string;
+  groupTitleTemplate?: string;
+  groupTitlePrefix?: string;
+  hideGroupColumn?: boolean;
+  columns?: ReportLayoutColumnDefinition[];
+  sections?: ReportLayoutSectionDefinition[];
+  groupDetails?: ReportLayoutDetailDefinition[];
+  summaries?: ReportLayoutSummaryDefinition[];
+  groupSummaries?: ReportLayoutSummaryDefinition[];
+  style?: ReportLayoutStyleDefinition;
+}
+
+export interface ReportTemplateContractInput {
+  name: string;
+  datasetKey?: string;
+  datasetType?: ReportDatasetTypeValue;
+  description?: string | null;
+  format?: ReportFormatValue;
+  defaultFormat?: ReportFormatValue;
+  scopeType?: ScopeTypeString | ReportScopeType;
+  filtersJson?: string | null;
+  layoutJson?: string;
+}
+
+export interface PreviewReportRequest {
+  templateId?: string;
+  template?: ReportTemplateContractInput;
+  format?: ReportFormatValue;
+  filtersJson?: string | null;
+  fileName?: string;
+  responseDisposition?: ResponseDisposition;
+  previewMode?: PreviewMode;
+}
+
+export interface PreviewReportResponse {
+  mode: PreviewMode;
+  contentType: string;
+  headers: {
+    rowCount?: number;
+    title?: string;
+    format?: string;
+    isPreview: boolean;
+    disposition?: string | null;
+  };
+  html?: string;
+  blob?: Blob;
+}
+
 export interface ReportFilterPreset {
   name: string;
   description: string;
@@ -989,10 +1240,19 @@ export interface ReportExecutionSchema {
 }
 
 export interface DatasetCatalogItem {
-  type: string;
-  fields: string[];
-  formats: ReportFormat[];
-  executionSchema: ReportExecutionSchema;
+  type?: string;
+  key?: string;
+  datasetType?: ReportDatasetTypeValue;
+  name?: string;
+  description?: string;
+  fields?: string[];
+  formats?: ReportFormat[];
+  supportedFormats?: ReportFormatString[];
+  defaultFormat?: ReportFormatString;
+  filters?: DatasetFilterDefinition[];
+  fieldMetadata?: ReportDatasetFieldMetadata[];
+  joinCapabilities?: ReportDatasetJoinCapability[];
+  executionSchema?: ReportExecutionSchema;
 }
 
 export interface ReportDataset {
@@ -1007,11 +1267,14 @@ export interface ReportTemplate {
   clientId: string | null;
   name: string;
   description: string | null;
-  datasetType: ReportDatasetType;
+  datasetKey?: string;
+  datasetType: ReportDatasetTypeValue;
   instructions?: string | null;
   executionSchema: ReportExecutionSchema;
   executionSchemaJson?: Record<string, any> | null;
-  defaultFormat: ReportFormat;
+  format?: ReportFormatValue;
+  defaultFormat: ReportFormatValue;
+  scopeType?: ScopeTypeString | ReportScopeType;
   layoutJson: string;
   filtersJson: string | null;
   isActive: boolean;
@@ -1044,10 +1307,13 @@ export interface ReportExecution {
 export interface CreateReportTemplateRequest {
   name: string;
   description?: string | null;
-  datasetType: ReportDatasetType;
+  datasetKey?: string;
+  datasetType: ReportDatasetTypeValue;
   instructions?: string | null;
   executionSchemaJson?: Record<string, any> | null;
-  defaultFormat?: ReportFormat;
+  format?: ReportFormatValue;
+  defaultFormat?: ReportFormatValue;
+  scopeType?: ScopeTypeString | ReportScopeType;
   layoutJson?: string;
   filtersJson?: string | null;
   createdBy?: string | null;
@@ -1056,10 +1322,13 @@ export interface CreateReportTemplateRequest {
 export interface UpdateReportTemplateRequest {
   name?: string;
   description?: string | null;
-  datasetType?: ReportDatasetType;
+  datasetKey?: string;
+  datasetType?: ReportDatasetTypeValue;
   instructions?: string | null;
   executionSchemaJson?: Record<string, any> | null;
-  defaultFormat?: ReportFormat;
+  format?: ReportFormatValue;
+  defaultFormat?: ReportFormatValue;
+  scopeType?: ScopeTypeString | ReportScopeType;
   layoutJson?: string;
   filtersJson?: string | null;
   isActive?: boolean;
@@ -1090,13 +1359,30 @@ export interface ReportTemplateHistory {
   version: number;
   eventType: "Created" | "Updated" | "Deleted";
   name: string;
-  datasetType: ReportDatasetType;
-  defaultFormat: ReportFormat;
+  datasetType: ReportDatasetTypeValue;
+  defaultFormat: ReportFormatValue;
   layoutJson: string;
   filtersJson: string | null;
   isActive: boolean;
   createdAt: string;
   createdBy: string | null;
+}
+
+export interface ReportAutocompleteItem {
+  datasetType: ReportDatasetTypeValue;
+  datasetKey?: string;
+  datasetName?: string;
+  field: string;
+  reference: string;
+  dataType?: string;
+  isJoinKey?: boolean;
+  defaultAlias?: string;
+}
+
+export interface ReportAutocompleteResponse {
+  fieldReferenceMode?: string;
+  total: number;
+  items: ReportAutocompleteItem[];
 }
 
 // ── App Store ──────────────────────────────────────────────

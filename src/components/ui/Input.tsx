@@ -3,9 +3,10 @@ import type { InputHTMLAttributes, SelectHTMLAttributes, TextareaHTMLAttributes 
 interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   label?: string;
   error?: string;
+  hint?: string;
 }
 
-export function Input({ label, error, className = '', id, ...props }: InputProps) {
+export function Input({ label, error, hint, className = '', id, ...props }: InputProps) {
   const inputId = id ?? label?.toLowerCase().replace(/\s+/g, '-');
   return (
     <div className="space-y-1">
@@ -22,6 +23,7 @@ export function Input({ label, error, className = '', id, ...props }: InputProps
         {...props}
       />
       {error && <p className="text-xs text-danger">{error}</p>}
+      {hint && !error && <p className="text-xs text-slate-500">{hint}</p>}
     </div>
   );
 }
@@ -62,9 +64,10 @@ export function Select({ label, options, className = '', id, ...props }: SelectP
 interface TextAreaProps extends TextareaHTMLAttributes<HTMLTextAreaElement> {
   label?: string;
   error?: string;
+  hint?: string;
 }
 
-export function TextArea({ label, error, className = '', id, ...props }: TextAreaProps) {
+export function TextArea({ label, error, hint, className = '', id, ...props }: TextAreaProps) {
   const textId = id ?? label?.toLowerCase().replace(/\s+/g, '-');
   return (
     <div className="space-y-1">
@@ -82,6 +85,7 @@ export function TextArea({ label, error, className = '', id, ...props }: TextAre
         {...props}
       />
       {error && <p className="text-xs text-danger">{error}</p>}
+      {hint && !error && <p className="text-xs text-slate-500">{hint}</p>}
     </div>
   );
 }

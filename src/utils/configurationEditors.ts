@@ -20,7 +20,9 @@ export type EditableFieldGroup =
   | "policy"
   | "agent"
   | "tokens"
-  | "advanced";
+  | "advanced"
+  | "storage"
+  | "siteProfile";
 
 export interface EditableField {
   key: string;
@@ -176,62 +178,157 @@ export const serverEditableFields: EditableField[] = [
     description:
       "Lista de campos que não podem ser sobrescritos por clientes ou sites.",
   },
+  // ── Object Storage (S3-compatible / MinIO) ─────────────────
+  {
+    key: "objectStorageEndpoint",
+    label: "Endpoint S3",
+    kind: "string",
+    group: "storage",
+    description:
+      "URL base do servidor S3-compatível (ex.: https://s3.us-east-1.amazonaws.com). Deixe em branco para desabilitar o armazenamento.",
+  },
+  {
+    key: "objectStorageBucketName",
+    label: "Bucket",
+    kind: "string",
+    group: "storage",
+    description: "Nome do bucket onde os arquivos serão armazenados.",
+  },
+  {
+    key: "objectStorageRegion",
+    label: "Região",
+    kind: "string",
+    group: "storage",
+    description: "Região do bucket (ex.: us-east-1, sa-east-1).",
+  },
+  {
+    key: "objectStorageAccessKey",
+    label: "Access Key",
+    kind: "string",
+    group: "storage",
+    description: "Chave de acesso (Access Key ID) para autenticação no S3.",
+  },
+  {
+    key: "objectStorageSecretKey",
+    label: "Secret Key",
+    kind: "string",
+    group: "storage",
+    description:
+      "Chave secreta (Secret Access Key). Será mascarada na exibição.",
+  },
+  {
+    key: "objectStorageUrlTtlHours",
+    label: "TTL de URLs Assinadas",
+    kind: "number",
+    group: "storage",
+    description:
+      "Tempo de validade (em horas) das URLs pré-assinadas geradas pelo servidor.",
+    unit: "horas",
+  },
+  {
+    key: "objectStorageUsePathStyle",
+    label: "Usar Path Style",
+    kind: "boolean",
+    group: "storage",
+    description:
+      "Ative para endpoints MinIO/compatíveis que exigem path-style (ex.: endpoint/bucket em vez de bucket.endpoint).",
+  },
+  {
+    key: "objectStorageSslVerify",
+    label: "Verificar SSL",
+    kind: "boolean",
+    group: "storage",
+    description:
+      "Valida o certificado TLS do endpoint. Desative apenas em ambientes de desenvolvimento com certificados autoassinados.",
+  },
 ];
 
 export const clientEditableFields: EditableField[] = [
-  { key: "recoveryEnabled", label: "Recovery Enabled", kind: "boolean" },
-  { key: "discoveryEnabled", label: "Discovery Enabled", kind: "boolean" },
-  { key: "p2PFilesEnabled", label: "P2P Files Enabled", kind: "boolean" },
-  { key: "supportEnabled", label: "Support Enabled", kind: "boolean" },
-  { key: "appStorePolicy", label: "App Store Policy", kind: "policy" },
+  {
+    key: "recoveryEnabled",
+    label: "Recuperação de Dispositivos",
+    kind: "boolean",
+    group: "features",
+  },
+  {
+    key: "discoveryEnabled",
+    label: "Descoberta de Rede",
+    kind: "boolean",
+    group: "features",
+  },
+  {
+    key: "p2PFilesEnabled",
+    label: "Transferência P2P de Arquivos",
+    kind: "boolean",
+    group: "features",
+  },
+  {
+    key: "supportEnabled",
+    label: "Suporte Remoto",
+    kind: "boolean",
+    group: "features",
+  },
+  {
+    key: "appStorePolicy",
+    label: "Política da Loja de Aplicativos",
+    kind: "policy",
+    group: "policy",
+  },
   {
     key: "aiIntegrationSettingsJson",
-    label: "AI Integration Settings JSON",
+    label: "Integração com IA",
     kind: "json",
+    group: "advanced",
     description:
       "ApiKey e write-only: mantenha ausente no JSON e inclua somente quando quiser trocar a chave.",
   },
   {
     key: "inventoryIntervalHours",
-    label: "Inventory Interval Hours",
+    label: "Intervalo de Inventário",
     kind: "number",
+    group: "agent",
     unit: "horas",
     description:
       "Com qual frequência (em horas) cada agente coleta e envia o inventário de software instalado. Valores menores = atualizações mais frequentes.",
   },
   {
     key: "autoUpdateSettingsJson",
-    label: "Auto Update Settings JSON",
+    label: "Configurações de Atualização Automática",
     kind: "json",
+    group: "advanced",
   },
   {
     key: "tokenExpirationDays",
-    label: "Token Expiration Days",
+    label: "Expiração de Token",
     kind: "number",
+    group: "tokens",
     unit: "dias",
     description:
       "Tempo de vida (em dias) de cada token de deploy. Tokens expirados devem ser regenerados. Valores menores aumentam a segurança mas requerem regeneração frequente.",
   },
   {
     key: "maxTokensPerAgent",
-    label: "Max Tokens Per Agent",
+    label: "Máximo de Tokens por Agente",
     kind: "number",
+    group: "tokens",
     unit: "tokens",
     description:
       "Quantidade máxima de tokens de deploy ativos simultaneamente por agente. Quando atingida, novos tokens exigem remoção de antigos.",
   },
   {
     key: "agentHeartbeatIntervalSeconds",
-    label: "Agent Heartbeat Interval Seconds",
+    label: "Intervalo de Heartbeat",
     kind: "number",
+    group: "agent",
     unit: "segundos",
     description:
       "Com qual frequência (em segundos) o agente envia um sinal de presença. Define se o agente está ativo e conectado ao servidor.",
   },
   {
     key: "agentOfflineThresholdSeconds",
-    label: "Agent Offline Threshold Seconds",
+    label: "Limite para Considerar Offline",
     kind: "number",
+    group: "agent",
     unit: "segundos",
     description:
       "Tempo máximo (em segundos) sem receber heartbeat antes que o agente seja marcado como offline. Deve ser > que o intervalo de heartbeat.",
@@ -239,35 +336,83 @@ export const clientEditableFields: EditableField[] = [
 ];
 
 export const siteEditableFields: EditableField[] = [
-  { key: "recoveryEnabled", label: "Recovery Enabled", kind: "boolean" },
-  { key: "discoveryEnabled", label: "Discovery Enabled", kind: "boolean" },
-  { key: "p2PFilesEnabled", label: "P2P Files Enabled", kind: "boolean" },
-  { key: "supportEnabled", label: "Support Enabled", kind: "boolean" },
-  { key: "appStorePolicy", label: "App Store Policy", kind: "policy" },
+  {
+    key: "recoveryEnabled",
+    label: "Recuperação de Dispositivos",
+    kind: "boolean",
+    group: "features",
+  },
+  {
+    key: "discoveryEnabled",
+    label: "Descoberta de Rede",
+    kind: "boolean",
+    group: "features",
+  },
+  {
+    key: "p2PFilesEnabled",
+    label: "Transferência P2P de Arquivos",
+    kind: "boolean",
+    group: "features",
+  },
+  {
+    key: "supportEnabled",
+    label: "Suporte Remoto",
+    kind: "boolean",
+    group: "features",
+  },
+  {
+    key: "appStorePolicy",
+    label: "Política da Loja de Aplicativos",
+    kind: "policy",
+    group: "policy",
+  },
   {
     key: "aiIntegrationSettingsJson",
-    label: "AI Integration Settings JSON",
+    label: "Integração com IA",
     kind: "json",
+    group: "advanced",
     description:
       "ApiKey e write-only: mantenha ausente no JSON e inclua somente quando quiser trocar a chave.",
   },
   {
     key: "inventoryIntervalHours",
-    label: "Inventory Interval Hours",
+    label: "Intervalo de Inventário",
     kind: "number",
+    group: "agent",
     unit: "horas",
     description:
       "Com qual frequência (em horas) cada agente coleta e envia o inventário de software instalado. Valores menores = atualizações mais frequentes.",
   },
   {
     key: "autoUpdateSettingsJson",
-    label: "Auto Update Settings JSON",
+    label: "Configurações de Atualização Automática",
     kind: "json",
+    group: "advanced",
   },
-  { key: "timezone", label: "Timezone", kind: "string" },
-  { key: "location", label: "Location", kind: "string" },
-  { key: "contactPerson", label: "Contact Person", kind: "string" },
-  { key: "contactEmail", label: "Contact Email", kind: "string" },
+  {
+    key: "timezone",
+    label: "Fuso Horário",
+    kind: "string",
+    group: "siteProfile",
+  },
+  {
+    key: "location",
+    label: "Localização",
+    kind: "string",
+    group: "siteProfile",
+  },
+  {
+    key: "contactPerson",
+    label: "Contato Responsável",
+    kind: "string",
+    group: "siteProfile",
+  },
+  {
+    key: "contactEmail",
+    label: "Email de Contato",
+    kind: "string",
+    group: "siteProfile",
+  },
 ];
 
 export function formatFieldValue(

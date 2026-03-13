@@ -3,19 +3,21 @@ import * as reportsApi from "@/api/reports";
 import type {
   CreateReportTemplateRequest,
   UpdateReportTemplateRequest,
-  ReportDatasetType,
+  ReportDatasetTypeValue,
 } from "@/api/types";
 
 const KEYS = {
   all: ["reportTemplates"] as const,
-  list: (params?: { datasetType?: ReportDatasetType; isActive?: boolean }) =>
-    [...KEYS.all, "list", params] as const,
+  list: (params?: {
+    datasetType?: ReportDatasetTypeValue;
+    isActive?: boolean;
+  }) => [...KEYS.all, "list", params] as const,
   detail: (id: string, clientId?: string) =>
     [...KEYS.all, "detail", id, clientId] as const,
 };
 
 export function useReportTemplates(params?: {
-  datasetType?: ReportDatasetType;
+  datasetType?: ReportDatasetTypeValue;
   isActive?: boolean;
 }) {
   return useQuery({

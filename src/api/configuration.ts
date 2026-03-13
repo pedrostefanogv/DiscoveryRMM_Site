@@ -1,4 +1,4 @@
-import { api } from "./client";
+﻿import { api } from "./client";
 import type {
   ClientConfiguration,
   ConfigurationMap,
@@ -6,6 +6,7 @@ import type {
   EffectiveConfiguration,
   ServerConfiguration,
   SiteConfiguration,
+  TicketAttachmentSettings,
 } from "./types";
 
 const BASE = "/api/configurations";
@@ -55,9 +56,25 @@ export const configurationApi = {
 
   resetServer: () => api.post<void>(`${BASE}/server/reset`),
 
+  getTicketAttachmentSettings: () =>
+    api.get<TicketAttachmentSettings>(`${BASE}/server/ticket-attachments`),
+
+  putTicketAttachmentSettings: (data: TicketAttachmentSettings) =>
+    api.put<TicketAttachmentSettings>(
+      `${BASE}/server/ticket-attachments`,
+      data,
+    ),
+
+  testObjectStorage: () =>
+    api.post<{
+      success: boolean;
+      configurationValid: boolean;
+      bucketReachable: boolean;
+      errors: string[];
+      latencyMs: number;
+    }>(`${BASE}/server/object-storage/test`),
   getClient: (clientId: string) =>
     api.get<ClientConfiguration>(`${BASE}/clients/${clientId}`),
-
   getClientMetadata: (clientId: string) =>
     api.get<Record<string, unknown>>(`${BASE}/clients/${clientId}/metadata`),
 

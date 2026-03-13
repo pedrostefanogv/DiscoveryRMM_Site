@@ -82,4 +82,7 @@ export * from "./useReportFavorites";
 export * from "./useReportTemplateHistory";
 export * from "./useReportNotifications";
 export * from "./useReportDownload";
+export * from "./useReportLayoutSchema";
+export * from "./useReportPreview";
+export * from "./useReportAutocomplete";
 export * from "./useKnowledge";

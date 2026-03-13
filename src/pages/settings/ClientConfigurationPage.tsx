@@ -1,10 +1,24 @@
 import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import toast from "react-hot-toast";
+import {
+  Building2,
+  Bot,
+  Clock,
+  Key,
+  RotateCcw,
+  Save,
+  ShieldCheck,
+  Store,
+} from "lucide-react";
 import { ApiError } from "@/api";
 import type { ConfigurationValue } from "@/api";
-import { ConfigurationFieldEditor } from "@/components/configuration";
-import { Button, Card, CardHeader, ErrorDisplay, Loading, Select } from "@/components/ui";
+import {
+  ConfigurationFieldEditor,
+  ConfigurationPageHeader,
+  ConfigurationSectionCard,
+} from "@/components/configuration";
+import { Button, ErrorDisplay, Loading, Select } from "@/components/ui";
 import { useClients } from "@/hooks/useClients";
 import {
   useClientConfig,
@@ -168,8 +182,11 @@ export default function ClientConfigurationPage() {
     }
   };
 
-  const primaryFields = clientEditableFields.filter((field) => field.kind !== "json");
-  const jsonFields = clientEditableFields.filter((field) => field.kind === "json");
+  const featureFields = clientEditableFields.filter((field) => field.group === "features");
+  const policyFields = clientEditableFields.filter((field) => field.group === "policy");
+  const agentFields = clientEditableFields.filter((field) => field.group === "agent");
+  const tokenFields = clientEditableFields.filter((field) => field.group === "tokens");
+  const advancedFields = clientEditableFields.filter((field) => field.group === "advanced");
 
   const renderFieldEditor = (
     fieldKey: string,
@@ -219,83 +236,139 @@ export default function ClientConfigurationPage() {
 
   return (
     <div className="space-y-6">
-      <Card>
-        <CardHeader
-          title="Configuração de Cliente"
-          subtitle="Null significa herdar do servidor"
-          action={
-            <div className="flex gap-2">
-              <Button size="sm" onClick={saveFull} loading={putMutation.isPending}>
-                Salvar completo (PUT)
-              </Button>
-              <Button
-                size="sm"
-                variant="danger"
-                onClick={removeLocalConfig}
-                loading={deleteMutation.isPending}
-              >
-                Remover config local (DELETE)
-              </Button>
-            </div>
-          }
-        />
+      <ConfigurationPageHeader
+        title="Configuração de Cliente"
+        subtitle="Configurações aplicáveis ao cliente e aos agentes/sites desse cliente via herança."
+        actions={
+          <>
+            <Button size="sm" variant="secondary" onClick={saveFull} loading={putMutation.isPending}>
+              <Save className="h-3.5 w-3.5" />
+              Salvar tudo
+            </Button>
+            <Button
+              size="sm"
+              variant="danger"
+              onClick={removeLocalConfig}
+              loading={deleteMutation.isPending}
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+              Restaurar herança
+            </Button>
+          </>
+        }
+      />
 
+      <ConfigurationSectionCard
+        title="Escopo de Cliente"
+        subtitle="Selecione o cliente para editar apenas configurações válidas neste escopo."
+        icon={<Building2 className="h-4 w-4" />}
+        iconClassName="bg-violet-500/20 text-violet-400"
+      >
         {clientsQuery.isLoading && <Loading message="Carregando clientes..." />}
         {clientsQuery.isError && (
           <ErrorDisplay message={readEntityError(clientsQuery.error, "client")} onRetry={clientsQuery.refetch} />
         )}
-
         {!clientsQuery.isLoading && !clientsQuery.isError && (
           <div className="space-y-4">
             <Select label="Cliente" options={clientOptions} value={clientId} onChange={(event) => setClientId(event.target.value)} />
-
             {!clientId && <p className="text-sm text-slate-400">Selecione um cliente para editar a configuração.</p>}
-
-            {clientId && (localQuery.isLoading || effectiveQuery.isLoading || metadataQuery.isLoading) && (
-              <Loading message="Carregando configuração do cliente..." />
-            )}
-
-            {clientId && (localQuery.isError || effectiveQuery.isError || metadataQuery.isError) && (
-              <ErrorDisplay
-                message={readEntityError(localQuery.error ?? effectiveQuery.error ?? metadataQuery.error, "client")}
-                onRetry={() => {
-                  localQuery.refetch();
-                  effectiveQuery.refetch();
-                  metadataQuery.refetch();
-                }}
-              />
-            )}
-
-            {clientId && !localQuery.isLoading && !effectiveQuery.isLoading && !metadataQuery.isLoading && !localQuery.isError && !effectiveQuery.isError && !metadataQuery.isError && (
-              <div className="space-y-6">
-                <section className="space-y-3">
-                  <div>
-                    <h4 className="text-sm font-semibold text-slate-100">Campos principais</h4>
-                    <p className="text-xs text-slate-400">Opcoes, politicas e limites herdados do servidor.</p>
-                  </div>
-                  <div className="grid gap-4 xl:grid-cols-2">
-                    {primaryFields.map((field) =>
-                      renderFieldEditor(field.key, field.label, field.kind),
-                    )}
-                  </div>
-                </section>
-
-                <section className="space-y-3">
-                  <div>
-                    <h4 className="text-sm font-semibold text-slate-100">Campos JSON</h4>
-                    <p className="text-xs text-slate-400">Overrides estruturados locais para payloads complexos.</p>
-                  </div>
-                  <div className="space-y-4">
-                    {jsonFields.map((field) =>
-                      renderFieldEditor(field.key, field.label, field.kind),
-                    )}
-                  </div>
-                </section>
-              </div>
-            )}
           </div>
         )}
-      </Card>
+      </ConfigurationSectionCard>
+
+      {clientId && (localQuery.isLoading || effectiveQuery.isLoading || metadataQuery.isLoading) && (
+        <Loading message="Carregando configuração do cliente..." />
+      )}
+
+      {clientId && (localQuery.isError || effectiveQuery.isError || metadataQuery.isError) && (
+        <ErrorDisplay
+          message={readEntityError(localQuery.error ?? effectiveQuery.error ?? metadataQuery.error, "client")}
+          onRetry={() => {
+            localQuery.refetch();
+            effectiveQuery.refetch();
+            metadataQuery.refetch();
+          }}
+        />
+      )}
+
+      {clientId && !localQuery.isLoading && !effectiveQuery.isLoading && !metadataQuery.isLoading && !localQuery.isError && !effectiveQuery.isError && !metadataQuery.isError && (
+        <>
+          {featureFields.length > 0 && (
+            <ConfigurationSectionCard
+              title="Funcionalidades do Sistema"
+              subtitle="Ative ou desative módulos que impactam os agentes e sites desse cliente."
+              icon={<ShieldCheck className="h-4 w-4" />}
+              iconClassName="bg-sky-500/20 text-sky-400"
+            >
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                {featureFields.map((field) =>
+                  renderFieldEditor(field.key, field.label, field.kind),
+                )}
+              </div>
+            </ConfigurationSectionCard>
+          )}
+
+          {policyFields.length > 0 && (
+            <ConfigurationSectionCard
+              title="Política da Loja de Aplicativos"
+              subtitle="Define quais aplicativos podem ser instalados pelos agentes."
+              icon={<Store className="h-4 w-4" />}
+              iconClassName="bg-violet-500/20 text-violet-400"
+            >
+              <div className="space-y-4">
+                {policyFields.map((field) =>
+                  renderFieldEditor(field.key, field.label, field.kind),
+                )}
+              </div>
+            </ConfigurationSectionCard>
+          )}
+
+          {agentFields.length > 0 && (
+            <ConfigurationSectionCard
+              title="Intervalos e Comportamento do Agente"
+              subtitle="Frequência de heartbeat, detecção de offline e coleta de inventário no escopo do cliente."
+              icon={<Clock className="h-4 w-4" />}
+              iconClassName="bg-emerald-500/20 text-emerald-400"
+            >
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                {agentFields.map((field) =>
+                  renderFieldEditor(field.key, field.label, field.kind),
+                )}
+              </div>
+            </ConfigurationSectionCard>
+          )}
+
+          {tokenFields.length > 0 && (
+            <ConfigurationSectionCard
+              title="Tokens de Deploy"
+              subtitle="Controle a validade e o limite de tokens emitidos por agente no escopo do cliente."
+              icon={<Key className="h-4 w-4" />}
+              iconClassName="bg-amber-500/20 text-amber-400"
+            >
+              <div className="grid gap-4 sm:grid-cols-2">
+                {tokenFields.map((field) =>
+                  renderFieldEditor(field.key, field.label, field.kind),
+                )}
+              </div>
+            </ConfigurationSectionCard>
+          )}
+
+          {advancedFields.length > 0 && (
+            <ConfigurationSectionCard
+              title="Configurações Avançadas"
+              subtitle="Auto-update e IA estruturada no escopo do cliente."
+              icon={<Bot className="h-4 w-4" />}
+              iconClassName="bg-blue-500/20 text-blue-400"
+            >
+              <div className="space-y-4">
+                {advancedFields.map((field) =>
+                  renderFieldEditor(field.key, field.label, field.kind),
+                )}
+              </div>
+            </ConfigurationSectionCard>
+          )}
+        </>
+      )}
     </div>
   );
 }

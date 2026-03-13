@@ -1,10 +1,24 @@
 import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import toast from "react-hot-toast";
+import {
+  Bot,
+  Clock,
+  MapPin,
+  RotateCcw,
+  Save,
+  ShieldCheck,
+  Store,
+  UserSquare2,
+} from "lucide-react";
 import { ApiError } from "@/api";
 import type { ConfigurationValue } from "@/api";
-import { ConfigurationFieldEditor } from "@/components/configuration";
-import { Button, Card, CardHeader, ErrorDisplay, Loading, Select } from "@/components/ui";
+import {
+  ConfigurationFieldEditor,
+  ConfigurationPageHeader,
+  ConfigurationSectionCard,
+} from "@/components/configuration";
+import { Button, ErrorDisplay, Loading, Select } from "@/components/ui";
 import {
   useClientMetadata,
   useClientConfig,
@@ -192,8 +206,11 @@ export default function SiteConfigurationPage() {
     }
   };
 
-  const primaryFields = siteEditableFields.filter((field) => field.kind !== "json");
-  const jsonFields = siteEditableFields.filter((field) => field.kind === "json");
+  const featureFields = siteEditableFields.filter((field) => field.group === "features");
+  const policyFields = siteEditableFields.filter((field) => field.group === "policy");
+  const agentFields = siteEditableFields.filter((field) => field.group === "agent");
+  const advancedFields = siteEditableFields.filter((field) => field.group === "advanced");
+  const siteProfileFields = siteEditableFields.filter((field) => field.group === "siteProfile");
 
   const renderFieldEditor = (
     fieldKey: string,
@@ -249,26 +266,34 @@ export default function SiteConfigurationPage() {
 
   return (
     <div className="space-y-6">
-      <Card>
-        <CardHeader
-          title="Configuração de Site"
-          subtitle="Null significa herdar do cliente e servidor"
-          action={
-            <div className="flex gap-2">
-              <Button size="sm" onClick={saveFull} loading={putMutation.isPending}>
-                Salvar completo (PUT)
-              </Button>
-              <Button
-                size="sm"
-                variant="danger"
-                onClick={removeLocalConfig}
-                loading={deleteMutation.isPending}
-              >
-                Remover config local (DELETE)
-              </Button>
-            </div>
-          }
-        />
+      <ConfigurationPageHeader
+        title="Configuração de Site"
+        subtitle="Configurações aplicáveis ao site e aos agentes deste site."
+        actions={
+          <>
+            <Button size="sm" variant="secondary" onClick={saveFull} loading={putMutation.isPending}>
+              <Save className="h-3.5 w-3.5" />
+              Salvar tudo
+            </Button>
+            <Button
+              size="sm"
+              variant="danger"
+              onClick={removeLocalConfig}
+              loading={deleteMutation.isPending}
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+              Restaurar herança
+            </Button>
+          </>
+        }
+      />
+
+      <ConfigurationSectionCard
+        title="Escopo de Site"
+        subtitle="Selecione cliente e site para editar apenas configurações válidas neste escopo."
+        icon={<MapPin className="h-4 w-4" />}
+        iconClassName="bg-cyan-500/20 text-cyan-400"
+      >
 
         {clientsQuery.isLoading && <Loading message="Carregando clientes..." />}
         {clientsQuery.isError && (
@@ -300,56 +325,107 @@ export default function SiteConfigurationPage() {
             {clientId && sitesQuery.isError && (
               <ErrorDisplay message={readEntityError(sitesQuery.error)} onRetry={sitesQuery.refetch} />
             )}
-
-            {siteId && (localSiteQuery.isLoading || effectiveSiteQuery.isLoading || localClientQuery.isLoading || clientMetadataQuery.isLoading || siteMetadataQuery.isLoading) && (
-              <Loading message="Carregando configuração do site..." />
-            )}
-
-            {siteId && (localSiteQuery.isError || effectiveSiteQuery.isError || localClientQuery.isError || clientMetadataQuery.isError || siteMetadataQuery.isError) && (
-              <ErrorDisplay
-                message={readEntityError(
-                  localSiteQuery.error ?? effectiveSiteQuery.error ?? localClientQuery.error ?? clientMetadataQuery.error ?? siteMetadataQuery.error,
-                )}
-                onRetry={() => {
-                  localSiteQuery.refetch();
-                  effectiveSiteQuery.refetch();
-                  localClientQuery.refetch();
-                  clientMetadataQuery.refetch();
-                  siteMetadataQuery.refetch();
-                }}
-              />
-            )}
-
-            {siteId && !localSiteQuery.isLoading && !effectiveSiteQuery.isLoading && !localClientQuery.isLoading && !clientMetadataQuery.isLoading && !siteMetadataQuery.isLoading && !localSiteQuery.isError && !effectiveSiteQuery.isError && !localClientQuery.isError && !clientMetadataQuery.isError && !siteMetadataQuery.isError && (
-              <div className="space-y-6">
-                <section className="space-y-3">
-                  <div>
-                    <h4 className="text-sm font-semibold text-slate-100">Campos principais</h4>
-                    <p className="text-xs text-slate-400">Configuracoes operacionais herdadas de cliente e servidor.</p>
-                  </div>
-                  <div className="grid gap-4 xl:grid-cols-2">
-                    {primaryFields.map((field) =>
-                      renderFieldEditor(field.key, field.label, field.kind),
-                    )}
-                  </div>
-                </section>
-
-                <section className="space-y-3">
-                  <div>
-                    <h4 className="text-sm font-semibold text-slate-100">Campos JSON</h4>
-                    <p className="text-xs text-slate-400">Payloads estruturados para update e IA no escopo do site.</p>
-                  </div>
-                  <div className="space-y-4">
-                    {jsonFields.map((field) =>
-                      renderFieldEditor(field.key, field.label, field.kind),
-                    )}
-                  </div>
-                </section>
-              </div>
-            )}
           </div>
         )}
-      </Card>
+      </ConfigurationSectionCard>
+
+      {siteId && (localSiteQuery.isLoading || effectiveSiteQuery.isLoading || localClientQuery.isLoading || clientMetadataQuery.isLoading || siteMetadataQuery.isLoading) && (
+        <Loading message="Carregando configuração do site..." />
+      )}
+
+      {siteId && (localSiteQuery.isError || effectiveSiteQuery.isError || localClientQuery.isError || clientMetadataQuery.isError || siteMetadataQuery.isError) && (
+        <ErrorDisplay
+          message={readEntityError(
+            localSiteQuery.error ?? effectiveSiteQuery.error ?? localClientQuery.error ?? clientMetadataQuery.error ?? siteMetadataQuery.error,
+          )}
+          onRetry={() => {
+            localSiteQuery.refetch();
+            effectiveSiteQuery.refetch();
+            localClientQuery.refetch();
+            clientMetadataQuery.refetch();
+            siteMetadataQuery.refetch();
+          }}
+        />
+      )}
+
+      {siteId && !localSiteQuery.isLoading && !effectiveSiteQuery.isLoading && !localClientQuery.isLoading && !clientMetadataQuery.isLoading && !siteMetadataQuery.isLoading && !localSiteQuery.isError && !effectiveSiteQuery.isError && !localClientQuery.isError && !clientMetadataQuery.isError && !siteMetadataQuery.isError && (
+        <>
+          {featureFields.length > 0 && (
+            <ConfigurationSectionCard
+              title="Funcionalidades do Sistema"
+              subtitle="Ative ou desative módulos que impactam os agentes desse site."
+              icon={<ShieldCheck className="h-4 w-4" />}
+              iconClassName="bg-sky-500/20 text-sky-400"
+            >
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                {featureFields.map((field) =>
+                  renderFieldEditor(field.key, field.label, field.kind),
+                )}
+              </div>
+            </ConfigurationSectionCard>
+          )}
+
+          {policyFields.length > 0 && (
+            <ConfigurationSectionCard
+              title="Política da Loja de Aplicativos"
+              subtitle="Define quais aplicativos são permitidos para os agentes do site."
+              icon={<Store className="h-4 w-4" />}
+              iconClassName="bg-violet-500/20 text-violet-400"
+            >
+              <div className="space-y-4">
+                {policyFields.map((field) =>
+                  renderFieldEditor(field.key, field.label, field.kind),
+                )}
+              </div>
+            </ConfigurationSectionCard>
+          )}
+
+          {agentFields.length > 0 && (
+            <ConfigurationSectionCard
+              title="Intervalos e Comportamento do Agente"
+              subtitle="Frequência de heartbeat, detecção de offline e coleta de inventário no escopo do site."
+              icon={<Clock className="h-4 w-4" />}
+              iconClassName="bg-emerald-500/20 text-emerald-400"
+            >
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                {agentFields.map((field) =>
+                  renderFieldEditor(field.key, field.label, field.kind),
+                )}
+              </div>
+            </ConfigurationSectionCard>
+          )}
+
+          {siteProfileFields.length > 0 && (
+            <ConfigurationSectionCard
+              title="Perfil do Site"
+              subtitle="Dados cadastrais e de contato específicos desta unidade."
+              icon={<UserSquare2 className="h-4 w-4" />}
+              iconClassName="bg-amber-500/20 text-amber-400"
+            >
+              <div className="grid gap-4 xl:grid-cols-2">
+                {siteProfileFields.map((field) =>
+                  renderFieldEditor(field.key, field.label, field.kind),
+                )}
+              </div>
+            </ConfigurationSectionCard>
+          )}
+
+          {advancedFields.length > 0 && (
+            <ConfigurationSectionCard
+              title="Configurações Avançadas"
+              subtitle="Campos estruturados de integração e atualização automática."
+              icon={<Bot className="h-4 w-4" />}
+              iconClassName="bg-blue-500/20 text-blue-400"
+            >
+              <div className="space-y-4">
+                {advancedFields.map((field) =>
+                  renderFieldEditor(field.key, field.label, field.kind),
+                )}
+              </div>
+            </ConfigurationSectionCard>
+          )}
+        </>
+      )}
     </div>
   );
 }

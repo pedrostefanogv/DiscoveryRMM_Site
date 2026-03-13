@@ -1,7 +1,7 @@
 import { History } from "lucide-react";
 import { Card, Badge, Loading } from "@/components/ui";
 import { useReportTemplateHistory } from "@/hooks";
-import { ReportFormat, ReportDatasetType } from "@/api/types";
+import { ReportFormat, ReportDatasetType, type ReportDatasetTypeValue, type ReportFormatValue } from "@/api/types";
 
 const EVENT_LABELS = {
   Created: "Criado",
@@ -27,7 +27,45 @@ const DATASET_LABELS: Record<ReportDatasetType, string> = {
   [ReportDatasetType.ConfigurationAudit]: "Auditoria de Configuração",
   [ReportDatasetType.Tickets]: "Tickets",
   [ReportDatasetType.AgentHardware]: "Hardware de Agentes",
+  [ReportDatasetType.AgentLabels]: "Labels de Agentes",
+  [ReportDatasetType.KnowledgeBase]: "Base de Conhecimento",
 };
+
+function getDatasetLabel(datasetType: ReportDatasetTypeValue): string {
+  if (typeof datasetType === "string") {
+    const normalized = datasetType.trim();
+    const lower = normalized.toLowerCase();
+    const stringLabels: Record<string, string> = {
+      softwareinventory: "Inventário de Software",
+      "software-inventory": "Inventário de Software",
+      logs: "Logs",
+      configurationaudit: "Auditoria de Configuração",
+      "configuration-audit": "Auditoria de Configuração",
+      tickets: "Tickets",
+      agenthardware: "Hardware de Agentes",
+      "agent-hardware": "Hardware de Agentes",
+      agentlabels: "Labels de Agentes",
+      "agent-labels": "Labels de Agentes",
+      knowledgebase: "Base de Conhecimento",
+      "knowledge-base": "Base de Conhecimento",
+    };
+    return stringLabels[lower] ?? normalized;
+  }
+
+  return DATASET_LABELS[datasetType] ?? String(datasetType);
+}
+
+function getFormatLabel(format: ReportFormatValue): string {
+  if (typeof format === "string") {
+    const lower = format.toLowerCase();
+    if (lower === "pdf") return "PDF";
+    if (lower === "csv") return "CSV";
+    if (lower === "xlsx") return "Excel";
+    return format;
+  }
+
+  return FORMAT_LABELS[format] ?? String(format);
+}
 
 interface ReportTemplateHistoryPanelProps {
   templateId: string;
@@ -85,11 +123,11 @@ export function ReportTemplateHistoryPanel({ templateId, limit = 50 }: ReportTem
                   </p>
                   <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
                     <span>
-                      {DATASET_LABELS[entry.datasetType]}
+                      {getDatasetLabel(entry.datasetType)}
                     </span>
                     <span>•</span>
                     <span>
-                      {FORMAT_LABELS[entry.defaultFormat]}
+                      {getFormatLabel(entry.defaultFormat)}
                     </span>
                     <span>•</span>
                     <span className={entry.isActive ? "text-green-400" : "text-red-400"}>

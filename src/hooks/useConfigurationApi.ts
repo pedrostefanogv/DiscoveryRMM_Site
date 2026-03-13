@@ -1,4 +1,6 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+﻿import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { configurationApi } from "@/api";
+import type { TicketAttachmentSettings } from "@/api";
 import {
   deleteClientConfig,
   deleteSiteConfig,
@@ -69,6 +71,7 @@ export const configurationQueryKeys = {
     ["config", "audit", "user", username, limit ?? "all"] as const,
   auditReport: (startDate: string, endDate: string) =>
     ["config", "audit", "report", startDate, endDate] as const,
+  ticketAttachmentSettings: ["config", "ticket-attachment-settings"] as const,
 };
 
 function invalidateRecentAudit(queryClient: ReturnType<typeof useQueryClient>) {
@@ -433,5 +436,33 @@ export function useConfigurationAuditReport(
     queryKey: configurationQueryKeys.auditReport(startDate, endDate),
     queryFn: () => getAuditReport(startDate, endDate),
     enabled: !!startDate && !!endDate,
+  });
+}
+
+export function useTicketAttachmentSettings() {
+  return useQuery({
+    queryKey: configurationQueryKeys.ticketAttachmentSettings,
+    queryFn: () => configurationApi.getTicketAttachmentSettings(),
+  });
+}
+
+export function useUpdateTicketAttachmentSettings() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: TicketAttachmentSettings) =>
+      configurationApi.putTicketAttachmentSettings(data),
+
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: configurationQueryKeys.ticketAttachmentSettings,
+      });
+    },
+  });
+}
+
+
+export function useTestObjectStorage() {
+  return useMutation({
+    mutationFn: () => configurationApi.testObjectStorage(),
   });
 }

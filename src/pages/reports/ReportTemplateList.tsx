@@ -35,6 +35,8 @@ import {
   ReportDatasetType,
   ReportFormat,
   type CreateReportTemplateRequest,
+  type ReportDatasetTypeValue,
+  type ReportFormatValue,
 } from "@/api/types";
 
 const DATASET_LABELS: Record<ReportDatasetType, string> = {
@@ -43,6 +45,8 @@ const DATASET_LABELS: Record<ReportDatasetType, string> = {
   [ReportDatasetType.ConfigurationAudit]: "Auditoria de Configuração",
   [ReportDatasetType.Tickets]: "Tickets",
   [ReportDatasetType.AgentHardware]: "Hardware de Agentes",
+  [ReportDatasetType.AgentLabels]: "Labels de Agentes",
+  [ReportDatasetType.KnowledgeBase]: "Base de Conhecimento",
 };
 
 const FORMAT_LABELS: Record<ReportFormat, string> = {
@@ -50,6 +54,42 @@ const FORMAT_LABELS: Record<ReportFormat, string> = {
   [ReportFormat.Csv]: "CSV",
   [ReportFormat.Pdf]: "PDF",
 };
+
+function getDatasetLabel(datasetType: ReportDatasetTypeValue): string {
+  if (typeof datasetType === "string") {
+    const normalized = datasetType.trim();
+    const lower = normalized.toLowerCase();
+    const stringLabels: Record<string, string> = {
+      softwareinventory: "Inventário de Software",
+      "software-inventory": "Inventário de Software",
+      logs: "Logs",
+      configurationaudit: "Auditoria de Configuração",
+      "configuration-audit": "Auditoria de Configuração",
+      tickets: "Tickets",
+      agenthardware: "Hardware de Agentes",
+      "agent-hardware": "Hardware de Agentes",
+      agentlabels: "Labels de Agentes",
+      "agent-labels": "Labels de Agentes",
+      knowledgebase: "Base de Conhecimento",
+      "knowledge-base": "Base de Conhecimento",
+    };
+    return stringLabels[lower] ?? normalized;
+  }
+
+  return DATASET_LABELS[datasetType] ?? String(datasetType);
+}
+
+function getFormatLabel(format: ReportFormatValue): string {
+  if (typeof format === "string") {
+    const lower = format.toLowerCase();
+    if (lower === "pdf") return "PDF";
+    if (lower === "csv") return "CSV";
+    if (lower === "xlsx") return "Excel";
+    return format;
+  }
+
+  return FORMAT_LABELS[format] ?? String(format);
+}
 
 export default function ReportTemplateList() {
   const [searchParams] = useSearchParams();
@@ -142,8 +182,8 @@ export default function ReportTemplateList() {
         templates?: Array<{
           name: string;
           description: string | null;
-          datasetType: ReportDatasetType;
-          defaultFormat: ReportFormat;
+          datasetType: ReportDatasetTypeValue;
+          defaultFormat: ReportFormatValue;
           layoutJson: string;
           filtersJson: string | null;
           isActive?: boolean;
@@ -237,7 +277,7 @@ export default function ReportTemplateList() {
       header: "Tipo de Dados",
       render: (t) => (
         <span className="text-slate-300">
-          {DATASET_LABELS[t.datasetType] || t.datasetType}
+          {getDatasetLabel(t.datasetType)}
         </span>
       ),
     },
@@ -246,7 +286,7 @@ export default function ReportTemplateList() {
       header: "Formato Padrão",
       render: (t) => (
         <Badge color="slate">
-          {FORMAT_LABELS[t.defaultFormat] || t.defaultFormat}
+          {getFormatLabel(t.defaultFormat)}
         </Badge>
       ),
     },

@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Send, Lock, Unlock, Clock, Activity, ChevronDown, BookOpen } from 'lucide-react';
+import { ArrowLeft, Send, Lock, Unlock, Clock, Activity, ChevronDown, BookOpen, Paperclip, Upload, File, CheckCircle, XCircle, Loader2 } from 'lucide-react';
 import {
   useTicket,
   useTicketComments,
@@ -9,7 +9,11 @@ import {
   useUpdateTicket,
   useTicketTimeline,
   useSlaDetails,
+  useTicketAttachments,
+  usePrepareTicketUpload,
+  useCompleteTicketUpload,
 } from '@/hooks/useTickets';
+import { useTicketAttachmentSettings } from '@/hooks/useConfigurationApi';
 import { useWorkflowStates } from '@/hooks/useWorkflow';
 import { Button, Card, CardHeader, Badge, Loading, ErrorDisplay, TextArea, Select, Input } from '@/components/ui';
 import type { TicketPriority, UpdateTicketRequest } from '@/api';
@@ -37,7 +41,7 @@ const ACTIVITY_LABELS: Record<string, string> = {
   CategoryChanged:   'Categoria alterada',
 };
 
-type Tab = 'comments' | 'timeline';
+type Tab = 'comments' | 'timeline' | 'attachments';
 
 export default function TicketDetail() {
   const { id } = useParams<{ id: string }>();
@@ -127,12 +131,21 @@ export default function TicketDetail() {
                 <Activity className="inline h-4 w-4 mr-1" />
                 Timeline
               </button>
+              <button
+                className={`px-4 py-3 text-sm font-medium transition-colors ${tab === 'attachments' ? 'border-b-2 border-primary text-white' : 'text-slate-400 hover:text-white'}`}
+                onClick={() => setTab('attachments')}
+              >
+                <Paperclip className="inline h-4 w-4 mr-1" />
+                Anexos
+              </button>
             </div>
             <div className="p-4">
               {tab === 'comments' ? (
                 <CommentsPanel ticketId={id!} />
-              ) : (
+              ) : tab === 'timeline' ? (
                 <TimelinePanel ticketId={id!} />
+              ) : (
+                <AttachmentsPanel ticketId={id!} />
               )}
             </div>
           </Card>
@@ -419,5 +432,226 @@ function EditTicketForm({ ticket, onDone }: { ticket: { id: string; title: strin
         </div>
       </div>
     </Card>
+  );
+}
+
+// ── Attachments Panel ────────────────────────────────────────────────────────
+
+type UploadStatus = 'idle' | 'preparing' | 'uploading' | 'confirming' | 'done' | 'error';
+
+interface FileEntry {
+  file: File;
+  status: UploadStatus;
+  error?: string;
+}
+
+function formatBytes(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1048576).toFixed(1)} MB`;
+}
+
+function AttachmentsPanel({ ticketId }: { ticketId: string }) {
+  const settings = useTicketAttachmentSettings();
+  const attachments = useTicketAttachments(ticketId);
+  const prepare = usePrepareTicketUpload();
+  const complete = useCompleteTicketUpload();
+  const [queue, setQueue] = useState<FileEntry[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const cfg = settings.data;
+  const isEnabled = cfg?.enabled !== false;
+
+  const accept = cfg?.allowedContentTypes?.join(',') ?? 'image/jpeg,image/png,image/webp,application/pdf';
+  const maxBytes = cfg?.maxFileSizeBytes ?? 10485760;
+
+  const handleFiles = (files: FileList | null) => {
+    if (!files || !isEnabled) return;
+    const entries: FileEntry[] = [];
+    for (const file of Array.from(files)) {
+      if (file.size > maxBytes) {
+        entries.push({ file, status: 'error', error: `Arquivo excede o limite de ${formatBytes(maxBytes)}` });
+        continue;
+      }
+      if (cfg?.allowedContentTypes && !cfg.allowedContentTypes.includes(file.type)) {
+        entries.push({ file, status: 'error', error: `Tipo não permitido: ${file.type}` });
+        continue;
+      }
+      entries.push({ file, status: 'idle' });
+    }
+    setQueue((q) => [...q, ...entries]);
+  };
+
+  const updateEntry = (idx: number, patch: Partial<FileEntry>) =>
+    setQueue((q) => q.map((e, i) => (i === idx ? { ...e, ...patch } : e)));
+
+  const uploadAll = async () => {
+    if (uploading) return;
+    const idleIndexes = queue.map((_e, i) => i).filter((i) => queue[i].status === 'idle');
+    if (idleIndexes.length === 0) return;
+    setUploading(true);
+
+    for (const idx of idleIndexes) {
+      const entry = queue[idx];
+      updateEntry(idx, { status: 'preparing', error: undefined });
+
+      let prepareRes: { attachmentId: string; objectKey: string; uploadUrl: string; httpMethod: string; expiresAtUtc: string };
+      try {
+        prepareRes = await prepare.mutateAsync({
+          ticketId,
+          data: {
+            fileName: entry.file.name,
+            contentType: entry.file.type,
+            sizeBytes: entry.file.size,
+          },
+        });
+      } catch (err) {
+        updateEntry(idx, { status: 'error', error: err instanceof Error ? err.message : 'Erro ao preparar upload' });
+        continue;
+      }
+
+      updateEntry(idx, { status: 'uploading' });
+      try {
+        const res = await fetch(prepareRes.uploadUrl, {
+          method: prepareRes.httpMethod,
+          headers: { 'Content-Type': entry.file.type },
+          body: entry.file,
+        });
+        if (!res.ok) throw new Error(`Upload falhou: ${res.status} ${res.statusText}`);
+      } catch (err) {
+        updateEntry(idx, { status: 'error', error: err instanceof Error ? err.message : 'Erro no upload' });
+        continue;
+      }
+
+      updateEntry(idx, { status: 'confirming' });
+      try {
+        await complete.mutateAsync({
+          ticketId,
+          data: {
+            attachmentId: prepareRes.attachmentId,
+            objectKey: prepareRes.objectKey,
+            fileName: entry.file.name,
+            contentType: entry.file.type,
+            sizeBytes: entry.file.size,
+            uploadedBy: 'Admin',
+          },
+        });
+        updateEntry(idx, { status: 'done' });
+      } catch (err) {
+        updateEntry(idx, { status: 'error', error: err instanceof Error ? err.message : 'Erro ao confirmar upload' });
+      }
+    }
+
+    setUploading(false);
+  };
+
+  const STATUS_ICON: Record<UploadStatus, React.ReactNode> = {
+    idle: <Upload className="h-4 w-4 text-slate-400" />,
+    preparing: <Loader2 className="h-4 w-4 animate-spin text-sky-400" />,
+    uploading: <Loader2 className="h-4 w-4 animate-spin text-sky-400" />,
+    confirming: <Loader2 className="h-4 w-4 animate-spin text-sky-400" />,
+    done: <CheckCircle className="h-4 w-4 text-success" />,
+    error: <XCircle className="h-4 w-4 text-danger" />,
+  };
+
+  const STATUS_LABEL: Record<UploadStatus, string> = {
+    idle: 'Aguardando',
+    preparing: 'Preparando…',
+    uploading: 'Enviando…',
+    confirming: 'Confirmando…',
+    done: 'Concluído',
+    error: 'Erro',
+  };
+
+  return (
+    <div className="space-y-4">
+      {!isEnabled && (
+        <div className="rounded-lg border border-warning/20 bg-warning/10 px-4 py-3 text-sm text-warning">
+          Upload de anexos está desabilitado nas configurações do servidor.
+        </div>
+      )}
+
+      {isEnabled && (
+        <>
+          <div
+            className="flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-white/10 py-8 text-center transition-colors hover:border-white/20 cursor-pointer"
+            onClick={() => fileRef.current?.click()}
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={(e) => { e.preventDefault(); handleFiles(e.dataTransfer.files); }}
+          >
+            <Paperclip className="h-6 w-6 text-slate-500" />
+            <p className="text-sm text-slate-400">
+              Arraste arquivos aqui ou{' '}
+              <span className="text-primary underline">clique para selecionar</span>
+            </p>
+            <p className="text-xs text-slate-500">
+              Máx. {formatBytes(maxBytes)} · {accept}
+            </p>
+          </div>
+          <input
+            ref={fileRef}
+            type="file"
+            multiple
+            accept={accept}
+            aria-label="Selecionar arquivos para anexar"
+            title="Selecionar arquivos para anexar"
+            className="hidden"
+            onChange={(e) => handleFiles(e.target.files)}
+          />
+
+          {queue.length > 0 && (
+            <div className="space-y-2">
+              {queue.map((entry, idx) => (
+                <div key={idx} className="flex items-center gap-3 rounded-lg border border-white/5 bg-white/[0.03] px-3 py-2">
+                  <File className="h-4 w-4 shrink-0 text-slate-400" />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm text-white">{entry.file.name}</p>
+                    <p className="text-xs text-slate-500">{formatBytes(entry.file.size)}</p>
+                    {entry.error && <p className="text-xs text-danger">{entry.error}</p>}
+                  </div>
+                  <span className={`text-xs ${entry.status === 'error' ? 'text-danger' : entry.status === 'done' ? 'text-success' : 'text-slate-400'}`}>
+                    {STATUS_LABEL[entry.status]}
+                  </span>
+                  {STATUS_ICON[entry.status]}
+                </div>
+              ))}
+              <div className="flex justify-end gap-2">
+                <Button size="sm" variant="ghost" onClick={() => setQueue([])}>Limpar</Button>
+                <Button
+                  size="sm"
+                  onClick={uploadAll}
+                  loading={uploading}
+                  disabled={!queue.some((e) => e.status === 'idle')}
+                >
+                  <Upload className="h-4 w-4" /> Enviar todos
+                </Button>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Existing attachments list */}
+      <div className="space-y-2">
+        <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Arquivos anexados</p>
+        {attachments.isLoading && <Loading />}
+        {(attachments.data ?? []).length === 0 && !attachments.isLoading && (
+          <p className="py-4 text-center text-sm text-slate-500">Nenhum anexo ainda.</p>
+        )}
+        {(attachments.data ?? []).map((a) => (
+          <div key={a.id} className="flex items-center gap-3 rounded-lg border border-white/5 bg-white/[0.03] px-3 py-2">
+            <File className="h-4 w-4 shrink-0 text-slate-400" />
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm text-white">{a.fileName}</p>
+              <p className="text-xs text-slate-500">
+                {formatBytes(a.sizeBytes)} · {a.contentType} · {new Date(a.createdAt).toLocaleString('pt-BR')}
+              </p>
+            </div>
+            <Badge color="slate">{a.uploadedBy}</Badge>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }

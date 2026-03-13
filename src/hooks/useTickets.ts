@@ -6,6 +6,8 @@ import type {
   UpdateWorkflowStateRequest,
   AddCommentRequest,
   TicketsQuery,
+  PresignedUploadRequest,
+  CompleteUploadRequest,
 } from "@/api";
 
 const KEYS = {
@@ -15,6 +17,7 @@ const KEYS = {
   detail: (id: string) => [...KEYS.all, "detail", id] as const,
   comments: (id: string) => [...KEYS.all, "comments", id] as const,
   timeline: (id: string) => [...KEYS.all, "timeline", id] as const,
+  attachments: (id: string) => [...KEYS.all, "attachments", id] as const,
   slaStatus: (id: string) => [...KEYS.all, "sla-status", id] as const,
   slaDetails: (id: string) => [...KEYS.all, "sla-details", id] as const,
 };
@@ -114,5 +117,40 @@ export function useAddComment() {
       ticketsApi.addComment(id, data),
     onSuccess: (_d, vars) =>
       qc.invalidateQueries({ queryKey: KEYS.comments(vars.id) }),
+  });
+}
+
+export function useTicketAttachments(ticketId: string) {
+  return useQuery({
+    queryKey: KEYS.attachments(ticketId),
+    queryFn: () => ticketsApi.listAttachments(ticketId),
+    enabled: !!ticketId,
+  });
+}
+
+export function usePrepareTicketUpload() {
+  return useMutation({
+    mutationFn: ({
+      ticketId,
+      data,
+    }: {
+      ticketId: string;
+      data: PresignedUploadRequest;
+    }) => ticketsApi.prepareUpload(ticketId, data),
+  });
+}
+
+export function useCompleteTicketUpload() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      ticketId,
+      data,
+    }: {
+      ticketId: string;
+      data: CompleteUploadRequest;
+    }) => ticketsApi.completeUpload(ticketId, data),
+    onSuccess: (_result, vars) =>
+      qc.invalidateQueries({ queryKey: KEYS.attachments(vars.ticketId) }),
   });
 }
