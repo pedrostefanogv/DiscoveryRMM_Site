@@ -375,6 +375,13 @@ export interface DeployToken {
   createdAt: string;
 }
 
+export type DeployTokenDelivery = "token" | "installer";
+
+export interface DeployInstallerPayload {
+  fileName: string;
+  blob: Blob;
+}
+
 export interface Note {
   id: string;
   clientId: string | null;
@@ -708,6 +715,7 @@ export interface CreateDeployTokenRequest {
   description: string | null;
   expiresInHours: number | null;
   multiUse: boolean | null;
+  delivery: DeployTokenDelivery;
 }
 
 export interface CreateLogRequest {

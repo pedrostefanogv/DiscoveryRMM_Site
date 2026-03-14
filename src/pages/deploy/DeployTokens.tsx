@@ -4,7 +4,7 @@ import { Button, Card, CardHeader, Input, TextArea, Badge, Select } from '@/comp
 import { useCreateDeployToken } from '@/hooks/useDeployTokens';
 import { useClients } from '@/hooks/useClients';
 import { useSites } from '@/hooks/useSites';
-import type { CreateDeployTokenRequest } from '@/api';
+import type { CreateDeployTokenRequest, DeployTokenDelivery } from '@/api';
 import toast from 'react-hot-toast';
 
 interface DeployTokenFormState {
@@ -13,6 +13,18 @@ interface DeployTokenFormState {
   description: string | null;
   expiresInHours: number | null;
   multiUse: boolean | null;
+  delivery: DeployTokenDelivery;
+}
+
+function triggerInstallerDownload(fileName: string, blob: Blob) {
+  const objectUrl = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = objectUrl;
+  anchor.download = fileName || 'meduza-installer.exe';
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(objectUrl);
 }
 
 export default function DeployTokens() {
@@ -23,6 +35,7 @@ export default function DeployTokens() {
     description: null,
     expiresInHours: 24,
     multiUse: false,
+    delivery: 'token',
   });
 
   const clients = useClients(false);
@@ -30,7 +43,7 @@ export default function DeployTokens() {
   const activeClients = (clients.data ?? []).filter(c => c.isActive);
   const activeSites = (sites.data ?? []).filter(s => s.isActive);
 
-  const generatedToken = createToken.data;
+  const generatedToken = createToken.data && 'token' in createToken.data ? createToken.data : null;
 
   const handleCreate = () => {
     if (!form.clientId) {
@@ -49,10 +62,19 @@ export default function DeployTokens() {
       description: form.description?.trim() ? form.description.trim() : null,
       expiresInHours: form.expiresInHours,
       multiUse: form.multiUse,
+      delivery: form.delivery,
     };
 
     createToken.mutate(payload, {
-      onSuccess: () => toast.success('Token de deploy criado com sucesso'),
+      onSuccess: (result) => {
+        if ('token' in result) {
+          toast.success('Token de deploy criado com sucesso');
+          return;
+        }
+
+        triggerInstallerDownload(result.fileName, result.blob);
+        toast.success('Instalador gerado com sucesso. Download iniciado.');
+      },
       onError: () => toast.error('Erro ao criar token de deploy'),
     });
   };
@@ -119,6 +141,16 @@ export default function DeployTokens() {
             rows={3}
           />
 
+          <Select
+            label="Entrega"
+            value={form.delivery}
+            onChange={e => setForm(f => ({ ...f, delivery: e.target.value as DeployTokenDelivery }))}
+            options={[
+              { value: 'token', label: 'Somente token' },
+              { value: 'installer', label: 'Token + download do instalador (.exe)' },
+            ]}
+          />
+
           <Input
             label="Expira em (horas)"
             type="number"
@@ -142,7 +174,7 @@ export default function DeployTokens() {
 
           <div className="flex justify-end">
             <Button onClick={handleCreate} loading={createToken.isPending}>
-              <KeyRound className="h-4 w-4" /> Gerar Token
+              <KeyRound className="h-4 w-4" /> {form.delivery === 'installer' ? 'Gerar e baixar instalador' : 'Gerar Token'}
             </Button>
           </div>
         </div>

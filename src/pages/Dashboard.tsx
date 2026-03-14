@@ -12,13 +12,13 @@ import {
 } from 'lucide-react';
 import type { ComponentType } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQueries, useQuery } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { useClients } from '@/hooks/useClients';
 import { useTickets } from '@/hooks/useTickets';
 import { useLogs } from '@/hooks/useLogs';
 import { StatCard, Card, CardHeader, Badge } from '@/components/ui';
 import { Loading, ErrorDisplay } from '@/components/ui';
-import { agentsApi, LogLevel, getRealtimeStats, type TicketPriority } from '@/api';
+import { LogLevel, getRealtimeStats, type TicketPriority } from '@/api';
 import { useSoftwareInventorySnapshot } from '@/hooks/useSoftwareInventory';
 
 function formatBytes(value?: number | null): string {
@@ -63,14 +63,6 @@ export default function Dashboard() {
     refetchIntervalInBackground: true,
   });
 
-  const agentQueries = useQueries({
-    queries: (clients.data ?? []).map((client) => ({
-      queryKey: ['agents', 'byClient', client.id, 'dashboard-total'],
-      queryFn: () => agentsApi.listByClient(client.id),
-      enabled: clients.isSuccess,
-    })),
-  });
-
   if (clients.isLoading) return <Loading />;
   if (clients.isError) {
     return (
@@ -106,9 +98,7 @@ export default function Dashboard() {
     ? (business.clients?.total ?? 0)
     : (clients.data?.length ?? 0);
 
-  const totalAgents = business?.available
-    ? (business.agents?.total ?? 0)
-    : agentQueries.reduce((acc, query) => acc + (query.data?.length ?? 0), 0);
+  const totalAgents = business?.agents?.total ?? 0;
 
   const openTicketsCount = business?.available
     ? (business.tickets?.open ?? 0)

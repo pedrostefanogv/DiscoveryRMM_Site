@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Ticket as TicketIcon, Filter, AlertTriangle } from 'lucide-react';
 import { useTickets, useCreateTicket } from '@/hooks/useTickets';
@@ -29,12 +29,18 @@ const PRIORITY_OPTIONS = [
 ];
 
 export default function TicketList() {
+  const PAGE_SIZE = 50;
   const [modalOpen, setModalOpen]       = useState(false);
   const [filterClient, setFilterClient] = useState('');
   const [filterState, setFilterState]   = useState('');
   const [filterPriority, setFilterPriority] = useState('');
+  const [page, setPage] = useState(1);
 
-  const tickets = useTickets({ workflowStateId: filterState || undefined, limit: 200 });
+  const tickets = useTickets({
+    workflowStateId: filterState || undefined,
+    limit: PAGE_SIZE,
+    offset: (page - 1) * PAGE_SIZE,
+  });
   const states  = useWorkflowStates();
   const clients = useClients();
   const navigate = useNavigate();
@@ -48,6 +54,13 @@ export default function TicketList() {
     if (filterPriority) data = data.filter(t => t.priority === filterPriority);
     return data;
   }, [tickets.data, filterClient, filterPriority]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [filterClient, filterPriority, filterState]);
+
+  const hasNextPage = (tickets.data?.length ?? 0) === PAGE_SIZE;
+  const hasPrevPage = page > 1;
 
   const clientOpts = [
     { value: '', label: 'Todos os clientes' },
@@ -131,7 +144,9 @@ export default function TicketList() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-white">Chamados</h1>
-          <p className="text-sm text-slate-400">{filtered.length} chamados</p>
+          <p className="text-sm text-slate-400">
+            {filtered.length} chamados na página {page}
+          </p>
         </div>
         <Button onClick={() => setModalOpen(true)}>
           <Plus className="h-4 w-4" /> Novo Chamado
@@ -178,12 +193,36 @@ export default function TicketList() {
             <p className="text-slate-400">Nenhum chamado encontrado</p>
           </div>
         ) : (
-          <DataTable
-            columns={columns}
-            data={filtered}
-            keyExtractor={t => t.id}
-            onRowClick={t => navigate(`/tickets/${t.id}`)}
-          />
+          <>
+            <DataTable
+              columns={columns}
+              data={filtered}
+              keyExtractor={t => t.id}
+              onRowClick={t => navigate(`/tickets/${t.id}`)}
+            />
+            <div className="flex items-center justify-between border-t border-white/5 px-4 py-3 text-xs text-slate-400">
+              <span>Mostrando até {PAGE_SIZE} registros por página</span>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setPage(p => Math.max(1, p - 1))}
+                  disabled={!hasPrevPage || tickets.isFetching}
+                >
+                  Anterior
+                </Button>
+                <span className="min-w-16 text-center">Página {page}</span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setPage(p => p + 1)}
+                  disabled={!hasNextPage || tickets.isFetching}
+                >
+                  Próxima
+                </Button>
+              </div>
+            </div>
+          </>
         )}
       </Card>
 

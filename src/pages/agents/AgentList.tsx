@@ -10,6 +10,7 @@ import { getAgentLastSeen, isAgentOnlineNow } from '@/utils/agentStatus';
 import { useNowTick } from '@/hooks/useNowTick';
 
 type AgentWithClient = Agent & { clientName: string; clientId: string };
+const MAX_CLIENTS_IN_OVERVIEW = 5;
 
 function formatRelative(dateStr: string | null, now: number): string {
   if (!dateStr) return '—';
@@ -39,9 +40,17 @@ export default function AgentList() {
   const [filterStatus, setFilterStatus] = useState<'all' | 'online' | 'offline'>('all');
   const [viewMode, setViewMode] = useState<'card' | 'list'>('card');
 
-  // Carrega agentes de todos os clientes em paralelo
+  const queriedClients = useMemo(() => {
+    const allClients = clients.data ?? [];
+    if (filterClient) {
+      return allClients.filter(c => c.id === filterClient);
+    }
+    return allClients.slice(0, MAX_CLIENTS_IN_OVERVIEW);
+  }, [clients.data, filterClient]);
+
+  // Evita fan-out total: carrega apenas cliente filtrado ou um subconjunto.
   const agentQueries = useQueries({
-    queries: (clients.data ?? []).map(c => ({
+    queries: queriedClients.map(c => ({
       queryKey: ['agents', 'byClient', c.id] as const,
       queryFn: () => agentsApi.listByClient(c.id),
       refetchInterval: 15_000,
@@ -50,13 +59,13 @@ export default function AgentList() {
   });
 
   const allAgents = useMemo<AgentWithClient[]>(() => {
-    if (!clients.data) return [];
-    return clients.data.flatMap((c, i) => {
+    if (!queriedClients.length) return [];
+    return queriedClients.flatMap((c, i) => {
       const q = agentQueries[i];
       if (!q?.data) return [];
       return q.data.map(a => ({ ...a, clientName: c.name, clientId: c.id }));
     });
-  }, [clients.data, agentQueries]);
+  }, [queriedClients, agentQueries]);
 
   const isLoadingAgents = clients.isLoading || agentQueries.some(q => q.isLoading && !q.data);
   const totalOnline = allAgents.filter(a => isAgentOnlineNow(a, now)).length;
@@ -171,6 +180,12 @@ export default function AgentList() {
           </div>
         </div>
       </div>
+
+      {!filterClient && (clients.data?.length ?? 0) > MAX_CLIENTS_IN_OVERVIEW && (
+        <div className="rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning">
+          Exibindo agentes dos primeiros {MAX_CLIENTS_IN_OVERVIEW} clientes para reduzir carga. Selecione um cliente no filtro para visualizar dados específicos.
+        </div>
+      )}
 
       {/* Conteúdo */}
       {isLoadingAgents ? (

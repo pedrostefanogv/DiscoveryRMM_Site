@@ -95,7 +95,10 @@ export default function ClientDetail() {
   const totalTickets = tickets.data?.length ?? 0;
   const recentTickets = (tickets.data ?? []).slice(0, 6);
   const recentLogs = (logs.data ?? []).slice(0, 8);
-  const generatedDeployToken = createDeployToken.data;
+  const generatedDeployToken =
+    createDeployToken.data && 'token' in createDeployToken.data
+      ? createDeployToken.data
+      : null;
 
   const resetDeployModal = () => {
     setDeployModalOpen(false);
@@ -119,6 +122,7 @@ export default function ClientDetail() {
         description: deployDescription.trim() ? deployDescription.trim() : null,
         expiresInHours: deployExpiresInHours,
         multiUse: deployMultiUse,
+        delivery: 'token',
       },
       {
         onSuccess: () => {

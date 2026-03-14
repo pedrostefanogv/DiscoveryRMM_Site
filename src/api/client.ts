@@ -10,6 +10,52 @@ class ApiError extends Error {
   }
 }
 
+const STATUS_FALLBACK_MESSAGE: Record<number, string> = {
+  400: "Solicitacao invalida",
+  401: "Nao autenticado",
+  403: "Acesso negado",
+  404: "Recurso nao encontrado",
+  408: "Tempo de resposta excedido",
+  429: "Muitas requisicoes",
+  500: "Erro interno do servidor",
+  502: "Gateway indisponivel",
+  503: "Servico indisponivel",
+  504: "Tempo de resposta do gateway excedido",
+};
+
+async function parseErrorMessage(res: Response): Promise<string> {
+  const contentType = res.headers.get("content-type")?.toLowerCase() ?? "";
+
+  if (contentType.includes("application/json")) {
+    try {
+      const payload = (await res.json()) as
+        | { message?: unknown; error?: unknown; detail?: unknown }
+        | string;
+      if (typeof payload === "string" && payload.trim()) return payload;
+      if (payload && typeof payload === "object") {
+        const message =
+          payload.message ?? payload.error ?? payload.detail ?? res.statusText;
+        if (typeof message === "string" && message.trim()) return message;
+      }
+    } catch {
+      // Fallback para parse de texto/status abaixo.
+    }
+  }
+
+  try {
+    const text = await res.text();
+    if (text.trim() && !text.trim().startsWith("<")) return text;
+  } catch {
+    // Fallback para status message abaixo.
+  }
+
+  return (
+    STATUS_FALLBACK_MESSAGE[res.status] ??
+    res.statusText ??
+    "Erro de requisicao"
+  );
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const url = `${API_BASE_URL}${path}`;
   const res = await fetch(url, {
@@ -21,8 +67,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   });
 
   if (!res.ok) {
-    const text = await res.text().catch(() => res.statusText);
-    throw new ApiError(res.status, text);
+    const message = await parseErrorMessage(res);
+    throw new ApiError(res.status, message);
   }
 
   if (res.status === 204 || res.headers.get("content-length") === "0") {

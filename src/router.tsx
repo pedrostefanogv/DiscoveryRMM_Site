@@ -99,7 +99,7 @@ export const router = createBrowserRouter([
       },
       {
         path: 'software-inventory',
-        element: <LazyPage><SoftwareHome /></LazyPage>,
+        element: <Navigate to="/software/inventory" replace />,
       },
       {
         path: 'settings',
