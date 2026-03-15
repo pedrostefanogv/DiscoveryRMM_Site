@@ -11,12 +11,17 @@ export { workflowProfilesApi } from "./workflowProfiles";
 export { deployTokensApi } from "./deploy-tokens";
 export { softwareInventoryApi } from "./software-inventory";
 export { appStoreApi } from "./app-store";
+export { automationApi } from "./automation";
 export type {
   CatalogParams,
   ApprovalsParams,
   AuditParams,
   EffectiveParams,
 } from "./app-store";
+export type {
+  ListAutomationScriptsParams,
+  ListAutomationTasksParams,
+} from "./automation";
 export { notesApi } from "./notes";
 export { knowledgeApi } from "./knowledge";
 export { configurationApi } from "./configuration";

@@ -16,6 +16,7 @@ import {
   ChevronUp,
   Shield,
   FileBarChart,
+  Wrench,
 } from 'lucide-react';
 import { useTheme } from '@/theme/ThemeContext';
 
@@ -31,8 +32,16 @@ const mainLinks = [
 
 const softwareLinks = [
   { to: '/software/inventory', label: 'Inventário Detalhado' },
-  { to: '/software/automation', label: 'Automação' },
+  { to: '/automation', label: 'Automação' },
   { to: '/software/store', label: 'Store' },
+];
+
+const automationLinks = [
+  { to: '/automation', label: 'Visão Geral' },
+  { to: '/automation/scripts', label: 'Scripts' },
+  { to: '/automation/tasks', label: 'Tarefas' },
+  { to: '/automation/operations', label: 'Operações' },
+  { to: '/automation/audit', label: 'Auditoria' },
 ];
 
 const reportsLinks = [
@@ -60,9 +69,11 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const location = useLocation();
   const navigate = useNavigate();
   const softwareIsActive = location.pathname.startsWith('/software') || location.pathname === '/software-inventory';
+  const automationIsActive = location.pathname.startsWith('/automation');
   const reportsIsActive = location.pathname.startsWith('/reports');
   const settingsIsActive = location.pathname.startsWith('/settings');
   const [softwareOpen, setSoftwareOpen] = useState(softwareIsActive);
+  const [automationOpen, setAutomationOpen] = useState(automationIsActive);
   const [reportsOpen, setReportsOpen] = useState(reportsIsActive);
   const [settingsOpen, setSettingsOpen] = useState(settingsIsActive);
 
@@ -141,6 +152,54 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
               <NavLink
                 key={to}
                 to={to}
+                className={({ isActive }) =>
+                  `block rounded-md px-2 py-1.5 text-sm transition-colors ${
+                    isActive
+                      ? 'bg-white/10 text-white'
+                      : 'text-slate-400 hover:bg-white/5 hover:text-white'
+                  }`
+                }
+              >
+                {label}
+              </NavLink>
+            ))}
+          </div>
+        )}
+
+        <button
+          type="button"
+          onClick={() => {
+            if (collapsed) {
+              navigate('/automation');
+              return;
+            }
+            setAutomationOpen(prev => !prev);
+          }}
+          className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+            automationIsActive
+              ? 'bg-white/10 text-white'
+              : 'text-slate-400 hover:bg-white/5 hover:text-white'
+          }`}
+          aria-label="Abrir submenu de automação"
+        >
+          <Wrench className="h-5 w-5 shrink-0" />
+          {!collapsed && (
+            <>
+              <span className="truncate">Automação</span>
+              <span className="ml-auto">
+                {automationOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              </span>
+            </>
+          )}
+        </button>
+
+        {!collapsed && automationOpen && (
+          <div className="ml-8 space-y-1 border-l border-white/10 pl-3">
+            {automationLinks.map(({ to, label }) => (
+              <NavLink
+                key={to}
+                to={to}
+                end={to === '/automation'}
                 className={({ isActive }) =>
                   `block rounded-md px-2 py-1.5 text-sm transition-colors ${
                     isActive

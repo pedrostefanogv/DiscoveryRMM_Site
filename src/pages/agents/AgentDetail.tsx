@@ -215,6 +215,13 @@ export default function AgentDetail() {
             {isOnlineNow ? 'Online' : 'Offline'}
           </span>
         </Badge>
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() => navigate(`/automation/operations?agentId=${a.id}`)}
+        >
+          Automacao
+        </Button>
       </div>
 
       {/* Stat Cards */}

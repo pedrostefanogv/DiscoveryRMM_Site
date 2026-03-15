@@ -86,3 +86,4 @@ export * from "./useReportLayoutSchema";
 export * from "./useReportPreview";
 export * from "./useReportAutocomplete";
 export * from "./useKnowledge";
+export * from "./useAutomation";

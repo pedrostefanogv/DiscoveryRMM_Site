@@ -12,8 +12,8 @@ const cards = [
   },
   {
     title: 'Automacao',
-    description: 'Fluxos de instalacao e remediacao. Estrutura pronta para API futura.',
-    to: '/software/automation',
+    description: 'Scripts, tarefas e operacoes de automacao centralizadas.',
+    to: '/automation',
     cta: 'Abrir Automacao',
     icon: Wrench,
   },

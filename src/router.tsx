@@ -16,8 +16,12 @@ const LogViewer = lazy(() => import('@/pages/logs/LogViewer'));
 const DeployTokens = lazy(() => import('@/pages/deploy/DeployTokens'));
 const SoftwareHome = lazy(() => import('@/pages/software/SoftwareHome'));
 const SoftwareInventory = lazy(() => import('@/pages/software/SoftwareInventory'));
-const SoftwareAutomation = lazy(() => import('@/pages/software/SoftwareAutomation'));
 const SoftwareStore = lazy(() => import('@/pages/software/SoftwareStore'));
+const AutomationHome = lazy(() => import('@/pages/automation/AutomationHome'));
+const AutomationScriptsPage = lazy(() => import('@/pages/automation/AutomationScriptsPage'));
+const AutomationTasksPage = lazy(() => import('@/pages/automation/AutomationTasksPage'));
+const AutomationOperationsPage = lazy(() => import('@/pages/automation/AutomationOperationsPage'));
+const AutomationAuditPage = lazy(() => import('@/pages/automation/AutomationAuditPage'));
 const BrandingSettings = lazy(() => import('@/pages/settings/BrandingSettings'));
 const WorkflowSettings = lazy(() => import('@/pages/settings/WorkflowSettings'));
 const DepartmentSettings = lazy(() => import('@/pages/settings/DepartmentSettings'));
@@ -91,7 +95,7 @@ export const router = createBrowserRouter([
       },
       {
         path: 'software/automation',
-        element: <LazyPage><SoftwareAutomation /></LazyPage>,
+        element: <Navigate to="/automation" replace />,
       },
       {
         path: 'software/store',
@@ -100,6 +104,26 @@ export const router = createBrowserRouter([
       {
         path: 'software-inventory',
         element: <Navigate to="/software/inventory" replace />,
+      },
+      {
+        path: 'automation',
+        element: <LazyPage><AutomationHome /></LazyPage>,
+      },
+      {
+        path: 'automation/scripts',
+        element: <LazyPage><AutomationScriptsPage /></LazyPage>,
+      },
+      {
+        path: 'automation/tasks',
+        element: <LazyPage><AutomationTasksPage /></LazyPage>,
+      },
+      {
+        path: 'automation/operations',
+        element: <LazyPage><AutomationOperationsPage /></LazyPage>,
+      },
+      {
+        path: 'automation/audit',
+        element: <LazyPage><AutomationAuditPage /></LazyPage>,
       },
       {
         path: 'settings',

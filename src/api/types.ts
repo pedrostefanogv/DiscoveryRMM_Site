@@ -1566,3 +1566,232 @@ export interface AppDiffPage {
   nextCursor: string | null;
   hasMore: boolean;
 }
+
+// ── Automation ─────────────────────────────────────────────
+
+export enum AutomationTaskActionType {
+  InstallPackage = 0,
+  UpdatePackage = 1,
+  RunScript = 2,
+  CustomCommand = 3,
+  RemovePackage = 4,
+  UpdateOrInstallPackage = 5,
+}
+
+export enum AutomationScriptType {
+  PowerShell = 0,
+  Shell = 1,
+  Python = 2,
+  Batch = 3,
+  Custom = 4,
+}
+
+export enum AutomationExecutionSourceType {
+  RunNow = 0,
+  Scheduled = 1,
+  ForceSync = 2,
+  AgentManual = 3,
+}
+
+export enum AutomationExecutionStatus {
+  Dispatched = 0,
+  Acknowledged = 1,
+  Completed = 2,
+  Failed = 3,
+}
+
+export enum AutomationScriptChangeType {
+  Created = 0,
+  Updated = 1,
+  Deleted = 2,
+  Consumed = 3,
+  Activated = 4,
+  Deactivated = 5,
+}
+
+export enum AutomationTaskChangeType {
+  Created = 0,
+  Updated = 1,
+  Deleted = 2,
+  Activated = 3,
+  Deactivated = 4,
+  Synced = 5,
+}
+
+export interface AutomationScriptSummary {
+  id: string;
+  clientId: string | null;
+  name: string;
+  summary: string;
+  scriptType: AutomationScriptType | string | number;
+  version: string;
+  executionFrequency: string;
+  triggerModes: string[];
+  isActive: boolean;
+  lastUpdatedAt: string;
+  createdAt: string;
+}
+
+export interface AutomationScriptDetail extends AutomationScriptSummary {
+  content: string;
+  contentHashSha256: string;
+  parametersSchemaJson: string | null;
+  metadataJson: string | null;
+  updatedAt: string;
+}
+
+export interface AutomationScriptConsume extends AutomationScriptDetail {
+  scriptId: string;
+}
+
+export interface AutomationScriptPage {
+  items: AutomationScriptSummary[];
+  count: number;
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface CreateAutomationScriptRequest {
+  clientId?: string | null;
+  name: string;
+  summary: string;
+  scriptType: AutomationScriptType;
+  version?: string | null;
+  executionFrequency?: string | null;
+  triggerModes: string[];
+  content: string;
+  parametersSchemaJson?: string | null;
+  metadataJson?: string | null;
+  isActive?: boolean;
+}
+
+export interface UpdateAutomationScriptRequest extends CreateAutomationScriptRequest {
+  reason?: string | null;
+}
+
+export interface AutomationScriptAudit {
+  id: string;
+  scriptId: string;
+  changeType: AutomationScriptChangeType | string | number;
+  reason: string | null;
+  oldValueJson: string | null;
+  newValueJson: string | null;
+  changedBy: string | null;
+  ipAddress: string | null;
+  correlationId: string | null;
+  changedAt: string;
+}
+
+export interface AutomationTaskSummary {
+  id: string;
+  name: string;
+  description: string | null;
+  actionType: AutomationTaskActionType | string | number;
+  scopeType: AppApprovalScopeType | string | number;
+  scopeId: string | null;
+  isActive: boolean;
+  requiresApproval: boolean;
+  lastUpdatedAt: string;
+}
+
+export interface AutomationTaskDetail extends AutomationTaskSummary {
+  installationType: AppInstallationType | string | number | null;
+  packageId: string | null;
+  scriptId: string | null;
+  commandPayload: string | null;
+  includeTags: string[];
+  excludeTags: string[];
+  triggerImmediate: boolean;
+  triggerRecurring: boolean;
+  triggerOnUserLogin: boolean;
+  triggerOnAgentCheckIn: boolean;
+  scheduleCron: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AutomationTaskPage {
+  items: AutomationTaskSummary[];
+  count: number;
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface CreateAutomationTaskRequest {
+  name: string;
+  description?: string | null;
+  actionType: AutomationTaskActionType;
+  installationType?: AppInstallationType | null;
+  packageId?: string | null;
+  scriptId?: string | null;
+  commandPayload?: string | null;
+  scopeType: AppApprovalScopeType;
+  scopeId?: string | null;
+  includeTags?: string[];
+  excludeTags?: string[];
+  triggerImmediate?: boolean;
+  triggerRecurring?: boolean;
+  triggerOnUserLogin?: boolean;
+  triggerOnAgentCheckIn?: boolean;
+  scheduleCron?: string | null;
+  requiresApproval?: boolean;
+  isActive?: boolean;
+}
+
+export interface UpdateAutomationTaskRequest extends CreateAutomationTaskRequest {
+  reason?: string | null;
+}
+
+export interface AutomationTaskAudit {
+  id: string;
+  taskId: string;
+  changeType: AutomationTaskChangeType | string | number;
+  reason: string | null;
+  oldValueJson: string | null;
+  newValueJson: string | null;
+  changedBy: string | null;
+  ipAddress: string | null;
+  correlationId: string | null;
+  changedAt: string;
+}
+
+export interface AutomationRunNowTaskResponse {
+  command: AgentCommand;
+  taskId: string;
+  taskName?: string | null;
+}
+
+export interface AutomationRunNowScriptResponse {
+  command: AgentCommand;
+  scriptId: string;
+  version?: string | null;
+  contentHashSha256?: string | null;
+}
+
+export interface AutomationForceSyncRequest {
+  policies?: boolean;
+  inventory?: boolean;
+  software?: boolean;
+  appStore?: boolean;
+}
+
+export interface AutomationExecutionReport {
+  id: string;
+  commandId: string;
+  agentId: string;
+  taskId: string | null;
+  scriptId: string | null;
+  sourceType: AutomationExecutionSourceType | string | number;
+  status: AutomationExecutionStatus | string | number;
+  correlationId: string | null;
+  createdAt: string;
+  acknowledgedAt: string | null;
+  resultReceivedAt: string | null;
+  exitCode: number | null;
+  errorMessage: string | null;
+  requestMetadataJson: string | null;
+  ackMetadataJson: string | null;
+  resultMetadataJson: string | null;
+}

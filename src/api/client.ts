@@ -90,22 +90,35 @@ function qs(params: Record<string, unknown>): string {
 }
 
 export const api = {
-  get: <T>(path: string, params: Record<string, unknown> = {}) =>
-    request<T>(`${path}${qs(params)}`),
+  get: <T>(
+    path: string,
+    params: Record<string, unknown> = {},
+    init?: RequestInit,
+  ) => request<T>(`${path}${qs(params)}`, init),
 
-  post: <T>(path: string, body?: unknown) =>
+  post: <T>(path: string, body?: unknown, init?: RequestInit) =>
     request<T>(path, {
+      ...init,
       method: "POST",
       body: body ? JSON.stringify(body) : undefined,
     }),
 
-  put: <T>(path: string, body: unknown) =>
-    request<T>(path, { method: "PUT", body: JSON.stringify(body) }),
+  put: <T>(path: string, body: unknown, init?: RequestInit) =>
+    request<T>(path, {
+      ...init,
+      method: "PUT",
+      body: JSON.stringify(body),
+    }),
 
-  patch: <T>(path: string, body: unknown) =>
-    request<T>(path, { method: "PATCH", body: JSON.stringify(body) }),
+  patch: <T>(path: string, body: unknown, init?: RequestInit) =>
+    request<T>(path, {
+      ...init,
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
 
-  del: <T>(path: string) => request<T>(path, { method: "DELETE" }),
+  del: <T>(path: string, init?: RequestInit) =>
+    request<T>(path, { ...init, method: "DELETE" }),
 };
 
 export { ApiError };
