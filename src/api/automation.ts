@@ -14,6 +14,7 @@ import type {
   AutomationTaskPage,
   CreateAutomationScriptRequest,
   CreateAutomationTaskRequest,
+  TaskPreviewAgentsResponse,
   UpdateAutomationScriptRequest,
   UpdateAutomationTaskRequest,
 } from "./types";
@@ -121,6 +122,12 @@ export const automationApi = {
 
   getTaskAudit: (id: string, limit = 50) =>
     api.get<AutomationTaskAudit[]>(`${TASKS_BASE}/${id}/audit`, { limit }),
+
+  getTaskPreviewAgents: (id: string, limit = 50, offset = 0) =>
+    api.get<TaskPreviewAgentsResponse>(`${TASKS_BASE}/${id}/preview-agents`, {
+      limit,
+      offset,
+    }),
 
   runTaskNow: (agentId: string, taskId: string, correlationId?: string) =>
     api.post<AutomationRunNowTaskResponse>(

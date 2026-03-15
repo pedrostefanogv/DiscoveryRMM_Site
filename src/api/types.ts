@@ -1757,6 +1757,28 @@ export interface AutomationTaskAudit {
   changedAt: string;
 }
 
+export interface TaskPreviewAgentItem {
+  agentId: string;
+  siteId: string | null;
+  hostname: string | null;
+  displayName: string | null;
+  status: string | null;
+  agentTags: string[];
+}
+
+export interface TaskPreviewAgentsResponse {
+  taskId: string;
+  taskName: string;
+  scopeType: AppApprovalScopeType | string | number;
+  includeTags: string[];
+  excludeTags: string[];
+  items: TaskPreviewAgentItem[];
+  count: number;
+  total: number;
+  limit: number;
+  offset: number;
+}
+
 export interface AutomationRunNowTaskResponse {
   command: AgentCommand;
   taskId: string;

@@ -23,6 +23,7 @@ import {
   type UpdateAutomationTaskRequest,
 } from "@/api";
 import {
+  useAutomationTaskPreviewAgents,
   useAutomationKnownTags,
   useAutomationScripts,
   useAutomationTask,
@@ -36,26 +37,27 @@ import { useClients } from "@/hooks/useClients";
 import { useSites } from "@/hooks/useSites";
 import { useAgentsBySite } from "@/hooks/useAgents";
 import { useAppStoreCatalog } from "@/hooks/useAppStore";
-import { Search, LayoutGrid, List } from "lucide-react";
+import { Search, LayoutGrid, List, Eye } from "lucide-react";
 
 function buildCorrelationId(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
 }
 
 function HighlightText({ text, highlight }: { text: string; highlight: string }) {
-  if (!highlight.trim()) return <>{text}</>;
-  const regex = new RegExp(`(${highlight.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`, "gi");
-  const parts = text.split(regex);
+  const safeText = String(text ?? "");
+  if (!highlight.trim() || !safeText) return <>{safeText}</>;
+  const escaped = highlight.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const parts = safeText.split(new RegExp(`(${escaped})`, "gi"));
   return (
     <>
       {parts.map((part, i) =>
-        regex.test(part) ? (
+        i % 2 !== 0 ? (
           <mark key={i} className="bg-yellow-400/30 text-yellow-200 rounded-sm px-0.5">
             {part}
           </mark>
-        ) : (
+        ) : part ? (
           <span key={i}>{part}</span>
-        ),
+        ) : null,
       )}
     </>
   );
@@ -130,6 +132,8 @@ export default function AutomationTasksPage() {
   const [editing, setEditing] = useState<AutomationTaskSummary | null>(null);
   const [editingId, setEditingId] = useState("");
   const [auditTaskId, setAuditTaskId] = useState<string | null>(null);
+  const [detailTaskId, setDetailTaskId] = useState<string | null>(null);
+  const [previewAgentsEnabled, setPreviewAgentsEnabled] = useState(false);
   const [form, setForm] = useState<TaskFormState>(defaultForm);
   const [scopeClientId, setScopeClientId] = useState("");
   const [scopeSiteId, setScopeSiteId] = useState("");
@@ -174,6 +178,8 @@ export default function AutomationTasksPage() {
   const deleteMutation = useDeleteAutomationTask();
   const auditQuery = useAutomationTaskAudit(auditTaskId ?? "", 50, !!auditTaskId);
   const taskDetail = useAutomationTask(editingId);
+  const detailTask = useAutomationTask(detailTaskId ?? "");
+  const previewAgents = useAutomationTaskPreviewAgents(detailTaskId ?? "", 100, 0, previewAgentsEnabled && !!detailTaskId);
 
   useEffect(() => {
     if (!editingId || !taskDetail.data) return;
@@ -302,6 +308,17 @@ export default function AutomationTasksPage() {
             <Button
               size="sm"
               variant="ghost"
+              title="Ver detalhes"
+              onClick={() => {
+                setDetailTaskId(item.id);
+                setPreviewAgentsEnabled(false);
+              }}
+            >
+              <Eye className="h-4 w-4" />
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
               onClick={() => {
                 setEditing(item);
                 setEditingId(item.id);
@@ -356,17 +373,17 @@ export default function AutomationTasksPage() {
 
   const scopeClientOptions = [
     { value: "", label: "Selecione" },
-    ...(clients.data ?? []).map((item) => ({ value: item.id, label: item.name })),
+    ...(Array.isArray(clients.data) ? clients.data : []).map((item) => ({ value: item.id, label: item.name })),
   ];
 
   const scopeSiteOptions = [
     { value: "", label: "Selecione" },
-    ...(sites.data ?? []).map((item) => ({ value: item.id, label: item.name })),
+    ...(Array.isArray(sites.data) ? sites.data : []).map((item) => ({ value: item.id, label: item.name })),
   ];
 
   const scopeAgentOptions = [
     { value: "", label: "Selecione" },
-    ...(agents.data ?? []).map((item) => ({
+    ...(Array.isArray(agents.data) ? agents.data : []).map((item) => ({
       value: item.id,
       label: item.displayName ?? item.hostname,
     })),
@@ -1142,6 +1159,199 @@ export default function AutomationTasksPage() {
           </div>
 
         </div>
+      </Modal>
+
+      {/* Modal de detalhes da tarefa */}
+      <Modal
+        open={!!detailTaskId}
+        onClose={() => { setDetailTaskId(null); setPreviewAgentsEnabled(false); }}
+        title="Detalhes da tarefa"
+        maxWidth="max-w-4xl"
+      >
+        {detailTask.isLoading && <Loading message="Carregando detalhes..." />}
+        {detailTask.isError && <ErrorDisplay onRetry={() => detailTask.refetch()} />}
+        {detailTask.data && !detailTask.isLoading && (() => {
+          const d = detailTask.data;
+          return (
+            <div className="space-y-4">
+              {/* Cabeçalho */}
+              <div className="flex items-start gap-3">
+                <div className="flex-1 space-y-1">
+                  <h3 className="text-lg font-semibold text-white">{d.name}</h3>
+                  {d.description && <p className="text-sm text-slate-400">{d.description}</p>}
+                </div>
+                <div className="flex gap-2 shrink-0">
+                  <Badge color={d.isActive ? "success" : "slate"}>{d.isActive ? "Ativa" : "Inativa"}</Badge>
+                  <Badge color={d.requiresApproval ? "warning" : "slate"}>{d.requiresApproval ? "Requer aprovação" : "Auto"}</Badge>
+                </div>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {/* Ação */}
+                <div className="rounded-lg bg-white/5 border border-white/10 p-3">
+                  <p className="text-xs text-slate-500 mb-1">Ação</p>
+                  <Badge color="primary">{actionLabel(d.actionType)}</Badge>
+                  {d.installationType !== null && d.installationType !== undefined && (
+                    <p className="text-xs text-slate-400 mt-1">{d.installationType === 0 ? "Winget" : d.installationType === 1 ? "Chocolatey" : "Custom"}</p>
+                  )}
+                  {d.packageId && (
+                    <p className="font-mono text-xs text-slate-300 mt-1 truncate">{d.packageId}</p>
+                  )}
+                </div>
+
+                {/* Escopo */}
+                <div className="rounded-lg bg-white/5 border border-white/10 p-3">
+                  <p className="text-xs text-slate-500 mb-1">Escopo</p>
+                  <p className="text-sm text-white">{scopeLabel(d.scopeType)}</p>
+                  {d.scopeId && <p className="font-mono text-xs text-slate-400 truncate">{d.scopeId}</p>}
+                </div>
+
+                {/* Triggers */}
+                <div className="rounded-lg bg-white/5 border border-white/10 p-3">
+                  <p className="text-xs text-slate-500 mb-1">Triggers</p>
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {d.triggerImmediate && <Badge color="accent">Imediato</Badge>}
+                    {d.triggerRecurring && <Badge color="accent">Recorrente</Badge>}
+                    {d.triggerOnUserLogin && <Badge color="accent">Login</Badge>}
+                    {d.triggerOnAgentCheckIn && <Badge color="accent">Check-in</Badge>}
+                  </div>
+                  {d.scheduleCron && <p className="font-mono text-xs text-slate-400 mt-1">{d.scheduleCron}</p>}
+                </div>
+              </div>
+
+              {/* Tags */}
+              {(d.includeTags?.length > 0 || d.excludeTags?.length > 0) && (
+                <div className="rounded-lg bg-white/5 border border-white/10 p-3">
+                  <p className="text-xs text-slate-500 mb-2">Tags de filtragem</p>
+                  {d.includeTags?.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mb-1">
+                      <span className="text-xs text-slate-500">Include:</span>
+                      {d.includeTags.map((t) => <Badge key={t} color="success">{t}</Badge>)}
+                    </div>
+                  )}
+                  {d.excludeTags?.length > 0 && (
+                    <div className="flex flex-wrap gap-1">
+                      <span className="text-xs text-slate-500">Exclude:</span>
+                      {d.excludeTags.map((t) => <Badge key={t} color="danger">{t}</Badge>)}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Datas */}
+              <div className="grid grid-cols-2 gap-3 text-xs text-slate-400">
+                <p>Criado: {new Date(d.createdAt).toLocaleString("pt-BR")}</p>
+                <p>Atualizado: {new Date(d.updatedAt).toLocaleString("pt-BR")}</p>
+              </div>
+
+              {/* Preview de agents */}
+              <div className="rounded-lg border border-white/10 p-3">
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <p className="text-sm font-medium text-white">Preview de agentes</p>
+                    <p className="text-xs text-slate-500">Agentes que receberão esta tarefa com base no escopo e tags</p>
+                  </div>
+                  {!previewAgentsEnabled && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => setPreviewAgentsEnabled(true)}
+                    >
+                      Carregar preview
+                    </Button>
+                  )}
+                </div>
+
+                {previewAgentsEnabled && (
+                  <>
+                    {previewAgents.isLoading && <Loading message="Calculando agentes..." />}
+                    {previewAgents.isError && <ErrorDisplay onRetry={() => previewAgents.refetch()} />}
+                    {previewAgents.data && !previewAgents.isLoading && (
+                      <>
+                        <p className="text-xs text-slate-400 mb-2">
+                          {previewAgents.data.count} agente(s) correspondem ao escopo
+                          {previewAgents.data.total > previewAgents.data.count && ` (de ${previewAgents.data.total} no total)`}
+                        </p>
+                        {previewAgents.data.items.length === 0 ? (
+                          <p className="text-sm text-slate-500 py-2 text-center">Nenhum agente encontrado para este escopo/tags.</p>
+                        ) : (
+                          <div className="max-h-[40vh] overflow-y-auto space-y-2">
+                            {previewAgents.data.items.map((agent) => (
+                              <div key={agent.agentId} className="flex items-center gap-3 rounded-lg bg-white/5 px-3 py-2">
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-sm font-medium text-white truncate">
+                                    {agent.displayName || agent.hostname || agent.agentId}
+                                  </p>
+                                  {agent.hostname && agent.displayName && (
+                                    <p className="text-xs text-slate-500 font-mono truncate">{agent.hostname}</p>
+                                  )}
+                                </div>
+                                <Badge color={
+                                  agent.status?.toLowerCase() === "online" ? "success" :
+                                  agent.status?.toLowerCase() === "offline" ? "slate" : "warning"
+                                }>
+                                  {agent.status || "?"}
+                                </Badge>
+                                {agent.agentTags?.length > 0 && (
+                                  <div className="flex gap-1 flex-wrap max-w-[140px] justify-end">
+                                    {agent.agentTags.slice(0, 3).map((t) => (
+                                      <span key={t} className="text-xs bg-slate-700 text-slate-300 px-1.5 py-0.5 rounded">{t}</span>
+                                    ))}
+                                    {agent.agentTags.length > 3 && (
+                                      <span className="text-xs text-slate-500">+{agent.agentTags.length - 3}</span>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </>
+                )}
+              </div>
+
+              {/* Ações */}
+              <div className="flex justify-end gap-2 pt-2">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => {
+                    setDetailTaskId(null);
+                    setPreviewAgentsEnabled(false);
+                    const item = list.data?.items.find((i) => i.id === detailTaskId);
+                    if (item) {
+                      setEditing(item);
+                      setEditingId(item.id);
+                      setForm((f) => ({
+                        ...f,
+                        name: item.name,
+                        description: item.description || "",
+                        actionType: String(item.actionType),
+                        scopeType: String(item.scopeType),
+                        scopeId: item.scopeId || "",
+                        requiresApproval: item.requiresApproval,
+                        isActive: item.isActive,
+                      }));
+                      setFormOpen(true);
+                    }
+                  }}
+                >
+                  Editar
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => { setDetailTaskId(null); setPreviewAgentsEnabled(false); }}
+                >
+                  Fechar
+                </Button>
+              </div>
+            </div>
+          );
+        })()}
       </Modal>
 
       <Modal

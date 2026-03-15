@@ -4,6 +4,8 @@ import { agentLabelsApi } from "@/modules/agent-labels/api";
 import type {
   AppApprovalScopeType,
   AutomationForceSyncRequest,
+  AutomationScriptAudit,
+  AutomationTaskAudit,
   CreateAutomationScriptRequest,
   CreateAutomationTaskRequest,
   UpdateAutomationScriptRequest,
@@ -70,7 +72,19 @@ export function useAutomationScriptAudit(
 ) {
   return useQuery({
     queryKey: KEYS.scripts.audit(id, limit),
-    queryFn: () => automationApi.getScriptAudit(id, limit),
+    queryFn: async (): Promise<AutomationScriptAudit[]> => {
+      const raw = await automationApi.getScriptAudit(id, limit);
+      if (Array.isArray(raw)) return raw as AutomationScriptAudit[];
+      const obj = raw as unknown as {
+        items?: AutomationScriptAudit[];
+        data?: AutomationScriptAudit[];
+      };
+      return Array.isArray(obj?.items)
+        ? obj.items
+        : Array.isArray(obj?.data)
+          ? obj.data
+          : [];
+    },
     enabled: !!id && enabled,
   });
 }
@@ -151,7 +165,20 @@ export function useAutomationTask(id: string) {
 export function useAutomationTaskAudit(id: string, limit = 50, enabled = true) {
   return useQuery({
     queryKey: KEYS.tasks.audit(id, limit),
-    queryFn: () => automationApi.getTaskAudit(id, limit),
+    queryFn: async (): Promise<AutomationTaskAudit[]> => {
+      const raw = await automationApi.getTaskAudit(id, limit);
+      // API may return a paginated object { items: [...] } or a direct array
+      if (Array.isArray(raw)) return raw as AutomationTaskAudit[];
+      const obj = raw as unknown as {
+        items?: AutomationTaskAudit[];
+        data?: AutomationTaskAudit[];
+      };
+      return Array.isArray(obj?.items)
+        ? obj.items
+        : Array.isArray(obj?.data)
+          ? obj.data
+          : [];
+    },
     enabled: !!id && enabled,
   });
 }
@@ -295,5 +322,19 @@ export function useAutomationKnownTags() {
       return Array.from(tags).sort((a, b) => a.localeCompare(b, "pt-BR"));
     },
     staleTime: 60_000,
+  });
+}
+
+export function useAutomationTaskPreviewAgents(
+  taskId: string,
+  limit = 50,
+  offset = 0,
+  enabled = false,
+) {
+  return useQuery({
+    queryKey: ["automationTaskPreviewAgents", taskId, limit, offset],
+    queryFn: () => automationApi.getTaskPreviewAgents(taskId, limit, offset),
+    enabled: enabled && !!taskId,
+    staleTime: 30_000,
   });
 }
