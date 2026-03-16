@@ -80,6 +80,8 @@ export default function ProfilePage() {
     confirmPassword: "",
   });
 
+  const security = securityQuery.data;
+
   useEffect(() => {
     if (!profileQuery.data) return;
 
@@ -230,6 +232,19 @@ export default function ProfilePage() {
     }
   };
 
+  useEffect(() => {
+    if (!security) return;
+
+    if (security.roleMfaRequirement === "Fido2") {
+      setRegisterMethod("Fido2");
+      setTotpSetup(null);
+    }
+
+    if (security.roleMfaRequirement === "Totp") {
+      setRegisterMethod("Totp");
+    }
+  }, [security]);
+
   if (profileQuery.isLoading || securityQuery.isLoading) {
     return <Loading message="Carregando dados do perfil..." />;
   }
@@ -247,7 +262,6 @@ export default function ProfilePage() {
   }
 
   const profile = profileQuery.data;
-  const security = securityQuery.data;
   const roleRequirement = security?.roleMfaRequirement ?? "None";
   const methodFixedByRole = roleRequirement === "Fido2" || roleRequirement === "Totp";
   const activeRegisterMethod = methodFixedByRole ? roleRequirement : registerMethod;
@@ -255,19 +269,6 @@ export default function ProfilePage() {
     session.expiresAt && session.stage === "authenticated"
       ? formatCountdown(session.expiresAt - now)
       : null;
-
-  useEffect(() => {
-    if (!security) return;
-
-    if (security.roleMfaRequirement === "Fido2") {
-      setRegisterMethod("Fido2");
-      setTotpSetup(null);
-    }
-
-    if (security.roleMfaRequirement === "Totp") {
-      setRegisterMethod("Totp");
-    }
-  }, [security]);
 
   if (!profile || !security) {
     return (

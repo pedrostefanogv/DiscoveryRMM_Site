@@ -428,6 +428,7 @@ export interface ServerConfiguration {
   lockedFieldsJson: string;
   brandingSettingsJson: string;
   aiIntegrationSettingsJson: string;
+  meshCentralGroupPolicyProfile: string;
   createdAt: string;
   updatedAt: string;
   createdBy?: string | null;
@@ -445,6 +446,7 @@ export interface ClientConfiguration {
   supportEnabled?: boolean | null;
   appStorePolicy?: AppStorePolicyType | null;
   aiIntegrationSettingsJson?: string | null;
+  meshCentralGroupPolicyProfile?: string | null;
   inventoryIntervalHours?: number | null;
   autoUpdateSettingsJson?: string | null;
   tokenExpirationDays?: number | null;
@@ -469,6 +471,7 @@ export interface SiteConfiguration {
   supportEnabled?: boolean | null;
   appStorePolicy?: AppStorePolicyType | null;
   aiIntegrationSettingsJson?: string | null;
+  meshCentralGroupPolicyProfile?: string | null;
   inventoryIntervalHours?: number | null;
   autoUpdateSettingsJson?: string | null;
   timezone?: string | null;
@@ -499,6 +502,7 @@ export interface ResolvedConfiguration {
   agentOfflineThresholdSeconds: number;
   autoUpdate: Record<string, unknown>;
   aiIntegration: Record<string, unknown>;
+  meshCentralGroupPolicyProfile?: string | null;
   inheritance?: Record<string, number>;
   blockedFields?: string[];
   resolvedAt: string;

@@ -17,6 +17,7 @@ import {
 import {
   type AssignGroupRoleRequest,
   type CreateUserGroupRequest,
+  type ScopeLevel,
   type UpdateUserGroupRequest,
   type UserGroupDto,
 } from "@/api";
@@ -331,7 +332,12 @@ function GroupAssignmentsPanel({
             <Select
               options={SCOPE_OPTIONS}
               value={roleAssignment.scopeLevel}
-              onChange={(e) => setRoleAssignment((prev) => ({ ...prev, scopeLevel: e.target.value }))}
+              onChange={(e) =>
+                setRoleAssignment((prev) => ({
+                  ...prev,
+                  scopeLevel: e.target.value as ScopeLevel,
+                }))
+              }
             />
             <Input
               placeholder="ScopeId (opcional)"

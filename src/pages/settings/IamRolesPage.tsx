@@ -28,6 +28,7 @@ import {
   useIamPermissionsCatalog,
   useIamRolePermissions,
   useIamRoles,
+  useMeshRightsProfiles,
   useRemoveIamRolePermission,
   useUpdateIamRole,
 } from "@/hooks";
@@ -95,6 +96,73 @@ const MFA_REQUIREMENT_OPTIONS: Array<{ value: MfaRequirement; label: string }> =
   { value: "Fido2", label: "FIDO2" },
 ];
 
+const MESH_RIGHT_BITS: Array<{ bit: number; label: string }> = [
+  { bit: 1, label: "Edit Group" },
+  { bit: 2, label: "Manage Users" },
+  { bit: 4, label: "Manage Devices" },
+  { bit: 8, label: "Remote Control" },
+  { bit: 16, label: "Agent Console" },
+  { bit: 32, label: "Server Files" },
+  { bit: 64, label: "Wake Device" },
+  { bit: 128, label: "Notes" },
+  { bit: 256, label: "View-only Desktop" },
+  { bit: 512, label: "No Terminal" },
+  { bit: 1024, label: "No Files" },
+  { bit: 2048, label: "No Intel AMT" },
+  { bit: 4096, label: "Limited Desktop Input" },
+  { bit: 8192, label: "Limited Events" },
+  { bit: 16384, label: "Chat/Notify" },
+  { bit: 32768, label: "Uninstall Agent" },
+  { bit: 65536, label: "No Remote Desktop" },
+  { bit: 131072, label: "Remote Commands" },
+  { bit: 262144, label: "Reset/Power Off" },
+];
+
+type MeshMode = "automatic" | "profile" | "mask";
+
+function inferMeshMode(meshRightsMask?: number | null, meshRightsProfile?: string | null): MeshMode {
+  if (meshRightsMask !== null && meshRightsMask !== undefined) {
+    return "mask";
+  }
+  if (meshRightsProfile && meshRightsProfile.trim()) {
+    return "profile";
+  }
+  return "automatic";
+}
+
+function parseMaskInput(value: string): number | null {
+  const trimmed = value.trim();
+  if (!trimmed) return 0;
+  if (!/^-?\d+$/.test(trimmed)) return null;
+  const parsed = Number.parseInt(trimmed, 10);
+  if (!Number.isInteger(parsed)) return null;
+  return parsed;
+}
+
+function bitsFromRights(rights: number): number[] {
+  if (!Number.isInteger(rights) || rights < 0) return [];
+  return MESH_RIGHT_BITS.filter(({ bit }) => (rights & bit) === bit).map(({ bit }) => bit);
+}
+
+function sumRights(bits: number[]): number {
+  return bits.reduce((acc, bit) => acc | bit, 0);
+}
+
+function summarizeRoleMeshRights(role: RoleDto) {
+  if (role.meshRightsMask !== null && role.meshRightsMask !== undefined) {
+    if (role.meshRightsMask === -1) {
+      return "Máscara: Full (-1)";
+    }
+    return `Máscara: ${role.meshRightsMask}`;
+  }
+
+  if (role.meshRightsProfile && role.meshRightsProfile.trim()) {
+    return `Perfil: ${role.meshRightsProfile}`;
+  }
+
+  return "Automático (fallback backend)";
+}
+
 function getMfaRequirementLabel(value: MfaRequirement) {
   return MFA_REQUIREMENT_OPTIONS.find((option) => option.value === value)?.label ?? value;
 }
@@ -102,6 +170,12 @@ function getMfaRequirementLabel(value: MfaRequirement) {
 export default function IamRolesPage() {
   const rolesQuery = useIamRoles();
   const permissionsCatalogQuery = useIamPermissionsCatalog();
+  const rightsProfilesQuery = useMeshRightsProfiles();
+
+  const profileOptions = (rightsProfilesQuery.data ?? []).map((p) => ({
+    value: p.name,
+    label: p.description ? `${p.name} — ${p.description}` : p.name,
+  }));
 
   const createRole = useCreateIamRole();
   const updateRole = useUpdateIamRole();
@@ -144,6 +218,13 @@ export default function IamRolesPage() {
           <Badge color={item.mfaRequirement === "Fido2" ? "accent" : item.mfaRequirement === "Totp" ? "warning" : "slate"}>
             {getMfaRequirementLabel(item.mfaRequirement)}
           </Badge>
+        ),
+      },
+      {
+        key: "meshRights",
+        header: "Permissão Mesh",
+        render: (item) => (
+          <span className="text-xs text-slate-300">{summarizeRoleMeshRights(item)}</span>
         ),
       },
       {
@@ -259,6 +340,7 @@ export default function IamRolesPage() {
         open={createOpen}
         onClose={() => setCreateOpen(false)}
         loading={createRole.isPending}
+        profileOptions={profileOptions}
         onSubmit={async (payload) => {
           await createRole.mutateAsync(payload);
         }}
@@ -269,6 +351,7 @@ export default function IamRolesPage() {
           role={editTarget}
           onClose={() => setEditTarget(null)}
           loading={updateRole.isPending}
+          profileOptions={profileOptions}
           onSubmit={async (payload) => {
             await updateRole.mutateAsync({ id: editTarget.id, payload });
           }}
@@ -451,30 +534,58 @@ function CreateRoleModal({
   onClose,
   onSubmit,
   loading,
+  profileOptions,
 }: {
   open: boolean;
   onClose: () => void;
   onSubmit: (payload: CreateRoleRequest) => Promise<void>;
   loading: boolean;
+  profileOptions: Array<{ value: string; label: string }>;
 }) {
   const [payload, setPayload] = useState<CreateRoleRequest>({
     name: "",
     description: "",
     mfaRequirement: "None",
+    meshRightsMask: null,
+    meshRightsProfile: null,
   });
+  const [meshMode, setMeshMode] = useState<MeshMode>("automatic");
+  const [meshProfile, setMeshProfile] = useState("operator");
+  const [maskInput, setMaskInput] = useState("0");
+  const [maskBits, setMaskBits] = useState<number[]>([]);
+
+  const parsedMask = parseMaskInput(maskInput);
   const valid = payload.name.trim().length >= 2;
+  const meshValid = meshMode !== "mask" || parsedMask !== null;
 
   const submit = async () => {
-    if (!valid) return;
+    if (!valid || !meshValid) return;
+
+    const normalizedProfile = meshProfile.trim();
+    const meshRightsMask = meshMode === "mask" ? parsedMask : null;
+    const meshRightsProfile =
+      meshMode === "profile" && normalizedProfile ? normalizedProfile : null;
 
     try {
       await onSubmit({
         name: payload.name.trim(),
         description: payload.description?.trim() || null,
         mfaRequirement: payload.mfaRequirement,
+        meshRightsMask,
+        meshRightsProfile,
       });
       toast.success("Role criada com sucesso.");
-      setPayload({ name: "", description: "", mfaRequirement: "None" });
+      setPayload({
+        name: "",
+        description: "",
+        mfaRequirement: "None",
+        meshRightsMask: null,
+        meshRightsProfile: null,
+      });
+      setMeshMode("automatic");
+      setMeshProfile("operator");
+      setMaskInput("0");
+      setMaskBits([]);
       onClose();
     } catch (error) {
       toast.error(getErrorMessage(error, "Não foi possível criar a role."));
@@ -501,9 +612,72 @@ function CreateRoleModal({
           }
         />
 
+        <Select
+          label="Modo de permissão Mesh"
+          options={[
+            { value: "automatic", label: "Automático (fallback backend)" },
+            { value: "profile", label: "Perfil" },
+            { value: "mask", label: "Máscara customizada" },
+          ]}
+          value={meshMode}
+          onChange={(e) => {
+            const nextMode = e.target.value as MeshMode;
+            setMeshMode(nextMode);
+            if (nextMode === "automatic") {
+              setMaskInput("0");
+              setMaskBits([]);
+            }
+          }}
+        />
+
+        {meshMode === "profile" && (
+          <Select
+            label="Perfil Mesh"
+            options={profileOptions.length > 0 ? profileOptions : [{ value: "", label: "Nenhum perfil disponível" }]}
+            value={meshProfile}
+            onChange={(e) => setMeshProfile(e.target.value)}
+          />
+        )}
+
+        {meshMode === "mask" && (
+          <MeshMaskEditor
+            maskInput={maskInput}
+            selectedBits={maskBits}
+            onMaskInputChange={(next) => {
+              setMaskInput(next);
+              const parsed = parseMaskInput(next);
+              if (parsed === null || parsed < 0) {
+                setMaskBits([]);
+                return;
+              }
+              setMaskBits(bitsFromRights(parsed));
+            }}
+            onToggleBit={(bit, checked) => {
+              const next = checked
+                ? Array.from(new Set([...maskBits, bit]))
+                : maskBits.filter((item) => item !== bit);
+              setMaskBits(next);
+              setMaskInput(String(sumRights(next)));
+            }}
+            onToggleFull={(checked) => {
+              if (checked) {
+                setMaskInput("-1");
+                setMaskBits([]);
+                return;
+              }
+              setMaskInput("0");
+              setMaskBits([]);
+            }}
+          />
+        )}
+
+        {meshMode === "mask" && !meshValid && (
+          <p className="text-xs text-warning">Use um inteiro válido para a máscara Mesh (ex.: 61176 ou -1).</p>
+        )}
+
         <div className="flex justify-end gap-3 pt-2">
           <Button variant="ghost" onClick={onClose}>Cancelar</Button>
-          <Button onClick={() => void submit()} loading={loading} disabled={!valid}>
+          <Button onClick={() => void submit()} loading={loading} disabled={!valid || !meshValid}>
             <ShieldCheck className="h-4 w-4" /> Criar role
           </Button>
         </div>
@@ -517,24 +691,47 @@ function EditRoleModal({
   onClose,
   onSubmit,
   loading,
+  profileOptions,
 }: {
   role: RoleDto;
   onClose: () => void;
   onSubmit: (payload: UpdateRoleRequest) => Promise<void>;
   loading: boolean;
+  profileOptions: Array<{ value: string; label: string }>;
 }) {
+  const initialMeshMode = inferMeshMode(role.meshRightsMask, role.meshRightsProfile);
+  const initialMaskInput =
+    role.meshRightsMask !== null && role.meshRightsMask !== undefined
+      ? String(role.meshRightsMask)
+      : "0";
+
   const [payload, setPayload] = useState<UpdateRoleRequest>({
     name: role.name,
     description: role.description,
     mfaRequirement: role.mfaRequirement,
+    meshRightsMask: role.meshRightsMask ?? null,
+    meshRightsProfile: role.meshRightsProfile ?? null,
     isActive: role.isActive,
   });
+  const [meshMode, setMeshMode] = useState<MeshMode>(initialMeshMode);
+  const [meshProfile, setMeshProfile] = useState(role.meshRightsProfile ?? "operator");
+  const [maskInput, setMaskInput] = useState(initialMaskInput);
+  const [maskBits, setMaskBits] = useState(
+    bitsFromRights(role.meshRightsMask ?? 0),
+  );
 
   const isSystemRole = role.isSystem;
   const valid = payload.name.trim().length >= 2;
+  const parsedMask = parseMaskInput(maskInput);
+  const meshValid = meshMode !== "mask" || parsedMask !== null;
 
   const submit = async () => {
-    if (!valid) return;
+    if (!valid || !meshValid) return;
+
+    const normalizedProfile = meshProfile.trim();
+    const meshRightsMask = meshMode === "mask" ? parsedMask : null;
+    const meshRightsProfile =
+      meshMode === "profile" && normalizedProfile ? normalizedProfile : null;
 
     try {
       await onSubmit({
@@ -542,6 +739,8 @@ function EditRoleModal({
         name: payload.name.trim(),
         description: payload.description?.trim() || null,
         mfaRequirement: payload.mfaRequirement,
+        meshRightsMask,
+        meshRightsProfile,
       });
       toast.success("Role atualizada com sucesso.");
       onClose();
@@ -586,6 +785,72 @@ function EditRoleModal({
           }
         />
 
+        <Select
+          label="Modo de permissão Mesh"
+          options={[
+            { value: "automatic", label: "Automático (fallback backend)" },
+            { value: "profile", label: "Perfil" },
+            { value: "mask", label: "Máscara customizada" },
+          ]}
+          value={meshMode}
+          disabled={isSystemRole}
+          onChange={(e) => {
+            const nextMode = e.target.value as MeshMode;
+            setMeshMode(nextMode);
+            if (nextMode === "automatic") {
+              setMaskInput("0");
+              setMaskBits([]);
+            }
+          }}
+        />
+
+        {meshMode === "profile" && (
+          <Select
+            label="Perfil Mesh"
+            options={profileOptions.length > 0 ? profileOptions : [{ value: "", label: "Nenhum perfil disponível" }]}
+            value={meshProfile}
+            disabled={isSystemRole}
+            onChange={(e) => setMeshProfile(e.target.value)}
+          />
+        )}
+
+        {meshMode === "mask" && (
+          <MeshMaskEditor
+            maskInput={maskInput}
+            selectedBits={maskBits}
+            disabled={isSystemRole}
+            onMaskInputChange={(next) => {
+              setMaskInput(next);
+              const parsed = parseMaskInput(next);
+              if (parsed === null || parsed < 0) {
+                setMaskBits([]);
+                return;
+              }
+              setMaskBits(bitsFromRights(parsed));
+            }}
+            onToggleBit={(bit, checked) => {
+              const next = checked
+                ? Array.from(new Set([...maskBits, bit]))
+                : maskBits.filter((item) => item !== bit);
+              setMaskBits(next);
+              setMaskInput(String(sumRights(next)));
+            }}
+            onToggleFull={(checked) => {
+              if (checked) {
+                setMaskInput("-1");
+                setMaskBits([]);
+                return;
+              }
+              setMaskInput("0");
+              setMaskBits([]);
+            }}
+          />
+        )}
+
+        {meshMode === "mask" && !meshValid && (
+          <p className="text-xs text-warning">Use um inteiro válido para a máscara Mesh (ex.: 61176 ou -1).</p>
+        )}
+
         <label className="flex items-center gap-2 text-sm text-slate-300">
           <input
             type="checkbox"
@@ -598,9 +863,73 @@ function EditRoleModal({
 
         <div className="flex justify-end gap-3 pt-2">
           <Button variant="ghost" onClick={onClose}>Cancelar</Button>
-          <Button onClick={() => void submit()} loading={loading} disabled={!valid}>Salvar</Button>
+          <Button onClick={() => void submit()} loading={loading} disabled={!valid || !meshValid}>Salvar</Button>
         </div>
       </div>
     </Modal>
+  );
+}
+
+function MeshMaskEditor({
+  maskInput,
+  selectedBits,
+  onMaskInputChange,
+  onToggleBit,
+  onToggleFull,
+  disabled,
+}: {
+  maskInput: string;
+  selectedBits: number[];
+  onMaskInputChange: (value: string) => void;
+  onToggleBit: (bit: number, checked: boolean) => void;
+  onToggleFull: (checked: boolean) => void;
+  disabled?: boolean;
+}) {
+  const fullSelected = maskInput.trim() === "-1";
+
+  return (
+    <div className="space-y-3 rounded-lg border border-white/10 bg-white/5 p-3">
+      <Input
+        label="MeshRightsMask (número)"
+        value={maskInput}
+        onChange={(event) => {
+          const next = event.target.value.trim();
+          if (!/^[-]?\d*$/.test(next)) return;
+          onMaskInputChange(next === "" || next === "-" ? "0" : next);
+        }}
+        disabled={disabled}
+      />
+
+      <label className="flex items-center gap-2 text-sm text-slate-300">
+        <input
+          type="checkbox"
+          checked={fullSelected}
+          onChange={(event) => onToggleFull(event.target.checked)}
+          className="rounded border-white/20 bg-white/5"
+          disabled={disabled}
+        />
+        Full (-1)
+      </label>
+
+      <div className="grid gap-2 sm:grid-cols-2">
+        {MESH_RIGHT_BITS.map((item) => (
+          <label
+            key={item.bit}
+            className="flex items-center gap-2 rounded border border-white/10 px-2 py-1 text-xs text-slate-300"
+          >
+            <input
+              type="checkbox"
+              checked={selectedBits.includes(item.bit)}
+              onChange={(event) => onToggleBit(item.bit, event.target.checked)}
+              className="rounded border-white/20 bg-white/5"
+              disabled={disabled || fullSelected}
+            />
+            <span>
+              {item.label} ({item.bit})
+            </span>
+          </label>
+        ))}
+      </div>
+    </div>
   );
 }

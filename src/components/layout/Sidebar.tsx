@@ -70,6 +70,8 @@ const identityLinks = [
   { to: '/identity/users', label: 'Usuários e Acesso' },
   { to: '/identity/groups', label: 'Grupos de Usuários' },
   { to: '/identity/roles', label: 'Roles e Permissões' },
+  { to: '/identity/mesh-profiles', label: 'Perfis Mesh' },
+  { to: '/identity/mesh-central', label: 'Config MeshCentral' },
 ];
 
 interface SidebarProps {

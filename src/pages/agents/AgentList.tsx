@@ -1,16 +1,76 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Monitor, Wifi, WifiOff, Activity, Building2, Clock, LayoutGrid, List } from 'lucide-react';
 import { useQueries } from '@tanstack/react-query';
+import { useAuth } from '@/auth/AuthContext';
 import { useClients } from '@/hooks/useClients';
-import { agentsApi } from '@/api';
-import { Badge, Loading, ErrorDisplay, Input, Select, StatCard } from '@/components/ui';
+import { useMyProfile } from '@/hooks';
+import { ApiError, agentsApi, authApi } from '@/api';
+import { Badge, Loading, ErrorDisplay, Input, Select, StatCard, Modal } from '@/components/ui';
 import type { Agent } from '@/api';
 import { getAgentLastSeen, isAgentOnlineNow } from '@/utils/agentStatus';
 import { useNowTick } from '@/hooks/useNowTick';
 
 type AgentWithClient = Agent & { clientName: string; clientId: string };
+type ContextMenuState = { x: number; y: number; agent: AgentWithClient } | null;
 const MAX_CLIENTS_IN_OVERVIEW = 5;
+
+const MESH_USERNAME_CLAIMS = [
+  'mesh_username',
+  'meshUsername',
+  'mesh_user',
+  'meshUser',
+  'preferred_username',
+  'unique_name',
+  'name',
+  'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name',
+];
+
+function decodeBase64Url(value: string): string {
+  const padded = value.padEnd(Math.ceil(value.length / 4) * 4, '=');
+  const base64 = padded.replace(/-/g, '+').replace(/_/g, '/');
+
+  try {
+    return decodeURIComponent(
+      atob(base64)
+        .split('')
+        .map((char) => `%${char.charCodeAt(0).toString(16).padStart(2, '0')}`)
+        .join(''),
+    );
+  } catch {
+    return atob(base64);
+  }
+}
+
+function parseJwtPayload(token: string | null): Record<string, unknown> | null {
+  if (!token) return null;
+  const segments = token.split('.');
+  if (segments.length < 2) return null;
+
+  try {
+    return JSON.parse(decodeBase64Url(segments[1])) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+function resolveMeshUsername(
+  accessToken: string | null,
+  profileLogin: string | null,
+): string | null {
+  const payload = parseJwtPayload(accessToken);
+  if (payload) {
+    for (const claim of MESH_USERNAME_CLAIMS) {
+      const raw = payload[claim];
+      if (typeof raw === 'string' && raw.trim()) {
+        return raw.trim();
+      }
+    }
+  }
+
+  if (profileLogin?.trim()) return profileLogin.trim();
+  return null;
+}
 
 function formatRelative(dateStr: string | null, now: number): string {
   if (!dateStr) return '—';
@@ -33,12 +93,103 @@ function getOsIcon(os: string | null): string {
 export default function AgentList() {
   const navigate = useNavigate();
   const now = useNowTick(5_000);
+  const { session } = useAuth();
   const clients = useClients();
+  const myProfile = useMyProfile();
 
   const [search, setSearch] = useState('');
   const [filterClient, setFilterClient] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'online' | 'offline'>('all');
   const [viewMode, setViewMode] = useState<'card' | 'list'>('card');
+  const [contextMenu, setContextMenu] = useState<ContextMenuState>(null);
+  const [remoteOpen, setRemoteOpen] = useState(false);
+  const [remoteLoading, setRemoteLoading] = useState(false);
+  const [remoteError, setRemoteError] = useState<string | null>(null);
+  const [remoteUrl, setRemoteUrl] = useState<string | null>(null);
+  const [remoteAgent, setRemoteAgent] = useState<AgentWithClient | null>(null);
+  const contextMenuRef = useRef<HTMLDivElement | null>(null);
+
+  const meshUsername = useMemo(
+    () => resolveMeshUsername(session.accessToken, myProfile.data?.login ?? null),
+    [session.accessToken, myProfile.data?.login],
+  );
+
+  useEffect(() => {
+    if (!contextMenu) return;
+
+    const closeMenu = () => setContextMenu(null);
+    window.addEventListener('click', closeMenu);
+    window.addEventListener('scroll', closeMenu, true);
+    window.addEventListener('contextmenu', closeMenu);
+
+    return () => {
+      window.removeEventListener('click', closeMenu);
+      window.removeEventListener('scroll', closeMenu, true);
+      window.removeEventListener('contextmenu', closeMenu);
+    };
+  }, [contextMenu]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      setContextMenu(null);
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
+
+  useEffect(() => {
+    if (!contextMenu || !contextMenuRef.current) return;
+    const left = Math.max(8, Math.min(contextMenu.x, window.innerWidth - 220));
+    const top = Math.max(8, Math.min(contextMenu.y, window.innerHeight - 64));
+    contextMenuRef.current.style.left = `${left}px`;
+    contextMenuRef.current.style.top = `${top}px`;
+  }, [contextMenu]);
+
+  const closeRemoteModal = () => {
+    setRemoteOpen(false);
+    setRemoteLoading(false);
+    setRemoteError(null);
+    setRemoteUrl(null);
+    setRemoteAgent(null);
+  };
+
+  const openRemoteControl = async (agent: AgentWithClient) => {
+    setContextMenu(null);
+    setRemoteAgent(agent);
+    setRemoteOpen(true);
+    setRemoteLoading(true);
+    setRemoteError(null);
+    setRemoteUrl(null);
+
+    if (!meshUsername) {
+      setRemoteLoading(false);
+      setRemoteError('Nao foi possivel identificar o usuario MeshCentral para sua sessao.');
+      return;
+    }
+
+    try {
+      const response = await authApi.getMeshCentralEmbedUrl({
+        clientId: agent.clientId,
+        siteId: agent.siteId,
+        agentId: agent.id,
+        meshUsername,
+      });
+
+      setRemoteUrl(response.url);
+    } catch (error) {
+      if (error instanceof ApiError) {
+        setRemoteError(error.message);
+      } else if (error instanceof Error) {
+        setRemoteError(error.message);
+      } else {
+        setRemoteError('Falha ao iniciar o controle remoto.');
+      }
+    } finally {
+      setRemoteLoading(false);
+    }
+  };
 
   const queriedClients = useMemo(() => {
     const allClients = clients.data ?? [];
@@ -222,6 +373,11 @@ export default function AgentList() {
                   <button
                     key={a.id}
                     onClick={() => navigate(`/agents/${a.id}`)}
+                    onContextMenu={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      setContextMenu({ x: event.clientX, y: event.clientY, agent: a });
+                    }}
                     className="group relative flex flex-col gap-4 rounded-xl border border-white/5 bg-surface p-5 text-left transition-all hover:border-primary/30 hover:bg-white/5 hover:shadow-lg"
                   >
                     <span className={`absolute right-4 top-4 h-2.5 w-2.5 rounded-full ${online ? 'bg-success shadow-[0_0_6px_theme(colors.success)]' : 'bg-slate-600'}`} />
@@ -291,6 +447,11 @@ export default function AgentList() {
                       <tr
                         key={a.id}
                         onClick={() => navigate(`/agents/${a.id}`)}
+                        onContextMenu={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          setContextMenu({ x: event.clientX, y: event.clientY, agent: a });
+                        }}
                         className="cursor-pointer transition-colors hover:bg-white/5"
                       >
                         <td className="px-4 py-3">
@@ -335,6 +496,52 @@ export default function AgentList() {
           )}
         </>
       )}
+
+      {contextMenu && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setContextMenu(null)} />
+          <div
+            ref={contextMenuRef}
+            className="fixed z-50 min-w-[200px] overflow-hidden rounded-lg border border-white/10 bg-slate-900 shadow-xl"
+          >
+            <button
+              className="w-full px-3 py-2 text-left text-sm text-slate-200 transition-colors hover:bg-white/10"
+              onClick={() => {
+                void openRemoteControl(contextMenu.agent);
+              }}
+            >
+              Controle remoto
+            </button>
+          </div>
+        </>
+      )}
+
+      <Modal
+        open={remoteOpen}
+        onClose={closeRemoteModal}
+        title={`Controle remoto${remoteAgent ? ` - ${remoteAgent.displayName ?? remoteAgent.hostname}` : ''}`}
+        maxWidth="max-w-6xl"
+      >
+        <div className="space-y-3">
+          {remoteLoading && <Loading message="Gerando sessao remota..." />}
+
+          {!remoteLoading && remoteError && (
+            <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+              {remoteError}
+            </div>
+          )}
+
+          {!remoteLoading && remoteUrl && (
+            <iframe
+              title="MeshCentral Remote"
+              src={remoteUrl}
+              className="h-[70vh] w-full rounded-lg border border-white/10 bg-white"
+              allow="clipboard-read; clipboard-write; fullscreen"
+              referrerPolicy="no-referrer"
+            />
+          )}
+        </div>
+      </Modal>
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import { Navigate, Outlet, useLocation } from "react-router-dom";
 import type { ReactNode } from "react";
 import { Loading } from "@/components/ui";
-import { useAuth } from "./AuthContext";
+import { useAuth } from "@/auth/AuthContext";
 import { useAuthorization } from "./authorization";
 
 export function RequireAuth() {

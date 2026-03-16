@@ -11,17 +11,24 @@ import {
   Input,
   Loading,
   Modal,
+  Select,
   type Column,
 } from "@/components/ui";
 import {
+  type MeshCentralBackfillReport,
   type CreateUserRequest,
   type UpdateUserRequest,
   type UserDto,
 } from "@/api";
 import {
   useChangeIamUserPassword,
-  useCreateIamUser,
+  useClients,
+  useCreateIamUserWithGroups,
   useDeleteIamUser,
+  useIamGroups,
+  useRunMeshCentralBackfill,
+  useRunMeshCentralBackfillDryRun,
+  useSites,
   useIamUsers,
   useUpdateIamUser,
 } from "@/hooks";
@@ -36,21 +43,37 @@ const EMPTY_CREATE_FORM: CreateUserRequest = {
   mfaRequired: true,
 };
 
+interface PostCreateDryRunOptions {
+  enabled: boolean;
+  clientId?: string | null;
+  siteId?: string | null;
+}
+
 function getErrorMessage(error: unknown, fallback: string) {
   return error instanceof ApiError ? error.message : fallback;
 }
 
 export default function IamUsersPage() {
   const usersQuery = useIamUsers();
-  const createUser = useCreateIamUser();
+  const groupsQuery = useIamGroups();
+  const clientsQuery = useClients();
+  const createUser = useCreateIamUserWithGroups();
   const updateUser = useUpdateIamUser();
   const deleteUser = useDeleteIamUser();
   const changePassword = useChangeIamUserPassword();
+  const backfillDryRun = useRunMeshCentralBackfillDryRun();
+  const backfillApply = useRunMeshCentralBackfill();
   const { hasAnyPermission } = useAuthorization();
 
   const [createOpen, setCreateOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<UserDto | null>(null);
   const [passwordTarget, setPasswordTarget] = useState<UserDto | null>(null);
+  const [backfillClientId, setBackfillClientId] = useState("");
+  const [backfillSiteId, setBackfillSiteId] = useState("");
+  const [lastBackfillReport, setLastBackfillReport] =
+    useState<MeshCentralBackfillReport | null>(null);
+
+  const backfillSitesQuery = useSites(backfillClientId);
 
   const canWrite = hasAnyPermission(["users.write", "users.*", "identity.*", "admin.*"]);
   const canDelete = hasAnyPermission(["users.delete", "users.*", "identity.*", "admin.*"]);
@@ -61,6 +84,32 @@ export default function IamUsersPage() {
     "identity.*",
     "admin.*",
   ]);
+
+  const canRunBackfill = canWrite;
+
+  const mapOptionalId = (value: string): string | null => {
+    const normalized = value.trim();
+    return normalized ? normalized : null;
+  };
+
+  const runDryRun = async (clientId: string, siteId: string) => {
+    const report = await backfillDryRun.mutateAsync({
+      clientId: mapOptionalId(clientId),
+      siteId: mapOptionalId(siteId),
+    });
+    setLastBackfillReport(report);
+    return report;
+  };
+
+  const runApply = async (clientId: string, siteId: string) => {
+    const report = await backfillApply.mutateAsync({
+      applyChanges: true,
+      clientId: mapOptionalId(clientId),
+      siteId: mapOptionalId(siteId),
+    });
+    setLastBackfillReport(report);
+    return report;
+  };
 
   const columns = useMemo<Column<UserDto>[]>(
     () => [
@@ -192,10 +241,50 @@ export default function IamUsersPage() {
       <CreateUserModal
         open={createOpen}
         onClose={() => setCreateOpen(false)}
-        onSubmit={async (payload) => {
-          await createUser.mutateAsync(payload);
+        groups={groupsQuery.data ?? []}
+        clients={clientsQuery.data ?? []}
+        onSubmit={async (payload, groupIds, postCreateDryRun) => {
+          const result = await createUser.mutateAsync({
+            user: payload,
+            groupIds,
+          });
+
+          const sync = result.meshCentralSync;
+          if (!sync.synced) {
+            toast.error(
+              sync.error
+                ? `Usuário criado, mas sync Mesh falhou: ${sync.error}`
+                : "Usuário criado, mas o sync Mesh não convergiu.",
+            );
+            return;
+          }
+
+          toast.success(
+            `Usuário criado com sync Mesh (${sync.siteBindingsApplied} bindings).`,
+          );
+
+          if (!postCreateDryRun.enabled) {
+            return;
+          }
+
+          try {
+            const dryRunReport = await runDryRun(
+              postCreateDryRun.clientId ?? "",
+              postCreateDryRun.siteId ?? "",
+            );
+            toast.success(
+              `Dry-run concluído: ${dryRunReport.syncedUsers}/${dryRunReport.totalUsers} usuários convergidos.`,
+            );
+          } catch (error) {
+            toast.error(
+              getErrorMessage(
+                error,
+                "Usuário criado, mas o dry-run de convergência falhou.",
+              ),
+            );
+          }
         }}
-        loading={createUser.isPending}
+        loading={createUser.isPending || backfillDryRun.isPending}
       />
 
       {editTarget && (
@@ -222,41 +311,278 @@ export default function IamUsersPage() {
           loading={changePassword.isPending}
         />
       )}
+
+      <BackfillMeshSection
+        clientId={backfillClientId}
+        siteId={backfillSiteId}
+        onChangeClientId={(value) => {
+          setBackfillClientId(value);
+          setBackfillSiteId("");
+        }}
+        onChangeSiteId={setBackfillSiteId}
+        clients={clientsQuery.data ?? []}
+        sites={backfillSitesQuery.data ?? []}
+        canRunBackfill={canRunBackfill}
+        report={lastBackfillReport}
+        dryRunLoading={backfillDryRun.isPending}
+        applyLoading={backfillApply.isPending}
+        onRunDryRun={async () => {
+          try {
+            const report = await runDryRun(backfillClientId, backfillSiteId);
+            toast.success(
+              `Dry-run concluído: ${report.syncedUsers}/${report.totalUsers} convergidos.`,
+            );
+          } catch (error) {
+            toast.error(
+              getErrorMessage(error, "Falha ao executar dry-run do backfill."),
+            );
+          }
+        }}
+        onRunApply={async () => {
+          const confirmed = window.confirm(
+            "Aplicar backfill fará reconciliação real no MeshCentral. Deseja continuar?",
+          );
+          if (!confirmed) return;
+          try {
+            const report = await runApply(backfillClientId, backfillSiteId);
+            toast.success(
+              `Backfill aplicado: ${report.syncedUsers}/${report.totalUsers} sincronizados.`,
+            );
+          } catch (error) {
+            toast.error(
+              getErrorMessage(error, "Falha ao aplicar backfill MeshCentral."),
+            );
+          }
+        }}
+      />
     </div>
+  );
+}
+
+function BackfillMeshSection({
+  clientId,
+  siteId,
+  onChangeClientId,
+  onChangeSiteId,
+  clients,
+  sites,
+  canRunBackfill,
+  report,
+  dryRunLoading,
+  applyLoading,
+  onRunDryRun,
+  onRunApply,
+}: {
+  clientId: string;
+  siteId: string;
+  onChangeClientId: (value: string) => void;
+  onChangeSiteId: (value: string) => void;
+  clients: Array<{ id: string; name: string }>;
+  sites: Array<{ id: string; name: string }>;
+  canRunBackfill: boolean;
+  report: MeshCentralBackfillReport | null;
+  dryRunLoading: boolean;
+  applyLoading: boolean;
+  onRunDryRun: () => Promise<void>;
+  onRunApply: () => Promise<void>;
+}) {
+  const clientOptions = [
+    { value: "", label: "Todos os clientes" },
+    ...clients.map((client) => ({ value: client.id, label: client.name })),
+  ];
+  const siteOptions = [
+    { value: "", label: "Todos os sites" },
+    ...sites.map((site) => ({ value: site.id, label: site.name })),
+  ];
+
+  return (
+    <Card>
+      <CardHeader
+        title="Backfill MeshCentral"
+        subtitle="Execute dry-run para validar convergência ou apply para reconciliar identidades."
+      />
+
+      <div className="space-y-4 px-5 pb-5">
+        <div className="grid gap-3 md:grid-cols-2">
+          <Select
+            label="Cliente (filtro)"
+            options={clientOptions}
+            value={clientId}
+            onChange={(e) => onChangeClientId(e.target.value)}
+          />
+          <Select
+            label="Site (filtro)"
+            options={siteOptions}
+            value={siteId}
+            onChange={(e) => onChangeSiteId(e.target.value)}
+            disabled={!clientId}
+          />
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3">
+          <Button
+            onClick={() => void onRunDryRun()}
+            loading={dryRunLoading}
+            disabled={!canRunBackfill || applyLoading}
+          >
+            Executar dry-run
+          </Button>
+          <Button
+            variant="danger"
+            onClick={() => void onRunApply()}
+            loading={applyLoading}
+            disabled={!canRunBackfill || dryRunLoading}
+          >
+            Aplicar backfill
+          </Button>
+          {!canRunBackfill && (
+            <p className="text-xs text-slate-500">
+              Sem permissão para executar reconciliação de identidade.
+            </p>
+          )}
+        </div>
+
+        {report && (
+          <div className="space-y-3 rounded-lg border border-white/10 bg-white/5 p-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge color="accent">Total: {report.totalUsers}</Badge>
+              <Badge color="success">Convergidos: {report.syncedUsers}</Badge>
+              <Badge color={report.failedUsers > 0 ? "danger" : "slate"}>
+                Falhas: {report.failedUsers}
+              </Badge>
+              <Badge color="slate">
+                Modo: {report.applyChanges ? "Apply" : "Dry-run"}
+              </Badge>
+            </div>
+            <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
+              {report.items.map((item) => (
+                <div
+                  key={item.userId}
+                  className="flex items-center justify-between rounded-md border border-white/10 bg-black/20 px-3 py-2"
+                >
+                  <div>
+                    <p className="text-sm font-medium text-white">
+                      {item.login} ({item.meshUsername})
+                    </p>
+                    <p className="text-xs text-slate-400">
+                      Bindings: {item.siteBindingsApplied} | Rights: {item.rightsUpdatesApplied}
+                    </p>
+                    {item.error && (
+                      <p className="text-xs text-danger">{item.error}</p>
+                    )}
+                  </div>
+                  <Badge color={item.success ? "success" : "danger"}>
+                    {item.success ? "OK" : "Falha"}
+                  </Badge>
+                </div>
+              ))}
+              {report.items.length === 0 && (
+                <p className="text-sm text-slate-500">
+                  Nenhum usuário retornado para os filtros selecionados.
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    </Card>
   );
 }
 
 function CreateUserModal({
   open,
   onClose,
+  groups,
+  clients,
   onSubmit,
   loading,
 }: {
   open: boolean;
   onClose: () => void;
-  onSubmit: (payload: CreateUserRequest) => Promise<void>;
+  groups: Array<{ id: string; name: string }>;
+  clients: Array<{ id: string; name: string }>;
+  onSubmit: (
+    payload: CreateUserRequest,
+    groupIds: string[],
+    postCreateDryRun: PostCreateDryRunOptions,
+  ) => Promise<void>;
   loading: boolean;
 }) {
   const [form, setForm] = useState<CreateUserRequest>(EMPTY_CREATE_FORM);
+  const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([]);
+  const [runPostCreateDryRun, setRunPostCreateDryRun] = useState(false);
+  const [dryRunClientId, setDryRunClientId] = useState("");
+  const [dryRunSiteId, setDryRunSiteId] = useState("");
 
-  const valid =
-    form.login.trim().length >= 3 &&
-    form.fullName.trim().length >= 3 &&
-    form.email.includes("@") &&
-    form.password.length >= 8;
+  const sitesQuery = useSites(dryRunClientId);
+
+  const loginValid = form.login.trim().length >= 3;
+  const fullNameValid = form.fullName.trim().length >= 3;
+  const emailValid = form.email.trim().includes("@");
+  const passwordValid = form.password.length >= 8;
+  const valid = loginValid && fullNameValid && emailValid && passwordValid;
 
   const submit = async () => {
-    if (!valid) return;
+    if (!valid) {
+      if (!loginValid) {
+        toast.error("Informe um login com pelo menos 3 caracteres.");
+        return;
+      }
+      if (!fullNameValid) {
+        toast.error("Informe um nome completo com pelo menos 3 caracteres.");
+        return;
+      }
+      if (!emailValid) {
+        toast.error("Informe um e-mail válido.");
+        return;
+      }
+      toast.error("A senha inicial deve ter pelo menos 8 caracteres.");
+      return;
+    }
 
     try {
-      await onSubmit(form);
-      toast.success("Usuário criado com sucesso.");
+      await onSubmit(form, selectedGroupIds, {
+        enabled: runPostCreateDryRun,
+        clientId: dryRunClientId || null,
+        siteId: dryRunSiteId || null,
+      });
       setForm(EMPTY_CREATE_FORM);
+      setSelectedGroupIds([]);
+      setRunPostCreateDryRun(false);
+      setDryRunClientId("");
+      setDryRunSiteId("");
       onClose();
     } catch (error) {
       toast.error(getErrorMessage(error, "Não foi possível criar o usuário."));
     }
   };
+
+  const toggleGroup = (groupId: string, checked: boolean) => {
+    setSelectedGroupIds((prev) => {
+      if (checked) return [...new Set([...prev, groupId])];
+      return prev.filter((id) => id !== groupId);
+    });
+  };
+
+  const dryRunClientOptions = [
+    { value: "", label: "Todos os clientes" },
+    ...clients.map((client) => ({ value: client.id, label: client.name })),
+  ];
+
+  const dryRunSiteOptions = [
+    {
+      value: "",
+      label: !dryRunClientId
+        ? "Todos os sites"
+        : sitesQuery.isLoading
+          ? "Carregando sites..."
+          : "Todos os sites",
+    },
+    ...(sitesQuery.data ?? []).map((site) => ({
+      value: site.id,
+      label: site.name,
+    })),
+  ];
 
   return (
     <Modal open={open} onClose={onClose} title="Novo usuário">
@@ -274,9 +600,63 @@ function CreateUserModal({
           />
           Exigir MFA no primeiro acesso
         </label>
+
+        <div className="space-y-2">
+          <p className="text-sm font-medium text-slate-300">Grupos iniciais (opcional)</p>
+          <div className="max-h-40 space-y-2 overflow-y-auto rounded-lg border border-white/10 bg-white/5 p-3">
+            {groups.map((group) => (
+              <label key={group.id} className="flex items-center gap-2 text-sm text-slate-300">
+                <input
+                  type="checkbox"
+                  checked={selectedGroupIds.includes(group.id)}
+                  onChange={(e) => toggleGroup(group.id, e.target.checked)}
+                  className="rounded border-white/20 bg-white/5"
+                />
+                {group.name}
+              </label>
+            ))}
+            {groups.length === 0 && (
+              <p className="text-xs text-slate-500">Nenhum grupo disponível.</p>
+            )}
+          </div>
+        </div>
+
+        <div className="space-y-2 rounded-lg border border-white/10 bg-white/5 p-3">
+          <label className="flex items-center gap-2 text-sm text-slate-300">
+            <input
+              type="checkbox"
+              checked={runPostCreateDryRun}
+              onChange={(e) => setRunPostCreateDryRun(e.target.checked)}
+              className="rounded border-white/20 bg-white/5"
+            />
+            Executar dry-run de convergência MeshCentral após criar
+          </label>
+
+          {runPostCreateDryRun && (
+            <div className="grid gap-2 sm:grid-cols-2">
+              <Select
+                label="Cliente (filtro)"
+                options={dryRunClientOptions}
+                value={dryRunClientId}
+                onChange={(e) => {
+                  setDryRunClientId(e.target.value);
+                  setDryRunSiteId("");
+                }}
+              />
+              <Select
+                label="Site (filtro)"
+                options={dryRunSiteOptions}
+                value={dryRunSiteId}
+                onChange={(e) => setDryRunSiteId(e.target.value)}
+                disabled={!dryRunClientId}
+              />
+            </div>
+          )}
+        </div>
+
         <div className="flex justify-end gap-3 pt-2">
           <Button variant="ghost" onClick={onClose}>Cancelar</Button>
-          <Button onClick={() => void submit()} loading={loading} disabled={!valid}>Criar usuário</Button>
+          <Button onClick={() => void submit()} loading={loading} disabled={loading}>Criar usuário</Button>
         </div>
       </div>
     </Modal>

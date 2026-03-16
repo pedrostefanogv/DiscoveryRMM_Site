@@ -18,6 +18,11 @@ const cards = [
     to: "/settings/site",
   },
   {
+    title: "Configuracao MeshCentral",
+    description: "Perfil de policy herdavel por escopo, status de drift e reconcile.",
+    to: "/identity/mesh-central",
+  },
+  {
     title: "Auditoria de Configuracoes",
     description: "Historico de alteracoes por entidade, campo e usuario.",
     to: "/settings/audit",

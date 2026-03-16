@@ -171,6 +171,14 @@ export const serverEditableFields: EditableField[] = [
       "Chave de API, modelo e parâmetros do provedor de IA. A chave é write-only e só deve ser enviada quando informada novamente.",
   },
   {
+    key: "meshCentralGroupPolicyProfile",
+    label: "Perfil de Política de Grupo MeshCentral",
+    kind: "string",
+    group: "advanced",
+    description:
+      "Perfil de policy aplicado ao MeshCentral em nível global. Pode ser herdado por cliente e site.",
+  },
+  {
     key: "lockedFieldsJson",
     label: "Campos Bloqueados para Herança",
     kind: "json",
@@ -283,6 +291,14 @@ export const clientEditableFields: EditableField[] = [
       "ApiKey e write-only: mantenha ausente no JSON e inclua somente quando quiser trocar a chave.",
   },
   {
+    key: "meshCentralGroupPolicyProfile",
+    label: "Perfil de Política de Grupo MeshCentral",
+    kind: "string",
+    group: "advanced",
+    description:
+      "Override do perfil de policy MeshCentral no escopo do cliente. Deixe herdado para usar o global.",
+  },
+  {
     key: "inventoryIntervalHours",
     label: "Intervalo de Inventário",
     kind: "number",
@@ -373,6 +389,14 @@ export const siteEditableFields: EditableField[] = [
     group: "advanced",
     description:
       "ApiKey e write-only: mantenha ausente no JSON e inclua somente quando quiser trocar a chave.",
+  },
+  {
+    key: "meshCentralGroupPolicyProfile",
+    label: "Perfil de Política de Grupo MeshCentral",
+    kind: "string",
+    group: "advanced",
+    description:
+      "Override do perfil de policy MeshCentral no escopo do site. Deixe herdado para usar cliente/global.",
   },
   {
     key: "inventoryIntervalHours",

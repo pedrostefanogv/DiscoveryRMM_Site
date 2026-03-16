@@ -36,10 +36,12 @@ const ClientConfigurationPage = lazy(() => import('@/pages/settings/ClientConfig
 const SiteConfigurationPage = lazy(() => import('@/pages/settings/SiteConfigurationPage'));
 const ConfigurationAudit = lazy(() => import('@/pages/settings/ConfigurationAudit'));
 const AgentLabelsSettings = lazy(() => import('@/pages/settings/AgentLabelsSettings'));
+const MeshCentralConfigurationPage = lazy(() => import('@/pages/settings/MeshCentralConfigurationPage'));
 const ProfilePage = lazy(() => import('@/pages/settings/ProfilePage'));
 const IamUsersPage = lazy(() => import('@/pages/settings/IamUsersPage'));
 const IamGroupsPage = lazy(() => import('@/pages/settings/IamGroupsPage'));
 const IamRolesPage = lazy(() => import('@/pages/settings/IamRolesPage'));
+const IamMeshProfilesPage = lazy(() => import('@/pages/settings/IamMeshProfilesPage'));
 const ReportTemplateList = lazy(() => import('@/pages/reports/ReportTemplateList'));
 const ReportTemplateForm = lazy(() => import('@/pages/reports/ReportTemplateForm'));
 const RunReport = lazy(() => import('@/pages/reports/RunReport'));
@@ -301,6 +303,10 @@ export const router = createBrowserRouter([
         ),
       },
       {
+        path: 'settings/mesh-central',
+        element: <Navigate to="/identity/mesh-central" replace />,
+      },
+      {
         path: 'profile',
         element: <Navigate to="/identity/authentication" replace />,
       },
@@ -318,6 +324,10 @@ export const router = createBrowserRouter([
       },
       {
         path: 'settings/iam/roles',
+        element: <Navigate to="/identity/roles" replace />,
+      },
+      {
+        path: 'settings/iam/mesh-permissions',
         element: <Navigate to="/identity/roles" replace />,
       },
       {
@@ -347,6 +357,26 @@ export const router = createBrowserRouter([
             <LazyPage><IamRolesPage /></LazyPage>
           </PermissionGate>
         ),
+      },
+      {
+        path: 'identity/mesh-central',
+        element: (
+          <PermissionGate anyOf={['identity.*', 'settings.*', 'settings.read', 'admin.*']}>
+            <LazyPage><MeshCentralConfigurationPage /></LazyPage>
+          </PermissionGate>
+        ),
+      },
+      {
+        path: 'identity/mesh-profiles',
+        element: (
+          <PermissionGate anyOf={['identity.*', 'users.*', 'users.read', 'admin.*']}>
+            <LazyPage><IamMeshProfilesPage /></LazyPage>
+          </PermissionGate>
+        ),
+      },
+      {
+        path: 'identity/mesh-permissions',
+        element: <Navigate to="/identity/roles" replace />,
       },
       {
         path: 'reports/templates',
