@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Cpu, MemoryStick, Ticket as TicketIcon, Tags,
-  Wifi, WifiOff, AppWindow, Search, Clock, HardDrive,
+  Wifi, WifiOff, AppWindow, Search, Clock, HardDrive, Printer,
 } from 'lucide-react';
 import { useAgent, useAgentHardware, useAgentSoftware, useAgentSoftwareSnapshot } from '@/hooks/useAgents';
 import { useTickets } from '@/hooks/useTickets';
@@ -35,6 +35,84 @@ function formatBytes(bytes: number | null): string {
 function formatDate(date: string | null): string {
   if (!date) return '—';
   return new Date(date).toLocaleString('pt-BR');
+}
+
+interface InventoryPrinter {
+  name: string;
+  driverName: string | null;
+  portName: string | null;
+  printerStatus: string | null;
+  isDefault: boolean;
+  isNetworkPrinter: boolean;
+  shared: boolean;
+  shareName: string | null;
+  location: string | null;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function asNullableString(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() ? value : null;
+}
+
+function asBoolean(value: unknown): boolean {
+  return value === true;
+}
+
+function normalizePrinterEntries(value: unknown): InventoryPrinter[] {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .filter(isRecord)
+    .map((printer) => ({
+      name: asNullableString(printer.name) ?? 'Impressora sem nome',
+      driverName: asNullableString(printer.driverName),
+      portName: asNullableString(printer.portName),
+      printerStatus: asNullableString(printer.printerStatus),
+      isDefault: asBoolean(printer.isDefault),
+      isNetworkPrinter: asBoolean(printer.isNetworkPrinter),
+      shared: asBoolean(printer.shared),
+      shareName: asNullableString(printer.shareName),
+      location: asNullableString(printer.location),
+    }));
+}
+
+function parseInventoryPrinters(
+  inventoryRaw: string | null,
+  topLevelPrinters?: unknown,
+  topLevelInventoryRaw?: unknown,
+): InventoryPrinter[] {
+  const fromTopLevel = normalizePrinterEntries(topLevelPrinters);
+  if (fromTopLevel.length > 0) return fromTopLevel;
+
+  const rawCandidate = topLevelInventoryRaw ?? inventoryRaw;
+  if (!rawCandidate) return [];
+
+  let parsed: unknown = rawCandidate;
+  if (typeof rawCandidate === 'string') {
+    try {
+      parsed = JSON.parse(rawCandidate);
+    } catch {
+      return [];
+    }
+  }
+
+  if (!isRecord(parsed)) return [];
+  const components = parsed.components;
+  if (!isRecord(components)) return [];
+
+  return normalizePrinterEntries(components.printers);
+}
+
+function printerStatusColor(status: string | null): 'success' | 'warning' | 'danger' | 'slate' {
+  if (!status) return 'slate';
+  const normalized = status.toLowerCase();
+  if (normalized.includes('ready') || normalized.includes('pronta')) return 'success';
+  if (normalized.includes('error') || normalized.includes('erro') || normalized.includes('offline')) return 'danger';
+  if (normalized.includes('warn') || normalized.includes('warning') || normalized.includes('paus')) return 'warning';
+  return 'slate';
 }
 
 export default function AgentDetail() {
@@ -118,6 +196,11 @@ export default function AgentDetail() {
   const freeDiskBytes = disks.reduce((acc, disk) => acc + (disk.freeSpaceBytes ?? 0), 0);
   const usedDiskBytes = Math.max(0, totalDiskBytes - freeDiskBytes);
   const diskUsagePercent = totalDiskBytes > 0 ? Math.min(100, Math.round((usedDiskBytes / totalDiskBytes) * 100)) : null;
+  const printers = parseInventoryPrinters(
+    hw.data?.hardware?.inventoryRaw ?? null,
+    hw.data?.printers,
+    hw.data?.inventoryRaw,
+  );
 
   const resetSoftwarePagination = () => {
     setSoftwarePage(1);
@@ -510,6 +593,46 @@ export default function AgentDetail() {
             </div>
           </Card>
         )}
+
+        <Card>
+          <CardHeader title="Impressoras" subtitle={`${printers.length} impressora(s) detectada(s)`} />
+          {printers.length === 0 ? (
+            <p className="text-sm text-slate-500">Nenhuma impressora coletada para este agente.</p>
+          ) : (
+            <div className="space-y-2">
+              {printers.map((printer, index) => (
+                <div key={`${printer.name}-${printer.portName ?? index}`} className="rounded-lg bg-white/5 px-3 py-2.5">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium text-white">{printer.name}</p>
+                      {printer.driverName && (
+                        <p className="truncate text-xs text-slate-500">Driver: {printer.driverName}</p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {printer.isDefault && <Badge color="primary">Padrão</Badge>}
+                      <Badge color={printerStatusColor(printer.printerStatus)}>{printer.printerStatus ?? 'Sem status'}</Badge>
+                    </div>
+                  </div>
+
+                  <div className="mt-2 grid gap-2 text-xs text-slate-400 sm:grid-cols-2">
+                    <span className="flex items-center gap-1">
+                      <Printer className="h-3.5 w-3.5" />
+                      {printer.isNetworkPrinter ? 'Rede' : 'Local'}
+                    </span>
+                    <span>{printer.portName ? `Porta: ${printer.portName}` : 'Porta não informada'}</span>
+                    <span>{printer.location ? `Local: ${printer.location}` : 'Local não informado'}</span>
+                    <span>
+                      {printer.shared
+                        ? `Compartilhada${printer.shareName ? ` (${printer.shareName})` : ''}`
+                        : 'Não compartilhada'}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
       </div>
 
       {/* Software Inventory */}

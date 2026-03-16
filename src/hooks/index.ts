@@ -87,3 +87,6 @@ export * from "./useReportPreview";
 export * from "./useReportAutocomplete";
 export * from "./useKnowledge";
 export * from "./useAutomation";
+export { useDashboardSummary } from "./useDashboardSummary";
+export { useDashboardRealtime } from "./useDashboardRealtime";
+export type { DashboardRealtimeScope } from "./useDashboardRealtime";

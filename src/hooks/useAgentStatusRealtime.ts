@@ -140,6 +140,14 @@ export function useAgentStatusRealtime(enabled = true) {
     connection.on("CommandCompleted", onCommandCompleted);
     connection.onreconnected(() => connection.invoke("JoinDashboard"));
 
+    const onDashboardEvent = () => {
+      // Invalidate all active dashboard summary queries. The throttle prevents
+      // storms when multiple events arrive within the same burst (e.g. batch ticket ops).
+      invalidateThrottled(["dashboard"], 5_000);
+    };
+
+    connection.on("DashboardEvent", onDashboardEvent);
+
     const startPromise = connection
       .start()
       .then(async () => {
@@ -164,6 +172,7 @@ export function useAgentStatusRealtime(enabled = true) {
       disposed = true;
       connection.off("AgentStatusChanged", onAgentStatusChanged);
       connection.off("CommandCompleted", onCommandCompleted);
+      connection.off("DashboardEvent", onDashboardEvent);
       void startPromise.finally(async () => {
         if (connection.state !== signalR.HubConnectionState.Disconnected) {
           await connection.stop();

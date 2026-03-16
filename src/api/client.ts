@@ -81,9 +81,20 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 function qs(params: Record<string, unknown>): string {
   const sp = new URLSearchParams();
   for (const [k, v] of Object.entries(params)) {
-    if (v !== undefined && v !== null && v !== "") {
-      sp.set(k, String(v));
+    if (v === undefined || v === null || v === "") {
+      continue;
     }
+
+    if (Array.isArray(v)) {
+      for (const item of v) {
+        if (item !== undefined && item !== null && item !== "") {
+          sp.append(k, String(item));
+        }
+      }
+      continue;
+    }
+
+    sp.set(k, String(v));
   }
   const s = sp.toString();
   return s ? `?${s}` : "";

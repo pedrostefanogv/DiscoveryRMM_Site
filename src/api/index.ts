@@ -38,3 +38,15 @@ export type {
   AgentHeartbeat,
   RealtimeStatsResponse,
 } from "./realtime";
+export { dashboardApi } from "./dashboard";
+export type {
+  DashboardWindow,
+  DashboardSummaryDto,
+  DashboardScopeDto,
+  DashboardPeriodDto,
+  DashboardAgentsSummaryDto,
+  DashboardCommandsSummaryDto,
+  DashboardTicketsSummaryDto,
+  DashboardLogsSummaryDto,
+  DashboardAutomationSummaryDto,
+} from "./dashboard";

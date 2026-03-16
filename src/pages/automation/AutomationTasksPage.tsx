@@ -31,6 +31,7 @@ import {
   useAutomationTasks,
   useCreateAutomationTask,
   useDeleteAutomationTask,
+  useRestoreAutomationTask,
   useUpdateAutomationTask,
 } from "@/hooks/useAutomation";
 import { useClients } from "@/hooks/useClients";
@@ -122,9 +123,20 @@ const defaultForm: TaskFormState = {
 };
 
 export default function AutomationTasksPage() {
-  const [activeOnly, setActiveOnly] = useState(true);
+  const [listMode, setListMode] = useState<"default" | "all" | "deleted">("default");
+  const [searchFilter, setSearchFilter] = useState("");
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [scopeTypeFilter, setScopeTypeFilter] = useState("");
   const [scopeIdFilter, setScopeIdFilter] = useState("");
+  const [filterScopeClientId, setFilterScopeClientId] = useState("");
+  const [filterScopeSiteId, setFilterScopeSiteId] = useState("");
+  const [filterScopeAgentId, setFilterScopeAgentId] = useState("");
+  const [filterClientId, setFilterClientId] = useState("");
+  const [filterSiteId, setFilterSiteId] = useState("");
+  const [filterAgentId, setFilterAgentId] = useState("");
+  const [filterActionType, setFilterActionType] = useState("");
+  const [filterLabels, setFilterLabels] = useState<string[]>([]);
+  const [filterLabelSearch, setFilterLabelSearch] = useState("");
   const [limit, setLimit] = useState(20);
   const [offset, setOffset] = useState(0);
 
@@ -133,6 +145,10 @@ export default function AutomationTasksPage() {
   const [editingId, setEditingId] = useState("");
   const [auditTaskId, setAuditTaskId] = useState<string | null>(null);
   const [detailTaskId, setDetailTaskId] = useState<string | null>(null);
+  const [deleteTask, setDeleteTask] = useState<AutomationTaskSummary | null>(null);
+  const [deleteConfirmationText, setDeleteConfirmationText] = useState("");
+  const [restoreTask, setRestoreTask] = useState<AutomationTaskSummary | null>(null);
+  const [restoreConfirmationText, setRestoreConfirmationText] = useState("");
   const [previewAgentsEnabled, setPreviewAgentsEnabled] = useState(false);
   const [form, setForm] = useState<TaskFormState>(defaultForm);
   const [scopeClientId, setScopeClientId] = useState("");
@@ -151,16 +167,37 @@ export default function AutomationTasksPage() {
   }, [packageSearch]);
 
   const list = useAutomationTasks({
+    search: searchFilter.trim() || undefined,
+    clientId: filterClientId || undefined,
+    siteId: filterSiteId || undefined,
+    agentId: filterAgentId || undefined,
+    actionTypes: filterActionType ? [filterActionType] : undefined,
+    labels: filterLabels.length ? filterLabels : undefined,
     scopeType: scopeTypeFilter ? (Number(scopeTypeFilter) as AppApprovalScopeType) : undefined,
     scopeId: scopeIdFilter || undefined,
-    activeOnly,
+    activeOnly: false,
+    deletedOnly: listMode === "deleted" ? true : undefined,
+    includeDeleted: listMode === "all" ? true : undefined,
     limit,
     offset,
   });
 
   const scripts = useAutomationScripts({ activeOnly: true, limit: 200, offset: 0 });
   const knownTags = useAutomationKnownTags();
+  const availableKnownFilterLabels = useMemo(
+    () =>
+      (knownTags.data ?? []).filter((tag) =>
+        filterLabelSearch.trim()
+          ? tag.toLowerCase().includes(filterLabelSearch.trim().toLowerCase())
+          : true,
+      ),
+    [knownTags.data, filterLabelSearch],
+  );
   const clients = useClients();
+  const filterScopeSites = useSites(filterScopeClientId);
+  const filterScopeAgents = useAgentsBySite(filterScopeSiteId);
+  const advancedSites = useSites(filterClientId);
+  const advancedAgents = useAgentsBySite(filterSiteId);
   const sites = useSites(scopeClientId);
   const agents = useAgentsBySite(scopeSiteId);
   const isPackageAction =
@@ -176,10 +213,38 @@ export default function AutomationTasksPage() {
   const createMutation = useCreateAutomationTask();
   const updateMutation = useUpdateAutomationTask();
   const deleteMutation = useDeleteAutomationTask();
+  const restoreMutation = useRestoreAutomationTask();
   const auditQuery = useAutomationTaskAudit(auditTaskId ?? "", 50, !!auditTaskId);
   const taskDetail = useAutomationTask(editingId);
   const detailTask = useAutomationTask(detailTaskId ?? "");
   const previewAgents = useAutomationTaskPreviewAgents(detailTaskId ?? "", 100, 0, previewAgentsEnabled && !!detailTaskId);
+
+  useEffect(() => {
+    if (!detailTaskId) {
+      setPreviewAgentsEnabled(false);
+      return;
+    }
+    setPreviewAgentsEnabled(true);
+  }, [detailTaskId]);
+
+  useEffect(() => {
+    const scopeType = Number(scopeTypeFilter);
+    if (!scopeTypeFilter || scopeType === AppApprovalScopeType.Global) {
+      setScopeIdFilter("");
+      return;
+    }
+    if (scopeType === AppApprovalScopeType.Client) {
+      setScopeIdFilter(filterScopeClientId);
+      return;
+    }
+    if (scopeType === AppApprovalScopeType.Site) {
+      setScopeIdFilter(filterScopeSiteId);
+      return;
+    }
+    if (scopeType === AppApprovalScopeType.Agent) {
+      setScopeIdFilter(filterScopeAgentId);
+    }
+  }, [scopeTypeFilter, filterScopeClientId, filterScopeSiteId, filterScopeAgentId]);
 
   useEffect(() => {
     if (!editingId || !taskDetail.data) return;
@@ -250,6 +315,91 @@ export default function AutomationTasksPage() {
   const canPrev = offset > 0;
   const canNext = offset + limit < total;
 
+  const closeDeleteModal = () => {
+    if (deleteMutation.isPending) return;
+    setDeleteTask(null);
+    setDeleteConfirmationText("");
+  };
+
+  const closeRestoreModal = () => {
+    if (restoreMutation.isPending) return;
+    setRestoreTask(null);
+    setRestoreConfirmationText("");
+  };
+
+  const handleConfirmDelete = () => {
+    if (!deleteTask) return;
+    if (deleteConfirmationText.trim().toLowerCase() !== "yes") {
+      toast.error('Digite "yes" para confirmar a exclusao');
+      return;
+    }
+
+    deleteMutation.mutate(
+      {
+        id: deleteTask.id,
+        reason: "confirmed-via-modal",
+        correlationId: buildCorrelationId("task-delete"),
+      },
+      {
+        onSuccess: () => {
+          toast.success("Tarefa excluida");
+          closeDeleteModal();
+        },
+        onError: (error) => {
+          const message = error instanceof Error ? error.message : "Falha ao excluir tarefa";
+          toast.error(message);
+        },
+      },
+    );
+  };
+
+  const handleConfirmRestore = () => {
+    if (!restoreTask) return;
+    if (restoreConfirmationText.trim().toLowerCase() !== "yes") {
+      toast.error('Digite "yes" para confirmar a reativacao');
+      return;
+    }
+
+    restoreMutation.mutate(
+      {
+        id: restoreTask.id,
+        reason: "confirmed-via-modal",
+        correlationId: buildCorrelationId("task-restore"),
+      },
+      {
+        onSuccess: () => {
+          toast.success("Tarefa reativada");
+          closeRestoreModal();
+        },
+        onError: (error) => {
+          const message = error instanceof Error ? error.message : "Falha ao reativar tarefa";
+          toast.error(message);
+        },
+      },
+    );
+  };
+
+  const isTaskDeleted = (task: AutomationTaskSummary | null | undefined) => {
+    if (!task) return false;
+    if (task.isDeleted === true) return true;
+    return Boolean(task.deletedAt);
+  };
+
+  const addFilterLabel = (rawTag: string) => {
+    const tag = rawTag.trim();
+    if (!tag) return;
+    setFilterLabels((prev) => {
+      if (prev.some((item) => item.toLowerCase() === tag.toLowerCase())) {
+        return prev;
+      }
+      return [...prev, tag];
+    });
+  };
+
+  const removeFilterLabel = (tag: string) => {
+    setFilterLabels((prev) => prev.filter((item) => item.toLowerCase() !== tag.toLowerCase()));
+  };
+
   const columns = useMemo<Column<AutomationTaskSummary>[]>(
     () => [
       {
@@ -289,11 +439,14 @@ export default function AutomationTasksPage() {
       {
         key: "status",
         header: "Status",
-        render: (item) => (
-          <Badge color={item.isActive ? "success" : "slate"}>
-            {item.isActive ? "Ativa" : "Inativa"}
-          </Badge>
-        ),
+        render: (item) => {
+          const deleted = isTaskDeleted(item);
+          return (
+            <Badge color={deleted ? "danger" : item.isActive ? "success" : "slate"}>
+              {deleted ? "Excluida" : item.isActive ? "Ativa" : "Inativa"}
+            </Badge>
+          );
+        },
       },
       {
         key: "updated",
@@ -303,15 +456,16 @@ export default function AutomationTasksPage() {
       {
         key: "actions",
         header: "Acoes",
-        render: (item) => (
-          <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
+        render: (item) => {
+          const deleted = isTaskDeleted(item);
+          return (
+            <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
             <Button
               size="sm"
               variant="ghost"
               title="Ver detalhes"
               onClick={() => {
                 setDetailTaskId(item.id);
-                setPreviewAgentsEnabled(false);
               }}
             >
               <Eye className="h-4 w-4" />
@@ -319,6 +473,7 @@ export default function AutomationTasksPage() {
             <Button
               size="sm"
               variant="ghost"
+              disabled={deleted}
               onClick={() => {
                 setEditing(item);
                 setEditingId(item.id);
@@ -340,30 +495,36 @@ export default function AutomationTasksPage() {
             <Button size="sm" variant="ghost" onClick={() => setAuditTaskId(item.id)}>
               Auditoria
             </Button>
-            <Button
-              size="sm"
-              variant="danger"
-              onClick={() => {
-                if (!window.confirm(`Excluir a tarefa ${item.name}?`)) return;
-                deleteMutation.mutate(
-                  {
-                    id: item.id,
-                    correlationId: buildCorrelationId("task-delete"),
-                  },
-                  {
-                    onSuccess: () => toast.success("Tarefa excluida"),
-                    onError: () => toast.error("Falha ao excluir tarefa"),
-                  },
-                );
-              }}
-            >
-              Excluir
-            </Button>
+            {deleted && (
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => {
+                  setRestoreTask(item);
+                  setRestoreConfirmationText("");
+                }}
+              >
+                Reativar
+              </Button>
+            )}
+            {!deleted && (
+              <Button
+                size="sm"
+                variant="danger"
+                onClick={() => {
+                  setDeleteTask(item);
+                  setDeleteConfirmationText("");
+                }}
+              >
+                Excluir
+              </Button>
+            )}
           </div>
-        ),
+          );
+        },
       },
     ],
-    [deleteMutation],
+    [listMode],
   );
 
   const scriptOptions = [
@@ -387,6 +548,58 @@ export default function AutomationTasksPage() {
       value: item.id,
       label: item.displayName ?? item.hostname,
     })),
+  ];
+
+  const filterScopeClientOptions = [
+    { value: "", label: "Selecione" },
+    ...(Array.isArray(clients.data) ? clients.data : []).map((item) => ({
+      value: item.id,
+      label: item.name,
+    })),
+  ];
+
+  const filterScopeSiteOptions = [
+    { value: "", label: "Selecione" },
+    ...(Array.isArray(filterScopeSites.data) ? filterScopeSites.data : []).map((item) => ({
+      value: item.id,
+      label: item.name,
+    })),
+  ];
+
+  const filterScopeAgentOptions = [
+    { value: "", label: "Selecione" },
+    ...(Array.isArray(filterScopeAgents.data) ? filterScopeAgents.data : []).map((item) => ({
+      value: item.id,
+      label: item.displayName ?? item.hostname,
+    })),
+  ];
+
+  const advancedClientOptions = filterScopeClientOptions;
+
+  const advancedSiteOptions = [
+    { value: "", label: "Selecione" },
+    ...(Array.isArray(advancedSites.data) ? advancedSites.data : []).map((item) => ({
+      value: item.id,
+      label: item.name,
+    })),
+  ];
+
+  const advancedAgentOptions = [
+    { value: "", label: "Selecione" },
+    ...(Array.isArray(advancedAgents.data) ? advancedAgents.data : []).map((item) => ({
+      value: item.id,
+      label: item.displayName ?? item.hostname,
+    })),
+  ];
+
+  const actionFilterOptions = [
+    { value: "", label: "Todas" },
+    { value: "InstallPackage", label: "Instalar pacote" },
+    { value: "UpdatePackage", label: "Atualizar pacote" },
+    { value: "RemovePackage", label: "Remover pacote" },
+    { value: "UpdateOrInstallPackage", label: "Atualizar/Instalar pacote" },
+    { value: "RunScript", label: "Executar script" },
+    { value: "CustomCommand", label: "Comando personalizado" },
   ];
 
   const packageOptions = [
@@ -573,8 +786,42 @@ export default function AutomationTasksPage() {
       </div>
 
       <Card>
-        <CardHeader title="Filtros" subtitle="Escopo, status e paginacao" />
+        <CardHeader title="Filtros" subtitle="Busca rapida, escopo e filtros avancados" />
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+          <p className="text-xs text-slate-500">Use o modo simples para a maioria dos casos e abra o avancado para filtros combinados.</p>
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            onClick={() => setShowAdvancedFilters((prev) => !prev)}
+          >
+            {showAdvancedFilters ? "Ocultar filtro avancado" : "Mostrar filtro avancado"}
+          </Button>
+        </div>
+
         <div className="grid gap-3 md:grid-cols-4">
+          <Input
+            label="Busca"
+            value={searchFilter}
+            placeholder="Nome, descricao, packageId ou comando"
+            onChange={(e) => {
+              setSearchFilter(e.target.value);
+              setOffset(0);
+            }}
+          />
+          <Select
+            label="Visao"
+            options={[
+              { value: "default", label: "Padrao (sem excluidas)" },
+              { value: "all", label: "Todas (inclui excluidas)" },
+              { value: "deleted", label: "Somente excluidas" },
+            ]}
+            value={listMode}
+            onChange={(e) => {
+              setListMode(e.target.value as "default" | "all" | "deleted");
+              setOffset(0);
+            }}
+          />
           <Select
             label="ScopeType"
             options={[
@@ -587,26 +834,10 @@ export default function AutomationTasksPage() {
             value={scopeTypeFilter}
             onChange={(e) => {
               setScopeTypeFilter(e.target.value);
-              setOffset(0);
-            }}
-          />
-          <Input
-            label="ScopeId"
-            value={scopeIdFilter}
-            onChange={(e) => {
-              setScopeIdFilter(e.target.value);
-              setOffset(0);
-            }}
-          />
-          <Select
-            label="Ativos"
-            options={[
-              { value: "true", label: "Somente ativos" },
-              { value: "false", label: "Todos" },
-            ]}
-            value={String(activeOnly)}
-            onChange={(e) => {
-              setActiveOnly(e.target.value === "true");
+              setScopeIdFilter("");
+              setFilterScopeClientId("");
+              setFilterScopeSiteId("");
+              setFilterScopeAgentId("");
               setOffset(0);
             }}
           />
@@ -624,6 +855,206 @@ export default function AutomationTasksPage() {
             }}
           />
         </div>
+
+        {scopeTypeFilter === String(AppApprovalScopeType.Client) && (
+          <div className="mt-3 grid gap-3 md:grid-cols-2">
+            <Select
+              label="Cliente do ScopeId"
+              options={filterScopeClientOptions}
+              value={filterScopeClientId}
+              onChange={(e) => {
+                setFilterScopeClientId(e.target.value);
+                setScopeIdFilter(e.target.value);
+                setOffset(0);
+              }}
+            />
+            <Input label="ScopeId selecionado" value={scopeIdFilter} readOnly />
+          </div>
+        )}
+
+        {scopeTypeFilter === String(AppApprovalScopeType.Site) && (
+          <div className="mt-3 grid gap-3 md:grid-cols-3">
+            <Select
+              label="Cliente do site"
+              options={filterScopeClientOptions}
+              value={filterScopeClientId}
+              onChange={(e) => {
+                setFilterScopeClientId(e.target.value);
+                setFilterScopeSiteId("");
+                setFilterScopeAgentId("");
+                setScopeIdFilter("");
+                setOffset(0);
+              }}
+            />
+            <Select
+              label="Site do ScopeId"
+              options={filterScopeSiteOptions}
+              value={filterScopeSiteId}
+              disabled={!filterScopeClientId}
+              onChange={(e) => {
+                setFilterScopeSiteId(e.target.value);
+                setScopeIdFilter(e.target.value);
+                setOffset(0);
+              }}
+            />
+            <Input label="ScopeId selecionado" value={scopeIdFilter} readOnly />
+          </div>
+        )}
+
+        {scopeTypeFilter === String(AppApprovalScopeType.Agent) && (
+          <div className="mt-3 grid gap-3 md:grid-cols-4">
+            <Select
+              label="Cliente do agent"
+              options={filterScopeClientOptions}
+              value={filterScopeClientId}
+              onChange={(e) => {
+                setFilterScopeClientId(e.target.value);
+                setFilterScopeSiteId("");
+                setFilterScopeAgentId("");
+                setScopeIdFilter("");
+                setOffset(0);
+              }}
+            />
+            <Select
+              label="Site do agent"
+              options={filterScopeSiteOptions}
+              value={filterScopeSiteId}
+              disabled={!filterScopeClientId}
+              onChange={(e) => {
+                setFilterScopeSiteId(e.target.value);
+                setFilterScopeAgentId("");
+                setScopeIdFilter("");
+                setOffset(0);
+              }}
+            />
+            <Select
+              label="Agent do ScopeId"
+              options={filterScopeAgentOptions}
+              value={filterScopeAgentId}
+              disabled={!filterScopeSiteId}
+              onChange={(e) => {
+                setFilterScopeAgentId(e.target.value);
+                setScopeIdFilter(e.target.value);
+                setOffset(0);
+              }}
+            />
+            <Input label="ScopeId selecionado" value={scopeIdFilter} readOnly />
+          </div>
+        )}
+
+        {scopeTypeFilter === String(AppApprovalScopeType.Global) && (
+          <div className="mt-3 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-400">
+            Escopo global nao exige ScopeId.
+          </div>
+        )}
+
+        {showAdvancedFilters && (
+          <div className="mt-4 space-y-3 rounded-xl border border-white/10 bg-white/5 p-4">
+            <div className="grid gap-3 md:grid-cols-4">
+              <Select
+                label="Cliente"
+                options={advancedClientOptions}
+                value={filterClientId}
+                onChange={(e) => {
+                  setFilterClientId(e.target.value);
+                  setFilterSiteId("");
+                  setFilterAgentId("");
+                  setOffset(0);
+                }}
+              />
+              <Select
+                label="Site"
+                options={advancedSiteOptions}
+                value={filterSiteId}
+                disabled={!filterClientId}
+                onChange={(e) => {
+                  setFilterSiteId(e.target.value);
+                  setFilterAgentId("");
+                  setOffset(0);
+                }}
+              />
+              <Select
+                label="Agent"
+                options={advancedAgentOptions}
+                value={filterAgentId}
+                disabled={!filterSiteId}
+                onChange={(e) => {
+                  setFilterAgentId(e.target.value);
+                  setOffset(0);
+                }}
+              />
+              <Select
+                label="Tipo de acao"
+                options={actionFilterOptions}
+                value={filterActionType}
+                onChange={(e) => {
+                  setFilterActionType(e.target.value);
+                  setOffset(0);
+                }}
+              />
+            </div>
+
+            <div className="space-y-2 rounded-lg border border-white/10 bg-black/10 p-3">
+              <Input
+                label="Labels"
+                value={filterLabelSearch}
+                placeholder="Pesquisar labels"
+                onChange={(e) => setFilterLabelSearch(e.target.value)}
+              />
+
+              {!!filterLabels.length && (
+                <div className="flex flex-wrap gap-2">
+                  {filterLabels.map((tag) => (
+                    <button
+                      key={tag}
+                      type="button"
+                      className="rounded-full border border-primary/40 bg-primary/20 px-2.5 py-1 text-xs text-primary-100"
+                      onClick={() => {
+                        removeFilterLabel(tag);
+                        setOffset(0);
+                      }}
+                    >
+                      {tag} x
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              <div className="max-h-36 overflow-y-auto space-y-1">
+                {knownTags.isLoading && <p className="text-xs text-slate-500">Carregando labels...</p>}
+                {!knownTags.isLoading && availableKnownFilterLabels.length === 0 && (
+                  <p className="text-xs text-slate-500">Nenhuma label encontrada.</p>
+                )}
+                {!knownTags.isLoading &&
+                  availableKnownFilterLabels.map((tag) => {
+                    const selected = filterLabels.some((item) => item.toLowerCase() === tag.toLowerCase());
+                    return (
+                      <button
+                        key={tag}
+                        type="button"
+                        className={`w-full rounded-md border px-2 py-1 text-left text-xs transition-colors ${
+                          selected
+                            ? "border-primary/40 bg-primary/20 text-primary-100"
+                            : "border-white/10 bg-white/5 text-slate-300 hover:bg-white/10"
+                        }`}
+                        onClick={() => {
+                          if (selected) {
+                            removeFilterLabel(tag);
+                          } else {
+                            addFilterLabel(tag);
+                          }
+                          setOffset(0);
+                        }}
+                      >
+                        {selected ? "[x] " : "[ ] "}
+                        {tag}
+                      </button>
+                    );
+                  })}
+              </div>
+            </div>
+          </div>
+        )}
       </Card>
 
       <Card>
@@ -1172,6 +1603,7 @@ export default function AutomationTasksPage() {
         {detailTask.isError && <ErrorDisplay onRetry={() => detailTask.refetch()} />}
         {detailTask.data && !detailTask.isLoading && (() => {
           const d = detailTask.data;
+          const detailIsDeleted = isTaskDeleted(d);
           return (
             <div className="space-y-4">
               {/* Cabeçalho */}
@@ -1181,7 +1613,9 @@ export default function AutomationTasksPage() {
                   {d.description && <p className="text-sm text-slate-400">{d.description}</p>}
                 </div>
                 <div className="flex gap-2 shrink-0">
-                  <Badge color={d.isActive ? "success" : "slate"}>{d.isActive ? "Ativa" : "Inativa"}</Badge>
+                  <Badge color={detailIsDeleted ? "danger" : d.isActive ? "success" : "slate"}>
+                    {detailIsDeleted ? "Excluida" : d.isActive ? "Ativa" : "Inativa"}
+                  </Badge>
                   <Badge color={d.requiresApproval ? "warning" : "slate"}>{d.requiresApproval ? "Requer aprovação" : "Auto"}</Badge>
                 </div>
               </div>
@@ -1315,9 +1749,39 @@ export default function AutomationTasksPage() {
 
               {/* Ações */}
               <div className="flex justify-end gap-2 pt-2">
+                {detailIsDeleted && (
+                  <Button
+                    type="button"
+                    variant="primary"
+                    onClick={() => {
+                      setDetailTaskId(null);
+                      setPreviewAgentsEnabled(false);
+                      const item = list.data?.items.find((i) => i.id === d.id);
+                      setRestoreTask(
+                        item ?? {
+                          id: d.id,
+                          name: d.name,
+                          description: d.description,
+                          actionType: d.actionType,
+                          scopeType: d.scopeType,
+                          scopeId: d.scopeId,
+                          deletedAt: d.deletedAt,
+                          isDeleted: d.isDeleted,
+                          isActive: d.isActive,
+                          requiresApproval: d.requiresApproval,
+                          lastUpdatedAt: d.lastUpdatedAt,
+                        },
+                      );
+                      setRestoreConfirmationText("");
+                    }}
+                  >
+                    Reativar
+                  </Button>
+                )}
                 <Button
                   type="button"
                   variant="secondary"
+                  disabled={detailIsDeleted}
                   onClick={() => {
                     setDetailTaskId(null);
                     setPreviewAgentsEnabled(false);
@@ -1379,6 +1843,80 @@ export default function AutomationTasksPage() {
             )}
           </div>
         )}
+      </Modal>
+
+      <Modal
+        open={!!deleteTask}
+        onClose={closeDeleteModal}
+        title="Confirmar exclusao"
+        maxWidth="max-w-lg"
+      >
+        <div className="space-y-4">
+          <div className="rounded-lg border border-danger/30 bg-danger/10 p-3 text-sm text-slate-200">
+            <p>Voce esta prestes a excluir a tarefa <span className="font-semibold text-white">{deleteTask?.name}</span>.</p>
+            <p className="mt-1 text-slate-400">Digite <span className="font-semibold text-white">yes</span> para confirmar.</p>
+          </div>
+
+          <Input
+            label="Confirmacao"
+            value={deleteConfirmationText}
+            onChange={(e) => setDeleteConfirmationText(e.target.value)}
+            placeholder="Digite yes"
+            autoFocus
+            disabled={deleteMutation.isPending}
+          />
+
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" onClick={closeDeleteModal} disabled={deleteMutation.isPending}>
+              Cancelar
+            </Button>
+            <Button
+              variant="danger"
+              onClick={handleConfirmDelete}
+              loading={deleteMutation.isPending}
+              disabled={deleteConfirmationText.trim().toLowerCase() !== "yes"}
+            >
+              Excluir tarefa
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        open={!!restoreTask}
+        onClose={closeRestoreModal}
+        title="Confirmar reativacao"
+        maxWidth="max-w-lg"
+      >
+        <div className="space-y-4">
+          <div className="rounded-lg border border-primary/30 bg-primary/10 p-3 text-sm text-slate-200">
+            <p>Voce esta prestes a reativar a tarefa <span className="font-semibold text-white">{restoreTask?.name}</span>.</p>
+            <p className="mt-1 text-slate-400">Digite <span className="font-semibold text-white">yes</span> para confirmar.</p>
+          </div>
+
+          <Input
+            label="Confirmacao"
+            value={restoreConfirmationText}
+            onChange={(e) => setRestoreConfirmationText(e.target.value)}
+            placeholder="Digite yes"
+            autoFocus
+            disabled={restoreMutation.isPending}
+          />
+
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" onClick={closeRestoreModal} disabled={restoreMutation.isPending}>
+              Cancelar
+            </Button>
+            <Button
+              variant="primary"
+              onClick={handleConfirmRestore}
+              loading={restoreMutation.isPending}
+              disabled={restoreConfirmationText.trim().toLowerCase() !== "yes"}
+            >
+              Reativar tarefa
+            </Button>
+          </div>
+        </div>
       </Modal>
     </div>
   );

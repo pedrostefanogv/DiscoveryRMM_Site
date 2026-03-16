@@ -22,12 +22,16 @@ import { useTheme } from '@/theme/ThemeContext';
 
 const mainLinks = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
-  { to: '/clients', icon: Users, label: 'Clientes' },
   { to: '/agents', icon: Monitor, label: 'Agentes' },
   { to: '/tickets', icon: Ticket, label: 'Chamados' },
   { to: '/logs', icon: ScrollText, label: 'Logs' },
   { to: '/deploy', icon: KeyRound, label: 'Deploy' },
   { to: '/knowledge', icon: BookOpen, label: 'Conhecimento' },
+];
+
+const clientLinks = [
+  { to: '/clients', label: 'Clientes' },
+  { to: '/sites', label: 'Sites' },
 ];
 
 const softwareLinks = [
@@ -68,10 +72,13 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const { branding } = useTheme();
   const location = useLocation();
   const navigate = useNavigate();
+  const clientsIsActive =
+    location.pathname.startsWith('/clients') || location.pathname.startsWith('/sites');
   const softwareIsActive = location.pathname.startsWith('/software') || location.pathname === '/software-inventory';
   const automationIsActive = location.pathname.startsWith('/automation');
   const reportsIsActive = location.pathname.startsWith('/reports');
   const settingsIsActive = location.pathname.startsWith('/settings');
+  const [clientsOpen, setClientsOpen] = useState(clientsIsActive);
   const [softwareOpen, setSoftwareOpen] = useState(softwareIsActive);
   const [automationOpen, setAutomationOpen] = useState(automationIsActive);
   const [reportsOpen, setReportsOpen] = useState(reportsIsActive);
@@ -101,7 +108,70 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
 
       {/* Nav Links */}
       <nav className="mt-2 flex-1 space-y-1 px-2 overflow-y-auto">
-        {mainLinks.map(({ to, icon: Icon, label }) => (
+        <NavLink
+          to="/"
+          end
+          className={({ isActive }) =>
+            `flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+              isActive
+                ? 'bg-white/10 text-white'
+                : 'text-slate-400 hover:bg-white/5 hover:text-white'
+            }`
+          }
+        >
+          <LayoutDashboard className="h-5 w-5 shrink-0" />
+          {!collapsed && <span className="truncate">Dashboard</span>}
+        </NavLink>
+
+        <button
+          type="button"
+          onClick={() => {
+            if (collapsed) {
+              navigate('/clients');
+              return;
+            }
+            setClientsOpen(prev => !prev);
+          }}
+          className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+            clientsIsActive
+              ? 'bg-white/10 text-white'
+              : 'text-slate-400 hover:bg-white/5 hover:text-white'
+          }`}
+          aria-label="Abrir submenu de clientes"
+        >
+          <Users className="h-5 w-5 shrink-0" />
+          {!collapsed && (
+            <>
+              <span className="truncate">Clientes</span>
+              <span className="ml-auto">
+                {clientsOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              </span>
+            </>
+          )}
+        </button>
+
+        {!collapsed && clientsOpen && (
+          <div className="ml-8 space-y-1 border-l border-white/10 pl-3">
+            {clientLinks.map(({ to, label }) => (
+              <NavLink
+                key={to}
+                to={to}
+                end={to === '/clients'}
+                className={({ isActive }) =>
+                  `block rounded-md px-2 py-1.5 text-sm transition-colors ${
+                    isActive
+                      ? 'bg-white/10 text-white'
+                      : 'text-slate-400 hover:bg-white/5 hover:text-white'
+                  }`
+                }
+              >
+                {label}
+              </NavLink>
+            ))}
+          </div>
+        )}
+
+        {mainLinks.slice(1).map(({ to, icon: Icon, label }) => (
           <NavLink
             key={to}
             to={to}

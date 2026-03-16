@@ -8,6 +8,8 @@ import { ErrorPage } from '@/components/ErrorPage';
 const Dashboard = lazy(() => import('@/pages/Dashboard'));
 const ClientList = lazy(() => import('@/pages/clients/ClientList'));
 const ClientDetail = lazy(() => import('@/pages/clients/ClientDetail'));
+const SiteList = lazy(() => import('@/pages/clients/SiteList'));
+const SiteDetail = lazy(() => import('@/pages/clients/SiteDetail'));
 const AgentList = lazy(() => import('@/pages/agents/AgentList'));
 const AgentDetail = lazy(() => import('@/pages/agents/AgentDetail'));
 const TicketList = lazy(() => import('@/pages/tickets/TicketList'));
@@ -58,8 +60,16 @@ export const router = createBrowserRouter([
         element: <LazyPage><ClientList /></LazyPage>,
       },
       {
+        path: 'sites',
+        element: <LazyPage><SiteList /></LazyPage>,
+      },
+      {
         path: 'clients/:id',
         element: <LazyPage><ClientDetail /></LazyPage>,
+      },
+      {
+        path: 'clients/:id/sites/:siteId',
+        element: <LazyPage><SiteDetail /></LazyPage>,
       },
       {
         path: 'agents',

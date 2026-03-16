@@ -24,6 +24,8 @@ export interface HardwareReport {
   disks: DiskInfo[];
   networkAdapters: NetworkAdapterInfo[];
   memoryModules: MemoryModuleInfo[];
+  printers?: unknown[];
+  inventoryRaw?: unknown;
 }
 
 export const agentsApi = {

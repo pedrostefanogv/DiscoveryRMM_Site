@@ -1690,6 +1690,8 @@ export interface AutomationTaskSummary {
   actionType: AutomationTaskActionType | string | number;
   scopeType: AppApprovalScopeType | string | number;
   scopeId: string | null;
+  deletedAt?: string | null;
+  isDeleted?: boolean;
   isActive: boolean;
   requiresApproval: boolean;
   lastUpdatedAt: string;

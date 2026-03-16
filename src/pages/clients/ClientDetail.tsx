@@ -1,12 +1,14 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Plus, Monitor, Trash2, AppWindow, Building2, Ticket as TicketIcon, Copy, KeyRound, BookOpen } from 'lucide-react';
+import { ArrowLeft, Plus, Monitor, Trash2, AppWindow, Building2, Ticket as TicketIcon, Copy, KeyRound, BookOpen, CheckCircle2, XCircle, AlertTriangle, Activity } from 'lucide-react';
 import { useClient, useDeleteClient } from '@/hooks/useClients';
 import { useSites, useCreateSite } from '@/hooks/useSites';
 import { useAgentsByClient } from '@/hooks/useAgents';
 import { useTicketsByClient } from '@/hooks/useTickets';
 import { useLogs } from '@/hooks/useLogs';
 import { useCreateDeployToken } from '@/hooks/useDeployTokens';
+import { useDashboardSummary } from '@/hooks/useDashboardSummary';
+import { useDashboardRealtime } from '@/hooks/useDashboardRealtime';
 import { Button, Card, CardHeader, Badge, Loading, ErrorDisplay, Modal, Input, TextArea, StatCard, Select } from '@/components/ui';
 import { NotesPanel } from '@/components/notes/NotesPanel';
 import { isAgentOnlineNow } from '@/utils/agentStatus';
@@ -53,6 +55,15 @@ export default function ClientDetail() {
   const deleteClient = useDeleteClient();
   const createSite = useCreateSite();
   const createDeployToken = useCreateDeployToken();
+  const clientDashboard = useDashboardSummary(
+    { clientId: id! },
+    '24h',
+    { enabled: !!id },
+  );
+
+  // Subscribe to the client-scoped SignalR group so DashboardEvent triggers
+  // a targeted refetch of this client's summary without needing the global group.
+  useDashboardRealtime({ clientId: id! }, '24h', !!id);
 
   if (client.isLoading) return <Loading />;
   if (client.isError || !client.data) return <ErrorDisplay onRetry={() => client.refetch()} />;
@@ -169,6 +180,78 @@ export default function ClientDetail() {
         </Button>
       </div>
 
+      {/* Mini-dashboard do cliente (últimas 24h) */}
+      {clientDashboard.data && (
+        <Card>
+          <CardHeader
+            title="Resumo do Cliente"
+            subtitle="Agregado das últimas 24h"
+          />
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 text-sm">
+            {/* Agentes */}
+            <div className="rounded-lg bg-white/5 px-3 py-2">
+              <div className="flex items-center gap-1.5 text-slate-500">
+                <Monitor className="h-3.5 w-3.5" />
+                <span>Agentes</span>
+              </div>
+              <p className="mt-1 text-base font-semibold text-white">
+                {clientDashboard.data.agents.online}
+                <span className="text-xs font-normal text-slate-400">/{clientDashboard.data.agents.total} online</span>
+              </p>
+              {clientDashboard.data.agents.error > 0 && (
+                <p className="mt-0.5 text-xs text-danger flex items-center gap-1">
+                  <AlertTriangle className="h-3 w-3" />{clientDashboard.data.agents.error} em erro
+                </p>
+              )}
+            </div>
+            {/* Chamados */}
+            <div className="rounded-lg bg-white/5 px-3 py-2">
+              <div className="flex items-center gap-1.5 text-slate-500">
+                <TicketIcon className="h-3.5 w-3.5" />
+                <span>Chamados</span>
+              </div>
+              <p className="mt-1 text-base font-semibold text-white">
+                {clientDashboard.data.tickets.open}
+                <span className="text-xs font-normal text-slate-400"> abertos</span>
+              </p>
+              {clientDashboard.data.tickets.slaBreachedOpen > 0 && (
+                <p className="mt-0.5 text-xs text-danger flex items-center gap-1">
+                  <AlertTriangle className="h-3 w-3" />{clientDashboard.data.tickets.slaBreachedOpen} SLA violado
+                </p>
+              )}
+            </div>
+            {/* Comandos */}
+            <div className="rounded-lg bg-white/5 px-3 py-2">
+              <div className="flex items-center gap-1.5 text-slate-500">
+                <Activity className="h-3.5 w-3.5" />
+                <span>Comandos</span>
+              </div>
+              <p className={`mt-1 text-base font-semibold ${clientDashboard.data.commands.total > 0 && clientDashboard.data.commands.successRate >= 80 ? 'text-success' : clientDashboard.data.commands.total > 0 ? 'text-danger' : 'text-white'}`}>
+                {clientDashboard.data.commands.total > 0
+                  ? `${clientDashboard.data.commands.successRate.toFixed(1)}% sucesso`
+                  : '—'}
+              </p>
+              <p className="mt-0.5 text-xs text-slate-400">{clientDashboard.data.commands.total} total</p>
+            </div>
+            {/* Automação */}
+            <div className="rounded-lg bg-white/5 px-3 py-2">
+              <div className="flex items-center gap-1.5 text-slate-500">
+                {clientDashboard.data.automation.failed > 0
+                  ? <XCircle className="h-3.5 w-3.5 text-danger" />
+                  : <CheckCircle2 className="h-3.5 w-3.5" />}
+                <span>Automação</span>
+              </div>
+              <p className={`mt-1 text-base font-semibold ${clientDashboard.data.automation.total > 0 && clientDashboard.data.automation.successRate >= 80 ? 'text-success' : clientDashboard.data.automation.total > 0 ? 'text-danger' : 'text-white'}`}>
+                {clientDashboard.data.automation.total > 0
+                  ? `${clientDashboard.data.automation.successRate.toFixed(1)}% sucesso`
+                  : '—'}
+              </p>
+              <p className="mt-0.5 text-xs text-slate-400">{clientDashboard.data.automation.total} execuções</p>
+            </div>
+          </div>
+        </Card>
+      )}
+
       {/* Stat Cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
@@ -263,19 +346,46 @@ export default function ClientDetail() {
           />
           <div className="space-y-2">
             {(sites.data ?? []).map(site => (
-              <div key={site.id} className="flex items-center gap-3 rounded-lg bg-white/5 px-3 py-2">
+              <div
+                key={site.id}
+                onClick={() => navigate(`/clients/${c.id}/sites/${site.id}`)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    navigate(`/clients/${c.id}/sites/${site.id}`);
+                  }
+                }}
+                role="button"
+                tabIndex={0}
+                className="flex cursor-pointer items-center gap-3 rounded-lg bg-white/5 px-3 py-2 transition-colors hover:bg-white/10"
+              >
                 <Building2 className="h-4 w-4 text-accent shrink-0" />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium text-white">{site.name}</p>
                   {site.notes && <p className="truncate text-xs text-slate-500">{site.notes}</p>}
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        navigate(`/clients/${c.id}/sites/${site.id}`);
+                      }}
+                    >
+                      Dashboard
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setNotesSite(site);
+                      }}
+                    >
+                      Notas
+                    </Button>
+                  </div>
                 </div>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => setNotesSite(site)}
-                >
-                  Notas
-                </Button>
                 <Badge color={site.isActive ? 'success' : 'slate'}>{site.isActive ? 'Ativo' : 'Inativo'}</Badge>
               </div>
             ))}

@@ -1,6 +1,7 @@
 import { api } from "./client";
 import type {
   AppApprovalScopeType,
+  AutomationTaskActionType,
   AutomationExecutionReport,
   AutomationForceSyncRequest,
   AutomationRunNowScriptResponse,
@@ -40,9 +41,18 @@ export interface ListAutomationScriptsParams {
 }
 
 export interface ListAutomationTasksParams {
+  search?: string;
+  clientId?: string;
+  siteId?: string;
+  agentId?: string;
   scopeType?: AppApprovalScopeType;
+  scopeTypes?: Array<AppApprovalScopeType | string>;
+  actionTypes?: Array<AutomationTaskActionType | string>;
+  labels?: string[];
   scopeId?: string;
   activeOnly?: boolean;
+  deletedOnly?: boolean;
+  includeDeleted?: boolean;
   limit?: number;
   offset?: number;
 }
@@ -116,6 +126,15 @@ export const automationApi = {
     const query = reason ? `?reason=${encodeURIComponent(reason)}` : "";
     return api.del<void>(
       `${TASKS_BASE}/${id}${query}`,
+      correlationInit(correlationId),
+    );
+  },
+
+  restoreTask: (id: string, reason?: string, correlationId?: string) => {
+    const query = reason ? `?reason=${encodeURIComponent(reason)}` : "";
+    return api.post<AutomationTaskDetail>(
+      `${TASKS_BASE}/${id}/restore${query}`,
+      undefined,
       correlationInit(correlationId),
     );
   },
