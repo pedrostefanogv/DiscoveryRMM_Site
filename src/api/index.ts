@@ -40,6 +40,7 @@ export type {
 } from "./realtime";
 export { dashboardApi } from "./dashboard";
 export { authApi } from "./auth";
+export { iamApi } from "./iam";
 export type {
   LoginRequest,
   LoginResponse,
@@ -49,14 +50,42 @@ export type {
   CompleteFirstAccessRequest,
   BeginFido2Response,
   CompleteFido2AssertionRequest,
+  CompleteOtpLoginRequest,
   CompleteFido2RegistrationRequest,
   CompleteFido2RegistrationResponse,
+  BeginTotpRegistrationResponse,
+  CompleteTotpRegistrationRequest,
+  CompleteTotpRegistrationResponse,
   MfaKey,
   RenameMfaKeyRequest,
   MeshCentralEmbedUrlRequest,
   MeshCentralEmbedUrlResponse,
   ApiMessageResponse,
 } from "./auth";
+export type {
+  ScopeLevel,
+  UserDto,
+  CreateUserRequest,
+  UpdateUserRequest,
+  ChangePasswordRequest,
+  MyProfileDto,
+  UpdateMyProfileRequest,
+  MySecurityKeyDto,
+  MySecurityDto,
+  ChangeMyPasswordRequest,
+  UserGroupDto,
+  CreateUserGroupRequest,
+  UpdateUserGroupRequest,
+  GroupMemberDto,
+  AddGroupMemberRequest,
+  GroupRoleAssignmentDto,
+  AssignGroupRoleRequest,
+  RoleDto,
+  CreateRoleRequest,
+  UpdateRoleRequest,
+  PermissionDto,
+  AddRolePermissionRequest,
+} from "./iam";
 export type {
   DashboardWindow,
   DashboardSummaryDto,

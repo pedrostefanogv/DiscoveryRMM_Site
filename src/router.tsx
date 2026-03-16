@@ -4,7 +4,7 @@ import { lazy, Suspense } from 'react';
 import { Loading } from '@/components/ui';
 import { ErrorPage } from '@/components/ErrorPage';
 import { AuthLayout } from '@/components/auth/AuthLayout';
-import { PublicOnlyAuth, RequireAuth } from '@/auth/AuthGuards';
+import { PermissionGate, PublicOnlyAuth, RequireAuth } from '@/auth/AuthGuards';
 
 // Lazy load all pages for code splitting
 const Dashboard = lazy(() => import('@/pages/Dashboard'));
@@ -36,6 +36,10 @@ const ClientConfigurationPage = lazy(() => import('@/pages/settings/ClientConfig
 const SiteConfigurationPage = lazy(() => import('@/pages/settings/SiteConfigurationPage'));
 const ConfigurationAudit = lazy(() => import('@/pages/settings/ConfigurationAudit'));
 const AgentLabelsSettings = lazy(() => import('@/pages/settings/AgentLabelsSettings'));
+const ProfilePage = lazy(() => import('@/pages/settings/ProfilePage'));
+const IamUsersPage = lazy(() => import('@/pages/settings/IamUsersPage'));
+const IamGroupsPage = lazy(() => import('@/pages/settings/IamGroupsPage'));
+const IamRolesPage = lazy(() => import('@/pages/settings/IamRolesPage'));
 const ReportTemplateList = lazy(() => import('@/pages/reports/ReportTemplateList'));
 const ReportTemplateForm = lazy(() => import('@/pages/reports/ReportTemplateForm'));
 const RunReport = lazy(() => import('@/pages/reports/RunReport'));
@@ -215,6 +219,54 @@ export const router = createBrowserRouter([
       {
         path: 'settings/agent-labels',
         element: <LazyPage><AgentLabelsSettings /></LazyPage>,
+      },
+      {
+        path: 'profile',
+        element: <Navigate to="/identity/authentication" replace />,
+      },
+      {
+        path: 'settings/security',
+        element: <Navigate to="/identity/authentication" replace />,
+      },
+      {
+        path: 'settings/iam/users',
+        element: <Navigate to="/identity/users" replace />,
+      },
+      {
+        path: 'settings/iam/groups',
+        element: <Navigate to="/identity/groups" replace />,
+      },
+      {
+        path: 'settings/iam/roles',
+        element: <Navigate to="/identity/roles" replace />,
+      },
+      {
+        path: 'identity/authentication',
+        element: <LazyPage><ProfilePage /></LazyPage>,
+      },
+      {
+        path: 'identity/users',
+        element: (
+          <PermissionGate anyOf={['identity.*', 'users.*', 'users.read', 'admin.*']}>
+            <LazyPage><IamUsersPage /></LazyPage>
+          </PermissionGate>
+        ),
+      },
+      {
+        path: 'identity/groups',
+        element: (
+          <PermissionGate anyOf={['identity.*', 'groups.*', 'groups.read', 'admin.*']}>
+            <LazyPage><IamGroupsPage /></LazyPage>
+          </PermissionGate>
+        ),
+      },
+      {
+        path: 'identity/roles',
+        element: (
+          <PermissionGate anyOf={['identity.*', 'roles.*', 'roles.read', 'permissions.read', 'admin.*']}>
+            <LazyPage><IamRolesPage /></LazyPage>
+          </PermissionGate>
+        ),
       },
       {
         path: 'reports/templates',

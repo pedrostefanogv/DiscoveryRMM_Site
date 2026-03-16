@@ -1,4 +1,5 @@
 import { api } from "./client";
+import type { MfaRequirement } from "./types";
 
 export interface LoginRequest {
   loginOrEmail: string;
@@ -6,12 +7,23 @@ export interface LoginRequest {
 }
 
 export interface LoginResponse {
-  mfaToken: string;
+  mfaToken?: string;
+  MfaToken?: string;
   mfaRequired: boolean;
-  mfaConfigured: boolean;
+  mfaConfigured?: boolean;
   firstAccessRequired: boolean;
   mustChangePassword: boolean;
   mustChangeProfile: boolean;
+  roleMfaRequirement?: MfaRequirement;
+  sessionEstablished?: boolean;
+  accessToken?: string;
+  refreshToken?: string;
+  expiresInSeconds?: number;
+  RoleMfaRequirement?: MfaRequirement;
+  SessionEstablished?: boolean;
+  AccessToken?: string;
+  RefreshToken?: string;
+  ExpiresInSeconds?: number;
 }
 
 export interface TokenPair {
@@ -56,6 +68,27 @@ export interface CompleteFido2RegistrationRequest {
 export interface CompleteFido2RegistrationResponse {
   keyId: string;
   message: string;
+}
+
+export interface CompleteOtpLoginRequest {
+  code: string;
+}
+
+export interface BeginTotpRegistrationResponse {
+  secretBase32: string;
+  qrCodeUri: string;
+  message: string;
+}
+
+export interface CompleteTotpRegistrationRequest {
+  secretBase32: string;
+  verificationCode: string;
+  keyName: string;
+}
+
+export interface CompleteTotpRegistrationResponse {
+  message: string;
+  backupCodes: string[];
 }
 
 export interface MfaKey {
@@ -151,6 +184,13 @@ export const authApi = {
       withBearer(token),
     ),
 
+  completeLoginOtp: (token: string, request: CompleteOtpLoginRequest) =>
+    api.post<TokenPair>(
+      "/api/auth/mfa/otp/complete",
+      request,
+      withBearer(token),
+    ),
+
   beginRegistrationFido2: (token: string) =>
     api.post<BeginFido2Response>(
       "/api/mfa/fido2/register/begin",
@@ -164,6 +204,23 @@ export const authApi = {
   ) =>
     api.post<CompleteFido2RegistrationResponse>(
       "/api/mfa/fido2/register/complete",
+      request,
+      withBearer(token),
+    ),
+
+  beginRegistrationTotp: (token: string) =>
+    api.post<BeginTotpRegistrationResponse>(
+      "/api/mfa/totp/register/begin",
+      undefined,
+      withBearer(token),
+    ),
+
+  completeRegistrationTotp: (
+    token: string,
+    request: CompleteTotpRegistrationRequest,
+  ) =>
+    api.post<CompleteTotpRegistrationResponse>(
+      "/api/mfa/totp/register/complete",
       request,
       withBearer(token),
     ),

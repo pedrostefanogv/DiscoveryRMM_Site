@@ -1,6 +1,6 @@
 import type { AuthSessionState } from "./types";
 
-const STORAGE_KEY = "meduza.auth.session.v1";
+const STORAGE_KEY = "discovery.auth.session.v1";
 
 export const emptyAuthSession: AuthSessionState = {
   stage: "anonymous",

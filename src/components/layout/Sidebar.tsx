@@ -17,8 +17,10 @@ import {
   Shield,
   FileBarChart,
   Wrench,
+  ShieldCheck,
 } from 'lucide-react';
 import { useTheme } from '@/theme/ThemeContext';
+import { useAuthorization } from '@/auth/authorization';
 
 const mainLinks = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
@@ -63,6 +65,13 @@ const settingsLinks = [
   { to: '/settings/branding', label: 'Branding' },
 ];
 
+const identityLinks = [
+  { to: '/identity/authentication', label: 'Perfil e Segurança' },
+  { to: '/identity/users', label: 'Usuários e Acesso' },
+  { to: '/identity/groups', label: 'Grupos de Usuários' },
+  { to: '/identity/roles', label: 'Roles e Permissões' },
+];
+
 interface SidebarProps {
   collapsed: boolean;
   onToggle: () => void;
@@ -70,6 +79,7 @@ interface SidebarProps {
 
 export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const { branding } = useTheme();
+  const { canManageIdentity } = useAuthorization();
   const location = useLocation();
   const navigate = useNavigate();
   const clientsIsActive =
@@ -78,11 +88,14 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const automationIsActive = location.pathname.startsWith('/automation');
   const reportsIsActive = location.pathname.startsWith('/reports');
   const settingsIsActive = location.pathname.startsWith('/settings');
+  const identityIsActive = location.pathname.startsWith('/identity');
   const [clientsOpen, setClientsOpen] = useState(clientsIsActive);
   const [softwareOpen, setSoftwareOpen] = useState(softwareIsActive);
   const [automationOpen, setAutomationOpen] = useState(automationIsActive);
   const [reportsOpen, setReportsOpen] = useState(reportsIsActive);
   const [settingsOpen, setSettingsOpen] = useState(settingsIsActive);
+  const [identityOpen, setIdentityOpen] = useState(identityIsActive);
+  const visibleIdentityLinks = canManageIdentity ? identityLinks : identityLinks.slice(0, 1);
 
   return (
     <aside
@@ -314,6 +327,53 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
         {!collapsed && reportsOpen && (
           <div className="ml-8 space-y-1 border-l border-white/10 pl-3">
             {reportsLinks.map(({ to, label }) => (
+              <NavLink
+                key={to}
+                to={to}
+                className={({ isActive }) =>
+                  `block rounded-md px-2 py-1.5 text-sm transition-colors ${
+                    isActive
+                      ? 'bg-white/10 text-white'
+                      : 'text-slate-400 hover:bg-white/5 hover:text-white'
+                  }`
+                }
+              >
+                {label}
+              </NavLink>
+            ))}
+          </div>
+        )}
+
+        <button
+          type="button"
+          onClick={() => {
+            if (collapsed) {
+              navigate('/identity/authentication');
+              return;
+            }
+            setIdentityOpen(prev => !prev);
+          }}
+          className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+            identityIsActive
+              ? 'bg-white/10 text-white'
+              : 'text-slate-400 hover:bg-white/5 hover:text-white'
+          }`}
+          aria-label="Abrir submenu de identidade"
+        >
+          <ShieldCheck className="h-5 w-5 shrink-0" />
+          {!collapsed && (
+            <>
+              <span className="truncate">Identidade</span>
+              <span className="ml-auto">
+                {identityOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              </span>
+            </>
+          )}
+        </button>
+
+        {!collapsed && identityOpen && (
+          <div className="ml-8 space-y-1 border-l border-white/10 pl-3">
+            {visibleIdentityLinks.map(({ to, label }) => (
               <NavLink
                 key={to}
                 to={to}

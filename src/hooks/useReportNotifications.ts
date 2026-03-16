@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 
-const NOTIFICATIONS_KEY = "meduza_report_notifications";
+const NOTIFICATIONS_KEY = "discovery_report_notifications";
 const MAX_NOTIFICATIONS = 120;
 
 export type ReportNotificationType = "info" | "success" | "warning" | "error";

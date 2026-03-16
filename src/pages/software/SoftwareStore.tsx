@@ -191,7 +191,7 @@ const limitOptions = [
   { value: '100', label: '100 por página' },
 ];
 
-const APP_STORE_LAST_SYNC_STORAGE_KEY = 'meduza.appStore.lastSyncByType.v1';
+const APP_STORE_LAST_SYNC_STORAGE_KEY = 'discovery.appStore.lastSyncByType.v1';
 
 function actionBadge(action: AppApprovalActionType) {
   return action === AppApprovalActionType.Allow ? (

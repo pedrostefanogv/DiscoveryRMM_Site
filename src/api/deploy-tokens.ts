@@ -10,7 +10,7 @@ export type CreateDeployTokenResponse = DeployToken | DeployInstallerPayload;
 function parseContentDispositionFileName(
   contentDisposition: string | null,
 ): string {
-  if (!contentDisposition) return "meduza-installer.exe";
+  if (!contentDisposition) return "discovery-installer.exe";
 
   const utf8Match = contentDisposition.match(/filename\*=UTF-8''([^;]+)/i);
   if (utf8Match?.[1]) {
@@ -25,7 +25,7 @@ function parseContentDispositionFileName(
   if (quotedMatch?.[1]) return quotedMatch[1];
 
   const plainMatch = contentDisposition.match(/filename=([^;]+)/i);
-  return plainMatch?.[1]?.trim() || "meduza-installer.exe";
+  return plainMatch?.[1]?.trim() || "discovery-installer.exe";
 }
 
 export const deployTokensApi = {

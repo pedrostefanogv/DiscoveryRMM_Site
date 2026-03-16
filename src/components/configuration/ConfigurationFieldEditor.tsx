@@ -531,7 +531,7 @@ export function ConfigurationFieldEditor({
                 updateJsonObjectValue("appName", event.target.value, "string")
               }
               disabled={inputDisabled}
-              placeholder="Meduza RMM"
+              placeholder="Discovery"
             />
             <Input
               label="Logo URL"

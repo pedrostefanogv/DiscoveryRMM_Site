@@ -75,8 +75,19 @@ export default function FirstAccessPage() {
         }
 
         if (!status.firstAccessRequired) {
-          setTemporaryStage(status.mfaRequired ? "mfa-register-begin" : "anonymous");
-          navigate(status.mfaRequired ? "/auth/mfa/register" : "/auth/login", {
+          const nextPath = status.mfaRequired
+            ? status.mfaConfigured
+              ? "/auth/mfa"
+              : "/auth/mfa/register"
+            : "/auth/login";
+          setTemporaryStage(
+            status.mfaRequired
+              ? status.mfaConfigured
+                ? "mfa-assert-begin"
+                : "mfa-register-begin"
+              : "anonymous",
+          );
+          navigate(nextPath, {
             replace: true,
           });
           return;
@@ -121,9 +132,11 @@ export default function FirstAccessPage() {
     toast.success(result.message);
 
     const status = await authApi.getFirstAccessStatus(token);
-    if (status.mfaRequired && !status.mfaConfigured) {
-      setTemporaryStage("mfa-register-begin");
-      navigate("/auth/mfa/register", { replace: true });
+    if (status.mfaRequired) {
+      setTemporaryStage(status.mfaConfigured ? "mfa-assert-begin" : "mfa-register-begin");
+      navigate(status.mfaConfigured ? "/auth/mfa" : "/auth/mfa/register", {
+        replace: true,
+      });
       return;
     }
 

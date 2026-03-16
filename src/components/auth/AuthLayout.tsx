@@ -12,28 +12,28 @@ export function AuthLayout() {
         <div className="max-w-xl space-y-6">
           <div className="inline-flex items-center gap-3 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-slate-200">
             <ShieldCheck className="h-4 w-4 text-primary" />
-            Autenticacao centralizada do Meduza
+            Autenticação centralizada do Discovery
           </div>
           <div className="space-y-4">
             <h1 className="text-4xl font-semibold tracking-tight text-white lg:text-5xl">
               {branding.appName}
             </h1>
             <p className="max-w-lg text-base leading-7 text-slate-300 lg:text-lg">
-              Sessao com refresh automatico, primeiro acesso guiado e MFA FIDO2/WebAuthn integrado ao backend atual.
+              Sessão segura com primeiro acesso guiado e verificação em duas etapas quando necessário.
             </p>
           </div>
           <div className="grid gap-3 text-sm text-slate-300 sm:grid-cols-2">
             <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-              Login com senha e token temporario
+              Login com senha e verificação adicional quando necessário
             </div>
             <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-              Onboarding de primeiro acesso com politica de senha
+              Primeiro acesso orientado para atualização de dados
             </div>
             <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-              MFA com passkeys e chaves FIDO2
+              Verificação em duas etapas para proteger sua conta
             </div>
             <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-              Sessao renovada antes do vencimento
+              Sessão mantida com continuidade e segurança
             </div>
           </div>
         </div>

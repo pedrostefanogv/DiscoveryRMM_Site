@@ -1,4 +1,12 @@
-type JsonRecord = Record<string, unknown>;
+﻿type JsonRecord = Record<string, unknown>;
+
+interface WebAuthnEnvironmentInfo {
+  isSecureContext: boolean;
+  protocol: string;
+  host: string;
+  origin: string;
+  hasPublicKeyCredential: boolean;
+}
 
 interface SerializedCredentialResponse {
   clientDataJSON: string;
@@ -51,16 +59,29 @@ function parseOptionsJson<T extends JsonRecord>(serialized: string): T {
   return JSON.parse(serialized) as T;
 }
 
+function getOption<T>(
+  source: JsonRecord,
+  camelCaseKey: string,
+  pascalCaseKey = `${camelCaseKey[0]?.toUpperCase() ?? ""}${camelCaseKey.slice(1)}`,
+): T | undefined {
+  return (source[camelCaseKey] ?? source[pascalCaseKey]) as T | undefined;
+}
+
+function getNestedRecord(source: JsonRecord, camelCaseKey: string): JsonRecord {
+  const value = getOption<JsonRecord>(source, camelCaseKey);
+  return value && typeof value === "object" ? value : {};
+}
+
 function normalizeCredentialDescriptor(
   descriptor: JsonRecord,
 ): PublicKeyCredentialDescriptor {
   return {
     ...descriptor,
     type:
-      (descriptor.type as PublicKeyCredentialType | undefined) ?? "public-key",
-    id: fromBase64Url(String(descriptor.id ?? "")),
-    transports: Array.isArray(descriptor.transports)
-      ? descriptor.transports.map(
+      getOption<PublicKeyCredentialType>(descriptor, "type") ?? "public-key",
+    id: fromBase64Url(String(getOption<string>(descriptor, "id") ?? "")),
+    transports: Array.isArray(getOption<unknown[]>(descriptor, "transports"))
+      ? (getOption<unknown[]>(descriptor, "transports") ?? []).map(
           (item) => String(item) as AuthenticatorTransport,
         )
       : undefined,
@@ -71,12 +92,14 @@ export function parseAssertionOptions(
   serializedOptions: string,
 ): PublicKeyCredentialRequestOptions {
   const options = parseOptionsJson<JsonRecord>(serializedOptions);
+  const challenge = getOption<string>(options, "challenge");
+  const allowCredentials = getOption<unknown[]>(options, "allowCredentials");
 
   return {
     ...options,
-    challenge: fromBase64Url(String(options.challenge ?? "")),
-    allowCredentials: Array.isArray(options.allowCredentials)
-      ? options.allowCredentials.map((item) =>
+    challenge: fromBase64Url(String(challenge ?? "")),
+    allowCredentials: Array.isArray(allowCredentials)
+      ? allowCredentials.map((item) =>
           normalizeCredentialDescriptor(item as JsonRecord),
         )
       : undefined,
@@ -87,17 +110,22 @@ export function parseRegistrationOptions(
   serializedOptions: string,
 ): PublicKeyCredentialCreationOptions {
   const options = parseOptionsJson<JsonRecord>(serializedOptions);
-  const user = (options.user ?? {}) as JsonRecord;
+  const challenge = getOption<string>(options, "challenge");
+  const user = getNestedRecord(options, "user");
+  const excludeCredentials = getOption<unknown[]>(
+    options,
+    "excludeCredentials",
+  );
 
   return {
     ...options,
-    challenge: fromBase64Url(String(options.challenge ?? "")),
+    challenge: fromBase64Url(String(challenge ?? "")),
     user: {
       ...user,
-      id: fromBase64Url(String(user.id ?? "")),
+      id: fromBase64Url(String(getOption<string>(user, "id") ?? "")),
     },
-    excludeCredentials: Array.isArray(options.excludeCredentials)
-      ? options.excludeCredentials.map((item) =>
+    excludeCredentials: Array.isArray(excludeCredentials)
+      ? excludeCredentials.map((item) =>
           normalizeCredentialDescriptor(item as JsonRecord),
         )
       : undefined,
@@ -146,7 +174,66 @@ export function serializeRegistrationCredential(
   };
 }
 
+export function getWebAuthnEnvironmentInfo(): WebAuthnEnvironmentInfo {
+  if (typeof window === "undefined") {
+    return {
+      isSecureContext: false,
+      protocol: "unknown:",
+      host: "unknown",
+      origin: "unknown",
+      hasPublicKeyCredential: false,
+    };
+  }
+
+  return {
+    isSecureContext: window.isSecureContext,
+    protocol: window.location.protocol,
+    host: window.location.host,
+    origin: window.location.origin,
+    hasPublicKeyCredential: typeof window.PublicKeyCredential !== "undefined",
+  };
+}
+
+export function describeWebAuthnError(error: unknown): string {
+  if (error instanceof DOMException) {
+    switch (error.name) {
+      case "SecurityError": {
+        const environment = getWebAuthnEnvironmentInfo();
+        return environment.isSecureContext
+          ? "O navegador bloqueou o WebAuthn por incompatibilidade de dominio ou RP ID. Verifique se o backend gerou o challenge para este host."
+          : "O navegador exige contexto seguro para WebAuthn. Em localhost isso costuma funcionar, mas IPs, hosts customizados ou paginas inseguras em HTTP podem ser bloqueados.";
+      }
+      case "NotAllowedError":
+        return "A operacao WebAuthn foi cancelada, expirou ou foi bloqueada pelo navegador/autenticador.";
+      case "InvalidStateError":
+        return "Esta chave ja parece estar registrada neste autenticador para este site.";
+      case "ConstraintError":
+        return "O autenticador nao conseguiu atender aos requisitos pedidos para esta credencial.";
+      case "AbortError":
+        return "A operacao WebAuthn foi interrompida antes da conclusao.";
+      case "NotSupportedError":
+        return "O autenticador ou o navegador nao suportam os parametros WebAuthn enviados pelo backend.";
+      default:
+        return error.message || "Falha inesperada ao usar WebAuthn.";
+    }
+  }
+
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return "Falha inesperada ao usar WebAuthn.";
+}
+
 export function ensureWebAuthnSupport() {
+  const environment = getWebAuthnEnvironmentInfo();
+
+  if (!environment.isSecureContext) {
+    throw new Error(
+      "WebAuthn exige contexto seguro. Use HTTPS ou localhost verdadeiro; hosts customizados ou IPs em HTTP podem ser bloqueados.",
+    );
+  }
+
   if (
     typeof window === "undefined" ||
     typeof window.PublicKeyCredential === "undefined" ||

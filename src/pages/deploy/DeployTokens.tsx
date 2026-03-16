@@ -20,7 +20,7 @@ function triggerInstallerDownload(fileName: string, blob: Blob) {
   const objectUrl = URL.createObjectURL(blob);
   const anchor = document.createElement('a');
   anchor.href = objectUrl;
-  anchor.download = fileName || 'meduza-installer.exe';
+  anchor.download = fileName || 'discovery-installer.exe';
   document.body.appendChild(anchor);
   anchor.click();
   anchor.remove();

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 
-const FAVORITES_KEY = "meduza_report_favorites";
+const FAVORITES_KEY = "discovery_report_favorites";
 
 interface FavoriteTemplate {
   id: string;

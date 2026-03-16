@@ -18,6 +18,8 @@ type LoginFormValues = z.infer<typeof loginSchema>;
 
 function routeForStage(stage: string) {
   switch (stage) {
+    case "authenticated":
+      return "/";
     case "first-access":
       return "/auth/first-access";
     case "mfa-register-begin":
@@ -54,8 +56,8 @@ export default function LoginPage() {
     } catch (error) {
       const message =
         error instanceof ApiError
-          ? "Nao foi possivel autenticar sua sessao. Verifique suas credenciais e tente novamente."
-          : "Nao foi possivel autenticar sua sessao.";
+          ? "Não foi possível autenticar sua sessão. Verifique suas credenciais e tente novamente."
+          : "Não foi possível autenticar sua sessão.";
       setSubmitError(message);
       toast.error(message);
     }
@@ -65,7 +67,7 @@ export default function LoginPage() {
     <Card className="border-white/10 bg-slate-900/80 shadow-2xl backdrop-blur" padding>
       <CardHeader
         title="Entrar"
-        subtitle="Use seu login ou e-mail e conclua o fluxo de seguranca exigido pela API."
+        subtitle="Use seu login ou e-mail e conclua o fluxo de segurança exigido."
       />
 
       <form className="space-y-4" onSubmit={handleSubmit(onSubmit)}>
@@ -95,11 +97,11 @@ export default function LoginPage() {
         <div className="rounded-xl border border-white/10 bg-white/5 p-4 text-sm text-slate-300">
           <div className="flex items-start gap-3">
             <UserRound className="mt-0.5 h-4 w-4 text-primary" />
-            O backend pode responder falha de login com 500 generico. Esta tela trata qualquer nao-2xx como erro de autenticacao.
+            Caso não seja possível acessar o sistema, revise suas credenciais e consulte o administrador.
           </div>
           <div className="mt-3 flex items-start gap-3">
             <LockKeyhole className="mt-0.5 h-4 w-4 text-accent" />
-            Se seu usuario exigir primeiro acesso ou MFA, o fluxo continua automaticamente nas proximas etapas.
+            Se o seu usuário exigir primeiro acesso ou verificação em duas etapas, o fluxo continuará automaticamente nas próximas etapas.
           </div>
         </div>
 

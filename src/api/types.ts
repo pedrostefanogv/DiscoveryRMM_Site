@@ -30,6 +30,8 @@ export enum CommandType {
 
 export type TicketPriority = "Low" | "Medium" | "High" | "Critical";
 
+export type MfaRequirement = "None" | "Totp" | "Fido2";
+
 export type TicketActivityType =
   | "Created"
   | "StateChanged"

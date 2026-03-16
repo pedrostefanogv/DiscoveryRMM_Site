@@ -13,6 +13,8 @@ import {
   authApi,
   configureApiClient,
   type LoginRequest,
+  type LoginResponse,
+  type MfaRequirement,
   type TokenPair,
 } from "@/api";
 import { clearAuthSession, emptyAuthSession, loadAuthSession, saveAuthSession } from "./storage";
@@ -32,24 +34,53 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-function resolveLoginStage(response: {
-  firstAccessRequired: boolean;
-  mfaRequired: boolean;
-  mfaConfigured: boolean;
-}): AuthStage {
+function readRoleMfaRequirement(response: LoginResponse): MfaRequirement {
+  return response.roleMfaRequirement ?? response.RoleMfaRequirement ?? "None";
+}
+
+function readSessionTokens(response: LoginResponse): TokenPair | null {
+  const accessToken = response.accessToken ?? response.AccessToken;
+  const refreshToken = response.refreshToken ?? response.RefreshToken;
+  const expiresInSeconds = response.expiresInSeconds ?? response.ExpiresInSeconds;
+
+  if (!accessToken || !refreshToken || !expiresInSeconds) {
+    return null;
+  }
+
+  return {
+    accessToken,
+    refreshToken,
+    expiresInSeconds,
+  };
+}
+
+function isSessionEstablished(response: LoginResponse): boolean {
+  return Boolean(
+    response.sessionEstablished ?? response.SessionEstablished ?? readSessionTokens(response),
+  );
+}
+
+function resolveLoginStage(response: LoginResponse): AuthStage {
   if (response.firstAccessRequired) {
     return "first-access";
   }
 
-  if (response.mfaRequired && response.mfaConfigured) {
-    return "mfa-assert-begin";
+  if (isSessionEstablished(response)) {
+    return "authenticated";
   }
 
-  if (response.mfaRequired && !response.mfaConfigured) {
+  if (!response.mfaRequired) {
+    return "anonymous";
+  }
+
+  const mfaConfigured = response.mfaConfigured ?? true;
+  const roleMfaRequirement = readRoleMfaRequirement(response);
+
+  if (!mfaConfigured && roleMfaRequirement !== "None") {
     return "mfa-register-begin";
   }
 
-  return "anonymous";
+  return "mfa-assert-begin";
 }
 
 function applyTokenPair(tokens: TokenPair, previous: AuthSessionState): AuthSessionState {
@@ -144,12 +175,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSession((previous) => ({ ...previous, stage: "login-submitting" }));
     const response = await authApi.login(request);
     const nextStage = resolveLoginStage(response);
+    const tokens = readSessionTokens(response);
+
+    if (nextStage === "authenticated" && tokens) {
+      setSession((previous) => ({
+        ...applyTokenPair(tokens, previous),
+        loginResponse: response,
+      }));
+      return nextStage;
+    }
 
     setSession({
       stage: nextStage,
       accessToken: null,
       refreshToken: null,
-      temporaryMfaToken: response.mfaToken,
+      temporaryMfaToken: response.mfaToken ?? response.MfaToken ?? null,
       expiresAt: null,
       loginResponse: response,
     });

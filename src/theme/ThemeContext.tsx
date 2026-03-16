@@ -10,7 +10,7 @@ export interface BrandingConfig {
 }
 
 const defaultBranding: BrandingConfig = {
-  appName: 'Meduza RMM',
+  appName: 'Discovery',
   logoUrl: null,
   primaryColor: '#6366f1',
   accentColor: '#06b6d4',
@@ -24,7 +24,7 @@ interface ThemeContextValue {
   resetBranding: () => void;
 }
 
-const STORAGE_KEY = 'meduza-branding';
+const STORAGE_KEY = 'discovery-branding';
 
 function loadBranding(): BrandingConfig {
   try {
@@ -54,6 +54,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     saveBranding(branding);
     applyCSSVars(branding);
+    document.title = branding.appName;
   }, [branding]);
 
   const updateBranding = (patch: Partial<BrandingConfig>) =>
