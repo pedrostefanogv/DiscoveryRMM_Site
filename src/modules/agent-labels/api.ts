@@ -8,13 +8,19 @@ import {
   CreateAgentLabelRuleRequest,
   UpdateAgentLabelRuleRequest,
 } from "./types";
+import {
+  api,
+  ApiError,
+  parseErrorMessage,
+  apiFetchResponse,
+} from "@/api/client";
 
 const BASE = "/api/agent-labels";
 
 async function toJson<T>(res: Response): Promise<T> {
   if (!res.ok) {
-    const payload = await res.json().catch(() => ({}));
-    throw { status: res.status, ...payload };
+    const message = await parseErrorMessage(res);
+    throw new ApiError(res.status, message);
   }
 
   if (res.status === 204) {
@@ -26,17 +32,17 @@ async function toJson<T>(res: Response): Promise<T> {
 
 export const agentLabelsApi = {
   async getAgentLabels(agentId: string): Promise<AgentLabel[]> {
-    const res = await fetch(`${BASE}/agents/${agentId}`);
-    return toJson<AgentLabel[]>(res);
+    return api.get<AgentLabel[]>(`${BASE}/agents/${agentId}`);
   },
 
   async getRules(includeDisabled = true): Promise<AgentLabelRuleResponse[]> {
-    const res = await fetch(`${BASE}/rules?includeDisabled=${includeDisabled}`);
-    return toJson<AgentLabelRuleResponse[]>(res);
+    return api.get<AgentLabelRuleResponse[]>(`${BASE}/rules`, {
+      includeDisabled,
+    });
   },
 
   async getRuleAgents(ruleId: string): Promise<AgentLabelRuleAgentsResponse> {
-    const res = await fetch(`${BASE}/rules/${ruleId}/agents`);
+    const res = await apiFetchResponse(`${BASE}/rules/${ruleId}/agents`);
     const raw = await toJson<{
       ruleId?: string;
       ruleName?: string;
@@ -72,47 +78,30 @@ export const agentLabelsApi = {
   async createRule(
     payload: CreateAgentLabelRuleRequest,
   ): Promise<AgentLabelRuleResponse> {
-    const res = await fetch(`${BASE}/rules`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-
-    return toJson<AgentLabelRuleResponse>(res);
+    return api.post<AgentLabelRuleResponse>(`${BASE}/rules`, payload);
   },
 
   async updateRule(
     id: string,
     payload: UpdateAgentLabelRuleRequest,
   ): Promise<AgentLabelRuleResponse> {
-    const res = await fetch(`${BASE}/rules/${id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-
-    return toJson<AgentLabelRuleResponse>(res);
+    return api.put<AgentLabelRuleResponse>(`${BASE}/rules/${id}`, payload);
   },
 
   async deleteRule(id: string): Promise<void> {
-    const res = await fetch(`${BASE}/rules/${id}`, { method: "DELETE" });
-    await toJson<void>(res);
+    await api.del<void>(`${BASE}/rules/${id}`);
   },
 
   async reprocessAll(): Promise<{ message: string }> {
-    const res = await fetch(`${BASE}/reprocess`, { method: "POST" });
-    return toJson<{ message: string }>(res);
+    return api.post<{ message: string }>(`${BASE}/reprocess`);
   },
 
   async dryRun(
     payload: AgentLabelRuleDryRunRequest,
   ): Promise<AgentLabelRuleDryRunResponse> {
-    const res = await fetch(`${BASE}/rules/dry-run`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-
-    return toJson<AgentLabelRuleDryRunResponse>(res);
+    return api.post<AgentLabelRuleDryRunResponse>(
+      `${BASE}/rules/dry-run`,
+      payload,
+    );
   },
 };

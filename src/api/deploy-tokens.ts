@@ -1,4 +1,4 @@
-import { API_BASE_URL, ApiError, api } from "./client";
+import { ApiError, api, apiFetchResponse, parseErrorMessage } from "./client";
 import type {
   CreateDeployTokenRequest,
   DeployInstallerPayload,
@@ -6,35 +6,6 @@ import type {
 } from "./types";
 
 export type CreateDeployTokenResponse = DeployToken | DeployInstallerPayload;
-
-async function parseErrorMessage(res: Response): Promise<string> {
-  const contentType = res.headers.get("content-type")?.toLowerCase() ?? "";
-
-  if (contentType.includes("application/json")) {
-    try {
-      const payload = (await res.json()) as
-        | { message?: unknown; error?: unknown; detail?: unknown }
-        | string;
-      if (typeof payload === "string" && payload.trim()) return payload;
-      if (payload && typeof payload === "object") {
-        const message =
-          payload.message ?? payload.error ?? payload.detail ?? res.statusText;
-        if (typeof message === "string" && message.trim()) return message;
-      }
-    } catch {
-      // Fallback para parse de texto/status abaixo.
-    }
-  }
-
-  try {
-    const text = await res.text();
-    if (text.trim() && !text.trim().startsWith("<")) return text;
-  } catch {
-    // Fallback para status message abaixo.
-  }
-
-  return res.statusText || "Erro de requisicao";
-}
 
 function parseContentDispositionFileName(
   contentDisposition: string | null,
@@ -65,7 +36,7 @@ export const deployTokensApi = {
       return api.post<DeployToken>("/api/deploy-tokens", data);
     }
 
-    const response = await fetch(`${API_BASE_URL}/api/deploy-tokens`, {
+    const response = await apiFetchResponse(`/api/deploy-tokens`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

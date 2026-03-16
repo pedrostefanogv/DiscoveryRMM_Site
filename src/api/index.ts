@@ -1,5 +1,5 @@
 export * from "./types";
-export { api, ApiError } from "./client";
+export { api, ApiError, configureApiClient } from "./client";
 export { clientsApi } from "./clients";
 export { sitesApi } from "./sites";
 export { agentsApi } from "./agents";
@@ -39,6 +39,24 @@ export type {
   RealtimeStatsResponse,
 } from "./realtime";
 export { dashboardApi } from "./dashboard";
+export { authApi } from "./auth";
+export type {
+  LoginRequest,
+  LoginResponse,
+  TokenPair,
+  RefreshTokenRequest,
+  FirstAccessStatus,
+  CompleteFirstAccessRequest,
+  BeginFido2Response,
+  CompleteFido2AssertionRequest,
+  CompleteFido2RegistrationRequest,
+  CompleteFido2RegistrationResponse,
+  MfaKey,
+  RenameMfaKeyRequest,
+  MeshCentralEmbedUrlRequest,
+  MeshCentralEmbedUrlResponse,
+  ApiMessageResponse,
+} from "./auth";
 export type {
   DashboardWindow,
   DashboardSummaryDto,

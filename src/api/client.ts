@@ -1,5 +1,25 @@
 export const API_BASE_URL = import.meta.env.VITE_API_URL ?? "";
 
+export interface ApiRequestInit extends RequestInit {
+  auth?: boolean;
+  retryOnAuthError?: boolean;
+}
+
+interface ApiClientConfig {
+  getAccessToken: () => string | null;
+  refreshAccessToken: () => Promise<string | null>;
+  onAuthFailure: () => void;
+}
+
+const defaultApiClientConfig: ApiClientConfig = {
+  getAccessToken: () => null,
+  refreshAccessToken: async () => null,
+  onAuthFailure: () => {},
+};
+
+let apiClientConfig = defaultApiClientConfig;
+let refreshInFlight: Promise<string | null> | null = null;
+
 class ApiError extends Error {
   constructor(
     public status: number,
@@ -56,14 +76,87 @@ async function parseErrorMessage(res: Response): Promise<string> {
   );
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+async function refreshAccessToken(): Promise<string | null> {
+  if (refreshInFlight) {
+    return refreshInFlight;
+  }
+
+  refreshInFlight = apiClientConfig
+    .refreshAccessToken()
+    .catch(() => null)
+    .finally(() => {
+      refreshInFlight = null;
+    });
+
+  return refreshInFlight;
+}
+
+export function configureApiClient(config: Partial<ApiClientConfig>) {
+  apiClientConfig = {
+    ...apiClientConfig,
+    ...config,
+  };
+}
+
+export async function apiFetchResponse(
+  path: string,
+  init: ApiRequestInit = {},
+): Promise<Response> {
   const url = `${API_BASE_URL}${path}`;
-  const res = await fetch(url, {
+  const headers = new Headers(init.headers);
+  const useAuth = init.auth !== false;
+
+  if (useAuth && !headers.has("Authorization")) {
+    const accessToken = apiClientConfig.getAccessToken();
+    if (accessToken) {
+      headers.set("Authorization", `Bearer ${accessToken}`);
+    }
+  }
+
+  const response = await fetch(url, {
     ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...init?.headers,
-    },
+    headers,
+  });
+
+  if (response.status === 401 && useAuth && init.retryOnAuthError !== false) {
+    const refreshedAccessToken = await refreshAccessToken();
+    if (!refreshedAccessToken) {
+      apiClientConfig.onAuthFailure();
+      return response;
+    }
+
+    const retryHeaders = new Headers(init.headers);
+    retryHeaders.set("Authorization", `Bearer ${refreshedAccessToken}`);
+
+    const retriedResponse = await fetch(url, {
+      ...init,
+      headers: retryHeaders,
+    });
+
+    if (retriedResponse.status === 401) {
+      apiClientConfig.onAuthFailure();
+    }
+
+    return retriedResponse;
+  }
+
+  return response;
+}
+
+async function request<T>(path: string, init?: ApiRequestInit): Promise<T> {
+  const headers = new Headers(init?.headers);
+
+  if (
+    !headers.has("Content-Type") &&
+    init?.body &&
+    !(init.body instanceof FormData)
+  ) {
+    headers.set("Content-Type", "application/json");
+  }
+
+  const res = await apiFetchResponse(path, {
+    ...init,
+    headers,
   });
 
   if (!res.ok) {
@@ -104,32 +197,32 @@ export const api = {
   get: <T>(
     path: string,
     params: Record<string, unknown> = {},
-    init?: RequestInit,
+    init?: ApiRequestInit,
   ) => request<T>(`${path}${qs(params)}`, init),
 
-  post: <T>(path: string, body?: unknown, init?: RequestInit) =>
+  post: <T>(path: string, body?: unknown, init?: ApiRequestInit) =>
     request<T>(path, {
       ...init,
       method: "POST",
       body: body ? JSON.stringify(body) : undefined,
     }),
 
-  put: <T>(path: string, body: unknown, init?: RequestInit) =>
+  put: <T>(path: string, body: unknown, init?: ApiRequestInit) =>
     request<T>(path, {
       ...init,
       method: "PUT",
       body: JSON.stringify(body),
     }),
 
-  patch: <T>(path: string, body: unknown, init?: RequestInit) =>
+  patch: <T>(path: string, body: unknown, init?: ApiRequestInit) =>
     request<T>(path, {
       ...init,
       method: "PATCH",
       body: JSON.stringify(body),
     }),
 
-  del: <T>(path: string, init?: RequestInit) =>
+  del: <T>(path: string, init?: ApiRequestInit) =>
     request<T>(path, { ...init, method: "DELETE" }),
 };
 
-export { ApiError };
+export { ApiError, parseErrorMessage };

@@ -3,6 +3,8 @@ import { MainLayout } from '@/components/layout/MainLayout';
 import { lazy, Suspense } from 'react';
 import { Loading } from '@/components/ui';
 import { ErrorPage } from '@/components/ErrorPage';
+import { AuthLayout } from '@/components/auth/AuthLayout';
+import { PublicOnlyAuth, RequireAuth } from '@/auth/AuthGuards';
 
 // Lazy load all pages for code splitting
 const Dashboard = lazy(() => import('@/pages/Dashboard'));
@@ -40,6 +42,10 @@ const RunReport = lazy(() => import('@/pages/reports/RunReport'));
 const ReportExecutionList = lazy(() => import('@/pages/reports/ReportExecutionList'));
 const KnowledgeList = lazy(() => import('@/pages/knowledge/KnowledgeList'));
 const KnowledgeEditor = lazy(() => import('@/pages/knowledge/KnowledgeEditor'));
+const LoginPage = lazy(() => import('@/pages/auth/LoginPage'));
+const FirstAccessPage = lazy(() => import('@/pages/auth/FirstAccessPage'));
+const MfaAssertionPage = lazy(() => import('@/pages/auth/MfaAssertionPage'));
+const MfaRegistrationPage = lazy(() => import('@/pages/auth/MfaRegistrationPage'));
 
 function LazyPage({ children }: { children: React.ReactNode }) {
   return <Suspense fallback={<Loading />}>{children}</Suspense>;
@@ -47,10 +53,45 @@ function LazyPage({ children }: { children: React.ReactNode }) {
 
 export const router = createBrowserRouter([
   {
-    path: '/',
-    element: <MainLayout />,
+    path: '/auth',
+    element: <PublicOnlyAuth />,
     errorElement: <ErrorPage />,
     children: [
+      {
+        element: <AuthLayout />,
+        children: [
+          {
+            index: true,
+            element: <Navigate to="/auth/login" replace />,
+          },
+          {
+            path: 'login',
+            element: <LazyPage><LoginPage /></LazyPage>,
+          },
+          {
+            path: 'first-access',
+            element: <LazyPage><FirstAccessPage /></LazyPage>,
+          },
+          {
+            path: 'mfa',
+            element: <LazyPage><MfaAssertionPage /></LazyPage>,
+          },
+          {
+            path: 'mfa/register',
+            element: <LazyPage><MfaRegistrationPage /></LazyPage>,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    path: '/',
+    element: <RequireAuth />,
+    errorElement: <ErrorPage />,
+    children: [
+      {
+        element: <MainLayout />,
+        children: [
       {
         index: true,
         element: <LazyPage><Dashboard /></LazyPage>,
@@ -210,6 +251,8 @@ export const router = createBrowserRouter([
       {
         path: '*',
         element: <Navigate to="/" replace />,
+      },
+        ],
       },
     ],
   },

@@ -3,10 +3,12 @@ import { Outlet } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
 import { useAgentStatusRealtime_Combined } from '@/hooks';
+import { useAuth } from '@/auth/AuthContext';
 
 export function MainLayout() {
   const [collapsed, setCollapsed] = useState(false);
-  useAgentStatusRealtime_Combined(true);
+  const { isAuthenticated } = useAuth();
+  useAgentStatusRealtime_Combined(isAuthenticated);
 
   return (
     <div className="flex min-h-screen bg-slate-950">

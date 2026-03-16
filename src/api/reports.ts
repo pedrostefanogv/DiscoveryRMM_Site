@@ -16,7 +16,7 @@ import type {
   PreviewMode,
   ReportAutocompleteResponse,
 } from "./types";
-import { API_BASE_URL, ApiError } from "./client";
+import { ApiError, apiFetchResponse, parseErrorMessage } from "./client";
 
 // ── Dataset Catalog ─────────────────────────────────────
 
@@ -111,10 +111,9 @@ export async function getReportExecutions(params?: {
 export async function previewReport(
   request: PreviewReportRequest,
 ): Promise<PreviewReportResponse> {
-  const url = `${API_BASE_URL}/api/reports/preview`;
   const previewMode: PreviewMode = request.previewMode ?? "document";
 
-  const res = await fetch(url, {
+  const res = await apiFetchResponse(`/api/reports/preview`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -123,8 +122,8 @@ export async function previewReport(
   });
 
   if (!res.ok) {
-    const text = await res.text().catch(() => res.statusText);
-    throw new ApiError(res.status, text);
+    const message = await parseErrorMessage(res);
+    throw new ApiError(res.status, message);
   }
 
   const rowCountHeader = res.headers.get("X-Report-RowCount");
@@ -156,14 +155,38 @@ export async function previewReport(
   };
 }
 
-export function getReportDownloadUrl(id: string, clientId?: string): string {
-  // Use relative URLs to properly leverage browser's cookie/session handling
-  // The VITE_API_URL is only for server-to-server API calls, not for browser navigation
+function getReportDownloadPath(id: string, clientId?: string): string {
+  const params = new URLSearchParams();
   if (clientId) {
-    const params = new URLSearchParams({ clientId });
-    return `/api/reports/executions/${id}/download?${params}`;
+    params.set("clientId", clientId);
   }
-  return `/api/reports/executions/${id}/download`;
+
+  const query = params.toString();
+  return query
+    ? `/api/reports/executions/${id}/download?${query}`
+    : `/api/reports/executions/${id}/download`;
+}
+
+function parseContentDispositionFileName(
+  contentDisposition: string | null,
+  fallback: string,
+) {
+  if (!contentDisposition) return fallback;
+
+  const utf8Match = contentDisposition.match(/filename\*=UTF-8''([^;]+)/i);
+  if (utf8Match?.[1]) {
+    try {
+      return decodeURIComponent(utf8Match[1]);
+    } catch {
+      return utf8Match[1];
+    }
+  }
+
+  const quotedMatch = contentDisposition.match(/filename="([^"]+)"/i);
+  if (quotedMatch?.[1]) return quotedMatch[1];
+
+  const plainMatch = contentDisposition.match(/filename=([^;]+)/i);
+  return plainMatch?.[1]?.trim() || fallback;
 }
 
 // ── Download Helper ─────────────────────────────────────
@@ -173,21 +196,35 @@ export function getReportDownloadUrl(id: string, clientId?: string): string {
  */
 export async function downloadReportFile(
   executionId: string,
-  _fileName?: string,
+  fileName?: string,
   clientId?: string,
 ): Promise<void> {
-  const downloadUrl = getReportDownloadUrl(executionId, clientId);
+  const response = await apiFetchResponse(
+    getReportDownloadPath(executionId, clientId),
+    {
+      method: "GET",
+    },
+  );
 
-  try {
-    // Use direct window.location for file download to leverage browser's native download handling
-    // This avoids CORS issues and properly maintains authentication cookies
-    window.location.href = downloadUrl;
-  } catch (error) {
-    console.error("Failed to initiate report download:", error);
-    throw new Error(
-      `Failed to download report: ${error instanceof Error ? error.message : "Unknown error"}`,
-    );
+  if (!response.ok) {
+    const message = await parseErrorMessage(response);
+    throw new ApiError(response.status, message);
   }
+
+  const blob = await response.blob();
+  const downloadName = parseContentDispositionFileName(
+    response.headers.get("Content-Disposition"),
+    fileName ?? `report-${executionId}`,
+  );
+
+  const blobUrl = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = blobUrl;
+  link.download = downloadName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(blobUrl);
 }
 
 // ── Preview (fallback local) ───────────────────────────
