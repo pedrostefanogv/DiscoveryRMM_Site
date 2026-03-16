@@ -135,6 +135,34 @@ export function useAuthorization() {
 
   return {
     ...authz,
+    canViewDeploy: authz.hasAnyPermission([
+      "deploy.*",
+      "deploy.read",
+      "deployment.*",
+      "admin.*",
+    ]),
+    canViewSoftware: authz.hasAnyPermission([
+      "software.*",
+      "software.read",
+      "inventory.*",
+      "inventory.read",
+      "admin.*",
+    ]),
+    canViewAutomation: authz.hasAnyPermission([
+      "automation.*",
+      "automation.read",
+      "admin.*",
+    ]),
+    canViewReports: authz.hasAnyPermission([
+      "reports.*",
+      "reports.read",
+      "admin.*",
+    ]),
+    canViewSettings: authz.hasAnyPermission([
+      "settings.*",
+      "settings.read",
+      "admin.*",
+    ]),
     canManageIdentity:
       authz.hasAnyPermission([
         "identity.*",

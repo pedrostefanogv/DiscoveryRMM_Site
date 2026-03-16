@@ -134,19 +134,35 @@ export const router = createBrowserRouter([
       },
       {
         path: 'logs',
-        element: <LazyPage><LogViewer /></LazyPage>,
+        element: (
+          <PermissionGate anyOf={['logs.*', 'logs.read', 'admin.*']}>
+            <LazyPage><LogViewer /></LazyPage>
+          </PermissionGate>
+        ),
       },
       {
         path: 'deploy',
-        element: <LazyPage><DeployTokens /></LazyPage>,
+        element: (
+          <PermissionGate anyOf={['deploy.*', 'deploy.read', 'deployment.*', 'admin.*']}>
+            <LazyPage><DeployTokens /></LazyPage>
+          </PermissionGate>
+        ),
       },
       {
         path: 'software',
-        element: <LazyPage><SoftwareHome /></LazyPage>,
+        element: (
+          <PermissionGate anyOf={['software.*', 'software.read', 'inventory.*', 'inventory.read', 'admin.*']}>
+            <LazyPage><SoftwareHome /></LazyPage>
+          </PermissionGate>
+        ),
       },
       {
         path: 'software/inventory',
-        element: <LazyPage><SoftwareInventory /></LazyPage>,
+        element: (
+          <PermissionGate anyOf={['software.*', 'software.read', 'inventory.*', 'inventory.read', 'admin.*']}>
+            <LazyPage><SoftwareInventory /></LazyPage>
+          </PermissionGate>
+        ),
       },
       {
         path: 'software/automation',
@@ -154,7 +170,11 @@ export const router = createBrowserRouter([
       },
       {
         path: 'software/store',
-        element: <LazyPage><SoftwareStore /></LazyPage>,
+        element: (
+          <PermissionGate anyOf={['software.*', 'software.read', 'inventory.*', 'inventory.read', 'admin.*']}>
+            <LazyPage><SoftwareStore /></LazyPage>
+          </PermissionGate>
+        ),
       },
       {
         path: 'software-inventory',
@@ -162,63 +182,123 @@ export const router = createBrowserRouter([
       },
       {
         path: 'automation',
-        element: <LazyPage><AutomationHome /></LazyPage>,
+        element: (
+          <PermissionGate anyOf={['automation.*', 'automation.read', 'admin.*']}>
+            <LazyPage><AutomationHome /></LazyPage>
+          </PermissionGate>
+        ),
       },
       {
         path: 'automation/scripts',
-        element: <LazyPage><AutomationScriptsPage /></LazyPage>,
+        element: (
+          <PermissionGate anyOf={['automation.*', 'automation.read', 'admin.*']}>
+            <LazyPage><AutomationScriptsPage /></LazyPage>
+          </PermissionGate>
+        ),
       },
       {
         path: 'automation/tasks',
-        element: <LazyPage><AutomationTasksPage /></LazyPage>,
+        element: (
+          <PermissionGate anyOf={['automation.*', 'automation.read', 'admin.*']}>
+            <LazyPage><AutomationTasksPage /></LazyPage>
+          </PermissionGate>
+        ),
       },
       {
         path: 'automation/operations',
-        element: <LazyPage><AutomationOperationsPage /></LazyPage>,
+        element: (
+          <PermissionGate anyOf={['automation.*', 'automation.read', 'admin.*']}>
+            <LazyPage><AutomationOperationsPage /></LazyPage>
+          </PermissionGate>
+        ),
       },
       {
         path: 'automation/audit',
-        element: <LazyPage><AutomationAuditPage /></LazyPage>,
+        element: (
+          <PermissionGate anyOf={['automation.*', 'automation.read', 'admin.*']}>
+            <LazyPage><AutomationAuditPage /></LazyPage>
+          </PermissionGate>
+        ),
       },
       {
         path: 'settings',
-        element: <LazyPage><ConfigurationSettings /></LazyPage>,
+        element: (
+          <PermissionGate anyOf={['settings.*', 'settings.read', 'admin.*']}>
+            <LazyPage><ConfigurationSettings /></LazyPage>
+          </PermissionGate>
+        ),
       },
       {
         path: 'settings/server',
-        element: <LazyPage><ServerConfigurationPage /></LazyPage>,
+        element: (
+          <PermissionGate anyOf={['settings.*', 'settings.read', 'admin.*']}>
+            <LazyPage><ServerConfigurationPage /></LazyPage>
+          </PermissionGate>
+        ),
       },
       {
         path: 'settings/client',
-        element: <LazyPage><ClientConfigurationPage /></LazyPage>,
+        element: (
+          <PermissionGate anyOf={['settings.*', 'settings.read', 'admin.*']}>
+            <LazyPage><ClientConfigurationPage /></LazyPage>
+          </PermissionGate>
+        ),
       },
       {
         path: 'settings/site',
-        element: <LazyPage><SiteConfigurationPage /></LazyPage>,
+        element: (
+          <PermissionGate anyOf={['settings.*', 'settings.read', 'admin.*']}>
+            <LazyPage><SiteConfigurationPage /></LazyPage>
+          </PermissionGate>
+        ),
       },
       {
         path: 'settings/branding',
-        element: <LazyPage><BrandingSettings /></LazyPage>,
+        element: (
+          <PermissionGate anyOf={['settings.*', 'settings.read', 'admin.*']}>
+            <LazyPage><BrandingSettings /></LazyPage>
+          </PermissionGate>
+        ),
       },
       {
         path: 'settings/workflow',
-        element: <LazyPage><WorkflowSettings /></LazyPage>,
+        element: (
+          <PermissionGate anyOf={['settings.*', 'settings.read', 'workflow.*', 'admin.*']}>
+            <LazyPage><WorkflowSettings /></LazyPage>
+          </PermissionGate>
+        ),
       },
       {
         path: 'settings/departments',
-        element: <LazyPage><DepartmentSettings /></LazyPage>,
+        element: (
+          <PermissionGate anyOf={['settings.*', 'settings.read', 'departments.*', 'admin.*']}>
+            <LazyPage><DepartmentSettings /></LazyPage>
+          </PermissionGate>
+        ),
       },
       {
         path: 'settings/workflow-profiles',
-        element: <LazyPage><WorkflowProfileSettings /></LazyPage>,
+        element: (
+          <PermissionGate anyOf={['settings.*', 'settings.read', 'workflow.*', 'admin.*']}>
+            <LazyPage><WorkflowProfileSettings /></LazyPage>
+          </PermissionGate>
+        ),
       },
       {
         path: 'settings/audit',
-        element: <LazyPage><ConfigurationAudit /></LazyPage>,
+        element: (
+          <PermissionGate anyOf={['settings.*', 'settings.read', 'admin.*']}>
+            <LazyPage><ConfigurationAudit /></LazyPage>
+          </PermissionGate>
+        ),
       },
       {
         path: 'settings/agent-labels',
-        element: <LazyPage><AgentLabelsSettings /></LazyPage>,
+        element: (
+          <PermissionGate anyOf={['settings.*', 'settings.read', 'admin.*']}>
+            <LazyPage><AgentLabelsSettings /></LazyPage>
+          </PermissionGate>
+        ),
       },
       {
         path: 'profile',
@@ -270,23 +350,43 @@ export const router = createBrowserRouter([
       },
       {
         path: 'reports/templates',
-        element: <LazyPage><ReportTemplateList /></LazyPage>,
+        element: (
+          <PermissionGate anyOf={['reports.*', 'reports.read', 'admin.*']}>
+            <LazyPage><ReportTemplateList /></LazyPage>
+          </PermissionGate>
+        ),
       },
       {
         path: 'reports/templates/new',
-        element: <LazyPage><ReportTemplateForm /></LazyPage>,
+        element: (
+          <PermissionGate anyOf={['reports.*', 'reports.read', 'admin.*']}>
+            <LazyPage><ReportTemplateForm /></LazyPage>
+          </PermissionGate>
+        ),
       },
       {
         path: 'reports/templates/:id/edit',
-        element: <LazyPage><ReportTemplateForm /></LazyPage>,
+        element: (
+          <PermissionGate anyOf={['reports.*', 'reports.read', 'admin.*']}>
+            <LazyPage><ReportTemplateForm /></LazyPage>
+          </PermissionGate>
+        ),
       },
       {
         path: 'reports/run',
-        element: <LazyPage><RunReport /></LazyPage>,
+        element: (
+          <PermissionGate anyOf={['reports.*', 'reports.read', 'admin.*']}>
+            <LazyPage><RunReport /></LazyPage>
+          </PermissionGate>
+        ),
       },
       {
         path: 'reports/executions',
-        element: <LazyPage><ReportExecutionList /></LazyPage>,
+        element: (
+          <PermissionGate anyOf={['reports.*', 'reports.read', 'admin.*']}>
+            <LazyPage><ReportExecutionList /></LazyPage>
+          </PermissionGate>
+        ),
       },
       {
         path: 'knowledge',

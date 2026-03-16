@@ -79,7 +79,14 @@ interface SidebarProps {
 
 export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const { branding } = useTheme();
-  const { canManageIdentity } = useAuthorization();
+  const {
+    canManageIdentity,
+    canViewAutomation,
+    canViewDeploy,
+    canViewReports,
+    canViewSettings,
+    canViewSoftware,
+  } = useAuthorization();
   const location = useLocation();
   const navigate = useNavigate();
   const clientsIsActive =
@@ -96,6 +103,9 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const [settingsOpen, setSettingsOpen] = useState(settingsIsActive);
   const [identityOpen, setIdentityOpen] = useState(identityIsActive);
   const visibleIdentityLinks = canManageIdentity ? identityLinks : identityLinks.slice(0, 1);
+  const visibleMainLinks = mainLinks
+    .slice(1)
+    .filter(({ to }) => (to === '/deploy' ? canViewDeploy : true));
 
   return (
     <aside
@@ -184,7 +194,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
           </div>
         )}
 
-        {mainLinks.slice(1).map(({ to, icon: Icon, label }) => (
+        {visibleMainLinks.map(({ to, icon: Icon, label }) => (
           <NavLink
             key={to}
             to={to}
@@ -202,146 +212,158 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
           </NavLink>
         ))}
 
-        <button
-          type="button"
-          onClick={() => {
-            if (collapsed) {
-              navigate('/software');
-              return;
-            }
-            setSoftwareOpen(prev => !prev);
-          }}
-          className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
-            softwareIsActive
-              ? 'bg-white/10 text-white'
-              : 'text-slate-400 hover:bg-white/5 hover:text-white'
-          }`}
-          aria-label="Abrir submenu de softwares"
-        >
-          <AppWindow className="h-5 w-5 shrink-0" />
-          {!collapsed && (
-            <>
-              <span className="truncate">Softwares</span>
-              <span className="ml-auto">
-                {softwareOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-              </span>
-            </>
-          )}
-        </button>
-
-        {!collapsed && softwareOpen && (
-          <div className="ml-8 space-y-1 border-l border-white/10 pl-3">
-            {softwareLinks.map(({ to, label }) => (
-              <NavLink
-                key={to}
-                to={to}
-                className={({ isActive }) =>
-                  `block rounded-md px-2 py-1.5 text-sm transition-colors ${
-                    isActive
-                      ? 'bg-white/10 text-white'
-                      : 'text-slate-400 hover:bg-white/5 hover:text-white'
-                  }`
+        {canViewSoftware && (
+          <>
+            <button
+              type="button"
+              onClick={() => {
+                if (collapsed) {
+                  navigate('/software');
+                  return;
                 }
-              >
-                {label}
-              </NavLink>
-            ))}
-          </div>
+                setSoftwareOpen(prev => !prev);
+              }}
+              className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+                softwareIsActive
+                  ? 'bg-white/10 text-white'
+                  : 'text-slate-400 hover:bg-white/5 hover:text-white'
+              }`}
+              aria-label="Abrir submenu de softwares"
+            >
+              <AppWindow className="h-5 w-5 shrink-0" />
+              {!collapsed && (
+                <>
+                  <span className="truncate">Softwares</span>
+                  <span className="ml-auto">
+                    {softwareOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                  </span>
+                </>
+              )}
+            </button>
+
+            {!collapsed && softwareOpen && (
+              <div className="ml-8 space-y-1 border-l border-white/10 pl-3">
+                {softwareLinks.map(({ to, label }) => (
+                  <NavLink
+                    key={to}
+                    to={to}
+                    className={({ isActive }) =>
+                      `block rounded-md px-2 py-1.5 text-sm transition-colors ${
+                        isActive
+                          ? 'bg-white/10 text-white'
+                          : 'text-slate-400 hover:bg-white/5 hover:text-white'
+                      }`
+                    }
+                  >
+                    {label}
+                  </NavLink>
+                ))}
+              </div>
+            )}
+          </>
         )}
 
-        <button
-          type="button"
-          onClick={() => {
-            if (collapsed) {
-              navigate('/automation');
-              return;
-            }
-            setAutomationOpen(prev => !prev);
-          }}
-          className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
-            automationIsActive
-              ? 'bg-white/10 text-white'
-              : 'text-slate-400 hover:bg-white/5 hover:text-white'
-          }`}
-          aria-label="Abrir submenu de automação"
-        >
-          <Wrench className="h-5 w-5 shrink-0" />
-          {!collapsed && (
-            <>
-              <span className="truncate">Automação</span>
-              <span className="ml-auto">
-                {automationOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-              </span>
-            </>
-          )}
-        </button>
-
-        {!collapsed && automationOpen && (
-          <div className="ml-8 space-y-1 border-l border-white/10 pl-3">
-            {automationLinks.map(({ to, label }) => (
-              <NavLink
-                key={to}
-                to={to}
-                end={to === '/automation'}
-                className={({ isActive }) =>
-                  `block rounded-md px-2 py-1.5 text-sm transition-colors ${
-                    isActive
-                      ? 'bg-white/10 text-white'
-                      : 'text-slate-400 hover:bg-white/5 hover:text-white'
-                  }`
+        {canViewAutomation && (
+          <>
+            <button
+              type="button"
+              onClick={() => {
+                if (collapsed) {
+                  navigate('/automation');
+                  return;
                 }
-              >
-                {label}
-              </NavLink>
-            ))}
-          </div>
+                setAutomationOpen(prev => !prev);
+              }}
+              className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+                automationIsActive
+                  ? 'bg-white/10 text-white'
+                  : 'text-slate-400 hover:bg-white/5 hover:text-white'
+              }`}
+              aria-label="Abrir submenu de automação"
+            >
+              <Wrench className="h-5 w-5 shrink-0" />
+              {!collapsed && (
+                <>
+                  <span className="truncate">Automação</span>
+                  <span className="ml-auto">
+                    {automationOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                  </span>
+                </>
+              )}
+            </button>
+
+            {!collapsed && automationOpen && (
+              <div className="ml-8 space-y-1 border-l border-white/10 pl-3">
+                {automationLinks.map(({ to, label }) => (
+                  <NavLink
+                    key={to}
+                    to={to}
+                    end={to === '/automation'}
+                    className={({ isActive }) =>
+                      `block rounded-md px-2 py-1.5 text-sm transition-colors ${
+                        isActive
+                          ? 'bg-white/10 text-white'
+                          : 'text-slate-400 hover:bg-white/5 hover:text-white'
+                      }`
+                    }
+                  >
+                    {label}
+                  </NavLink>
+                ))}
+              </div>
+            )}
+          </>
         )}
 
-        <button
-          type="button"
-          onClick={() => {
-            if (collapsed) {
-              navigate('/reports/templates');
-              return;
-            }
-            setReportsOpen(prev => !prev);
-          }}
-          className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
-            reportsIsActive
-              ? 'bg-white/10 text-white'
-              : 'text-slate-400 hover:bg-white/5 hover:text-white'
-          }`}
-          aria-label="Abrir submenu de relatórios"
-        >
-          <FileBarChart className="h-5 w-5 shrink-0" />
-          {!collapsed && (
-            <>
-              <span className="truncate">Relatórios</span>
-              <span className="ml-auto">
-                {reportsOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-              </span>
-            </>
-          )}
-        </button>
-
-        {!collapsed && reportsOpen && (
-          <div className="ml-8 space-y-1 border-l border-white/10 pl-3">
-            {reportsLinks.map(({ to, label }) => (
-              <NavLink
-                key={to}
-                to={to}
-                className={({ isActive }) =>
-                  `block rounded-md px-2 py-1.5 text-sm transition-colors ${
-                    isActive
-                      ? 'bg-white/10 text-white'
-                      : 'text-slate-400 hover:bg-white/5 hover:text-white'
-                  }`
+        {canViewReports && (
+          <>
+            <button
+              type="button"
+              onClick={() => {
+                if (collapsed) {
+                  navigate('/reports/templates');
+                  return;
                 }
-              >
-                {label}
-              </NavLink>
-            ))}
-          </div>
+                setReportsOpen(prev => !prev);
+              }}
+              className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+                reportsIsActive
+                  ? 'bg-white/10 text-white'
+                  : 'text-slate-400 hover:bg-white/5 hover:text-white'
+              }`}
+              aria-label="Abrir submenu de relatórios"
+            >
+              <FileBarChart className="h-5 w-5 shrink-0" />
+              {!collapsed && (
+                <>
+                  <span className="truncate">Relatórios</span>
+                  <span className="ml-auto">
+                    {reportsOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                  </span>
+                </>
+              )}
+            </button>
+
+            {!collapsed && reportsOpen && (
+              <div className="ml-8 space-y-1 border-l border-white/10 pl-3">
+                {reportsLinks.map(({ to, label }) => (
+                  <NavLink
+                    key={to}
+                    to={to}
+                    className={({ isActive }) =>
+                      `block rounded-md px-2 py-1.5 text-sm transition-colors ${
+                        isActive
+                          ? 'bg-white/10 text-white'
+                          : 'text-slate-400 hover:bg-white/5 hover:text-white'
+                      }`
+                    }
+                  >
+                    {label}
+                  </NavLink>
+                ))}
+              </div>
+            )}
+          </>
         )}
 
         <button
@@ -391,52 +413,56 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
           </div>
         )}
 
-        <button
-          type="button"
-          onClick={() => {
-            if (collapsed) {
-              navigate('/settings');
-              return;
-            }
-            setSettingsOpen(prev => !prev);
-          }}
-          className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
-            settingsIsActive
-              ? 'bg-white/10 text-white'
-              : 'text-slate-400 hover:bg-white/5 hover:text-white'
-          }`}
-          aria-label="Abrir submenu de configurações"
-        >
-          <Settings className="h-5 w-5 shrink-0" />
-          {!collapsed && (
-            <>
-              <span className="truncate">Configurações</span>
-              <span className="ml-auto">
-                {settingsOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-              </span>
-            </>
-          )}
-        </button>
-
-        {!collapsed && settingsOpen && (
-          <div className="ml-8 space-y-1 border-l border-white/10 pl-3">
-            {settingsLinks.map(({ to, label }) => (
-              <NavLink
-                key={to}
-                to={to}
-                end={to === '/settings'}
-                className={({ isActive }) =>
-                  `block rounded-md px-2 py-1.5 text-sm transition-colors ${
-                    isActive
-                      ? 'bg-white/10 text-white'
-                      : 'text-slate-400 hover:bg-white/5 hover:text-white'
-                  }`
+        {canViewSettings && (
+          <>
+            <button
+              type="button"
+              onClick={() => {
+                if (collapsed) {
+                  navigate('/settings');
+                  return;
                 }
-              >
-                {label}
-              </NavLink>
-            ))}
-          </div>
+                setSettingsOpen(prev => !prev);
+              }}
+              className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+                settingsIsActive
+                  ? 'bg-white/10 text-white'
+                  : 'text-slate-400 hover:bg-white/5 hover:text-white'
+              }`}
+              aria-label="Abrir submenu de configurações"
+            >
+              <Settings className="h-5 w-5 shrink-0" />
+              {!collapsed && (
+                <>
+                  <span className="truncate">Configurações</span>
+                  <span className="ml-auto">
+                    {settingsOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                  </span>
+                </>
+              )}
+            </button>
+
+            {!collapsed && settingsOpen && (
+              <div className="ml-8 space-y-1 border-l border-white/10 pl-3">
+                {settingsLinks.map(({ to, label }) => (
+                  <NavLink
+                    key={to}
+                    to={to}
+                    end={to === '/settings'}
+                    className={({ isActive }) =>
+                      `block rounded-md px-2 py-1.5 text-sm transition-colors ${
+                        isActive
+                          ? 'bg-white/10 text-white'
+                          : 'text-slate-400 hover:bg-white/5 hover:text-white'
+                      }`
+                    }
+                  >
+                    {label}
+                  </NavLink>
+                ))}
+              </div>
+            )}
+          </>
         )}
       </nav>
 
