@@ -79,6 +79,13 @@ export const serverEditableFields: EditableField[] = [
     description: "Habilita transferência de arquivos entre agentes via P2P.",
   },
   {
+    key: "chatAIEnabled",
+    label: "Chat IA",
+    kind: "boolean",
+    group: "features",
+    description: "Habilita o chat com IA para suporte no painel.",
+  },
+  {
     key: "supportEnabled",
     label: "Suporte Remoto",
     kind: "boolean",
@@ -271,8 +278,20 @@ export const clientEditableFields: EditableField[] = [
     group: "features",
   },
   {
+    key: "chatAIEnabled",
+    label: "Chat IA",
+    kind: "boolean",
+    group: "features",
+  },
+  {
     key: "supportEnabled",
     label: "Suporte Remoto",
+    kind: "boolean",
+    group: "features",
+  },
+  {
+    key: "knowledgeBaseEnabled",
+    label: "Base de Conhecimento",
     kind: "boolean",
     group: "features",
   },
@@ -371,8 +390,20 @@ export const siteEditableFields: EditableField[] = [
     group: "features",
   },
   {
+    key: "chatAIEnabled",
+    label: "Chat IA",
+    kind: "boolean",
+    group: "features",
+  },
+  {
     key: "supportEnabled",
     label: "Suporte Remoto",
+    kind: "boolean",
+    group: "features",
+  },
+  {
+    key: "knowledgeBaseEnabled",
+    label: "Base de Conhecimento",
     kind: "boolean",
     group: "features",
   },
@@ -467,10 +498,18 @@ export function formatFieldValue(
   }
 
   if (typeof value === "string") {
+    if (fieldKey === "appStorePolicy") {
+      if (value === "Disabled") return "0";
+      if (value === "PreApproved") return "1";
+      if (value === "All") return "2";
+    }
     return value;
   }
 
   if (typeof value === "number" || typeof value === "boolean") {
+    if (fieldKey === "appStorePolicy") {
+      return String(value);
+    }
     return String(value);
   }
 
@@ -534,11 +573,11 @@ export function validateFieldValue(
   }
 
   if (kind === "policy") {
-    if (["Disabled", "PreApproved", "All"].includes(trimmed)) {
+    if (["0", "1", "2"].includes(trimmed)) {
       return true;
     }
 
-    return "Use Disabled, PreApproved ou All";
+    return "Use 0, 1 ou 2";
   }
 
   return true;
@@ -591,11 +630,7 @@ export function parseFieldValue(
   }
 
   if (kind === "policy") {
-    if (trimmed === "0" || trimmed === "1" || trimmed === "2") {
-      return Number(trimmed);
-    }
-
-    return trimmed;
+    return Number(trimmed);
   }
 
   return value;
@@ -695,7 +730,10 @@ export function getFieldMetadata(
   metadataFields: Record<string, ConfigurationFieldMetadata> | undefined,
   fieldKey: string,
 ): ConfigurationFieldMetadata | undefined {
-  return metadataFields?.[fieldKey] ?? metadataFields?.[toPascalCase(fieldKey)];
+  return (
+    metadataFields?.[fieldKey] ??
+    metadataFields?.[toCanonicalConfigurationFieldName(fieldKey)]
+  );
 }
 
 export function canEditFieldAtScope(
@@ -753,9 +791,13 @@ export function isInheritedBySourceType(
   return sourceType !== 4;
 }
 
-function toPascalCase(value: string): string {
+function toCanonicalConfigurationFieldName(value: string): string {
   if (!value) {
     return value;
+  }
+
+  if (value === "aiIntegrationSettingsJson" || value === "AiIntegrationSettingsJson") {
+    return "AIIntegrationSettingsJson";
   }
 
   return value.charAt(0).toUpperCase() + value.slice(1);

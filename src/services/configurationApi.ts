@@ -50,6 +50,34 @@ export type SiteConfigurationPayload = Partial<
 export type ConfigurationEntityType = "Server" | "Client" | "Site";
 export type ServerReportingConfiguration = Record<string, unknown>;
 
+const CANONICAL_CONFIGURATION_FIELDS: Record<string, string> = {
+  aiIntegrationSettingsJson: "AIIntegrationSettingsJson",
+  AiIntegrationSettingsJson: "AIIntegrationSettingsJson",
+};
+
+function toCanonicalConfigurationFieldName(fieldName: string): string {
+  if (!fieldName) {
+    return fieldName;
+  }
+
+  const known = CANONICAL_CONFIGURATION_FIELDS[fieldName];
+  if (known) {
+    return known;
+  }
+
+  return fieldName.charAt(0).toUpperCase() + fieldName.slice(1);
+}
+
+function toCanonicalConfigurationPayload<T extends Record<string, unknown>>(
+  payload: T,
+): Record<string, unknown> {
+  const nextPayload: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(payload)) {
+    nextPayload[toCanonicalConfigurationFieldName(key)] = value;
+  }
+  return nextPayload;
+}
+
 function normalizeMetadata(payload: unknown): ConfigurationMetadataResponse {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
     return { fields: {} };
@@ -82,13 +110,16 @@ export function getServerConfig() {
 }
 
 export function updateServerConfig(payload: ServerConfigurationPayload) {
-  return api.put<ServerConfiguration>(`${CONFIG_BASE}/server`, payload);
+  return api.put<ServerConfiguration>(
+    `${CONFIG_BASE}/server`,
+    toCanonicalConfigurationPayload(payload as Record<string, unknown>),
+  );
 }
 
 export function patchServerConfig(partialPayload: ServerConfigurationPayload) {
   return api.patch<ServerConfiguration>(
     `${CONFIG_BASE}/server`,
-    partialPayload,
+    toCanonicalConfigurationPayload(partialPayload as Record<string, unknown>),
   );
 }
 
@@ -133,7 +164,7 @@ export function upsertClientConfig(
 ) {
   return api.put<ClientConfiguration>(
     `${CONFIG_BASE}/clients/${clientId}`,
-    payload,
+    toCanonicalConfigurationPayload(payload as Record<string, unknown>),
   );
 }
 
@@ -143,7 +174,7 @@ export function patchClientConfig(
 ) {
   return api.patch<ClientConfiguration>(
     `${CONFIG_BASE}/clients/${clientId}`,
-    partialPayload,
+    toCanonicalConfigurationPayload(partialPayload as Record<string, unknown>),
   );
 }
 
@@ -153,7 +184,7 @@ export function deleteClientConfig(clientId: string) {
 
 export function resetClientProperty(clientId: string, propertyName: string) {
   return api.post<void>(
-    `${CONFIG_BASE}/clients/${clientId}/reset/${encodeURIComponent(propertyName)}`,
+    `${CONFIG_BASE}/clients/${clientId}/reset/${encodeURIComponent(toCanonicalConfigurationFieldName(propertyName))}`,
   );
 }
 
@@ -164,7 +195,7 @@ export async function getClientMetadata(clientId: string) {
 }
 
 export function getSiteConfig(siteId: string) {
-  return api.get<ResolvedConfiguration>(`${CONFIG_BASE}/sites/${siteId}`);
+  return api.get<SiteConfiguration>(`${CONFIG_BASE}/sites/${siteId}`);
 }
 
 export function getSiteEffectiveConfig(siteId: string) {
@@ -177,7 +208,10 @@ export function upsertSiteConfig(
   siteId: string,
   payload: SiteConfigurationPayload,
 ) {
-  return api.put<SiteConfiguration>(`${CONFIG_BASE}/sites/${siteId}`, payload);
+  return api.put<SiteConfiguration>(
+    `${CONFIG_BASE}/sites/${siteId}`,
+    toCanonicalConfigurationPayload(payload as Record<string, unknown>),
+  );
 }
 
 export function patchSiteConfig(
@@ -186,7 +220,7 @@ export function patchSiteConfig(
 ) {
   return api.patch<SiteConfiguration>(
     `${CONFIG_BASE}/sites/${siteId}`,
-    partialPayload,
+    toCanonicalConfigurationPayload(partialPayload as Record<string, unknown>),
   );
 }
 
@@ -196,7 +230,7 @@ export function deleteSiteConfig(siteId: string) {
 
 export function resetSiteProperty(siteId: string, propertyName: string) {
   return api.post<void>(
-    `${CONFIG_BASE}/sites/${siteId}/reset/${encodeURIComponent(propertyName)}`,
+    `${CONFIG_BASE}/sites/${siteId}/reset/${encodeURIComponent(toCanonicalConfigurationFieldName(propertyName))}`,
   );
 }
 

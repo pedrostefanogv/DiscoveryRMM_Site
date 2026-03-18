@@ -416,6 +416,7 @@ export interface ServerConfiguration {
   recoveryEnabled: boolean;
   discoveryEnabled: boolean;
   p2PFilesEnabled: boolean;
+  chatAIEnabled: boolean;
   supportEnabled: boolean;
   knowledgeBaseEnabled: boolean;
   appStorePolicy: AppStorePolicyType;
@@ -443,7 +444,9 @@ export interface ClientConfiguration {
   recoveryEnabled?: boolean | null;
   discoveryEnabled?: boolean | null;
   p2PFilesEnabled?: boolean | null;
+  chatAIEnabled?: boolean | null;
   supportEnabled?: boolean | null;
+  knowledgeBaseEnabled?: boolean | null;
   appStorePolicy?: AppStorePolicyType | null;
   aiIntegrationSettingsJson?: string | null;
   meshCentralGroupPolicyProfile?: string | null;
@@ -468,7 +471,9 @@ export interface SiteConfiguration {
   recoveryEnabled?: boolean | null;
   discoveryEnabled?: boolean | null;
   p2PFilesEnabled?: boolean | null;
+  chatAIEnabled?: boolean | null;
   supportEnabled?: boolean | null;
+  knowledgeBaseEnabled?: boolean | null;
   appStorePolicy?: AppStorePolicyType | null;
   aiIntegrationSettingsJson?: string | null;
   meshCentralGroupPolicyProfile?: string | null;
@@ -492,6 +497,7 @@ export interface ResolvedConfiguration {
   recoveryEnabled: boolean;
   discoveryEnabled: boolean;
   p2PFilesEnabled: boolean;
+  chatAIEnabled: boolean;
   supportEnabled: boolean;
   knowledgeBaseEnabled: boolean;
   appStorePolicy: AppStorePolicyType;
