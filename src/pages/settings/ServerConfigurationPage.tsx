@@ -10,7 +10,6 @@ import {
   Cloud,
   FileStack,
   HardDrive,
-  Key,
   Layers,
   Lock,
   RotateCcw,
@@ -188,7 +187,6 @@ export default function ServerConfigurationPage() {
   const featureFields = serverEditableFields.filter((f) => f.group === "features");
   const policyFields = serverEditableFields.filter((f) => f.group === "policy");
   const agentFields = serverEditableFields.filter((f) => f.group === "agent");
-  const tokenFields = serverEditableFields.filter((f) => f.group === "tokens");
   const advancedFields = serverEditableFields.filter(
     (f) => f.group === "advanced" && f.key !== "brandingSettingsJson",
   );
@@ -417,24 +415,6 @@ export default function ServerConfigurationPage() {
             </div>
             <div className="grid flex-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
               {agentFields.map((field) => (
-                <div key={field.key}>{renderFieldEditor(field)}</div>
-              ))}
-            </div>
-          </div>
-        </Card>
-
-        {/* Tokens */}
-        <Card>
-          <CardHeader
-            title="Tokens de Deploy"
-            subtitle="Controle a validade e o limite de tokens emitidos por agente."
-          />
-          <div className="flex items-start gap-3">
-            <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-500/20 text-amber-400">
-              <Key className="h-4 w-4" />
-            </div>
-            <div className="grid flex-1 gap-4 sm:grid-cols-2">
-              {tokenFields.map((field) => (
                 <div key={field.key}>{renderFieldEditor(field)}</div>
               ))}
             </div>

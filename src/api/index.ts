@@ -24,7 +24,10 @@ export type {
 } from "./automation";
 export { notesApi } from "./notes";
 export { knowledgeApi } from "./knowledge";
-export { configurationApi } from "./configuration";
+export {
+  configurationApi,
+  extractTicketAttachmentSettingsFromEffective,
+} from "./configuration";
 export { auditApi } from "./audit";
 export { getNatsService, resetNatsService } from "./nats";
 export type { DashboardEvent, NatsConfig } from "./nats";

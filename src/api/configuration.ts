@@ -121,3 +121,49 @@ export const configurationApi = {
       `${BASE}/sites/${siteId}/reset/${encodeURIComponent(propertyName)}`,
     ),
 };
+
+/**
+ * Extrai TicketAttachmentSettings de um JSON armazenado em ticketAttachmentSettingsJson
+ * com fallback para defaults se nulo/inválido
+ */
+export function parseTicketAttachmentSettings(
+  jsonValue: unknown,
+): TicketAttachmentSettings {
+  const parsed = parseJsonObject<TicketAttachmentSettings>(jsonValue);
+  if (parsed) {
+    return parsed;
+  }
+  // Fallback para defaults
+  return {
+    enabled: true,
+    maxFileSizeBytes: 10485760, // 10 MB
+    allowedContentTypes: ["image/jpeg", "image/png", "image/webp", "application/pdf"],
+    presignedUploadUrlTtlMinutes: 15,
+  };
+}
+
+/**
+ * Extrai TicketAttachmentSettings de uma EffectiveConfiguration
+ * Percorre a herança: Site → Client → Server
+ */
+export function extractTicketAttachmentSettingsFromEffective(
+  effective: EffectiveConfiguration,
+): TicketAttachmentSettings {
+  const jsonValue = effective.values.ticketAttachmentSettingsJson;
+  return parseTicketAttachmentSettings(jsonValue);
+}
+
+function parseJsonObject<T>(value: unknown): T | null {
+  if (!value) return null;
+  if (typeof value === "string") {
+    try {
+      return JSON.parse(value) as T;
+    } catch {
+      return null;
+    }
+  }
+  if (typeof value === "object" && !Array.isArray(value)) {
+    return value as T;
+  }
+  return null;
+}

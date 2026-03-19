@@ -5,7 +5,6 @@ import {
   Building2,
   Bot,
   Clock,
-  Key,
   RotateCcw,
   Save,
   ShieldCheck,
@@ -185,7 +184,6 @@ export default function ClientConfigurationPage() {
   const featureFields = clientEditableFields.filter((field) => field.group === "features");
   const policyFields = clientEditableFields.filter((field) => field.group === "policy");
   const agentFields = clientEditableFields.filter((field) => field.group === "agent");
-  const tokenFields = clientEditableFields.filter((field) => field.group === "tokens");
   const advancedFields = clientEditableFields.filter((field) => field.group === "advanced");
 
   const renderFieldEditor = (
@@ -332,21 +330,6 @@ export default function ClientConfigurationPage() {
             >
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                 {agentFields.map((field) =>
-                  renderFieldEditor(field.key, field.label, field.kind),
-                )}
-              </div>
-            </ConfigurationSectionCard>
-          )}
-
-          {tokenFields.length > 0 && (
-            <ConfigurationSectionCard
-              title="Tokens de Deploy"
-              subtitle="Controle a validade e o limite de tokens emitidos por agente no escopo do cliente."
-              icon={<Key className="h-4 w-4" />}
-              iconClassName="bg-amber-500/20 text-amber-400"
-            >
-              <div className="grid gap-4 sm:grid-cols-2">
-                {tokenFields.map((field) =>
                   renderFieldEditor(field.key, field.label, field.kind),
                 )}
               </div>

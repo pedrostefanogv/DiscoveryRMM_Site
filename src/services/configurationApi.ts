@@ -56,8 +56,10 @@ export type ConfigurationEntityType = "Server" | "Client" | "Site";
 export type ServerReportingConfiguration = Record<string, unknown>;
 
 const CANONICAL_CONFIGURATION_FIELDS: Record<string, string> = {
-  aiIntegrationSettingsJson: "AIIntegrationSettingsJson",
-  AiIntegrationSettingsJson: "AIIntegrationSettingsJson",
+  // Aceita aliases legados e normaliza para o formato camelCase do contrato atual.
+  aiIntegrationSettingsJson: "aiIntegrationSettingsJson",
+  AiIntegrationSettingsJson: "aiIntegrationSettingsJson",
+  AIIntegrationSettingsJson: "aiIntegrationSettingsJson",
 };
 
 function toCanonicalConfigurationFieldName(fieldName: string): string {
@@ -70,7 +72,8 @@ function toCanonicalConfigurationFieldName(fieldName: string): string {
     return known;
   }
 
-  return fieldName.charAt(0).toUpperCase() + fieldName.slice(1);
+  // Mantem o nome recebido para preservar o contrato de payload em camelCase.
+  return fieldName;
 }
 
 function toCanonicalConfigurationPayload<T extends Record<string, unknown>>(

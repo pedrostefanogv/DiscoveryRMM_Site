@@ -1,5 +1,5 @@
 ﻿import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { configurationApi } from "@/api";
+import { configurationApi, extractTicketAttachmentSettingsFromEffective } from "@/api";
 import type { TicketAttachmentSettings } from "@/api";
 import {
   deleteClientConfig,
@@ -479,6 +479,52 @@ export function useUpdateTicketAttachmentSettings() {
         queryKey: configurationQueryKeys.ticketAttachmentSettings,
       });
     },
+  });
+}
+
+/**
+ * Obtém a config efetiva de TicketAttachmentSettings para um site (com herança aplicada)
+ */
+export function useSiteTicketAttachmentSettings(siteId: string | null | undefined) {
+  return useQuery({
+    queryKey: [
+      ...configurationQueryKeys.ticketAttachmentSettings,
+      "site",
+      siteId,
+    ] as const,
+    queryFn: async () => {
+      if (!siteId) {
+        // Fallback para servidor se siteId não disponível
+        return configurationApi.getTicketAttachmentSettings();
+      }
+      const effective = await configurationApi.getSiteEffective(siteId);
+      return extractTicketAttachmentSettingsFromEffective(effective);
+    },
+    enabled: !!siteId,
+  });
+}
+
+/**
+ * Obtém a config efetiva de TicketAttachmentSettings para um cliente (com herança aplicada)
+ */
+export function useClientTicketAttachmentSettings(
+  clientId: string | null | undefined,
+) {
+  return useQuery({
+    queryKey: [
+      ...configurationQueryKeys.ticketAttachmentSettings,
+      "client",
+      clientId,
+    ] as const,
+    queryFn: async () => {
+      if (!clientId) {
+        // Fallback para servidor se clientId não disponível
+        return configurationApi.getTicketAttachmentSettings();
+      }
+      const effective = await configurationApi.getClientEffective(clientId);
+      return extractTicketAttachmentSettingsFromEffective(effective);
+    },
+    enabled: !!clientId,
   });
 }
 

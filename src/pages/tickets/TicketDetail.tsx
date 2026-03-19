@@ -14,6 +14,7 @@ import {
   useCompleteTicketUpload,
 } from '@/hooks/useTickets';
 import { useTicketAttachmentSettings } from '@/hooks/useConfigurationApi';
+import { useSiteTicketAttachmentSettings, useClientTicketAttachmentSettings } from '@/hooks/useConfigurationApi';
 import { useWorkflowStates } from '@/hooks/useWorkflow';
 import { Button, Card, CardHeader, Badge, Loading, ErrorDisplay, TextArea, Select, Input } from '@/components/ui';
 import type { TicketPriority, UpdateTicketRequest } from '@/api';
@@ -145,7 +146,7 @@ export default function TicketDetail() {
               ) : tab === 'timeline' ? (
                 <TimelinePanel ticketId={id!} />
               ) : (
-                <AttachmentsPanel ticketId={id!} />
+                <AttachmentsPanel ticketId={id!} siteId={t.siteId} clientId={t.clientId} />
               )}
             </div>
           </Card>
@@ -451,8 +452,27 @@ function formatBytes(bytes: number) {
   return `${(bytes / 1048576).toFixed(1)} MB`;
 }
 
-function AttachmentsPanel({ ticketId }: { ticketId: string }) {
-  const settings = useTicketAttachmentSettings();
+function AttachmentsPanel({ 
+  ticketId, 
+  siteId, 
+  clientId,
+}: { 
+  ticketId: string
+  siteId: string | null
+  clientId: string | null
+}) {
+  // Prioridade de herança: Site > Client > Server
+  const siteSettings = useSiteTicketAttachmentSettings(siteId);
+  const clientSettings = useClientTicketAttachmentSettings(!siteId ? clientId : null);
+  const serverSettings = useTicketAttachmentSettings();
+
+  // Determina qual config usar baseado na hierarquia
+  const settings = (() => {
+    if (siteId && siteSettings.data) return { data: siteSettings.data, isLoading: false };
+    if (clientId && clientSettings.data) return { data: clientSettings.data, isLoading: false };
+    return serverSettings;
+  })();
+  
   const attachments = useTicketAttachments(ticketId);
   const prepare = usePrepareTicketUpload();
   const complete = useCompleteTicketUpload();

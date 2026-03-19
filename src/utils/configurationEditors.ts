@@ -137,24 +137,6 @@ export const serverEditableFields: EditableField[] = [
     unit: "segundos",
   },
   {
-    key: "tokenExpirationDays",
-    label: "Expiração de Token",
-    kind: "number",
-    group: "tokens",
-    description:
-      "Tempo de vida (em dias) de cada token de deploy. Tokens expirados devem ser regenerados. Valores menores aumentam a segurança mas requerem regeneração frequente.",
-    unit: "dias",
-  },
-  {
-    key: "maxTokensPerAgent",
-    label: "Máximo de Tokens por Agente",
-    kind: "number",
-    group: "tokens",
-    description:
-      "Quantidade máxima de tokens de deploy ativos simultaneamente por agente. Quando atingida, novos tokens exigem remoção de antigos.",
-    unit: "tokens",
-  },
-  {
     key: "autoUpdateSettingsJson",
     label: "Configurações de Atualização Automática",
     kind: "json",
@@ -339,24 +321,6 @@ export const clientEditableFields: EditableField[] = [
     label: "Configurações de Atualização Automática",
     kind: "json",
     group: "advanced",
-  },
-  {
-    key: "tokenExpirationDays",
-    label: "Expiração de Token",
-    kind: "number",
-    group: "tokens",
-    unit: "dias",
-    description:
-      "Tempo de vida (em dias) de cada token de deploy. Tokens expirados devem ser regenerados. Valores menores aumentam a segurança mas requerem regeneração frequente.",
-  },
-  {
-    key: "maxTokensPerAgent",
-    label: "Máximo de Tokens por Agente",
-    kind: "number",
-    group: "tokens",
-    unit: "tokens",
-    description:
-      "Quantidade máxima de tokens de deploy ativos simultaneamente por agente. Quando atingida, novos tokens exigem remoção de antigos.",
   },
   {
     key: "agentHeartbeatIntervalSeconds",
