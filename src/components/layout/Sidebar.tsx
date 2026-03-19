@@ -55,11 +55,15 @@ const reportsLinks = [
   { to: '/reports/executions', label: 'Execuções' },
 ];
 
+const ticketsLinks = [
+  { to: '/tickets', label: 'Chamados' },
+  { to: '/settings/departments', label: 'Departamentos' },
+];
+
 const settingsLinks = [
   { to: '/settings', label: 'Geral' },
   { to: '/settings/workflow', label: 'Workflow' },
   { to: '/settings/workflow-profiles', label: 'SLA e Perfis' },
-  { to: '/settings/departments', label: 'Departamentos' },
   { to: '/settings/agent-labels', label: 'Labels Automaticas' },
   { to: '/settings/audit', label: 'Auditoria Config' },
   { to: '/settings/branding', label: 'Branding' },
@@ -88,6 +92,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
     canViewReports,
     canViewSettings,
     canViewSoftware,
+    hasAnyPermission,
   } = useAuthorization();
   const location = useLocation();
   const navigate = useNavigate();
@@ -96,18 +101,25 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const softwareIsActive = location.pathname.startsWith('/software') || location.pathname === '/software-inventory';
   const automationIsActive = location.pathname.startsWith('/automation');
   const reportsIsActive = location.pathname.startsWith('/reports');
+  const ticketsIsActive =
+    location.pathname.startsWith('/tickets') || location.pathname.startsWith('/settings/departments');
   const settingsIsActive = location.pathname.startsWith('/settings');
   const identityIsActive = location.pathname.startsWith('/identity');
   const [clientsOpen, setClientsOpen] = useState(clientsIsActive);
   const [softwareOpen, setSoftwareOpen] = useState(softwareIsActive);
   const [automationOpen, setAutomationOpen] = useState(automationIsActive);
   const [reportsOpen, setReportsOpen] = useState(reportsIsActive);
+  const [ticketsOpen, setTicketsOpen] = useState(ticketsIsActive);
   const [settingsOpen, setSettingsOpen] = useState(settingsIsActive);
   const [identityOpen, setIdentityOpen] = useState(identityIsActive);
   const visibleIdentityLinks = canManageIdentity ? identityLinks : identityLinks.slice(0, 1);
+  const canViewDepartments = hasAnyPermission(['departments.*', 'settings.*', 'settings.read', 'admin.*']);
+  const visibleTicketsLinks = canViewDepartments
+    ? ticketsLinks
+    : ticketsLinks.filter(({ to }) => to !== '/settings/departments');
   const visibleMainLinks = mainLinks
     .slice(1)
-    .filter(({ to }) => (to === '/deploy' ? canViewDeploy : true));
+    .filter(({ to }) => (to === '/deploy' ? canViewDeploy : to !== '/tickets'));
 
   return (
     <aside
@@ -213,6 +225,54 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
             {!collapsed && <span className="truncate">{label}</span>}
           </NavLink>
         ))}
+
+        <button
+          type="button"
+          onClick={() => {
+            if (collapsed) {
+              navigate('/tickets');
+              return;
+            }
+            setTicketsOpen(prev => !prev);
+          }}
+          className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+            ticketsIsActive
+              ? 'bg-white/10 text-white'
+              : 'text-slate-400 hover:bg-white/5 hover:text-white'
+          }`}
+          aria-label="Abrir submenu de tickets"
+        >
+          <Ticket className="h-5 w-5 shrink-0" />
+          {!collapsed && (
+            <>
+              <span className="truncate">Tickets</span>
+              <span className="ml-auto">
+                {ticketsOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              </span>
+            </>
+          )}
+        </button>
+
+        {!collapsed && ticketsOpen && (
+          <div className="ml-8 space-y-1 border-l border-white/10 pl-3">
+            {visibleTicketsLinks.map(({ to, label }) => (
+              <NavLink
+                key={to}
+                to={to}
+                end={to === '/tickets'}
+                className={({ isActive }) =>
+                  `block rounded-md px-2 py-1.5 text-sm transition-colors ${
+                    isActive
+                      ? 'bg-white/10 text-white'
+                      : 'text-slate-400 hover:bg-white/5 hover:text-white'
+                  }`
+                }
+              >
+                {label}
+              </NavLink>
+            ))}
+          </div>
+        )}
 
         {canViewSoftware && (
           <>
