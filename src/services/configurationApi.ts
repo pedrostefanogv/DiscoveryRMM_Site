@@ -1,13 +1,18 @@
 import { api } from "@/api/client";
 import type {
+  AIIntegrationSettings,
+  AutoUpdateSettings,
+  BrandingSettings,
   ClientConfiguration,
   ConfigurationAuditEntry,
   ConfigurationAuditReportQuery,
   ConfigurationMetadataResponse,
   ConfigurationFieldMetadata,
+  ReportingSettings,
   ResolvedConfiguration,
   ServerConfiguration,
   SiteConfiguration,
+  TicketAttachmentSettings,
 } from "@/api/types";
 
 const CONFIG_BASE = "/api/configurations";
@@ -103,6 +108,69 @@ function normalizeMetadata(payload: unknown): ConfigurationMetadataResponse {
     : undefined;
 
   return { fields, blockedFields };
+}
+
+function parseJsonObject<T>(jsonValue: string | null | undefined): T | null {
+  if (!jsonValue) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(jsonValue) as T;
+  } catch {
+    return null;
+  }
+}
+
+export function parseAutoUpdateSettings(
+  jsonValue: string | null | undefined,
+): AutoUpdateSettings | null {
+  return parseJsonObject<AutoUpdateSettings>(jsonValue);
+}
+
+export function parseAIIntegrationSettings(
+  jsonValue: string | null | undefined,
+): AIIntegrationSettings | null {
+  const parsed = parseJsonObject<AIIntegrationSettings>(jsonValue);
+
+  if (!parsed) {
+    return null;
+  }
+
+  const sanitized = { ...parsed };
+  if ("apiKey" in sanitized) {
+    delete sanitized.apiKey;
+  }
+
+  return sanitized;
+}
+
+export function parseBrandingSettings(
+  jsonValue: string | null | undefined,
+): BrandingSettings | null {
+  return parseJsonObject<BrandingSettings>(jsonValue);
+}
+
+export function parseReportingSettings(
+  jsonValue: string | null | undefined,
+): ReportingSettings | null {
+  return parseJsonObject<ReportingSettings>(jsonValue);
+}
+
+export function parseTicketAttachmentSettingsJson(
+  jsonValue: string | null | undefined,
+): TicketAttachmentSettings | null {
+  return parseJsonObject<TicketAttachmentSettings>(jsonValue);
+}
+
+export function stringifyConfigurationJson(
+  value: Record<string, unknown> | null | undefined,
+): string {
+  if (!value) {
+    return "{}";
+  }
+
+  return JSON.stringify(value);
 }
 
 export function getServerConfig() {

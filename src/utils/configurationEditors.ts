@@ -310,6 +310,14 @@ export const clientEditableFields: EditableField[] = [
       "ApiKey e write-only: mantenha ausente no JSON e inclua somente quando quiser trocar a chave.",
   },
   {
+    key: "lockedFieldsJson",
+    label: "Campos Bloqueados para Herança",
+    kind: "json",
+    group: "advanced",
+    description:
+      "Lista de campos bloqueados neste cliente para impedir override no nível de site.",
+  },
+  {
     key: "meshCentralGroupPolicyProfile",
     label: "Perfil de Política de Grupo MeshCentral",
     kind: "string",
@@ -430,6 +438,44 @@ export const siteEditableFields: EditableField[] = [
       "Override do perfil de policy MeshCentral no escopo do site. Deixe herdado para usar cliente/global.",
   },
   {
+    key: "meshCentralGroupName",
+    label: "Nome do Grupo MeshCentral",
+    kind: "string",
+    group: "siteProfile",
+    description:
+      "Nome lógico do grupo MeshCentral associado a este site.",
+  },
+  {
+    key: "meshCentralMeshId",
+    label: "Mesh ID",
+    kind: "string",
+    group: "siteProfile",
+    description: "Identificador de mesh aplicado ao site no MeshCentral.",
+  },
+  {
+    key: "meshCentralAppliedGroupPolicyProfile",
+    label: "Policy MeshCentral Aplicada",
+    kind: "string",
+    group: "siteProfile",
+    description:
+      "Perfil efetivamente aplicado pelo backend ao site no MeshCentral.",
+  },
+  {
+    key: "meshCentralAppliedGroupPolicyAt",
+    label: "Policy Aplicada em",
+    kind: "string",
+    group: "siteProfile",
+    description: "Data/hora da última aplicação de policy no site.",
+  },
+  {
+    key: "lockedFieldsJson",
+    label: "Campos Bloqueados para Herança",
+    kind: "json",
+    group: "advanced",
+    description:
+      "Lista de campos bloqueados neste site para impedir sobrescritas em níveis inferiores.",
+  },
+  {
     key: "inventoryIntervalHours",
     label: "Intervalo de Inventário",
     kind: "number",
@@ -545,6 +591,7 @@ export function validateFieldValue(
       agentOfflineThresholdSeconds: [30, 86400],
       tokenExpirationDays: [1, 3650],
       maxTokensPerAgent: [1, 100],
+      objectStorageUrlTtlHours: [1, 168],
     };
 
     const fieldRange = fieldKey ? ranges[fieldKey] : undefined;
@@ -566,6 +613,68 @@ export function validateFieldValue(
           return "lockedFieldsJson deve ser um JSON array de strings";
         }
       }
+
+      if (fieldKey === "reportingSettingsJson") {
+        if (
+          typeof parsed !== "object" ||
+          parsed === null ||
+          Array.isArray(parsed)
+        ) {
+          return "reportingSettingsJson deve ser um objeto JSON";
+        }
+
+        const dbRetention = Number(
+          (parsed as Record<string, unknown>).databaseRetentionDays,
+        );
+        const fileRetention = Number(
+          (parsed as Record<string, unknown>).fileRetentionDays,
+        );
+
+        if (
+          Number.isNaN(dbRetention) ||
+          Number.isNaN(fileRetention) ||
+          dbRetention < 1 ||
+          fileRetention < 1
+        ) {
+          return "Reporting requer databaseRetentionDays e fileRetentionDays >= 1";
+        }
+      }
+
+      if (fieldKey === "ticketAttachmentSettingsJson") {
+        if (
+          typeof parsed !== "object" ||
+          parsed === null ||
+          Array.isArray(parsed)
+        ) {
+          return "ticketAttachmentSettingsJson deve ser um objeto JSON";
+        }
+
+        const payload = parsed as Record<string, unknown>;
+        const maxFileSizeBytes = Number(payload.maxFileSizeBytes);
+        const presignedTtl = Number(payload.presignedUploadUrlTtlMinutes);
+        const allowedContentTypes = payload.allowedContentTypes;
+
+        if (
+          Number.isNaN(maxFileSizeBytes) ||
+          maxFileSizeBytes <= 0 ||
+          maxFileSizeBytes > 1024 * 1024 * 1024
+        ) {
+          return "MaxFileSizeBytes deve ser maior que 0 e menor ou igual a 1GB";
+        }
+
+        if (Number.isNaN(presignedTtl) || presignedTtl < 1 || presignedTtl > 120) {
+          return "PresignedUploadUrlTtlMinutes deve estar entre 1 e 120";
+        }
+
+        if (
+          !Array.isArray(allowedContentTypes) ||
+          allowedContentTypes.length === 0 ||
+          !allowedContentTypes.every((item) => typeof item === "string")
+        ) {
+          return "AllowedContentTypes deve ser um array de strings não vazio";
+        }
+      }
+
       return true;
     } catch {
       return "JSON invalido";
@@ -796,7 +905,10 @@ function toCanonicalConfigurationFieldName(value: string): string {
     return value;
   }
 
-  if (value === "aiIntegrationSettingsJson" || value === "AiIntegrationSettingsJson") {
+  if (
+    value === "aiIntegrationSettingsJson" ||
+    value === "AiIntegrationSettingsJson"
+  ) {
     return "AIIntegrationSettingsJson";
   }
 

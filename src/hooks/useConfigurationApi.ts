@@ -14,6 +14,7 @@ import {
   getFieldAudit,
   getRecentAudit,
   getServerConfig,
+  getServerReportingConfig,
   getServerMetadata,
   getSiteConfig,
   getSiteEffectiveConfig,
@@ -25,6 +26,7 @@ import {
   resetServerConfig,
   resetSiteProperty,
   updateServerConfig,
+  updateServerReportingConfig,
   upsertClientConfig,
   upsertSiteConfig,
   type ClientConfigurationPayload,
@@ -36,6 +38,7 @@ import {
 export const configurationQueryKeys = {
   server: ["config", "server"] as const,
   serverMetadata: ["config", "server-metadata"] as const,
+  serverReporting: ["config", "server-reporting"] as const,
   client: (clientId: string) => ["config", "client", clientId] as const,
   clientEffective: (clientId: string) =>
     ["config", "client-effective", clientId] as const,
@@ -92,6 +95,13 @@ export function useServerMetadata() {
   });
 }
 
+export function useServerReportingConfig() {
+  return useQuery({
+    queryKey: configurationQueryKeys.serverReporting,
+    queryFn: getServerReportingConfig,
+  });
+}
+
 export function useUpdateServerConfig() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -138,6 +148,18 @@ export function useResetServerConfig() {
         queryKey: configurationQueryKeys.serverMetadata,
       });
       invalidateRecentAudit(queryClient);
+    },
+  });
+}
+
+export function useUpdateServerReportingConfig() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: updateServerReportingConfig,
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: configurationQueryKeys.serverReporting,
+      });
     },
   });
 }
