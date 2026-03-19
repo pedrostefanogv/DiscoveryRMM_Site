@@ -48,6 +48,7 @@ const automationLinks = [
   { to: '/automation/tasks', label: 'Tarefas' },
   { to: '/automation/operations', label: 'Operações' },
   { to: '/automation/audit', label: 'Auditoria' },
+  { to: '/settings/agent-labels', label: 'Labels Automaticas' },
 ];
 
 const reportsLinks = [
@@ -64,7 +65,6 @@ const settingsLinks = [
   { to: '/settings', label: 'Geral' },
   { to: '/settings/workflow', label: 'Workflow' },
   { to: '/settings/workflow-profiles', label: 'SLA e Perfis' },
-  { to: '/settings/agent-labels', label: 'Labels Automaticas' },
   { to: '/settings/audit', label: 'Auditoria Config' },
   { to: '/settings/branding', label: 'Branding' },
 ];
@@ -99,7 +99,8 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const clientsIsActive =
     location.pathname.startsWith('/clients') || location.pathname.startsWith('/sites');
   const softwareIsActive = location.pathname.startsWith('/software') || location.pathname === '/software-inventory';
-  const automationIsActive = location.pathname.startsWith('/automation');
+  const automationIsActive =
+    location.pathname.startsWith('/automation') || location.pathname.startsWith('/settings/agent-labels');
   const reportsIsActive = location.pathname.startsWith('/reports');
   const ticketsIsActive =
     location.pathname.startsWith('/tickets') || location.pathname.startsWith('/settings/departments');
@@ -113,6 +114,11 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const [settingsOpen, setSettingsOpen] = useState(settingsIsActive);
   const [identityOpen, setIdentityOpen] = useState(identityIsActive);
   const visibleIdentityLinks = canManageIdentity ? identityLinks : identityLinks.slice(0, 1);
+  const canViewAgentLabels = hasAnyPermission(['settings.*', 'settings.read', 'admin.*']);
+  const canViewAutomationMenu = canViewAutomation || canViewAgentLabels;
+  const visibleAutomationLinks = canViewAgentLabels
+    ? automationLinks
+    : automationLinks.filter(({ to }) => to !== '/settings/agent-labels');
   const canViewDepartments = hasAnyPermission(['departments.*', 'settings.*', 'settings.read', 'admin.*']);
   const visibleTicketsLinks = canViewDepartments
     ? ticketsLinks
@@ -325,13 +331,13 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
           </>
         )}
 
-        {canViewAutomation && (
+        {canViewAutomationMenu && (
           <>
             <button
               type="button"
               onClick={() => {
                 if (collapsed) {
-                  navigate('/automation');
+                  navigate(visibleAutomationLinks[0]?.to ?? '/automation');
                   return;
                 }
                 setAutomationOpen(prev => !prev);
@@ -356,7 +362,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
 
             {!collapsed && automationOpen && (
               <div className="ml-8 space-y-1 border-l border-white/10 pl-3">
-                {automationLinks.map(({ to, label }) => (
+                {visibleAutomationLinks.map(({ to, label }) => (
                   <NavLink
                     key={to}
                     to={to}
