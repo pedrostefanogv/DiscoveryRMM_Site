@@ -79,6 +79,13 @@ export const serverEditableFields: EditableField[] = [
     description: "Habilita transferência de arquivos entre agentes via P2P.",
   },
   {
+    key: "chatAIEnabled",
+    label: "Chat IA",
+    kind: "boolean",
+    group: "features",
+    description: "Habilita o chat com IA para suporte no painel.",
+  },
+  {
     key: "supportEnabled",
     label: "Suporte Remoto",
     kind: "boolean",
@@ -271,8 +278,20 @@ export const clientEditableFields: EditableField[] = [
     group: "features",
   },
   {
+    key: "chatAIEnabled",
+    label: "Chat IA",
+    kind: "boolean",
+    group: "features",
+  },
+  {
     key: "supportEnabled",
     label: "Suporte Remoto",
+    kind: "boolean",
+    group: "features",
+  },
+  {
+    key: "knowledgeBaseEnabled",
+    label: "Base de Conhecimento",
     kind: "boolean",
     group: "features",
   },
@@ -289,6 +308,14 @@ export const clientEditableFields: EditableField[] = [
     group: "advanced",
     description:
       "ApiKey e write-only: mantenha ausente no JSON e inclua somente quando quiser trocar a chave.",
+  },
+  {
+    key: "lockedFieldsJson",
+    label: "Campos Bloqueados para Herança",
+    kind: "json",
+    group: "advanced",
+    description:
+      "Lista de campos bloqueados neste cliente para impedir override no nível de site.",
   },
   {
     key: "meshCentralGroupPolicyProfile",
@@ -371,8 +398,20 @@ export const siteEditableFields: EditableField[] = [
     group: "features",
   },
   {
+    key: "chatAIEnabled",
+    label: "Chat IA",
+    kind: "boolean",
+    group: "features",
+  },
+  {
     key: "supportEnabled",
     label: "Suporte Remoto",
+    kind: "boolean",
+    group: "features",
+  },
+  {
+    key: "knowledgeBaseEnabled",
+    label: "Base de Conhecimento",
     kind: "boolean",
     group: "features",
   },
@@ -397,6 +436,44 @@ export const siteEditableFields: EditableField[] = [
     group: "advanced",
     description:
       "Override do perfil de policy MeshCentral no escopo do site. Deixe herdado para usar cliente/global.",
+  },
+  {
+    key: "meshCentralGroupName",
+    label: "Nome do Grupo MeshCentral",
+    kind: "string",
+    group: "siteProfile",
+    description:
+      "Nome lógico do grupo MeshCentral associado a este site.",
+  },
+  {
+    key: "meshCentralMeshId",
+    label: "Mesh ID",
+    kind: "string",
+    group: "siteProfile",
+    description: "Identificador de mesh aplicado ao site no MeshCentral.",
+  },
+  {
+    key: "meshCentralAppliedGroupPolicyProfile",
+    label: "Policy MeshCentral Aplicada",
+    kind: "string",
+    group: "siteProfile",
+    description:
+      "Perfil efetivamente aplicado pelo backend ao site no MeshCentral.",
+  },
+  {
+    key: "meshCentralAppliedGroupPolicyAt",
+    label: "Policy Aplicada em",
+    kind: "string",
+    group: "siteProfile",
+    description: "Data/hora da última aplicação de policy no site.",
+  },
+  {
+    key: "lockedFieldsJson",
+    label: "Campos Bloqueados para Herança",
+    kind: "json",
+    group: "advanced",
+    description:
+      "Lista de campos bloqueados neste site para impedir sobrescritas em níveis inferiores.",
   },
   {
     key: "inventoryIntervalHours",
@@ -467,10 +544,18 @@ export function formatFieldValue(
   }
 
   if (typeof value === "string") {
+    if (fieldKey === "appStorePolicy") {
+      if (value === "Disabled") return "0";
+      if (value === "PreApproved") return "1";
+      if (value === "All") return "2";
+    }
     return value;
   }
 
   if (typeof value === "number" || typeof value === "boolean") {
+    if (fieldKey === "appStorePolicy") {
+      return String(value);
+    }
     return String(value);
   }
 
@@ -506,6 +591,7 @@ export function validateFieldValue(
       agentOfflineThresholdSeconds: [30, 86400],
       tokenExpirationDays: [1, 3650],
       maxTokensPerAgent: [1, 100],
+      objectStorageUrlTtlHours: [1, 168],
     };
 
     const fieldRange = fieldKey ? ranges[fieldKey] : undefined;
@@ -527,6 +613,68 @@ export function validateFieldValue(
           return "lockedFieldsJson deve ser um JSON array de strings";
         }
       }
+
+      if (fieldKey === "reportingSettingsJson") {
+        if (
+          typeof parsed !== "object" ||
+          parsed === null ||
+          Array.isArray(parsed)
+        ) {
+          return "reportingSettingsJson deve ser um objeto JSON";
+        }
+
+        const dbRetention = Number(
+          (parsed as Record<string, unknown>).databaseRetentionDays,
+        );
+        const fileRetention = Number(
+          (parsed as Record<string, unknown>).fileRetentionDays,
+        );
+
+        if (
+          Number.isNaN(dbRetention) ||
+          Number.isNaN(fileRetention) ||
+          dbRetention < 1 ||
+          fileRetention < 1
+        ) {
+          return "Reporting requer databaseRetentionDays e fileRetentionDays >= 1";
+        }
+      }
+
+      if (fieldKey === "ticketAttachmentSettingsJson") {
+        if (
+          typeof parsed !== "object" ||
+          parsed === null ||
+          Array.isArray(parsed)
+        ) {
+          return "ticketAttachmentSettingsJson deve ser um objeto JSON";
+        }
+
+        const payload = parsed as Record<string, unknown>;
+        const maxFileSizeBytes = Number(payload.maxFileSizeBytes);
+        const presignedTtl = Number(payload.presignedUploadUrlTtlMinutes);
+        const allowedContentTypes = payload.allowedContentTypes;
+
+        if (
+          Number.isNaN(maxFileSizeBytes) ||
+          maxFileSizeBytes <= 0 ||
+          maxFileSizeBytes > 1024 * 1024 * 1024
+        ) {
+          return "MaxFileSizeBytes deve ser maior que 0 e menor ou igual a 1GB";
+        }
+
+        if (Number.isNaN(presignedTtl) || presignedTtl < 1 || presignedTtl > 120) {
+          return "PresignedUploadUrlTtlMinutes deve estar entre 1 e 120";
+        }
+
+        if (
+          !Array.isArray(allowedContentTypes) ||
+          allowedContentTypes.length === 0 ||
+          !allowedContentTypes.every((item) => typeof item === "string")
+        ) {
+          return "AllowedContentTypes deve ser um array de strings não vazio";
+        }
+      }
+
       return true;
     } catch {
       return "JSON invalido";
@@ -534,11 +682,11 @@ export function validateFieldValue(
   }
 
   if (kind === "policy") {
-    if (["Disabled", "PreApproved", "All"].includes(trimmed)) {
+    if (["0", "1", "2"].includes(trimmed)) {
       return true;
     }
 
-    return "Use Disabled, PreApproved ou All";
+    return "Use 0, 1 ou 2";
   }
 
   return true;
@@ -591,11 +739,7 @@ export function parseFieldValue(
   }
 
   if (kind === "policy") {
-    if (trimmed === "0" || trimmed === "1" || trimmed === "2") {
-      return Number(trimmed);
-    }
-
-    return trimmed;
+    return Number(trimmed);
   }
 
   return value;
@@ -695,7 +839,10 @@ export function getFieldMetadata(
   metadataFields: Record<string, ConfigurationFieldMetadata> | undefined,
   fieldKey: string,
 ): ConfigurationFieldMetadata | undefined {
-  return metadataFields?.[fieldKey] ?? metadataFields?.[toPascalCase(fieldKey)];
+  return (
+    metadataFields?.[fieldKey] ??
+    metadataFields?.[toCanonicalConfigurationFieldName(fieldKey)]
+  );
 }
 
 export function canEditFieldAtScope(
@@ -753,9 +900,16 @@ export function isInheritedBySourceType(
   return sourceType !== 4;
 }
 
-function toPascalCase(value: string): string {
+function toCanonicalConfigurationFieldName(value: string): string {
   if (!value) {
     return value;
+  }
+
+  if (
+    value === "aiIntegrationSettingsJson" ||
+    value === "AiIntegrationSettingsJson"
+  ) {
+    return "AIIntegrationSettingsJson";
   }
 
   return value.charAt(0).toUpperCase() + value.slice(1);

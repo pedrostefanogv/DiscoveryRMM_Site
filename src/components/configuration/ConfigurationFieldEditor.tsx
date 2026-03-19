@@ -219,9 +219,9 @@ export function ConfigurationFieldEditor({
           onChange={(event) => onValueChange(event.target.value)}
           disabled={inputDisabled}
           options={[
-            { value: "Disabled", label: "🔒 Desativado - Nenhum aplicativo autorizado" },
-            { value: "PreApproved", label: "✅ Pré-aprovados - Apenas aplicativos na lista" },
-            { value: "All", label: "🌍 Todos - Qualquer aplicativo autorizado" },
+            { value: "0", label: "🔒 0 (Disabled) - Nenhum aplicativo autorizado" },
+            { value: "1", label: "✅ 1 (PreApproved) - Apenas aplicativos na lista" },
+            { value: "2", label: "🌍 2 (All) - Qualquer aplicativo autorizado" },
           ]}
         />
       );
@@ -266,7 +266,7 @@ export function ConfigurationFieldEditor({
             placeholder={
               inherited
                 ? "Herdando do nivel acima"
-                : "supportEnabled\ntokenExpirationDays\naiIntegrationSettingsJson"
+                : "SupportEnabled\nTokenExpirationDays\nAIIntegrationSettingsJson"
             }
           />
         );
@@ -600,7 +600,7 @@ export function ConfigurationFieldEditor({
               inherited
                 ? "Herdando do nivel acima"
                 : fieldKey === "lockedFieldsJson"
-                  ? '["supportEnabled", "tokenExpirationDays"]'
+                  ? '["SupportEnabled", "TokenExpirationDays"]'
                   : "{\n  \"key\": \"value\"\n}"
             }
           />

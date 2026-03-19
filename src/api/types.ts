@@ -409,13 +409,94 @@ export type ConfigurationMap = Record<string, ConfigurationValue>;
 
 export type ConfigurationOrigin = "Server" | "Client" | "Site";
 
+export enum ConfigurationPriorityType {
+  Block = 0,
+  Global = 2,
+  Client = 3,
+  Site = 4,
+  Agent = 5,
+}
+
+export enum AppStorePolicyTypeEnum {
+  Disabled = 0,
+  PreApproved = 1,
+  All = 2,
+}
+
 export type AppStorePolicyType = "Disabled" | "PreApproved" | "All" | 0 | 1 | 2;
+
+export interface AutoUpdateSettings {
+  enabled: boolean;
+  checkEveryHours: number;
+  allowUserDelay: boolean;
+  maxDelayHours: number;
+  forceRestartDelay: boolean;
+  restartDelayHours: number;
+  updateOnLogon: boolean;
+  maintenanceWindows?: Record<string, unknown>[];
+  silentInstall: boolean;
+  autoRollbackOnFailure: boolean;
+}
+
+export interface AIIntegrationSettings {
+  enabled: boolean;
+  chatAIEnabled: boolean;
+  knowledgeBaseEnabled: boolean;
+  mspServers?: string[];
+  timeoutMs?: number;
+  maxTokensPerRequest?: number;
+  provider?: string;
+  apiKey?: string;
+  baseUrl?: string;
+  chatModel?: string;
+  embeddingModel?: string;
+  promptTemplate?: string;
+  temperature?: number;
+  embeddingEnabled?: boolean;
+  embeddingArticlesEnabled?: boolean;
+  maxHistoryMessages?: number;
+  maxKbContextTokens?: number;
+  rateLimitPerMinute?: number;
+  tokenBudgetDaily?: number;
+  costControlEnabled?: boolean;
+  minSimilarityScore?: number;
+  maxKbChunks?: number;
+}
+
+export interface AIIntegrationSettingsOverride {
+  enabled?: boolean;
+  chatAIEnabled?: boolean;
+  knowledgeBaseEnabled?: boolean;
+  chatModel?: string;
+  promptTemplate?: string;
+  temperature?: number;
+  maxTokensPerRequest?: number;
+  maxHistoryMessages?: number;
+  maxKbContextTokens?: number;
+  maxKbChunks?: number;
+  minSimilarityScore?: number;
+}
+
+export interface ReportingSettings {
+  databaseRetentionDays: number;
+  fileRetentionDays: number;
+  allowedRetentionDays?: number[];
+}
+
+export interface BrandingSettings {
+  companyName?: string;
+  logoUrl?: string;
+  primaryColor?: string;
+  secondaryColor?: string;
+  faviconUrl?: string;
+}
 
 export interface ServerConfiguration {
   id: string;
   recoveryEnabled: boolean;
   discoveryEnabled: boolean;
   p2PFilesEnabled: boolean;
+  chatAIEnabled: boolean;
   supportEnabled: boolean;
   knowledgeBaseEnabled: boolean;
   appStorePolicy: AppStorePolicyType;
@@ -429,6 +510,16 @@ export interface ServerConfiguration {
   brandingSettingsJson: string;
   aiIntegrationSettingsJson: string;
   meshCentralGroupPolicyProfile: string;
+  reportingSettingsJson?: string;
+  ticketAttachmentSettingsJson?: string;
+  objectStorageBucketName?: string;
+  objectStorageEndpoint?: string;
+  objectStorageRegion?: string;
+  objectStorageAccessKey?: string;
+  objectStorageSecretKey?: string;
+  objectStorageUrlTtlHours?: number;
+  objectStorageUsePathStyle?: boolean;
+  objectStorageSslVerify?: boolean;
   createdAt: string;
   updatedAt: string;
   createdBy?: string | null;
@@ -443,7 +534,9 @@ export interface ClientConfiguration {
   recoveryEnabled?: boolean | null;
   discoveryEnabled?: boolean | null;
   p2PFilesEnabled?: boolean | null;
+  chatAIEnabled?: boolean | null;
   supportEnabled?: boolean | null;
+  knowledgeBaseEnabled?: boolean | null;
   appStorePolicy?: AppStorePolicyType | null;
   aiIntegrationSettingsJson?: string | null;
   meshCentralGroupPolicyProfile?: string | null;
@@ -453,6 +546,7 @@ export interface ClientConfiguration {
   maxTokensPerAgent?: number | null;
   agentHeartbeatIntervalSeconds?: number | null;
   agentOfflineThresholdSeconds?: number | null;
+  lockedFieldsJson?: string | null;
   createdAt: string;
   updatedAt: string;
   createdBy?: string | null;
@@ -468,7 +562,9 @@ export interface SiteConfiguration {
   recoveryEnabled?: boolean | null;
   discoveryEnabled?: boolean | null;
   p2PFilesEnabled?: boolean | null;
+  chatAIEnabled?: boolean | null;
   supportEnabled?: boolean | null;
+  knowledgeBaseEnabled?: boolean | null;
   appStorePolicy?: AppStorePolicyType | null;
   aiIntegrationSettingsJson?: string | null;
   meshCentralGroupPolicyProfile?: string | null;
@@ -478,6 +574,11 @@ export interface SiteConfiguration {
   location?: string | null;
   contactPerson?: string | null;
   contactEmail?: string | null;
+  lockedFieldsJson?: string | null;
+  meshCentralGroupName?: string | null;
+  meshCentralMeshId?: string | null;
+  meshCentralAppliedGroupPolicyProfile?: string | null;
+  meshCentralAppliedGroupPolicyAt?: string | null;
   createdAt: string;
   updatedAt: string;
   createdBy?: string | null;
@@ -492,6 +593,7 @@ export interface ResolvedConfiguration {
   recoveryEnabled: boolean;
   discoveryEnabled: boolean;
   p2PFilesEnabled: boolean;
+  chatAIEnabled: boolean;
   supportEnabled: boolean;
   knowledgeBaseEnabled: boolean;
   appStorePolicy: AppStorePolicyType;
@@ -510,7 +612,7 @@ export interface ResolvedConfiguration {
 }
 
 export interface ConfigurationFieldMetadata {
-  sourceType?: number;
+  sourceType?: ConfigurationPriorityType;
   isLockedByGlobal?: boolean;
   isLockedByClient?: boolean;
   isLockedBySite?: boolean;
