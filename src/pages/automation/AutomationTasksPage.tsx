@@ -82,6 +82,46 @@ function scopeLabel(value: unknown): string {
   return String(value ?? "-");
 }
 
+function normalizeActionType(value: unknown): AutomationTaskActionType {
+  if (typeof value === "number") return value as AutomationTaskActionType;
+  if (typeof value === "string") {
+    const numeric = Number(value);
+    if (!Number.isNaN(numeric)) return numeric as AutomationTaskActionType;
+    if (value === "InstallPackage") return AutomationTaskActionType.InstallPackage;
+    if (value === "UpdatePackage") return AutomationTaskActionType.UpdatePackage;
+    if (value === "RunScript") return AutomationTaskActionType.RunScript;
+    if (value === "CustomCommand") return AutomationTaskActionType.CustomCommand;
+    if (value === "RemovePackage") return AutomationTaskActionType.RemovePackage;
+    if (value === "UpdateOrInstallPackage") return AutomationTaskActionType.UpdateOrInstallPackage;
+  }
+  return AutomationTaskActionType.RunScript;
+}
+
+function normalizeScopeType(value: unknown): AppApprovalScopeType {
+  if (typeof value === "number") return value as AppApprovalScopeType;
+  if (typeof value === "string") {
+    const numeric = Number(value);
+    if (!Number.isNaN(numeric)) return numeric as AppApprovalScopeType;
+    if (value === "Global") return AppApprovalScopeType.Global;
+    if (value === "Client") return AppApprovalScopeType.Client;
+    if (value === "Site") return AppApprovalScopeType.Site;
+    if (value === "Agent") return AppApprovalScopeType.Agent;
+  }
+  return AppApprovalScopeType.Global;
+}
+
+function normalizeInstallationType(value: unknown): AppInstallationType {
+  if (typeof value === "number") return value as AppInstallationType;
+  if (typeof value === "string") {
+    const numeric = Number(value);
+    if (!Number.isNaN(numeric)) return numeric as AppInstallationType;
+    if (value === "Winget") return AppInstallationType.Winget;
+    if (value === "Chocolatey") return AppInstallationType.Chocolatey;
+    if (value === "Custom") return AppInstallationType.Custom;
+  }
+  return AppInstallationType.Winget;
+}
+
 type TaskFormState = {
   name: string;
   description: string;
@@ -200,11 +240,13 @@ export default function AutomationTasksPage() {
   const advancedAgents = useAgentsBySite(filterSiteId);
   const sites = useSites(scopeClientId);
   const agents = useAgentsBySite(scopeSiteId);
+  const selectedActionType = normalizeActionType(form.actionType);
+  const selectedScopeType = normalizeScopeType(form.scopeType);
   const isPackageAction =
-    Number(form.actionType) === AutomationTaskActionType.InstallPackage ||
-    Number(form.actionType) === AutomationTaskActionType.UpdatePackage ||
-    Number(form.actionType) === AutomationTaskActionType.RemovePackage ||
-    Number(form.actionType) === AutomationTaskActionType.UpdateOrInstallPackage;
+    selectedActionType === AutomationTaskActionType.InstallPackage ||
+    selectedActionType === AutomationTaskActionType.UpdatePackage ||
+    selectedActionType === AutomationTaskActionType.RemovePackage ||
+    selectedActionType === AutomationTaskActionType.UpdateOrInstallPackage;
   const packageCatalog = useAppStoreCatalog({
     installationType: Number(form.installationType) as AppInstallationType,
     search: isPackageAction ? packageSearchDebounced : undefined,
@@ -249,16 +291,21 @@ export default function AutomationTasksPage() {
   useEffect(() => {
     if (!editingId || !taskDetail.data) return;
     const detail = taskDetail.data;
-    const scopeTypeString = String(detail.scopeType);
+    const normalizedActionType = normalizeActionType(detail.actionType);
+    const normalizedScopeType = normalizeScopeType(detail.scopeType);
+    const normalizedInstallationType =
+      detail.installationType !== null
+        ? normalizeInstallationType(detail.installationType)
+        : AppInstallationType.Winget;
     setForm({
       name: detail.name,
       description: detail.description || "",
-      actionType: String(detail.actionType),
-      installationType: detail.installationType !== null ? String(detail.installationType) : String(AppInstallationType.Winget),
+      actionType: String(normalizedActionType),
+      installationType: String(normalizedInstallationType),
       packageId: detail.packageId || "",
       scriptId: detail.scriptId || "",
       commandPayload: detail.commandPayload || "",
-      scopeType: scopeTypeString,
+      scopeType: String(normalizedScopeType),
       scopeId: detail.scopeId || "",
       includeTags: detail.includeTags ?? [],
       triggerImmediate: detail.triggerImmediate,
@@ -270,14 +317,14 @@ export default function AutomationTasksPage() {
       isActive: detail.isActive,
     });
 
-    if (detail.scopeType === AppApprovalScopeType.Client || detail.scopeType === "Client") {
+    if (normalizedScopeType === AppApprovalScopeType.Client) {
       setScopeClientId(detail.scopeId || "");
       setScopeSiteId("");
       setScopeAgentId("");
-    } else if (detail.scopeType === AppApprovalScopeType.Site || detail.scopeType === "Site") {
+    } else if (normalizedScopeType === AppApprovalScopeType.Site) {
       setScopeSiteId(detail.scopeId || "");
       setScopeAgentId("");
-    } else if (detail.scopeType === AppApprovalScopeType.Agent || detail.scopeType === "Agent") {
+    } else if (normalizedScopeType === AppApprovalScopeType.Agent) {
       setScopeAgentId(detail.scopeId || "");
     } else {
       setScopeClientId("");
@@ -287,7 +334,7 @@ export default function AutomationTasksPage() {
   }, [editingId, taskDetail.data]);
 
   useEffect(() => {
-    const currentScopeType = Number(form.scopeType);
+    const currentScopeType = normalizeScopeType(form.scopeType);
     if (currentScopeType === AppApprovalScopeType.Client) {
       if (scopeClientId) {
         setForm((prev) => ({ ...prev, scopeId: scopeClientId }));
@@ -310,6 +357,18 @@ export default function AutomationTasksPage() {
       setForm((prev) => ({ ...prev, scopeId: "" }));
     }
   }, [form.scopeType, scopeAgentId, scopeClientId, scopeSiteId]);
+
+  const closeFormModal = () => {
+    setFormOpen(false);
+    setEditing(null);
+    setEditingId("");
+    setScopeClientId("");
+    setScopeSiteId("");
+    setScopeAgentId("");
+    setPackageSearch("");
+    setTagSearch("");
+    setForm(defaultForm);
+  };
 
   const total = list.data?.total ?? 0;
   const canPrev = offset > 0;
@@ -475,18 +534,37 @@ export default function AutomationTasksPage() {
               variant="ghost"
               disabled={deleted}
               onClick={() => {
+                const normalizedActionType = normalizeActionType(item.actionType);
+                const normalizedScopeType = normalizeScopeType(item.scopeType);
                 setEditing(item);
                 setEditingId(item.id);
-                setForm((f) => ({
-                  ...f,
+                setForm({
+                  ...defaultForm,
                   name: item.name,
                   description: item.description || "",
-                  actionType: String(item.actionType),
-                  scopeType: String(item.scopeType),
+                  actionType: String(normalizedActionType),
+                  scopeType: String(normalizedScopeType),
                   scopeId: item.scopeId || "",
                   requiresApproval: item.requiresApproval,
                   isActive: item.isActive,
-                }));
+                });
+                if (normalizedScopeType === AppApprovalScopeType.Client) {
+                  setScopeClientId(item.scopeId || "");
+                  setScopeSiteId("");
+                  setScopeAgentId("");
+                } else if (normalizedScopeType === AppApprovalScopeType.Site) {
+                  setScopeClientId("");
+                  setScopeSiteId(item.scopeId || "");
+                  setScopeAgentId("");
+                } else if (normalizedScopeType === AppApprovalScopeType.Agent) {
+                  setScopeClientId("");
+                  setScopeSiteId("");
+                  setScopeAgentId(item.scopeId || "");
+                } else {
+                  setScopeClientId("");
+                  setScopeSiteId("");
+                  setScopeAgentId("");
+                }
                 setFormOpen(true);
               }}
             >
@@ -647,8 +725,8 @@ export default function AutomationTasksPage() {
 
     if (!triggerCount) return toast.error("Ative pelo menos um trigger");
 
-    const actionType = Number(form.actionType) as AutomationTaskActionType;
-    const scopeType = Number(form.scopeType) as AppApprovalScopeType;
+    const actionType = normalizeActionType(form.actionType);
+    const scopeType = normalizeScopeType(form.scopeType);
 
     if (form.triggerRecurring && !form.scheduleCron.trim()) {
       return toast.error("ScheduleCron obrigatorio quando trigger recorrente esta ativo");
@@ -770,15 +848,15 @@ export default function AutomationTasksPage() {
         </div>
         <Button
           onClick={() => {
-            setEditing(null);
-            setEditingId("");
-            setScopeClientId("");
-            setScopeSiteId("");
-            setScopeAgentId("");
-            setPackageSearch("");
-            setTagSearch("");
-            setForm(defaultForm);
-            setFormOpen(true);
+              setEditing(null);
+              setEditingId("");
+              setScopeClientId("");
+              setScopeSiteId("");
+              setScopeAgentId("");
+              setPackageSearch("");
+              setTagSearch("");
+              setForm(defaultForm);
+              setFormOpen(true);
           }}
         >
           Nova tarefa
@@ -1085,11 +1163,7 @@ export default function AutomationTasksPage() {
 
       <Modal
         open={formOpen}
-        onClose={() => {
-          setFormOpen(false);
-          setEditing(null);
-          setEditingId("");
-        }}
+        onClose={closeFormModal}
         title={editing ? "Editar tarefa" : "Nova tarefa"}
         maxWidth="max-w-5xl"
       >
@@ -1146,7 +1220,7 @@ export default function AutomationTasksPage() {
               }
             }}
           />
-          {Number(form.scopeType) === AppApprovalScopeType.Client && (
+          {selectedScopeType === AppApprovalScopeType.Client && (
             <Select
               label="Cliente alvo"
               options={scopeClientOptions}
@@ -1158,7 +1232,7 @@ export default function AutomationTasksPage() {
               }}
             />
           )}
-          {Number(form.scopeType) === AppApprovalScopeType.Site && (
+          {selectedScopeType === AppApprovalScopeType.Site && (
             <>
               <Select
                 label="Cliente alvo"
@@ -1182,7 +1256,7 @@ export default function AutomationTasksPage() {
               />
             </>
           )}
-          {Number(form.scopeType) === AppApprovalScopeType.Agent && (
+          {selectedScopeType === AppApprovalScopeType.Agent && (
             <>
               <Select
                 label="Cliente alvo"
@@ -1213,21 +1287,13 @@ export default function AutomationTasksPage() {
               />
             </>
           )}
-          {Number(form.scopeType) !== AppApprovalScopeType.Global && (
-            <Input
-              label="ScopeId (manual)"
-              value={form.scopeId}
-              onChange={(e) => setForm((p) => ({ ...p, scopeId: e.target.value }))}
-            />
-          )}
-
-          {(Number(form.actionType) === AutomationTaskActionType.InstallPackage ||
-            Number(form.actionType) === AutomationTaskActionType.UpdatePackage ||
-            Number(form.actionType) === AutomationTaskActionType.RemovePackage ||
-            Number(form.actionType) === AutomationTaskActionType.UpdateOrInstallPackage) && (
+          {(selectedActionType === AutomationTaskActionType.InstallPackage ||
+            selectedActionType === AutomationTaskActionType.UpdatePackage ||
+            selectedActionType === AutomationTaskActionType.RemovePackage ||
+            selectedActionType === AutomationTaskActionType.UpdateOrInstallPackage) && (
             <>
               <div className="space-y-1">
-                <label className="block text-sm font-medium text-slate-300">PackageId</label>
+                <label className="block text-sm font-medium text-slate-300">Nome do pacote</label>
                 <div className="flex gap-2">
                   <Input
                     value={selectedPackageLabel}
@@ -1245,17 +1311,12 @@ export default function AutomationTasksPage() {
                     <Search className="h-4 w-4" />
                   </Button>
                 </div>
+                <p className="text-xs text-slate-500">PackageId: {form.packageId || "-"}</p>
               </div>
-              <Input
-                label="PackageId (manual)"
-                value={form.packageId}
-                onChange={(e) => setForm((p) => ({ ...p, packageId: e.target.value }))}
-                hint="Use busca/catálogo quando possível; este campo aceita entrada manual."
-              />
             </>
           )}
 
-          {Number(form.actionType) === AutomationTaskActionType.RunScript && (
+          {selectedActionType === AutomationTaskActionType.RunScript && (
             <Select
               label="ScriptId"
               options={scriptOptions}
@@ -1265,7 +1326,7 @@ export default function AutomationTasksPage() {
           )}
         </div>
 
-        {Number(form.actionType) === AutomationTaskActionType.CustomCommand && (
+        {selectedActionType === AutomationTaskActionType.CustomCommand && (
           <div className="mt-3">
             <TextArea
               label="CommandPayload"
@@ -1365,7 +1426,7 @@ export default function AutomationTasksPage() {
         </div>
 
         <div className="mt-4 flex justify-end gap-2">
-          <Button variant="secondary" onClick={() => setFormOpen(false)}>Cancelar</Button>
+          <Button variant="secondary" onClick={closeFormModal}>Cancelar</Button>
           <Button onClick={handleSubmit} loading={createMutation.isPending || updateMutation.isPending}>
             {editing ? "Salvar" : "Criar"}
           </Button>
