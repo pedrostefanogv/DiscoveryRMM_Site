@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Pencil, Plus, Shield, Trash2, UserCog } from "lucide-react";
+import { KeyRound, Pencil, Plus, Shield, Trash2, UserCog } from "lucide-react";
 import toast from "react-hot-toast";
 import {
   Badge,
@@ -15,6 +15,7 @@ import {
   type Column,
 } from "@/components/ui";
 import {
+  type UserMfaKeyDto,
   type MeshCentralBackfillReport,
   type CreateUserRequest,
   type UpdateUserRequest,
@@ -25,9 +26,13 @@ import {
   useClients,
   useCreateIamUserWithGroups,
   useDeleteIamUser,
+  useForceIamUserPasswordReset,
   useIamGroups,
+  useIamUserMfaKeys,
   useRunMeshCentralBackfill,
   useRunMeshCentralBackfillDryRun,
+  useRevokeIamUserMfaAll,
+  useRevokeIamUserMfaKey,
   useSites,
   useIamUsers,
   useUpdateIamUser,
@@ -53,6 +58,10 @@ function getErrorMessage(error: unknown, fallback: string) {
   return error instanceof ApiError ? error.message : fallback;
 }
 
+function userMfaKeyTypeLabel(keyType: UserMfaKeyDto["keyType"]) {
+  return keyType === "Fido2" ? "FIDO2" : "TOTP";
+}
+
 export default function IamUsersPage() {
   const usersQuery = useIamUsers();
   const groupsQuery = useIamGroups();
@@ -68,6 +77,7 @@ export default function IamUsersPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<UserDto | null>(null);
   const [passwordTarget, setPasswordTarget] = useState<UserDto | null>(null);
+  const [securityTarget, setSecurityTarget] = useState<UserDto | null>(null);
   const [backfillClientId, setBackfillClientId] = useState("");
   const [backfillSiteId, setBackfillSiteId] = useState("");
   const [lastBackfillReport, setLastBackfillReport] =
@@ -75,17 +85,19 @@ export default function IamUsersPage() {
 
   const backfillSitesQuery = useSites(backfillClientId);
 
-  const canWrite = hasAnyPermission(["users.write", "users.*", "identity.*", "admin.*"]);
-  const canDelete = hasAnyPermission(["users.delete", "users.*", "identity.*", "admin.*"]);
-  const canChangePassword = hasAnyPermission([
-    "users.password",
-    "users.write",
-    "users.*",
+  const canView = hasAnyPermission([
+    "Users.View",
+    "Users.Edit",
     "identity.*",
     "admin.*",
   ]);
 
-  const canRunBackfill = canWrite;
+  const canEdit = hasAnyPermission(["Users.Edit", "identity.*", "admin.*"]);
+
+  const canDelete = canEdit;
+  const canChangePassword = canEdit;
+
+  const canRunBackfill = canEdit;
 
   const mapOptionalId = (value: string): string | null => {
     const normalized = value.trim();
@@ -151,7 +163,19 @@ export default function IamUsersPage() {
                 <Shield className="h-4 w-4" /> Senha
               </Button>
             )}
-            {canWrite && (
+            {canView && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setSecurityTarget(item);
+                }}
+              >
+                <KeyRound className="h-4 w-4" /> Segurança
+              </Button>
+            )}
+            {canEdit && (
               <Button
                 variant="ghost"
                 size="sm"
@@ -179,7 +203,7 @@ export default function IamUsersPage() {
         ),
       },
     ],
-    [canChangePassword, canDelete, canWrite],
+    [canChangePassword, canDelete, canEdit, canView],
   );
 
   const handleDelete = async (user: UserDto) => {
@@ -223,7 +247,7 @@ export default function IamUsersPage() {
           title="Usuários"
           subtitle={`${users.length} registro(s)`}
           action={
-            canWrite ? (
+              canEdit ? (
               <Button size="sm" onClick={() => setCreateOpen(true)}>
                 <Plus className="h-4 w-4" /> Novo usuário
               </Button>
@@ -312,6 +336,14 @@ export default function IamUsersPage() {
         />
       )}
 
+      {securityTarget && (
+        <UserSecurityModal
+          user={securityTarget}
+          canEdit={canEdit}
+          onClose={() => setSecurityTarget(null)}
+        />
+      )}
+
       <BackfillMeshSection
         clientId={backfillClientId}
         siteId={backfillSiteId}
@@ -356,6 +388,171 @@ export default function IamUsersPage() {
         }}
       />
     </div>
+  );
+}
+
+function UserSecurityModal({
+  user,
+  canEdit,
+  onClose,
+}: {
+  user: UserDto;
+  canEdit: boolean;
+  onClose: () => void;
+}) {
+  const userMfaKeys = useIamUserMfaKeys(user.id);
+  const revokeMfaAll = useRevokeIamUserMfaAll(user.id);
+  const revokeMfaKey = useRevokeIamUserMfaKey(user.id);
+  const forcePasswordReset = useForceIamUserPasswordReset(user.id);
+
+  const keys = userMfaKeys.data ?? [];
+
+  const handleRemoveKey = async (key: UserMfaKeyDto) => {
+    if (!canEdit) return;
+    const confirmed = window.confirm(
+      `Remover a chave "${key.name}" do usuário "${user.fullName}"?`,
+    );
+    if (!confirmed) return;
+
+    try {
+      await revokeMfaKey.mutateAsync(key.id);
+      toast.success("Chave MFA removida com sucesso.");
+    } catch (error) {
+      toast.error(getErrorMessage(error, "Não foi possível remover a chave MFA."));
+    }
+  };
+
+  const handleRevokeAllMfa = async () => {
+    if (!canEdit) return;
+    const confirmed = window.confirm(
+      `Revogar TODAS as chaves MFA de "${user.fullName}"?`,
+    );
+    if (!confirmed) return;
+
+    try {
+      await revokeMfaAll.mutateAsync();
+      toast.success(
+        "MFA revogado. No próximo login, o usuário precisará recadastrar via mfaSetupToken.",
+      );
+    } catch (error) {
+      toast.error(getErrorMessage(error, "Não foi possível revogar o MFA do usuário."));
+    }
+  };
+
+  const handleForcePasswordReset = async () => {
+    if (!canEdit) return;
+    const confirmed = window.confirm(
+      `Forçar troca de senha para "${user.fullName}" no próximo login?`,
+    );
+    if (!confirmed) return;
+
+    try {
+      await forcePasswordReset.mutateAsync();
+      toast.success("Troca de senha forçada com sucesso para o próximo login.");
+    } catch (error) {
+      toast.error(
+        getErrorMessage(error, "Não foi possível forçar a troca de senha."),
+      );
+    }
+  };
+
+  const hasPendingMutation =
+    revokeMfaAll.isPending || revokeMfaKey.isPending || forcePasswordReset.isPending;
+
+  return (
+    <Modal open={true} onClose={onClose} title={`Segurança: ${user.fullName}`}>
+      <div className="space-y-4">
+        <p className="text-sm text-slate-400">
+          Gerencie as chaves MFA/2FA do usuário e ações de recuperação de acesso.
+        </p>
+
+        <div className="space-y-2 rounded-lg border border-white/10 bg-white/5 p-3">
+          <p className="text-xs text-slate-400">
+            Fluxo de recuperação: após revogar MFA, no próximo login o usuário recebe
+            mfaSetupToken e recadastra TOTP ou FIDO2 normalmente.
+          </p>
+        </div>
+
+        {userMfaKeys.isLoading && <Loading message="Carregando chaves MFA..." />}
+
+        {userMfaKeys.isError && (
+          <ErrorDisplay
+            message="Falha ao carregar chaves MFA do usuário."
+            onRetry={() => void userMfaKeys.refetch()}
+          />
+        )}
+
+        {!userMfaKeys.isLoading && !userMfaKeys.isError && (
+          <div className="space-y-2">
+            {keys.map((key) => (
+              <div
+                key={key.id}
+                className="rounded-lg border border-white/10 bg-white/5 px-3 py-3"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="font-medium text-white">{key.name}</p>
+                    <p className="text-xs text-slate-400">Criada em: {key.createdAt}</p>
+                    <p className="text-xs text-slate-400">
+                      Último uso: {key.lastUsedAt ?? "Nunca"}
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <Badge color={key.keyType === "Fido2" ? "accent" : "warning"}>
+                      {userMfaKeyTypeLabel(key.keyType)}
+                    </Badge>
+                    {canEdit && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => void handleRemoveKey(key)}
+                        loading={revokeMfaKey.isPending}
+                        disabled={hasPendingMutation}
+                      >
+                        <Trash2 className="h-4 w-4" /> Remover
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+
+            {keys.length === 0 && (
+              <div className="rounded-lg border border-dashed border-white/15 p-4 text-sm text-slate-500">
+                Nenhuma chave MFA cadastrada para este usuário.
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className="flex flex-wrap justify-end gap-2 pt-2">
+          <Button variant="ghost" onClick={onClose} disabled={hasPendingMutation}>
+            Fechar
+          </Button>
+          {canEdit && (
+            <>
+              <Button
+                variant="ghost"
+                onClick={() => void handleForcePasswordReset()}
+                loading={forcePasswordReset.isPending}
+                disabled={hasPendingMutation}
+              >
+                <UserCog className="h-4 w-4" /> Forçar troca de senha
+              </Button>
+              <Button
+                variant="danger"
+                onClick={() => void handleRevokeAllMfa()}
+                loading={revokeMfaAll.isPending}
+                disabled={hasPendingMutation}
+              >
+                <Shield className="h-4 w-4" /> Revogar MFA
+              </Button>
+            </>
+          )}
+        </div>
+      </div>
+    </Modal>
   );
 }
 

@@ -337,7 +337,7 @@ export const router = createBrowserRouter([
       {
         path: 'identity/users',
         element: (
-          <PermissionGate anyOf={['identity.*', 'users.*', 'users.read', 'admin.*']}>
+          <PermissionGate anyOf={['identity.*', 'Users.View', 'Users.Edit', 'admin.*']}>
             <LazyPage><IamUsersPage /></LazyPage>
           </PermissionGate>
         ),
@@ -369,7 +369,7 @@ export const router = createBrowserRouter([
       {
         path: 'identity/mesh-profiles',
         element: (
-          <PermissionGate anyOf={['identity.*', 'users.*', 'users.read', 'admin.*']}>
+          <PermissionGate anyOf={['identity.*', 'Users.View', 'Users.Edit', 'admin.*']}>
             <LazyPage><IamMeshProfilesPage /></LazyPage>
           </PermissionGate>
         ),

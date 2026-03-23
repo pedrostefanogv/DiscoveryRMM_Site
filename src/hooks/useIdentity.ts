@@ -27,6 +27,7 @@ const IAM_KEYS = {
   permissionsCatalog: ["iam", "permissions", "catalog"] as const,
   myProfile: ["iam", "me", "profile"] as const,
   mySecurity: ["iam", "me", "security"] as const,
+  userMfaKeys: (userId: string) => ["iam", "users", userId, "mfa", "keys"] as const,
   groupMembers: (groupId: string) =>
     ["iam", "groups", groupId, "members"] as const,
   groupRoles: (groupId: string) => ["iam", "groups", groupId, "roles"] as const,
@@ -133,6 +134,51 @@ export function useChangeIamUserPassword() {
       id: string;
       payload: ChangePasswordRequest;
     }) => iamApi.changePassword(id, payload),
+  });
+}
+
+export function useIamUserMfaKeys(userId: string | null) {
+  return useQuery({
+    queryKey: userId
+      ? IAM_KEYS.userMfaKeys(userId)
+      : ["iam", "users", "mfa", "keys", "disabled"],
+    queryFn: () => iamApi.listUserMfaKeys(userId as string),
+    enabled: !!userId,
+  });
+}
+
+export function useRevokeIamUserMfaAll(userId: string | null) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => iamApi.revokeUserMfa(userId as string),
+    onSuccess: () => {
+      if (!userId) return;
+      queryClient.invalidateQueries({ queryKey: IAM_KEYS.userMfaKeys(userId) });
+      queryClient.invalidateQueries({ queryKey: IAM_KEYS.users });
+    },
+  });
+}
+
+export function useRevokeIamUserMfaKey(userId: string | null) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (keyId: string) =>
+      iamApi.revokeUserMfaKey(userId as string, keyId),
+    onSuccess: () => {
+      if (!userId) return;
+      queryClient.invalidateQueries({ queryKey: IAM_KEYS.userMfaKeys(userId) });
+      queryClient.invalidateQueries({ queryKey: IAM_KEYS.users });
+    },
+  });
+}
+
+export function useForceIamUserPasswordReset(userId: string | null) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => iamApi.forceUserPasswordReset(userId as string),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: IAM_KEYS.users });
+    },
   });
 }
 

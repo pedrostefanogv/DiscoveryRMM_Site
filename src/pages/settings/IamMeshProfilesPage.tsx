@@ -93,8 +93,8 @@ export default function IamMeshProfilesPage() {
   const [editTarget, setEditTarget] = useState<MeshCentralRightsProfileDto | null>(null);
 
   const { hasAnyPermission } = useAuthorization();
-  const canWrite = hasAnyPermission(["users.write", "users.*", "identity.*", "admin.*"]);
-  const canDelete = hasAnyPermission(["users.delete", "users.*", "identity.*", "admin.*"]);
+  const canWrite = hasAnyPermission(["Users.Edit", "identity.*", "admin.*"]);
+  const canDelete = hasAnyPermission(["Users.Edit", "identity.*", "admin.*"]);
 
   const usageMap = useMemo(() => {
     const map = new Map<string, number>();

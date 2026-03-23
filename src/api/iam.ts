@@ -56,6 +56,17 @@ export interface ChangePasswordRequest {
   newPassword: string;
 }
 
+export type UserMfaKeyType = "Fido2" | "Totp";
+
+export interface UserMfaKeyDto {
+  id: string;
+  name: string;
+  keyType: UserMfaKeyType;
+  createdAt: string;
+  lastUsedAt: string | null;
+  isActive?: boolean;
+}
+
 export interface MyProfileDto {
   login: string;
   email: string;
@@ -316,6 +327,17 @@ export const iamApi = {
 
   changePassword: (id: string, payload: ChangePasswordRequest) =>
     api.post<void>(`${USERS}/${id}/change-password`, payload),
+
+  listUserMfaKeys: (id: string) =>
+    api.get<UserMfaKeyDto[]>(`${USERS}/${id}/mfa/keys`),
+
+  revokeUserMfa: (id: string) => api.del<void>(`${USERS}/${id}/mfa`),
+
+  revokeUserMfaKey: (id: string, keyId: string) =>
+    api.del<void>(`${USERS}/${id}/mfa/keys/${keyId}`),
+
+  forceUserPasswordReset: (id: string) =>
+    api.post<void>(`${USERS}/${id}/force-password-reset`),
 
   deleteUser: (id: string) => api.del<void>(`${USERS}/${id}`),
 

@@ -42,6 +42,7 @@ export type {
   RealtimeStatsResponse,
 } from "./realtime";
 export { dashboardApi } from "./dashboard";
+export { p2pApi } from "./p2p";
 export { authApi } from "./auth";
 export { iamApi } from "./iam";
 export type {
@@ -75,6 +76,8 @@ export type {
   MeshCentralSyncSummary,
   UpdateUserRequest,
   ChangePasswordRequest,
+  UserMfaKeyType,
+  UserMfaKeyDto,
   MyProfileDto,
   UpdateMyProfileRequest,
   MySecurityKeyDto,

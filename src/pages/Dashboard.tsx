@@ -21,6 +21,11 @@ import { useQuery } from '@tanstack/react-query';
 import { useTickets } from '@/hooks/useTickets';
 import { useLogs } from '@/hooks/useLogs';
 import { useDashboardSummary } from '@/hooks/useDashboardSummary';
+import { useP2POverview } from '@/hooks/useP2POverview';
+import { useP2PTimeseries } from '@/hooks/useP2PTimeseries';
+import { useP2PArtifactsDistribution } from '@/hooks/useP2PArtifactsDistribution';
+import { useP2PAgentsRanking } from '@/hooks/useP2PAgentsRanking';
+import { useP2PSeedPlan } from '@/hooks/useP2PSeedPlan';
 import { StatCard, Card, CardHeader, Badge } from '@/components/ui';
 import { Loading, ErrorDisplay } from '@/components/ui';
 import { LogLevel, getRealtimeStats, type TicketPriority } from '@/api';
@@ -75,6 +80,12 @@ export default function Dashboard() {
     refetchInterval: 10_000,
     refetchIntervalInBackground: true,
   });
+  const p2pScope = { scope: 'global' as const };
+  const p2pOverview = useP2POverview(p2pScope);
+  const p2pTimeseries = useP2PTimeseries({ ...p2pScope, metric: 'successRate', interval: window });
+  const p2pArtifacts = useP2PArtifactsDistribution({ ...p2pScope, limit: 5, offset: 0 });
+  const p2pRanking = useP2PAgentsRanking({ ...p2pScope, limit: 5, offset: 0 });
+  const p2pSeedPlan = useP2PSeedPlan(p2pScope);
 
   const ds = dashboard.data;
 
@@ -120,6 +131,7 @@ export default function Dashboard() {
   const cmds = ds?.commands;
   const auto = ds?.automation;
   const logs = ds?.logs;
+  const p2p = p2pOverview.data;
 
   return (
     <div className="space-y-6">
@@ -420,7 +432,146 @@ export default function Dashboard() {
         </Card>
       </div>
 
-      {/* Linha 5 – Listas recentes */}
+      {/* Linha 5 – Operacional P2P */}
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card>
+          <CardHeader
+            title="P2P Overview"
+            subtitle="Indicadores operacionais de distribuição peer-to-peer"
+          />
+          <div className="grid grid-cols-2 gap-3 text-sm">
+            <MetricTile label="Agentes ativos" value={p2p?.activeAgents ?? '—'} icon={Monitor} />
+            <MetricTile label="Seeders" value={p2p?.seeders ?? '—'} icon={Server} />
+            <MetricTile label="Success rate" value={typeof p2p?.successRate === 'number' ? `${p2p.successRate.toFixed(1)}%` : '—'} icon={CheckCircle2} />
+            <MetricTile label="Bytes" value={formatBytes(p2p?.bytesTransferred)} icon={Database} />
+          </div>
+          <div className="mt-3 rounded-lg bg-white/5 px-3 py-2 text-sm">
+            <div className="flex items-center justify-between">
+              <span className="text-slate-400">Health score</span>
+              <span className="font-semibold text-white">
+                {typeof p2p?.healthScore === 'number' ? p2p.healthScore.toFixed(1) : '—'}
+              </span>
+            </div>
+            <progress
+              value={Math.max(0, Math.min(100, p2p?.healthScore ?? 0))}
+              max={100}
+              className="status-bar status-bar-success mt-1.5"
+              aria-label="Health score P2P"
+            />
+          </div>
+        </Card>
+
+        <Card>
+          <CardHeader
+            title="P2P Timeseries"
+            subtitle="Últimos pontos da métrica success rate"
+          />
+          <div className="space-y-2 text-sm">
+            {(p2pTimeseries.data?.points ?? []).slice(-8).map(point => (
+              <div key={point.timestampUtc} className="rounded-lg bg-white/5 px-3 py-2">
+                <div className="flex items-center justify-between text-xs text-slate-400">
+                  <span>{new Date(point.timestampUtc).toLocaleDateString('pt-BR')}</span>
+                  <span>{new Date(point.timestampUtc).toLocaleTimeString('pt-BR')}</span>
+                </div>
+                <div className="mt-1 flex items-center justify-between">
+                  <span className="text-slate-300">Valor</span>
+                  <span className="font-semibold text-white">{point.value.toFixed(2)}</span>
+                </div>
+              </div>
+            ))}
+            {(p2pTimeseries.data?.points?.length ?? 0) === 0 && (
+              <p className="text-sm text-slate-500">Sem dados de série temporal para o filtro atual.</p>
+            )}
+          </div>
+        </Card>
+      </div>
+
+      {/* Linha 6 – Distribuição de Artifacts + Ranking de Agentes */}
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card>
+          <CardHeader
+            title="P2P Artifacts Distribution"
+            subtitle="Distribuição de cache por peer"
+          />
+          <div className="space-y-2">
+            {(p2pArtifacts.data?.items ?? []).map(item => (
+              <div key={item.artifactId} className="rounded-lg bg-white/5 px-3 py-2">
+                <div className="flex items-center justify-between">
+                  <p className="truncate text-sm font-medium text-slate-200">{item.artifactName}</p>
+                  <Badge color="primary">{item.peerCount} peers</Badge>
+                </div>
+                <p className="mt-1 text-xs text-slate-500">
+                  Atualizado em {new Date(item.lastUpdatedUtc).toLocaleDateString('pt-BR')}
+                </p>
+              </div>
+            ))}
+            {(p2pArtifacts.data?.items?.length ?? 0) === 0 && (
+              <p className="text-sm text-slate-500">Nenhum artifact distribuído encontrado.</p>
+            )}
+          </div>
+        </Card>
+
+        <Card>
+          <CardHeader
+            title="P2P Agents Ranking"
+            subtitle="Top agentes por health score"
+          />
+          <div className="space-y-2">
+            {(p2pRanking.data?.items ?? []).map(agent => (
+              <div key={agent.agentId} className="rounded-lg bg-white/5 px-3 py-2">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="truncate text-sm font-medium text-slate-200">{agent.agentName}</p>
+                  <Badge color={agent.healthScore >= 80 ? 'success' : 'warning'}>
+                    {agent.healthScore.toFixed(1)}
+                  </Badge>
+                </div>
+                <div className="mt-1 grid grid-cols-3 gap-2 text-xs text-slate-400">
+                  <span>Bytes: {formatBytes(agent.bytesTransferred)}</span>
+                  <span>Fail: {agent.failureRate.toFixed(1)}%</span>
+                  <span>Fila: {agent.queueLength}</span>
+                </div>
+              </div>
+            ))}
+            {(p2pRanking.data?.items?.length ?? 0) === 0 && (
+              <p className="text-sm text-slate-500">Sem ranking de agentes no momento.</p>
+            )}
+          </div>
+        </Card>
+      </div>
+
+      {/* Linha 7 – Seed Plan */}
+      <div className="grid gap-6 lg:grid-cols-1">
+        <Card>
+          <CardHeader
+            title="P2P Seed Plan"
+            subtitle="Estado atual dos seed-plans por escopo"
+          />
+          <div className="space-y-2">
+            {(p2pSeedPlan.data?.items ?? []).map((plan, idx) => (
+              <div key={`${plan.scope}-${plan.siteId ?? 'global'}-${idx}`} className="rounded-lg bg-white/5 px-3 py-2">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-sm font-medium text-slate-200">
+                    Escopo: {plan.scope}
+                    {plan.tenantId ? ` • tenant ${plan.tenantId}` : ''}
+                    {plan.siteId ? ` • site ${plan.siteId}` : ''}
+                  </p>
+                  <Badge color={plan.status.toLowerCase() === 'healthy' ? 'success' : 'warning'}>
+                    {plan.status}
+                  </Badge>
+                </div>
+                <p className="mt-1 text-xs text-slate-400">
+                  Seeders desejados: {plan.desiredSeeders} • reais: {plan.actualSeeders}
+                </p>
+              </div>
+            ))}
+            {(p2pSeedPlan.data?.items?.length ?? 0) === 0 && (
+              <p className="text-sm text-slate-500">Nenhuma configuração de seed plan encontrada.</p>
+            )}
+          </div>
+        </Card>
+      </div>
+
+      {/* Linha 8 – Listas recentes */}
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader title="Chamados Recentes" subtitle="Últimos 10 chamados" />
