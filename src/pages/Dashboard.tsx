@@ -26,11 +26,21 @@ import { useP2PTimeseries } from '@/hooks/useP2PTimeseries';
 import { useP2PArtifactsDistribution } from '@/hooks/useP2PArtifactsDistribution';
 import { useP2PAgentsRanking } from '@/hooks/useP2PAgentsRanking';
 import { useP2PSeedPlan } from '@/hooks/useP2PSeedPlan';
+import type { P2PScope } from '@/api/p2p';
 import { StatCard, Card, CardHeader, Badge } from '@/components/ui';
 import { Loading, ErrorDisplay } from '@/components/ui';
 import { LogLevel, getRealtimeStats, type TicketPriority } from '@/api';
 import { useSoftwareInventorySnapshot } from '@/hooks/useSoftwareInventory';
 import type { DashboardWindow } from '@/api/dashboard';
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from 'recharts';
 
 function formatBytes(value?: number | null): string {
   if (!value || value <= 0) return '—';
@@ -80,7 +90,18 @@ export default function Dashboard() {
     refetchInterval: 10_000,
     refetchIntervalInBackground: true,
   });
-  const p2pScope = { scope: 'global' as const };
+  const [p2pScopeLevel, setP2pScopeLevel] = useState<P2PScope>('global');
+  const [p2pTenantId, setP2pTenantId] = useState('');
+  const [p2pSiteId, setP2pSiteId] = useState('');
+  const [p2pAgentId, setP2pAgentId] = useState('');
+
+  const p2pScope = {
+    scope: p2pScopeLevel,
+    ...(p2pScopeLevel !== 'global' && p2pTenantId ? { tenantId: p2pTenantId } : {}),
+    ...(p2pScopeLevel === 'site' && p2pSiteId ? { siteId: p2pSiteId } : {}),
+    ...(p2pScopeLevel === 'agent' && p2pAgentId ? { agentId: p2pAgentId } : {}),
+  };
+
   const p2pOverview = useP2POverview(p2pScope);
   const p2pTimeseries = useP2PTimeseries({ ...p2pScope, metric: 'successRate', interval: window });
   const p2pArtifacts = useP2PArtifactsDistribution({ ...p2pScope, limit: 5, offset: 0 });
@@ -433,6 +454,16 @@ export default function Dashboard() {
       </div>
 
       {/* Linha 5 – Operacional P2P */}
+      <P2PScopeSelector
+        scope={p2pScopeLevel}
+        tenantId={p2pTenantId}
+        siteId={p2pSiteId}
+        agentId={p2pAgentId}
+        onScopeChange={setP2pScopeLevel}
+        onTenantIdChange={setP2pTenantId}
+        onSiteIdChange={setP2pSiteId}
+        onAgentIdChange={setP2pAgentId}
+      />
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader
@@ -464,25 +495,12 @@ export default function Dashboard() {
         <Card>
           <CardHeader
             title="P2P Timeseries"
-            subtitle="Últimos pontos da métrica success rate"
+            subtitle={`Success rate ao longo do tempo • ${window}`}
           />
-          <div className="space-y-2 text-sm">
-            {(p2pTimeseries.data?.points ?? []).slice(-8).map(point => (
-              <div key={point.timestampUtc} className="rounded-lg bg-white/5 px-3 py-2">
-                <div className="flex items-center justify-between text-xs text-slate-400">
-                  <span>{new Date(point.timestampUtc).toLocaleDateString('pt-BR')}</span>
-                  <span>{new Date(point.timestampUtc).toLocaleTimeString('pt-BR')}</span>
-                </div>
-                <div className="mt-1 flex items-center justify-between">
-                  <span className="text-slate-300">Valor</span>
-                  <span className="font-semibold text-white">{point.value.toFixed(2)}</span>
-                </div>
-              </div>
-            ))}
-            {(p2pTimeseries.data?.points?.length ?? 0) === 0 && (
-              <p className="text-sm text-slate-500">Sem dados de série temporal para o filtro atual.</p>
-            )}
-          </div>
+          <P2PLineChart
+            points={p2pTimeseries.data?.points ?? []}
+            loading={p2pTimeseries.isLoading}
+          />
         </Card>
       </div>
 
@@ -707,5 +725,158 @@ function MetricTile({
       </div>
       <p className="mt-1 text-base font-semibold text-white">{value}</p>
     </div>
+  );
+}
+
+// ── P2P Scope Selector ──────────────────────────────────────────────────────
+
+const P2P_SCOPES: { value: P2PScope; label: string }[] = [
+  { value: 'global', label: 'Global' },
+  { value: 'tenant', label: 'Tenant' },
+  { value: 'site', label: 'Site' },
+  { value: 'agent', label: 'Agent' },
+];
+
+function P2PScopeSelector({
+  scope,
+  tenantId,
+  siteId,
+  agentId,
+  onScopeChange,
+  onTenantIdChange,
+  onSiteIdChange,
+  onAgentIdChange,
+}: {
+  scope: P2PScope;
+  tenantId: string;
+  siteId: string;
+  agentId: string;
+  onScopeChange: (s: P2PScope) => void;
+  onTenantIdChange: (v: string) => void;
+  onSiteIdChange: (v: string) => void;
+  onAgentIdChange: (v: string) => void;
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3">
+      <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">Escopo P2P</span>
+      <div className="flex items-center gap-1 rounded-lg border border-white/10 bg-black/20 p-0.5">
+        {P2P_SCOPES.map(s => (
+          <button
+            key={s.value}
+            type="button"
+            onClick={() => onScopeChange(s.value)}
+            className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
+              scope === s.value ? 'bg-primary text-white' : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            {s.label}
+          </button>
+        ))}
+      </div>
+      {scope !== 'global' && (
+        <input
+          type="text"
+          value={tenantId}
+          onChange={e => onTenantIdChange(e.target.value)}
+          placeholder="Tenant ID"
+          className="h-7 rounded-md border border-white/10 bg-black/20 px-2 text-xs text-white placeholder:text-slate-600 focus:outline-none focus:ring-1 focus:ring-primary"
+        />
+      )}
+      {scope === 'site' && (
+        <input
+          type="text"
+          value={siteId}
+          onChange={e => onSiteIdChange(e.target.value)}
+          placeholder="Site ID"
+          className="h-7 rounded-md border border-white/10 bg-black/20 px-2 text-xs text-white placeholder:text-slate-600 focus:outline-none focus:ring-1 focus:ring-primary"
+        />
+      )}
+      {scope === 'agent' && (
+        <input
+          type="text"
+          value={agentId}
+          onChange={e => onAgentIdChange(e.target.value)}
+          placeholder="Agent ID"
+          className="h-7 rounded-md border border-white/10 bg-black/20 px-2 text-xs text-white placeholder:text-slate-600 focus:outline-none focus:ring-1 focus:ring-primary"
+        />
+      )}
+    </div>
+  );
+}
+
+// ── P2P Line Chart (recharts) ────────────────────────────────────────────────
+
+type ChartPoint = { timestampUtc: string; value: number };
+
+function P2PLineChart({
+  points,
+  loading,
+}: {
+  points: ChartPoint[];
+  loading?: boolean;
+}) {
+  if (loading) {
+    return (
+      <div className="flex h-40 items-center justify-center">
+        <span className="text-xs text-slate-500">Carregando...</span>
+      </div>
+    );
+  }
+  if (points.length === 0) {
+    return (
+      <div className="flex h-40 items-center justify-center">
+        <span className="text-xs text-slate-500">Sem dados de série temporal.</span>
+      </div>
+    );
+  }
+
+  const data = points.map(p => ({
+    t: new Date(p.timestampUtc).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
+    v: p.value,
+  }));
+
+  return (
+    <ResponsiveContainer width="100%" height={160}>
+      <LineChart data={data} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
+        <CartesianGrid stroke="rgba(255,255,255,0.06)" strokeDasharray="3 3" vertical={false} />
+        <XAxis
+          dataKey="t"
+          tick={{ fill: '#64748b', fontSize: 9 }}
+          axisLine={false}
+          tickLine={false}
+          interval="preserveStartEnd"
+        />
+        <YAxis
+          tick={{ fill: '#64748b', fontSize: 9 }}
+          axisLine={false}
+          tickLine={false}
+          tickFormatter={(v: number) => `${v.toFixed(0)}%`}
+          width={36}
+        />
+        <Tooltip
+          contentStyle={{
+            background: '#1e293b',
+            border: '1px solid rgba(255,255,255,0.08)',
+            borderRadius: 8,
+            fontSize: 11,
+            color: '#f1f5f9',
+          }}
+          formatter={(value) => {
+            const v = typeof value === 'number' ? value : Number(value ?? 0);
+            return [`${v.toFixed(2)}%`, 'Success rate'] as [string, string];
+          }}
+          labelStyle={{ color: '#94a3b8' }}
+        />
+        <Line
+          type="monotone"
+          dataKey="v"
+          stroke="#22c55e"
+          strokeWidth={2}
+          dot={{ r: 3, fill: '#22c55e', strokeWidth: 0 }}
+          activeDot={{ r: 5 }}
+          name="Success rate"
+        />
+      </LineChart>
+    </ResponsiveContainer>
   );
 }

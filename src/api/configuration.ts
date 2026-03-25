@@ -73,6 +73,18 @@ export const configurationApi = {
       errors: string[];
       latencyMs: number;
     }>(`${BASE}/server/object-storage/test`),
+  testNatsServer: (payload: { url: string; user?: string; password?: string }) =>
+    api.post<{ ok: boolean; errors?: string[]; latencyMs?: number }>(
+      `${BASE}/server/nats/test`,
+      payload,
+    ),
+  generateNatsAccountKey: () =>
+    api.post<{
+      accountSeed: string;
+      accountPublicKey: string;
+      xKeySeed?: string;
+      xKeyPublicKey?: string;
+    }>(`${BASE}/server/nats/generate-account-key`),
   getClient: (clientId: string) =>
     api.get<ClientConfiguration>(`${BASE}/clients/${clientId}`),
   getClientMetadata: (clientId: string) =>

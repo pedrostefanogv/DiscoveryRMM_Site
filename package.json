@@ -1,5 +1,5 @@
 {
-  "name": "meduza-rmm",
+  "name": "discovery-rmm",
   "private": true,
   "version": "1.0.0",
   "type": "module",
@@ -26,6 +26,7 @@
     "react-hot-toast": "^2.4.1",
     "react-markdown": "^10.1.0",
     "react-router-dom": "^7.1.0",
+    "recharts": "^3.8.0",
     "remark-gfm": "^4.0.1",
     "zod": "^4.3.6"
   },

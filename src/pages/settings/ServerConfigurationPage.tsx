@@ -10,6 +10,7 @@ import {
   Cloud,
   FileStack,
   HardDrive,
+  KeyRound,
   Layers,
   Lock,
   RotateCcw,
@@ -26,6 +27,8 @@ import {
   usePatchServerConfig,
   useResetServerConfig,
   useServerConfig,
+  useGenerateNatsAccountKey,
+  useTestNatsServer,
   useTestObjectStorage,
   useTicketAttachmentSettings,
   useUpdateServerConfig,
@@ -59,11 +62,26 @@ export default function ServerConfigurationPage() {
   const patchMutation = usePatchServerConfig();
   const putMutation = useUpdateServerConfig();
   const resetMutation = useResetServerConfig();
+  const generateNatsAccountKeyMutation = useGenerateNatsAccountKey();
+  const testNatsMutation = useTestNatsServer();
   const testStorageMutation = useTestObjectStorage();
 
   const [confirmReset, setConfirmReset] = useState(false);
   const [togglingKey, setTogglingKey] = useState<string | null>(null);
+  const [savingNats, setSavingNats] = useState(false);
+  const [natsKeys, setNatsKeys] = useState<{
+    accountSeed: string;
+    accountPublicKey: string;
+    xKeySeed?: string;
+    xKeyPublicKey?: string;
+  } | null>(null);
   const [savingStorage, setSavingStorage] = useState(false);
+  const [natsTestResult, setNatsTestResult] = useState<{
+    ok: boolean;
+    errors: string[];
+    latencyMs?: number;
+    host: string;
+  } | null>(null);
   const [testResult, setTestResult] = useState<{
     success: boolean;
     configurationValid: boolean;
@@ -150,6 +168,31 @@ export default function ServerConfigurationPage() {
     }
   };
 
+  const saveNatsFields = async () => {
+    setSavingNats(true);
+    const natsFields = serverEditableFields.filter((f) => f.group === "nats");
+    const payload: Record<string, ConfigurationValue> = {};
+    for (const field of natsFields) {
+      const value = String(getValues(`values.${field.key}` as never) ?? "");
+      const validation = validateFieldValue(field.kind, value, field.key);
+      if (validation !== true) {
+        toast.error(`${field.label}: ${validation}`);
+        setSavingNats(false);
+        return;
+      }
+      payload[field.key] = parseFieldValue(field.kind, value, field.key);
+    }
+    try {
+      await patchMutation.mutateAsync(payload);
+      toast.success("Configuração NATS salva.");
+      setNatsTestResult(null);
+    } catch (error) {
+      toast.error(readApiError(error));
+    } finally {
+      setSavingNats(false);
+    }
+  };
+
   const testConnection = async () => {
     setTestResult(null);
     try {
@@ -163,6 +206,55 @@ export default function ServerConfigurationPage() {
         errors: [readApiError(error)],
         latencyMs: 0,
       });
+    }
+  };
+
+  const testNatsConnection = async () => {
+    setNatsTestResult(null);
+    const externalHost = String(getValues("values.natsServerHostExternal" as never) ?? "").trim();
+    const internalHost = String(getValues("values.natsServerHostInternal" as never) ?? "").trim();
+    const host = externalHost || internalHost;
+
+    if (!host) {
+      toast.error("Informe um host externo ou interno para testar.");
+      return;
+    }
+
+    const validation = validateFieldValue("string", host, "natsServerHostExternal");
+    if (validation !== true) {
+      toast.error(String(validation));
+      return;
+    }
+
+    try {
+      const result = await testNatsMutation.mutateAsync({ url: host });
+      setNatsTestResult({
+        ok: !!result?.ok,
+        errors: result?.errors ?? [],
+        latencyMs: result?.latencyMs,
+        host,
+      });
+    } catch (error) {
+      setNatsTestResult({
+        ok: false,
+        errors: [readApiError(error)],
+        host,
+      });
+    }
+  };
+
+  const generateNatsAccountKey = async () => {
+    try {
+      const result = await generateNatsAccountKeyMutation.mutateAsync();
+      setNatsKeys({
+        accountSeed: result?.accountSeed ?? "",
+        accountPublicKey: result?.accountPublicKey ?? "",
+        xKeySeed: result?.xKeySeed,
+        xKeyPublicKey: result?.xKeyPublicKey,
+      });
+      toast.success("Account key NATS gerada com sucesso.");
+    } catch (error) {
+      toast.error(readApiError(error));
     }
   };
 
@@ -187,6 +279,7 @@ export default function ServerConfigurationPage() {
   const featureFields = serverEditableFields.filter((f) => f.group === "features");
   const policyFields = serverEditableFields.filter((f) => f.group === "policy");
   const agentFields = serverEditableFields.filter((f) => f.group === "agent");
+  const natsFields = serverEditableFields.filter((f) => f.group === "nats");
   const advancedFields = serverEditableFields.filter(
     (f) => f.group === "advanced" && f.key !== "brandingSettingsJson",
   );
@@ -214,6 +307,37 @@ export default function ServerConfigurationPage() {
         disableInheritance
         description={field.description}
         unit={field.unit}
+        hideSaveButton
+        onValueChange={(next) => {
+          setValue(`values.${field.key}` as never, next as never, {
+            shouldDirty: true,
+            shouldTouch: true,
+            shouldValidate: true,
+          });
+        }}
+        onToggleInherit={() => undefined}
+        onSavePatch={() => undefined}
+        saving={false}
+      />
+    );
+  };
+
+  const renderNatsFieldEditor = (field: EditableField) => {
+    const value = formValues.values?.[field.key] ?? "";
+    const error = errors.values?.[field.key]?.message;
+    return (
+      <ConfigurationFieldEditor
+        key={field.key}
+        fieldLabel={field.label}
+        fieldKey={field.key}
+        fieldKind={field.kind}
+        value={String(value)}
+        error={typeof error === "string" ? error : undefined}
+        inherited={false}
+        effectiveValue={serverQuery.data?.[field.key]}
+        origin="Server"
+        disableInheritance
+        description={field.description}
         hideSaveButton
         onValueChange={(next) => {
           setValue(`values.${field.key}` as never, next as never, {
@@ -492,6 +616,140 @@ export default function ServerConfigurationPage() {
                 )}
               </div>
             )}
+          </div>
+        </Card>
+
+        {/* NATS */}
+        <Card>
+          <CardHeader
+            title="Servidor NATS"
+            subtitle="Configuração exclusiva do servidor. Informe apenas host/IP; porta 4222 é fixa."
+          />
+          <div className="space-y-5">
+            <div className="grid gap-4 sm:grid-cols-2">
+              {natsFields.map((field) => renderNatsFieldEditor(field))}
+            </div>
+
+            <div className="flex flex-wrap items-center justify-end gap-3 border-t border-white/5 pt-4">
+              <Button size="sm" onClick={saveNatsFields} loading={savingNats}>
+                <Save className="h-3.5 w-3.5" />
+                Salvar
+              </Button>
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={testNatsConnection}
+                loading={testNatsMutation.isPending}
+                disabled={savingNats}
+              >
+                <Wifi className="h-3.5 w-3.5" />
+                Testar Conexão
+              </Button>
+            </div>
+
+            {natsTestResult && (
+              <div
+                className={`flex items-start gap-3 rounded-lg border p-3 text-sm ${
+                  natsTestResult.ok
+                    ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-300"
+                    : "border-red-500/20 bg-red-500/10 text-red-300"
+                }`}
+              >
+                {natsTestResult.ok ? (
+                  <>
+                    <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+                    <div>
+                      <p>
+                        Conexão OK{typeof natsTestResult.latencyMs === "number" ? ` — ${natsTestResult.latencyMs}ms` : ""}
+                      </p>
+                      <p className="mt-1 text-xs">Host testado: {natsTestResult.host}</p>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <XCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                    <div>
+                      <p className="font-medium">Falha na conexão</p>
+                      <p className="mt-1 text-xs">Host testado: {natsTestResult.host}</p>
+                      {natsTestResult.errors.length > 0 && (
+                        <ul className="mt-1 list-inside list-disc space-y-0.5 text-xs">
+                          {natsTestResult.errors.map((e, i) => (
+                            <li key={i}>{e}</li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+
+            <div className="rounded-lg border border-white/10 bg-white/5 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium text-white">Account Key + xKey</p>
+                  <p className="mt-1 text-xs text-slate-400">
+                    O account seed e privado (salvar na API). A public key vai no nats-server.conf.
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={generateNatsAccountKey}
+                  loading={generateNatsAccountKeyMutation.isPending}
+                >
+                  <KeyRound className="h-3.5 w-3.5" />
+                  Gerar Account Key
+                </Button>
+              </div>
+
+              {natsKeys ? (
+                <div className="mt-4 space-y-4">
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-slate-300">Account Seed (privado)</label>
+                      <textarea
+                        readOnly
+                        value={natsKeys.accountSeed}
+                        className="min-h-[96px] w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-200 outline-none"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-slate-300">Account Public Key</label>
+                      <textarea
+                        readOnly
+                        value={natsKeys.accountPublicKey}
+                        className="min-h-[96px] w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-200 outline-none"
+                      />
+                    </div>
+                  </div>
+                  {(natsKeys.xKeySeed || natsKeys.xKeyPublicKey) && (
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="space-y-1">
+                        <label className="text-xs font-medium text-slate-300">xKey Seed (opcional)</label>
+                        <textarea
+                          readOnly
+                          value={natsKeys.xKeySeed ?? ""}
+                          className="min-h-[96px] w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-200 outline-none"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-xs font-medium text-slate-300">xKey Public Key (opcional)</label>
+                        <textarea
+                          readOnly
+                          value={natsKeys.xKeyPublicKey ?? ""}
+                          className="min-h-[96px] w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-200 outline-none"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <p className="mt-3 text-xs text-slate-500">
+                  Clique em “Gerar Account Key” para obter o account seed/public key e, se habilitado, a xKey.
+                </p>
+              )}
+            </div>
           </div>
         </Card>
 

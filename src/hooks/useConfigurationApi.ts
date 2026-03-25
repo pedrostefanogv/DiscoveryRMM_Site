@@ -534,3 +534,16 @@ export function useTestObjectStorage() {
     mutationFn: () => configurationApi.testObjectStorage(),
   });
 }
+
+export function useTestNatsServer() {
+  return useMutation({
+    mutationFn: (payload: { url: string; user?: string; password?: string }) =>
+      configurationApi.testNatsServer(payload),
+  });
+}
+
+export function useGenerateNatsAccountKey() {
+  return useMutation({
+    mutationFn: () => configurationApi.generateNatsAccountKey(),
+  });
+}

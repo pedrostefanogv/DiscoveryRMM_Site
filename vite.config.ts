@@ -12,8 +12,8 @@ export default defineConfig({
       registerType: "autoUpdate",
       includeAssets: ["favicon.svg"],
       manifest: {
-        name: "Meduza RMM",
-        short_name: "Meduza",
+        name: "Discovery RMM",
+        short_name: "Discovery",
         description: "Remote Monitoring & Management",
         theme_color: "#6366f1",
         background_color: "#0f172a",

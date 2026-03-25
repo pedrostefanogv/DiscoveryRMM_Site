@@ -1178,6 +1178,9 @@ function CatalogTab() {
   const [viewMode, setViewMode] = useState<'card' | 'list'>('list');
   const [approvalTarget, setApprovalTarget] = useState<AppStoreCatalogPackage | null>(null);
   const [detailsTarget, setDetailsTarget] = useState<AppStoreCatalogPackage | null>(null);
+  const [syncConfirmOpen, setSyncConfirmOpen] = useState(false);
+  const [syncConfirmValue, setSyncConfirmValue] = useState('');
+  const [syncConfirmTouched, setSyncConfirmTouched] = useState(false);
   const [lastSyncByType, setLastSyncByType] = useState<
     Partial<Record<AppInstallationType, SyncChocolateyCatalogResponse>>
   >(() => {
@@ -1255,6 +1258,7 @@ function CatalogTab() {
   const isCatalogEmpty = (query.data?.totalPackagesInSource ?? 0) === 0;
   const syncLabel = isChocolatey ? 'Chocolatey' : 'Winget';
   const lastSyncInfo = lastSyncByType[installationType];
+  const syncConfirmOk = syncConfirmValue.trim().toLowerCase() === 'yes';
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -1281,8 +1285,85 @@ function CatalogTab() {
     }
   }
 
+  function handleSyncRequest() {
+    if (isChocolatey) {
+      setSyncConfirmOpen(true);
+      setSyncConfirmValue('');
+      setSyncConfirmTouched(false);
+      return;
+    }
+    void handleSyncCatalog();
+  }
+
+  function handleSyncConfirm() {
+    if (!syncConfirmOk) {
+      setSyncConfirmTouched(true);
+      return;
+    }
+    setSyncConfirmOpen(false);
+    void handleSyncCatalog();
+  }
+
   return (
     <div className="space-y-4">
+      <Modal
+        open={syncConfirmOpen}
+        onClose={() => setSyncConfirmOpen(false)}
+        title="Confirmar sincronizacao Chocolatey"
+        maxWidth="max-w-xl"
+      >
+        <div className="space-y-4">
+          <div className="rounded-lg border border-white/10 bg-white/5 p-4 text-sm text-slate-200">
+            <p>
+              Esta operacao consulta a API do Chocolatey. Continue apenas se voce
+              tem autorizacao para acessar e sincronizar dados do catalogo.
+            </p>
+            <p className="mt-2">
+              Ao confirmar, voce declara que leu e concorda com os Termos de Uso:
+              {' '}
+              <a
+                href="https://chocolatey.org/terms"
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1 text-primary hover:underline"
+              >
+                https://chocolatey.org/terms
+                <ExternalLink className="h-3.5 w-3.5" />
+              </a>
+            </p>
+          </div>
+          <div className="rounded-lg border border-white/10 bg-white/5 p-4 text-sm text-slate-200">
+            <p>
+              Se nao for possivel sincronizar todos os dados agora, ao repetir a
+              sincronizacao o processo continua de onde parou.
+            </p>
+            <p className="mt-2">
+              Para evitar incompatibilidades posteriores, confirme conscientemente
+              antes de iniciar o processo.
+            </p>
+          </div>
+          <Input
+            label="Digite yes para confirmar"
+            value={syncConfirmValue}
+            onChange={(e) => setSyncConfirmValue(e.target.value)}
+            placeholder="yes"
+            autoFocus
+            error={syncConfirmTouched && !syncConfirmOk ? 'Confirmacao obrigatoria.' : undefined}
+          />
+          <div className="flex items-center justify-end gap-2">
+            <Button variant="ghost" onClick={() => setSyncConfirmOpen(false)}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleSyncConfirm}
+              disabled={!syncConfirmOk}
+              loading={syncCatalog.isPending}
+            >
+              Confirmar e sincronizar
+            </Button>
+          </div>
+        </div>
+      </Modal>
       {/* Filters */}
       <Card>
         <div className="flex flex-wrap items-end gap-3">
@@ -1365,7 +1446,7 @@ function CatalogTab() {
           {(isChocolatey || isWinget) && (
             <Button
               variant="primary"
-              onClick={handleSyncCatalog}
+              onClick={handleSyncRequest}
               loading={syncCatalog.isPending}
               title={`Sincronizar catalogo ${syncLabel}`}
             >
@@ -1444,7 +1525,7 @@ function CatalogTab() {
             {(isChocolatey || isWinget) && isCatalogEmpty && (
               <Button
                 className="mt-3"
-                onClick={handleSyncCatalog}
+                onClick={handleSyncRequest}
                 loading={syncCatalog.isPending}
               >
                 <RefreshCw className="h-4 w-4" /> Sincronizar catalogo agora

@@ -22,6 +22,7 @@ export type EditableFieldGroup =
   | "tokens"
   | "advanced"
   | "storage"
+  | "nats"
   | "siteProfile";
 
 export interface EditableField {
@@ -53,6 +54,30 @@ function sanitizeAiIntegrationObject(
   }
 
   return record;
+}
+
+const HOST_LABEL_REGEX = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i;
+const IPV4_REGEX = /^(25[0-5]|2[0-4]\d|1?\d?\d)(\.(25[0-5]|2[0-4]\d|1?\d?\d)){3}$/;
+
+function isValidHostOnly(value: string): boolean {
+  if (!value) {
+    return true;
+  }
+
+  if (value.includes("://") || value.includes("/") || value.includes(":")) {
+    return false;
+  }
+
+  if (IPV4_REGEX.test(value)) {
+    return true;
+  }
+
+  const parts = value.split(".");
+  if (parts.some((part) => part.length === 0)) {
+    return false;
+  }
+
+  return parts.every((part) => HOST_LABEL_REGEX.test(part));
 }
 
 export const serverEditableFields: EditableField[] = [
@@ -237,6 +262,21 @@ export const serverEditableFields: EditableField[] = [
     group: "storage",
     description:
       "Valida o certificado TLS do endpoint. Desative apenas em ambientes de desenvolvimento com certificados autoassinados.",
+  },
+  // ── NATS (Server-only) ───────────────────────────────
+  {
+    key: "natsServerHostExternal",
+    label: "NATS Host Externo",
+    kind: "string",
+    group: "nats",
+    description: "Host publico/DNS para acesso externo. Sem protocolo e sem porta.",
+  },
+  {
+    key: "natsServerHostInternal",
+    label: "NATS Host Interno",
+    kind: "string",
+    group: "nats",
+    description: "Host interno/DNS para acesso na rede local. Sem protocolo e sem porta.",
   },
 ];
 
@@ -534,6 +574,18 @@ export function validateFieldValue(
   const trimmed = value.trim();
 
   if (kind === "string") {
+    if (
+      fieldKey === "natsServerHostInternal" ||
+      fieldKey === "natsServerHostExternal"
+    ) {
+      if (trimmed.length === 0) {
+        return true;
+      }
+
+      return isValidHostOnly(trimmed)
+        ? true
+        : "Informe apenas host ou IP, sem porta e sem protocolo";
+    }
     return true;
   }
 
@@ -664,6 +716,12 @@ export function parseFieldValue(
   const trimmed = value.trim();
 
   if (kind === "string") {
+    if (
+      fieldKey === "natsServerHostInternal" ||
+      fieldKey === "natsServerHostExternal"
+    ) {
+      return trimmed;
+    }
     return value;
   }
 

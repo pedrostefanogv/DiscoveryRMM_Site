@@ -520,6 +520,8 @@ export interface ServerConfiguration {
   objectStorageUrlTtlHours?: number;
   objectStorageUsePathStyle?: boolean;
   objectStorageSslVerify?: boolean;
+  natsServerHostInternal?: string;
+  natsServerHostExternal?: string;
   createdAt: string;
   updatedAt: string;
   createdBy?: string | null;

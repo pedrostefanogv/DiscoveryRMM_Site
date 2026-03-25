@@ -10,7 +10,7 @@ export interface BrandingConfig {
 }
 
 const defaultBranding: BrandingConfig = {
-  appName: 'Discovery',
+  appName: 'Discovery RMM',
   logoUrl: null,
   primaryColor: '#6366f1',
   accentColor: '#06b6d4',
@@ -24,7 +24,7 @@ interface ThemeContextValue {
   resetBranding: () => void;
 }
 
-const STORAGE_KEY = 'discovery-branding';
+const STORAGE_KEY = 'discovery-rmm-branding';
 
 function loadBranding(): BrandingConfig {
   try {
