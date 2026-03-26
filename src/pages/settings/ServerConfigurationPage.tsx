@@ -52,6 +52,7 @@ const featureIcons: Record<string, React.ReactNode> = {
   recoveryEnabled: <HardDrive className="h-4 w-4" />,
   discoveryEnabled: <Wifi className="h-4 w-4" />,
   p2PFilesEnabled: <Layers className="h-4 w-4" />,
+  cloudBootstrapEnabled: <Cloud className="h-4 w-4" />,
   chatAIEnabled: <Bot className="h-4 w-4" />,
   supportEnabled: <Activity className="h-4 w-4" />,
   knowledgeBaseEnabled: <ShieldCheck className="h-4 w-4" />,

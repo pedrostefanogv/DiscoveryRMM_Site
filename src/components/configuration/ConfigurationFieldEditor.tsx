@@ -55,6 +55,7 @@ export function ConfigurationFieldEditor({
 }: ConfigurationFieldEditorProps) {
   const [showDiff, setShowDiff] = useState(false);
   const [showAiAdvanced, setShowAiAdvanced] = useState(false);
+  const [showAiEmbedding, setShowAiEmbedding] = useState(false);
   const isReadOnly = !!locked;
   const inputDisabled = isReadOnly || (!!disableInheritance ? false : inherited);
 
@@ -275,6 +276,7 @@ export function ConfigurationFieldEditor({
       if (isAiIntegrationField && aiParsedValue && !Array.isArray(aiParsedValue)) {
         return (
           <div className="space-y-3">
+            {/* Campos principais */}
             <div className="grid gap-3 sm:grid-cols-2">
               <Input
                 label="Provider"
@@ -283,22 +285,48 @@ export function ConfigurationFieldEditor({
                   updateJsonObjectValue("provider", event.target.value, "string")
                 }
                 disabled={inputDisabled}
-                placeholder="openai, azure-openai, anthropic..."
+                placeholder="openai, openrouter, anthropic..."
               />
               <Input
-                label="Model"
-                value={jsonStringValue("model")}
+                label="Chat Model"
+                value={jsonStringValue("chatModel")}
                 onChange={(event) =>
-                  updateJsonObjectValue("model", event.target.value, "string")
+                  updateJsonObjectValue("chatModel", event.target.value, "string")
                 }
                 disabled={inputDisabled}
-                placeholder="gpt-4.1-mini"
+                placeholder="google/gemma-3-4b-it:free"
               />
               <Select
                 label="Enabled"
                 value={jsonStringValue("enabled")}
                 onChange={(event) =>
                   updateJsonObjectValue("enabled", event.target.value, "boolean")
+                }
+                disabled={inputDisabled}
+                options={[
+                  { value: "", label: "Padrao do backend" },
+                  { value: "true", label: "Ativado" },
+                  { value: "false", label: "Desativado" },
+                ]}
+              />
+              <Select
+                label="Chat AI Enabled"
+                value={jsonStringValue("chatAIEnabled")}
+                onChange={(event) =>
+                  updateJsonObjectValue("chatAIEnabled", event.target.value, "boolean")
+                }
+                disabled={inputDisabled}
+                options={[
+                  { value: "", label: "Padrao do backend" },
+                  { value: "true", label: "Ativado" },
+                  { value: "false", label: "Desativado" },
+                ]}
+              />
+              <Select
+                label="Knowledge Base Enabled"
+                value={jsonStringValue("knowledgeBaseEnabled")}
+                onChange={(event) =>
+                  updateJsonObjectValue("knowledgeBaseEnabled", event.target.value, "boolean")
                 }
                 disabled={inputDisabled}
                 options={[
@@ -319,13 +347,14 @@ export function ConfigurationFieldEditor({
               />
             </div>
 
+            {/* Configuracao avancada de chat */}
             <div className="rounded-lg border border-white/10 bg-white/[0.02] p-2">
               <button
                 type="button"
                 onClick={() => setShowAiAdvanced((prev) => !prev)}
                 className="flex w-full items-center justify-between rounded-md px-2 py-1.5 text-xs font-medium text-slate-300 hover:bg-white/5"
               >
-                <span>Configuracao avancada</span>
+                <span>Configuracao avancada (Chat)</span>
                 {showAiAdvanced ? (
                   <ChevronUp className="h-4 w-4" />
                 ) : (
@@ -342,25 +371,7 @@ export function ConfigurationFieldEditor({
                       updateJsonObjectValue("baseUrl", event.target.value, "string")
                     }
                     disabled={inputDisabled}
-                    placeholder="https://api.openai.com/v1"
-                  />
-                  <Input
-                    label="Endpoint"
-                    value={jsonStringValue("endpoint")}
-                    onChange={(event) =>
-                      updateJsonObjectValue("endpoint", event.target.value, "string")
-                    }
-                    disabled={inputDisabled}
-                    placeholder="/chat/completions"
-                  />
-                  <Input
-                    label="Deployment"
-                    value={jsonStringValue("deployment")}
-                    onChange={(event) =>
-                      updateJsonObjectValue("deployment", event.target.value, "string")
-                    }
-                    disabled={inputDisabled}
-                    placeholder="nome-do-deployment"
+                    placeholder="https://openrouter.ai/api/v1/"
                   />
                   <Input
                     label="Temperature"
@@ -373,58 +384,80 @@ export function ConfigurationFieldEditor({
                       updateJsonObjectValue("temperature", event.target.value, "number")
                     }
                     disabled={inputDisabled}
-                    placeholder="0.2"
+                    placeholder="0.7"
                   />
                   <Input
-                    label="Top P"
-                    type="number"
-                    step="0.1"
-                    min="0"
-                    max="1"
-                    value={jsonStringValue("topP")}
-                    onChange={(event) =>
-                      updateJsonObjectValue("topP", event.target.value, "number")
-                    }
-                    disabled={inputDisabled}
-                    placeholder="1"
-                  />
-                  <Input
-                    label="Max Tokens"
+                    label="Max Tokens Per Request"
                     type="number"
                     step="1"
                     min="1"
-                    value={jsonStringValue("maxTokens")}
+                    value={jsonStringValue("maxTokensPerRequest")}
                     onChange={(event) =>
-                      updateJsonObjectValue("maxTokens", event.target.value, "number")
+                      updateJsonObjectValue("maxTokensPerRequest", event.target.value, "number")
                     }
                     disabled={inputDisabled}
-                    placeholder="1024"
+                    placeholder="2000"
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Configuracao de embedding */}
+            <div className="rounded-lg border border-white/10 bg-white/[0.02] p-2">
+              <button
+                type="button"
+                onClick={() => setShowAiEmbedding((prev) => !prev)}
+                className="flex w-full items-center justify-between rounded-md px-2 py-1.5 text-xs font-medium text-slate-300 hover:bg-white/5"
+              >
+                <span>Configuracao de Embedding</span>
+                {showAiEmbedding ? (
+                  <ChevronUp className="h-4 w-4" />
+                ) : (
+                  <ChevronDown className="h-4 w-4" />
+                )}
+              </button>
+
+              {showAiEmbedding && (
+                <div className="mt-2 grid gap-3 sm:grid-cols-2 p-2">
+                  <Input
+                    label="Embedding Model"
+                    value={jsonStringValue("embeddingModel")}
+                    onChange={(event) =>
+                      updateJsonObjectValue("embeddingModel", event.target.value, "string")
+                    }
+                    disabled={inputDisabled}
+                    placeholder="openai/text-embedding-3-small"
                   />
                   <Input
-                    label="Presence Penalty"
-                    type="number"
-                    step="0.1"
-                    min="-2"
-                    max="2"
-                    value={jsonStringValue("presencePenalty")}
+                    label="Embedding Base URL"
+                    value={jsonStringValue("embeddingBaseUrl")}
                     onChange={(event) =>
-                      updateJsonObjectValue("presencePenalty", event.target.value, "number")
+                      updateJsonObjectValue("embeddingBaseUrl", event.target.value, "string")
                     }
                     disabled={inputDisabled}
-                    placeholder="0"
+                    placeholder="https://api.openai.com/v1/"
                   />
                   <Input
-                    label="Frequency Penalty"
+                    label="Embedding Dimensions"
                     type="number"
-                    step="0.1"
-                    min="-2"
-                    max="2"
-                    value={jsonStringValue("frequencyPenalty")}
+                    step="1"
+                    min="1"
+                    value={jsonStringValue("embeddingDimensions")}
                     onChange={(event) =>
-                      updateJsonObjectValue("frequencyPenalty", event.target.value, "number")
+                      updateJsonObjectValue("embeddingDimensions", event.target.value, "number")
                     }
                     disabled={inputDisabled}
-                    placeholder="0"
+                    placeholder="1536"
+                  />
+                  <Input
+                    type="password"
+                    label="Embedding API Key"
+                    value={jsonStringValue("embeddingApiKey")}
+                    onChange={(event) =>
+                      updateJsonObjectValue("embeddingApiKey", event.target.value, "string")
+                    }
+                    disabled={inputDisabled}
+                    placeholder="Preencha apenas para trocar a chave"
                   />
                 </div>
               )}

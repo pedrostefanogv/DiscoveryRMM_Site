@@ -45,12 +45,18 @@ function sanitizeAiIntegrationObject(
 
   const record = { ...(value as Record<string, unknown>) };
 
-  // ApiKey e apiKey sao write-only: nunca exibir valores existentes.
+  // ApiKey, apiKey, EmbeddingApiKey e embeddingApiKey sao write-only: nunca exibir valores existentes.
   if ("apiKey" in record) {
     delete record.apiKey;
   }
   if ("ApiKey" in record) {
     delete record.ApiKey;
+  }
+  if ("embeddingApiKey" in record) {
+    delete record.embeddingApiKey;
+  }
+  if ("EmbeddingApiKey" in record) {
+    delete record.EmbeddingApiKey;
   }
 
   return record;
@@ -102,6 +108,13 @@ export const serverEditableFields: EditableField[] = [
     kind: "boolean",
     group: "features",
     description: "Habilita transferência de arquivos entre agentes via P2P.",
+  },
+  {
+    key: "cloudBootstrapEnabled",
+    label: "Bootstrap P2P via Nuvem",
+    kind: "boolean",
+    group: "features",
+    description: "Permite que agentes P2P se descubram entre VLANs e multi-redes diferentes usando o servidor como ponto de bootstrap na nuvem.",
   },
   {
     key: "chatAIEnabled",
@@ -266,17 +279,33 @@ export const serverEditableFields: EditableField[] = [
   // ── NATS (Server-only) ───────────────────────────────
   {
     key: "natsServerHostExternal",
-    label: "NATS Host Externo",
+    label: "NATS Host Externo (Agents)",
     kind: "string",
     group: "nats",
-    description: "Host publico/DNS para acesso externo. Sem protocolo e sem porta.",
+    description: "Host/IP utilizado pelos agents para conectar ao servidor NATS. Geralmente um endereço público ou acessível na rede dos agents. Sem protocolo e sem porta.",
   },
   {
     key: "natsServerHostInternal",
-    label: "NATS Host Interno",
+    label: "NATS Host Interno (Servidor)",
     kind: "string",
     group: "nats",
-    description: "Host interno/DNS para acesso na rede local. Sem protocolo e sem porta.",
+    description: "Host/IP utilizado pelo próprio servidor para conectar ao NATS. Pode ser localhost ou um endereço interno. Sem protocolo e sem porta.",
+  },
+  {
+    key: "natsAgentJwtTtlMinutes",
+    label: "TTL JWT do Agent",
+    kind: "number",
+    group: "nats",
+    description: "Tempo de vida do JWT emitido para agents. Mínimo 15 min, máximo 4320 min (72h). Padrão: 1440 min (24h).",
+    unit: "min",
+  },
+  {
+    key: "natsUserJwtTtlMinutes",
+    label: "TTL JWT do Usuário",
+    kind: "number",
+    group: "nats",
+    description: "Tempo de vida do JWT emitido para usuários. Mínimo 15 min, máximo 4320 min (72h). Padrão: 1440 min (24h).",
+    unit: "min",
   },
 ];
 
@@ -296,6 +325,12 @@ export const clientEditableFields: EditableField[] = [
   {
     key: "p2PFilesEnabled",
     label: "Transferência P2P de Arquivos",
+    kind: "boolean",
+    group: "features",
+  },
+  {
+    key: "cloudBootstrapEnabled",
+    label: "Bootstrap P2P via Nuvem",
     kind: "boolean",
     group: "features",
   },
@@ -398,6 +433,12 @@ export const siteEditableFields: EditableField[] = [
   {
     key: "p2PFilesEnabled",
     label: "Transferência P2P de Arquivos",
+    kind: "boolean",
+    group: "features",
+  },
+  {
+    key: "cloudBootstrapEnabled",
+    label: "Bootstrap P2P via Nuvem",
     kind: "boolean",
     group: "features",
   },
@@ -608,6 +649,8 @@ export function validateFieldValue(
       tokenExpirationDays: [1, 3650],
       maxTokensPerAgent: [1, 100],
       objectStorageUrlTtlHours: [1, 168],
+      natsAgentJwtTtlMinutes: [15, 4320],
+      natsUserJwtTtlMinutes: [15, 4320],
     };
 
     const fieldRange = fieldKey ? ranges[fieldKey] : undefined;

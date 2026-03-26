@@ -144,6 +144,9 @@ export function parseAIIntegrationSettings(
   if ("apiKey" in sanitized) {
     delete sanitized.apiKey;
   }
+  if ("embeddingApiKey" in sanitized) {
+    delete sanitized.embeddingApiKey;
+  }
 
   return sanitized;
 }

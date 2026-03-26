@@ -450,6 +450,9 @@ export interface AIIntegrationSettings {
   baseUrl?: string;
   chatModel?: string;
   embeddingModel?: string;
+  embeddingDimensions?: number;
+  embeddingBaseUrl?: string;
+  embeddingApiKey?: string;
   promptTemplate?: string;
   temperature?: number;
   embeddingEnabled?: boolean;
@@ -496,6 +499,7 @@ export interface ServerConfiguration {
   recoveryEnabled: boolean;
   discoveryEnabled: boolean;
   p2PFilesEnabled: boolean;
+  cloudBootstrapEnabled: boolean;
   chatAIEnabled: boolean;
   supportEnabled: boolean;
   knowledgeBaseEnabled: boolean;
@@ -522,6 +526,8 @@ export interface ServerConfiguration {
   objectStorageSslVerify?: boolean;
   natsServerHostInternal?: string;
   natsServerHostExternal?: string;
+  natsAgentJwtTtlMinutes?: number;
+  natsUserJwtTtlMinutes?: number;
   createdAt: string;
   updatedAt: string;
   createdBy?: string | null;
@@ -536,6 +542,7 @@ export interface ClientConfiguration {
   recoveryEnabled?: boolean | null;
   discoveryEnabled?: boolean | null;
   p2PFilesEnabled?: boolean | null;
+  cloudBootstrapEnabled?: boolean | null;
   chatAIEnabled?: boolean | null;
   supportEnabled?: boolean | null;
   knowledgeBaseEnabled?: boolean | null;
@@ -564,6 +571,7 @@ export interface SiteConfiguration {
   recoveryEnabled?: boolean | null;
   discoveryEnabled?: boolean | null;
   p2PFilesEnabled?: boolean | null;
+  cloudBootstrapEnabled?: boolean | null;
   chatAIEnabled?: boolean | null;
   supportEnabled?: boolean | null;
   knowledgeBaseEnabled?: boolean | null;
@@ -595,6 +603,7 @@ export interface ResolvedConfiguration {
   recoveryEnabled: boolean;
   discoveryEnabled: boolean;
   p2PFilesEnabled: boolean;
+  cloudBootstrapEnabled: boolean;
   chatAIEnabled: boolean;
   supportEnabled: boolean;
   knowledgeBaseEnabled: boolean;
