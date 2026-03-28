@@ -15,6 +15,8 @@ import type {
   SendCommandRequest,
   CreateTokenRequest,
   HardwareReportRequest,
+  StartRemoteDebugSessionRequest,
+  StartRemoteDebugSessionResponse,
 } from "./types";
 
 const BASE = "/api/Agents";
@@ -91,4 +93,17 @@ export const agentsApi = {
   // Install token
   createInstallToken: (agentId: string) =>
     api.post<{ token: string }>(`/api/agent-install/${agentId}/token`),
+
+  // Remote debug
+  startRemoteDebugSession: (
+    id: string,
+    data?: StartRemoteDebugSessionRequest,
+  ) =>
+    api.post<StartRemoteDebugSessionResponse>(
+      `${BASE}/${id}/remote-debug/start`,
+      data,
+    ),
+
+  stopRemoteDebugSession: (id: string, sessionId: string) =>
+    api.post<void>(`${BASE}/${id}/remote-debug/${sessionId}/stop`),
 };

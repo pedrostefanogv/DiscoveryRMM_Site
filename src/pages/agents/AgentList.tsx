@@ -1,7 +1,8 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Monitor, Wifi, WifiOff, Activity, Building2, Clock, LayoutGrid, List } from 'lucide-react';
+import { Monitor, Wifi, WifiOff, Activity, Building2, Clock, LayoutGrid, List, Bug } from 'lucide-react';
 import { useQueries } from '@tanstack/react-query';
+import toast from 'react-hot-toast';
 import { useAuth } from '@/auth/AuthContext';
 import { useClients } from '@/hooks/useClients';
 import { useMyProfile } from '@/hooks';
@@ -10,6 +11,7 @@ import { Badge, Loading, ErrorDisplay, Input, Select, StatCard, Modal } from '@/
 import type { Agent } from '@/api';
 import { getAgentLastSeen, isAgentOnlineNow } from '@/utils/agentStatus';
 import { useNowTick } from '@/hooks/useNowTick';
+import { openRemoteDebugPopup } from './remoteDebugLauncher';
 
 type AgentWithClient = Agent & { clientName: string; clientId: string };
 type ContextMenuState = { x: number; y: number; agent: AgentWithClient } | null;
@@ -107,6 +109,7 @@ export default function AgentList() {
   const [remoteError, setRemoteError] = useState<string | null>(null);
   const [remoteUrl, setRemoteUrl] = useState<string | null>(null);
   const [remoteAgent, setRemoteAgent] = useState<AgentWithClient | null>(null);
+  const [remoteDebugAgentId, setRemoteDebugAgentId] = useState<string | null>(null);
   const contextMenuRef = useRef<HTMLDivElement | null>(null);
 
   const meshUsername = useMemo(
@@ -188,6 +191,31 @@ export default function AgentList() {
       }
     } finally {
       setRemoteLoading(false);
+    }
+  };
+
+  const openRemoteDebug = async (agent: AgentWithClient) => {
+    setContextMenu(null);
+    if (remoteDebugAgentId) return;
+
+    setRemoteDebugAgentId(agent.id);
+    try {
+      await openRemoteDebugPopup({
+        agentId: agent.id,
+        payload: {
+          logLevel: 'info',
+          preferredTransport: 'signalr',
+          ttlMinutes: 20,
+        },
+      });
+      toast.success(`Debug remoto aberto para ${agent.displayName ?? agent.hostname}.`);
+    } catch (error) {
+      const message = error instanceof Error
+        ? error.message
+        : 'Falha ao abrir o console de remote debug.';
+      toast.error(message);
+    } finally {
+      setRemoteDebugAgentId(null);
     }
   };
 
@@ -511,6 +539,16 @@ export default function AgentList() {
               }}
             >
               Controle remoto
+            </button>
+            <button
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-200 transition-colors hover:bg-white/10"
+              onClick={() => {
+                void openRemoteDebug(contextMenu.agent);
+              }}
+              disabled={remoteDebugAgentId === contextMenu.agent.id}
+            >
+              <Bug className="h-4 w-4" />
+              {remoteDebugAgentId === contextMenu.agent.id ? 'Abrindo debug...' : 'Ver debug'}
             </button>
           </div>
         </>

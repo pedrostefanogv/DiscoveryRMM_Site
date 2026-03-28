@@ -2,8 +2,9 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Cpu, MemoryStick, Ticket as TicketIcon, Tags,
-  Wifi, WifiOff, AppWindow, Search, Clock, HardDrive, Printer,
+  Wifi, WifiOff, AppWindow, Search, Clock, HardDrive, Printer, Bug,
 } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { useAgent, useAgentHardware, useAgentSoftware, useAgentSoftwareSnapshot } from '@/hooks/useAgents';
 import { useTickets } from '@/hooks/useTickets';
 import { useLogs } from '@/hooks/useLogs';
@@ -15,6 +16,7 @@ import { isAgentOnlineNow } from '@/utils/agentStatus';
 import { useNowTick } from '@/hooks/useNowTick';
 import { agentLabelsApi } from '@/modules/agent-labels/api';
 import { AgentLabelSourceType, type AgentLabel } from '@/modules/agent-labels/types';
+import { openRemoteDebugPopup } from './remoteDebugLauncher';
 
 const levelLabels: Record<number, { label: string; color: 'slate' | 'primary' | 'warning' | 'danger' | 'accent' }> = {
   [LogLevel.Debug]: { label: 'Debug', color: 'slate' },
@@ -127,6 +129,7 @@ export default function AgentDetail() {
   const [automaticLabels, setAutomaticLabels] = useState<AgentLabel[]>([]);
   const [isLoadingLabels, setIsLoadingLabels] = useState(true);
   const [labelsError, setLabelsError] = useState<string | null>(null);
+  const [isOpeningRemoteDebug, setIsOpeningRemoteDebug] = useState(false);
 
   const agent = useAgent(id!);
   const hw = useAgentHardware(id!);
@@ -229,6 +232,30 @@ export default function AgentDetail() {
     resetSoftwarePagination();
   };
 
+  const handleOpenRemoteDebug = async () => {
+    if (!id || isOpeningRemoteDebug) return;
+
+    setIsOpeningRemoteDebug(true);
+    try {
+      await openRemoteDebugPopup({
+        agentId: id,
+        payload: {
+          logLevel: 'info',
+          preferredTransport: 'signalr',
+          ttlMinutes: 20,
+        },
+      });
+      toast.success('Console de debug aberto em nova janela.');
+    } catch (error) {
+      const message = error instanceof Error
+        ? error.message
+        : 'Falha ao abrir o console de remote debug.';
+      toast.error(message);
+    } finally {
+      setIsOpeningRemoteDebug(false);
+    }
+  };
+
   const goToNextSoftwarePage = () => {
     if (!software.data?.nextCursor) return;
     setSoftwarePageCursors((prev) => {
@@ -298,6 +325,17 @@ export default function AgentDetail() {
             {isOnlineNow ? 'Online' : 'Offline'}
           </span>
         </Badge>
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() => {
+            void handleOpenRemoteDebug();
+          }}
+          loading={isOpeningRemoteDebug}
+        >
+          <Bug className="h-4 w-4" />
+          Ver Debug
+        </Button>
         <Button
           size="sm"
           variant="ghost"

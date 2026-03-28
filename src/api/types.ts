@@ -258,6 +258,52 @@ export interface AgentCommand {
   completedAt: string | null;
 }
 
+export type RemoteDebugLogLevel = "debug" | "info" | "warn" | "error";
+
+export interface StartRemoteDebugSessionRequest {
+  logLevel?: RemoteDebugLogLevel;
+  preferredTransport?: "signalr" | "nats";
+  ttlMinutes?: number;
+}
+
+export interface StartRemoteDebugSessionResponse {
+  sessionId: string;
+  commandId: string;
+  agentId: string;
+  logLevel: RemoteDebugLogLevel;
+  preferredTransport: "signalr" | "nats";
+  startedAtUtc: string;
+  expiresAtUtc: string;
+  signalRHub: string;
+  natsLegacySubject: string | null;
+  natsTenantSubject: string | null;
+  natsWssUrl: string | null;
+}
+
+export interface RemoteDebugSessionJoinedEvent {
+  sessionId: string;
+  agentId: string;
+  startedAtUtc: string;
+  expiresAtUtc: string;
+  preferredTransport: "signalr" | "nats";
+}
+
+export interface RemoteDebugLogEvent {
+  sessionId: string;
+  agentId: string;
+  level: RemoteDebugLogLevel;
+  message: string;
+  timestampUtc: string;
+  sequence?: number;
+  transport?: string | null;
+}
+
+export interface RemoteDebugSessionEndedEvent {
+  sessionId: string;
+  endedAtUtc: string;
+  reason?: string | null;
+}
+
 export interface Ticket {
   id: string;
   clientId: string;

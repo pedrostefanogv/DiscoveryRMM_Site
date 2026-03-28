@@ -14,6 +14,7 @@ const SiteList = lazy(() => import('@/pages/clients/SiteList'));
 const SiteDetail = lazy(() => import('@/pages/clients/SiteDetail'));
 const AgentList = lazy(() => import('@/pages/agents/AgentList'));
 const AgentDetail = lazy(() => import('@/pages/agents/AgentDetail'));
+const RemoteDebugConsole = lazy(() => import('@/pages/agents/RemoteDebugConsole'));
 const TicketList = lazy(() => import('@/pages/tickets/TicketList'));
 const TicketDetail = lazy(() => import('@/pages/tickets/TicketDetail'));
 const LogViewer = lazy(() => import('@/pages/logs/LogViewer'));
@@ -125,6 +126,10 @@ export const router = createBrowserRouter([
       {
         path: 'agents/:id',
         element: <LazyPage><AgentDetail /></LazyPage>,
+      },
+      {
+        path: 'agents/remote-debug-console',
+        element: <LazyPage><RemoteDebugConsole /></LazyPage>,
       },
       {
         path: 'tickets',
