@@ -151,6 +151,33 @@ export interface MemoryModuleInfo {
   collectedAt: string;
 }
 
+export interface ListeningPortInfo {
+  id: string;
+  agentId: string;
+  processName: string | null;
+  processId: number;
+  processPath: string | null;
+  protocol: string | null;
+  address: string | null;
+  port: number;
+  collectedAt: string;
+}
+
+export interface OpenSocketInfo {
+  id: string;
+  agentId: string;
+  processName: string | null;
+  processId: number;
+  processPath: string | null;
+  localAddress: string | null;
+  localPort: number;
+  remoteAddress: string | null;
+  remotePort: number;
+  protocol: string | null;
+  family: string | null;
+  collectedAt: string;
+}
+
 export interface AgentSoftwareInventoryItem {
   inventoryId: string;
   agentId: string;

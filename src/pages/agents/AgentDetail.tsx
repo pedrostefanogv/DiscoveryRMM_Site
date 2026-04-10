@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Cpu, MemoryStick, Ticket as TicketIcon, Tags,
-  Wifi, WifiOff, AppWindow, Search, Clock, HardDrive, Printer, Bug,
+  Wifi, WifiOff, AppWindow, Search, Clock, HardDrive, Printer, Bug, AlertTriangle,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAgent, useAgentHardware, useAgentSoftware, useAgentSoftwareSnapshot } from '@/hooks/useAgents';
@@ -10,7 +10,7 @@ import { useTickets } from '@/hooks/useTickets';
 import { useLogs } from '@/hooks/useLogs';
 import { Button, Card, CardHeader, Badge, Loading, ErrorDisplay, Input, Select, DataTable, StatCard, type Column } from '@/components/ui';
 import { NotesPanel } from '@/components/notes/NotesPanel';
-import type { AgentSoftwareInventoryItem } from '@/api';
+import type { AgentSoftwareInventoryItem, ListeningPortInfo, OpenSocketInfo } from '@/api';
 import { LogLevel } from '@/api';
 import { isAgentOnlineNow } from '@/utils/agentStatus';
 import { useNowTick } from '@/hooks/useNowTick';
@@ -37,6 +37,13 @@ function formatBytes(bytes: number | null): string {
 function formatDate(date: string | null): string {
   if (!date) return '—';
   return new Date(date).toLocaleString('pt-BR');
+}
+
+function formatSocketFamily(family: string | null): string {
+  if (!family) return '—';
+  if (family === '2') return 'IPv4';
+  if (family === '23') return 'IPv6';
+  return family;
 }
 
 interface InventoryPrinter {
@@ -204,6 +211,89 @@ export default function AgentDetail() {
     hw.data?.printers,
     hw.data?.inventoryRaw,
   );
+  const listeningPorts: ListeningPortInfo[] = hw.data?.listeningPorts ?? [];
+  const openSockets: OpenSocketInfo[] = hw.data?.openSockets ?? [];
+
+  const listeningPortColumns: Column<ListeningPortInfo>[] = [
+    {
+      key: 'protocol',
+      header: 'Protocolo',
+      className: 'w-24',
+      render: item => <span className="font-mono uppercase text-slate-300">{item.protocol ?? '—'}</span>,
+    },
+    {
+      key: 'address',
+      header: 'Endereço',
+      render: item => (
+        <span className="font-mono text-slate-300">
+          {item.address ?? '—'}:{item.port}
+        </span>
+      ),
+    },
+    {
+      key: 'process',
+      header: 'Processo',
+      render: item => (
+        <div>
+          <p className="text-sm text-white">{item.processName ?? '—'}</p>
+          <p className="text-xs text-slate-500">PID {item.processId}</p>
+        </div>
+      ),
+    },
+    {
+      key: 'collectedAt',
+      header: 'Última coleta',
+      render: item => formatDate(item.collectedAt),
+    },
+  ];
+
+  const openSocketColumns: Column<OpenSocketInfo>[] = [
+    {
+      key: 'protocol',
+      header: 'Protocolo',
+      className: 'w-24',
+      render: item => <span className="font-mono uppercase text-slate-300">{item.protocol ?? '—'}</span>,
+    },
+    {
+      key: 'family',
+      header: 'Família',
+      className: 'w-20',
+      render: item => <Badge color="slate">{formatSocketFamily(item.family)}</Badge>,
+    },
+    {
+      key: 'local',
+      header: 'Origem',
+      render: item => (
+        <span className="font-mono text-slate-300">
+          {item.localAddress ?? '—'}:{item.localPort}
+        </span>
+      ),
+    },
+    {
+      key: 'remote',
+      header: 'Destino',
+      render: item => (
+        <span className="font-mono text-slate-300">
+          {item.remoteAddress ?? '—'}:{item.remotePort}
+        </span>
+      ),
+    },
+    {
+      key: 'process',
+      header: 'Processo',
+      render: item => (
+        <div>
+          <p className="text-sm text-white">{item.processName ?? '—'}</p>
+          <p className="text-xs text-slate-500">PID {item.processId}</p>
+        </div>
+      ),
+    },
+    {
+      key: 'collectedAt',
+      header: 'Última coleta',
+      render: item => formatDate(item.collectedAt),
+    },
+  ];
 
   const resetSoftwarePagination = () => {
     setSoftwarePage(1);
@@ -767,6 +857,47 @@ export default function AgentDetail() {
 
       {/* Detailed Hardware Tables */}
 
+      {listeningPorts.length > 0 && (
+        <Card>
+          <CardHeader
+            title="Portas em Escuta"
+            subtitle={`${listeningPorts.length} porta(s) ativa(s)`}
+          />
+          {listeningPorts.length === 200 && (
+            <div className="mb-3 flex items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-400">
+              <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+              Lista truncada pelo backend no limite de 200 itens. Podem existir mais portas em escuta.
+            </div>
+          )}
+          <DataTable
+            columns={listeningPortColumns}
+            data={listeningPorts}
+            keyExtractor={item => item.id}
+            emptyMessage="Nenhuma porta em escuta encontrada"
+          />
+        </Card>
+      )}
+
+      {openSockets.length > 0 && (
+        <Card>
+          <CardHeader
+            title="Conexões Abertas"
+            subtitle={`${openSockets.length} conexão(ões) ativa(s)`}
+          />
+          {openSockets.length === 500 && (
+            <div className="mb-3 flex items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-400">
+              <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+              Lista truncada pelo backend no limite de 500 itens. Podem existir mais conexões abertas.
+            </div>
+          )}
+          <DataTable
+            columns={openSocketColumns}
+            data={openSockets}
+            keyExtractor={item => item.id}
+            emptyMessage="Nenhuma conexão aberta encontrada"
+          />
+        </Card>
+      )}
 
       <Card>
         <CardHeader title="Logs Recentes" />

@@ -5,6 +5,8 @@ import type {
   DiskInfo,
   NetworkAdapterInfo,
   MemoryModuleInfo,
+  ListeningPortInfo,
+  OpenSocketInfo,
   AgentSoftwareInventoryPage,
   AgentSoftwareOrder,
   AgentSoftwareInventorySnapshot,
@@ -28,6 +30,8 @@ export interface HardwareReport {
   memoryModules: MemoryModuleInfo[];
   printers?: unknown[];
   inventoryRaw?: unknown;
+  listeningPorts?: ListeningPortInfo[];
+  openSockets?: OpenSocketInfo[];
 }
 
 export const agentsApi = {
