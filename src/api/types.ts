@@ -457,6 +457,30 @@ export interface DeployInstallerPayload {
   blob: Blob;
 }
 
+export type DeployInstallerType = "online" | "offline";
+
+export type DeployInstallerTypeInput =
+  | DeployInstallerType
+  | "installer"
+  | "portable";
+
+export interface DeployInstallerOption {
+  type: DeployInstallerType;
+  displayName: string;
+  description: string;
+  requiresInternet: boolean;
+  fileExtension: string;
+  recommended: boolean;
+}
+
+export interface DeployInstallerOptionsResponse {
+  tokenId: string;
+  clientId: string;
+  siteId: string;
+  expiresAt: string | null;
+  options: DeployInstallerOption[];
+}
+
 export interface Note {
   id: string;
   clientId: string | null;
@@ -908,6 +932,15 @@ export interface CreateDeployTokenRequest {
   expiresInHours: number | null;
   multiUse: boolean | null;
   delivery: DeployTokenDelivery;
+}
+
+export interface DeployInstallerOptionsRequest {
+  rawToken: string;
+}
+
+export interface DownloadDeployInstallerRequest {
+  rawToken: string;
+  installerType: DeployInstallerTypeInput;
 }
 
 export interface CreateLogRequest {

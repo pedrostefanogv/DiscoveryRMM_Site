@@ -1,10 +1,26 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Copy, KeyRound } from 'lucide-react';
 import { Button, Card, CardHeader, Input, TextArea, Badge, Select } from '@/components/ui';
-import { useCreateDeployToken } from '@/hooks/useDeployTokens';
+import {
+  useCreateDeployToken,
+  useDeployInstallerOptions,
+  useDownloadDeployInstaller,
+} from '@/hooks/useDeployTokens';
 import { useClients } from '@/hooks/useClients';
 import { useSites } from '@/hooks/useSites';
-import type { CreateDeployTokenRequest, DeployTokenDelivery } from '@/api';
+import {
+  ApiError,
+  LogLevel,
+  LogSource,
+  LogType,
+  logsApi,
+} from '@/api';
+import type {
+  CreateDeployTokenRequest,
+  DeployInstallerOption,
+  DeployInstallerType,
+  DeployTokenDelivery,
+} from '@/api';
 import toast from 'react-hot-toast';
 
 interface DeployTokenFormState {
@@ -27,8 +43,28 @@ function triggerInstallerDownload(fileName: string, blob: Blob) {
   URL.revokeObjectURL(objectUrl);
 }
 
+function mapInstallerFlowError(error: ApiError | null, action: 'validar token' | 'baixar instalador') {
+  if (!error) return `Nao foi possivel ${action}.`;
+
+  if (error.status === 400) {
+    return `Nao foi possivel ${action}: parametros ausentes ou invalidos.`;
+  }
+
+  if (error.status === 401) {
+    return 'Token invalido, expirado, revogado ou sem usos disponiveis.';
+  }
+
+  if (error.status === 503) {
+    return 'Instalador indisponivel temporariamente. Tente novamente em instantes.';
+  }
+
+  return error.message || `Nao foi possivel ${action}.`;
+}
+
 export default function DeployTokens() {
   const createToken = useCreateDeployToken();
+  const installerOptions = useDeployInstallerOptions();
+  const downloadInstaller = useDownloadDeployInstaller();
   const [form, setForm] = useState<DeployTokenFormState>({
     clientId: '',
     siteId: '',
@@ -37,6 +73,8 @@ export default function DeployTokens() {
     multiUse: false,
     delivery: 'token',
   });
+  const [rawToken, setRawToken] = useState('');
+  const [selectedInstallerType, setSelectedInstallerType] = useState<DeployInstallerType>('online');
 
   const clients = useClients(false);
   const sites = useSites(form.clientId, false);
@@ -44,6 +82,35 @@ export default function DeployTokens() {
   const activeSites = (sites.data ?? []).filter(s => s.isActive);
 
   const generatedToken = createToken.data && 'token' in createToken.data ? createToken.data : null;
+  const installerOptionsData = installerOptions.data;
+  const availableOptions = installerOptionsData?.options ?? [];
+  const hasOfflineOption = useMemo(
+    () => availableOptions.some(option => option.type === 'offline'),
+    [availableOptions],
+  );
+
+  const selectedOption = availableOptions.find(option => option.type === selectedInstallerType) ?? null;
+
+  const emitInstallerTelemetry = async (
+    eventName: string,
+    level: LogLevel,
+    data: Record<string, unknown>,
+  ) => {
+    try {
+      await logsApi.create({
+        clientId: installerOptionsData?.clientId ?? null,
+        siteId: installerOptionsData?.siteId ?? null,
+        agentId: null,
+        type: LogType.Application,
+        level,
+        source: LogSource.Portal,
+        message: `deploy.installer.${eventName}`,
+        dataJson: data,
+      });
+    } catch {
+      // Telemetria nao deve bloquear o fluxo principal.
+    }
+  };
 
   const handleCreate = () => {
     if (!form.clientId) {
@@ -77,6 +144,76 @@ export default function DeployTokens() {
       },
       onError: () => toast.error('Erro ao criar token de deploy'),
     });
+  };
+
+  const handleValidateInstallerOptions = () => {
+    const normalizedToken = rawToken.trim();
+    if (!normalizedToken) {
+      toast.error('Informe um deploy token para validar opcoes.');
+      return;
+    }
+
+    installerOptions.mutate(normalizedToken, {
+      onSuccess: (response) => {
+        const recommended = response.options.find(option => option.recommended);
+        setSelectedInstallerType((recommended ?? response.options[0])?.type ?? 'online');
+        toast.success('Token validado. Escolha a modalidade de instalacao.');
+      },
+      onError: (error) => {
+        toast.error(mapInstallerFlowError(error, 'validar token'));
+      },
+    });
+  };
+
+  const handleInstallerTypeChange = (option: DeployInstallerOption) => {
+    setSelectedInstallerType(option.type);
+    emitInstallerTelemetry('option_selected', LogLevel.Info, {
+      tokenId: installerOptionsData?.tokenId ?? null,
+      installerType: option.type,
+      recommended: option.recommended,
+      requiresInternet: option.requiresInternet,
+    });
+  };
+
+  const handleDownloadInstaller = (type?: DeployInstallerType) => {
+    const normalizedToken = rawToken.trim();
+    if (!normalizedToken) {
+      toast.error('Informe um deploy token para iniciar o download.');
+      return;
+    }
+
+    const installerType = type ?? selectedInstallerType;
+    emitInstallerTelemetry('download_started', LogLevel.Info, {
+      tokenId: installerOptionsData?.tokenId ?? null,
+      installerType,
+    });
+
+    downloadInstaller.mutate(
+      {
+        rawToken: normalizedToken,
+        installerType,
+      },
+      {
+        onSuccess: (result) => {
+          triggerInstallerDownload(result.fileName, result.blob);
+          toast.success('Download iniciado com sucesso.');
+          emitInstallerTelemetry('download_succeeded', LogLevel.Info, {
+            tokenId: installerOptionsData?.tokenId ?? null,
+            installerType,
+            fileName: result.fileName,
+          });
+        },
+        onError: (error) => {
+          toast.error(mapInstallerFlowError(error, 'baixar instalador'));
+          emitInstallerTelemetry('download_failed', LogLevel.Error, {
+            tokenId: installerOptionsData?.tokenId ?? null,
+            installerType,
+            status: error.status,
+            reason: error.message,
+          });
+        },
+      },
+    );
   };
 
   const handleCopyToken = async () => {
@@ -176,6 +313,100 @@ export default function DeployTokens() {
             <Button onClick={handleCreate} loading={createToken.isPending}>
               <KeyRound className="h-4 w-4" /> {form.delivery === 'installer' ? 'Gerar e baixar instalador' : 'Gerar Token'}
             </Button>
+          </div>
+        </div>
+      </Card>
+
+      <Card>
+        <CardHeader
+          title="Download por Token"
+          subtitle="Valida token e escolha Online (menor) ou Offline (completo)"
+        />
+        <div className="space-y-4">
+          <Input
+            label="Deploy Token"
+            placeholder="mdz_deploy_..."
+            value={rawToken}
+            onChange={e => {
+              setRawToken(e.target.value);
+              installerOptions.reset();
+            }}
+          />
+
+          <div className="flex flex-wrap items-center gap-3">
+            <Button
+              variant="secondary"
+              onClick={handleValidateInstallerOptions}
+              loading={installerOptions.isPending}
+            >
+              Validar opcoes
+            </Button>
+
+            {installerOptionsData?.expiresAt && (
+              <Badge color="slate">
+                Expira: {new Date(installerOptionsData.expiresAt).toLocaleString('pt-BR')}
+              </Badge>
+            )}
+          </div>
+
+          {availableOptions.length > 0 && (
+            <div className="grid gap-3 md:grid-cols-2">
+              {availableOptions.map(option => {
+                const isActive = selectedInstallerType === option.type;
+                return (
+                  <button
+                    key={option.type}
+                    type="button"
+                    onClick={() => handleInstallerTypeChange(option)}
+                    className={`rounded-xl border p-4 text-left transition ${
+                      isActive
+                        ? 'border-cyan-400/70 bg-cyan-500/10'
+                        : 'border-white/10 bg-white/5 hover:border-white/20'
+                    }`}
+                  >
+                    <div className="mb-2 flex items-center justify-between gap-2">
+                      <p className="text-sm font-semibold text-white">{option.displayName}</p>
+                      {option.recommended && <Badge color="accent">Recomendado</Badge>}
+                    </div>
+                    <p className="text-xs text-slate-300">{option.description}</p>
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <Badge color="slate">{option.type === 'online' ? 'Online' : 'Offline'}</Badge>
+                      <Badge color="slate">{option.requiresInternet ? 'Requer internet' : 'Sem internet'}</Badge>
+                      <Badge color="slate">Formato: {option.fileExtension}</Badge>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {installerOptions.isError && (
+            <p className="text-sm text-rose-300">
+              {mapInstallerFlowError(installerOptions.error, 'validar token')}
+            </p>
+          )}
+
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <Button
+              onClick={() => handleDownloadInstaller()}
+              loading={downloadInstaller.isPending}
+              disabled={!selectedOption || availableOptions.length === 0}
+            >
+              Baixar {selectedOption?.type === 'offline' ? 'Offline' : 'Online'}
+            </Button>
+
+            {downloadInstaller.isError &&
+              downloadInstaller.error.status === 503 &&
+              selectedInstallerType === 'online' &&
+              hasOfflineOption && (
+                <Button
+                  variant="secondary"
+                  onClick={() => handleDownloadInstaller('offline')}
+                  disabled={downloadInstaller.isPending}
+                >
+                  Tentar fallback Offline
+                </Button>
+              )}
           </div>
         </div>
       </Card>
