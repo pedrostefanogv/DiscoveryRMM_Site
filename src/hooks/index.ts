@@ -87,6 +87,7 @@ export * from "./useReportPreview";
 export * from "./useReportAutocomplete";
 export * from "./useKnowledge";
 export * from "./useAutomation";
+export * from "./useCustomFields";
 export * from "./useAuthSecurity";
 export * from "./useIdentity";
 export * from "./useNowTick";

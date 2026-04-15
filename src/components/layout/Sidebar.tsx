@@ -66,6 +66,7 @@ const settingsLinks = [
   { to: '/settings/workflow', label: 'Workflow' },
   { to: '/settings/workflow-profiles', label: 'SLA e Perfis' },
   { to: '/settings/audit', label: 'Auditoria Config' },
+  { to: '/settings/custom-fields', label: 'Custom Fields' },
   { to: '/settings/branding', label: 'Branding' },
 ];
 

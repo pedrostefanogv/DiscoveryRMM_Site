@@ -37,6 +37,7 @@ const ClientConfigurationPage = lazy(() => import('@/pages/settings/ClientConfig
 const SiteConfigurationPage = lazy(() => import('@/pages/settings/SiteConfigurationPage'));
 const ConfigurationAudit = lazy(() => import('@/pages/settings/ConfigurationAudit'));
 const AgentLabelsSettings = lazy(() => import('@/pages/settings/AgentLabelsSettings'));
+const CustomFieldsSettings = lazy(() => import('@/pages/settings/CustomFieldsSettings'));
 const MeshCentralConfigurationPage = lazy(() => import('@/pages/settings/MeshCentralConfigurationPage'));
 const ProfilePage = lazy(() => import('@/pages/settings/ProfilePage'));
 const IamUsersPage = lazy(() => import('@/pages/settings/IamUsersPage'));
@@ -304,6 +305,14 @@ export const router = createBrowserRouter([
         element: (
           <PermissionGate anyOf={['settings.*', 'settings.read', 'admin.*']}>
             <LazyPage><AgentLabelsSettings /></LazyPage>
+          </PermissionGate>
+        ),
+      },
+      {
+        path: 'settings/custom-fields',
+        element: (
+          <PermissionGate anyOf={['settings.*', 'settings.read', 'admin.*']}>
+            <LazyPage><CustomFieldsSettings /></LazyPage>
           </PermissionGate>
         ),
       },

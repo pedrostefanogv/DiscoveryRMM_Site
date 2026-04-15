@@ -1,11 +1,19 @@
 import {
   AgentLabel,
+  AgentLabelAvailableCustomField,
+  AgentLabelNodeType,
   AgentLabelRuleAgentItem,
   AgentLabelRuleAgentsResponse,
   AgentLabelRuleDryRunRequest,
   AgentLabelRuleDryRunResponse,
   AgentLabelRuleResponse,
   CreateAgentLabelRuleRequest,
+  normalizeAgentLabelApplyMode,
+  normalizeAgentLabelComparisonOperator,
+  normalizeAgentLabelField,
+  normalizeAgentLabelLogicalOperator,
+  normalizeAgentLabelNodeType,
+  normalizeAgentLabelSourceType,
   UpdateAgentLabelRuleRequest,
 } from "./types";
 import {
@@ -32,13 +40,22 @@ async function toJson<T>(res: Response): Promise<T> {
 
 export const agentLabelsApi = {
   async getAgentLabels(agentId: string): Promise<AgentLabel[]> {
-    return api.get<AgentLabel[]>(`${BASE}/agents/${agentId}`);
+    const raw = await api.get<Array<Record<string, unknown>>>(`${BASE}/agents/${agentId}`);
+    return raw.map((item) => ({
+      id: String(item.id ?? ""),
+      agentId: String(item.agentId ?? item.AgentId ?? agentId),
+      label: String(item.label ?? ""),
+      sourceType: normalizeAgentLabelSourceType(item.sourceType ?? item.SourceType),
+      createdAt: String(item.createdAt ?? item.CreatedAt ?? ""),
+      updatedAt: String(item.updatedAt ?? item.UpdatedAt ?? ""),
+    }));
   },
 
   async getRules(includeDisabled = true): Promise<AgentLabelRuleResponse[]> {
-    return api.get<AgentLabelRuleResponse[]>(`${BASE}/rules`, {
+    const raw = await api.get<Array<Record<string, unknown>>>(`${BASE}/rules`, {
       includeDisabled,
     });
+    return raw.map(normalizeRuleResponse);
   },
 
   async getRuleAgents(ruleId: string): Promise<AgentLabelRuleAgentsResponse> {
@@ -78,14 +95,16 @@ export const agentLabelsApi = {
   async createRule(
     payload: CreateAgentLabelRuleRequest,
   ): Promise<AgentLabelRuleResponse> {
-    return api.post<AgentLabelRuleResponse>(`${BASE}/rules`, payload);
+    const raw = await api.post<Record<string, unknown>>(`${BASE}/rules`, payload);
+    return normalizeRuleResponse(raw);
   },
 
   async updateRule(
     id: string,
     payload: UpdateAgentLabelRuleRequest,
   ): Promise<AgentLabelRuleResponse> {
-    return api.put<AgentLabelRuleResponse>(`${BASE}/rules/${id}`, payload);
+    const raw = await api.put<Record<string, unknown>>(`${BASE}/rules/${id}`, payload);
+    return normalizeRuleResponse(raw);
   },
 
   async deleteRule(id: string): Promise<void> {
@@ -104,4 +123,80 @@ export const agentLabelsApi = {
       payload,
     );
   },
+
+  async getAvailableCustomFields(): Promise<AgentLabelAvailableCustomField[]> {
+    const raw = await api.get<Array<Record<string, unknown>>>(`${BASE}/rules/available-custom-fields`);
+    return raw.map((item) => ({
+      id: String(item.id ?? ""),
+      name: String(item.name ?? ""),
+      label: String(item.label ?? item.name ?? ""),
+      description:
+        item.description === null || item.description === undefined
+          ? null
+          : String(item.description),
+      scopeType: Number(item.scopeType ?? item.ScopeType ?? 3) as 1 | 2 | 3,
+      dataType: Number(item.dataType ?? item.DataType ?? 0),
+      options: normalizeStringArray(item.options ?? item.Options ?? item.allowedValues ?? item.AllowedValues),
+    }));
+  },
 };
+
+function normalizeStringArray(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item ?? "")).filter(Boolean);
+  }
+  if (typeof value === "string") {
+    return value.split(",").map((item) => item.trim()).filter(Boolean);
+  }
+  return [];
+}
+
+function normalizeRuleResponse(raw: Record<string, unknown>): AgentLabelRuleResponse {
+  return {
+    id: String(raw.id ?? raw.ruleId ?? ""),
+    name: String(raw.name ?? ""),
+    label: String(raw.label ?? ""),
+    description:
+      raw.description === null || raw.description === undefined
+        ? null
+        : String(raw.description),
+    isEnabled: Boolean(raw.isEnabled ?? raw.IsEnabled ?? true),
+    applyMode: normalizeAgentLabelApplyMode(raw.applyMode ?? raw.ApplyMode),
+    expression: normalizeExpressionNode(raw.expression ?? raw.Expression),
+    createdAt: String(raw.createdAt ?? raw.CreatedAt ?? ""),
+    updatedAt: String(raw.updatedAt ?? raw.UpdatedAt ?? ""),
+  };
+}
+
+function normalizeExpressionNode(input: unknown): import("./types").AgentLabelRuleExpressionNodeDto {
+  const raw = (input ?? {}) as Record<string, unknown>;
+  const nodeType = normalizeAgentLabelNodeType(raw.nodeType ?? raw.NodeType);
+  const childrenRaw = raw.children ?? raw.Children;
+
+  return {
+    nodeType,
+    logicalOperator:
+      nodeType === AgentLabelNodeType.Group
+        ? normalizeAgentLabelLogicalOperator(raw.logicalOperator ?? raw.LogicalOperator)
+        : null,
+    children: Array.isArray(childrenRaw)
+      ? childrenRaw.map((child) => normalizeExpressionNode(child))
+      : [],
+    field:
+      nodeType === AgentLabelNodeType.Condition
+        ? normalizeAgentLabelField(raw.field ?? raw.Field)
+        : null,
+    customFieldDefinitionId:
+      raw.customFieldDefinitionId === null || raw.CustomFieldDefinitionId === null
+        ? null
+        : String(raw.customFieldDefinitionId ?? raw.CustomFieldDefinitionId ?? "") || null,
+    operator:
+      nodeType === AgentLabelNodeType.Condition
+        ? normalizeAgentLabelComparisonOperator(raw.operator ?? raw.Operator)
+        : null,
+    value:
+      raw.value === null || raw.Value === null
+        ? null
+        : String(raw.value ?? raw.Value ?? ""),
+  };
+}

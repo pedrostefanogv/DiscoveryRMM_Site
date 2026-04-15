@@ -5,7 +5,9 @@ import {
   AgentLabelNodeType,
   AgentLabelRuleExpressionNodeDto,
   AgentStatus,
+  isCustomFieldAgentLabelField,
 } from "./types";
+import { CustomFieldDataType, CustomFieldScopeType } from "@/api/custom-fields";
 
 export const AgentLabelExpressionLimits = {
   maxDepth: 8,
@@ -57,10 +59,63 @@ const statusOperators = new Set<AgentLabelComparisonOperator>([
   AgentLabelComparisonOperator.NotEquals,
 ]);
 
+const booleanOperators = new Set<AgentLabelComparisonOperator>([
+  AgentLabelComparisonOperator.Equals,
+  AgentLabelComparisonOperator.NotEquals,
+]);
+
+export function getCustomFieldScopeTypeForRuleField(
+  field: AgentLabelField,
+): CustomFieldScopeType | null {
+  switch (field) {
+    case AgentLabelField.AgentCustomField:
+      return CustomFieldScopeType.Agent;
+    case AgentLabelField.ClientCustomField:
+      return CustomFieldScopeType.Client;
+    case AgentLabelField.SiteCustomField:
+      return CustomFieldScopeType.Site;
+    default:
+      return null;
+  }
+}
+
+export function getAllowedOperatorsForField(
+  field: AgentLabelField,
+  customFieldDataType?: CustomFieldDataType | null,
+): AgentLabelComparisonOperator[] {
+  if (isCustomFieldAgentLabelField(field)) {
+    switch (customFieldDataType) {
+      case CustomFieldDataType.Integer:
+      case CustomFieldDataType.Decimal:
+      case CustomFieldDataType.Date:
+      case CustomFieldDataType.DateTime:
+        return Array.from(numericOperators);
+      case CustomFieldDataType.Boolean:
+        return Array.from(booleanOperators);
+      case CustomFieldDataType.Text:
+      case CustomFieldDataType.Dropdown:
+      case CustomFieldDataType.ListBox:
+      default:
+        return Array.from(textOperators);
+    }
+  }
+
+  if (numericFields.has(field)) {
+    return Array.from(numericOperators);
+  }
+
+  if (field === AgentLabelField.Status) {
+    return Array.from(statusOperators);
+  }
+
+  return Array.from(textOperators);
+}
+
 export function validateRulePayload(input: {
   name: string;
   label: string;
   expression: AgentLabelRuleExpressionNodeDto;
+  customFieldDataTypes?: Record<string, CustomFieldDataType | undefined>;
 }): string[] {
   const errors: string[] = [];
 
@@ -76,12 +131,13 @@ export function validateRulePayload(input: {
     errors.push("Label exceeds maximum length of 120.");
   }
 
-  errors.push(...validateExpression(input.expression));
+  errors.push(...validateExpression(input.expression, input.customFieldDataTypes));
   return errors;
 }
 
 export function validateExpression(
   expression: AgentLabelRuleExpressionNodeDto,
+  customFieldDataTypes?: Record<string, CustomFieldDataType | undefined>,
 ): string[] {
   const errors: string[] = [];
   let nodeCount = 0;
@@ -106,7 +162,7 @@ export function validateExpression(
     }
 
     if (node.nodeType === AgentLabelNodeType.Group) {
-      if (!node.logicalOperator) {
+      if (node.logicalOperator == null) {
         errors.push(`${path}: group node requires LogicalOperator.`);
       } else if (
         node.logicalOperator !== AgentLabelLogicalOperator.And &&
@@ -115,7 +171,12 @@ export function validateExpression(
         errors.push(`${path}: invalid LogicalOperator.`);
       }
 
-      if (node.field != null || node.operator != null || node.value != null) {
+      if (
+        node.field != null ||
+        node.operator != null ||
+        node.value != null ||
+        node.customFieldDefinitionId != null
+      ) {
         errors.push(`${path}: group node cannot define Field/Operator/Value.`);
       }
 
@@ -163,7 +224,21 @@ export function validateExpression(
       return;
     }
 
-    validateCondition(node.field, node.operator, node.value, errors, path);
+    if (isCustomFieldAgentLabelField(node.field) && !node.customFieldDefinitionId) {
+      errors.push(`${path}: custom field condition requires CustomFieldDefinitionId.`);
+      return;
+    }
+
+    validateCondition(
+      node.field,
+      node.operator,
+      node.value,
+      errors,
+      path,
+      node.customFieldDefinitionId
+        ? customFieldDataTypes?.[node.customFieldDefinitionId]
+        : undefined,
+    );
   }
 
   walk(expression, 1, "root");
@@ -176,11 +251,55 @@ function validateCondition(
   value: string,
   errors: string[],
   path: string,
+  customFieldDataType?: CustomFieldDataType,
 ) {
   if (value.length > AgentLabelExpressionLimits.maxValueLength) {
     errors.push(
       `${path}: value exceeds maximum length of ${AgentLabelExpressionLimits.maxValueLength}.`,
     );
+  }
+
+  if (isCustomFieldAgentLabelField(field)) {
+    const allowedOperators = getAllowedOperatorsForField(field, customFieldDataType);
+    if (!allowedOperators.includes(operator)) {
+      errors.push(`${path}: operator '${operator}' is not allowed for this custom field.`);
+      return;
+    }
+
+    switch (customFieldDataType) {
+      case CustomFieldDataType.Integer:
+      case CustomFieldDataType.Decimal:
+        if (Number.isNaN(Number(value))) {
+          errors.push(`${path}: value '${value}' is not a valid number.`);
+        }
+        return;
+      case CustomFieldDataType.Boolean:
+        if (!["true", "false", "1", "0"].includes(value.trim().toLowerCase())) {
+          errors.push(`${path}: value '${value}' is not a valid boolean.`);
+        }
+        return;
+      case CustomFieldDataType.Date:
+      case CustomFieldDataType.DateTime:
+        if (Number.isNaN(new Date(value).getTime())) {
+          errors.push(`${path}: value '${value}' is not a valid date.`);
+        }
+        return;
+      default:
+        if (operator === AgentLabelComparisonOperator.Regex) {
+          if (value.length > AgentLabelExpressionLimits.maxRegexLength) {
+            errors.push(
+              `${path}: regex pattern exceeds maximum length of ${AgentLabelExpressionLimits.maxRegexLength}.`,
+            );
+          }
+
+          try {
+            new RegExp(value);
+          } catch {
+            errors.push(`${path}: invalid regex pattern.`);
+          }
+        }
+        return;
+    }
   }
 
   if (field === AgentLabelField.Status) {

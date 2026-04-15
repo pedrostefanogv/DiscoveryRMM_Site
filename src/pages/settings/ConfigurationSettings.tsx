@@ -32,6 +32,11 @@ const cards = [
     description: "Cadastro e gerenciamento de regras de tags para agents.",
     to: "/settings/agent-labels",
   },
+  {
+    title: "Custom Fields",
+    description: "Defina campos por escopo e gerencie valores por entidade.",
+    to: "/settings/custom-fields",
+  },
 ];
 
 export default function ConfigurationSettings() {

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Card, CardHeader, Button, Input, Select, TextArea, Loading, ErrorDisplay, Badge } from '@/components/ui';
-import { agentsApi, clientsApi, sitesApi } from '@/api';
+import { Badge, Button, Card, CardHeader, ErrorDisplay, Input, Loading, Select, TextArea } from '@/components/ui';
+import { agentsApi, clientsApi, sitesApi, type Agent, type Client, type Site } from '@/api';
 import { agentLabelsApi } from '@/modules/agent-labels/api';
 import {
   AgentLabelApplyMode,
@@ -9,13 +9,28 @@ import {
   AgentLabelField,
   AgentLabelLogicalOperator,
   AgentLabelNodeType,
+  AgentStatus,
+  getAgentLabelApplyModeLabel,
+  getAgentLabelComparisonOperatorLabel,
+  getAgentLabelFieldLabel,
+  getAgentLabelLogicalOperatorLabel,
+  isCustomFieldAgentLabelField,
+  type AgentLabelAvailableCustomField,
   type AgentLabelRuleAgentItem,
   type AgentLabelRuleDryRunResponse,
   type AgentLabelRuleExpressionNodeDto,
   type AgentLabelRuleResponse,
 } from '@/modules/agent-labels/types';
-import { validateRulePayload } from '@/modules/agent-labels/validation';
-import type { Agent, Client, Site } from '@/api';
+import {
+  getAllowedOperatorsForField,
+  getCustomFieldScopeTypeForRuleField,
+  validateRulePayload,
+} from '@/modules/agent-labels/validation';
+import {
+  CustomFieldDataType,
+  getCustomFieldDataTypeLabel,
+  getCustomFieldScopeLabel,
+} from '@/api/custom-fields';
 
 const defaultExpression: AgentLabelRuleExpressionNodeDto = {
   nodeType: AgentLabelNodeType.Group,
@@ -28,40 +43,28 @@ const defaultCondition: AgentLabelRuleExpressionNodeDto = {
   field: AgentLabelField.Hostname,
   operator: AgentLabelComparisonOperator.Contains,
   value: '',
+  customFieldDefinitionId: null,
 };
 
-const textFields = new Set<AgentLabelField>([
-  AgentLabelField.Hostname,
-  AgentLabelField.DisplayName,
-  AgentLabelField.IpAddress,
-  AgentLabelField.OperatingSystem,
-  AgentLabelField.OsVersion,
-  AgentLabelField.SoftwareName,
-  AgentLabelField.SoftwarePublisher,
-  AgentLabelField.SoftwareVersion,
-  AgentLabelField.Processor,
-]);
+const fieldOptions = Object.values(AgentLabelField)
+  .filter((value): value is AgentLabelField => typeof value === 'number')
+  .map(field => ({ value: String(field), label: getAgentLabelFieldLabel(field) }));
 
-const numericFields = new Set<AgentLabelField>([
-  AgentLabelField.SoftwareCount,
-  AgentLabelField.TotalMemoryBytes,
-  AgentLabelField.TotalDisksCount,
-]);
+const logicalOperatorOptions = Object.values(AgentLabelLogicalOperator)
+  .filter((value): value is AgentLabelLogicalOperator => typeof value === 'number')
+  .map(operator => ({ value: String(operator), label: getAgentLabelLogicalOperatorLabel(operator) }));
 
-const statusFields = new Set<AgentLabelField>([AgentLabelField.Status]);
+const applyModeOptions = Object.values(AgentLabelApplyMode)
+  .filter((value): value is AgentLabelApplyMode => typeof value === 'number')
+  .map(mode => ({ value: String(mode), label: getAgentLabelApplyModeLabel(mode) }));
 
-const fieldOptions = Object.values(AgentLabelField).map(field => ({ value: field, label: field }));
-const logicalOperatorOptions = Object.values(AgentLabelLogicalOperator).map(operator => ({ value: operator, label: operator }));
-
-const applyModeOptions = [
-  { value: AgentLabelApplyMode.ApplyOnly, label: 'Aplicar apenas (ApplyOnly)' },
-  { value: AgentLabelApplyMode.ApplyAndRemove, label: 'Aplicar e remover (ApplyAndRemove)' },
-];
+type DryRunMode = 'site-batch' | 'single-agent';
 
 export default function AgentLabelsSettings() {
   const [viewMode, setViewMode] = useState<'list' | 'create'>('list');
   const [editingRuleId, setEditingRuleId] = useState<string | null>(null);
   const [rules, setRules] = useState<AgentLabelRuleResponse[]>([]);
+  const [availableCustomFields, setAvailableCustomFields] = useState<AgentLabelAvailableCustomField[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isReprocessing, setIsReprocessing] = useState(false);
@@ -84,6 +87,8 @@ export default function AgentLabelsSettings() {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [selectedClientId, setSelectedClientId] = useState('');
   const [selectedSiteId, setSelectedSiteId] = useState('');
+  const [selectedAgentId, setSelectedAgentId] = useState('');
+  const [dryRunMode, setDryRunMode] = useState<DryRunMode>('site-batch');
   const [previewLimit, setPreviewLimit] = useState(25);
   const [previewResults, setPreviewResults] = useState<Array<AgentLabelRuleDryRunResponse & { agentName: string }>>([]);
 
@@ -96,6 +101,11 @@ export default function AgentLabelsSettings() {
     matchedAt: string | null;
     lastEvaluatedAt: string | null;
   }>>([]);
+
+  const customFieldDataTypes = useMemo(() => {
+    const entries = availableCustomFields.map((item) => [item.id, item.dataType as CustomFieldDataType]);
+    return Object.fromEntries(entries) as Record<string, CustomFieldDataType>;
+  }, [availableCustomFields]);
 
   const sortedRules = useMemo(
     () => [...rules].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')),
@@ -111,9 +121,11 @@ export default function AgentLabelsSettings() {
     setEditorMode('visual');
     setShowJsonInVisual(false);
     setShowHelp(false);
-    setExpressionBuilder(defaultExpression);
+    setExpressionBuilder(structuredClone(defaultExpression));
     setSelectedClientId('');
     setSelectedSiteId('');
+    setSelectedAgentId('');
+    setDryRunMode('site-batch');
     setPreviewLimit(25);
     setPreviewResults([]);
   }
@@ -137,6 +149,8 @@ export default function AgentLabelsSettings() {
     setExpressionText(JSON.stringify(expression, null, 2));
     setSelectedClientId('');
     setSelectedSiteId('');
+    setSelectedAgentId('');
+    setDryRunMode('site-batch');
     setPreviewResults([]);
     setViewMode('create');
   }
@@ -152,34 +166,27 @@ export default function AgentLabelsSettings() {
     setAppliedResults([]);
   }
 
-  async function loadRules() {
+  async function loadAll() {
     setError(null);
     setIsLoading(true);
     try {
-      const data = await agentLabelsApi.getRules(true);
-      setRules(data);
+      const [rulesData, clientsData, customFieldsData] = await Promise.all([
+        agentLabelsApi.getRules(true),
+        clientsApi.list(false),
+        agentLabelsApi.getAvailableCustomFields(),
+      ]);
+      setRules(rulesData);
+      setClients(clientsData);
+      setAvailableCustomFields(customFieldsData);
     } catch (err) {
-      setError(getApiErrorMessage(err, 'Falha ao carregar regras de labels.'));
+      setError(getApiErrorMessage(err, 'Falha ao carregar regras e dependências.'));
     } finally {
       setIsLoading(false);
     }
   }
 
   useEffect(() => {
-    void loadRules();
-  }, []);
-
-  useEffect(() => {
-    async function loadClients() {
-      try {
-        const data = await clientsApi.list(false);
-        setClients(data);
-      } catch {
-        toast.error('Falha ao carregar clientes para previa.');
-      }
-    }
-
-    void loadClients();
+    void loadAll();
   }, []);
 
   useEffect(() => {
@@ -187,6 +194,7 @@ export default function AgentLabelsSettings() {
       if (!selectedClientId) {
         setSites([]);
         setSelectedSiteId('');
+        setSelectedAgentId('');
         setAgents([]);
         return;
       }
@@ -195,10 +203,11 @@ export default function AgentLabelsSettings() {
         const data = await sitesApi.list(selectedClientId, false);
         setSites(data);
         setSelectedSiteId('');
+        setSelectedAgentId('');
         setAgents([]);
         setPreviewResults([]);
       } catch {
-        toast.error('Falha ao carregar sites para previa.');
+        toast.error('Falha ao carregar sites para prévia.');
       }
     }
 
@@ -209,6 +218,7 @@ export default function AgentLabelsSettings() {
     async function loadAgents() {
       if (!selectedSiteId) {
         setAgents([]);
+        setSelectedAgentId('');
         setPreviewResults([]);
         return;
       }
@@ -216,9 +226,10 @@ export default function AgentLabelsSettings() {
       try {
         const data = await agentsApi.listBySite(selectedSiteId);
         setAgents(data);
+        setSelectedAgentId('');
         setPreviewResults([]);
       } catch {
-        toast.error('Falha ao carregar agents para previa.');
+        toast.error('Falha ao carregar agentes para prévia.');
       }
     }
 
@@ -235,11 +246,16 @@ export default function AgentLabelsSettings() {
     try {
       parsedExpression = JSON.parse(expressionText) as AgentLabelRuleExpressionNodeDto;
     } catch {
-      toast.error('Expressao invalida: JSON malformado.');
+      toast.error('Expressão inválida: JSON malformado.');
       return;
     }
 
-    const errors = validateRulePayload({ name, label, expression: parsedExpression });
+    const errors = validateRulePayload({
+      name,
+      label,
+      expression: parsedExpression,
+      customFieldDataTypes,
+    });
     if (errors.length > 0) {
       toast.error(errors[0]);
       return;
@@ -250,7 +266,7 @@ export default function AgentLabelsSettings() {
       if (editingRuleId) {
         const currentRule = rules.find(rule => rule.id === editingRuleId);
         if (!currentRule) {
-          toast.error('Nao foi possivel localizar a regra para edicao.');
+          toast.error('Não foi possível localizar a regra para edição.');
           return;
         }
 
@@ -276,7 +292,7 @@ export default function AgentLabelsSettings() {
 
       resetCreateState();
       setViewMode('list');
-      await loadRules();
+      await loadAll();
     } catch (err) {
       toast.error(getApiErrorMessage(err, editingRuleId ? 'Falha ao atualizar regra.' : 'Falha ao criar regra.'));
     } finally {
@@ -310,7 +326,7 @@ export default function AgentLabelsSettings() {
     try {
       await agentLabelsApi.deleteRule(rule.id);
       setRules(prev => prev.filter(item => item.id !== rule.id));
-      toast.success('Regra excluida.');
+      toast.success('Regra excluída.');
     } catch (err) {
       toast.error(getApiErrorMessage(err, 'Falha ao excluir regra.'));
     }
@@ -322,39 +338,49 @@ export default function AgentLabelsSettings() {
       const response = await agentLabelsApi.reprocessAll();
       toast.success(response.message || 'Reprocessamento iniciado.');
     } catch (err) {
-      toast.error(getApiErrorMessage(err, 'Falha ao reprocessar agents.'));
+      toast.error(getApiErrorMessage(err, 'Falha ao reprocessar agentes.'));
     } finally {
       setIsReprocessing(false);
     }
   }
 
   async function handleRunPreview() {
-    if (!selectedSiteId) {
-      toast.error('Selecione um site para simular a regra.');
-      return;
-    }
-
     let parsedExpression: AgentLabelRuleExpressionNodeDto;
     try {
       parsedExpression = JSON.parse(expressionText) as AgentLabelRuleExpressionNodeDto;
     } catch {
-      toast.error('Expressao invalida: JSON malformado.');
+      toast.error('Expressão inválida: JSON malformado.');
       return;
     }
 
     const validationErrors = validateRulePayload({
-      name: name || 'Previa',
+      name: name || 'Prévia',
       label,
       expression: parsedExpression,
+      customFieldDataTypes,
     });
     if (validationErrors.length > 0) {
       toast.error(validationErrors[0]);
       return;
     }
 
-    const scopedAgents = agents.slice(0, Math.min(Math.max(previewLimit, 1), 100));
+    const scopedAgents =
+      dryRunMode === 'single-agent'
+        ? agents.filter(agent => agent.id === selectedAgentId)
+        : agents.slice(0, Math.min(Math.max(previewLimit, 1), 100));
+
+    if (dryRunMode === 'single-agent' && !selectedAgentId) {
+      toast.error('Selecione um agente para simulação individual.');
+      return;
+    }
+
+    if (dryRunMode === 'site-batch' && !selectedSiteId) {
+      toast.error('Selecione um site para simular a regra em lote.');
+      return;
+    }
+
     if (scopedAgents.length === 0) {
-      toast.error('Nenhum agent encontrado neste site para simulacao.');
+      toast.error('Nenhum agente encontrado para simulação.');
       return;
     }
 
@@ -378,9 +404,9 @@ export default function AgentLabelsSettings() {
 
       setPreviewResults(responses);
       const matchedCount = responses.filter(item => item.matched).length;
-      toast.success(`Previa concluida: ${matchedCount}/${responses.length} agents com match.`);
+      toast.success(`Prévia concluída: ${matchedCount}/${responses.length} agentes com match.`);
     } catch (err) {
-      toast.error(getApiErrorMessage(err, 'Falha ao executar previa da regra.'));
+      toast.error(getApiErrorMessage(err, 'Falha ao executar prévia da regra.'));
     } finally {
       setIsRunningPreview(false);
     }
@@ -400,7 +426,7 @@ export default function AgentLabelsSettings() {
 
       setAppliedAgentsTotal(response.totalAgents);
       setAppliedResults(mapped);
-      toast.success(`Consulta concluida: ${mapped.length} agents retornados pela regra.`);
+      toast.success(`Consulta concluída: ${mapped.length} agentes retornados pela regra.`);
     } catch (err) {
       toast.error(getApiErrorMessage(err, 'Falha ao consultar labels aplicadas.'));
     } finally {
@@ -428,7 +454,7 @@ export default function AgentLabelsSettings() {
     try {
       const parsed = JSON.parse(expressionText) as AgentLabelRuleExpressionNodeDto;
       if (parsed.nodeType !== AgentLabelNodeType.Group) {
-        toast.error('A raiz da expressao precisa ser um Group.');
+        toast.error('A raiz da expressão precisa ser um Group.');
         return;
       }
 
@@ -436,7 +462,7 @@ export default function AgentLabelsSettings() {
       setEditorMode('visual');
       toast.success('Editor visual sincronizado com o JSON.');
     } catch {
-      toast.error('Expressao invalida: JSON malformado.');
+      toast.error('Expressão inválida: JSON malformado.');
     }
   }
 
@@ -445,23 +471,20 @@ export default function AgentLabelsSettings() {
   }
 
   if (error) {
-    return <ErrorDisplay message={error} onRetry={() => void loadRules()} />;
+    return <ErrorDisplay message={error} onRetry={() => void loadAll()} />;
   }
 
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-white">Labels Automaticas</h1>
+          <h1 className="text-2xl font-bold text-white">Labels Automáticas</h1>
           <p className="text-sm text-slate-400">
-            Gerencie o cadastro e comportamento das regras de labels automaticas para agents.
+            Gerencie regras automáticas com campos nativos e custom fields por Agente, Cliente e Site.
           </p>
         </div>
         {viewMode === 'list' ? (
-          <Button
-            size="sm"
-            onClick={startCreateRule}
-          >
+          <Button size="sm" onClick={startCreateRule}>
             Criar Regra
           </Button>
         ) : (
@@ -483,7 +506,7 @@ export default function AgentLabelsSettings() {
           <Card>
             <CardHeader
               title={editingRuleId ? 'Editar Regra' : 'Nova Regra'}
-              subtitle={editingRuleId ? 'Atualize a regra com editor visual ou JSON' : 'Crie uma regra com editor visual ou JSON'}
+              subtitle="Crie a regra via editor visual ou JSON, com suporte a custom fields e operadores por tipo."
             />
 
             <div className="mb-4 flex justify-end">
@@ -494,79 +517,31 @@ export default function AgentLabelsSettings() {
 
             {showHelp ? (
               <div className="mb-4 space-y-3 rounded-xl border border-white/10 bg-white/5 p-4 text-sm text-slate-300">
-                <div>
-                  <h3 className="font-semibold text-white">Como a regra funciona</h3>
-                  <p>Uma regra tem Nome, Label, Modo de Aplicacao e uma expressao logica.</p>
-                </div>
-                <div>
-                  <h3 className="font-semibold text-white">Grupo (Group)</h3>
-                  <p>Grupo combina filhos com And/Or. And exige todos; Or exige ao menos um.</p>
-                </div>
-                <div>
-                  <h3 className="font-semibold text-white">Condicao (Condition)</h3>
-                  <p>Condicao compara Campo, Operador e Valor.</p>
-                </div>
-                <div>
-                  <h3 className="font-semibold text-white">Boas praticas</h3>
-                  <p>Use a previa para validar impacto antes de salvar.</p>
-                </div>
+                <p>Use grupos para combinar condições com E/OU.</p>
+                <p>Ao escolher custom fields, o operador disponível depende do DataType da definição selecionada.</p>
+                <p>O dry-run suporta lote por site ou simulação individual em um agente específico.</p>
               </div>
             ) : null}
 
             <div className="grid gap-4 lg:grid-cols-2">
-              <Input
-                label="Nome"
-                placeholder="Ex.: Windows + VS"
-                value={name}
-                maxLength={200}
-                onChange={event => setName(event.target.value)}
-              />
-              <Input
-                label="Label"
-                placeholder="Ex.: DEV"
-                value={label}
-                maxLength={120}
-                onChange={event => setLabel(event.target.value)}
-              />
+              <Input label="Nome" placeholder="Ex.: Windows Produção" value={name} maxLength={200} onChange={event => setName(event.target.value)} />
+              <Input label="Label" placeholder="Ex.: PROD" value={label} maxLength={120} onChange={event => setLabel(event.target.value)} />
             </div>
 
             <div className="mt-4">
-              <TextArea
-                label="Descricao / Observacao"
-                placeholder="Ex.: Regra para identificar maquinas de desenvolvimento"
-                rows={3}
-                value={description}
-                onChange={event => setDescription(event.target.value)}
-              />
+              <TextArea label="Descrição / Observação" rows={3} value={description} onChange={event => setDescription(event.target.value)} />
             </div>
 
             <div className="mt-4">
-              <Select
-                label="Modo de Aplicacao"
-                value={applyMode}
-                options={applyModeOptions}
-                onChange={event => setApplyMode(event.target.value as AgentLabelApplyMode)}
-              />
+              <Select label="Modo de Aplicação" value={String(applyMode)} options={applyModeOptions} onChange={event => setApplyMode(Number(event.target.value) as AgentLabelApplyMode)} />
             </div>
 
             <div className="mt-4 flex flex-wrap gap-2">
-              <Button
-                size="sm"
-                variant={editorMode === 'visual' ? 'primary' : 'secondary'}
-                onClick={() => setEditorMode('visual')}
-              >
-                Editor Visual
-              </Button>
-              <Button
-                size="sm"
-                variant={editorMode === 'json' ? 'primary' : 'secondary'}
-                onClick={() => setEditorMode('json')}
-              >
-                Editor JSON
-              </Button>
+              <Button size="sm" variant={editorMode === 'visual' ? 'primary' : 'secondary'} onClick={() => setEditorMode('visual')}>Editor Visual</Button>
+              <Button size="sm" variant={editorMode === 'json' ? 'primary' : 'secondary'} onClick={() => setEditorMode('json')}>Editor JSON</Button>
               {editorMode === 'visual' ? (
                 <Button size="sm" variant="ghost" onClick={() => setShowJsonInVisual(prev => !prev)}>
-                  {showJsonInVisual ? 'Recolher JSON' : 'Mostrar JSON'}
+                  {showJsonInVisual ? 'Ocultar JSON' : 'Mostrar JSON'}
                 </Button>
               ) : null}
             </div>
@@ -577,6 +552,7 @@ export default function AgentLabelsSettings() {
                   node={expressionBuilder}
                   path={[]}
                   isRoot
+                  availableCustomFields={availableCustomFields}
                   onUpdateNode={handleUpdateNode}
                   onAddCondition={handleAddCondition}
                   onAddGroup={handleAddGroup}
@@ -587,87 +563,56 @@ export default function AgentLabelsSettings() {
 
             {editorMode === 'json' || showJsonInVisual ? (
               <div className="mt-4">
-                <TextArea
-                  label="Expressao (JSON)"
-                  rows={12}
-                  value={expressionText}
-                  onChange={event => setExpressionText(event.target.value)}
-                />
+                <TextArea label="Expressão (JSON)" rows={14} value={expressionText} onChange={event => setExpressionText(event.target.value)} className="font-mono" />
               </div>
             ) : null}
 
             {editorMode === 'json' ? (
               <div className="mt-2 flex justify-end">
-                <Button size="sm" variant="secondary" onClick={handleApplyJsonToVisual}>
-                  Aplicar JSON no Editor Visual
-                </Button>
+                <Button size="sm" variant="secondary" onClick={handleApplyJsonToVisual}>Aplicar JSON no Editor Visual</Button>
               </div>
             ) : null}
 
             <div className="mt-4 flex justify-end gap-2">
-              <Button
-                variant="ghost"
-                onClick={() => {
-                  resetCreateState();
-                  setViewMode('list');
-                }}
-              >
-                Cancelar
-              </Button>
-              <Button onClick={() => void handleSaveRule()} loading={isSaving}>
-                {editingRuleId ? 'Salvar Alteracoes' : 'Cadastrar Regra'}
-              </Button>
+              <Button variant="ghost" onClick={() => { resetCreateState(); setViewMode('list'); }}>Cancelar</Button>
+              <Button onClick={() => void handleSaveRule()} loading={isSaving}>{editingRuleId ? 'Salvar Alterações' : 'Cadastrar Regra'}</Button>
             </div>
           </Card>
 
           <Card>
-            <CardHeader title="Previa de Aplicacao" subtitle="Simule em agents de um site antes de salvar" />
+            <CardHeader title="Prévia de Aplicação" subtitle="Simule em lote por site ou em um agente específico antes de salvar" />
+
             <div className="grid gap-4 lg:grid-cols-4">
               <Select
-                label="Cliente"
-                value={selectedClientId}
-                options={[
-                  { value: '', label: 'Selecione...' },
-                  ...clients.map(client => ({ value: client.id, label: client.name })),
-                ]}
-                onChange={event => setSelectedClientId(event.target.value)}
+                label="Modo de Dry-Run"
+                value={dryRunMode}
+                options={[{ value: 'site-batch', label: 'Lote por Site' }, { value: 'single-agent', label: 'Agente Único' }]}
+                onChange={event => setDryRunMode(event.target.value as DryRunMode)}
               />
 
-              <Select
-                label="Site"
-                value={selectedSiteId}
-                options={[
-                  { value: '', label: 'Selecione...' },
-                  ...sites.map(site => ({ value: site.id, label: site.name })),
-                ]}
-                onChange={event => setSelectedSiteId(event.target.value)}
-              />
+              <Select label="Cliente" value={selectedClientId} options={[{ value: '', label: 'Selecione...' }, ...clients.map(client => ({ value: client.id, label: client.name }))]} onChange={event => setSelectedClientId(event.target.value)} />
+              <Select label="Site" value={selectedSiteId} options={[{ value: '', label: 'Selecione...' }, ...sites.map(site => ({ value: site.id, label: site.name }))]} onChange={event => setSelectedSiteId(event.target.value)} />
 
-              <Input
-                label="Limite de agents"
-                type="number"
-                min={1}
-                max={100}
-                value={previewLimit}
-                onChange={event => setPreviewLimit(Number(event.target.value || 1))}
-              />
+              {dryRunMode === 'site-batch' ? (
+                <Input label="Limite de agentes" type="number" min={1} max={100} value={previewLimit} onChange={event => setPreviewLimit(Number(event.target.value || 1))} />
+              ) : (
+                <Select
+                  label="Agente"
+                  value={selectedAgentId}
+                  options={[{ value: '', label: 'Selecione...' }, ...agents.map(agent => ({ value: agent.id, label: agent.displayName || agent.hostname || agent.id }))]}
+                  onChange={event => setSelectedAgentId(event.target.value)}
+                />
+              )}
+            </div>
 
-              <div className="flex items-end">
-                <Button
-                  className="w-full"
-                  variant="secondary"
-                  loading={isRunningPreview}
-                  onClick={() => void handleRunPreview()}
-                >
-                  Rodar Previa
-                </Button>
-              </div>
+            <div className="mt-4 flex justify-end">
+              <Button variant="secondary" loading={isRunningPreview} onClick={() => void handleRunPreview()}>Rodar Prévia</Button>
             </div>
 
             <div className="mt-4 flex flex-wrap gap-2 text-xs text-slate-400">
-              <span>Agents no site: {agents.length}</span>
+              <span>Agentes no site: {agents.length}</span>
               <span>•</span>
-              <span>Previa atual: {previewResults.length}</span>
+              <span>Prévia atual: {previewResults.length}</span>
               <span>•</span>
               <span>Com match: {previewResults.filter(item => item.matched).length}</span>
               <span>•</span>
@@ -681,42 +626,28 @@ export default function AgentLabelsSettings() {
                 <table className="min-w-full divide-y divide-white/10 text-sm">
                   <thead className="bg-white/5">
                     <tr>
-                      <th className="px-3 py-2 text-left font-medium text-slate-300">Agent</th>
+                      <th className="px-3 py-2 text-left font-medium text-slate-300">Agente</th>
                       <th className="px-3 py-2 text-left font-medium text-slate-300">Match</th>
                       <th className="px-3 py-2 text-left font-medium text-slate-300">Adicionar</th>
                       <th className="px-3 py-2 text-left font-medium text-slate-300">Remover</th>
-                      <th className="px-3 py-2 text-left font-medium text-slate-300">Labels automaticas atuais</th>
+                      <th className="px-3 py-2 text-left font-medium text-slate-300">Labels automáticas atuais</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/5">
                     {previewResults.map(result => (
                       <tr key={result.agentId} className="bg-slate-900/20">
                         <td className="px-3 py-2 text-slate-200">{result.agentName}</td>
-                        <td className="px-3 py-2">
-                          <Badge color={result.matched ? 'success' : 'slate'}>{result.matched ? 'Sim' : 'Nao'}</Badge>
-                        </td>
-                        <td className="px-3 py-2">
-                          <Badge color={result.wouldAddLabel ? 'success' : 'slate'}>
-                            {result.wouldAddLabel ? 'Sim' : 'Nao'}
-                          </Badge>
-                        </td>
-                        <td className="px-3 py-2">
-                          <Badge color={result.wouldRemoveLabel ? 'warning' : 'slate'}>
-                            {result.wouldRemoveLabel ? 'Sim' : 'Nao'}
-                          </Badge>
-                        </td>
-                        <td className="px-3 py-2 text-slate-300">
-                          {result.currentAutomaticLabels.length > 0
-                            ? result.currentAutomaticLabels.join(', ')
-                            : '-'}
-                        </td>
+                        <td className="px-3 py-2"><Badge color={result.matched ? 'success' : 'slate'}>{result.matched ? 'Sim' : 'Não'}</Badge></td>
+                        <td className="px-3 py-2"><Badge color={result.wouldAddLabel ? 'success' : 'slate'}>{result.wouldAddLabel ? 'Sim' : 'Não'}</Badge></td>
+                        <td className="px-3 py-2"><Badge color={result.wouldRemoveLabel ? 'warning' : 'slate'}>{result.wouldRemoveLabel ? 'Sim' : 'Não'}</Badge></td>
+                        <td className="px-3 py-2 text-slate-300">{result.currentAutomaticLabels.length > 0 ? result.currentAutomaticLabels.join(', ') : '-'}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
             ) : (
-              <p className="mt-4 text-sm text-slate-500">Execute a previa para ver em quais agents a regra teria efeito.</p>
+              <p className="mt-4 text-sm text-slate-500">Execute a prévia para ver em quais agentes a regra teria efeito.</p>
             )}
           </Card>
         </>
@@ -729,15 +660,8 @@ export default function AgentLabelsSettings() {
             subtitle={`${sortedRules.length} regra(s)`}
             action={(
               <div className="flex items-center gap-2">
-                <Button variant="secondary" size="sm" loading={isReprocessing} onClick={() => void handleReprocessAll()}>
-                  Reprocessar Agents
-                </Button>
-                <Button
-                  size="sm"
-                  onClick={startCreateRule}
-                >
-                  Criar Regra
-                </Button>
+                <Button variant="secondary" size="sm" loading={isReprocessing} onClick={() => void handleReprocessAll()}>Reprocessar Agentes</Button>
+                <Button size="sm" onClick={startCreateRule}>Criar Regra</Button>
               </div>
             )}
           />
@@ -745,12 +669,7 @@ export default function AgentLabelsSettings() {
           {sortedRules.length === 0 ? (
             <div className="space-y-3">
               <p className="text-sm text-slate-500">Nenhuma regra cadastrada.</p>
-              <Button
-                size="sm"
-                onClick={startCreateRule}
-              >
-                Criar primeira regra
-              </Button>
+              <Button size="sm" onClick={startCreateRule}>Criar primeira regra</Button>
             </div>
           ) : (
             <div className="space-y-3">
@@ -758,64 +677,40 @@ export default function AgentLabelsSettings() {
                 <div key={rule.id} className="rounded-lg border border-white/10 bg-white/5 p-4">
                   <div className="flex flex-wrap items-center gap-2">
                     <h3 className="font-medium text-white">{rule.name}</h3>
-                    <Badge color={rule.isEnabled ? 'success' : 'slate'}>
-                      {rule.isEnabled ? 'Habilitada' : 'Desabilitada'}
-                    </Badge>
+                    <Badge color={rule.isEnabled ? 'success' : 'slate'}>{rule.isEnabled ? 'Habilitada' : 'Desabilitada'}</Badge>
                     <Badge color="accent">{rule.label}</Badge>
-                    <Badge color="slate">{rule.applyMode}</Badge>
+                    <Badge color="slate">{getAgentLabelApplyModeLabel(rule.applyMode)}</Badge>
                   </div>
 
                   <p className="mt-2 text-xs text-slate-400">Atualizada em {formatDateTime(rule.updatedAt)}</p>
 
-                  {rule.description?.trim() ? (
-                    <p className="mt-2 text-sm text-slate-300 whitespace-pre-wrap">{rule.description}</p>
-                  ) : null}
+                  {rule.description?.trim() ? <p className="mt-2 whitespace-pre-wrap text-sm text-slate-300">{rule.description}</p> : null}
 
                   <div className="mt-3 flex flex-wrap gap-2">
-                    <Button size="sm" variant="secondary" onClick={() => startEditRule(rule)}>
-                      Editar
-                    </Button>
-                    <Button size="sm" variant="ghost" onClick={() => void handleToggleRule(rule)}>
-                      {rule.isEnabled ? 'Desabilitar' : 'Habilitar'}
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      onClick={() => toggleAppliedAgentsPanel(rule.id)}
-                    >
-                      {expandedRuleId === rule.id ? 'Ocultar Agents com Label' : 'Ver Agents com Label'}
-                    </Button>
-                    <Button size="sm" variant="danger" onClick={() => void handleDeleteRule(rule)}>
-                      Excluir
-                    </Button>
+                    <Button size="sm" variant="secondary" onClick={() => startEditRule(rule)}>Editar</Button>
+                    <Button size="sm" variant="ghost" onClick={() => void handleToggleRule(rule)}>{rule.isEnabled ? 'Desabilitar' : 'Habilitar'}</Button>
+                    <Button size="sm" variant="secondary" onClick={() => toggleAppliedAgentsPanel(rule.id)}>{expandedRuleId === rule.id ? 'Ocultar Agentes com Label' : 'Ver Agentes com Label'}</Button>
+                    <Button size="sm" variant="danger" onClick={() => void handleDeleteRule(rule)}>Excluir</Button>
                   </div>
 
                   {expandedRuleId === rule.id ? (
                     <div className="mt-4 space-y-3 rounded-lg border border-white/10 bg-slate-900/30 p-3">
-                      <h4 className="text-sm font-medium text-slate-100">Agents com a label "{rule.label}"</h4>
+                      <h4 className="text-sm font-medium text-slate-100">Agentes com a label "{rule.label}"</h4>
                       <div className="flex justify-end">
-                        <Button
-                          variant="secondary"
-                          loading={isLoadingAppliedAgents}
-                          onClick={() => void handleLoadAppliedAgents(rule)}
-                        >
-                          Carregar Todos os Agents
-                        </Button>
+                        <Button variant="secondary" loading={isLoadingAppliedAgents} onClick={() => void handleLoadAppliedAgents(rule)}>Carregar Todos os Agentes</Button>
                       </div>
 
-                      <p className="text-xs text-slate-400">
-                        Total informado pela API: {appliedAgentsTotal} • Retornados nesta consulta: {appliedResults.length}
-                      </p>
+                      <p className="text-xs text-slate-400">Total informado pela API: {appliedAgentsTotal} • Retornados nesta consulta: {appliedResults.length}</p>
 
                       {appliedResults.length > 0 ? (
                         <div className="overflow-x-auto rounded-lg border border-white/10">
                           <table className="min-w-full divide-y divide-white/10 text-sm">
                             <thead className="bg-white/5">
                               <tr>
-                                <th className="px-3 py-2 text-left font-medium text-slate-300">Agent</th>
+                                <th className="px-3 py-2 text-left font-medium text-slate-300">Agente</th>
                                 <th className="px-3 py-2 text-left font-medium text-slate-300">Status</th>
                                 <th className="px-3 py-2 text-left font-medium text-slate-300">Match em</th>
-                                <th className="px-3 py-2 text-left font-medium text-slate-300">Ultima avaliacao</th>
+                                <th className="px-3 py-2 text-left font-medium text-slate-300">Última avaliação</th>
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-white/5">
@@ -831,9 +726,7 @@ export default function AgentLabelsSettings() {
                           </table>
                         </div>
                       ) : (
-                        <p className="text-sm text-slate-500">
-                          Clique em "Carregar Todos os Agents" para listar os agents retornados pela regra sem filtro de cliente/site.
-                        </p>
+                        <p className="text-sm text-slate-500">Clique em carregar para listar os agentes retornados pela regra.</p>
                       )}
                     </div>
                   ) : null}
@@ -866,6 +759,11 @@ function getApiErrorMessage(error: unknown, fallback: string): string {
       return maybeErrors[0];
     }
 
+    const maybeMessage = (error as { message?: unknown }).message;
+    if (typeof maybeMessage === 'string' && maybeMessage.trim()) {
+      return maybeMessage;
+    }
+
     const maybeError = (error as { error?: unknown }).error;
     if (typeof maybeError === 'string' && maybeError.trim()) {
       return maybeError;
@@ -884,21 +782,14 @@ interface ExpressionNodeEditorProps {
   node: AgentLabelRuleExpressionNodeDto;
   path: number[];
   isRoot?: boolean;
+  availableCustomFields: AgentLabelAvailableCustomField[];
   onUpdateNode: (path: number[], updater: (node: AgentLabelRuleExpressionNodeDto) => AgentLabelRuleExpressionNodeDto) => void;
   onAddCondition: (path: number[]) => void;
   onAddGroup: (path: number[]) => void;
   onRemoveNode: (path: number[]) => void;
 }
 
-function ExpressionNodeEditor({
-  node,
-  path,
-  isRoot = false,
-  onUpdateNode,
-  onAddCondition,
-  onAddGroup,
-  onRemoveNode,
-}: ExpressionNodeEditorProps) {
+function ExpressionNodeEditor({ node, path, isRoot = false, availableCustomFields, onUpdateNode, onAddCondition, onAddGroup, onRemoveNode }: ExpressionNodeEditorProps) {
   if (node.nodeType === AgentLabelNodeType.Group) {
     const children = node.children ?? [];
 
@@ -908,29 +799,21 @@ function ExpressionNodeEditor({
           <Badge color="primary">Grupo</Badge>
           <div className="min-w-[180px]">
             <Select
-              value={node.logicalOperator ?? AgentLabelLogicalOperator.And}
+              value={String(node.logicalOperator ?? AgentLabelLogicalOperator.And)}
               options={logicalOperatorOptions}
               onChange={event => {
-                const logicalOperator = event.target.value as AgentLabelLogicalOperator;
+                const logicalOperator = Number(event.target.value) as AgentLabelLogicalOperator;
                 onUpdateNode(path, current => ({ ...current, logicalOperator }));
               }}
             />
           </div>
-          <Button size="sm" variant="secondary" onClick={() => onAddCondition(path)}>
-            + Condicao
-          </Button>
-          <Button size="sm" variant="secondary" onClick={() => onAddGroup(path)}>
-            + Grupo
-          </Button>
-          {!isRoot ? (
-            <Button size="sm" variant="danger" onClick={() => onRemoveNode(path)}>
-              Remover
-            </Button>
-          ) : null}
+          <Button size="sm" variant="secondary" onClick={() => onAddCondition(path)}>+ Condição</Button>
+          <Button size="sm" variant="secondary" onClick={() => onAddGroup(path)}>+ Grupo</Button>
+          {!isRoot ? <Button size="sm" variant="danger" onClick={() => onRemoveNode(path)}>Remover</Button> : null}
         </div>
 
         {children.length === 0 ? (
-          <p className="text-xs text-slate-400">Este grupo ainda nao possui filhos.</p>
+          <p className="text-xs text-slate-400">Este grupo ainda não possui filhos.</p>
         ) : (
           <div className="space-y-3 border-l border-white/10 pl-3">
             {children.map((child, index) => (
@@ -938,6 +821,7 @@ function ExpressionNodeEditor({
                 key={index}
                 node={child}
                 path={[...path, index]}
+                availableCustomFields={availableCustomFields}
                 onUpdateNode={onUpdateNode}
                 onAddCondition={onAddCondition}
                 onAddGroup={onAddGroup}
@@ -951,73 +835,147 @@ function ExpressionNodeEditor({
   }
 
   const currentField = node.field ?? AgentLabelField.Hostname;
-  const operatorOptions = getOperatorOptions(currentField);
+  const customFieldScope = getCustomFieldScopeTypeForRuleField(currentField);
+  const customFieldOptions = customFieldScope === null
+    ? []
+    : availableCustomFields
+        .filter(item => item.scopeType === customFieldScope)
+        .map(item => ({ value: item.id, label: `${item.label} (${getCustomFieldDataTypeLabel(item.dataType as CustomFieldDataType)})` }));
+  const selectedCfDef = node.customFieldDefinitionId
+    ? availableCustomFields.find(item => item.id === node.customFieldDefinitionId)
+    : undefined;
+  const customFieldDataType = selectedCfDef?.dataType as CustomFieldDataType | undefined;
+  const operatorOptions = getAllowedOperatorsForField(currentField, customFieldDataType)
+    .map(operator => ({ value: String(operator), label: getAgentLabelComparisonOperatorLabel(operator) }));
+  const currentValue = node.value ?? '';
+  const valueHint = isCustomFieldAgentLabelField(currentField) && node.customFieldDefinitionId
+    ? `Tipo: ${getCustomFieldDataTypeLabel(customFieldDataType ?? CustomFieldDataType.Text)} • Escopo: ${getCustomFieldScopeLabel(customFieldScope ?? 3)}`
+    : undefined;
+  function handleValueChange(newVal: string) {
+    onUpdateNode(path, current => ({ ...current, value: newVal }));
+  }
+  const valueInput = (() => {
+    if (currentField === AgentLabelField.Status) {
+      return (
+        <Select
+          label="Valor"
+          value={currentValue}
+          options={Object.values(AgentStatus).map(s => ({ value: s, label: s }))}
+          onChange={e => handleValueChange(e.target.value)}
+        />
+      );
+    }
+    if (isCustomFieldAgentLabelField(currentField)) {
+      if (customFieldDataType === CustomFieldDataType.Boolean) {
+        return (
+          <Select
+            label="Valor"
+            value={currentValue}
+            options={[{ value: '', label: 'Selecione...' }, { value: 'true', label: 'Verdadeiro' }, { value: 'false', label: 'Falso' }]}
+            onChange={e => handleValueChange(e.target.value)}
+          />
+        );
+      }
+      const cfOpts = selectedCfDef?.options ?? [];
+      if ((customFieldDataType === CustomFieldDataType.Dropdown || customFieldDataType === CustomFieldDataType.ListBox) && cfOpts.length > 0) {
+        return (
+          <Select
+            label="Valor"
+            value={currentValue}
+            options={[{ value: '', label: 'Selecione...' }, ...cfOpts.map(opt => ({ value: opt, label: opt }))]}
+            onChange={e => handleValueChange(e.target.value)}
+          />
+        );
+      }
+      if (customFieldDataType === CustomFieldDataType.Integer) {
+        return <Input label="Valor" type="number" step="1" value={currentValue} hint={valueHint} onChange={e => handleValueChange(e.target.value)} />;
+      }
+      if (customFieldDataType === CustomFieldDataType.Decimal) {
+        return <Input label="Valor" type="number" step="any" value={currentValue} hint={valueHint} onChange={e => handleValueChange(e.target.value)} />;
+      }
+      if (customFieldDataType === CustomFieldDataType.Date) {
+        return <Input label="Valor" type="date" value={currentValue} hint={valueHint} onChange={e => handleValueChange(e.target.value)} />;
+      }
+      if (customFieldDataType === CustomFieldDataType.DateTime) {
+        return <Input label="Valor" type="datetime-local" value={currentValue} hint={valueHint} onChange={e => handleValueChange(e.target.value)} />;
+      }
+    }
+    return <Input label="Valor" value={currentValue} hint={valueHint} onChange={e => handleValueChange(e.target.value)} />;
+  })();
 
   return (
     <div className="space-y-3 rounded-lg border border-white/10 bg-slate-900/40 p-3">
       <div className="flex flex-wrap items-center gap-2">
-        <Badge color="accent">Condicao</Badge>
-        <Button size="sm" variant="danger" onClick={() => onRemoveNode(path)}>
-          Remover
-        </Button>
+        <Badge color="accent">Condição</Badge>
+        <Button size="sm" variant="danger" onClick={() => onRemoveNode(path)}>Remover</Button>
       </div>
+
       <div className="grid gap-3 lg:grid-cols-3">
         <Select
           label="Campo"
-          value={currentField}
+          value={String(currentField)}
           options={fieldOptions}
           onChange={event => {
-            const field = event.target.value as AgentLabelField;
+            const field = Number(event.target.value) as AgentLabelField;
             onUpdateNode(path, current => {
-              const nextOperator = normalizeOperator(field, current.operator ?? null);
-              return { ...current, field, operator: nextOperator };
+              const nextCustomFieldDefinitionId = isCustomFieldAgentLabelField(field)
+                ? current.customFieldDefinitionId ?? null
+                : null;
+              const nextCustomFieldDataType = nextCustomFieldDefinitionId
+                ? availableCustomFields.find(item => item.id === nextCustomFieldDefinitionId)?.dataType as CustomFieldDataType | undefined
+                : undefined;
+              const nextOperator = getAllowedOperatorsForField(field, nextCustomFieldDataType)[0] ?? AgentLabelComparisonOperator.Equals;
+              return { ...current, field, customFieldDefinitionId: nextCustomFieldDefinitionId, operator: nextOperator };
             });
           }}
         />
+
+        {isCustomFieldAgentLabelField(currentField) ? (
+          <Select
+            label="Custom Field"
+            value={node.customFieldDefinitionId ?? ''}
+            options={[{ value: '', label: 'Selecione...' }, ...customFieldOptions]}
+            onChange={event => {
+              const customFieldDefinitionId = event.target.value || null;
+              onUpdateNode(path, current => {
+                const selected = availableCustomFields.find(item => item.id === customFieldDefinitionId);
+                const nextOperator = getAllowedOperatorsForField(currentField, selected?.dataType as CustomFieldDataType | undefined)[0] ?? AgentLabelComparisonOperator.Equals;
+                return { ...current, customFieldDefinitionId, operator: nextOperator, value: current.value ?? '' };
+              });
+            }}
+          />
+        ) : (
+          <div className="rounded-lg border border-dashed border-white/10 px-3 py-2 text-sm text-slate-500 lg:pt-8">Campo nativo sem definição de custom field.</div>
+        )}
+
         <Select
           label="Operador"
-          value={node.operator ?? operatorOptions[0]?.value ?? AgentLabelComparisonOperator.Equals}
+          value={String(node.operator ?? operatorOptions[0]?.value ?? AgentLabelComparisonOperator.Equals)}
           options={operatorOptions}
           onChange={event => {
-            const operator = event.target.value as AgentLabelComparisonOperator;
+            const operator = Number(event.target.value) as AgentLabelComparisonOperator;
             onUpdateNode(path, current => ({ ...current, operator }));
           }}
         />
-        <Input
-          label="Valor"
-          value={node.value ?? ''}
-          onChange={event => {
-            const value = event.target.value;
-            onUpdateNode(path, current => ({ ...current, value }));
-          }}
-        />
       </div>
+
+      {valueInput}
     </div>
   );
 }
 
-function addChildAtPath(
-  root: AgentLabelRuleExpressionNodeDto,
-  path: number[],
-  child: AgentLabelRuleExpressionNodeDto,
-): AgentLabelRuleExpressionNodeDto {
+function addChildAtPath(root: AgentLabelRuleExpressionNodeDto, path: number[], child: AgentLabelRuleExpressionNodeDto): AgentLabelRuleExpressionNodeDto {
   return updateNodeAtPath(root, path, node => {
     if (node.nodeType !== AgentLabelNodeType.Group) {
       return node;
     }
 
     const children = node.children ?? [];
-    return {
-      ...node,
-      children: [...children, structuredClone(child)],
-    };
+    return { ...node, children: [...children, structuredClone(child)] };
   });
 }
 
-function removeNodeAtPath(
-  root: AgentLabelRuleExpressionNodeDto,
-  path: number[],
-): AgentLabelRuleExpressionNodeDto {
+function removeNodeAtPath(root: AgentLabelRuleExpressionNodeDto, path: number[]): AgentLabelRuleExpressionNodeDto {
   if (path.length === 0) {
     return root;
   }
@@ -1031,10 +989,7 @@ function removeNodeAtPath(
     }
 
     const children = parent.children ?? [];
-    return {
-      ...parent,
-      children: children.filter((_, index) => index !== removeIndex),
-    };
+    return { ...parent, children: children.filter((_, index) => index !== removeIndex) };
   });
 }
 
@@ -1055,66 +1010,6 @@ function updateNodeAtPath(
   const children = root.children ?? [];
   return {
     ...root,
-    children: children.map((child, index) => {
-      if (index !== currentIndex) {
-        return child;
-      }
-
-      return updateNodeAtPath(child, nextPath, updater);
-    }),
+    children: children.map((child, index) => (index !== currentIndex ? child : updateNodeAtPath(child, nextPath, updater))),
   };
-}
-
-function getOperatorOptions(field: AgentLabelField): Array<{ value: AgentLabelComparisonOperator; label: string }> {
-  if (numericFields.has(field)) {
-    return [
-      AgentLabelComparisonOperator.Equals,
-      AgentLabelComparisonOperator.NotEquals,
-      AgentLabelComparisonOperator.GreaterThan,
-      AgentLabelComparisonOperator.GreaterThanOrEqual,
-      AgentLabelComparisonOperator.LessThan,
-      AgentLabelComparisonOperator.LessThanOrEqual,
-    ].map(operator => ({ value: operator, label: operator }));
-  }
-
-  if (statusFields.has(field)) {
-    return [AgentLabelComparisonOperator.Equals, AgentLabelComparisonOperator.NotEquals].map(operator => ({
-      value: operator,
-      label: operator,
-    }));
-  }
-
-  return [
-    AgentLabelComparisonOperator.Contains,
-    AgentLabelComparisonOperator.NotContains,
-    AgentLabelComparisonOperator.StartsWith,
-    AgentLabelComparisonOperator.EndsWith,
-    AgentLabelComparisonOperator.Equals,
-    AgentLabelComparisonOperator.NotEquals,
-    AgentLabelComparisonOperator.Regex,
-  ].map(operator => ({ value: operator, label: operator }));
-}
-
-function normalizeOperator(
-  field: AgentLabelField,
-  current: AgentLabelComparisonOperator | null,
-): AgentLabelComparisonOperator {
-  const options = getOperatorOptions(field).map(option => option.value);
-  if (current && options.includes(current)) {
-    return current;
-  }
-
-  if (numericFields.has(field)) {
-    return AgentLabelComparisonOperator.Equals;
-  }
-
-  if (statusFields.has(field)) {
-    return AgentLabelComparisonOperator.Equals;
-  }
-
-  if (textFields.has(field)) {
-    return AgentLabelComparisonOperator.Contains;
-  }
-
-  return AgentLabelComparisonOperator.Equals;
 }

@@ -45,6 +45,22 @@ export { dashboardApi } from "./dashboard";
 export { p2pApi } from "./p2p";
 export { authApi } from "./auth";
 export { iamApi } from "./iam";
+export { customFieldsApi } from "./custom-fields";
+export type {
+  CustomFieldDefinition,
+  CreateCustomFieldDefinitionRequest,
+  UpdateCustomFieldDefinitionRequest,
+  CustomFieldValueItem,
+  UpsertCustomFieldValueRequest,
+} from "./custom-fields";
+export {
+  CustomFieldScopeType,
+  CustomFieldDataType,
+  getCustomFieldScopeLabel,
+  getCustomFieldDataTypeLabel,
+  formatCustomFieldValue,
+  parseCustomFieldValue,
+} from "./custom-fields";
 export type {
   LoginRequest,
   LoginResponse,
