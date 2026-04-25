@@ -32,4 +32,6 @@ pnpm-debug.log*
 
 
 .codebase/
-.github/
+.github/*
+!.github/workflows/
+!.github/workflows/**
