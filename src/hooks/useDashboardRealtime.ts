@@ -146,7 +146,6 @@ export function useDashboardRealtime(
     enabled,
     queryClient,
     refreshSession,
-    scope,
     scopeKey,
     session.accessToken,
     signalrSource,

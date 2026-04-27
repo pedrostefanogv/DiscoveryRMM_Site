@@ -20,11 +20,7 @@ const listeners = new Set<() => void>();
 
 let natsState: RealtimeTransportState = "disconnected";
 let checkedAtUtc = new Date().toISOString();
-
-function notify() {
-  checkedAtUtc = new Date().toISOString();
-  listeners.forEach((listener) => listener());
-}
+let snapshot: RealtimeConnectionSnapshot;
 
 function aggregateSignalrState(): RealtimeTransportState {
   const states = Array.from(signalrSources.values());
@@ -35,10 +31,10 @@ function aggregateSignalrState(): RealtimeTransportState {
   return "disconnected";
 }
 
-export function getRealtimeConnectionSnapshot(): RealtimeConnectionSnapshot {
+function rebuildSnapshot() {
   const signalrState = aggregateSignalrState();
 
-  return {
+  snapshot = {
     natsConnected: natsState === "connected",
     natsState,
     signalrConnected: signalrState === "connected",
@@ -46,6 +42,18 @@ export function getRealtimeConnectionSnapshot(): RealtimeConnectionSnapshot {
     checkedAtUtc,
     provider: realtimeConfig.provider,
   };
+}
+
+function notify() {
+  checkedAtUtc = new Date().toISOString();
+  rebuildSnapshot();
+  listeners.forEach((listener) => listener());
+}
+
+rebuildSnapshot();
+
+export function getRealtimeConnectionSnapshot(): RealtimeConnectionSnapshot {
+  return snapshot;
 }
 
 export function subscribeRealtimeConnectionState(listener: () => void) {
