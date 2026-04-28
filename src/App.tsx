@@ -9,9 +9,12 @@ import { AuthProvider } from '@/auth/AuthContext';
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 30_000,
-      retry: 1,
+      staleTime: 60_000,
+      gcTime: 10 * 60_000,
+      retry: 2,
+      retryDelay: (attemptIndex) => Math.min(1_000 * 2 ** attemptIndex, 8_000),
       refetchOnWindowFocus: false,
+      refetchOnReconnect: true,
     },
   },
 });
@@ -26,11 +29,16 @@ export default function App() {
             <Toaster
               position="top-right"
               toastOptions={{
+                duration: 4000,
                 style: {
-                  background: '#1e293b',
+                  background: '#0f172a',
                   color: '#e2e8f0',
-                  border: '1px solid rgba(255,255,255,0.1)',
+                  border: '1px solid rgba(148,163,184,0.25)',
+                  borderRadius: '0.75rem',
+                  boxShadow: '0 20px 38px rgba(2, 6, 23, 0.55)',
                 },
+                success: { iconTheme: { primary: '#22c55e', secondary: '#052e16' } },
+                error: { iconTheme: { primary: '#ef4444', secondary: '#450a0a' } },
               }}
             />
           </AuthProvider>

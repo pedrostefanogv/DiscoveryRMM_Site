@@ -1,3 +1,4 @@
+import { useId } from 'react';
 import type { InputHTMLAttributes, SelectHTMLAttributes, TextareaHTMLAttributes } from 'react';
 
 interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
@@ -7,7 +8,9 @@ interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
 }
 
 export function Input({ label, error, hint, className = '', id, ...props }: InputProps) {
-  const inputId = id ?? label?.toLowerCase().replace(/\s+/g, '-');
+  const generatedId = useId();
+  const inputId = id ?? label?.toLowerCase().replace(/\s+/g, '-') ?? generatedId;
+  const helpId = `${inputId}-help`;
   return (
     <div className="space-y-1">
       {label && (
@@ -17,13 +20,15 @@ export function Input({ label, error, hint, className = '', id, ...props }: Inpu
       )}
       <input
         id={inputId}
-        className={`w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-200 placeholder-slate-500 outline-none transition-colors focus:border-primary/50 focus:ring-1 focus:ring-primary/30 ${
+        aria-invalid={Boolean(error)}
+        aria-describedby={error || hint ? helpId : undefined}
+        className={`w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 outline-none transition-colors focus-visible:border-primary/60 focus-visible:ring-2 focus-visible:ring-primary/30 ${
           error ? 'border-danger/50' : ''
         } ${className}`}
         {...props}
       />
-      {error && <p className="text-xs text-danger">{error}</p>}
-      {hint && !error && <p className="text-xs text-slate-500">{hint}</p>}
+      {error && <p id={helpId} className="text-xs text-danger">{error}</p>}
+      {hint && !error && <p id={helpId} className="text-xs text-slate-400">{hint}</p>}
     </div>
   );
 }
@@ -34,7 +39,8 @@ interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
 }
 
 export function Select({ label, options, className = '', id, ...props }: SelectProps) {
-  const selectId = id ?? label?.toLowerCase().replace(/\s+/g, '-');
+  const generatedId = useId();
+  const selectId = id ?? label?.toLowerCase().replace(/\s+/g, '-') ?? generatedId;
   return (
     <div className="space-y-1">
       {label && (
@@ -44,7 +50,7 @@ export function Select({ label, options, className = '', id, ...props }: SelectP
       )}
       <select
         id={selectId}
-        className={`w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-200 outline-none transition-colors focus:border-primary/50 focus:ring-1 focus:ring-primary/30 ${className}`}
+        className={`w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-100 outline-none transition-colors focus-visible:border-primary/60 focus-visible:ring-2 focus-visible:ring-primary/30 ${className}`}
         {...props}
       >
         {options.map(opt => (
@@ -68,7 +74,9 @@ interface TextAreaProps extends TextareaHTMLAttributes<HTMLTextAreaElement> {
 }
 
 export function TextArea({ label, error, hint, className = '', id, ...props }: TextAreaProps) {
-  const textId = id ?? label?.toLowerCase().replace(/\s+/g, '-');
+  const generatedId = useId();
+  const textId = id ?? label?.toLowerCase().replace(/\s+/g, '-') ?? generatedId;
+  const helpId = `${textId}-help`;
   return (
     <div className="space-y-1">
       {label && (
@@ -78,14 +86,16 @@ export function TextArea({ label, error, hint, className = '', id, ...props }: T
       )}
       <textarea
         id={textId}
-        className={`w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-200 placeholder-slate-500 outline-none transition-colors focus:border-primary/50 focus:ring-1 focus:ring-primary/30 ${
+        aria-invalid={Boolean(error)}
+        aria-describedby={error || hint ? helpId : undefined}
+        className={`w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 outline-none transition-colors focus-visible:border-primary/60 focus-visible:ring-2 focus-visible:ring-primary/30 ${
           error ? 'border-danger/50' : ''
         } ${className}`}
         rows={3}
         {...props}
       />
-      {error && <p className="text-xs text-danger">{error}</p>}
-      {hint && !error && <p className="text-xs text-slate-500">{hint}</p>}
+      {error && <p id={helpId} className="text-xs text-danger">{error}</p>}
+      {hint && !error && <p id={helpId} className="text-xs text-slate-400">{hint}</p>}
     </div>
   );
 }

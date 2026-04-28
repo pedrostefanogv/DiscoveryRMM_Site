@@ -5,7 +5,7 @@ import { useQueries } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { useClients } from '@/hooks/useClients';
 import { ApiError, agentsApi, authApi } from '@/api';
-import { Badge, Loading, ErrorDisplay, Input, Select, StatCard, Modal } from '@/components/ui';
+import { Badge, Loading, ErrorDisplay, Input, Select, StatCard, Modal, PageHeader, SkeletonCard, EmptyState } from '@/components/ui';
 import type { Agent } from '@/api';
 import { getAgentLastSeen, isAgentOnlineNow } from '@/utils/agentStatus';
 import { useNowTick } from '@/hooks/useNowTick';
@@ -217,10 +217,7 @@ export default function AgentList() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-white">Agentes</h1>
-        <p className="text-sm text-slate-400">Gerenciamento de dispositivos monitorados</p>
-      </div>
+      <PageHeader title="Agentes" description="Gerenciamento de dispositivos monitorados" />
 
       {/* StatCards */}
       <div className="grid gap-4 sm:grid-cols-3">
@@ -301,22 +298,19 @@ export default function AgentList() {
 
       {/* Conteúdo */}
       {isLoadingAgents ? (
-        <Loading message="Carregando agentes..." />
-      ) : filtered.length === 0 ? (
-        <div className="flex h-48 flex-col items-center justify-center gap-2 rounded-xl border border-white/5 bg-surface text-slate-500">
-          <Monitor className="h-8 w-8 opacity-40" />
-          <p className="text-sm">
-            {allAgents.length === 0 ? 'Nenhum agente encontrado' : 'Nenhum agente corresponde aos filtros'}
-          </p>
-          {(search || filterClient || filterStatus !== 'all') && (
-            <button
-              className="text-xs text-primary hover:underline"
-              onClick={() => { setSearch(''); setFilterClient(''); setFilterStatus('all'); }}
-            >
-              Limpar filtros
-            </button>
-          )}
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} />)}
         </div>
+      ) : filtered.length === 0 ? (
+        <EmptyState
+          icon={Monitor}
+          title={allAgents.length === 0 ? 'Nenhum agente encontrado' : 'Nenhum agente corresponde aos filtros'}
+          description={allAgents.length === 0 ? 'Nenhum dispositivo registrado no sistema.' : 'Tente ajustar os filtros de busca.'}
+          action={(search || filterClient || filterStatus !== 'all') ? {
+            label: 'Limpar filtros',
+            onClick: () => { setSearch(''); setFilterClient(''); setFilterStatus('all'); },
+          } : undefined}
+        />
       ) : (
         <>
           <p className="text-xs text-slate-500">

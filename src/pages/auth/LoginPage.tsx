@@ -4,7 +4,7 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
-import { ArrowRight, LockKeyhole, UserRound } from "lucide-react";
+import { ArrowRight, LockKeyhole, UserRound, AlertTriangle } from "lucide-react";
 import { ApiError } from "@/api";
 import { Button, Card, CardHeader, Input } from "@/components/ui";
 import { useAuth } from "@/auth/AuthContext";
@@ -64,7 +64,7 @@ export default function LoginPage() {
   };
 
   return (
-    <Card className="border-white/10 bg-slate-900/80 shadow-2xl backdrop-blur" padding>
+    <Card className="border-white/10 bg-slate-900/80 shadow-2xl backdrop-blur-xl" padding>
       <CardHeader
         title="Entrar"
         subtitle="Use seu login ou e-mail e conclua o fluxo de segurança exigido."
@@ -89,19 +89,20 @@ export default function LoginPage() {
         />
 
         {submitError && (
-          <div className="rounded-xl border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-red-100">
-            {submitError}
+          <div className="flex items-start gap-3 rounded-xl border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-red-100">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-danger" />
+            <span>{submitError}</span>
           </div>
         )}
 
-        <div className="rounded-xl border border-white/10 bg-white/5 p-4 text-sm text-slate-300">
+        <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 text-sm text-slate-400 space-y-2">
           <div className="flex items-start gap-3">
-            <UserRound className="mt-0.5 h-4 w-4 text-primary" />
-            Caso não seja possível acessar o sistema, revise suas credenciais e consulte o administrador.
+            <UserRound className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+            <span>Caso não seja possível acessar o sistema, revise suas credenciais e consulte o administrador.</span>
           </div>
-          <div className="mt-3 flex items-start gap-3">
-            <LockKeyhole className="mt-0.5 h-4 w-4 text-accent" />
-            Se o seu usuário exigir primeiro acesso ou verificação em duas etapas, o fluxo continuará automaticamente nas próximas etapas.
+          <div className="flex items-start gap-3">
+            <LockKeyhole className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
+            <span>Se o seu usuário exigir primeiro acesso ou verificação em duas etapas, o fluxo continuará automaticamente nas próximas etapas.</span>
           </div>
         </div>
 

@@ -1,5 +1,5 @@
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   LayoutDashboard,
   Users,
@@ -86,9 +86,12 @@ const identityLinks = [
 interface SidebarProps {
   collapsed: boolean;
   onToggle: () => void;
+  isDesktop: boolean;
+  mobileOpen: boolean;
+  onCloseMobile: () => void;
 }
 
-export function Sidebar({ collapsed, onToggle }: SidebarProps) {
+export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMobile }: SidebarProps) {
   const { branding } = useTheme();
   const {
     canManageIdentity,
@@ -132,10 +135,17 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
     .slice(1)
     .filter(({ to }) => (to === '/deploy' ? canViewDeploy : to !== '/tickets'));
 
+  useEffect(() => {
+    if (!isDesktop) onCloseMobile();
+  }, [location.pathname, isDesktop, onCloseMobile]);
+
+  const expandedWidthClass = collapsed ? 'lg:w-16' : 'lg:w-60';
+  const mobileVisibleClass = mobileOpen ? 'translate-x-0' : '-translate-x-full';
+
   return (
     <aside
-      className={`sidebar-transition fixed left-0 top-0 z-30 flex h-screen flex-col border-r border-white/5 bg-sidebar ${
-        collapsed ? 'w-16' : 'w-60'
+      className={`sidebar-transition fixed left-0 top-0 z-30 flex h-screen w-60 flex-col border-r border-white/10 bg-sidebar/95 shadow-2xl backdrop-blur-xl ${
+        isDesktop ? `translate-x-0 ${expandedWidthClass}` : mobileVisibleClass
       }`}
     >
       {/* Logo */}
@@ -540,12 +550,16 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
       </nav>
 
       {/* Collapse toggle */}
-      <button
-        onClick={onToggle}
-        className="flex h-12 items-center justify-center border-t border-white/5 text-slate-400 hover:text-white transition-colors"
-      >
-        {collapsed ? <ChevronRight className="h-5 w-5" /> : <ChevronLeft className="h-5 w-5" />}
-      </button>
+      <div className="hidden border-t border-white/5 lg:block">
+        <button
+          onClick={onToggle}
+          className="flex h-11 w-full items-center justify-center gap-2 text-xs font-medium text-slate-500 transition-colors hover:bg-white/[0.03] hover:text-slate-300"
+          aria-label={collapsed ? 'Expandir sidebar' : 'Recolher sidebar'}
+        >
+          {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+          {!collapsed && <span>Recolher</span>}
+        </button>
+      </div>
     </aside>
   );
 }
