@@ -15,7 +15,7 @@ import {
   Zap,
 } from 'lucide-react';
 import type { ComponentType } from 'react';
-import { useState } from 'react';
+import { memo, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useTickets } from '@/hooks/useTickets';
@@ -27,8 +27,7 @@ import { useP2PArtifactsDistribution } from '@/hooks/useP2PArtifactsDistribution
 import { useP2PAgentsRanking } from '@/hooks/useP2PAgentsRanking';
 import { useP2PSeedPlan } from '@/hooks/useP2PSeedPlan';
 import type { P2PScope } from '@/api/p2p';
-import { StatCard, Card, CardHeader, Badge } from '@/components/ui';
-import { Loading, ErrorDisplay } from '@/components/ui';
+import { StatCard, Card, CardHeader, Badge, SkeletonDashboard, ErrorDisplay } from '@/components/ui';
 import { LogLevel, getRealtimeStats, type TicketPriority } from '@/api';
 import { useSoftwareInventorySnapshot } from '@/hooks/useSoftwareInventory';
 import type { DashboardWindow } from '@/api/dashboard';
@@ -76,6 +75,12 @@ const WINDOWS: { value: DashboardWindow; label: string }[] = [
   { value: '30d', label: 'Últimos 30 dias' },
 ];
 
+const DATE_ONLY_FORMATTER = new Intl.DateTimeFormat('pt-BR');
+const DATE_TIME_FORMATTER = new Intl.DateTimeFormat('pt-BR', {
+  dateStyle: 'short',
+  timeStyle: 'short',
+});
+
 export default function Dashboard() {
   const navigate = useNavigate();
   const [window, setWindow] = useState<DashboardWindow>('24h');
@@ -96,12 +101,15 @@ export default function Dashboard() {
   const [p2pAgentId, setP2pAgentId] = useState('');
   const supportsAggregatedP2P = p2pScopeLevel !== 'agent';
 
-  const p2pScope = {
-    scope: p2pScopeLevel,
-    ...(p2pScopeLevel !== 'global' && p2pTenantId ? { tenantId: p2pTenantId } : {}),
-    ...(p2pScopeLevel === 'site' && p2pSiteId ? { siteId: p2pSiteId } : {}),
-    ...(p2pScopeLevel === 'agent' && p2pAgentId ? { agentId: p2pAgentId } : {}),
-  };
+  const p2pScope = useMemo(
+    () => ({
+      scope: p2pScopeLevel,
+      ...(p2pScopeLevel !== 'global' && p2pTenantId ? { tenantId: p2pTenantId } : {}),
+      ...(p2pScopeLevel === 'site' && p2pSiteId ? { siteId: p2pSiteId } : {}),
+      ...(p2pScopeLevel === 'agent' && p2pAgentId ? { agentId: p2pAgentId } : {}),
+    }),
+    [p2pAgentId, p2pScopeLevel, p2pSiteId, p2pTenantId],
+  );
 
   const p2pOverview = useP2POverview({ ...p2pScope, window });
   const p2pTimeseries = useP2PTimeseries({ ...p2pScope, metric: 'replicationsSucceeded', interval: window });
@@ -111,7 +119,7 @@ export default function Dashboard() {
 
   const ds = dashboard.data;
 
-  if (dashboard.isLoading && !ds) return <Loading />;
+  if (dashboard.isLoading && !ds) return <SkeletonDashboard />;
   if (dashboard.isError && !ds) {
     return (
       <ErrorDisplay
@@ -121,8 +129,8 @@ export default function Dashboard() {
     );
   }
 
-  const ticketList = recentTickets.data ?? [];
-  const logList = recentLogs.data ?? [];
+  const ticketList = useMemo(() => recentTickets.data ?? [], [recentTickets.data]);
+  const logList = useMemo(() => recentLogs.data ?? [], [recentLogs.data]);
   const totalInstalledSoftware = softwareSnapshot.data?.totalInstalled ?? 0;
   const realtime = realtimeStats.data?.realtime;
   const database = realtimeStats.data?.database;
@@ -257,7 +265,7 @@ export default function Dashboard() {
             title="Saúde dos Agentes"
             subtitle={`Distribuição de status • ${window}`}
           />
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <StatusBar label="Online" value={agentsOnline} total={agentsTotal} color="text-success" bg="bg-success" />
             <StatusBar label="Offline" value={agentsOffline} total={agentsTotal} color="text-danger" bg="bg-danger" />
             <StatusBar label="Stale" value={agentsStale} total={agentsTotal} color="text-warning" bg="bg-warning" />
@@ -276,7 +284,7 @@ export default function Dashboard() {
             title="Comandos"
             subtitle={`Execuções na janela • ${window}`}
           />
-          <div className="grid grid-cols-3 gap-3 text-sm">
+          <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
             <MetricTile label="Pending" value={cmds?.pending ?? 0} icon={Clock} />
             <MetricTile label="Running" value={cmds?.running ?? 0} icon={Activity} />
             <MetricTile label="Completed" value={cmds?.completed ?? 0} icon={CheckCircle2} />
@@ -302,7 +310,7 @@ export default function Dashboard() {
             title="Automação"
             subtitle={`Execuções na janela • ${window}`}
           />
-          <div className="grid grid-cols-3 gap-3 text-sm">
+          <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
             <MetricTile label="Dispatched" value={auto?.dispatched ?? 0} icon={Zap} />
             <MetricTile label="Acknowledged" value={auto?.acknowledged ?? 0} icon={Activity} />
             <MetricTile label="Completed" value={auto?.completed ?? 0} icon={CheckCircle2} />
@@ -325,7 +333,7 @@ export default function Dashboard() {
             title="Distribuição de Logs"
             subtitle={`Entradas na janela • ${window}`}
           />
-          <div className="grid grid-cols-2 gap-3 text-sm">
+          <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
             <div className="rounded-lg bg-danger/10 px-3 py-2">
               <div className="flex items-center gap-1.5">
                 <AlertTriangle className="h-3.5 w-3.5 text-danger" />
@@ -536,7 +544,7 @@ export default function Dashboard() {
                     <Badge color="primary">{item.peerCount} peers</Badge>
                   </div>
                   <p className="mt-1 text-xs text-slate-500">
-                    Atualizado em {new Date(item.lastUpdatedUtc).toLocaleDateString('pt-BR')}
+                    Atualizado em {DATE_ONLY_FORMATTER.format(new Date(item.lastUpdatedUtc))}
                   </p>
                 </div>
               ))}
@@ -617,7 +625,7 @@ export default function Dashboard() {
                     <span>Selecionados: {plan.selectedSeeds}</span>
                   </div>
                   <p className="mt-1 text-[11px] text-slate-500">
-                    Gerado em {new Date(plan.generatedAtUtc).toLocaleString('pt-BR')}
+                    Gerado em {DATE_TIME_FORMATTER.format(new Date(plan.generatedAtUtc))}
                   </p>
                 </div>
               ))}
@@ -645,7 +653,7 @@ export default function Dashboard() {
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-slate-200">{t.title}</p>
                     <p className="text-xs text-slate-500">
-                      {new Date(t.createdAt).toLocaleDateString('pt-BR')}
+                      {DATE_ONLY_FORMATTER.format(new Date(t.createdAt))}
                     </p>
                   </div>
                   <PriorityBadge priority={t.priority} />
@@ -670,8 +678,7 @@ export default function Dashboard() {
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm text-slate-200">{log.message}</p>
                     <p className="text-xs text-slate-500">
-                      {new Date(log.createdAt).toLocaleDateString('pt-BR')}{' '}
-                      {new Date(log.createdAt).toLocaleTimeString('pt-BR')}
+                      {DATE_TIME_FORMATTER.format(new Date(log.createdAt))}
                     </p>
                   </div>
                 </div>
@@ -694,7 +701,7 @@ const BG_TO_TONE: Record<string, string> = {
   'bg-primary': 'primary',
 };
 
-function StatusBar({
+const StatusBar = memo(function StatusBar({
   label,
   value,
   total,
@@ -723,9 +730,9 @@ function StatusBar({
       />
     </div>
   );
-}
+});
 
-function PriorityBadge({ priority }: { priority: TicketPriority }) {
+const PriorityBadge = memo(function PriorityBadge({ priority }: { priority: TicketPriority }) {
   const map: Record<TicketPriority, { label: string; color: 'slate' | 'success' | 'warning' | 'danger' }> = {
     Low: { label: 'Baixa', color: 'slate' },
     Medium: { label: 'Média', color: 'success' },
@@ -734,9 +741,9 @@ function PriorityBadge({ priority }: { priority: TicketPriority }) {
   };
   const { label, color } = map[priority] ?? { label: 'N/A', color: 'slate' as const };
   return <Badge color={color}>{label}</Badge>;
-}
+});
 
-function LogLevelIcon({ level }: { level: LogLevel }) {
+const LogLevelIcon = memo(function LogLevelIcon({ level }: { level: LogLevel }) {
   switch (level) {
     case LogLevel.Error:
     case LogLevel.Critical:
@@ -746,9 +753,9 @@ function LogLevelIcon({ level }: { level: LogLevel }) {
     default:
       return <WifiOff className="h-4 w-4 shrink-0 text-slate-500" />;
   }
-}
+});
 
-function MetricTile({
+const MetricTile = memo(function MetricTile({
   label,
   value,
   icon: Icon,
@@ -766,7 +773,7 @@ function MetricTile({
       <p className="mt-1 text-base font-semibold text-white">{value}</p>
     </div>
   );
-}
+});
 
 // ── P2P Scope Selector ──────────────────────────────────────────────────────
 
@@ -777,7 +784,7 @@ const P2P_SCOPES: { value: P2PScope; label: string }[] = [
   { value: 'agent', label: 'Agent' },
 ];
 
-function P2PScopeSelector({
+const P2PScopeSelector = memo(function P2PScopeSelector({
   scope,
   tenantId,
   siteId,
@@ -842,13 +849,13 @@ function P2PScopeSelector({
       )}
     </div>
   );
-}
+});
 
 // ── P2P Line Chart (recharts) ────────────────────────────────────────────────
 
 type ChartPoint = { tsUtc: string; value: number };
 
-function P2PLineChart({
+const P2PLineChart = memo(function P2PLineChart({
   points,
   loading,
   unit,
@@ -862,7 +869,13 @@ function P2PLineChart({
   if (loading) {
     return (
       <div className="flex h-40 items-center justify-center">
-        <span className="text-xs text-slate-500">Carregando...</span>
+        <div className="space-y-2 w-full">
+          <div className="h-28 w-full rounded-lg animate-shimmer bg-white/[0.03] bg-gradient-to-r from-transparent via-white/[0.06] to-transparent bg-[length:400%_100%]" />
+          <div className="flex justify-between">
+            <div className="h-3 w-16 rounded animate-shimmer bg-white/[0.03] bg-gradient-to-r from-transparent via-white/[0.06] to-transparent bg-[length:400%_100%]" />
+            <div className="h-3 w-16 rounded animate-shimmer bg-white/[0.03] bg-gradient-to-r from-transparent via-white/[0.06] to-transparent bg-[length:400%_100%]" />
+          </div>
+        </div>
       </div>
     );
   }
@@ -874,10 +887,13 @@ function P2PLineChart({
     );
   }
 
-  const data = points.map(p => ({
-    t: new Date(p.tsUtc).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
-    v: p.value,
-  }));
+  const data = useMemo(
+    () => points.map(p => ({
+      t: new Date(p.tsUtc).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
+      v: p.value,
+    })),
+    [points],
+  );
 
   return (
     <ResponsiveContainer width="100%" height={160}>
@@ -923,7 +939,7 @@ function P2PLineChart({
       </LineChart>
     </ResponsiveContainer>
   );
-}
+});
 
 function formatChartValue(value: number, unit?: string) {
   if (unit === 'bytes') {

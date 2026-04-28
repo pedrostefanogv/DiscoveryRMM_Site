@@ -1,19 +1,92 @@
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Space+Grotesk:wght@600;700&display=swap');
 @import "tailwindcss";
 
 @theme {
-  --color-primary: #6366f1;
-  --color-accent: #06b6d4;
-  --color-sidebar: #0f172a;
-  --color-header: #1e293b;
-  --color-surface: #1e293b;
-  --color-surface-light: #334155;
+  --color-primary: #1d4ed8;
+  --color-accent: #0ea5e9;
+  --color-sidebar: #0b1220;
+  --color-header: #121b2e;
+  --color-surface: #111d33;
+  --color-surface-light: #1a2840;
   --color-danger: #ef4444;
   --color-success: #22c55e;
   --color-warning: #f59e0b;
 }
 
+html {
+  color-scheme: dark;
+}
+
 body {
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  margin: 0;
+  min-height: 100vh;
+  font-family: 'Manrope', 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  background:
+    radial-gradient(circle at 12% 10%, rgb(14 165 233 / 0.17), transparent 38%),
+    radial-gradient(circle at 88% 85%, rgb(29 78 216 / 0.19), transparent 41%),
+    #050b16;
+}
+
+h1,
+h2,
+h3 {
+  font-family: 'Space Grotesk', 'Manrope', sans-serif;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+.app-shell {
+  background:
+    linear-gradient(160deg, rgb(2 6 23 / 0.72), rgb(2 6 23 / 0.9)),
+    radial-gradient(circle at 8% 0%, rgb(14 165 233 / 0.12), transparent 32%);
+}
+
+.surface-card {
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.04),
+    0 12px 32px rgb(2 6 23 / 0.35);
+}
+
+:where(button, a, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid rgb(56 189 248 / 0.8);
+  outline-offset: 2px;
+}
+
+.app-grid-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(to right, rgb(148 163 184 / 0.06) 1px, transparent 1px),
+    linear-gradient(to bottom, rgb(148 163 184 / 0.06) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: radial-gradient(circle at center, black 32%, transparent 88%);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(51 65 85 / 0.9) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgb(51 65 85 / 0.95), rgb(30 41 59 / 0.95));
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 /*
@@ -28,7 +101,7 @@ select optgroup {
 
 /* Transitions for sidebar */
 .sidebar-transition {
-  transition: width 200ms ease, transform 200ms ease;
+  transition: width 200ms ease, transform 220ms ease, opacity 180ms ease;
 }
 
 /* SLA progress bar — dynamic width via CSS variable */
@@ -66,3 +139,80 @@ select optgroup {
 .status-bar-warning::-moz-progress-bar       { background: var(--color-warning); }
 .status-bar-primary::-webkit-progress-value { background: var(--color-primary); }
 .status-bar-primary::-moz-progress-bar       { background: var(--color-primary); }
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Skeleton shimmer animation */
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.animate-shimmer {
+  animation: shimmer 2s infinite linear;
+}
+
+/* Page transition */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.3s ease-out;
+}
+
+/* Modal backdrop animation */
+@keyframes backdropIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes modalIn {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.animate-backdrop-in {
+  animation: backdropIn 0.15s ease-out;
+}
+
+.animate-modal-in {
+  animation: modalIn 0.2s ease-out;
+}
+
+/* Counter animation for stat cards */
+@property --num {
+  syntax: '<integer>';
+  initial-value: 0;
+  inherits: false;
+}
+
+/* Glassmorphism card hover */
+.glass-card {
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+.glass-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 30px rgb(2 6 23 / 0.4), inset 0 1px 0 rgb(255 255 255 / 0.06);
+  border-color: rgb(255 255 255 / 0.12);
+}

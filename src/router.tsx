@@ -60,7 +60,11 @@ const MfaAssertionPage = lazy(() => import('@/pages/auth/MfaAssertionPage'));
 const MfaRegistrationPage = lazy(() => import('@/pages/auth/MfaRegistrationPage'));
 
 function LazyPage({ children }: { children: React.ReactNode }) {
-  return <Suspense fallback={<Loading />}>{children}</Suspense>;
+  return (
+    <Suspense fallback={<Loading />}>
+      <div className="animate-fade-in-up">{children}</div>
+    </Suspense>
+  );
 }
 
 export const router = createBrowserRouter([

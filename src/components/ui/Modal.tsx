@@ -26,10 +26,11 @@ export function Modal({ open, onClose, title, children, maxWidth = 'max-w-lg' }:
   return (
     <div
       ref={overlayRef}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+      className="animate-backdrop-in fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
       onClick={e => { if (e.target === overlayRef.current) onClose(); }}
+      onKeyDown={e => { if (e.key === 'Escape') onClose(); }}
     >
-      <div className={`w-full ${maxWidth} rounded-xl border border-white/10 bg-slate-900 shadow-2xl`}>
+      <div className={`animate-modal-in w-full ${maxWidth} rounded-xl border border-white/10 bg-slate-900 shadow-2xl`}>
         {/* Header */}
         <div className="flex items-center justify-between border-b border-white/5 px-6 py-4">
           <h2 className="text-lg font-semibold text-white">{title}</h2>

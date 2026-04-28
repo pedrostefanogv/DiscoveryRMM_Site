@@ -4,10 +4,46 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/x-icon" href="/icon.ico" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0b1220" />
+    <meta name="color-scheme" content="dark" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <title>Discovery RMM</title>
+    <style>
+      body { margin: 0; background: #020617; }
+      #initial-loader {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+        gap: 20px;
+        font-family: 'Segoe UI', system-ui, sans-serif;
+        background: radial-gradient(circle at 50% 30%, rgb(14 165 233 / 0.12), transparent 50%), #020617;
+      }
+      #initial-loader .spinner {
+        width: 36px;
+        height: 36px;
+        border: 3px solid rgb(255 255 255 / 0.08);
+        border-top-color: #6366f1;
+        border-radius: 50%;
+        animation: spin 0.7s linear infinite;
+      }
+      @keyframes spin { to { transform: rotate(360deg); } }
+      #initial-loader span {
+        color: rgb(148 163 184 / 0.6);
+        font-size: 13px;
+        letter-spacing: 0.02em;
+      }
+    </style>
   </head>
-  <body class="bg-slate-950 text-slate-100 antialiased">
-    <div id="root"></div>
+  <body>
+    <div id="root">
+      <div id="initial-loader">
+        <div class="spinner"></div>
+        <span>Discovery RMM</span>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
