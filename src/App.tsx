@@ -5,6 +5,7 @@ import { ThemeProvider } from '@/theme/ThemeContext';
 import { router } from '@/router';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { AuthProvider } from '@/auth/AuthContext';
+import { PwaUpdatePrompt } from '@/components/PwaUpdatePrompt';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -26,6 +27,7 @@ export default function App() {
         <ThemeProvider>
           <AuthProvider>
             <RouterProvider router={router} />
+            <PwaUpdatePrompt />
             <Toaster
               position="top-right"
               toastOptions={{

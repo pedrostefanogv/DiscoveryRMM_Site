@@ -42,6 +42,14 @@ export default defineConfig({
         changeOrigin: true,
         ws: true,
       },
+      "/openapi": {
+        target: "http://localhost:5288",
+        changeOrigin: true,
+      },
+      "/scalar": {
+        target: "http://localhost:5288",
+        changeOrigin: true,
+      },
     },
   },
   build: {

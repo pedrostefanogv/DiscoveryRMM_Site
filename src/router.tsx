@@ -3,6 +3,7 @@ import { MainLayout } from '@/components/layout/MainLayout';
 import { lazy, Suspense } from 'react';
 import { Loading } from '@/components/ui';
 import { ErrorPage } from '@/components/ErrorPage';
+import { CatchAllRoute } from '@/components/CatchAllRoute';
 import { AuthLayout } from '@/components/auth/AuthLayout';
 import { PermissionGate, PublicOnlyAuth, RequireAuth } from '@/auth/AuthGuards';
 
@@ -505,7 +506,7 @@ export const router = createBrowserRouter([
       },
       {
         path: '*',
-        element: <Navigate to="/" replace />,
+        element: <CatchAllRoute />,
       },
         ],
       },
