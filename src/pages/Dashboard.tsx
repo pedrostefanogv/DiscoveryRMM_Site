@@ -116,6 +116,8 @@ export default function Dashboard() {
   const p2pArtifacts = useP2PArtifactsDistribution({ ...p2pScope, limit: 5, offset: 0 }, supportsAggregatedP2P);
   const p2pRanking = useP2PAgentsRanking({ ...p2pScope, window, sortBy: 'healthScore' }, supportsAggregatedP2P);
   const p2pSeedPlan = useP2PSeedPlan(p2pScope, supportsAggregatedP2P);
+  const ticketList = useMemo(() => recentTickets.data ?? [], [recentTickets.data]);
+  const logList = useMemo(() => recentLogs.data ?? [], [recentLogs.data]);
 
   const ds = dashboard.data;
 
@@ -128,9 +130,6 @@ export default function Dashboard() {
       />
     );
   }
-
-  const ticketList = useMemo(() => recentTickets.data ?? [], [recentTickets.data]);
-  const logList = useMemo(() => recentLogs.data ?? [], [recentLogs.data]);
   const totalInstalledSoftware = softwareSnapshot.data?.totalInstalled ?? 0;
   const realtime = realtimeStats.data?.realtime;
   const database = realtimeStats.data?.database;
@@ -866,6 +865,14 @@ const P2PLineChart = memo(function P2PLineChart({
   unit?: string;
   label?: string;
 }) {
+  const data = useMemo(
+    () => points.map(p => ({
+      t: new Date(p.tsUtc).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
+      v: p.value,
+    })),
+    [points],
+  );
+
   if (loading) {
     return (
       <div className="flex h-40 items-center justify-center">
@@ -886,14 +893,6 @@ const P2PLineChart = memo(function P2PLineChart({
       </div>
     );
   }
-
-  const data = useMemo(
-    () => points.map(p => ({
-      t: new Date(p.tsUtc).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
-      v: p.value,
-    })),
-    [points],
-  );
 
   return (
     <ResponsiveContainer width="100%" height={160}>
