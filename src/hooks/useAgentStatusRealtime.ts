@@ -155,15 +155,33 @@ export function useAgentStatusRealtime(enabled = true) {
 
     connection.on("AgentStatusChanged", onAgentStatusChanged);
     connection.on("CommandCompleted", onCommandCompleted);
-    connection.onreconnecting(() => {
+    connection.onreconnecting((error) => {
+      console.warn("[realtime] SignalR reconectando…", error);
       setSignalrConnectionState("agent-hub", "reconnecting");
     });
-    connection.onreconnected(() => {
+    connection.onreconnected(async (connectionId) => {
+      console.info(
+        "[realtime] SignalR reconectado (connectionId:",
+        connectionId,
+        ")",
+      );
       setSignalrConnectionState("agent-hub", "connected");
-      return connection.invoke("JoinDashboard");
+      try {
+        await connection.invoke("JoinDashboard");
+      } catch (error) {
+        console.warn(
+          "[realtime] JoinDashboard falhou após reconexão (escopo global ausente?).",
+          error,
+        );
+      }
     });
-    connection.onclose(() => {
+    connection.onclose((error) => {
       if (disposed) return;
+      if (error) {
+        console.warn("[realtime] SignalR desconectou:", error);
+      } else {
+        console.info("[realtime] SignalR desconectado.");
+      }
       setSignalrConnectionState("agent-hub", "disconnected");
     });
 
@@ -180,7 +198,26 @@ export function useAgentStatusRealtime(enabled = true) {
       .then(async () => {
         if (disposed) return;
         setSignalrConnectionState("agent-hub", "connected");
-        await connection.invoke("JoinDashboard");
+        console.info(
+          "[realtime] SignalR conectado em",
+          hubUrl,
+          "(connectionId:",
+          connection.connectionId,
+          ")",
+        );
+        try {
+          await connection.invoke("JoinDashboard");
+          console.info("[realtime] SignalR ingressou no grupo Dashboard global.");
+        } catch (error) {
+          // JoinDashboard requer Dashboard.View em escopo Global. Se o usuário
+          // não tiver permissão global, mantemos a conexão ativa (recebe eventos
+          // direcionados/por grupo) e apenas avisamos no console.
+          if (disposed) return;
+          console.warn(
+            "[realtime] SignalR conectado mas JoinDashboard falhou (permissão de escopo global ausente). Conexão segue ativa para grupos por escopo.",
+            error,
+          );
+        }
       })
       .catch((error: unknown) => {
         if (disposed) return;
@@ -193,6 +230,7 @@ export function useAgentStatusRealtime(enabled = true) {
           return;
         }
 
+        console.error("[realtime] Falha ao iniciar SignalR:", error);
         setSignalrConnectionState("agent-hub", "disconnected");
 
         // Keep UI working with REST fallback even if realtime fails.

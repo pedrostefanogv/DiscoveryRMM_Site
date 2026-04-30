@@ -77,10 +77,29 @@ function isCredentialsExpiring(credentials: NatsCredentialsResponse): boolean {
 }
 
 function isNonRetryableNatsError(error: unknown): boolean {
-  return (
+  if (
     error instanceof ApiError &&
     [400, 401, 403, 404].includes(error.status)
-  );
+  ) {
+    return true;
+  }
+
+  // O cliente @nats-io/nats-core lança NatsError com nome "AuthorizationError"
+  // quando o broker rejeita as credenciais (ex.: callout devolveu erro,
+  // accountSeed divergente). Reconectar não resolve — evita loop no console.
+  if (error && typeof error === "object") {
+    const err = error as { name?: unknown; message?: unknown; code?: unknown };
+    const name = typeof err.name === "string" ? err.name : "";
+    const message = typeof err.message === "string" ? err.message : "";
+    if (
+      name === "AuthorizationError" ||
+      /authorization violation/i.test(message)
+    ) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 export interface DashboardEvent {
@@ -340,7 +359,13 @@ class NatsService {
         this.watchConnection(this.connection);
         await this.restoreSubscriptions();
         this.setConnectionState("connected");
-        console.log("NATS connected successfully");
+        console.info(
+          "[realtime] NATS conectado em",
+          url,
+          this.subscriptions.size > 0
+            ? `(restaurou ${this.subscriptions.size} subscrições)`
+            : "",
+        );
       } catch (error) {
         this.connection = null;
         this.subscriptions.clear();
