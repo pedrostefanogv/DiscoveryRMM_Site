@@ -93,6 +93,19 @@ export const agentAlertsApi = {
   getScopeOptions: () =>
     api.get<AgentAlertScopeOptionsResponse>(`${BASE}/scope-options`),
 
+  getById: async (id: string): Promise<AgentAlert> => {
+    const raw = await api.get<Record<string, unknown>>(`${BASE}/${id}`);
+    return normalizeAgentAlert(raw);
+  },
+
+  dispatch: (id: string) =>
+    api.post<Record<string, unknown>>(`${BASE}/${id}/dispatch`),
+
+  createTicket: (id: string) =>
+    api.post<Record<string, unknown>>(`${BASE}/${id}/create-ticket`),
+
+  delete: (id: string) => api.del<void>(`${BASE}/${id}`),
+
   testDispatch: (data: AgentAlertTestDispatchRequest) =>
     api.post<AgentAlertTestDispatchResponse>(`${BASE}/test-dispatch`, data),
 };

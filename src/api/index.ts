@@ -45,6 +45,8 @@ export type {
 export { notesApi } from "./notes";
 export { knowledgeApi } from "./knowledge";
 export { reportSchedulesApi } from "./report-schedules";
+export { autoTicketRulesApi } from "./auto-ticket-rules";
+export { agentUpdatesApi } from "./agent-updates";
 export {
   configurationApi,
   extractTicketAttachmentSettingsFromEffective,

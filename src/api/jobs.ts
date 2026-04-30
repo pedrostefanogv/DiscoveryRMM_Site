@@ -72,6 +72,13 @@ async function runJobAction(
 }
 
 export const jobsApi = {
+  list: () => api.get<unknown[]>(BASE),
+
+  get: (jobGroup: string, jobName: string) =>
+    api.get<unknown>(
+      `${BASE}/${encodeURIComponent(jobGroup)}/${encodeURIComponent(jobName)}`,
+    ),
+
   trigger: (jobGroup: string, jobName: string) =>
     runJobAction(jobGroup, jobName, "trigger"),
 
@@ -80,4 +87,10 @@ export const jobsApi = {
 
   resume: (jobGroup: string, jobName: string) =>
     runJobAction(jobGroup, jobName, "resume"),
+
+  schedulerStandby: () =>
+    api.post<void>(`${BASE}/scheduler/standby`),
+
+  schedulerStart: () =>
+    api.post<void>(`${BASE}/scheduler/start`),
 };

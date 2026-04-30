@@ -1,6 +1,6 @@
 # Discovery RMM - Guia de API para Frontend e Site
 
-> Ultima atualizacao: 2026-04-30
+> Ultima atualizacao: 2026-04-30 (revisao completa de integracao frontend-backend)
 > Fonte: controllers, DTOs, validators e middleware em src/Discovery.Api e src/Discovery.Core.
 > Escopo: contratos HTTP e SignalR consumiveis por painel web, portal/site e telas administrativas.
 
@@ -165,7 +165,25 @@ Regras relevantes:
 - Roles de sistema nao podem ser excluidas nem ter nome/descricao alterados.
 - `meshRightsProfile`, quando informado, precisa existir no cadastro MeshCentral.
 
-### 4.3 Permissoes e escopo
+### 4.3 User Groups
+
+Base: `/api/v1/user-groups`
+
+| Endpoint | Request | Response |
+|---|---|---|
+| `GET /user-groups` | - | `UserGroupDto[]` |
+| `GET /user-groups/{id}` | - | `UserGroupDto` |
+| `POST /user-groups` | `CreateUserGroupDto` | `201` com grupo criado |
+| `PUT /user-groups/{id}` | `UpdateUserGroupDto` | `204` |
+| `DELETE /user-groups/{id}` | - | `204` |
+| `GET /user-groups/{id}/members` | - | membros do grupo |
+| `POST /user-groups/{id}/members` | `{ userId }` | `204` |
+| `DELETE /user-groups/{id}/members/{userId}` | - | `204` |
+| `GET /user-groups/{id}/roles` | - | roles atribuidas ao grupo |
+| `POST /user-groups/{id}/roles` | `AssignRoleToGroupDto` | `204` |
+| `DELETE /user-groups/{id}/roles/{assignmentId}` | - | `204` |
+
+### 4.4 Permissoes e escopo
 
 O frontend deve considerar tres niveis de erro de acesso:
 
@@ -231,6 +249,63 @@ Campos relevantes de `UpsertCustomFieldDefinitionRequest`:
 - `accessBindings?`
 
 Recomendacao: construir os formularios dinamicos a partir de `GET /custom-fields/schema/{scopeType}` em vez de replicar regras no front.
+
+### 5.4 Departamentos
+
+Base: `/api/v1/departments`
+
+| Endpoint | Request | Response |
+|---|---|---|
+| `GET /departments/global` | - | departamentos globais |
+| `GET /departments` | query `clientId?` | departamentos |
+| `GET /departments/{id}` | - | departamento |
+| `POST /departments` | `CreateDepartmentDto` | `201` |
+| `PUT /departments/{id}` | `UpdateDepartmentDto` | `204` |
+| `DELETE /departments/{id}` | - | `204` |
+
+### 5.5 Workflow - Estados e Transicoes
+
+Base: `/api/v1/workflow`
+
+| Endpoint | Request | Response |
+|---|---|---|
+| `GET /workflow/states` | - | estados de workflow |
+| `GET /workflow/states/{id}` | - | estado |
+| `POST /workflow/states` | `CreateWorkflowStateDto` | `201` |
+| `PUT /workflow/states/{id}` | `UpdateWorkflowStateDto` | `204` |
+| `DELETE /workflow/states/{id}` | - | `204` |
+| `GET /workflow/transitions` | - | transicoes |
+| `GET /workflow/transitions/from/{fromStateId}` | - | transicoes a partir de um estado |
+| `POST /workflow/transitions` | `CreateWorkflowTransitionDto` | `201` |
+| `DELETE /workflow/transitions/{id}` | - | `204` |
+
+### 5.6 Workflow Profiles
+
+Base: `/api/v1/workflowprofiles`
+
+| Endpoint | Request | Response |
+|---|---|---|
+| `GET /workflowprofiles/global` | - | perfis globais |
+| `GET /workflowprofiles` | query `clientId?` | perfis |
+| `GET /workflowprofiles/by-department/{departmentId}` | - | perfis do departamento |
+| `GET /workflowprofiles/{id}` | - | perfil |
+| `POST /workflowprofiles` | `CreateWorkflowProfileDto` | `201` |
+| `PUT /workflowprofiles/{id}` | `UpdateWorkflowProfileDto` | `204` |
+| `DELETE /workflowprofiles/{id}` | - | `204` |
+
+### 5.7 SLA Calendars
+
+Base: `/api/v1/sla-calendars`
+
+| Endpoint | Request | Response |
+|---|---|---|
+| `GET /sla-calendars` | - | calendarios |
+| `GET /sla-calendars/{id}` | - | calendario |
+| `POST /sla-calendars` | `CreateSlaCalendarDto` | `201` |
+| `PUT /sla-calendars/{id}` | `UpdateSlaCalendarDto` | `204` |
+| `DELETE /sla-calendars/{id}` | - | `204` |
+| `POST /sla-calendars/{id}/holidays` | `CreateHolidayDto` | `201` |
+| `DELETE /sla-calendars/{id}/holidays/{holidayId}` | - | `204` |
 
 ## 6. Deploy tokens, instalacao do agent e download de pacote
 
@@ -356,21 +431,153 @@ Fluxo de upload recomendado no front:
 3. Confirmar em `complete-upload`.
 4. Recarregar `GET /tickets/{id}/attachments`.
 
-### 7.3 Endpoints complementares do modulo de tickets
+### 7.3 KPIs de tickets
 
-Esses endpoints estao em controllers separados, mas fazem parte da experiencia do front de service desk:
+Base: `/api/v1/tickets/kpi`
 
-| Base | Uso |
-|---|---|
-| `/api/v1/tickets/kpi` | KPIs agregados de tickets |
-| `/api/v1/ticket-saved-views` | views salvas do operador |
-| `/api/v1/tickets/{ticketId}/watchers` | seguidores do ticket |
-| `/api/v1/tickets/{ticketId}/custom-fields` | valores extras do ticket |
-| `/api/v1/tickets/{ticketId}/audit` | trilha de auditoria |
-| `/api/v1/tickets/{ticketId}/automation-links` | vinculo com automacao |
-| `/api/v1/tickets/{ticketId}/remote-sessions` | sessoes remotas ligadas ao ticket |
-| `/api/v1/tickets/{id}/ai` | assistente/IA por ticket |
-| `/api/v1/ticket-alert-rules` | regras automaticas de alerta |
+| Endpoint | Request/Query | Response |
+|---|---|---|
+| `GET /tickets/kpi` | filtros por periodo, cliente, etc. | `TicketKpiDto` com metricas agregadas |
+
+### 7.4 Saved Views
+
+Base: `/api/v1/ticket-saved-views`
+
+| Endpoint | Request/Query | Response |
+|---|---|---|
+| `GET /ticket-saved-views` | - | views salvas do usuario |
+| `GET /ticket-saved-views/{id}` | - | view |
+| `POST /ticket-saved-views` | `CreateTicketSavedViewDto` | `201` |
+| `PUT /ticket-saved-views/{id}` | `UpdateTicketSavedViewDto` | `204` |
+| `DELETE /ticket-saved-views/{id}` | - | `204` |
+
+### 7.5 Watchers (seguidores do ticket)
+
+Base: `/api/v1/tickets/{ticketId}/watchers`
+
+| Endpoint | Request | Response |
+|---|---|---|
+| `GET /tickets/{ticketId}/watchers` | - | lista de watchers |
+| `POST /tickets/{ticketId}/watchers` | `{ userId }` | `201` |
+| `DELETE /tickets/{ticketId}/watchers/{userId}` | - | `204` |
+
+### 7.6 Custom Fields do Ticket
+
+Base: `/api/v1/tickets/{ticketId}/custom-fields`
+
+| Endpoint | Request | Response |
+|---|---|---|
+| `GET /tickets/{ticketId}/custom-fields` | query `includeSecrets?` | valores |
+| `PUT /tickets/{ticketId}/custom-fields/{definitionId}` | `{ value }` | valor salvo |
+
+### 7.7 Audit (trilha de auditoria do ticket)
+
+Base: `/api/v1/tickets/{ticketId}/audit`
+
+| Endpoint | Request/Query | Response |
+|---|---|---|
+| `GET /tickets/{ticketId}/audit/timeline/unified` | - | timeline unificada (atividades + comentarios) |
+| `GET /tickets/{ticketId}/audit/timeline` | - | timeline de atividades |
+| `GET /tickets/{ticketId}/audit/timeline/activity-type/{activityType}` | - | atividades por tipo |
+| `GET /tickets/{ticketId}/audit/timeline/user/{userId}` | - | atividades por usuario |
+| `GET /tickets/{ticketId}/audit/timeline/date-range` | query `from`, `to` | atividades por periodo |
+| `GET /tickets/{ticketId}/audit/timeline/last` | - | ultimas atividades |
+| `GET /tickets/{ticketId}/audit/statistics` | - | estatisticas de atividade |
+
+### 7.8 Automation Links (vinculo com automacao)
+
+Base: `/api/v1/tickets/{ticketId}/automation-links`
+
+| Endpoint | Request | Response |
+|---|---|---|
+| `GET /tickets/{ticketId}/automation-links` | - | links de automacao |
+| `POST /tickets/{ticketId}/automation-links` | `CreateAutomationLinkDto` | `201` |
+| `PATCH /tickets/{ticketId}/automation-links/{linkId}/approve` | - | link aprovado |
+| `PATCH /tickets/{ticketId}/automation-links/{linkId}/reject` | - | link rejeitado |
+
+### 7.9 Remote Sessions (sessoes remotas do ticket)
+
+Base: `/api/v1/tickets/{ticketId}/remote-sessions`
+
+| Endpoint | Request | Response |
+|---|---|---|
+| `GET /tickets/{ticketId}/remote-sessions` | - | sessoes remotas |
+| `POST /tickets/{ticketId}/remote-sessions` | `CreateRemoteSessionLinkDto` | `201` |
+| `PATCH /tickets/{ticketId}/remote-sessions/{sessionId}/end` | - | sessao encerrada |
+
+### 7.10 AI Assistant do Ticket
+
+Base: `/api/v1/tickets/{id}/ai`
+
+| Endpoint | Request | Response |
+|---|---|---|
+| `POST /tickets/{id}/ai/triage` | payload com contexto | resultado de triage |
+| `POST /tickets/{id}/ai/summarize` | - | resumo do ticket |
+| `POST /tickets/{id}/ai/suggest-reply` | - | sugestao de resposta |
+| `POST /tickets/{id}/ai/draft-kb-article` | - | rascunho de artigo KB |
+
+### 7.11 Ticket Alert Rules
+
+Base: `/api/v1/ticket-alert-rules`
+
+| Endpoint | Request | Response |
+|---|---|---|
+| `GET /ticket-alert-rules` | - | regras de alerta |
+| `GET /ticket-alert-rules/{id}` | - | regra |
+| `GET /ticket-alert-rules/by-workflow-state/{workflowStateId}` | - | regras por estado |
+| `POST /ticket-alert-rules` | `CreateTicketAlertRuleDto` | `201` |
+| `PUT /ticket-alert-rules/{id}` | `UpdateTicketAlertRuleDto` | `204` |
+| `PATCH /ticket-alert-rules/{id}/toggle` | - | alterna ativo/inativo |
+| `DELETE /ticket-alert-rules/{id}` | - | `204` |
+
+### 7.12 Ticket SLA
+
+Base: `/api/v1/tickets/{ticketId}/sla`
+
+| Endpoint | Request | Response |
+|---|---|---|
+| `GET /tickets/{ticketId}/sla/status` | - | status atual do SLA |
+| `GET /tickets/{ticketId}/sla/details` | - | detalhes completos do SLA |
+
+### 7.13 Auto Ticket Rules
+
+Base: `/api/v1/auto-ticket-rules`
+
+| Endpoint | Request | Response |
+|---|---|---|
+| `GET /auto-ticket-rules` | - | regras |
+| `GET /auto-ticket-rules/{id}` | - | regra |
+| `POST /auto-ticket-rules` | `CreateAutoTicketRuleDto` | `201` |
+| `PUT /auto-ticket-rules/{id}` | `UpdateAutoTicketRuleDto` | `204` |
+| `PATCH /auto-ticket-rules/{id}/enable` | - | ativar regra |
+| `PATCH /auto-ticket-rules/{id}/disable` | - | desativar regra |
+| `DELETE /auto-ticket-rules/{id}` | - | `204` |
+| `POST /auto-ticket-rules/{id}/dry-run` | - | simulacao da regra |
+| `POST /auto-ticket-rules/seed-defaults` | - | popular regras padrao |
+| `GET /auto-ticket-rules/{id}/stats` | - | estatisticas da regra |
+
+### 7.14 Escalation Rules
+
+Base: `/api/v1/escalation-rules`
+
+| Endpoint | Request | Response |
+|---|---|---|
+| `GET /escalation-rules` | - | regras |
+| `GET /escalation-rules/by-profile/{workflowProfileId}` | - | regras do perfil |
+| `GET /escalation-rules/{id}` | - | regra |
+| `POST /escalation-rules` | `CreateEscalationRuleDto` | `201` |
+| `PUT /escalation-rules/{id}` | `UpdateEscalationRuleDto` | `204` |
+| `DELETE /escalation-rules/{id}` | - | `204` |
+
+### 7.15 Monitoring Events
+
+Base: `/api/v1/monitoring-events`
+
+| Endpoint | Request | Response |
+|---|---|---|
+| `POST /monitoring-events` | `CreateMonitoringEventDto` | `201` |
+| `POST /monitoring-events/{id}/evaluate` | - | reavaliar evento |
+| `GET /monitoring-events/{id}/auto-ticket-decisions` | - | decisoes automaticas |
 
 ## 8. Agents, inventario e comandos
 
@@ -434,6 +641,93 @@ Formato da pagina de software:
   "order": "asc"
 }
 ```
+
+### 8.5 Agent Labels
+
+Base: `/api/v1/agent-labels`
+
+| Endpoint | Request | Response |
+|---|---|---|
+| `GET /agent-labels/agents/{agentId}` | - | labels do agent |
+| `GET /agent-labels/rules/{ruleId}/agents` | - | agents que satisfazem a regra |
+| `GET /agent-labels/rules` | - | regras de label |
+| `POST /agent-labels/rules` | `CreateLabelRuleDto` | `201` |
+| `PUT /agent-labels/rules/{id}` | `UpdateLabelRuleDto` | `204` |
+| `DELETE /agent-labels/rules/{id}` | - | `204` |
+| `POST /agent-labels/reprocess` | - | reprocessar labels |
+| `POST /agent-labels/rules/dry-run` | `DryRunLabelRuleDto` | resultado simulado |
+| `GET /agent-labels/rules/available-custom-fields` | - | campos disponiveis para regras |
+
+### 8.6 Agent Alerts
+
+Base: `/api/v1/agent-alerts`
+
+| Endpoint | Request | Response |
+|---|---|---|
+| `GET /agent-alerts` | - | alertas |
+| `GET /agent-alerts/{id}` | - | alerta |
+| `POST /agent-alerts` | `CreateAgentAlertDto` | `201` |
+| `POST /agent-alerts/{id}/dispatch` | - | disparar alerta |
+| `POST /agent-alerts/{id}/create-ticket` | - | criar ticket do alerta |
+| `DELETE /agent-alerts/{id}` | - | `204` |
+| `GET /agent-alerts/scope-options` | - | opcoes de escopo |
+| `POST /agent-alerts/test-dispatch` | `TestDispatchDto` | resultado do teste |
+
+### 8.7 Agent Updates
+
+Base: `/api/v1/agent-updates`
+
+| Endpoint | Request | Response |
+|---|---|---|
+| `GET /agent-updates/releases` | - | releases |
+| `GET /agent-updates/releases/{releaseId}` | - | release |
+| `POST /agent-updates/releases` | `CreateReleaseDto` | `201` |
+| `PUT /agent-updates/releases/{releaseId}` | `UpdateReleaseDto` | `204` |
+| `DELETE /agent-updates/releases/{releaseId}` | - | `204` |
+| `POST /agent-updates/releases/{releaseId}/promote` | - | promover release |
+| `POST /agent-updates/releases/{releaseId}/artifacts` | multifile upload | artefatos |
+| `DELETE /agent-updates/artifacts/{artifactId}` | - | `204` |
+| `GET /agent-updates/agents/{agentId}/events` | - | eventos de update |
+| `GET /agent-updates/dashboard/rollout` | - | dashboard de rollout |
+| `POST /agent-updates/agents/{agentId}/force-check` | - | forcar verificacao |
+| `POST /agent-updates/releases/{releaseId}/build-artifact` | `BuildArtifactDto` | build disparado |
+| `POST /agent-updates/repository/sync` | - | sincronizar repositorio |
+| `POST /agent-updates/repository/sync-and-build` | - | sincronizar e buildar |
+
+### 8.8 Software Inventory (global)
+
+Base: `/api/v1/software-inventory`
+
+Endpoints globais para visao consolidada de software alem do escopo de um unico agent.
+
+| Endpoint | Request/Query | Response |
+|---|---|---|
+| `GET /software-inventory` | `cursor?`, `limit?`, `search?` | pagina cursor-based global |
+| `GET /software-inventory/snapshot` | - | snapshot global |
+| `GET /software-inventory/top` | - | top software |
+| `GET /software-inventory/by-client/{clientId}` | `cursor?`, `limit?`, `search?` | pagina por cliente |
+| `GET /software-inventory/by-client/{clientId}/snapshot` | - | snapshot do cliente |
+| `GET /software-inventory/by-site/{siteId}` | `cursor?`, `limit?`, `search?` | pagina por site |
+| `GET /software-inventory/by-site/{siteId}/snapshot` | - | snapshot do site |
+| `GET /software-inventory/by-site/{siteId}/top` | - | top software do site |
+
+### 8.9 Notes
+
+Base: `/api/v1`
+
+Notas vinculaveis a clientes, sites ou agents.
+
+| Endpoint | Request | Response |
+|---|---|---|
+| `GET /clients/{clientId}/notes` | - | notas do cliente |
+| `POST /clients/{clientId}/notes` | `CreateNoteDto` | `201` |
+| `GET /sites/{siteId}/notes` | - | notas do site |
+| `POST /sites/{siteId}/notes` | `CreateNoteDto` | `201` |
+| `GET /agents/{agentId}/notes` | - | notas do agent |
+| `POST /agents/{agentId}/notes` | `CreateNoteDto` | `201` |
+| `GET /notes/{id}` | - | nota por ID |
+| `PUT /notes/{id}` | `UpdateNoteDto` | `204` |
+| `DELETE /notes/{id}` | - | `204` |
 
 ## 9. App Store e aprovacoes de software
 
@@ -633,7 +927,151 @@ Metodos cliente -> servidor:
 - `UnsubscribeAgent(agentId)`
 - `UnsubscribeKey(recipientKey)`
 
-## 13. Inventario resumido de rotas relevantes ao front
+## 13. Configuracoes do servidor
+
+Base: `/api/v1/configurations`
+
+O controller de configuracoes e o mais extenso do projeto, cobrindo settings de servidor, cliente, site, AI e retencao.
+
+### 13.1 Configuracoes de servidor
+
+| Endpoint | Request | Response |
+|---|---|---|
+| `GET /configurations/server` | - | config atual |
+| `PUT /configurations/server` | objeto de config | config atualizada |
+| `PATCH /configurations/server` | patch parcial | config atualizada |
+| `POST /configurations/server/reset` | - | reset para defaults |
+| `POST /configurations/server/nats/test` | credenciais NATS | resultado do teste |
+| `PATCH /configurations/server/nats` | credenciais NATS | config atualizada |
+| `GET /configurations/server/metadata` | - | metadados do servidor |
+| `GET /configurations/server/reporting` | - | config de reporting |
+| `PUT /configurations/server/reporting` | config reporting | atualizada |
+| `GET /configurations/server/ticket-attachments` | - | config de anexos |
+| `PUT /configurations/server/ticket-attachments` | config anexos | atualizada |
+| `GET /configurations/server/retention` | - | config de retencao |
+| `PUT /configurations/server/retention` | config retencao | atualizada |
+| `POST /configurations/server/retention/reset` | - | resetar retencao |
+| `POST /configurations/server/retention/trigger` | - | disparar limpeza |
+| `POST /configurations/server/object-storage/test` | credenciais | resultado do teste |
+
+### 13.2 Configuracoes por cliente
+
+| Endpoint | Request | Response |
+|---|---|---|
+| `GET /configurations/clients/{clientId}` | - | config do cliente |
+| `GET /configurations/clients/{clientId}/effective` | - | config efetiva (com heranca) |
+| `GET /configurations/clients/{clientId}/metadata` | - | metadados do cliente |
+| `PUT /configurations/clients/{clientId}` | objeto de config | atualizada |
+| `PATCH /configurations/clients/{clientId}` | patch parcial | atualizada |
+| `DELETE /configurations/clients/{clientId}` | - | remover override |
+| `POST /configurations/clients/{clientId}/reset/{propertyName}` | - | resetar propriedade |
+
+### 13.3 Configuracoes por site
+
+| Endpoint | Request | Response |
+|---|---|---|
+| `GET /configurations/sites/{siteId}` | - | config do site |
+| `GET /configurations/sites/{siteId}/effective` | - | config efetiva |
+| `GET /configurations/sites/{siteId}/metadata` | - | metadados do site |
+| `PUT /configurations/sites/{siteId}` | objeto de config | atualizada |
+| `PATCH /configurations/sites/{siteId}` | patch parcial | atualizada |
+| `DELETE /configurations/sites/{siteId}` | - | remover override |
+| `POST /configurations/sites/{siteId}/reset/{propertyName}` | - | resetar propriedade |
+
+### 13.4 Configuracoes de AI
+
+| Endpoint | Request | Response |
+|---|---|---|
+| `GET /configurations/ai/providers` | - | providers disponiveis |
+| `GET /configurations/ai/credentials` | - | credenciais cadastradas |
+| `PUT /configurations/ai/credentials` | credenciais | salvas |
+| `DELETE /configurations/ai/credentials/{credentialId}` | - | `204` |
+| `POST /configurations/ai/credentials/test` | credenciais | resultado do teste |
+| `GET /configurations/ai/models` | - | modelos disponiveis |
+| `GET /configurations/ai/models/{modelId}` | - | detalhes do modelo |
+| `POST /configurations/ai/models/validate` | config do modelo | validacao |
+
+## 14. Configuration Audit
+
+Base: `/api/v1/configuration-audit`
+
+| Endpoint | Request/Query | Response |
+|---|---|---|
+| `GET /configuration-audit` | filtros | registros de auditoria |
+| `GET /configuration-audit/{entityType}/{entityId}` | - | auditoria por entidade |
+| `GET /configuration-audit/{entityType}/{entityId}/field/{fieldName}` | - | auditoria por campo |
+| `GET /configuration-audit/by-user/{username}` | - | auditoria por usuario |
+| `GET /configuration-audit/report` | filtros | relatorio de auditoria |
+
+## 15. MeshCentral
+
+Base: `/api/v1/meshcentral`
+
+| Endpoint | Request | Response |
+|---|---|---|
+| `GET /meshcentral/rights-profiles` | - | perfis de direitos |
+| `POST /meshcentral/rights-profiles` | `CreateRightsProfileDto` | `201` |
+| `PUT /meshcentral/rights-profiles/{id}` | `UpdateRightsProfileDto` | `204` |
+| `DELETE /meshcentral/rights-profiles/{id}` | - | `204` |
+| `GET /meshcentral/rights-profiles/usage` | - | uso dos perfis |
+| `POST /meshcentral/embed-url` | `{ agentId }` | URL de embed |
+| `POST /meshcentral/identity-sync/backfill` | - | backfill de identidade |
+| `POST /meshcentral/node-links/backfill` | - | backfill de node links |
+| `GET /meshcentral/diagnostics/health` | - | health check |
+| `GET /meshcentral/group-policy/sites/{siteId}/status` | - | status de group policy |
+| `POST /meshcentral/group-policy/reconcile` | - | reconciliar group policy |
+
+## 16. Admin
+
+### 16.1 Jobs (agendador Quartz.NET)
+
+Base: `/api/v1/admin/jobs`
+
+| Endpoint | Request | Response |
+|---|---|---|
+| `GET /admin/jobs` | - | lista de jobs |
+| `GET /admin/jobs/{jobGroup}/{jobName}` | - | detalhes do job |
+| `POST /admin/jobs/{jobGroup}/{jobName}/trigger` | - | disparar job |
+| `POST /admin/jobs/{jobGroup}/{jobName}/pause` | - | pausar job |
+| `POST /admin/jobs/{jobGroup}/{jobName}/resume` | - | resumir job |
+| `POST /admin/jobs/scheduler/standby` | - | colocar scheduler em standby |
+| `POST /admin/jobs/scheduler/start` | - | iniciar scheduler |
+
+### 16.2 Background Services
+
+Base: `/api/v1/admin/background-services`
+
+| Endpoint | Request | Response |
+|---|---|---|
+| `GET /admin/background-services` | - | lista de servicos |
+| `GET /admin/background-services/{name}` | - | detalhes do servico |
+| `GET /admin/dashboard` | - | dashboard administrativo |
+
+### 16.3 Logs
+
+Base: `/api/v1/logs`
+
+| Endpoint | Request | Response |
+|---|---|---|
+| `GET /logs` | filtros | registros de log |
+| `POST /logs` | entrada de log | `201` |
+
+## 17. RemoteDebugHub
+
+Hub: `/hubs/remote-debug`
+
+Conexao: mesma estrategia do NotificationHub (JWT via header ou query string).
+
+Metodos cliente -> servidor:
+
+- `JoinSession(sessionId: Guid)` — entra em uma sessao de debug remoto
+- `LeaveSession(sessionId: Guid)` — sai da sessao
+- `CloseSession(sessionId: Guid, reason: string?)` — encerra a sessao
+
+Metodos servidor -> cliente:
+
+- `RemoteDebugSessionJoined` — `{ sessionId, agentId, startedAtUtc, expiresAtUtc, preferredTransport, fallbackTransport, natsSubject, signalRMethod }`
+- `RemoteDebugSessionEnded` — `{ sessionId, endedAtUtc, reason }`
 
 | Grupo | Rotas base principais |
 |---|---|
@@ -644,9 +1082,22 @@ Metodos cliente -> servidor:
 | Automacao e software | `/automation/scripts`, `/automation/tasks`, `/app-store` |
 | Observabilidade e admin | `/reports`, `/dashboard/*`, `/realtime`, `/logs`, `/configuration-audit`, `/configurations`, `/meshcentral`, `/admin/jobs`, `/admin/background-services` |
 
-## 14. Validacao de dados: estrategia recomendada para o frontend
+## 18. Inventario resumido de rotas relevantes ao front
 
-### 14.1 Regras que valem espelhar no cliente
+| Grupo | Rotas base principais |
+|---|---|
+| Identidade | `/auth`, `/mfa`, `/users`, `/roles`, `/user-groups`, `/api-tokens` |
+| Cadastro | `/clients`, `/clients/{clientId}/sites`, `/custom-fields`, `/departments`, `/workflow`, `/workflowprofiles`, `/sla-calendars` |
+| Service desk | `/tickets`, `/tickets/kpi`, `/ticket-saved-views`, `/tickets/{ticketId}/watchers`, `/tickets/{ticketId}/custom-fields`, `/tickets/{ticketId}/audit`, `/tickets/{ticketId}/automation-links`, `/tickets/{ticketId}/remote-sessions`, `/tickets/{id}/ai`, `/tickets/{ticketId}/sla`, `/ticket-alert-rules`, `/auto-ticket-rules`, `/escalation-rules`, `/monitoring-events`, `/knowledge`, `/notifications`, `/notes` |
+| Agents | `/agents`, `/agent-labels`, `/agent-updates`, `/agent-alerts`, `/software-inventory`, `/agent-install`, `/deploy-tokens` |
+| Automacao e software | `/automation/scripts`, `/automation/tasks`, `/app-store` |
+| Configuracoes | `/configurations`, `/configuration-audit` |
+| Observabilidade e admin | `/reports`, `/dashboard/*`, `/realtime`, `/logs`, `/meshcentral`, `/admin/jobs`, `/admin/background-services`, `/admin/dashboard` |
+| Realtime (hubs) | `/hubs/notifications`, `/hubs/remote-debug` |
+
+## 19. Validacao de dados: estrategia recomendada para o frontend
+
+### 19.1 Regras que valem espelhar no cliente
 
 - Tickets: titulo 3-200, descricao 3-10000, categoria max 100, comentario 3-4000.
 - Clientes: nome 2-200, notes max 2000.
@@ -655,14 +1106,14 @@ Metodos cliente -> servidor:
 - Reports: `layoutJson` precisa ser JSON valido e obedecer o schema exposto pelo backend.
 - Knowledge: `q` obrigatorio em busca/sugestao; `siteId` depende de `clientId`.
 
-### 14.2 Regras que nao devem ser hardcoded
+### 19.2 Regras que nao devem ser hardcoded
 
 - Politica de senha: o backend valida via `PasswordService` e retorna a mensagem final.
 - Custom fields: regex, min/max, enum e segredos vem do schema dinamico.
 - Permissoes por usuario/role/scope: o front deve reagir ao `403`, nao tentar inferir tudo localmente.
 - Workflow de tickets: transicoes validas continuam sendo autoridade do backend.
 
-### 14.3 Normalizacao de erro sugerida
+### 19.3 Normalizacao de erro sugerida
 
 Como os formatos nao sao uniformes, uma camada de erro no frontend deve procurar nessa ordem:
 
@@ -672,7 +1123,7 @@ Como os formatos nao sao uniformes, uma camada de erro no frontend deve procurar
 4. `response.data.code` combinado com `message`.
 5. Fallback generico por status code.
 
-## 15. Recomendacoes de implementacao do front
+## 20. Recomendacoes de implementacao do front
 
 1. Gerar tipos a partir de `/openapi/v1.json`, mas manter overrides locais para endpoints cujo request/response mora inline no controller.
 2. Implementar a autenticacao como maquina de estados: `login -> mfa_pending -> mfa_setup -> full_session`.
@@ -682,25 +1133,60 @@ Como os formatos nao sao uniformes, uma camada de erro no frontend deve procurar
 6. Usar endpoints de schema (`custom-fields`, `reports/datasets`, `reports/layout-schema`) para formularios dinamicos.
 7. Implementar upload de anexos e download de relatarios com suporte a URL presignada/redirect.
 
-## 16. Arquivos de referencia
+## 21. Arquivos de referencia
 
 - [Program.cs](../src/Discovery.Api/Program.cs)
 - [AuthController.cs](../src/Discovery.Api/Controllers/AuthController.cs)
 - [MfaController.cs](../src/Discovery.Api/Controllers/MfaController.cs)
 - [UsersController.cs](../src/Discovery.Api/Controllers/UsersController.cs)
 - [RolesController.cs](../src/Discovery.Api/Controllers/RolesController.cs)
+- [UserGroupsController.cs](../src/Discovery.Api/Controllers/UserGroupsController.cs)
+- [ApiTokensController.cs](../src/Discovery.Api/Controllers/ApiTokensController.cs)
 - [ClientsController.cs](../src/Discovery.Api/Controllers/ClientsController.cs)
 - [SitesController.cs](../src/Discovery.Api/Controllers/SitesController.cs)
 - [CustomFieldsController.cs](../src/Discovery.Api/Controllers/CustomFieldsController.cs)
+- [DepartmentsController.cs](../src/Discovery.Api/Controllers/DepartmentsController.cs)
+- [WorkflowController.cs](../src/Discovery.Api/Controllers/WorkflowController.cs)
+- [WorkflowProfilesController.cs](../src/Discovery.Api/Controllers/WorkflowProfilesController.cs)
+- [SlaCalendarsController.cs](../src/Discovery.Api/Controllers/SlaCalendarsController.cs)
 - [DeployTokensController.cs](../src/Discovery.Api/Controllers/DeployTokensController.cs)
 - [AgentInstallController.cs](../src/Discovery.Api/Controllers/AgentInstallController.cs)
 - [TicketsController.cs](../src/Discovery.Api/Controllers/TicketsController.cs)
+- [TicketKpiController.cs](../src/Discovery.Api/Controllers/TicketKpiController.cs)
+- [TicketSavedViewsController.cs](../src/Discovery.Api/Controllers/TicketSavedViewsController.cs)
+- [TicketWatchersController.cs](../src/Discovery.Api/Controllers/TicketWatchersController.cs)
+- [TicketCustomFieldsController.cs](../src/Discovery.Api/Controllers/TicketCustomFieldsController.cs)
+- [TicketAuditController.cs](../src/Discovery.Api/Controllers/TicketAuditController.cs)
+- [TicketAutomationLinksController.cs](../src/Discovery.Api/Controllers/TicketAutomationLinksController.cs)
+- [TicketRemoteSessionsController.cs](../src/Discovery.Api/Controllers/TicketRemoteSessionsController.cs)
+- [TicketAiController.cs](../src/Discovery.Api/Controllers/TicketAiController.cs)
+- [TicketSlaController.cs](../src/Discovery.Api/Controllers/TicketSlaController.cs)
+- [TicketAlertRulesController.cs](../src/Discovery.Api/Controllers/TicketAlertRulesController.cs)
+- [AutoTicketRulesController.cs](../src/Discovery.Api/Controllers/AutoTicketRulesController.cs)
+- [EscalationRulesController.cs](../src/Discovery.Api/Controllers/EscalationRulesController.cs)
+- [MonitoringEventsController.cs](../src/Discovery.Api/Controllers/MonitoringEventsController.cs)
+- [NotesController.cs](../src/Discovery.Api/Controllers/NotesController.cs)
+- [KnowledgeController.cs](../src/Discovery.Api/Controllers/KnowledgeController.cs)
 - [AgentsController.cs](../src/Discovery.Api/Controllers/Agents/AgentsController.cs)
+- [AgentLabelsController.cs](../src/Discovery.Api/Controllers/AgentLabelsController.cs)
+- [AgentAlertsController.cs](../src/Discovery.Api/Controllers/AgentAlertsController.cs)
+- [AgentUpdatesController.cs](../src/Discovery.Api/Controllers/AgentUpdatesController.cs)
+- [SoftwareInventoryController.cs](../src/Discovery.Api/Controllers/SoftwareInventoryController.cs)
+- [AutomationScriptsController.cs](../src/Discovery.Api/Controllers/AutomationScriptsController.cs)
+- [AutomationTasksController.cs](../src/Discovery.Api/Controllers/AutomationTasksController.cs)
 - [AppStoreController.cs](../src/Discovery.Api/Controllers/AppStoreController.cs)
 - [ReportsController.cs](../src/Discovery.Api/Controllers/ReportsController.cs)
-- [KnowledgeController.cs](../src/Discovery.Api/Controllers/KnowledgeController.cs)
+- [DashboardController.cs](../src/Discovery.Api/Controllers/DashboardController.cs)
+- [RealtimeController.cs](../src/Discovery.Api/Controllers/RealtimeController.cs)
+- [ConfigurationsController.cs](../src/Discovery.Api/Controllers/ConfigurationsController.cs)
+- [ConfigurationAuditController.cs](../src/Discovery.Api/Controllers/ConfigurationAuditController.cs)
+- [MeshCentralController.cs](../src/Discovery.Api/Controllers/MeshCentralController.cs)
+- [JobsController.cs](../src/Discovery.Api/Controllers/JobsController.cs)
+- [BackgroundServicesController.cs](../src/Discovery.Api/Controllers/BackgroundServicesController.cs)
+- [LogsController.cs](../src/Discovery.Api/Controllers/LogsController.cs)
 - [NotificationsController.cs](../src/Discovery.Api/Controllers/NotificationsController.cs)
 - [NotificationHub.cs](../src/Discovery.Api/Hubs/NotificationHub.cs)
+- [RemoteDebugHub.cs](../src/Discovery.Api/Hubs/RemoteDebugHub.cs)
 - [TicketValidators.cs](../src/Discovery.Api/Validators/TicketValidators.cs)
 - [ClientValidators.cs](../src/Discovery.Api/Validators/ClientValidators.cs)
 - [ApiTokenValidators.cs](../src/Discovery.Api/Validators/ApiTokenValidators.cs)

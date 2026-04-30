@@ -147,6 +147,11 @@ export const ticketsApi = {
       `${BASE}/${ticketId}/audit/timeline`,
     ),
 
+  getUnifiedTimeline: (ticketId: string) =>
+    api.get<import("./types").TicketTimelineEntry[]>(
+      `${BASE}/${ticketId}/audit/timeline/unified`,
+    ),
+
   getTimelineByActivityType: (ticketId: string, activityType: string) =>
     api.get<import("./types").TicketTimelineEntry[]>(
       `${BASE}/${ticketId}/audit/timeline/activity-type/${activityType}`,

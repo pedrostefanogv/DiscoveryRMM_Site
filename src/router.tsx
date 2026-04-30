@@ -17,6 +17,7 @@ const AgentDetail = lazy(() => import('@/pages/agents/AgentDetail'));
 const RemoteDebugConsole = lazy(() => import('@/pages/agents/RemoteDebugConsole'));
 const TicketList = lazy(() => import('@/pages/tickets/TicketList'));
 const TicketAlertsPage = lazy(() => import('@/pages/tickets/TicketAlertsPage'));
+const AutoTicketRulesPage = lazy(() => import('@/pages/tickets/AutoTicketRulesPage'));
 const TicketSlaPage = lazy(() => import('@/pages/tickets/TicketSlaPage'));
 const TicketDetail = lazy(() => import('@/pages/tickets/TicketDetail'));
 const LogViewer = lazy(() => import('@/pages/logs/LogViewer'));
@@ -39,6 +40,7 @@ const ClientConfigurationPage = lazy(() => import('@/pages/settings/ClientConfig
 const SiteConfigurationPage = lazy(() => import('@/pages/settings/SiteConfigurationPage'));
 const ConfigurationAudit = lazy(() => import('@/pages/settings/ConfigurationAudit'));
 const AgentLabelsSettings = lazy(() => import('@/pages/settings/AgentLabelsSettings'));
+const AgentUpdatesPage = lazy(() => import('@/pages/settings/AgentUpdatesPage'));
 const CustomFieldsSettings = lazy(() => import('@/pages/settings/CustomFieldsSettings'));
 const MeshCentralConfigurationPage = lazy(() => import('@/pages/settings/MeshCentralConfigurationPage'));
 const MeshCentralDiagnosticsPage = lazy(() => import('@/pages/settings/MeshCentralDiagnosticsPage'));
@@ -50,6 +52,7 @@ const IamRolesPage = lazy(() => import('@/pages/settings/IamRolesPage'));
 const IamMeshProfilesPage = lazy(() => import('@/pages/settings/IamMeshProfilesPage'));
 const ReportTemplateList = lazy(() => import('@/pages/reports/ReportTemplateList'));
 const ReportTemplateForm = lazy(() => import('@/pages/reports/ReportTemplateForm'));
+const ReportSchedulesPage = lazy(() => import('@/pages/reports/ReportSchedulesPage'));
 const RunReport = lazy(() => import('@/pages/reports/RunReport'));
 const ReportExecutionList = lazy(() => import('@/pages/reports/ReportExecutionList'));
 const KnowledgeList = lazy(() => import('@/pages/knowledge/KnowledgeList'));
@@ -151,6 +154,14 @@ export const router = createBrowserRouter([
       {
         path: 'tickets/sla',
         element: <LazyPage><TicketSlaPage /></LazyPage>,
+      },
+      {
+        path: 'tickets/auto-rules',
+        element: (
+          <PermissionGate anyOf={['tickets.*', 'tickets.edit', 'admin.*']}>
+            <LazyPage><AutoTicketRulesPage /></LazyPage>
+          </PermissionGate>
+        ),
       },
       {
         path: 'tickets/:id',
@@ -325,6 +336,14 @@ export const router = createBrowserRouter([
         ),
       },
       {
+        path: 'settings/agent-updates',
+        element: (
+          <PermissionGate anyOf={['settings.*', 'settings.read', 'admin.*']}>
+            <LazyPage><AgentUpdatesPage /></LazyPage>
+          </PermissionGate>
+        ),
+      },
+      {
         path: 'settings/custom-fields',
         element: (
           <PermissionGate anyOf={['settings.*', 'settings.read', 'admin.*']}>
@@ -423,6 +442,14 @@ export const router = createBrowserRouter([
       {
         path: 'identity/mesh-permissions',
         element: <Navigate to="/identity/roles" replace />,
+      },
+      {
+        path: 'reports/schedules',
+        element: (
+          <PermissionGate anyOf={['reports.*', 'reports.read', 'admin.*']}>
+            <LazyPage><ReportSchedulesPage /></LazyPage>
+          </PermissionGate>
+        ),
       },
       {
         path: 'reports/templates',

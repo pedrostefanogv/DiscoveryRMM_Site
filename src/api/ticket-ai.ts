@@ -17,4 +17,10 @@ export const ticketAiApi = {
       `/api/tickets/${ticketId}/ai/suggest-reply`,
       {},
     ),
+
+  draftKbArticle: (ticketId: string) =>
+    api.post<unknown>(
+      `/api/tickets/${ticketId}/ai/draft-kb-article`,
+      {},
+    ),
 };
