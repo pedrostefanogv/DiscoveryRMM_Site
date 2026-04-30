@@ -102,7 +102,7 @@ export default function LoginPage() {
           </div>
           <div className="flex items-start gap-3">
             <LockKeyhole className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
-            <span>Se o seu usuário exigir primeiro acesso ou verificação em duas etapas, o fluxo continuará automaticamente nas próximas etapas.</span>
+            <span>Quando necessário, o login seguirá automaticamente para a configuração da autenticação em duas etapas.</span>
           </div>
         </div>
 
