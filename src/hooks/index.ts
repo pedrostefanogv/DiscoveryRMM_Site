@@ -77,6 +77,10 @@ export * from "./useAgentAlerts";
 export * from "./useWorkflow";
 export * from "./useDepartments";
 export * from "./useWorkflowProfiles";
+export * from "./useDeployTokens";
+export * from "./useApiTokens";
+export * from "./useMonitoringEvents";
+export * from "./useBackgroundServices";
 
 // Reports
 export * from "./useReportDatasets";
@@ -89,6 +93,7 @@ export * from "./useReportDownload";
 export * from "./useReportLayoutSchema";
 export * from "./useReportPreview";
 export * from "./useReportAutocomplete";
+export * from "./useReportSchedules";
 export * from "./useNotifications";
 export * from "./useTicketAlertRules";
 export * from "./useSlaCalendars";

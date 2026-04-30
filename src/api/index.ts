@@ -18,6 +18,10 @@ export { workflowApi } from "./workflow";
 export { departmentsApi } from "./departments";
 export { workflowProfilesApi } from "./workflowProfiles";
 export { deployTokensApi } from "./deploy-tokens";
+export { apiTokensApi } from "./api-tokens";
+export { monitoringEventsApi } from "./monitoring-events";
+export { backgroundServicesApi } from "./background-services";
+export { jobsApi } from "./jobs";
 export { softwareInventoryApi } from "./software-inventory";
 export { appStoreApi } from "./app-store";
 export { automationApi } from "./automation";
@@ -40,6 +44,7 @@ export type {
 } from "./notifications";
 export { notesApi } from "./notes";
 export { knowledgeApi } from "./knowledge";
+export { reportSchedulesApi } from "./report-schedules";
 export {
   configurationApi,
   extractTicketAttachmentSettingsFromEffective,
@@ -157,3 +162,12 @@ export type {
   DashboardLogsSummaryDto,
   DashboardAutomationSummaryDto,
 } from "./dashboard";
+export type {
+  ReportSchedule,
+  CreateReportScheduleRequest,
+  UpdateReportScheduleRequest,
+  ReportLibraryTemplate,
+  ReportScheduleFrequency,
+  KbLinkFeedbackRequest,
+  ApproveZeroTouchResponse,
+} from "./types";

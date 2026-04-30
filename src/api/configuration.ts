@@ -1,12 +1,21 @@
 ﻿import { api } from "./client";
 import type {
+  AiCredentialQuery,
+  AiModelQuery,
+  AiModelScopeQuery,
+  AiModelValidationRequest,
+  AiProviderCredentialUpsertRequest,
   ClientConfiguration,
   ConfigurationMap,
   ConfigurationOrigin,
   EffectiveConfiguration,
+  NatsConnectionTestRequest,
+  NatsSettingsRequest,
+  ServerRetentionSettings,
   ServerConfiguration,
   SiteConfiguration,
   TicketAttachmentSettings,
+  TriggerMaintenanceRequest,
 } from "./types";
 
 const BASE = "/api/configurations";
@@ -51,6 +60,17 @@ export const configurationApi = {
   putServerReporting: (data: ServerReportingConfiguration) =>
     api.put<ServerReportingConfiguration>(`${BASE}/server/reporting`, data),
 
+  getServerRetention: () =>
+    api.get<ServerRetentionSettings>(`${BASE}/server/retention`),
+
+  putServerRetention: (data: ServerRetentionSettings) =>
+    api.put<ServerRetentionSettings>(`${BASE}/server/retention`, data),
+
+  resetServerRetention: () => api.post<void>(`${BASE}/server/retention/reset`),
+
+  triggerServerRetention: (data: TriggerMaintenanceRequest) =>
+    api.post<Record<string, unknown>>(`${BASE}/server/retention/trigger`, data),
+
   patchServer: (data: Partial<ServerConfiguration>) =>
     api.patch<ServerConfiguration>(`${BASE}/server`, data),
 
@@ -78,13 +98,48 @@ export const configurationApi = {
       `${BASE}/server/nats/test`,
       payload,
     ),
-  generateNatsAccountKey: () =>
-    api.post<{
-      accountSeed: string;
-      accountPublicKey: string;
-      xKeySeed?: string;
-      xKeyPublicKey?: string;
-    }>(`${BASE}/server/nats/generate-account-key`),
+  patchServerNats: (data: NatsSettingsRequest) =>
+    api.patch<ServerConfiguration>(`${BASE}/server/nats`, data),
+
+  testNatsConnection: (payload?: NatsConnectionTestRequest) =>
+    api.post<{ ok: boolean; errors?: string[]; latencyMs?: number }>(
+      `${BASE}/server/nats/test`,
+      payload,
+    ),
+
+  listAiCredentials: (params: AiCredentialQuery = {}) =>
+    api.get<Array<Record<string, unknown>>>(
+      `${BASE}/ai/credentials`,
+      params as Record<string, unknown>,
+    ),
+
+  upsertAiCredential: (data: AiProviderCredentialUpsertRequest) =>
+    api.put<Record<string, unknown>>(`${BASE}/ai/credentials`, data),
+
+  deleteAiCredential: (credentialId: string) =>
+    api.del<void>(`${BASE}/ai/credentials/${encodeURIComponent(credentialId)}`),
+
+  testAiCredential: (data: AiProviderCredentialUpsertRequest) =>
+    api.post<Record<string, unknown>>(`${BASE}/ai/credentials/test`, data),
+
+  listAiProviders: () =>
+    api.get<Array<Record<string, unknown>>>(`${BASE}/ai/providers`),
+
+  listAiModels: (params: AiModelQuery = {}) =>
+    api.get<Array<Record<string, unknown>>>(
+      `${BASE}/ai/models`,
+      params as Record<string, unknown>,
+    ),
+
+  getAiModel: (modelId: string, params: AiModelScopeQuery = {}) =>
+    api.get<Record<string, unknown>>(
+      `${BASE}/ai/models/${encodeURIComponent(modelId)}`,
+      params as Record<string, unknown>,
+    ),
+
+  validateAiModel: (data: AiModelValidationRequest) =>
+    api.post<Record<string, unknown>>(`${BASE}/ai/models/validate`, data),
+
   getClient: (clientId: string) =>
     api.get<ClientConfiguration>(`${BASE}/clients/${clientId}`),
   getClientMetadata: (clientId: string) =>

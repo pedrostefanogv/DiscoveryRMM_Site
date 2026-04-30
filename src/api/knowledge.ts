@@ -1,6 +1,7 @@
 import { api } from "./client";
 import type {
   CreateKnowledgeArticleRequest,
+  KbLinkFeedbackRequest,
   KnowledgeArticle,
   KnowledgeListQuery,
   KnowledgeSearchQuery,
@@ -54,5 +55,15 @@ export const knowledgeApi = {
     api.get<KnowledgeArticle[]>(
       `/api/tickets/${ticketId}/knowledge/suggest`,
       (params ?? {}) as unknown as Record<string, unknown>,
+    ),
+
+  sendTicketKnowledgeFeedback: (
+    ticketId: string,
+    articleId: string,
+    data: KbLinkFeedbackRequest,
+  ) =>
+    api.post<void>(
+      `/api/tickets/${ticketId}/knowledge/${articleId}/feedback`,
+      data,
     ),
 };

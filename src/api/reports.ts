@@ -4,6 +4,7 @@ import type {
   ReportTemplate,
   ReportExecution,
   ReportTemplateHistory,
+  ReportLibraryTemplate,
   CreateReportTemplateRequest,
   UpdateReportTemplateRequest,
   RunReportRequest,
@@ -152,6 +153,28 @@ export async function getReportTemplateHistory(
     `/api/reports/templates/${id}/history`,
     { limit },
   );
+}
+
+// ── Library Templates ───────────────────────────────────
+
+export async function getLibraryTemplates(params?: {
+  datasetType?: ReportDatasetTypeValue;
+}): Promise<ReportLibraryTemplate[]> {
+  return api.get<ReportLibraryTemplate[]>(
+    "/api/reports/templates/library",
+    params ?? {},
+  );
+}
+
+export async function installLibraryTemplate(
+  id: string,
+  createdBy?: string,
+): Promise<ReportTemplate> {
+  const params = new URLSearchParams();
+  if (createdBy) params.set("createdBy", createdBy);
+  const query = params.toString();
+  const path = `/api/reports/templates/library/${id}/install${query ? `?${query}` : ""}`;
+  return api.post<ReportTemplate>(path);
 }
 
 // ── Executions ──────────────────────────────────────────

@@ -10,7 +10,6 @@ import {
   Cloud,
   FileStack,
   HardDrive,
-  KeyRound,
   Layers,
   Lock,
   RotateCcw,
@@ -24,10 +23,10 @@ import {
 import { ConfigurationFieldEditor } from "@/components/configuration";
 import { Button, Card, CardHeader, ErrorDisplay, Loading, Modal } from "@/components/ui";
 import {
+  usePatchServerNatsConfig,
   usePatchServerConfig,
   useResetServerConfig,
   useServerConfig,
-  useGenerateNatsAccountKey,
   useTestNatsServer,
   useTestObjectStorage,
   useTicketAttachmentSettings,
@@ -61,21 +60,15 @@ const featureIcons: Record<string, React.ReactNode> = {
 export default function ServerConfigurationPage() {
   const serverQuery = useServerConfig();
   const patchMutation = usePatchServerConfig();
+  const patchNatsMutation = usePatchServerNatsConfig();
   const putMutation = useUpdateServerConfig();
   const resetMutation = useResetServerConfig();
-  const generateNatsAccountKeyMutation = useGenerateNatsAccountKey();
   const testNatsMutation = useTestNatsServer();
   const testStorageMutation = useTestObjectStorage();
 
   const [confirmReset, setConfirmReset] = useState(false);
   const [togglingKey, setTogglingKey] = useState<string | null>(null);
   const [savingNats, setSavingNats] = useState(false);
-  const [natsKeys, setNatsKeys] = useState<{
-    accountSeed: string;
-    accountPublicKey: string;
-    xKeySeed?: string;
-    xKeyPublicKey?: string;
-  } | null>(null);
   const [savingStorage, setSavingStorage] = useState(false);
   const [natsTestResult, setNatsTestResult] = useState<{
     ok: boolean;
@@ -184,7 +177,7 @@ export default function ServerConfigurationPage() {
       payload[field.key] = parseFieldValue(field.kind, value, field.key);
     }
     try {
-      await patchMutation.mutateAsync(payload);
+      await patchNatsMutation.mutateAsync(payload);
       toast.success("Configuração NATS salva.");
       setNatsTestResult(null);
     } catch (error) {
@@ -241,21 +234,6 @@ export default function ServerConfigurationPage() {
         errors: [readApiError(error)],
         host,
       });
-    }
-  };
-
-  const generateNatsAccountKey = async () => {
-    try {
-      const result = await generateNatsAccountKeyMutation.mutateAsync();
-      setNatsKeys({
-        accountSeed: result?.accountSeed ?? "",
-        accountPublicKey: result?.accountPublicKey ?? "",
-        xKeySeed: result?.xKeySeed,
-        xKeyPublicKey: result?.xKeyPublicKey,
-      });
-      toast.success("Account key NATS gerada com sucesso.");
-    } catch (error) {
-      toast.error(readApiError(error));
     }
   };
 
@@ -685,71 +663,11 @@ export default function ServerConfigurationPage() {
               </div>
             )}
 
-            <div className="rounded-lg border border-white/10 bg-white/5 p-4">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <p className="text-sm font-medium text-white">Account Key + xKey</p>
-                  <p className="mt-1 text-xs text-slate-400">
-                    O account seed e privado (salvar na API). A public key vai no nats-server.conf.
-                  </p>
-                </div>
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  onClick={generateNatsAccountKey}
-                  loading={generateNatsAccountKeyMutation.isPending}
-                >
-                  <KeyRound className="h-3.5 w-3.5" />
-                  Gerar Account Key
-                </Button>
-              </div>
-
-              {natsKeys ? (
-                <div className="mt-4 space-y-4">
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div className="space-y-1">
-                      <label className="text-xs font-medium text-slate-300">Account Seed (privado)</label>
-                      <textarea
-                        readOnly
-                        value={natsKeys.accountSeed}
-                        className="min-h-[96px] w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-200 outline-none"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-xs font-medium text-slate-300">Account Public Key</label>
-                      <textarea
-                        readOnly
-                        value={natsKeys.accountPublicKey}
-                        className="min-h-[96px] w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-200 outline-none"
-                      />
-                    </div>
-                  </div>
-                  {(natsKeys.xKeySeed || natsKeys.xKeyPublicKey) && (
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      <div className="space-y-1">
-                        <label className="text-xs font-medium text-slate-300">xKey Seed (opcional)</label>
-                        <textarea
-                          readOnly
-                          value={natsKeys.xKeySeed ?? ""}
-                          className="min-h-[96px] w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-200 outline-none"
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-xs font-medium text-slate-300">xKey Public Key (opcional)</label>
-                        <textarea
-                          readOnly
-                          value={natsKeys.xKeyPublicKey ?? ""}
-                          className="min-h-[96px] w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-200 outline-none"
-                        />
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <p className="mt-3 text-xs text-slate-500">
-                  Clique em “Gerar Account Key” para obter o account seed/public key e, se habilitado, a xKey.
-                </p>
-              )}
+            <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 p-4 text-sm text-amber-100">
+              <p className="font-medium">Fluxo de geração de Account Key fora do escopo documentado</p>
+              <p className="mt-1 text-xs text-amber-100/80">
+                O OpenAPI atual não documenta mais um endpoint para geração de account seed/xKey. O portal permanece alinhado aos endpoints publicados de configuração e teste do NATS.
+              </p>
             </div>
           </div>
         </Card>

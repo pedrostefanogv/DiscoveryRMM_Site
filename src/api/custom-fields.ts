@@ -66,7 +66,34 @@ export interface UpsertCustomFieldValueRequest {
   value: unknown;
 }
 
+export interface CustomFieldValueQueryParams {
+  entityId?: string;
+  clientId?: string;
+  includeSecrets?: boolean;
+}
+
 const BASE = "/api/custom-fields";
+
+async function listEntityValues(
+  path: string,
+  scopeType: CustomFieldScopeType,
+  entityId: string,
+  params?: { includeSecrets?: boolean },
+): Promise<CustomFieldValueItem[]> {
+  const raw = await api.get<unknown>(path, { includeSecrets: params?.includeSecrets });
+  return normalizeValues(raw, scopeType, entityId);
+}
+
+async function upsertEntityValue(
+  path: string,
+  scopeType: CustomFieldScopeType,
+  entityId: string,
+  definitionId: string,
+  value: unknown,
+): Promise<CustomFieldValueItem> {
+  const raw = await api.put<Record<string, unknown>>(path, { value });
+  return normalizeValueItem(raw, scopeType, entityId, definitionId);
+}
 
 export const customFieldsApi = {
   async listDefinitions(params?: {
@@ -115,6 +142,87 @@ export const customFieldsApi = {
   ): Promise<CustomFieldValueItem> {
     const raw = await api.put<Record<string, unknown>>(`${BASE}/values/${definitionId}`, payload);
     return normalizeValueItem(raw, payload.scopeType, payload.entityId ?? null, definitionId);
+  },
+
+  async getScopedValues(
+    scopeType: CustomFieldScopeType,
+    params: CustomFieldValueQueryParams = {},
+  ): Promise<CustomFieldValueItem[]> {
+    switch (scopeType) {
+      case CustomFieldScopeType.Client:
+        if (!params.entityId) return [];
+        return listEntityValues(
+          `/api/Clients/${params.entityId}/custom-fields`,
+          scopeType,
+          params.entityId,
+          params,
+        );
+      case CustomFieldScopeType.Site:
+        if (!params.entityId || !params.clientId) return [];
+        return listEntityValues(
+          `/api/clients/${params.clientId}/Sites/${params.entityId}/custom-fields`,
+          scopeType,
+          params.entityId,
+          params,
+        );
+      case CustomFieldScopeType.Agent:
+        if (!params.entityId) return [];
+        return listEntityValues(
+          `/api/Agents/${params.entityId}/custom-fields`,
+          scopeType,
+          params.entityId,
+          params,
+        );
+      default:
+        return customFieldsApi.getValues(scopeType, {
+          entityId: params.entityId,
+          includeSecrets: params.includeSecrets,
+        });
+    }
+  },
+
+  async upsertScopedValue(
+    definitionId: string,
+    payload: UpsertCustomFieldValueRequest,
+    params?: { clientId?: string },
+  ): Promise<CustomFieldValueItem> {
+    switch (payload.scopeType) {
+      case CustomFieldScopeType.Client:
+        if (!payload.entityId) {
+          throw new Error("Client entityId is required.");
+        }
+        return upsertEntityValue(
+          `/api/Clients/${payload.entityId}/custom-fields/${definitionId}`,
+          payload.scopeType,
+          payload.entityId,
+          definitionId,
+          payload.value,
+        );
+      case CustomFieldScopeType.Site:
+        if (!payload.entityId || !params?.clientId) {
+          throw new Error("Site clientId and entityId are required.");
+        }
+        return upsertEntityValue(
+          `/api/clients/${params.clientId}/Sites/${payload.entityId}/custom-fields/${definitionId}`,
+          payload.scopeType,
+          payload.entityId,
+          definitionId,
+          payload.value,
+        );
+      case CustomFieldScopeType.Agent:
+        if (!payload.entityId) {
+          throw new Error("Agent entityId is required.");
+        }
+        return upsertEntityValue(
+          `/api/Agents/${payload.entityId}/custom-fields/${definitionId}`,
+          payload.scopeType,
+          payload.entityId,
+          definitionId,
+          payload.value,
+        );
+      default:
+        return customFieldsApi.upsertValue(definitionId, payload);
+    }
   },
 };
 

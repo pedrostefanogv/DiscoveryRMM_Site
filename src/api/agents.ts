@@ -12,6 +12,7 @@ import type {
   AgentSoftwareInventorySnapshot,
   AgentCommand,
   AgentToken,
+  ApproveZeroTouchResponse,
   CreateAgentRequest,
   UpdateAgentRequest,
   SendCommandRequest,
@@ -110,4 +111,35 @@ export const agentsApi = {
 
   stopRemoteDebugSession: (id: string, sessionId: string) =>
     api.post<void>(`${BASE}/${id}/remote-debug/${sessionId}/stop`),
+
+  // Zero-touch approval
+  approveZeroTouch: (agentId: string) =>
+    api.post<ApproveZeroTouchResponse>(
+      `/api/agents/${agentId}/approve-zero-touch`,
+    ),
+
+  // Automation - run task/script on agent
+  runAutomationTask: (agentId: string, taskId: string) =>
+    api.post<Record<string, unknown>>(
+      `/api/agents/${agentId}/automation/tasks/${taskId}/run-now`,
+    ),
+
+  runAutomationScript: (agentId: string, scriptId: string) =>
+    api.post<Record<string, unknown>>(
+      `/api/agents/${agentId}/automation/scripts/${scriptId}/run-now`,
+    ),
+
+  forceAutomationSync: (agentId: string, data: {
+    policies?: boolean;
+    inventory?: boolean;
+    software?: boolean;
+    appStore?: boolean;
+  }) =>
+    api.post<Record<string, unknown>>(
+      `/api/agents/${agentId}/automation/force-sync`,
+      data,
+    ),
+
+  getAutomationExecutions: (agentId: string) =>
+    api.get<unknown[]>(`/api/agents/${agentId}/automation/executions`),
 };

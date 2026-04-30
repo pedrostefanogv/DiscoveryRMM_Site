@@ -3,19 +3,80 @@ import type {
   Ticket,
   TicketAttachment,
   TicketComment,
+  TicketRemoteSession,
   TicketWatcher,
   CreateTicketRequest,
   UpdateTicketRequest,
   UpdateWorkflowStateRequest,
   AddCommentRequest,
   AddTicketWatcherRequest,
+  EndTicketRemoteSessionRequest,
   TicketsQuery,
   PresignedUploadRequest,
   PresignedUploadResponse,
   CompleteUploadRequest,
+  StartTicketRemoteSessionRequest,
 } from "./types";
 
 const BASE = "/api/tickets";
+
+function normalizeNullableString(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  const normalized = String(value).trim();
+  return normalized ? normalized : null;
+}
+
+function normalizeTicketRemoteSession(
+  raw: Record<string, unknown>,
+  ticketId: string,
+): TicketRemoteSession {
+  return {
+    id: String(raw.id ?? raw.sessionId ?? raw.Id ?? ""),
+    ticketId: String(raw.ticketId ?? raw.TicketId ?? ticketId),
+    agentId: normalizeNullableString(raw.agentId ?? raw.AgentId),
+    meshNodeId: normalizeNullableString(raw.meshNodeId ?? raw.MeshNodeId),
+    sessionUrl: normalizeNullableString(
+      raw.sessionUrl ?? raw.SessionUrl ?? raw.url ?? raw.Url,
+    ),
+    startedBy: normalizeNullableString(raw.startedBy ?? raw.StartedBy),
+    note: normalizeNullableString(raw.note ?? raw.Note),
+    startedAt: normalizeNullableString(
+      raw.startedAt ?? raw.StartedAt ?? raw.createdAt ?? raw.CreatedAt,
+    ),
+    endedAt: normalizeNullableString(raw.endedAt ?? raw.EndedAt),
+    endedBy: normalizeNullableString(raw.endedBy ?? raw.EndedBy),
+    endNote: normalizeNullableString(raw.endNote ?? raw.EndNote),
+    status: normalizeNullableString(raw.status ?? raw.Status),
+    createdAt: normalizeNullableString(raw.createdAt ?? raw.CreatedAt),
+    updatedAt: normalizeNullableString(raw.updatedAt ?? raw.UpdatedAt),
+  };
+}
+
+function normalizeTicketRemoteSessions(
+  raw: unknown,
+  ticketId: string,
+): TicketRemoteSession[] {
+  if (Array.isArray(raw)) {
+    return raw.map((item) =>
+      normalizeTicketRemoteSession(item as Record<string, unknown>, ticketId),
+    );
+  }
+
+  if (raw && typeof raw === "object") {
+    const record = raw as Record<string, unknown>;
+    const collection = Array.isArray(record.items)
+      ? record.items
+      : Array.isArray(record.sessions)
+        ? record.sessions
+        : [];
+
+    return collection.map((item) =>
+      normalizeTicketRemoteSession(item as Record<string, unknown>, ticketId),
+    );
+  }
+
+  return [];
+}
 
 export const ticketsApi = {
   list: (params: TicketsQuery = {}) =>
@@ -50,6 +111,35 @@ export const ticketsApi = {
 
   removeWatcher: (ticketId: string, userId: string) =>
     api.del<void>(`${BASE}/${ticketId}/watchers/${userId}`),
+
+  // Remote sessions
+  async listRemoteSessions(ticketId: string): Promise<TicketRemoteSession[]> {
+    const raw = await api.get<unknown>(`${BASE}/${ticketId}/remote-sessions`);
+    return normalizeTicketRemoteSessions(raw, ticketId);
+  },
+
+  async startRemoteSession(
+    ticketId: string,
+    data: StartTicketRemoteSessionRequest,
+  ): Promise<TicketRemoteSession> {
+    const raw = await api.post<Record<string, unknown>>(
+      `${BASE}/${ticketId}/remote-sessions`,
+      data,
+    );
+    return normalizeTicketRemoteSession(raw, ticketId);
+  },
+
+  async endRemoteSession(
+    ticketId: string,
+    sessionId: string,
+    data: EndTicketRemoteSessionRequest,
+  ): Promise<TicketRemoteSession> {
+    const raw = await api.patch<Record<string, unknown>>(
+      `${BASE}/${ticketId}/remote-sessions/${sessionId}/end`,
+      data,
+    );
+    return normalizeTicketRemoteSession(raw, ticketId);
+  },
 
   // Audit / Timeline
   getTimeline: (ticketId: string) =>

@@ -1,6 +1,11 @@
 import { api } from "@/api/client";
 import type {
+  AiCredentialQuery,
+  AiModelQuery,
+  AiModelScopeQuery,
+  AiModelValidationRequest,
   AIIntegrationSettings,
+  AiProviderCredentialUpsertRequest,
   AutoUpdateSettings,
   BrandingSettings,
   ClientConfiguration,
@@ -8,11 +13,14 @@ import type {
   ConfigurationAuditReportQuery,
   ConfigurationMetadataResponse,
   ConfigurationFieldMetadata,
+  NatsSettingsRequest,
   ReportingSettings,
   ResolvedConfiguration,
+  ServerRetentionSettings,
   ServerConfiguration,
   SiteConfiguration,
   TicketAttachmentSettings,
+  TriggerMaintenanceRequest,
 } from "@/api/types";
 
 const CONFIG_BASE = "/api/configurations";
@@ -197,6 +205,13 @@ export function patchServerConfig(partialPayload: ServerConfigurationPayload) {
   );
 }
 
+export function patchServerNatsConfig(payload: NatsSettingsRequest) {
+  return api.patch<ServerConfiguration>(
+    `${CONFIG_BASE}/server/nats`,
+    payload as Record<string, unknown>,
+  );
+}
+
 export function resetServerConfig() {
   return api.post<void>(`${CONFIG_BASE}/server/reset`);
 }
@@ -213,6 +228,27 @@ export function getServerReportingConfig() {
   );
 }
 
+export function getServerRetentionConfig() {
+  return api.get<ServerRetentionSettings>(`${CONFIG_BASE}/server/retention`);
+}
+
+export function updateServerRetentionConfig(payload: ServerRetentionSettings) {
+  return api.put<ServerRetentionSettings>(`${CONFIG_BASE}/server/retention`, payload);
+}
+
+export function resetServerRetentionConfig() {
+  return api.post<void>(`${CONFIG_BASE}/server/retention/reset`);
+}
+
+export function triggerServerRetentionMaintenance(
+  payload: TriggerMaintenanceRequest,
+) {
+  return api.post<Record<string, unknown>>(
+    `${CONFIG_BASE}/server/retention/trigger`,
+    payload,
+  );
+}
+
 export function updateServerReportingConfig(
   payload: ServerReportingConfiguration,
 ) {
@@ -224,6 +260,47 @@ export function updateServerReportingConfig(
 
 export function getClientConfig(clientId: string) {
   return api.get<ClientConfiguration>(`${CONFIG_BASE}/clients/${clientId}`);
+}
+
+export function listAiCredentials(params: AiCredentialQuery = {}) {
+  return api.get<Array<Record<string, unknown>>>(
+    `${CONFIG_BASE}/ai/credentials`,
+    params as Record<string, unknown>,
+  );
+}
+
+export function upsertAiCredential(payload: AiProviderCredentialUpsertRequest) {
+  return api.put<Record<string, unknown>>(`${CONFIG_BASE}/ai/credentials`, payload);
+}
+
+export function deleteAiCredential(credentialId: string) {
+  return api.del<void>(`${CONFIG_BASE}/ai/credentials/${encodeURIComponent(credentialId)}`);
+}
+
+export function testAiCredential(payload: AiProviderCredentialUpsertRequest) {
+  return api.post<Record<string, unknown>>(`${CONFIG_BASE}/ai/credentials/test`, payload);
+}
+
+export function listAiProviders() {
+  return api.get<Array<Record<string, unknown>>>(`${CONFIG_BASE}/ai/providers`);
+}
+
+export function listAiModels(params: AiModelQuery = {}) {
+  return api.get<Array<Record<string, unknown>>>(
+    `${CONFIG_BASE}/ai/models`,
+    params as Record<string, unknown>,
+  );
+}
+
+export function getAiModel(modelId: string, params: AiModelScopeQuery = {}) {
+  return api.get<Record<string, unknown>>(
+    `${CONFIG_BASE}/ai/models/${encodeURIComponent(modelId)}`,
+    params as Record<string, unknown>,
+  );
+}
+
+export function validateAiModel(payload: AiModelValidationRequest) {
+  return api.post<Record<string, unknown>>(`${CONFIG_BASE}/ai/models/validate`, payload);
 }
 
 export function getClientEffectiveConfig(clientId: string) {

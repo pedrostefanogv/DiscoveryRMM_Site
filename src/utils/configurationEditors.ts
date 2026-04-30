@@ -278,6 +278,27 @@ export const serverEditableFields: EditableField[] = [
   },
   // ── NATS (Server-only) ───────────────────────────────
   {
+    key: "natsEnabled",
+    label: "NATS Habilitado",
+    kind: "boolean",
+    group: "nats",
+    description: "Ativa o servidor NATS para realtime e comunicação dos agentes.",
+  },
+  {
+    key: "natsAuthEnabled",
+    label: "Autenticação NATS",
+    kind: "boolean",
+    group: "nats",
+    description: "Exige autenticação JWT na conexão com o broker NATS.",
+  },
+  {
+    key: "natsUseWssExternal",
+    label: "WSS Externo",
+    kind: "boolean",
+    group: "nats",
+    description: "Usa WebSocket seguro (WSS) para conexões externas ao NATS.",
+  },
+  {
     key: "natsServerHostExternal",
     label: "NATS Host Externo (Agents)",
     kind: "string",

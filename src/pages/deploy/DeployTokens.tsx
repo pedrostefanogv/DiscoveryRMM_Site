@@ -1,10 +1,12 @@
 import { useMemo, useState } from 'react';
-import { Copy, KeyRound } from 'lucide-react';
+import { Copy, KeyRound, Trash2 } from 'lucide-react';
 import { Button, Card, CardHeader, Input, TextArea, Badge, Select } from '@/components/ui';
 import {
   useCreateDeployToken,
+  useDeployTokens,
   useDeployInstallerOptions,
   useDownloadDeployInstaller,
+  useRevokeDeployToken,
 } from '@/hooks/useDeployTokens';
 import { useClients } from '@/hooks/useClients';
 import { useSites } from '@/hooks/useSites';
@@ -63,6 +65,7 @@ function mapInstallerFlowError(error: ApiError | null, action: 'validar token' |
 
 export default function DeployTokens() {
   const createToken = useCreateDeployToken();
+  const revokeToken = useRevokeDeployToken();
   const installerOptions = useDeployInstallerOptions();
   const downloadInstaller = useDownloadDeployInstaller();
   const [form, setForm] = useState<DeployTokenFormState>({
@@ -78,8 +81,19 @@ export default function DeployTokens() {
 
   const clients = useClients(false);
   const sites = useSites(form.clientId, false);
+  const deployTokens = useDeployTokens({
+    clientId: form.clientId || undefined,
+    siteId: form.siteId || undefined,
+  });
   const activeClients = (clients.data ?? []).filter(c => c.isActive);
   const activeSites = (sites.data ?? []).filter(s => s.isActive);
+  const listedTokens = useMemo(
+    () => [...(deployTokens.data ?? [])].sort(
+      (left, right) =>
+        new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime(),
+    ),
+    [deployTokens.data],
+  );
 
   const generatedToken = createToken.data && 'token' in createToken.data ? createToken.data : null;
   const installerOptionsData = installerOptions.data;
@@ -224,6 +238,30 @@ export default function DeployTokens() {
     } catch {
       toast.error('Nao foi possivel copiar o token');
     }
+  };
+
+  const handleCopyListedToken = async (tokenValue: string) => {
+    try {
+      await navigator.clipboard.writeText(tokenValue);
+      toast.success('Token copiado para a area de transferencia');
+    } catch {
+      toast.error('Nao foi possivel copiar o token');
+    }
+  };
+
+  const handleRevokeToken = (tokenId: string) => {
+    if (!window.confirm('Revogar este deploy token?')) {
+      return;
+    }
+
+    revokeToken.mutate(tokenId, {
+      onSuccess: () => {
+        toast.success('Deploy token revogado com sucesso.');
+      },
+      onError: (error) => {
+        toast.error(error.message || 'Nao foi possivel revogar o deploy token.');
+      },
+    });
   };
 
   return (
@@ -436,6 +474,78 @@ export default function DeployTokens() {
           </div>
         </Card>
       )}
+
+      <Card>
+        <CardHeader
+          title="Tokens Emitidos"
+          subtitle={form.siteId
+            ? 'Listagem filtrada pelo site selecionado.'
+            : form.clientId
+              ? 'Listagem filtrada pelo cliente selecionado.'
+              : 'Listagem geral de deploy tokens.'}
+        />
+
+        <div className="space-y-3">
+          {deployTokens.isLoading && listedTokens.length === 0 ? (
+            <p className="text-sm text-slate-400">Carregando tokens...</p>
+          ) : listedTokens.length === 0 ? (
+            <p className="text-sm text-slate-500">Nenhum deploy token encontrado para o filtro atual.</p>
+          ) : (
+            listedTokens.map(token => (
+              <div
+                key={token.id}
+                className="rounded-xl border border-white/10 bg-white/5 p-4"
+              >
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="min-w-0 space-y-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge color={token.multiUse ? 'accent' : 'slate'}>
+                        {token.multiUse ? 'Multiuso' : 'Uso unico'}
+                      </Badge>
+                      <Badge color="slate">
+                        Criado em {new Date(token.createdAt).toLocaleString('pt-BR')}
+                      </Badge>
+                      <Badge color="slate">
+                        Expira: {token.expiresAt ? new Date(token.expiresAt).toLocaleString('pt-BR') : 'Sem expiracao'}
+                      </Badge>
+                    </div>
+
+                    {token.description && (
+                      <p className="text-sm text-slate-300">{token.description}</p>
+                    )}
+
+                    <div className="rounded-lg border border-white/10 bg-black/20 p-3">
+                      <p className="break-all font-mono text-xs text-slate-200">{token.token}</p>
+                    </div>
+                  </div>
+
+                  <div className="flex shrink-0 flex-wrap gap-2">
+                    <Button
+                      variant="secondary"
+                      onClick={() => void handleCopyListedToken(token.token)}
+                    >
+                      <Copy className="h-4 w-4" /> Copiar
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      onClick={() => handleRevokeToken(token.id)}
+                      loading={revokeToken.isPending}
+                    >
+                      <Trash2 className="h-4 w-4" /> Revogar
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
+
+          {deployTokens.isError && (
+            <p className="text-sm text-rose-300">
+              Nao foi possivel carregar os deploy tokens.
+            </p>
+          )}
+        </div>
+      </Card>
     </div>
   );
 }

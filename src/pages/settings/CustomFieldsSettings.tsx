@@ -84,8 +84,11 @@ export default function CustomFieldsSettings() {
   const definitionsQuery = useCustomFieldDefinitions({ scopeType: scopeFilter, includeInactive });
   const valuesQuery = useCustomFieldValues(
     valueScope,
-    valueEntityId,
-    includeSecrets,
+    {
+      entityId: valueEntityId,
+      clientId: valueScope === CustomFieldScopeType.Site ? selectedClientId || undefined : undefined,
+      includeSecrets,
+    },
     valueScope === CustomFieldScopeType.Server || Boolean(valueEntityId),
   );
   const createDefinition = useCreateCustomFieldDefinition();
@@ -244,6 +247,7 @@ export default function CustomFieldsSettings() {
     try {
       await upsertValue.mutateAsync({
         definitionId: definition.id,
+        clientId: definition.scopeType === CustomFieldScopeType.Site ? selectedClientId || undefined : undefined,
         payload: {
           scopeType: definition.scopeType,
           entityId: definition.scopeType === CustomFieldScopeType.Server ? null : valueEntityId ?? null,

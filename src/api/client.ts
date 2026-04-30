@@ -50,12 +50,28 @@ async function parseErrorMessage(res: Response): Promise<string> {
   if (contentType.includes("application/json")) {
     try {
       const payload = (await res.json()) as
-        | { message?: unknown; error?: unknown; detail?: unknown }
+        | { message?: unknown; error?: unknown; detail?: unknown; code?: unknown; errors?: unknown }
         | string;
       if (typeof payload === "string" && payload.trim()) return payload;
       if (payload && typeof payload === "object") {
+        // ValidationProblemDetails: extrai erros por campo
+        if (payload.errors && typeof payload.errors === "object") {
+          const fieldErrors = Object.entries(payload.errors as Record<string, unknown>)
+            .flatMap(([field, msgs]) => {
+              if (Array.isArray(msgs)) return msgs.map((m: unknown) => `${field}: ${String(m)}`);
+              return [`${field}: ${String(msgs)}`];
+            })
+            .join("; ");
+          if (fieldErrors) return fieldErrors;
+        }
+
+        // { code, message } combo
+        if (payload.code && payload.message) {
+          return `[${String(payload.code)}] ${String(payload.message)}`;
+        }
+
         const message =
-          payload.message ?? payload.error ?? payload.detail ?? res.statusText;
+          payload.message ?? payload.error ?? payload.detail ?? payload.title ?? res.statusText;
         if (typeof message === "string" && message.trim()) return message;
       }
     } catch {

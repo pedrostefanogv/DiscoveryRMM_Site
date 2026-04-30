@@ -6,9 +6,11 @@ import type {
   UpdateWorkflowStateRequest,
   AddCommentRequest,
   AddTicketWatcherRequest,
+  EndTicketRemoteSessionRequest,
   TicketsQuery,
   PresignedUploadRequest,
   CompleteUploadRequest,
+  StartTicketRemoteSessionRequest,
 } from "@/api";
 
 const KEYS = {
@@ -18,6 +20,7 @@ const KEYS = {
   detail: (id: string) => [...KEYS.all, "detail", id] as const,
   comments: (id: string) => [...KEYS.all, "comments", id] as const,
   watchers: (id: string) => [...KEYS.all, "watchers", id] as const,
+  remoteSessions: (id: string) => [...KEYS.all, "remote-sessions", id] as const,
   timeline: (id: string) => [...KEYS.all, "timeline", id] as const,
   attachments: (id: string) => [...KEYS.all, "attachments", id] as const,
   slaStatus: (id: string) => [...KEYS.all, "sla-status", id] as const,
@@ -59,6 +62,14 @@ export function useTicketWatchers(id: string) {
   return useQuery({
     queryKey: KEYS.watchers(id),
     queryFn: () => ticketsApi.listWatchers(id),
+    enabled: !!id,
+  });
+}
+
+export function useTicketRemoteSessions(id: string) {
+  return useQuery({
+    queryKey: KEYS.remoteSessions(id),
+    queryFn: () => ticketsApi.listRemoteSessions(id),
     enabled: !!id,
   });
 }
@@ -157,6 +168,38 @@ export function useRemoveTicketWatcher() {
     }) => ticketsApi.removeWatcher(ticketId, userId),
     onSuccess: (_result, vars) =>
       qc.invalidateQueries({ queryKey: KEYS.watchers(vars.ticketId) }),
+  });
+}
+
+export function useStartTicketRemoteSession() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      ticketId,
+      data,
+    }: {
+      ticketId: string;
+      data: StartTicketRemoteSessionRequest;
+    }) => ticketsApi.startRemoteSession(ticketId, data),
+    onSuccess: (_result, vars) =>
+      qc.invalidateQueries({ queryKey: KEYS.remoteSessions(vars.ticketId) }),
+  });
+}
+
+export function useEndTicketRemoteSession() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      ticketId,
+      sessionId,
+      data,
+    }: {
+      ticketId: string;
+      sessionId: string;
+      data: EndTicketRemoteSessionRequest;
+    }) => ticketsApi.endRemoteSession(ticketId, sessionId, data),
+    onSuccess: (_result, vars) =>
+      qc.invalidateQueries({ queryKey: KEYS.remoteSessions(vars.ticketId) }),
   });
 }
 

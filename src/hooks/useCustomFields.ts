@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   customFieldsApi,
+  type CustomFieldValueQueryParams,
   CustomFieldScopeType,
   type CreateCustomFieldDefinitionRequest,
   type UpdateCustomFieldDefinitionRequest,
@@ -12,8 +13,15 @@ const KEYS = {
   definitions: (params?: { scopeType?: CustomFieldScopeType; includeInactive?: boolean }) =>
     [...KEYS.all, "definitions", params ?? {}] as const,
   definition: (id: string) => [...KEYS.all, "definition", id] as const,
-  values: (scopeType: CustomFieldScopeType, entityId?: string, includeSecrets?: boolean) =>
-    [...KEYS.all, "values", scopeType, entityId ?? null, Boolean(includeSecrets)] as const,
+  values: (scopeType: CustomFieldScopeType, params: CustomFieldValueQueryParams = {}) =>
+    [
+      ...KEYS.all,
+      "values",
+      scopeType,
+      params.entityId ?? null,
+      params.clientId ?? null,
+      Boolean(params.includeSecrets),
+    ] as const,
 };
 
 export function useCustomFieldDefinitions(params?: {
@@ -62,13 +70,12 @@ export function useDeleteCustomFieldDefinition() {
 
 export function useCustomFieldValues(
   scopeType: CustomFieldScopeType,
-  entityId?: string,
-  includeSecrets?: boolean,
+  params: CustomFieldValueQueryParams = {},
   enabled = true,
 ) {
   return useQuery({
-    queryKey: KEYS.values(scopeType, entityId, includeSecrets),
-    queryFn: () => customFieldsApi.getValues(scopeType, { entityId, includeSecrets }),
+    queryKey: KEYS.values(scopeType, params),
+    queryFn: () => customFieldsApi.getScopedValues(scopeType, params),
     enabled,
   });
 }
@@ -79,16 +86,26 @@ export function useUpsertCustomFieldValue() {
     mutationFn: ({
       definitionId,
       payload,
+      clientId,
     }: {
       definitionId: string;
       payload: UpsertCustomFieldValueRequest;
-    }) => customFieldsApi.upsertValue(definitionId, payload),
-    onSuccess: (result) => {
+      clientId?: string;
+    }) => customFieldsApi.upsertScopedValue(definitionId, payload, { clientId }),
+    onSuccess: (result, vars) => {
       qc.invalidateQueries({
-        queryKey: KEYS.values(result.scopeType, result.entityId ?? undefined, true),
+        queryKey: KEYS.values(result.scopeType, {
+          entityId: result.entityId ?? undefined,
+          clientId: vars.clientId,
+          includeSecrets: true,
+        }),
       });
       qc.invalidateQueries({
-        queryKey: KEYS.values(result.scopeType, result.entityId ?? undefined, false),
+        queryKey: KEYS.values(result.scopeType, {
+          entityId: result.entityId ?? undefined,
+          clientId: vars.clientId,
+          includeSecrets: false,
+        }),
       });
     },
   });

@@ -389,6 +389,35 @@ export interface TicketStatistics {
   byActivityType: Record<string, number>;
 }
 
+export interface TicketRemoteSession {
+  id: string;
+  ticketId: string;
+  agentId?: string | null;
+  meshNodeId?: string | null;
+  sessionUrl?: string | null;
+  startedBy?: string | null;
+  note?: string | null;
+  startedAt?: string | null;
+  endedAt?: string | null;
+  endedBy?: string | null;
+  endNote?: string | null;
+  status?: string | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+}
+
+export interface StartTicketRemoteSessionRequest {
+  agentId?: string | null;
+  meshNodeId?: string | null;
+  sessionUrl?: string | null;
+  startedBy?: string | null;
+  note?: string | null;
+}
+
+export interface EndTicketRemoteSessionRequest {
+  note?: string | null;
+}
+
 export interface TicketAutomationLink {
   id: string;
   ticketId: string;
@@ -670,6 +699,75 @@ export interface DeployToken {
   createdAt: string;
 }
 
+export interface ApiToken {
+  id: string;
+  name: string;
+  token?: string | null;
+  maskedToken?: string | null;
+  prefix?: string | null;
+  createdAt?: string | null;
+  expiresAt?: string | null;
+  lastUsedAt?: string | null;
+  revokedAt?: string | null;
+  isActive?: boolean;
+}
+
+export interface MonitoringEvent {
+  id: string;
+  clientId?: string | null;
+  siteId?: string | null;
+  agentId?: string | null;
+  alertCode?: string | null;
+  severity?: number | null;
+  title?: string | null;
+  message?: string | null;
+  metricKey?: string | null;
+  metricValue?: number | null;
+  payloadJson?: string | null;
+  labels?: string[] | null;
+  source?: number | null;
+  sourceRefId?: string | null;
+  correlationId?: string | null;
+  occurredAt?: string | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+}
+
+export interface MonitoringAutoTicketDecision {
+  id?: string | null;
+  monitoringEventId?: string | null;
+  ruleId?: string | null;
+  ticketId?: string | null;
+  decision?: string | null;
+  reason?: string | null;
+  note?: string | null;
+  createdAt?: string | null;
+  matched?: boolean | null;
+}
+
+export interface BackgroundService {
+  name: string;
+  displayName?: string | null;
+  description?: string | null;
+  jobGroup?: string | null;
+  jobName?: string | null;
+  status?: string | null;
+  isRunning?: boolean | null;
+  isEnabled?: boolean | null;
+  lastRunAt?: string | null;
+  nextRunAt?: string | null;
+  lastError?: string | null;
+}
+
+export interface AdminJobActionResult {
+  jobGroup: string;
+  jobName: string;
+  action: string;
+  success?: boolean | null;
+  message?: string | null;
+  status?: string | null;
+}
+
 export type DeployTokenDelivery = "token" | "installer";
 
 export interface DeployInstallerPayload {
@@ -699,6 +797,20 @@ export interface DeployInstallerOptionsResponse {
   siteId: string;
   expiresAt: string | null;
   options: DeployInstallerOption[];
+}
+
+export interface ListDeployTokensParams {
+  clientId?: string;
+  siteId?: string;
+}
+
+export interface DownloadDeployPackageRequest {
+  rawToken: string;
+  artifact: string | null;
+}
+
+export interface PrebuildAgentRequest {
+  forceRebuild: boolean;
 }
 
 export interface MeshCentralInstallInstructions {
@@ -816,6 +928,78 @@ export interface ReportingSettings {
   allowedRetentionDays?: number[];
 }
 
+export interface NatsSettingsRequest {
+  natsEnabled?: boolean | null;
+  natsAuthEnabled?: boolean | null;
+  natsUseWssExternal?: boolean | null;
+  natsServerHostInternal?: string | null;
+  natsServerHostExternal?: string | null;
+  natsAgentJwtTtlMinutes?: number | null;
+  natsUserJwtTtlMinutes?: number | null;
+}
+
+export interface NatsConnectionTestRequest {
+  url?: string | null;
+  user?: string | null;
+  password?: string | null;
+}
+
+export interface ServerRetentionSettings {
+  logRetentionDays?: number | null;
+  notificationRetentionDays?: number | null;
+  agentCommandRetentionDays?: number | null;
+  sessionRetentionDays?: number | null;
+  tokenExpiredGraceDays?: number | null;
+  syncPingRetentionDays?: number | null;
+  telemetryRetentionDays?: number | null;
+  automationReportRetentionDays?: number | null;
+  databaseMaintenance?: Record<string, unknown> | null;
+  [key: string]: unknown;
+}
+
+export interface TriggerMaintenanceRequest {
+  jobs?: string[] | null;
+}
+
+export interface AiCredentialQuery {
+  scopeType?: string;
+  clientId?: string;
+  siteId?: string;
+}
+
+export interface AiProviderCredentialUpsertRequest {
+  scopeType: string;
+  clientId?: string | null;
+  siteId?: string | null;
+  provider: string;
+  baseUrl?: string | null;
+  embeddingBaseUrl?: string | null;
+  apiKey?: string | null;
+  embeddingApiKey?: string | null;
+}
+
+export interface AiModelQuery {
+  provider?: string;
+  capability?: string;
+  search?: string;
+  refresh?: boolean;
+  freeOnly?: boolean;
+  clientId?: string;
+  siteId?: string;
+}
+
+export interface AiModelScopeQuery {
+  clientId?: string;
+  siteId?: string;
+}
+
+export interface AiModelValidationRequest {
+  modelId: string;
+  capability?: string | null;
+  clientId?: string | null;
+  siteId?: string | null;
+}
+
 export interface BrandingSettings {
   companyName?: string;
   logoUrl?: string;
@@ -854,6 +1038,9 @@ export interface ServerConfiguration {
   objectStorageUrlTtlHours?: number;
   objectStorageUsePathStyle?: boolean;
   objectStorageSslVerify?: boolean;
+  natsEnabled?: boolean;
+  natsAuthEnabled?: boolean;
+  natsUseWssExternal?: boolean;
   natsServerHostInternal?: string;
   natsServerHostExternal?: string;
   natsAgentJwtTtlMinutes?: number;
@@ -1167,6 +1354,30 @@ export interface CreateDeployTokenRequest {
   delivery: DeployTokenDelivery;
 }
 
+export interface CreateApiTokenRequest {
+  name: string;
+  expiresAt?: string | null;
+}
+
+export interface CreateMonitoringEventRequest {
+  clientId: string;
+  siteId?: string | null;
+  agentId: string;
+  alertCode: string;
+  severity: number;
+  title?: string | null;
+  message?: string | null;
+  metricKey?: string | null;
+  metricValue?: number | string | null;
+  payloadJson?: string | null;
+  labels?: string[] | null;
+  source: number;
+  sourceRefId?: string | null;
+  correlationId?: string | null;
+  occurredAt?: string | null;
+  evaluateAutoTicket?: boolean;
+}
+
 export interface DeployInstallerOptionsRequest {
   rawToken: string;
 }
@@ -1174,6 +1385,11 @@ export interface DeployInstallerOptionsRequest {
 export interface DownloadDeployInstallerRequest {
   rawToken: string;
   installerType: DeployInstallerTypeInput;
+}
+
+export interface DownloadPackageRequest {
+  rawToken: string;
+  artifact: string | null;
 }
 
 export interface CreateLogRequest {
@@ -1260,9 +1476,14 @@ export interface KnowledgeSearchQuery {
 
 export interface LinkTicketKnowledgeRequest {
   articleId: string;
+  linkedBy?: string | null;
+  note?: string | null;
 }
 
 export interface TicketKnowledgeSuggestQuery {
+  q: string;
+  clientId?: string;
+  siteId?: string;
   maxResults?: number;
 }
 
@@ -1363,6 +1584,42 @@ export enum AgentAlertScopeType {
   Label = 3,
 }
 
+export type AgentAlertStatus = number;
+
+export interface AgentAlert {
+  id: string;
+  title: string;
+  message: string;
+  alertType: number;
+  timeoutSeconds?: number | null;
+  actionsJson?: string | null;
+  defaultAction?: string | null;
+  icon?: AgentAlertIcon | null;
+  scopeType: AgentAlertScopeType;
+  scopeAgentId?: string | null;
+  scopeSiteId?: string | null;
+  scopeClientId?: string | null;
+  scopeLabelName?: string | null;
+  scheduledAt?: string | null;
+  expiresAt?: string | null;
+  ticketId?: string | null;
+  createdBy?: string | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+  status?: AgentAlertStatus | null;
+}
+
+export interface AgentAlertsQuery {
+  status?: AgentAlertStatus;
+  scopeType?: AgentAlertScopeType;
+  scopeClientId?: string;
+  scopeSiteId?: string;
+  scopeAgentId?: string;
+  ticketId?: string;
+  limit?: number;
+  offset?: number;
+}
+
 export interface AgentAlertScopeOptionAgent {
   id: string;
   label: string;
@@ -1384,6 +1641,25 @@ export interface AgentAlertScopeOptionsResponse {
 }
 
 export type AgentAlertIcon = "info" | "success" | "warning" | "error" | string;
+
+export interface CreateAgentAlertRequest {
+  title: string;
+  message: string;
+  alertType: number;
+  timeoutSeconds?: number | null;
+  actionsJson?: string | null;
+  defaultAction?: string | null;
+  icon?: AgentAlertIcon | null;
+  scopeType: AgentAlertScopeType;
+  scopeAgentId?: string | null;
+  scopeSiteId?: string | null;
+  scopeClientId?: string | null;
+  scopeLabelName?: string | null;
+  scheduledAt?: string | null;
+  expiresAt?: string | null;
+  ticketId?: string | null;
+  createdBy?: string | null;
+}
 
 export interface AgentAlertTestDispatchRequest {
   testAgentId: string;
@@ -1945,6 +2221,92 @@ export interface ReportAutocompleteResponse {
   fieldReferenceMode?: string;
   total: number;
   items: ReportAutocompleteItem[];
+}
+
+// ── Report Schedules ──────────────────────────────────────
+
+export enum ReportScheduleFrequency {
+  Daily = 0,
+  Weekly = 1,
+  Monthly = 2,
+}
+
+export interface ReportSchedule {
+  id: string;
+  templateId: string;
+  clientId: string | null;
+  name: string;
+  frequency: ReportScheduleFrequency;
+  dayOfWeek: number | null;
+  dayOfMonth: number | null;
+  hourUtc: number;
+  minuteUtc: number;
+  format: ReportFormatValue;
+  filtersJson: string | null;
+  recipients: string[] | null;
+  isActive: boolean;
+  lastRunAt: string | null;
+  nextRunAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateReportScheduleRequest {
+  templateId: string;
+  clientId?: string | null;
+  name: string;
+  frequency: ReportScheduleFrequency;
+  dayOfWeek?: number | null;
+  dayOfMonth?: number | null;
+  hourUtc: number;
+  minuteUtc: number;
+  format?: ReportFormatValue;
+  filtersJson?: string | null;
+  recipients?: string[] | null;
+  isActive?: boolean;
+}
+
+export interface UpdateReportScheduleRequest {
+  name?: string;
+  frequency?: ReportScheduleFrequency;
+  dayOfWeek?: number | null;
+  dayOfMonth?: number | null;
+  hourUtc?: number;
+  minuteUtc?: number;
+  format?: ReportFormatValue;
+  filtersJson?: string | null;
+  recipients?: string[] | null;
+  isActive?: boolean;
+}
+
+// ── Report Library Templates ──────────────────────────────
+
+export interface ReportLibraryTemplate {
+  id: string;
+  name: string;
+  description: string | null;
+  datasetType: ReportDatasetTypeValue;
+  defaultFormat: ReportFormatValue;
+  layoutJson: string;
+  filtersJson: string | null;
+  isBuiltIn: boolean;
+  category: string | null;
+  tags: string[] | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+// ── Knowledge Feedback ────────────────────────────────────
+
+export interface KbLinkFeedbackRequest {
+  useful: boolean;
+}
+
+// ── Agent Approve Zero-Touch ──────────────────────────────
+
+export interface ApproveZeroTouchResponse {
+  message: string;
+  agentId: string;
 }
 
 // ── App Store ──────────────────────────────────────────────
