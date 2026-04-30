@@ -1,11 +1,22 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown, LogOut, Menu, Search, User } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/auth/AuthContext';
-import { Button } from '@/components/ui';
 import { useNowTick } from '@/hooks/useNowTick';
+import { useMyProfile } from '@/hooks/useIdentity';
 import { RealtimeConnectionStatus } from '@/components/RealtimeConnectionStatus';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
+
+function computeInitials(source: string | undefined | null): string {
+  if (!source) return 'U';
+  const trimmed = source.trim();
+  if (!trimmed) return 'U';
+  const parts = trimmed.split(/\s+/).filter(Boolean);
+  if (parts.length === 1) {
+    return parts[0].slice(0, 2).toUpperCase();
+  }
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
 
 function formatCountdown(msRemaining: number) {
   const totalSeconds = Math.max(0, Math.floor(msRemaining / 1000));
@@ -24,7 +35,7 @@ interface HeaderProps {
 
 export function Header({ onMenuClick }: HeaderProps) {
   const navigate = useNavigate();
-  const { logout, session } = useAuth();
+  const { logout, session, isAuthenticated } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const now = useNowTick(1_000);
@@ -32,6 +43,15 @@ export function Header({ onMenuClick }: HeaderProps) {
     session.expiresAt && session.stage === 'authenticated'
       ? formatCountdown(session.expiresAt - now)
       : null;
+
+  const profileQuery = useMyProfile();
+  const profile = isAuthenticated ? profileQuery.data : undefined;
+  const displayName = profile?.fullName || profile?.login || 'Usuário';
+  const displayEmail = profile?.email ?? '';
+  const initials = useMemo(
+    () => computeInitials(profile?.fullName ?? profile?.login ?? null),
+    [profile?.fullName, profile?.login],
+  );
 
   const handleLogout = async () => {
     await logout();
@@ -78,9 +98,6 @@ export function Header({ onMenuClick }: HeaderProps) {
 
         {/* Right side */}
         <div className="flex items-center gap-2 sm:gap-4">
-          <div className="hidden rounded-lg border border-emerald-400/20 bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-200 xl:block">
-            Sessão segura
-          </div>
           <div className="hidden text-right md:block">
             <p className="text-sm font-medium text-white">
               {session.stage === 'authenticated' ? 'Sessão autenticada' : 'Aguardando autenticação'}
@@ -92,19 +109,41 @@ export function Header({ onMenuClick }: HeaderProps) {
           <RealtimeConnectionStatus />
           <NotificationBell />
           <div className="relative" ref={menuRef}>
-            <Button
-              variant="ghost"
-              size="sm"
+            <button
+              type="button"
               onClick={() => setMenuOpen((prev) => !prev)}
-              className="rounded-xl border border-white/10 bg-white/5 text-slate-200 hover:bg-white/10"
+              title={displayEmail ? `${displayName} · ${displayEmail}` : displayName}
+              aria-label={`Conta de ${displayName}`}
+              aria-haspopup="menu"
+              aria-expanded={menuOpen}
+              className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-1 py-1 pr-2 text-slate-200 transition-colors hover:bg-white/10"
             >
-              <User className="h-4 w-4" /> Conta <ChevronDown className="h-4 w-4" />
-            </Button>
+              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-primary text-xs font-bold text-white">
+                {initials}
+              </span>
+              <span className="hidden text-sm font-medium text-slate-100 sm:inline">{displayName}</span>
+              <ChevronDown className="h-4 w-4 text-slate-400" />
+            </button>
 
             {menuOpen && (
-              <div className="absolute right-0 z-30 mt-2 w-44 rounded-lg border border-white/10 bg-slate-900/95 p-1 shadow-2xl backdrop-blur">
+              <div
+                role="menu"
+                className="absolute right-0 z-30 mt-2 w-60 rounded-lg border border-white/10 bg-slate-900/95 p-1 shadow-2xl backdrop-blur"
+              >
+                <div className="flex items-center gap-3 border-b border-white/10 px-3 py-3">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-bold text-white">
+                    {initials}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium text-white">{displayName}</p>
+                    {displayEmail && (
+                      <p className="truncate text-xs text-slate-400">{displayEmail}</p>
+                    )}
+                  </div>
+                </div>
                 <button
                   type="button"
+                  role="menuitem"
                   onClick={() => {
                     setMenuOpen(false);
                     navigate('/identity/authentication');
@@ -115,6 +154,7 @@ export function Header({ onMenuClick }: HeaderProps) {
                 </button>
                 <button
                   type="button"
+                  role="menuitem"
                   onClick={() => {
                     setMenuOpen(false);
                     void handleLogout();
@@ -126,7 +166,6 @@ export function Header({ onMenuClick }: HeaderProps) {
               </div>
             )}
           </div>
-          <div className="hidden h-8 w-8 items-center justify-center rounded-full bg-primary text-xs font-bold text-white sm:flex">U</div>
         </div>
       </div>
     </header>

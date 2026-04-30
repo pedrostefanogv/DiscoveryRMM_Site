@@ -228,20 +228,61 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [refreshSession]);
 
+  // Inatividade: se o usuário não interagir até a expiração do access token,
+  // a sessão é encerrada e os tokens limpos (forçando novo login).
+  // Se houver atividade recente, o token é renovado proativamente ~5min antes do fim.
   useEffect(() => {
     if (!session.accessToken || !session.refreshToken || !session.expiresAt) {
       return;
     }
 
-    const refreshDelay = Math.max(session.expiresAt - Date.now() - 60_000, 5_000);
-    const timer = window.setTimeout(() => {
-      void refreshSession();
-    }, refreshDelay);
+    const REFRESH_THRESHOLD_MS = 5 * 60 * 1000; // janela em que renovamos antecipadamente se ativo
+    const ACTIVITY_WINDOW_MS = 5 * 60 * 1000; // considera "ativo" se interagiu nos últimos 5min
+    const REFRESH_THROTTLE_MS = 30_000;
+
+    let lastActivityAt = Date.now();
+    let lastRefreshAttemptAt = 0;
+    const activityEvents: (keyof WindowEventMap)[] = [
+      "mousedown",
+      "keydown",
+      "touchstart",
+      "scroll",
+      "click",
+    ];
+    const handleActivity = () => {
+      lastActivityAt = Date.now();
+    };
+    activityEvents.forEach((event) =>
+      window.addEventListener(event, handleActivity, { passive: true } as AddEventListenerOptions),
+    );
+
+    const intervalId = window.setInterval(() => {
+      const now = Date.now();
+      const expiresAt = sessionRef.current.expiresAt ?? 0;
+      const remaining = expiresAt - now;
+      const idleFor = now - lastActivityAt;
+
+      if (remaining <= 0) {
+        console.warn("[auth] Sessão encerrada por inatividade. Tokens removidos.");
+        void logout();
+        return;
+      }
+
+      if (
+        remaining < REFRESH_THRESHOLD_MS &&
+        idleFor < ACTIVITY_WINDOW_MS &&
+        now - lastRefreshAttemptAt > REFRESH_THROTTLE_MS
+      ) {
+        lastRefreshAttemptAt = now;
+        void refreshSession();
+      }
+    }, 1_000);
 
     return () => {
-      window.clearTimeout(timer);
+      window.clearInterval(intervalId);
+      activityEvents.forEach((event) => window.removeEventListener(event, handleActivity));
     };
-  }, [refreshSession, session.accessToken, session.expiresAt, session.refreshToken]);
+  }, [logout, refreshSession, session.accessToken, session.expiresAt, session.refreshToken]);
 
   const value = useMemo<AuthContextValue>(
     () => ({
