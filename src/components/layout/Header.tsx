@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronDown, LogOut, Menu, Search, User } from 'lucide-react';
+import { LogOut, Menu, Search, User } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/auth/AuthContext';
 import { useNowTick } from '@/hooks/useNowTick';
@@ -116,13 +116,9 @@ export function Header({ onMenuClick }: HeaderProps) {
               aria-label={`Conta de ${displayName}`}
               aria-haspopup="menu"
               aria-expanded={menuOpen}
-              className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-1 py-1 pr-2 text-slate-200 transition-colors hover:bg-white/10"
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-xs font-bold text-white ring-1 ring-white/10 transition hover:ring-white/30 focus:outline-none focus:ring-2 focus:ring-primary/60"
             >
-              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-primary text-xs font-bold text-white">
-                {initials}
-              </span>
-              <span className="hidden text-sm font-medium text-slate-100 sm:inline">{displayName}</span>
-              <ChevronDown className="h-4 w-4 text-slate-400" />
+              {initials}
             </button>
 
             {menuOpen && (
