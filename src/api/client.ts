@@ -1,4 +1,5 @@
 export const API_BASE_URL = import.meta.env.VITE_API_URL ?? "";
+export const API_VERSION_PREFIX = "/api/v1";
 
 export interface ApiRequestInit extends RequestInit {
   auth?: boolean;
@@ -98,11 +99,33 @@ export function configureApiClient(config: Partial<ApiClientConfig>) {
   };
 }
 
+function normalizeApiPath(path: string): string {
+  if (!path.startsWith("/")) {
+    return path;
+  }
+
+  // Migra automaticamente endpoints legados /api/* para /api/v1/*.
+  if (path.startsWith("/api/v")) {
+    return path;
+  }
+
+  if (path === "/api") {
+    return API_VERSION_PREFIX;
+  }
+
+  if (path.startsWith("/api/")) {
+    return `${API_VERSION_PREFIX}${path.slice(4)}`;
+  }
+
+  return path;
+}
+
 export async function apiFetchResponse(
   path: string,
   init: ApiRequestInit = {},
 ): Promise<Response> {
-  const url = `${API_BASE_URL}${path}`;
+  const normalizedPath = normalizeApiPath(path);
+  const url = `${API_BASE_URL}${normalizedPath}`;
   const headers = new Headers(init.headers);
   const useAuth = init.auth !== false;
 
