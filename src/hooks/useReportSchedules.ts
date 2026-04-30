@@ -1,7 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { reportSchedulesApi } from "@/api";
 import type {
-  ReportSchedule,
   CreateReportScheduleRequest,
   UpdateReportScheduleRequest,
 } from "@/api";

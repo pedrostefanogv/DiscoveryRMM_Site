@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { Zap, Plus, Pencil, Trash2, Play, Power, PowerOff, BarChart3 } from 'lucide-react';
+import { Zap, Plus, Pencil, Trash2, Power, PowerOff } from 'lucide-react';
 import {
   Badge,
   Button,
@@ -106,7 +106,7 @@ export default function AutoTicketRulesPage() {
   };
 
   if (isLoading) return <Loading message="Carregando regras..." />;
-  if (error) return <ErrorDisplay error={error} />;
+  if (error) return <ErrorDisplay message={(error as Error).message} />;
 
   return (
     <div className="space-y-6">
@@ -155,17 +155,18 @@ export default function AutoTicketRulesPage() {
               label="Prioridade"
               value={form.ticketPriority}
               onChange={(e) => setForm({ ...form, ticketPriority: e.target.value })}
-            >
-              <option value="Low">Baixa</option>
-              <option value="Medium">Média</option>
-              <option value="High">Alta</option>
-              <option value="Critical">Crítica</option>
-            </Select>
+              options={[
+                { value: 'Low', label: 'Baixa' },
+                { value: 'Medium', label: 'Média' },
+                { value: 'High', label: 'Alta' },
+                { value: 'Critical', label: 'Crítica' },
+              ]}
+            />
             <div className="flex gap-2">
               <Button onClick={() => saveMutation.mutate(form)} disabled={saveMutation.isPending}>
                 {saveMutation.isPending ? 'Salvando...' : 'Salvar'}
               </Button>
-              <Button variant="outline" onClick={resetForm}>
+              <Button variant="secondary" onClick={resetForm}>
                 Cancelar
               </Button>
             </div>
@@ -190,7 +191,7 @@ export default function AutoTicketRulesPage() {
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
                       <h3 className="font-semibold">{rule.name}</h3>
-                      <Badge variant={rule.isEnabled ? 'success' : 'secondary'}>
+                      <Badge color={rule.isEnabled ? 'success' : 'slate'}>
                         {rule.isEnabled ? 'Ativo' : 'Inativo'}
                       </Badge>
                     </div>
@@ -207,7 +208,7 @@ export default function AutoTicketRulesPage() {
                   <div className="flex items-center gap-1">
                     <Button
                       variant="ghost"
-                      size="icon"
+                      size="sm"
                       onClick={() => toggleMutation.mutate({ id: rule.id, enable: !rule.isEnabled })}
                       title={rule.isEnabled ? 'Desativar' : 'Ativar'}
                     >
@@ -215,7 +216,7 @@ export default function AutoTicketRulesPage() {
                     </Button>
                     <Button
                       variant="ghost"
-                      size="icon"
+                      size="sm"
                       onClick={() => {
                         setForm({
                           name: rule.name,
@@ -237,7 +238,7 @@ export default function AutoTicketRulesPage() {
                     </Button>
                     <Button
                       variant="ghost"
-                      size="icon"
+                      size="sm"
                       onClick={() => {
                         if (confirm('Excluir esta regra?')) deleteMutation.mutate(rule.id);
                       }}

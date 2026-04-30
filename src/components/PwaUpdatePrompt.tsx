@@ -56,7 +56,7 @@ export function PwaUpdatePrompt() {
             Recarregar agora
           </Button>
           <Button
-            variant="outline"
+            variant="secondary"
             onClick={() => window.location.reload()}
           >
             Reload forcado

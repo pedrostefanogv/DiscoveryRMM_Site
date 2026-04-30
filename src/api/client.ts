@@ -50,7 +50,7 @@ async function parseErrorMessage(res: Response): Promise<string> {
   if (contentType.includes("application/json")) {
     try {
       const payload = (await res.json()) as
-        | { message?: unknown; error?: unknown; detail?: unknown; code?: unknown; errors?: unknown }
+        | { message?: unknown; error?: unknown; detail?: unknown; code?: unknown; errors?: unknown; title?: unknown }
         | string;
       if (typeof payload === "string" && payload.trim()) return payload;
       if (payload && typeof payload === "object") {

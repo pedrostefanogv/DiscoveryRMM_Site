@@ -55,7 +55,7 @@ export default function ReportSchedulesPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState<FormState>(DEFAULT_FORM);
 
-  const { data: schedules = [], isLoading, error } = useQuery({
+  const { data: schedules = [], isLoading, error, refetch } = useQuery({
     queryKey: ['report-schedules'],
     queryFn: () => reportSchedulesApi.list(),
   });
@@ -117,7 +117,7 @@ export default function ReportSchedulesPage() {
   };
 
   if (isLoading) return <Loading message="Carregando agendamentos..." />;
-  if (error) return <ErrorDisplay error={error} />;
+  if (error) return <ErrorDisplay message={error.message} onRetry={() => refetch()} />;
 
   return (
     <div className="space-y-6">
@@ -157,20 +157,22 @@ export default function ReportSchedulesPage() {
                 onChange={(e) =>
                   setForm({ ...form, frequency: Number(e.target.value) })
                 }
-              >
-                <option value="0">Diário</option>
-                <option value="1">Semanal</option>
-                <option value="2">Mensal</option>
-              </Select>
+                options={[
+                  { value: '0', label: 'Diário' },
+                  { value: '1', label: 'Semanal' },
+                  { value: '2', label: 'Mensal' },
+                ]}
+              />
               <Select
                 label="Formato"
                 value={form.format}
                 onChange={(e) => setForm({ ...form, format: e.target.value })}
-              >
-                <option value="Pdf">PDF</option>
-                <option value="Xlsx">Excel (XLSX)</option>
-                <option value="Csv">CSV</option>
-              </Select>
+                options={[
+                  { value: 'Pdf', label: 'PDF' },
+                  { value: 'Xlsx', label: 'Excel (XLSX)' },
+                  { value: 'Csv', label: 'CSV' },
+                ]}
+              />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <Input
@@ -201,15 +203,16 @@ export default function ReportSchedulesPage() {
                 onChange={(e) =>
                   setForm({ ...form, dayOfWeek: Number(e.target.value) })
                 }
-              >
-                <option value="0">Domingo</option>
-                <option value="1">Segunda-feira</option>
-                <option value="2">Terça-feira</option>
-                <option value="3">Quarta-feira</option>
-                <option value="4">Quinta-feira</option>
-                <option value="5">Sexta-feira</option>
-                <option value="6">Sábado</option>
-              </Select>
+                options={[
+                  { value: '0', label: 'Domingo' },
+                  { value: '1', label: 'Segunda-feira' },
+                  { value: '2', label: 'Terça-feira' },
+                  { value: '3', label: 'Quarta-feira' },
+                  { value: '4', label: 'Quinta-feira' },
+                  { value: '5', label: 'Sexta-feira' },
+                  { value: '6', label: 'Sábado' },
+                ]}
+              />
             )}
             {form.frequency === 2 && (
               <Input
@@ -233,7 +236,7 @@ export default function ReportSchedulesPage() {
               <Button onClick={handleSave} disabled={saveMutation.isPending}>
                 {saveMutation.isPending ? 'Salvando...' : 'Salvar'}
               </Button>
-              <Button variant="outline" onClick={resetForm}>
+              <Button variant="secondary" onClick={resetForm}>
                 Cancelar
               </Button>
             </div>
@@ -258,7 +261,7 @@ export default function ReportSchedulesPage() {
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
                       <h3 className="font-semibold">{schedule.name}</h3>
-                      <Badge variant={schedule.isActive ? 'success' : 'secondary'}>
+                      <Badge color={schedule.isActive ? 'success' : 'slate'}>
                         {schedule.isActive ? 'Ativo' : 'Inativo'}
                       </Badge>
                     </div>
@@ -281,7 +284,7 @@ export default function ReportSchedulesPage() {
                   <div className="flex items-center gap-1">
                     <Button
                       variant="ghost"
-                      size="icon"
+                      size="sm"
                       onClick={() => {
                         setForm({
                           name: schedule.name,
@@ -304,7 +307,7 @@ export default function ReportSchedulesPage() {
                     </Button>
                     <Button
                       variant="ghost"
-                      size="icon"
+                      size="sm"
                       onClick={() => {
                         if (confirm('Excluir este agendamento?'))
                           deleteMutation.mutate(schedule.id);

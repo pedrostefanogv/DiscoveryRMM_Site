@@ -1,16 +1,14 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { Package, Upload, RefreshCw, Rocket, Play, Download, Trash2 } from 'lucide-react';
+import { Package, RefreshCw, Rocket } from 'lucide-react';
 import {
   Badge,
   Button,
   Card,
   CardHeader,
   ErrorDisplay,
-  Input,
   Loading,
-  Select,
 } from '@/components/ui';
 import { agentUpdatesApi } from '@/api';
 
@@ -74,7 +72,7 @@ export default function AgentUpdatesPage() {
   };
 
   if (isLoading) return <Loading message="Carregando releases..." />;
-  if (error) return <ErrorDisplay error={error} />;
+  if (error) return <ErrorDisplay message={(error as Error).message} />;
 
   return (
     <div className="space-y-6">
@@ -86,7 +84,7 @@ export default function AgentUpdatesPage() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={handleSyncRepository} disabled={syncLoading}>
+          <Button variant="secondary" onClick={handleSyncRepository} disabled={syncLoading}>
             <RefreshCw className={`w-4 h-4 mr-2 ${syncLoading ? 'animate-spin' : ''}`} />
             Sincronizar
           </Button>
@@ -120,9 +118,9 @@ export default function AgentUpdatesPage() {
           </div>
           {rollout.currentVersion && (
             <div className="px-4 pb-4 text-sm text-muted-foreground">
-              Versão atual mais comum: <Badge variant="outline">{rollout.currentVersion}</Badge>
+              Versão atual mais comum: <Badge color="slate">{rollout.currentVersion}</Badge>
               {rollout.latestVersion && rollout.latestVersion !== rollout.currentVersion && (
-                <> | Última: <Badge variant="success">{rollout.latestVersion}</Badge></>
+                <> | Última: <Badge color="success">{rollout.latestVersion}</Badge></>
               )}
             </div>
           )}
@@ -144,7 +142,7 @@ export default function AgentUpdatesPage() {
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="font-mono font-semibold">{release.version}</span>
-                    <Badge variant={release.isPromoted ? 'success' : 'secondary'}>
+                    <Badge color={release.isPromoted ? 'success' : 'slate'}>
                       {release.isPromoted ? 'Promovida' : release.channel || 'Dev'}
                     </Badge>
                   </div>
