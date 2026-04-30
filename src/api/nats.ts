@@ -41,6 +41,12 @@ function normalizeNatsUrl(url: string): string {
   const trimmed = url.trim();
 
   if (!trimmed) return "";
+  if (trimmed.startsWith("http://")) {
+    return `ws://${trimmed.slice("http://".length)}`;
+  }
+  if (trimmed.startsWith("https://")) {
+    return `wss://${trimmed.slice("https://".length)}`;
+  }
   if (trimmed.startsWith("ws://") || trimmed.startsWith("wss://")) {
     return trimmed;
   }
@@ -49,6 +55,11 @@ function normalizeNatsUrl(url: string): string {
   }
   if (trimmed.startsWith("tls://")) {
     return `wss://${trimmed.slice("tls://".length)}`;
+  }
+
+  // Bare host/path values are mapped to secure websocket in browser contexts.
+  if (!trimmed.includes("://")) {
+    return `wss://${trimmed}`;
   }
 
   return trimmed;

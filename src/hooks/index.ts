@@ -1,67 +1,114 @@
 import { useEffect, useState } from "react";
 import { useAgentStatusRealtime } from "./useAgentStatusRealtime";
 import { useAgentStatusNats } from "./useAgentStatusNats";
-import { getNatsService } from "@/api/nats";
 import { realtimeConfig } from "@/config/realtime";
+import {
+  getRealtimeConnectionSnapshot,
+  subscribeRealtimeConnectionState,
+} from "@/utils/realtimeConnectionState";
 
-const NATS_FALLBACK_GRACE_MS = 4_000;
-const NATS_HEALTHCHECK_INTERVAL_MS = 5_000;
+const SIGNALR_PRIORITY_GRACE_MS = 4_000;
+const SIGNALR_HEALTHCHECK_INTERVAL_MS = 5_000;
 
 /**
  * Unified realtime hook that supports both SignalR and NATS
  * Allows gradual migration from SignalR to NATS or running both in parallel
  */
 export function useAgentStatusRealtime_Combined(enabled = true) {
-  const natsEnabled =
+  const natsConfigured =
     enabled && realtimeConfig.useNats && realtimeConfig.natsEnabled;
   const signalrConfigured = enabled && realtimeConfig.useSignalR;
 
-  // Prioridade: NATS primeiro. SignalR sobe apenas como fallback.
-  const [signalrFallbackEnabled, setSignalrFallbackEnabled] =
-    useState(!natsEnabled);
+  // Modo both com prioridade SignalR.
+  // NATS entra como fallback automatico quando SignalR nao conecta ou cai.
+  const [natsRuntimeEnabled, setNatsRuntimeEnabled] =
+    useState(false);
+  const [signalrRuntimeEnabled, setSignalrRuntimeEnabled] =
+    useState(signalrConfigured);
 
-  useAgentStatusNats(natsEnabled);
+  useAgentStatusNats(natsRuntimeEnabled);
 
   useEffect(() => {
     if (!enabled) {
-      setSignalrFallbackEnabled(false);
+      setNatsRuntimeEnabled(false);
+      setSignalrRuntimeEnabled(false);
       return;
     }
 
-    if (!signalrConfigured) {
-      setSignalrFallbackEnabled(false);
+    if (!natsConfigured && !signalrConfigured) {
+      setNatsRuntimeEnabled(false);
+      setSignalrRuntimeEnabled(false);
       return;
     }
 
-    if (!natsEnabled) {
-      setSignalrFallbackEnabled(true);
+    if (natsConfigured && !signalrConfigured) {
+      setNatsRuntimeEnabled(true);
+      setSignalrRuntimeEnabled(false);
       return;
     }
 
-    // Aguarda um pequeno periodo para NATS conectar antes de ativar fallback.
-    setSignalrFallbackEnabled(false);
+    if (!natsConfigured && signalrConfigured) {
+      setNatsRuntimeEnabled(false);
+      setSignalrRuntimeEnabled(true);
+      return;
+    }
+
+    // Ambos configurados: prioriza SignalR e habilita NATS apenas em falha.
+    setSignalrRuntimeEnabled(true);
+    setNatsRuntimeEnabled(false);
+
+    const startedAt = Date.now();
 
     const evaluateFallback = () => {
-      const natsConnected = getNatsService().isConnected();
-      setSignalrFallbackEnabled(!natsConnected);
+      const snapshot = getRealtimeConnectionSnapshot();
+      const graceElapsed = Date.now() - startedAt >= SIGNALR_PRIORITY_GRACE_MS;
+
+      if (snapshot.signalrConnected) {
+        setNatsRuntimeEnabled(false);
+        return;
+      }
+
+      if (snapshot.signalrState === "disconnected") {
+        setNatsRuntimeEnabled(true);
+        return;
+      }
+
+      if (snapshot.signalrState === "reconnecting") {
+        setNatsRuntimeEnabled(true);
+        return;
+      }
+
+      if (snapshot.signalrState === "connecting") {
+        setNatsRuntimeEnabled(graceElapsed);
+        return;
+      }
+
+      setNatsRuntimeEnabled(graceElapsed);
     };
+
+    evaluateFallback();
+
+    const unsubscribeConnectionState = subscribeRealtimeConnectionState(() => {
+      evaluateFallback();
+    });
 
     const graceTimer = window.setTimeout(
       evaluateFallback,
-      NATS_FALLBACK_GRACE_MS,
+      SIGNALR_PRIORITY_GRACE_MS,
     );
     const healthTimer = window.setInterval(
       evaluateFallback,
-      NATS_HEALTHCHECK_INTERVAL_MS,
+      SIGNALR_HEALTHCHECK_INTERVAL_MS,
     );
 
     return () => {
+      unsubscribeConnectionState();
       window.clearTimeout(graceTimer);
       window.clearInterval(healthTimer);
     };
-  }, [enabled, natsEnabled, signalrConfigured]);
+  }, [enabled, natsConfigured, signalrConfigured]);
 
-  useAgentStatusRealtime(enabled && signalrFallbackEnabled);
+  useAgentStatusRealtime(signalrRuntimeEnabled);
 }
 
 /**
