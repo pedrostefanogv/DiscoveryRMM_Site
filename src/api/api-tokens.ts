@@ -1,7 +1,7 @@
-import { api } from "./client";
+﻿import { api } from "./client";
 import type { ApiToken, CreateApiTokenRequest } from "./types";
 
-const BASE = "/api/api-tokens";
+const BASE = "/api/v1/api-tokens";
 
 function normalizeNullableString(value: unknown): string | null {
   if (value === null || value === undefined) {

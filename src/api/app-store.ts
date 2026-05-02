@@ -1,4 +1,4 @@
-import { api } from "./client";
+﻿import { api } from "./client";
 import { AppInstallationType } from "./types";
 import type {
   AppApprovalScopeType,
@@ -15,7 +15,7 @@ import type {
   SyncChocolateyCatalogResponse,
 } from "./types";
 
-const BASE = "/api/app-store";
+const BASE = "/api/v1/app-store";
 
 type RawCatalogPackage = Partial<AppStoreCatalogPackage> & {
   id?: string;

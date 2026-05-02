@@ -1,11 +1,11 @@
-import { api } from "./client";
+﻿import { api } from "./client";
 import type {
   ConfigurationAuditEntry,
   ConfigurationAuditQuery,
   ConfigurationAuditReportQuery,
 } from "./types";
 
-const BASE = "/api/configuration-audit";
+const BASE = "/api/v1/configuration-audit";
 
 export const auditApi = {
   list: (query: ConfigurationAuditQuery = {}) =>

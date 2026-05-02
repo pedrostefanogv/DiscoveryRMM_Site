@@ -1,4 +1,4 @@
-import { api, ApiError } from "./client";
+﻿import { api, ApiError } from "./client";
 import type {
   Authenticator,
   NatsConnection as CoreNatsConnection,
@@ -84,9 +84,9 @@ function isNonRetryableNatsError(error: unknown): boolean {
     return true;
   }
 
-  // O cliente @nats-io/nats-core lança NatsError com nome "AuthorizationError"
+  // O cliente @nats-io/nats-core lanÃ§a NatsError com nome "AuthorizationError"
   // quando o broker rejeita as credenciais (ex.: callout devolveu erro,
-  // accountSeed divergente). Reconectar não resolve — evita loop no console.
+  // accountSeed divergente). Reconectar nÃ£o resolve â€” evita loop no console.
   if (error && typeof error === "object") {
     const err = error as { name?: unknown; message?: unknown; code?: unknown };
     const name = typeof err.name === "string" ? err.name : "";
@@ -200,7 +200,7 @@ class NatsService {
     };
 
     return api.post<NatsCredentialsResponse>(
-      "/api/nats-auth/user/credentials",
+      "/api/v1/nats-auth/user/credentials",
       request,
     );
   }
@@ -363,7 +363,7 @@ class NatsService {
           "[realtime] NATS conectado em",
           url,
           this.subscriptions.size > 0
-            ? `(restaurou ${this.subscriptions.size} subscrições)`
+            ? `(restaurou ${this.subscriptions.size} subscriÃ§Ãµes)`
             : "",
         );
       } catch (error) {

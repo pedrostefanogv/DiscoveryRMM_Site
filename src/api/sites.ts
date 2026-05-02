@@ -1,19 +1,19 @@
-import { api } from "./client";
+﻿import { api } from "./client";
 import type { Site, CreateSiteRequest, UpdateSiteRequest } from "./types";
 
 export const sitesApi = {
   list: (clientId: string, includeInactive = false) =>
-    api.get<Site[]>(`/api/clients/${clientId}/Sites`, { includeInactive }),
+    api.get<Site[]>(`/api/v1/clients/${clientId}/Sites`, { includeInactive }),
 
   get: (clientId: string, id: string) =>
-    api.get<Site>(`/api/clients/${clientId}/Sites/${id}`),
+    api.get<Site>(`/api/v1/clients/${clientId}/Sites/${id}`),
 
   create: (clientId: string, data: CreateSiteRequest) =>
-    api.post<Site>(`/api/clients/${clientId}/Sites`, data),
+    api.post<Site>(`/api/v1/clients/${clientId}/Sites`, data),
 
   update: (clientId: string, id: string, data: UpdateSiteRequest) =>
-    api.put<Site>(`/api/clients/${clientId}/Sites/${id}`, data),
+    api.put<Site>(`/api/v1/clients/${clientId}/Sites/${id}`, data),
 
   delete: (clientId: string, id: string) =>
-    api.del<void>(`/api/clients/${clientId}/Sites/${id}`),
+    api.del<void>(`/api/v1/clients/${clientId}/Sites/${id}`),
 };

@@ -1,4 +1,4 @@
-import { api } from "./client";
+﻿import { api } from "./client";
 import type {
   AppApprovalScopeType,
   AutomationTaskActionType,
@@ -20,9 +20,9 @@ import type {
   UpdateAutomationTaskRequest,
 } from "./types";
 
-const SCRIPTS_BASE = "/api/automation/scripts";
-const TASKS_BASE = "/api/automation/tasks";
-const AGENTS_BASE = "/api/agents";
+const SCRIPTS_BASE = "/api/v1/automation/scripts";
+const TASKS_BASE = "/api/v1/automation/tasks";
+const AGENTS_BASE = "/api/v1/agents";
 
 function correlationInit(correlationId?: string): RequestInit | undefined {
   if (!correlationId) return undefined;

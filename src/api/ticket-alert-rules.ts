@@ -1,7 +1,7 @@
-import { api } from "./client";
+﻿import { api } from "./client";
 import type { TicketAlertRule, UpsertTicketAlertRuleRequest } from "./types";
 
-const BASE = "/api/ticket-alert-rules";
+const BASE = "/api/v1/ticket-alert-rules";
 
 export const ticketAlertRulesApi = {
   list: () => api.get<TicketAlertRule[]>(BASE),

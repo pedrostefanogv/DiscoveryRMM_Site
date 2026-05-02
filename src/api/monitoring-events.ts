@@ -1,11 +1,11 @@
-import { api } from "./client";
+﻿import { api } from "./client";
 import type {
   CreateMonitoringEventRequest,
   MonitoringAutoTicketDecision,
   MonitoringEvent,
 } from "./types";
 
-const BASE = "/api/monitoring-events";
+const BASE = "/api/v1/monitoring-events";
 
 function normalizeNullableString(value: unknown): string | null {
   if (value === null || value === undefined) {

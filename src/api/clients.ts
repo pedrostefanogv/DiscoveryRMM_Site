@@ -1,7 +1,7 @@
-import { api } from "./client";
+﻿import { api } from "./client";
 import type { Client, CreateClientRequest, UpdateClientRequest } from "./types";
 
-const BASE = "/api/Clients";
+const BASE = "/api/v1/Clients";
 
 export const clientsApi = {
   list: (includeInactive = false) =>

@@ -1,4 +1,4 @@
-import { api } from "./client";
+﻿import { api } from "./client";
 import { AgentAlertScopeType } from "./types";
 import type {
   AgentAlert,
@@ -9,7 +9,7 @@ import type {
   CreateAgentAlertRequest,
 } from "./types";
 
-const BASE = "/api/agent-alerts";
+const BASE = "/api/v1/agent-alerts";
 
 function normalizeNullableString(value: unknown): string | null {
   if (value === null || value === undefined) {

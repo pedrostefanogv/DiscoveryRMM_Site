@@ -1,7 +1,7 @@
-import { api } from "./client";
+﻿import { api } from "./client";
 import type { BackgroundService } from "./types";
 
-const BASE = "/api/admin/background-services";
+const BASE = "/api/v1/admin/background-services";
 
 function normalizeNullableString(value: unknown): string | null {
   if (value === null || value === undefined) {

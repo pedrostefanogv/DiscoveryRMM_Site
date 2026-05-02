@@ -1,4 +1,4 @@
-import { api } from "./client";
+﻿import { api } from "./client";
 import type {
   TicketAiSuggestedReplyResponse,
   TicketAiSummaryResponse,
@@ -7,20 +7,20 @@ import type {
 
 export const ticketAiApi = {
   triage: (ticketId: string) =>
-    api.post<TicketAiTriageResponse>(`/api/tickets/${ticketId}/ai/triage`, {}),
+    api.post<TicketAiTriageResponse>(`/api/v1/tickets/${ticketId}/ai/triage`, {}),
 
   summarize: (ticketId: string) =>
-    api.post<TicketAiSummaryResponse>(`/api/tickets/${ticketId}/ai/summarize`, {}),
+    api.post<TicketAiSummaryResponse>(`/api/v1/tickets/${ticketId}/ai/summarize`, {}),
 
   suggestReply: (ticketId: string) =>
     api.post<TicketAiSuggestedReplyResponse>(
-      `/api/tickets/${ticketId}/ai/suggest-reply`,
+      `/api/v1/tickets/${ticketId}/ai/suggest-reply`,
       {},
     ),
 
   draftKbArticle: (ticketId: string) =>
     api.post<unknown>(
-      `/api/tickets/${ticketId}/ai/draft-kb-article`,
+      `/api/v1/tickets/${ticketId}/ai/draft-kb-article`,
       {},
     ),
 };

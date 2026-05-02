@@ -1,4 +1,4 @@
-import { api } from "./client";
+﻿import { api } from "./client";
 import type {
   CreateTicketAutomationLinkRequest,
   ReviewTicketAutomationLinkRequest,
@@ -6,7 +6,7 @@ import type {
 } from "./types";
 
 function basePath(ticketId: string) {
-  return `/api/tickets/${ticketId}/automation-links`;
+  return `/api/v1/tickets/${ticketId}/automation-links`;
 }
 
 export const ticketAutomationLinksApi = {

@@ -1,4 +1,4 @@
-import { api } from "./client";
+﻿import { api } from "./client";
 import {
   CustomFieldScopeType,
   normalizeCustomFieldScopeType,
@@ -67,7 +67,7 @@ function normalizeTicketCustomFieldValues(
 
 export const ticketCustomFieldsApi = {
   async list(ticketId: string): Promise<CustomFieldValueItem[]> {
-    const raw = await api.get<unknown>(`/api/tickets/${ticketId}/custom-fields`);
+    const raw = await api.get<unknown>(`/api/v1/tickets/${ticketId}/custom-fields`);
     return normalizeTicketCustomFieldValues(raw, ticketId);
   },
 
@@ -77,7 +77,7 @@ export const ticketCustomFieldsApi = {
     value: unknown,
   ): Promise<CustomFieldValueItem> {
     const raw = await api.put<Record<string, unknown>>(
-      `/api/tickets/${ticketId}/custom-fields/${definitionId}`,
+      `/api/v1/tickets/${ticketId}/custom-fields/${definitionId}`,
       value,
     );
 

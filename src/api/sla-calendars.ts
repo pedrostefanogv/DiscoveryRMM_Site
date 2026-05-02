@@ -1,4 +1,4 @@
-import { api } from "./client";
+﻿import { api } from "./client";
 import type {
   AddSlaCalendarHolidayRequest,
   CreateSlaCalendarRequest,
@@ -10,7 +10,7 @@ import type {
   UpdateSlaCalendarRequest,
 } from "./types";
 
-const BASE = "/api/sla-calendars";
+const BASE = "/api/v1/sla-calendars";
 
 export const slaCalendarsApi = {
   list: (clientId?: string) =>

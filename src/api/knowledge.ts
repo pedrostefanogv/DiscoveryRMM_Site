@@ -1,4 +1,4 @@
-import { api } from "./client";
+﻿import { api } from "./client";
 import type {
   CreateKnowledgeArticleRequest,
   KbLinkFeedbackRequest,
@@ -10,7 +10,7 @@ import type {
   UpdateKnowledgeArticleRequest,
 } from "./types";
 
-const BASE = "/api/knowledge";
+const BASE = "/api/v1/knowledge";
 
 export const knowledgeApi = {
   list: (params?: KnowledgeListQuery) =>
@@ -40,20 +40,20 @@ export const knowledgeApi = {
   unpublish: (id: string) => api.post<void>(`${BASE}/${id}/unpublish`),
 
   listTicketKnowledge: (ticketId: string) =>
-    api.get<KnowledgeArticle[]>(`/api/tickets/${ticketId}/knowledge`),
+    api.get<KnowledgeArticle[]>(`/api/v1/tickets/${ticketId}/knowledge`),
 
   linkTicketKnowledge: (ticketId: string, data: LinkTicketKnowledgeRequest) =>
-    api.post<void>(`/api/tickets/${ticketId}/knowledge`, data),
+    api.post<void>(`/api/v1/tickets/${ticketId}/knowledge`, data),
 
   unlinkTicketKnowledge: (ticketId: string, articleId: string) =>
-    api.del<void>(`/api/tickets/${ticketId}/knowledge/${articleId}`),
+    api.del<void>(`/api/v1/tickets/${ticketId}/knowledge/${articleId}`),
 
   suggestTicketKnowledge: (
     ticketId: string,
     params?: TicketKnowledgeSuggestQuery,
   ) =>
     api.get<KnowledgeArticle[]>(
-      `/api/tickets/${ticketId}/knowledge/suggest`,
+      `/api/v1/tickets/${ticketId}/knowledge/suggest`,
       (params ?? {}) as unknown as Record<string, unknown>,
     ),
 
@@ -63,7 +63,7 @@ export const knowledgeApi = {
     data: KbLinkFeedbackRequest,
   ) =>
     api.post<void>(
-      `/api/tickets/${ticketId}/knowledge/${articleId}/feedback`,
+      `/api/v1/tickets/${ticketId}/knowledge/${articleId}/feedback`,
       data,
     ),
 };

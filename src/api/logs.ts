@@ -1,7 +1,7 @@
-import { api } from "./client";
+﻿import { api } from "./client";
 import type { LogEntry, LogsQuery, CreateLogRequest } from "./types";
 
-const BASE = "/api/Logs";
+const BASE = "/api/v1/Logs";
 
 export const logsApi = {
   list: (params: LogsQuery = {}) =>

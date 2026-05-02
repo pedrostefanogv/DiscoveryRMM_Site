@@ -1,4 +1,4 @@
-import { ApiError, api, apiFetchResponse, parseErrorMessage } from "./client";
+﻿import { ApiError, api, apiFetchResponse, parseErrorMessage } from "./client";
 import type {
   CreateDeployTokenRequest,
   DownloadDeployPackageRequest,
@@ -13,7 +13,7 @@ import type {
 } from "./types";
 
 export type CreateDeployTokenResponse = DeployToken | DeployInstallerPayload;
-const BASE = "/api/deploy-tokens";
+const BASE = "/api/v1/deploy-tokens";
 
 function parseContentDispositionFileName(
   contentDisposition: string | null,

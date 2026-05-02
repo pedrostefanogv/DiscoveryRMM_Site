@@ -1,4 +1,4 @@
-import { api } from "@/api/client";
+﻿import { api } from "@/api/client";
 import type {
   AiCredentialQuery,
   AiModelQuery,
@@ -23,8 +23,8 @@ import type {
   TriggerMaintenanceRequest,
 } from "@/api/types";
 
-const CONFIG_BASE = "/api/configurations";
-const AUDIT_BASE = "/api/configuration-audit";
+const CONFIG_BASE = "/api/v1/configurations";
+const AUDIT_BASE = "/api/v1/configuration-audit";
 
 export type ServerConfigurationPayload = Partial<
   Omit<
@@ -392,7 +392,7 @@ export async function getSiteMetadata(siteId: string) {
 }
 
 export function getAgentMeEffectiveConfig() {
-  return api.get<ResolvedConfiguration>("/api/agent-auth/me/configuration");
+  return api.get<ResolvedConfiguration>("/api/v1/agent-auth/me/configuration");
 }
 
 export function getRecentAudit(days = 30, limit = 200) {

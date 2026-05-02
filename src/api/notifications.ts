@@ -1,4 +1,4 @@
-import { api } from "./client";
+﻿import { api } from "./client";
 
 export type AppNotificationSeverity =
   | "Informational"
@@ -58,13 +58,13 @@ function buildMarkAsReadPath(
   id: string,
   params: MarkNotificationAsReadParams = {},
 ) {
-  return `/api/notifications/${id}/read${buildQueryString(params)}`;
+  return `/api/v1/notifications/${id}/read${buildQueryString(params)}`;
 }
 
 export const notificationsApi = {
   listRecent: (params: ListNotificationsParams = {}) =>
     api.get<AppNotification[]>(
-      "/api/notifications",
+      "/api/v1/notifications",
       params as unknown as Record<string, unknown>,
     ),
 

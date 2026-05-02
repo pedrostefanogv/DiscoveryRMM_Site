@@ -1,4 +1,4 @@
-import { api } from "./client";
+﻿import { api } from "./client";
 import type { MfaRequirement } from "./types";
 
 export type ScopeLevel = "Global" | "Client" | "Site";
@@ -373,9 +373,9 @@ export interface AddRolePermissionRequest {
   permissionId: string;
 }
 
-const USERS = "/api/users";
-const GROUPS = "/api/user-groups";
-const ROLES = "/api/roles";
+const USERS = "/api/v1/users";
+const GROUPS = "/api/v1/user-groups";
+const ROLES = "/api/v1/roles";
 
 export const iamApi = {
   listUsers: () => api.get<UserDto[]>(USERS),
@@ -490,7 +490,7 @@ export const iamApi = {
 
   runMeshCentralBackfill: (payload: MeshCentralBackfillRequest) =>
     api.post<MeshCentralBackfillReport>(
-      "/api/meshcentral/identity-sync/backfill",
+      "/api/v1/meshcentral/identity-sync/backfill",
       payload,
     ),
 
@@ -498,7 +498,7 @@ export const iamApi = {
     payload: Omit<MeshCentralBackfillRequest, "applyChanges"> = {},
   ) =>
     api.post<MeshCentralBackfillReport>(
-      "/api/meshcentral/identity-sync/backfill",
+      "/api/v1/meshcentral/identity-sync/backfill",
       {
         applyChanges: false,
         ...payload,
@@ -507,7 +507,7 @@ export const iamApi = {
 
   getMeshCentralDiagnosticsHealth: (siteId: string, agentId?: string | null) =>
     api.get<MeshCentralDiagnosticsResponse>(
-      "/api/meshcentral/diagnostics/health",
+      "/api/v1/meshcentral/diagnostics/health",
       {
         siteId,
         ...(agentId ? { agentId } : {}),
@@ -518,7 +518,7 @@ export const iamApi = {
     payload: MeshCentralNodeLinksBackfillRequest,
   ) =>
     api.post<MeshCentralNodeLinksBackfillReport>(
-      "/api/meshcentral/node-links/backfill",
+      "/api/v1/meshcentral/node-links/backfill",
       payload,
     ),
 
@@ -526,7 +526,7 @@ export const iamApi = {
     payload: Omit<MeshCentralNodeLinksBackfillRequest, "applyChanges"> = {},
   ) =>
     api.post<MeshCentralNodeLinksBackfillReport>(
-      "/api/meshcentral/node-links/backfill",
+      "/api/v1/meshcentral/node-links/backfill",
       {
         applyChanges: false,
         ...payload,
@@ -535,21 +535,21 @@ export const iamApi = {
 
   getMeshGroupPolicyStatus: (siteId: string) =>
     api.get<MeshGroupPolicyStatusDto>(
-      `/api/meshcentral/group-policy/sites/${siteId}/status`,
+      `/api/v1/meshcentral/group-policy/sites/${siteId}/status`,
     ),
 
   reconcileMeshGroupPolicy: (payload: MeshGroupPolicyReconcileRequest) =>
     api.post<MeshGroupPolicyReconcileReport>(
-      "/api/meshcentral/group-policy/reconcile",
+      "/api/v1/meshcentral/group-policy/reconcile",
       payload,
     ),
 
   listRightsProfiles: () =>
-    api.get<MeshCentralRightsProfileDto[]>("/api/meshcentral/rights-profiles"),
+    api.get<MeshCentralRightsProfileDto[]>("/api/v1/meshcentral/rights-profiles"),
 
   createRightsProfile: (payload: CreateMeshCentralRightsProfileRequest) =>
     api.post<MeshCentralRightsProfileDto>(
-      "/api/meshcentral/rights-profiles",
+      "/api/v1/meshcentral/rights-profiles",
       payload,
     ),
 
@@ -558,15 +558,15 @@ export const iamApi = {
     payload: UpdateMeshCentralRightsProfileRequest,
   ) =>
     api.put<MeshCentralRightsProfileDto>(
-      `/api/meshcentral/rights-profiles/${id}`,
+      `/api/v1/meshcentral/rights-profiles/${id}`,
       payload,
     ),
 
   deleteRightsProfile: (id: string) =>
-    api.del<void>(`/api/meshcentral/rights-profiles/${id}`),
+    api.del<void>(`/api/v1/meshcentral/rights-profiles/${id}`),
 
   getRightsProfileUsage: () =>
     api.get<MeshCentralRightsProfileUsageDto[]>(
-      "/api/meshcentral/rights-profiles/usage",
+      "/api/v1/meshcentral/rights-profiles/usage",
     ),
 };

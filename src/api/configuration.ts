@@ -18,7 +18,7 @@ import type {
   TriggerMaintenanceRequest,
 } from "./types";
 
-const BASE = "/api/configurations";
+const BASE = "/api/v1/configurations";
 export type ServerReportingConfiguration = Record<string, unknown>;
 
 function normalizeEffective(payload: unknown): EffectiveConfiguration {

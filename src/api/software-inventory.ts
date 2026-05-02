@@ -1,4 +1,4 @@
-import { api } from "./client";
+﻿import { api } from "./client";
 import type {
   SoftwareInventoryCatalogPage,
   AgentSoftwareOrder,
@@ -6,7 +6,7 @@ import type {
   SoftwareInventoryTopResponse,
 } from "./types";
 
-const BASE = "/api/software-inventory";
+const BASE = "/api/v1/software-inventory";
 
 interface SoftwareInventoryParams {
   cursor?: string;

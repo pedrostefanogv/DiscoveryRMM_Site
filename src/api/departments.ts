@@ -1,11 +1,11 @@
-import { api } from "./client";
+﻿import { api } from "./client";
 import type {
   Department,
   CreateDepartmentRequest,
   UpdateDepartmentRequest,
 } from "./types";
 
-const BASE = "/api/departments";
+const BASE = "/api/v1/departments";
 
 export const departmentsApi = {
   listGlobal: () => api.get<Department[]>(`${BASE}/global`),

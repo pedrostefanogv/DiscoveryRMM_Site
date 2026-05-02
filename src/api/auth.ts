@@ -1,4 +1,4 @@
-import { api } from "./client";
+﻿import { api } from "./client";
 import type { MfaRequirement } from "./types";
 
 export interface LoginRequest {
@@ -142,59 +142,59 @@ function withBearer(token: string) {
 
 export const authApi = {
   login: (request: LoginRequest) =>
-    api.post<LoginResponse>("/api/auth/login", request, { auth: false }),
+    api.post<LoginResponse>("/api/v1/auth/login", request, { auth: false }),
 
   refresh: (request: RefreshTokenRequest) =>
-    api.post<TokenPair>("/api/auth/refresh", request, {
+    api.post<TokenPair>("/api/v1/auth/refresh", request, {
       auth: false,
       retryOnAuthError: false,
     }),
 
   logout: (accessToken: string, refreshToken: string | null) =>
     api.post<void>(
-      "/api/auth/logout",
+      "/api/v1/auth/logout",
       { refreshToken },
       withBearer(accessToken),
     ),
 
   getFirstAccessStatus: (token: string) =>
     api.get<FirstAccessStatus>(
-      "/api/auth/first-access/status",
+      "/api/v1/auth/first-access/status",
       {},
       withBearer(token),
     ),
 
   completeFirstAccess: (token: string, request: CompleteFirstAccessRequest) =>
     api.post<ApiMessageResponse>(
-      "/api/auth/first-access/complete",
+      "/api/v1/auth/first-access/complete",
       request,
       withBearer(token),
     ),
 
   beginLoginFido2: (token: string) =>
     api.post<BeginFido2Response>(
-      "/api/auth/mfa/fido2/begin",
+      "/api/v1/auth/mfa/fido2/begin",
       undefined,
       withBearer(token),
     ),
 
   completeLoginFido2: (token: string, request: CompleteFido2AssertionRequest) =>
     api.post<TokenPair>(
-      "/api/auth/mfa/fido2/complete",
+      "/api/v1/auth/mfa/fido2/complete",
       request,
       withBearer(token),
     ),
 
   completeLoginOtp: (token: string, request: CompleteOtpLoginRequest) =>
     api.post<TokenPair>(
-      "/api/auth/mfa/otp/complete",
+      "/api/v1/auth/mfa/otp/complete",
       request,
       withBearer(token),
     ),
 
   beginRegistrationFido2: (token: string) =>
     api.post<BeginFido2Response>(
-      "/api/mfa/fido2/register/begin",
+      "/api/v1/mfa/fido2/register/begin",
       undefined,
       withBearer(token),
     ),
@@ -204,14 +204,14 @@ export const authApi = {
     request: CompleteFido2RegistrationRequest,
   ) =>
     api.post<CompleteFido2RegistrationResponse>(
-      "/api/mfa/fido2/register/complete",
+      "/api/v1/mfa/fido2/register/complete",
       request,
       withBearer(token),
     ),
 
   beginRegistrationTotp: (token: string) =>
     api.post<BeginTotpRegistrationResponse>(
-      "/api/mfa/totp/register/begin",
+      "/api/v1/mfa/totp/register/begin",
       undefined,
       withBearer(token),
     ),
@@ -221,21 +221,21 @@ export const authApi = {
     request: CompleteTotpRegistrationRequest,
   ) =>
     api.post<CompleteTotpRegistrationResponse>(
-      "/api/mfa/totp/register/complete",
+      "/api/v1/mfa/totp/register/complete",
       request,
       withBearer(token),
     ),
 
-  listMfaKeys: () => api.get<MfaKey[]>("/api/mfa/keys"),
+  listMfaKeys: () => api.get<MfaKey[]>("/api/v1/mfa/keys"),
 
   renameMfaKey: (keyId: string, request: RenameMfaKeyRequest) =>
-    api.patch<void>(`/api/mfa/keys/${keyId}/name`, request),
+    api.patch<void>(`/api/v1/mfa/keys/${keyId}/name`, request),
 
-  deleteMfaKey: (keyId: string) => api.del<void>(`/api/mfa/keys/${keyId}`),
+  deleteMfaKey: (keyId: string) => api.del<void>(`/api/v1/mfa/keys/${keyId}`),
 
   getMeshCentralEmbedUrl: (request: MeshCentralEmbedUrlRequest) =>
     api.post<MeshCentralEmbedUrlResponse>(
-      "/api/meshcentral/embed-url",
+      "/api/v1/meshcentral/embed-url",
       request,
     ),
 };

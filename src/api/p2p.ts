@@ -1,4 +1,4 @@
-import { api } from "./client";
+﻿import { api } from "./client";
 
 export type P2PScope = "global" | "tenant" | "site" | "agent";
 
@@ -130,7 +130,7 @@ function withoutAgentId<T extends { agentId?: unknown }>(params: T): Omit<T, 'ag
   return rest;
 }
 
-const BASE = "/api/ops/p2p";
+const BASE = "/api/v1/ops/p2p";
 
 export const p2pApi = {
   getOverview: (params: P2POverviewParams) =>

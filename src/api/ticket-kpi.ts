@@ -1,7 +1,7 @@
-import { api } from "./client";
+﻿import { api } from "./client";
 import type { TicketKpiQuery, TicketKpiResult } from "./types";
 
-const BASE = "/api/tickets/kpi";
+const BASE = "/api/v1/tickets/kpi";
 
 export const ticketKpiApi = {
   get: (params: TicketKpiQuery = {}) =>

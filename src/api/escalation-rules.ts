@@ -1,11 +1,11 @@
-import { api } from "./client";
+﻿import { api } from "./client";
 import type {
   CreateEscalationRuleRequest,
   TicketEscalationRule,
   UpdateEscalationRuleRequest,
 } from "./types";
 
-const BASE = "/api/escalation-rules";
+const BASE = "/api/v1/escalation-rules";
 
 export const escalationRulesApi = {
   list: () => api.get<TicketEscalationRule[]>(BASE),

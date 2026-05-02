@@ -1,11 +1,11 @@
-import { api } from "./client";
+﻿import { api } from "./client";
 import type {
   ReportSchedule,
   CreateReportScheduleRequest,
   UpdateReportScheduleRequest,
 } from "./types";
 
-const BASE = "/api/reports/schedules";
+const BASE = "/api/v1/reports/schedules";
 
 export const reportSchedulesApi = {
   list: () => api.get<ReportSchedule[]>(BASE),

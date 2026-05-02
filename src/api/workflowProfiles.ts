@@ -1,11 +1,11 @@
-import { api } from "./client";
+﻿import { api } from "./client";
 import type {
   WorkflowProfile,
   CreateWorkflowProfileRequest,
   UpdateWorkflowProfileRequest,
 } from "./types";
 
-const BASE = "/api/workflowprofiles";
+const BASE = "/api/v1/workflowprofiles";
 
 export const workflowProfilesApi = {
   listGlobal: () => api.get<WorkflowProfile[]>(`${BASE}/global`),

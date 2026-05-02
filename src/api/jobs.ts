@@ -1,7 +1,7 @@
-import { api } from "./client";
+﻿import { api } from "./client";
 import type { AdminJobActionResult } from "./types";
 
-const BASE = "/api/admin/jobs";
+const BASE = "/api/v1/admin/jobs";
 
 function normalizeNullableString(value: unknown): string | null {
   if (value === null || value === undefined) {

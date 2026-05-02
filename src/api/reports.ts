@@ -1,4 +1,4 @@
-import { api } from "./client";
+﻿import { api } from "./client";
 import { ReportDatasetType } from "./types";
 import type {
   ReportTemplate,
@@ -89,14 +89,14 @@ function parsePreviewHtmlTable(html: string, limit: number): Record<string, stri
   });
 }
 
-// ── Dataset Catalog ─────────────────────────────────────
+// â”€â”€ Dataset Catalog â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export async function getDatasetCatalog(): Promise<DatasetCatalogItem[]> {
-  return api.get<DatasetCatalogItem[]>("/api/reports/datasets");
+  return api.get<DatasetCatalogItem[]>("/api/v1/reports/datasets");
 }
 
 export async function getReportLayoutSchema(): Promise<LayoutSchemaResponse> {
-  return api.get<LayoutSchemaResponse>("/api/reports/layout-schema");
+  return api.get<LayoutSchemaResponse>("/api/v1/reports/layout-schema");
 }
 
 export async function getReportAutocomplete(params: {
@@ -105,31 +105,31 @@ export async function getReportAutocomplete(params: {
   alias?: string;
 }): Promise<ReportAutocompleteResponse> {
   return api.get<ReportAutocompleteResponse>(
-    "/api/reports/autocomplete",
+    "/api/v1/reports/autocomplete",
     params,
   );
 }
 
-// ── Templates ───────────────────────────────────────────
+// â”€â”€ Templates â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export async function createReportTemplate(
   request: CreateReportTemplateRequest,
 ): Promise<ReportTemplate> {
-  return api.post<ReportTemplate>("/api/reports/templates", request);
+  return api.post<ReportTemplate>("/api/v1/reports/templates", request);
 }
 
 export async function getReportTemplates(params?: {
   datasetType?: ReportDatasetTypeValue;
   isActive?: boolean;
 }): Promise<ReportTemplate[]> {
-  return api.get<ReportTemplate[]>("/api/reports/templates", params ?? {});
+  return api.get<ReportTemplate[]>("/api/v1/reports/templates", params ?? {});
 }
 
 export async function getReportTemplateById(
   id: string,
   clientId?: string,
 ): Promise<ReportTemplate> {
-  return api.get<ReportTemplate>(`/api/reports/templates/${id}`, {
+  return api.get<ReportTemplate>(`/api/v1/reports/templates/${id}`, {
     clientId,
   });
 }
@@ -138,11 +138,11 @@ export async function updateReportTemplate(
   id: string,
   request: UpdateReportTemplateRequest,
 ): Promise<ReportTemplate> {
-  return api.put<ReportTemplate>(`/api/reports/templates/${id}`, request);
+  return api.put<ReportTemplate>(`/api/v1/reports/templates/${id}`, request);
 }
 
 export async function deleteReportTemplate(id: string): Promise<void> {
-  return api.del<void>(`/api/reports/templates/${id}`);
+  return api.del<void>(`/api/v1/reports/templates/${id}`);
 }
 
 export async function getReportTemplateHistory(
@@ -150,18 +150,18 @@ export async function getReportTemplateHistory(
   limit?: number,
 ): Promise<ReportTemplateHistory[]> {
   return api.get<ReportTemplateHistory[]>(
-    `/api/reports/templates/${id}/history`,
+    `/api/v1/reports/templates/${id}/history`,
     { limit },
   );
 }
 
-// ── Library Templates ───────────────────────────────────
+// â”€â”€ Library Templates â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export async function getLibraryTemplates(params?: {
   datasetType?: ReportDatasetTypeValue;
 }): Promise<ReportLibraryTemplate[]> {
   return api.get<ReportLibraryTemplate[]>(
-    "/api/reports/templates/library",
+    "/api/v1/reports/templates/library",
     params ?? {},
   );
 }
@@ -173,23 +173,23 @@ export async function installLibraryTemplate(
   const params = new URLSearchParams();
   if (createdBy) params.set("createdBy", createdBy);
   const query = params.toString();
-  const path = `/api/reports/templates/library/${id}/install${query ? `?${query}` : ""}`;
+  const path = `/api/v1/reports/templates/library/${id}/install${query ? `?${query}` : ""}`;
   return api.post<ReportTemplate>(path);
 }
 
-// ── Executions ──────────────────────────────────────────
+// â”€â”€ Executions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export async function runReport(
   request: RunReportRequest,
 ): Promise<RunReportResponse> {
-  return api.post<RunReportResponse>("/api/reports/run", request);
+  return api.post<RunReportResponse>("/api/v1/reports/run", request);
 }
 
 export async function getReportExecution(
   id: string,
   clientId?: string,
 ): Promise<ReportExecution> {
-  return api.get<ReportExecution>(`/api/reports/executions/${id}`, {
+  return api.get<ReportExecution>(`/api/v1/reports/executions/${id}`, {
     clientId,
   });
 }
@@ -198,7 +198,7 @@ export async function getReportExecutions(params?: {
   clientId?: string;
   limit?: number;
 }): Promise<ReportExecution[]> {
-  return api.get<ReportExecution[]>("/api/reports/executions", params ?? {});
+  return api.get<ReportExecution[]>("/api/v1/reports/executions", params ?? {});
 }
 
 export async function previewReport(
@@ -206,7 +206,7 @@ export async function previewReport(
 ): Promise<PreviewReportResponse> {
   const previewMode: PreviewMode = request.previewMode ?? "document";
 
-  const res = await apiFetchResponse(`/api/reports/preview`, {
+  const res = await apiFetchResponse(`/api/v1/reports/preview`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -256,8 +256,8 @@ function getReportDownloadPath(id: string, clientId?: string): string {
 
   const query = params.toString();
   return query
-    ? `/api/reports/executions/${id}/download?${query}`
-    : `/api/reports/executions/${id}/download`;
+    ? `/api/v1/reports/executions/${id}/download?${query}`
+    : `/api/v1/reports/executions/${id}/download`;
 }
 
 function parseContentDispositionFileName(
@@ -282,7 +282,7 @@ function parseContentDispositionFileName(
   return plainMatch?.[1]?.trim() || fallback;
 }
 
-// ── Download Helper ─────────────────────────────────────
+// â”€â”€ Download Helper â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /**
  * Downloads a report file using direct redirect for better browser handling
@@ -320,7 +320,7 @@ export async function downloadReportFile(
   URL.revokeObjectURL(blobUrl);
 }
 
-// ── Preview (fallback local) ───────────────────────────
+// â”€â”€ Preview (fallback local) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export async function previewReportData(
   datasetType: ReportDatasetType,

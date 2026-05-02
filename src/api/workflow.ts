@@ -1,4 +1,4 @@
-import { api } from "./client";
+﻿import { api } from "./client";
 import type {
   WorkflowState,
   WorkflowTransition,
@@ -7,8 +7,8 @@ import type {
   CreateWorkflowTransitionRequest,
 } from "./types";
 
-const STATES = "/api/workflow/states";
-const TRANSITIONS = "/api/workflow/transitions";
+const STATES = "/api/v1/workflow/states";
+const TRANSITIONS = "/api/v1/workflow/transitions";
 
 export const workflowApi = {
   // States

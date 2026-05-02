@@ -1,4 +1,4 @@
-import { api } from "./client";
+﻿import { api } from "./client";
 import type {
   Agent,
   AgentHardwareInfo,
@@ -22,7 +22,7 @@ import type {
   StartRemoteDebugSessionResponse,
 } from "./types";
 
-const BASE = "/api/Agents";
+const BASE = "/api/v1/Agents";
 
 export interface HardwareReport {
   hardware: AgentHardwareInfo | null;
@@ -97,7 +97,7 @@ export const agentsApi = {
 
   // Install token
   createInstallToken: (agentId: string) =>
-    api.post<{ token: string }>(`/api/agent-install/${agentId}/token`),
+    api.post<{ token: string }>(`/api/v1/agent-install/${agentId}/token`),
 
   // Remote debug
   startRemoteDebugSession: (
@@ -115,18 +115,18 @@ export const agentsApi = {
   // Zero-touch approval
   approveZeroTouch: (agentId: string) =>
     api.post<ApproveZeroTouchResponse>(
-      `/api/agents/${agentId}/approve-zero-touch`,
+      `/api/v1/agents/${agentId}/approve-zero-touch`,
     ),
 
   // Automation - run task/script on agent
   runAutomationTask: (agentId: string, taskId: string) =>
     api.post<Record<string, unknown>>(
-      `/api/agents/${agentId}/automation/tasks/${taskId}/run-now`,
+      `/api/v1/agents/${agentId}/automation/tasks/${taskId}/run-now`,
     ),
 
   runAutomationScript: (agentId: string, scriptId: string) =>
     api.post<Record<string, unknown>>(
-      `/api/agents/${agentId}/automation/scripts/${scriptId}/run-now`,
+      `/api/v1/agents/${agentId}/automation/scripts/${scriptId}/run-now`,
     ),
 
   forceAutomationSync: (agentId: string, data: {
@@ -136,10 +136,10 @@ export const agentsApi = {
     appStore?: boolean;
   }) =>
     api.post<Record<string, unknown>>(
-      `/api/agents/${agentId}/automation/force-sync`,
+      `/api/v1/agents/${agentId}/automation/force-sync`,
       data,
     ),
 
   getAutomationExecutions: (agentId: string) =>
-    api.get<unknown[]>(`/api/agents/${agentId}/automation/executions`),
+    api.get<unknown[]>(`/api/v1/agents/${agentId}/automation/executions`),
 };

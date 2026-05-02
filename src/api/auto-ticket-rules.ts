@@ -1,6 +1,6 @@
-import { api } from "./client";
+﻿import { api } from "./client";
 
-const BASE = "/api/auto-ticket-rules";
+const BASE = "/api/v1/auto-ticket-rules";
 
 export const autoTicketRulesApi = {
   list: () => api.get<unknown[]>(BASE),

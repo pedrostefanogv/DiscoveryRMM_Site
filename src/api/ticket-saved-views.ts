@@ -1,11 +1,11 @@
-import { api } from "./client";
+﻿import { api } from "./client";
 import type {
   CreateTicketSavedViewRequest,
   TicketSavedView,
   UpdateTicketSavedViewRequest,
 } from "./types";
 
-const BASE = "/api/ticket-saved-views";
+const BASE = "/api/v1/ticket-saved-views";
 
 export const ticketSavedViewsApi = {
   list: (userId?: string) =>

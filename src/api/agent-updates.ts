@@ -1,6 +1,6 @@
-import { api } from "./client";
+﻿import { api } from "./client";
 
-const BASE = "/api/agent-updates";
+const BASE = "/api/v1/agent-updates";
 
 export const agentUpdatesApi = {
   listReleases: () => api.get<unknown[]>(`${BASE}/releases`),

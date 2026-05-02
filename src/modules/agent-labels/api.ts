@@ -1,4 +1,4 @@
-import {
+﻿import {
   AgentLabel,
   AgentLabelAvailableCustomField,
   AgentLabelNodeType,
@@ -23,7 +23,7 @@ import {
   apiFetchResponse,
 } from "@/api/client";
 
-const BASE = "/api/agent-labels";
+const BASE = "/api/v1/agent-labels";
 
 async function toJson<T>(res: Response): Promise<T> {
   if (!res.ok) {

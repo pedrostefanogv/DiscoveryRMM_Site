@@ -1,4 +1,4 @@
-import { getNatsService } from "./nats";
+﻿import { getNatsService } from "./nats";
 import { api } from "./client";
 
 export interface AgentCommand {
@@ -107,7 +107,7 @@ export async function sendAgentCommand(
   }
 
   // Fallback to REST API
-  return api.post(`/api/agents/${agentId}/commands`, command);
+  return api.post(`/api/v1/agents/${agentId}/commands`, command);
 }
 
 /**
@@ -118,12 +118,12 @@ export async function getRealtimeStatus() {
     natsConnected: boolean;
     signalrConnectedAgents: number;
     checkedAtUtc: string;
-  }>("/api/realtime/status");
+  }>("/api/v1/realtime/status");
 }
 
 /**
  * Get full realtime/infra/business telemetry for the dashboard.
  */
 export async function getRealtimeStats() {
-  return api.get<RealtimeStatsResponse>("/api/realtime/stats");
+  return api.get<RealtimeStatsResponse>("/api/v1/realtime/stats");
 }

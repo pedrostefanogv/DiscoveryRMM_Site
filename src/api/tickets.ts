@@ -1,4 +1,4 @@
-import { api } from "./client";
+﻿import { api } from "./client";
 import type {
   Ticket,
   TicketAttachment,
@@ -18,7 +18,7 @@ import type {
   StartTicketRemoteSessionRequest,
 } from "./types";
 
-const BASE = "/api/tickets";
+const BASE = "/api/v1/tickets";
 
 function normalizeNullableString(value: unknown): string | null {
   if (value === null || value === undefined) return null;

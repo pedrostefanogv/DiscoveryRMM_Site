@@ -1,4 +1,4 @@
-import { api } from "./client";
+﻿import { api } from "./client";
 
 export enum CustomFieldScopeType {
   Server = 0,
@@ -72,7 +72,7 @@ export interface CustomFieldValueQueryParams {
   includeSecrets?: boolean;
 }
 
-const BASE = "/api/custom-fields";
+const BASE = "/api/v1/custom-fields";
 
 async function listEntityValues(
   path: string,
@@ -152,7 +152,7 @@ export const customFieldsApi = {
       case CustomFieldScopeType.Client:
         if (!params.entityId) return [];
         return listEntityValues(
-          `/api/Clients/${params.entityId}/custom-fields`,
+          `/api/v1/Clients/${params.entityId}/custom-fields`,
           scopeType,
           params.entityId,
           params,
@@ -160,7 +160,7 @@ export const customFieldsApi = {
       case CustomFieldScopeType.Site:
         if (!params.entityId || !params.clientId) return [];
         return listEntityValues(
-          `/api/clients/${params.clientId}/Sites/${params.entityId}/custom-fields`,
+          `/api/v1/clients/${params.clientId}/Sites/${params.entityId}/custom-fields`,
           scopeType,
           params.entityId,
           params,
@@ -168,7 +168,7 @@ export const customFieldsApi = {
       case CustomFieldScopeType.Agent:
         if (!params.entityId) return [];
         return listEntityValues(
-          `/api/Agents/${params.entityId}/custom-fields`,
+          `/api/v1/Agents/${params.entityId}/custom-fields`,
           scopeType,
           params.entityId,
           params,
@@ -192,7 +192,7 @@ export const customFieldsApi = {
           throw new Error("Client entityId is required.");
         }
         return upsertEntityValue(
-          `/api/Clients/${payload.entityId}/custom-fields/${definitionId}`,
+          `/api/v1/Clients/${payload.entityId}/custom-fields/${definitionId}`,
           payload.scopeType,
           payload.entityId,
           definitionId,
@@ -203,7 +203,7 @@ export const customFieldsApi = {
           throw new Error("Site clientId and entityId are required.");
         }
         return upsertEntityValue(
-          `/api/clients/${params.clientId}/Sites/${payload.entityId}/custom-fields/${definitionId}`,
+          `/api/v1/clients/${params.clientId}/Sites/${payload.entityId}/custom-fields/${definitionId}`,
           payload.scopeType,
           payload.entityId,
           definitionId,
@@ -214,7 +214,7 @@ export const customFieldsApi = {
           throw new Error("Agent entityId is required.");
         }
         return upsertEntityValue(
-          `/api/Agents/${payload.entityId}/custom-fields/${definitionId}`,
+          `/api/v1/Agents/${payload.entityId}/custom-fields/${definitionId}`,
           payload.scopeType,
           payload.entityId,
           definitionId,

@@ -1,4 +1,4 @@
-import { api } from "./client";
+﻿import { api } from "./client";
 
 export type DashboardWindow = "24h" | "7d" | "30d";
 
@@ -73,7 +73,7 @@ export const dashboardApi = {
     const params: Record<string, unknown> = {};
     if (window) params["window"] = window;
     return api.get<DashboardSummaryDto>(
-      "/api/dashboard/global/summary",
+      "/api/v1/dashboard/global/summary",
       params,
     );
   },
@@ -85,7 +85,7 @@ export const dashboardApi = {
     const params: Record<string, unknown> = {};
     if (window) params["window"] = window;
     return api.get<DashboardSummaryDto>(
-      `/api/clients/${clientId}/dashboard/summary`,
+      `/api/v1/clients/${clientId}/dashboard/summary`,
       params,
     );
   },
@@ -98,7 +98,7 @@ export const dashboardApi = {
     const params: Record<string, unknown> = {};
     if (window) params["window"] = window;
     return api.get<DashboardSummaryDto>(
-      `/api/clients/${clientId}/sites/${siteId}/dashboard/summary`,
+      `/api/v1/clients/${clientId}/sites/${siteId}/dashboard/summary`,
       params,
     );
   },
