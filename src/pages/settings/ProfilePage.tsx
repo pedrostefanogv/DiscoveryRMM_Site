@@ -5,6 +5,7 @@ import { Badge, Button, Card, CardHeader, ErrorDisplay, Input, Loading, Modal, S
 import { ApiError, authApi } from "@/api";
 import { useAuth } from "@/auth/AuthContext";
 import {
+  describeWebAuthnError,
   ensureWebAuthnSupport,
   parseRegistrationOptions,
   serializeRegistrationCredential,
@@ -179,9 +180,7 @@ export default function ProfilePage() {
       toast.success(result.message || "Chave cadastrada com sucesso.");
       await securityQuery.refetch();
     } catch (error) {
-      toast.error(
-        getErrorMessage(error, "Não foi possível cadastrar a nova chave."),
-      );
+      toast.error(describeWebAuthnError(error));
     } finally {
       setRegisteringKey(false);
     }

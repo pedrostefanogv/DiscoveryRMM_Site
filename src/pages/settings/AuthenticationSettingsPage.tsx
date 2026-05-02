@@ -14,6 +14,7 @@ import {
 import { ApiError, authApi, type MfaKey } from "@/api";
 import { useAuth } from "@/auth/AuthContext";
 import {
+  describeWebAuthnError,
   ensureWebAuthnSupport,
   parseRegistrationOptions,
   serializeRegistrationCredential,
@@ -194,9 +195,9 @@ export default function AuthenticationSettingsPage() {
       toast.success(result.message);
     } catch (error) {
       const message =
-        error instanceof Error
+        error instanceof ApiError
           ? error.message
-          : "Nao foi possivel registrar a chave de seguranca.";
+          : describeWebAuthnError(error);
       toast.error(message);
     } finally {
       setRegistering(false);

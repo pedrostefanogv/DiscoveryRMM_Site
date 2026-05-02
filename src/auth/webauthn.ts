@@ -72,6 +72,83 @@ function getNestedRecord(source: JsonRecord, camelCaseKey: string): JsonRecord {
   return value && typeof value === "object" ? value : {};
 }
 
+function normalizeHostLikeValue(value: string) {
+  return value.trim().toLowerCase().replace(/\.$/, "");
+}
+
+function isIpv4Address(value: string) {
+  if (!/^\d{1,3}(?:\.\d{1,3}){3}$/.test(value)) {
+    return false;
+  }
+
+  return value
+    .split(".")
+    .every((part) => Number(part) >= 0 && Number(part) <= 255);
+}
+
+function isIpv6Address(value: string) {
+  return value.includes(":");
+}
+
+function isIpAddress(value: string) {
+  return isIpv4Address(value) || isIpv6Address(value);
+}
+
+function getCurrentHostname() {
+  if (typeof window === "undefined") {
+    return "";
+  }
+
+  return normalizeHostLikeValue(window.location.hostname);
+}
+
+function isRpIdCompatibleWithHostname(rpId: string, hostname: string) {
+  const normalizedRpId = normalizeHostLikeValue(rpId);
+
+  if (!normalizedRpId || !hostname) {
+    return true;
+  }
+
+  if (normalizedRpId === hostname) {
+    return true;
+  }
+
+  // IPs must match exactly; suffix matching only applies to domain names.
+  if (isIpAddress(normalizedRpId) || isIpAddress(hostname)) {
+    return false;
+  }
+
+  return hostname.endsWith(`.${normalizedRpId}`);
+}
+
+function ensureRpIdMatchesCurrentHost(
+  rpId: string | undefined,
+  flow: "assertion" | "registration",
+) {
+  if (!rpId) {
+    return;
+  }
+
+  const normalizedRpId = normalizeHostLikeValue(rpId);
+  if (!normalizedRpId) {
+    return;
+  }
+
+  const hostname = getCurrentHostname();
+  if (!hostname) {
+    return;
+  }
+
+  if (isRpIdCompatibleWithHostname(normalizedRpId, hostname)) {
+    return;
+  }
+
+  const flowLabel = flow === "assertion" ? "validacao" : "registro";
+  throw new Error(
+    `RP ID WebAuthn incompativel no fluxo de ${flowLabel}. rpId recebido: "${normalizedRpId}". Host atual: "${hostname}". Verifique se o backend gerou o challenge para este mesmo dominio.`,
+  );
+}
+
 function normalizeCredentialDescriptor(
   descriptor: JsonRecord,
 ): PublicKeyCredentialDescriptor {
@@ -93,7 +170,10 @@ export function parseAssertionOptions(
 ): PublicKeyCredentialRequestOptions {
   const options = parseOptionsJson<JsonRecord>(serializedOptions);
   const challenge = getOption<string>(options, "challenge");
+  const rpId = getOption<string>(options, "rpId");
   const allowCredentials = getOption<unknown[]>(options, "allowCredentials");
+
+  ensureRpIdMatchesCurrentHost(rpId, "assertion");
 
   return {
     ...options,
@@ -111,11 +191,15 @@ export function parseRegistrationOptions(
 ): PublicKeyCredentialCreationOptions {
   const options = parseOptionsJson<JsonRecord>(serializedOptions);
   const challenge = getOption<string>(options, "challenge");
+  const rp = getNestedRecord(options, "rp");
+  const rpId = getOption<string>(rp, "id");
   const user = getNestedRecord(options, "user");
   const excludeCredentials = getOption<unknown[]>(
     options,
     "excludeCredentials",
   );
+
+  ensureRpIdMatchesCurrentHost(rpId, "registration");
 
   return {
     ...options,
@@ -199,8 +283,11 @@ export function describeWebAuthnError(error: unknown): string {
     switch (error.name) {
       case "SecurityError": {
         const environment = getWebAuthnEnvironmentInfo();
+        const detail = error.message?.trim()
+          ? ` Detalhe do navegador: ${error.message.trim()}`
+          : "";
         return environment.isSecureContext
-          ? "O navegador bloqueou o WebAuthn por incompatibilidade de dominio ou RP ID. Verifique se o backend gerou o challenge para este host."
+          ? `O navegador bloqueou o WebAuthn por incompatibilidade de dominio, RP ID ou politica de seguranca da pagina. Host atual: ${environment.host}. Verifique se o challenge foi gerado para este host e sem troca de dominio entre begin e complete.${detail}`
           : "O navegador exige contexto seguro para WebAuthn. Em localhost isso costuma funcionar, mas IPs, hosts customizados ou paginas inseguras em HTTP podem ser bloqueados.";
       }
       case "NotAllowedError":
