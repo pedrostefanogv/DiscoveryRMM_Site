@@ -68,9 +68,38 @@ export default function MfaAssertionPage() {
         allowCredentialsCount: publicKeyOptions.allowCredentials?.length ?? 0,
       });
 
-      const credential = await navigator.credentials.get({
-        publicKey: publicKeyOptions,
-      });
+      let credential: Credential | null;
+
+      try {
+        credential = await navigator.credentials.get({
+          publicKey: publicKeyOptions,
+        });
+      } catch (error) {
+        const shouldRetryWithoutRpId =
+          isFirefox &&
+          error instanceof DOMException &&
+          error.name === "SecurityError" &&
+          typeof publicKeyOptions.rpId === "string";
+
+        if (!shouldRetryWithoutRpId) {
+          throw error;
+        }
+
+        const fallbackOptions: PublicKeyCredentialRequestOptions = {
+          ...publicKeyOptions,
+        };
+        delete fallbackOptions.rpId;
+
+        console.warn("[WebAuthn][MFA][firefox-rpId-fallback]", {
+          reason: "SecurityError with explicit rpId",
+          originalRpId: publicKeyOptions.rpId,
+          retryWithRpId: null,
+        });
+
+        credential = await navigator.credentials.get({
+          publicKey: fallbackOptions,
+        });
+      }
 
       if (!(credential instanceof PublicKeyCredential)) {
         throw new Error("O navegador nao retornou uma credencial valida.");
