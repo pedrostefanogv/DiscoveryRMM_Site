@@ -7,6 +7,7 @@ import { useAuth } from "@/auth/AuthContext";
 import {
   describeWebAuthnError,
   ensureWebAuthnSupport,
+  getWebAuthnEnvironmentInfo,
   parseAssertionOptions,
   serializeAssertionCredential,
 } from "@/auth/webauthn";
@@ -37,6 +38,9 @@ export default function MfaAssertionPage() {
   );
   const isTotpFlow = roleMfaRequirement === "Totp";
 
+  const isFirefox =
+    typeof navigator !== "undefined" && /firefox/i.test(navigator.userAgent);
+
   const handleAuthenticateFido2 = async () => {
     if (!token) {
       navigate("/auth/login", { replace: true });
@@ -51,8 +55,21 @@ export default function MfaAssertionPage() {
       setTemporaryStage("mfa-assert-begin");
 
       const begin = await authApi.beginLoginFido2(token);
+      const publicKeyOptions = parseAssertionOptions(begin.options);
+      const environment = getWebAuthnEnvironmentInfo();
+
+      console.info("[WebAuthn][MFA][begin]", {
+        browser: isFirefox ? "firefox" : "other",
+        isSecureContext: environment.isSecureContext,
+        origin: environment.origin,
+        host: environment.host,
+        rpId: publicKeyOptions.rpId ?? null,
+        userVerification: publicKeyOptions.userVerification ?? null,
+        allowCredentialsCount: publicKeyOptions.allowCredentials?.length ?? 0,
+      });
+
       const credential = await navigator.credentials.get({
-        publicKey: parseAssertionOptions(begin.options),
+        publicKey: publicKeyOptions,
       });
 
       if (!(credential instanceof PublicKeyCredential)) {
@@ -70,6 +87,25 @@ export default function MfaAssertionPage() {
       toast.success("Autenticacao concluida com sucesso.");
       navigate("/", { replace: true });
     } catch (caught) {
+      if (caught instanceof DOMException) {
+        const environment = getWebAuthnEnvironmentInfo();
+        console.error("[WebAuthn][MFA][error]", {
+          browser: isFirefox ? "firefox" : "other",
+          name: caught.name,
+          message: caught.message,
+          isSecureContext: environment.isSecureContext,
+          origin: environment.origin,
+          host: environment.host,
+        });
+      }
+
+      if (caught instanceof ApiError) {
+        console.error("[WebAuthn][MFA][api-error]", {
+          status: caught.status,
+          message: caught.message,
+        });
+      }
+
       if (caught instanceof ApiError && caught.status === 403) {
         const message = "Seu perfil exige outro metodo de MFA. Inicie novamente o login para seguir o fluxo correto.";
         setError(message);

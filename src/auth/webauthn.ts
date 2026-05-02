@@ -170,20 +170,49 @@ export function parseAssertionOptions(
 ): PublicKeyCredentialRequestOptions {
   const options = parseOptionsJson<JsonRecord>(serializedOptions);
   const challenge = getOption<string>(options, "challenge");
+  const timeout = getOption<number>(options, "timeout");
   const rpId = getOption<string>(options, "rpId");
   const allowCredentials = getOption<unknown[]>(options, "allowCredentials");
+  const userVerification = getOption<UserVerificationRequirement>(
+    options,
+    "userVerification",
+  );
+  const extensions = getOption<AuthenticationExtensionsClientInputs>(
+    options,
+    "extensions",
+  );
 
   ensureRpIdMatchesCurrentHost(rpId, "assertion");
 
-  return {
-    ...options,
-    challenge: fromBase64Url(String(challenge ?? "")),
-    allowCredentials: Array.isArray(allowCredentials)
-      ? allowCredentials.map((item) =>
-          normalizeCredentialDescriptor(item as JsonRecord),
-        )
-      : undefined,
-  } as PublicKeyCredentialRequestOptions;
+  const normalizedChallenge = fromBase64Url(String(challenge ?? ""));
+  const normalizedAllowCredentials = Array.isArray(allowCredentials)
+    ? allowCredentials.map((item) =>
+        normalizeCredentialDescriptor(item as JsonRecord),
+      )
+    : undefined;
+
+  const normalizedOptions: PublicKeyCredentialRequestOptions = {
+    challenge: normalizedChallenge,
+    allowCredentials: normalizedAllowCredentials,
+  };
+
+  if (typeof timeout === "number") {
+    normalizedOptions.timeout = timeout;
+  }
+
+  if (typeof rpId === "string" && rpId.trim()) {
+    normalizedOptions.rpId = rpId;
+  }
+
+  if (userVerification) {
+    normalizedOptions.userVerification = userVerification;
+  }
+
+  if (extensions && typeof extensions === "object") {
+    normalizedOptions.extensions = extensions;
+  }
+
+  return normalizedOptions;
 }
 
 export function parseRegistrationOptions(
@@ -280,26 +309,27 @@ export function getWebAuthnEnvironmentInfo(): WebAuthnEnvironmentInfo {
 
 export function describeWebAuthnError(error: unknown): string {
   if (error instanceof DOMException) {
+    const detail = error.message?.trim()
+      ? ` Detalhe do navegador: ${error.message.trim()}`
+      : "";
+
     switch (error.name) {
       case "SecurityError": {
         const environment = getWebAuthnEnvironmentInfo();
-        const detail = error.message?.trim()
-          ? ` Detalhe do navegador: ${error.message.trim()}`
-          : "";
         return environment.isSecureContext
           ? `O navegador bloqueou o WebAuthn por incompatibilidade de dominio, RP ID ou politica de seguranca da pagina. Host atual: ${environment.host}. Verifique se o challenge foi gerado para este host e sem troca de dominio entre begin e complete.${detail}`
           : "O navegador exige contexto seguro para WebAuthn. Em localhost isso costuma funcionar, mas IPs, hosts customizados ou paginas inseguras em HTTP podem ser bloqueados.";
       }
       case "NotAllowedError":
-        return "A operacao WebAuthn foi cancelada, expirou ou foi bloqueada pelo navegador/autenticador.";
+        return `A operacao WebAuthn foi cancelada, expirou ou foi bloqueada pelo navegador/autenticador.${detail}`;
       case "InvalidStateError":
-        return "Esta chave ja parece estar registrada neste autenticador para este site.";
+        return `Esta chave ja parece estar registrada neste autenticador para este site.${detail}`;
       case "ConstraintError":
-        return "O autenticador nao conseguiu atender aos requisitos pedidos para esta credencial.";
+        return `O autenticador nao conseguiu atender aos requisitos pedidos para esta credencial.${detail}`;
       case "AbortError":
-        return "A operacao WebAuthn foi interrompida antes da conclusao.";
+        return `A operacao WebAuthn foi interrompida antes da conclusao.${detail}`;
       case "NotSupportedError":
-        return "O autenticador ou o navegador nao suportam os parametros WebAuthn enviados pelo backend.";
+        return `O autenticador ou o navegador nao suportam os parametros WebAuthn enviados pelo backend.${detail}`;
       default:
         return error.message || "Falha inesperada ao usar WebAuthn.";
     }
