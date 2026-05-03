@@ -2,10 +2,10 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Cpu, MemoryStick, Ticket as TicketIcon, Tags,
-  Wifi, WifiOff, AppWindow, Search, Clock, HardDrive, Printer, Bug, AlertTriangle,
+  Wifi, WifiOff, AppWindow, Search, Clock, HardDrive, Printer, Bug, AlertTriangle, Trash2,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { useAgent, useAgentHardware, useAgentSoftware, useAgentSoftwareSnapshot } from '@/hooks/useAgents';
+import { useAgent, useAgentHardware, useAgentSoftware, useAgentSoftwareSnapshot, useDeleteAgent } from '@/hooks/useAgents';
 import { useTickets } from '@/hooks/useTickets';
 import { useLogs } from '@/hooks/useLogs';
 import { useRunMeshCentralNodeLinksBackfill, useRunMeshCentralNodeLinksBackfillDryRun } from '@/hooks';
@@ -155,7 +155,8 @@ export default function AgentDetail() {
   const [nodeLinkPreviewReport, setNodeLinkPreviewReport] = useState<MeshCentralNodeLinksBackfillReport | null>(null);
 
   const { hasAnyPermission } = useAuthorization();
-  const canReconcileNodeLink = hasAnyPermission(['Agents.Edit', 'agents.*', 'admin.*']);
+  const canManageAgent = hasAnyPermission(['Agents.Edit', 'agents.*', 'admin.*']);
+  const deleteAgent = useDeleteAgent();
   const agent = useAgent(id!);
   const hw = useAgentHardware(id!);
   const softwareCursor = softwarePageCursors[softwarePage - 1];
@@ -367,6 +368,28 @@ export default function AgentDetail() {
     }
   };
 
+  const handleDeleteAgent = async () => {
+    if (!id) return;
+
+    const confirmed = window.confirm(
+      `Excluir o agente "${a.displayName ?? a.hostname}"? Esta ação não pode ser desfeita.`,
+    );
+    if (!confirmed) return;
+
+    try {
+      await deleteAgent.mutateAsync(id);
+      toast.success('Agente excluído com sucesso.');
+      navigate('/agents', { replace: true });
+    } catch (error) {
+      const message = error instanceof ApiError
+        ? error.message
+        : error instanceof Error
+          ? error.message
+          : 'Falha ao excluir o agente.';
+      toast.error(message);
+    }
+  };
+
   const handleNodeLinkDryRun = async () => {
     if (!a.siteId || isReconcilingNodeLink) return;
 
@@ -530,6 +553,19 @@ export default function AgentDetail() {
         >
           Automacao
         </Button>
+        {canManageAgent && (
+          <Button
+            size="sm"
+            variant="danger"
+            onClick={() => {
+              void handleDeleteAgent();
+            }}
+            loading={deleteAgent.isPending}
+          >
+            <Trash2 className="h-4 w-4" />
+            Excluir
+          </Button>
+        )}
       </div>
 
       {/* Stat Cards */}
@@ -695,7 +731,7 @@ export default function AgentDetail() {
               <p className="mt-1 text-xs text-slate-500">
                 Valor persistido no agent, utilizado automaticamente no suporte remoto.
               </p>
-              {canReconcileNodeLink && (
+              {canManageAgent && (
                 <Button
                   size="sm"
                   variant="ghost"

@@ -1,14 +1,16 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Monitor, Wifi, WifiOff, Activity, Building2, Clock, LayoutGrid, List, Bug } from 'lucide-react';
+import { Monitor, Wifi, WifiOff, Activity, Building2, Clock, LayoutGrid, List, Bug, Trash2 } from 'lucide-react';
 import { useQueries } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { useClients } from '@/hooks/useClients';
+import { useDeleteAgent } from '@/hooks/useAgents';
 import { ApiError, agentsApi, authApi } from '@/api';
 import { Badge, Loading, ErrorDisplay, Input, Select, StatCard, Modal, PageHeader, SkeletonCard, EmptyState } from '@/components/ui';
 import type { Agent } from '@/api';
 import { getAgentLastSeen, isAgentOnlineNow } from '@/utils/agentStatus';
 import { useNowTick } from '@/hooks/useNowTick';
+import { useAuthorization } from '@/auth/authorization';
 import { openRemoteDebugPopup } from './remoteDebugLauncher';
 
 type AgentWithClient = Agent & { clientName: string; clientId: string };
@@ -37,6 +39,9 @@ export default function AgentList() {
   const navigate = useNavigate();
   const now = useNowTick(5_000);
   const clients = useClients();
+  const deleteAgent = useDeleteAgent();
+  const { hasAnyPermission } = useAuthorization();
+  const canManageAgent = hasAnyPermission(['Agents.Edit', 'agents.*', 'admin.*']);
 
   const [search, setSearch] = useState('');
   const [filterClient, setFilterClient] = useState('');
@@ -49,6 +54,7 @@ export default function AgentList() {
   const [remoteUrl, setRemoteUrl] = useState<string | null>(null);
   const [remoteAgent, setRemoteAgent] = useState<AgentWithClient | null>(null);
   const [remoteDebugAgentId, setRemoteDebugAgentId] = useState<string | null>(null);
+  const [deletingAgentId, setDeletingAgentId] = useState<string | null>(null);
   const contextMenuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -149,6 +155,30 @@ export default function AgentList() {
       toast.error(message);
     } finally {
       setRemoteDebugAgentId(null);
+    }
+  };
+
+  const handleDeleteAgent = async (agent: AgentWithClient) => {
+    setContextMenu(null);
+
+    const confirmed = window.confirm(
+      `Excluir o agente "${agent.displayName ?? agent.hostname}"? Esta ação não pode ser desfeita.`,
+    );
+    if (!confirmed) return;
+
+    setDeletingAgentId(agent.id);
+    try {
+      await deleteAgent.mutateAsync(agent.id);
+      toast.success(`Agente ${agent.displayName ?? agent.hostname} excluído com sucesso.`);
+    } catch (error) {
+      const message = error instanceof ApiError
+        ? error.message
+        : error instanceof Error
+          ? error.message
+          : 'Falha ao excluir o agente.';
+      toast.error(message);
+    } finally {
+      setDeletingAgentId(null);
     }
   };
 
@@ -477,6 +507,18 @@ export default function AgentList() {
               <Bug className="h-4 w-4" />
               {remoteDebugAgentId === contextMenu.agent.id ? 'Abrindo debug...' : 'Ver debug'}
             </button>
+            {canManageAgent && (
+              <button
+                className="flex w-full items-center gap-2 border-t border-white/10 px-3 py-2 text-left text-sm text-red-300 transition-colors hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+                onClick={() => {
+                  void handleDeleteAgent(contextMenu.agent);
+                }}
+                disabled={deleteAgent.isPending}
+              >
+                <Trash2 className="h-4 w-4" />
+                {deletingAgentId === contextMenu.agent.id ? 'Excluindo...' : 'Excluir agente'}
+              </button>
+            )}
           </div>
         </>
       )}
