@@ -13,6 +13,7 @@ import type {
   AgentCommand,
   AgentToken,
   ApproveZeroTouchResponse,
+  AutomationExecutionReport,
   CreateAgentRequest,
   UpdateAgentRequest,
   SendCommandRequest,
@@ -140,6 +141,9 @@ export const agentsApi = {
       data,
     ),
 
-  getAutomationExecutions: (agentId: string) =>
-    api.get<unknown[]>(`/api/v1/agents/${agentId}/automation/executions`),
+  getAutomationExecutions: (agentId: string, limit = 50) =>
+    api.get<AutomationExecutionReport[]>(
+      `/api/v1/agents/${agentId}/automation/executions`,
+      { limit },
+    ),
 };

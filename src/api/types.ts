@@ -76,6 +76,7 @@ export interface Agent {
   hostname: string;
   displayName: string | null;
   meshCentralNodeId?: string | null;
+  zeroTouchPending?: boolean;
   operatingSystem: string | null;
   osVersion: string | null;
   agentVersion: string | null;

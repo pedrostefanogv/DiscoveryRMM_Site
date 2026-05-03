@@ -156,3 +156,14 @@ export function useCreateAgentToken() {
       qc.invalidateQueries({ queryKey: KEYS.tokens(vars.id) }),
   });
 }
+
+export function useApproveZeroTouch() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (agentId: string) => agentsApi.approveZeroTouch(agentId),
+    onSuccess: (_d, agentId) => {
+      qc.invalidateQueries({ queryKey: KEYS.all });
+      qc.invalidateQueries({ queryKey: KEYS.detail(agentId) });
+    },
+  });
+}

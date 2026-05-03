@@ -2,10 +2,10 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Cpu, MemoryStick, Ticket as TicketIcon, Tags,
-  Wifi, WifiOff, AppWindow, Search, Clock, HardDrive, Printer, Bug, AlertTriangle, Trash2,
+  Wifi, WifiOff, AppWindow, Search, Clock, HardDrive, Printer, Bug, AlertTriangle, Trash2, ShieldCheck,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { useAgent, useAgentHardware, useAgentSoftware, useAgentSoftwareSnapshot, useDeleteAgent } from '@/hooks/useAgents';
+import { useAgent, useAgentHardware, useAgentSoftware, useAgentSoftwareSnapshot, useApproveZeroTouch, useDeleteAgent } from '@/hooks/useAgents';
 import { useTickets } from '@/hooks/useTickets';
 import { useLogs } from '@/hooks/useLogs';
 import { useRunMeshCentralNodeLinksBackfill, useRunMeshCentralNodeLinksBackfillDryRun } from '@/hooks';
@@ -151,6 +151,7 @@ export default function AgentDetail() {
   const [isReconcilingNodeLink, setIsReconcilingNodeLink] = useState(false);
   const [isApplyingNodeLink, setIsApplyingNodeLink] = useState(false);
   const [isTriggeringAgentUpdate, setIsTriggeringAgentUpdate] = useState(false);
+  const [isApprovingZeroTouch, setIsApprovingZeroTouch] = useState(false);
   const [nodeLinkPreviewOpen, setNodeLinkPreviewOpen] = useState(false);
   const [nodeLinkPreviewError, setNodeLinkPreviewError] = useState<string | null>(null);
   const [nodeLinkPreviewReport, setNodeLinkPreviewReport] = useState<MeshCentralNodeLinksBackfillReport | null>(null);
@@ -158,6 +159,7 @@ export default function AgentDetail() {
   const { hasAnyPermission } = useAuthorization();
   const canManageAgent = hasAnyPermission(['Agents.Edit', 'agents.*', 'admin.*']);
   const deleteAgent = useDeleteAgent();
+  const approveZeroTouch = useApproveZeroTouch();
   const agent = useAgent(id!);
   const hw = useAgentHardware(id!);
   const softwareCursor = softwarePageCursors[softwarePage - 1];
@@ -217,6 +219,7 @@ export default function AgentDetail() {
 
   const a = agent.data;
   const isOnlineNow = isAgentOnlineNow(a, now);
+  const isZeroTouchPending = a.zeroTouchPending === true;
   const softwareItems = software.data?.items ?? [];
   const softwareLimitReturned = software.data?.limit ?? Number(softwareLimitSelected);
   const softwareTotalCount = software.data?.count ?? softwareSnapshot.data?.totalInstalled ?? 0;
@@ -410,6 +413,31 @@ export default function AgentDetail() {
     }
   };
 
+  const handleApproveZeroTouch = async () => {
+    if (!id || !isZeroTouchPending || !canManageAgent || isApprovingZeroTouch) return;
+
+    const confirmed = window.confirm(
+      `Aprovar o provisionamento Zero-Touch do agente "${a.displayName ?? a.hostname}"?`,
+    );
+    if (!confirmed) return;
+
+    setIsApprovingZeroTouch(true);
+    try {
+      await approveZeroTouch.mutateAsync(id);
+      toast.success('Agente aprovado para comunicação com a API.');
+      await agent.refetch();
+    } catch (error) {
+      const message = error instanceof ApiError
+        ? error.message
+        : error instanceof Error
+          ? error.message
+          : 'Falha ao aprovar o agente.';
+      toast.error(message);
+    } finally {
+      setIsApprovingZeroTouch(false);
+    }
+  };
+
   const handleNodeLinkDryRun = async () => {
     if (!a.siteId || isReconcilingNodeLink) return;
 
@@ -554,6 +582,9 @@ export default function AgentDetail() {
             {isOnlineNow ? <Wifi className="h-3 w-3" /> : <WifiOff className="h-3 w-3" />}
             {isOnlineNow ? 'Online' : 'Offline'}
           </span>
+        </Badge>
+        <Badge color={isZeroTouchPending ? 'warning' : 'success'}>
+          {isZeroTouchPending ? 'Zero-Touch: aguardando aprovação' : 'Zero-Touch: aprovado'}
         </Badge>
         <Button
           size="sm"
@@ -784,6 +815,27 @@ export default function AgentDetail() {
             <div className="border-t border-white/5 pt-3">
               <dt className="text-slate-400">Versão do Agente</dt>
               <dd className="mt-0.5 font-mono text-white">{a.agentVersion ?? '—'}</dd>
+            </div>
+            <div>
+              <dt className="text-slate-400">Zero-Touch Config Registration</dt>
+              <dd className="mt-1 flex items-center gap-2">
+                <Badge color={isZeroTouchPending ? 'warning' : 'success'}>
+                  {isZeroTouchPending ? 'Aguardando aprovação' : 'Aprovado'}
+                </Badge>
+                {canManageAgent && isZeroTouchPending && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                      void handleApproveZeroTouch();
+                    }}
+                    loading={isApprovingZeroTouch}
+                  >
+                    <ShieldCheck className="h-4 w-4" />
+                    Aprovar
+                  </Button>
+                )}
+              </dd>
             </div>
             <div>
               <dt className="text-slate-400">Último IP</dt>
