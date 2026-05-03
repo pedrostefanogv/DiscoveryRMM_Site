@@ -111,9 +111,7 @@ export default function SoftwareInventory() {
   const totalAgents = list.data?.totalAgents ?? snapshot.data?.distinctAgents ?? 0;
   const totalCount = list.data?.totalSoftware ?? list.data?.count ?? snapshot.data?.distinctSoftware ?? 0;
   const resolvedLimit = list.data?.limit ?? Number(limit);
-  const totalPagesByCount = Math.max(1, Math.ceil(totalCount / resolvedLimit));
-  const totalPagesByCursor = Math.max(page, page + (list.data?.hasMore ? 1 : 0));
-  const totalPages = Math.max(totalPagesByCount, totalPagesByCursor);
+  const totalPages = Math.max(1, Math.ceil(totalCount / resolvedLimit));
   const currentPage = Math.min(page, totalPages);
 
   useEffect(() => {
@@ -137,35 +135,6 @@ export default function SoftwareInventory() {
 
   const goToPrevPage = () => {
     setPage((p) => Math.max(1, p - 1));
-  };
-
-  const hasCursorForPage = (targetPage: number) => {
-    if (targetPage <= 1) return true;
-    return Boolean(pageCursors[targetPage - 1]);
-  };
-
-  const visibleWindowSize = 5;
-  const windowStart = Math.max(
-    1,
-    Math.min(currentPage - 2, Math.max(1, totalPages - (visibleWindowSize - 1))),
-  );
-  const visiblePages = Array.from(
-    { length: Math.min(visibleWindowSize, totalPages) },
-    (_, index) => windowStart + index,
-  );
-
-  const goToPage = (targetPage: number) => {
-    if (targetPage === page) return;
-    if (targetPage < 1 || targetPage > totalPages) return;
-
-    if (targetPage < page && hasCursorForPage(targetPage)) {
-      setPage(targetPage);
-      return;
-    }
-
-    if (targetPage === page + 1 && canNext) {
-      goToNextPage();
-    }
   };
 
   const scopeOptions = [
@@ -465,15 +434,12 @@ export default function SoftwareInventory() {
           <ErrorDisplay onRetry={() => list.refetch()} />
         ) : (
           <div className="p-5">
-            <div className="mb-3 text-xs text-slate-400">
-              Endpoint: <code className="font-mono">/api/software-inventory{scope === "client" ? "/by-client/{clientId}" : scope === "site" ? "/by-site/{siteId}" : ""}</code>
-            </div>
-
             <DataTable
               columns={columns}
               data={items}
               keyExtractor={(item) => item.softwareId}
               emptyMessage="Nenhum software encontrado para os filtros atuais"
+              showPagination={false}
             />
 
             <div className="mt-4 flex items-center justify-between gap-3">
@@ -487,31 +453,9 @@ export default function SoftwareInventory() {
                   Voltar
                 </Button>
 
-                <div className="flex items-center gap-1">
-                  {visiblePages.map((pageNumber) => {
-                    const isCurrent = pageNumber === currentPage;
-                    const canNavigateToPage =
-                      hasCursorForPage(pageNumber) || (pageNumber === page + 1 && canNext);
-
-                    return (
-                      <button
-                        key={pageNumber}
-                        type="button"
-                        onClick={() => goToPage(pageNumber)}
-                        disabled={isCurrent || !canNavigateToPage || list.isFetching}
-                        className={`min-w-8 rounded-md border px-2 py-1 text-xs transition-colors ${
-                          isCurrent
-                            ? "border-primary/60 bg-primary/20 text-primary"
-                            : canNavigateToPage
-                              ? "border-white/10 text-slate-300 hover:border-white/30 hover:bg-white/5"
-                              : "border-white/5 text-slate-600"
-                        }`}
-                      >
-                        {pageNumber}
-                      </button>
-                    );
-                  })}
-                </div>
+                <span className="px-2 text-xs tabular-nums text-slate-400">
+                  {currentPage} / {totalPages}
+                </span>
 
                 <Button variant="secondary" size="sm" onClick={goToNextPage} disabled={!canNext} loading={list.isFetching}>
                   Avançar

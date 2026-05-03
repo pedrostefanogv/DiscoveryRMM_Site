@@ -3,7 +3,6 @@ import {
   Monitor,
   Ticket,
   AlertTriangle,
-  WifiOff,
   AppWindow,
   Server,
   Database,
@@ -15,31 +14,15 @@ import {
   Zap,
 } from 'lucide-react';
 import type { ComponentType } from 'react';
-import { memo, useMemo, useState } from 'react';
+import { memo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { useTickets } from '@/hooks/useTickets';
-import { useLogs } from '@/hooks/useLogs';
 import { useDashboardSummary } from '@/hooks/useDashboardSummary';
 import { useP2POverview } from '@/hooks/useP2POverview';
-import { useP2PTimeseries } from '@/hooks/useP2PTimeseries';
-import { useP2PArtifactsDistribution } from '@/hooks/useP2PArtifactsDistribution';
-import { useP2PAgentsRanking } from '@/hooks/useP2PAgentsRanking';
-import { useP2PSeedPlan } from '@/hooks/useP2PSeedPlan';
-import type { P2PScope } from '@/api/p2p';
 import { StatCard, Card, CardHeader, Badge, SkeletonDashboard, ErrorDisplay } from '@/components/ui';
-import { LogLevel, getRealtimeStats, type TicketPriority } from '@/api';
+import { getRealtimeStats } from '@/api';
 import { useSoftwareInventorySnapshot } from '@/hooks/useSoftwareInventory';
 import type { DashboardWindow } from '@/api/dashboard';
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-} from 'recharts';
 
 function formatBytes(value?: number | null): string {
   if (!value || value <= 0) return '—';
@@ -75,19 +58,11 @@ const WINDOWS: { value: DashboardWindow; label: string }[] = [
   { value: '30d', label: 'Últimos 30 dias' },
 ];
 
-const DATE_ONLY_FORMATTER = new Intl.DateTimeFormat('pt-BR');
-const DATE_TIME_FORMATTER = new Intl.DateTimeFormat('pt-BR', {
-  dateStyle: 'short',
-  timeStyle: 'short',
-});
-
 export default function Dashboard() {
   const navigate = useNavigate();
   const [window, setWindow] = useState<DashboardWindow>('24h');
 
   const dashboard = useDashboardSummary('global', window);
-  const recentTickets = useTickets({ limit: 10 });
-  const recentLogs = useLogs({ limit: 10 });
   const softwareSnapshot = useSoftwareInventorySnapshot('global');
   const realtimeStats = useQuery({
     queryKey: ['realtime', 'stats'],
@@ -95,29 +70,7 @@ export default function Dashboard() {
     refetchInterval: 10_000,
     refetchIntervalInBackground: true,
   });
-  const [p2pScopeLevel, setP2pScopeLevel] = useState<P2PScope>('global');
-  const [p2pTenantId, setP2pTenantId] = useState('');
-  const [p2pSiteId, setP2pSiteId] = useState('');
-  const [p2pAgentId, setP2pAgentId] = useState('');
-  const supportsAggregatedP2P = p2pScopeLevel !== 'agent';
-
-  const p2pScope = useMemo(
-    () => ({
-      scope: p2pScopeLevel,
-      ...(p2pScopeLevel !== 'global' && p2pTenantId ? { tenantId: p2pTenantId } : {}),
-      ...(p2pScopeLevel === 'site' && p2pSiteId ? { siteId: p2pSiteId } : {}),
-      ...(p2pScopeLevel === 'agent' && p2pAgentId ? { agentId: p2pAgentId } : {}),
-    }),
-    [p2pAgentId, p2pScopeLevel, p2pSiteId, p2pTenantId],
-  );
-
-  const p2pOverview = useP2POverview({ ...p2pScope, window });
-  const p2pTimeseries = useP2PTimeseries({ ...p2pScope, metric: 'replicationsSucceeded', interval: window });
-  const p2pArtifacts = useP2PArtifactsDistribution({ ...p2pScope, limit: 5, offset: 0 }, supportsAggregatedP2P);
-  const p2pRanking = useP2PAgentsRanking({ ...p2pScope, window, sortBy: 'healthScore' }, supportsAggregatedP2P);
-  const p2pSeedPlan = useP2PSeedPlan(p2pScope, supportsAggregatedP2P);
-  const ticketList = useMemo(() => recentTickets.data ?? [], [recentTickets.data]);
-  const logList = useMemo(() => recentLogs.data ?? [], [recentLogs.data]);
+  const p2pOverview = useP2POverview({ scope: 'global', window });
 
   const ds = dashboard.data;
 
@@ -160,8 +113,7 @@ export default function Dashboard() {
   const cmds = ds?.commands;
   const auto = ds?.automation;
   const logs = ds?.logs;
-  const p2p = p2pOverview.data;
-  const p2pKpis = p2p?.kpis;
+  const p2pKpis = p2pOverview.data?.kpis;
 
   return (
     <div className="space-y-6">
@@ -462,229 +414,12 @@ export default function Dashboard() {
         </Card>
       </div>
 
-      {/* Linha 5 – Operacional P2P */}
-      <P2PScopeSelector
-        scope={p2pScopeLevel}
-        tenantId={p2pTenantId}
-        siteId={p2pSiteId}
-        agentId={p2pAgentId}
-        onScopeChange={setP2pScopeLevel}
-        onTenantIdChange={setP2pTenantId}
-        onSiteIdChange={setP2pSiteId}
-        onAgentIdChange={setP2pAgentId}
-      />
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Card>
-          <CardHeader
-            title="P2P Overview"
-            subtitle="Indicadores operacionais de distribuição peer-to-peer"
-          />
-          <div className="grid grid-cols-2 gap-3 text-sm">
-            <MetricTile label="Agentes ativos" value={p2pKpis?.activeAgents ?? '—'} icon={Monitor} />
-            <MetricTile label="Seeders ativos" value={p2pKpis?.activeSeeders ?? '—'} icon={Server} />
-            <MetricTile label="Success rate" value={typeof p2pKpis?.replicationSuccessRate === 'number' ? `${p2pKpis.replicationSuccessRate.toFixed(1)}%` : '—'} icon={CheckCircle2} />
-            <MetricTile label="Bytes servidos" value={formatBytes(p2pKpis?.bytesServedDelta)} icon={Database} />
-          </div>
-          <div className="mt-3 rounded-lg bg-white/5 px-3 py-2 text-sm">
-            <div className="flex items-center justify-between">
-              <span className="text-slate-400">Saude P2P</span>
-              <Badge color={p2p?.health === 'ok' ? 'success' : 'warning'}>
-                {(p2p?.health ?? 'desconhecido').toUpperCase()}
-              </Badge>
-            </div>
-            <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-slate-400">
-              <div className="rounded-lg bg-white/5 px-3 py-2">
-                <p className="text-slate-500">Queue pressure</p>
-                <p className="mt-0.5 text-sm font-semibold text-white">
-                  {typeof p2pKpis?.queuePressure === 'number' ? p2pKpis.queuePressure.toFixed(2) : '—'}
-                </p>
-              </div>
-              <div className="rounded-lg bg-white/5 px-3 py-2">
-                <p className="text-slate-500">Artifacts com peers</p>
-                <p className="mt-0.5 text-sm font-semibold text-white">
-                  {p2pKpis?.artifactsWithPeers ?? '—'}
-                </p>
-              </div>
-            </div>
-          </div>
-        </Card>
-
-        <Card>
-          <CardHeader
-            title="P2P Timeseries"
-            subtitle={`Replicacoes bem-sucedidas ao longo do tempo • ${window}`}
-          />
-          <P2PLineChart
-            points={p2pTimeseries.data?.points ?? []}
-            loading={p2pTimeseries.isLoading}
-            unit={p2pTimeseries.data?.unit}
-            label="Replicacoes bem-sucedidas"
-          />
-        </Card>
-      </div>
-
-      {/* Linha 6 – Distribuição de Artifacts + Ranking de Agentes */}
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Card>
-          <CardHeader
-            title="P2P Artifacts Distribution"
-            subtitle="Distribuição de cache por peer"
-          />
-          {!supportsAggregatedP2P ? (
-            <p className="text-sm text-slate-500">
-              Distribuicao por artifacts nao esta disponivel no escopo agent.
-            </p>
-          ) : (
-            <div className="space-y-2">
-              {(p2pArtifacts.data?.items ?? []).map(item => (
-                <div key={item.artifactId} className="rounded-lg bg-white/5 px-3 py-2">
-                  <div className="flex items-center justify-between">
-                    <p className="truncate text-sm font-medium text-slate-200">{item.artifactName ?? item.artifactId}</p>
-                    <Badge color="primary">{item.peerCount} peers</Badge>
-                  </div>
-                  <p className="mt-1 text-xs text-slate-500">
-                    Atualizado em {DATE_ONLY_FORMATTER.format(new Date(item.lastUpdatedUtc))}
-                  </p>
-                </div>
-              ))}
-              {(p2pArtifacts.data?.items?.length ?? 0) === 0 && (
-                <p className="text-sm text-slate-500">Nenhum artifact distribuido encontrado.</p>
-              )}
-            </div>
-          )}
-        </Card>
-
-        <Card>
-          <CardHeader
-            title="P2P Agents Ranking"
-            subtitle="Top agentes por health score"
-          />
-          {!supportsAggregatedP2P ? (
-            <p className="text-sm text-slate-500">
-              Ranking agregado nao esta disponivel no escopo agent.
-            </p>
-          ) : (
-            <div className="space-y-2">
-              {(p2pRanking.data ?? []).map(agent => (
-                <div key={agent.agentId} className="rounded-lg bg-white/5 px-3 py-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium text-slate-200">{agent.agentId}</p>
-                      <p className="text-[11px] text-slate-500">
-                        Site {agent.siteId}{agent.clientId ? ` • Cliente ${agent.clientId}` : ''}
-                      </p>
-                    </div>
-                    <Badge color={agent.healthScore >= 80 ? 'success' : 'warning'}>
-                      {agent.healthScore.toFixed(1)}
-                    </Badge>
-                  </div>
-                  <div className="mt-1 grid grid-cols-2 gap-2 text-xs text-slate-400">
-                    <span>Success: {agent.successRate.toFixed(1)}%</span>
-                    <span>Fail: {agent.failureRate.toFixed(1)}%</span>
-                    <span>Servido: {formatBytes(agent.bytesServedDelta)}</span>
-                    <span>Fila avg: {agent.queuedReplicationsAvg.toFixed(1)}</span>
-                  </div>
-                </div>
-              ))}
-              {(p2pRanking.data?.length ?? 0) === 0 && (
-                <p className="text-sm text-slate-500">Sem ranking de agentes no momento.</p>
-              )}
-            </div>
-          )}
-        </Card>
-      </div>
-
-      {/* Linha 7 – Seed Plan */}
-      <div className="grid gap-6 lg:grid-cols-1">
-        <Card>
-          <CardHeader
-            title="P2P Seed Plan"
-            subtitle="Estado atual dos seed-plans por escopo"
-          />
-          {!supportsAggregatedP2P ? (
-            <p className="text-sm text-slate-500">
-              Seed plan agregado nao esta disponivel no escopo agent.
-            </p>
-          ) : (
-            <div className="space-y-2">
-              {(p2pSeedPlan.data ?? []).map((plan) => (
-                <div key={`${plan.siteId ?? 'global'}-${plan.generatedAtUtc}`} className="rounded-lg bg-white/5 px-3 py-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-sm font-medium text-slate-200">
-                      {plan.siteId ? `Site ${plan.siteId}` : 'Escopo global'}
-                    </p>
-                    <Badge color={plan.selectedSeeds >= plan.minSeeds ? 'success' : 'warning'}>
-                      {plan.selectedSeeds >= plan.minSeeds ? 'OK' : 'Ajustar'}
-                    </Badge>
-                  </div>
-                  <div className="mt-1 grid grid-cols-2 gap-2 text-xs text-slate-400">
-                    <span>Total agents: {plan.totalAgents}</span>
-                    <span>Configurado: {plan.configuredPercent}%</span>
-                    <span>Min seeds: {plan.minSeeds}</span>
-                    <span>Selecionados: {plan.selectedSeeds}</span>
-                  </div>
-                  <p className="mt-1 text-[11px] text-slate-500">
-                    Gerado em {DATE_TIME_FORMATTER.format(new Date(plan.generatedAtUtc))}
-                  </p>
-                </div>
-              ))}
-              {(p2pSeedPlan.data?.length ?? 0) === 0 && (
-                <p className="text-sm text-slate-500">Nenhuma configuracao de seed plan encontrada.</p>
-              )}
-            </div>
-          )}
-        </Card>
-      </div>
-
-      {/* Linha 8 – Listas recentes */}
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Card>
-          <CardHeader title="Chamados Recentes" subtitle="Últimos 10 chamados" />
-          <div className="space-y-2">
-            {ticketList.length === 0 ? (
-              <p className="text-sm text-slate-500">Nenhum chamado</p>
-            ) : (
-              ticketList.map(t => (
-                <div
-                  key={t.id}
-                  className="flex items-center justify-between rounded-lg bg-white/5 px-4 py-3"
-                >
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-slate-200">{t.title}</p>
-                    <p className="text-xs text-slate-500">
-                      {DATE_ONLY_FORMATTER.format(new Date(t.createdAt))}
-                    </p>
-                  </div>
-                  <PriorityBadge priority={t.priority} />
-                </div>
-              ))
-            )}
-          </div>
-        </Card>
-
-        <Card>
-          <CardHeader title="Logs Recentes" subtitle="Últimas 10 entradas" />
-          <div className="space-y-2">
-            {logList.length === 0 ? (
-              <p className="text-sm text-slate-500">Nenhum log</p>
-            ) : (
-              logList.map(log => (
-                <div
-                  key={log.id}
-                  className="flex items-center gap-3 rounded-lg bg-white/5 px-4 py-3"
-                >
-                  <LogLevelIcon level={log.level} />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm text-slate-200">{log.message}</p>
-                    <p className="text-xs text-slate-500">
-                      {DATE_TIME_FORMATTER.format(new Date(log.createdAt))}
-                    </p>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </Card>
+      {/* Linha 6 – P2P Summary Cards */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard icon={Monitor} label="Agentes ativos P2P" value={p2pKpis?.activeAgents ?? '—'} tone="accent" />
+        <StatCard icon={Server} label="Seeders ativos" value={p2pKpis?.activeSeeders ?? '—'} tone="primary" />
+        <StatCard icon={CheckCircle2} label="Success rate" value={typeof p2pKpis?.replicationSuccessRate === 'number' ? `${p2pKpis.replicationSuccessRate.toFixed(1)}%` : '—'} tone="success" />
+        <StatCard icon={Database} label="Bytes servidos" value={formatBytes(p2pKpis?.bytesServedDelta)} tone="warning" />
       </div>
     </div>
   );
@@ -731,29 +466,6 @@ const StatusBar = memo(function StatusBar({
   );
 });
 
-const PriorityBadge = memo(function PriorityBadge({ priority }: { priority: TicketPriority }) {
-  const map: Record<TicketPriority, { label: string; color: 'slate' | 'success' | 'warning' | 'danger' }> = {
-    Low: { label: 'Baixa', color: 'slate' },
-    Medium: { label: 'Média', color: 'success' },
-    High: { label: 'Alta', color: 'warning' },
-    Critical: { label: 'Crítica', color: 'danger' },
-  };
-  const { label, color } = map[priority] ?? { label: 'N/A', color: 'slate' as const };
-  return <Badge color={color}>{label}</Badge>;
-});
-
-const LogLevelIcon = memo(function LogLevelIcon({ level }: { level: LogLevel }) {
-  switch (level) {
-    case LogLevel.Error:
-    case LogLevel.Critical:
-      return <AlertTriangle className="h-4 w-4 shrink-0 text-danger" />;
-    case LogLevel.Warning:
-      return <AlertTriangle className="h-4 w-4 shrink-0 text-warning" />;
-    default:
-      return <WifiOff className="h-4 w-4 shrink-0 text-slate-500" />;
-  }
-});
-
 const MetricTile = memo(function MetricTile({
   label,
   value,
@@ -773,181 +485,3 @@ const MetricTile = memo(function MetricTile({
     </div>
   );
 });
-
-// ── P2P Scope Selector ──────────────────────────────────────────────────────
-
-const P2P_SCOPES: { value: P2PScope; label: string }[] = [
-  { value: 'global', label: 'Global' },
-  { value: 'tenant', label: 'Tenant' },
-  { value: 'site', label: 'Site' },
-  { value: 'agent', label: 'Agent' },
-];
-
-const P2PScopeSelector = memo(function P2PScopeSelector({
-  scope,
-  tenantId,
-  siteId,
-  agentId,
-  onScopeChange,
-  onTenantIdChange,
-  onSiteIdChange,
-  onAgentIdChange,
-}: {
-  scope: P2PScope;
-  tenantId: string;
-  siteId: string;
-  agentId: string;
-  onScopeChange: (s: P2PScope) => void;
-  onTenantIdChange: (v: string) => void;
-  onSiteIdChange: (v: string) => void;
-  onAgentIdChange: (v: string) => void;
-}) {
-  return (
-    <div className="flex flex-wrap items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3">
-      <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">Escopo P2P</span>
-      <div className="flex items-center gap-1 rounded-lg border border-white/10 bg-black/20 p-0.5">
-        {P2P_SCOPES.map(s => (
-          <button
-            key={s.value}
-            type="button"
-            onClick={() => onScopeChange(s.value)}
-            className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
-              scope === s.value ? 'bg-primary text-white' : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            {s.label}
-          </button>
-        ))}
-      </div>
-      {scope !== 'global' && (
-        <input
-          type="text"
-          value={tenantId}
-          onChange={e => onTenantIdChange(e.target.value)}
-          placeholder="Tenant ID"
-          className="h-7 rounded-md border border-white/10 bg-black/20 px-2 text-xs text-white placeholder:text-slate-600 focus:outline-none focus:ring-1 focus:ring-primary"
-        />
-      )}
-      {scope === 'site' && (
-        <input
-          type="text"
-          value={siteId}
-          onChange={e => onSiteIdChange(e.target.value)}
-          placeholder="Site ID"
-          className="h-7 rounded-md border border-white/10 bg-black/20 px-2 text-xs text-white placeholder:text-slate-600 focus:outline-none focus:ring-1 focus:ring-primary"
-        />
-      )}
-      {scope === 'agent' && (
-        <input
-          type="text"
-          value={agentId}
-          onChange={e => onAgentIdChange(e.target.value)}
-          placeholder="Agent ID"
-          className="h-7 rounded-md border border-white/10 bg-black/20 px-2 text-xs text-white placeholder:text-slate-600 focus:outline-none focus:ring-1 focus:ring-primary"
-        />
-      )}
-    </div>
-  );
-});
-
-// ── P2P Line Chart (recharts) ────────────────────────────────────────────────
-
-type ChartPoint = { tsUtc: string; value: number };
-
-const P2PLineChart = memo(function P2PLineChart({
-  points,
-  loading,
-  unit,
-  label,
-}: {
-  points: ChartPoint[];
-  loading?: boolean;
-  unit?: string;
-  label?: string;
-}) {
-  const data = useMemo(
-    () => points.map(p => ({
-      t: new Date(p.tsUtc).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
-      v: p.value,
-    })),
-    [points],
-  );
-
-  if (loading) {
-    return (
-      <div className="flex h-40 items-center justify-center">
-        <div className="space-y-2 w-full">
-          <div className="h-28 w-full rounded-lg animate-shimmer bg-white/[0.03] bg-gradient-to-r from-transparent via-white/[0.06] to-transparent bg-[length:400%_100%]" />
-          <div className="flex justify-between">
-            <div className="h-3 w-16 rounded animate-shimmer bg-white/[0.03] bg-gradient-to-r from-transparent via-white/[0.06] to-transparent bg-[length:400%_100%]" />
-            <div className="h-3 w-16 rounded animate-shimmer bg-white/[0.03] bg-gradient-to-r from-transparent via-white/[0.06] to-transparent bg-[length:400%_100%]" />
-          </div>
-        </div>
-      </div>
-    );
-  }
-  if (points.length === 0) {
-    return (
-      <div className="flex h-40 items-center justify-center">
-        <span className="text-xs text-slate-500">Sem dados de série temporal.</span>
-      </div>
-    );
-  }
-
-  return (
-    <ResponsiveContainer width="100%" height={160}>
-      <LineChart data={data} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
-        <CartesianGrid stroke="rgba(255,255,255,0.06)" strokeDasharray="3 3" vertical={false} />
-        <XAxis
-          dataKey="t"
-          tick={{ fill: '#64748b', fontSize: 9 }}
-          axisLine={false}
-          tickLine={false}
-          interval="preserveStartEnd"
-        />
-        <YAxis
-          tick={{ fill: '#64748b', fontSize: 9 }}
-          axisLine={false}
-          tickLine={false}
-          tickFormatter={(v: number) => formatChartValue(v, unit)}
-          width={36}
-        />
-        <Tooltip
-          contentStyle={{
-            background: '#1e293b',
-            border: '1px solid rgba(255,255,255,0.08)',
-            borderRadius: 8,
-            fontSize: 11,
-            color: '#f1f5f9',
-          }}
-          formatter={(value) => {
-            const v = typeof value === 'number' ? value : Number(value ?? 0);
-            return [formatChartValue(v, unit), label ?? 'Valor'] as [string, string];
-          }}
-          labelStyle={{ color: '#94a3b8' }}
-        />
-        <Line
-          type="monotone"
-          dataKey="v"
-          stroke="#22c55e"
-          strokeWidth={2}
-          dot={{ r: 3, fill: '#22c55e', strokeWidth: 0 }}
-          activeDot={{ r: 5 }}
-          name={label ?? 'Valor'}
-        />
-      </LineChart>
-    </ResponsiveContainer>
-  );
-});
-
-function formatChartValue(value: number, unit?: string) {
-  if (unit === 'bytes') {
-    return formatBytes(value);
-  }
-
-  if (unit === 'percent') {
-    return `${value.toFixed(2)}%`;
-  }
-
-  return value.toFixed(0);
-}
