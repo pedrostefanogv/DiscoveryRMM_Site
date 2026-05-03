@@ -5,7 +5,7 @@ import { useQueries } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { useClients } from '@/hooks/useClients';
 import { useDeleteAgent } from '@/hooks/useAgents';
-import { ApiError, agentsApi, authApi } from '@/api';
+import { ApiError, agentUpdatesApi, agentsApi, authApi } from '@/api';
 import { Badge, Loading, ErrorDisplay, Input, Select, StatCard, Modal, PageHeader, SkeletonCard, EmptyState } from '@/components/ui';
 import type { Agent } from '@/api';
 import { getAgentLastSeen, isAgentOnlineNow } from '@/utils/agentStatus';
@@ -55,6 +55,7 @@ export default function AgentList() {
   const [remoteAgent, setRemoteAgent] = useState<AgentWithClient | null>(null);
   const [remoteDebugAgentId, setRemoteDebugAgentId] = useState<string | null>(null);
   const [deletingAgentId, setDeletingAgentId] = useState<string | null>(null);
+  const [updatingAgentId, setUpdatingAgentId] = useState<string | null>(null);
   const contextMenuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -179,6 +180,26 @@ export default function AgentList() {
       toast.error(message);
     } finally {
       setDeletingAgentId(null);
+    }
+  };
+
+  const handleTriggerAgentUpdate = async (agent: AgentWithClient) => {
+    setContextMenu(null);
+    if (updatingAgentId) return;
+
+    setUpdatingAgentId(agent.id);
+    try {
+      await agentUpdatesApi.forceAgentCheck(agent.id);
+      toast.success(`Verificação de update disparada para ${agent.displayName ?? agent.hostname}.`);
+    } catch (error) {
+      const message = error instanceof ApiError
+        ? error.message
+        : error instanceof Error
+          ? error.message
+          : 'Falha ao disparar atualização do agente.';
+      toast.error(message);
+    } finally {
+      setUpdatingAgentId(null);
     }
   };
 
@@ -506,6 +527,15 @@ export default function AgentList() {
             >
               <Bug className="h-4 w-4" />
               {remoteDebugAgentId === contextMenu.agent.id ? 'Abrindo debug...' : 'Ver debug'}
+            </button>
+            <button
+              className="w-full px-3 py-2 text-left text-sm text-slate-200 transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+              onClick={() => {
+                void handleTriggerAgentUpdate(contextMenu.agent);
+              }}
+              disabled={updatingAgentId === contextMenu.agent.id}
+            >
+              {updatingAgentId === contextMenu.agent.id ? 'Disparando update...' : 'Disparar self-update'}
             </button>
             {canManageAgent && (
               <button

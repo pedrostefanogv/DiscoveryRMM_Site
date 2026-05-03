@@ -43,4 +43,7 @@ export const agentUpdatesApi = {
 
   syncAndBuild: () =>
     api.post<unknown>(`${BASE}/repository/sync-and-build`),
+
+  refreshBuild: () =>
+    api.post<unknown>(`${BASE}/build/refresh`),
 };

@@ -12,7 +12,7 @@ import { useRunMeshCentralNodeLinksBackfill, useRunMeshCentralNodeLinksBackfillD
 import { Button, Card, CardHeader, Badge, Loading, ErrorDisplay, Input, Select, DataTable, Modal, StatCard, type Column } from '@/components/ui';
 import { NotesPanel } from '@/components/notes/NotesPanel';
 import type { AgentSoftwareInventoryItem, ListeningPortInfo, MeshCentralNodeLinksBackfillItem, MeshCentralNodeLinksBackfillReport, OpenSocketInfo } from '@/api';
-import { ApiError, LogLevel } from '@/api';
+import { ApiError, LogLevel, agentUpdatesApi } from '@/api';
 import { isAgentOnlineNow } from '@/utils/agentStatus';
 import { useNowTick } from '@/hooks/useNowTick';
 import { agentLabelsApi } from '@/modules/agent-labels/api';
@@ -150,6 +150,7 @@ export default function AgentDetail() {
   const [isOpeningRemoteDebug, setIsOpeningRemoteDebug] = useState(false);
   const [isReconcilingNodeLink, setIsReconcilingNodeLink] = useState(false);
   const [isApplyingNodeLink, setIsApplyingNodeLink] = useState(false);
+  const [isTriggeringAgentUpdate, setIsTriggeringAgentUpdate] = useState(false);
   const [nodeLinkPreviewOpen, setNodeLinkPreviewOpen] = useState(false);
   const [nodeLinkPreviewError, setNodeLinkPreviewError] = useState<string | null>(null);
   const [nodeLinkPreviewReport, setNodeLinkPreviewReport] = useState<MeshCentralNodeLinksBackfillReport | null>(null);
@@ -390,6 +391,25 @@ export default function AgentDetail() {
     }
   };
 
+  const handleTriggerAgentUpdate = async () => {
+    if (!id || isTriggeringAgentUpdate) return;
+
+    setIsTriggeringAgentUpdate(true);
+    try {
+      await agentUpdatesApi.forceAgentCheck(id);
+      toast.success('Self-update do agente disparado com sucesso.');
+    } catch (error) {
+      const message = error instanceof ApiError
+        ? error.message
+        : error instanceof Error
+          ? error.message
+          : 'Falha ao disparar atualização do agente.';
+      toast.error(message);
+    } finally {
+      setIsTriggeringAgentUpdate(false);
+    }
+  };
+
   const handleNodeLinkDryRun = async () => {
     if (!a.siteId || isReconcilingNodeLink) return;
 
@@ -545,6 +565,16 @@ export default function AgentDetail() {
         >
           <Bug className="h-4 w-4" />
           Ver Debug
+        </Button>
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() => {
+            void handleTriggerAgentUpdate();
+          }}
+          loading={isTriggeringAgentUpdate}
+        >
+          Atualizar agente
         </Button>
         <Button
           size="sm"
