@@ -17,10 +17,18 @@ const KEYS = {
   list: (params: ListDeployTokensParams) => [...KEYS.all, "list", params] as const,
 };
 
-export function useDeployTokens(params: ListDeployTokensParams = {}) {
+interface UseDeployTokensOptions {
+  enabled?: boolean;
+}
+
+export function useDeployTokens(
+  params: ListDeployTokensParams = {},
+  options: UseDeployTokensOptions = {},
+) {
   return useQuery({
     queryKey: KEYS.list(params),
     queryFn: () => deployTokensApi.list(params),
+    enabled: options.enabled ?? true,
   });
 }
 

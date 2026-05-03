@@ -21,6 +21,7 @@ import {
 import type {
   CreateDeployTokenRequest,
   DeployTokenDelivery,
+  ListDeployTokensParams,
 } from '@/api';
 import toast from 'react-hot-toast';
 
@@ -76,13 +77,11 @@ export default function DeployTokens() {
   });
   const [downloadingTokenId, setDownloadingTokenId] = useState<string | null>(null);
   const [visibleTokenIds, setVisibleTokenIds] = useState<Set<string>>(new Set());
+  const [tokensFilter, setTokensFilter] = useState<ListDeployTokensParams | null>(null);
 
   const clients = useClients(false);
   const sites = useSites(form.clientId, false);
-  const deployTokens = useDeployTokens({
-    clientId: form.clientId || undefined,
-    siteId: form.siteId || undefined,
-  });
+  const deployTokens = useDeployTokens(tokensFilter ?? {}, { enabled: tokensFilter !== null });
   const activeClients = (clients.data ?? []).filter(c => c.isActive);
   const activeSites = (sites.data ?? []).filter(s => s.isActive);
   const listedTokens = useMemo(
@@ -162,6 +161,35 @@ export default function DeployTokens() {
       },
       onError: () => toast.error('Erro ao criar token de deploy'),
     });
+  };
+
+  const handleLoadIssuedTokens = () => {
+    if (!form.clientId) {
+      toast.error('Selecione o cliente');
+      return;
+    }
+
+    if (!form.siteId) {
+      toast.error('Selecione o site');
+      return;
+    }
+
+    const nextFilter: ListDeployTokensParams = {
+      clientId: form.clientId,
+      siteId: form.siteId,
+    };
+
+    const sameFilter =
+      tokensFilter?.clientId === nextFilter.clientId
+      && tokensFilter?.siteId === nextFilter.siteId;
+
+    if (sameFilter) {
+      void deployTokens.refetch();
+      return;
+    }
+
+    setVisibleTokenIds(new Set());
+    setTokensFilter(nextFilter);
   };
 
   const handleDownloadInstallerByToken = (tokenId: string, rawToken: string) => {
@@ -281,6 +309,8 @@ export default function DeployTokens() {
             value={form.clientId}
             onChange={e => {
               const clientId = e.target.value;
+              setTokensFilter(null);
+              setVisibleTokenIds(new Set());
               setForm(f => ({ ...f, clientId, siteId: '' }));
             }}
             options={[
@@ -293,7 +323,11 @@ export default function DeployTokens() {
             label="Site"
             value={form.siteId}
             disabled={!form.clientId || sites.isLoading}
-            onChange={e => setForm(f => ({ ...f, siteId: e.target.value }))}
+            onChange={e => {
+              setTokensFilter(null);
+              setVisibleTokenIds(new Set());
+              setForm(f => ({ ...f, siteId: e.target.value }));
+            }}
             options={[
               {
                 value: '',
@@ -383,15 +417,30 @@ export default function DeployTokens() {
       <Card>
         <CardHeader
           title="Tokens Emitidos"
-          subtitle={form.siteId
+          subtitle={tokensFilter?.siteId
             ? 'Listagem filtrada pelo site selecionado.'
-            : form.clientId
-              ? 'Listagem filtrada pelo cliente selecionado.'
-              : 'Listagem geral de deploy tokens.'}
+            : form.siteId && form.clientId
+              ? 'Clique em "Ver tokens emitidos" para carregar a listagem.'
+              : 'Selecione cliente e site para habilitar a listagem.'}
         />
 
         <div className="space-y-3">
-          {deployTokens.isLoading && listedTokens.length === 0 ? (
+          <div className="flex justify-end">
+            <Button
+              variant="secondary"
+              onClick={handleLoadIssuedTokens}
+              disabled={!form.clientId || !form.siteId}
+              loading={deployTokens.isFetching}
+            >
+              Ver tokens emitidos
+            </Button>
+          </div>
+
+          {tokensFilter === null ? (
+            <p className="text-sm text-slate-400">
+              Selecione cliente e site e clique em "Ver tokens emitidos".
+            </p>
+          ) : deployTokens.isLoading && listedTokens.length === 0 ? (
             <p className="text-sm text-slate-400">Carregando tokens...</p>
           ) : listedTokens.length === 0 ? (
             <p className="text-sm text-slate-500">Nenhum deploy token encontrado para o filtro atual.</p>
@@ -461,7 +510,7 @@ export default function DeployTokens() {
             ))
           )}
 
-          {deployTokens.isError && (
+          {tokensFilter !== null && deployTokens.isError && (
             <p className="text-sm text-rose-300">
               Nao foi possivel carregar os deploy tokens.
             </p>
