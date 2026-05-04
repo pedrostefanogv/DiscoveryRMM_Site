@@ -2,7 +2,8 @@ import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import * as signalR from "@microsoft/signalr";
 import { API_BASE_URL } from "@/api/client";
-import type { Agent } from "@/api";
+import type { Agent, AgentHeartbeat } from "@/api";
+import { heartbeatStore } from "@/stores/heartbeatStore";
 import { useAuth } from "@/auth/AuthContext";
 import {
   clearSignalrConnectionState,
@@ -196,6 +197,90 @@ export function useAgentStatusRealtime(enabled = true) {
       invalidateThrottled(["dashboard"], 5_000);
     };
 
+    const onAgentHeartbeat = (data: AgentHeartbeat) => {
+      if (!data.agentId) return;
+
+      // Store the complete heartbeat metrics for reactive consumption
+      heartbeatStore.setHeartbeat(data.agentId, data);
+
+      // Keep agent detail cache fresh with last-seen and IP
+      queryClient.setQueryData<Agent | undefined>(
+        ["agents", "detail", data.agentId],
+        (current) => {
+          if (!current) return current;
+          const nowIso = new Date().toISOString();
+          const updated = {
+            ...current,
+            status: "Online" as const,
+            isOnline: true,
+            lastSeenAt: nowIso,
+            lastSeen: nowIso,
+            updatedAt: nowIso,
+            heartbeatMetrics: {
+              cpuPercent: data.cpuPercent,
+              memoryPercent: data.memoryPercent,
+              diskPercent: data.diskPercent,
+              memoryTotalGb: data.memoryTotalGb,
+              memoryUsedGb: data.memoryUsedGb,
+              diskTotalGb: data.diskTotalGb,
+              diskUsedGb: data.diskUsedGb,
+              p2pPeers: data.p2pPeers,
+              uptimeSeconds: data.uptimeSeconds,
+              processCount: data.processCount,
+              ipAddress: data.ipAddress,
+              hostname: data.hostname,
+              agentVersion: data.agentVersion,
+              timestampUtc: data.timestampUtc,
+            },
+          };
+          if (data.ipAddress && !updated.lastIpAddress) {
+            updated.lastIpAddress = data.ipAddress;
+          }
+          return updated;
+        },
+      );
+
+      queryClient.setQueriesData<Agent[]>(
+        { queryKey: ["agents", "byClient"] },
+        (current) => {
+          if (!current) return current;
+          const nowIso = new Date().toISOString();
+          return current.map((agent) => {
+            if (agent.id !== data.agentId) return agent;
+            return {
+              ...agent,
+              status: "Online" as const,
+              isOnline: true,
+              lastSeenAt: nowIso,
+              lastSeen: nowIso,
+              updatedAt: nowIso,
+              lastIpAddress: data.ipAddress ?? agent.lastIpAddress,
+              heartbeatMetrics: {
+                cpuPercent: data.cpuPercent,
+                memoryPercent: data.memoryPercent,
+                diskPercent: data.diskPercent,
+                memoryTotalGb: data.memoryTotalGb,
+                memoryUsedGb: data.memoryUsedGb,
+                diskTotalGb: data.diskTotalGb,
+                diskUsedGb: data.diskUsedGb,
+                p2pPeers: data.p2pPeers,
+                uptimeSeconds: data.uptimeSeconds,
+                processCount: data.processCount,
+                ipAddress: data.ipAddress,
+                hostname: data.hostname,
+                agentVersion: data.agentVersion,
+                timestampUtc: data.timestampUtc,
+              },
+            };
+          });
+        },
+      );
+
+      invalidateThrottled(["agents"]);
+      invalidateThrottled(["realtime", "stats"]);
+    };
+
+    connection.on("AgentHeartbeat", onAgentHeartbeat);
     connection.on("DashboardEvent", onDashboardEvent);
 
     const startPromise = connection
@@ -246,6 +331,7 @@ export function useAgentStatusRealtime(enabled = true) {
       clearSignalrConnectionState("agent-hub");
       connection.off("AgentStatusChanged", onAgentStatusChanged);
       connection.off("CommandCompleted", onCommandCompleted);
+      connection.off("AgentHeartbeat", onAgentHeartbeat);
       connection.off("DashboardEvent", onDashboardEvent);
       void startPromise.finally(async () => {
         if (connection.state !== signalR.HubConnectionState.Disconnected) {

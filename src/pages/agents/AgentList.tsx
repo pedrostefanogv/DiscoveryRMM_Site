@@ -1,12 +1,12 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Monitor, Wifi, WifiOff, Activity, Building2, Clock, LayoutGrid, List, Bug, Trash2, ShieldCheck, ArrowUp, ArrowDown } from 'lucide-react';
+import { Monitor, Wifi, WifiOff, Activity, Building2, Clock, LayoutGrid, List, Bug, Trash2, ShieldCheck, ArrowUp, ArrowDown, Radio } from 'lucide-react';
 import { useQueries } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { useClients } from '@/hooks/useClients';
 import { getDeleteAgentErrorMessage, useApproveZeroTouch, useDeleteAgent } from '@/hooks/useAgents';
 import { ApiError, agentUpdatesApi, agentsApi, authApi } from '@/api';
-import { Badge, Loading, ErrorDisplay, Input, Select, StatCard, Modal, PageHeader, SkeletonCard, EmptyState } from '@/components/ui';
+import { Badge, Loading, ErrorDisplay, Input, Select, StatCard, Modal, PageHeader, SkeletonCard, EmptyState, MetricBar } from '@/components/ui';
 import type { Agent } from '@/api';
 import { getAgentLastSeen, isAgentOnlineNow } from '@/utils/agentStatus';
 import { useNowTick } from '@/hooks/useNowTick';
@@ -115,6 +115,16 @@ function formatRelative(dateStr: string | null, now: number): { text: string; fu
   if (diff < 3_600_000) return { text: `há ${Math.floor(diff / 60_000)} min`, fullDate };
   if (diff < 86_400_000) return { text: `há ${Math.floor(diff / 3_600_000)} h`, fullDate };
   return { text: fullDate, fullDate };
+}
+
+function formatUptimeShort(seconds: number | undefined | null): string {
+  if (seconds == null || !Number.isFinite(seconds)) return '—';
+  if (seconds < 60) return `${Math.round(seconds)}s`;
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
+  const hours = Math.floor(seconds / 3600);
+  const days = Math.floor(hours / 24);
+  if (days > 0) return `${days}d ${hours % 24}h`;
+  return `${hours}h`;
 }
 
 function getOsIcon(os: string | null): string {
@@ -664,6 +674,40 @@ export default function AgentList() {
                         <Clock className="h-3.5 w-3.5 shrink-0 text-slate-500" />
                         <span title={relativeTime.fullDate ?? undefined}>{relativeTime.text}</span>
                       </div>
+                      {/* Heartbeat metrics */}
+                      {a.heartbeatMetrics && (
+                        <div className="border-t border-white/5 pt-2 mt-2 space-y-1.5">
+                          <MetricBar
+                            label="CPU"
+                            value={a.heartbeatMetrics.cpuPercent}
+                            compact
+                          />
+                          <MetricBar
+                            label="RAM"
+                            value={a.heartbeatMetrics.memoryPercent}
+                            compact
+                          />
+                          <MetricBar
+                            label="DISCO"
+                            value={a.heartbeatMetrics.diskPercent}
+                            compact
+                          />
+                          <div className="flex items-center gap-3 text-slate-500 pt-0.5">
+                            {a.heartbeatMetrics.p2pPeers != null && (
+                              <span className="flex items-center gap-1 text-[10px]">
+                                <Radio className="h-3 w-3" />
+                                {a.heartbeatMetrics.p2pPeers} peers
+                              </span>
+                            )}
+                            {a.heartbeatMetrics.uptimeSeconds != null && (
+                              <span className="flex items-center gap-1 text-[10px]">
+                                <Clock className="h-3 w-3" />
+                                {formatUptimeShort(a.heartbeatMetrics.uptimeSeconds)}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </div>
                     {canManageAgent && isZeroTouchPending && (
                       <div className="pt-1">
@@ -700,6 +744,9 @@ export default function AgentList() {
                     <th className="hidden px-4 py-3 text-xs font-medium uppercase tracking-wide text-slate-500 sm:table-cell">Cliente</th>
                     <th className="px-4 py-3 text-xs font-medium uppercase tracking-wide text-slate-500">Status</th>
                     <th className="hidden px-4 py-3 text-xs font-medium uppercase tracking-wide text-slate-500 md:table-cell">Provisionamento</th>
+                    <th className="hidden px-4 py-3 text-xs font-medium uppercase tracking-wide text-slate-500 2xl:table-cell">CPU</th>
+                    <th className="hidden px-4 py-3 text-xs font-medium uppercase tracking-wide text-slate-500 2xl:table-cell">RAM</th>
+                    <th className="hidden px-4 py-3 text-xs font-medium uppercase tracking-wide text-slate-500 2xl:table-cell">Disco</th>
                     <th className="hidden px-4 py-3 text-xs font-medium uppercase tracking-wide text-slate-500 lg:table-cell">Último contato</th>
                   </tr>
                 </thead>
@@ -778,6 +825,28 @@ export default function AgentList() {
                         </td>
                         <td className="hidden px-4 py-3 text-xs text-slate-500 lg:table-cell" title={relativeTime.fullDate ?? undefined}>
                           {relativeTime.text}
+                        </td>
+                        {/* Heartbeat metrics columns */}
+                        <td className="hidden px-4 py-3 2xl:table-cell">
+                          {a.heartbeatMetrics?.cpuPercent != null ? (
+                            <MetricBar label="" value={a.heartbeatMetrics.cpuPercent} compact hideValue />
+                          ) : (
+                            <span className="text-xs text-slate-600">—</span>
+                          )}
+                        </td>
+                        <td className="hidden px-4 py-3 2xl:table-cell">
+                          {a.heartbeatMetrics?.memoryPercent != null ? (
+                            <MetricBar label="" value={a.heartbeatMetrics.memoryPercent} compact hideValue />
+                          ) : (
+                            <span className="text-xs text-slate-600">—</span>
+                          )}
+                        </td>
+                        <td className="hidden px-4 py-3 2xl:table-cell">
+                          {a.heartbeatMetrics?.diskPercent != null ? (
+                            <MetricBar label="" value={a.heartbeatMetrics.diskPercent} compact hideValue />
+                          ) : (
+                            <span className="text-xs text-slate-600">—</span>
+                          )}
                         </td>
                       </tr>
                     );

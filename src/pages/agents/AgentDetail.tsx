@@ -9,7 +9,7 @@ import { getDeleteAgentErrorMessage, useAgent, useAgentHardware, useAgentSoftwar
 import { useTickets } from '@/hooks/useTickets';
 import { useLogs } from '@/hooks/useLogs';
 import { useRunMeshCentralNodeLinksBackfill, useRunMeshCentralNodeLinksBackfillDryRun } from '@/hooks';
-import { Button, Card, CardHeader, Badge, Loading, ErrorDisplay, Input, Select, DataTable, Modal, StatCard, type Column } from '@/components/ui';
+import { Button, Card, CardHeader, Badge, Loading, ErrorDisplay, Input, Select, DataTable, Modal, StatCard, AgentHeartbeatCard, type Column } from '@/components/ui';
 import { NotesPanel } from '@/components/notes/NotesPanel';
 import type { AgentSoftwareInventoryItem, ListeningPortInfo, MeshCentralNodeLinksBackfillItem, MeshCentralNodeLinksBackfillReport, OpenSocketInfo } from '@/api';
 import { ApiError, LogLevel, agentUpdatesApi } from '@/api';
@@ -647,6 +647,9 @@ export default function AgentDetail() {
           </Button>
         )}
       </div>
+
+      {/* Live Heartbeat Metrics */}
+      <AgentHeartbeatCard metrics={a.heartbeatMetrics} showEmpty />
 
       {/* Stat Cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

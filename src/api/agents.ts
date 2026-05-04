@@ -1,4 +1,5 @@
 ﻿import { api } from "./client";
+import type { AgentHeartbeat } from "./realtime";
 import type {
   Agent,
   AgentHardwareInfo,
@@ -118,6 +119,10 @@ export const agentsApi = {
     api.post<ApproveZeroTouchResponse>(
       `/api/v1/agents/${agentId}/approve-zero-touch`,
     ),
+
+  // Heartbeat cache (fallback REST — latest metrics from Redis)
+  getHeartbeat: (_agentId: string) =>
+    api.get<AgentHeartbeat>(`/api/v1/agent-auth/me/heartbeat`),
 
   // Automation - run task/script on agent
   runAutomationTask: (agentId: string, taskId: string) =>

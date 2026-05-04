@@ -9,8 +9,26 @@ export interface AgentCommand {
 
 export interface AgentHeartbeat {
   agentId: string;
+  status: "Online";
   ipAddress?: string;
+  hostname?: string;
   agentVersion?: string;
+  timestampUtc?: string;
+
+  // Métricas percentuais (0-100)
+  cpuPercent?: number;
+  memoryPercent?: number;
+  diskPercent?: number;
+
+  // Métricas absolutas
+  memoryTotalGb?: number;
+  memoryUsedGb?: number;
+  diskTotalGb?: number;
+  diskUsedGb?: number;
+
+  p2pPeers?: number;
+  uptimeSeconds?: number;
+  processCount?: number;
 }
 
 export interface RealtimeStatsResponse {

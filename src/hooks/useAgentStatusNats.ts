@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { getNatsService, type DashboardEvent } from "@/api/nats";
 import { realtimeConfig } from "@/config/realtime";
 import type { Agent } from "@/api";
+import { heartbeatStore } from "@/stores/heartbeatStore";
 import { setNatsConnectionState } from "@/utils/realtimeConnectionState";
 
 type AgentRealtimeStatus = "Online" | "Offline";
@@ -22,6 +23,21 @@ function getStringField(
     }
   }
   return null;
+}
+
+function getNumberField(
+  data: Record<string, unknown>,
+  keys: string[],
+): number | undefined {
+  for (const key of keys) {
+    const value = data[key];
+    if (typeof value === "number") return value;
+    if (typeof value === "string") {
+      const parsed = Number(value);
+      if (Number.isFinite(parsed)) return parsed;
+    }
+  }
+  return undefined;
 }
 
 const NATS_URL = realtimeConfig.natsUrl;
@@ -158,33 +174,121 @@ export function useAgentStatusNats(enabled = true) {
         ]);
         if (!heartbeatAgentId) return;
 
-        const status: AgentRealtimeStatus = "Online";
         const heartbeatIp = getStringField(safeData, ["ipAddress", "lastIpAddress", "ip"]);
 
-        // Update agent detail preserving IP from heartbeat
+        // Extract all heartbeat metrics
+        const cpuPercent = getNumberField(safeData, ["cpuPercent", "cpu"]);
+        const memoryPercent = getNumberField(safeData, ["memoryPercent", "memory"]);
+        const diskPercent = getNumberField(safeData, ["diskPercent", "disk"]);
+        const memoryTotalGb = getNumberField(safeData, ["memoryTotalGb", "memoryTotal"]);
+        const memoryUsedGb = getNumberField(safeData, ["memoryUsedGb", "memoryUsed"]);
+        const diskTotalGb = getNumberField(safeData, ["diskTotalGb", "diskTotal"]);
+        const diskUsedGb = getNumberField(safeData, ["diskUsedGb", "diskUsed"]);
+        const p2pPeers = getNumberField(safeData, ["p2pPeers", "p2pPeersCount"]);
+        const uptimeSeconds = getNumberField(safeData, ["uptimeSeconds", "uptime"]);
+        const processCount = getNumberField(safeData, ["processCount", "processes"]);
+        const hostname = getStringField(safeData, ["hostname", "hostName", "machineName"]);
+        const timestampUtc = getStringField(safeData, ["timestampUtc", "timestamp", "timeStamp"]);
+
+        // Store complete heartbeat for reactive consumption
+        heartbeatStore.setHeartbeat(heartbeatAgentId, {
+          agentId: heartbeatAgentId,
+          status: "Online",
+          ipAddress: heartbeatIp ?? undefined,
+          hostname: hostname ?? undefined,
+          cpuPercent,
+          memoryPercent,
+          diskPercent,
+          memoryTotalGb,
+          memoryUsedGb,
+          diskTotalGb,
+          diskUsedGb,
+          p2pPeers,
+          uptimeSeconds,
+          processCount,
+          timestampUtc: timestampUtc ?? undefined,
+        });
+
+        // Build metrics object for React Query cache
+        const metrics = {
+          cpuPercent,
+          memoryPercent,
+          diskPercent,
+          memoryTotalGb,
+          memoryUsedGb,
+          diskTotalGb,
+          diskUsedGb,
+          p2pPeers,
+          uptimeSeconds,
+          processCount,
+          ipAddress: heartbeatIp ?? undefined,
+          hostname: hostname ?? undefined,
+          timestampUtc: timestampUtc ?? undefined,
+        };
+
+        // Update agent detail with full metrics
         queryClient.setQueryData<Agent | undefined>(
           ["agents", "detail", heartbeatAgentId],
           (current) => {
             if (!current) return current;
-            const updated = applyStatusUpdate(current, status);
+            const nowIso = new Date().toISOString();
+            const updated = {
+              ...current,
+              status: "Online" as const,
+              isOnline: true,
+              lastSeenAt: nowIso,
+              lastSeen: nowIso,
+              updatedAt: nowIso,
+              heartbeatMetrics: metrics,
+            };
             if (heartbeatIp && !updated.lastIpAddress) {
-              return { ...updated, lastIpAddress: heartbeatIp };
+              updated.lastIpAddress = heartbeatIp;
             }
             return updated;
           },
         );
 
-        // Update agents in collections preserving IP from heartbeat
+        // Update agents in collections with full metrics
         queryClient.setQueriesData<Agent[]>(
           { queryKey: ["agents", "byClient"] },
-          (current) =>
-            updateAgentInCollection(current, heartbeatAgentId, status, heartbeatIp),
+          (current) => {
+            if (!current) return current;
+            const nowIso = new Date().toISOString();
+            return current.map((agent) => {
+              if (agent.id !== heartbeatAgentId) return agent;
+              return {
+                ...agent,
+                status: "Online" as const,
+                isOnline: true,
+                lastSeenAt: nowIso,
+                lastSeen: nowIso,
+                updatedAt: nowIso,
+                lastIpAddress: heartbeatIp ?? agent.lastIpAddress,
+                heartbeatMetrics: metrics,
+              };
+            });
+          },
         );
 
         queryClient.setQueriesData<Agent[]>(
           { queryKey: ["agents", "bySite"] },
-          (current) =>
-            updateAgentInCollection(current, heartbeatAgentId, status, heartbeatIp),
+          (current) => {
+            if (!current) return current;
+            const nowIso = new Date().toISOString();
+            return current.map((agent) => {
+              if (agent.id !== heartbeatAgentId) return agent;
+              return {
+                ...agent,
+                status: "Online" as const,
+                isOnline: true,
+                lastSeenAt: nowIso,
+                lastSeen: nowIso,
+                updatedAt: nowIso,
+                lastIpAddress: heartbeatIp ?? agent.lastIpAddress,
+                heartbeatMetrics: metrics,
+              };
+            });
+          },
         );
 
         invalidateThrottled(["agents"]);

@@ -10,5 +10,7 @@ export { Skeleton, SkeletonCard, SkeletonTable, SkeletonStatCard, SkeletonDashbo
 export { Tooltip } from "./Tooltip";
 export { EmptyState } from "./EmptyState";
 export { PageHeader } from "./PageHeader";
+export { MetricBar } from "./MetricBar";
+export { AgentHeartbeatCard } from "./AgentHeartbeatCard";
 export { ErrorBoundary } from "../ErrorBoundary";
 export { ErrorPage } from "../ErrorPage";

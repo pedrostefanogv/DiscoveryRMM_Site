@@ -70,6 +70,23 @@ export interface Site {
   updatedAt: string;
 }
 
+export interface AgentHeartbeatMetrics {
+  cpuPercent?: number;
+  memoryPercent?: number;
+  diskPercent?: number;
+  memoryTotalGb?: number;
+  memoryUsedGb?: number;
+  diskTotalGb?: number;
+  diskUsedGb?: number;
+  p2pPeers?: number;
+  uptimeSeconds?: number;
+  processCount?: number;
+  ipAddress?: string;
+  hostname?: string;
+  agentVersion?: string;
+  timestampUtc?: string;
+}
+
 export interface Agent {
   id: string;
   siteId: string;
@@ -85,6 +102,7 @@ export interface Agent {
   status?: "Online" | "Offline";
   lastSeenAt?: string | null;
   lastIpAddress?: string | null;
+  heartbeatMetrics?: AgentHeartbeatMetrics;
   createdAt: string;
   updatedAt: string;
 }
