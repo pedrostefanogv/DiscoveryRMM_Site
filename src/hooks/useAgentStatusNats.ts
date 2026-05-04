@@ -289,6 +289,9 @@ export function useAgentStatusNats(enabled = true) {
           (current) => updateAgentInCollection(current, agentId, status),
         );
 
+        // Remove heartbeat metrics when agent goes offline
+        heartbeatStore.removeHeartbeat(agentId);
+
         invalidateThrottled(["agents"]);
         invalidateDashboardQueries(normalizedType, invalidateThrottled);
       } else {

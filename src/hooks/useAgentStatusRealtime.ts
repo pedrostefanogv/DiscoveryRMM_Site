@@ -146,6 +146,11 @@ export function useAgentStatusRealtime(enabled = true) {
         (current) => updateAgentInCollection(current, agentId, status),
       );
 
+      // Remove heartbeat metrics from store when agent goes offline
+      if (status === "Offline") {
+        heartbeatStore.removeHeartbeat(agentId);
+      }
+
       // Ensure any other agents queries that are currently mounted are refreshed.
       invalidateThrottled(["agents"]);
       invalidateThrottled(["realtime", "stats"]);
