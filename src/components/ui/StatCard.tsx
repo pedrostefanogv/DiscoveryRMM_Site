@@ -7,6 +7,8 @@ interface StatCardProps {
   value: string | number;
   trend?: ReactNode;
   tone?: 'primary' | 'accent' | 'success' | 'warning';
+  onClick?: () => void;
+  active?: boolean;
 }
 
 const toneMap: Record<NonNullable<StatCardProps['tone']>, { bg: string; icon: string }> = {
@@ -16,11 +18,32 @@ const toneMap: Record<NonNullable<StatCardProps['tone']>, { bg: string; icon: st
   warning: { bg: 'bg-warning/15', icon: 'text-warning' },
 };
 
-export function StatCard({ icon: Icon, label, value, trend, tone = 'primary' }: StatCardProps) {
+export function StatCard({ icon: Icon, label, value, trend, tone = 'primary', onClick, active = false }: StatCardProps) {
   const styles = toneMap[tone];
+  const baseClassName = 'glass-card flex items-center gap-4 rounded-xl border border-white/5 bg-surface p-5';
+
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        aria-pressed={active}
+        className={`${baseClassName} cursor-pointer text-left transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:bg-surface-light/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${active ? 'border-primary/40 bg-surface-light/80 ring-1 ring-primary/30' : ''}`}
+      >
+        <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${styles.bg} ring-1 ring-white/5`}>
+          <Icon className={`h-6 w-6 ${styles.icon}`} />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-medium uppercase tracking-wider text-slate-500">{label}</p>
+          <p className="text-2xl font-bold text-white tabular-nums">{value}</p>
+        </div>
+        {trend && <div className="text-sm">{trend}</div>}
+      </button>
+    );
+  }
 
   return (
-    <div className="glass-card flex items-center gap-4 rounded-xl border border-white/5 bg-surface p-5">
+    <div className={baseClassName}>
       <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${styles.bg} ring-1 ring-white/5`}>
         <Icon className={`h-6 w-6 ${styles.icon}`} />
       </div>

@@ -5,9 +5,9 @@ import { useQueries } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { useClients } from '@/hooks/useClients';
 import { useApproveZeroTouch, useDeleteAgent } from '@/hooks/useAgents';
-import { ApiError, AutomationExecutionStatus, agentUpdatesApi, agentsApi, authApi } from '@/api';
+import { ApiError, agentUpdatesApi, agentsApi, authApi } from '@/api';
 import { Badge, Loading, ErrorDisplay, Input, Select, StatCard, Modal, PageHeader, SkeletonCard, EmptyState } from '@/components/ui';
-import type { Agent, AutomationExecutionReport } from '@/api';
+import type { Agent } from '@/api';
 import { getAgentLastSeen, isAgentOnlineNow } from '@/utils/agentStatus';
 import { useNowTick } from '@/hooks/useNowTick';
 import { useAuthorization } from '@/auth/authorization';
@@ -16,11 +16,6 @@ import { openRemoteDebugPopup } from './remoteDebugLauncher';
 type AgentWithClient = Agent & { clientName: string; clientId: string };
 type ContextMenuState = { x: number; y: number; agent: AgentWithClient } | null;
 type ProvisioningFilter = 'all' | 'pendingApproval';
-type AutomationFilter = 'all' | 'pendingExecution';
-type AgentAutomationQueueState = {
-  latestStatus: AutomationExecutionReport['status'] | null;
-  pendingExecution: boolean;
-};
 const MAX_CLIENTS_IN_OVERVIEW = 5;
 
 function formatRelative(dateStr: string | null, now: number): string {
@@ -41,44 +36,6 @@ function getOsIcon(os: string | null): string {
   return '💻';
 }
 
-function statusToInt(status: unknown): number | null {
-  if (typeof status === 'number') return status;
-  if (typeof status === 'string') {
-    if (status === 'Dispatched') return AutomationExecutionStatus.Dispatched;
-    if (status === 'Acknowledged') return AutomationExecutionStatus.Acknowledged;
-    if (status === 'Completed') return AutomationExecutionStatus.Completed;
-    if (status === 'Failed') return AutomationExecutionStatus.Failed;
-    const parsed = Number(status);
-    return Number.isFinite(parsed) ? parsed : null;
-  }
-  return null;
-}
-
-function isAutomationPendingStatus(status: unknown): boolean {
-  const code = statusToInt(status);
-  return code === AutomationExecutionStatus.Dispatched || code === AutomationExecutionStatus.Acknowledged;
-}
-
-function getAutomationBadge(status: unknown): { color: 'slate' | 'primary' | 'success' | 'danger'; label: string } {
-  const code = statusToInt(status);
-  if (code === AutomationExecutionStatus.Dispatched || code === AutomationExecutionStatus.Acknowledged) {
-    return { color: 'primary', label: 'Aguardando execução' };
-  }
-  if (code === AutomationExecutionStatus.Completed) {
-    return { color: 'success', label: 'Sem fila' };
-  }
-  if (code === AutomationExecutionStatus.Failed) {
-    return { color: 'danger', label: 'Falha recente' };
-  }
-  return { color: 'slate', label: 'Sem execução recente' };
-}
-
-function newestExecution(executions: AutomationExecutionReport[]): AutomationExecutionReport | null {
-  if (!executions.length) return null;
-  const sorted = [...executions].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
-  return sorted[0] ?? null;
-}
-
 export default function AgentList() {
   const navigate = useNavigate();
   const now = useNowTick(5_000);
@@ -92,7 +49,6 @@ export default function AgentList() {
   const [filterClient, setFilterClient] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'online' | 'offline'>('all');
   const [filterProvisioning, setFilterProvisioning] = useState<ProvisioningFilter>('all');
-  const [filterAutomation, setFilterAutomation] = useState<AutomationFilter>('all');
   const [viewMode, setViewMode] = useState<'card' | 'list'>('card');
   const [contextMenu, setContextMenu] = useState<ContextMenuState>(null);
   const [remoteOpen, setRemoteOpen] = useState(false);
@@ -324,51 +280,7 @@ export default function AgentList() {
     }
     return true;
   }), [allAgents, filterStatus, filterClient, filterProvisioning, search, now]);
-
-  const automationStatusQueries = useQueries({
-    queries: baseFiltered.map((agent) => ({
-      queryKey: ['agents', 'automationExecutions', agent.id, 'latest'] as const,
-      queryFn: async (): Promise<AgentAutomationQueueState> => {
-        const executions = await agentsApi.getAutomationExecutions(agent.id, 10);
-        const latest = newestExecution(executions);
-        const latestStatus = latest?.status ?? null;
-        return {
-          latestStatus,
-          pendingExecution: isAutomationPendingStatus(latestStatus),
-        };
-      },
-      staleTime: 10_000,
-      refetchInterval: 15_000,
-      refetchIntervalInBackground: true,
-    })),
-  });
-
-  const automationStateByAgent = useMemo(() => {
-    const map = new Map<string, AgentAutomationQueueState>();
-    baseFiltered.forEach((agent, index) => {
-      const query = automationStatusQueries[index];
-      if (query?.data) map.set(agent.id, query.data);
-    });
-    return map;
-  }, [baseFiltered, automationStatusQueries]);
-
-  const automationLoadingByAgent = useMemo(() => {
-    const loading = new Set<string>();
-    baseFiltered.forEach((agent, index) => {
-      const query = automationStatusQueries[index];
-      if (!query) return;
-      if ((query.isLoading || query.isFetching) && !query.data) {
-        loading.add(agent.id);
-      }
-    });
-    return loading;
-  }, [baseFiltered, automationStatusQueries]);
-
-  const filtered = useMemo(() => baseFiltered.filter((agent) => {
-    if (filterAutomation !== 'pendingExecution') return true;
-    const state = automationStateByAgent.get(agent.id);
-    return state?.pendingExecution === true;
-  }), [baseFiltered, filterAutomation, automationStateByAgent]);
+  const filtered = baseFiltered;
 
   if (clients.isError) return <ErrorDisplay onRetry={() => clients.refetch()} />;
 
@@ -388,17 +300,7 @@ export default function AgentList() {
     { value: 'pendingApproval', label: 'Provisionamento: aguardando aprovação' },
   ];
 
-  const automationOptions = [
-    { value: 'all', label: 'Automação: todos' },
-    { value: 'pendingExecution', label: 'Automação: aguardando execução' },
-  ];
-
-  const isLoadingBaseAgents = clients.isLoading || agentQueries.some(q => q.isLoading && !q.data);
-  const isLoadingAutomationForFilter =
-    filterAutomation === 'pendingExecution' &&
-    baseFiltered.length > 0 &&
-    automationStatusQueries.some((q) => (q.isLoading || q.isFetching) && !q.data);
-  const isLoadingAgents = isLoadingBaseAgents || isLoadingAutomationForFilter;
+  const isLoadingAgents = clients.isLoading || agentQueries.some(q => q.isLoading && !q.data);
 
   return (
     <div className="space-y-6">
@@ -407,12 +309,21 @@ export default function AgentList() {
 
       {/* StatCards */}
       <div className="grid gap-4 sm:grid-cols-3">
-        <StatCard icon={Monitor} label="Total de Agentes" value={allAgents.length} tone="primary" />
+        <StatCard
+          icon={Monitor}
+          label="Total de Agentes"
+          value={allAgents.length}
+          tone="primary"
+          onClick={() => setFilterStatus('all')}
+          active={filterStatus === 'all'}
+        />
         <StatCard
           icon={Wifi}
           label="Online"
           value={totalOnline}
           tone="success"
+          onClick={() => setFilterStatus('online')}
+          active={filterStatus === 'online'}
           trend={
             allAgents.length > 0 ? (
               <span className="text-success text-sm font-medium">
@@ -426,6 +337,8 @@ export default function AgentList() {
           label="Offline"
           value={totalOffline}
           tone="warning"
+          onClick={() => setFilterStatus('offline')}
+          active={filterStatus === 'offline'}
           trend={
             allAgents.length > 0 && totalOffline > 0 ? (
               <span className="text-warning text-sm font-medium">
@@ -438,7 +351,7 @@ export default function AgentList() {
 
       {/* Filtros + toggle de visualização */}
       <div className="flex gap-3">
-        <div className="grid flex-1 gap-3 md:grid-cols-2 xl:grid-cols-[minmax(240px,1fr)_220px_180px_260px_260px]">
+        <div className="grid flex-1 gap-3 md:grid-cols-2 xl:grid-cols-[minmax(240px,1fr)_220px_180px_260px]">
           <Input
             placeholder="Buscar por nome, hostname, OS, IP ou cliente..."
             value={search}
@@ -458,11 +371,6 @@ export default function AgentList() {
             options={provisioningOptions}
             value={filterProvisioning}
             onChange={e => setFilterProvisioning(e.target.value as ProvisioningFilter)}
-          />
-          <Select
-            options={automationOptions}
-            value={filterAutomation}
-            onChange={e => setFilterAutomation(e.target.value as AutomationFilter)}
           />
         </div>
         {/* Toggle card / lista */}
@@ -502,14 +410,13 @@ export default function AgentList() {
           icon={Monitor}
           title={allAgents.length === 0 ? 'Nenhum agente encontrado' : 'Nenhum agente corresponde aos filtros'}
           description={allAgents.length === 0 ? 'Nenhum dispositivo registrado no sistema.' : 'Tente ajustar os filtros de busca.'}
-          action={(search || filterClient || filterStatus !== 'all' || filterProvisioning !== 'all' || filterAutomation !== 'all') ? {
+          action={(search || filterClient || filterStatus !== 'all' || filterProvisioning !== 'all') ? {
             label: 'Limpar filtros',
             onClick: () => {
               setSearch('');
               setFilterClient('');
               setFilterStatus('all');
               setFilterProvisioning('all');
-              setFilterAutomation('all');
             },
           } : undefined}
         />
@@ -527,9 +434,6 @@ export default function AgentList() {
                 const lastSeen = getAgentLastSeen(a);
                 const displayName = a.displayName ?? a.hostname;
                 const isZeroTouchPending = a.zeroTouchPending === true;
-                const automationState = automationStateByAgent.get(a.id);
-                const automationLoading = automationLoadingByAgent.has(a.id);
-                const automationBadge = getAutomationBadge(automationState?.latestStatus ?? null);
                 return (
                   <div
                     key={a.id}
@@ -566,12 +470,9 @@ export default function AgentList() {
                               {online ? 'Online' : 'Offline'}
                             </span>
                           </Badge>
-                          <Badge color={isZeroTouchPending ? 'warning' : 'success'}>
-                            {isZeroTouchPending ? 'Aguardando aprovação' : 'Provisionado'}
-                          </Badge>
-                          <Badge color={automationLoading ? 'slate' : automationBadge.color}>
-                            {automationLoading ? 'Automação: verificando...' : `Automação: ${automationBadge.label}`}
-                          </Badge>
+                          {isZeroTouchPending && (
+                            <Badge color="warning">Aguardando aprovação</Badge>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -630,7 +531,6 @@ export default function AgentList() {
                     <th className="hidden px-4 py-3 text-xs font-medium uppercase tracking-wide text-slate-500 sm:table-cell">Cliente</th>
                     <th className="px-4 py-3 text-xs font-medium uppercase tracking-wide text-slate-500">Status</th>
                     <th className="hidden px-4 py-3 text-xs font-medium uppercase tracking-wide text-slate-500 md:table-cell">Provisionamento</th>
-                    <th className="hidden px-4 py-3 text-xs font-medium uppercase tracking-wide text-slate-500 lg:table-cell">Automação</th>
                     <th className="hidden px-4 py-3 text-xs font-medium uppercase tracking-wide text-slate-500 lg:table-cell">Último contato</th>
                   </tr>
                 </thead>
@@ -640,9 +540,6 @@ export default function AgentList() {
                     const lastSeen = getAgentLastSeen(a);
                     const displayName = a.displayName ?? a.hostname;
                     const isZeroTouchPending = a.zeroTouchPending === true;
-                    const automationState = automationStateByAgent.get(a.id);
-                    const automationLoading = automationLoadingByAgent.has(a.id);
-                    const automationBadge = getAutomationBadge(automationState?.latestStatus ?? null);
                     return (
                       <tr
                         key={a.id}
@@ -686,29 +583,28 @@ export default function AgentList() {
                         </td>
                         <td className="hidden px-4 py-3 md:table-cell">
                           <div className="flex flex-col items-start gap-1.5">
-                            <Badge color={isZeroTouchPending ? 'warning' : 'success'}>
-                              {isZeroTouchPending ? 'Aguardando aprovação' : 'Provisionado'}
-                            </Badge>
-                            {canManageAgent && isZeroTouchPending && (
-                              <button
-                                type="button"
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  void handleApproveZeroTouch(a);
-                                }}
-                                disabled={approvingAgentId === a.id}
-                                className="inline-flex items-center gap-1 rounded-md border border-warning/40 bg-warning/10 px-2 py-1 text-xs font-medium text-warning transition-colors hover:bg-warning/20 disabled:cursor-not-allowed disabled:opacity-60"
-                              >
-                                <ShieldCheck className="h-3.5 w-3.5" />
-                                {approvingAgentId === a.id ? 'Aprovando...' : 'Aprovar'}
-                              </button>
+                            {isZeroTouchPending ? (
+                              <>
+                                <Badge color="warning">Aguardando aprovação</Badge>
+                                {canManageAgent && (
+                                  <button
+                                    type="button"
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      void handleApproveZeroTouch(a);
+                                    }}
+                                    disabled={approvingAgentId === a.id}
+                                    className="inline-flex items-center gap-1 rounded-md border border-warning/40 bg-warning/10 px-2 py-1 text-xs font-medium text-warning transition-colors hover:bg-warning/20 disabled:cursor-not-allowed disabled:opacity-60"
+                                  >
+                                    <ShieldCheck className="h-3.5 w-3.5" />
+                                    {approvingAgentId === a.id ? 'Aprovando...' : 'Aprovar'}
+                                  </button>
+                                )}
+                              </>
+                            ) : (
+                              <span className="text-xs text-slate-500">—</span>
                             )}
                           </div>
-                        </td>
-                        <td className="hidden px-4 py-3 lg:table-cell">
-                          <Badge color={automationLoading ? 'slate' : automationBadge.color}>
-                            {automationLoading ? 'Verificando...' : automationBadge.label}
-                          </Badge>
                         </td>
                         <td className="hidden px-4 py-3 text-xs text-slate-500 lg:table-cell">
                           {formatRelative(lastSeen, now)}

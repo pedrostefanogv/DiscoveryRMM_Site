@@ -135,6 +135,8 @@ function nodeLinkStatusColor(status: string): 'success' | 'warning' | 'danger' |
   return 'slate';
 }
 
+type AgentDetailDataTab = 'software' | 'listeningPorts' | 'openSockets' | 'logs';
+
 export default function AgentDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -155,6 +157,7 @@ export default function AgentDetail() {
   const [nodeLinkPreviewOpen, setNodeLinkPreviewOpen] = useState(false);
   const [nodeLinkPreviewError, setNodeLinkPreviewError] = useState<string | null>(null);
   const [nodeLinkPreviewReport, setNodeLinkPreviewReport] = useState<MeshCentralNodeLinksBackfillReport | null>(null);
+  const [activeDataTab, setActiveDataTab] = useState<AgentDetailDataTab>('software');
 
   const { hasAnyPermission } = useAuthorization();
   const canManageAgent = hasAnyPermission(['Agents.Edit', 'agents.*', 'admin.*']);
@@ -583,9 +586,24 @@ export default function AgentDetail() {
             {isOnlineNow ? 'Online' : 'Offline'}
           </span>
         </Badge>
-        <Badge color={isZeroTouchPending ? 'warning' : 'success'}>
-          {isZeroTouchPending ? 'Zero-Touch: aguardando aprovação' : 'Zero-Touch: aprovado'}
-        </Badge>
+        {isZeroTouchPending && (
+          <>
+            <Badge color="warning">Zero-Touch: aguardando aprovação</Badge>
+            {canManageAgent && (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => {
+                  void handleApproveZeroTouch();
+                }}
+                loading={isApprovingZeroTouch}
+              >
+                <ShieldCheck className="h-4 w-4" />
+                Aprovar
+              </Button>
+            )}
+          </>
+        )}
         <Button
           size="sm"
           variant="ghost"
@@ -816,27 +834,27 @@ export default function AgentDetail() {
               <dt className="text-slate-400">Versão do Agente</dt>
               <dd className="mt-0.5 font-mono text-white">{a.agentVersion ?? '—'}</dd>
             </div>
-            <div>
-              <dt className="text-slate-400">Zero-Touch Config Registration</dt>
-              <dd className="mt-1 flex items-center gap-2">
-                <Badge color={isZeroTouchPending ? 'warning' : 'success'}>
-                  {isZeroTouchPending ? 'Aguardando aprovação' : 'Aprovado'}
-                </Badge>
-                {canManageAgent && isZeroTouchPending && (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => {
-                      void handleApproveZeroTouch();
-                    }}
-                    loading={isApprovingZeroTouch}
-                  >
-                    <ShieldCheck className="h-4 w-4" />
-                    Aprovar
-                  </Button>
-                )}
-              </dd>
-            </div>
+            {isZeroTouchPending && (
+              <div>
+                <dt className="text-slate-400">Zero-Touch Config Registration</dt>
+                <dd className="mt-1 flex items-center gap-2">
+                  <Badge color="warning">Aguardando aprovação</Badge>
+                  {canManageAgent && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => {
+                        void handleApproveZeroTouch();
+                      }}
+                      loading={isApprovingZeroTouch}
+                    >
+                      <ShieldCheck className="h-4 w-4" />
+                      Aprovar
+                    </Button>
+                  )}
+                </dd>
+              </div>
+            )}
             <div>
               <dt className="text-slate-400">Último IP</dt>
               <dd className="mt-0.5 font-mono text-white">{a.lastIpAddress ?? hw.data?.networkAdapters?.find(n => n.ipAddress && !n.ipAddress.startsWith('169.254'))?.ipAddress ?? '—'}</dd>
@@ -998,162 +1016,204 @@ export default function AgentDetail() {
         </Card>
       </div>
 
-      {/* Software Inventory */}
-      <Card>
-        <CardHeader
-          title="Inventário de Aplicativos"
-          subtitle={`${softwareTotalCount} aplicativo(s) no inventário`}
-        />
-        {software.isLoading ? (
-          <Loading message="Carregando inventário de aplicativos..." />
-        ) : software.isError ? (
-          <ErrorDisplay onRetry={() => software.refetch()} />
-        ) : (
+      <Card className="surface-card">
+        <div className="mb-4 flex flex-wrap gap-2 border-b border-white/10 pb-3">
+          <button
+            type="button"
+            onClick={() => setActiveDataTab('software')}
+            aria-pressed={activeDataTab === 'software'}
+            className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors ${activeDataTab === 'software' ? 'border-primary/40 bg-primary/15 text-primary' : 'border-white/10 bg-white/5 text-slate-300 hover:text-slate-100'}`}
+          >
+            Inventário de Aplicativos
+            <span className="rounded-full bg-black/25 px-2 py-0.5 text-xs text-slate-300">{softwareTotalCount}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveDataTab('listeningPorts')}
+            aria-pressed={activeDataTab === 'listeningPorts'}
+            className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors ${activeDataTab === 'listeningPorts' ? 'border-primary/40 bg-primary/15 text-primary' : 'border-white/10 bg-white/5 text-slate-300 hover:text-slate-100'}`}
+          >
+            Portas em Escuta
+            <span className="rounded-full bg-black/25 px-2 py-0.5 text-xs text-slate-300">{listeningPorts.length}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveDataTab('openSockets')}
+            aria-pressed={activeDataTab === 'openSockets'}
+            className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors ${activeDataTab === 'openSockets' ? 'border-primary/40 bg-primary/15 text-primary' : 'border-white/10 bg-white/5 text-slate-300 hover:text-slate-100'}`}
+          >
+            Conexões Abertas
+            <span className="rounded-full bg-black/25 px-2 py-0.5 text-xs text-slate-300">{openSockets.length}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveDataTab('logs')}
+            aria-pressed={activeDataTab === 'logs'}
+            className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors ${activeDataTab === 'logs' ? 'border-primary/40 bg-primary/15 text-primary' : 'border-white/10 bg-white/5 text-slate-300 hover:text-slate-100'}`}
+          >
+            Logs Recentes
+            <span className="rounded-full bg-black/25 px-2 py-0.5 text-xs text-slate-300">{agentLogs.data?.length ?? 0}</span>
+          </button>
+        </div>
+
+        {activeDataTab === 'software' && (
           <>
-            {softwareSnapshot.data?.updatedAt && (
-              <div className="mb-3 flex items-center justify-end gap-2 text-xs text-slate-500">
-                <Clock className="h-3.5 w-3.5" />
-                <span>Última coleta: <span className="text-slate-300">{formatDate(softwareSnapshot.data.updatedAt)}</span></span>
+            <CardHeader
+              title="Inventário de Aplicativos"
+              subtitle={`${softwareTotalCount} aplicativo(s) no inventário`}
+            />
+            {software.isLoading ? (
+              <Loading message="Carregando inventário de aplicativos..." />
+            ) : software.isError ? (
+              <ErrorDisplay onRetry={() => software.refetch()} />
+            ) : (
+              <>
+                {softwareSnapshot.data?.updatedAt && (
+                  <div className="mb-3 flex items-center justify-end gap-2 text-xs text-slate-500">
+                    <Clock className="h-3.5 w-3.5" />
+                    <span>Última coleta: <span className="text-slate-300">{formatDate(softwareSnapshot.data.updatedAt)}</span></span>
+                  </div>
+                )}
+
+                <div className="mb-4 grid gap-3 md:grid-cols-3">
+                  <div className="rounded-lg bg-white/5 px-3 py-2">
+                    <p className="text-xs text-slate-500">Total instalado</p>
+                    <p className="text-sm font-medium text-white">{softwareSnapshot.data?.totalInstalled ?? softwareTotalCount}</p>
+                  </div>
+                  <div className="rounded-lg bg-white/5 px-3 py-2">
+                    <p className="text-xs text-slate-500">Primeira detecção</p>
+                    <p className="text-sm text-slate-300">{formatDate(softwareSnapshot.data?.firstSeenAt ?? null)}</p>
+                  </div>
+                  <div className="rounded-lg bg-white/5 px-3 py-2">
+                    <p className="text-xs text-slate-500">Última coleta</p>
+                    <p className="text-sm text-slate-300">{formatDate(softwareSnapshot.data?.lastCollectedAt ?? null)}</p>
+                  </div>
+                </div>
+
+                <form className="mb-4 grid gap-3 lg:grid-cols-[1fr_200px_160px_auto_auto]" onSubmit={handleApplySoftwareFilters}>
+                  <Input
+                    value={softwareSearchInput}
+                    onChange={(e) => setSoftwareSearchInput(e.target.value)}
+                    placeholder="Pesquisar por nome, versão, fabricante, installId, serial ou fonte"
+                  />
+                  <Select
+                    value={softwareOrder}
+                    options={softwareOrderOptions}
+                    onChange={(e) => handleSoftwareOrderChange(e.target.value as 'asc' | 'desc')}
+                  />
+                  <Select
+                    value={softwareLimitSelected}
+                    options={softwareLimitOptions}
+                    onChange={(e) => handleSoftwareLimitChange(e.target.value)}
+                  />
+                  <Button type="submit" variant="secondary" size="sm">
+                    <Search className="h-4 w-4" />
+                    Buscar
+                  </Button>
+                  <Button type="button" variant="ghost" size="sm" onClick={handleClearSoftwareSearch}>
+                    Limpar
+                  </Button>
+                </form>
+
+                <DataTable
+                  columns={softwareColumns}
+                  data={softwareItems}
+                  keyExtractor={item => item.inventoryId}
+                  emptyMessage="Nenhum aplicativo encontrado para este agente"
+                />
+                <div className="mt-4 flex items-center justify-between gap-3">
+                  <p className="text-xs text-slate-500">
+                    Página {softwarePage} de {softwareTotalPages} | {softwareItems.length} item(ns) nesta página
+                    {softwareSearchApplied ? ` | filtro: "${softwareSearchApplied}"` : ''}
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <Button variant="secondary" size="sm" onClick={goToPreviousSoftwarePage} disabled={!canGoPrevSoftwarePage}>
+                      Voltar
+                    </Button>
+                    <div className="rounded-md border border-white/10 px-3 py-1 text-xs text-slate-300">
+                      {softwarePage}
+                    </div>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={goToNextSoftwarePage}
+                      disabled={!canGoNextSoftwarePage}
+                      loading={software.isFetching}
+                    >
+                      Avançar
+                    </Button>
+                  </div>
+                </div>
+              </>
+            )}
+          </>
+        )}
+
+        {activeDataTab === 'listeningPorts' && (
+          <>
+            <CardHeader
+              title="Portas em Escuta"
+              subtitle={`${listeningPorts.length} porta(s) ativa(s)`}
+            />
+            {listeningPorts.length === 200 && (
+              <div className="mb-3 flex items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-400">
+                <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                Lista truncada pelo backend no limite de 200 itens. Podem existir mais portas em escuta.
               </div>
             )}
-
-            <div className="mb-4 grid gap-3 md:grid-cols-3">
-              <div className="rounded-lg bg-white/5 px-3 py-2">
-                <p className="text-xs text-slate-500">Total instalado</p>
-                <p className="text-sm font-medium text-white">{softwareSnapshot.data?.totalInstalled ?? softwareTotalCount}</p>
-              </div>
-              <div className="rounded-lg bg-white/5 px-3 py-2">
-                <p className="text-xs text-slate-500">Primeira detecção</p>
-                <p className="text-sm text-slate-300">{formatDate(softwareSnapshot.data?.firstSeenAt ?? null)}</p>
-              </div>
-              <div className="rounded-lg bg-white/5 px-3 py-2">
-                <p className="text-xs text-slate-500">Última coleta</p>
-                <p className="text-sm text-slate-300">{formatDate(softwareSnapshot.data?.lastCollectedAt ?? null)}</p>
-              </div>
-            </div>
-
-            <form className="mb-4 grid gap-3 lg:grid-cols-[1fr_200px_160px_auto_auto]" onSubmit={handleApplySoftwareFilters}>
-              <Input
-                value={softwareSearchInput}
-                onChange={(e) => setSoftwareSearchInput(e.target.value)}
-                placeholder="Pesquisar por nome, versão, fabricante, installId, serial ou fonte"
-              />
-              <Select
-                value={softwareOrder}
-                options={softwareOrderOptions}
-                onChange={(e) => handleSoftwareOrderChange(e.target.value as 'asc' | 'desc')}
-              />
-              <Select
-                value={softwareLimitSelected}
-                options={softwareLimitOptions}
-                onChange={(e) => handleSoftwareLimitChange(e.target.value)}
-              />
-              <Button type="submit" variant="secondary" size="sm">
-                <Search className="h-4 w-4" />
-                Buscar
-              </Button>
-              <Button type="button" variant="ghost" size="sm" onClick={handleClearSoftwareSearch}>
-                Limpar
-              </Button>
-            </form>
-
             <DataTable
-              columns={softwareColumns}
-              data={softwareItems}
-              keyExtractor={item => item.inventoryId}
-              emptyMessage="Nenhum aplicativo encontrado para este agente"
+              columns={listeningPortColumns}
+              data={listeningPorts}
+              keyExtractor={item => item.id}
+              emptyMessage="Nenhuma porta em escuta encontrada"
             />
-            <div className="mt-4 flex items-center justify-between gap-3">
-              <p className="text-xs text-slate-500">
-                Página {softwarePage} de {softwareTotalPages} | {softwareItems.length} item(ns) nesta página
-                {softwareSearchApplied ? ` | filtro: "${softwareSearchApplied}"` : ''}
-              </p>
-              <div className="flex items-center gap-2">
-                <Button variant="secondary" size="sm" onClick={goToPreviousSoftwarePage} disabled={!canGoPrevSoftwarePage}>
-                  Voltar
-                </Button>
-                <div className="rounded-md border border-white/10 px-3 py-1 text-xs text-slate-300">
-                  {softwarePage}
-                </div>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={goToNextSoftwarePage}
-                  disabled={!canGoNextSoftwarePage}
-                  loading={software.isFetching}
-                >
-                  Avançar
-                </Button>
+          </>
+        )}
+
+        {activeDataTab === 'openSockets' && (
+          <>
+            <CardHeader
+              title="Conexões Abertas"
+              subtitle={`${openSockets.length} conexão(ões) ativa(s)`}
+            />
+            {openSockets.length === 500 && (
+              <div className="mb-3 flex items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-400">
+                <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                Lista truncada pelo backend no limite de 500 itens. Podem existir mais conexões abertas.
               </div>
+            )}
+            <DataTable
+              columns={openSocketColumns}
+              data={openSockets}
+              keyExtractor={item => item.id}
+              emptyMessage="Nenhuma conexão aberta encontrada"
+            />
+          </>
+        )}
+
+        {activeDataTab === 'logs' && (
+          <>
+            <CardHeader title="Logs Recentes" />
+            <div className="max-h-72 space-y-2 overflow-y-auto">
+              {(agentLogs.data ?? []).map(log => {
+                const l = levelLabels[log.level] ?? { label: '?', color: 'slate' as const };
+                return (
+                  <div key={log.id} className="flex items-start gap-2 rounded-lg bg-white/5 px-3 py-2">
+                    <Badge color={l.color} className="mt-0.5 shrink-0">{l.label}</Badge>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm text-slate-300">{log.message}</p>
+                      <p className="text-xs text-slate-500">{formatDate(log.createdAt)}</p>
+                    </div>
+                  </div>
+                );
+              })}
+              {agentLogs.isLoading && <p className="text-sm text-slate-500">Carregando...</p>}
+              {(agentLogs.data?.length ?? 0) === 0 && !agentLogs.isLoading && (
+                <p className="text-sm text-slate-500">Nenhum log registrado</p>
+              )}
             </div>
           </>
         )}
-      </Card>
-
-      {/* Detailed Hardware Tables */}
-
-      {listeningPorts.length > 0 && (
-        <Card>
-          <CardHeader
-            title="Portas em Escuta"
-            subtitle={`${listeningPorts.length} porta(s) ativa(s)`}
-          />
-          {listeningPorts.length === 200 && (
-            <div className="mb-3 flex items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-400">
-              <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-              Lista truncada pelo backend no limite de 200 itens. Podem existir mais portas em escuta.
-            </div>
-          )}
-          <DataTable
-            columns={listeningPortColumns}
-            data={listeningPorts}
-            keyExtractor={item => item.id}
-            emptyMessage="Nenhuma porta em escuta encontrada"
-          />
-        </Card>
-      )}
-
-      {openSockets.length > 0 && (
-        <Card>
-          <CardHeader
-            title="Conexões Abertas"
-            subtitle={`${openSockets.length} conexão(ões) ativa(s)`}
-          />
-          {openSockets.length === 500 && (
-            <div className="mb-3 flex items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-400">
-              <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-              Lista truncada pelo backend no limite de 500 itens. Podem existir mais conexões abertas.
-            </div>
-          )}
-          <DataTable
-            columns={openSocketColumns}
-            data={openSockets}
-            keyExtractor={item => item.id}
-            emptyMessage="Nenhuma conexão aberta encontrada"
-          />
-        </Card>
-      )}
-
-      <Card>
-        <CardHeader title="Logs Recentes" />
-        <div className="max-h-72 space-y-2 overflow-y-auto">
-          {(agentLogs.data ?? []).map(log => {
-            const l = levelLabels[log.level] ?? { label: '?', color: 'slate' as const };
-            return (
-              <div key={log.id} className="flex items-start gap-2 rounded-lg bg-white/5 px-3 py-2">
-                <Badge color={l.color} className="mt-0.5 shrink-0">{l.label}</Badge>
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm text-slate-300">{log.message}</p>
-                  <p className="text-xs text-slate-500">{formatDate(log.createdAt)}</p>
-                </div>
-              </div>
-            );
-          })}
-          {agentLogs.isLoading && <p className="text-sm text-slate-500">Carregando...</p>}
-          {(agentLogs.data?.length ?? 0) === 0 && !agentLogs.isLoading && (
-            <p className="text-sm text-slate-500">Nenhum log registrado</p>
-          )}
-        </div>
       </Card>
 
       <Modal
