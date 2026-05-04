@@ -157,6 +157,14 @@ export const router = createBrowserRouter([
         element: <LazyPage><TicketSlaPage /></LazyPage>,
       },
       {
+        path: 'tickets/departments',
+        element: (
+          <PermissionGate anyOf={['settings.*', 'settings.read', 'departments.*', 'admin.*']}>
+            <LazyPage><DepartmentSettings /></LazyPage>
+          </PermissionGate>
+        ),
+      },
+      {
         path: 'tickets/auto-rules',
         element: (
           <PermissionGate anyOf={['tickets.*', 'tickets.edit', 'admin.*']}>
@@ -306,11 +314,7 @@ export const router = createBrowserRouter([
       },
       {
         path: 'settings/departments',
-        element: (
-          <PermissionGate anyOf={['settings.*', 'settings.read', 'departments.*', 'admin.*']}>
-            <LazyPage><DepartmentSettings /></LazyPage>
-          </PermissionGate>
-        ),
+        element: <Navigate to="/tickets/departments" replace />,
       },
       {
         path: 'settings/workflow-profiles',

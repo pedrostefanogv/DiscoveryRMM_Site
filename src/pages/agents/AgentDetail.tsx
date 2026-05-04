@@ -135,7 +135,7 @@ function nodeLinkStatusColor(status: string): 'success' | 'warning' | 'danger' |
   return 'slate';
 }
 
-type AgentDetailDataTab = 'software' | 'listeningPorts' | 'openSockets' | 'logs';
+type AgentDetailDataTab = 'software' | 'tickets' | 'listeningPorts' | 'openSockets' | 'logs';
 
 export default function AgentDetail() {
   const { id } = useParams<{ id: string }>();
@@ -878,103 +878,7 @@ export default function AgentDetail() {
           </dl>
         </Card>
 
-        {/* Processador + Memória */}
-        <Card>
-            <CardHeader title="Últimos Chamados" />
-            <div className="space-y-2">
-              {agentTickets.isLoading && (
-                <div className="py-4 text-center text-sm text-slate-400">
-                  Carregando chamados...
-                </div>
-              )}
-              {!agentTickets.isLoading && (!agentTickets.data || agentTickets.data.length === 0) && (
-                <div className="py-4 text-center text-sm text-slate-400">
-                  Nenhum chamado encontrado
-                </div>
-              )}
-              {!agentTickets.isLoading && agentTickets.data && agentTickets.data.length > 0 && (
-                <div className="space-y-2">
-                  {agentTickets.data.map(ticket => {
-                    const priorityColors: Record<string, 'slate' | 'success' | 'warning' | 'danger'> = {
-                      Low: 'slate',
-                      Medium: 'success',
-                      High: 'warning',
-                      Critical: 'danger',
-                    };
-                    const priorityLabels: Record<string, string> = {
-                      Low: 'Baixa',
-                      Medium: 'Média',
-                      High: 'Alta',
-                      Critical: 'Crítica',
-                    };
-                    return (
-                      <button
-                        key={ticket.id}
-                        onClick={() => navigate(`/tickets/${ticket.id}`)}
-                        className="w-full rounded-lg bg-white/5 px-3 py-2.5 text-left transition-colors hover:bg-white/10"
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2">
-                              <TicketIcon className="h-3.5 w-3.5 shrink-0 text-slate-400" />
-                              <p className="truncate text-sm font-medium text-white">
-                                {ticket.title}
-                              </p>
-                            </div>
-                            <p className="mt-1 text-xs text-slate-400">
-                              {new Date(ticket.createdAt).toLocaleDateString('pt-BR')}
-                              {ticket.closedAt && ' • Encerrado'}
-                            </p>
-                          </div>
-                          <Badge color={priorityColors[ticket.priority] ?? 'slate'} className="shrink-0">
-                            {priorityLabels[ticket.priority] ?? ticket.priority}
-                          </Badge>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-          </div>
-        </Card>
-
-        {/* Adaptadores de Rede */}
-        {hw.data?.networkAdapters && hw.data.networkAdapters.length > 0 && (
-          <Card>
-            <CardHeader title="Adaptadores de Rede" subtitle={`${hw.data.networkAdapters.length} adaptador(es)`} />
-            <div className="space-y-2">
-              {hw.data.networkAdapters.map(n => (
-                <div key={n.id} className="rounded-lg bg-white/5 px-3 py-2.5">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-white">{n.name}</p>
-                      {n.macAddress && <p className="font-mono text-xs text-slate-500">{n.macAddress}</p>}
-                    </div>
-                    <Badge color={n.isDhcpEnabled ? 'success' : 'slate'}>{n.isDhcpEnabled ? 'DHCP' : 'Estático'}</Badge>
-                  </div>
-                  {(n.ipAddress || n.gateway) && (
-                    <div className="mt-1.5 grid grid-cols-2 gap-2 text-xs">
-                      {n.ipAddress && (
-                        <div>
-                          <span className="text-slate-500">IP: </span>
-                          <span className="font-mono text-slate-300">{n.ipAddress}</span>
-                          {n.subnetMask && <span className="text-slate-500"> / {n.subnetMask}</span>}
-                        </div>
-                      )}
-                      {n.gateway && (
-                        <div>
-                          <span className="text-slate-500">Gateway: </span>
-                          <span className="font-mono text-slate-300">{n.gateway}</span>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          </Card>
-        )}
-
+        {/* Impressoras */}
         <Card>
           <CardHeader title="Impressoras" subtitle={`${printers.length} impressora(s) detectada(s)`} />
           {printers.length === 0 ? (
@@ -1014,6 +918,43 @@ export default function AgentDetail() {
             </div>
           )}
         </Card>
+
+        {/* Adaptadores de Rede */}
+        {hw.data?.networkAdapters && hw.data.networkAdapters.length > 0 && (
+          <Card>
+            <CardHeader title="Adaptadores de Rede" subtitle={`${hw.data.networkAdapters.length} adaptador(es)`} />
+            <div className="space-y-2">
+              {hw.data.networkAdapters.map(n => (
+                <div key={n.id} className="rounded-lg bg-white/5 px-3 py-2.5">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium text-white">{n.name}</p>
+                      {n.macAddress && <p className="font-mono text-xs text-slate-500">{n.macAddress}</p>}
+                    </div>
+                    <Badge color={n.isDhcpEnabled ? 'success' : 'slate'}>{n.isDhcpEnabled ? 'DHCP' : 'Estático'}</Badge>
+                  </div>
+                  {(n.ipAddress || n.gateway) && (
+                    <div className="mt-1.5 grid grid-cols-2 gap-2 text-xs">
+                      {n.ipAddress && (
+                        <div>
+                          <span className="text-slate-500">IP: </span>
+                          <span className="font-mono text-slate-300">{n.ipAddress}</span>
+                          {n.subnetMask && <span className="text-slate-500"> / {n.subnetMask}</span>}
+                        </div>
+                      )}
+                      {n.gateway && (
+                        <div>
+                          <span className="text-slate-500">Gateway: </span>
+                          <span className="font-mono text-slate-300">{n.gateway}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </Card>
+        )}
       </div>
 
       <Card className="surface-card">
@@ -1026,6 +967,15 @@ export default function AgentDetail() {
           >
             Inventário de Aplicativos
             <span className="rounded-full bg-black/25 px-2 py-0.5 text-xs text-slate-300">{softwareTotalCount}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveDataTab('tickets')}
+            aria-pressed={activeDataTab === 'tickets'}
+            className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors ${activeDataTab === 'tickets' ? 'border-primary/40 bg-primary/15 text-primary' : 'border-white/10 bg-white/5 text-slate-300 hover:text-slate-100'}`}
+          >
+            Últimos Chamados
+            <span className="rounded-full bg-black/25 px-2 py-0.5 text-xs text-slate-300">{agentTickets.data?.length ?? 0}</span>
           </button>
           <button
             type="button"
@@ -1146,6 +1096,67 @@ export default function AgentDetail() {
                 </div>
               </>
             )}
+          </>
+        )}
+
+        {activeDataTab === 'tickets' && (
+          <>
+            <CardHeader title="Últimos Chamados" subtitle={`${agentTickets.data?.length ?? 0} chamado(s) retornado(s)`} />
+            <div className="space-y-2">
+              {agentTickets.isLoading && (
+                <div className="py-4 text-center text-sm text-slate-400">
+                  Carregando chamados...
+                </div>
+              )}
+              {!agentTickets.isLoading && (!agentTickets.data || agentTickets.data.length === 0) && (
+                <div className="py-4 text-center text-sm text-slate-400">
+                  Nenhum chamado encontrado
+                </div>
+              )}
+              {!agentTickets.isLoading && agentTickets.data && agentTickets.data.length > 0 && (
+                <div className="space-y-2">
+                  {agentTickets.data.map(ticket => {
+                    const priorityColors: Record<string, 'slate' | 'success' | 'warning' | 'danger'> = {
+                      Low: 'slate',
+                      Medium: 'success',
+                      High: 'warning',
+                      Critical: 'danger',
+                    };
+                    const priorityLabels: Record<string, string> = {
+                      Low: 'Baixa',
+                      Medium: 'Média',
+                      High: 'Alta',
+                      Critical: 'Crítica',
+                    };
+                    return (
+                      <button
+                        key={ticket.id}
+                        onClick={() => navigate(`/tickets/${ticket.id}`)}
+                        className="w-full rounded-lg bg-white/5 px-3 py-2.5 text-left transition-colors hover:bg-white/10"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <TicketIcon className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                              <p className="truncate text-sm font-medium text-white">
+                                {ticket.title}
+                              </p>
+                            </div>
+                            <p className="mt-1 text-xs text-slate-400">
+                              {new Date(ticket.createdAt).toLocaleDateString('pt-BR')}
+                              {ticket.closedAt && ' • Encerrado'}
+                            </p>
+                          </div>
+                          <Badge color={priorityColors[ticket.priority] ?? 'slate'} className="shrink-0">
+                            {priorityLabels[ticket.priority] ?? ticket.priority}
+                          </Badge>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </>
         )}
 

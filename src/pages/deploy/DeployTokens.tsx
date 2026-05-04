@@ -96,14 +96,14 @@ export default function DeployTokens() {
   const refreshAgentUpdateBuild = useMutation({
     mutationFn: () => agentUpdatesApi.refreshBuild(),
     onSuccess: () => {
-      toast.success('Novo build de update do agente iniciado.');
+      toast.success('Rebuild do agente de atualizacao iniciado.');
     },
     onError: (error: unknown) => {
       const message = error instanceof ApiError
         ? error.message
         : error instanceof Error
           ? error.message
-          : 'Nao foi possivel iniciar o build de update do agente.';
+          : 'Nao foi possivel iniciar o rebuild do agente de atualizacao.';
       toast.error(message);
     },
   });
@@ -283,9 +283,9 @@ export default function DeployTokens() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-white">Deploy</h1>
-        <p className="text-sm text-slate-400">Geracao de token para instalacao de agentes</p>
-        <div className="mt-3">
+        <h1 className="text-2xl font-bold text-white">Instalacao de Agentes</h1>
+        <p className="text-sm text-slate-400">Crie token e instalador para provisionar agentes em novos dispositivos</p>
+        <div className="mt-3 flex justify-start">
           <Button
             variant="secondary"
             onClick={() => {
@@ -293,15 +293,15 @@ export default function DeployTokens() {
             }}
             loading={refreshAgentUpdateBuild.isPending}
           >
-            Gerar novo build do update do agente
+            Rebuildar agente de atualizacao
           </Button>
         </div>
       </div>
 
       <Card>
         <CardHeader
-          title="Criar Deploy Token"
-          subtitle="Endpoint: POST /api/deploy-tokens"
+          title="Criar agente para instalacao"
+          subtitle="Gere token e instalador para onboarding de novos agentes"
         />
         <div className="space-y-4">
           <Select

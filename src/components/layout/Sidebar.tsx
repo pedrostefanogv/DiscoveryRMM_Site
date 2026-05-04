@@ -25,7 +25,7 @@ import { useAuthorization } from '@/auth/authorization';
 const mainLinks = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/agents', icon: Monitor, label: 'Agentes' },
-  { to: '/tickets', icon: Ticket, label: 'Chamados' },
+  { to: '/tickets', icon: Ticket, label: 'Suporte' },
   { to: '/logs', icon: ScrollText, label: 'Logs' },
   { to: '/deploy', icon: KeyRound, label: 'Deploy' },
   { to: '/knowledge', icon: BookOpen, label: 'Conhecimento' },
@@ -60,7 +60,7 @@ const ticketsLinks = [
   { to: '/tickets', label: 'Chamados' },
   { to: '/tickets/alerts', label: 'Alertas' },
   { to: '/tickets/sla', label: 'SLA e Calendarios' },
-  { to: '/settings/departments', label: 'Departamentos' },
+  { to: '/tickets/departments', label: 'Departamentos' },
 ];
 
 const settingsLinks = [
@@ -110,8 +110,7 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
   const automationIsActive =
     location.pathname.startsWith('/automation') || location.pathname.startsWith('/settings/agent-labels');
   const reportsIsActive = location.pathname.startsWith('/reports');
-  const ticketsIsActive =
-    location.pathname.startsWith('/tickets') || location.pathname.startsWith('/settings/departments');
+  const ticketsIsActive = location.pathname.startsWith('/tickets');
   const settingsIsActive = location.pathname.startsWith('/settings');
   const identityIsActive = location.pathname.startsWith('/identity');
   const [clientsOpen, setClientsOpen] = useState(clientsIsActive);
@@ -130,7 +129,7 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
   const canViewDepartments = hasAnyPermission(['departments.*', 'settings.*', 'settings.read', 'admin.*']);
   const visibleTicketsLinks = canViewDepartments
     ? ticketsLinks
-    : ticketsLinks.filter(({ to }) => to !== '/settings/departments');
+    : ticketsLinks.filter(({ to }) => to !== '/tickets/departments');
   const visibleMainLinks = mainLinks
     .slice(1)
     .filter(({ to }) => (to === '/deploy' ? canViewDeploy : to !== '/tickets'));
@@ -261,12 +260,12 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
               ? 'bg-white/10 text-white'
               : 'text-slate-400 hover:bg-white/5 hover:text-white'
           }`}
-          aria-label="Abrir submenu de tickets"
+          aria-label="Abrir submenu de suporte"
         >
           <Ticket className="h-5 w-5 shrink-0" />
           {!collapsed && (
             <>
-              <span className="truncate">Tickets</span>
+              <span className="truncate">Suporte</span>
               <span className="ml-auto">
                 {ticketsOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
               </span>
