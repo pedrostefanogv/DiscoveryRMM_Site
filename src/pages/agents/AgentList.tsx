@@ -18,6 +18,27 @@ type ContextMenuState = { x: number; y: number; agent: AgentWithClient } | null;
 type ProvisioningFilter = 'all' | 'pendingApproval';
 const MAX_CLIENTS_IN_OVERVIEW = 5;
 
+function normalizeIp(value: string | null | undefined): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function compareAgentsByStableOrder(a: AgentWithClient, b: AgentWithClient): number {
+  const byClient = a.clientName.localeCompare(b.clientName, 'pt-BR', { sensitivity: 'base' });
+  if (byClient !== 0) return byClient;
+
+  const aName = (a.displayName ?? a.hostname).trim();
+  const bName = (b.displayName ?? b.hostname).trim();
+  const byName = aName.localeCompare(bName, 'pt-BR', { sensitivity: 'base' });
+  if (byName !== 0) return byName;
+
+  const byHostname = a.hostname.localeCompare(b.hostname, 'pt-BR', { sensitivity: 'base' });
+  if (byHostname !== 0) return byHostname;
+
+  return a.id.localeCompare(b.id);
+}
+
 function formatRelative(dateStr: string | null, now: number): string {
   if (!dateStr) return '—';
   const diff = now - new Date(dateStr).getTime();
@@ -62,6 +83,7 @@ export default function AgentList() {
   const [deleteConfirmAgent, setDeleteConfirmAgent] = useState<AgentWithClient | null>(null);
   const [updatingAgentId, setUpdatingAgentId] = useState<string | null>(null);
   const contextMenuRef = useRef<HTMLDivElement | null>(null);
+  const lastKnownIpByAgentRef = useRef<Map<string, string>>(new Map());
 
   useEffect(() => {
     if (!contextMenu) return;
@@ -262,11 +284,36 @@ export default function AgentList() {
     });
   }, [queriedClients, agentQueries]);
 
-  const totalOnline = allAgents.filter(a => isAgentOnlineNow(a, now)).length;
-  const totalOffline = allAgents.length - totalOnline;
-  const totalPendingApproval = allAgents.filter(a => a.zeroTouchPending === true).length;
+  useEffect(() => {
+    for (const agent of allAgents) {
+      const ip = normalizeIp(agent.lastIpAddress);
+      if (ip) {
+        lastKnownIpByAgentRef.current.set(agent.id, ip);
+      }
+    }
+  }, [allAgents]);
 
-  const baseFiltered = useMemo(() => allAgents.filter(a => {
+  const agentsWithStableIp = useMemo<AgentWithClient[]>(() => {
+    return allAgents.map((agent) => {
+      const currentIp = normalizeIp(agent.lastIpAddress);
+      const stableIp = currentIp ?? lastKnownIpByAgentRef.current.get(agent.id) ?? null;
+
+      if (stableIp === currentIp) {
+        return agent;
+      }
+
+      return {
+        ...agent,
+        lastIpAddress: stableIp,
+      };
+    });
+  }, [allAgents]);
+
+  const totalOnline = agentsWithStableIp.filter(a => isAgentOnlineNow(a, now)).length;
+  const totalOffline = agentsWithStableIp.length - totalOnline;
+  const totalPendingApproval = agentsWithStableIp.filter(a => a.zeroTouchPending === true).length;
+
+  const baseFiltered = useMemo(() => agentsWithStableIp.filter(a => {
     const online = isAgentOnlineNow(a, now);
     if (filterStatus === 'online' && !online) return false;
     if (filterStatus === 'offline' && online) return false;
@@ -283,8 +330,12 @@ export default function AgentList() {
       );
     }
     return true;
-  }), [allAgents, filterStatus, filterClient, filterProvisioning, search, now]);
-  const filtered = baseFiltered;
+  }), [agentsWithStableIp, filterStatus, filterClient, filterProvisioning, search, now]);
+
+  const filtered = useMemo(
+    () => [...baseFiltered].sort(compareAgentsByStableOrder),
+    [baseFiltered],
+  );
 
   if (clients.isError) return <ErrorDisplay onRetry={() => clients.refetch()} />;
 
@@ -316,7 +367,7 @@ export default function AgentList() {
         <StatCard
           icon={Monitor}
           label="Total de Agentes"
-          value={allAgents.length}
+          value={agentsWithStableIp.length}
           tone="primary"
           onClick={() => {
             setFilterStatus('all');
@@ -332,9 +383,9 @@ export default function AgentList() {
           onClick={() => setFilterStatus('online')}
           active={filterStatus === 'online'}
           trend={
-            allAgents.length > 0 ? (
+            agentsWithStableIp.length > 0 ? (
               <span className="text-success text-sm font-medium">
-                {Math.round((totalOnline / allAgents.length) * 100)}%
+                {Math.round((totalOnline / agentsWithStableIp.length) * 100)}%
               </span>
             ) : undefined
           }
@@ -347,9 +398,9 @@ export default function AgentList() {
           onClick={() => setFilterStatus('offline')}
           active={filterStatus === 'offline'}
           trend={
-            allAgents.length > 0 && totalOffline > 0 ? (
+            agentsWithStableIp.length > 0 && totalOffline > 0 ? (
               <span className="text-warning text-sm font-medium">
-                {Math.round((totalOffline / allAgents.length) * 100)}%
+                {Math.round((totalOffline / agentsWithStableIp.length) * 100)}%
               </span>
             ) : undefined
           }
@@ -362,9 +413,9 @@ export default function AgentList() {
           onClick={() => setFilterProvisioning('pendingApproval')}
           active={filterProvisioning === 'pendingApproval'}
           trend={
-            allAgents.length > 0 && totalPendingApproval > 0 ? (
+            agentsWithStableIp.length > 0 && totalPendingApproval > 0 ? (
               <span className="text-accent text-sm font-medium">
-                {Math.round((totalPendingApproval / allAgents.length) * 100)}%
+                {Math.round((totalPendingApproval / agentsWithStableIp.length) * 100)}%
               </span>
             ) : undefined
           }
@@ -430,8 +481,8 @@ export default function AgentList() {
       ) : filtered.length === 0 ? (
         <EmptyState
           icon={Monitor}
-          title={allAgents.length === 0 ? 'Nenhum agente encontrado' : 'Nenhum agente corresponde aos filtros'}
-          description={allAgents.length === 0 ? 'Nenhum dispositivo registrado no sistema.' : 'Tente ajustar os filtros de busca.'}
+          title={agentsWithStableIp.length === 0 ? 'Nenhum agente encontrado' : 'Nenhum agente corresponde aos filtros'}
+          description={agentsWithStableIp.length === 0 ? 'Nenhum dispositivo registrado no sistema.' : 'Tente ajustar os filtros de busca.'}
           action={(search || filterClient || filterStatus !== 'all' || filterProvisioning !== 'all') ? {
             label: 'Limpar filtros',
             onClick: () => {
@@ -445,7 +496,7 @@ export default function AgentList() {
       ) : (
         <>
           <p className="text-xs text-slate-500">
-            {filtered.length} agente{filtered.length !== 1 ? 's' : ''} exibido{filtered.length !== 1 ? 's' : ''}
+            {filtered.length} agente{filtered.length !== 1 ? 's' : ''} exibido{filtered.length !== 1 ? 's' : ''} · Ordenação: cliente e nome (A-Z)
           </p>
 
           {/* ── CARD VIEW ── */}
@@ -503,12 +554,10 @@ export default function AgentList() {
                         <Activity className="h-3.5 w-3.5 shrink-0 text-slate-500" />
                         <span className="truncate">{a.operatingSystem ?? '—'}{a.osVersion ? ` · ${a.osVersion}` : ''}</span>
                       </div>
-                      {a.lastIpAddress && (
-                        <div className="flex items-center gap-2 text-slate-400">
-                          <span className="h-3.5 w-3.5 shrink-0 pt-px text-center font-mono text-[10px] leading-none text-slate-500">IP</span>
-                          <span className="font-mono">{a.lastIpAddress}</span>
-                        </div>
-                      )}
+                      <div className="flex items-center gap-2 text-slate-400">
+                        <span className="h-3.5 w-3.5 shrink-0 pt-px text-center font-mono text-[10px] leading-none text-slate-500">IP</span>
+                        <span className="font-mono">{a.lastIpAddress ?? 'IP indisponível'}</span>
+                      </div>
                       <div className="flex items-center gap-2 text-slate-400">
                         <Building2 className="h-3.5 w-3.5 shrink-0 text-slate-500" />
                         <span className="truncate">{a.clientName}</span>
