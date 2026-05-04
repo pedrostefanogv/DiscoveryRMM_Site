@@ -3,6 +3,8 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Eye, Save } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import MDEditor from '@uiw/react-md-editor';
+import '@uiw/react-md-editor/markdown-editor.css';
 import {
   Badge,
   Button,
@@ -11,7 +13,6 @@ import {
   Input,
   Loading,
   Select,
-  TextArea,
 } from '@/components/ui';
 import { useClients, useCreateKnowledgeArticle, useKnowledgeArticle, useSites, useUpdateKnowledgeArticle } from '@/hooks';
 import type { CreateKnowledgeArticleRequest, UpdateKnowledgeArticleRequest } from '@/api';
@@ -227,12 +228,27 @@ export default function KnowledgeEditor() {
               />
             </div>
 
-            <TextArea
-              label="Markdown"
-              value={form.content}
-              rows={18}
-              onChange={(event) => setField('content', event.target.value)}
-            />
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-slate-300">Markdown</label>
+              <div
+                data-color-mode="dark"
+                className="overflow-hidden rounded-xl border border-white/10 bg-slate-950"
+              >
+                <MDEditor
+                  value={form.content}
+                  preview="edit"
+                  visibleDragbar={false}
+                  height={460}
+                  textareaProps={{
+                    placeholder: 'Escreva o artigo usando Markdown...',
+                  }}
+                  onChange={(value) => setField('content', value ?? '')}
+                />
+              </div>
+              <p className="mt-2 text-xs text-slate-500">
+                Editor avançado com atalhos e toolbar para títulos, listas, links, tabelas e blocos de código.
+              </p>
+            </div>
 
             <div className="flex justify-end gap-3">
               <Button variant="ghost" onClick={() => navigate('/knowledge')}>

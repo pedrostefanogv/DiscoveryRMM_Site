@@ -23,6 +23,7 @@
     "@tsparticles/engine": "^3.9.1",
     "@tsparticles/react": "^3.0.0",
     "@tsparticles/slim": "^3.9.1",
+    "@uiw/react-md-editor": "^4.1.0",
     "lucide-react": "^1.8.0",
     "nats": "^2.29.3",
     "react": "^19.0.0",

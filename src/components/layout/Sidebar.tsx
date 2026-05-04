@@ -8,7 +8,6 @@ import {
   ScrollText,
   KeyRound,
   AppWindow,
-  BookOpen,
   Settings,
   ChevronLeft,
   ChevronRight,
@@ -28,7 +27,6 @@ const mainLinks = [
   { to: '/tickets', icon: Ticket, label: 'Suporte' },
   { to: '/logs', icon: ScrollText, label: 'Logs' },
   { to: '/deploy', icon: KeyRound, label: 'Deploy' },
-  { to: '/knowledge', icon: BookOpen, label: 'Conhecimento' },
 ];
 
 const clientLinks = [
@@ -58,6 +56,7 @@ const reportsLinks = [
 
 const ticketsLinks = [
   { to: '/tickets', label: 'Chamados' },
+  { to: '/knowledge', label: 'Conhecimento' },
   { to: '/tickets/alerts', label: 'Alertas' },
   { to: '/tickets/sla', label: 'SLA e Calendarios' },
   { to: '/tickets/departments', label: 'Departamentos' },
@@ -110,7 +109,8 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
   const automationIsActive =
     location.pathname.startsWith('/automation') || location.pathname.startsWith('/settings/agent-labels');
   const reportsIsActive = location.pathname.startsWith('/reports');
-  const ticketsIsActive = location.pathname.startsWith('/tickets');
+  const ticketsIsActive =
+    location.pathname.startsWith('/tickets') || location.pathname.startsWith('/knowledge');
   const settingsIsActive = location.pathname.startsWith('/settings');
   const identityIsActive = location.pathname.startsWith('/identity');
   const [clientsOpen, setClientsOpen] = useState(clientsIsActive);
