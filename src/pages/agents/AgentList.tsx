@@ -96,13 +96,25 @@ function compareAgentsBySort(
   return compareAgentsTieBreaker(a, b);
 }
 
-function formatRelative(dateStr: string | null, now: number): string {
-  if (!dateStr) return '—';
+function formatDateBrazil(value: string): string {
+  const d = new Date(value);
+  if (!Number.isFinite(d.getTime())) return value;
+  return d.toLocaleString('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function formatRelative(dateStr: string | null, now: number): { text: string; fullDate: string | null } {
+  if (!dateStr) return { text: '—', fullDate: null };
   const diff = now - new Date(dateStr).getTime();
-  if (diff < 60_000) return 'agora mesmo';
-  if (diff < 3_600_000) return `há ${Math.floor(diff / 60_000)} min`;
-  if (diff < 86_400_000) return `há ${Math.floor(diff / 3_600_000)} h`;
-  return `há ${Math.floor(diff / 86_400_000)} d`;
+  const fullDate = formatDateBrazil(dateStr);
+  if (diff < 60_000) return { text: 'agora mesmo', fullDate };
+  if (diff < 3_600_000) return { text: `há ${Math.floor(diff / 60_000)} min`, fullDate };
+  if (diff < 86_400_000) return { text: `há ${Math.floor(diff / 3_600_000)} h`, fullDate };
+  return { text: fullDate, fullDate };
 }
 
 function getOsIcon(os: string | null): string {
@@ -592,6 +604,7 @@ export default function AgentList() {
                 const lastSeen = getAgentLastSeen(a);
                 const displayName = a.displayName ?? a.hostname;
                 const isZeroTouchPending = a.zeroTouchPending === true;
+                const relativeTime = formatRelative(lastSeen, now);
                 return (
                   <div
                     key={a.id}
@@ -649,7 +662,7 @@ export default function AgentList() {
                       </div>
                       <div className="flex items-center gap-2 text-slate-400">
                         <Clock className="h-3.5 w-3.5 shrink-0 text-slate-500" />
-                        <span>{formatRelative(lastSeen, now)}</span>
+                        <span title={relativeTime.fullDate ?? undefined}>{relativeTime.text}</span>
                       </div>
                     </div>
                     {canManageAgent && isZeroTouchPending && (
@@ -696,6 +709,7 @@ export default function AgentList() {
                     const lastSeen = getAgentLastSeen(a);
                     const displayName = a.displayName ?? a.hostname;
                     const isZeroTouchPending = a.zeroTouchPending === true;
+                    const relativeTime = formatRelative(lastSeen, now);
                     return (
                       <tr
                         key={a.id}
@@ -762,8 +776,8 @@ export default function AgentList() {
                             )}
                           </div>
                         </td>
-                        <td className="hidden px-4 py-3 text-xs text-slate-500 lg:table-cell">
-                          {formatRelative(lastSeen, now)}
+                        <td className="hidden px-4 py-3 text-xs text-slate-500 lg:table-cell" title={relativeTime.fullDate ?? undefined}>
+                          {relativeTime.text}
                         </td>
                       </tr>
                     );

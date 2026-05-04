@@ -108,13 +108,18 @@ function updateAgentInCollection(
   data: Agent[] | undefined,
   agentId: string,
   status: AgentRealtimeStatus,
+  ipAddress?: string | null,
 ): Agent[] | undefined {
   if (!data) return data;
   let changed = false;
   const next = data.map((agent) => {
     if (agent.id !== agentId) return agent;
     changed = true;
-    return applyStatusUpdate(agent, status);
+    const updated = applyStatusUpdate(agent, status);
+    if (ipAddress && !updated.lastIpAddress) {
+      return { ...updated, lastIpAddress: ipAddress };
+    }
+    return updated;
   });
   return changed ? next : data;
 }
@@ -154,27 +159,32 @@ export function useAgentStatusNats(enabled = true) {
         if (!heartbeatAgentId) return;
 
         const status: AgentRealtimeStatus = "Online";
+        const heartbeatIp = getStringField(safeData, ["ipAddress", "lastIpAddress", "ip"]);
 
-        // Update agent detail
+        // Update agent detail preserving IP from heartbeat
         queryClient.setQueryData<Agent | undefined>(
           ["agents", "detail", heartbeatAgentId],
           (current) => {
             if (!current) return current;
-            return applyStatusUpdate(current, status);
+            const updated = applyStatusUpdate(current, status);
+            if (heartbeatIp && !updated.lastIpAddress) {
+              return { ...updated, lastIpAddress: heartbeatIp };
+            }
+            return updated;
           },
         );
 
-        // Update agents in collections
+        // Update agents in collections preserving IP from heartbeat
         queryClient.setQueriesData<Agent[]>(
           { queryKey: ["agents", "byClient"] },
           (current) =>
-            updateAgentInCollection(current, heartbeatAgentId, status),
+            updateAgentInCollection(current, heartbeatAgentId, status, heartbeatIp),
         );
 
         queryClient.setQueriesData<Agent[]>(
           { queryKey: ["agents", "bySite"] },
           (current) =>
-            updateAgentInCollection(current, heartbeatAgentId, status),
+            updateAgentInCollection(current, heartbeatAgentId, status, heartbeatIp),
         );
 
         invalidateThrottled(["agents"]);

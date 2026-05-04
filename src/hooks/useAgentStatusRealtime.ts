@@ -55,13 +55,18 @@ function updateAgentInCollection(
   data: Agent[] | undefined,
   agentId: string,
   status: AgentRealtimeStatus,
+  ipAddress?: string | null,
 ): Agent[] | undefined {
   if (!data) return data;
   let changed = false;
   const next = data.map((agent) => {
     if (agent.id !== agentId) return agent;
     changed = true;
-    return applyStatusUpdate(agent, status);
+    const updated = applyStatusUpdate(agent, status);
+    if (ipAddress && !updated.lastIpAddress) {
+      return { ...updated, lastIpAddress: ipAddress };
+    }
+    return updated;
   });
   return changed ? next : data;
 }
