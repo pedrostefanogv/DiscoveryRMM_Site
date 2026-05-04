@@ -220,11 +220,9 @@ export default function AgentDetail() {
     };
   }, [id]);
 
-  if (agent.isLoading) return <Loading />;
-  if (agent.isError || !agent.data) return <ErrorDisplay onRetry={() => agent.refetch()} />;
-
   const a = agent.data;
   const aWithHeartbeat = useMemo(() => {
+    if (!a) return null;
     if (!liveHeartbeat) return a;
     return {
       ...a,
@@ -246,6 +244,10 @@ export default function AgentDetail() {
       },
     };
   }, [a, liveHeartbeat]);
+
+  if (agent.isLoading) return <Loading />;
+  if (agent.isError || !a || !aWithHeartbeat) return <ErrorDisplay onRetry={() => agent.refetch()} />;
+
   const isOnlineNow = isAgentOnlineNow(aWithHeartbeat, now);
   const isZeroTouchPending = aWithHeartbeat.zeroTouchPending === true;
   const softwareItems = software.data?.items ?? [];
