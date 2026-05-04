@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Cpu, MemoryStick, Ticket as TicketIcon, Tags,
@@ -15,6 +15,7 @@ import type { AgentSoftwareInventoryItem, ListeningPortInfo, MeshCentralNodeLink
 import { ApiError, LogLevel, agentUpdatesApi } from '@/api';
 import { isAgentOnlineNow } from '@/utils/agentStatus';
 import { useNowTick } from '@/hooks/useNowTick';
+import { useAgentHeartbeat } from '@/stores/heartbeatStore';
 import { agentLabelsApi } from '@/modules/agent-labels/api';
 import { AgentLabelSourceType, type AgentLabel } from '@/modules/agent-labels/types';
 import { openRemoteDebugPopup } from './remoteDebugLauncher';
@@ -165,6 +166,7 @@ export default function AgentDetail() {
   const deleteAgent = useDeleteAgent();
   const approveZeroTouch = useApproveZeroTouch();
   const agent = useAgent(id!);
+  const liveHeartbeat = useAgentHeartbeat(id!);
   const hw = useAgentHardware(id!);
   const softwareCursor = softwarePageCursors[softwarePage - 1];
   const software = useAgentSoftware(id!, {
@@ -222,8 +224,30 @@ export default function AgentDetail() {
   if (agent.isError || !agent.data) return <ErrorDisplay onRetry={() => agent.refetch()} />;
 
   const a = agent.data;
-  const isOnlineNow = isAgentOnlineNow(a, now);
-  const isZeroTouchPending = a.zeroTouchPending === true;
+  const aWithHeartbeat = useMemo(() => {
+    if (!liveHeartbeat) return a;
+    return {
+      ...a,
+      heartbeatMetrics: {
+        cpuPercent: liveHeartbeat.cpuPercent,
+        memoryPercent: liveHeartbeat.memoryPercent,
+        diskPercent: liveHeartbeat.diskPercent,
+        memoryTotalGb: liveHeartbeat.memoryTotalGb,
+        memoryUsedGb: liveHeartbeat.memoryUsedGb,
+        diskTotalGb: liveHeartbeat.diskTotalGb,
+        diskUsedGb: liveHeartbeat.diskUsedGb,
+        p2pPeers: liveHeartbeat.p2pPeers,
+        uptimeSeconds: liveHeartbeat.uptimeSeconds,
+        processCount: liveHeartbeat.processCount,
+        ipAddress: liveHeartbeat.ipAddress,
+        hostname: liveHeartbeat.hostname,
+        agentVersion: liveHeartbeat.agentVersion,
+        timestampUtc: liveHeartbeat.timestampUtc,
+      },
+    };
+  }, [a, liveHeartbeat]);
+  const isOnlineNow = isAgentOnlineNow(aWithHeartbeat, now);
+  const isZeroTouchPending = aWithHeartbeat.zeroTouchPending === true;
   const softwareItems = software.data?.items ?? [];
   const softwareLimitReturned = software.data?.limit ?? Number(softwareLimitSelected);
   const softwareTotalCount = software.data?.count ?? softwareSnapshot.data?.totalInstalled ?? 0;
@@ -649,7 +673,7 @@ export default function AgentDetail() {
       </div>
 
       {/* Live Heartbeat Metrics */}
-      <AgentHeartbeatCard metrics={a.heartbeatMetrics} showEmpty />
+      <AgentHeartbeatCard metrics={aWithHeartbeat.heartbeatMetrics} showEmpty />
 
       {/* Stat Cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

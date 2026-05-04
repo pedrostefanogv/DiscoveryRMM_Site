@@ -10,6 +10,7 @@ import { Badge, Loading, ErrorDisplay, Input, Select, StatCard, Modal, PageHeade
 import type { Agent } from '@/api';
 import { getAgentLastSeen, isAgentOnlineNow } from '@/utils/agentStatus';
 import { useNowTick } from '@/hooks/useNowTick';
+import { useAllAgentHeartbeats } from '@/stores/heartbeatStore';
 import { useAuthorization } from '@/auth/authorization';
 import { openRemoteDebugPopup } from './remoteDebugLauncher';
 
@@ -365,17 +366,47 @@ export default function AgentList() {
     });
   }, [queriedClients, agentQueries]);
 
+  // Merge live heartbeat metrics from the reactive store — survives REST polling overwrites
+  const allHeartbeats = useAllAgentHeartbeats();
+
+  const agentsWithHeartbeat = useMemo<AgentWithClient[]>(() => {
+    if (allHeartbeats.size === 0) return allAgents;
+    return allAgents.map((agent) => {
+      const live = allHeartbeats.get(agent.id);
+      if (!live) return agent;
+      return {
+        ...agent,
+        heartbeatMetrics: {
+          cpuPercent: live.cpuPercent,
+          memoryPercent: live.memoryPercent,
+          diskPercent: live.diskPercent,
+          memoryTotalGb: live.memoryTotalGb,
+          memoryUsedGb: live.memoryUsedGb,
+          diskTotalGb: live.diskTotalGb,
+          diskUsedGb: live.diskUsedGb,
+          p2pPeers: live.p2pPeers,
+          uptimeSeconds: live.uptimeSeconds,
+          processCount: live.processCount,
+          ipAddress: live.ipAddress,
+          hostname: live.hostname,
+          agentVersion: live.agentVersion,
+          timestampUtc: live.timestampUtc,
+        },
+      };
+    });
+  }, [allAgents, allHeartbeats]);
+
   useEffect(() => {
-    for (const agent of allAgents) {
+    for (const agent of agentsWithHeartbeat) {
       const ip = normalizeIp(agent.lastIpAddress);
       if (ip) {
         lastKnownIpByAgentRef.current.set(agent.id, ip);
       }
     }
-  }, [allAgents]);
+  }, [agentsWithHeartbeat]);
 
   const agentsWithStableIp = useMemo<AgentWithClient[]>(() => {
-    return allAgents.map((agent) => {
+    return agentsWithHeartbeat.map((agent) => {
       const currentIp = normalizeIp(agent.lastIpAddress);
       const stableIp = currentIp ?? lastKnownIpByAgentRef.current.get(agent.id) ?? null;
 
@@ -388,7 +419,7 @@ export default function AgentList() {
         lastIpAddress: stableIp,
       };
     });
-  }, [allAgents]);
+  }, [agentsWithHeartbeat]);
 
   const totalOnline = agentsWithStableIp.filter(a => isAgentOnlineNow(a, now)).length;
   const totalOffline = agentsWithStableIp.length - totalOnline;
