@@ -4,7 +4,7 @@ import { Monitor, Wifi, WifiOff, Activity, Building2, Clock, LayoutGrid, List, B
 import { useQueries } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { useClients } from '@/hooks/useClients';
-import { useApproveZeroTouch, useDeleteAgent } from '@/hooks/useAgents';
+import { getDeleteAgentErrorMessage, useApproveZeroTouch, useDeleteAgent } from '@/hooks/useAgents';
 import { ApiError, agentUpdatesApi, agentsApi, authApi } from '@/api';
 import { Badge, Loading, ErrorDisplay, Input, Select, StatCard, Modal, PageHeader, SkeletonCard, EmptyState } from '@/components/ui';
 import type { Agent } from '@/api';
@@ -176,12 +176,7 @@ export default function AgentList() {
       await deleteAgent.mutateAsync(agent.id);
       toast.success(`Agente ${agent.displayName ?? agent.hostname} excluído com sucesso.`);
     } catch (error) {
-      const message = error instanceof ApiError
-        ? error.message
-        : error instanceof Error
-          ? error.message
-          : 'Falha ao excluir o agente.';
-      toast.error(message);
+      toast.error(getDeleteAgentErrorMessage(error));
     } finally {
       setDeletingAgentId(null);
     }

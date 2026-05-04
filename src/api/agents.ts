@@ -23,7 +23,7 @@ import type {
   StartRemoteDebugSessionResponse,
 } from "./types";
 
-const BASE = "/api/v1/Agents";
+const BASE = "/api/v1/agents";
 
 export interface HardwareReport {
   hardware: AgentHardwareInfo | null;

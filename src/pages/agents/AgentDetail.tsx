@@ -5,7 +5,7 @@ import {
   Wifi, WifiOff, AppWindow, Search, Clock, HardDrive, Printer, Bug, AlertTriangle, Trash2, ShieldCheck,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { useAgent, useAgentHardware, useAgentSoftware, useAgentSoftwareSnapshot, useApproveZeroTouch, useDeleteAgent } from '@/hooks/useAgents';
+import { getDeleteAgentErrorMessage, useAgent, useAgentHardware, useAgentSoftware, useAgentSoftwareSnapshot, useApproveZeroTouch, useDeleteAgent } from '@/hooks/useAgents';
 import { useTickets } from '@/hooks/useTickets';
 import { useLogs } from '@/hooks/useLogs';
 import { useRunMeshCentralNodeLinksBackfill, useRunMeshCentralNodeLinksBackfillDryRun } from '@/hooks';
@@ -388,12 +388,7 @@ export default function AgentDetail() {
       toast.success('Agente excluído com sucesso.');
       navigate('/agents', { replace: true });
     } catch (error) {
-      const message = error instanceof ApiError
-        ? error.message
-        : error instanceof Error
-          ? error.message
-          : 'Falha ao excluir o agente.';
-      toast.error(message);
+      toast.error(getDeleteAgentErrorMessage(error));
     }
   };
 

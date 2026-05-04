@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { agentsApi } from "@/api";
+import { ApiError, agentsApi } from "@/api";
 import type {
   AgentSoftwareOrder,
   UpdateAgentRequest,
@@ -26,6 +26,65 @@ const KEYS = {
   commands: (id: string) => [...KEYS.all, "commands", id] as const,
   tokens: (id: string) => [...KEYS.all, "tokens", id] as const,
 };
+
+const DELETE_AGENT_DEPENDENCY_ERROR_TOKENS = [
+  "foreign key",
+  "constraint",
+  "reference constraint",
+  "deletebehavior.restrict",
+  "delete behavior restrict",
+  "violates",
+  "23503",
+];
+
+function isLikelyDeleteDependencyError(message: string): boolean {
+  const normalized = message.toLowerCase();
+  return DELETE_AGENT_DEPENDENCY_ERROR_TOKENS.some((token) =>
+    normalized.includes(token),
+  );
+}
+
+function isGenericInternalError(message: string): boolean {
+  const normalized = message.trim().toLowerCase();
+  return (
+    normalized === "erro interno do servidor" ||
+    normalized === "internal server error" ||
+    normalized.includes("an error occurred while processing your request")
+  );
+}
+
+export function getDeleteAgentErrorMessage(error: unknown): string {
+  if (error instanceof ApiError) {
+    if (error.status === 400) {
+      return "ID de agente invalido. Use um GUID valido em /api/v1/agents/{id}.";
+    }
+
+    if (error.status === 401) {
+      return "Nao autenticado para excluir agente. Valide sessao/JWT, MFA concluido ou API key (X-Api-Key + X-Api-Secret).";
+    }
+
+    if (error.status === 404) {
+      return "Endpoint de exclusao nao encontrado. Use DELETE /api/v1/agents/{id}.";
+    }
+
+    if (error.status === 500) {
+      if (
+        isLikelyDeleteDependencyError(error.message) ||
+        isGenericInternalError(error.message)
+      ) {
+        return "Nao foi possivel excluir o agente porque existem vinculos ativos (FK), como tickets, tokens, inventario ou comandos.";
+      }
+    }
+
+    return error.message;
+  }
+
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return "Falha ao excluir o agente.";
+}
 
 export function useAgentsByClient(clientId: string) {
   return useQuery({
