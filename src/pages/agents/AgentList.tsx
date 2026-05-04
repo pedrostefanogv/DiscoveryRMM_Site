@@ -264,6 +264,7 @@ export default function AgentList() {
 
   const totalOnline = allAgents.filter(a => isAgentOnlineNow(a, now)).length;
   const totalOffline = allAgents.length - totalOnline;
+  const totalPendingApproval = allAgents.filter(a => a.zeroTouchPending === true).length;
 
   const baseFiltered = useMemo(() => allAgents.filter(a => {
     const online = isAgentOnlineNow(a, now);
@@ -299,8 +300,8 @@ export default function AgentList() {
   ];
 
   const provisioningOptions = [
-    { value: 'all', label: 'Provisionamento: todos' },
-    { value: 'pendingApproval', label: 'Provisionamento: aguardando aprovação' },
+    { value: 'all', label: 'Autorização: autorizados e aguardando aprovação' },
+    { value: 'pendingApproval', label: 'Autorização: aguardando autorização' },
   ];
 
   const isLoadingAgents = clients.isLoading || agentQueries.some(q => q.isLoading && !q.data);
@@ -311,14 +312,17 @@ export default function AgentList() {
       <PageHeader title="Agentes" description="Gerenciamento de dispositivos monitorados" />
 
       {/* StatCards */}
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
           icon={Monitor}
           label="Total de Agentes"
           value={allAgents.length}
           tone="primary"
-          onClick={() => setFilterStatus('all')}
-          active={filterStatus === 'all'}
+          onClick={() => {
+            setFilterStatus('all');
+            setFilterProvisioning('all');
+          }}
+          active={filterStatus === 'all' && filterProvisioning === 'all'}
         />
         <StatCard
           icon={Wifi}
@@ -346,6 +350,21 @@ export default function AgentList() {
             allAgents.length > 0 && totalOffline > 0 ? (
               <span className="text-warning text-sm font-medium">
                 {Math.round((totalOffline / allAgents.length) * 100)}%
+              </span>
+            ) : undefined
+          }
+        />
+        <StatCard
+          icon={ShieldCheck}
+          label="Aguardando autorização/aprovação"
+          value={totalPendingApproval}
+          tone="accent"
+          onClick={() => setFilterProvisioning('pendingApproval')}
+          active={filterProvisioning === 'pendingApproval'}
+          trend={
+            allAgents.length > 0 && totalPendingApproval > 0 ? (
+              <span className="text-accent text-sm font-medium">
+                {Math.round((totalPendingApproval / allAgents.length) * 100)}%
               </span>
             ) : undefined
           }
