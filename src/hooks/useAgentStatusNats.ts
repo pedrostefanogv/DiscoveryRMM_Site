@@ -2,8 +2,8 @@ import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { getNatsService, type DashboardEvent } from "@/api/nats";
 import { realtimeConfig } from "@/config/realtime";
-import type { Agent } from "@/api";
-import { heartbeatStore } from "@/stores/heartbeatStore";
+import type { Agent, AgentHeartbeat } from "@/api";
+import { heartbeatStore, extractHeartbeatMetrics } from "@/stores/heartbeatStore";
 import { setNatsConnectionState } from "@/utils/realtimeConnectionState";
 
 type AgentRealtimeStatus = "Online" | "Offline";
@@ -176,65 +176,52 @@ export function useAgentStatusNats(enabled = true) {
 
         const heartbeatIp = getStringField(safeData, ["ipAddress", "lastIpAddress", "ip"]);
 
-        // Extract all heartbeat metrics
-        const cpuPercent = getNumberField(safeData, ["cpuPercent", "cpu"]);
-        const memoryPercent = getNumberField(safeData, ["memoryPercent", "memory"]);
-        const diskPercent = getNumberField(safeData, ["diskPercent", "disk"]);
-        const memoryTotalGb = getNumberField(safeData, ["memoryTotalGb", "memoryTotal"]);
-        const memoryUsedGb = getNumberField(safeData, ["memoryUsedGb", "memoryUsed"]);
-        const diskTotalGb = getNumberField(safeData, ["diskTotalGb", "diskTotal"]);
-        const diskUsedGb = getNumberField(safeData, ["diskUsedGb", "diskUsed"]);
-        const p2pPeers = getNumberField(safeData, ["p2pPeers", "p2pPeersCount"]);
-        const uptimeSeconds = getNumberField(safeData, ["uptimeSeconds", "uptime"]);
-        const processCount = getNumberField(safeData, ["processCount", "processes"]);
-        const hostname = getStringField(safeData, ["hostname", "hostName", "machineName"]);
-        const timestampUtc = getStringField(safeData, ["timestampUtc", "timestamp", "timeStamp"]);
-
-        // Store complete heartbeat for reactive consumption
-        heartbeatStore.setHeartbeat(heartbeatAgentId, {
+        // Extract all heartbeat metrics and store
+        const heartbeatData: AgentHeartbeat = {
           agentId: heartbeatAgentId,
           status: "Online",
           ipAddress: heartbeatIp ?? undefined,
-          hostname: hostname ?? undefined,
-          cpuPercent,
-          memoryPercent,
-          diskPercent,
-          memoryTotalGb,
-          memoryUsedGb,
-          diskTotalGb,
-          diskUsedGb,
-          p2pPeers,
-          uptimeSeconds,
-          processCount,
-          timestampUtc: timestampUtc ?? undefined,
-        });
-
-        // Build metrics object for React Query cache
-        const metrics = {
-          cpuPercent,
-          memoryPercent,
-          diskPercent,
-          memoryTotalGb,
-          memoryUsedGb,
-          diskTotalGb,
-          diskUsedGb,
-          p2pPeers,
-          uptimeSeconds,
-          processCount,
-          ipAddress: heartbeatIp ?? undefined,
-          hostname: hostname ?? undefined,
-          timestampUtc: timestampUtc ?? undefined,
+          hostname: getStringField(safeData, ["hostname", "hostName", "machineName"]) ?? undefined,
+          cpuPercent: getNumberField(safeData, ["cpuPercent", "cpu"]),
+          memoryPercent: getNumberField(safeData, ["memoryPercent", "memory"]),
+          diskPercent: getNumberField(safeData, ["diskPercent", "disk"]),
+          memoryTotalGb: getNumberField(safeData, ["memoryTotalGb", "memoryTotal"]),
+          memoryUsedGb: getNumberField(safeData, ["memoryUsedGb", "memoryUsed"]),
+          diskTotalGb: getNumberField(safeData, ["diskTotalGb", "diskTotal"]),
+          diskUsedGb: getNumberField(safeData, ["diskUsedGb", "diskUsed"]),
+          p2pPeers: getNumberField(safeData, ["p2pPeers", "p2pPeersCount"]),
+          uptimeSeconds: getNumberField(safeData, ["uptimeSeconds", "uptime"]),
+          processCount: getNumberField(safeData, ["processCount", "processes"]),
+          timestampUtc: getStringField(safeData, ["timestampUtc", "timestamp", "timeStamp"]) ?? undefined,
         };
 
-        // Update agent detail with full metrics
+        heartbeatStore.setHeartbeat(heartbeatAgentId, heartbeatData);
+
+        const metrics = extractHeartbeatMetrics(heartbeatData);
+
+        const applyToCollection = (agent: Agent) => {
+          if (agent.id !== heartbeatAgentId) return agent;
+          const nowIso = new Date().toISOString();
+          return {
+            ...agent,
+            status: "Online" as const,
+            isOnline: true,
+            lastSeenAt: nowIso,
+            lastSeen: nowIso,
+            updatedAt: nowIso,
+            lastIpAddress: heartbeatIp ?? agent.lastIpAddress,
+            heartbeatMetrics: metrics,
+          };
+        };
+
         queryClient.setQueryData<Agent | undefined>(
           ["agents", "detail", heartbeatAgentId],
           (current) => {
             if (!current) return current;
             const nowIso = new Date().toISOString();
-            const updated = {
+            const updated: Agent = {
               ...current,
-              status: "Online" as const,
+              status: "Online",
               isOnline: true,
               lastSeenAt: nowIso,
               lastSeen: nowIso,
@@ -248,47 +235,14 @@ export function useAgentStatusNats(enabled = true) {
           },
         );
 
-        // Update agents in collections with full metrics
         queryClient.setQueriesData<Agent[]>(
           { queryKey: ["agents", "byClient"] },
-          (current) => {
-            if (!current) return current;
-            const nowIso = new Date().toISOString();
-            return current.map((agent) => {
-              if (agent.id !== heartbeatAgentId) return agent;
-              return {
-                ...agent,
-                status: "Online" as const,
-                isOnline: true,
-                lastSeenAt: nowIso,
-                lastSeen: nowIso,
-                updatedAt: nowIso,
-                lastIpAddress: heartbeatIp ?? agent.lastIpAddress,
-                heartbeatMetrics: metrics,
-              };
-            });
-          },
+          (current) => current?.map(applyToCollection),
         );
 
         queryClient.setQueriesData<Agent[]>(
           { queryKey: ["agents", "bySite"] },
-          (current) => {
-            if (!current) return current;
-            const nowIso = new Date().toISOString();
-            return current.map((agent) => {
-              if (agent.id !== heartbeatAgentId) return agent;
-              return {
-                ...agent,
-                status: "Online" as const,
-                isOnline: true,
-                lastSeenAt: nowIso,
-                lastSeen: nowIso,
-                updatedAt: nowIso,
-                lastIpAddress: heartbeatIp ?? agent.lastIpAddress,
-                heartbeatMetrics: metrics,
-              };
-            });
-          },
+          (current) => current?.map(applyToCollection),
         );
 
         invalidateThrottled(["agents"]);

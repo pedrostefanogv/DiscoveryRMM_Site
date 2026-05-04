@@ -1,10 +1,30 @@
 import { useSyncExternalStore } from "react";
-import type { AgentHeartbeat } from "@/api";
+import type { AgentHeartbeat, AgentHeartbeatMetrics } from "@/api";
 
 type HeartbeatPayload = Required<Pick<AgentHeartbeat, "agentId" | "status">> &
   Omit<AgentHeartbeat, "agentId" | "status">;
 
 type Listener = () => void;
+
+/** Extract AgentHeartbeatMetrics from an AgentHeartbeat payload */
+export function extractHeartbeatMetrics(data: AgentHeartbeat): AgentHeartbeatMetrics {
+  return {
+    cpuPercent: data.cpuPercent,
+    memoryPercent: data.memoryPercent,
+    diskPercent: data.diskPercent,
+    memoryTotalGb: data.memoryTotalGb,
+    memoryUsedGb: data.memoryUsedGb,
+    diskTotalGb: data.diskTotalGb,
+    diskUsedGb: data.diskUsedGb,
+    p2pPeers: data.p2pPeers,
+    uptimeSeconds: data.uptimeSeconds,
+    processCount: data.processCount,
+    ipAddress: data.ipAddress,
+    hostname: data.hostname,
+    agentVersion: data.agentVersion,
+    timestampUtc: data.timestampUtc,
+  };
+}
 
 class HeartbeatStore {
   private heartbeats = new Map<string, HeartbeatPayload>();

@@ -3,7 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import * as signalR from "@microsoft/signalr";
 import { API_BASE_URL } from "@/api/client";
 import type { Agent, AgentHeartbeat } from "@/api";
-import { heartbeatStore } from "@/stores/heartbeatStore";
+import { heartbeatStore, extractHeartbeatMetrics } from "@/stores/heartbeatStore";
 import { useAuth } from "@/auth/AuthContext";
 import {
   clearSignalrConnectionState,
@@ -203,35 +203,23 @@ export function useAgentStatusRealtime(enabled = true) {
       // Store the complete heartbeat metrics for reactive consumption
       heartbeatStore.setHeartbeat(data.agentId, data);
 
+      // Cache the metrics in reactor upgrade the cache inflight
+      const heartbeatMetrics = extractHeartbeatMetrics(data);
+
       // Keep agent detail cache fresh with last-seen and IP
       queryClient.setQueryData<Agent | undefined>(
         ["agents", "detail", data.agentId],
         (current) => {
           if (!current) return current;
           const nowIso = new Date().toISOString();
-          const updated = {
+          const updated: Agent = {
             ...current,
-            status: "Online" as const,
+            status: "Online",
             isOnline: true,
             lastSeenAt: nowIso,
             lastSeen: nowIso,
             updatedAt: nowIso,
-            heartbeatMetrics: {
-              cpuPercent: data.cpuPercent,
-              memoryPercent: data.memoryPercent,
-              diskPercent: data.diskPercent,
-              memoryTotalGb: data.memoryTotalGb,
-              memoryUsedGb: data.memoryUsedGb,
-              diskTotalGb: data.diskTotalGb,
-              diskUsedGb: data.diskUsedGb,
-              p2pPeers: data.p2pPeers,
-              uptimeSeconds: data.uptimeSeconds,
-              processCount: data.processCount,
-              ipAddress: data.ipAddress,
-              hostname: data.hostname,
-              agentVersion: data.agentVersion,
-              timestampUtc: data.timestampUtc,
-            },
+            heartbeatMetrics,
           };
           if (data.ipAddress && !updated.lastIpAddress) {
             updated.lastIpAddress = data.ipAddress;
@@ -240,40 +228,29 @@ export function useAgentStatusRealtime(enabled = true) {
         },
       );
 
+      const applyToCollection = (agent: Agent) => {
+        if (agent.id !== data.agentId) return agent;
+        const nowIso = new Date().toISOString();
+        return {
+          ...agent,
+          status: "Online" as const,
+          isOnline: true,
+          lastSeenAt: nowIso,
+          lastSeen: nowIso,
+          updatedAt: nowIso,
+          lastIpAddress: data.ipAddress ?? agent.lastIpAddress,
+          heartbeatMetrics,
+        };
+      };
+
       queryClient.setQueriesData<Agent[]>(
         { queryKey: ["agents", "byClient"] },
-        (current) => {
-          if (!current) return current;
-          const nowIso = new Date().toISOString();
-          return current.map((agent) => {
-            if (agent.id !== data.agentId) return agent;
-            return {
-              ...agent,
-              status: "Online" as const,
-              isOnline: true,
-              lastSeenAt: nowIso,
-              lastSeen: nowIso,
-              updatedAt: nowIso,
-              lastIpAddress: data.ipAddress ?? agent.lastIpAddress,
-              heartbeatMetrics: {
-                cpuPercent: data.cpuPercent,
-                memoryPercent: data.memoryPercent,
-                diskPercent: data.diskPercent,
-                memoryTotalGb: data.memoryTotalGb,
-                memoryUsedGb: data.memoryUsedGb,
-                diskTotalGb: data.diskTotalGb,
-                diskUsedGb: data.diskUsedGb,
-                p2pPeers: data.p2pPeers,
-                uptimeSeconds: data.uptimeSeconds,
-                processCount: data.processCount,
-                ipAddress: data.ipAddress,
-                hostname: data.hostname,
-                agentVersion: data.agentVersion,
-                timestampUtc: data.timestampUtc,
-              },
-            };
-          });
-        },
+        (current) => current?.map(applyToCollection),
+      );
+
+      queryClient.setQueriesData<Agent[]>(
+        { queryKey: ["agents", "bySite"] },
+        (current) => current?.map(applyToCollection),
       );
 
       invalidateThrottled(["agents"]);

@@ -823,9 +823,6 @@ export default function AgentList() {
                             )}
                           </div>
                         </td>
-                        <td className="hidden px-4 py-3 text-xs text-slate-500 lg:table-cell" title={relativeTime.fullDate ?? undefined}>
-                          {relativeTime.text}
-                        </td>
                         {/* Heartbeat metrics columns */}
                         <td className="hidden px-4 py-3 2xl:table-cell">
                           {a.heartbeatMetrics?.cpuPercent != null ? (
@@ -847,6 +844,9 @@ export default function AgentList() {
                           ) : (
                             <span className="text-xs text-slate-600">—</span>
                           )}
+                        </td>
+                        <td className="hidden px-4 py-3 text-xs text-slate-500 lg:table-cell" title={relativeTime.fullDate ?? undefined}>
+                          {relativeTime.text}
                         </td>
                       </tr>
                     );
