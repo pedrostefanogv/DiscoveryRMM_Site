@@ -154,6 +154,7 @@ export default function AgentDetail() {
   const [isApplyingNodeLink, setIsApplyingNodeLink] = useState(false);
   const [isTriggeringAgentUpdate, setIsTriggeringAgentUpdate] = useState(false);
   const [isApprovingZeroTouch, setIsApprovingZeroTouch] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [nodeLinkPreviewOpen, setNodeLinkPreviewOpen] = useState(false);
   const [nodeLinkPreviewError, setNodeLinkPreviewError] = useState<string | null>(null);
   const [nodeLinkPreviewReport, setNodeLinkPreviewReport] = useState<MeshCentralNodeLinksBackfillReport | null>(null);
@@ -375,17 +376,22 @@ export default function AgentDetail() {
     }
   };
 
-  const handleDeleteAgent = async () => {
+  const closeDeleteAgentModal = () => {
+    if (deleteAgent.isPending) return;
+    setDeleteConfirmOpen(false);
+  };
+
+  const handleDeleteAgent = () => {
     if (!id) return;
+    setDeleteConfirmOpen(true);
+  };
 
-    const confirmed = window.confirm(
-      `Excluir o agente "${a.displayName ?? a.hostname}"? Esta ação não pode ser desfeita.`,
-    );
-    if (!confirmed) return;
-
+  const confirmDeleteAgent = async () => {
+    if (!id) return;
     try {
       await deleteAgent.mutateAsync(id);
       toast.success('Agente excluído com sucesso.');
+      setDeleteConfirmOpen(false);
       navigate('/agents', { replace: true });
     } catch (error) {
       toast.error(getDeleteAgentErrorMessage(error));
@@ -632,7 +638,7 @@ export default function AgentDetail() {
             size="sm"
             variant="danger"
             onClick={() => {
-              void handleDeleteAgent();
+              handleDeleteAgent();
             }}
             loading={deleteAgent.isPending}
           >
@@ -1221,6 +1227,42 @@ export default function AgentDetail() {
           </>
         )}
       </Card>
+
+      <Modal
+        open={deleteConfirmOpen}
+        onClose={closeDeleteAgentModal}
+        title="Confirmar exclusão de agente"
+        maxWidth="max-w-lg"
+      >
+        <div className="space-y-4">
+          <div className="rounded-lg border border-danger/30 bg-danger/10 p-3 text-sm text-slate-200">
+            <p>
+              Você está prestes a excluir o agente{' '}
+              <span className="font-semibold text-white">{a.displayName ?? a.hostname}</span>.
+            </p>
+            <p className="mt-1 text-slate-400">Esta ação não pode ser desfeita.</p>
+          </div>
+
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="secondary"
+              onClick={closeDeleteAgentModal}
+              disabled={deleteAgent.isPending}
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="danger"
+              onClick={() => {
+                void confirmDeleteAgent();
+              }}
+              loading={deleteAgent.isPending}
+            >
+              Excluir agente
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       <Modal
         open={nodeLinkPreviewOpen}

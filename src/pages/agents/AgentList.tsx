@@ -59,6 +59,7 @@ export default function AgentList() {
   const [remoteDebugAgentId, setRemoteDebugAgentId] = useState<string | null>(null);
   const [approvingAgentId, setApprovingAgentId] = useState<string | null>(null);
   const [deletingAgentId, setDeletingAgentId] = useState<string | null>(null);
+  const [deleteConfirmAgent, setDeleteConfirmAgent] = useState<AgentWithClient | null>(null);
   const [updatingAgentId, setUpdatingAgentId] = useState<string | null>(null);
   const contextMenuRef = useRef<HTMLDivElement | null>(null);
 
@@ -163,18 +164,25 @@ export default function AgentList() {
     }
   };
 
-  const handleDeleteAgent = async (agent: AgentWithClient) => {
+  const openDeleteAgentModal = (agent: AgentWithClient) => {
     setContextMenu(null);
+    setDeleteConfirmAgent(agent);
+  };
 
-    const confirmed = window.confirm(
-      `Excluir o agente "${agent.displayName ?? agent.hostname}"? Esta ação não pode ser desfeita.`,
-    );
-    if (!confirmed) return;
+  const closeDeleteAgentModal = () => {
+    if (deleteAgent.isPending) return;
+    setDeleteConfirmAgent(null);
+  };
+
+  const handleDeleteAgent = async () => {
+    if (!deleteConfirmAgent) return;
+    const agent = deleteConfirmAgent;
 
     setDeletingAgentId(agent.id);
     try {
       await deleteAgent.mutateAsync(agent.id);
       toast.success(`Agente ${agent.displayName ?? agent.hostname} excluído com sucesso.`);
+      setDeleteConfirmAgent(null);
     } catch (error) {
       toast.error(getDeleteAgentErrorMessage(error));
     } finally {
@@ -664,7 +672,7 @@ export default function AgentList() {
               <button
                 className="flex w-full items-center gap-2 border-t border-white/10 px-3 py-2 text-left text-sm text-red-300 transition-colors hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-60"
                 onClick={() => {
-                  void handleDeleteAgent(contextMenu.agent);
+                  openDeleteAgentModal(contextMenu.agent);
                 }}
                 disabled={deleteAgent.isPending}
               >
@@ -675,6 +683,41 @@ export default function AgentList() {
           </div>
         </>
       )}
+
+      <Modal
+        open={!!deleteConfirmAgent}
+        onClose={closeDeleteAgentModal}
+        title="Confirmar exclusão de agente"
+      >
+        <div className="space-y-4">
+          <div className="rounded-lg border border-danger/30 bg-danger/10 p-3 text-sm text-slate-200">
+            <p>
+              Você está prestes a excluir o agente{' '}
+              <span className="font-semibold text-white">{deleteConfirmAgent?.displayName ?? deleteConfirmAgent?.hostname}</span>.
+            </p>
+            <p className="mt-1 text-slate-400">Esta ação não pode ser desfeita.</p>
+          </div>
+
+          <div className="flex justify-end gap-2">
+            <button
+              className="rounded-lg border border-white/15 px-3 py-2 text-sm text-slate-200 transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+              onClick={closeDeleteAgentModal}
+              disabled={deleteAgent.isPending}
+            >
+              Cancelar
+            </button>
+            <button
+              className="rounded-lg bg-danger px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-danger/90 disabled:cursor-not-allowed disabled:opacity-60"
+              onClick={() => {
+                void handleDeleteAgent();
+              }}
+              disabled={deleteAgent.isPending}
+            >
+              {deleteAgent.isPending ? 'Excluindo...' : 'Excluir agente'}
+            </button>
+          </div>
+        </div>
+      </Modal>
 
       <Modal
         open={remoteOpen}
