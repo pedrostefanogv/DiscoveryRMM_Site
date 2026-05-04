@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Monitor, Wifi, WifiOff, Activity, Building2, Clock, LayoutGrid, List, Bug, Trash2, ShieldCheck } from 'lucide-react';
+import { Monitor, Wifi, WifiOff, Activity, Building2, Clock, LayoutGrid, List, Bug, Trash2, ShieldCheck, ArrowUp, ArrowDown } from 'lucide-react';
 import { useQueries } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { useClients } from '@/hooks/useClients';
@@ -15,7 +15,9 @@ import { openRemoteDebugPopup } from './remoteDebugLauncher';
 
 type AgentWithClient = Agent & { clientName: string; clientId: string };
 type ContextMenuState = { x: number; y: number; agent: AgentWithClient } | null;
-type ProvisioningFilter = 'all' | 'pendingApproval';
+type ProvisioningFilter = 'all' | 'pendingApproval' | 'approved';
+type AgentSortField = 'name' | 'site' | 'client' | 'lastSeen' | 'status';
+type SortDirection = 'asc' | 'desc';
 const MAX_CLIENTS_IN_OVERVIEW = 5;
 
 function normalizeIp(value: string | null | undefined): string | null {
@@ -24,19 +26,74 @@ function normalizeIp(value: string | null | undefined): string | null {
   return trimmed.length > 0 ? trimmed : null;
 }
 
-function compareAgentsByStableOrder(a: AgentWithClient, b: AgentWithClient): number {
+function compareText(a: string, b: string): number {
+  return a.localeCompare(b, 'pt-BR', { sensitivity: 'base' });
+}
+
+function getAgentDisplayName(agent: AgentWithClient): string {
+  return (agent.displayName ?? agent.hostname).trim();
+}
+
+function getAgentLastSeenMs(agent: AgentWithClient): number | null {
+  const value = getAgentLastSeen(agent);
+  if (!value) return null;
+  const ms = new Date(value).getTime();
+  return Number.isFinite(ms) ? ms : null;
+}
+
+function compareAgentsTieBreaker(a: AgentWithClient, b: AgentWithClient): number {
   const byClient = a.clientName.localeCompare(b.clientName, 'pt-BR', { sensitivity: 'base' });
   if (byClient !== 0) return byClient;
 
-  const aName = (a.displayName ?? a.hostname).trim();
-  const bName = (b.displayName ?? b.hostname).trim();
-  const byName = aName.localeCompare(bName, 'pt-BR', { sensitivity: 'base' });
+  const byName = compareText(getAgentDisplayName(a), getAgentDisplayName(b));
   if (byName !== 0) return byName;
 
-  const byHostname = a.hostname.localeCompare(b.hostname, 'pt-BR', { sensitivity: 'base' });
+  const byHostname = compareText(a.hostname, b.hostname);
   if (byHostname !== 0) return byHostname;
 
   return a.id.localeCompare(b.id);
+}
+
+function compareAgentsBySort(
+  a: AgentWithClient,
+  b: AgentWithClient,
+  sortBy: AgentSortField,
+  sortDirection: SortDirection,
+  now: number,
+): number {
+  const directionMultiplier = sortDirection === 'asc' ? 1 : -1;
+  let baseComparison = 0;
+
+  if (sortBy === 'name') {
+    baseComparison = compareText(getAgentDisplayName(a), getAgentDisplayName(b));
+  } else if (sortBy === 'site') {
+    baseComparison = compareText(a.siteId, b.siteId);
+  } else if (sortBy === 'client') {
+    baseComparison = compareText(a.clientName, b.clientName);
+  } else if (sortBy === 'status') {
+    const aRank = isAgentOnlineNow(a, now) ? 0 : 1;
+    const bRank = isAgentOnlineNow(b, now) ? 0 : 1;
+    baseComparison = aRank - bRank;
+  } else if (sortBy === 'lastSeen') {
+    const aSeen = getAgentLastSeenMs(a);
+    const bSeen = getAgentLastSeenMs(b);
+
+    if (aSeen === null && bSeen === null) {
+      baseComparison = 0;
+    } else if (aSeen === null) {
+      baseComparison = 1;
+    } else if (bSeen === null) {
+      baseComparison = -1;
+    } else {
+      baseComparison = aSeen - bSeen;
+    }
+  }
+
+  if (baseComparison !== 0) {
+    return baseComparison * directionMultiplier;
+  }
+
+  return compareAgentsTieBreaker(a, b);
 }
 
 function formatRelative(dateStr: string | null, now: number): string {
@@ -70,6 +127,8 @@ export default function AgentList() {
   const [filterClient, setFilterClient] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'online' | 'offline'>('all');
   const [filterProvisioning, setFilterProvisioning] = useState<ProvisioningFilter>('all');
+  const [sortBy, setSortBy] = useState<AgentSortField>('client');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
   const [viewMode, setViewMode] = useState<'card' | 'list'>('card');
   const [contextMenu, setContextMenu] = useState<ContextMenuState>(null);
   const [remoteOpen, setRemoteOpen] = useState(false);
@@ -319,6 +378,7 @@ export default function AgentList() {
     if (filterStatus === 'offline' && online) return false;
     if (filterClient && a.clientId !== filterClient) return false;
     if (filterProvisioning === 'pendingApproval' && !a.zeroTouchPending) return false;
+    if (filterProvisioning === 'approved' && a.zeroTouchPending) return false;
     if (search) {
       const q = search.toLowerCase();
       return (
@@ -333,8 +393,8 @@ export default function AgentList() {
   }), [agentsWithStableIp, filterStatus, filterClient, filterProvisioning, search, now]);
 
   const filtered = useMemo(
-    () => [...baseFiltered].sort(compareAgentsByStableOrder),
-    [baseFiltered],
+    () => [...baseFiltered].sort((a, b) => compareAgentsBySort(a, b, sortBy, sortDirection, now)),
+    [baseFiltered, sortBy, sortDirection, now],
   );
 
   if (clients.isError) return <ErrorDisplay onRetry={() => clients.refetch()} />;
@@ -351,9 +411,20 @@ export default function AgentList() {
   ];
 
   const provisioningOptions = [
-    { value: 'all', label: 'Autorização: autorizados e aguardando aprovação' },
-    { value: 'pendingApproval', label: 'Autorização: aguardando autorização' },
+    { value: 'all', label: 'Autorização: todos' },
+    { value: 'approved', label: 'Autorização: autorizados' },
+    { value: 'pendingApproval', label: 'Autorização: aguardando aprovação' },
   ];
+
+  const sortOptions: Array<{ value: AgentSortField; label: string }> = [
+    { value: 'name', label: 'Nome' },
+    { value: 'site', label: 'Site' },
+    { value: 'client', label: 'Cliente' },
+    { value: 'lastSeen', label: 'Último ping' },
+    { value: 'status', label: 'Status' },
+  ];
+
+  const activeSortLabel = sortOptions.find((option) => option.value === sortBy)?.label ?? 'Cliente';
 
   const isLoadingAgents = clients.isLoading || agentQueries.some(q => q.isLoading && !q.data);
 
@@ -424,7 +495,7 @@ export default function AgentList() {
 
       {/* Filtros + toggle de visualização */}
       <div className="flex gap-3">
-        <div className="grid flex-1 gap-3 md:grid-cols-2 xl:grid-cols-[minmax(240px,1fr)_220px_180px_260px]">
+        <div className="grid flex-1 gap-3 md:grid-cols-2 xl:grid-cols-[minmax(240px,1fr)_220px_180px_260px_180px_48px]">
           <Input
             placeholder="Buscar por nome, hostname, OS, IP ou cliente..."
             value={search}
@@ -445,6 +516,20 @@ export default function AgentList() {
             value={filterProvisioning}
             onChange={e => setFilterProvisioning(e.target.value as ProvisioningFilter)}
           />
+          <Select
+            options={sortOptions}
+            value={sortBy}
+            onChange={e => setSortBy(e.target.value as AgentSortField)}
+          />
+          <button
+            type="button"
+            onClick={() => setSortDirection((current) => (current === 'asc' ? 'desc' : 'asc'))}
+            className="flex h-10 w-12 items-center justify-center self-end rounded-xl border border-white/10 bg-white/5 text-slate-200 transition-colors hover:bg-white/10"
+            title={sortDirection === 'asc' ? 'Ordenação crescente' : 'Ordenação decrescente'}
+            aria-label={sortDirection === 'asc' ? 'Ordenação crescente' : 'Ordenação decrescente'}
+          >
+            {sortDirection === 'asc' ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />}
+          </button>
         </div>
         {/* Toggle card / lista */}
         <div className="flex shrink-0 items-end">
@@ -496,7 +581,7 @@ export default function AgentList() {
       ) : (
         <>
           <p className="text-xs text-slate-500">
-            {filtered.length} agente{filtered.length !== 1 ? 's' : ''} exibido{filtered.length !== 1 ? 's' : ''} · Ordenação: cliente e nome (A-Z)
+            {filtered.length} agente{filtered.length !== 1 ? 's' : ''} exibido{filtered.length !== 1 ? 's' : ''} · Ordenação: {activeSortLabel} ({sortDirection === 'asc' ? 'crescente' : 'decrescente'})
           </p>
 
           {/* ── CARD VIEW ── */}
