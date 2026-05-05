@@ -35,3 +35,4 @@ pnpm-debug.log*
 .github/*
 !.github/workflows/
 !.github/workflows/**
+Contrato.md

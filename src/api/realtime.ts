@@ -10,6 +10,8 @@ export interface AgentCommand {
 export interface AgentHeartbeat {
   agentId: string;
   status: "Online";
+  clientId?: string;
+  siteId?: string;
   ipAddress?: string;
   hostname?: string;
   agentVersion?: string;

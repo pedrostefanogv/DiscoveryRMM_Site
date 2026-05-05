@@ -105,7 +105,7 @@ function isNonRetryableNatsError(error: unknown): boolean {
 export interface DashboardEvent {
   eventType: string;
   data: Record<string, unknown>;
-  timestamp: string;
+  timestampUtc: string;
 }
 
 export interface NatsConfig {

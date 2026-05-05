@@ -4,6 +4,7 @@ import * as signalR from "@microsoft/signalr";
 import { API_BASE_URL } from "@/api/client";
 import type { DashboardWindow } from "@/api/dashboard";
 import { useAuth } from "@/auth/AuthContext";
+import { normalizeDashboardEvent } from "@/utils/dashboardEvents";
 import {
   clearSignalrConnectionState,
   setSignalrConnectionState,
@@ -104,12 +105,16 @@ export function useDashboardRealtime(
     setSignalrConnectionState(signalrSource, "connecting");
 
     const onDashboardEvent = (...args: unknown[]) => {
+      const normalizedEvent = normalizeDashboardEvent(args, "signalr");
+      if (!normalizedEvent) return;
+
       // Debug trace for dashboard realtime events.
       console.log("[dashboard][DashboardEvent]", {
         scope: scopeKey,
         window,
         signalrSource,
-        args,
+        eventType: normalizedEvent.eventType,
+        timestampUtc: normalizedEvent.timestampUtc,
       });
       void queryClient.invalidateQueries({ queryKey });
     };

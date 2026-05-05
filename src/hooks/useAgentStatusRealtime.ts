@@ -6,94 +6,22 @@ import type { Agent, AgentHeartbeat } from "@/api";
 import { heartbeatStore, extractHeartbeatMetrics } from "@/stores/heartbeatStore";
 import { useAuth } from "@/auth/AuthContext";
 import {
+  normalizeDashboardEvent,
+  parseAgentHeartbeatData,
+  parseAgentStatusChangedData,
+  parseCommandCompletedData,
+} from "@/utils/dashboardEvents";
+import {
   clearSignalrConnectionState,
   setSignalrConnectionState,
 } from "@/utils/realtimeConnectionState";
 
 type AgentRealtimeStatus = "Online" | "Offline";
-type AgentStatusPayload =
-  | { agentId: string; status: AgentRealtimeStatus }
-  | { id: string; status: AgentRealtimeStatus };
 
 const SIGNALR_KEEP_ALIVE_MS = 15_000;
 const SIGNALR_SERVER_TIMEOUT_MS = 60_000;
 const INVALIDATE_MIN_INTERVAL_MS = 1_500;
 const DASHBOARD_INVALIDATE_MIN_INTERVAL_MS = 5_000;
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
-
-function normalizeEventType(value: string | null | undefined): string {
-  if (!value) return "";
-  return value.trim().toLowerCase();
-}
-
-function getStringField(
-  data: Record<string, unknown>,
-  keys: string[],
-): string | null {
-  for (const key of keys) {
-    const value = data[key];
-    if (typeof value === "string" && value.trim().length > 0) {
-      return value;
-    }
-  }
-  return null;
-}
-
-function getNumberField(
-  data: Record<string, unknown>,
-  keys: string[],
-): number | undefined {
-  for (const key of keys) {
-    const value = data[key];
-    if (typeof value === "number") return value;
-    if (typeof value === "string") {
-      const parsed = Number(value);
-      if (Number.isFinite(parsed)) return parsed;
-    }
-  }
-  return undefined;
-}
-
-function isHeartbeatDashboardEvent(normalizedType: string): boolean {
-  return normalizedType === "agentheartbeat" || normalizedType === "heartbeatv2";
-}
-
-function toHeartbeatPayload(
-  data: Record<string, unknown>,
-): AgentHeartbeat | null {
-  const agentId = getStringField(data, ["agentId", "id", "agentID"]);
-  if (!agentId) return null;
-
-  const ipAddress = getStringField(data, ["ipAddress", "lastIpAddress", "ip"]);
-
-  return {
-    agentId,
-    status: "Online",
-    ipAddress: ipAddress ?? undefined,
-    hostname:
-      getStringField(data, ["hostname", "hostName", "machineName"]) ??
-      undefined,
-    agentVersion:
-      getStringField(data, ["agentVersion", "version", "agent_version"]) ??
-      undefined,
-    cpuPercent: getNumberField(data, ["cpuPercent", "cpu"]),
-    memoryPercent: getNumberField(data, ["memoryPercent", "memory"]),
-    diskPercent: getNumberField(data, ["diskPercent", "disk"]),
-    memoryTotalGb: getNumberField(data, ["memoryTotalGb", "memoryTotal"]),
-    memoryUsedGb: getNumberField(data, ["memoryUsedGb", "memoryUsed"]),
-    diskTotalGb: getNumberField(data, ["diskTotalGb", "diskTotal"]),
-    diskUsedGb: getNumberField(data, ["diskUsedGb", "diskUsed"]),
-    p2pPeers: getNumberField(data, ["p2pPeers", "p2pPeersCount"]),
-    uptimeSeconds: getNumberField(data, ["uptimeSeconds", "uptime"]),
-    processCount: getNumberField(data, ["processCount", "processes"]),
-    timestampUtc:
-      getStringField(data, ["timestampUtc", "timestamp", "timeStamp"]) ??
-      undefined,
-  };
-}
 
 function createInvalidateThrottler(
   queryClient: ReturnType<typeof useQueryClient>,
@@ -148,24 +76,6 @@ function updateAgentInCollection(
   return changed ? next : data;
 }
 
-function normalizeStatusEvent(
-  arg1: string | AgentStatusPayload,
-  arg2?: AgentRealtimeStatus,
-): { agentId: string; status: AgentRealtimeStatus } | null {
-  if (typeof arg1 === "string" && arg2) {
-    return { agentId: arg1, status: arg2 };
-  }
-
-  if (arg1 && typeof arg1 === "object" && "status" in arg1) {
-    const agentId = "agentId" in arg1 ? arg1.agentId : arg1.id;
-    if (agentId) {
-      return { agentId, status: arg1.status };
-    }
-  }
-
-  return null;
-}
-
 export function useAgentStatusRealtime(enabled = true) {
   const queryClient = useQueryClient();
   const { refreshSession, session } = useAuth();
@@ -204,18 +114,10 @@ export function useAgentStatusRealtime(enabled = true) {
 
     setSignalrConnectionState("agent-hub", "connecting");
 
-    const onAgentStatusChanged = (
-      arg1: string | AgentStatusPayload,
-      arg2?: AgentRealtimeStatus,
+    const applyAgentStatusChanged = (
+      agentId: string,
+      status: AgentRealtimeStatus,
     ) => {
-      const parsed = normalizeStatusEvent(arg1, arg2);
-      if (!parsed) {
-        console.log("[realtime][AgentStatusChanged] ignorado (payload inválido)", { arg1, arg2 });
-        return;
-      }
-      const { agentId, status } = parsed;
-      console.log("[realtime][AgentStatusChanged]", { agentId, status, raw: { arg1, arg2 } });
-
       queryClient.setQueryData<Agent | undefined>(
         ["agents", "detail", agentId],
         (current) => {
@@ -234,27 +136,14 @@ export function useAgentStatusRealtime(enabled = true) {
         (current) => updateAgentInCollection(current, agentId, status),
       );
 
-      // Remove heartbeat metrics from store when agent goes offline
       if (status === "Offline") {
         heartbeatStore.removeHeartbeat(agentId);
       }
 
-      // Ensure any other agents queries that are currently mounted are refreshed.
       invalidateThrottled(["agents"]);
       invalidateThrottled(["realtime", "stats"]);
     };
 
-    const onCommandCompleted = (...args: unknown[]) => {
-      console.log("[realtime][CommandCompleted]", { args });
-      // Keep dashboard and command-related widgets fresh without page reload.
-      invalidateThrottled(["agents"]);
-      invalidateThrottled(["logs"]);
-      invalidateThrottled(["tickets"]);
-      invalidateThrottled(["realtime", "stats"]);
-    };
-
-    connection.on("AgentStatusChanged", onAgentStatusChanged);
-    connection.on("CommandCompleted", onCommandCompleted);
     connection.onreconnecting((error) => {
       console.warn("[realtime] SignalR reconectando…", { error, connectionId: connection.connectionId });
       setSignalrConnectionState("agent-hub", "reconnecting");
@@ -347,74 +236,65 @@ export function useAgentStatusRealtime(enabled = true) {
       invalidateThrottled(["realtime", "stats"]);
     };
 
-    const onAgentHeartbeat = (data: AgentHeartbeat) => {
-      console.log("[realtime][AgentHeartbeat]", {
-        agentId: data.agentId,
-        cpu: data.cpuPercent,
-        memory: data.memoryPercent,
-        disk: data.diskPercent,
-        hostname: data.hostname,
-        ip: data.ipAddress,
-        uptimeSeconds: data.uptimeSeconds,
-        timestampUtc: data.timestampUtc,
-      });
-      applyHeartbeat(data);
-    };
-
     const onDashboardEvent = (...args: unknown[]) => {
-      const [arg1, arg2, arg3] = args;
+      const normalizedEvent = normalizeDashboardEvent(args, "signalr");
+      if (!normalizedEvent) return;
 
-      let eventType: string | null = null;
-      let rawData: unknown = undefined;
-
-      if (typeof arg1 === "string") {
-        eventType = arg1;
-        rawData = arg2;
-      } else if (isRecord(arg1)) {
-        eventType = getStringField(arg1, ["eventType", "type"]);
-        rawData = "data" in arg1 ? arg1.data : arg1;
-      }
-
-      const normalizedType = normalizeEventType(eventType);
-      const safeData = isRecord(rawData)
-        ? rawData
-        : (isRecord(arg1) ? arg1 : {});
-
-      // Temporary debug trace for all dashboard events.
       console.log("[realtime][DashboardEvent]", {
-        eventType,
-        normalizedType,
-        data: safeData,
-        timestampUtc: arg3,
-        rawArgs: args,
+        eventType: normalizedEvent.eventType,
+        timestampUtc: normalizedEvent.timestampUtc,
+        data: normalizedEvent.data,
       });
 
-      const heartbeatData = toHeartbeatPayload(safeData);
-      const isHeartbeat = isHeartbeatDashboardEvent(normalizedType) || (!normalizedType && heartbeatData);
-      console.log("[realtime][DashboardEvent][filter]", {
-        eventType,
-        normalizedType,
-        classifiedAs: isHeartbeat ? "heartbeat" : "summary-refresh",
-        hasHeartbeatData: !!heartbeatData,
-        agentId: heartbeatData?.agentId ?? null,
-      });
+      switch (normalizedEvent.eventType) {
+        case "AgentHeartbeat": {
+          const heartbeatData = parseAgentHeartbeatData(
+            normalizedEvent.data,
+            normalizedEvent.timestampUtc,
+            "signalr",
+          );
+          if (!heartbeatData) return;
+          applyHeartbeat(heartbeatData);
+          return;
+        }
 
-      if (isHeartbeat) {
-        if (!heartbeatData) return;
-        applyHeartbeat(heartbeatData);
-        return;
+        case "AgentStatusChanged": {
+          const statusData = parseAgentStatusChangedData(
+            normalizedEvent.data,
+            "signalr",
+          );
+          if (!statusData) return;
+          applyAgentStatusChanged(statusData.agentId, statusData.status);
+          return;
+        }
+
+        case "CommandCompleted": {
+          if (!parseCommandCompletedData(normalizedEvent.data, "signalr")) {
+            return;
+          }
+
+          invalidateThrottled(["agents"]);
+          invalidateThrottled(["logs"]);
+          invalidateThrottled(["tickets"]);
+          invalidateThrottled(["realtime", "stats"]);
+          return;
+        }
+
+        case "AgentHardwareReported":
+        case "AgentConnected":
+        case "AgentDisconnected": {
+          invalidateThrottled(["dashboard"], DASHBOARD_INVALIDATE_MIN_INTERVAL_MS);
+          invalidateThrottled(["realtime", "stats"]);
+          return;
+        }
+
+        default:
+          return;
       }
-
-      // Non-heartbeat dashboard events only trigger summary refresh.
-      invalidateThrottled(["dashboard"], DASHBOARD_INVALIDATE_MIN_INTERVAL_MS);
     };
 
-    connection.on("AgentHeartbeat", onAgentHeartbeat);
     connection.on("DashboardEvent", onDashboardEvent);
     console.log("[realtime] Handlers registrados no hub /hubs/agent:", [
-      "AgentStatusChanged",
-      "CommandCompleted",
-      "AgentHeartbeat",
       "DashboardEvent",
     ]);
 
@@ -465,9 +345,6 @@ export function useAgentStatusRealtime(enabled = true) {
       disposed = true;
       console.log("[realtime] Cleanup: removendo handlers e parando conexão SignalR.");
       clearSignalrConnectionState("agent-hub");
-      connection.off("AgentStatusChanged", onAgentStatusChanged);
-      connection.off("CommandCompleted", onCommandCompleted);
-      connection.off("AgentHeartbeat", onAgentHeartbeat);
       connection.off("DashboardEvent", onDashboardEvent);
       void startPromise.finally(async () => {
         if (connection.state !== signalR.HubConnectionState.Disconnected) {

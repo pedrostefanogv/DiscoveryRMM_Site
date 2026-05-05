@@ -1,114 +1,13 @@
-import { useEffect, useState } from "react";
 import { useAgentStatusRealtime } from "./useAgentStatusRealtime";
-import { useAgentStatusNats } from "./useAgentStatusNats";
-import { realtimeConfig } from "@/config/realtime";
-import {
-  getRealtimeConnectionSnapshot,
-  subscribeRealtimeConnectionState,
-} from "@/utils/realtimeConnectionState";
-
-const SIGNALR_PRIORITY_GRACE_MS = 4_000;
-const SIGNALR_HEALTHCHECK_INTERVAL_MS = 5_000;
 
 /**
- * Unified realtime hook that supports both SignalR and NATS
- * Allows gradual migration from SignalR to NATS or running both in parallel
+ * Backward-compatible entry point for realtime agent status updates.
+ *
+ * Contract v3.0.0:
+ * Dashboard consumes agent events exclusively from SignalR DashboardEvent.
  */
 export function useAgentStatusRealtime_Combined(enabled = true) {
-  const natsConfigured =
-    enabled && realtimeConfig.useNats && realtimeConfig.natsEnabled;
-  const signalrConfigured = enabled && realtimeConfig.useSignalR;
-
-  // Modo both com prioridade SignalR.
-  // NATS entra como fallback automatico quando SignalR nao conecta ou cai.
-  const [natsRuntimeEnabled, setNatsRuntimeEnabled] =
-    useState(false);
-  const [signalrRuntimeEnabled, setSignalrRuntimeEnabled] =
-    useState(signalrConfigured);
-
-  useAgentStatusNats(natsRuntimeEnabled);
-
-  useEffect(() => {
-    if (!enabled) {
-      setNatsRuntimeEnabled(false);
-      setSignalrRuntimeEnabled(false);
-      return;
-    }
-
-    if (!natsConfigured && !signalrConfigured) {
-      setNatsRuntimeEnabled(false);
-      setSignalrRuntimeEnabled(false);
-      return;
-    }
-
-    if (natsConfigured && !signalrConfigured) {
-      setNatsRuntimeEnabled(true);
-      setSignalrRuntimeEnabled(false);
-      return;
-    }
-
-    if (!natsConfigured && signalrConfigured) {
-      setNatsRuntimeEnabled(false);
-      setSignalrRuntimeEnabled(true);
-      return;
-    }
-
-    // Ambos configurados: prioriza SignalR e habilita NATS apenas em falha.
-    setSignalrRuntimeEnabled(true);
-    setNatsRuntimeEnabled(false);
-
-    const startedAt = Date.now();
-
-    const evaluateFallback = () => {
-      const snapshot = getRealtimeConnectionSnapshot();
-      const graceElapsed = Date.now() - startedAt >= SIGNALR_PRIORITY_GRACE_MS;
-
-      if (snapshot.signalrConnected) {
-        setNatsRuntimeEnabled(false);
-        return;
-      }
-
-      if (snapshot.signalrState === "disconnected") {
-        setNatsRuntimeEnabled(true);
-        return;
-      }
-
-      if (snapshot.signalrState === "reconnecting") {
-        setNatsRuntimeEnabled(true);
-        return;
-      }
-
-      if (snapshot.signalrState === "connecting") {
-        setNatsRuntimeEnabled(graceElapsed);
-        return;
-      }
-
-      setNatsRuntimeEnabled(graceElapsed);
-    };
-
-    evaluateFallback();
-
-    const unsubscribeConnectionState = subscribeRealtimeConnectionState(() => {
-      evaluateFallback();
-    });
-
-    const graceTimer = window.setTimeout(
-      evaluateFallback,
-      SIGNALR_PRIORITY_GRACE_MS,
-    );
-    const healthTimer = window.setInterval(
-      evaluateFallback,
-      SIGNALR_HEALTHCHECK_INTERVAL_MS,
-    );
-
-    return () => {
-      unsubscribeConnectionState();
-      window.clearTimeout(graceTimer);
-      window.clearInterval(healthTimer);
-    };
-  }, [enabled, natsConfigured, signalrConfigured]);
-
-  useAgentStatusRealtime(signalrRuntimeEnabled);
+  useAgentStatusRealtime(enabled);
 }
 
 /**
