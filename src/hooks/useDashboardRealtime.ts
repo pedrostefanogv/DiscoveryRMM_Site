@@ -78,6 +78,7 @@ export function useDashboardRealtime(
     const queryKey = buildQueryKey(scope, window);
 
     const hubUrl = `${API_BASE_URL}/hubs/agent`;
+    console.log("[dashboard] Iniciando conexão SignalR - escopo:", scopeKey, "janela:", window, "hub:", hubUrl);
     const connection = new signalR.HubConnectionBuilder()
       .withUrl(hubUrl, {
         accessTokenFactory: async () => {
@@ -92,13 +93,22 @@ export function useDashboardRealtime(
       .configureLogging(signalR.LogLevel.Warning)
       .build();
 
+    console.log("[dashboard] Conexão configurada:", {
+      signalrSource,
+      scopeKey,
+      window,
+      queryKey,
+      reconnectDelays: RECONNECT_DELAYS,
+    });
+
     setSignalrConnectionState(signalrSource, "connecting");
 
     const onDashboardEvent = (...args: unknown[]) => {
-      // Temporary debug trace for dashboard realtime events.
+      // Debug trace for dashboard realtime events.
       console.log("[dashboard][DashboardEvent]", {
         scope: scopeKey,
         window,
+        signalrSource,
         args,
       });
       void queryClient.invalidateQueries({ queryKey });
@@ -106,14 +116,21 @@ export function useDashboardRealtime(
 
     connection.on("DashboardEvent", onDashboardEvent);
     connection.onreconnecting(() => {
+      console.log("[dashboard] SignalR reconectando (escopo:", scopeKey, "janela:", window, ")");
       setSignalrConnectionState(signalrSource, "reconnecting");
     });
     connection.onreconnected(() => {
+      console.log("[dashboard] SignalR reconectado (escopo:", scopeKey, "janela:", window, ")");
       setSignalrConnectionState(signalrSource, "connected");
-      return joinGroup(connection, scope).catch(() => {});
+      const groupPromise = joinGroup(connection, scope);
+      groupPromise
+        .then(() => console.log("[dashboard] Grupo re-ingressado após reconexão:", scopeKey))
+        .catch(() => {});
+      return groupPromise;
     });
     connection.onclose(() => {
       if (disposed) return;
+      console.log("[dashboard] SignalR desconectado (escopo:", scopeKey, "janela:", window, ")");
       setSignalrConnectionState(signalrSource, "disconnected");
     });
 
@@ -122,7 +139,9 @@ export function useDashboardRealtime(
       .then(async () => {
         if (disposed) return;
         setSignalrConnectionState(signalrSource, "connected");
+        console.log("[dashboard] SignalR conectado (escopo:", scopeKey, "janela:", window, ")");
         await joinGroup(connection, scope);
+        console.log("[dashboard] Ingressou no grupo:", scopeKey);
       })
       .catch((error: unknown) => {
         if (disposed) return;
@@ -133,15 +152,18 @@ export function useDashboardRealtime(
           return;
         }
 
+        console.warn("[dashboard] Falha ao conectar SignalR:", { scope: scopeKey, window, error });
         setSignalrConnectionState(signalrSource, "disconnected");
       });
 
     return () => {
       disposed = true;
+      console.log("[dashboard] Cleanup: removendo handlers (escopo:", scopeKey, "janela:", window, ")");
       clearSignalrConnectionState(signalrSource);
       connection.off("DashboardEvent", onDashboardEvent);
       void startPromise.finally(async () => {
         if (connection.state !== signalR.HubConnectionState.Disconnected) {
+          console.log("[dashboard] Parando conexão (escopo:", scopeKey, ")");
           await connection.stop();
         }
       });

@@ -277,6 +277,31 @@ export function useAgentStatusNats(enabled = true) {
 
       const heartbeatData = toHeartbeatPayload(safeData);
 
+      let classifiedAs = "outro";
+      if (isHeartbeatType(normalizedType) || (!normalizedType && heartbeatData)) {
+        classifiedAs = "heartbeat";
+      } else if (
+        normalizedType === "agentcommandresult" ||
+        normalizedType === "commandresult" ||
+        normalizedType === "agent.result"
+      ) {
+        classifiedAs = "command-result";
+      } else if (
+        normalizedType === "agentoffline" ||
+        normalizedType === "offline" ||
+        normalizedType === "agent.offline"
+      ) {
+        classifiedAs = "offline";
+      }
+
+      console.log("[NATS][dashboard.events]", {
+        eventType,
+        normalizedType,
+        classifiedAs,
+        agentId: heartbeatData?.agentId ?? getStringField(safeData, ["agentId", "id", "agentID"]) ?? null,
+        heartbeatAgentId: heartbeatData?.agentId ?? null,
+      });
+
       if (isHeartbeatType(normalizedType) || (!normalizedType && heartbeatData)) {
         if (!heartbeatData) return;
         applyHeartbeat(heartbeatData);
@@ -340,11 +365,23 @@ export function useAgentStatusNats(enabled = true) {
       if (!isRecord(message)) return;
 
       const heartbeatData = toHeartbeatPayload(message);
-      if (!heartbeatData) return;
+      if (!heartbeatData) {
+        console.log("[NATS][heartbeat] Payload inválido (sem agentId)", message);
+        return;
+      }
+
+      console.log("[NATS][heartbeat]", {
+        agentId: heartbeatData.agentId,
+        cpu: heartbeatData.cpuPercent,
+        memory: heartbeatData.memoryPercent,
+        disk: heartbeatData.diskPercent,
+        hostname: heartbeatData.hostname,
+      });
 
       applyHeartbeat(heartbeatData);
     };
 
+    console.log("[NATS] Configurando serviço NATS:", { url: NATS_URL, enabled: NATS_ENABLED });
     const natsService = getNatsService({
       url: NATS_URL,
       enabled: NATS_ENABLED,
@@ -353,23 +390,29 @@ export function useAgentStatusNats(enabled = true) {
     const unsubscribeConnectionState = natsService.onConnectionStateChange(
       (state) => {
         if (disposed) return;
+        console.log("[NATS] Estado da conexão mudou:", state);
         setNatsConnectionState(state);
       },
     );
 
     void natsService.connect().then(() => {
       if (disposed) return;
+      console.log("[NATS] Conectado. Inscrevendo subjects...");
+      console.log("[NATS] Subscrevendo em:", DASHBOARD_EVENTS_SUBJECT);
       void natsService.subscribe(DASHBOARD_EVENTS_SUBJECT, handleDashboardEvent);
       if (AGENT_HEARTBEAT_SUBJECT !== DASHBOARD_EVENTS_SUBJECT) {
+        console.log("[NATS] Subscrevendo em:", AGENT_HEARTBEAT_SUBJECT);
         void natsService.subscribe(
           AGENT_HEARTBEAT_SUBJECT,
           handleAgentHeartbeatSubject,
         );
       }
+      console.log("[NATS] Subscriptions ativas:", [DASHBOARD_EVENTS_SUBJECT, ...(AGENT_HEARTBEAT_SUBJECT !== DASHBOARD_EVENTS_SUBJECT ? [AGENT_HEARTBEAT_SUBJECT] : [])]);
     });
 
     return () => {
       disposed = true;
+      console.log("[NATS] Cleanup: removendo subscriptions.");
       unsubscribeConnectionState();
       natsService.unsubscribe(DASHBOARD_EVENTS_SUBJECT, handleDashboardEvent);
       if (AGENT_HEARTBEAT_SUBJECT !== DASHBOARD_EVENTS_SUBJECT) {
@@ -379,6 +422,7 @@ export function useAgentStatusNats(enabled = true) {
         );
       }
       setNatsConnectionState("disconnected");
+      console.log("[NATS] Cleanup concluído.");
     };
   }, [enabled, queryClient]);
 }

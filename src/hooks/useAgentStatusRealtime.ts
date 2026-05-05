@@ -180,6 +180,7 @@ export function useAgentStatusRealtime(enabled = true) {
     const invalidateThrottled = createInvalidateThrottler(queryClient);
 
     const hubUrl = `${API_BASE_URL}/hubs/agent`;
+    console.log("[realtime] Iniciando conexão SignalR em", hubUrl);
     const connection = new signalR.HubConnectionBuilder()
       .withUrl(hubUrl, {
         accessTokenFactory: async () => {
@@ -194,6 +195,13 @@ export function useAgentStatusRealtime(enabled = true) {
       .configureLogging(signalR.LogLevel.Warning)
       .build();
 
+    console.log("[realtime] Conexão SignalR configurada:", {
+      hubUrl,
+      reconnectDelays: [0, 2000, 5000, 10000, 30000],
+      keepAliveMs: SIGNALR_KEEP_ALIVE_MS,
+      serverTimeoutMs: SIGNALR_SERVER_TIMEOUT_MS,
+    });
+
     setSignalrConnectionState("agent-hub", "connecting");
 
     const onAgentStatusChanged = (
@@ -201,8 +209,12 @@ export function useAgentStatusRealtime(enabled = true) {
       arg2?: AgentRealtimeStatus,
     ) => {
       const parsed = normalizeStatusEvent(arg1, arg2);
-      if (!parsed) return;
+      if (!parsed) {
+        console.log("[realtime][AgentStatusChanged] ignorado (payload inválido)", { arg1, arg2 });
+        return;
+      }
       const { agentId, status } = parsed;
+      console.log("[realtime][AgentStatusChanged]", { agentId, status, raw: { arg1, arg2 } });
 
       queryClient.setQueryData<Agent | undefined>(
         ["agents", "detail", agentId],
@@ -232,7 +244,8 @@ export function useAgentStatusRealtime(enabled = true) {
       invalidateThrottled(["realtime", "stats"]);
     };
 
-    const onCommandCompleted = () => {
+    const onCommandCompleted = (...args: unknown[]) => {
+      console.log("[realtime][CommandCompleted]", { args });
       // Keep dashboard and command-related widgets fresh without page reload.
       invalidateThrottled(["agents"]);
       invalidateThrottled(["logs"]);
@@ -243,7 +256,7 @@ export function useAgentStatusRealtime(enabled = true) {
     connection.on("AgentStatusChanged", onAgentStatusChanged);
     connection.on("CommandCompleted", onCommandCompleted);
     connection.onreconnecting((error) => {
-      console.warn("[realtime] SignalR reconectando…", error);
+      console.warn("[realtime] SignalR reconectando…", { error, connectionId: connection.connectionId });
       setSignalrConnectionState("agent-hub", "reconnecting");
     });
     connection.onreconnected(async (connectionId) => {
@@ -255,6 +268,7 @@ export function useAgentStatusRealtime(enabled = true) {
       setSignalrConnectionState("agent-hub", "connected");
       try {
         await connection.invoke("JoinDashboard");
+        console.log("[realtime][JoinDashboard] grupo Dashboard global re-ingressado após reconexão.");
       } catch (error) {
         console.warn(
           "[realtime] JoinDashboard falhou após reconexão (escopo global ausente?).",
@@ -265,9 +279,9 @@ export function useAgentStatusRealtime(enabled = true) {
     connection.onclose((error) => {
       if (disposed) return;
       if (error) {
-        console.warn("[realtime] SignalR desconectou:", error);
+        console.warn("[realtime] SignalR desconectou:", { error, connectionId: connection.connectionId });
       } else {
-        console.info("[realtime] SignalR desconectado.");
+        console.info("[realtime] SignalR desconectado.", { connectionId: connection.connectionId });
       }
       setSignalrConnectionState("agent-hub", "disconnected");
     });
@@ -334,6 +348,16 @@ export function useAgentStatusRealtime(enabled = true) {
     };
 
     const onAgentHeartbeat = (data: AgentHeartbeat) => {
+      console.log("[realtime][AgentHeartbeat]", {
+        agentId: data.agentId,
+        cpu: data.cpuPercent,
+        memory: data.memoryPercent,
+        disk: data.diskPercent,
+        hostname: data.hostname,
+        ip: data.ipAddress,
+        uptimeSeconds: data.uptimeSeconds,
+        timestampUtc: data.timestampUtc,
+      });
       applyHeartbeat(data);
     };
 
@@ -366,10 +390,16 @@ export function useAgentStatusRealtime(enabled = true) {
       });
 
       const heartbeatData = toHeartbeatPayload(safeData);
-      if (
-        isHeartbeatDashboardEvent(normalizedType) ||
-        (!normalizedType && heartbeatData)
-      ) {
+      const isHeartbeat = isHeartbeatDashboardEvent(normalizedType) || (!normalizedType && heartbeatData);
+      console.log("[realtime][DashboardEvent][filter]", {
+        eventType,
+        normalizedType,
+        classifiedAs: isHeartbeat ? "heartbeat" : "summary-refresh",
+        hasHeartbeatData: !!heartbeatData,
+        agentId: heartbeatData?.agentId ?? null,
+      });
+
+      if (isHeartbeat) {
         if (!heartbeatData) return;
         applyHeartbeat(heartbeatData);
         return;
@@ -381,6 +411,12 @@ export function useAgentStatusRealtime(enabled = true) {
 
     connection.on("AgentHeartbeat", onAgentHeartbeat);
     connection.on("DashboardEvent", onDashboardEvent);
+    console.log("[realtime] Handlers registrados no hub /hubs/agent:", [
+      "AgentStatusChanged",
+      "CommandCompleted",
+      "AgentHeartbeat",
+      "DashboardEvent",
+    ]);
 
     const startPromise = connection
       .start()
@@ -427,6 +463,7 @@ export function useAgentStatusRealtime(enabled = true) {
 
     return () => {
       disposed = true;
+      console.log("[realtime] Cleanup: removendo handlers e parando conexão SignalR.");
       clearSignalrConnectionState("agent-hub");
       connection.off("AgentStatusChanged", onAgentStatusChanged);
       connection.off("CommandCompleted", onCommandCompleted);
@@ -434,7 +471,9 @@ export function useAgentStatusRealtime(enabled = true) {
       connection.off("DashboardEvent", onDashboardEvent);
       void startPromise.finally(async () => {
         if (connection.state !== signalR.HubConnectionState.Disconnected) {
+          console.log("[realtime] Parando conexão SignalR (estado:", connection.state, ")");
           await connection.stop();
+          console.log("[realtime] Conexão SignalR parada.");
         }
       });
     };

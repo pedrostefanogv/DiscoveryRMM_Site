@@ -148,6 +148,7 @@ class NatsService {
   private setConnectionState(state: NatsConnectionState) {
     if (this.connectionState === state) return;
 
+    console.log("[NATS] Estado:", { anterior: this.connectionState, novo: state, tentativa: this.reconnectAttempts, subjects: Array.from(this.subscriptions.keys()) });
     this.connectionState = state;
     this.stateListeners.forEach((listener) => listener(state));
   }
@@ -233,16 +234,20 @@ class NatsService {
       }
 
       this.connection = null;
+      const subjects = Array.from(this.subscriptions.keys());
       this.subscriptions.clear();
 
       if (this.manualDisconnect) {
         this.manualDisconnect = false;
+        console.log("[NATS] Desconexão manual, não vai reconectar.");
         this.setConnectionState("disconnected");
         return;
       }
 
       if (error) {
-        console.warn("NATS connection closed:", error);
+        console.warn("[NATS] Conexão fechada com erro:", { error, subjects, reconnectAttempts: this.reconnectAttempts });
+      } else {
+        console.log("[NATS] Conexão fechada (sem erro).", { subjects, reconnectAttempts: this.reconnectAttempts });
       }
 
       this.scheduleReconnect();
@@ -255,14 +260,18 @@ class NatsService {
     }
 
     try {
+      console.log("[NATS] Inscrevendo em subject:", subject);
       const subscription = this.connection.subscribe(subject) as Subscription;
       this.subscriptions.set(subject, subscription);
+      console.log("[NATS] Inscrito em:", subject, "(subscriptions ativas:", this.subscriptions.size, ")");
 
       void (async () => {
         try {
           for await (const msg of subscription) {
             try {
-              const data = JSON.parse(new TextDecoder().decode(msg.data));
+              const raw = new TextDecoder().decode(msg.data);
+              const data = JSON.parse(raw);
+              console.log("[NATS] Mensagem recebida em", subject, ":", typeof data === "object" ? Object.keys(data).join(", ") : raw.slice(0, 200));
               const listeners = this.listeners.get(subject);
               if (listeners) {
                 listeners.forEach((listener) => {
@@ -385,6 +394,7 @@ class NatsService {
 
   private scheduleReconnect(): void {
     if (this.connectInFlight || this.reconnectTimer) {
+      console.log("[NATS] Reconexão já agendada ou em voo, ignorando.");
       return;
     }
 
@@ -393,13 +403,17 @@ class NatsService {
       this.setConnectionState("reconnecting");
       const delay =
         this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1);
+      const cappedDelay = Math.min(delay, 30000);
+      console.log("[NATS] Agendando reconexão", { tentativa: this.reconnectAttempts, max: this.maxReconnectAttempts, delay: cappedDelay });
       this.reconnectTimer = setTimeout(() => {
         this.reconnectTimer = null;
+        console.log("[NATS] Executando reconexão (tentativa", this.reconnectAttempts, ")");
         void this.connect();
-      }, Math.min(delay, 30000));
+      }, cappedDelay);
       return;
     }
 
+    console.log("[NATS] Máximo de tentativas de reconexão atingido (", this.maxReconnectAttempts, "). Desconectando.");
     this.setConnectionState("disconnected");
   }
 
@@ -411,13 +425,15 @@ class NatsService {
       this.listeners.set(subject, new Set());
     }
     this.listeners.get(subject)!.add(callback);
+    console.log("[NATS] subscribe() chamado para:", subject, "(listeners:", this.listeners.get(subject)?.size, ")");
 
     if (!this.connection) {
+      console.log("[NATS] Sem conexão ativa, conectando antes de subscrever...");
       await this.connect();
     }
 
     if (!this.connection) {
-      console.warn("Cannot subscribe: NATS not connected");
+      console.warn("[NATS] Cannot subscribe: NATS not connected para subject:", subject);
       return;
     }
 
@@ -431,6 +447,7 @@ class NatsService {
     const listeners = this.listeners.get(subject);
     if (listeners) {
       listeners.delete(callback);
+      console.log("[NATS] unsubscribe() chamado para:", subject, "(listeners restantes:", listeners.size, ")");
       if (listeners.size === 0) {
         this.listeners.delete(subject);
       }

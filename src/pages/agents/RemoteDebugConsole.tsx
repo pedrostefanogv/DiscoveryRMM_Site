@@ -110,8 +110,10 @@ export default function RemoteDebugConsole() {
     }
 
     let disposed = false;
+    const resolvedHubUrl = resolveHubUrl(hubUrl);
+    console.log("[RemoteDebug] Iniciando conexão SignalR em", resolvedHubUrl, { sessionId, agentId });
     const connection = new signalR.HubConnectionBuilder()
-      .withUrl(resolveHubUrl(hubUrl), {
+      .withUrl(resolvedHubUrl, {
         accessTokenFactory: async () => {
           if (session.accessToken) return session.accessToken;
           const refreshed = await refreshSession();
@@ -123,6 +125,13 @@ export default function RemoteDebugConsole() {
       .withServerTimeout(60_000)
       .configureLogging(signalR.LogLevel.Warning)
       .build();
+
+    console.log("[RemoteDebug] Conexão configurada:", {
+      hubUrl: resolvedHubUrl,
+      sessionId,
+      agentId,
+      reconnectDelays: [1000, 2000, 5000, 10000],
+    });
 
     connectionRef.current = connection;
 
@@ -145,6 +154,14 @@ export default function RemoteDebugConsole() {
 
     const onJoined = (event: RemoteDebugSessionJoinedEvent) => {
       if (disposed) return;
+      console.log("[RemoteDebug][SessionJoined]", {
+        sessionId: event.sessionId,
+        agentId: event.agentId,
+        transport: event.preferredTransport,
+        fallback: event.fallbackTransport,
+        startedAt: event.startedAtUtc,
+        expiresAt: event.expiresAtUtc,
+      });
       setConnectionState("connected");
       appendLog(
         withSystemMessage(
@@ -155,11 +172,23 @@ export default function RemoteDebugConsole() {
 
     const onLog = (event: RemoteDebugLogEvent) => {
       if (disposed) return;
+      console.log("[RemoteDebug][Log]", {
+        level: event.level,
+        message: event.message?.slice(0, 200),
+        sequence: event.sequence,
+        timestamp: event.timestamp,
+        transport: event.transport,
+      });
       appendLog({ ...event, level: normalizeLevel(event.level) });
     };
 
     const onEnded = (event: RemoteDebugSessionEndedEvent) => {
       if (disposed) return;
+      console.log("[RemoteDebug][SessionEnded]", {
+        sessionId: event.sessionId,
+        reason: event.reason,
+        endedAt: event.endedAtUtc,
+      });
       setConnectionState("closed");
       appendLog(
         withSystemMessage(
@@ -171,26 +200,36 @@ export default function RemoteDebugConsole() {
     connection.on("RemoteDebugSessionJoined", onJoined);
     connection.on("RemoteDebugLog", onLog);
     connection.on("RemoteDebugSessionEnded", onEnded);
+    console.log("[RemoteDebug] Handlers registrados:", [
+      "RemoteDebugSessionJoined",
+      "RemoteDebugLog",
+      "RemoteDebugSessionEnded",
+    ]);
 
     connection.onreconnecting(() => {
       if (disposed) return;
+      console.log("[RemoteDebug] Reconectando...");
       setConnectionState("reconnecting");
       setErrorMessage(null);
     });
 
     connection.onreconnected(async () => {
       if (disposed) return;
+      console.log("[RemoteDebug] Reconectado. Re-ingressando na sessão...");
       setConnectionState("connected");
       setErrorMessage(null);
       try {
         await connection.invoke("JoinSession", sessionId);
+        console.log("[RemoteDebug] Sessão re-ingressada após reconexão.");
       } catch {
+        console.warn("[RemoteDebug] Falha ao re-ingressar na sessão após reconexão.");
         setErrorMessage("Reconectado, mas não foi possível entrar novamente na sessão.");
       }
     });
 
     connection.onclose(() => {
       if (disposed) return;
+      console.log("[RemoteDebug] Conexão fechada.");
       setConnectionState("closed");
     });
 
@@ -198,19 +237,24 @@ export default function RemoteDebugConsole() {
       .start()
       .then(async () => {
         if (disposed) return;
+        console.log("[RemoteDebug] SignalR conectado (connectionId:", connection.connectionId, ")");
+        console.log("[RemoteDebug] Ingressando na sessão:", sessionId);
         await connection.invoke("JoinSession", sessionId);
+        console.log("[RemoteDebug] Sessão ingressada com sucesso.");
         setConnectionState("connected");
         setErrorMessage(null);
       })
       .catch((error: unknown) => {
         if (disposed) return;
         const message = error instanceof Error ? error.message : "Falha ao conectar no remote debug.";
+        console.error("[RemoteDebug] Falha ao conectar:", message, error);
         setConnectionState("closed");
         setErrorMessage(message);
       });
 
     return () => {
       disposed = true;
+      console.log("[RemoteDebug] Cleanup: removendo handlers e saindo da sessão.");
       connection.off("RemoteDebugSessionJoined", onJoined);
       connection.off("RemoteDebugLog", onLog);
       connection.off("RemoteDebugSessionEnded", onEnded);
@@ -218,13 +262,16 @@ export default function RemoteDebugConsole() {
       void startPromise.finally(async () => {
         try {
           if (connection.state === signalR.HubConnectionState.Connected) {
+            console.log("[RemoteDebug] Saindo da sessão:", sessionId);
             await connection.invoke("LeaveSession", sessionId);
           }
         } catch {
           // Ignore cleanup invoke errors.
         } finally {
           if (connection.state !== signalR.HubConnectionState.Disconnected) {
+            console.log("[RemoteDebug] Parando conexão (estado:", connection.state, ")");
             await connection.stop();
+            console.log("[RemoteDebug] Conexão parada.");
           }
         }
       });

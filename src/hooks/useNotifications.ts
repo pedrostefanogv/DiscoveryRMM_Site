@@ -111,8 +111,10 @@ export function useNotifications(options?: {
     if (!canQuery || !recipientUserId) return;
 
     let disposed = false;
+    const hubUrl = resolveHubUrl("/hubs/notifications");
+    console.log("[notifications] Iniciando conexão SignalR em", hubUrl, "recipientUserId:", recipientUserId, "topic:", topic);
     const connection = new signalR.HubConnectionBuilder()
-      .withUrl(resolveHubUrl("/hubs/notifications"), {
+      .withUrl(hubUrl, {
         accessTokenFactory: async () => {
           if (session.accessToken) return session.accessToken;
           const refreshed = await refreshSession();
@@ -125,24 +127,56 @@ export function useNotifications(options?: {
       .configureLogging(signalR.LogLevel.Warning)
       .build();
 
+    console.log("[notifications] Conexão configurada:", {
+      hubUrl,
+      recipientUserId,
+      topic,
+      queryKey,
+    });
+
     const subscribeGroups = async () => {
+      console.log("[notifications] Inscrevendo usuário:", recipientUserId);
       await connection.invoke("SubscribeUser", recipientUserId);
+      console.log("[notifications] Usuário inscrito com sucesso:", recipientUserId);
 
       if (topic) {
+        console.log("[notifications] Inscrevendo tópico:", topic);
         await connection.invoke("SubscribeTopic", topic);
+        console.log("[notifications] Tópico inscrito com sucesso:", topic);
       }
     };
 
     const onNotificationReceived = (notification: AppNotification) => {
       if (disposed) return;
 
+      // Filtro por recipientUserId
       if (notification.recipientUserId && notification.recipientUserId !== recipientUserId) {
+        console.log("[notifications][filter] Ignorado por recipientUserId:", {
+          esperado: recipientUserId,
+          recebido: notification.recipientUserId,
+          notificationId: notification.id,
+        });
         return;
       }
 
+      // Filtro por topic
       if (topic && notification.topic !== topic) {
+        console.log("[notifications][filter] Ignorado por tópico:", {
+          esperado: topic,
+          recebido: notification.topic,
+          notificationId: notification.id,
+        });
         return;
       }
+
+      console.log("[notifications][NotificationReceived]", {
+        id: notification.id,
+        title: notification.title,
+        topic: notification.topic,
+        isRead: notification.isRead,
+        createdAt: notification.createdAt,
+        recipientUserId: notification.recipientUserId,
+      });
 
       queryClient.setQueryData<AppNotification[]>(queryKey, (current) =>
         upsertNotification(current, notification, limit),
@@ -150,12 +184,25 @@ export function useNotifications(options?: {
     };
 
     connection.on("NotificationReceived", onNotificationReceived);
-    connection.onreconnected(() => subscribeGroups().catch(() => {}));
+    connection.onreconnected(() => {
+      console.log("[notifications] Reconectado. Re-inscrevendo grupos...");
+      subscribeGroups()
+        .then(() => console.log("[notifications] Grupos re-inscritos após reconexão."))
+        .catch(() => {});
+    });
+    connection.onreconnecting(() => {
+      console.log("[notifications] Reconectando...");
+    });
+    connection.onclose(() => {
+      if (disposed) return;
+      console.log("[notifications] Conexão fechada.");
+    });
 
     const startPromise = connection
       .start()
       .then(async () => {
         if (disposed) return;
+        console.log("[notifications] SignalR conectado em", hubUrl, "(connectionId:", connection.connectionId, ")");
         await subscribeGroups();
       })
       .catch((error: unknown) => {
@@ -167,15 +214,20 @@ export function useNotifications(options?: {
         ) {
           return;
         }
+
+        console.warn("[notifications] Falha ao conectar SignalR:", error);
       });
 
     return () => {
       disposed = true;
+      console.log("[notifications] Cleanup: removendo handlers e parando conexão.");
       connection.off("NotificationReceived", onNotificationReceived);
 
       void startPromise.finally(async () => {
         if (connection.state !== signalR.HubConnectionState.Disconnected) {
+          console.log("[notifications] Parando conexão (estado:", connection.state, ")");
           await connection.stop();
+          console.log("[notifications] Conexão parada.");
         }
       });
     };
