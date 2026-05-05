@@ -18,6 +18,7 @@ type AgentStatusPayload =
 const SIGNALR_KEEP_ALIVE_MS = 15_000;
 const SIGNALR_SERVER_TIMEOUT_MS = 60_000;
 const INVALIDATE_MIN_INTERVAL_MS = 1_500;
+const DASHBOARD_INVALIDATE_MIN_INTERVAL_MS = 5_000;
 
 function createInvalidateThrottler(
   queryClient: ReturnType<typeof useQueryClient>,
@@ -259,10 +260,13 @@ export function useAgentStatusRealtime(enabled = true) {
       );
 
       invalidateThrottled(["agents"]);
+      invalidateThrottled(["dashboard"], DASHBOARD_INVALIDATE_MIN_INTERVAL_MS);
       invalidateThrottled(["realtime", "stats"]);
     };
 
     connection.on("AgentHeartbeat", onAgentHeartbeat);
+    // HeartbeatV2 keeps compatibility with direct hub invocations used by newer agents.
+    connection.on("HeartbeatV2", onAgentHeartbeat);
     connection.on("DashboardEvent", onDashboardEvent);
 
     const startPromise = connection
@@ -314,6 +318,7 @@ export function useAgentStatusRealtime(enabled = true) {
       connection.off("AgentStatusChanged", onAgentStatusChanged);
       connection.off("CommandCompleted", onCommandCompleted);
       connection.off("AgentHeartbeat", onAgentHeartbeat);
+      connection.off("HeartbeatV2", onAgentHeartbeat);
       connection.off("DashboardEvent", onDashboardEvent);
       void startPromise.finally(async () => {
         if (connection.state !== signalR.HubConnectionState.Disconnected) {

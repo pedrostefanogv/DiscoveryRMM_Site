@@ -8,8 +8,21 @@ import { setNatsConnectionState } from "@/utils/realtimeConnectionState";
 
 type AgentRealtimeStatus = "Online" | "Offline";
 
-function normalizeEventType(value: string): string {
+function normalizeEventType(value: string | null | undefined): string {
+  if (!value) return "";
   return value.trim().toLowerCase();
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function isHeartbeatType(normalizedType: string): boolean {
+  return (
+    normalizedType === "agentheartbeat" ||
+    normalizedType === "heartbeat" ||
+    normalizedType === "agent.heartbeat"
+  );
 }
 
 function getStringField(
@@ -43,7 +56,11 @@ function getNumberField(
 const NATS_URL = realtimeConfig.natsUrl;
 const NATS_ENABLED = realtimeConfig.useNats && realtimeConfig.natsEnabled;
 const DASHBOARD_EVENTS_SUBJECT = "dashboard.events";
+const AGENT_HEARTBEAT_SUBJECT =
+  import.meta.env.VITE_NATS_AGENT_HEARTBEAT_SUBJECT ??
+  "tenant.*.site.*.agent.*.heartbeat";
 const INVALIDATE_MIN_INTERVAL_MS = 1_500;
+const DASHBOARD_INVALIDATE_MIN_INTERVAL_MS = 5_000;
 
 function createInvalidateThrottler(
   queryClient: ReturnType<typeof useQueryClient>,
@@ -74,6 +91,7 @@ function invalidateDashboardQueries(
     normalizedType === "agent.offline";
 
   if (isHeartbeatLike) {
+    invalidateThrottled(["dashboard"], DASHBOARD_INVALIDATE_MIN_INTERVAL_MS);
     invalidateThrottled(["realtime", "stats"]);
     return;
   }
@@ -101,6 +119,40 @@ function invalidateDashboardQueries(
 
   // Stats are aggregate numbers and should reflect every backend event.
   invalidateThrottled(["realtime", "stats"]);
+}
+
+function toHeartbeatPayload(
+  data: Record<string, unknown>,
+): AgentHeartbeat | null {
+  const agentId = getStringField(data, ["agentId", "id", "agentID"]);
+  if (!agentId) return null;
+
+  const ipAddress = getStringField(data, ["ipAddress", "lastIpAddress", "ip"]);
+
+  return {
+    agentId,
+    status: "Online",
+    ipAddress: ipAddress ?? undefined,
+    hostname:
+      getStringField(data, ["hostname", "hostName", "machineName"]) ??
+      undefined,
+    agentVersion:
+      getStringField(data, ["agentVersion", "version", "agent_version"]) ??
+      undefined,
+    cpuPercent: getNumberField(data, ["cpuPercent", "cpu"]),
+    memoryPercent: getNumberField(data, ["memoryPercent", "memory"]),
+    diskPercent: getNumberField(data, ["diskPercent", "disk"]),
+    memoryTotalGb: getNumberField(data, ["memoryTotalGb", "memoryTotal"]),
+    memoryUsedGb: getNumberField(data, ["memoryUsedGb", "memoryUsed"]),
+    diskTotalGb: getNumberField(data, ["diskTotalGb", "diskTotal"]),
+    diskUsedGb: getNumberField(data, ["diskUsedGb", "diskUsed"]),
+    p2pPeers: getNumberField(data, ["p2pPeers", "p2pPeersCount"]),
+    uptimeSeconds: getNumberField(data, ["uptimeSeconds", "uptime"]),
+    processCount: getNumberField(data, ["processCount", "processes"]),
+    timestampUtc:
+      getStringField(data, ["timestampUtc", "timestamp", "timeStamp"]) ??
+      undefined,
+  };
 }
 
 function applyStatusUpdate(agent: Agent, status: AgentRealtimeStatus): Agent {
@@ -152,101 +204,82 @@ export function useAgentStatusNats(enabled = true) {
     let disposed = false;
     const invalidateThrottled = createInvalidateThrottler(queryClient);
 
-    const handleDashboardEvent = (event: DashboardEvent) => {
-      if (disposed) return;
+    const applyHeartbeat = (heartbeatData: AgentHeartbeat) => {
+      const heartbeatAgentId = heartbeatData.agentId;
+      const heartbeatIp = heartbeatData.ipAddress ?? null;
 
-      const { eventType, data } = event;
-      const normalizedType = normalizeEventType(eventType);
-      const safeData =
-        data && typeof data === "object"
-          ? (data as Record<string, unknown>)
-          : {};
+      heartbeatStore.setHeartbeat(heartbeatAgentId, heartbeatData);
 
-      if (
-        normalizedType === "agentheartbeat" ||
-        normalizedType === "heartbeat" ||
-        normalizedType === "agent.heartbeat"
-      ) {
-        const heartbeatAgentId = getStringField(safeData, [
-          "agentId",
-          "id",
-          "agentID",
-        ]);
-        if (!heartbeatAgentId) return;
+      const metrics = extractHeartbeatMetrics(heartbeatData);
 
-        const heartbeatIp = getStringField(safeData, ["ipAddress", "lastIpAddress", "ip"]);
-
-        // Extract all heartbeat metrics and store
-        const heartbeatData: AgentHeartbeat = {
-          agentId: heartbeatAgentId,
-          status: "Online",
-          ipAddress: heartbeatIp ?? undefined,
-          hostname: getStringField(safeData, ["hostname", "hostName", "machineName"]) ?? undefined,
-          cpuPercent: getNumberField(safeData, ["cpuPercent", "cpu"]),
-          memoryPercent: getNumberField(safeData, ["memoryPercent", "memory"]),
-          diskPercent: getNumberField(safeData, ["diskPercent", "disk"]),
-          memoryTotalGb: getNumberField(safeData, ["memoryTotalGb", "memoryTotal"]),
-          memoryUsedGb: getNumberField(safeData, ["memoryUsedGb", "memoryUsed"]),
-          diskTotalGb: getNumberField(safeData, ["diskTotalGb", "diskTotal"]),
-          diskUsedGb: getNumberField(safeData, ["diskUsedGb", "diskUsed"]),
-          p2pPeers: getNumberField(safeData, ["p2pPeers", "p2pPeersCount"]),
-          uptimeSeconds: getNumberField(safeData, ["uptimeSeconds", "uptime"]),
-          processCount: getNumberField(safeData, ["processCount", "processes"]),
-          timestampUtc: getStringField(safeData, ["timestampUtc", "timestamp", "timeStamp"]) ?? undefined,
+      const applyToCollection = (agent: Agent) => {
+        if (agent.id !== heartbeatAgentId) return agent;
+        const nowIso = new Date().toISOString();
+        return {
+          ...agent,
+          status: "Online" as const,
+          isOnline: true,
+          lastSeenAt: nowIso,
+          lastSeen: nowIso,
+          updatedAt: nowIso,
+          lastIpAddress: heartbeatIp ?? agent.lastIpAddress,
+          heartbeatMetrics: metrics,
         };
+      };
 
-        heartbeatStore.setHeartbeat(heartbeatAgentId, heartbeatData);
-
-        const metrics = extractHeartbeatMetrics(heartbeatData);
-
-        const applyToCollection = (agent: Agent) => {
-          if (agent.id !== heartbeatAgentId) return agent;
+      queryClient.setQueryData<Agent | undefined>(
+        ["agents", "detail", heartbeatAgentId],
+        (current) => {
+          if (!current) return current;
           const nowIso = new Date().toISOString();
-          return {
-            ...agent,
-            status: "Online" as const,
+          const updated: Agent = {
+            ...current,
+            status: "Online",
             isOnline: true,
             lastSeenAt: nowIso,
             lastSeen: nowIso,
             updatedAt: nowIso,
-            lastIpAddress: heartbeatIp ?? agent.lastIpAddress,
             heartbeatMetrics: metrics,
           };
-        };
+          if (heartbeatIp && !updated.lastIpAddress) {
+            updated.lastIpAddress = heartbeatIp;
+          }
+          return updated;
+        },
+      );
 
-        queryClient.setQueryData<Agent | undefined>(
-          ["agents", "detail", heartbeatAgentId],
-          (current) => {
-            if (!current) return current;
-            const nowIso = new Date().toISOString();
-            const updated: Agent = {
-              ...current,
-              status: "Online",
-              isOnline: true,
-              lastSeenAt: nowIso,
-              lastSeen: nowIso,
-              updatedAt: nowIso,
-              heartbeatMetrics: metrics,
-            };
-            if (heartbeatIp && !updated.lastIpAddress) {
-              updated.lastIpAddress = heartbeatIp;
-            }
-            return updated;
-          },
-        );
+      queryClient.setQueriesData<Agent[]>(
+        { queryKey: ["agents", "byClient"] },
+        (current) => current?.map(applyToCollection),
+      );
 
-        queryClient.setQueriesData<Agent[]>(
-          { queryKey: ["agents", "byClient"] },
-          (current) => current?.map(applyToCollection),
-        );
+      queryClient.setQueriesData<Agent[]>(
+        { queryKey: ["agents", "bySite"] },
+        (current) => current?.map(applyToCollection),
+      );
 
-        queryClient.setQueriesData<Agent[]>(
-          { queryKey: ["agents", "bySite"] },
-          (current) => current?.map(applyToCollection),
-        );
+      invalidateThrottled(["agents"]);
+      invalidateDashboardQueries("agentheartbeat", invalidateThrottled);
+    };
 
-        invalidateThrottled(["agents"]);
-        invalidateDashboardQueries(normalizedType, invalidateThrottled);
+    const handleDashboardEvent = (event: DashboardEvent | Record<string, unknown>) => {
+      if (disposed) return;
+
+      const eventEnvelope = isRecord(event) ? event : {};
+      const eventType = getStringField(eventEnvelope, ["eventType", "type"]);
+      const normalizedType = normalizeEventType(eventType);
+
+      const eventData = eventEnvelope.data;
+      const safeData =
+        isRecord(eventData)
+          ? eventData
+          : eventEnvelope;
+
+      const heartbeatData = toHeartbeatPayload(safeData);
+
+      if (isHeartbeatType(normalizedType) || (!normalizedType && heartbeatData)) {
+        if (!heartbeatData) return;
+        applyHeartbeat(heartbeatData);
       } else if (
         normalizedType === "agentcommandresult" ||
         normalizedType === "commandresult" ||
@@ -295,8 +328,21 @@ export function useAgentStatusNats(enabled = true) {
         invalidateThrottled(["agents"]);
         invalidateDashboardQueries(normalizedType, invalidateThrottled);
       } else {
+        if (!normalizedType) return;
         invalidateDashboardQueries(normalizedType, invalidateThrottled);
       }
+    };
+
+    const handleAgentHeartbeatSubject = (
+      message: DashboardEvent | Record<string, unknown>,
+    ) => {
+      if (disposed) return;
+      if (!isRecord(message)) return;
+
+      const heartbeatData = toHeartbeatPayload(message);
+      if (!heartbeatData) return;
+
+      applyHeartbeat(heartbeatData);
     };
 
     const natsService = getNatsService({
@@ -314,12 +360,24 @@ export function useAgentStatusNats(enabled = true) {
     void natsService.connect().then(() => {
       if (disposed) return;
       void natsService.subscribe(DASHBOARD_EVENTS_SUBJECT, handleDashboardEvent);
+      if (AGENT_HEARTBEAT_SUBJECT !== DASHBOARD_EVENTS_SUBJECT) {
+        void natsService.subscribe(
+          AGENT_HEARTBEAT_SUBJECT,
+          handleAgentHeartbeatSubject,
+        );
+      }
     });
 
     return () => {
       disposed = true;
       unsubscribeConnectionState();
       natsService.unsubscribe(DASHBOARD_EVENTS_SUBJECT, handleDashboardEvent);
+      if (AGENT_HEARTBEAT_SUBJECT !== DASHBOARD_EVENTS_SUBJECT) {
+        natsService.unsubscribe(
+          AGENT_HEARTBEAT_SUBJECT,
+          handleAgentHeartbeatSubject,
+        );
+      }
       setNatsConnectionState("disconnected");
     };
   }, [enabled, queryClient]);
