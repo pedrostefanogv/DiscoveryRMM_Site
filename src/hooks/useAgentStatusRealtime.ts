@@ -20,6 +20,81 @@ const SIGNALR_SERVER_TIMEOUT_MS = 60_000;
 const INVALIDATE_MIN_INTERVAL_MS = 1_500;
 const DASHBOARD_INVALIDATE_MIN_INTERVAL_MS = 5_000;
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function normalizeEventType(value: string | null | undefined): string {
+  if (!value) return "";
+  return value.trim().toLowerCase();
+}
+
+function getStringField(
+  data: Record<string, unknown>,
+  keys: string[],
+): string | null {
+  for (const key of keys) {
+    const value = data[key];
+    if (typeof value === "string" && value.trim().length > 0) {
+      return value;
+    }
+  }
+  return null;
+}
+
+function getNumberField(
+  data: Record<string, unknown>,
+  keys: string[],
+): number | undefined {
+  for (const key of keys) {
+    const value = data[key];
+    if (typeof value === "number") return value;
+    if (typeof value === "string") {
+      const parsed = Number(value);
+      if (Number.isFinite(parsed)) return parsed;
+    }
+  }
+  return undefined;
+}
+
+function isHeartbeatDashboardEvent(normalizedType: string): boolean {
+  return normalizedType === "agentheartbeat" || normalizedType === "heartbeatv2";
+}
+
+function toHeartbeatPayload(
+  data: Record<string, unknown>,
+): AgentHeartbeat | null {
+  const agentId = getStringField(data, ["agentId", "id", "agentID"]);
+  if (!agentId) return null;
+
+  const ipAddress = getStringField(data, ["ipAddress", "lastIpAddress", "ip"]);
+
+  return {
+    agentId,
+    status: "Online",
+    ipAddress: ipAddress ?? undefined,
+    hostname:
+      getStringField(data, ["hostname", "hostName", "machineName"]) ??
+      undefined,
+    agentVersion:
+      getStringField(data, ["agentVersion", "version", "agent_version"]) ??
+      undefined,
+    cpuPercent: getNumberField(data, ["cpuPercent", "cpu"]),
+    memoryPercent: getNumberField(data, ["memoryPercent", "memory"]),
+    diskPercent: getNumberField(data, ["diskPercent", "disk"]),
+    memoryTotalGb: getNumberField(data, ["memoryTotalGb", "memoryTotal"]),
+    memoryUsedGb: getNumberField(data, ["memoryUsedGb", "memoryUsed"]),
+    diskTotalGb: getNumberField(data, ["diskTotalGb", "diskTotal"]),
+    diskUsedGb: getNumberField(data, ["diskUsedGb", "diskUsed"]),
+    p2pPeers: getNumberField(data, ["p2pPeers", "p2pPeersCount"]),
+    uptimeSeconds: getNumberField(data, ["uptimeSeconds", "uptime"]),
+    processCount: getNumberField(data, ["processCount", "processes"]),
+    timestampUtc:
+      getStringField(data, ["timestampUtc", "timestamp", "timeStamp"]) ??
+      undefined,
+  };
+}
+
 function createInvalidateThrottler(
   queryClient: ReturnType<typeof useQueryClient>,
 ) {
@@ -197,13 +272,7 @@ export function useAgentStatusRealtime(enabled = true) {
       setSignalrConnectionState("agent-hub", "disconnected");
     });
 
-    const onDashboardEvent = () => {
-      // Invalidate all active dashboard summary queries. The throttle prevents
-      // storms when multiple events arrive within the same burst (e.g. batch ticket ops).
-      invalidateThrottled(["dashboard"], 5_000);
-    };
-
-    const onAgentHeartbeat = (data: AgentHeartbeat) => {
+    const applyHeartbeat = (data: AgentHeartbeat) => {
       if (!data.agentId) return;
 
       // Store the complete heartbeat metrics for reactive consumption
@@ -264,9 +333,44 @@ export function useAgentStatusRealtime(enabled = true) {
       invalidateThrottled(["realtime", "stats"]);
     };
 
+    const onAgentHeartbeat = (data: AgentHeartbeat) => {
+      applyHeartbeat(data);
+    };
+
+    const onDashboardEvent = (...args: unknown[]) => {
+      const [arg1, arg2] = args;
+
+      let eventType: string | null = null;
+      let rawData: unknown = undefined;
+
+      if (typeof arg1 === "string") {
+        eventType = arg1;
+        rawData = arg2;
+      } else if (isRecord(arg1)) {
+        eventType = getStringField(arg1, ["eventType", "type"]);
+        rawData = "data" in arg1 ? arg1.data : arg1;
+      }
+
+      const normalizedType = normalizeEventType(eventType);
+      const safeData = isRecord(rawData)
+        ? rawData
+        : (isRecord(arg1) ? arg1 : {});
+
+      const heartbeatData = toHeartbeatPayload(safeData);
+      if (
+        isHeartbeatDashboardEvent(normalizedType) ||
+        (!normalizedType && heartbeatData)
+      ) {
+        if (!heartbeatData) return;
+        applyHeartbeat(heartbeatData);
+        return;
+      }
+
+      // Non-heartbeat dashboard events only trigger summary refresh.
+      invalidateThrottled(["dashboard"], DASHBOARD_INVALIDATE_MIN_INTERVAL_MS);
+    };
+
     connection.on("AgentHeartbeat", onAgentHeartbeat);
-    // HeartbeatV2 keeps compatibility with direct hub invocations used by newer agents.
-    connection.on("HeartbeatV2", onAgentHeartbeat);
     connection.on("DashboardEvent", onDashboardEvent);
 
     const startPromise = connection
@@ -318,7 +422,6 @@ export function useAgentStatusRealtime(enabled = true) {
       connection.off("AgentStatusChanged", onAgentStatusChanged);
       connection.off("CommandCompleted", onCommandCompleted);
       connection.off("AgentHeartbeat", onAgentHeartbeat);
-      connection.off("HeartbeatV2", onAgentHeartbeat);
       connection.off("DashboardEvent", onDashboardEvent);
       void startPromise.finally(async () => {
         if (connection.state !== signalR.HubConnectionState.Disconnected) {
