@@ -338,7 +338,7 @@ export function useAgentStatusRealtime(enabled = true) {
     };
 
     const onDashboardEvent = (...args: unknown[]) => {
-      const [arg1, arg2] = args;
+      const [arg1, arg2, arg3] = args;
 
       let eventType: string | null = null;
       let rawData: unknown = undefined;
@@ -355,6 +355,15 @@ export function useAgentStatusRealtime(enabled = true) {
       const safeData = isRecord(rawData)
         ? rawData
         : (isRecord(arg1) ? arg1 : {});
+
+      // Temporary debug trace for all dashboard events.
+      console.log("[realtime][DashboardEvent]", {
+        eventType,
+        normalizedType,
+        data: safeData,
+        timestampUtc: arg3,
+        rawArgs: args,
+      });
 
       const heartbeatData = toHeartbeatPayload(safeData);
       if (

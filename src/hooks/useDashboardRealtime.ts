@@ -94,7 +94,13 @@ export function useDashboardRealtime(
 
     setSignalrConnectionState(signalrSource, "connecting");
 
-    const onDashboardEvent = () => {
+    const onDashboardEvent = (...args: unknown[]) => {
+      // Temporary debug trace for dashboard realtime events.
+      console.log("[dashboard][DashboardEvent]", {
+        scope: scopeKey,
+        window,
+        args,
+      });
       void queryClient.invalidateQueries({ queryKey });
     };
 
