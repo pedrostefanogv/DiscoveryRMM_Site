@@ -158,7 +158,6 @@ export default function RemoteDebugConsole() {
         sessionId: event.sessionId,
         agentId: event.agentId,
         transport: event.preferredTransport,
-        fallback: event.fallbackTransport,
         startedAt: event.startedAtUtc,
         expiresAt: event.expiresAtUtc,
       });
@@ -176,7 +175,7 @@ export default function RemoteDebugConsole() {
         level: event.level,
         message: event.message?.slice(0, 200),
         sequence: event.sequence,
-        timestamp: event.timestamp,
+        timestamp: event.timestampUtc,
         transport: event.transport,
       });
       appendLog({ ...event, level: normalizeLevel(event.level) });
