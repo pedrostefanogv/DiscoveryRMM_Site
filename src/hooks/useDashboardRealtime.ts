@@ -139,21 +139,24 @@ export function useDashboardRealtime(
       void queryClient.invalidateQueries({ queryKey });
     };
 
-    void natsService.connect().then(() => {
-      if (disposed) return;
+    void (async () => {
+      const connected = await natsService.connect();
+      if (disposed || !connected) return;
 
-      dashboardSubjects.forEach((subject) => {
+      for (const subject of dashboardSubjects) {
         if (!natsService.canSubscribeToSubject(subject)) {
           console.debug(
             "[NATS][dashboard] Subject fora da allow-list do token, ignorando:",
             subject,
           );
-          return;
+          continue;
         }
 
-        void natsService.subscribe(subject, onDashboardEvent);
-      });
-    });
+        void natsService.subscribe(subject, onDashboardEvent, {
+          connectIfNeeded: false,
+        });
+      }
+    })();
 
     return () => {
       disposed = true;

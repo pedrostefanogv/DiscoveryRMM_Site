@@ -288,6 +288,17 @@ export default function RemoteDebugConsole() {
         setConnectionState("connecting");
         return;
       }
+
+      if (state === "auth_error") {
+        setConnectionState("closed");
+        const diagnostics = natsService.getConnectionDiagnostics();
+        setErrorMessage(
+          diagnostics.lastErrorMessage ??
+            "Falha de autenticacao no NATS para o console de remote debug.",
+        );
+        return;
+      }
+
       setConnectionState("closed");
     });
 
@@ -329,25 +340,37 @@ export default function RemoteDebugConsole() {
       }
     };
 
-    void natsService
-      .connect()
-      .then(async () => {
-        if (disposed) return;
-        await natsService.subscribe(subject, onRemoteDebugEvent);
-        if (disposed) return;
-        setErrorMessage(null);
-        setConnectionState("connected");
-        appendLog(withSystemMessage(`Escutando subject NATS: ${subject}`));
-      })
-      .catch((error: unknown) => {
-        if (disposed) return;
-        const message =
-          error instanceof Error
-            ? error.message
-            : "Falha ao conectar no remote debug via NATS.";
+    void (async () => {
+      const connected = await natsService.connect();
+      if (disposed) return;
+
+      if (!connected) {
+        const diagnostics = natsService.getConnectionDiagnostics();
         setConnectionState("closed");
-        setErrorMessage(message);
+        setErrorMessage(
+          diagnostics.lastErrorMessage ??
+            "Falha ao conectar no remote debug via NATS.",
+        );
+        return;
+      }
+
+      const subscribed = await natsService.subscribe(subject, onRemoteDebugEvent, {
+        connectIfNeeded: false,
       });
+      if (disposed) return;
+
+      if (!subscribed) {
+        setConnectionState("closed");
+        setErrorMessage(
+          "Conexao NATS estabelecida, mas nao foi possivel assinar o subject do remote debug.",
+        );
+        return;
+      }
+
+      setErrorMessage(null);
+      setConnectionState("connected");
+      appendLog(withSystemMessage(`Escutando subject NATS: ${subject}`));
+    })();
 
     return () => {
       disposed = true;

@@ -38,6 +38,36 @@ type NatsClientModule = {
 
 const CREDENTIALS_REFRESH_SKEW_MS = 60_000;
 
+function sanitizeNatsUrl(url: string): string {
+  const normalized = url.trim();
+  if (!normalized) return "";
+
+  try {
+    const parsed = new URL(normalized);
+    return `${parsed.protocol}//${parsed.host}${parsed.pathname}`;
+  } catch {
+    const queryIndex = normalized.indexOf("?");
+    return queryIndex >= 0 ? normalized.slice(0, queryIndex) : normalized;
+  }
+}
+
+function getErrorCode(error: unknown): string | null {
+  if (!error || typeof error !== "object") {
+    return null;
+  }
+
+  const err = error as { code?: unknown; name?: unknown };
+  if (typeof err.code === "string" && err.code.trim().length > 0) {
+    return err.code;
+  }
+
+  if (typeof err.name === "string" && err.name.trim().length > 0) {
+    return err.name;
+  }
+
+  return null;
+}
+
 function normalizeNatsUrl(url: string): string {
   const trimmed = url.trim();
 
@@ -77,19 +107,13 @@ function isCredentialsExpiring(credentials: NatsCredentialsResponse): boolean {
   );
 }
 
-function isNonRetryableNatsError(error: unknown): boolean {
-  if (
-    error instanceof ApiError &&
-    [400, 401, 403, 404, 503].includes(error.status)
-  ) {
+function isAuthorizationNatsError(error: unknown): boolean {
+  if (error instanceof ApiError && [401, 403].includes(error.status)) {
     return true;
   }
 
-  // O cliente @nats-io/nats-core lanÃ§a NatsError com nome "AuthorizationError"
-  // quando o broker rejeita as credenciais (ex.: callout devolveu erro,
-  // accountSeed divergente). Reconectar nÃ£o resolve â€” evita loop no console.
   if (error && typeof error === "object") {
-    const err = error as { name?: unknown; message?: unknown; code?: unknown };
+    const err = error as { name?: unknown; message?: unknown };
     const name = typeof err.name === "string" ? err.name : "";
     const message = typeof err.message === "string" ? err.message : "";
     if (
@@ -98,6 +122,44 @@ function isNonRetryableNatsError(error: unknown): boolean {
     ) {
       return true;
     }
+  }
+
+  return false;
+}
+
+function classifyNatsErrorType(error: unknown): "auth" | "network" {
+  return isAuthorizationNatsError(error) ? "auth" : "network";
+}
+
+function getNatsErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message.trim().length > 0) {
+    return error.message;
+  }
+
+  if (error && typeof error === "object") {
+    const err = error as { message?: unknown };
+    if (typeof err.message === "string" && err.message.trim().length > 0) {
+      return err.message;
+    }
+  }
+
+  if (typeof error === "string" && error.trim().length > 0) {
+    return error;
+  }
+
+  return "Unknown NATS error";
+}
+
+function isNonRetryableNatsError(error: unknown): boolean {
+  if (
+    error instanceof ApiError &&
+    [400, 401, 403, 404, 503].includes(error.status)
+  ) {
+    return true;
+  }
+
+  if (isAuthorizationNatsError(error)) {
+    return true;
   }
 
   return false;
@@ -123,7 +185,18 @@ export type NatsConnectionState =
   | "disconnected"
   | "connecting"
   | "connected"
-  | "reconnecting";
+  | "reconnecting"
+  | "auth_error";
+
+export type NatsConnectionErrorType = "auth" | "network" | null;
+
+export interface NatsConnectionDiagnostics {
+  lastErrorType: NatsConnectionErrorType;
+  lastErrorMessage: string | null;
+  lastErrorAtUtc: string | null;
+}
+
+type NatsTelemetryLevel = "info" | "warn" | "error";
 
 class NatsService {
   private connection: NatsConnection | null = null;
@@ -140,9 +213,15 @@ class NatsService {
   private warnedInvalidUrl = false;
   private warnedUnavailableClient = false;
   private connectionState: NatsConnectionState = "disconnected";
-  private connectInFlight: Promise<void> | null = null;
+  private connectInFlight: Promise<boolean> | null = null;
   private manualDisconnect = false;
   private pendingReconnect = false;
+  private lastErrorType: NatsConnectionErrorType = null;
+  private lastErrorMessage: string | null = null;
+  private lastErrorAtUtc: string | null = null;
+  private readonly maxAuthRefreshAttempts = 1;
+  private telemetrySequence = 0;
+  private connectAttemptSequence = 0;
 
   constructor(private config: NatsConfig) {}
 
@@ -169,11 +248,26 @@ class NatsService {
       this.config.url !== nextConfig.url ||
       this.config.enabled !== nextConfig.enabled;
 
+    const previousConfig = this.config;
+
     this.config = nextConfig;
 
+    if (scopeChanged || connectionInputsChanged) {
+      this.emitTelemetry("info", "config_updated", {
+        scopeChanged,
+        connectionInputsChanged,
+        previousEnabled: previousConfig.enabled,
+        nextEnabled: nextConfig.enabled,
+        previousUrl: sanitizeNatsUrl(previousConfig.url),
+        nextUrl: sanitizeNatsUrl(nextConfig.url),
+      });
+    }
+
     if (scopeChanged) {
-      this.credentials = null;
-      this.credentialsInFlight = null;
+      this.invalidateCredentials();
+      this.emitTelemetry("info", "credentials_invalidated", {
+        reason: "scope_changed",
+      });
     }
 
     if (scopeChanged || connectionInputsChanged) {
@@ -184,9 +278,47 @@ class NatsService {
   private setConnectionState(state: NatsConnectionState) {
     if (this.connectionState === state) return;
 
-    console.log("[NATS] Estado:", { anterior: this.connectionState, novo: state, tentativa: this.reconnectAttempts, subjects: Array.from(this.subscriptions.keys()) });
+    const previousState = this.connectionState;
+    console.log("[NATS] Estado:", { anterior: previousState, novo: state, tentativa: this.reconnectAttempts, subjects: Array.from(this.subscriptions.keys()) });
     this.connectionState = state;
+    this.emitTelemetry("info", "connection_state_changed", {
+      previousState,
+      nextState: state,
+    });
     this.stateListeners.forEach((listener) => listener(state));
+  }
+
+  private emitTelemetry(
+    level: NatsTelemetryLevel,
+    event: string,
+    details: Record<string, unknown> = {},
+  ) {
+    const payload = {
+      source: "frontend.nats",
+      sequence: ++this.telemetrySequence,
+      event,
+      atUtc: new Date().toISOString(),
+      state: this.connectionState,
+      reconnectAttempts: this.reconnectAttempts,
+      hasConnection: this.connection?.isClosed() === false,
+      listenersCount: this.listeners.size,
+      subscriptionsCount: this.subscriptions.size,
+      clientId: this.config.clientId ?? null,
+      siteId: this.config.siteId ?? null,
+      ...details,
+    };
+
+    if (level === "error") {
+      console.error("[NATS][telemetry]", payload);
+      return;
+    }
+
+    if (level === "warn") {
+      console.warn("[NATS][telemetry]", payload);
+      return;
+    }
+
+    console.info("[NATS][telemetry]", payload);
   }
 
   private async loadClient(): Promise<NatsClientModule | null> {
@@ -230,9 +362,29 @@ class NatsService {
     this.reconnectTimer = null;
   }
 
+  private invalidateCredentials() {
+    this.credentials = null;
+    this.credentialsInFlight = null;
+  }
+
+  private clearConnectionError() {
+    this.lastErrorType = null;
+    this.lastErrorMessage = null;
+    this.lastErrorAtUtc = null;
+  }
+
+  private updateConnectionError(error: unknown): "auth" | "network" {
+    const type = classifyNatsErrorType(error);
+    this.lastErrorType = type;
+    this.lastErrorMessage = getNatsErrorMessage(error);
+    this.lastErrorAtUtc = new Date().toISOString();
+    return type;
+  }
+
   private restartConnection() {
     if (this.connectInFlight) {
       this.pendingReconnect = true;
+      this.emitTelemetry("warn", "restart_deferred_connect_inflight");
       return;
     }
 
@@ -240,8 +392,15 @@ class NatsService {
     this.reconnectAttempts = 0;
 
     const activeConnection = this.connection;
+    const hadActiveConnection = Boolean(
+      activeConnection && !activeConnection.isClosed(),
+    );
     this.connection = null;
     this.subscriptions.clear();
+
+    this.emitTelemetry("info", "restart_connection", {
+      hadActiveConnection,
+    });
 
     if (activeConnection && !activeConnection.isClosed()) {
       void activeConnection.close().catch((error) => {
@@ -249,6 +408,7 @@ class NatsService {
       });
     }
 
+    this.clearConnectionError();
     this.setConnectionState("disconnected");
 
     if (this.listeners.size > 0 && this.config.enabled) {
@@ -262,18 +422,43 @@ class NatsService {
       siteId: this.config.siteId,
     };
 
-    return api.post<NatsCredentialsResponse>(
-      "/api/v1/nats-auth/user/credentials",
-      request,
-    );
+    this.emitTelemetry("info", "credentials_issue_start", {
+      hasClientId: Boolean(request.clientId),
+      hasSiteId: Boolean(request.siteId),
+    });
+
+    try {
+      const response = await api.post<NatsCredentialsResponse>(
+        "/api/v1/nats-auth/user/credentials",
+        request,
+      );
+      this.emitTelemetry("info", "credentials_issue_success", {
+        expiresAtUtc: response.expiresAtUtc,
+        subscribeSubjectsCount: response.subscribeSubjects.length,
+        publishSubjectsCount: response.publishSubjects.length,
+      });
+      return response;
+    } catch (error) {
+      const errorType = classifyNatsErrorType(error);
+      this.emitTelemetry(errorType === "auth" ? "warn" : "error", "credentials_issue_failure", {
+        errorType,
+        errorMessage: getNatsErrorMessage(error),
+        errorCode: getErrorCode(error),
+      });
+      throw error;
+    }
   }
 
   private async getCredentials(): Promise<NatsCredentialsResponse> {
     if (this.credentials && !isCredentialsExpiring(this.credentials)) {
+      this.emitTelemetry("info", "credentials_cache_hit", {
+        expiresAtUtc: this.credentials.expiresAtUtc,
+      });
       return this.credentials;
     }
 
     if (this.credentialsInFlight) {
+      this.emitTelemetry("info", "credentials_inflight_joined");
       return this.credentialsInFlight;
     }
 
@@ -302,13 +487,44 @@ class NatsService {
       if (this.manualDisconnect) {
         this.manualDisconnect = false;
         console.log("[NATS] Desconexão manual, não vai reconectar.");
+        this.emitTelemetry("info", "connection_closed_manual", {
+          subscribedSubjects: subjects,
+        });
+        this.clearConnectionError();
         this.setConnectionState("disconnected");
         return;
       }
 
       if (error) {
+        const errorType = this.updateConnectionError(error);
+        if (errorType === "auth") {
+          this.invalidateCredentials();
+          this.setConnectionState("auth_error");
+          this.emitTelemetry("warn", "connection_closed_auth_error", {
+            errorMessage: getNatsErrorMessage(error),
+            errorCode: getErrorCode(error),
+            subscribedSubjects: subjects,
+          });
+          console.warn("[NATS] Conexão encerrada por erro de autorização.", {
+            error,
+            subjects,
+          });
+          return;
+        }
+
+        this.emitTelemetry("warn", "connection_closed_error", {
+          errorType,
+          errorMessage: getNatsErrorMessage(error),
+          errorCode: getErrorCode(error),
+          subscribedSubjects: subjects,
+        });
+
         console.warn("[NATS] Conexão fechada com erro:", { error, subjects, reconnectAttempts: this.reconnectAttempts });
       } else {
+        this.clearConnectionError();
+        this.emitTelemetry("info", "connection_closed_clean", {
+          subscribedSubjects: subjects,
+        });
         console.log("[NATS] Conexão fechada (sem erro).", { subjects, reconnectAttempts: this.reconnectAttempts });
       }
 
@@ -316,15 +532,31 @@ class NatsService {
     });
   }
 
-  private async ensureSubjectSubscription(subject: string): Promise<void> {
-    if (!this.connection || this.subscriptions.has(subject)) {
-      return;
+  private async ensureSubjectSubscription(subject: string): Promise<boolean> {
+    if (!this.connection) {
+      this.emitTelemetry("warn", "subscribe_subject_skipped_no_connection", {
+        subject,
+      });
+      return false;
+    }
+
+    if (this.subscriptions.has(subject)) {
+      this.emitTelemetry("info", "subscribe_subject_already_active", {
+        subject,
+      });
+      return true;
     }
 
     try {
+      this.emitTelemetry("info", "subscribe_subject_start", {
+        subject,
+      });
       console.log("[NATS] Inscrevendo em subject:", subject);
       const subscription = this.connection.subscribe(subject) as Subscription;
       this.subscriptions.set(subject, subscription);
+      this.emitTelemetry("info", "subscribe_subject_success", {
+        subject,
+      });
       console.log("[NATS] Inscrito em:", subject, "(subscriptions ativas:", this.subscriptions.size, ")");
 
       void (async () => {
@@ -358,18 +590,46 @@ class NatsService {
           }
         }
       })();
+
+      return true;
     } catch (error) {
+      this.emitTelemetry("warn", "subscribe_subject_failure", {
+        subject,
+        errorMessage: getNatsErrorMessage(error),
+        errorCode: getErrorCode(error),
+      });
       console.error(`Failed to subscribe to ${subject}:`, error);
+      return false;
     }
   }
 
   private async restoreSubscriptions(): Promise<void> {
+    let restoredCount = 0;
+    let failedCount = 0;
+
     for (const subject of this.listeners.keys()) {
-      await this.ensureSubjectSubscription(subject);
+      const restored = await this.ensureSubjectSubscription(subject);
+      if (!restored) {
+        failedCount++;
+        console.warn("[NATS] Falha ao restaurar subject:", subject);
+      } else {
+        restoredCount++;
+      }
+    }
+
+    if (restoredCount > 0 || failedCount > 0) {
+      this.emitTelemetry(failedCount > 0 ? "warn" : "info", "restore_subscriptions_result", {
+        restoredCount,
+        failedCount,
+      });
     }
   }
 
-  async connect(): Promise<void> {
+  async connect(): Promise<boolean> {
+    this.emitTelemetry("info", "connect_requested", {
+      hasExistingConnection: this.connection?.isClosed() === false,
+    });
+
     if (this.connection?.isClosed()) {
       this.connection = null;
       this.subscriptions.clear();
@@ -377,19 +637,26 @@ class NatsService {
     }
 
     if (this.connection) {
+      this.emitTelemetry("info", "connect_short_circuit_connected");
+      this.clearConnectionError();
       this.setConnectionState("connected");
-      return;
+      return true;
     }
 
     if (this.connectInFlight) {
+      this.emitTelemetry("info", "connect_join_inflight");
       return this.connectInFlight;
     }
 
     const url = this.getResolvedUrl();
 
     if (!this.config.enabled || !url) {
+      this.emitTelemetry("warn", "connect_skipped_invalid_config", {
+        enabled: this.config.enabled,
+        hasUrl: Boolean(url),
+      });
       this.setConnectionState("disconnected");
-      return;
+      return false;
     }
 
     if (!this.isBrowserWsUrl(url)) {
@@ -399,14 +666,18 @@ class NatsService {
           "NATS desativado no browser: use VITE_NATS_URL com ws://, wss://, nats:// ou tls://.",
         );
       }
+      this.emitTelemetry("warn", "connect_skipped_non_browser_url", {
+        url: sanitizeNatsUrl(url),
+      });
       this.setConnectionState("disconnected");
-      return;
+      return false;
     }
 
     const client = await this.loadClient();
     if (!client) {
+      this.emitTelemetry("warn", "connect_skipped_client_unavailable");
       this.setConnectionState("disconnected");
-      return;
+      return false;
     }
 
     this.setConnectionState(
@@ -414,53 +685,125 @@ class NatsService {
     );
 
     this.connectInFlight = (async () => {
-      try {
-        this.manualDisconnect = false;
-        const credentials = await this.getCredentials();
-        const authenticator = client.credsAuthenticator(
-          new TextEncoder().encode(buildCredsFile(credentials)),
-        );
+      this.manualDisconnect = false;
+      const connectAttemptId = ++this.connectAttemptSequence;
 
-        this.connection = await client.wsconnect({
-          servers: [url],
-          authenticator,
-        });
-        this.reconnectAttempts = 0;
-        this.clearReconnectTimer();
-        this.watchConnection(this.connection);
-        await this.restoreSubscriptions();
-        this.setConnectionState("connected");
-        console.info(
-          "[realtime] NATS conectado em",
-          url,
-          this.subscriptions.size > 0
-            ? `(restaurou ${this.subscriptions.size} subscriÃ§Ãµes)`
-            : "",
-        );
-      } catch (error) {
-        this.connection = null;
-        this.subscriptions.clear();
-        this.setConnectionState("disconnected");
-        console.error("Failed to connect to NATS:", error);
-        if (isNonRetryableNatsError(error)) {
-          return;
-        }
-        this.scheduleReconnect();
-      } finally {
-        this.connectInFlight = null;
+      this.emitTelemetry("info", "connect_attempt_start", {
+        connectAttemptId,
+        url: sanitizeNatsUrl(url),
+      });
 
-        if (this.pendingReconnect) {
-          this.pendingReconnect = false;
-          this.restartConnection();
+      for (
+        let authAttempt = 0;
+        authAttempt <= this.maxAuthRefreshAttempts;
+        authAttempt++
+      ) {
+        try {
+          this.emitTelemetry("info", "connect_auth_attempt_start", {
+            connectAttemptId,
+            authAttempt,
+          });
+
+          const credentials = await this.getCredentials();
+          const authenticator = client.credsAuthenticator(
+            new TextEncoder().encode(buildCredsFile(credentials)),
+          );
+
+          this.connection = await client.wsconnect({
+            servers: [url],
+            authenticator,
+          });
+          this.reconnectAttempts = 0;
+          this.clearReconnectTimer();
+          this.watchConnection(this.connection);
+          await this.restoreSubscriptions();
+          this.clearConnectionError();
+          this.setConnectionState("connected");
+          this.emitTelemetry("info", "connect_attempt_success", {
+            connectAttemptId,
+            authAttempt,
+            restoredSubscriptions: this.subscriptions.size,
+            url: sanitizeNatsUrl(url),
+          });
+          console.info(
+            "[realtime] NATS conectado em",
+            url,
+            this.subscriptions.size > 0
+              ? `(restaurou ${this.subscriptions.size} subscriÃ§Ãµes)`
+              : "",
+          );
+          return true;
+        } catch (error) {
+          this.connection = null;
+          this.subscriptions.clear();
+          const errorType = this.updateConnectionError(error);
+          const nonRetryable = isNonRetryableNatsError(error);
+          this.emitTelemetry(errorType === "auth" ? "warn" : "error", "connect_attempt_failure", {
+            connectAttemptId,
+            authAttempt,
+            errorType,
+            errorMessage: getNatsErrorMessage(error),
+            errorCode: getErrorCode(error),
+            nonRetryable,
+          });
+          console.error("Failed to connect to NATS:", error);
+
+          const canRetryWithFreshCredentials =
+            errorType === "auth" && authAttempt < this.maxAuthRefreshAttempts;
+          if (canRetryWithFreshCredentials) {
+            this.invalidateCredentials();
+            this.emitTelemetry("warn", "connect_auth_refresh_retry", {
+              connectAttemptId,
+              failedAuthAttempt: authAttempt,
+              nextAuthAttempt: authAttempt + 1,
+            });
+            console.warn(
+              "[NATS] AuthorizationError no CONNECT. Reemitindo credencial e tentando novamente.",
+            );
+            continue;
+          }
+
+          if (errorType === "auth") {
+            this.invalidateCredentials();
+            this.setConnectionState("auth_error");
+            this.emitTelemetry("warn", "connect_auth_failure_terminal", {
+              connectAttemptId,
+              authAttempt,
+            });
+            return false;
+          }
+
+          this.setConnectionState("disconnected");
+          if (!nonRetryable) {
+            this.scheduleReconnect();
+          }
+          return false;
         }
       }
+
+      this.setConnectionState("disconnected");
+      return false;
     })();
 
-    return this.connectInFlight;
+    try {
+      return await this.connectInFlight;
+    } finally {
+      this.connectInFlight = null;
+
+      if (this.pendingReconnect) {
+        this.pendingReconnect = false;
+        this.emitTelemetry("info", "connect_pending_restart_execute");
+        this.restartConnection();
+      }
+    }
   }
 
   private scheduleReconnect(): void {
     if (this.connectInFlight || this.reconnectTimer) {
+      this.emitTelemetry("info", "reconnect_schedule_skipped", {
+        hasConnectInFlight: Boolean(this.connectInFlight),
+        hasReconnectTimer: Boolean(this.reconnectTimer),
+      });
       console.log("[NATS] Reconexão já agendada ou em voo, ignorando.");
       return;
     }
@@ -471,15 +814,25 @@ class NatsService {
       const delay =
         this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1);
       const cappedDelay = Math.min(delay, 30000);
+      this.emitTelemetry("warn", "reconnect_scheduled", {
+        attempt: this.reconnectAttempts,
+        delayMs: cappedDelay,
+      });
       console.log("[NATS] Agendando reconexão", { tentativa: this.reconnectAttempts, max: this.maxReconnectAttempts, delay: cappedDelay });
       this.reconnectTimer = setTimeout(() => {
         this.reconnectTimer = null;
+        this.emitTelemetry("info", "reconnect_attempt_execute", {
+          attempt: this.reconnectAttempts,
+        });
         console.log("[NATS] Executando reconexão (tentativa", this.reconnectAttempts, ")");
         void this.connect();
       }, cappedDelay);
       return;
     }
 
+    this.emitTelemetry("error", "reconnect_exhausted", {
+      maxReconnectAttempts: this.maxReconnectAttempts,
+    });
     console.log("[NATS] Máximo de tentativas de reconexão atingido (", this.maxReconnectAttempts, "). Desconectando.");
     this.setConnectionState("disconnected");
   }
@@ -487,32 +840,68 @@ class NatsService {
   async subscribe(
     subject: string,
     callback: (event: DashboardEvent) => void,
-  ): Promise<void> {
+    options?: { connectIfNeeded?: boolean },
+  ): Promise<boolean> {
     if (!this.listeners.has(subject)) {
       this.listeners.set(subject, new Set());
     }
     this.listeners.get(subject)!.add(callback);
     console.log("[NATS] subscribe() chamado para:", subject, "(listeners:", this.listeners.get(subject)?.size, ")");
 
+    const connectIfNeeded = options?.connectIfNeeded ?? true;
+    this.emitTelemetry("info", "subscribe_requested", {
+      subject,
+      connectIfNeeded,
+      listenersForSubject: this.listeners.get(subject)?.size ?? 0,
+    });
+
     if (!this.connection) {
+      if (!connectIfNeeded) {
+        this.emitTelemetry("warn", "subscribe_aborted_no_connection", {
+          subject,
+        });
+        console.warn("[NATS] Cannot subscribe sem conexão ativa para subject:", subject);
+        return false;
+      }
+
       console.log("[NATS] Sem conexão ativa, conectando antes de subscrever...");
-      await this.connect();
+      const connected = await this.connect();
+      if (!connected) {
+        this.emitTelemetry("warn", "subscribe_aborted_connect_failed", {
+          subject,
+          diagnostics: this.getConnectionDiagnostics(),
+        });
+        console.warn("[NATS] Conexão falhou antes de subscrever:", subject);
+        return false;
+      }
     }
 
     if (!this.connection) {
+      this.emitTelemetry("warn", "subscribe_aborted_not_connected", {
+        subject,
+      });
       console.warn("[NATS] Cannot subscribe: NATS not connected para subject:", subject);
-      return;
+      return false;
     }
 
     if (!this.canSubscribeToSubject(subject)) {
+      this.emitTelemetry("warn", "subscribe_blocked_allow_list", {
+        subject,
+        allowedSubjectsCount: this.getAllowedSubscribeSubjects().length,
+      });
       console.warn(
         "[NATS] Subject fora da allow-list do token, ignorando:",
         subject,
       );
-      return;
+      return false;
     }
 
-    await this.ensureSubjectSubscription(subject);
+    const subscribed = await this.ensureSubjectSubscription(subject);
+    this.emitTelemetry(subscribed ? "info" : "warn", "subscribe_result", {
+      subject,
+      subscribed,
+    });
+    return subscribed;
   }
 
   unsubscribe(
@@ -523,6 +912,10 @@ class NatsService {
     if (listeners) {
       listeners.delete(callback);
       console.log("[NATS] unsubscribe() chamado para:", subject, "(listeners restantes:", listeners.size, ")");
+      this.emitTelemetry("info", "unsubscribe_requested", {
+        subject,
+        listenersRemaining: listeners.size,
+      });
       if (listeners.size === 0) {
         this.listeners.delete(subject);
       }
@@ -534,23 +927,37 @@ class NatsService {
       if (subscription) {
         subscription.unsubscribe();
         this.subscriptions.delete(subject);
+        this.emitTelemetry("info", "unsubscribe_subject_detached", {
+          subject,
+        });
       }
     }
   }
 
   async publish(subject: string, data: Record<string, unknown>): Promise<void> {
     if (!this.connection) {
-      await this.connect();
+      const connected = await this.connect();
+      if (!connected) {
+        throw new Error("NATS not connected");
+      }
     }
 
     if (!this.connection) {
       throw new Error("NATS not connected");
     }
 
+    this.emitTelemetry("info", "publish", {
+      subject,
+      payloadKeys: Object.keys(data),
+    });
     this.connection.publish(subject, new TextEncoder().encode(JSON.stringify(data)));
   }
 
   async disconnect(): Promise<void> {
+    this.emitTelemetry("info", "disconnect_requested", {
+      activeSubscriptions: this.subscriptions.size,
+      activeListeners: this.listeners.size,
+    });
     this.manualDisconnect = true;
     this.clearReconnectTimer();
 
@@ -566,9 +973,11 @@ class NatsService {
       this.connection = null;
     }
 
-    this.credentials = null;
+    this.invalidateCredentials();
+    this.clearConnectionError();
     this.manualDisconnect = false;
     this.setConnectionState("disconnected");
+    this.emitTelemetry("info", "disconnect_completed");
   }
 
   isConnected(): boolean {
@@ -601,6 +1010,14 @@ class NatsService {
     return allowSubjects.some((pattern) =>
       natsSubjectMatches(pattern, normalizedSubject),
     );
+  }
+
+  getConnectionDiagnostics(): NatsConnectionDiagnostics {
+    return {
+      lastErrorType: this.lastErrorType,
+      lastErrorMessage: this.lastErrorMessage,
+      lastErrorAtUtc: this.lastErrorAtUtc,
+    };
   }
 
   onConnectionStateChange(listener: (state: NatsConnectionState) => void) {

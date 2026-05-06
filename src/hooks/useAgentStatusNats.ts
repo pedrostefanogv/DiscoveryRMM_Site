@@ -5,6 +5,7 @@ import { realtimeConfig } from "@/config/realtime";
 import type { Agent, AgentHeartbeat } from "@/api";
 import { heartbeatStore, extractHeartbeatMetrics } from "@/stores/heartbeatStore";
 import {
+  setNatsConnectionDiagnostics,
   setNatsConnectionState,
   setServerPongState,
 } from "@/utils/realtimeConnectionState";
@@ -324,6 +325,7 @@ export function useAgentStatusNats(
   useEffect(() => {
     if (!enabled || !NATS_ENABLED) {
       setNatsConnectionState("disconnected");
+      setNatsConnectionDiagnostics(null, null, null);
       setServerPongState(null, null);
       return;
     }
@@ -499,6 +501,18 @@ export function useAgentStatusNats(
       subscriptions.set(GLOBAL_PONG_SUBJECT, handleGlobalPong);
     }
 
+    const telemetryContext = {
+      source: "frontend.nats.bootstrap",
+      scope: describeScope(scope),
+      subjectsRequested: subscriptions.size,
+      atUtc: new Date().toISOString(),
+    };
+
+    console.info("[NATS][telemetry]", {
+      event: "bootstrap_start",
+      ...telemetryContext,
+    });
+
     console.log("[NATS] Configurando serviço NATS:", {
       url: NATS_URL,
       enabled: NATS_ENABLED,
@@ -519,29 +533,77 @@ export function useAgentStatusNats(
         if (disposed) return;
         console.log("[NATS] Estado da conexão mudou:", state);
         setNatsConnectionState(state);
+        const diagnostics = natsService.getConnectionDiagnostics();
+        setNatsConnectionDiagnostics(
+          diagnostics.lastErrorType,
+          diagnostics.lastErrorMessage,
+          diagnostics.lastErrorAtUtc,
+        );
       },
     );
 
-    void natsService.connect().then(() => {
+    void (async () => {
+      const connected = await natsService.connect();
       if (disposed) return;
+
+      const diagnostics = natsService.getConnectionDiagnostics();
+      setNatsConnectionDiagnostics(
+        diagnostics.lastErrorType,
+        diagnostics.lastErrorMessage,
+        diagnostics.lastErrorAtUtc,
+      );
+
+      if (!connected) {
+        console.warn(
+          "[NATS] Conexão não estabelecida. Bootstrap de subscriptions abortado.",
+          diagnostics,
+        );
+        console.warn("[NATS][telemetry]", {
+          event: "bootstrap_connect_failed",
+          ...telemetryContext,
+          diagnostics,
+        });
+        return;
+      }
+
       console.log("[NATS] Conectado. Inscrevendo subjects...");
 
       const activeSubjects: string[] = [];
-      subscriptions.forEach((handler, subject) => {
+      const blockedSubjects: string[] = [];
+      const failedSubjects: string[] = [];
+      for (const [subject, handler] of subscriptions) {
         if (!natsService.canSubscribeToSubject(subject)) {
           console.debug(
             "[NATS] Subject fora da allow-list do token, ignorando:",
             subject,
           );
-          return;
+          blockedSubjects.push(subject);
+          continue;
         }
 
-        activeSubjects.push(subject);
-        void natsService.subscribe(subject, handler);
-      });
+        const subscribed = await natsService.subscribe(subject, handler, {
+          connectIfNeeded: false,
+        });
+        if (subscribed) {
+          activeSubjects.push(subject);
+        } else {
+          failedSubjects.push(subject);
+        }
+      }
 
       console.log("[NATS] Subscriptions ativas:", activeSubjects);
-    });
+      console.info("[NATS][telemetry]", {
+        event: "bootstrap_subscriptions_result",
+        ...telemetryContext,
+        connected,
+        activeCount: activeSubjects.length,
+        blockedCount: blockedSubjects.length,
+        failedCount: failedSubjects.length,
+        activeSubjects,
+        blockedSubjects,
+        failedSubjects,
+      });
+    })();
 
     return () => {
       disposed = true;
@@ -551,7 +613,12 @@ export function useAgentStatusNats(
         natsService.unsubscribe(subject, handler);
       });
       setNatsConnectionState("disconnected");
+      setNatsConnectionDiagnostics(null, null, null);
       setServerPongState(null, null);
+      console.info("[NATS][telemetry]", {
+        event: "bootstrap_cleanup",
+        ...telemetryContext,
+      });
       console.log("[NATS] Cleanup concluído.");
     };
   }, [enabled, queryClient, scope]);

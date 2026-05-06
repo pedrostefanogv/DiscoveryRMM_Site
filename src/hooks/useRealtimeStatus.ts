@@ -6,9 +6,17 @@ import {
 
 export interface RealtimeConnectionStatus {
   natsConnected: boolean;
-  natsState: "disconnected" | "connecting" | "connected" | "reconnecting";
+  natsState:
+    | "disconnected"
+    | "connecting"
+    | "connected"
+    | "reconnecting"
+    | "auth_error";
   checkedAtUtc: string;
   provider: string;
+  natsLastErrorType: "auth" | "network" | null;
+  natsLastErrorMessage: string | null;
+  natsLastErrorAtUtc: string | null;
 }
 
 /**

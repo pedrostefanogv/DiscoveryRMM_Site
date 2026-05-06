@@ -8,6 +8,9 @@ export function RealtimeConnectionStatus() {
   const isRecovering =
     status.natsState === 'connecting' ||
     status.natsState === 'reconnecting';
+  const isAuthError =
+    status.natsState === 'auth_error' || status.natsLastErrorType === 'auth';
+  const hasConnectionError = !isConnected && status.natsLastErrorType !== null;
   const providers = [];
   const isServerOverloaded = status.serverOverloaded === true;
 
@@ -19,6 +22,10 @@ export function RealtimeConnectionStatus() {
 
   if (!status.natsConnected && status.natsState === 'reconnecting') {
     providers.push('NATS reconectando');
+  }
+
+  if (!status.natsConnected && status.natsState === 'auth_error') {
+    providers.push('NATS auth_error');
   }
 
   const toneClasses = isConnected
@@ -40,9 +47,24 @@ export function RealtimeConnectionStatus() {
             ? providers.join(' + ')
             : isRecovering
               ? 'Conectando'
+              : isAuthError
+                ? 'Erro de autenticacao'
               : 'Offline'}
         </span>
       </div>
+      {hasConnectionError && (
+        <div
+          className="flex items-center gap-1 rounded-full bg-red-950 px-2 py-1 text-xs font-medium text-red-200"
+          title={
+            status.natsLastErrorAtUtc
+              ? `${status.natsLastErrorMessage ?? 'Erro NATS'} @ ${status.natsLastErrorAtUtc}`
+              : (status.natsLastErrorMessage ?? 'Erro NATS')
+          }
+        >
+          <AlertTriangle className="h-3 w-3" />
+          <span>{isAuthError ? 'Credencial NATS rejeitada' : 'Falha de rede NATS'}</span>
+        </div>
+      )}
       {isServerOverloaded && (
         <div className="flex items-center gap-1 rounded-full bg-amber-950 px-2 py-1 text-xs font-medium text-amber-200">
           <AlertTriangle className="h-3 w-3" />

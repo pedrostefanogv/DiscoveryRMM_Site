@@ -236,15 +236,17 @@ export function useNotifications(options?: {
       );
     };
 
-    void natsService
-      .connect()
-      .then(() => {
-        if (disposed) return;
-        void natsService.subscribe(notificationSubject, onNotificationMessage);
-      })
-      .catch(() => {
+    void (async () => {
+      const connected = await natsService.connect();
+      if (disposed || !connected) {
         // Polling keeps notifications functional even if NATS is unavailable.
+        return;
+      }
+
+      void natsService.subscribe(notificationSubject, onNotificationMessage, {
+        connectIfNeeded: false,
       });
+    })();
 
     return () => {
       disposed = true;
