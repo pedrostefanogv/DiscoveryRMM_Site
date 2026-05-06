@@ -36,3 +36,4 @@ pnpm-debug.log*
 !.github/workflows/
 !.github/workflows/**
 Contrato.md
+.playwright-mcp/**

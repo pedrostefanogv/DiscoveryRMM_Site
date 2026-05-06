@@ -483,7 +483,8 @@ export function useAgentStatusNats(
       setServerPongState(pong.overloaded, pong.observedAtUtc);
     };
 
-    const dashboardSubjects = buildDashboardNatsSubjects(toDashboardScope(scope), {
+    const dashboardScope = toDashboardScope(scope);
+    const dashboardSubjects = buildDashboardNatsSubjects(dashboardScope, {
       includeScopedFallbacks: true,
       includeSiteWildcardForClientScope: true,
       includeGlobalWildcardSubjects: true,
@@ -506,6 +507,11 @@ export function useAgentStatusNats(
     const natsService = getNatsService({
       url: NATS_URL,
       enabled: NATS_ENABLED,
+      clientId:
+        dashboardScope.level !== "global" ? dashboardScope.clientId : undefined,
+      siteId:
+        dashboardScope.level === "site" ? dashboardScope.siteId : undefined,
+      scopeMode: "replace",
     });
 
     const unsubscribeConnectionState = natsService.onConnectionStateChange(

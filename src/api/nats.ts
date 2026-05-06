@@ -80,7 +80,7 @@ function isCredentialsExpiring(credentials: NatsCredentialsResponse): boolean {
 function isNonRetryableNatsError(error: unknown): boolean {
   if (
     error instanceof ApiError &&
-    [400, 401, 403, 404].includes(error.status)
+    [400, 401, 403, 404, 503].includes(error.status)
   ) {
     return true;
   }
@@ -116,6 +116,7 @@ export interface NatsConfig {
   enabled: boolean;
   clientId?: string;
   siteId?: string;
+  scopeMode?: "replace" | "preserve";
 }
 
 export type NatsConnectionState =
@@ -141,11 +142,43 @@ class NatsService {
   private connectionState: NatsConnectionState = "disconnected";
   private connectInFlight: Promise<void> | null = null;
   private manualDisconnect = false;
+  private pendingReconnect = false;
 
   constructor(private config: NatsConfig) {}
 
   updateConfig(config: NatsConfig) {
-    this.config = config;
+    const scopeMode = config.scopeMode ?? "replace";
+    const nextConfig: NatsConfig = {
+      ...this.config,
+      ...config,
+      clientId:
+        scopeMode === "preserve" && config.clientId === undefined
+          ? this.config.clientId
+          : config.clientId,
+      siteId:
+        scopeMode === "preserve" && config.siteId === undefined
+          ? this.config.siteId
+          : config.siteId,
+      scopeMode,
+    };
+
+    const scopeChanged =
+      this.config.clientId !== nextConfig.clientId ||
+      this.config.siteId !== nextConfig.siteId;
+    const connectionInputsChanged =
+      this.config.url !== nextConfig.url ||
+      this.config.enabled !== nextConfig.enabled;
+
+    this.config = nextConfig;
+
+    if (scopeChanged) {
+      this.credentials = null;
+      this.credentialsInFlight = null;
+    }
+
+    if (scopeChanged || connectionInputsChanged) {
+      this.restartConnection();
+    }
   }
 
   private setConnectionState(state: NatsConnectionState) {
@@ -195,6 +228,32 @@ class NatsService {
 
     clearTimeout(this.reconnectTimer);
     this.reconnectTimer = null;
+  }
+
+  private restartConnection() {
+    if (this.connectInFlight) {
+      this.pendingReconnect = true;
+      return;
+    }
+
+    this.clearReconnectTimer();
+    this.reconnectAttempts = 0;
+
+    const activeConnection = this.connection;
+    this.connection = null;
+    this.subscriptions.clear();
+
+    if (activeConnection && !activeConnection.isClosed()) {
+      void activeConnection.close().catch((error) => {
+        console.warn("Failed to close NATS connection during restart:", error);
+      });
+    }
+
+    this.setConnectionState("disconnected");
+
+    if (this.listeners.size > 0 && this.config.enabled) {
+      void this.connect();
+    }
   }
 
   private async issueCredentials(): Promise<NatsCredentialsResponse> {
@@ -389,6 +448,11 @@ class NatsService {
         this.scheduleReconnect();
       } finally {
         this.connectInFlight = null;
+
+        if (this.pendingReconnect) {
+          this.pendingReconnect = false;
+          this.restartConnection();
+        }
       }
     })();
 
@@ -437,6 +501,14 @@ class NatsService {
 
     if (!this.connection) {
       console.warn("[NATS] Cannot subscribe: NATS not connected para subject:", subject);
+      return;
+    }
+
+    if (!this.canSubscribeToSubject(subject)) {
+      console.warn(
+        "[NATS] Subject fora da allow-list do token, ignorando:",
+        subject,
+      );
       return;
     }
 
@@ -523,7 +595,7 @@ class NatsService {
 
     const allowSubjects = this.getAllowedSubscribeSubjects();
     if (allowSubjects.length === 0) {
-      return true;
+      return false;
     }
 
     return allowSubjects.some((pattern) =>

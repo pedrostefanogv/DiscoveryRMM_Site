@@ -209,6 +209,7 @@ export function useNotifications(options?: {
     const natsService = getNatsService({
       url: realtimeConfig.natsUrl,
       enabled: true,
+      scopeMode: "preserve",
     });
 
     const onNotificationMessage = (

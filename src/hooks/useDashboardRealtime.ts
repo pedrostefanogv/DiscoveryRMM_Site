@@ -116,18 +116,21 @@ export function useDashboardRealtime(
 
     let disposed = false;
     const queryKey = buildQueryKey(stableScope, window);
-    const dashboardSubjects = buildDashboardNatsSubjects(
-      toDashboardNatsScope(stableScope),
-      {
-        includeScopedFallbacks: true,
-        includeSiteWildcardForClientScope: true,
-        includeGlobalWildcardSubjects: true,
-      },
-    );
+    const dashboardScope = toDashboardNatsScope(stableScope);
+    const dashboardSubjects = buildDashboardNatsSubjects(dashboardScope, {
+      includeScopedFallbacks: true,
+      includeSiteWildcardForClientScope: true,
+      includeGlobalWildcardSubjects: true,
+    });
 
     const natsService = getNatsService({
       url: realtimeConfig.natsUrl,
       enabled: NATS_ENABLED,
+      clientId:
+        dashboardScope.level !== "global" ? dashboardScope.clientId : undefined,
+      siteId:
+        dashboardScope.level === "site" ? dashboardScope.siteId : undefined,
+      scopeMode: "replace",
     });
 
     const onDashboardEvent = (event: DashboardEvent | Record<string, unknown>) => {
