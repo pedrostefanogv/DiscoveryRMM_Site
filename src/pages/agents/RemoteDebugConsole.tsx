@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import * as signalR from "@microsoft/signalr";
 import {
   agentsApi,
   type RemoteDebugLogEvent,
@@ -8,20 +7,14 @@ import {
   type RemoteDebugSessionEndedEvent,
   type RemoteDebugSessionJoinedEvent,
 } from "@/api";
-import { API_BASE_URL } from "@/api/client";
+import { getNatsService, type DashboardEvent } from "@/api/nats";
+import { realtimeConfig } from "@/config/realtime";
 import { useAuth } from "@/auth/AuthContext";
 import { Badge, Button, Card, ErrorDisplay } from "@/components/ui";
 
 const MAX_LOG_LINES = 2000;
 
 const levelOrder: RemoteDebugLogLevel[] = ["debug", "info", "warn", "error"];
-
-function resolveHubUrl(hubPath: string): string {
-  if (hubPath.startsWith("http://") || hubPath.startsWith("https://")) {
-    return hubPath;
-  }
-  return `${API_BASE_URL}${hubPath}`;
-}
 
 function formatTimestamp(ts: string | undefined): string {
   if (!ts) return "--:--:--";
@@ -33,7 +26,9 @@ function formatTimestamp(ts: string | undefined): string {
   });
 }
 
-function levelBadgeColor(level: RemoteDebugLogLevel): "slate" | "primary" | "warning" | "danger" {
+function levelBadgeColor(
+  level: RemoteDebugLogLevel,
+): "slate" | "primary" | "warning" | "danger" {
   if (level === "info") return "primary";
   if (level === "warn") return "warning";
   if (level === "error") return "danger";
@@ -55,17 +50,151 @@ function withSystemMessage(message: string): RemoteDebugLogEvent {
     level: "info",
     message,
     timestampUtc: new Date().toISOString(),
+    transport: "nats",
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function readOptionalString(
+  source: Record<string, unknown>,
+  key: string,
+): string | undefined {
+  const value = source[key];
+  if (typeof value !== "string") return undefined;
+  const normalized = value.trim();
+  return normalized.length > 0 ? normalized : undefined;
+}
+
+function readOptionalNumber(
+  source: Record<string, unknown>,
+  key: string,
+): number | undefined {
+  const value = source[key];
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return undefined;
+}
+
+function safeStringify(value: unknown): string {
+  try {
+    const json = JSON.stringify(value);
+    return typeof json === "string" ? json : String(value);
+  } catch {
+    return String(value);
+  }
+}
+
+function unwrapEnvelope(
+  message: DashboardEvent | Record<string, unknown>,
+): { envelope: Record<string, unknown>; payload: Record<string, unknown> } {
+  const envelope = isRecord(message) ? message : {};
+  const payload = isRecord(envelope.data) ? envelope.data : envelope;
+  return { envelope, payload };
+}
+
+function detectEventKind(
+  envelope: Record<string, unknown>,
+  payload: Record<string, unknown>,
+): "joined" | "log" | "ended" | null {
+  const rawType =
+    readOptionalString(envelope, "eventType") ??
+    readOptionalString(envelope, "type") ??
+    readOptionalString(payload, "eventType") ??
+    readOptionalString(payload, "type");
+
+  if (rawType) {
+    const normalized = rawType.toLowerCase();
+    if (normalized.includes("joined")) return "joined";
+    if (normalized.includes("ended")) return "ended";
+    if (normalized.includes("log")) return "log";
+  }
+
+  if ("level" in payload || "message" in payload) return "log";
+  if ("endedAtUtc" in payload || "reason" in payload) return "ended";
+  if ("startedAtUtc" in payload || "expiresAtUtc" in payload) return "joined";
+  return null;
+}
+
+function toJoinedEvent(
+  payload: Record<string, unknown>,
+  fallback: {
+    sessionId: string;
+    agentId: string;
+    expiresAt: string;
+  },
+): RemoteDebugSessionJoinedEvent {
+  return {
+    sessionId: readOptionalString(payload, "sessionId") ?? fallback.sessionId,
+    agentId: readOptionalString(payload, "agentId") ?? fallback.agentId,
+    startedAtUtc:
+      readOptionalString(payload, "startedAtUtc") ?? new Date().toISOString(),
+    expiresAtUtc: readOptionalString(payload, "expiresAtUtc") ?? fallback.expiresAt,
+    preferredTransport: "nats",
+  };
+}
+
+function toLogEvent(
+  payload: Record<string, unknown>,
+  envelope: Record<string, unknown>,
+  fallback: {
+    sessionId: string;
+    agentId: string;
+  },
+): RemoteDebugLogEvent {
+  const message =
+    readOptionalString(payload, "message") ??
+    readOptionalString(envelope, "message") ??
+    safeStringify(payload);
+
+  return {
+    sessionId: readOptionalString(payload, "sessionId") ?? fallback.sessionId,
+    agentId: readOptionalString(payload, "agentId") ?? fallback.agentId,
+    level: normalizeLevel(
+      readOptionalString(payload, "level") ?? readOptionalString(envelope, "level"),
+    ),
+    message,
+    timestampUtc:
+      readOptionalString(payload, "timestampUtc") ??
+      readOptionalString(envelope, "timestampUtc") ??
+      new Date().toISOString(),
+    sequence:
+      readOptionalNumber(payload, "sequence") ??
+      readOptionalNumber(envelope, "sequence"),
+    transport:
+      readOptionalString(payload, "transport") ??
+      readOptionalString(envelope, "transport") ??
+      "nats",
+  };
+}
+
+function toEndedEvent(
+  payload: Record<string, unknown>,
+  fallback: {
+    sessionId: string;
+  },
+): RemoteDebugSessionEndedEvent {
+  return {
+    sessionId: readOptionalString(payload, "sessionId") ?? fallback.sessionId,
+    endedAtUtc: readOptionalString(payload, "endedAtUtc") ?? new Date().toISOString(),
+    reason: readOptionalString(payload, "reason") ?? null,
   };
 }
 
 export default function RemoteDebugConsole() {
   const [searchParams] = useSearchParams();
-  const { session, refreshSession } = useAuth();
+  const { session } = useAuth();
 
   const sessionId = searchParams.get("sessionId") ?? "";
   const agentId = searchParams.get("agentId") ?? "";
-  const hubUrl = searchParams.get("hubUrl") ?? "/hubs/remote-debug";
+  const subject = searchParams.get("subject") ?? "";
   const expiresAt = searchParams.get("expiresAt") ?? "";
+  const natsUrl = searchParams.get("natsUrl") ?? realtimeConfig.natsUrl;
 
   const [connectionState, setConnectionState] = useState<
     "connecting" | "connected" | "reconnecting" | "closed"
@@ -73,7 +202,7 @@ export default function RemoteDebugConsole() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [logs, setLogs] = useState<RemoteDebugLogEvent[]>([]);
   const [lastSequence, setLastSequence] = useState<number | null>(null);
-  const [lastTransport, setLastTransport] = useState<string>("--");
+  const [lastTransport, setLastTransport] = useState<string>("nats");
   const [isStopping, setIsStopping] = useState(false);
   const [levelFilters, setLevelFilters] = useState<Record<RemoteDebugLogLevel, boolean>>({
     debug: true,
@@ -82,7 +211,6 @@ export default function RemoteDebugConsole() {
     error: true,
   });
 
-  const connectionRef = useRef<signalR.HubConnection | null>(null);
   const consoleRef = useRef<HTMLDivElement | null>(null);
   const [autoScroll, setAutoScroll] = useState(true);
 
@@ -98,42 +226,36 @@ export default function RemoteDebugConsole() {
 
   useEffect(() => {
     if (!sessionId || !agentId) {
-      setErrorMessage("Parâmetros inválidos para a sessão de remote debug.");
+      setErrorMessage("Parametros invalidos para a sessao de remote debug.");
       setConnectionState("closed");
       return;
     }
 
     if (!session.accessToken) {
-      setErrorMessage("Sessão autenticada não encontrada para conectar no hub.");
+      setErrorMessage("Sessao autenticada nao encontrada para conectar no NATS.");
+      setConnectionState("closed");
+      return;
+    }
+
+    if (!subject) {
+      setErrorMessage("Sessao sem subject NATS para consumir logs de remote debug.");
+      setConnectionState("closed");
+      return;
+    }
+
+    if (!natsUrl) {
+      setErrorMessage("URL NATS nao informada para o console de remote debug.");
       setConnectionState("closed");
       return;
     }
 
     let disposed = false;
-    const resolvedHubUrl = resolveHubUrl(hubUrl);
-    console.log("[RemoteDebug] Iniciando conexão SignalR em", resolvedHubUrl, { sessionId, agentId });
-    const connection = new signalR.HubConnectionBuilder()
-      .withUrl(resolvedHubUrl, {
-        accessTokenFactory: async () => {
-          if (session.accessToken) return session.accessToken;
-          const refreshed = await refreshSession();
-          return refreshed ?? "";
-        },
-      })
-      .withAutomaticReconnect([1000, 2000, 5000, 10000])
-      .withKeepAliveInterval(15_000)
-      .withServerTimeout(60_000)
-      .configureLogging(signalR.LogLevel.Warning)
-      .build();
+    setConnectionState("connecting");
 
-    console.log("[RemoteDebug] Conexão configurada:", {
-      hubUrl: resolvedHubUrl,
-      sessionId,
-      agentId,
-      reconnectDelays: [1000, 2000, 5000, 10000],
+    const natsService = getNatsService({
+      url: natsUrl,
+      enabled: true,
     });
-
-    connectionRef.current = connection;
 
     const appendLog = (event: RemoteDebugLogEvent) => {
       setLogs((previous) => {
@@ -152,130 +274,88 @@ export default function RemoteDebugConsole() {
       }
     };
 
-    const onJoined = (event: RemoteDebugSessionJoinedEvent) => {
+    const unsubscribeConnectionState = natsService.onConnectionStateChange((state) => {
       if (disposed) return;
-      console.log("[RemoteDebug][SessionJoined]", {
-        sessionId: event.sessionId,
-        agentId: event.agentId,
-        transport: event.preferredTransport,
-        startedAt: event.startedAtUtc,
-        expiresAt: event.expiresAtUtc,
-      });
-      setConnectionState("connected");
-      appendLog(
-        withSystemMessage(
-          `Sessão conectada (${event.sessionId.slice(0, 8)}...) via ${event.preferredTransport}.`,
-        ),
-      );
-    };
-
-    const onLog = (event: RemoteDebugLogEvent) => {
-      if (disposed) return;
-      console.log("[RemoteDebug][Log]", {
-        level: event.level,
-        message: event.message?.slice(0, 200),
-        sequence: event.sequence,
-        timestamp: event.timestampUtc,
-        transport: event.transport,
-      });
-      appendLog({ ...event, level: normalizeLevel(event.level) });
-    };
-
-    const onEnded = (event: RemoteDebugSessionEndedEvent) => {
-      if (disposed) return;
-      console.log("[RemoteDebug][SessionEnded]", {
-        sessionId: event.sessionId,
-        reason: event.reason,
-        endedAt: event.endedAtUtc,
-      });
-      setConnectionState("closed");
-      appendLog(
-        withSystemMessage(
-          `Sessão encerrada: ${event.reason?.trim() || "sem motivo informado"}.`,
-        ),
-      );
-    };
-
-    connection.on("RemoteDebugSessionJoined", onJoined);
-    connection.on("RemoteDebugLog", onLog);
-    connection.on("RemoteDebugSessionEnded", onEnded);
-    console.log("[RemoteDebug] Handlers registrados:", [
-      "RemoteDebugSessionJoined",
-      "RemoteDebugLog",
-      "RemoteDebugSessionEnded",
-    ]);
-
-    connection.onreconnecting(() => {
-      if (disposed) return;
-      console.log("[RemoteDebug] Reconectando...");
-      setConnectionState("reconnecting");
-      setErrorMessage(null);
-    });
-
-    connection.onreconnected(async () => {
-      if (disposed) return;
-      console.log("[RemoteDebug] Reconectado. Re-ingressando na sessão...");
-      setConnectionState("connected");
-      setErrorMessage(null);
-      try {
-        await connection.invoke("JoinSession", sessionId);
-        console.log("[RemoteDebug] Sessão re-ingressada após reconexão.");
-      } catch {
-        console.warn("[RemoteDebug] Falha ao re-ingressar na sessão após reconexão.");
-        setErrorMessage("Reconectado, mas não foi possível entrar novamente na sessão.");
-      }
-    });
-
-    connection.onclose(() => {
-      if (disposed) return;
-      console.log("[RemoteDebug] Conexão fechada.");
-      setConnectionState("closed");
-    });
-
-    const startPromise = connection
-      .start()
-      .then(async () => {
-        if (disposed) return;
-        console.log("[RemoteDebug] SignalR conectado (connectionId:", connection.connectionId, ")");
-        console.log("[RemoteDebug] Ingressando na sessão:", sessionId);
-        await connection.invoke("JoinSession", sessionId);
-        console.log("[RemoteDebug] Sessão ingressada com sucesso.");
+      if (state === "connected") {
         setConnectionState("connected");
         setErrorMessage(null);
+        return;
+      }
+      if (state === "reconnecting") {
+        setConnectionState("reconnecting");
+        return;
+      }
+      if (state === "connecting") {
+        setConnectionState("connecting");
+        return;
+      }
+      setConnectionState("closed");
+    });
+
+    const onRemoteDebugEvent = (message: DashboardEvent | Record<string, unknown>) => {
+      if (disposed) return;
+      const { envelope, payload } = unwrapEnvelope(message);
+      const kind = detectEventKind(envelope, payload);
+
+      if (kind === "joined") {
+        const event = toJoinedEvent(payload, {
+          sessionId,
+          agentId,
+          expiresAt: expiresAt || new Date().toISOString(),
+        });
+
+        setConnectionState("connected");
+        appendLog(
+          withSystemMessage(
+            `Sessao conectada (${event.sessionId.slice(0, 8)}...) via nats.`,
+          ),
+        );
+        return;
+      }
+
+      if (kind === "ended") {
+        const event = toEndedEvent(payload, { sessionId });
+        setConnectionState("closed");
+        appendLog(
+          withSystemMessage(
+            `Sessao encerrada: ${event.reason?.trim() || "sem motivo informado"}.`,
+          ),
+        );
+        return;
+      }
+
+      if (kind === "log") {
+        const event = toLogEvent(payload, envelope, { sessionId, agentId });
+        appendLog(event);
+      }
+    };
+
+    void natsService
+      .connect()
+      .then(async () => {
+        if (disposed) return;
+        await natsService.subscribe(subject, onRemoteDebugEvent);
+        if (disposed) return;
+        setErrorMessage(null);
+        setConnectionState("connected");
+        appendLog(withSystemMessage(`Escutando subject NATS: ${subject}`));
       })
       .catch((error: unknown) => {
         if (disposed) return;
-        const message = error instanceof Error ? error.message : "Falha ao conectar no remote debug.";
-        console.error("[RemoteDebug] Falha ao conectar:", message, error);
+        const message =
+          error instanceof Error
+            ? error.message
+            : "Falha ao conectar no remote debug via NATS.";
         setConnectionState("closed");
         setErrorMessage(message);
       });
 
     return () => {
       disposed = true;
-      console.log("[RemoteDebug] Cleanup: removendo handlers e saindo da sessão.");
-      connection.off("RemoteDebugSessionJoined", onJoined);
-      connection.off("RemoteDebugLog", onLog);
-      connection.off("RemoteDebugSessionEnded", onEnded);
-
-      void startPromise.finally(async () => {
-        try {
-          if (connection.state === signalR.HubConnectionState.Connected) {
-            console.log("[RemoteDebug] Saindo da sessão:", sessionId);
-            await connection.invoke("LeaveSession", sessionId);
-          }
-        } catch {
-          // Ignore cleanup invoke errors.
-        } finally {
-          if (connection.state !== signalR.HubConnectionState.Disconnected) {
-            console.log("[RemoteDebug] Parando conexão (estado:", connection.state, ")");
-            await connection.stop();
-            console.log("[RemoteDebug] Conexão parada.");
-          }
-        }
-      });
+      unsubscribeConnectionState();
+      natsService.unsubscribe(subject, onRemoteDebugEvent);
     };
-  }, [agentId, hubUrl, refreshSession, session.accessToken, sessionId]);
+  }, [agentId, expiresAt, natsUrl, session.accessToken, sessionId, subject]);
 
   useEffect(() => {
     if (!expiresAt) return;
@@ -286,7 +366,7 @@ export default function RemoteDebugConsole() {
     if (remainingMs <= 0) {
       setLogs((current) => [
         ...current,
-        withSystemMessage("Sessão expirada (TTL atingido)."),
+        withSystemMessage("Sessao expirada (TTL atingido)."),
       ]);
       return;
     }
@@ -294,7 +374,7 @@ export default function RemoteDebugConsole() {
     const timerId = window.setTimeout(() => {
       setLogs((current) => [
         ...current,
-        withSystemMessage("Sessão expirada (TTL atingido)."),
+        withSystemMessage("Sessao expirada (TTL atingido)."),
       ]);
     }, remainingMs);
 
@@ -309,17 +389,14 @@ export default function RemoteDebugConsole() {
     try {
       await agentsApi.stopRemoteDebugSession(agentId, sessionId);
       setConnectionState("closed");
-      setLogs((current) => [...current, withSystemMessage("Sessão encerrada pelo usuário.")]);
+      setLogs((current) => [
+        ...current,
+        withSystemMessage("Sessao encerrada pelo usuario."),
+      ]);
     } catch (error) {
-      const fallbackMessage = error instanceof Error ? error.message : "Falha ao encerrar a sessão.";
+      const fallbackMessage =
+        error instanceof Error ? error.message : "Falha ao encerrar a sessao.";
       setErrorMessage(fallbackMessage);
-      try {
-        if (connectionRef.current?.state === signalR.HubConnectionState.Connected) {
-          await connectionRef.current.invoke("CloseSession", sessionId, "closed-by-user");
-        }
-      } catch {
-        // Keep original stop error.
-      }
     } finally {
       setIsStopping(false);
     }
@@ -337,31 +414,42 @@ export default function RemoteDebugConsole() {
   const handleScroll = () => {
     const element = consoleRef.current;
     if (!element) return;
-    const nearBottom = element.scrollTop + element.clientHeight >= element.scrollHeight - 20;
+    const nearBottom =
+      element.scrollTop + element.clientHeight >= element.scrollHeight - 20;
     setAutoScroll(nearBottom);
   };
 
   if (!sessionId || !agentId) {
     return (
       <div className="mx-auto max-w-3xl p-6">
-        <ErrorDisplay message="Parâmetros inválidos para a tela de remote debug." />
+        <ErrorDisplay message="Parametros invalidos para a tela de remote debug." />
       </div>
     );
   }
 
   const totalLines = logs.length;
-  const expiresLabel = expiresAt ? new Date(expiresAt).toLocaleTimeString("pt-BR", { hour12: false }) : "--:--";
+  const expiresLabel = expiresAt
+    ? new Date(expiresAt).toLocaleTimeString("pt-BR", { hour12: false })
+    : "--:--";
 
   return (
     <div className="min-h-screen bg-slate-950 p-4 text-slate-100">
       <div className="mx-auto flex max-w-7xl flex-col gap-4">
         <Card className="border border-white/10 bg-slate-900/80">
           <div className="flex flex-wrap items-center gap-2 border-b border-white/5 px-4 py-3">
-            <Badge color={connectionState === "connected" ? "success" : connectionState === "reconnecting" ? "warning" : "slate"}>
+            <Badge
+              color={
+                connectionState === "connected"
+                  ? "success"
+                  : connectionState === "reconnecting"
+                    ? "warning"
+                    : "slate"
+              }
+            >
               {connectionState}
             </Badge>
             <span className="text-sm text-slate-300">Agente: {agentId}</span>
-            <span className="text-xs text-slate-500">Sessão: {sessionId.slice(0, 8)}...</span>
+            <span className="text-xs text-slate-500">Sessao: {sessionId.slice(0, 8)}...</span>
             <span className="text-xs text-slate-500">Expira: {expiresLabel}</span>
             <div className="ml-auto flex items-center gap-2">
               <Button
@@ -379,7 +467,7 @@ export default function RemoteDebugConsole() {
                 loading={isStopping}
                 disabled={connectionState === "closed"}
               >
-                Encerrar sessão
+                Encerrar sessao
               </Button>
             </div>
           </div>
@@ -448,9 +536,7 @@ export default function RemoteDebugConsole() {
           </div>
         </Card>
 
-        {errorMessage && (
-          <ErrorDisplay message={errorMessage} />
-        )}
+        {errorMessage && <ErrorDisplay message={errorMessage} />}
       </div>
     </div>
   );

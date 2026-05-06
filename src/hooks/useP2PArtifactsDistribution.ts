@@ -15,7 +15,7 @@ export function useP2PArtifactsDistribution(
     queryFn: () => p2pApi.getArtifactsDistribution(params),
     enabled,
     staleTime: 30_000,
-    refetchInterval: 60_000,
+    refetchInterval: 300_000,
     refetchIntervalInBackground: true,
   });
 }

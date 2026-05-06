@@ -87,7 +87,7 @@ export function useSlaStatus(id: string) {
     queryKey: KEYS.slaStatus(id),
     queryFn: () => ticketsApi.getSlaStatus(id),
     enabled: !!id,
-    refetchInterval: 60_000,
+    refetchInterval: 300_000,
   });
 }
 
@@ -96,7 +96,7 @@ export function useSlaDetails(id: string) {
     queryKey: KEYS.slaDetails(id),
     queryFn: () => ticketsApi.getSlaDetails(id),
     enabled: !!id,
-    refetchInterval: 60_000,
+    refetchInterval: 300_000,
   });
 }
 

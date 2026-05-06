@@ -15,7 +15,7 @@ export function useP2PAgentsRanking(
     queryFn: () => p2pApi.getAgentsRanking(params),
     enabled,
     staleTime: 30_000,
-    refetchInterval: 60_000,
+    refetchInterval: 300_000,
     refetchIntervalInBackground: true,
   });
 }

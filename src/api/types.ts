@@ -312,7 +312,7 @@ export type RemoteDebugLogLevel = "debug" | "info" | "warn" | "error";
 
 export interface StartRemoteDebugSessionRequest {
   logLevel?: RemoteDebugLogLevel;
-  preferredTransport?: "signalr" | "nats";
+  preferredTransport?: "nats";
   ttlMinutes?: number;
 }
 
@@ -321,10 +321,9 @@ export interface StartRemoteDebugSessionResponse {
   commandId: string;
   agentId: string;
   logLevel: RemoteDebugLogLevel;
-  preferredTransport: "signalr" | "nats";
+  preferredTransport: "nats";
   startedAtUtc: string;
   expiresAtUtc: string;
-  signalRHub: string;
   natsLegacySubject: string | null;
   natsTenantSubject: string | null;
   natsWssUrl: string | null;
@@ -335,7 +334,7 @@ export interface RemoteDebugSessionJoinedEvent {
   agentId: string;
   startedAtUtc: string;
   expiresAtUtc: string;
-  preferredTransport: "signalr" | "nats";
+  preferredTransport: "nats";
 }
 
 export interface RemoteDebugLogEvent {

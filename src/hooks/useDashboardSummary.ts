@@ -36,7 +36,7 @@ export function useDashboardSummary(
   window: DashboardWindow = "24h",
   options: UseDashboardSummaryOptions = {},
 ) {
-  const { enabled = true, refetchInterval = 60_000 } = options;
+  const { enabled = true, refetchInterval = 300_000 } = options;
 
   return useQuery<DashboardSummaryDto>({
     queryKey: buildQueryKey(scope, window),

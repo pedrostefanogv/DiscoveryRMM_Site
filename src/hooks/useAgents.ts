@@ -91,7 +91,7 @@ export function useAgentsByClient(clientId: string) {
     queryKey: KEYS.byClient(clientId),
     queryFn: () => agentsApi.listByClient(clientId),
     enabled: !!clientId,
-    refetchInterval: 15_000,
+    refetchInterval: 300_000,
     refetchIntervalInBackground: true,
   });
 }
@@ -101,7 +101,7 @@ export function useAgentsBySite(siteId: string) {
     queryKey: KEYS.bySite(siteId),
     queryFn: () => agentsApi.listBySite(siteId),
     enabled: !!siteId,
-    refetchInterval: 15_000,
+    refetchInterval: 300_000,
     refetchIntervalInBackground: true,
   });
 }
@@ -111,7 +111,7 @@ export function useAgent(id: string) {
     queryKey: KEYS.detail(id),
     queryFn: () => agentsApi.get(id),
     enabled: !!id,
-    refetchInterval: 15_000,
+    refetchInterval: 300_000,
     refetchIntervalInBackground: true,
   });
 }

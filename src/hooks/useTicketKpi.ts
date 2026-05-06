@@ -13,6 +13,6 @@ export function useTicketKpi(params: TicketKpiQuery = {}, enabled = true) {
     queryFn: () => ticketKpiApi.get(params),
     enabled,
     staleTime: 30_000,
-    refetchInterval: 60_000,
+    refetchInterval: 300_000,
   });
 }

@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import * as signalR from "@microsoft/signalr";
 import { notificationsApi, type AppNotification } from "@/api/notifications";
-import { API_BASE_URL } from "@/api/client";
+import { getNatsService, type DashboardEvent } from "@/api/nats";
+import { realtimeConfig } from "@/config/realtime";
 import { useAuth } from "@/auth/AuthContext";
 import { getUserIdFromJwt } from "@/auth/jwt";
 
@@ -11,12 +11,28 @@ const NOTIFICATION_KEYS = {
     ["notifications", recipientUserId ?? "anonymous", topic ?? "all", limit] as const,
 };
 
-function resolveHubUrl(hubPath: string) {
-  if (hubPath.startsWith("http://") || hubPath.startsWith("https://")) {
-    return hubPath;
+const NATS_ENABLED = realtimeConfig.useNats && realtimeConfig.natsEnabled;
+const NATS_NOTIFICATIONS_SUBJECT_TEMPLATE =
+  import.meta.env.VITE_NATS_NOTIFICATIONS_SUBJECT_TEMPLATE ?? "";
+
+function resolveNatsNotificationsSubject(
+  recipientUserId: string,
+  topic: string | undefined,
+): string | null {
+  const template = NATS_NOTIFICATIONS_SUBJECT_TEMPLATE.trim();
+  if (!template) return null;
+
+  let subject = template.replaceAll("{userId}", recipientUserId);
+  if (topic) {
+    subject = subject.replaceAll("{topic}", topic);
   }
 
-  return `${API_BASE_URL}${hubPath}`;
+  if (subject.includes("{userId}") || subject.includes("{topic}")) {
+    return null;
+  }
+
+  const normalized = subject.trim();
+  return normalized.length > 0 ? normalized : null;
 }
 
 function upsertNotification(
@@ -72,12 +88,76 @@ function markAllNotificationsAsRead(current: AppNotification[] | undefined) {
   }));
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function readOptionalString(
+  source: Record<string, unknown>,
+  key: string,
+): string | undefined {
+  const value = source[key];
+  if (typeof value !== "string") return undefined;
+  const normalized = value.trim();
+  return normalized.length > 0 ? normalized : undefined;
+}
+
+function readOptionalBoolean(
+  source: Record<string, unknown>,
+  key: string,
+): boolean | undefined {
+  const value = source[key];
+  if (typeof value === "boolean") return value;
+  return undefined;
+}
+
+function safeStringify(value: unknown): string | null {
+  try {
+    const json = JSON.stringify(value);
+    return typeof json === "string" ? json : null;
+  } catch {
+    return null;
+  }
+}
+
+function toNotificationPayload(
+  message: DashboardEvent | Record<string, unknown>,
+  fallbackTopic: string | undefined,
+): AppNotification | null {
+  if (!isRecord(message)) return null;
+
+  const payload = isRecord(message.data) ? message.data : message;
+  const id = readOptionalString(payload, "id");
+  if (!id) return null;
+
+  const payloadJson =
+    readOptionalString(payload, "payloadJson") ??
+    ("payload" in payload ? safeStringify(payload.payload) : null);
+
+  return {
+    id,
+    eventType: readOptionalString(payload, "eventType") ?? "NotificationReceived",
+    topic: readOptionalString(payload, "topic") ?? fallbackTopic ?? "general",
+    severity: readOptionalString(payload, "severity") ?? "Informational",
+    recipientUserId: readOptionalString(payload, "recipientUserId") ?? null,
+    recipientAgentId: readOptionalString(payload, "recipientAgentId") ?? null,
+    recipientKey: readOptionalString(payload, "recipientKey") ?? null,
+    title: readOptionalString(payload, "title") ?? "Notificacao",
+    message: readOptionalString(payload, "message") ?? "",
+    payloadJson,
+    isRead: readOptionalBoolean(payload, "isRead") ?? false,
+    createdAt: readOptionalString(payload, "createdAt") ?? new Date().toISOString(),
+    readAt: readOptionalString(payload, "readAt") ?? null,
+    createdBy: readOptionalString(payload, "createdBy") ?? null,
+  };
+}
+
 export function useNotifications(options?: {
   topic?: string;
   limit?: number;
   enabled?: boolean;
 }) {
-  const { isAuthenticated, refreshSession, session } = useAuth();
+  const { isAuthenticated, session } = useAuth();
   const queryClient = useQueryClient();
   const topic = options?.topic;
   const limit = options?.limit ?? 50;
@@ -93,6 +173,11 @@ export function useNotifications(options?: {
   );
   const canQuery = enabled && isAuthenticated && !!recipientUserId;
 
+  const notificationSubject = useMemo(() => {
+    if (!recipientUserId) return null;
+    return resolveNatsNotificationsSubject(recipientUserId, topic);
+  }, [recipientUserId, topic]);
+
   const query = useQuery({
     queryKey,
     queryFn: () =>
@@ -103,144 +188,68 @@ export function useNotifications(options?: {
       }),
     enabled: canQuery,
     staleTime: 15_000,
-    refetchInterval: 60_000,
+    refetchInterval: 300_000,
     refetchIntervalInBackground: true,
   });
 
   useEffect(() => {
-    if (!canQuery || !recipientUserId) return;
+    const canUseNats =
+      canQuery &&
+      NATS_ENABLED &&
+      !!realtimeConfig.natsUrl &&
+      !!recipientUserId &&
+      !!notificationSubject;
+
+    if (!canUseNats || !recipientUserId || !notificationSubject) {
+      return;
+    }
 
     let disposed = false;
-    const hubUrl = resolveHubUrl("/hubs/notifications");
-    console.log("[notifications] Iniciando conexão SignalR em", hubUrl, "recipientUserId:", recipientUserId, "topic:", topic);
-    const connection = new signalR.HubConnectionBuilder()
-      .withUrl(hubUrl, {
-        accessTokenFactory: async () => {
-          if (session.accessToken) return session.accessToken;
-          const refreshed = await refreshSession();
-          return refreshed ?? "";
-        },
-      })
-      .withAutomaticReconnect([0, 2_000, 5_000, 10_000, 30_000])
-      .withKeepAliveInterval(15_000)
-      .withServerTimeout(60_000)
-      .configureLogging(signalR.LogLevel.Warning)
-      .build();
 
-    console.log("[notifications] Conexão configurada:", {
-      hubUrl,
-      recipientUserId,
-      topic,
-      queryKey,
+    const natsService = getNatsService({
+      url: realtimeConfig.natsUrl,
+      enabled: true,
     });
 
-    const subscribeGroups = async () => {
-      console.log("[notifications] Inscrevendo usuário:", recipientUserId);
-      await connection.invoke("SubscribeUser", recipientUserId);
-      console.log("[notifications] Usuário inscrito com sucesso:", recipientUserId);
-
-      if (topic) {
-        console.log("[notifications] Inscrevendo tópico:", topic);
-        await connection.invoke("SubscribeTopic", topic);
-        console.log("[notifications] Tópico inscrito com sucesso:", topic);
-      }
-    };
-
-    const onNotificationReceived = (notification: AppNotification) => {
+    const onNotificationMessage = (
+      message: DashboardEvent | Record<string, unknown>,
+    ) => {
       if (disposed) return;
 
-      // Filtro por recipientUserId
-      if (notification.recipientUserId && notification.recipientUserId !== recipientUserId) {
-        console.log("[notifications][filter] Ignorado por recipientUserId:", {
-          esperado: recipientUserId,
-          recebido: notification.recipientUserId,
-          notificationId: notification.id,
-        });
+      const notification = toNotificationPayload(message, topic);
+      if (!notification) return;
+
+      if (
+        notification.recipientUserId &&
+        notification.recipientUserId !== recipientUserId
+      ) {
         return;
       }
 
-      // Filtro por topic
       if (topic && notification.topic !== topic) {
-        console.log("[notifications][filter] Ignorado por tópico:", {
-          esperado: topic,
-          recebido: notification.topic,
-          notificationId: notification.id,
-        });
         return;
       }
-
-      console.log("[notifications][NotificationReceived]", {
-        id: notification.id,
-        title: notification.title,
-        topic: notification.topic,
-        isRead: notification.isRead,
-        createdAt: notification.createdAt,
-        recipientUserId: notification.recipientUserId,
-      });
 
       queryClient.setQueryData<AppNotification[]>(queryKey, (current) =>
         upsertNotification(current, notification, limit),
       );
     };
 
-    connection.on("NotificationReceived", onNotificationReceived);
-    connection.onreconnected(() => {
-      console.log("[notifications] Reconectado. Re-inscrevendo grupos...");
-      subscribeGroups()
-        .then(() => console.log("[notifications] Grupos re-inscritos após reconexão."))
-        .catch(() => {});
-    });
-    connection.onreconnecting(() => {
-      console.log("[notifications] Reconectando...");
-    });
-    connection.onclose(() => {
-      if (disposed) return;
-      console.log("[notifications] Conexão fechada.");
-    });
-
-    const startPromise = connection
-      .start()
-      .then(async () => {
+    void natsService
+      .connect()
+      .then(() => {
         if (disposed) return;
-        console.log("[notifications] SignalR conectado em", hubUrl, "(connectionId:", connection.connectionId, ")");
-        await subscribeGroups();
+        void natsService.subscribe(notificationSubject, onNotificationMessage);
       })
-      .catch((error: unknown) => {
-        if (disposed) return;
-
-        if (
-          error instanceof Error &&
-          error.message.includes("before stop() was called")
-        ) {
-          return;
-        }
-
-        console.warn("[notifications] Falha ao conectar SignalR:", error);
+      .catch(() => {
+        // Polling keeps notifications functional even if NATS is unavailable.
       });
 
     return () => {
       disposed = true;
-      console.log("[notifications] Cleanup: removendo handlers e parando conexão.");
-      connection.off("NotificationReceived", onNotificationReceived);
-
-      void startPromise.finally(async () => {
-        if (connection.state !== signalR.HubConnectionState.Disconnected) {
-          console.log("[notifications] Parando conexão (estado:", connection.state, ")");
-          await connection.stop();
-          console.log("[notifications] Conexão parada.");
-        }
-      });
+      natsService.unsubscribe(notificationSubject, onNotificationMessage);
     };
-  }, [
-    canQuery,
-    limit,
-    queryClient,
-    queryKey,
-    recipientUserId,
-    refreshSession,
-    session.accessToken,
-    topic,
-  ]);
+  }, [canQuery, limit, notificationSubject, queryClient, queryKey, recipientUserId, topic]);
 
   const notifications = query.data ?? [];
   const unreadCount = useMemo(

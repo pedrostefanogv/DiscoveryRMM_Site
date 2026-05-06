@@ -5,6 +5,7 @@ import type {
   Subscription as CoreSubscription,
   WsConnectionOptions,
 } from "@nats-io/nats-core";
+import { natsSubjectMatches } from "@/utils/natsSubjects";
 
 type NatsConnection = Pick<
   CoreNatsConnection,
@@ -104,8 +105,10 @@ function isNonRetryableNatsError(error: unknown): boolean {
 
 export interface DashboardEvent {
   eventType: string;
-  data: Record<string, unknown>;
+  data: Record<string, unknown> | null;
   timestampUtc: string;
+  clientId?: string | null;
+  siteId?: string | null;
 }
 
 export interface NatsConfig {
@@ -506,6 +509,26 @@ class NatsService {
     }
 
     return this.connectionState;
+  }
+
+  getAllowedSubscribeSubjects(): readonly string[] {
+    return this.credentials?.subscribeSubjects ?? [];
+  }
+
+  canSubscribeToSubject(subject: string): boolean {
+    const normalizedSubject = subject.trim();
+    if (!normalizedSubject) {
+      return false;
+    }
+
+    const allowSubjects = this.getAllowedSubscribeSubjects();
+    if (allowSubjects.length === 0) {
+      return true;
+    }
+
+    return allowSubjects.some((pattern) =>
+      natsSubjectMatches(pattern, normalizedSubject),
+    );
   }
 
   onConnectionStateChange(listener: (state: NatsConnectionState) => void) {

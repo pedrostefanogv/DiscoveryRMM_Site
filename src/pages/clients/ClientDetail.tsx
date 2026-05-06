@@ -61,8 +61,7 @@ export default function ClientDetail() {
     { enabled: !!id },
   );
 
-  // Subscribe to the client-scoped SignalR group so DashboardEvent triggers
-  // a targeted refetch of this client's summary without needing the global group.
+  // Subscribe to client-scoped NATS dashboard events for targeted refetch.
   useDashboardRealtime({ clientId: id! }, '24h', !!id);
 
   if (client.isLoading) return <Loading />;

@@ -1,19 +1,26 @@
-import { useAgentStatusRealtime } from "./useAgentStatusRealtime";
+import {
+  useAgentStatusRealtime,
+  type AgentRealtimeScope,
+} from "./useAgentStatusRealtime";
 
 /**
  * Backward-compatible entry point for realtime agent status updates.
  *
- * Contract v3.0.0:
- * Dashboard consumes agent events exclusively from SignalR DashboardEvent.
+ * Contract v4.0.0:
+ * Dashboard consumes agent events exclusively from NATS.
  */
-export function useAgentStatusRealtime_Combined(enabled = true) {
-  useAgentStatusRealtime(enabled);
+export function useAgentStatusRealtime_Combined(
+  enabled = true,
+  scope?: AgentRealtimeScope,
+) {
+  useAgentStatusRealtime(enabled, scope);
 }
 
 /**
  * Export for backward compatibility - apps using the original hook continue to work
  */
 export { useAgentStatusRealtime } from "./useAgentStatusRealtime";
+export type { AgentRealtimeScope } from "./useAgentStatusRealtime";
 
 // Core entities
 export * from "./useClients";

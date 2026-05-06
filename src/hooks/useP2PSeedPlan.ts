@@ -11,7 +11,7 @@ export function useP2PSeedPlan(scope: P2PQueryScope, enabled = true) {
     queryFn: () => p2pApi.getSeedPlan(scope),
     enabled,
     staleTime: 30_000,
-    refetchInterval: 60_000,
+    refetchInterval: 300_000,
     refetchIntervalInBackground: true,
   });
 }

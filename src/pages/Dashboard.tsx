@@ -67,7 +67,7 @@ export default function Dashboard() {
   const realtimeStats = useQuery({
     queryKey: ['realtime', 'stats'],
     queryFn: getRealtimeStats,
-    refetchInterval: 10_000,
+    refetchInterval: 300_000,
     refetchIntervalInBackground: true,
   });
   const p2pOverview = useP2POverview({ scope: 'global', window });
@@ -369,9 +369,9 @@ export default function Dashboard() {
 
             <div className="grid grid-cols-2 gap-2 pt-1 text-xs text-slate-400">
               <div className="rounded-lg bg-white/5 px-3 py-2">
-                <p className="text-slate-500">SignalR agents</p>
+                <p className="text-slate-500">Realtime agents</p>
                 <p className="mt-0.5 text-sm font-semibold text-white">
-                  {realtime?.signalrConnectedAgents ?? 0}
+                  {realtime?.realtimeConnectedAgents ?? realtime?.signalrConnectedAgents ?? 0}
                 </p>
               </div>
               <div className="rounded-lg bg-white/5 px-3 py-2">

@@ -11,7 +11,7 @@ export function useP2PTimeseries(params: P2PTimeseriesParams, enabled = true) {
     queryFn: () => p2pApi.getTimeseries(params),
     enabled,
     staleTime: 30_000,
-    refetchInterval: 60_000,
+    refetchInterval: 300_000,
     refetchIntervalInBackground: true,
   });
 }

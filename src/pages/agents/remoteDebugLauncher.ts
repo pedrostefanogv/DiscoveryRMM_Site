@@ -14,22 +14,27 @@ export class PopupBlockedError extends Error {
 
 const DEFAULT_PAYLOAD: StartRemoteDebugSessionRequest = {
   logLevel: "info",
-  preferredTransport: "signalr",
+  preferredTransport: "nats",
   ttlMinutes: 20,
 };
 
 function toConsoleUrl(params: {
   sessionId: string;
   agentId: string;
-  signalRHub: string;
+  natsSubject: string;
+  natsUrl?: string | null;
   expiresAtUtc: string;
 }) {
   const query = new URLSearchParams({
     sessionId: params.sessionId,
     agentId: params.agentId,
-    hubUrl: params.signalRHub,
+    subject: params.natsSubject,
     expiresAt: params.expiresAtUtc,
   });
+
+  if (params.natsUrl) {
+    query.set("natsUrl", params.natsUrl);
+  }
 
   return `/agents/remote-debug-console?${query.toString()}`;
 }
@@ -43,11 +48,25 @@ export async function openRemoteDebugPopup({
     ...payload,
   });
 
+  const natsSubject = session.natsTenantSubject ?? session.natsLegacySubject;
+  if (!natsSubject) {
+    try {
+      await agentsApi.stopRemoteDebugSession(agentId, session.sessionId);
+    } catch {
+      // Mantem o erro principal para a UI.
+    }
+
+    throw new Error(
+      "Sessão de remote debug criada sem subject NATS. Verifique a configuração do backend.",
+    );
+  }
+
   const popup = window.open(
     toConsoleUrl({
       sessionId: session.sessionId,
       agentId: session.agentId,
-      signalRHub: session.signalRHub,
+      natsSubject,
+      natsUrl: session.natsWssUrl,
       expiresAtUtc: session.expiresAtUtc,
     }),
     `rdebug-${session.sessionId}`,

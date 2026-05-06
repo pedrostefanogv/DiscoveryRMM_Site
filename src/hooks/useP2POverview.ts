@@ -12,7 +12,7 @@ export function useP2POverview(params: P2POverviewParams, enabled = true) {
     queryFn: () => p2pApi.getOverview(params),
     enabled,
     staleTime: 30_000,
-    refetchInterval: 60_000,
+    refetchInterval: 300_000,
     refetchIntervalInBackground: true,
   });
 }

@@ -66,8 +66,8 @@ EN-US: The project is structured as a React SPA with lazy-loaded routes, protect
 - EN-US: React Hook Form + Zod for forms and validation.
 - PT-BR: Tailwind CSS 4, Lucide React e Recharts para UI e visualizacao.
 - EN-US: Tailwind CSS 4, Lucide React, and Recharts for UI and visualization.
-- PT-BR: SignalR e NATS para recursos de realtime.
-- EN-US: SignalR and NATS for realtime capabilities.
+- PT-BR: NATS para recursos de realtime.
+- EN-US: NATS for realtime capabilities.
 
 ## Integracao Com o Servidor / Server Integration
 
@@ -88,9 +88,9 @@ EN-US: Expected frontend environment variables.
 | Variavel / Variable | PT-BR | EN-US |
 | --- | --- | --- |
 | `VITE_API_URL` | URL base da API HTTP usada pelo frontend. | Base URL of the HTTP API used by the frontend. |
-| `VITE_REALTIME_PROVIDER` | Define o modo de realtime: `signalr`, `nats` ou `both`. | Defines the realtime mode: `signalr`, `nats`, or `both`. |
 | `VITE_NATS_URL` | Endpoint de NATS/WebSocket usado pelo browser quando habilitado. | NATS/WebSocket endpoint used by the browser when enabled. |
 | `VITE_NATS_ENABLED` | Liga ou desliga o suporte a NATS no browser. | Enables or disables NATS support in the browser. |
+| `VITE_NATS_NOTIFICATIONS_SUBJECT_TEMPLATE` | Template opcional de subject NATS para notificacoes em tempo real (`{userId}` e `{topic}`). | Optional NATS subject template for realtime notifications (`{userId}` and `{topic}`). |
 | `VITE_NATS_AGENT_HEARTBEAT_SUBJECT` | Subject wildcard (opcional) para heartbeat cru no NATS, sem envelope `dashboard.events`. | Optional wildcard subject for raw NATS heartbeat payloads without the `dashboard.events` envelope. |
 | `VITE_AGENT_OFFLINE_FALLBACK_MS` | Janela de fallback para considerar agentes offline. | Fallback window used to consider agents offline. |
 
@@ -194,7 +194,7 @@ EN-US: Planned collaboration policy.
 | Stack de frontend / Frontend stack | React 19, TypeScript 6, Vite 7 | React 19, TypeScript 6, Vite 7 |
 | Camada de dados / Data layer | TanStack Query 5 | TanStack Query 5 |
 | Formularios e validacao / Forms and validation | React Hook Form, Zod | React Hook Form, Zod |
-| Transporte realtime / Realtime transport | SignalR e NATS | SignalR and NATS |
+| Transporte realtime / Realtime transport | NATS | NATS |
 | Dominios principais / Key domains | Agentes, clientes/sites, tickets/SLA, automacao, software, relatorios, IAM/configuracoes | Agents, clients/sites, tickets/SLA, automation, software, reports, IAM/settings |
 | Recursos de autenticacao / Authentication features | Autenticacao de sessao, MFA, WebAuthn/FIDO2 | Session authentication, MFA, WebAuthn/FIDO2 |
 

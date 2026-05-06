@@ -1,20 +1,15 @@
 /**
- * Realtime Configuration - Support for both SignalR and NATS
+ * Realtime Configuration - NATS only
  */
 
-export type RealtimeProvider = "signalr" | "nats" | "both";
-
-const REALTIME_PROVIDER =
-  (import.meta.env.VITE_REALTIME_PROVIDER as RealtimeProvider | undefined) ??
-  "signalr";
+export type RealtimeProvider = "nats";
 
 const NATS_URL = import.meta.env.VITE_NATS_URL ?? "";
-const NATS_ENABLED = import.meta.env.VITE_NATS_ENABLED === "true";
+const NATS_ENABLED = import.meta.env.VITE_NATS_ENABLED !== "false";
 
 export const realtimeConfig = {
-  provider: REALTIME_PROVIDER,
-  useSignalR: REALTIME_PROVIDER !== "nats",
-  useNats: REALTIME_PROVIDER !== "signalr",
+  provider: "nats" as const,
+  useNats: true,
   natsUrl: NATS_URL,
   natsEnabled: NATS_ENABLED,
 } as const;

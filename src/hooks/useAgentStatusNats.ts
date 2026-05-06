@@ -4,9 +4,24 @@ import { getNatsService, type DashboardEvent } from "@/api/nats";
 import { realtimeConfig } from "@/config/realtime";
 import type { Agent, AgentHeartbeat } from "@/api";
 import { heartbeatStore, extractHeartbeatMetrics } from "@/stores/heartbeatStore";
-import { setNatsConnectionState } from "@/utils/realtimeConnectionState";
+import {
+  setNatsConnectionState,
+  setServerPongState,
+} from "@/utils/realtimeConnectionState";
+import {
+  buildDashboardNatsSubjects,
+  type DashboardNatsScope,
+} from "@/utils/natsSubjects";
 
 type AgentRealtimeStatus = "Online" | "Offline";
+
+export type AgentRealtimeScope =
+  | { level: "global" }
+  | { level: "client"; clientId: string }
+  | { level: "site"; clientId: string; siteId: string }
+  | { level: "agent"; agentId: string; clientId?: string; siteId?: string };
+
+const GLOBAL_SCOPE: AgentRealtimeScope = { level: "global" };
 
 function normalizeEventType(value: string | null | undefined): string {
   if (!value) return "";
@@ -22,6 +37,14 @@ function isHeartbeatType(normalizedType: string): boolean {
     normalizedType === "agentheartbeat" ||
     normalizedType === "heartbeat" ||
     normalizedType === "agent.heartbeat"
+  );
+}
+
+function isPongType(normalizedType: string): boolean {
+  return (
+    normalizedType === "pong" ||
+    normalizedType === "globalpong" ||
+    normalizedType === "serverpong"
   );
 }
 
@@ -53,12 +76,106 @@ function getNumberField(
   return undefined;
 }
 
+function parseNullableBoolean(
+  value: unknown,
+): boolean | null | undefined {
+  if (typeof value === "boolean") return value;
+  if (value === null) return null;
+
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === "true") return true;
+    if (normalized === "false") return false;
+    if (normalized === "null") return null;
+  }
+
+  return undefined;
+}
+
+function toDashboardScope(scope: AgentRealtimeScope): DashboardNatsScope {
+  if (scope.level === "site") {
+    return {
+      level: "site",
+      clientId: scope.clientId,
+      siteId: scope.siteId,
+    };
+  }
+
+  if (scope.level === "client") {
+    return {
+      level: "client",
+      clientId: scope.clientId,
+    };
+  }
+
+  if (scope.level === "agent") {
+    if (scope.clientId && scope.siteId) {
+      return {
+        level: "site",
+        clientId: scope.clientId,
+        siteId: scope.siteId,
+      };
+    }
+
+    if (scope.clientId) {
+      return {
+        level: "client",
+        clientId: scope.clientId,
+      };
+    }
+  }
+
+  return { level: "global" };
+}
+
+function describeScope(scope: AgentRealtimeScope): string {
+  if (scope.level === "site") {
+    return `site:${scope.clientId}:${scope.siteId}`;
+  }
+
+  if (scope.level === "client") {
+    return `client:${scope.clientId}`;
+  }
+
+  if (scope.level === "agent") {
+    return `agent:${scope.agentId}:${scope.clientId ?? "?"}:${scope.siteId ?? "?"}`;
+  }
+
+  return "global";
+}
+
+function parsePongMessage(message: Record<string, unknown>) {
+  const eventType = normalizeEventType(getStringField(message, ["eventType", "type"]));
+  const payload = isRecord(message.data) ? message.data : message;
+
+  const overloaded =
+    parseNullableBoolean(payload.serverOverloaded) ??
+    parseNullableBoolean(message.serverOverloaded);
+
+  if (overloaded === undefined && !isPongType(eventType)) {
+    return null;
+  }
+
+  const observedAtUtc =
+    getStringField(payload, ["serverTimeUtc", "timestampUtc"]) ??
+    getStringField(message, ["serverTimeUtc", "timestampUtc"]) ??
+    new Date().toISOString();
+
+  return {
+    overloaded: overloaded ?? null,
+    observedAtUtc,
+  };
+}
+
 const NATS_URL = realtimeConfig.natsUrl;
 const NATS_ENABLED = realtimeConfig.useNats && realtimeConfig.natsEnabled;
-const DASHBOARD_EVENTS_SUBJECT = "dashboard.events";
-const AGENT_HEARTBEAT_SUBJECT =
+const LEGACY_AGENT_HEARTBEAT_SUBJECT =
   import.meta.env.VITE_NATS_AGENT_HEARTBEAT_SUBJECT ??
   "tenant.*.site.*.agent.*.heartbeat";
+const GLOBAL_PONG_SUBJECT =
+  (import.meta.env.VITE_NATS_GLOBAL_PONG_SUBJECT ?? "tenant.global.pong").trim();
+const INCLUDE_LEGACY_DASHBOARD_SUBJECT =
+  import.meta.env.VITE_NATS_INCLUDE_LEGACY_DASHBOARD_SUBJECT !== "false";
 const INVALIDATE_MIN_INTERVAL_MS = 1_500;
 const DASHBOARD_INVALIDATE_MIN_INTERVAL_MS = 5_000;
 
@@ -132,6 +249,8 @@ function toHeartbeatPayload(
   return {
     agentId,
     status: "Online",
+    clientId: getStringField(data, ["clientId"]) ?? undefined,
+    siteId: getStringField(data, ["siteId"]) ?? undefined,
     ipAddress: ipAddress ?? undefined,
     hostname:
       getStringField(data, ["hostname", "hostName", "machineName"]) ??
@@ -192,12 +311,16 @@ function updateAgentInCollection(
   return changed ? next : data;
 }
 
-export function useAgentStatusNats(enabled = true) {
+export function useAgentStatusNats(
+  enabled = true,
+  scope: AgentRealtimeScope = GLOBAL_SCOPE,
+) {
   const queryClient = useQueryClient();
 
   useEffect(() => {
     if (!enabled || !NATS_ENABLED) {
       setNatsConnectionState("disconnected");
+      setServerPongState(null, null);
       return;
     }
 
@@ -262,10 +385,18 @@ export function useAgentStatusNats(enabled = true) {
       invalidateDashboardQueries("agentheartbeat", invalidateThrottled);
     };
 
-    const handleDashboardEvent = (event: DashboardEvent | Record<string, unknown>) => {
+    const handleDashboardEvent = (event: DashboardEvent) => {
       if (disposed) return;
 
-      const eventEnvelope = isRecord(event) ? event : {};
+      if (!isRecord(event)) return;
+
+      const pong = parsePongMessage(event);
+      if (pong) {
+        setServerPongState(pong.overloaded, pong.observedAtUtc);
+        return;
+      }
+
+      const eventEnvelope = event;
       const eventType = getStringField(eventEnvelope, ["eventType", "type"]);
       const normalizedType = normalizeEventType(eventType);
 
@@ -358,9 +489,7 @@ export function useAgentStatusNats(enabled = true) {
       }
     };
 
-    const handleAgentHeartbeatSubject = (
-      message: DashboardEvent | Record<string, unknown>,
-    ) => {
+    const handleAgentHeartbeatSubject = (message: DashboardEvent) => {
       if (disposed) return;
       if (!isRecord(message)) return;
 
@@ -381,7 +510,42 @@ export function useAgentStatusNats(enabled = true) {
       applyHeartbeat(heartbeatData);
     };
 
-    console.log("[NATS] Configurando serviço NATS:", { url: NATS_URL, enabled: NATS_ENABLED });
+    const handleGlobalPong = (message: DashboardEvent) => {
+      if (disposed) return;
+      if (!isRecord(message)) return;
+
+      const pong = parsePongMessage(message);
+      if (!pong) return;
+
+      console.log("[NATS][global.pong]", pong);
+      setServerPongState(pong.overloaded, pong.observedAtUtc);
+    };
+
+    const dashboardSubjects = buildDashboardNatsSubjects(toDashboardScope(scope), {
+      includeLegacySubject: INCLUDE_LEGACY_DASHBOARD_SUBJECT,
+      includeScopedFallbacks: true,
+      includeSiteWildcardForClientScope: true,
+      includeGlobalWildcardSubjects: true,
+    });
+
+    const subscriptions = new Map<string, (event: DashboardEvent) => void>();
+    dashboardSubjects.forEach((subject) => {
+      subscriptions.set(subject, handleDashboardEvent);
+    });
+
+    if (LEGACY_AGENT_HEARTBEAT_SUBJECT.trim()) {
+      subscriptions.set(LEGACY_AGENT_HEARTBEAT_SUBJECT, handleAgentHeartbeatSubject);
+    }
+
+    if (GLOBAL_PONG_SUBJECT) {
+      subscriptions.set(GLOBAL_PONG_SUBJECT, handleGlobalPong);
+    }
+
+    console.log("[NATS] Configurando serviço NATS:", {
+      url: NATS_URL,
+      enabled: NATS_ENABLED,
+      scope: describeScope(scope),
+    });
     const natsService = getNatsService({
       url: NATS_URL,
       enabled: NATS_ENABLED,
@@ -398,31 +562,34 @@ export function useAgentStatusNats(enabled = true) {
     void natsService.connect().then(() => {
       if (disposed) return;
       console.log("[NATS] Conectado. Inscrevendo subjects...");
-      console.log("[NATS] Subscrevendo em:", DASHBOARD_EVENTS_SUBJECT);
-      void natsService.subscribe(DASHBOARD_EVENTS_SUBJECT, handleDashboardEvent);
-      if (AGENT_HEARTBEAT_SUBJECT !== DASHBOARD_EVENTS_SUBJECT) {
-        console.log("[NATS] Subscrevendo em:", AGENT_HEARTBEAT_SUBJECT);
-        void natsService.subscribe(
-          AGENT_HEARTBEAT_SUBJECT,
-          handleAgentHeartbeatSubject,
-        );
-      }
-      console.log("[NATS] Subscriptions ativas:", [DASHBOARD_EVENTS_SUBJECT, ...(AGENT_HEARTBEAT_SUBJECT !== DASHBOARD_EVENTS_SUBJECT ? [AGENT_HEARTBEAT_SUBJECT] : [])]);
+
+      const activeSubjects: string[] = [];
+      subscriptions.forEach((handler, subject) => {
+        if (!natsService.canSubscribeToSubject(subject)) {
+          console.debug(
+            "[NATS] Subject fora da allow-list do token, ignorando:",
+            subject,
+          );
+          return;
+        }
+
+        activeSubjects.push(subject);
+        void natsService.subscribe(subject, handler);
+      });
+
+      console.log("[NATS] Subscriptions ativas:", activeSubjects);
     });
 
     return () => {
       disposed = true;
       console.log("[NATS] Cleanup: removendo subscriptions.");
       unsubscribeConnectionState();
-      natsService.unsubscribe(DASHBOARD_EVENTS_SUBJECT, handleDashboardEvent);
-      if (AGENT_HEARTBEAT_SUBJECT !== DASHBOARD_EVENTS_SUBJECT) {
-        natsService.unsubscribe(
-          AGENT_HEARTBEAT_SUBJECT,
-          handleAgentHeartbeatSubject,
-        );
-      }
+      subscriptions.forEach((handler, subject) => {
+        natsService.unsubscribe(subject, handler);
+      });
       setNatsConnectionState("disconnected");
+      setServerPongState(null, null);
       console.log("[NATS] Cleanup concluído.");
     };
-  }, [enabled, queryClient]);
+  }, [enabled, queryClient, scope]);
 }

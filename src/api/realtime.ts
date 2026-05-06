@@ -44,7 +44,8 @@ export interface RealtimeStatsResponse {
     uptimeSeconds?: number | null;
   };
   realtime: {
-    signalrConnectedAgents: number;
+    realtimeConnectedAgents?: number;
+    signalrConnectedAgents?: number;
     natsConnected: boolean;
     natsConnectionState?: string | null;
     natsTcpReachable?: boolean | null;
@@ -136,7 +137,8 @@ export async function sendAgentCommand(
 export async function getRealtimeStatus() {
   return api.get<{
     natsConnected: boolean;
-    signalrConnectedAgents: number;
+    realtimeConnectedAgents?: number;
+    signalrConnectedAgents?: number;
     checkedAtUtc: string;
   }>("/api/v1/realtime/status");
 }

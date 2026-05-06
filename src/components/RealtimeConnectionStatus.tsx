@@ -1,19 +1,17 @@
 import { useRealtimeStatus } from '@/hooks/useRealtimeStatus';
-import { Wifi, WifiOff } from 'lucide-react';
+import { AlertTriangle, Wifi, WifiOff } from 'lucide-react';
 
 export function RealtimeConnectionStatus() {
   const status = useRealtimeStatus();
 
-  const isConnected = status.natsConnected || status.signalrConnected;
+  const isConnected = status.natsConnected;
   const isRecovering =
     status.natsState === 'connecting' ||
-    status.natsState === 'reconnecting' ||
-    status.signalrState === 'connecting' ||
-    status.signalrState === 'reconnecting';
+    status.natsState === 'reconnecting';
   const providers = [];
+  const isServerOverloaded = status.serverOverloaded === true;
 
   if (status.natsConnected) providers.push('NATS');
-  if (status.signalrConnected) providers.push('SignalR');
 
   if (!status.natsConnected && status.natsState === 'connecting') {
     providers.push('NATS conectando');
@@ -21,14 +19,6 @@ export function RealtimeConnectionStatus() {
 
   if (!status.natsConnected && status.natsState === 'reconnecting') {
     providers.push('NATS reconectando');
-  }
-
-  if (!status.signalrConnected && status.signalrState === 'connecting') {
-    providers.push('SignalR conectando');
-  }
-
-  if (!status.signalrConnected && status.signalrState === 'reconnecting') {
-    providers.push('SignalR reconectando');
   }
 
   const toneClasses = isConnected
@@ -53,6 +43,12 @@ export function RealtimeConnectionStatus() {
               : 'Offline'}
         </span>
       </div>
+      {isServerOverloaded && (
+        <div className="flex items-center gap-1 rounded-full bg-amber-950 px-2 py-1 text-xs font-medium text-amber-200">
+          <AlertTriangle className="h-3 w-3" />
+          <span>Servidor sobrecarregado</span>
+        </div>
+      )}
     </div>
   );
 }

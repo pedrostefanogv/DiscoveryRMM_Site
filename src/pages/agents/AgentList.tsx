@@ -253,7 +253,7 @@ export default function AgentList() {
         agentId: agent.id,
         payload: {
           logLevel: 'info',
-          preferredTransport: 'signalr',
+          preferredTransport: 'nats',
           ttlMinutes: 20,
         },
       });
@@ -352,7 +352,7 @@ export default function AgentList() {
     queries: queriedClients.map(c => ({
       queryKey: ['agents', 'byClient', c.id] as const,
       queryFn: () => agentsApi.listByClient(c.id),
-      refetchInterval: 15_000,
+      refetchInterval: 300_000,
       refetchIntervalInBackground: true,
     })),
   });

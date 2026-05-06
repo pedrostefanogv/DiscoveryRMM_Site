@@ -387,7 +387,7 @@ export default function AgentDetail() {
         agentId: id,
         payload: {
           logLevel: 'info',
-          preferredTransport: 'signalr',
+          preferredTransport: 'nats',
           ttlMinutes: 20,
         },
       });
