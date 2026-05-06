@@ -104,9 +104,7 @@ function detectEventKind(
 ): "joined" | "log" | "ended" | null {
   const rawType =
     readOptionalString(envelope, "eventType") ??
-    readOptionalString(envelope, "type") ??
-    readOptionalString(payload, "eventType") ??
-    readOptionalString(payload, "type");
+    readOptionalString(payload, "eventType");
 
   if (rawType) {
     const normalized = rawType.toLowerCase();

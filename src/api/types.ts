@@ -324,7 +324,6 @@ export interface StartRemoteDebugSessionResponse {
   preferredTransport: "nats";
   startedAtUtc: string;
   expiresAtUtc: string;
-  natsLegacySubject: string | null;
   natsTenantSubject: string | null;
   natsWssUrl: string | null;
 }

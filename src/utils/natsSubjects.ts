@@ -4,13 +4,11 @@ export type DashboardNatsScope =
   | { level: "site"; clientId: string; siteId: string };
 
 interface BuildDashboardSubjectsOptions {
-  includeLegacySubject?: boolean;
   includeScopedFallbacks?: boolean;
   includeSiteWildcardForClientScope?: boolean;
   includeGlobalWildcardSubjects?: boolean;
 }
 
-export const DASHBOARD_LEGACY_SUBJECT = "dashboard.events";
 export const DASHBOARD_UNSCOPED_SUBJECT = "tenant.unscoped.dashboard.events";
 
 function normalizeSegment(value: string | null | undefined): string | null {
@@ -32,7 +30,6 @@ export function buildDashboardNatsSubjects(
   options: BuildDashboardSubjectsOptions = {},
 ): string[] {
   const {
-    includeLegacySubject = true,
     includeScopedFallbacks = true,
     includeSiteWildcardForClientScope = true,
     includeGlobalWildcardSubjects = true,
@@ -63,10 +60,6 @@ export function buildDashboardNatsSubjects(
       pushUnique(subjects, "tenant.*.dashboard.events");
     }
     pushUnique(subjects, DASHBOARD_UNSCOPED_SUBJECT);
-  }
-
-  if (includeLegacySubject) {
-    pushUnique(subjects, DASHBOARD_LEGACY_SUBJECT);
   }
 
   return subjects;

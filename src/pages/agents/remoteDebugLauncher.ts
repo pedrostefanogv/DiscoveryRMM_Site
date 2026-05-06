@@ -48,7 +48,7 @@ export async function openRemoteDebugPopup({
     ...payload,
   });
 
-  const natsSubject = session.natsTenantSubject ?? session.natsLegacySubject;
+  const natsSubject = session.natsTenantSubject;
   if (!natsSubject) {
     try {
       await agentsApi.stopRemoteDebugSession(agentId, session.sessionId);

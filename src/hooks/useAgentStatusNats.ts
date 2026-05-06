@@ -33,19 +33,19 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function isHeartbeatType(normalizedType: string): boolean {
-  return (
-    normalizedType === "agentheartbeat" ||
-    normalizedType === "heartbeat" ||
-    normalizedType === "agent.heartbeat"
-  );
+  return normalizedType === "agentheartbeat";
+}
+
+function isStatusChangedType(normalizedType: string): boolean {
+  return normalizedType === "agentstatuschanged";
+}
+
+function isCommandCompletedType(normalizedType: string): boolean {
+  return normalizedType === "commandcompleted";
 }
 
 function isPongType(normalizedType: string): boolean {
-  return (
-    normalizedType === "pong" ||
-    normalizedType === "globalpong" ||
-    normalizedType === "serverpong"
-  );
+  return normalizedType === "pong";
 }
 
 function getStringField(
@@ -145,7 +145,7 @@ function describeScope(scope: AgentRealtimeScope): string {
 }
 
 function parsePongMessage(message: Record<string, unknown>) {
-  const eventType = normalizeEventType(getStringField(message, ["eventType", "type"]));
+  const eventType = normalizeEventType(getStringField(message, ["eventType"]));
   const payload = isRecord(message.data) ? message.data : message;
 
   const overloaded =
@@ -169,13 +169,8 @@ function parsePongMessage(message: Record<string, unknown>) {
 
 const NATS_URL = realtimeConfig.natsUrl;
 const NATS_ENABLED = realtimeConfig.useNats && realtimeConfig.natsEnabled;
-const LEGACY_AGENT_HEARTBEAT_SUBJECT =
-  import.meta.env.VITE_NATS_AGENT_HEARTBEAT_SUBJECT ??
-  "tenant.*.site.*.agent.*.heartbeat";
 const GLOBAL_PONG_SUBJECT =
   (import.meta.env.VITE_NATS_GLOBAL_PONG_SUBJECT ?? "tenant.global.pong").trim();
-const INCLUDE_LEGACY_DASHBOARD_SUBJECT =
-  import.meta.env.VITE_NATS_INCLUDE_LEGACY_DASHBOARD_SUBJECT !== "false";
 const INVALIDATE_MIN_INTERVAL_MS = 1_500;
 const DASHBOARD_INVALIDATE_MIN_INTERVAL_MS = 5_000;
 
@@ -201,11 +196,7 @@ function invalidateDashboardQueries(
 ) {
   const isHeartbeatLike =
     normalizedType === "agentheartbeat" ||
-    normalizedType === "heartbeat" ||
-    normalizedType === "agent.heartbeat" ||
-    normalizedType === "agentoffline" ||
-    normalizedType === "offline" ||
-    normalizedType === "agent.offline";
+    normalizedType === "agentstatuschanged";
 
   if (isHeartbeatLike) {
     invalidateThrottled(["dashboard"], DASHBOARD_INVALIDATE_MIN_INTERVAL_MS);
@@ -213,25 +204,21 @@ function invalidateDashboardQueries(
     return;
   }
 
-  if (normalizedType.includes("command")) {
+  if (normalizedType === "commandcompleted") {
     invalidateThrottled(["agents"]);
     invalidateThrottled(["logs"]);
+    invalidateThrottled(["realtime", "stats"]);
+    return;
   }
 
-  if (normalizedType.includes("ticket")) {
-    invalidateThrottled(["tickets"]);
-  }
-
-  if (normalizedType.includes("log")) {
-    invalidateThrottled(["logs"]);
-  }
-
-  if (normalizedType.includes("software")) {
-    invalidateThrottled(["softwareInventory"]);
-  }
-
-  if (normalizedType.includes("client")) {
-    invalidateThrottled(["clients"]);
+  if (
+    normalizedType === "agenthardwarereported" ||
+    normalizedType === "agentconnected" ||
+    normalizedType === "agentdisconnected"
+  ) {
+    invalidateThrottled(["dashboard"], DASHBOARD_INVALIDATE_MIN_INTERVAL_MS);
+    invalidateThrottled(["realtime", "stats"]);
+    return;
   }
 
   // Stats are aggregate numbers and should reflect every backend event.
@@ -241,10 +228,15 @@ function invalidateDashboardQueries(
 function toHeartbeatPayload(
   data: Record<string, unknown>,
 ): AgentHeartbeat | null {
-  const agentId = getStringField(data, ["agentId", "id", "agentID"]);
+  const agentId = getStringField(data, ["agentId"]);
   if (!agentId) return null;
 
-  const ipAddress = getStringField(data, ["ipAddress", "lastIpAddress", "ip"]);
+  const status = getStringField(data, ["status"]);
+  if (status && normalizeEventType(status) !== "online") {
+    return null;
+  }
+
+  const ipAddress = getStringField(data, ["ipAddress"]);
 
   return {
     agentId,
@@ -252,26 +244,38 @@ function toHeartbeatPayload(
     clientId: getStringField(data, ["clientId"]) ?? undefined,
     siteId: getStringField(data, ["siteId"]) ?? undefined,
     ipAddress: ipAddress ?? undefined,
-    hostname:
-      getStringField(data, ["hostname", "hostName", "machineName"]) ??
-      undefined,
-    agentVersion:
-      getStringField(data, ["agentVersion", "version", "agent_version"]) ??
-      undefined,
-    cpuPercent: getNumberField(data, ["cpuPercent", "cpu"]),
-    memoryPercent: getNumberField(data, ["memoryPercent", "memory"]),
-    diskPercent: getNumberField(data, ["diskPercent", "disk"]),
-    memoryTotalGb: getNumberField(data, ["memoryTotalGb", "memoryTotal"]),
-    memoryUsedGb: getNumberField(data, ["memoryUsedGb", "memoryUsed"]),
-    diskTotalGb: getNumberField(data, ["diskTotalGb", "diskTotal"]),
-    diskUsedGb: getNumberField(data, ["diskUsedGb", "diskUsed"]),
-    p2pPeers: getNumberField(data, ["p2pPeers", "p2pPeersCount"]),
-    uptimeSeconds: getNumberField(data, ["uptimeSeconds", "uptime"]),
-    processCount: getNumberField(data, ["processCount", "processes"]),
-    timestampUtc:
-      getStringField(data, ["timestampUtc", "timestamp", "timeStamp"]) ??
-      undefined,
+    hostname: getStringField(data, ["hostname"]) ?? undefined,
+    agentVersion: getStringField(data, ["agentVersion"]) ?? undefined,
+    cpuPercent: getNumberField(data, ["cpuPercent"]),
+    memoryPercent: getNumberField(data, ["memoryPercent"]),
+    diskPercent: getNumberField(data, ["diskPercent"]),
+    memoryTotalGb: getNumberField(data, ["memoryTotalGb"]),
+    memoryUsedGb: getNumberField(data, ["memoryUsedGb"]),
+    diskTotalGb: getNumberField(data, ["diskTotalGb"]),
+    diskUsedGb: getNumberField(data, ["diskUsedGb"]),
+    p2pPeers: getNumberField(data, ["p2pPeers"]),
+    uptimeSeconds: getNumberField(data, ["uptimeSeconds"]),
+    processCount: getNumberField(data, ["processCount"]),
+    timestampUtc: getStringField(data, ["timestampUtc"]) ?? undefined,
   };
+}
+
+function toStatusChangedPayload(
+  data: Record<string, unknown>,
+): { agentId: string; status: AgentRealtimeStatus } | null {
+  const agentId = getStringField(data, ["agentId"]);
+  if (!agentId) return null;
+
+  const rawStatus = getStringField(data, ["status"]);
+  const normalizedStatus = normalizeEventType(rawStatus);
+  if (normalizedStatus === "online") {
+    return { agentId, status: "Online" };
+  }
+  if (normalizedStatus === "offline") {
+    return { agentId, status: "Offline" };
+  }
+
+  return null;
 }
 
 function applyStatusUpdate(agent: Agent, status: AgentRealtimeStatus): Agent {
@@ -397,68 +401,33 @@ export function useAgentStatusNats(
       }
 
       const eventEnvelope = event;
-      const eventType = getStringField(eventEnvelope, ["eventType", "type"]);
+      const eventType = getStringField(eventEnvelope, ["eventType"]);
       const normalizedType = normalizeEventType(eventType);
 
       const eventData = eventEnvelope.data;
-      const safeData =
-        isRecord(eventData)
-          ? eventData
-          : eventEnvelope;
-
-      const heartbeatData = toHeartbeatPayload(safeData);
-
-      let classifiedAs = "outro";
-      if (isHeartbeatType(normalizedType) || (!normalizedType && heartbeatData)) {
-        classifiedAs = "heartbeat";
-      } else if (
-        normalizedType === "agentcommandresult" ||
-        normalizedType === "commandresult" ||
-        normalizedType === "agent.result"
-      ) {
-        classifiedAs = "command-result";
-      } else if (
-        normalizedType === "agentoffline" ||
-        normalizedType === "offline" ||
-        normalizedType === "agent.offline"
-      ) {
-        classifiedAs = "offline";
-      }
+      const safeData = isRecord(eventData) ? eventData : null;
 
       console.log("[NATS][dashboard.events]", {
         eventType,
         normalizedType,
-        classifiedAs,
-        agentId: heartbeatData?.agentId ?? getStringField(safeData, ["agentId", "id", "agentID"]) ?? null,
-        heartbeatAgentId: heartbeatData?.agentId ?? null,
+        hasData: Boolean(safeData),
       });
 
-      if (isHeartbeatType(normalizedType) || (!normalizedType && heartbeatData)) {
+      if (isHeartbeatType(normalizedType)) {
+        if (!safeData) return;
+        const heartbeatData = toHeartbeatPayload(safeData);
         if (!heartbeatData) return;
         applyHeartbeat(heartbeatData);
-      } else if (
-        normalizedType === "agentcommandresult" ||
-        normalizedType === "commandresult" ||
-        normalizedType === "agent.result"
-      ) {
-        const resultAgentId = getStringField(safeData, [
-          "agentId",
-          "id",
-          "agentID",
-        ]);
-        if (!resultAgentId) return;
+        return;
+      }
 
-        // Invalidate related queries to fetch fresh data
-        invalidateThrottled(["agents", "detail", resultAgentId], 500);
-        invalidateDashboardQueries(normalizedType, invalidateThrottled);
-      } else if (
-        normalizedType === "agentoffline" ||
-        normalizedType === "offline" ||
-        normalizedType === "agent.offline"
-      ) {
-        const agentId = getStringField(safeData, ["agentId", "id", "agentID"]);
-        if (!agentId) return;
-        const status: AgentRealtimeStatus = "Offline";
+      if (isStatusChangedType(normalizedType)) {
+        if (!safeData) return;
+
+        const statusPayload = toStatusChangedPayload(safeData);
+        if (!statusPayload) return;
+
+        const { agentId, status } = statusPayload;
 
         queryClient.setQueryData<Agent | undefined>(
           ["agents", "detail", agentId],
@@ -478,36 +447,29 @@ export function useAgentStatusNats(
           (current) => updateAgentInCollection(current, agentId, status),
         );
 
-        // Remove heartbeat metrics when agent goes offline
-        heartbeatStore.removeHeartbeat(agentId);
+        if (status === "Offline") {
+          heartbeatStore.removeHeartbeat(agentId);
+        }
 
         invalidateThrottled(["agents"]);
         invalidateDashboardQueries(normalizedType, invalidateThrottled);
-      } else {
-        if (!normalizedType) return;
-        invalidateDashboardQueries(normalizedType, invalidateThrottled);
-      }
-    };
-
-    const handleAgentHeartbeatSubject = (message: DashboardEvent) => {
-      if (disposed) return;
-      if (!isRecord(message)) return;
-
-      const heartbeatData = toHeartbeatPayload(message);
-      if (!heartbeatData) {
-        console.log("[NATS][heartbeat] Payload inválido (sem agentId)", message);
         return;
       }
 
-      console.log("[NATS][heartbeat]", {
-        agentId: heartbeatData.agentId,
-        cpu: heartbeatData.cpuPercent,
-        memory: heartbeatData.memoryPercent,
-        disk: heartbeatData.diskPercent,
-        hostname: heartbeatData.hostname,
-      });
+      if (isCommandCompletedType(normalizedType)) {
+        if (safeData) {
+          const resultAgentId = getStringField(safeData, ["agentId"]);
+          if (resultAgentId) {
+            invalidateThrottled(["agents", "detail", resultAgentId], 500);
+          }
+        }
 
-      applyHeartbeat(heartbeatData);
+        invalidateDashboardQueries(normalizedType, invalidateThrottled);
+        return;
+      }
+
+      if (!normalizedType) return;
+      invalidateDashboardQueries(normalizedType, invalidateThrottled);
     };
 
     const handleGlobalPong = (message: DashboardEvent) => {
@@ -522,7 +484,6 @@ export function useAgentStatusNats(
     };
 
     const dashboardSubjects = buildDashboardNatsSubjects(toDashboardScope(scope), {
-      includeLegacySubject: INCLUDE_LEGACY_DASHBOARD_SUBJECT,
       includeScopedFallbacks: true,
       includeSiteWildcardForClientScope: true,
       includeGlobalWildcardSubjects: true,
@@ -532,10 +493,6 @@ export function useAgentStatusNats(
     dashboardSubjects.forEach((subject) => {
       subscriptions.set(subject, handleDashboardEvent);
     });
-
-    if (LEGACY_AGENT_HEARTBEAT_SUBJECT.trim()) {
-      subscriptions.set(LEGACY_AGENT_HEARTBEAT_SUBJECT, handleAgentHeartbeatSubject);
-    }
 
     if (GLOBAL_PONG_SUBJECT) {
       subscriptions.set(GLOBAL_PONG_SUBJECT, handleGlobalPong);

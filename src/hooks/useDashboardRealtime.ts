@@ -119,7 +119,6 @@ export function useDashboardRealtime(
     const dashboardSubjects = buildDashboardNatsSubjects(
       toDashboardNatsScope(stableScope),
       {
-        includeLegacySubject: true,
         includeScopedFallbacks: true,
         includeSiteWildcardForClientScope: true,
         includeGlobalWildcardSubjects: true,
