@@ -1,10 +1,35 @@
 import { useSyncExternalStore } from "react";
 import type { AgentHeartbeat, AgentHeartbeatMetrics } from "@/api";
 
+const DEFAULT_HEARTBEAT_METRICS_TTL_MS = 60_000;
+
+function parseHeartbeatMetricsTtlMs(value: string | undefined): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return DEFAULT_HEARTBEAT_METRICS_TTL_MS;
+  }
+  return parsed;
+}
+
+export const HEARTBEAT_METRICS_TTL_MS = parseHeartbeatMetricsTtlMs(
+  import.meta.env.VITE_AGENT_HEARTBEAT_METRICS_TTL_MS,
+);
+
 type HeartbeatPayload = Required<Pick<AgentHeartbeat, "agentId" | "status">> &
   Omit<AgentHeartbeat, "agentId" | "status">;
 
 type Listener = () => void;
+
+export function isHeartbeatTimestampFresh(
+  timestampUtc: string | undefined | null,
+  now = Date.now(),
+  ttlMs = HEARTBEAT_METRICS_TTL_MS,
+): boolean {
+  if (!timestampUtc) return false;
+  const timestampMs = new Date(timestampUtc).getTime();
+  if (!Number.isFinite(timestampMs)) return false;
+  return now - timestampMs <= ttlMs;
+}
 
 /** Extract AgentHeartbeatMetrics from an AgentHeartbeat payload */
 export function extractHeartbeatMetrics(data: AgentHeartbeat): AgentHeartbeatMetrics {
@@ -42,6 +67,7 @@ class HeartbeatStore {
 
   /** Update or insert heartbeat data for a given agentId */
   setHeartbeat(agentId: string, data: Partial<AgentHeartbeat>): void {
+    const nowIso = new Date().toISOString();
     const current = this.heartbeats.get(agentId) ?? {
       agentId,
       status: "Online" as const,
@@ -51,6 +77,7 @@ class HeartbeatStore {
       ...current,
       ...data,
       agentId,
+      timestampUtc: data.timestampUtc ?? nowIso,
     });
 
     this.emit();
@@ -71,6 +98,22 @@ class HeartbeatStore {
     if (this.heartbeats.delete(agentId)) {
       this.emit();
     }
+  }
+
+  removeHeartbeatIfStale(
+    agentId: string,
+    ttlMs = HEARTBEAT_METRICS_TTL_MS,
+    now = Date.now(),
+  ): boolean {
+    const heartbeat = this.heartbeats.get(agentId);
+    if (!heartbeat) return false;
+    if (isHeartbeatTimestampFresh(heartbeat.timestampUtc, now, ttlMs)) {
+      return false;
+    }
+
+    this.heartbeats.delete(agentId);
+    this.emit();
+    return true;
   }
 
   /** Clear all heartbeats */

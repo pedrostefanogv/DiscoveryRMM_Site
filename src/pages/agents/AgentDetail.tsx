@@ -15,7 +15,7 @@ import type { AgentSoftwareInventoryItem, ListeningPortInfo, MeshCentralNodeLink
 import { ApiError, LogLevel, agentUpdatesApi } from '@/api';
 import { isAgentOnlineNow } from '@/utils/agentStatus';
 import { useNowTick } from '@/hooks/useNowTick';
-import { useAgentHeartbeat } from '@/stores/heartbeatStore';
+import { isHeartbeatTimestampFresh, useAgentHeartbeat } from '@/stores/heartbeatStore';
 import { agentLabelsApi } from '@/modules/agent-labels/api';
 import { AgentLabelSourceType, type AgentLabel } from '@/modules/agent-labels/types';
 import { openRemoteDebugPopup } from './remoteDebugLauncher';
@@ -223,7 +223,25 @@ export default function AgentDetail() {
   const a = agent.data;
   const aWithHeartbeat = useMemo(() => {
     if (!a) return null;
-    if (!liveHeartbeat) return a;
+    const hasFreshLiveHeartbeat =
+      liveHeartbeat && isHeartbeatTimestampFresh(liveHeartbeat.timestampUtc, now);
+
+    const freshFallbackMetrics =
+      a.heartbeatMetrics && isHeartbeatTimestampFresh(a.heartbeatMetrics.timestampUtc, now)
+        ? a.heartbeatMetrics
+        : undefined;
+
+    if (!hasFreshLiveHeartbeat) {
+      if (freshFallbackMetrics === a.heartbeatMetrics) {
+        return a;
+      }
+
+      return {
+        ...a,
+        heartbeatMetrics: freshFallbackMetrics,
+      };
+    }
+
     return {
       ...a,
       heartbeatMetrics: {
@@ -243,7 +261,7 @@ export default function AgentDetail() {
         timestampUtc: liveHeartbeat.timestampUtc,
       },
     };
-  }, [a, liveHeartbeat]);
+  }, [a, liveHeartbeat, now]);
 
   if (agent.isLoading) return <Loading />;
   if (agent.isError || !a || !aWithHeartbeat) return <ErrorDisplay onRetry={() => agent.refetch()} />;

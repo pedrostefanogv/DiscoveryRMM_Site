@@ -3,7 +3,11 @@ import { useQueryClient } from "@tanstack/react-query";
 import { getNatsService, type DashboardEvent } from "@/api/nats";
 import { realtimeConfig } from "@/config/realtime";
 import type { Agent, AgentHeartbeat } from "@/api";
-import { heartbeatStore, extractHeartbeatMetrics } from "@/stores/heartbeatStore";
+import {
+  heartbeatStore,
+  extractHeartbeatMetrics,
+  HEARTBEAT_METRICS_TTL_MS,
+} from "@/stores/heartbeatStore";
 import {
   setNatsConnectionDiagnostics,
   setNatsConnectionState,
@@ -458,7 +462,10 @@ export function useAgentStatusNats(
         );
 
         if (status === "Offline") {
-          heartbeatStore.removeHeartbeat(agentId);
+          heartbeatStore.removeHeartbeatIfStale(
+            agentId,
+            HEARTBEAT_METRICS_TTL_MS,
+          );
         }
 
         invalidateThrottled(["agents"]);

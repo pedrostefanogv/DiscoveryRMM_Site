@@ -10,7 +10,7 @@ import { Badge, Loading, ErrorDisplay, Input, Select, StatCard, Modal, PageHeade
 import type { Agent } from '@/api';
 import { getAgentLastSeen, isAgentOnlineNow } from '@/utils/agentStatus';
 import { useNowTick } from '@/hooks/useNowTick';
-import { useAllAgentHeartbeats } from '@/stores/heartbeatStore';
+import { isHeartbeatTimestampFresh, useAllAgentHeartbeats } from '@/stores/heartbeatStore';
 import { useAuthorization } from '@/auth/authorization';
 import { openRemoteDebugPopup } from './remoteDebugLauncher';
 
@@ -370,10 +370,27 @@ export default function AgentList() {
   const allHeartbeats = useAllAgentHeartbeats();
 
   const agentsWithHeartbeat = useMemo<AgentWithClient[]>(() => {
-    if (allHeartbeats.size === 0) return allAgents;
     return allAgents.map((agent) => {
       const live = allHeartbeats.get(agent.id);
-      if (!live) return agent;
+      const hasFreshLiveHeartbeat =
+        live && isHeartbeatTimestampFresh(live.timestampUtc, now);
+
+      const freshFallbackMetrics =
+        agent.heartbeatMetrics && isHeartbeatTimestampFresh(agent.heartbeatMetrics.timestampUtc, now)
+          ? agent.heartbeatMetrics
+          : undefined;
+
+      if (!hasFreshLiveHeartbeat) {
+        if (freshFallbackMetrics === agent.heartbeatMetrics) {
+          return agent;
+        }
+
+        return {
+          ...agent,
+          heartbeatMetrics: freshFallbackMetrics,
+        };
+      }
+
       return {
         ...agent,
         heartbeatMetrics: {
@@ -394,7 +411,7 @@ export default function AgentList() {
         },
       };
     });
-  }, [allAgents, allHeartbeats]);
+  }, [allAgents, allHeartbeats, now]);
 
   useEffect(() => {
     for (const agent of agentsWithHeartbeat) {
