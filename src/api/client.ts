@@ -115,6 +115,10 @@ export function configureApiClient(config: Partial<ApiClientConfig>) {
   };
 }
 
+export function getApiAccessToken(): string | null {
+  return apiClientConfig.getAccessToken();
+}
+
 function normalizeApiPath(path: string): string {
   if (!path.startsWith("/")) {
     return path;

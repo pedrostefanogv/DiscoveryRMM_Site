@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { getNatsService, type DashboardEvent } from "@/api/nats";
 import { realtimeConfig } from "@/config/realtime";
@@ -170,10 +170,16 @@ function parsePongMessage(message: Record<string, unknown>) {
 
 const NATS_URL = realtimeConfig.natsUrl;
 const NATS_ENABLED = realtimeConfig.useNats && realtimeConfig.natsEnabled;
+const NATS_AUTH_MODE = realtimeConfig.natsAuthMode;
 const GLOBAL_PONG_SUBJECT =
   (import.meta.env.VITE_NATS_GLOBAL_PONG_SUBJECT ?? "tenant.global.pong").trim();
 const INVALIDATE_MIN_INTERVAL_MS = 1_500;
 const DASHBOARD_INVALIDATE_MIN_INTERVAL_MS = 5_000;
+const BOOTSTRAP_DEBOUNCE_MS = 250;
+
+function isIncompleteAgentScope(scope: AgentRealtimeScope): boolean {
+  return scope.level === "agent" && (!scope.clientId || !scope.siteId);
+}
 
 function createInvalidateThrottler(
   queryClient: ReturnType<typeof useQueryClient>,
@@ -321,6 +327,8 @@ export function useAgentStatusNats(
   scope: AgentRealtimeScope = GLOBAL_SCOPE,
 ) {
   const queryClient = useQueryClient();
+  const scopeKey = describeScope(scope);
+  const stableScope = useMemo(() => scope, [scopeKey]);
 
   useEffect(() => {
     if (!enabled || !NATS_ENABLED) {
@@ -485,7 +493,7 @@ export function useAgentStatusNats(
       setServerPongState(pong.overloaded, pong.observedAtUtc);
     };
 
-    const dashboardScope = toDashboardScope(scope);
+    const dashboardScope = toDashboardScope(stableScope);
     const dashboardSubjects = buildDashboardNatsSubjects(dashboardScope, {
       includeScopedFallbacks: true,
       includeSiteWildcardForClientScope: true,
@@ -503,29 +511,29 @@ export function useAgentStatusNats(
 
     const telemetryContext = {
       source: "frontend.nats.bootstrap",
-      scope: describeScope(scope),
+      scope: describeScope(stableScope),
       subjectsRequested: subscriptions.size,
-      atUtc: new Date().toISOString(),
+      authMode: NATS_AUTH_MODE,
     };
 
-    console.info("[NATS][telemetry]", {
-      event: "bootstrap_start",
-      ...telemetryContext,
-    });
+    const incompleteAgentScope = isIncompleteAgentScope(stableScope);
 
     console.log("[NATS] Configurando serviço NATS:", {
       url: NATS_URL,
       enabled: NATS_ENABLED,
-      scope: describeScope(scope),
+      scope: describeScope(stableScope),
+      authMode: NATS_AUTH_MODE,
+      scopeMode: incompleteAgentScope ? "preserve" : "replace",
     });
     const natsService = getNatsService({
       url: NATS_URL,
       enabled: NATS_ENABLED,
+      authMode: NATS_AUTH_MODE,
       clientId:
         dashboardScope.level !== "global" ? dashboardScope.clientId : undefined,
       siteId:
         dashboardScope.level === "site" ? dashboardScope.siteId : undefined,
-      scopeMode: "replace",
+      scopeMode: incompleteAgentScope ? "preserve" : "replace",
     });
 
     const unsubscribeConnectionState = natsService.onConnectionStateChange(
@@ -542,71 +550,84 @@ export function useAgentStatusNats(
       },
     );
 
-    void (async () => {
-      const connected = await natsService.connect();
+    let bootstrapStarted = false;
+    const bootstrapTimer = window.setTimeout(() => {
       if (disposed) return;
 
-      const diagnostics = natsService.getConnectionDiagnostics();
-      setNatsConnectionDiagnostics(
-        diagnostics.lastErrorType,
-        diagnostics.lastErrorMessage,
-        diagnostics.lastErrorAtUtc,
-      );
-
-      if (!connected) {
-        console.warn(
-          "[NATS] Conexão não estabelecida. Bootstrap de subscriptions abortado.",
-          diagnostics,
-        );
-        console.warn("[NATS][telemetry]", {
-          event: "bootstrap_connect_failed",
-          ...telemetryContext,
-          diagnostics,
-        });
-        return;
-      }
-
-      console.log("[NATS] Conectado. Inscrevendo subjects...");
-
-      const activeSubjects: string[] = [];
-      const blockedSubjects: string[] = [];
-      const failedSubjects: string[] = [];
-      for (const [subject, handler] of subscriptions) {
-        if (!natsService.canSubscribeToSubject(subject)) {
-          console.debug(
-            "[NATS] Subject fora da allow-list do token, ignorando:",
-            subject,
-          );
-          blockedSubjects.push(subject);
-          continue;
-        }
-
-        const subscribed = await natsService.subscribe(subject, handler, {
-          connectIfNeeded: false,
-        });
-        if (subscribed) {
-          activeSubjects.push(subject);
-        } else {
-          failedSubjects.push(subject);
-        }
-      }
-
-      console.log("[NATS] Subscriptions ativas:", activeSubjects);
+      bootstrapStarted = true;
       console.info("[NATS][telemetry]", {
-        event: "bootstrap_subscriptions_result",
+        event: "bootstrap_start",
         ...telemetryContext,
-        connected,
-        activeCount: activeSubjects.length,
-        blockedCount: blockedSubjects.length,
-        failedCount: failedSubjects.length,
-        activeSubjects,
-        blockedSubjects,
-        failedSubjects,
+        atUtc: new Date().toISOString(),
       });
-    })();
+
+      void (async () => {
+        const connected = await natsService.connect();
+        if (disposed) return;
+
+        const diagnostics = natsService.getConnectionDiagnostics();
+        setNatsConnectionDiagnostics(
+          diagnostics.lastErrorType,
+          diagnostics.lastErrorMessage,
+          diagnostics.lastErrorAtUtc,
+        );
+
+        if (!connected) {
+          console.warn(
+            "[NATS] Conexão não estabelecida. Bootstrap de subscriptions abortado.",
+            diagnostics,
+          );
+          console.warn("[NATS][telemetry]", {
+            event: "bootstrap_connect_failed",
+            ...telemetryContext,
+            diagnostics,
+          });
+          return;
+        }
+
+        console.log("[NATS] Conectado. Inscrevendo subjects...");
+
+        const activeSubjects: string[] = [];
+        const blockedSubjects: string[] = [];
+        const failedSubjects: string[] = [];
+        for (const [subject, handler] of subscriptions) {
+          if (!natsService.canSubscribeToSubject(subject)) {
+            console.debug(
+              "[NATS] Subject fora da allow-list do token, ignorando:",
+              subject,
+            );
+            blockedSubjects.push(subject);
+            continue;
+          }
+
+          const subscribed = await natsService.subscribe(subject, handler, {
+            connectIfNeeded: false,
+          });
+          if (subscribed) {
+            activeSubjects.push(subject);
+          } else {
+            failedSubjects.push(subject);
+          }
+        }
+
+        console.log("[NATS] Subscriptions ativas:", activeSubjects);
+        console.info("[NATS][telemetry]", {
+          event: "bootstrap_subscriptions_result",
+          ...telemetryContext,
+          connected,
+          activeCount: activeSubjects.length,
+          blockedCount: blockedSubjects.length,
+          failedCount: failedSubjects.length,
+          activeSubjects,
+          blockedSubjects,
+          failedSubjects,
+        });
+      })();
+    }, BOOTSTRAP_DEBOUNCE_MS);
 
     return () => {
       disposed = true;
+      window.clearTimeout(bootstrapTimer);
       console.log("[NATS] Cleanup: removendo subscriptions.");
       unsubscribeConnectionState();
       subscriptions.forEach((handler, subject) => {
@@ -615,11 +636,13 @@ export function useAgentStatusNats(
       setNatsConnectionState("disconnected");
       setNatsConnectionDiagnostics(null, null, null);
       setServerPongState(null, null);
-      console.info("[NATS][telemetry]", {
-        event: "bootstrap_cleanup",
-        ...telemetryContext,
-      });
+      if (bootstrapStarted) {
+        console.info("[NATS][telemetry]", {
+          event: "bootstrap_cleanup",
+          ...telemetryContext,
+        });
+      }
       console.log("[NATS] Cleanup concluído.");
     };
-  }, [enabled, queryClient, scope]);
+  }, [enabled, queryClient, scopeKey, stableScope]);
 }

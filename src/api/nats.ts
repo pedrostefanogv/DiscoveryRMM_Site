@@ -1,4 +1,4 @@
-﻿import { api, ApiError } from "./client";
+﻿import { api, ApiError, getApiAccessToken } from "./client";
 import type {
   Authenticator,
   NatsConnection as CoreNatsConnection,
@@ -34,7 +34,10 @@ type NatsClientModule = {
   credsAuthenticator: (
     creds: Uint8Array | (() => Uint8Array),
   ) => Authenticator;
+  tokenAuthenticator: (token: string | (() => string)) => Authenticator;
 };
+
+export type NatsAuthMode = "auth_token" | "jwt_credentials";
 
 const CREDENTIALS_REFRESH_SKEW_MS = 60_000;
 
@@ -118,7 +121,9 @@ function isAuthorizationNatsError(error: unknown): boolean {
     const message = typeof err.message === "string" ? err.message : "";
     if (
       name === "AuthorizationError" ||
-      /authorization violation/i.test(message)
+      /authorization violation|missing auth token|authentication token/i.test(
+        message,
+      )
     ) {
       return true;
     }
@@ -150,6 +155,14 @@ function getNatsErrorMessage(error: unknown): string {
   return "Unknown NATS error";
 }
 
+function buildMissingAuthTokenError(): Error {
+  const error = new Error(
+    "Missing auth token for NATS connect in auth_token mode",
+  );
+  error.name = "MissingAuthTokenError";
+  return error;
+}
+
 function isNonRetryableNatsError(error: unknown): boolean {
   if (
     error instanceof ApiError &&
@@ -176,6 +189,7 @@ export interface DashboardEvent {
 export interface NatsConfig {
   url: string;
   enabled: boolean;
+  authMode?: NatsAuthMode;
   clientId?: string;
   siteId?: string;
   scopeMode?: "replace" | "preserve";
@@ -199,6 +213,7 @@ export interface NatsConnectionDiagnostics {
 type NatsTelemetryLevel = "info" | "warn" | "error";
 
 class NatsService {
+  private config: NatsConfig;
   private connection: NatsConnection | null = null;
   private subscriptions: Map<string, Subscription> = new Map();
   private listeners: Map<string, Set<(event: DashboardEvent) => void>> =
@@ -223,13 +238,20 @@ class NatsService {
   private telemetrySequence = 0;
   private connectAttemptSequence = 0;
 
-  constructor(private config: NatsConfig) {}
+  constructor(config: NatsConfig) {
+    this.config = {
+      ...config,
+      authMode: config.authMode ?? "auth_token",
+    };
+  }
 
   updateConfig(config: NatsConfig) {
     const scopeMode = config.scopeMode ?? "replace";
+    const authMode = config.authMode ?? this.config.authMode ?? "auth_token";
     const nextConfig: NatsConfig = {
       ...this.config,
       ...config,
+      authMode,
       clientId:
         scopeMode === "preserve" && config.clientId === undefined
           ? this.config.clientId
@@ -244,9 +266,11 @@ class NatsService {
     const scopeChanged =
       this.config.clientId !== nextConfig.clientId ||
       this.config.siteId !== nextConfig.siteId;
+    const authModeChanged = this.config.authMode !== nextConfig.authMode;
     const connectionInputsChanged =
       this.config.url !== nextConfig.url ||
-      this.config.enabled !== nextConfig.enabled;
+      this.config.enabled !== nextConfig.enabled ||
+      authModeChanged;
 
     const previousConfig = this.config;
 
@@ -260,13 +284,19 @@ class NatsService {
         nextEnabled: nextConfig.enabled,
         previousUrl: sanitizeNatsUrl(previousConfig.url),
         nextUrl: sanitizeNatsUrl(nextConfig.url),
+        previousAuthMode: previousConfig.authMode ?? "auth_token",
+        nextAuthMode: nextConfig.authMode ?? "auth_token",
       });
     }
 
-    if (scopeChanged) {
+    if (scopeChanged || authModeChanged) {
       this.invalidateCredentials();
       this.emitTelemetry("info", "credentials_invalidated", {
-        reason: "scope_changed",
+        reason: scopeChanged && authModeChanged
+          ? "scope_changed_and_auth_mode_changed"
+          : scopeChanged
+            ? "scope_changed"
+            : "auth_mode_changed",
       });
     }
 
@@ -300,6 +330,7 @@ class NatsService {
       atUtc: new Date().toISOString(),
       state: this.connectionState,
       reconnectAttempts: this.reconnectAttempts,
+      authMode: this.config.authMode ?? "auth_token",
       hasConnection: this.connection?.isClosed() === false,
       listenersCount: this.listeners.size,
       subscriptionsCount: this.subscriptions.size,
@@ -330,6 +361,9 @@ class NatsService {
         ) => Promise<NatsConnection>,
         credsAuthenticator: mod.credsAuthenticator as (
           creds: Uint8Array | (() => Uint8Array),
+        ) => Authenticator,
+        tokenAuthenticator: mod.tokenAuthenticator as (
+          token: string | (() => string),
         ) => Authenticator,
       };
     } catch {
@@ -472,6 +506,46 @@ class NatsService {
       });
 
     return this.credentialsInFlight;
+  }
+
+  private getAuthMode(): NatsAuthMode {
+    return this.config.authMode ?? "auth_token";
+  }
+
+  private async createAuthenticator(
+    client: NatsClientModule,
+    connectAttemptId: number,
+    authAttempt: number,
+  ): Promise<Authenticator> {
+    const authMode = this.getAuthMode();
+
+    if (authMode === "auth_token") {
+      const accessToken = getApiAccessToken()?.trim();
+      if (!accessToken) {
+        throw buildMissingAuthTokenError();
+      }
+
+      this.emitTelemetry("info", "connect_authenticator_selected", {
+        authMode,
+        connectAttemptId,
+        authAttempt,
+      });
+
+      return client.tokenAuthenticator(accessToken);
+    }
+
+    const credentials = await this.getCredentials();
+
+    this.emitTelemetry("info", "connect_authenticator_selected", {
+      authMode,
+      connectAttemptId,
+      authAttempt,
+      subscribeSubjectsCount: credentials.subscribeSubjects.length,
+    });
+
+    return client.credsAuthenticator(
+      new TextEncoder().encode(buildCredsFile(credentials)),
+    );
   }
 
   private watchConnection(connection: NatsConnection) {
@@ -687,26 +761,32 @@ class NatsService {
     this.connectInFlight = (async () => {
       this.manualDisconnect = false;
       const connectAttemptId = ++this.connectAttemptSequence;
+      const authMode = this.getAuthMode();
+      const maxAuthAttempts =
+        authMode === "jwt_credentials" ? this.maxAuthRefreshAttempts : 0;
 
       this.emitTelemetry("info", "connect_attempt_start", {
         connectAttemptId,
+        authMode,
         url: sanitizeNatsUrl(url),
       });
 
       for (
         let authAttempt = 0;
-        authAttempt <= this.maxAuthRefreshAttempts;
+        authAttempt <= maxAuthAttempts;
         authAttempt++
       ) {
         try {
           this.emitTelemetry("info", "connect_auth_attempt_start", {
             connectAttemptId,
+            authMode,
             authAttempt,
           });
 
-          const credentials = await this.getCredentials();
-          const authenticator = client.credsAuthenticator(
-            new TextEncoder().encode(buildCredsFile(credentials)),
+          const authenticator = await this.createAuthenticator(
+            client,
+            connectAttemptId,
+            authAttempt,
           );
 
           this.connection = await client.wsconnect({
@@ -721,6 +801,7 @@ class NatsService {
           this.setConnectionState("connected");
           this.emitTelemetry("info", "connect_attempt_success", {
             connectAttemptId,
+            authMode,
             authAttempt,
             restoredSubscriptions: this.subscriptions.size,
             url: sanitizeNatsUrl(url),
@@ -740,6 +821,7 @@ class NatsService {
           const nonRetryable = isNonRetryableNatsError(error);
           this.emitTelemetry(errorType === "auth" ? "warn" : "error", "connect_attempt_failure", {
             connectAttemptId,
+            authMode,
             authAttempt,
             errorType,
             errorMessage: getNatsErrorMessage(error),
@@ -749,11 +831,14 @@ class NatsService {
           console.error("Failed to connect to NATS:", error);
 
           const canRetryWithFreshCredentials =
-            errorType === "auth" && authAttempt < this.maxAuthRefreshAttempts;
+            authMode === "jwt_credentials" &&
+            errorType === "auth" &&
+            authAttempt < maxAuthAttempts;
           if (canRetryWithFreshCredentials) {
             this.invalidateCredentials();
             this.emitTelemetry("warn", "connect_auth_refresh_retry", {
               connectAttemptId,
+              authMode,
               failedAuthAttempt: authAttempt,
               nextAuthAttempt: authAttempt + 1,
             });
@@ -768,6 +853,7 @@ class NatsService {
             this.setConnectionState("auth_error");
             this.emitTelemetry("warn", "connect_auth_failure_terminal", {
               connectAttemptId,
+              authMode,
               authAttempt,
             });
             return false;
@@ -1004,7 +1090,7 @@ class NatsService {
 
     const allowSubjects = this.getAllowedSubscribeSubjects();
     if (allowSubjects.length === 0) {
-      return false;
+      return this.getAuthMode() === "auth_token";
     }
 
     return allowSubjects.some((pattern) =>
@@ -1038,7 +1124,10 @@ export function getNatsService(config?: NatsConfig): NatsService {
   } else if (natsService && config) {
     natsService.updateConfig(config);
   }
-  return natsService || new NatsService({ url: "", enabled: false });
+  return (
+    natsService ||
+    new NatsService({ url: "", enabled: false, authMode: "auth_token" })
+  );
 }
 
 export function resetNatsService(): void {

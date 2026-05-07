@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { Sidebar } from './Sidebar';
@@ -14,6 +14,8 @@ type RouteRealtimeScope =
   | { kind: 'client'; clientId: string }
   | { kind: 'site'; clientId: string; siteId: string }
   | { kind: 'agent'; agentId: string };
+
+const GLOBAL_REALTIME_SCOPE: AgentRealtimeScope = { level: 'global' };
 
 function decodeSegment(value: string | undefined): string {
   if (!value) return '';
@@ -114,7 +116,7 @@ export function MainLayout() {
   const agentSiteId = agentQuery.data?.siteId;
   const agentClientId = readOptionalStringField(agentQuery.data, 'clientId');
 
-  const realtimeScope = useMemo<AgentRealtimeScope>(() => {
+  const computedRealtimeScope = useMemo<AgentRealtimeScope>(() => {
     if (routeScope.kind === 'site') {
       return {
         level: 'site',
@@ -145,7 +147,7 @@ export function MainLayout() {
       };
     }
 
-    return { level: 'global' };
+    return GLOBAL_REALTIME_SCOPE;
   }, [
     routeScope,
     heartbeatSiteId,
@@ -154,6 +156,30 @@ export function MainLayout() {
     agentClientId,
     queryClient,
   ]);
+
+  const stableScopeRef = useRef<AgentRealtimeScope>(GLOBAL_REALTIME_SCOPE);
+
+  const realtimeScope = useMemo<AgentRealtimeScope>(() => {
+    const previousScope = stableScopeRef.current;
+
+    if (
+      computedRealtimeScope.level === 'agent' &&
+      (!computedRealtimeScope.clientId || !computedRealtimeScope.siteId)
+    ) {
+      if (
+        previousScope.level === 'agent' &&
+        previousScope.agentId !== computedRealtimeScope.agentId
+      ) {
+        stableScopeRef.current = GLOBAL_REALTIME_SCOPE;
+        return GLOBAL_REALTIME_SCOPE;
+      }
+
+      return previousScope;
+    }
+
+    stableScopeRef.current = computedRealtimeScope;
+    return computedRealtimeScope;
+  }, [computedRealtimeScope]);
 
   useAgentStatusRealtime_Combined(isAuthenticated, realtimeScope);
 

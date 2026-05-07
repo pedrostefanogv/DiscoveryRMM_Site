@@ -4,6 +4,11 @@ import { AlertTriangle, Wifi, WifiOff } from 'lucide-react';
 export function RealtimeConnectionStatus() {
   const status = useRealtimeStatus();
 
+  const handleReloadSession = () => {
+    if (typeof window === 'undefined') return;
+    window.location.reload();
+  };
+
   const isConnected = status.natsConnected;
   const isRecovering =
     status.natsState === 'connecting' ||
@@ -64,6 +69,16 @@ export function RealtimeConnectionStatus() {
           <AlertTriangle className="h-3 w-3" />
           <span>{isAuthError ? 'Credencial NATS rejeitada' : 'Falha de rede NATS'}</span>
         </div>
+      )}
+      {isAuthError && (
+        <button
+          type="button"
+          onClick={handleReloadSession}
+          className="rounded-full border border-red-800 bg-red-950/80 px-2 py-1 text-xs font-medium text-red-100 transition hover:bg-red-900"
+          title="Recarregar sessão autenticada"
+        >
+          Recarregar sessão
+        </button>
       )}
       {isServerOverloaded && (
         <div className="flex items-center gap-1 rounded-full bg-amber-950 px-2 py-1 text-xs font-medium text-amber-200">

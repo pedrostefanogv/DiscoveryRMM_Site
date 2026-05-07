@@ -253,6 +253,7 @@ export default function RemoteDebugConsole() {
     const natsService = getNatsService({
       url: natsUrl,
       enabled: true,
+      authMode: realtimeConfig.natsAuthMode,
       scopeMode: "preserve",
     });
 

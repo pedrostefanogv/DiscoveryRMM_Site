@@ -126,6 +126,7 @@ export function useDashboardRealtime(
     const natsService = getNatsService({
       url: realtimeConfig.natsUrl,
       enabled: NATS_ENABLED,
+      authMode: realtimeConfig.natsAuthMode,
       clientId:
         dashboardScope.level !== "global" ? dashboardScope.clientId : undefined,
       siteId:
