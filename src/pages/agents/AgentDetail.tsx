@@ -224,10 +224,22 @@ export default function AgentDetail() {
   const aWithHeartbeat = useMemo(() => {
     if (!a) return null;
     const hasFreshLiveHeartbeat =
-      liveHeartbeat && isHeartbeatTimestampFresh(liveHeartbeat.timestampUtc, now);
+      liveHeartbeat &&
+      isHeartbeatTimestampFresh(
+        liveHeartbeat.timestampUtc,
+        now,
+        undefined,
+        liveHeartbeat.receivedAtUtc,
+      );
 
     const freshFallbackMetrics =
-      a.heartbeatMetrics && isHeartbeatTimestampFresh(a.heartbeatMetrics.timestampUtc, now)
+      a.heartbeatMetrics &&
+      isHeartbeatTimestampFresh(
+        a.heartbeatMetrics.timestampUtc,
+        now,
+        undefined,
+        a.heartbeatMetrics.receivedAtUtc,
+      )
         ? a.heartbeatMetrics
         : undefined;
 

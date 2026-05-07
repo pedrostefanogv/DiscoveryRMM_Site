@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from "react";
 import type { AgentHeartbeat, AgentHeartbeatMetrics } from "@/api";
 
-const DEFAULT_HEARTBEAT_METRICS_TTL_MS = 60_000;
+const DEFAULT_HEARTBEAT_METRICS_TTL_MS = 90_000;
 
 function parseHeartbeatMetricsTtlMs(value: string | undefined): number {
   const parsed = Number(value);
@@ -16,19 +16,28 @@ export const HEARTBEAT_METRICS_TTL_MS = parseHeartbeatMetricsTtlMs(
 );
 
 type HeartbeatPayload = Required<Pick<AgentHeartbeat, "agentId" | "status">> &
-  Omit<AgentHeartbeat, "agentId" | "status">;
+  Omit<AgentHeartbeat, "agentId" | "status"> & {
+    receivedAtUtc?: string;
+  };
 
 type Listener = () => void;
+
+function toEpochMs(value: string | undefined | null): number | null {
+  if (!value) return null;
+  const parsed = new Date(value).getTime();
+  return Number.isFinite(parsed) ? parsed : null;
+}
 
 export function isHeartbeatTimestampFresh(
   timestampUtc: string | undefined | null,
   now = Date.now(),
   ttlMs = HEARTBEAT_METRICS_TTL_MS,
+  receivedAtUtc?: string | null,
 ): boolean {
-  if (!timestampUtc) return false;
-  const timestampMs = new Date(timestampUtc).getTime();
-  if (!Number.isFinite(timestampMs)) return false;
-  return now - timestampMs <= ttlMs;
+  // Prefer local receive time for freshness to avoid clock skew from agent payload.
+  const referenceMs = toEpochMs(receivedAtUtc) ?? toEpochMs(timestampUtc);
+  if (referenceMs == null) return false;
+  return now - referenceMs <= ttlMs;
 }
 
 /** Extract AgentHeartbeatMetrics from an AgentHeartbeat payload */
@@ -48,6 +57,7 @@ export function extractHeartbeatMetrics(data: AgentHeartbeat): AgentHeartbeatMet
     hostname: data.hostname,
     agentVersion: data.agentVersion,
     timestampUtc: data.timestampUtc,
+    receivedAtUtc: new Date().toISOString(),
   };
 }
 
@@ -78,6 +88,7 @@ class HeartbeatStore {
       ...data,
       agentId,
       timestampUtc: data.timestampUtc ?? nowIso,
+      receivedAtUtc: nowIso,
     });
 
     this.emit();
@@ -107,7 +118,14 @@ class HeartbeatStore {
   ): boolean {
     const heartbeat = this.heartbeats.get(agentId);
     if (!heartbeat) return false;
-    if (isHeartbeatTimestampFresh(heartbeat.timestampUtc, now, ttlMs)) {
+    if (
+      isHeartbeatTimestampFresh(
+        heartbeat.timestampUtc,
+        now,
+        ttlMs,
+        heartbeat.receivedAtUtc,
+      )
+    ) {
       return false;
     }
 

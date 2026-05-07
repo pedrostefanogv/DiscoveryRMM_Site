@@ -373,10 +373,22 @@ export default function AgentList() {
     return allAgents.map((agent) => {
       const live = allHeartbeats.get(agent.id);
       const hasFreshLiveHeartbeat =
-        live && isHeartbeatTimestampFresh(live.timestampUtc, now);
+        live &&
+        isHeartbeatTimestampFresh(
+          live.timestampUtc,
+          now,
+          undefined,
+          live.receivedAtUtc,
+        );
 
       const freshFallbackMetrics =
-        agent.heartbeatMetrics && isHeartbeatTimestampFresh(agent.heartbeatMetrics.timestampUtc, now)
+        agent.heartbeatMetrics &&
+        isHeartbeatTimestampFresh(
+          agent.heartbeatMetrics.timestampUtc,
+          now,
+          undefined,
+          agent.heartbeatMetrics.receivedAtUtc,
+        )
           ? agent.heartbeatMetrics
           : undefined;
 

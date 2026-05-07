@@ -85,6 +85,7 @@ export interface AgentHeartbeatMetrics {
   hostname?: string;
   agentVersion?: string;
   timestampUtc?: string;
+  receivedAtUtc?: string;
 }
 
 export interface Agent {

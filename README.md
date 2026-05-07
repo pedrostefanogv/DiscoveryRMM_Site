@@ -91,6 +91,7 @@ EN-US: Expected frontend environment variables.
 | `VITE_NATS_URL` | Endpoint de NATS/WebSocket usado pelo browser quando habilitado. | NATS/WebSocket endpoint used by the browser when enabled. |
 | `VITE_NATS_ENABLED` | Liga ou desliga o suporte a NATS no browser. | Enables or disables NATS support in the browser. |
 | `VITE_NATS_NOTIFICATIONS_SUBJECT_TEMPLATE` | Template opcional de subject NATS para notificacoes em tempo real (`{userId}` e `{topic}`). | Optional NATS subject template for realtime notifications (`{userId}` and `{topic}`). |
+| `VITE_AGENT_HEARTBEAT_METRICS_TTL_MS` | Janela para manter metricas do heartbeat apos o ultimo update recebido no frontend. | Window to keep heartbeat metrics after the last update received by the frontend. |
 | `VITE_AGENT_OFFLINE_FALLBACK_MS` | Janela de fallback para considerar agentes offline. | Fallback window used to consider agents offline. |
 
 PT-BR: Use o arquivo [.env.example](.env.example) como base para configuracao local.

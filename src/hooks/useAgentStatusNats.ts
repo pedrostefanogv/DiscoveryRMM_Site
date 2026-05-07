@@ -38,7 +38,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function isHeartbeatType(normalizedType: string): boolean {
-  return normalizedType === "agentheartbeat";
+  return normalizedType === "agentheartbeat" || normalizedType === "heartbeatv2";
 }
 
 function isStatusChangedType(normalizedType: string): boolean {
@@ -58,9 +58,18 @@ function getStringField(
   keys: string[],
 ): string | null {
   for (const key of keys) {
-    const value = data[key];
-    if (typeof value === "string" && value.trim().length > 0) {
-      return value;
+    for (const [candidateKey, candidateValue] of Object.entries(data)) {
+      if (candidateKey.toLowerCase() !== key.toLowerCase()) {
+        continue;
+      }
+
+      if (typeof candidateValue === "string" && candidateValue.trim().length > 0) {
+        return candidateValue;
+      }
+
+      if (typeof candidateValue === "number" && Number.isFinite(candidateValue)) {
+        return String(candidateValue);
+      }
     }
   }
   return null;
@@ -71,14 +80,38 @@ function getNumberField(
   keys: string[],
 ): number | undefined {
   for (const key of keys) {
-    const value = data[key];
-    if (typeof value === "number") return value;
-    if (typeof value === "string") {
-      const parsed = Number(value);
-      if (Number.isFinite(parsed)) return parsed;
+    for (const [candidateKey, candidateValue] of Object.entries(data)) {
+      if (candidateKey.toLowerCase() !== key.toLowerCase()) {
+        continue;
+      }
+
+      if (typeof candidateValue === "number") return candidateValue;
+      if (typeof candidateValue === "string") {
+        const parsed = Number(candidateValue);
+        if (Number.isFinite(parsed)) return parsed;
+      }
     }
   }
   return undefined;
+}
+
+function getRecordField(
+  data: Record<string, unknown>,
+  keys: string[],
+): Record<string, unknown> | null {
+  for (const key of keys) {
+    for (const [candidateKey, candidateValue] of Object.entries(data)) {
+      if (candidateKey.toLowerCase() !== key.toLowerCase()) {
+        continue;
+      }
+
+      if (isRecord(candidateValue)) {
+        return candidateValue;
+      }
+    }
+  }
+
+  return null;
 }
 
 function parseNullableBoolean(
@@ -238,37 +271,112 @@ function invalidateDashboardQueries(
 
 function toHeartbeatPayload(
   data: Record<string, unknown>,
+  envelope?: Record<string, unknown>,
 ): AgentHeartbeat | null {
-  const agentId = getStringField(data, ["agentId"]);
+  const nestedPayload =
+    getRecordField(data, ["data"]) ??
+    getRecordField(data, ["payload"]) ??
+    getRecordField(data, ["heartbeat"]);
+
+  const source = nestedPayload ?? data;
+  const metricsSource =
+    getRecordField(source, ["metrics"]) ??
+    getRecordField(source, ["telemetry"]);
+
+  const agentId =
+    getStringField(source, ["agentId", "agent_id"]) ??
+    getStringField(data, ["agentId", "agent_id"]) ??
+    (envelope ? getStringField(envelope, ["agentId", "agent_id"]) : null);
+
   if (!agentId) return null;
 
-  const status = getStringField(data, ["status"]);
-  if (status && normalizeEventType(status) !== "online") {
-    return null;
+  const status = getStringField(source, ["status", "state"]);
+  if (status) {
+    const normalizedStatus = normalizeEventType(status);
+    if (normalizedStatus === "offline" || normalizedStatus === "disconnected") {
+      return null;
+    }
   }
 
-  const ipAddress = getStringField(data, ["ipAddress"]);
+  const getMetric = (keys: string[]) =>
+    getNumberField(source, keys) ??
+    (metricsSource ? getNumberField(metricsSource, keys) : undefined);
+
+  const ipAddress =
+    getStringField(source, ["ipAddress", "ip", "ip_address"]) ??
+    getStringField(data, ["ipAddress", "ip", "ip_address"]);
+
+  const clientId =
+    getStringField(source, ["clientId", "client_id"]) ??
+    getStringField(data, ["clientId", "client_id"]) ??
+    (envelope ? getStringField(envelope, ["clientId", "client_id"]) : null);
+
+  const siteId =
+    getStringField(source, ["siteId", "site_id"]) ??
+    getStringField(data, ["siteId", "site_id"]) ??
+    (envelope ? getStringField(envelope, ["siteId", "site_id"]) : null);
+
+  const timestampUtc =
+    getStringField(source, ["timestampUtc", "timestamp_utc", "timestamp"]) ??
+    getStringField(data, ["timestampUtc", "timestamp_utc", "timestamp"]) ??
+    (envelope
+      ? getStringField(envelope, ["timestampUtc", "timestamp_utc", "timestamp"])
+      : null);
 
   return {
     agentId,
     status: "Online",
-    clientId: getStringField(data, ["clientId"]) ?? undefined,
-    siteId: getStringField(data, ["siteId"]) ?? undefined,
+    clientId: clientId ?? undefined,
+    siteId: siteId ?? undefined,
     ipAddress: ipAddress ?? undefined,
-    hostname: getStringField(data, ["hostname"]) ?? undefined,
-    agentVersion: getStringField(data, ["agentVersion"]) ?? undefined,
-    cpuPercent: getNumberField(data, ["cpuPercent"]),
-    memoryPercent: getNumberField(data, ["memoryPercent"]),
-    diskPercent: getNumberField(data, ["diskPercent"]),
-    memoryTotalGb: getNumberField(data, ["memoryTotalGb"]),
-    memoryUsedGb: getNumberField(data, ["memoryUsedGb"]),
-    diskTotalGb: getNumberField(data, ["diskTotalGb"]),
-    diskUsedGb: getNumberField(data, ["diskUsedGb"]),
-    p2pPeers: getNumberField(data, ["p2pPeers"]),
-    uptimeSeconds: getNumberField(data, ["uptimeSeconds"]),
-    processCount: getNumberField(data, ["processCount"]),
-    timestampUtc: getStringField(data, ["timestampUtc"]) ?? undefined,
+    hostname:
+      getStringField(source, ["hostname", "hostName", "host_name"]) ??
+      getStringField(data, ["hostname", "hostName", "host_name"]) ??
+      undefined,
+    agentVersion:
+      getStringField(source, ["agentVersion", "agent_version", "version"]) ??
+      getStringField(data, ["agentVersion", "agent_version", "version"]) ??
+      undefined,
+    cpuPercent: getMetric(["cpuPercent", "cpu_percent", "cpu"]),
+    memoryPercent: getMetric(["memoryPercent", "memory_percent", "ramPercent", "ram_percent"]),
+    diskPercent: getMetric(["diskPercent", "disk_percent"]),
+    memoryTotalGb: getMetric(["memoryTotalGb", "memory_total_gb", "totalMemoryGb"]),
+    memoryUsedGb: getMetric(["memoryUsedGb", "memory_used_gb", "usedMemoryGb"]),
+    diskTotalGb: getMetric(["diskTotalGb", "disk_total_gb", "totalDiskGb"]),
+    diskUsedGb: getMetric(["diskUsedGb", "disk_used_gb", "usedDiskGb"]),
+    p2pPeers: getMetric(["p2pPeers", "p2p_peers"]),
+    uptimeSeconds: getMetric(["uptimeSeconds", "uptime_seconds"]),
+    processCount: getMetric(["processCount", "process_count"]),
+    timestampUtc: timestampUtc ?? undefined,
   };
+}
+
+function toHeartbeatEventData(
+  envelope: Record<string, unknown>,
+  eventData: Record<string, unknown> | null,
+): Record<string, unknown> {
+  if (eventData) {
+    return eventData;
+  }
+
+  return envelope;
+}
+
+function describeKeys(record: Record<string, unknown> | null): string[] {
+  if (!record) return [];
+  return Object.keys(record);
+}
+
+function logDiscardedHeartbeat(
+  normalizedType: string,
+  envelope: Record<string, unknown>,
+  payload: Record<string, unknown>,
+) {
+  console.debug("[NATS][dashboard.events] heartbeat descartado por payload inválido", {
+    normalizedType,
+    envelopeKeys: describeKeys(envelope),
+    payloadKeys: describeKeys(payload),
+  });
 }
 
 function toStatusChangedPayload(
@@ -428,9 +536,12 @@ export function useAgentStatusNats(
       });
 
       if (isHeartbeatType(normalizedType)) {
-        if (!safeData) return;
-        const heartbeatData = toHeartbeatPayload(safeData);
-        if (!heartbeatData) return;
+        const heartbeatEventData = toHeartbeatEventData(eventEnvelope, safeData);
+        const heartbeatData = toHeartbeatPayload(heartbeatEventData, eventEnvelope);
+        if (!heartbeatData) {
+          logDiscardedHeartbeat(normalizedType, eventEnvelope, heartbeatEventData);
+          return;
+        }
         applyHeartbeat(heartbeatData);
         return;
       }
