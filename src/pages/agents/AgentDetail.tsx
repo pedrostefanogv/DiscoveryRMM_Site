@@ -1125,6 +1125,32 @@ export default function AgentDetail() {
                   </Button>
                 </form>
 
+                {softwareItems.length > 0 && (
+                  <div className="mb-4 flex items-center justify-between gap-3">
+                    <p className="text-xs text-slate-500">
+                      Página {softwarePage} de {softwareTotalPages} | {softwareItems.length} item(ns) nesta página
+                      {softwareSearchApplied ? ` | filtro: "${softwareSearchApplied}"` : ''}
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <Button variant="secondary" size="sm" onClick={goToPreviousSoftwarePage} disabled={!canGoPrevSoftwarePage}>
+                        Voltar
+                      </Button>
+                      <div className="rounded-md border border-white/10 px-3 py-1 text-xs text-slate-300">
+                        {softwarePage}
+                      </div>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={goToNextSoftwarePage}
+                        disabled={!canGoNextSoftwarePage}
+                        loading={software.isFetching}
+                      >
+                        Avançar
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
                 <DataTable
                   columns={softwareColumns}
                   data={softwareItems}
