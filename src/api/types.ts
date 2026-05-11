@@ -309,7 +309,7 @@ export interface AgentCommand {
   completedAt: string | null;
 }
 
-export type RemoteDebugLogLevel = "debug" | "info" | "warn" | "error";
+export type RemoteDebugLogLevel = "trace" | "debug" | "info" | "warn" | "error";
 
 export interface StartRemoteDebugSessionRequest {
   logLevel?: RemoteDebugLogLevel;
@@ -351,6 +351,14 @@ export interface RemoteDebugSessionEndedEvent {
   sessionId: string;
   endedAtUtc: string;
   reason?: string | null;
+}
+
+export interface RemoteDebugNatsCredentialsResponse {
+  jwt: string;
+  nkeySeed: string;
+  publicKey: string;
+  expiresAtUtc: string;
+  subscribeSubjects: string[];
 }
 
 export interface Ticket {

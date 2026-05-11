@@ -252,7 +252,7 @@ export default function AgentList() {
       await openRemoteDebugPopup({
         agentId: agent.id,
         payload: {
-          logLevel: 'info',
+          logLevel: 'debug',
           preferredTransport: 'nats',
           ttlMinutes: 20,
         },

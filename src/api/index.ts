@@ -53,7 +53,7 @@ export {
 } from "./configuration";
 export { auditApi } from "./audit";
 export { getNatsService, resetNatsService } from "./nats";
-export type { DashboardEvent, NatsConfig } from "./nats";
+export type { DashboardEvent, NatsConfig, NatsCredentialsResponse } from "./nats";
 export {
   sendAgentCommand,
   getRealtimeStatus,

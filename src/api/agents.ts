@@ -22,6 +22,7 @@ import type {
   HardwareReportRequest,
   StartRemoteDebugSessionRequest,
   StartRemoteDebugSessionResponse,
+  RemoteDebugNatsCredentialsResponse,
 } from "./types";
 
 const BASE = "/api/v1/agents";
@@ -113,6 +114,11 @@ export const agentsApi = {
 
   stopRemoteDebugSession: (id: string, sessionId: string) =>
     api.post<void>(`${BASE}/${id}/remote-debug/${sessionId}/stop`),
+
+  getRemoteDebugNatsCredentials: (id: string, sessionId: string) =>
+    api.post<RemoteDebugNatsCredentialsResponse>(
+      `${BASE}/${id}/remote-debug/${sessionId}/nats-credentials`,
+    ),
 
   // Zero-touch approval
   approveZeroTouch: (agentId: string) =>

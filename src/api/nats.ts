@@ -20,7 +20,7 @@ interface NatsCredentialsRequest {
   siteId?: string;
 }
 
-interface NatsCredentialsResponse {
+export interface NatsCredentialsResponse {
   jwt: string;
   nkeySeed: string;
   publicKey: string;
@@ -394,6 +394,10 @@ class NatsService {
 
     clearTimeout(this.reconnectTimer);
     this.reconnectTimer = null;
+  }
+
+  setPreSuppliedCredentials(creds: NatsCredentialsResponse): void {
+    this.credentials = creds;
   }
 
   private invalidateCredentials() {
