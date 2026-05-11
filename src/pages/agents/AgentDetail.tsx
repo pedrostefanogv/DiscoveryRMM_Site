@@ -1130,6 +1130,7 @@ export default function AgentDetail() {
                   data={softwareItems}
                   keyExtractor={item => item.inventoryId}
                   emptyMessage="Nenhum aplicativo encontrado para este agente"
+                  showPagination={false}
                 />
                 <div className="mt-4 flex items-center justify-between gap-3">
                   <p className="text-xs text-slate-500">

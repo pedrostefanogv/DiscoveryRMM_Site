@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { ApiError, agentsApi } from "@/api";
 import type {
   AgentSoftwareOrder,
@@ -152,6 +152,7 @@ export function useAgentSoftware(
         order: safeOrder,
       }),
     enabled: !!id,
+    placeholderData: keepPreviousData,
   });
 }
 
