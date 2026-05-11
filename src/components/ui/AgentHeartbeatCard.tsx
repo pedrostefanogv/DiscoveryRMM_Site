@@ -42,7 +42,7 @@ export function AgentHeartbeatCard({ metrics, showEmpty = false }: AgentHeartbea
         <div>
           <p className="text-sm font-medium text-white">Métricas Ao Vivo</p>
           <p className="text-xs text-slate-400">
-            Heartbeat do agente
+            Última atualização
             {metrics.timestampUtc && (
               <span className="ml-1">
                 · {new Date(metrics.timestampUtc).toLocaleTimeString('pt-BR')}

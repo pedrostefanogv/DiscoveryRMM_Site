@@ -110,6 +110,10 @@ export const router = createBrowserRouter([
     errorElement: <ErrorPage />,
     children: [
       {
+        path: 'agents/remote-debug-console',
+        element: <LazyPage><RemoteDebugConsole /></LazyPage>,
+      },
+      {
         element: <MainLayout />,
         children: [
       {
@@ -139,10 +143,6 @@ export const router = createBrowserRouter([
       {
         path: 'agents/:id',
         element: <LazyPage><AgentDetail /></LazyPage>,
-      },
-      {
-        path: 'agents/remote-debug-console',
-        element: <LazyPage><RemoteDebugConsole /></LazyPage>,
       },
       {
         path: 'tickets',
