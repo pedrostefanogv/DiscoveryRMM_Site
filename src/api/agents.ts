@@ -38,6 +38,39 @@ export interface HardwareReport {
   openSockets?: OpenSocketInfo[];
 }
 
+interface StartRemoteDebugSessionWireResponse extends Omit<
+  StartRemoteDebugSessionResponse,
+  "natsTenantSubject" | "natsWssUrl"
+> {
+  natsTenantSubject?: string | null;
+  natsSubject?: string | null;
+  natsWssUrl?: string | null;
+  stream?: {
+    natsSubject?: string | null;
+    natsWssUrl?: string | null;
+  } | null;
+}
+
+function normalizeStartRemoteDebugSessionResponse(
+  session: StartRemoteDebugSessionWireResponse,
+): StartRemoteDebugSessionResponse {
+  const natsTenantSubject =
+    session.natsTenantSubject ??
+    session.natsSubject ??
+    session.stream?.natsSubject ??
+    null;
+
+  const natsWssUrl = session.natsWssUrl ?? session.stream?.natsWssUrl ?? null;
+
+  const { stream: _stream, natsSubject: _natsSubject, ...base } = session;
+
+  return {
+    ...base,
+    natsTenantSubject,
+    natsWssUrl,
+  };
+}
+
 export const agentsApi = {
   listBySite: (siteId: string) => api.get<Agent[]>(`${BASE}/by-site/${siteId}`),
 
@@ -103,14 +136,17 @@ export const agentsApi = {
     api.post<{ token: string }>(`/api/v1/agent-install/${agentId}/token`),
 
   // Remote debug
-  startRemoteDebugSession: (
+  startRemoteDebugSession: async (
     id: string,
     data?: StartRemoteDebugSessionRequest,
-  ) =>
-    api.post<StartRemoteDebugSessionResponse>(
+  ) => {
+    const response = await api.post<StartRemoteDebugSessionWireResponse>(
       `${BASE}/${id}/remote-debug/start`,
       data,
-    ),
+    );
+
+    return normalizeStartRemoteDebugSessionResponse(response);
+  },
 
   stopRemoteDebugSession: (id: string, sessionId: string) =>
     api.post<void>(`${BASE}/${id}/remote-debug/${sessionId}/stop`),
