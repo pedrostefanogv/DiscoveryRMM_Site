@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import toast from 'react-hot-toast';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import {
@@ -1330,8 +1331,9 @@ function CatalogTab() {
         [installationType]: syncResult,
       }));
       await query.refetch();
-    } catch {
-      // A mensagem de erro detalhada ja e exibida pelo componente de erro global.
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Falha ao sincronizar catálogo.';
+      toast.error(message);
     }
   }
 

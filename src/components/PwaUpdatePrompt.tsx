@@ -1,10 +1,12 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useRegisterSW } from 'virtual:pwa-register/react';
 import { Button } from '@/components/ui';
 
 const CHECK_INTERVAL_MS = 5 * 60 * 1000;
 
 export function PwaUpdatePrompt() {
+  const checkIntervalRef = useRef<number | null>(null);
+
   const {
     needRefresh: [needRefresh],
     updateServiceWorker,
@@ -13,7 +15,7 @@ export function PwaUpdatePrompt() {
     onRegisteredSW(_, registration) {
       if (!registration) return;
 
-      window.setInterval(() => {
+      checkIntervalRef.current = window.setInterval(() => {
         void registration.update();
       }, CHECK_INTERVAL_MS);
     },
@@ -29,6 +31,9 @@ export function PwaUpdatePrompt() {
     document.addEventListener('visibilitychange', onVisibility);
     return () => {
       document.removeEventListener('visibilitychange', onVisibility);
+      if (checkIntervalRef.current !== null) {
+        window.clearInterval(checkIntervalRef.current);
+      }
     };
   }, [updateServiceWorker]);
 

@@ -644,6 +644,7 @@ export default function TicketList() {
               data={visibleTickets}
               keyExtractor={(ticket) => ticket.id}
               onRowClick={(ticket) => navigate(`/tickets/${ticket.id}`)}
+              showPagination={false}
             />
             <div className="flex items-center justify-between border-t border-white/5 px-4 py-3 text-xs text-slate-400">
               <span>Mostrando ate {PAGE_SIZE} registros por pagina</span>

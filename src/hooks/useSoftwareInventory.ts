@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { softwareInventoryApi } from "@/api";
 import type { AgentSoftwareOrder } from "@/api";
 
@@ -80,6 +80,7 @@ export function useSoftwareInventoryList(params: SoftwareInventoryListParams) {
       });
     },
     enabled: hasScopeTarget,
+    placeholderData: keepPreviousData,
   });
 }
 

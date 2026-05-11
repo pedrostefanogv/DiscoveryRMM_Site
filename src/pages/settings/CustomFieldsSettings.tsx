@@ -97,19 +97,26 @@ export default function CustomFieldsSettings() {
   const upsertValue = useUpsertCustomFieldValue();
 
   useEffect(() => {
+    let cancelled = false;
+
     async function loadClients() {
       try {
         const data = await clientsApi.list(false);
+        if (cancelled) return;
         setClients(data);
       } catch {
+        if (cancelled) return;
         toast.error('Falha ao carregar clientes.');
       }
     }
 
     void loadClients();
+    return () => { cancelled = true; };
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
+
     async function loadSites() {
       if (!selectedClientId) {
         setSites([]);
@@ -121,19 +128,24 @@ export default function CustomFieldsSettings() {
 
       try {
         const data = await sitesApi.list(selectedClientId, false);
+        if (cancelled) return;
         setSites(data);
         setSelectedSiteId('');
         setSelectedAgentId('');
         setAgents([]);
       } catch {
+        if (cancelled) return;
         toast.error('Falha ao carregar sites.');
       }
     }
 
     void loadSites();
+    return () => { cancelled = true; };
   }, [selectedClientId]);
 
   useEffect(() => {
+    let cancelled = false;
+
     async function loadAgents() {
       if (!selectedSiteId) {
         setAgents([]);
@@ -143,14 +155,17 @@ export default function CustomFieldsSettings() {
 
       try {
         const data = await agentsApi.listBySite(selectedSiteId);
+        if (cancelled) return;
         setAgents(data);
         setSelectedAgentId('');
       } catch {
+        if (cancelled) return;
         toast.error('Falha ao carregar agentes.');
       }
     }
 
     void loadAgents();
+    return () => { cancelled = true; };
   }, [selectedSiteId]);
 
   useEffect(() => {

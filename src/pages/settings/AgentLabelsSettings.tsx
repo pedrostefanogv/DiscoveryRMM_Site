@@ -190,6 +190,8 @@ export default function AgentLabelsSettings() {
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
+
     async function loadSites() {
       if (!selectedClientId) {
         setSites([]);
@@ -201,20 +203,25 @@ export default function AgentLabelsSettings() {
 
       try {
         const data = await sitesApi.list(selectedClientId, false);
+        if (cancelled) return;
         setSites(data);
         setSelectedSiteId('');
         setSelectedAgentId('');
         setAgents([]);
         setPreviewResults([]);
       } catch {
+        if (cancelled) return;
         toast.error('Falha ao carregar sites para prévia.');
       }
     }
 
     void loadSites();
+    return () => { cancelled = true; };
   }, [selectedClientId]);
 
   useEffect(() => {
+    let cancelled = false;
+
     async function loadAgents() {
       if (!selectedSiteId) {
         setAgents([]);
@@ -225,15 +232,18 @@ export default function AgentLabelsSettings() {
 
       try {
         const data = await agentsApi.listBySite(selectedSiteId);
+        if (cancelled) return;
         setAgents(data);
         setSelectedAgentId('');
         setPreviewResults([]);
       } catch {
+        if (cancelled) return;
         toast.error('Falha ao carregar agentes para prévia.');
       }
     }
 
     void loadAgents();
+    return () => { cancelled = true; };
   }, [selectedSiteId]);
 
   useEffect(() => {

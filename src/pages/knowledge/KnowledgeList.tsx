@@ -337,6 +337,7 @@ export default function KnowledgeList() {
               keyExtractor={(item) => item.id}
               onRowClick={(item) => navigate(`/knowledge/${item.id}/edit`)}
               emptyMessage="Nenhum artigo encontrado para os filtros selecionados."
+              showPagination={false}
             />
             <div className="flex items-center justify-between border-t border-white/10 px-4 py-3">
               <p className="text-xs text-slate-400">

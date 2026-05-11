@@ -351,6 +351,7 @@ export default function ReportExecutionList() {
           columns={columns}
           data={executions.data ?? []}
           keyExtractor={(e) => e.id}
+          pageSize={limit}
         />
       </Card>
     </div>

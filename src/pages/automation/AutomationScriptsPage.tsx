@@ -402,6 +402,7 @@ export default function AutomationScriptsPage() {
               columns={columns}
               data={list.data?.items ?? []}
               keyExtractor={(item) => item.id}
+              showPagination={false}
             />
             <div className="mt-4 flex justify-end gap-2">
               <Button size="sm" variant="secondary" disabled={!canPrev} onClick={() => setOffset((x) => Math.max(0, x - limit))}>

@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import * as reportsApi from "@/api/reports";
 import { ReportExecutionStatus } from "@/api/types";
 import { downloadReportFile } from "@/api/reports";
@@ -40,6 +40,17 @@ export function useReportDownload() {
   const [downloads, setDownloads] = useState<Record<string, DownloadProgress>>(
     {},
   );
+  const clearTimeoutsRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+
+  useEffect(() => {
+    const activeTimeouts = clearTimeoutsRef.current;
+    return () => {
+      for (const timeoutId of activeTimeouts.values()) {
+        window.clearTimeout(timeoutId);
+      }
+      activeTimeouts.clear();
+    };
+  }, []);
 
   const downloadReport = useCallback(
     async (executionId: string, options?: DownloadReportOptions) => {
@@ -137,13 +148,15 @@ export function useReportDownload() {
           },
         }));
 
-        setTimeout(() => {
+        const clearTimeoutId = setTimeout(() => {
           setDownloads((prev) => {
             const updated = { ...prev };
             delete updated[executionId];
             return updated;
           });
+          clearTimeoutsRef.current.delete(executionId);
         }, 3000);
+        clearTimeoutsRef.current.set(executionId, clearTimeoutId);
       } catch (error) {
         const errorMessage =
           error instanceof Error ? error.message : "Erro desconhecido";
