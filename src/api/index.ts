@@ -52,6 +52,12 @@ export {
   extractTicketAttachmentSettingsFromEffective,
 } from "./configuration";
 export { auditApi } from "./audit";
+export { searchApi } from "./search";
+export type {
+  UniversalSearchResult,
+  SearchResultGroup,
+  SearchResultItem,
+} from "./search";
 export { getNatsService, resetNatsService } from "./nats";
 export type { DashboardEvent, NatsConfig, NatsCredentialsResponse } from "./nats";
 export {

@@ -62,6 +62,7 @@ export * from "./useCustomFields";
 export * from "./useAuthSecurity";
 export * from "./useIdentity";
 export * from "./useNowTick";
+export { useSearch } from "./useSearch";
 export { useDashboardSummary } from "./useDashboardSummary";
 export { useDashboardRealtime } from "./useDashboardRealtime";
 export type { DashboardRealtimeScope } from "./useDashboardRealtime";

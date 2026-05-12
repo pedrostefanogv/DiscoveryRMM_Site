@@ -1,11 +1,13 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { LogOut, Menu, Search, User } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/auth/AuthContext';
 import { useNowTick } from '@/hooks/useNowTick';
 import { useMyProfile } from '@/hooks/useIdentity';
+import { useSearch } from '@/hooks/useSearch';
 import { RealtimeConnectionStatus } from '@/components/RealtimeConnectionStatus';
 import { NotificationBell } from '@/components/notifications/NotificationBell';
+import { SearchPalette } from '@/components/search/SearchPalette';
 
 function computeInitials(source: string | undefined | null): string {
   if (!source) return 'U';
@@ -38,6 +40,9 @@ export function Header({ onMenuClick }: HeaderProps) {
   const { logout, session, isAuthenticated } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
+  const searchContainerRef = useRef<HTMLDivElement | null>(null);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const { query, setQuery, results, loading, error } = useSearch();
   const now = useNowTick(1_000);
   const expiresInText =
     session.expiresAt && session.stage === 'authenticated'
@@ -58,6 +63,43 @@ export function Header({ onMenuClick }: HeaderProps) {
     navigate('/auth/login', { replace: true });
   };
 
+  const handleSearchClose = useCallback(() => {
+    setSearchOpen(false);
+    setQuery('');
+  }, [setQuery]);
+
+  const handleSearchKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLInputElement>) => {
+      if (e.key === 'Escape') {
+        handleSearchClose();
+        (e.target as HTMLInputElement).blur();
+      }
+    },
+    [handleSearchClose],
+  );
+
+  // Click outside para o dropdown de busca
+  useEffect(() => {
+    if (!searchOpen) return;
+
+    const handleClickOutside = (event: MouseEvent) => {
+      if (!searchContainerRef.current) return;
+      if (searchContainerRef.current.contains(event.target as Node)) return;
+      setSearchOpen(false);
+    };
+
+    // Delay para evitar que o clique que abriu dispare o fechamento
+    const timer = setTimeout(() => {
+      document.addEventListener('mousedown', handleClickOutside);
+    }, 0);
+
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [searchOpen]);
+
+  // Click outside para o menu do usuário
   useEffect(() => {
     if (!menuOpen) return;
 
@@ -86,13 +128,30 @@ export function Header({ onMenuClick }: HeaderProps) {
             <Menu className="h-4 w-4" />
           </button>
 
-          <div className="relative hidden max-w-md flex-1 sm:block">
+          <div className="relative hidden max-w-md flex-1 sm:block" ref={searchContainerRef}>
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
               placeholder="Buscar agentes, clientes, chamados..."
+              value={query}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                setSearchOpen(true);
+              }}
+              onFocus={() => setSearchOpen(true)}
+              onKeyDown={handleSearchKeyDown}
               className="w-full rounded-xl border border-white/10 bg-white/5 py-2 pl-10 pr-4 text-sm text-slate-200 placeholder-slate-500 outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/30"
             />
+
+            {searchOpen && (query.trim().length >= 2 || loading) && (
+              <SearchPalette
+                query={query}
+                results={results}
+                loading={loading}
+                error={error}
+                onClose={handleSearchClose}
+              />
+            )}
           </div>
         </div>
 
