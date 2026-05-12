@@ -30,9 +30,12 @@ export interface SearchResultItem {
 
 // ── API ────────────────────────────────────────────────
 
-const BASE = "/search";
+const BASE = "/api/v1/search";
 
 export const searchApi = {
   search: (q: string, maxResults = 10) =>
-    api.get<UniversalSearchResult>(BASE, { q, maxResults }),
+    api.get<UniversalSearchResult>(BASE, {
+      q: q.trim(),
+      maxResults: Math.min(Math.max(maxResults, 1), 25),
+    }),
 };
