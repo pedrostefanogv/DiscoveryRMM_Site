@@ -18,10 +18,10 @@ const cards = [
     icon: Wrench,
   },
   {
-    title: 'Store',
-    description: 'Catalogo e distribuicao de apps. Tela pronta para integracao futura.',
+    title: 'Loja de Apps',
+    description: 'Loja e distribuicao de apps.',
     to: '/software/store',
-    cta: 'Abrir Store',
+    cta: 'Abrir Loja de Apps',
     icon: Store,
   },
 ];

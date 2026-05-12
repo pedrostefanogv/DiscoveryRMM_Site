@@ -460,7 +460,7 @@ export default function AgentDetail() {
     setIsTriggeringAgentUpdate(true);
     try {
       await agentUpdatesApi.forceAgentCheck(id);
-      toast.success('Self-update do agente disparado com sucesso.');
+      toast.success('Atualização do agente disparada com sucesso.');
     } catch (error) {
       const message = error instanceof ApiError
         ? error.message

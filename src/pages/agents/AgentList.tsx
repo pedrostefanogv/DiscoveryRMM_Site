@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Monitor, Wifi, WifiOff, Activity, Building2, Clock, LayoutGrid, List, Bug, Trash2, ShieldCheck, ArrowUp, ArrowDown, Radio } from 'lucide-react';
+import { Monitor, Wifi, WifiOff, Activity, Building2, Clock, LayoutGrid, List, Bug, Trash2, ShieldCheck, ArrowUp, ArrowDown, Radio, RefreshCw } from 'lucide-react';
 import { useQueries } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { useClients } from '@/hooks/useClients';
@@ -926,11 +926,12 @@ export default function AgentList() {
             className="fixed z-50 min-w-[200px] overflow-hidden rounded-lg border border-white/10 bg-slate-900 shadow-xl"
           >
             <button
-              className="w-full px-3 py-2 text-left text-sm text-slate-200 transition-colors hover:bg-white/10"
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-200 transition-colors hover:bg-white/10"
               onClick={() => {
                 void openRemoteControl(contextMenu.agent);
               }}
             >
+              <Monitor className="h-4 w-4" />
               Controle remoto
             </button>
             <button
@@ -944,13 +945,14 @@ export default function AgentList() {
               {remoteDebugAgentId === contextMenu.agent.id ? 'Abrindo debug...' : 'Ver debug'}
             </button>
             <button
-              className="w-full px-3 py-2 text-left text-sm text-slate-200 transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-200 transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
               onClick={() => {
                 void handleTriggerAgentUpdate(contextMenu.agent);
               }}
               disabled={updatingAgentId === contextMenu.agent.id}
             >
-              {updatingAgentId === contextMenu.agent.id ? 'Disparando update...' : 'Disparar self-update'}
+              <RefreshCw className="h-4 w-4" />
+              {updatingAgentId === contextMenu.agent.id ? 'Disparando update...' : 'Atualizar agente'}
             </button>
             {canManageAgent && contextMenu.agent.zeroTouchPending && (
               <button

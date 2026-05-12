@@ -37,7 +37,7 @@ const clientLinks = [
 const softwareLinks = [
   { to: '/software/inventory', label: 'Inventário Detalhado' },
   { to: '/automation', label: 'Automação' },
-  { to: '/software/store', label: 'Store' },
+  { to: '/software/store', label: 'Loja de aplicativos' },
 ];
 
 const automationLinks = [
@@ -46,7 +46,7 @@ const automationLinks = [
   { to: '/automation/tasks', label: 'Tarefas' },
   { to: '/automation/operations', label: 'Operações' },
   { to: '/automation/audit', label: 'Auditoria' },
-  { to: '/settings/agent-labels', label: 'Labels Automaticas' },
+  { to: '/settings/agent-labels', label: 'Labels Automáticas' },
 ];
 
 const reportsLinks = [
@@ -58,7 +58,7 @@ const ticketsLinks = [
   { to: '/tickets', label: 'Chamados' },
   { to: '/knowledge', label: 'Conhecimento' },
   { to: '/tickets/alerts', label: 'Alertas' },
-  { to: '/tickets/sla', label: 'SLA e Calendarios' },
+  { to: '/tickets/sla', label: 'SLA e Calendários' },
   { to: '/tickets/departments', label: 'Departamentos' },
 ];
 
@@ -67,7 +67,7 @@ const settingsLinks = [
   { to: '/settings/workflow', label: 'Workflow' },
   { to: '/settings/workflow-profiles', label: 'SLA e Perfis' },
   { to: '/settings/audit', label: 'Auditoria Config' },
-  { to: '/settings/custom-fields', label: 'Custom Fields' },
+  { to: '/settings/custom-fields', label: 'Campos Personalizados' },
   { to: '/settings/branding', label: 'Branding' },
 ];
 
