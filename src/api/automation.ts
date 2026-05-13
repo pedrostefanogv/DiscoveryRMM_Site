@@ -15,6 +15,9 @@ import type {
   AutomationTaskPage,
   CreateAutomationScriptRequest,
   CreateAutomationTaskRequest,
+  CursorPageDto,
+  AutomationScriptSummary,
+  AutomationTaskSummary,
   TaskPreviewAgentsResponse,
   UpdateAutomationScriptRequest,
   UpdateAutomationTaskRequest,
@@ -64,6 +67,12 @@ export const automationApi = {
       params as Record<string, unknown>,
     ),
 
+  listScriptsPage: (params: { clientId?: string; activeOnly?: boolean; cursor?: string; limit?: number } = {}) =>
+    api.get<CursorPageDto<AutomationScriptSummary>>(
+      `${SCRIPTS_BASE}/page`,
+      params as Record<string, unknown>,
+    ),
+
   getScript: (id: string) =>
     api.get<AutomationScriptDetail>(`${SCRIPTS_BASE}/${id}`),
 
@@ -101,6 +110,12 @@ export const automationApi = {
 
   listTasks: (params: ListAutomationTasksParams = {}) =>
     api.get<AutomationTaskPage>(TASKS_BASE, params as Record<string, unknown>),
+
+  listTasksPage: (params: { scopeType?: AppApprovalScopeType; scopeId?: string; activeOnly?: boolean; deletedOnly?: boolean; includeDeleted?: boolean; search?: string; clientId?: string; siteId?: string; agentId?: string; scopeTypes?: Array<AppApprovalScopeType | string>; actionTypes?: Array<AutomationTaskActionType | string>; labels?: string[]; cursor?: string; limit?: number } = {}) =>
+    api.get<CursorPageDto<AutomationTaskSummary>>(
+      `${TASKS_BASE}/page`,
+      params as Record<string, unknown>,
+    ),
 
   getTask: (id: string) => api.get<AutomationTaskDetail>(`${TASKS_BASE}/${id}`),
 

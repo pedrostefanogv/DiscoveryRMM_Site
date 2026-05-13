@@ -7,6 +7,7 @@ import type {
   AgentAlertTestDispatchRequest,
   AgentAlertTestDispatchResponse,
   CreateAgentAlertRequest,
+  CursorPageDto,
 } from "./types";
 
 const BASE = "/api/v1/agent-alerts";
@@ -83,6 +84,19 @@ export const agentAlertsApi = {
     }
 
     return [];
+  },
+
+  listPage: async (params: AgentAlertsQuery & { cursor?: string; limit?: number } = {}): Promise<CursorPageDto<AgentAlert>> => {
+    const raw = await api.get<Record<string, unknown>>(`${BASE}/page`, params as Record<string, unknown>);
+    const items = Array.isArray(raw.items) ? raw.items.map(item => normalizeAgentAlert(item as Record<string, unknown>)) : [];
+    return {
+      items,
+      returnedItems: typeof raw.returnedItems === "number" ? raw.returnedItems : items.length,
+      cursor: typeof raw.cursor === "string" ? raw.cursor : null,
+      nextCursor: typeof raw.nextCursor === "string" ? raw.nextCursor : null,
+      hasMore: Boolean(raw.hasMore),
+      limit: typeof raw.limit === "number" ? raw.limit : 100,
+    };
   },
 
   async create(data: CreateAgentAlertRequest): Promise<AgentAlert> {

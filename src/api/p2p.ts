@@ -1,4 +1,5 @@
 ﻿import { api } from "./client";
+import type { CursorPageDto } from "./types";
 
 export type P2PScope = "global" | "tenant" | "site" | "agent";
 
@@ -62,6 +63,14 @@ export interface P2PArtifactsDistributionResponse {
   limit: number;
   offset: number;
   items: P2PArtifactsDistributionItem[];
+}
+
+export type P2PDistributionPage = CursorPageDto<P2PArtifactsDistributionItem>;
+
+export interface P2PArtifactsDistributionPageParams extends P2PQueryScope {
+  artifactId?: string;
+  cursor?: string;
+  limit?: number;
 }
 
 export interface P2PAgentsRankingItem {
@@ -148,6 +157,12 @@ export const p2pApi = {
   getArtifactsDistribution: (params: P2PArtifactsDistributionParams) =>
     api.get<P2PArtifactsDistributionResponse>(
       `${BASE}/artifacts/distribution`,
+      withoutAgentId(params) as unknown as Record<string, unknown>,
+    ),
+
+  getArtifactsDistributionPage: (params: P2PArtifactsDistributionPageParams) =>
+    api.get<P2PDistributionPage>(
+      `${BASE}/artifacts/distribution/page`,
       withoutAgentId(params) as unknown as Record<string, unknown>,
     ),
 

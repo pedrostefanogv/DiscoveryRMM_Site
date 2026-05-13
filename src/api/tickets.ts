@@ -16,6 +16,7 @@ import type {
   PresignedUploadResponse,
   CompleteUploadRequest,
   StartTicketRemoteSessionRequest,
+  CursorPageDto,
 } from "./types";
 
 const BASE = "/api/v1/tickets";
@@ -78,9 +79,16 @@ function normalizeTicketRemoteSessions(
   return [];
 }
 
+export interface TicketsPageParams extends TicketsQuery {
+  cursor?: string;
+}
+
 export const ticketsApi = {
   list: (params: TicketsQuery = {}) =>
     api.get<Ticket[]>(BASE, params as Record<string, unknown>),
+
+  listPage: (params: TicketsPageParams = {}) =>
+    api.get<CursorPageDto<Ticket>>(`${BASE}/page`, params as Record<string, unknown>),
 
   listByClient: (clientId: string, workflowStateId?: string) =>
     api.get<Ticket[]>(`${BASE}/by-client/${clientId}`, { workflowStateId }),

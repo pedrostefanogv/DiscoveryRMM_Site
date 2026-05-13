@@ -759,6 +759,17 @@ export interface LogCursorPage {
   to: string | null;
 }
 
+// ── Generic cursor page (reusable across modules) ─────────
+
+export interface CursorPageDto<T> {
+  items: T[];
+  returnedItems: number;
+  cursor: string | null;
+  nextCursor: string | null;
+  hasMore: boolean;
+  limit: number;
+}
+
 export interface LogSummary {
   total: number;
   search: string | null;
