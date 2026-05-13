@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { agentsApi } from "@/api";
-import type { TransferAgentRequest } from "@/api";
+import type { TransferAgentRequest, TransferAgentBulkRequest } from "@/api";
 
 const KEYS = {
   all: ["agentTransfer"] as const,
@@ -31,6 +31,25 @@ export function useTransferAgent() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["agents"] });
       qc.invalidateQueries({ queryKey: KEYS.all });
+    },
+  });
+}
+
+export function useTransferBulkAgents() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: TransferAgentBulkRequest) =>
+      agentsApi.transferBulk(data),
+    onSuccess: (result) => {
+      qc.invalidateQueries({ queryKey: ["agents"] });
+      qc.invalidateQueries({ queryKey: KEYS.all });
+
+      if (result.errorCount > 0) {
+        const firstError = result.errors[0];
+        throw new Error(
+          `${result.successCount} transferido(s), ${result.errorCount} falha(s). ${firstError ? `Erro: ${firstError.error}` : ""}`,
+        );
+      }
     },
   });
 }

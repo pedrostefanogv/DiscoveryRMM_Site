@@ -15,6 +15,7 @@ import { isAgentOnlineNow } from '@/utils/agentStatus';
 import { useNowTick } from '@/hooks/useNowTick';
 import { useSoftwareInventorySnapshot } from '@/hooks/useSoftwareInventory';
 import { LogLevel, type TicketPriority, type Site } from '@/api';
+import { TransferBeforeDeleteModal } from '@/components/agents/TransferBeforeDeleteModal';
 import toast from 'react-hot-toast';
 
 const priorityLabels: Record<TicketPriority, { label: string; color: 'slate' | 'success' | 'warning' | 'danger' }> = {
@@ -44,6 +45,7 @@ export default function ClientDetail() {
   const [deployDescription, setDeployDescription] = useState('');
   const [deployExpiresInHours, setDeployExpiresInHours] = useState<number | null>(24);
   const [deployMultiUse, setDeployMultiUse] = useState(false);
+  const [transferModalOpen, setTransferModalOpen] = useState(false);
 
   const client = useClient(id!);
   const sites = useSites(id!);
@@ -70,10 +72,23 @@ export default function ClientDetail() {
   const c = client.data;
 
   const handleDelete = () => {
-    if (!confirm('Tem certeza que deseja excluir este cliente?')) return;
+    const agentList = agents.data ?? [];
+    if (agentList.length > 0) {
+      setTransferModalOpen(true);
+    } else {
+      if (!confirm('Tem certeza que deseja excluir este cliente?')) return;
+      deleteClient.mutate(c.id, {
+        onSuccess: () => { toast.success('Cliente excluído'); navigate('/clients'); },
+        onError: () => toast.error('Erro ao excluir'),
+      });
+    }
+  };
+
+  const handleTransferAndDelete = () => {
+    setTransferModalOpen(false);
     deleteClient.mutate(c.id, {
       onSuccess: () => { toast.success('Cliente excluído'); navigate('/clients'); },
-      onError: () => toast.error('Erro ao excluir'),
+      onError: () => toast.error('Erro ao excluir cliente após transferência'),
     });
   };
 
@@ -614,6 +629,16 @@ export default function ClientDetail() {
           </div>
         </div>
       </Modal>
+
+      <TransferBeforeDeleteModal
+        open={transferModalOpen}
+        onClose={() => setTransferModalOpen(false)}
+        entityType="client"
+        entityName={c.name}
+        agentIds={(agents.data ?? []).map((a) => a.id)}
+        sourceClientId={c.id}
+        onSuccess={handleTransferAndDelete}
+      />
     </div>
   );
 }

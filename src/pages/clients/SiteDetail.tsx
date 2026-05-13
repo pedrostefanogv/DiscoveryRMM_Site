@@ -9,11 +9,13 @@ import {
   CheckCircle2,
   Monitor,
   Ticket as TicketIcon,
+  Trash2,
   XCircle,
 } from 'lucide-react';
 import { useClient } from '@/hooks/useClients';
-import { useSite } from '@/hooks/useSites';
+import { useSite, useDeleteSite } from '@/hooks/useSites';
 import { useAgentsBySite } from '@/hooks/useAgents';
+import { TransferBeforeDeleteModal } from '@/components/agents/TransferBeforeDeleteModal';
 import { useTicketsByClient } from '@/hooks/useTickets';
 import { useLogs } from '@/hooks/useLogs';
 import { useDashboardSummary } from '@/hooks/useDashboardSummary';
@@ -32,6 +34,7 @@ import {
 import { NotesPanel } from '@/components/notes/NotesPanel';
 import { isAgentOnlineNow } from '@/utils/agentStatus';
 import { LogLevel, type TicketPriority } from '@/api';
+import toast from 'react-hot-toast';
 import type { DashboardWindow } from '@/api/dashboard';
 
 const priorityLabels: Record<
@@ -74,9 +77,12 @@ export default function SiteDetail() {
     normalizeWindow(searchParams.get('window')),
   );
 
+  const [transferModalOpen, setTransferModalOpen] = useState(false);
+
   const client = useClient(clientId!);
   const site = useSite(clientId!, siteId!);
   const agents = useAgentsBySite(siteId!);
+  const deleteSite = useDeleteSite();
   const tickets = useTicketsByClient(clientId!);
   const logs = useLogs({ siteId, limit: 8 });
   const softwareSnapshot = useSoftwareInventorySnapshot('site', undefined, siteId);
@@ -126,6 +132,39 @@ export default function SiteDetail() {
     setSearchParams(next, { replace: true });
   };
 
+  const handleDelete = () => {
+    const agentList = agents.data ?? [];
+    if (agentList.length > 0) {
+      setTransferModalOpen(true);
+    } else {
+      if (!confirm(`Tem certeza que deseja excluir o site "${currentSite.name}"?`)) return;
+      deleteSite.mutate(
+        { clientId: currentClient.id, id: currentSite.id },
+        {
+          onSuccess: () => {
+            toast.success('Site excluído com sucesso');
+            navigate(`/clients/${currentClient.id}`);
+          },
+          onError: () => toast.error('Erro ao excluir site'),
+        },
+      );
+    }
+  };
+
+  const handleTransferAndDelete = () => {
+    setTransferModalOpen(false);
+    deleteSite.mutate(
+      { clientId: currentClient.id, id: currentSite.id },
+      {
+        onSuccess: () => {
+          toast.success('Site excluído com sucesso');
+          navigate(`/clients/${currentClient.id}`);
+        },
+        onError: () => toast.error('Erro ao excluir site após transferência'),
+      },
+    );
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -163,6 +202,9 @@ export default function SiteDetail() {
             );
           })}
         </div>
+        <Button variant="danger" size="sm" onClick={handleDelete}>
+          <Trash2 className="h-4 w-4" /> Excluir
+        </Button>
       </div>
 
       {dashboard.data && (
@@ -446,6 +488,16 @@ export default function SiteDetail() {
           </Card>
         </div>
       </div>
+
+      <TransferBeforeDeleteModal
+        open={transferModalOpen}
+        onClose={() => setTransferModalOpen(false)}
+        entityType="site"
+        entityName={currentSite.name}
+        agentIds={(agents.data ?? []).map((a) => a.id)}
+        sourceClientId={currentClient.id}
+        onSuccess={handleTransferAndDelete}
+      />
     </div>
   );
 }
