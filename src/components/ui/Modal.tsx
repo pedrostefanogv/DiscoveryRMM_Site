@@ -1,4 +1,5 @@
 import { useEffect, useRef, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 
 interface ModalProps {
@@ -23,10 +24,10 @@ export function Modal({ open, onClose, title, children, maxWidth = 'max-w-lg' }:
 
   if (!open) return null;
 
-  return (
+  const modalContent = (
     <div
       ref={overlayRef}
-      className="animate-backdrop-in fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+      className="animate-backdrop-in fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
       onClick={e => { if (e.target === overlayRef.current) onClose(); }}
       onKeyDown={e => { if (e.key === 'Escape') onClose(); }}
     >
@@ -47,4 +48,6 @@ export function Modal({ open, onClose, title, children, maxWidth = 'max-w-lg' }:
       </div>
     </div>
   );
+
+  return createPortal(modalContent, document.body);
 }
