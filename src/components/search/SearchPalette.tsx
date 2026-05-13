@@ -47,6 +47,18 @@ interface SearchPaletteProps {
   onClose: () => void;
 }
 
+function normalizeResultUrl(url: string, entityType: string): string {
+  const trimmed = url.trim();
+
+  // O backend pode retornar rota legada de software (/software/:id),
+  // mas o frontend atual expõe /software/store e /software/inventory.
+  if (entityType === "software" && /^\/software\/[^/]+$/i.test(trimmed)) {
+    return "/software/store";
+  }
+
+  return trimmed;
+}
+
 // ── Component ──────────────────────────────────────────
 
 export function SearchPalette({
@@ -59,8 +71,8 @@ export function SearchPalette({
   const navigate = useNavigate();
 
   const handleItemClick = useCallback(
-    (url: string) => {
-      navigate(url);
+    (url: string, entityType: string) => {
+      navigate(normalizeResultUrl(url, entityType));
       onClose();
     },
     [navigate, onClose],
@@ -117,7 +129,7 @@ export function SearchPalette({
                   <button
                     key={item.id}
                     type="button"
-                    onClick={() => handleItemClick(item.url)}
+                    onClick={() => handleItemClick(item.url, item.entityType)}
                     className="flex w-full items-start gap-3 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-white/5"
                   >
                     <div
