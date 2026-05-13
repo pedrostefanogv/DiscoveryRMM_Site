@@ -23,6 +23,11 @@ import type {
   StartRemoteDebugSessionRequest,
   StartRemoteDebugSessionResponse,
   RemoteDebugNatsCredentialsResponse,
+  TransferAgentRequest,
+  TransferAgentResponse,
+  TransferAgentBulkRequest,
+  TransferBulkResult,
+  ValidateTransferResponse,
 } from "./types";
 
 const BASE = "/api/v1/agents";
@@ -192,5 +197,17 @@ export const agentsApi = {
     api.get<AutomationExecutionReport[]>(
       `/api/v1/agents/${agentId}/automation/executions`,
       { limit },
+    ),
+
+  // Transfer
+  transfer: (agentId: string, data: TransferAgentRequest) =>
+    api.post<TransferAgentResponse>(`${BASE}/${agentId}/transfer`, data),
+
+  transferBulk: (data: TransferAgentBulkRequest) =>
+    api.post<TransferBulkResult>(`${BASE}/transfer/bulk`, data),
+
+  validateTransfer: (agentId: string, targetSiteId: string) =>
+    api.get<ValidateTransferResponse>(
+      `${BASE}/${agentId}/validate-transfer?targetSiteId=${targetSiteId}`,
     ),
 };

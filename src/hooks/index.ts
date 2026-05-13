@@ -26,6 +26,7 @@ export type { AgentRealtimeScope } from "./useAgentStatusRealtime";
 export * from "./useClients";
 export * from "./useSites";
 export * from "./useAgents";
+export * from "./useAgentTransfer";
 export * from "./useAgentAlerts";
 export * from "./useWorkflow";
 export * from "./useDepartments";

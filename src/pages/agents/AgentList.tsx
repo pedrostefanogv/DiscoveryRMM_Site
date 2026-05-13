@@ -1,12 +1,13 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Monitor, Wifi, WifiOff, Activity, Building2, Clock, LayoutGrid, List, Bug, Trash2, ShieldCheck, ArrowUp, ArrowDown, Radio, RefreshCw } from 'lucide-react';
+import { Monitor, Wifi, WifiOff, Activity, Building2, Clock, LayoutGrid, List, Bug, Trash2, ShieldCheck, ArrowUp, ArrowDown, Radio, RefreshCw, Move } from 'lucide-react';
 import { useQueries } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { useClients } from '@/hooks/useClients';
 import { getDeleteAgentErrorMessage, useApproveZeroTouch, useDeleteAgent } from '@/hooks/useAgents';
 import { ApiError, agentUpdatesApi, agentsApi, authApi } from '@/api';
 import { Badge, Loading, ErrorDisplay, Input, Select, StatCard, Modal, PageHeader, SkeletonCard, EmptyState, MetricBar } from '@/components/ui';
+import { TransferAgentModal } from '@/components/agents/TransferAgentModal';
 import type { Agent } from '@/api';
 import { getAgentLastSeen, isAgentOnlineNow } from '@/utils/agentStatus';
 import { useNowTick } from '@/hooks/useNowTick';
@@ -164,6 +165,7 @@ export default function AgentList() {
   const [deletingAgentId, setDeletingAgentId] = useState<string | null>(null);
   const [deleteConfirmAgent, setDeleteConfirmAgent] = useState<AgentWithClient | null>(null);
   const [updatingAgentId, setUpdatingAgentId] = useState<string | null>(null);
+  const [transferAgent, setTransferAgent] = useState<AgentWithClient | null>(null);
   const contextMenuRef = useRef<HTMLDivElement | null>(null);
   const lastKnownIpByAgentRef = useRef<Map<string, string>>(new Map());
 
@@ -276,6 +278,15 @@ export default function AgentList() {
   const closeDeleteAgentModal = () => {
     if (deleteAgent.isPending) return;
     setDeleteConfirmAgent(null);
+  };
+
+  const openTransferAgentModal = (agent: AgentWithClient) => {
+    setContextMenu(null);
+    setTransferAgent(agent);
+  };
+
+  const closeTransferAgentModal = () => {
+    setTransferAgent(null);
   };
 
   const handleDeleteAgent = async () => {
@@ -968,6 +979,17 @@ export default function AgentList() {
             )}
             {canManageAgent && (
               <button
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-200 transition-colors hover:bg-white/10"
+                onClick={() => {
+                  openTransferAgentModal(contextMenu.agent);
+                }}
+              >
+                <Move className="h-4 w-4" />
+                Transferir agente
+              </button>
+            )}
+            {canManageAgent && (
+              <button
                 className="flex w-full items-center gap-2 border-t border-white/10 px-3 py-2 text-left text-sm text-red-300 transition-colors hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-60"
                 onClick={() => {
                   openDeleteAgentModal(contextMenu.agent);
@@ -1043,6 +1065,12 @@ export default function AgentList() {
           )}
         </div>
       </Modal>
+
+      <TransferAgentModal
+        open={!!transferAgent}
+        onClose={closeTransferAgentModal}
+        agent={transferAgent ? { id: transferAgent.id, siteId: transferAgent.siteId, hostname: transferAgent.hostname, displayName: transferAgent.displayName } as Agent : null}
+      />
     </div>
   );
 }

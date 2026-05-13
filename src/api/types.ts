@@ -2761,3 +2761,43 @@ export interface AutomationExecutionReport {
   ackMetadataJson: string | null;
   resultMetadataJson: string | null;
 }
+
+// ── Agent Transfer ─────────────────────────────────────
+
+export interface TransferAgentRequest {
+  targetSiteId: string;
+  reason?: string;
+}
+
+export interface TransferAgentBulkRequest {
+  agentIds: string[];
+  targetSiteId: string;
+  reason?: string;
+}
+
+export interface TransferAgentResponse {
+  agent: Agent;
+  previousSiteId: string;
+  previousClientId: string;
+  targetClientId: string;
+  isCrossClient: boolean;
+  meshCentralAclUpdated: boolean;
+  reason: string | null;
+}
+
+export interface TransferBulkResult {
+  results: TransferAgentResponse[];
+  errors: { agentId: string; error: string }[];
+  successCount: number;
+  errorCount: number;
+}
+
+export interface ValidateTransferResponse {
+  isValid: boolean;
+  messages: string[];
+  isCrossClient: boolean;
+  previousSiteName: string | null;
+  targetSiteName: string | null;
+  previousClientName: string | null;
+  targetClientName: string | null;
+}
