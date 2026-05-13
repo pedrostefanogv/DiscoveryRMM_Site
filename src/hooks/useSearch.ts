@@ -11,7 +11,7 @@ interface UseSearchReturn {
 }
 
 const DEBOUNCE_MS = 300;
-const MIN_QUERY_LENGTH = 2;
+const MIN_QUERY_LENGTH = 3;
 const DEFAULT_MAX_RESULTS = 5;
 
 export function useSearch(): UseSearchReturn {
@@ -45,7 +45,7 @@ export function useSearch(): UseSearchReturn {
 
     const trimmed = query.trim();
 
-    // Menos de 2 caracteres → limpa resultados
+    // Menos de 3 caracteres → limpa resultados
     if (trimmed.length < MIN_QUERY_LENGTH) {
       setResults(null);
       setLoading(false);

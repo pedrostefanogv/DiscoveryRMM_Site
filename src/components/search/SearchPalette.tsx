@@ -86,8 +86,8 @@ export function SearchPalette({
           </div>
         )}
 
-        {/* Empty state — query >= 2 chars, loaded, no results */}
-        {!loading && !error && query.trim().length >= 2 && !hasResults && (
+        {/* Empty state — query >= 3 chars, loaded, no results */}
+        {!loading && !error && query.trim().length >= 3 && !hasResults && (
           <div className="flex flex-col items-center gap-2 py-6">
             <Search className="h-6 w-6 text-slate-500" strokeWidth={1.5} />
             <p className="text-sm text-slate-400">
