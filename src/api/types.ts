@@ -1,23 +1,38 @@
 // ── Enums ──────────────────────────────────────────────
 export enum LogType {
-  System = 0,
-  Security = 1,
-  Application = 2,
-  Hardware = 3,
+  Inventory = 0,
+  Hardware = 0,
+  Command = 1,
+  Auth = 2,
+  Security = 2,
+  System = 3,
+  Application = 3,
+  Agent = 4,
+  Ticket = 5,
+  Workflow = 6,
+  AiChat = 7,
+  Automation = 8,
+  CustomField = 9,
 }
 
 export enum LogLevel {
-  Debug = 0,
-  Info = 1,
-  Warning = 2,
-  Error = 3,
-  Critical = 4,
+  Trace = 0,
+  Debug = 1,
+  Info = 2,
+  Warn = 3,
+  Warning = 3,
+  Error = 4,
+  Fatal = 5,
+  Critical = 5,
 }
 
 export enum LogSource {
-  Agent = 0,
-  Server = 1,
-  Portal = 2,
+  Api = 0,
+  Server = 0,
+  Portal = 0,
+  Agent = 1,
+  Scheduler = 2,
+  Nats = 3,
 }
 
 export enum CommandType {
@@ -714,6 +729,88 @@ export interface LogEntry {
   message: string;
   dataJson: unknown;
   createdAt: string;
+}
+
+export interface LogFacetCount {
+  key: string;
+  count: number;
+}
+
+export interface LogScopeFacetCount {
+  id: string;
+  name: string | null;
+  count: number;
+}
+
+export interface LogCursorPage {
+  items: LogEntry[];
+  returnedItems: number;
+  cursor: string | null;
+  nextCursor: string | null;
+  hasMore: boolean;
+  limit: number;
+  search: string | null;
+  traceId: string | null;
+  correlationId: string | null;
+  requestPath: string | null;
+  statusCode: number | null;
+  period: string | null;
+  from: string | null;
+  to: string | null;
+}
+
+export interface LogSummary {
+  total: number;
+  search: string | null;
+  traceId: string | null;
+  correlationId: string | null;
+  requestPath: string | null;
+  statusCode: number | null;
+  period: string | null;
+  from: string | null;
+  to: string | null;
+  levels: LogFacetCount[];
+  sources: LogFacetCount[];
+  types: LogFacetCount[];
+  clients: LogScopeFacetCount[];
+  sites: LogScopeFacetCount[];
+  agents: LogScopeFacetCount[];
+}
+
+export interface LogScopeOption {
+  value: string;
+  id: number;
+}
+
+export interface LogScopeClientOption {
+  id: string;
+  name: string;
+  isActive: boolean;
+}
+
+export interface LogScopeSiteOption {
+  id: string;
+  clientId: string;
+  name: string;
+  isActive: boolean;
+}
+
+export interface LogScopeAgentOption {
+  id: string;
+  label: string;
+  hostname: string;
+  siteId: string;
+  status?: string | null;
+}
+
+export interface LogScopeOptions {
+  canViewAll: boolean;
+  clients: LogScopeClientOption[];
+  sites: LogScopeSiteOption[];
+  agents: LogScopeAgentOption[];
+  logLevels: LogScopeOption[];
+  logSources: LogScopeOption[];
+  logTypes: LogScopeOption[];
 }
 
 export interface DeployToken {
@@ -1713,8 +1810,15 @@ export interface LogsQuery {
   type?: LogType;
   level?: LogLevel;
   source?: LogSource;
+  search?: string;
+  traceId?: string;
+  correlationId?: string;
+  requestPath?: string;
+  statusCode?: number;
+  period?: string;
   from?: string;
   to?: string;
+  cursor?: string;
   limit?: number;
   offset?: number;
 }
