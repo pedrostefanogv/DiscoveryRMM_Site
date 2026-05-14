@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   AlertTriangle,
   BellRing,
   CalendarDays,
   Clock3,
+  ExternalLink,
   Pencil,
   Plus,
   TimerReset,
@@ -14,6 +16,7 @@ import type {
   Client,
   Department,
   SlaCalendarDetail,
+  SlaCalendarHoliday,
   TicketEscalationRule,
   UserDto,
   WorkflowProfile,
@@ -55,6 +58,81 @@ const WORKDAY_OPTIONS = [
   { value: 5, label: "Sex" },
   { value: 6, label: "Sab" },
   { value: 0, label: "Dom" },
+];
+
+const TIMEZONE_OPTIONS = [
+  { value: "UTC", label: "UTC (UTC±0)" },
+  { value: "America/Sao_Paulo", label: "Brasília (GMT-3)" },
+  { value: "America/New_York", label: "Nova York (GMT-5/-4)" },
+  { value: "America/Chicago", label: "Chicago (GMT-6/-5)" },
+  { value: "America/Denver", label: "Denver (GMT-7/-6)" },
+  { value: "America/Los_Angeles", label: "Los Angeles (GMT-8/-7)" },
+  { value: "America/Argentina/Buenos_Aires", label: "Buenos Aires (GMT-3)" },
+  { value: "America/Mexico_City", label: "Cidade do México (GMT-6)" },
+  { value: "America/Bogota", label: "Bogotá (GMT-5)" },
+  { value: "America/Santiago", label: "Santiago (GMT-4/-3)" },
+  { value: "America/Caracas", label: "Caracas (GMT-4)" },
+  { value: "America/Lima", label: "Lima (GMT-5)" },
+  { value: "Europe/London", label: "Londres (GMT+0/+1)" },
+  { value: "Europe/Lisbon", label: "Lisboa (GMT+0/+1)" },
+  { value: "Europe/Madrid", label: "Madrid (GMT+1/+2)" },
+  { value: "Europe/Berlin", label: "Berlim (GMT+1/+2)" },
+  { value: "Europe/Paris", label: "Paris (GMT+1/+2)" },
+  { value: "Europe/Rome", label: "Roma (GMT+1/+2)" },
+  { value: "Asia/Tokyo", label: "Tóquio (GMT+9)" },
+  { value: "Asia/Shanghai", label: "China (GMT+8)" },
+  { value: "Asia/Singapore", label: "Singapura (GMT+8)" },
+  { value: "Asia/Dubai", label: "Dubai (GMT+4)" },
+  { value: "Asia/Seoul", label: "Seul (GMT+9)" },
+  { value: "Asia/Kolkata", label: "Índia (GMT+5:30)" },
+  { value: "Australia/Sydney", label: "Sydney (GMT+10/+11)" },
+  { value: "Pacific/Auckland", label: "Auckland (GMT+12/+13)" },
+  { value: "Africa/Cairo", label: "Cairo (GMT+2)" },
+  { value: "Africa/Johannesburg", label: "África do Sul (GMT+2)" },
+];
+
+const HOLIDAY_TYPE_OPTIONS = [
+  { value: "0", label: "Fixo (data especifica, nao recorre)" },
+  { value: "1", label: "Anual (recorre todo ano - ex: Natal)" },
+  { value: "2", label: "Relativo (calculo por regra - ex: 3ª seg de jan)" },
+];
+
+const RELATIVE_METHOD_OPTIONS = [
+  { value: "0", label: "Enesima ocorrencia de dia da semana" },
+  { value: "1", label: "Enesimo dia util do mes" },
+];
+
+const MONTH_OPTIONS = [
+  { value: "1", label: "Janeiro" },
+  { value: "2", label: "Fevereiro" },
+  { value: "3", label: "Marco" },
+  { value: "4", label: "Abril" },
+  { value: "5", label: "Maio" },
+  { value: "6", label: "Junho" },
+  { value: "7", label: "Julho" },
+  { value: "8", label: "Agosto" },
+  { value: "9", label: "Setembro" },
+  { value: "10", label: "Outubro" },
+  { value: "11", label: "Novembro" },
+  { value: "12", label: "Dezembro" },
+];
+
+const DAY_OF_WEEK_OPTIONS = [
+  { value: "0", label: "Domingo" },
+  { value: "1", label: "Segunda-feira" },
+  { value: "2", label: "Terca-feira" },
+  { value: "3", label: "Quarta-feira" },
+  { value: "4", label: "Quinta-feira" },
+  { value: "5", label: "Sexta-feira" },
+  { value: "6", label: "Sabado" },
+];
+
+const OCCURRENCE_OPTIONS = [
+  { value: "1", label: "1ª" },
+  { value: "2", label: "2ª" },
+  { value: "3", label: "3ª" },
+  { value: "4", label: "4ª" },
+  { value: "5", label: "Ultima" },
 ];
 
 type CalendarFormState = {
@@ -175,6 +253,7 @@ function getWorkflowProfileLabel(
 }
 
 export default function TicketSlaPage() {
+  const navigate = useNavigate();
   const clientsQuery = useClients();
   const departmentsQuery = useDepartments({ includeGlobal: true });
   const usersQuery = useIamUsers();
@@ -186,6 +265,11 @@ export default function TicketSlaPage() {
     useState<CalendarFormState>(DEFAULT_CALENDAR_FORM);
   const [holidayName, setHolidayName] = useState("");
   const [holidayDate, setHolidayDate] = useState("");
+  const [holidayType, setHolidayType] = useState("1"); // default: Yearly
+  const [holidayRelativeMonth, setHolidayRelativeMonth] = useState("1");
+  const [holidayRelativeDayOfWeek, setHolidayRelativeDayOfWeek] = useState("1");
+  const [holidayRelativeOccurrence, setHolidayRelativeOccurrence] = useState("1");
+  const [holidayRelativeMethod, setHolidayRelativeMethod] = useState("0"); // DayOfWeekOccurrence
 
   const [selectedWorkflowProfileId, setSelectedWorkflowProfileId] = useState("");
   const [editingRuleId, setEditingRuleId] = useState<string | null>(null);
@@ -452,21 +536,54 @@ export default function TicketSlaPage() {
       return;
     }
 
-    if (!holidayDate || !holidayName.trim()) {
-      toast.error("Informe data e nome do feriado.");
+    if (!holidayName.trim()) {
+      toast.error("Informe o nome do feriado.");
       return;
     }
 
+    const typeNum = Number(holidayType);
+
+    // Validacao especifica por tipo
+    if (typeNum === 0 || typeNum === 1) {
+      // Fixed ou Yearly: precisa de data
+      if (!holidayDate) {
+        toast.error("Informe a data do feriado.");
+        return;
+      }
+    }
+
+    if (typeNum === 2) {
+      // Relative: precisa de mes
+      if (!holidayRelativeMonth) {
+        toast.error("Informe o mes para o feriado relativo.");
+        return;
+      }
+    }
+
     try {
+      const payload: Record<string, unknown> = {
+        name: holidayName.trim(),
+        date: holidayDate ? `${holidayDate}T00:00:00` : "2000-01-01T00:00:00",
+        holidayType: typeNum,
+      };
+
+      if (typeNum === 2) {
+        payload.relativeMonth = Number(holidayRelativeMonth);
+        payload.relativeMethod = Number(holidayRelativeMethod);
+        if (holidayRelativeMethod === "0") {
+          payload.relativeDayOfWeek = Number(holidayRelativeDayOfWeek);
+          payload.relativeOccurrence = Number(holidayRelativeOccurrence);
+        } else {
+          payload.relativeDayOfWeek = null;
+          payload.relativeOccurrence = Number(holidayRelativeOccurrence);
+        }
+      }
+
       await addHoliday.mutateAsync({
         id: editingCalendarId,
-        data: {
-          date: `${holidayDate}T00:00:00`,
-          name: holidayName.trim(),
-        },
+        data: payload as never,
       });
-      setHolidayDate("");
-      setHolidayName("");
+      resetHolidayForm();
       toast.success("Feriado adicionado com sucesso.");
     } catch (error) {
       toast.error(
@@ -475,6 +592,32 @@ export default function TicketSlaPage() {
           : "Nao foi possivel adicionar o feriado.",
       );
     }
+  }
+
+  function resetHolidayForm() {
+    setHolidayDate("");
+    setHolidayName("");
+    setHolidayType("1");
+    setHolidayRelativeMonth("1");
+    setHolidayRelativeDayOfWeek("1");
+    setHolidayRelativeOccurrence("1");
+    setHolidayRelativeMethod("0");
+  }
+
+  function getHolidayTypeLabel(holiday: SlaCalendarHoliday): string {
+    const t = holiday.holidayType;
+    if (t === 2) {
+      const month = MONTH_OPTIONS.find(m => m.value === String(holiday.relativeMonth))?.label ?? "";
+      if (holiday.relativeMethod === 1) {
+        const occ = OCCURRENCE_OPTIONS.find(o => o.value === String(holiday.relativeOccurrence))?.label ?? "";
+        return `${occ} dia util de ${month}`;
+      }
+      const dow = DAY_OF_WEEK_OPTIONS.find(d => d.value === String(holiday.relativeDayOfWeek))?.label ?? "";
+      const occ = OCCURRENCE_OPTIONS.find(o => o.value === String(holiday.relativeOccurrence))?.label ?? "";
+      return `${occ} ${dow} de ${month}`;
+    }
+    if (t === 1) return "Anual";
+    return "Fixo";
   }
 
   async function handleDeleteHoliday(holidayId: string, name: string) {
@@ -600,7 +743,6 @@ export default function TicketSlaPage() {
         <div className="flex flex-wrap gap-2">
           <Badge color="primary">Calendarios uteis</Badge>
           <Badge color="warning">Escalonamento automatico</Badge>
-          <Badge color="accent">Contrato real do backend</Badge>
         </div>
       </div>
 
@@ -757,16 +899,16 @@ export default function TicketSlaPage() {
                       }))
                     }
                   />
-                  <Input
+                  <Select
                     label="Timezone"
-                    value={calendarForm.timezone}
+                    options={TIMEZONE_OPTIONS}
+                    value={TIMEZONE_OPTIONS.some(opt => opt.value === calendarForm.timezone) ? calendarForm.timezone : "UTC"}
                     onChange={(event) =>
                       setCalendarForm((current) => ({
                         ...current,
                         timezone: event.target.value,
                       }))
                     }
-                    placeholder="UTC"
                   />
                   <div className="grid grid-cols-2 gap-3">
                     <Input
@@ -867,32 +1009,86 @@ export default function TicketSlaPage() {
                       <h3 className="text-sm font-semibold text-white">Feriados do calendario</h3>
                     </div>
 
-                    <div className="mt-4 grid gap-4 md:grid-cols-[minmax(0,1fr)_auto_auto]">
-                      <Input
-                        label="Nome do feriado"
-                        value={holidayName}
-                        onChange={(event) => setHolidayName(event.target.value)}
-                        placeholder="Natal"
+                    <div className="mt-4 space-y-4">
+                      {/* Tipo do feriado */}
+                      <Select
+                        label="Tipo do feriado"
+                        options={HOLIDAY_TYPE_OPTIONS}
+                        value={holidayType}
+                        onChange={(event) => setHolidayType(event.target.value)}
                       />
-                      <Input
-                        label="Data"
-                        type="date"
-                        value={holidayDate}
-                        onChange={(event) => setHolidayDate(event.target.value)}
-                      />
-                      <div className="flex items-end">
+
+                      {/* Campos para Fixed / Yearly */}
+                      {(holidayType === "0" || holidayType === "1") && (
+                        <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto]">
+                          <Input
+                            label="Nome do feriado"
+                            value={holidayName}
+                            onChange={(event) => setHolidayName(event.target.value)}
+                            placeholder="Natal"
+                          />
+                          <Input
+                            label={holidayType === "1" ? "Dia/Mes (ignora ano)" : "Data"}
+                            type="date"
+                            value={holidayDate}
+                            onChange={(event) => setHolidayDate(event.target.value)}
+                          />
+                        </div>
+                      )}
+
+                      {/* Campos para Relative */}
+                      {holidayType === "2" && (
+                        <div className="space-y-4 rounded-xl border border-white/10 bg-white/5 p-4">
+                          <p className="text-xs font-medium text-slate-400 uppercase tracking-wide">
+                            Configuracao de feriado relativo
+                          </p>
+                          <Input
+                            label="Nome do feriado"
+                            value={holidayName}
+                            onChange={(event) => setHolidayName(event.target.value)}
+                            placeholder="Corpus Christi"
+                          />
+                          <Select
+                            label="Metodo de calculo"
+                            options={RELATIVE_METHOD_OPTIONS}
+                            value={holidayRelativeMethod}
+                            onChange={(event) => setHolidayRelativeMethod(event.target.value)}
+                          />
+                          <Select
+                            label="Mes"
+                            options={MONTH_OPTIONS}
+                            value={holidayRelativeMonth}
+                            onChange={(event) => setHolidayRelativeMonth(event.target.value)}
+                          />
+                          {holidayRelativeMethod === "0" && (
+                            <Select
+                              label="Dia da semana"
+                              options={DAY_OF_WEEK_OPTIONS}
+                              value={holidayRelativeDayOfWeek}
+                              onChange={(event) => setHolidayRelativeDayOfWeek(event.target.value)}
+                            />
+                          )}
+                          <Select
+                            label={holidayRelativeMethod === "1" ? "Ocorrencia (dia util)" : "Ocorrencia"}
+                            options={OCCURRENCE_OPTIONS}
+                            value={holidayRelativeOccurrence}
+                            onChange={(event) => setHolidayRelativeOccurrence(event.target.value)}
+                          />
+                        </div>
+                      )}
+
+                      <div className="flex justify-end">
                         <Button
-                          className="w-full"
                           onClick={() => void handleAddHoliday()}
                           loading={addHoliday.isPending}
                         >
                           <Plus className="h-4 w-4" />
-                          Adicionar
+                          Adicionar feriado
                         </Button>
                       </div>
                     </div>
 
-                    <div className="mt-4 space-y-2">
+                    <div className="mt-6 space-y-2">
                       {calendarDetailQuery.data.holidays.length === 0 && (
                         <p className="text-sm text-slate-500">Nenhum feriado cadastrado.</p>
                       )}
@@ -909,9 +1105,15 @@ export default function TicketSlaPage() {
                           >
                             <div>
                               <p className="text-sm font-medium text-white">{holiday.name}</p>
-                              <p className="text-xs text-slate-400">
-                                {new Date(holiday.date).toLocaleDateString("pt-BR")}
-                              </p>
+                              <div className="mt-0.5 flex flex-wrap gap-2 text-xs text-slate-400">
+                                {holiday.holidayType === 2 ? (
+                                  <span className="text-accent">Relativo: {getHolidayTypeLabel(holiday)}</span>
+                                ) : holiday.holidayType === 1 ? (
+                                  <span className="text-primary">Anual: {new Date(holiday.date).toLocaleDateString("pt-BR", { day: "numeric", month: "long" })}</span>
+                                ) : (
+                                  <span>{new Date(holiday.date).toLocaleDateString("pt-BR")}</span>
+                                )}
+                              </div>
                             </div>
                             <Button
                               size="sm"
@@ -938,10 +1140,19 @@ export default function TicketSlaPage() {
               title="Regras de escalonamento"
               subtitle="Dispare reatribuicao, notificacao e aumento de prioridade conforme o SLA se aproxima do limite."
               action={
-                <Button variant="secondary" onClick={() => resetRuleForm()}>
-                  <Plus className="h-4 w-4" />
-                  Nova regra
-                </Button>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant="secondary"
+                    onClick={() => navigate("/settings/workflow-profiles")}
+                  >
+                    <ExternalLink className="h-4 w-4" />
+                    Gerenciar perfis
+                  </Button>
+                  <Button variant="secondary" onClick={() => resetRuleForm()}>
+                    <Plus className="h-4 w-4" />
+                    Nova regra
+                  </Button>
+                </div>
               }
             />
 
@@ -955,7 +1166,18 @@ export default function TicketSlaPage() {
               }}
             />
 
-            {!selectedWorkflowProfileId && (
+            {workflowProfiles.length === 0 && (
+              <div className="mt-3 flex items-start gap-3 rounded-xl border border-warning/30 bg-warning/10 p-4 text-sm text-slate-300">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+                <div>
+                  <p className="font-medium text-warning">Nenhum workflow profile cadastrado</p>
+                  <p className="mt-1 text-slate-400">
+                    Regras de escalonamento exigem um workflow profile existente. Clique em <strong>"Gerenciar perfis"</strong> acima ou acesse <strong>Suporte &rarr; Workflow Profiles</strong> para criar um perfil com SLA configurado.
+                  </p>
+                </div>
+              </div>
+            )}
+            {!selectedWorkflowProfileId && workflowProfiles.length > 0 && (
               <div className="mt-3 flex items-start gap-3 rounded-xl border border-white/10 bg-white/5 p-4 text-sm text-slate-300">
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
                 <p>
@@ -1056,11 +1278,24 @@ export default function TicketSlaPage() {
             />
 
             {workflowProfiles.length === 0 ? (
-              <div className="flex items-start gap-3 rounded-xl border border-white/10 bg-white/5 p-4 text-sm text-slate-300">
+              <div className="flex items-start gap-3 rounded-xl border border-warning/30 bg-warning/10 p-4 text-sm">
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
-                <p>
-                  Nenhum workflow profile encontrado. Configure os perfis base de SLA antes de criar regras de escalonamento.
-                </p>
+                <div>
+                  <p className="font-medium text-warning">Workflow profiles necessarios</p>
+                  <p className="mt-1 text-slate-400">
+                    Regras de escalonamento sao vinculadas a um <strong>workflow profile</strong>. Nenhum perfil foi encontrado no sistema.
+                  </p>
+                  <div className="mt-3">
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => navigate("/settings/workflow-profiles")}
+                    >
+                      <ExternalLink className="h-4 w-4" />
+                      Ir para Workflow Profiles
+                    </Button>
+                  </div>
+                </div>
               </div>
             ) : (
               <>
@@ -1205,18 +1440,39 @@ export default function TicketSlaPage() {
           </Card>
 
           <Card>
-            <CardHeader title="Observacoes" subtitle="Comportamento relevante do backend nesses modulos." />
+            <CardHeader title="Ajuda rapida" subtitle="Entenda o fluxo completo de SLA e escalonamento." />
             <div className="space-y-3 text-sm text-slate-300">
               <div className="flex items-start gap-3 rounded-xl border border-white/10 bg-white/5 p-4">
-                <Clock3 className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
-                <p>
-                  O calculo de SLA usa o calendario configurado para remover tempo fora do horario util e feriados do vencimento efetivo.
-                </p>
+                <CalendarDays className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                <div>
+                  <p className="font-medium text-white">1. Calendario de SLA</p>
+                  <p className="mt-1 text-slate-400">
+                    Define o fuso horario, dias uteis, horario comercial e feriados. Use um calendario global como padrao e especificos por cliente quando necessario.
+                  </p>
+                </div>
               </div>
               <div className="flex items-start gap-3 rounded-xl border border-white/10 bg-white/5 p-4">
-                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+                <Clock3 className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
+                <div>
+                  <p className="font-medium text-white">2. Workflow Profile</p>
+                  <p className="mt-1 text-slate-400">
+                    Perfil vinculado a um departamento que define o SLA em horas, prioridade padrao e o calendario usado. Crie em <strong>Suporte &rarr; Workflow Profiles</strong>.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3 rounded-xl border border-white/10 bg-white/5 p-4">
+                <BellRing className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+                <div>
+                  <p className="font-medium text-white">3. Regra de Escalonamento</p>
+                  <p className="mt-1 text-slate-400">
+                    Dispara automaticamente quando o SLA atingir um percentual ou estiver proximo do vencimento. Pode reatribuir, notificar ou aumentar a prioridade do ticket.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3 rounded-xl border border-white/10 bg-white/5 p-4">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-danger" />
                 <p>
-                  A API de listagem global de escalonamento retorna apenas regras ativas. Para revisar ou editar regras inativas, filtre por workflow profile.
+                  A listagem global de regras retorna apenas regras ativas. Para editar regras inativas, filtre pelo workflow profile especifico.
                 </p>
               </div>
             </div>

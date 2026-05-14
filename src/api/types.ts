@@ -607,6 +607,11 @@ export interface SlaCalendarHoliday {
   id: string;
   date: string;
   name: string;
+  holidayType: number; // 0=Fixed, 1=Yearly, 2=Relative
+  relativeMonth: number | null;
+  relativeDayOfWeek: number | null;
+  relativeOccurrence: number | null;
+  relativeMethod: number | null; // 0=DayOfWeekOccurrence, 1=NthBusinessDay
 }
 
 export interface SlaCalendarDetail extends Omit<SlaCalendarSummary, "holidayCount"> {
@@ -633,6 +638,21 @@ export interface UpdateSlaCalendarRequest {
 export interface AddSlaCalendarHolidayRequest {
   date: string;
   name: string;
+  holidayType?: number;
+  relativeMonth?: number | null;
+  relativeDayOfWeek?: number | null;
+  relativeOccurrence?: number | null;
+  relativeMethod?: number | null;
+}
+
+export interface UpdateSlaCalendarHolidayRequest {
+  date: string;
+  name: string;
+  holidayType?: number;
+  relativeMonth?: number | null;
+  relativeDayOfWeek?: number | null;
+  relativeOccurrence?: number | null;
+  relativeMethod?: number | null;
 }
 
 export interface SlaCalendarCreateResponse {

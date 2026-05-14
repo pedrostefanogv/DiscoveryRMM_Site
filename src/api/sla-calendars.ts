@@ -8,6 +8,7 @@ import type {
   SlaCalendarSummary,
   SlaCalendarUpdateResponse,
   UpdateSlaCalendarRequest,
+  UpdateSlaCalendarHolidayRequest,
 } from "./types";
 
 const BASE = "/api/v1/sla-calendars";
@@ -28,6 +29,9 @@ export const slaCalendarsApi = {
 
   addHoliday: (id: string, data: AddSlaCalendarHolidayRequest) =>
     api.post<SlaCalendarHoliday>(`${BASE}/${id}/holidays`, data),
+
+  updateHoliday: (id: string, holidayId: string, data: UpdateSlaCalendarHolidayRequest) =>
+    api.put<SlaCalendarHoliday>(`${BASE}/${id}/holidays/${holidayId}`, data),
 
   deleteHoliday: (id: string, holidayId: string) =>
     api.del<void>(`${BASE}/${id}/holidays/${holidayId}`),

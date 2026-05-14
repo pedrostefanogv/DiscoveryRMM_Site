@@ -3,6 +3,7 @@ import { slaCalendarsApi } from "@/api/sla-calendars";
 import type {
   AddSlaCalendarHolidayRequest,
   CreateSlaCalendarRequest,
+  UpdateSlaCalendarHolidayRequest,
   UpdateSlaCalendarRequest,
 } from "@/api";
 
@@ -97,6 +98,26 @@ export function useDeleteSlaCalendarHoliday() {
       id: string;
       holidayId: string;
     }) => slaCalendarsApi.deleteHoliday(id, holidayId),
+    onSuccess: (_result, vars) => {
+      void queryClient.invalidateQueries({ queryKey: KEYS.all });
+      void queryClient.invalidateQueries({ queryKey: KEYS.detail(vars.id) });
+    },
+  });
+}
+
+export function useUpdateSlaCalendarHoliday() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      id,
+      holidayId,
+      data,
+    }: {
+      id: string;
+      holidayId: string;
+      data: UpdateSlaCalendarHolidayRequest;
+    }) => slaCalendarsApi.updateHoliday(id, holidayId, data),
     onSuccess: (_result, vars) => {
       void queryClient.invalidateQueries({ queryKey: KEYS.all });
       void queryClient.invalidateQueries({ queryKey: KEYS.detail(vars.id) });

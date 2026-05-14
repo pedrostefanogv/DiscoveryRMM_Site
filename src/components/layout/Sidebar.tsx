@@ -58,14 +58,14 @@ const ticketsLinks = [
   { to: '/tickets', label: 'Chamados' },
   { to: '/knowledge', label: 'Conhecimento' },
   { to: '/tickets/alerts', label: 'Alertas' },
-  { to: '/tickets/sla', label: 'SLA e Calendários' },
+  { to: '/tickets/sla', label: 'SLA, Calendários e Perfis' },
   { to: '/tickets/departments', label: 'Departamentos' },
+  { to: '/settings/workflow-profiles', label: 'Workflow Profiles' },
 ];
 
 const settingsLinks = [
   { to: '/settings', label: 'Geral' },
   { to: '/settings/workflow', label: 'Workflow' },
-  { to: '/settings/workflow-profiles', label: 'SLA e Perfis' },
   { to: '/settings/audit', label: 'Auditoria Config' },
   { to: '/settings/custom-fields', label: 'Campos Personalizados' },
   { to: '/settings/branding', label: 'Branding' },
@@ -127,9 +127,13 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
     ? automationLinks
     : automationLinks.filter(({ to }) => to !== '/settings/agent-labels');
   const canViewDepartments = hasAnyPermission(['departments.*', 'settings.*', 'settings.read', 'admin.*']);
-  const visibleTicketsLinks = canViewDepartments
+  const canViewWorkflowProfiles = hasAnyPermission(['workflow-profiles.*', 'settings.*', 'settings.read', 'admin.*']);
+  let visibleTicketsLinks = canViewDepartments
     ? ticketsLinks
     : ticketsLinks.filter(({ to }) => to !== '/tickets/departments');
+  visibleTicketsLinks = canViewWorkflowProfiles
+    ? visibleTicketsLinks
+    : visibleTicketsLinks.filter(({ to }) => to !== '/settings/workflow-profiles');
   const visibleMainLinks = mainLinks
     .slice(1)
     .filter(({ to }) => (to === '/deploy' ? canViewDeploy : to !== '/tickets'));
