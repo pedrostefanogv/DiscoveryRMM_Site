@@ -810,7 +810,7 @@ export function buildLayoutJson(state: LayoutEditorState): {
       .map((source) => source.alias.trim())
       .filter(Boolean);
     if (aliases.length !== new Set(aliases).size) {
-      errors.push("Cada dataSource precisa usar um alias unico.");
+      errors.push("Cada dataSource precisa usar um alias único.");
     }
   }
 

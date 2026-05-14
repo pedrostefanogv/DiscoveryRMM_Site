@@ -178,7 +178,7 @@ export default function AuthenticationSettingsPage() {
       });
 
       if (!(credential instanceof PublicKeyCredential)) {
-        throw new Error("O navegador nao retornou uma credencial valida.");
+        throw new Error("O navegador não retornou uma credencial válida.");
       }
 
       const result = await authApi.completeRegistrationFido2(
@@ -206,7 +206,7 @@ export default function AuthenticationSettingsPage() {
 
   const handleDelete = async (item: MfaKey) => {
     const confirmed = window.confirm(
-      `Remover a chave \"${item.name}\"? Esta acao nao pode ser desfeita.`,
+      `Remover a chave \"${item.name}\"? Esta ação não pode ser desfeita.`,
     );
     if (!confirmed) {
       return;
@@ -219,13 +219,13 @@ export default function AuthenticationSettingsPage() {
       const message =
         error instanceof ApiError
           ? error.message
-          : "Nao foi possivel remover a chave de seguranca.";
+          : "Não foi possível remover a chave de segurança.";
       toast.error(message);
     }
   };
 
   if (keysQuery.isLoading) {
-    return <Loading message="Carregando configuracoes de autenticacao..." />;
+    return <Loading message="Carregando configurações de autenticação..." />;
   }
 
   if (keysQuery.isError) {
@@ -391,7 +391,7 @@ function RenameMfaKeyModal({
       const message =
         error instanceof ApiError
           ? error.message
-          : "Nao foi possivel renomear a chave de seguranca.";
+          : "Não foi possível renomear a chave de segurança.";
       toast.error(message);
     }
   };

@@ -142,7 +142,7 @@ function toNotificationPayload(
     recipientUserId: readOptionalString(payload, "recipientUserId") ?? null,
     recipientAgentId: readOptionalString(payload, "recipientAgentId") ?? null,
     recipientKey: readOptionalString(payload, "recipientKey") ?? null,
-    title: readOptionalString(payload, "title") ?? "Notificacao",
+    title: readOptionalString(payload, "title") ?? "Notificação",
     message: readOptionalString(payload, "message") ?? "",
     payloadJson,
     isRead: readOptionalBoolean(payload, "isRead") ?? false,

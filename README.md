@@ -25,9 +25,9 @@ PT-BR: Este projeto foi desenvolvido com apoio de vibecoding e uso de IA como as
 
 EN-US: This project was developed with vibecoding practices and AI-assisted programming support in parts of the workflow, including exploring alternatives, accelerating implementation, reviewing documentation, and operational support. This does not replace human review, technical validation, or engineering decision-making.
 
-## Visao Geral / Overview
+## Visão Geral / Overview
 
-PT-BR: O projeto foi estruturado como uma aplicacao SPA em React com carregamento lazy das rotas, autenticacao protegida, atualizacao em tempo real e modulos de operacao separados por dominio. A aplicacao atende fluxos administrativos e tecnicos, incluindo:
+PT-BR: O projeto foi estruturado como uma aplicação SPA em React com carregamento lazy das rotas, autenticação protegida, atualização em tempo real e módulos de operação separados por domínio. A aplicação atende fluxos administrativos e técnicos, incluindo:
 
 EN-US: The project is structured as a React SPA with lazy-loaded routes, protected authentication, realtime updates, and domain-oriented operational modules. The application serves both administrative and technical workflows, including:
 
@@ -35,43 +35,28 @@ EN-US: The project is structured as a React SPA with lazy-loaded routes, protect
 - EN-US: Operational dashboard with live indicators and status.
 - PT-BR: Gestao de clientes, sites e agentes.
 - EN-US: Client, site, and agent management.
-- PT-BR: Sessoes de depuracao remota e operacoes relacionadas a agentes.
-- EN-US: Remote debugging sessions and agent-related operations.
-- PT-BR: Tickets, alertas, SLA, campos customizados e views salvas.
-- EN-US: Tickets, alerts, SLA, custom fields, and saved views.
-- PT-BR: Automacao, tarefas, auditoria e operacoes.
-- EN-US: Automation, tasks, audit, and operational flows.
-- PT-BR: Inventario de software, catalogo/store e acoes relacionadas.
-- EN-US: Software inventory, catalog/store, and related actions.
-- PT-BR: Tokens de deploy, knowledge base e relatorios.
-- EN-US: Deployment tokens, knowledge base, and reports.
-- PT-BR: Configuracoes de servidor, cliente, site, IAM, branding e workflows.
-- EN-US: Server, client, site, IAM, branding, and workflow configuration.
-- PT-BR: Autenticacao com MFA, WebAuthn/FIDO2 e controle por permissoes.
+- PT-BR: Sessões de depuração remota e operações relacionadas a agentes.
+- PT-BR: Automação, tarefas, auditoria e operações.
+- PT-BR: Configurações de servidor, cliente, site, IAM, branding e workflows.
+- PT-BR: Autenticação com MFA, WebAuthn/FIDO2 e controle por permissões.
 - EN-US: Authentication with MFA, WebAuthn/FIDO2, and permission-based access control.
 
 ## Stack Tecnica / Technical Stack
 
 - PT-BR: React 19 para a interface.
 - EN-US: React 19 for the user interface.
-- PT-BR: TypeScript 6 para tipagem e seguranca de contrato.
-- EN-US: TypeScript 6 for typing and contract safety.
-- PT-BR: Vite 7 para desenvolvimento e build.
-- EN-US: Vite 7 for development and builds.
-- PT-BR: TanStack Query 5 para fetching, cache e invalidacao.
-- EN-US: TanStack Query 5 for fetching, caching, and invalidation.
-- PT-BR: React Router 7 para composicao de rotas.
-- EN-US: React Router 7 for route composition.
-- PT-BR: React Hook Form + Zod para formularios e validacao.
-- EN-US: React Hook Form + Zod for forms and validation.
-- PT-BR: Tailwind CSS 4, Lucide React e Recharts para UI e visualizacao.
+- PT-BR: TypeScript 6 para tipagem e segurança de contrato.
+- PT-BR: TanStack Query 5 para fetching, cache e invalidação.
+- PT-BR: React Router 7 para composição de rotas.
+- PT-BR: React Hook Form + Zod para formulários e validação.
+- PT-BR: Tailwind CSS 4, Lucide React e Recharts para UI e visualização.
 - EN-US: Tailwind CSS 4, Lucide React, and Recharts for UI and visualization.
 - PT-BR: NATS para recursos de realtime.
 - EN-US: NATS for realtime capabilities.
 
 ## Integracao Com o Servidor / Server Integration
 
-PT-BR: Este frontend nao e um produto isolado. Para executar o sistema completo, o servidor/API precisa estar disponivel e compativel com os endpoints consumidos pela camada em [src/api](src/api).
+PT-BR: Este frontend não é um produto isolado. Para executar o sistema completo, o servidor/API precisa estar disponível e compatível com os endpoints consumidos pela camada em [src/api](src/api).
 
 EN-US: This frontend is not a standalone product. To run the full system, the server/API must be available and compatible with the endpoints consumed by the layer in [src/api](src/api).
 
@@ -90,15 +75,15 @@ EN-US: Expected frontend environment variables.
 | `VITE_API_URL` | URL base da API HTTP usada pelo frontend. | Base URL of the HTTP API used by the frontend. |
 | `VITE_NATS_URL` | Endpoint de NATS/WebSocket usado pelo browser quando habilitado. | NATS/WebSocket endpoint used by the browser when enabled. |
 | `VITE_NATS_ENABLED` | Liga ou desliga o suporte a NATS no browser. | Enables or disables NATS support in the browser. |
-| `VITE_NATS_NOTIFICATIONS_SUBJECT_TEMPLATE` | Template opcional de subject NATS para notificacoes em tempo real (`{userId}` e `{topic}`). | Optional NATS subject template for realtime notifications (`{userId}` and `{topic}`). |
+| `VITE_NATS_NOTIFICATIONS_SUBJECT_TEMPLATE` | Template opcional de subject NATS para notificações em tempo real (`{userId}` e `{topic}`). | Optional NATS subject template for realtime notifications (`{userId}` and `{topic}`). |
 | `VITE_AGENT_HEARTBEAT_METRICS_TTL_MS` | Janela para manter metricas do heartbeat apos o ultimo update recebido no frontend. | Window to keep heartbeat metrics after the last update received by the frontend. |
 | `VITE_AGENT_OFFLINE_FALLBACK_MS` | Janela de fallback para considerar agentes offline. | Fallback window used to consider agents offline. |
 
-PT-BR: Use o arquivo [.env.example](.env.example) como base para configuracao local.
+PT-BR: Use o arquivo [.env.example](.env.example) como base para configuração local.
 
 EN-US: Use [.env.example](.env.example) as the baseline for local configuration.
 
-## Execucao Local / Local Setup
+## Execução Local / Local Setup
 
 ### Pre-requisitos / Prerequisites
 
@@ -150,21 +135,21 @@ npm run build
 - `src/hooks`: PT-BR: hooks por dominio de negocio. EN-US: business-domain hooks.
 - `src/pages`: PT-BR: telas e modulos operacionais. EN-US: screens and operational modules.
 - `src/services`: PT-BR: servicos auxiliares. EN-US: supporting services.
-- `src/utils`: PT-BR: helpers, normalizacoes e utilitarios de configuracao. EN-US: helpers, normalizations, and configuration utilities.
+- `src/utils`: PT-BR: helpers, normalizações e utilitários de configuração. EN-US: helpers, normalizations, and configuration utilities.
 - `scripts`: PT-BR: rotinas de build e verificacao. EN-US: build and verification routines.
 
 ## Estrategia de Branches / Branch Strategy
 
-PT-BR: O repositorio foi organizado com o seguinte modelo principal.
+PT-BR: O repositório foi organizado com o seguinte modelo principal.
 
 EN-US: The repository is organized around the following primary model.
 
-- `release`: PT-BR: branch padrao e principal para entregas estaveis. EN-US: default and primary branch for stable deliveries.
-- `LTS`: PT-BR: trilha de manutencao estavel de longo prazo. EN-US: long-term stable maintenance track.
-- `beta`: PT-BR: trilha intermediaria para validacao antes de promover para release. EN-US: intermediate validation track before promoting to release.
+- `release`: PT-BR: branch padrão e principal para entregas estáveis. EN-US: default and primary branch for stable deliveries.
+- `LTS`: PT-BR: trilha de manutenção estável de longo prazo. EN-US: long-term stable maintenance track.
+- `beta`: PT-BR: trilha intermediária para validação antes de promover para release. EN-US: intermediate validation track before promoting to release.
 - `dev`: PT-BR: branch de desenvolvimento com commits diretos permitidos. EN-US: development branch where direct commits are allowed.
 
-PT-BR: Politica planejada de colaboracao.
+PT-BR: Política planejada de colaboração.
 
 EN-US: Planned collaboration policy.
 
@@ -172,11 +157,11 @@ EN-US: Planned collaboration policy.
 - `dev`: PT-BR: branch aberta para evolucao continua e integracao. EN-US: open branch for continuous evolution and integration.
 - Features, hotfixes e branches temporarias: PT-BR: devem derivar de `dev` antes da promocao para trilhas estaveis. EN-US: must derive from `dev` before promotion into stable tracks.
 
-## Observacoes de Publicacao / Publication Notes
+## Observações de Publicação / Publication Notes
 
-- PT-BR: O historico publico deste repositorio foi reinicializado para publicacao segura.
+- PT-BR: O histórico público deste repositório foi reinicializado para publicação segura.
 - EN-US: The public history of this repository was reset for a safe publication.
-- PT-BR: O arquivo de exemplo de ambiente foi saneado para evitar exposicao de endpoints internos.
+- PT-BR: O arquivo de exemplo de ambiente foi saneado para evitar exposição de endpoints internos.
 - EN-US: The example environment file was sanitized to avoid exposing internal endpoints.
 - PT-BR: Configuracoes sensiveis reais devem permanecer fora do Git e fora de arquivos versionados.
 - EN-US: Real sensitive configuration must remain outside Git and outside versioned files.
@@ -195,22 +180,22 @@ EN-US: Planned collaboration policy.
 | Camada de dados / Data layer | TanStack Query 5 | TanStack Query 5 |
 | Formularios e validacao / Forms and validation | React Hook Form, Zod | React Hook Form, Zod |
 | Transporte realtime / Realtime transport | NATS | NATS |
-| Dominios principais / Key domains | Agentes, clientes/sites, tickets/SLA, automacao, software, relatorios, IAM/configuracoes | Agents, clients/sites, tickets/SLA, automation, software, reports, IAM/settings |
+| Dominios principais / Key domains | Agentes, clientes/sites, tickets/SLA, automação, software, relatórios, IAM/configurações | Agents, clients/sites, tickets/SLA, automation, software, reports, IAM/settings |
 | Recursos de autenticacao / Authentication features | Autenticacao de sessao, MFA, WebAuthn/FIDO2 | Session authentication, MFA, WebAuthn/FIDO2 |
 
 ## Resumo Final / Final Summary
 
-PT-BR: Este repositorio contem o frontend web do Discovery RMM. Ele oferece o console operacional e administrativo usado para gerenciar agentes, clientes, sites, fluxos de tickets, automacao, inventario de software, relatorios, tokens de deploy, superficies de configuracao e fluxos de identidade/autorizacao.
+PT-BR: Este repositório contém o frontend web do Discovery RMM. Ele oferece o console operacional e administrativo usado para gerenciar agentes, clientes, sites, fluxos de tickets, automação, inventário de software, relatórios, tokens de deploy, superfícies de configuração e fluxos de identidade/autorização.
 
 EN-US: This repository contains the Discovery RMM web frontend. It provides the operational and administrative console used to manage agents, customers, sites, ticketing flows, automation, software inventory, reports, deployment tokens, configuration surfaces, and identity/authorization workflows.
 
-PT-BR: A implementacao do lado do servidor fica no repositorio complementar [pedrostefanogv/DiscoveryRMM_API](https://github.com/pedrostefanogv/DiscoveryRMM_API). Este frontend depende de um ambiente compativel de API/backend e deve ser entendido como parte da mesma plataforma, nao como um produto isolado.
+PT-BR: A implementação do lado do servidor fica no repositório complementar [pedrostefanogv/DiscoveryRMM_API](https://github.com/pedrostefanogv/DiscoveryRMM_API). Este frontend depende de um ambiente compatível de API/backend e deve ser entendido como parte da mesma plataforma, não como um produto isolado.
 
 EN-US: The server-side implementation lives in the companion repository [pedrostefanogv/DiscoveryRMM_API](https://github.com/pedrostefanogv/DiscoveryRMM_API). This frontend depends on a compatible API/backend environment and should be treated as part of the same platform rather than a standalone product.
 
 ## Licenca / License
 
-PT-BR: O codigo autoral deste repositorio esta licenciado sob MIT. Dependencias de terceiros continuam sob suas respectivas licencas e devem ser observadas separadamente.
+PT-BR: O código autoral deste repositório está licenciado sob MIT. Dependências de terceiros continuam sob suas respectivas licenças e devem ser observadas separadamente.
 
 EN-US: The original code in this repository is licensed under MIT. Third-party dependencies remain under their own respective licenses and should be reviewed separately.
 

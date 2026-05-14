@@ -370,7 +370,7 @@ class NatsService {
       if (!this.warnedUnavailableClient) {
         this.warnedUnavailableClient = true;
         console.warn(
-          "NATS WebSocket client (@nats-io/nats-core) nao disponivel. Realtime NATS desativado.",
+          "NATS WebSocket client (@nats-io/nats-core) não disponível. Realtime NATS desativado.",
         );
       }
       return null;

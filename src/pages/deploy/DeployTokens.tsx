@@ -46,21 +46,21 @@ function triggerInstallerDownload(fileName: string, blob: Blob) {
 }
 
 function mapInstallerFlowError(error: ApiError | null, action: 'baixar instalador') {
-  if (!error) return `Nao foi possivel ${action}.`;
+   if (!error) return `Não foi possível ${action}.`;
 
-  if (error.status === 400) {
-    return `Nao foi possivel ${action}: parametros ausentes ou invalidos.`;
-  }
+   if (error.status === 400) {
+     return `Não foi possível ${action}: parâmetros ausentes ou inválidos.`;
+   }
 
-  if (error.status === 401) {
-    return 'Token invalido, expirado, revogado ou sem usos disponiveis.';
-  }
+   if (error.status === 401) {
+     return 'Token inválido, expirado, revogado ou sem usos disponíveis.';
+   }
 
-  if (error.status === 503) {
-    return 'Instalador indisponivel temporariamente. Tente novamente em instantes.';
-  }
+   if (error.status === 503) {
+     return 'Instalador indisponível temporariamente. Tente novamente em instantes.';
+   }
 
-  return error.message || `Nao foi possivel ${action}.`;
+   return error.message || `Não foi possível ${action}.`;
 }
 
 export default function DeployTokens() {
@@ -103,7 +103,7 @@ export default function DeployTokens() {
         ? error.message
         : error instanceof Error
           ? error.message
-          : 'Nao foi possivel iniciar o rebuild do agente de atualizacao.';
+          : 'Não foi possível iniciar o rebuild do agente de atualização.';
       toast.error(message);
     },
   });
@@ -250,18 +250,18 @@ export default function DeployTokens() {
     if (!generatedToken?.token) return;
     try {
       await navigator.clipboard.writeText(generatedToken.token);
-      toast.success('Token copiado para a area de transferencia');
-    } catch {
-      toast.error('Nao foi possivel copiar o token');
-    }
-  };
+      toast.success('Token copiado para a área de transferência');
+     } catch {
+       toast.error('Não foi possível copiar o token');
+     }
+   };
 
-  const handleCopyListedToken = async (tokenValue: string) => {
-    try {
-      await navigator.clipboard.writeText(tokenValue);
-      toast.success('Token copiado para a area de transferencia');
-    } catch {
-      toast.error('Nao foi possivel copiar o token');
+   const handleCopyListedToken = async (tokenValue: string) => {
+     try {
+       await navigator.clipboard.writeText(tokenValue);
+       toast.success('Token copiado para a área de transferência');
+     } catch {
+       toast.error('Não foi possível copiar o token');
     }
   };
 
@@ -275,7 +275,7 @@ export default function DeployTokens() {
         toast.success('Deploy token revogado com sucesso.');
       },
       onError: (error) => {
-        toast.error(error.message || 'Nao foi possivel revogar o deploy token.');
+        toast.error(error.message || 'Não foi possível revogar o deploy token.');
       },
     });
   };
@@ -342,7 +342,7 @@ export default function DeployTokens() {
           />
 
           <TextArea
-            label="Descricao"
+            label="Descrição"
             placeholder="Ex: Token para onboarding de novos agentes"
             value={form.description ?? ''}
             onChange={e => setForm(f => ({ ...f, description: e.target.value || null }))}

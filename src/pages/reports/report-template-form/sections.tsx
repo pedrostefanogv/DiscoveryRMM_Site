@@ -95,8 +95,8 @@ export function IdentificationCard({ draft, setDraft }: IdentificationProps) {
       </div>
       <div className="mt-4">
         <TextArea
-          label="Descricao"
-          value={draft.description}
+          label="Descrição"
+           value={draft.description}
           onChange={(event) =>
             setDraft((prev) => ({
               ...prev,
@@ -104,7 +104,7 @@ export function IdentificationCard({ draft, setDraft }: IdentificationProps) {
             }))
           }
           rows={3}
-          placeholder="Descricao opcional do template"
+          placeholder="Descrição opcional do template"
           hint="Texto livre para descrever o objetivo do template. Visível apenas no formulário de edição."
         />
       </div>
@@ -320,10 +320,10 @@ export function LayoutBuilderTopSection({
           hint="Linha secundária abaixo do título. Deixe vazio para omitir."
         />
         <div>
-          <label className="mb-2 block text-sm font-medium text-slate-300">Orientacao</label>
-          <select
-            aria-label="Orientacao do layout"
-            title="Orientacao do layout"
+          <label className="mb-2 block text-sm font-medium text-slate-300">Orientação</label>
+           <select
+             aria-label="Orientação do layout"
+             title="Orientação do layout"
             value={layoutEditor.orientation}
             onChange={(event) =>
               setLayoutEditor((prev) => ({
@@ -1545,7 +1545,7 @@ export function LayoutBuilderDetailsSection({
                   sections: parseJsonObject<LayoutEditorState["sections"]>(event.target.value, prev.sections),
                 }))
               }
-              placeholder='[{"title":"Secao","source":"items","columns":[{"field":"name","label":"Nome"}]}]'
+              placeholder='[{"title":"Seção","source":"items","columns":[{"field":"name","label":"Nome"}]}]'
               hint="Cada seção possui title, source (chave de dados) e columns. Use o editor visual acima para não precisar editar JSON."
             />
           </div>
@@ -2118,7 +2118,7 @@ export function ValidationErrorsCard({ errors }: ValidationErrorsCardProps) {
 
   return (
     <Card>
-      <h2 className="text-sm font-semibold text-red-300">Erros de validacao</h2>
+      <h2 className="text-sm font-semibold text-red-300">Erros de validação</h2>
       <ul className="mt-2 list-disc pl-5 text-xs text-red-200">
         {errors.map((error, index) => (
           <li key={`${error}-${index}`}>{error}</li>

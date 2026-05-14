@@ -36,7 +36,7 @@ export async function createDevRule() {
 
   const errors = validateRulePayload(payload);
   if (errors.length) {
-    console.error("Erros de validacao:", errors);
+    console.error("Erros de validação:", errors);
     return;
   }
 

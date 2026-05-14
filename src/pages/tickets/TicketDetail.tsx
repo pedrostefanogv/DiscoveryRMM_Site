@@ -82,9 +82,9 @@ const ACTIVITY_LABELS: Record<string, string> = {
   PriorityChanged:   'Prioridade alterada',
   DescriptionUpdated:'Descrição atualizada',
   CategoryChanged:   'Categoria alterada',
-  AutomationLinked:  'Automacao vinculada',
-  AutomationApproved:'Automacao aprovada',
-  AutomationRejected:'Automacao rejeitada',
+   AutomationLinked:  'Automação vinculada',
+   AutomationApproved:'Automação aprovada',
+   AutomationRejected:'Automação rejeitada',
 };
 
 type Tab = 'comments' | 'timeline' | 'attachments' | 'automation' | 'ai';
@@ -369,7 +369,7 @@ async function copyTextToClipboard(text: string, successMessage: string) {
     await navigator.clipboard.writeText(text);
     toast.success(successMessage);
   } catch {
-    toast.error('Nao foi possivel copiar o texto.');
+    toast.error('Não foi possível copiar o texto.');
   }
 }
 
@@ -410,7 +410,7 @@ function TicketAiPanel({
     const nextPriority = parsedTriage?.priority ?? ticket.priority;
 
     if (nextCategory === ticket.category && nextPriority === ticket.priority) {
-      toast.error('A triagem nao trouxe categoria ou prioridade aplicaveis.');
+      toast.error('A triagem não trouxe categoria ou prioridade aplicáveis.');
       return;
     }
 
@@ -433,7 +433,7 @@ function TicketAiPanel({
           toast.error(
             error instanceof Error
               ? error.message
-              : 'Nao foi possivel aplicar a triagem ao ticket.',
+              : 'Não foi possível aplicar a triagem ao ticket.',
           );
         },
       },
@@ -445,7 +445,7 @@ function TicketAiPanel({
       <div className="rounded-xl border border-white/10 bg-white/5 p-4 text-sm text-slate-300">
         <p className="font-medium text-white">Assistente de IA do ticket</p>
         <p className="mt-1 text-slate-400">
-          Usa o contrato real do backend para triagem, resumo e proxima resposta. A triagem pode aplicar apenas categoria e prioridade, porque o update atual do ticket nao aceita departamento.
+           Usa o contrato real do backend para triagem, resumo e próxima resposta. A triagem pode aplicar apenas categoria e prioridade, porque o update atual do ticket não aceita departamento.
         </p>
       </div>
 
@@ -530,7 +530,7 @@ function TicketAiPanel({
             ) : (
               <div className="space-y-3">
                 <p className="text-sm text-slate-300">
-                  A IA retornou uma saida nao estruturada. O conteudo bruto continua disponivel abaixo.
+                   A IA retornou uma saída não estruturada. O conteúdo bruto continua disponível abaixo.
                 </p>
                 <pre className="overflow-x-auto whitespace-pre-wrap rounded-lg bg-black/20 p-3 text-xs text-slate-300">
                   {triage.data.suggestion}
@@ -698,7 +698,7 @@ function getAutomationActionLabel(value: unknown) {
     case AutomationTaskActionType.UpdateOrInstallPackage:
       return 'Atualizar ou instalar';
     default:
-      return 'Automacao';
+      return 'Automação';
   }
 }
 
@@ -821,7 +821,7 @@ function AutomationLinksPanel({
         tasksQuery.isLoading
           ? 'Carregando tarefas...'
           : availableTasks.length === 0
-            ? 'Nenhuma tarefa ativa disponivel'
+            ? 'Nenhuma tarefa ativa disponível'
             : 'Selecione uma tarefa',
     },
     ...availableTasks.map((task) => ({
@@ -846,13 +846,13 @@ function AutomationLinksPanel({
         onSuccess: () => {
           setSelectedTaskId('');
           setRequestNote('');
-          toast.success('Solicitacao de automacao vinculada ao ticket.');
-        },
-        onError: (error) => {
-          toast.error(
-            error instanceof Error
-              ? error.message
-              : 'Nao foi possivel vincular a automacao.',
+           toast.success('Solicitação de automação vinculada ao ticket.');
+         },
+         onError: (error) => {
+           toast.error(
+             error instanceof Error
+               ? error.message
+               : 'Não foi possível vincular a automação.',
           );
         },
       },
@@ -879,15 +879,15 @@ function AutomationLinksPanel({
           setReviewNotes((current) => ({ ...current, [link.id]: '' }));
           toast.success(
             action === 'approve'
-              ? 'Automacao aprovada com sucesso.'
-              : 'Automacao rejeitada com sucesso.',
+              ? 'Automação aprovada com sucesso.'
+               : 'Automação rejeitada com sucesso.',
           );
         },
         onError: (error) => {
           toast.error(
             error instanceof Error
               ? error.message
-              : 'Nao foi possivel revisar a automacao.',
+              : 'Não foi possível revisar a automação.',
           );
         },
       },
@@ -900,9 +900,9 @@ function AutomationLinksPanel({
         <div className="mb-3 flex items-center gap-2">
           <Wrench className="h-4 w-4 text-slate-400" />
           <div>
-            <h3 className="text-sm font-semibold text-white">Solicitar automacao</h3>
-            <p className="text-xs text-slate-400">
-              Vincule uma tarefa ativa ao ticket e deixe a revisao pendente quando necessario.
+            <h3 className="text-sm font-semibold text-white">Solicitar automação</h3>
+             <p className="text-xs text-slate-400">
+               Vincule uma tarefa ativa ao ticket e deixe a revisão pendente quando necessário.
             </p>
           </div>
         </div>
@@ -919,7 +919,7 @@ function AutomationLinksPanel({
             label="Nota"
             value={requestNote}
             onChange={(event) => setRequestNote(event.target.value)}
-            placeholder="Opcional: contexto da solicitacao"
+            placeholder="Opcional: contexto da solicitação"
           />
         </div>
 
@@ -931,7 +931,7 @@ function AutomationLinksPanel({
 
         {tasksQuery.isError && (
           <p className="mt-3 text-sm text-danger">
-            Nao foi possivel carregar as tarefas de automacao ativas.
+            Não foi possível carregar as tarefas de automação ativas.
           </p>
         )}
 
@@ -942,7 +942,7 @@ function AutomationLinksPanel({
             loading={createLink.isPending}
             disabled={!selectedTaskId}
           >
-            <Wrench className="h-4 w-4" /> Vincular automacao
+            <Wrench className="h-4 w-4" /> Vincular automação
           </Button>
         </div>
       </div>
@@ -951,10 +951,10 @@ function AutomationLinksPanel({
         {linksQuery.isLoading ? (
           <Loading />
         ) : linksQuery.isError ? (
-          <p className="text-sm text-danger">Erro ao carregar vinculacoes de automacao.</p>
-        ) : linkItems.length === 0 ? (
-          <p className="py-6 text-center text-sm text-slate-500">
-            Nenhuma automacao vinculada a este ticket.
+          <p className="text-sm text-danger">Erro ao carregar vinculações de automação.</p>
+         ) : linkItems.length === 0 ? (
+           <p className="py-6 text-center text-sm text-slate-500">
+             Nenhuma automação vinculada a este ticket.
           </p>
         ) : (
           linkItems.map((link) => {
@@ -977,7 +977,7 @@ function AutomationLinksPanel({
                       )}
                       {task && (
                         <Badge color={task.requiresApproval ? 'warning' : 'accent'}>
-                          {task.requiresApproval ? 'Requer aprovacao' : 'Execucao direta'}
+                          {task.requiresApproval ? 'Requer aprovação' : 'Execução direta'}
                         </Badge>
                       )}
                     </div>
@@ -1106,7 +1106,7 @@ function TicketCustomFieldsPanel({ ticketId }: { ticketId: string }) {
       toast.error(
         error instanceof Error
           ? error.message
-          : 'Nao foi possivel salvar o campo customizado.',
+          : 'Não foi possível salvar o campo customizado.',
       );
     } finally {
       setSavingDefinitionId(null);
@@ -1117,7 +1117,7 @@ function TicketCustomFieldsPanel({ ticketId }: { ticketId: string }) {
     <Card>
       <CardHeader
         title="Campos customizados"
-        subtitle="Valores especificos deste chamado definidos pela operacao."
+        subtitle="Valores específicos deste chamado definidos pela operação."
       />
       <div className="space-y-3">
         {definitionsQuery.isLoading || valuesQuery.isLoading ? (
@@ -1208,7 +1208,7 @@ function TicketCustomFieldInput({
           label="Valor"
           value={value}
           options={[
-            { value: '', label: 'Nao definido' },
+            { value: '', label: 'Não definido' },
             { value: 'true', label: 'Verdadeiro' },
             { value: 'false', label: 'Falso' },
           ]}
@@ -1365,7 +1365,7 @@ function WatchersPanel({
 
   return (
     <Card>
-      <CardHeader title="Watchers" subtitle="Usuarios que acompanham este ticket e recebem notificacoes." />
+      <CardHeader title="Watchers" subtitle="Usuários que acompanham este ticket e recebem notificações." />
       <div className="space-y-3">
         {watchers.isLoading || users.isLoading ? (
           <Loading />

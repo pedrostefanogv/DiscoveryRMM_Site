@@ -92,7 +92,7 @@ const TIMEZONE_OPTIONS = [
 ];
 
 const HOLIDAY_TYPE_OPTIONS = [
-  { value: "0", label: "Fixo (data especifica, nao recorre)" },
+   { value: "0", label: "Fixo (data específica, não recorre)" },
   { value: "1", label: "Anual (recorre todo ano - ex: Natal)" },
   { value: "2", label: "Relativo (calculo por regra - ex: 3ª seg de jan)" },
 ];
@@ -354,7 +354,7 @@ export default function TicketSlaPage() {
 
   const userOptions = useMemo(
     () => [
-      { value: "", label: "Nao reatribuir usuario" },
+      { value: "", label: "Não reatribuir usuário" },
       ...users.map((user) => ({
         value: user.id,
         label: user.fullName || user.login || user.email,
@@ -365,7 +365,7 @@ export default function TicketSlaPage() {
 
   const departmentOptions = useMemo(
     () => [
-      { value: "", label: "Nao reatribuir departamento" },
+      { value: "", label: "Não reatribuir departamento" },
       ...departments.map((department) => ({
         value: department.id,
         label: department.name,
@@ -457,17 +457,17 @@ export default function TicketSlaPage() {
     }
 
     if (!Number.isInteger(startHour) || startHour < 0 || startHour > 23) {
-      toast.error("Horario inicial invalido.");
+      toast.error("Horário inicial inválido.");
       return;
     }
 
     if (!Number.isInteger(endHour) || endHour < 1 || endHour > 24) {
-      toast.error("Horario final invalido.");
+      toast.error("Horário final inválido.");
       return;
     }
 
     if (endHour <= startHour) {
-      toast.error("Horario final deve ser maior que o inicial.");
+      toast.error("Horário final deve ser maior que o inicial.");
       return;
     }
 
@@ -499,19 +499,19 @@ export default function TicketSlaPage() {
           workDaysJson: buildWorkDaysJson(calendarForm.workDays),
         });
         setEditingCalendarId(created.id);
-        toast.success("Calendario criado com sucesso.");
-      }
-    } catch (error) {
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : "Nao foi possivel salvar o calendario.",
+        toast.success("Calendário criado com sucesso.");
+       }
+     } catch (error) {
+       toast.error(
+         error instanceof Error
+           ? error.message
+           : "Não foi possível salvar o calendário.",
       );
     }
   }
 
   async function handleDeleteCalendar(id: string, name: string) {
-    if (!window.confirm(`Excluir o calendario \"${name}\"?`)) {
+    if (!window.confirm(`Excluir o calendário \"${name}\"?`)) {
       return;
     }
 
@@ -523,16 +523,16 @@ export default function TicketSlaPage() {
       toast.success("Calendario removido com sucesso.");
     } catch (error) {
       toast.error(
-        error instanceof Error
-          ? error.message
-          : "Nao foi possivel excluir o calendario.",
+         error instanceof Error
+           ? error.message
+           : "Não foi possível excluir o calendário.",
       );
     }
   }
 
   async function handleAddHoliday() {
     if (!editingCalendarId) {
-      toast.error("Salve o calendario antes de adicionar feriados.");
+      toast.error("Salve o calendário antes de adicionar feriados.");
       return;
     }
 
@@ -585,11 +585,11 @@ export default function TicketSlaPage() {
       });
       resetHolidayForm();
       toast.success("Feriado adicionado com sucesso.");
-    } catch (error) {
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : "Nao foi possivel adicionar o feriado.",
+     } catch (error) {
+       toast.error(
+         error instanceof Error
+           ? error.message
+           : "Não foi possível adicionar o feriado.",
       );
     }
   }
@@ -629,11 +629,11 @@ export default function TicketSlaPage() {
     try {
       await deleteHoliday.mutateAsync({ id: editingCalendarId, holidayId });
       toast.success("Feriado removido com sucesso.");
-    } catch (error) {
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : "Nao foi possivel remover o feriado.",
+     } catch (error) {
+       toast.error(
+         error instanceof Error
+           ? error.message
+           : "Não foi possível remover o feriado.",
       );
     }
   }
@@ -661,7 +661,7 @@ export default function TicketSlaPage() {
     const triggerAtHoursBefore = Number(ruleForm.triggerAtHoursBefore || "0");
 
     if (!Number.isFinite(triggerAtSlaPercent) || triggerAtSlaPercent < 0) {
-      toast.error("Percentual de disparo invalido.");
+      toast.error("Percentual de disparo inválido.");
       return;
     }
 
@@ -697,16 +697,16 @@ export default function TicketSlaPage() {
           bumpPriority: ruleForm.bumpPriority,
           notifyAssignee: ruleForm.notifyAssignee,
         });
-        toast.success("Regra de escalonamento criada.");
-      }
+        toast.success("Regra de escalonamento criada.")
+       }
 
-      setSelectedWorkflowProfileId(ruleForm.workflowProfileId);
-      resetRuleForm(ruleForm.workflowProfileId);
-    } catch (error) {
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : "Nao foi possivel salvar a regra.",
+       setSelectedWorkflowProfileId(ruleForm.workflowProfileId);
+       resetRuleForm(ruleForm.workflowProfileId);
+     } catch (error) {
+       toast.error(
+         error instanceof Error
+           ? error.message
+           : "Não foi possível salvar a regra.",
       );
     }
   }
@@ -722,11 +722,11 @@ export default function TicketSlaPage() {
         resetRuleForm();
       }
       toast.success("Regra removida com sucesso.");
-    } catch (error) {
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : "Nao foi possivel remover a regra.",
+     } catch (error) {
+       toast.error(
+         error instanceof Error
+           ? error.message
+           : "Não foi possível remover a regra.",
       );
     }
   }
@@ -742,7 +742,7 @@ export default function TicketSlaPage() {
         </div>
         <div className="flex flex-wrap gap-2">
           <Badge color="primary">Calendarios uteis</Badge>
-          <Badge color="warning">Escalonamento automatico</Badge>
+          <Badge color="warning">Escalonamento automático</Badge>
         </div>
       </div>
 
@@ -974,7 +974,7 @@ export default function TicketSlaPage() {
 
                 {editingCalendarId && (
                   <p className="mt-3 text-xs text-slate-500">
-                    O client do calendario nao pode ser alterado pelo endpoint atual. Para mudar o escopo, crie um novo calendario.
+                    O client do calendário não pode ser alterado pelo endpoint atual. Para mudar o escopo, crie um novo calendário.
                   </p>
                 )}
 
@@ -1138,7 +1138,7 @@ export default function TicketSlaPage() {
           <Card>
             <CardHeader
               title="Regras de escalonamento"
-              subtitle="Dispare reatribuicao, notificacao e aumento de prioridade conforme o SLA se aproxima do limite."
+               subtitle="Dispare reatribuição, notificação e aumento de prioridade conforme o SLA se aproxima do limite."
               action={
                 <div className="flex flex-wrap gap-2">
                   <Button
@@ -1242,15 +1242,15 @@ export default function TicketSlaPage() {
                         <Badge color="accent">{formatHoursBefore(rule.triggerAtHoursBefore)}</Badge>
                       )}
                       {rule.bumpPriority && <Badge color="danger">Aumenta prioridade</Badge>}
-                      {rule.notifyAssignee && <Badge color="primary">Notifica responsavel</Badge>}
+                      {rule.notifyAssignee && <Badge color="primary">Notifica responsável</Badge>}
                     </div>
 
                     <div className="mt-3 space-y-1 text-xs text-slate-400">
                       <p>
-                        Usuario destino: {user ? user.fullName || user.login || user.email : "Sem reatribuicao"}
-                      </p>
-                      <p>
-                        Departamento destino: {department?.name ?? "Sem reatribuicao"}
+                         Usuário destino: {user ? user.fullName || user.login || user.email : "Sem reatribuição"}
+                       </p>
+                       <p>
+                         Departamento destino: {department?.name ?? "Sem reatribuição"}
                       </p>
                     </div>
 
@@ -1445,18 +1445,18 @@ export default function TicketSlaPage() {
               <div className="flex items-start gap-3 rounded-xl border border-white/10 bg-white/5 p-4">
                 <CalendarDays className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
                 <div>
-                  <p className="font-medium text-white">1. Calendario de SLA</p>
-                  <p className="mt-1 text-slate-400">
-                    Define o fuso horario, dias uteis, horario comercial e feriados. Use um calendario global como padrao e especificos por cliente quando necessario.
+                  <p className="font-medium text-white">1. Calendário de SLA</p>
+                   <p className="mt-1 text-slate-400">
+                     Define o fuso horário, dias úteis, horário comercial e feriados. Use um calendário global como padrão e específicos por cliente quando necessário.
                   </p>
                 </div>
               </div>
               <div className="flex items-start gap-3 rounded-xl border border-white/10 bg-white/5 p-4">
                 <Clock3 className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
                 <div>
-                  <p className="font-medium text-white">2. Workflow Profile</p>
-                  <p className="mt-1 text-slate-400">
-                    Perfil vinculado a um departamento que define o SLA em horas, prioridade padrao e o calendario usado. Crie em <strong>Suporte &rarr; Workflow Profiles</strong>.
+                    <p className="font-medium text-white">2. Workflow Profile</p>
+                   <p className="mt-1 text-slate-400">
+                     Perfil vinculado a um departamento que define o SLA em horas, prioridade padrão e o calendário usado. Crie em <strong>Suporte &rarr; Workflow Profiles</strong>.
                   </p>
                 </div>
               </div>
@@ -1465,14 +1465,14 @@ export default function TicketSlaPage() {
                 <div>
                   <p className="font-medium text-white">3. Regra de Escalonamento</p>
                   <p className="mt-1 text-slate-400">
-                    Dispara automaticamente quando o SLA atingir um percentual ou estiver proximo do vencimento. Pode reatribuir, notificar ou aumentar a prioridade do ticket.
+                    Dispara automaticamente quando o SLA atingir um percentual ou estiver próximo do vencimento. Pode reatribuir, notificar ou aumentar a prioridade do ticket.
                   </p>
                 </div>
               </div>
               <div className="flex items-start gap-3 rounded-xl border border-white/10 bg-white/5 p-4">
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-danger" />
                 <p>
-                  A listagem global de regras retorna apenas regras ativas. Para editar regras inativas, filtre pelo workflow profile especifico.
+                   A listagem global de regras retorna apenas regras ativas. Para editar regras inativas, filtre pelo workflow profile específico.
                 </p>
               </div>
             </div>

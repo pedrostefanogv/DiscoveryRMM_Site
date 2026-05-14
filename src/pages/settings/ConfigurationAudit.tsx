@@ -109,7 +109,7 @@ export default function ConfigurationAudit() {
             }}
           />
           <Input
-            label="Data inicio"
+            label="Data início"
             type="date"
             value={startDate}
             onChange={(event) => {
@@ -266,6 +266,6 @@ function formatAuditValue(value: unknown): string {
   try {
     return JSON.stringify(value, null, 2);
   } catch {
-    return "[valor nao serializavel]";
+    return "[valor não serializável]";
   }
 }

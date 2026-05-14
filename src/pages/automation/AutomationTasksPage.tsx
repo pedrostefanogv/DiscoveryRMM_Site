@@ -467,13 +467,13 @@ export default function AutomationTasksPage() {
         render: (item) => (
           <div>
             <p className="font-medium text-white">{item.name}</p>
-            <p className="text-xs text-slate-500">{item.description || "Sem descricao"}</p>
+            <p className="text-xs text-slate-500">{item.description || "Sem descrição"}</p>
           </div>
         ),
       },
       {
         key: "action",
-        header: "Acao",
+        header: "Ação",
         render: (item) => <Badge color="primary">{actionLabel(item.actionType)}</Badge>,
       },
       {
@@ -488,7 +488,7 @@ export default function AutomationTasksPage() {
       },
       {
         key: "approval",
-        header: "Aprovacao",
+        header: "Aprovação",
         render: (item) => (
           <Badge color={item.requiresApproval ? "warning" : "slate"}>
             {item.requiresApproval ? "Requer" : "Nao"}
@@ -733,7 +733,7 @@ export default function AutomationTasksPage() {
     }
 
     if (scopeType !== AppApprovalScopeType.Global && !form.scopeId.trim()) {
-      return toast.error("ScopeId obrigatorio para escopos nao globais");
+      return toast.error("ScopeId obrigatório para escopos não globais");
     }
 
     if (
@@ -864,16 +864,16 @@ export default function AutomationTasksPage() {
       </div>
 
       <Card>
-        <CardHeader title="Filtros" subtitle="Busca rapida, escopo e filtros avancados" />
+        <CardHeader title="Filtros" subtitle="Busca rápida, escopo e filtros avançados" />
         <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-          <p className="text-xs text-slate-500">Use o modo simples para a maioria dos casos e abra o avancado para filtros combinados.</p>
+          <p className="text-xs text-slate-500">Use o modo simples para a maioria dos casos e abra o avançado para filtros combinados.</p>
           <Button
             type="button"
             size="sm"
             variant="secondary"
             onClick={() => setShowAdvancedFilters((prev) => !prev)}
           >
-            {showAdvancedFilters ? "Ocultar filtro avancado" : "Mostrar filtro avancado"}
+            {showAdvancedFilters ? "Ocultar filtro avançado" : "Mostrar filtro avançado"}
           </Button>
         </div>
 
@@ -881,7 +881,7 @@ export default function AutomationTasksPage() {
           <Input
             label="Busca"
             value={searchFilter}
-            placeholder="Nome, descricao, packageId ou comando"
+            placeholder="Nome, descrição, packageId ou comando"
             onChange={(e) => {
               setSearchFilter(e.target.value);
               setOffset(0);
@@ -1022,7 +1022,7 @@ export default function AutomationTasksPage() {
 
         {scopeTypeFilter === String(AppApprovalScopeType.Global) && (
           <div className="mt-3 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-400">
-            Escopo global nao exige ScopeId.
+            Escopo global não exige ScopeId.
           </div>
         )}
 
@@ -1185,7 +1185,7 @@ export default function AutomationTasksPage() {
             onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
           />
           <Input
-            label="Descricao"
+            label="Descrição"
             value={form.description}
             onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
           />
@@ -1915,13 +1915,13 @@ export default function AutomationTasksPage() {
       >
         <div className="space-y-4">
           <div className="rounded-lg border border-danger/30 bg-danger/10 p-3 text-sm text-slate-200">
-            <p>Voce esta prestes a excluir a tarefa <span className="font-semibold text-white">{deleteTask?.name}</span>.</p>
+            <p>Você está prestes a excluir a tarefa <span className="font-semibold text-white">{deleteTask?.name}</span>.</p>
             <p className="mt-1 text-slate-400">Digite <span className="font-semibold text-white">yes</span> para confirmar.</p>
           </div>
 
           <Input
-            label="Confirmacao"
-            value={deleteConfirmationText}
+            label="Confirmação"
+             value={deleteConfirmationText}
             onChange={(e) => setDeleteConfirmationText(e.target.value)}
             placeholder="Digite yes"
             autoFocus
@@ -1952,13 +1952,13 @@ export default function AutomationTasksPage() {
       >
         <div className="space-y-4">
           <div className="rounded-lg border border-primary/30 bg-primary/10 p-3 text-sm text-slate-200">
-            <p>Voce esta prestes a reativar a tarefa <span className="font-semibold text-white">{restoreTask?.name}</span>.</p>
+            <p>Você está prestes a reativar a tarefa <span className="font-semibold text-white">{restoreTask?.name}</span>.</p>
             <p className="mt-1 text-slate-400">Digite <span className="font-semibold text-white">yes</span> para confirmar.</p>
           </div>
 
           <Input
-            label="Confirmacao"
-            value={restoreConfirmationText}
+            label="Confirmação"
+             value={restoreConfirmationText}
             onChange={(e) => setRestoreConfirmationText(e.target.value)}
             placeholder="Digite yes"
             autoFocus

@@ -56,15 +56,15 @@ function isGenericInternalError(message: string): boolean {
 export function getDeleteAgentErrorMessage(error: unknown): string {
   if (error instanceof ApiError) {
     if (error.status === 400) {
-      return "ID de agente invalido. Use um GUID valido em /api/v1/agents/{id}.";
+      return "ID de agente inválido. Use um GUID válido em /api/v1/agents/{id}.";
     }
 
     if (error.status === 401) {
-      return "Nao autenticado para excluir agente. Valide sessao/JWT, MFA concluido ou API key (X-Api-Key + X-Api-Secret).";
+      return "Não autenticado para excluir agente. Valide sessão/JWT, MFA concluído ou API key (X-Api-Key + X-Api-Secret).";
     }
 
     if (error.status === 404) {
-      return "Endpoint de exclusao nao encontrado. Use DELETE /api/v1/agents/{id}.";
+      return "Endpoint de exclusão não encontrado. Use DELETE /api/v1/agents/{id}.";
     }
 
     if (error.status === 500) {
@@ -72,7 +72,7 @@ export function getDeleteAgentErrorMessage(error: unknown): string {
         isLikelyDeleteDependencyError(error.message) ||
         isGenericInternalError(error.message)
       ) {
-        return "Nao foi possivel excluir o agente porque existem vinculos ativos (FK), como tickets, tokens, inventario ou comandos.";
+        return "Não foi possível excluir o agente porque existem vínculos ativos (FK), como tickets, tokens, inventário ou comandos.";
       }
     }
 

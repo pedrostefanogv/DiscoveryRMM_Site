@@ -99,7 +99,7 @@ export default function FirstAccessPage() {
           setStatusError(
             error instanceof Error
               ? error.message
-              : "Nao foi possivel carregar o status do primeiro acesso.",
+              : "Não foi possível carregar o status do primeiro acesso.",
           );
         }
       } finally {

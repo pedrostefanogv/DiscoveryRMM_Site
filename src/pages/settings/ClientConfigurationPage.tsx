@@ -358,7 +358,7 @@ export default function ClientConfigurationPage() {
 
 function readEntityError(error: unknown, entity: "client" | "site"): string {
   if (error instanceof ApiError && error.status === 404) {
-    return `404: ${entity} nao encontrado`;
+    return `404: ${entity} não encontrado`;
   }
 
   if (error instanceof ApiError) {

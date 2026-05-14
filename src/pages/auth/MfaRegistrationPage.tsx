@@ -97,7 +97,7 @@ export default function MfaRegistrationPage() {
         });
 
         if (!(credential instanceof PublicKeyCredential)) {
-          throw new Error("O navegador nao retornou uma credencial valida.");
+          throw new Error("O navegador não retornou uma credencial válida.");
         }
 
         setTemporaryStage("mfa-register-complete");
@@ -124,7 +124,7 @@ export default function MfaRegistrationPage() {
         clearTemporarySession();
         setTemporaryStage("anonymous");
         toast.error(
-          "Seu token temporario de MFA nao e mais valido. Faca login novamente para emitir um novo token de configuracao.",
+          "Seu token temporário de MFA não é mais válido. Faça login novamente para emitir um novo token de configuração.",
         );
         navigate("/auth/login", { replace: true });
         return;
@@ -216,7 +216,7 @@ export default function MfaRegistrationPage() {
         <div className={`rounded-2xl border px-4 py-3 text-sm ${environment.isSecureContext ? 'border-accent/30 bg-accent/10 text-cyan-100' : 'border-warning/30 bg-warning/10 text-amber-50'}`}>
           Local atual: <strong>{environment.origin}</strong>. {environment.isSecureContext
             ? "Este contexto e considerado seguro para WebAuthn; se houver 401, o problema e de token/permissao no backend."
-            : "Este contexto nao e seguro para WebAuthn; o navegador pode bloquear a operacao."}
+            : "Este contexto não é seguro para WebAuthn; o navegador pode bloquear a operação."}
         </div>
 
         {error && (
@@ -230,7 +230,7 @@ export default function MfaRegistrationPage() {
           {isTotpFlow
             ? totpSetupData
               ? " Confirmar OTP"
-              : " Iniciar configuracao OTP"
+              : "Iniciar configuração OTP"
             : " Registrar chave"}
         </Button>
       </form>

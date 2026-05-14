@@ -3,34 +3,34 @@ import { Button, Card, CardHeader } from "@/components/ui";
 
 const cards = [
   {
-    title: "Configuracao de Servidor",
-    description: "Define os valores base para toda a hierarquia.",
-    to: "/settings/server",
-  },
-  {
-    title: "Configuracao de Cliente",
-    description: "Sobrescritas por cliente. Null herda do servidor.",
-    to: "/settings/client",
-  },
-  {
-    title: "Configuracao de Site",
-    description: "Sobrescritas por site. Null herda de cliente/servidor.",
-    to: "/settings/site",
-  },
-  {
-    title: "Configuracao MeshCentral",
-    description: "Perfil de policy herdavel por escopo, status de drift e reconcile.",
-    to: "/identity/mesh-central",
-  },
-  {
-    title: "Auditoria de Configuracoes",
-    description: "Historico de alteracoes por entidade, campo e usuario.",
-    to: "/settings/audit",
-  },
-  {
-    title: "Labels Automaticas",
-    description: "Cadastro e gerenciamento de regras de tags para agents.",
-    to: "/settings/agent-labels",
+    title: "Configuração de Servidor",
+     description: "Define os valores base para toda a hierarquia.",
+     to: "/settings/server",
+   },
+   {
+     title: "Configuração de Cliente",
+     description: "Sobrescritas por cliente. Null herda do servidor.",
+     to: "/settings/client",
+   },
+   {
+     title: "Configuração de Site",
+     description: "Sobrescritas por site. Null herda de cliente/servidor.",
+     to: "/settings/site",
+   },
+   {
+     title: "Configuração MeshCentral",
+     description: "Perfil de policy herdável por escopo, status de drift e reconcile.",
+     to: "/identity/mesh-central",
+   },
+   {
+     title: "Auditoria de Configurações",
+     description: "Histórico de alterações por entidade, campo e usuário.",
+     to: "/settings/audit",
+   },
+   {
+     title: "Labels Automáticas",
+     description: "Cadastro e gerenciamento de regras de tags para agents.",
+     to: "/settings/agent-labels",
   },
   {
     title: "Custom Fields",
@@ -43,7 +43,7 @@ export default function ConfigurationSettings() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-white">Configuracoes</h1>
+        <h1 className="text-2xl font-bold text-white">Configurações</h1>
         <p className="text-sm text-slate-400">
           Gerencie Server, Client e Site com heranca Server -&gt; Client -&gt; Site.
         </p>

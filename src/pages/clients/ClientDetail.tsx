@@ -166,7 +166,7 @@ export default function ClientDetail() {
       await navigator.clipboard.writeText(generatedDeployToken.token);
       toast.success('Token copiado para a area de transferencia');
     } catch {
-      toast.error('Nao foi possivel copiar o token');
+      toast.error('Não foi possível copiar o token');
     }
   };
 
@@ -569,7 +569,7 @@ export default function ClientDetail() {
           />
 
           <TextArea
-            label="Descricao"
+             label="Descrição"
             placeholder="Ex: onboarding de novo agente"
             value={deployDescription}
             onChange={(e) => setDeployDescription(e.target.value)}
@@ -603,7 +603,7 @@ export default function ClientDetail() {
               <p className="break-all font-mono text-sm text-slate-200">{generatedDeployToken.token}</p>
               <div className="flex flex-wrap items-center gap-2">
                 <Badge color={generatedDeployToken.multiUse ? 'accent' : 'slate'}>
-                  {generatedDeployToken.multiUse ? 'Multiuso' : 'Uso unico'}
+                  {generatedDeployToken.multiUse ? 'Multiuso' : 'Uso único'}
                 </Badge>
                 <Badge color="slate">
                   Expira: {generatedDeployToken.expiresAt ? new Date(generatedDeployToken.expiresAt).toLocaleString('pt-BR') : 'Sem expiracao'}

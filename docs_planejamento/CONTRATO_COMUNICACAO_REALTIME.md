@@ -1,9 +1,9 @@
-# Contrato de Comunicacao em Tempo Real - DiscoveryRMM API
+# Contrato de Comunicação em Tempo Real - DiscoveryRMM API
 
-> Versao: 4.2.0 | Data: 2026-05-05
-> Publico: Servidor (C# - C:\Projetos\DiscoveryRMM_API), Agent (Go - C:\Projetos\Discovery), Frontend (JS/TS - C:\Projetos\DiscoveryRMM_Site)
-> Proposito: Especificacao canonica executavel. Todos os componentes DEVEM validar entrada e saida contra este documento.
-> Status: periodo de transicao ate 2026-06-01. Durante a transicao, formato legado gera warning. Apos essa data, mensagem nao conforme eh rejeitada.
+> Versão: 4.2.0 | Data: 2026-05-05
+> Público: Servidor (C# - C:\Projetos\DiscoveryRMM_API), Agent (Go - C:\Projetos\Discovery), Frontend (JS/TS - C:\Projetos\DiscoveryRMM_Site)
+> Propósito: Especificação canônica executável. Todos os componentes DEVEM validar entrada e saída contra este documento.
+> Status: período de transição até 2026-06-01. Durante a transição, formato legado gera warning. Após essa data, mensagem não conforme é rejeitada.
 
 ---
 
@@ -11,11 +11,11 @@
 
 | Versao | Data | Mudancas |
 |---|---|---|
-| 4.2.0 | 2026-05-05 | Inclusao de comando em massa por escopo (`site`, `client`, `global`) com subjects dedicados (`*.agents.command`), envelope de dispatch, regras de idempotencia e diretrizes de ACL para alto volume. |
-| 4.1.0 | 2026-05-05 | Padronizacao detalhada de subjects (publish/subscribe), regra explicita de matching NATS, inclusao do subject por cliente (`tenant.{clientId}.dashboard.events`), secao de ACL por perfil e alinhamento com a implementacao de credenciais NATS. |
-| 4.0.0 | 2026-05-05 | Contrato consolidado em NATS de ponta a ponta (nativo e WebSocket), remocao do fluxo de hub legado, secao dedicada de conexao browser via NATS WS, checklist e plano de acao revisados para canal unico por subjects. |
-| 3.0.0 | 2026-05-05 | Consolidacao de envelope canonico, tabelas de equivalencia e plano de convergencia. |
-| 2.0.0 | 2026-05-05 | Contrato executavel com validacao por componente e checklist. |
+| 4.2.0 | 2026-05-05 | Inclusão de comando em massa por escopo (`site`, `client`, `global`) com subjects dedicados (`*.agents.command`), envelope de dispatch, regras de idempotência e diretrizes de ACL para alto volume. |
+| 4.1.0 | 2026-05-05 | Padronização detalhada de subjects (publish/subscribe), regra explícita de matching NATS, inclusão do subject por cliente (`tenant.{clientId}.dashboard.events`), seção de ACL por perfil e alinhamento com a implementação de credenciais NATS. |
+| 4.0.0 | 2026-05-05 | Contrato consolidado em NATS de ponta a ponta (nativo e WebSocket), remoção do fluxo de hub legado, seção dedicada de conexão browser via NATS WS, checklist e plano de ação revisados para canal único por subjects. |
+| 3.0.0 | 2026-05-05 | Consolidação de envelope canônico, tabelas de equivalência e plano de convergência. |
+| 2.0.0 | 2026-05-05 | Contrato executável com validação por componente e checklist. |
 | 1.x | - | Versoes iniciais. |
 
 ---
@@ -31,21 +31,17 @@
 | 4 | JSON camelCase em todos os payloads no wire. |
 | 5 | Subjects NATS em minusculas, separados por ponto. |
 | 6 | Eventos de dashboard devem trafegar apenas em `dashboard.events` (nativo ou WS). |
-| 7 | Notificacoes ao agent chegam por `.command` com `commandType = "notification"`. |
-| 8 | Mesmo DTO/shape em NATS nativo e NATS WS (sem duplicacao por transporte). |
-| 9 | Campo de tempo padrao: `timestampUtc` em ISO-8601 UTC. |
-| 10 | `eventType` em PascalCase e enum fechado. |
-| 11 | Nomes de campo sao exatos (sem aliases em modo estrito). |
-| 12 | Toda violacao de contrato gera log com prefixo `[CONTRACT_VIOLATION]`. |
-| 13 | Cada componente valida na borda de entrada e de saida. |
-| 14 | Nenhum componente pode criar canal paralelo fora do NATS para eventos de dashboard. |
-| 15 | Durante a transicao, normalizacao temporaria e permitida com warning. |
-| 16 | Apos 2026-06-01, modo estrito: mensagem nao conforme deve ser descartada. |
-| 17 | Assinar `tenant.{clientId}.site.{siteId}.dashboard.events` nao inclui subjects mais especificos; matching NATS exige subject exato ou wildcard explicito. |
-| 18 | Subject canonico de dashboard para UI e por site; `tenant.{clientId}.dashboard.events` e `tenant.unscoped.dashboard.events` sao fallbacks controlados de roteamento. |
+| 7 | Notificações ao agent chegam por `.command` com `commandType = "notification"`. |
+| 9 | Campo de tempo padrão: `timestampUtc` em ISO-8601 UTC. |
+| 11 | Nomes de campo são exatos (sem aliases em modo estrito). |
+| 13 | Cada componente valida na borda de entrada e de saída. |
+| 15 | Durante a transição, normalização temporária é permitida com warning. |
+| 16 | Após 2026-06-01, modo estrito: mensagem não conforme deve ser descartada. |
+| 17 | Assinar `tenant.{clientId}.site.{siteId}.dashboard.events` não inclui subjects mais específicos; matching NATS exige subject exato ou wildcard explícito. |
+| 18 | Subject canônico de dashboard para UI é por site; `tenant.{clientId}.dashboard.events` e `tenant.unscoped.dashboard.events` são fallbacks controlados de roteamento. |
 | 19 | Comando em massa deve usar subjects dedicados `*.agents.command` por escopo, evitando loop unicast agente-a-agente no servidor. |
-| 20 | Todo comando em massa deve carregar `dispatchId` e `idempotencyKey` para execucao idempotente no agent. |
-| 21 | Resultado de comando em massa deve incluir `dispatchId` para consolidacao de campanha por agent. |
+| 20 | Todo comando em massa deve carregar `dispatchId` e `idempotencyKey` para execução idempotente no agent. |
+| 21 | Resultado de comando em massa deve incluir `dispatchId` para consolidação de campanha por agent. |
 
 ---
 

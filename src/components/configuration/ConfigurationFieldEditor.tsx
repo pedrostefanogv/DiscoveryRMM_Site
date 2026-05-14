@@ -266,7 +266,7 @@ export function ConfigurationFieldEditor({
             disabled={inputDisabled}
             placeholder={
               inherited
-                ? "Herdando do nivel acima"
+                ? "Herdando do nível acima"
                 : "SupportEnabled\nTokenExpirationDays\nAIIntegrationSettingsJson"
             }
           />
@@ -619,7 +619,7 @@ export function ConfigurationFieldEditor({
         <>
           {structuredJsonField && (
             <p className="text-xs text-amber-300">
-              Conteudo legado invalido detectado. Ajuste o JSON para continuar usando os campos estruturados.
+               Conteúdo legado inválido detectado. Ajuste o JSON para continuar usando os campos estruturados.
             </p>
           )}
           <TextArea
@@ -631,7 +631,7 @@ export function ConfigurationFieldEditor({
             error={error}
             placeholder={
               inherited
-                ? "Herdando do nivel acima"
+                 ? "Herdando do nível acima"
                 : fieldKey === "lockedFieldsJson"
                   ? '["SupportEnabled", "TokenExpirationDays"]'
                   : "{\n  \"key\": \"value\"\n}"
@@ -648,7 +648,7 @@ export function ConfigurationFieldEditor({
         onChange={(event) => onValueChange(event.target.value)}
         disabled={inputDisabled}
         error={error}
-        placeholder={inherited ? "Herdando do nivel acima" : "Digite o valor local"}
+        placeholder={inherited ? "Herdando do nível acima" : "Digite o valor local"}
       />
     );
   };
@@ -682,7 +682,7 @@ export function ConfigurationFieldEditor({
       <div className="grid gap-3">
         {fieldKind === "json" && fieldKey === "aiIntegrationSettingsJson" && (
           <p className="text-xs text-amber-300">
-            ApiKey e write-only: o valor atual nao e retornado pela API. Preencha apenas para trocar a chave.
+             ApiKey é write-only: o valor atual não é retornado pela API. Preencha apenas para trocar a chave.
           </p>
         )}
         {fieldKind === "json" && fieldKey === "autoUpdateSettingsJson" && (

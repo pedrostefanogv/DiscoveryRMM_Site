@@ -40,7 +40,7 @@ export function NotificationBell() {
     try {
       await markAsRead(notificationId);
     } catch {
-      toast.error("Nao foi possivel marcar a notificacao como lida.");
+      toast.error("Não foi possível marcar a notificação como lida.");
     }
   };
 
@@ -48,7 +48,7 @@ export function NotificationBell() {
     try {
       await markAllAsRead();
     } catch {
-      toast.error("Nao foi possivel marcar todas as notificacoes como lidas.");
+      toast.error("Não foi possível marcar todas as notificações como lidas.");
     }
   };
 
@@ -58,7 +58,7 @@ export function NotificationBell() {
         variant="ghost"
         size="sm"
         onClick={() => setOpen((prev) => !prev)}
-        aria-label="Abrir notificacoes"
+        aria-label="Abrir notificações"
       >
         <Bell className="h-4 w-4" />
         {unreadCount > 0 && (
@@ -94,7 +94,7 @@ export function NotificationBell() {
               {isLoading && list.length === 0 && <Loading />}
 
               {!isLoading && list.length === 0 && (
-                <p className="text-sm text-slate-400">Sem notificacoes.</p>
+                <p className="text-sm text-slate-400">Sem notificações.</p>
               )}
 
               {list.map((item) => (

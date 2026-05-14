@@ -314,7 +314,7 @@ export default function ReportTemplateForm() {
     }
 
     if ((layout.columns?.length ?? 0) === 0 && (layout.sections?.length ?? 0) === 0) {
-      errors.push("Layout precisa de colunas ou secoes.");
+      errors.push("Layout precisa de colunas ou seções.");
     }
 
     if (layout.groupDetails && layout.groupDetails.length > 0 && !layout.groupBy) {
@@ -322,7 +322,7 @@ export default function ReportTemplateForm() {
     }
 
     if ((layout.columns?.length ?? 0) > 0 && (layout.sections?.length ?? 0) > 0) {
-      errors.push("columns e sections nao podem coexistir na raiz do layout.");
+      errors.push("columns e sections não podem coexistir na raiz do layout.");
     }
 
     if (selectedDataset) {
@@ -331,7 +331,7 @@ export default function ReportTemplateForm() {
 
       const invalidColumns = (layout.columns ?? []).filter((col) => !availableFields.has(col.field));
       if (invalidColumns.length > 0) {
-        errors.push(`Campos invalidos em columns: ${invalidColumns.map((col) => col.field).join(", ")}.`);
+        errors.push(`Campos inválidos em columns: ${invalidColumns.map((col) => col.field).join(", ")}.`);
       }
 
       if (requireQualifiedReference) {
@@ -344,18 +344,18 @@ export default function ReportTemplateForm() {
           .filter((field) => field && !field.includes("."));
 
         if (unqualified.length > 0) {
-          errors.push(`Com dataSources configurado, use referencias no formato alias.field. Campos invalidos: ${unqualified.join(", ")}.`);
+          errors.push(`Com dataSources configurado, use referências no formato alias.field. Campos inválidos: ${unqualified.join(", ")}.`);
         }
       }
 
       if (layout.groupBy && !availableFields.has(layout.groupBy)) {
-        errors.push(`groupBy invalido: '${layout.groupBy}' nao existe no dataset.`);
+        errors.push(`groupBy inválido: '${layout.groupBy}' não existe no dataset.`);
       }
 
       const invalidGroupDetails = (layout.groupDetails ?? []).filter((detail) => !availableFields.has(detail.field));
       if (invalidGroupDetails.length > 0) {
         errors.push(
-          `Campos invalidos em groupDetails: ${invalidGroupDetails.map((detail) => detail.field).join(", ")}.`,
+          `Campos inválidos em groupDetails: ${invalidGroupDetails.map((detail) => detail.field).join(", ")}.`,
         );
       }
 
@@ -363,7 +363,7 @@ export default function ReportTemplateForm() {
         (summary) => summary.field && !availableFields.has(summary.field),
       );
       if (invalidSummaries.length > 0) {
-        errors.push(`Campos invalidos em summaries: ${invalidSummaries.map((summary) => summary.field).join(", ")}.`);
+        errors.push(`Campos inválidos em summaries: ${invalidSummaries.map((summary) => summary.field).join(", ")}.`);
       }
 
       const missingSummaryFields = (layout.summaries ?? []).filter(
@@ -378,7 +378,7 @@ export default function ReportTemplateForm() {
       );
       if (invalidGroupSummaries.length > 0) {
         errors.push(
-          `Campos invalidos em groupSummaries: ${invalidGroupSummaries.map((summary) => summary.field).join(", ")}.`,
+          `Campos inválidos em groupSummaries: ${invalidGroupSummaries.map((summary) => summary.field).join(", ")}.`,
         );
       }
 
@@ -402,7 +402,7 @@ export default function ReportTemplateForm() {
       });
       if (invalidSectionColumns.length > 0) {
         errors.push(
-          `Campos invalidos em sections.columns: ${invalidSectionColumns.map((column) => column.field).join(", ")}.`,
+          `Campos inválidos em sections.columns: ${invalidSectionColumns.map((column) => column.field).join(", ")}.`,
         );
       }
     }
@@ -475,7 +475,7 @@ export default function ReportTemplateForm() {
       sections: [
         ...prev.sections,
         {
-          title: preset?.label ?? `Secao ${prev.sections.length + 1}`,
+          title: preset?.label ?? `Seção ${prev.sections.length + 1}`,
           source: preset?.source ?? "",
           columns: preset && preset.columns.length > 0
             ? preset.columns.map((c) => ({ ...c, align: "left", width: "" }))
@@ -529,7 +529,7 @@ export default function ReportTemplateForm() {
 
     const { valid, layoutJson, filtersJson } = validateLocal();
     if (!valid) {
-      toast.error("Corrija os erros de validacao antes do preview.");
+      toast.error("Corrija os erros de validação antes do preview.");
       return;
     }
 
@@ -582,7 +582,7 @@ export default function ReportTemplateForm() {
           setPreviewUnexpectedHeaders([]);
           setPreviewHtml("");
           if (!response.blob) {
-            toast.error("A API nao retornou arquivo para preview document.");
+            toast.error("A API não retornou arquivo para preview document.");
             return;
           }
 
@@ -620,7 +620,7 @@ export default function ReportTemplateForm() {
 
     const { valid, layoutJson, filtersJson } = validateLocal();
     if (!valid) {
-      toast.error("Corrija os erros de validacao antes de salvar.");
+      toast.error("Corrija os erros de validação antes de salvar.");
       return;
     }
 

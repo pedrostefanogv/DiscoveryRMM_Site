@@ -32,15 +32,15 @@ class ApiError extends Error {
 }
 
 const STATUS_FALLBACK_MESSAGE: Record<number, string> = {
-  400: "Solicitacao invalida",
-  401: "Nao autenticado",
+  400: "Solicitação inválida",
+  401: "Não autenticado",
   403: "Acesso negado",
-  404: "Recurso nao encontrado",
+  404: "Recurso não encontrado",
   408: "Tempo de resposta excedido",
-  429: "Muitas requisicoes",
+  429: "Muitas requisições",
   500: "Erro interno do servidor",
-  502: "Gateway indisponivel",
-  503: "Servico indisponivel",
+  502: "Gateway indisponível",
+  503: "Serviço indisponível",
   504: "Tempo de resposta do gateway excedido",
 };
 

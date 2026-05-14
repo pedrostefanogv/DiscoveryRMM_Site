@@ -224,7 +224,7 @@ export default function AutomationOperationsPage() {
       </div>
 
       <Card>
-        <CardHeader title="Contexto do Agent" subtitle="Selecione alvo para operacoes" />
+        <CardHeader title="Contexto do Agent" subtitle="Selecione alvo para operações" />
         <div className="grid gap-3 md:grid-cols-3">
           <Select
             label="Cliente"
@@ -288,7 +288,7 @@ export default function AutomationOperationsPage() {
         </Card>
 
         <Card>
-          <CardHeader title="Force Sync" subtitle="Sincronizacao tecnica" />
+          <CardHeader title="Force Sync" subtitle="Sincronização técnica" />
           <div className="space-y-3">
             <Select
               label="Policies"
@@ -331,7 +331,7 @@ export default function AutomationOperationsPage() {
             columns={columns}
             data={executions.data ?? []}
             keyExtractor={(item) => item.id}
-            emptyMessage="Nenhuma execucao encontrada."
+            emptyMessage="Nenhuma execução encontrada."
           />
         )}
       </Card>

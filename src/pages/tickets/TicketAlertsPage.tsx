@@ -233,7 +233,7 @@ export default function TicketAlertsPage() {
       const message =
         error instanceof Error
           ? error.message
-          : 'Nao foi possivel salvar a regra.';
+          : 'Não foi possível salvar a regra.';
       toast.error(message);
     }
   }
@@ -256,7 +256,7 @@ export default function TicketAlertsPage() {
       const message =
         error instanceof Error
           ? error.message
-          : 'Nao foi possivel alterar o status da regra.';
+          : 'Não foi possível alterar o status da regra.';
       toast.error(message);
     }
   }
@@ -276,7 +276,7 @@ export default function TicketAlertsPage() {
       const message =
         error instanceof Error
           ? error.message
-          : 'Nao foi possivel remover a regra.';
+          : 'Não foi possível remover a regra.';
       toast.error(message);
     }
   }

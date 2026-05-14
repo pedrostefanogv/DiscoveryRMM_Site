@@ -44,7 +44,7 @@ export function PwaUpdatePrompt() {
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
           <p className="text-sm font-semibold text-slate-100">
-            Nova versao da interface disponivel
+            Nova versão da interface disponível
           </p>
           <p className="text-xs text-slate-300">
             Recomendado recarregar agora para aplicar o novo build e limpar recursos em cache.

@@ -166,7 +166,7 @@ export const DATASET_SECTION_SOURCES: Record<
       label: "Timeline dos tickets",
       columns: [
         { field: "activityType", label: "Atividade", format: "text" },
-        { field: "description", label: "Descricao", format: "text" },
+        { field: "description", label: "Descrição", format: "text" },
         { field: "createdAt", label: "Data/Hora", format: "date" },
       ],
     },

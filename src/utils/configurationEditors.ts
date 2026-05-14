@@ -757,7 +757,7 @@ export function validateFieldValue(
 
       return true;
     } catch {
-      return "JSON invalido";
+      return "JSON inválido";
     }
   }
 

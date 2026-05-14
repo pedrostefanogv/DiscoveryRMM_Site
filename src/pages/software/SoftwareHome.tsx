@@ -11,15 +11,15 @@ const cards = [
     icon: AppWindow,
   },
   {
-    title: 'Automacao',
-    description: 'Scripts, tarefas e operacoes de automacao centralizadas.',
-    to: '/automation',
-    cta: 'Abrir Automacao',
+    title: 'Automação',
+     description: 'Scripts, tarefas e operações de automação centralizadas.',
+     to: '/automation',
+     cta: 'Abrir Automação',
     icon: Wrench,
   },
   {
     title: 'Loja de Apps',
-    description: 'Loja e distribuicao de apps.',
+     description: 'Loja e distribuição de apps.',
     to: '/software/store',
     cta: 'Abrir Loja de Apps',
     icon: Store,
@@ -31,7 +31,7 @@ export default function SoftwareHome() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-white">Softwares</h1>
-        <p className="text-sm text-slate-400">Escolha um modulo para gerenciar aplicativos e distribuicao.</p>
+        <p className="text-sm text-slate-400">Escolha um módulo para gerenciar aplicativos e distribuição.</p>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">

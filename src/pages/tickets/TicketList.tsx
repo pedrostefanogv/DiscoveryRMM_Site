@@ -365,7 +365,7 @@ export default function TicketList() {
 
   const openCreateSavedViewModal = () => {
     if (!currentUserId) {
-      toast.error('Nao foi possivel identificar o usuario autenticado.');
+      toast.error('Não foi possível identificar o usuário autenticado.');
       return;
     }
 
@@ -420,27 +420,27 @@ export default function TicketList() {
       setSavedViewModalOpen(false);
       setEditingSavedView(null);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Nao foi possivel salvar a visao.');
-    }
-  };
+      toast.error(error instanceof Error ? error.message : 'Não foi possível salvar a visão.');
+     }
+   };
 
-  const handleDeleteSavedView = async (view: TicketSavedView) => {
-    if (!window.confirm(`Excluir a visao "${view.name}"?`)) {
-      return;
-    }
+   const handleDeleteSavedView = async (view: TicketSavedView) => {
+     if (!window.confirm(`Excluir a visão "${view.name}"?`)) {
+       return;
+     }
 
-    try {
-      await deleteSavedView.mutateAsync(view.id);
-      if (activeSavedViewId === view.id) {
-        setActiveSavedViewId(null);
-      }
-      if (editingSavedView?.id === view.id) {
-        setEditingSavedView(null);
-        setSavedViewModalOpen(false);
-      }
-      toast.success('Visao removida com sucesso.');
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Nao foi possivel excluir a visao.');
+     try {
+       await deleteSavedView.mutateAsync(view.id);
+       if (activeSavedViewId === view.id) {
+         setActiveSavedViewId(null);
+       }
+       if (editingSavedView?.id === view.id) {
+         setEditingSavedView(null);
+         setSavedViewModalOpen(false);
+       }
+       toast.success('Visão removida com sucesso.');
+     } catch (error) {
+       toast.error(error instanceof Error ? error.message : 'Não foi possível excluir a visão.');
     }
   };
 
@@ -492,13 +492,13 @@ export default function TicketList() {
         ) : savedViewsQuery.isError ? (
           <div className="mt-4 flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3">
             <AlertTriangle className="h-4 w-4 text-danger" />
-            <p className="text-sm text-slate-400">Nao foi possivel carregar as visoes salvas.</p>
+            <p className="text-sm text-slate-400">Não foi possível carregar as visões salvas.</p>
             <Button size="sm" variant="ghost" onClick={() => savedViewsQuery.refetch()}>
               Tentar novamente
             </Button>
           </div>
         ) : savedViews.length === 0 ? (
-          <p className="mt-4 text-sm text-slate-500">Nenhuma visao salva disponivel.</p>
+          <p className="mt-4 text-sm text-slate-500">Nenhuma visão salva disponível.</p>
         ) : (
           <div className="mt-4 grid gap-3 lg:grid-cols-2">
             {savedViews.map((view) => {
@@ -558,7 +558,7 @@ export default function TicketList() {
           <Filter className="h-4 w-4 text-slate-400" />
           <div>
             <h2 className="text-lg font-semibold text-white">Filtros</h2>
-            <p className="text-sm text-slate-400">Os filtros abaixo tambem alimentam as visoes salvas.</p>
+            <p className="text-sm text-slate-400">Os filtros abaixo também alimentam as visões salvas.</p>
           </div>
         </div>
 
@@ -571,7 +571,7 @@ export default function TicketList() {
                 setActiveSavedViewId(null);
                 setFilterText(event.target.value);
               }}
-              placeholder="Titulo, descricao ou termo livre"
+              placeholder="Título, descrição ou termo livre"
             />
           </div>
           <Select
@@ -602,7 +602,7 @@ export default function TicketList() {
             }}
           />
           <Select
-            label="Situacao"
+            label="Situação"
             options={STATUS_OPTIONS}
             value={filterStatus}
             onChange={(event) => {

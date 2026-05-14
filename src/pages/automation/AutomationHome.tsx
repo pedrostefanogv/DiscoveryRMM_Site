@@ -5,28 +5,28 @@ import { Button, Card, CardHeader } from "@/components/ui";
 const cards = [
   {
     title: "Scripts",
-    description: "Cadastro de scripts reutilizaveis e trilha de auditoria.",
+    description: "Cadastro de scripts reutilizáveis e trilha de auditoria.",
     to: "/automation/scripts",
     cta: "Abrir Scripts",
     icon: Wrench,
   },
   {
     title: "Tarefas",
-    description: "Regras de automacao por escopo com validacao condicional.",
+    description: "Regras de automação por escopo com validação condicional.",
     to: "/automation/tasks",
     cta: "Abrir Tarefas",
     icon: ListChecks,
   },
   {
-    title: "Operacoes",
-    description: "Run-now, force-sync e historico de execucao por agent.",
-    to: "/automation/operations",
-    cta: "Abrir Operacoes",
+    title: "Operações",
+     description: "Run-now, force-sync e histórico de execução por agent.",
+     to: "/automation/operations",
+     cta: "Abrir Operações",
     icon: PlayCircle,
   },
   {
     title: "Auditoria",
-    description: "Trilha de alteracoes de scripts e tarefas com snapshots.",
+    description: "Trilha de alterações de scripts e tarefas com snapshots.",
     to: "/automation/audit",
     cta: "Abrir Auditoria",
     icon: History,
@@ -37,9 +37,9 @@ export default function AutomationHome() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-white">Automacao</h1>
-        <p className="text-sm text-slate-400">
-          Gerencie scripts, tarefas e operacoes de execucao no ambiente.
+        <h1 className="text-2xl font-bold text-white">Automação</h1>
+         <p className="text-sm text-slate-400">
+           Gerencie scripts, tarefas e operações de execução no ambiente.
         </p>
       </div>
 

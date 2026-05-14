@@ -1136,7 +1136,7 @@ function PackageDetailsModal({ open, onClose, pkg, installationType }: PackageDe
         {detailsQuery.isLoading && !details && <Loading />}
         {detailsQuery.isError && (
           <ErrorDisplay
-            message="Nao foi possivel carregar os detalhes completos do pacote."
+            message="Não foi possível carregar os detalhes completos do pacote."
             onRetry={() => detailsQuery.refetch()}
           />
         )}
@@ -1181,7 +1181,7 @@ function PackageDetailsModal({ open, onClose, pkg, installationType }: PackageDe
                 <MarkdownDescription
                   content={details.description}
                   variant="full"
-                  emptyText="Sem descricao."
+                   emptyText="Sem descrição."
                 />
               </div>
             </div>
@@ -1319,7 +1319,7 @@ function CatalogTab() {
         JSON.stringify(lastSyncByType),
       );
     } catch {
-      // storage pode estar indisponivel em alguns contextos.
+      // storage pode estar indisponível em alguns contextos.
     }
   }, [lastSyncByType]);
 
@@ -1367,7 +1367,7 @@ function CatalogTab() {
         <div className="space-y-4">
           <div className="rounded-lg border border-white/10 bg-white/5 p-4 text-sm text-slate-200">
             <p>
-              Esta operacao consulta a API do Chocolatey. Continue apenas se voce
+              Esta operação consulta a API do Chocolatey. Continue apenas se você
               tem autorizacao para acessar e sincronizar dados do catalogo.
             </p>
             <p className="mt-2">
@@ -1386,8 +1386,8 @@ function CatalogTab() {
           </div>
           <div className="rounded-lg border border-white/10 bg-white/5 p-4 text-sm text-slate-200">
             <p>
-              Se nao for possivel sincronizar todos os dados agora, ao repetir a
-              sincronizacao o processo continua de onde parou.
+              Se não for possível sincronizar todos os dados agora, ao repetir a
+              sincronização o processo continua de onde parou.
             </p>
             <p className="mt-2">
               Para evitar incompatibilidades posteriores, confirme conscientemente
@@ -1400,7 +1400,7 @@ function CatalogTab() {
             onChange={(e) => setSyncConfirmValue(e.target.value)}
             placeholder="yes"
             autoFocus
-            error={syncConfirmTouched && !syncConfirmOk ? 'Confirmacao obrigatoria.' : undefined}
+            error={syncConfirmTouched && !syncConfirmOk ? 'Confirmação obrigatória.' : undefined}
           />
           <div className="flex items-center justify-end gap-2">
             <Button variant="ghost" onClick={() => setSyncConfirmOpen(false)}>
@@ -1571,7 +1571,7 @@ function CatalogTab() {
             <Package className="mb-3 h-10 w-10 opacity-30" />
             <p className="text-sm">
               {(isChocolatey || isWinget) && isCatalogEmpty
-                ? `Catalogo ${syncLabel} ainda nao sincronizado.`
+                ? `Catálogo ${syncLabel} ainda não sincronizado.`
                 : 'Nenhum pacote encontrado.'}
             </p>
             {(isChocolatey || isWinget) && isCatalogEmpty && (

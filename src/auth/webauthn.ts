@@ -143,7 +143,7 @@ function ensureRpIdMatchesCurrentHost(
     return;
   }
 
-  const flowLabel = flow === "assertion" ? "validacao" : "registro";
+  const flowLabel = flow === "assertion" ? "validação" : "registro";
   throw new Error(
     `RP ID WebAuthn incompativel no fluxo de ${flowLabel}. rpId recebido: "${normalizedRpId}". Host atual: "${hostname}". Verifique se o backend gerou o challenge para este mesmo dominio.`,
   );
@@ -318,18 +318,13 @@ export function describeWebAuthnError(error: unknown): string {
         const environment = getWebAuthnEnvironmentInfo();
         return environment.isSecureContext
           ? `O navegador bloqueou o WebAuthn por incompatibilidade de dominio, RP ID ou politica de seguranca da pagina. Host atual: ${environment.host}. Verifique se o challenge foi gerado para este host e sem troca de dominio entre begin e complete.${detail}`
-          : "O navegador exige contexto seguro para WebAuthn. Em localhost isso costuma funcionar, mas IPs, hosts customizados ou paginas inseguras em HTTP podem ser bloqueados.";
+          : "O navegador exige contexto seguro para WebAuthn. Em localhost isso costuma funcionar, mas IPs, hosts customizados ou páginas inseguras em HTTP podem ser bloqueados.";
       }
       case "NotAllowedError":
-        return `A operacao WebAuthn foi cancelada, expirou ou foi bloqueada pelo navegador/autenticador.${detail}`;
-      case "InvalidStateError":
-        return `Esta chave ja parece estar registrada neste autenticador para este site.${detail}`;
-      case "ConstraintError":
-        return `O autenticador nao conseguiu atender aos requisitos pedidos para esta credencial.${detail}`;
-      case "AbortError":
-        return `A operacao WebAuthn foi interrompida antes da conclusao.${detail}`;
-      case "NotSupportedError":
-        return `O autenticador ou o navegador nao suportam os parametros WebAuthn enviados pelo backend.${detail}`;
+        return `A operação WebAuthn foi cancelada, expirou ou foi bloqueada pelo navegador/autenticador.${detail}`;
+        return `A operação WebAuthn foi interrompida antes da conclusão.${detail}`;
+        return `O autenticador não conseguiu atender aos requisitos pedidos para esta credencial.${detail}`;
+        return `O autenticador ou o navegador não suportam os parâmetros WebAuthn enviados pelo backend.${detail}`;
       default:
         return error.message || "Falha inesperada ao usar WebAuthn.";
     }
@@ -356,6 +351,6 @@ export function ensureWebAuthnSupport() {
     typeof window.PublicKeyCredential === "undefined" ||
     !navigator.credentials
   ) {
-    throw new Error("Este navegador nao suporta WebAuthn/FIDO2.");
+    throw new Error("Este navegador não suporta WebAuthn/FIDO2.");
   }
 }
