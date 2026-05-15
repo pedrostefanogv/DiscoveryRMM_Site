@@ -15,6 +15,7 @@ import {
   getAgentLabelFieldLabel,
   getAgentLabelLogicalOperatorLabel,
   isCustomFieldAgentLabelField,
+  isDiskAgentLabelField,
   type AgentLabelAvailableCustomField,
   type AgentLabelRuleAgentItem,
   type AgentLabelRuleDryRunResponse,
@@ -46,8 +47,20 @@ const defaultCondition: AgentLabelRuleExpressionNodeDto = {
   customFieldDefinitionId: null,
 };
 
+const defaultDiskGroup: AgentLabelRuleExpressionNodeDto = {
+  nodeType: AgentLabelNodeType.DiskGroup,
+  logicalOperator: AgentLabelLogicalOperator.Or,
+  children: [],
+};
+
 const fieldOptions = Object.values(AgentLabelField)
   .filter((value): value is AgentLabelField => typeof value === 'number')
+  .filter(field => !isDiskAgentLabelField(field))
+  .map(field => ({ value: String(field), label: getAgentLabelFieldLabel(field) }));
+
+const diskFieldOptions = Object.values(AgentLabelField)
+  .filter((value): value is AgentLabelField => typeof value === 'number')
+  .filter(field => isDiskAgentLabelField(field))
   .map(field => ({ value: String(field), label: getAgentLabelFieldLabel(field) }));
 
 const logicalOperatorOptions = Object.values(AgentLabelLogicalOperator)
@@ -72,8 +85,9 @@ const GROUP_ACCENTS = [
 type DryRunMode = 'site-batch' | 'single-agent';
 
 export default function AgentLabelsSettings() {
-  const [viewMode, setViewMode] = useState<'list' | 'create'>('list');
+  const [viewMode, setViewMode] = useState<'list' | 'create' | 'view'>('list');
   const [editingRuleId, setEditingRuleId] = useState<string | null>(null);
+  const [isReadOnly, setIsReadOnly] = useState(true);
   const [rules, setRules] = useState<AgentLabelRuleResponse[]>([]);
   const [availableCustomFields, setAvailableCustomFields] = useState<AgentLabelAvailableCustomField[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -125,6 +139,7 @@ export default function AgentLabelsSettings() {
 
   function resetCreateState() {
     setEditingRuleId(null);
+    setIsReadOnly(true);
     setName('');
     setLabel('');
     setDescription('');
@@ -146,9 +161,10 @@ export default function AgentLabelsSettings() {
     setViewMode('create');
   }
 
-  function startEditRule(rule: AgentLabelRuleResponse) {
+  function startViewRule(rule: AgentLabelRuleResponse) {
     const expression = structuredClone(rule.expression);
     setEditingRuleId(rule.id);
+    setIsReadOnly(true);
     setName(rule.name);
     setLabel(rule.label);
     setDescription(rule.description ?? '');
@@ -163,7 +179,11 @@ export default function AgentLabelsSettings() {
     setSelectedAgentId('');
     setDryRunMode('site-batch');
     setPreviewResults([]);
-    setViewMode('create');
+    setViewMode('view');
+  }
+
+  function enableEditing() {
+    setIsReadOnly(false);
   }
 
   function toggleAppliedAgentsPanel(rule: AgentLabelRuleResponse) {
@@ -349,6 +369,8 @@ export default function AgentLabelsSettings() {
       await agentLabelsApi.deleteRule(rule.id);
       setRules(prev => prev.filter(item => item.id !== rule.id));
       toast.success('Regra excluída.');
+      resetCreateState();
+      setViewMode('list');
     } catch (err) {
       toast.error(getApiErrorMessage(err, 'Falha ao excluir regra.'));
     }
@@ -468,6 +490,10 @@ export default function AgentLabelsSettings() {
     setExpressionBuilder(prev => addChildAtPath(prev, path, defaultExpression));
   }
 
+  function handleAddDiskGroup(path: number[]) {
+    setExpressionBuilder(prev => addChildAtPath(prev, path, defaultDiskGroup));
+  }
+
   function handleRemoveNode(path: number[]) {
     setExpressionBuilder(prev => removeNodeAtPath(prev, path));
   }
@@ -579,6 +605,17 @@ export default function AgentLabelsSettings() {
                       <p className="ml-4">&nbsp;&nbsp;└─ Condição: Hostname <em>NÃO contém</em> "SRV"</p>
                       <p className="mt-2 text-slate-500">Resultado: (Windows <strong className="text-yellow-400">E</strong> SRV <strong className="text-yellow-400">E</strong> 16GB+) <strong className="text-yellow-400">OU</strong> (Linux <strong className="text-yellow-400">E</strong> NÃO estação)</p>
                     </div>
+
+                    <div className="rounded-lg bg-slate-900/60 p-3 font-mono text-xs text-slate-400">
+                      <p className="text-slate-300 font-medium mb-1">Exemplo 4 — Discos: SSD C: com menos de 20% livre</p>
+                      <p>Grupo raiz: <strong className="text-yellow-400">E</strong></p>
+                      <p className="ml-2">├─ <strong className="text-orange-400">Disco</strong> [<strong className="text-yellow-400">OU</strong> — algum disco atende]</p>
+                      <p className="ml-4">&nbsp;&nbsp;├─ Condição: Letra <em>=</em> "C:"</p>
+                      <p className="ml-4">&nbsp;&nbsp;├─ Condição: Tipo <em>=</em> "SSD"</p>
+                      <p className="ml-4">&nbsp;&nbsp;└─ Condição: % Livre <em>&lt;</em> "20"</p>
+                      <p className="ml-2">└─ Condição: Status <em>=</em> "Online"</p>
+                      <p className="mt-2 text-slate-500">Resultado: (C: SSD &lt;20% livre) <strong className="text-yellow-400">E</strong> Online</p>
+                    </div>
                   </div>
                 </div>
 
@@ -600,6 +637,16 @@ export default function AgentLabelsSettings() {
                   <div className="mt-2 rounded-lg bg-slate-900/60 p-3 text-xs text-slate-400">
                     <p className="text-slate-300"><strong>Lote por site:</strong> selecione um cliente + site e defina um limite de agentes. A regra será testada em lote.</p>
                     <p className="mt-1 text-slate-300"><strong>Agente específico:</strong> selecione um cliente + site + agente para testar a regra em um único agente.</p>
+                  </div>
+                </div>
+
+                <div>
+                  <p className="mb-1 font-medium text-white">Grupo de Discos</p>
+                  <p>Use o botão <strong>+ Disco</strong> para criar condições que avaliam discos do agente. Dentro de um grupo de discos, você pode usar campos como Letra da Unidade, Tipo de Mídia (SSD/HDD), % Livre, Sistema de Arquivos, entre outros.</p>
+                  <div className="mt-2 rounded-lg bg-slate-900/60 p-3 text-xs text-slate-400">
+                    <p className="text-slate-300"><strong>ANY (OU):</strong> pelo menos um disco do agente deve atender a todas as condições.</p>
+                    <p className="mt-1 text-slate-300"><strong>ALL (E):</strong> todos os discos do agente devem atender a todas as condições.</p>
+                    <p className="mt-2 text-slate-500">Campos de disco (Letra, Tipo, % Livre, etc.) só podem ser usados dentro de um grupo Disco.</p>
                   </div>
                 </div>
               </div>
@@ -638,6 +685,7 @@ export default function AgentLabelsSettings() {
                   onUpdateNode={handleUpdateNode}
                   onAddCondition={handleAddCondition}
                   onAddGroup={handleAddGroup}
+                  onAddDiskGroup={handleAddDiskGroup}
                   onRemoveNode={handleRemoveNode}
                 />
               </div>
@@ -735,6 +783,155 @@ export default function AgentLabelsSettings() {
         </>
       ) : null}
 
+      {viewMode === 'view' ? (
+        <>
+          <Card>
+            <CardHeader
+              title={isReadOnly ? `Regra: ${name}` : `Editando: ${name}`}
+              subtitle={isReadOnly ? 'Visualizando regra — clique em Editar para alterar.' : 'Modo de edição ativo.'}
+            />
+
+            <div className="grid gap-4 lg:grid-cols-2">
+              <Input label="Nome" placeholder="Ex.: Windows Produção" value={name} maxLength={200} disabled={isReadOnly} onChange={event => setName(event.target.value)} />
+              <Input label="Label" placeholder="Ex.: PROD" value={label} maxLength={120} disabled={isReadOnly} onChange={event => setLabel(event.target.value)} />
+            </div>
+
+            <div className="mt-4">
+              <TextArea label="Descrição / Observação" rows={3} value={description} disabled={isReadOnly} onChange={event => setDescription(event.target.value)} />
+            </div>
+
+            <div className="mt-4">
+              <Select label="Modo de Aplicação" value={String(applyMode)} options={applyModeOptions} disabled={isReadOnly} onChange={event => setApplyMode(Number(event.target.value) as AgentLabelApplyMode)} />
+            </div>
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Button size="sm" variant={editorMode === 'visual' ? 'primary' : 'secondary'} disabled={isReadOnly} onClick={() => setEditorMode('visual')}>Editor Visual</Button>
+              <Button size="sm" variant={editorMode === 'json' ? 'primary' : 'secondary'} disabled={isReadOnly} onClick={() => setEditorMode('json')}>Editor JSON</Button>
+              {editorMode === 'visual' ? (
+                <Button size="sm" variant="ghost" disabled={isReadOnly} onClick={() => setShowJsonInVisual(prev => !prev)}>
+                  {showJsonInVisual ? 'Ocultar JSON' : 'Mostrar JSON'}
+                </Button>
+              ) : null}
+            </div>
+
+            {editorMode === 'visual' ? (
+              <div className="mt-4 space-y-3 rounded-xl border border-white/10 bg-white/5 p-4">
+                <ExpressionNodeEditor
+                  node={expressionBuilder}
+                  path={[]}
+                  isRoot
+                  availableCustomFields={availableCustomFields}
+                  onUpdateNode={isReadOnly ? () => {} : handleUpdateNode}
+                  onAddCondition={isReadOnly ? () => {} : handleAddCondition}
+                  onAddGroup={isReadOnly ? () => {} : handleAddGroup}
+                  onAddDiskGroup={isReadOnly ? () => {} : handleAddDiskGroup}
+                  onRemoveNode={isReadOnly ? () => {} : handleRemoveNode}
+                />
+              </div>
+            ) : null}
+
+            {editorMode === 'json' || showJsonInVisual ? (
+              <div className="mt-4">
+                <TextArea label="Expressão (JSON)" rows={14} value={expressionText} disabled={isReadOnly} onChange={event => setExpressionText(event.target.value)} className="font-mono" />
+              </div>
+            ) : null}
+
+            <div className="mt-4 flex justify-between gap-2">
+              <div className="flex gap-2">
+                <Button variant="ghost" onClick={() => { resetCreateState(); setViewMode('list'); }}>Voltar para Lista</Button>
+                {isReadOnly ? (
+                  <Button onClick={enableEditing}>Editar</Button>
+                ) : (
+                  <>
+                    <Button variant="danger" onClick={() => void handleDeleteRule({ id: editingRuleId!, name } as AgentLabelRuleResponse)}>Excluir</Button>
+                  </>
+                )}
+              </div>
+              <div className="flex gap-2">
+                {!isReadOnly ? (
+                  <>
+                    <Button variant="ghost" onClick={() => { resetCreateState(); setViewMode('list'); }}>Cancelar</Button>
+                    <Button onClick={() => void handleSaveRule()} loading={isSaving}>Salvar Alterações</Button>
+                  </>
+                ) : null}
+              </div>
+            </div>
+          </Card>
+
+          <Card>
+            <CardHeader title="Dry-Run" subtitle="Simule a regra em lote por site ou em um agente específico" />
+
+            <div className="grid gap-4 lg:grid-cols-4">
+              <Select
+                label="Modo de Dry-Run"
+                value={dryRunMode}
+                options={[{ value: 'site-batch', label: 'Lote por Site' }, { value: 'single-agent', label: 'Agente Único' }]}
+                onChange={event => setDryRunMode(event.target.value as DryRunMode)}
+              />
+
+              <Select label="Cliente" value={selectedClientId} options={[{ value: '', label: 'Selecione...' }, ...clients.map(client => ({ value: client.id, label: client.name }))]} onChange={event => setSelectedClientId(event.target.value)} />
+              <Select label="Site" value={selectedSiteId} options={[{ value: '', label: 'Selecione...' }, ...sites.map(site => ({ value: site.id, label: site.name }))]} onChange={event => setSelectedSiteId(event.target.value)} />
+
+              {dryRunMode === 'site-batch' ? (
+                <Input label="Limite de agentes" type="number" min={1} max={100} value={previewLimit} onChange={event => setPreviewLimit(Number(event.target.value || 1))} />
+              ) : (
+                <Select
+                  label="Agente"
+                  value={selectedAgentId}
+                  options={[{ value: '', label: 'Selecione...' }, ...agents.map(agent => ({ value: agent.id, label: agent.displayName || agent.hostname || agent.id }))]}
+                  onChange={event => setSelectedAgentId(event.target.value)}
+                />
+              )}
+            </div>
+
+            <div className="mt-4 flex justify-end">
+              <Button variant="secondary" loading={isRunningPreview} onClick={() => void handleRunPreview()}>Rodar Dry-Run</Button>
+            </div>
+
+            <div className="mt-4 flex flex-wrap gap-2 text-xs text-slate-400">
+              <span>Agentes no site: {agents.length}</span>
+              <span>•</span>
+              <span>Prévia atual: {previewResults.length}</span>
+              <span>•</span>
+              <span>Com match: {previewResults.filter(item => item.matched).length}</span>
+              <span>•</span>
+              <span>Adicionaria label: {previewResults.filter(item => item.wouldAddLabel).length}</span>
+              <span>•</span>
+              <span>Removeria label: {previewResults.filter(item => item.wouldRemoveLabel).length}</span>
+            </div>
+
+            {previewResults.length > 0 ? (
+              <div className="mt-4 overflow-x-auto rounded-lg border border-white/10">
+                <table className="min-w-full divide-y divide-white/10 text-sm">
+                  <thead className="bg-white/5">
+                    <tr>
+                      <th className="px-3 py-2 text-left font-medium text-slate-300">Agente</th>
+                      <th className="px-3 py-2 text-left font-medium text-slate-300">Match</th>
+                      <th className="px-3 py-2 text-left font-medium text-slate-300">Adicionar</th>
+                      <th className="px-3 py-2 text-left font-medium text-slate-300">Remover</th>
+                      <th className="px-3 py-2 text-left font-medium text-slate-300">Labels automáticas atuais</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/5">
+                    {previewResults.map(result => (
+                      <tr key={result.agentId} className="bg-slate-900/20">
+                        <td className="px-3 py-2 text-slate-200">{result.agentName}</td>
+                        <td className="px-3 py-2"><Badge color={result.matched ? 'success' : 'slate'}>{result.matched ? 'Sim' : 'Não'}</Badge></td>
+                        <td className="px-3 py-2"><Badge color={result.wouldAddLabel ? 'success' : 'slate'}>{result.wouldAddLabel ? 'Sim' : 'Não'}</Badge></td>
+                        <td className="px-3 py-2"><Badge color={result.wouldRemoveLabel ? 'warning' : 'slate'}>{result.wouldRemoveLabel ? 'Sim' : 'Não'}</Badge></td>
+                        <td className="px-3 py-2 text-slate-300">{result.currentAutomaticLabels.length > 0 ? result.currentAutomaticLabels.join(', ') : '-'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p className="mt-4 text-sm text-slate-500">Execute o dry-run para ver em quais agentes a regra teria efeito.</p>
+            )}
+          </Card>
+        </>
+      ) : null}
+
       {viewMode === 'list' ? (
         <Card>
           <CardHeader
@@ -743,7 +940,6 @@ export default function AgentLabelsSettings() {
             action={(
               <div className="flex items-center gap-2">
                 <Button variant="secondary" size="sm" loading={isReprocessing} onClick={() => void handleReprocessAll()}>Reprocessar Agentes</Button>
-                <Button size="sm" onClick={startCreateRule}>Criar Regra</Button>
               </div>
             )}
           />
@@ -769,10 +965,9 @@ export default function AgentLabelsSettings() {
                   {rule.description?.trim() ? <p className="mt-2 whitespace-pre-wrap text-sm text-slate-300">{rule.description}</p> : null}
 
                   <div className="mt-3 flex flex-wrap gap-2">
-                    <Button size="sm" variant="secondary" onClick={() => startEditRule(rule)}>Editar</Button>
+                    <Button size="sm" variant="secondary" onClick={() => startViewRule(rule)}>Visualizar</Button>
                     <Button size="sm" variant="ghost" onClick={() => void handleToggleRule(rule)}>{rule.isEnabled ? 'Desabilitar' : 'Habilitar'}</Button>
                     <Button size="sm" variant="secondary" onClick={() => toggleAppliedAgentsPanel(rule)}>{expandedRuleId === rule.id ? 'Ocultar Agentes com Label' : 'Ver Agentes com Label'}</Button>
-                    <Button size="sm" variant="danger" onClick={() => void handleDeleteRule(rule)}>Excluir</Button>
                   </div>
 
                   {expandedRuleId === rule.id ? (
@@ -867,25 +1062,28 @@ interface ExpressionNodeEditorProps {
   node: AgentLabelRuleExpressionNodeDto;
   path: number[];
   isRoot?: boolean;
+  insideDiskGroup?: boolean;
   availableCustomFields: AgentLabelAvailableCustomField[];
   onUpdateNode: (path: number[], updater: (node: AgentLabelRuleExpressionNodeDto) => AgentLabelRuleExpressionNodeDto) => void;
   onAddCondition: (path: number[]) => void;
   onAddGroup: (path: number[]) => void;
+  onAddDiskGroup: (path: number[]) => void;
   onRemoveNode: (path: number[]) => void;
 }
 
-function ExpressionNodeEditor({ node, path, isRoot = false, availableCustomFields, onUpdateNode, onAddCondition, onAddGroup, onRemoveNode }: ExpressionNodeEditorProps) {
+function ExpressionNodeEditor({ node, path, isRoot = false, insideDiskGroup = false, availableCustomFields, onUpdateNode, onAddCondition, onAddGroup, onAddDiskGroup, onRemoveNode }: ExpressionNodeEditorProps) {
   const depth = path.length - 1;
   const nodeAccent = depth >= 0 ? GROUP_ACCENTS[depth % GROUP_ACCENTS.length] : null;
 
-  if (node.nodeType === AgentLabelNodeType.Group) {
+  if (node.nodeType === AgentLabelNodeType.DiskGroup || node.nodeType === AgentLabelNodeType.Group) {
     const children = node.children ?? [];
+    const isDisk = node.nodeType === AgentLabelNodeType.DiskGroup;
 
     return (
       <div className={`space-y-3 rounded-lg border ${nodeAccent ? `${nodeAccent.border} border-t-white/10 border-r-white/10 border-b-white/10` : 'border-white/10'} bg-slate-900/40 p-3`}>
         <div className="flex flex-wrap items-center gap-2">
           {nodeAccent ? <span className={`inline-block h-2 w-2 rounded-full ${nodeAccent.dot} shrink-0`} /> : null}
-          <Badge color="primary">Grupo</Badge>
+          <Badge color={isDisk ? 'warning' : 'primary'}>{isDisk ? 'Disco' : 'Grupo'}</Badge>
           <div className="min-w-[180px]">
             <Select
               value={String(node.logicalOperator ?? AgentLabelLogicalOperator.And)}
@@ -896,13 +1094,22 @@ function ExpressionNodeEditor({ node, path, isRoot = false, availableCustomField
               }}
             />
           </div>
-          <Button size="sm" variant="secondary" onClick={() => onAddCondition(path)}>+ Condição</Button>
+          {!isDisk ? (
+            <Button size="sm" variant="secondary" onClick={() => onAddCondition(path)}>+ Condição</Button>
+          ) : null}
+          <Button size="sm" variant="secondary" onClick={() => onAddDiskGroup(path)}>+ Disco</Button>
           <Button size="sm" variant="secondary" onClick={() => onAddGroup(path)}>+ Grupo</Button>
           {!isRoot ? <Button size="sm" variant="danger" onClick={() => onRemoveNode(path)}>Remover</Button> : null}
         </div>
 
+        {isDisk ? (
+          <p className="text-xs text-slate-500">
+            <strong>ANY (OU):</strong> algum disco atende todas as condições abaixo &nbsp;|&nbsp; <strong>ALL (E):</strong> todos os discos atendem
+          </p>
+        ) : null}
+
         {children.length === 0 ? (
-          <p className="text-xs text-slate-400">Este grupo ainda não possui filhos.</p>
+          <p className="text-xs text-slate-400">{isDisk ? 'Adicione condições de disco a este grupo.' : 'Este grupo ainda não possui filhos.'}</p>
         ) : (
           <div className="space-y-3 border-l border-white/10 pl-3">
             {children.map((child, index) => (
@@ -910,10 +1117,12 @@ function ExpressionNodeEditor({ node, path, isRoot = false, availableCustomField
                 key={index}
                 node={child}
                 path={[...path, index]}
+                insideDiskGroup={isDisk}
                 availableCustomFields={availableCustomFields}
                 onUpdateNode={onUpdateNode}
                 onAddCondition={onAddCondition}
                 onAddGroup={onAddGroup}
+                onAddDiskGroup={onAddDiskGroup}
                 onRemoveNode={onRemoveNode}
               />
             ))}
@@ -1004,7 +1213,7 @@ function ExpressionNodeEditor({ node, path, isRoot = false, availableCustomField
         <Select
           label="Campo"
           value={String(currentField)}
-          options={fieldOptions}
+          options={insideDiskGroup ? [...diskFieldOptions, ...fieldOptions] : fieldOptions}
           onChange={event => {
             const field = Number(event.target.value) as AgentLabelField;
             onUpdateNode(path, current => {

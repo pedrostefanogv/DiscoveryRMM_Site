@@ -189,11 +189,12 @@ function normalizeExpressionNode(input: unknown): import("./types").AgentLabelRu
   const raw = (input ?? {}) as Record<string, unknown>;
   const nodeType = normalizeAgentLabelNodeType(raw.nodeType ?? raw.NodeType);
   const childrenRaw = raw.children ?? raw.Children;
+  const isContainer = nodeType === AgentLabelNodeType.Group || nodeType === AgentLabelNodeType.DiskGroup;
 
   return {
     nodeType,
     logicalOperator:
-      nodeType === AgentLabelNodeType.Group
+      isContainer
         ? normalizeAgentLabelLogicalOperator(raw.logicalOperator ?? raw.LogicalOperator)
         : null,
     children: Array.isArray(childrenRaw)

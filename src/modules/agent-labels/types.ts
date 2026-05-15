@@ -8,6 +8,7 @@ export enum AgentLabelApplyMode {
 export enum AgentLabelNodeType {
   Group = 0,
   Condition = 1,
+  DiskGroup = 2,
 }
 
 export enum AgentLabelLogicalOperator {
@@ -29,6 +30,16 @@ export enum AgentLabelField {
   Processor = 10,
   TotalMemoryBytes = 11,
   TotalDisksCount = 12,
+  ProcessorCores = 13,
+  ProcessorThreads = 14,
+  GpuModel = 15,
+  GpuMemoryBytes = 16,
+  DiskDriveLetter = 17,
+  DiskFreeSpaceBytes = 18,
+  DiskTotalSpaceBytes = 19,
+  DiskFreeSpacePercent = 20,
+  DiskFileSystem = 21,
+  DiskMediaType = 22,
   AgentCustomField = 100,
   ClientCustomField = 101,
   SiteCustomField = 102,
@@ -168,6 +179,7 @@ const APPLY_MODE_NAMES: Record<string, AgentLabelApplyMode> = {
 const NODE_TYPE_NAMES: Record<string, AgentLabelNodeType> = {
   Group: AgentLabelNodeType.Group,
   Condition: AgentLabelNodeType.Condition,
+  DiskGroup: AgentLabelNodeType.DiskGroup,
 };
 
 const LOGICAL_OPERATOR_NAMES: Record<string, AgentLabelLogicalOperator> = {
@@ -189,6 +201,16 @@ const FIELD_NAMES: Record<string, AgentLabelField> = {
   Processor: AgentLabelField.Processor,
   TotalMemoryBytes: AgentLabelField.TotalMemoryBytes,
   TotalDisksCount: AgentLabelField.TotalDisksCount,
+  ProcessorCores: AgentLabelField.ProcessorCores,
+  ProcessorThreads: AgentLabelField.ProcessorThreads,
+  GpuModel: AgentLabelField.GpuModel,
+  GpuMemoryBytes: AgentLabelField.GpuMemoryBytes,
+  DiskDriveLetter: AgentLabelField.DiskDriveLetter,
+  DiskFreeSpaceBytes: AgentLabelField.DiskFreeSpaceBytes,
+  DiskTotalSpaceBytes: AgentLabelField.DiskTotalSpaceBytes,
+  DiskFreeSpacePercent: AgentLabelField.DiskFreeSpacePercent,
+  DiskFileSystem: AgentLabelField.DiskFileSystem,
+  DiskMediaType: AgentLabelField.DiskMediaType,
   AgentCustomField: AgentLabelField.AgentCustomField,
   ClientCustomField: AgentLabelField.ClientCustomField,
   SiteCustomField: AgentLabelField.SiteCustomField,
@@ -269,6 +291,14 @@ export function isCustomFieldAgentLabelField(field: AgentLabelField): boolean {
   );
 }
 
+export function isDiskAgentLabelField(field: AgentLabelField): boolean {
+  return field >= AgentLabelField.DiskDriveLetter && field <= AgentLabelField.DiskMediaType;
+}
+
+export function isDiskNodeType(nodeType: AgentLabelNodeType): boolean {
+  return nodeType === AgentLabelNodeType.DiskGroup;
+}
+
 export function getAgentLabelFieldLabel(field: AgentLabelField): string {
   switch (field) {
     case AgentLabelField.Hostname:
@@ -297,6 +327,26 @@ export function getAgentLabelFieldLabel(field: AgentLabelField): string {
       return "Memória Total (bytes)";
     case AgentLabelField.TotalDisksCount:
       return "Quantidade de Discos";
+    case AgentLabelField.ProcessorCores:
+      return "Núcleos da CPU";
+    case AgentLabelField.ProcessorThreads:
+      return "Threads da CPU";
+    case AgentLabelField.GpuModel:
+      return "Modelo da GPU";
+    case AgentLabelField.GpuMemoryBytes:
+      return "VRAM (bytes)";
+    case AgentLabelField.DiskDriveLetter:
+      return "Letra da Unidade";
+    case AgentLabelField.DiskFreeSpaceBytes:
+      return "Espaço Livre (bytes)";
+    case AgentLabelField.DiskTotalSpaceBytes:
+      return "Capacidade Total (bytes)";
+    case AgentLabelField.DiskFreeSpacePercent:
+      return "% Livre";
+    case AgentLabelField.DiskFileSystem:
+      return "Sistema de Arquivos";
+    case AgentLabelField.DiskMediaType:
+      return "Tipo de Mídia";
     case AgentLabelField.AgentCustomField:
       return "Custom Field do Agente";
     case AgentLabelField.ClientCustomField:

@@ -6,6 +6,7 @@ import {
   AgentLabelRuleExpressionNodeDto,
   AgentStatus,
   isCustomFieldAgentLabelField,
+  isDiskAgentLabelField,
 } from "./types";
 import { CustomFieldDataType, CustomFieldScopeType } from "@/api/custom-fields";
 
@@ -27,12 +28,22 @@ const textFields = new Set<AgentLabelField>([
   AgentLabelField.SoftwarePublisher,
   AgentLabelField.SoftwareVersion,
   AgentLabelField.Processor,
+  AgentLabelField.GpuModel,
+  AgentLabelField.DiskDriveLetter,
+  AgentLabelField.DiskFileSystem,
+  AgentLabelField.DiskMediaType,
 ]);
 
 const numericFields = new Set<AgentLabelField>([
   AgentLabelField.SoftwareCount,
   AgentLabelField.TotalMemoryBytes,
   AgentLabelField.TotalDisksCount,
+  AgentLabelField.ProcessorCores,
+  AgentLabelField.ProcessorThreads,
+  AgentLabelField.GpuMemoryBytes,
+  AgentLabelField.DiskFreeSpaceBytes,
+  AgentLabelField.DiskTotalSpaceBytes,
+  AgentLabelField.DiskFreeSpacePercent,
 ]);
 
 const textOperators = new Set<AgentLabelComparisonOperator>([
@@ -146,6 +157,7 @@ export function validateExpression(
     node: AgentLabelRuleExpressionNodeDto,
     depth: number,
     path: string,
+    insideDiskGroup: boolean,
   ) {
     nodeCount++;
 
@@ -159,6 +171,41 @@ export function validateExpression(
       errors.push(
         `expression node count exceeds maximum of ${AgentLabelExpressionLimits.maxNodes}.`,
       );
+    }
+
+    if (node.nodeType === AgentLabelNodeType.DiskGroup) {
+      if (node.logicalOperator == null) {
+        errors.push(`${path}: DiskGroup node requires LogicalOperator.`);
+      } else if (
+        node.logicalOperator !== AgentLabelLogicalOperator.And &&
+        node.logicalOperator !== AgentLabelLogicalOperator.Or
+      ) {
+        errors.push(`${path}: DiskGroup node invalid LogicalOperator.`);
+      }
+
+      if (
+        node.field != null ||
+        node.operator != null ||
+        node.value != null ||
+        node.customFieldDefinitionId != null
+      ) {
+        errors.push(`${path}: DiskGroup node cannot define Field/Operator/Value.`);
+      }
+
+      const children = node.children ?? [];
+      if (children.length === 0) {
+        errors.push(`${path}: DiskGroup node must have at least one child.`);
+      }
+      if (children.length > AgentLabelExpressionLimits.maxChildrenPerGroup) {
+        errors.push(
+          `${path}: DiskGroup node exceeds maximum of ${AgentLabelExpressionLimits.maxChildrenPerGroup} children.`,
+        );
+      }
+
+      children.forEach((child, i) =>
+        walk(child, depth + 1, `${path}.children[${i}]`, true),
+      );
+      return;
     }
 
     if (node.nodeType === AgentLabelNodeType.Group) {
@@ -191,7 +238,7 @@ export function validateExpression(
       }
 
       children.forEach((child, i) =>
-        walk(child, depth + 1, `${path}.children[${i}]`),
+        walk(child, depth + 1, `${path}.children[${i}]`, false),
       );
       return;
     }
@@ -224,6 +271,11 @@ export function validateExpression(
       return;
     }
 
+    if (isDiskAgentLabelField(node.field) && !insideDiskGroup) {
+      errors.push(`${path}: disk field '${node.field}' can only be used inside a DiskGroup node.`);
+      return;
+    }
+
     if (isCustomFieldAgentLabelField(node.field) && !node.customFieldDefinitionId) {
       errors.push(`${path}: custom field condition requires CustomFieldDefinitionId.`);
       return;
@@ -241,7 +293,7 @@ export function validateExpression(
     );
   }
 
-  walk(expression, 1, "root");
+  walk(expression, 1, "root", false);
   return errors;
 }
 

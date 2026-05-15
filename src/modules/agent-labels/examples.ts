@@ -52,3 +52,57 @@ export async function createDevRule() {
   const created = await agentLabelsApi.createRule(payload);
   console.log("Regra criada:", created);
 }
+
+export async function createDiskRule() {
+  const payload = {
+    name: "C: SSD com menos de 20% livre",
+    label: "DISCO_CRITICO",
+    description: "Agentes com disco C: SSD com menos de 20% de espaço livre.",
+    applyMode: AgentLabelApplyMode.ApplyOnly,
+    expression: {
+      nodeType: AgentLabelNodeType.Group,
+      logicalOperator: AgentLabelLogicalOperator.And,
+      children: [
+        {
+          nodeType: AgentLabelNodeType.DiskGroup,
+          logicalOperator: AgentLabelLogicalOperator.Or,
+          children: [
+            {
+              nodeType: AgentLabelNodeType.Condition,
+              field: AgentLabelField.DiskDriveLetter,
+              operator: AgentLabelComparisonOperator.Equals,
+              value: "C:",
+            },
+            {
+              nodeType: AgentLabelNodeType.Condition,
+              field: AgentLabelField.DiskMediaType,
+              operator: AgentLabelComparisonOperator.Equals,
+              value: "SSD",
+            },
+            {
+              nodeType: AgentLabelNodeType.Condition,
+              field: AgentLabelField.DiskFreeSpacePercent,
+              operator: AgentLabelComparisonOperator.LessThan,
+              value: "20",
+            },
+          ],
+        },
+        {
+          nodeType: AgentLabelNodeType.Condition,
+          field: AgentLabelField.Status,
+          operator: AgentLabelComparisonOperator.Equals,
+          value: "Online",
+        },
+      ],
+    },
+  };
+
+  const errors = validateRulePayload(payload);
+  if (errors.length) {
+    console.error("Erros de validação:", errors);
+    return;
+  }
+
+  const created = await agentLabelsApi.createRule(payload);
+  console.log("Regra de disco criada:", created);
+}
