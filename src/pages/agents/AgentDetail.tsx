@@ -147,9 +147,11 @@ export default function AgentDetail() {
   const [softwareSearchApplied, setSoftwareSearchApplied] = useState('');
   const [softwarePage, setSoftwarePage] = useState(1);
   const [softwarePageCursors, setSoftwarePageCursors] = useState<Array<string | undefined>>([undefined]);
-  const [automaticLabels, setAutomaticLabels] = useState<AgentLabel[]>([]);
+  const [allLabels, setAllLabels] = useState<AgentLabel[]>([]);
   const [isLoadingLabels, setIsLoadingLabels] = useState(true);
   const [labelsError, setLabelsError] = useState<string | null>(null);
+  const [manualLabelInput, setManualLabelInput] = useState('');
+  const [isAddingManualLabel, setIsAddingManualLabel] = useState(false);
   const [isOpeningRemoteDebug, setIsOpeningRemoteDebug] = useState(false);
   const [isReconcilingNodeLink, setIsReconcilingNodeLink] = useState(false);
   const [isApplyingNodeLink, setIsApplyingNodeLink] = useState(false);
@@ -187,7 +189,7 @@ export default function AgentDetail() {
 
     async function loadAgentLabels() {
       if (!id) {
-        setAutomaticLabels([]);
+        setAllLabels([]);
         setIsLoadingLabels(false);
         return;
       }
@@ -199,13 +201,11 @@ export default function AgentDetail() {
         const data = await agentLabelsApi.getAgentLabels(id);
         if (isCancelled) return;
 
-        const automaticOnly = data
-          .filter(item => item.sourceType === AgentLabelSourceType.Automatic)
-          .sort((a, b) => a.label.localeCompare(b.label, 'pt-BR'));
-        setAutomaticLabels(automaticOnly);
+        const sorted = data.sort((a, b) => a.label.localeCompare(b.label, 'pt-BR'));
+        setAllLabels(sorted);
       } catch {
         if (isCancelled) return;
-        setLabelsError('Falha ao carregar labels automáticas.');
+        setLabelsError('Falha ao carregar labels.');
       } finally {
         if (!isCancelled) {
           setIsLoadingLabels(false);
@@ -219,6 +219,57 @@ export default function AgentDetail() {
       isCancelled = true;
     };
   }, [id]);
+
+  async function handleAddManualLabel() {
+    const label = manualLabelInput.trim();
+    if (!label || !id) return;
+
+    setIsAddingManualLabel(true);
+    try {
+      const created = await agentLabelsApi.addManualLabel(id, label);
+      setAllLabels(prev =>
+        [...prev, created].sort((a, b) => a.label.localeCompare(b.label, 'pt-BR')),
+      );
+      setManualLabelInput('');
+      toast.success(`Label "${label}" adicionada.`);
+    } catch (err) {
+      if (err && typeof err === 'object' && 'status' in err) {
+        const apiErr = err as { status?: number; message?: string };
+        if (apiErr.status === 409) {
+          toast.error('Este agente já possui essa label.');
+          return;
+        }
+        if (apiErr.status === 400) {
+          toast.error(apiErr.message || 'Label inválida.');
+          return;
+        }
+      }
+      toast.error('Falha ao adicionar label manual.');
+    } finally {
+      setIsAddingManualLabel(false);
+    }
+  }
+
+  async function handleRemoveManualLabel(labelId: string) {
+    try {
+      await agentLabelsApi.removeManualLabel(labelId);
+      setAllLabels(prev => prev.filter(item => item.id !== labelId));
+      toast.success('Label manual removida.');
+    } catch (err) {
+      if (err && typeof err === 'object' && 'status' in err) {
+        const apiErr = err as { status?: number; message?: string };
+        if (apiErr.status === 400) {
+          toast.error(apiErr.message || 'Não é possível remover label automática por este endpoint.');
+          return;
+        }
+        if (apiErr.status === 404) {
+          toast.error('Label não encontrada.');
+          return;
+        }
+      }
+      toast.error('Falha ao remover label manual.');
+    }
+  }
 
   const a = agent.data;
   const aWithHeartbeat = useMemo(() => {
@@ -733,8 +784,8 @@ export default function AgentDetail() {
               <Tags className="h-4 w-4" />
             </span>
             <div>
-              <p className="text-xs uppercase tracking-[0.12em] text-cyan-200/80">Labels automáticas</p>
-              <p className="text-xs text-slate-400">Aplicadas por regras</p>
+              <p className="text-xs uppercase tracking-[0.12em] text-cyan-200/80">Labels</p>
+              <p className="text-xs text-slate-400">Automáticas por regras • Manuais</p>
             </div>
           </div>
 
@@ -745,17 +796,57 @@ export default function AgentDetail() {
               ))}
             </div>
           ) : labelsError ? (
-            <p className="text-sm text-danger">Falha ao carregar labels.</p>
-          ) : automaticLabels.length === 0 ? (
-            <p className="text-sm text-slate-400">Nenhuma label automática aplicada.</p>
+            <p className="text-sm text-danger">{labelsError}</p>
           ) : (
-            <div className="max-h-[86px] overflow-y-auto pr-1">
-              <div className="flex flex-wrap gap-2">
-                {automaticLabels.map(item => (
-                  <Badge key={item.id} color="accent">{item.label}</Badge>
-                ))}
+            <>
+              {allLabels.length > 0 ? (
+                <div className="max-h-[86px] overflow-y-auto pr-1">
+                  <div className="flex flex-wrap gap-2">
+                    {allLabels.map(item => (
+                      <Badge
+                        key={item.id}
+                        color={item.sourceType === AgentLabelSourceType.Manual ? 'slate' : 'accent'}
+                        className="group relative"
+                      >
+                        <span>{item.label}</span>
+                        {item.sourceType === AgentLabelSourceType.Manual ? (
+                          <button
+                            className="ml-1.5 inline-flex items-center justify-center rounded-full p-0.5 text-slate-500 transition-colors hover:bg-white/10 hover:text-danger"
+                            title="Remover label manual"
+                            onClick={() => void handleRemoveManualLabel(item.id)}
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </button>
+                        ) : null}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <p className="mb-3 text-sm text-slate-400">Nenhuma label aplicada.</p>
+              )}
+
+              <div className="mt-3 flex items-center gap-2">
+                <Input
+                  placeholder="Nova label manual..."
+                  value={manualLabelInput}
+                  maxLength={120}
+                  className="flex-1"
+                  onChange={event => setManualLabelInput(event.target.value)}
+                  onKeyDown={event => {
+                    if (event.key === 'Enter') void handleAddManualLabel();
+                  }}
+                />
+                <Button
+                  size="sm"
+                  loading={isAddingManualLabel}
+                  disabled={!manualLabelInput.trim()}
+                  onClick={() => void handleAddManualLabel()}
+                >
+                  Adicionar
+                </Button>
               </div>
-            </div>
+            </>
           )}
         </Card>
         <StatCard

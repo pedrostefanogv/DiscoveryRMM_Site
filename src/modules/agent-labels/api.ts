@@ -7,6 +7,7 @@
   AgentLabelRuleDryRunRequest,
   AgentLabelRuleDryRunResponse,
   AgentLabelRuleResponse,
+  AgentLabelSourceType,
   CreateAgentLabelRuleRequest,
   normalizeAgentLabelApplyMode,
   normalizeAgentLabelComparisonOperator,
@@ -49,6 +50,22 @@ export const agentLabelsApi = {
       createdAt: String(item.createdAt ?? item.CreatedAt ?? ""),
       updatedAt: String(item.updatedAt ?? item.UpdatedAt ?? ""),
     }));
+  },
+
+  async addManualLabel(agentId: string, label: string): Promise<AgentLabel> {
+    const raw = await api.post<Record<string, unknown>>(`${BASE}/manual`, { agentId, label });
+    return {
+      id: String(raw.id ?? ""),
+      agentId: String(raw.agentId ?? agentId),
+      label: String(raw.label ?? label),
+      sourceType: AgentLabelSourceType.Manual,
+      createdAt: String(raw.createdAt ?? ""),
+      updatedAt: String(raw.updatedAt ?? ""),
+    };
+  },
+
+  async removeManualLabel(labelId: string): Promise<void> {
+    await api.del<void>(`${BASE}/manual/${labelId}`);
   },
 
   async getRules(includeDisabled = true): Promise<AgentLabelRuleResponse[]> {
