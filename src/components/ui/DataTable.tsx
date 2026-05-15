@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { ChevronUp, ChevronDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
 import { EmptyState } from './EmptyState';
 
@@ -46,8 +46,11 @@ export function DataTable<T>({
 }: DataTableProps<T>) {
   const [sort, setSort] = useState<SortState | null>(null);
   const [page, setPage] = useState(1);
-  const [activeHoverKey, setActiveHoverKey] = useState<string | null>(null);
+  const [activeHover, setActiveHover] = useState<{ key: string; item: T } | null>(null);
+  const [popoverPosition, setPopoverPosition] = useState<{ top: number; left: number; width: number } | null>(null);
   const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const popoverRef = useRef<HTMLDivElement | null>(null);
+  const rowRefs = useRef(new Map<string, HTMLTableRowElement>());
 
   const sorted = useMemo(() => {
     if (!sort || !sort.key || !sort.direction) return data;
@@ -72,24 +75,59 @@ export function DataTable<T>({
     }
   };
 
+  const updateHoverPopoverPosition = useCallback(() => {
+    if (!rowHoverCard || !activeHover) {
+      setPopoverPosition(null);
+      return;
+    }
+
+    const rowElement = rowRefs.current.get(activeHover.key);
+    if (!rowElement) {
+      setPopoverPosition(null);
+      return;
+    }
+
+    const viewportPadding = 12;
+    const offset = 10;
+    const preferredWidth = 460;
+    const availableWidth = Math.max(260, window.innerWidth - viewportPadding * 2);
+    const width = Math.min(preferredWidth, availableWidth);
+
+    const rowRect = rowElement.getBoundingClientRect();
+    const estimatedHeight = popoverRef.current?.offsetHeight ?? 220;
+
+    const canShowBelow = rowRect.bottom + offset + estimatedHeight <= window.innerHeight - viewportPadding;
+    const top = canShowBelow
+      ? Math.min(rowRect.bottom + offset, window.innerHeight - estimatedHeight - viewportPadding)
+      : Math.max(viewportPadding, rowRect.top - estimatedHeight - offset);
+
+    const left = Math.max(
+      viewportPadding,
+      Math.min(rowRect.left + 8, window.innerWidth - width - viewportPadding),
+    );
+
+    setPopoverPosition({ top, left, width });
+  }, [activeHover, rowHoverCard]);
+
   const closeHoverCard = () => {
     if (!rowHoverCard) return;
-    setActiveHoverKey((current) => {
-      if (current) {
+    clearHoverTimeout();
+    setActiveHover((current) => {
+      if (current?.key) {
         onRowHoverCardChange?.(null);
       }
       return null;
     });
+    setPopoverPosition(null);
   };
 
-  const handleRowMouseEnter = (item: T) => {
+  const handleRowMouseEnter = (item: T, rowKey: string) => {
     if (!rowHoverCard) return;
-    const rowKey = keyExtractor(item);
 
     clearHoverTimeout();
 
-    setActiveHoverKey((current) => {
-      if (current && current !== rowKey) {
+    setActiveHover((current) => {
+      if (current && current.key !== rowKey) {
         onRowHoverCardChange?.(null);
         return null;
       }
@@ -97,8 +135,9 @@ export function DataTable<T>({
     });
 
     hoverTimeoutRef.current = setTimeout(() => {
-      setActiveHoverKey(rowKey);
+      setActiveHover({ key: rowKey, item });
       onRowHoverCardChange?.(item);
+      updateHoverPopoverPosition();
     }, rowHoverDelayMs);
   };
 
@@ -108,13 +147,42 @@ export function DataTable<T>({
   };
 
   useEffect(() => {
-    if (!rowHoverCard || !activeHoverKey) return;
+    if (!rowHoverCard || !activeHover) return;
 
-    const stillVisible = paginated.some((item) => keyExtractor(item) === activeHoverKey);
+    const stillVisible = paginated.some((item) => keyExtractor(item) === activeHover.key);
     if (!stillVisible) {
       closeHoverCard();
     }
-  }, [activeHoverKey, closeHoverCard, keyExtractor, paginated, rowHoverCard]);
+  }, [activeHover, closeHoverCard, keyExtractor, paginated, rowHoverCard]);
+
+  useLayoutEffect(() => {
+    if (!rowHoverCard || !activeHover) return;
+
+    updateHoverPopoverPosition();
+    const rafId = window.requestAnimationFrame(() => {
+      updateHoverPopoverPosition();
+    });
+
+    return () => {
+      window.cancelAnimationFrame(rafId);
+    };
+  }, [activeHover, rowHoverCard, updateHoverPopoverPosition]);
+
+  useEffect(() => {
+    if (!rowHoverCard || !activeHover) return;
+
+    const handleViewportChange = () => {
+      updateHoverPopoverPosition();
+    };
+
+    window.addEventListener('resize', handleViewportChange);
+    window.addEventListener('scroll', handleViewportChange, true);
+
+    return () => {
+      window.removeEventListener('resize', handleViewportChange);
+      window.removeEventListener('scroll', handleViewportChange, true);
+    };
+  }, [activeHover, rowHoverCard, updateHoverPopoverPosition]);
 
   useEffect(() => {
     return () => {
@@ -147,7 +215,7 @@ export function DataTable<T>({
   }
 
   return (
-    <div className="space-y-3">
+    <div className="relative space-y-3">
       <div className="overflow-hidden rounded-xl border border-white/10 bg-surface">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm" role="grid">
@@ -173,42 +241,57 @@ export function DataTable<T>({
             <tbody onMouseLeave={handleBodyMouseLeave}>
               {paginated.map((item, idx) => {
                 const rowKey = keyExtractor(item);
-                const showHoverCard = !!rowHoverCard && activeHoverKey === rowKey;
+                const isHoverActive = !!rowHoverCard && activeHover?.key === rowKey;
 
                 return (
-                  <Fragment key={rowKey}>
-                    <tr
-                      onClick={() => onRowClick?.(item)}
-                      onMouseEnter={() => handleRowMouseEnter(item)}
-                      onKeyDown={(event) => handleRowKeyDown(event, item)}
-                      tabIndex={onRowClick ? 0 : -1}
-                      className={`border-b border-white/5 transition-colors ${
-                        onRowClick ? 'cursor-pointer hover:bg-white/[0.04] focus-visible:bg-white/[0.06] focus-visible:outline-none' : idx % 2 === 1 ? 'bg-white/[0.01]' : ''
-                      } ${showHoverCard ? 'border-b-0' : 'last:border-b-0'}`}
-                    >
-                      {columns.map(col => (
-                        <td key={col.key} className={`px-4 py-3 text-slate-300 ${col.className ?? ''}`}>
-                          {col.render(item)}
-                        </td>
-                      ))}
-                    </tr>
+                  <tr
+                    key={rowKey}
+                    ref={(node) => {
+                      if (node) {
+                        rowRefs.current.set(rowKey, node);
+                        return;
+                      }
 
-                    {showHoverCard && (
-                      <tr className="border-b border-white/5 bg-white/[0.02]">
-                        <td colSpan={columns.length} className="px-4 pb-4 pt-0">
-                          <div className="rounded-xl border border-white/10 bg-slate-950/40 p-4">
-                            {rowHoverCard(item)}
-                          </div>
-                        </td>
-                      </tr>
-                    )}
-                  </Fragment>
+                      rowRefs.current.delete(rowKey);
+                    }}
+                    onClick={() => onRowClick?.(item)}
+                    onMouseEnter={() => handleRowMouseEnter(item, rowKey)}
+                    onKeyDown={(event) => handleRowKeyDown(event, item)}
+                    tabIndex={onRowClick ? 0 : -1}
+                    className={`border-b border-white/5 transition-colors last:border-b-0 ${
+                      onRowClick ? 'cursor-pointer hover:bg-white/[0.04] focus-visible:bg-white/[0.06] focus-visible:outline-none' : idx % 2 === 1 ? 'bg-white/[0.01]' : ''
+                    } ${isHoverActive ? 'bg-white/[0.04]' : ''}`}
+                  >
+                    {columns.map(col => (
+                      <td key={col.key} className={`px-4 py-3 text-slate-300 ${col.className ?? ''}`}>
+                        {col.render(item)}
+                      </td>
+                    ))}
+                  </tr>
                 );
               })}
             </tbody>
           </table>
         </div>
       </div>
+
+      {rowHoverCard && activeHover && popoverPosition && (
+        <div
+          ref={popoverRef}
+          className="pointer-events-none fixed z-50"
+          style={{
+            top: popoverPosition.top,
+            left: popoverPosition.left,
+            width: popoverPosition.width,
+          }}
+          role="dialog"
+          aria-live="polite"
+        >
+          <div className="rounded-xl border border-white/15 bg-slate-950/95 p-4 shadow-2xl backdrop-blur-sm">
+            {rowHoverCard(activeHover.item)}
+          </div>
+        </div>
+      )}
 
       {showPagination && totalPages > 1 && (
         <div className="flex items-center justify-between text-sm">

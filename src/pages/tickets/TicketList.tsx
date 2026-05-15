@@ -31,7 +31,7 @@ import {
   useTicketSavedViews,
   useUpdateTicketSavedView,
 } from '@/hooks/useTicketSavedViews';
-import { Button, Card, DataTable, Badge, Loading, Modal, Input, Select, TextArea } from '@/components/ui';
+import { Button, Card, DataTable, Badge, Loading, Modal, Input, Select, TextArea, Tooltip } from '@/components/ui';
 import type {
   CreateTicketRequest,
   Ticket,
@@ -61,10 +61,13 @@ const PRIORITY_OPTIONS = [
 ];
 
 const STATUS_OPTIONS = [
-  { value: '', label: 'Todos' },
   { value: 'false', label: 'Abertos' },
+  { value: '', label: 'Todos' },
   { value: 'true', label: 'Encerrados' },
 ];
+
+const PAGE_SIZE_OPTIONS = [25, 50, 100];
+const DEFAULT_STATUS_FILTER: '' | 'true' | 'false' = 'false';
 
 type SavedViewFormState = {
   name: string;
@@ -169,10 +172,12 @@ function KpiTile({
   label,
   value,
   tone = 'slate',
+  description,
 }: {
   label: string;
   value: string;
   tone?: 'slate' | 'success' | 'warning' | 'danger' | 'primary';
+  description: string;
 }) {
   const toneClass =
     tone === 'success'
@@ -186,17 +191,24 @@ function KpiTile({
             : 'text-white';
 
   return (
-    <Card>
-      <div className="space-y-1">
-        <p className="text-xs uppercase tracking-wide text-slate-500">{label}</p>
-        <p className={`text-2xl font-semibold ${toneClass}`}>{value}</p>
-      </div>
-    </Card>
+    <Tooltip
+      className="block w-full"
+      content={description}
+      delay={1000}
+      position="bottom"
+    >
+      <Card>
+        <div className="space-y-1">
+          <p className="text-xs uppercase tracking-wide text-slate-500">{label}</p>
+          <p className={`text-2xl font-semibold ${toneClass}`}>{value}</p>
+        </div>
+      </Card>
+    </Tooltip>
   );
 }
 
 export default function TicketList() {
-  const PAGE_SIZE = 50;
+  const DEFAULT_PAGE_SIZE = 50;
   const navigate = useNavigate();
   const { session } = useAuth();
 
@@ -207,10 +219,12 @@ export default function TicketList() {
   const [filterClient, setFilterClient] = useState('');
   const [filterState, setFilterState] = useState('');
   const [filterPriority, setFilterPriority] = useState<TicketPriority | ''>('');
-  const [filterStatus, setFilterStatus] = useState<'' | 'true' | 'false'>('');
+  const [filterStatus, setFilterStatus] = useState<'' | 'true' | 'false'>(DEFAULT_STATUS_FILTER);
   const [filterText, setFilterText] = useState('');
+  const [advancedFiltersExpanded, setAdvancedFiltersExpanded] = useState(false);
   const [savedViewsExpanded, setSavedViewsExpanded] = useState(false);
   const [hoverPreviewTicketId, setHoverPreviewTicketId] = useState<string | null>(null);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [page, setPage] = useState(1);
   const [savedViewForm, setSavedViewForm] = useState<SavedViewFormState>({
     name: 'Minha visao',
@@ -228,8 +242,8 @@ export default function TicketList() {
     priority: filterPriority || undefined,
     isClosed: filterStatus === '' ? undefined : filterStatus === 'true',
     text: filterText.trim() || undefined,
-    limit: PAGE_SIZE,
-    offset: (page - 1) * PAGE_SIZE,
+    limit: pageSize,
+    offset: (page - 1) * pageSize,
   });
   const hoverPreviewTicketQuery = useTicket(hoverPreviewTicketId ?? '');
   const hoverPreviewWatchersQuery = useTicketWatchers(hoverPreviewTicketId ?? '');
@@ -281,13 +295,19 @@ export default function TicketList() {
 
   useEffect(() => {
     setPage(1);
-  }, [filterClient, filterPriority, filterState, filterStatus, filterText]);
+  }, [filterClient, filterPriority, filterState, filterStatus, filterText, pageSize]);
 
   useEffect(() => {
     if (activeSavedViewId) {
       setSavedViewsExpanded(true);
     }
   }, [activeSavedViewId]);
+
+  useEffect(() => {
+    if (filterClient || filterState) {
+      setAdvancedFiltersExpanded(true);
+    }
+  }, [filterClient, filterState]);
 
   useEffect(() => {
     if (!hoverPreviewTicketId) return;
@@ -297,8 +317,15 @@ export default function TicketList() {
     }
   }, [hoverPreviewTicketId, visibleTickets]);
 
-  const hasNextPage = visibleTickets.length === PAGE_SIZE;
+  const hasNextPage = visibleTickets.length === pageSize;
   const hasPrevPage = page > 1;
+  const advancedFiltersActiveCount = Number(Boolean(filterClient)) + Number(Boolean(filterState));
+  const hasActiveFilters =
+    Boolean(filterClient) ||
+    Boolean(filterState) ||
+    Boolean(filterPriority) ||
+    Boolean(filterText) ||
+    filterStatus !== DEFAULT_STATUS_FILTER;
 
   const clientOpts = [
     { value: '', label: 'Todos os clientes' },
@@ -443,8 +470,9 @@ export default function TicketList() {
     setFilterClient('');
     setFilterState('');
     setFilterPriority('');
-    setFilterStatus('');
+    setFilterStatus(DEFAULT_STATUS_FILTER);
     setFilterText('');
+    setAdvancedFiltersExpanded(false);
   };
 
   const buildCurrentFilter = (): TicketSavedViewFilter => ({
@@ -465,13 +493,67 @@ export default function TicketList() {
         ? filter.isClosed
           ? 'true'
           : 'false'
-        : '',
+        : DEFAULT_STATUS_FILTER,
     );
     setFilterText(filter.text ?? '');
     setActiveSavedViewId(view.id);
+    setAdvancedFiltersExpanded(Boolean(filter.clientId || filter.workflowStateId));
     setPage(1);
     toast.success(`Visao aplicada: ${view.name}`);
   };
+
+  const renderPaginationBar = (position: 'top' | 'bottom') => (
+    <div
+      className={`flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-xs text-slate-400 ${
+        position === 'top' ? 'border-b border-white/5' : 'border-t border-white/5'
+      }`}
+    >
+      <div className="flex items-center gap-3">
+        <span>Mostrando ate {pageSize} registros por pagina</span>
+        <label className="flex items-center gap-2">
+          <span className="text-slate-500">Por pagina</span>
+          <select
+            value={String(pageSize)}
+            onChange={(event) => {
+              setPageSize(Number(event.target.value));
+              setHoverPreviewTicketId(null);
+            }}
+            className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-xs text-slate-200 outline-none transition-colors focus-visible:border-primary/60 focus-visible:ring-2 focus-visible:ring-primary/30"
+            aria-label="Quantidade de chamados por pagina"
+          >
+            {PAGE_SIZE_OPTIONS.map((value) => (
+              <option
+                key={value}
+                value={value}
+                className="bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100"
+              >
+                {value}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <div className="flex items-center gap-2">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setPage((current) => Math.max(1, current - 1))}
+          disabled={!hasPrevPage || tickets.isFetching}
+        >
+          Anterior
+        </Button>
+        <span className="min-w-16 text-center">Pagina {page}</span>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setPage((current) => current + 1)}
+          disabled={!hasNextPage || tickets.isFetching}
+        >
+          Proxima
+        </Button>
+      </div>
+    </div>
+  );
 
   const openCreateSavedViewModal = () => {
     if (!currentUserId) {
@@ -569,15 +651,40 @@ export default function TicketList() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
-        <KpiTile label="Abertos" value={String(kpi?.totalOpen ?? '--')} tone="primary" />
-        <KpiTile label="Encerrados" value={String(kpi?.totalClosed ?? '--')} />
-        <KpiTile label="SLA violado" value={String(kpi?.slaBreached ?? '--')} tone="danger" />
-        <KpiTile label="SLA em alerta" value={String(kpi?.slaWarning ?? '--')} tone="warning" />
-        <KpiTile label="Em espera" value={String(kpi?.onHold ?? '--')} tone="warning" />
+        <KpiTile
+          label="Abertos"
+          value={String(kpi?.totalOpen ?? '--')}
+          tone="primary"
+          description="Quantidade de chamados abertos no momento, considerando os filtros aplicados."
+        />
+        <KpiTile
+          label="Encerrados"
+          value={String(kpi?.totalClosed ?? '--')}
+          description="Quantidade de chamados encerrados no recorte atual de filtros."
+        />
+        <KpiTile
+          label="SLA violado"
+          value={String(kpi?.slaBreached ?? '--')}
+          tone="danger"
+          description="Chamados que ultrapassaram o prazo definido em SLA."
+        />
+        <KpiTile
+          label="SLA em alerta"
+          value={String(kpi?.slaWarning ?? '--')}
+          tone="warning"
+          description="Chamados proximos de violar o SLA, exigindo atencao rapida."
+        />
+        <KpiTile
+          label="Em espera"
+          value={String(kpi?.onHold ?? '--')}
+          tone="warning"
+          description="Chamados em espera de retorno, aprovacao ou alguma dependencia externa."
+        />
         <KpiTile
           label="FRT"
           value={typeof kpi?.frtAchievementRate === 'number' ? `${kpi.frtAchievementRate.toFixed(1)}%` : '--'}
           tone="success"
+          description="First Response Time: percentual de chamados com primeira resposta dentro do SLA."
         />
       </div>
 
@@ -610,7 +717,7 @@ export default function TicketList() {
           </div>
         </div>
 
-        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <div className="xl:col-span-2">
             <Input
               label="Buscar"
@@ -622,24 +729,6 @@ export default function TicketList() {
               placeholder="Título, descrição ou termo livre"
             />
           </div>
-          <Select
-            label="Cliente"
-            options={clientOpts}
-            value={filterClient}
-            onChange={(event) => {
-              setActiveSavedViewId(null);
-              setFilterClient(event.target.value);
-            }}
-          />
-          <Select
-            label="Estado"
-            options={stateOpts}
-            value={filterState}
-            onChange={(event) => {
-              setActiveSavedViewId(null);
-              setFilterState(event.target.value);
-            }}
-          />
           <Select
             label="Prioridade"
             options={PRIORITY_OPTIONS}
@@ -660,8 +749,48 @@ export default function TicketList() {
           />
         </div>
 
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setAdvancedFiltersExpanded((current) => !current)}
+            aria-expanded={advancedFiltersExpanded}
+          >
+            <Filter className="h-4 w-4" />
+            Filtros avançados
+            {advancedFiltersActiveCount > 0 && <Badge color="accent">{advancedFiltersActiveCount}</Badge>}
+            {advancedFiltersExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          </Button>
+          {advancedFiltersActiveCount > 0 && !advancedFiltersExpanded && (
+            <span className="text-xs text-slate-500">Cliente e/ou estado filtrados.</span>
+          )}
+        </div>
+
+        {advancedFiltersExpanded && (
+          <div className="mt-3 grid gap-3 md:grid-cols-2">
+            <Select
+              label="Cliente"
+              options={clientOpts}
+              value={filterClient}
+              onChange={(event) => {
+                setActiveSavedViewId(null);
+                setFilterClient(event.target.value);
+              }}
+            />
+            <Select
+              label="Estado"
+              options={stateOpts}
+              value={filterState}
+              onChange={(event) => {
+                setActiveSavedViewId(null);
+                setFilterState(event.target.value);
+              }}
+            />
+          </div>
+        )}
+
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-          {(filterClient || filterState || filterPriority || filterStatus || filterText) && (
+          {hasActiveFilters && (
             <Button variant="ghost" size="sm" onClick={handleClearFilters}>
               Limpar filtros
             </Button>
@@ -764,6 +893,7 @@ export default function TicketList() {
           </div>
         ) : (
           <>
+            {renderPaginationBar('top')}
             <DataTable
               columns={columns}
               data={visibleTickets}
@@ -774,28 +904,7 @@ export default function TicketList() {
               onRowHoverCardChange={(ticket) => setHoverPreviewTicketId(ticket?.id ?? null)}
               showPagination={false}
             />
-            <div className="flex items-center justify-between border-t border-white/5 px-4 py-3 text-xs text-slate-400">
-              <span>Mostrando ate {PAGE_SIZE} registros por página</span>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setPage((current) => Math.max(1, current - 1))}
-                  disabled={!hasPrevPage || tickets.isFetching}
-                >
-                  Anterior
-                </Button>
-                <span className="min-w-16 text-center">Pagina {page}</span>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setPage((current) => current + 1)}
-                  disabled={!hasNextPage || tickets.isFetching}
-                >
-                  Proxima
-                </Button>
-              </div>
-            </div>
+            {renderPaginationBar('bottom')}
           </>
         )}
       </Card>

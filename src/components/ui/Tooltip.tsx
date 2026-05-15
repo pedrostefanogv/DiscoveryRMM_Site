@@ -5,9 +5,10 @@ interface TooltipProps {
   content: ReactNode;
   position?: 'top' | 'bottom' | 'left' | 'right';
   delay?: number;
+  className?: string;
 }
 
-export function Tooltip({ children, content, position = 'top', delay = 300 }: TooltipProps) {
+export function Tooltip({ children, content, position = 'top', delay = 300, className = 'inline-flex' }: TooltipProps) {
   const [visible, setVisible] = useState(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -39,14 +40,14 @@ export function Tooltip({ children, content, position = 'top', delay = 300 }: To
   };
 
   return (
-    <div className="relative inline-flex" onMouseEnter={show} onMouseLeave={hide} onFocus={show} onBlur={hide}>
+    <div className={`relative ${className}`} onMouseEnter={show} onMouseLeave={hide} onFocus={show} onBlur={hide}>
       {children}
       {visible && (
         <div
           role="tooltip"
           className={`pointer-events-none absolute z-50 ${positionClasses[position]}`}
         >
-          <div className="whitespace-nowrap rounded-lg border border-white/10 bg-slate-800 px-3 py-1.5 text-xs text-slate-200 shadow-xl backdrop-blur-sm">
+          <div className="max-w-xs whitespace-normal rounded-lg border border-white/10 bg-slate-800 px-3 py-1.5 text-xs text-slate-200 shadow-xl backdrop-blur-sm">
             {content}
           </div>
           <div className={`absolute ${arrowClasses[position]}`} />
