@@ -29,6 +29,7 @@ import {
   ErrorDisplay,
   Input,
   Loading,
+  Modal,
   Select,
 } from "@/components/ui";
 import {
@@ -261,6 +262,13 @@ export default function TicketSlaPage() {
 
   const [selectedClientId, setSelectedClientId] = useState("");
   const [editingCalendarId, setEditingCalendarId] = useState<string | null>(null);
+  const [holidayCalendarId, setHolidayCalendarId] = useState<string | null>(null);
+  const [isCalendarModalOpen, setIsCalendarModalOpen] = useState(false);
+  const [isHolidayModalOpen, setIsHolidayModalOpen] = useState(false);
+  const [isRuleModalOpen, setIsRuleModalOpen] = useState(false);
+  const [isHelpModalOpen, setIsHelpModalOpen] = useState(false);
+  const [calendarSearchTerm, setCalendarSearchTerm] = useState("");
+  const [ruleSearchTerm, setRuleSearchTerm] = useState("");
   const [calendarForm, setCalendarForm] =
     useState<CalendarFormState>(DEFAULT_CALENDAR_FORM);
   const [holidayName, setHolidayName] = useState("");
@@ -276,7 +284,14 @@ export default function TicketSlaPage() {
   const [ruleForm, setRuleForm] = useState<EscalationFormState>(DEFAULT_RULE_FORM);
 
   const calendarsQuery = useSlaCalendars(selectedClientId || undefined);
-  const calendarDetailQuery = useSlaCalendar(editingCalendarId);
+  const calendarDetailQuery = useSlaCalendar(
+    editingCalendarId,
+    isCalendarModalOpen && !!editingCalendarId,
+  );
+  const holidayDetailQuery = useSlaCalendar(
+    holidayCalendarId,
+    isHolidayModalOpen && !!holidayCalendarId,
+  );
   const activeRulesQuery = useEscalationRules(!selectedWorkflowProfileId);
   const profileRulesQuery = useEscalationRulesByWorkflowProfile(
     selectedWorkflowProfileId,
@@ -390,6 +405,50 @@ export default function TicketSlaPage() {
     [rules],
   );
 
+  const filteredCalendars = useMemo(() => {
+    const term = calendarSearchTerm.trim().toLocaleLowerCase("pt-BR");
+    if (!term) return sortedCalendars;
+
+    return sortedCalendars.filter((calendar) => {
+      const clientName = calendar.clientId
+        ? clientsById.get(calendar.clientId)?.name ?? ""
+        : "global";
+
+      return [
+        calendar.name,
+        calendar.timezone,
+        clientName,
+        formatWorkDays(calendar.workDaysJson),
+      ]
+        .join(" ")
+        .toLocaleLowerCase("pt-BR")
+        .includes(term);
+    });
+  }, [calendarSearchTerm, clientsById, sortedCalendars]);
+
+  const filteredRules = useMemo(() => {
+    const term = ruleSearchTerm.trim().toLocaleLowerCase("pt-BR");
+    if (!term) return sortedRules;
+
+    return sortedRules.filter((rule) => {
+      const workflowProfile = workflowProfilesById.get(rule.workflowProfileId);
+      const workflowLabel = workflowProfile
+        ? getWorkflowProfileLabel(workflowProfile, departmentsById, clientsById)
+        : rule.workflowProfileId;
+
+      return [rule.name, workflowLabel]
+        .join(" ")
+        .toLocaleLowerCase("pt-BR")
+        .includes(term);
+    });
+  }, [
+    clientsById,
+    departmentsById,
+    ruleSearchTerm,
+    sortedRules,
+    workflowProfilesById,
+  ]);
+
   const totalHolidays = sortedCalendars.reduce(
     (sum, calendar) => sum + calendar.holidayCount,
     0,
@@ -447,6 +506,51 @@ export default function TicketSlaPage() {
     );
   }
 
+  function openCreateCalendarModal() {
+    setEditingCalendarId(null);
+    setCalendarForm({
+      ...DEFAULT_CALENDAR_FORM,
+      clientId: selectedClientId,
+    });
+    setIsCalendarModalOpen(true);
+  }
+
+  function openEditCalendarModal(calendarId: string) {
+    setEditingCalendarId(calendarId);
+    setIsCalendarModalOpen(true);
+  }
+
+  function closeCalendarModal() {
+    setIsCalendarModalOpen(false);
+    setEditingCalendarId(null);
+    setCalendarForm({
+      ...DEFAULT_CALENDAR_FORM,
+      clientId: selectedClientId,
+    });
+  }
+
+  function openHolidayModal(calendarId: string) {
+    setHolidayCalendarId(calendarId);
+    resetHolidayForm();
+    setIsHolidayModalOpen(true);
+  }
+
+  function closeHolidayModal() {
+    setIsHolidayModalOpen(false);
+    setHolidayCalendarId(null);
+    resetHolidayForm();
+  }
+
+  function openCreateRuleModal() {
+    resetRuleForm();
+    setIsRuleModalOpen(true);
+  }
+
+  function closeRuleModal() {
+    setIsRuleModalOpen(false);
+    resetRuleForm();
+  }
+
   async function handleSaveCalendar() {
     const startHour = Number(calendarForm.workDayStartHour);
     const endHour = Number(calendarForm.workDayEndHour);
@@ -490,7 +594,7 @@ export default function TicketSlaPage() {
         });
         toast.success("Calendário atualizado com sucesso.");
       } else {
-        const created = await createCalendar.mutateAsync({
+        await createCalendar.mutateAsync({
           name: calendarForm.name.trim(),
           clientId: calendarForm.clientId || null,
           timezone: calendarForm.timezone.trim() || "UTC",
@@ -498,14 +602,15 @@ export default function TicketSlaPage() {
           workDayEndHour: endHour,
           workDaysJson: buildWorkDaysJson(calendarForm.workDays),
         });
-        setEditingCalendarId(created.id);
         toast.success("Calendário criado com sucesso.");
-       }
-     } catch (error) {
-       toast.error(
-         error instanceof Error
-           ? error.message
-           : "Não foi possível salvar o calendário.",
+      }
+
+      closeCalendarModal();
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível salvar o calendário.",
       );
     }
   }
@@ -518,21 +623,24 @@ export default function TicketSlaPage() {
     try {
       await deleteCalendar.mutateAsync(id);
       if (editingCalendarId === id) {
-        setEditingCalendarId(null);
+        closeCalendarModal();
+      }
+      if (holidayCalendarId === id) {
+        closeHolidayModal();
       }
       toast.success("Calendário removido com sucesso.");
     } catch (error) {
       toast.error(
-         error instanceof Error
-           ? error.message
-           : "Não foi possível excluir o calendário.",
+        error instanceof Error
+          ? error.message
+          : "Não foi possível excluir o calendário.",
       );
     }
   }
 
   async function handleAddHoliday() {
-    if (!editingCalendarId) {
-      toast.error("Salve o calendário antes de adicionar feriados.");
+    if (!holidayCalendarId) {
+      toast.error("Selecione um calendário para gerenciar os feriados.");
       return;
     }
 
@@ -580,16 +688,16 @@ export default function TicketSlaPage() {
       }
 
       await addHoliday.mutateAsync({
-        id: editingCalendarId,
+        id: holidayCalendarId,
         data: payload as never,
       });
       resetHolidayForm();
       toast.success("Feriado adicionado com sucesso.");
-     } catch (error) {
-       toast.error(
-         error instanceof Error
-           ? error.message
-           : "Não foi possível adicionar o feriado.",
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível adicionar o feriado.",
       );
     }
   }
@@ -621,19 +729,19 @@ export default function TicketSlaPage() {
   }
 
   async function handleDeleteHoliday(holidayId: string, name: string) {
-    if (!editingCalendarId) return;
+    if (!holidayCalendarId) return;
     if (!window.confirm(`Remover o feriado \"${name}\"?`)) {
       return;
     }
 
     try {
-      await deleteHoliday.mutateAsync({ id: editingCalendarId, holidayId });
+      await deleteHoliday.mutateAsync({ id: holidayCalendarId, holidayId });
       toast.success("Feriado removido com sucesso.");
-     } catch (error) {
-       toast.error(
-         error instanceof Error
-           ? error.message
-           : "Não foi possível remover o feriado.",
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível remover o feriado.",
       );
     }
   }
@@ -697,16 +805,17 @@ export default function TicketSlaPage() {
           bumpPriority: ruleForm.bumpPriority,
           notifyAssignee: ruleForm.notifyAssignee,
         });
-        toast.success("Regra de escalonamento criada.")
-       }
+        toast.success("Regra de escalonamento criada.");
+      }
 
-       setSelectedWorkflowProfileId(ruleForm.workflowProfileId);
-       resetRuleForm(ruleForm.workflowProfileId);
-     } catch (error) {
-       toast.error(
-         error instanceof Error
-           ? error.message
-           : "Não foi possível salvar a regra.",
+      setSelectedWorkflowProfileId(ruleForm.workflowProfileId);
+      setIsRuleModalOpen(false);
+      resetRuleForm(ruleForm.workflowProfileId);
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível salvar a regra.",
       );
     }
   }
@@ -719,17 +828,23 @@ export default function TicketSlaPage() {
     try {
       await deleteRule.mutateAsync(id);
       if (editingRuleId === id) {
+        setIsRuleModalOpen(false);
         resetRuleForm();
       }
       toast.success("Regra removida com sucesso.");
-     } catch (error) {
-       toast.error(
-         error instanceof Error
-           ? error.message
-           : "Não foi possível remover a regra.",
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível remover a regra.",
       );
     }
   }
+
+  const holidayCalendarSummary = holidayCalendarId
+    ? sortedCalendars.find((item) => item.id === holidayCalendarId) ?? null
+    : null;
+  const holidayCalendarDetail = holidayDetailQuery.data;
 
   return (
     <div className="space-y-6">
@@ -737,10 +852,14 @@ export default function TicketSlaPage() {
         <div>
           <h1 className="text-2xl font-bold text-white">SLA, calendários e escalonamento</h1>
           <p className="text-sm text-slate-400">
-            Gerencie horas úteis, feriados e regras que escalam tickets com base no consumo de SLA.
+            Visualize rapidamente calendários e regras, e abra os detalhes somente quando precisar.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <Button variant="secondary" onClick={() => setIsHelpModalOpen(true)}>
+            <Clock3 className="h-4 w-4" />
+            Guia rápido
+          </Button>
           <Badge color="primary">Calendários úteis</Badge>
           <Badge color="warning">Escalonamento automático</Badge>
         </div>
@@ -761,465 +880,227 @@ export default function TicketSlaPage() {
         </Card>
         <Card>
           <div className="space-y-1">
-            <p className="text-xs uppercase tracking-wide text-slate-500">Regras visiveis</p>
+            <p className="text-xs uppercase tracking-wide text-slate-500">Regras visíveis</p>
             <p className="text-2xl font-semibold text-white">{sortedRules.length}</p>
           </div>
         </Card>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(360px,1fr)]">
-        <div className="space-y-6">
-          <Card>
-            <CardHeader
-              title="Calendários de SLA"
-              subtitle="Cada calendário define dias úteis, faixa horaria e feriados usados no cálculo de vencimento."
-              action={
+      <div className="grid gap-6 xl:grid-cols-2">
+        <Card>
+          <CardHeader
+            title="Calendários de SLA"
+            subtitle="Liste e filtre calendários. Edição detalhada e feriados ficam em modal."
+            action={
+              <Button variant="secondary" onClick={openCreateCalendarModal}>
+                <Plus className="h-4 w-4" />
+                Novo calendário
+              </Button>
+            }
+          />
+
+          <div className="mb-4 grid gap-4 md:grid-cols-2">
+            <Select
+              label="Filtrar por cliente"
+              options={clientOptions}
+              value={selectedClientId}
+              onChange={(event) => setSelectedClientId(event.target.value)}
+            />
+            <Input
+              label="Buscar calendário"
+              value={calendarSearchTerm}
+              onChange={(event) => setCalendarSearchTerm(event.target.value)}
+              placeholder="Nome, timezone ou cliente"
+            />
+          </div>
+
+          <div className="mb-4 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-300">
+            <p className="font-medium text-white">Uso recomendado</p>
+            <p className="mt-1 text-slate-400">
+              Mantenha um calendário global e crie exceções por cliente apenas quando houver jornada ou feriados diferentes.
+            </p>
+          </div>
+
+          <div className="space-y-3">
+            <p className="text-xs text-slate-500">
+              Mostrando {filteredCalendars.length} de {sortedCalendars.length} calendários.
+            </p>
+
+            {sortedCalendars.length === 0 && (
+              <p className="text-sm text-slate-500">Nenhum calendário encontrado para o filtro atual.</p>
+            )}
+
+            {sortedCalendars.length > 0 && filteredCalendars.length === 0 && (
+              <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-400">
+                <p>Nenhum calendário encontrado para a busca atual.</p>
+                <div className="mt-2">
+                  <Button size="sm" variant="ghost" onClick={() => setCalendarSearchTerm("")}>
+                    Limpar busca
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {filteredCalendars.map((calendar) => (
+              <div
+                key={calendar.id}
+                className="rounded-xl border border-white/10 bg-white/5 px-4 py-3"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-sm font-medium text-white">{calendar.name}</p>
+                      <Badge color={calendar.clientId ? "accent" : "primary"}>
+                        {calendar.clientId
+                          ? clientsById.get(calendar.clientId)?.name ?? "Cliente vinculado"
+                          : "Global"}
+                      </Badge>
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-2 text-xs text-slate-400">
+                      <span>Timezone: {calendar.timezone}</span>
+                      <span>
+                        Jornada: {calendar.workDayStartHour}:00 - {calendar.workDayEndHour}:00
+                      </span>
+                      <span>Dias: {formatWorkDays(calendar.workDaysJson)}</span>
+                      <span>Feriados: {calendar.holidayCount}</span>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => openEditCalendarModal(calendar.id)}
+                    >
+                      <Pencil className="h-4 w-4" />
+                      Editar
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => openHolidayModal(calendar.id)}
+                    >
+                      <CalendarDays className="h-4 w-4" />
+                      Feriados
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+
+        <Card>
+          <CardHeader
+            title="Regras de escalonamento"
+            subtitle="Liste regras e abra o formulário apenas quando for criar ou editar."
+            action={
+              <div className="flex flex-wrap gap-2">
                 <Button
                   variant="secondary"
-                  onClick={() => {
-                    setEditingCalendarId(null);
-                    setCalendarForm({
-                      ...DEFAULT_CALENDAR_FORM,
-                      clientId: selectedClientId,
-                    });
-                  }}
+                  onClick={() => navigate("/settings/workflow-profiles")}
                 >
-                  <Plus className="h-4 w-4" />
-                  Novo calendário
+                  <ExternalLink className="h-4 w-4" />
+                  Gerenciar perfis
                 </Button>
-              }
-            />
+                <Button variant="secondary" onClick={openCreateRuleModal}>
+                  <Plus className="h-4 w-4" />
+                  Nova regra
+                </Button>
+              </div>
+            }
+          />
 
-            <div className="mb-4 grid gap-4 md:grid-cols-2">
-              <Select
-                label="Filtrar por client"
-                options={clientOptions}
-                value={selectedClientId}
-                onChange={(event) => setSelectedClientId(event.target.value)}
-              />
-              <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-300">
-                <p className="font-medium text-white">Quando usar</p>
+          <Select
+            label="Filtrar por workflow profile"
+            options={workflowProfileFilterOptions}
+            value={selectedWorkflowProfileId}
+            onChange={(event) => {
+              setSelectedWorkflowProfileId(event.target.value);
+              resetRuleForm(event.target.value);
+            }}
+          />
+
+          <div className="mt-4">
+            <Input
+              label="Buscar regra"
+              value={ruleSearchTerm}
+              onChange={(event) => setRuleSearchTerm(event.target.value)}
+              placeholder="Nome da regra ou workflow profile"
+            />
+          </div>
+
+          {workflowProfiles.length === 0 && (
+            <div className="mt-3 flex items-start gap-3 rounded-xl border border-warning/30 bg-warning/10 p-4 text-sm text-slate-300">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+              <div>
+                <p className="font-medium text-warning">Nenhum workflow profile cadastrado</p>
                 <p className="mt-1 text-slate-400">
-                  Use um calendário global como padrão e crie calendários por client quando houver horario comercial ou feriados próprios.
+                  Regras de escalonamento exigem um workflow profile existente. Clique em
+                  Gerenciar perfis para criar um perfil com SLA configurado.
                 </p>
               </div>
             </div>
+          )}
+          {!selectedWorkflowProfileId && workflowProfiles.length > 0 && (
+            <div className="mt-3 flex items-start gap-3 rounded-xl border border-white/10 bg-white/5 p-4 text-sm text-slate-300">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+              <p>
+                Sem filtro, o backend retorna apenas regras ativas. Para editar regras inativas,
+                selecione o workflow profile correspondente.
+              </p>
+            </div>
+          )}
 
-            <div className="space-y-3">
-              {sortedCalendars.length === 0 && (
-                <p className="text-sm text-slate-500">Nenhum calendário encontrado para o filtro atual.</p>
-              )}
+          <div className="mt-4 space-y-3">
+            <p className="text-xs text-slate-500">
+              Mostrando {filteredRules.length} de {sortedRules.length} regras.
+            </p>
 
-              {sortedCalendars.map((calendar) => (
-                <div
-                  key={calendar.id}
-                  className={`rounded-xl border px-4 py-3 ${
-                    editingCalendarId === calendar.id
-                      ? "border-primary/40 bg-primary/10"
-                      : "border-white/10 bg-white/5"
-                  }`}
-                >
+            {sortedRules.length === 0 && (
+              <p className="text-sm text-slate-500">Nenhuma regra encontrada para o filtro atual.</p>
+            )}
+
+            {sortedRules.length > 0 && filteredRules.length === 0 && (
+              <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-400">
+                <p>Nenhuma regra encontrada para a busca atual.</p>
+                <div className="mt-2">
+                  <Button size="sm" variant="ghost" onClick={() => setRuleSearchTerm("")}>
+                    Limpar busca
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {filteredRules.map((rule) => {
+              const workflowProfile = workflowProfilesById.get(rule.workflowProfileId);
+              const user = rule.reassignToUserId
+                ? usersById.get(rule.reassignToUserId)
+                : null;
+              const department = rule.reassignToDepartmentId
+                ? departmentsById.get(rule.reassignToDepartmentId)
+                : null;
+
+              return (
+                <div key={rule.id} className="rounded-xl border border-white/10 bg-white/5 p-4">
                   <div className="flex items-start justify-between gap-3">
-                    <div>
+                    <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
-                        <p className="text-sm font-medium text-white">{calendar.name}</p>
-                        <Badge color={calendar.clientId ? "accent" : "primary"}>
-                          {calendar.clientId
-                            ? clientsById.get(calendar.clientId)?.name ?? "Client vinculado"
-                            : "Global"}
+                        <p className="truncate text-sm font-medium text-white">{rule.name}</p>
+                        <Badge color={rule.isActive ? "success" : "slate"}>
+                          {rule.isActive ? "Ativa" : "Inativa"}
                         </Badge>
                       </div>
-                      <div className="mt-2 flex flex-wrap gap-2 text-xs text-slate-400">
-                        <span>Timezone: {calendar.timezone}</span>
-                        <span>
-                          Jornada: {calendar.workDayStartHour}:00 - {calendar.workDayEndHour}:00
-                        </span>
-                        <span>Dias: {formatWorkDays(calendar.workDaysJson)}</span>
-                        <span>Feriados: {calendar.holidayCount}</span>
-                      </div>
+                      <p className="mt-1 text-xs text-slate-400">
+                        {workflowProfile
+                          ? getWorkflowProfileLabel(
+                              workflowProfile,
+                              departmentsById,
+                              clientsById,
+                            )
+                          : rule.workflowProfileId}
+                      </p>
                     </div>
                     <div className="flex flex-wrap gap-2">
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        onClick={() => setEditingCalendarId(calendar.id)}
-                      >
-                        <Pencil className="h-4 w-4" />
-                        Editar
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="danger"
-                        onClick={() => void handleDeleteCalendar(calendar.id, calendar.name)}
-                        loading={deleteCalendar.isPending}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                        Excluir
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </Card>
-
-          <Card>
-            <CardHeader
-              title={editingCalendarId ? "Editar calendário" : "Novo calendário"}
-              subtitle="Defina fuso, dias úteis e a jornada base usada no cálculo do SLA."
-            />
-
-            {editingCalendarId && calendarDetailQuery.isLoading ? (
-              <Loading />
-            ) : editingCalendarId && calendarDetailQuery.isError ? (
-              <ErrorDisplay onRetry={() => calendarDetailQuery.refetch()} />
-            ) : (
-              <>
-                <div className="grid gap-4 md:grid-cols-2">
-                  <Input
-                    label="Nome"
-                    value={calendarForm.name}
-                    onChange={(event) =>
-                      setCalendarForm((current) => ({
-                        ...current,
-                        name: event.target.value,
-                      }))
-                    }
-                    placeholder="Horario comercial Brasil"
-                  />
-                  <Select
-                    label="Client"
-                    options={clientOptions}
-                    value={calendarForm.clientId}
-                    disabled={!!editingCalendarId}
-                    onChange={(event) =>
-                      setCalendarForm((current) => ({
-                        ...current,
-                        clientId: event.target.value,
-                      }))
-                    }
-                  />
-                  <Select
-                    label="Timezone"
-                    options={TIMEZONE_OPTIONS}
-                    value={TIMEZONE_OPTIONS.some(opt => opt.value === calendarForm.timezone) ? calendarForm.timezone : "UTC"}
-                    onChange={(event) =>
-                      setCalendarForm((current) => ({
-                        ...current,
-                        timezone: event.target.value,
-                      }))
-                    }
-                  />
-                  <div className="grid grid-cols-2 gap-3">
-                    <Input
-                      label="Inicio"
-                      type="number"
-                      min="0"
-                      max="23"
-                      value={calendarForm.workDayStartHour}
-                      onChange={(event) =>
-                        setCalendarForm((current) => ({
-                          ...current,
-                          workDayStartHour: event.target.value,
-                        }))
-                      }
-                    />
-                    <Input
-                      label="Fim"
-                      type="number"
-                      min="1"
-                      max="24"
-                      value={calendarForm.workDayEndHour}
-                      onChange={(event) =>
-                        setCalendarForm((current) => ({
-                          ...current,
-                          workDayEndHour: event.target.value,
-                        }))
-                      }
-                    />
-                  </div>
-                </div>
-
-                <div className="mt-4 space-y-2">
-                  <p className="text-sm font-medium text-slate-300">Dias úteis</p>
-                  <div className="flex flex-wrap gap-2">
-                    {WORKDAY_OPTIONS.map((option) => {
-                      const checked = calendarForm.workDays.includes(option.value);
-                      return (
-                        <label
-                          key={option.value}
-                          className={`inline-flex cursor-pointer items-center gap-2 rounded-full border px-3 py-1.5 text-xs ${
-                            checked
-                              ? "border-primary/40 bg-primary/10 text-white"
-                              : "border-white/10 bg-white/5 text-slate-400"
-                          }`}
-                        >
-                          <input
-                            type="checkbox"
-                            className="hidden"
-                            checked={checked}
-                            onChange={() =>
-                              setCalendarForm((current) => ({
-                                ...current,
-                                workDays: toggleWorkDay(current.workDays, option.value),
-                              }))
-                            }
-                          />
-                          {option.label}
-                        </label>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {editingCalendarId && (
-                  <p className="mt-3 text-xs text-slate-500">
-                    O client do calendário não pode ser alterado pelo endpoint atual. Para mudar o escopo, crie um novo calendário.
-                  </p>
-                )}
-
-                <div className="mt-6 flex flex-wrap gap-3">
-                  <Button
-                    onClick={() => void handleSaveCalendar()}
-                    loading={createCalendar.isPending || updateCalendar.isPending}
-                  >
-                    <CalendarDays className="h-4 w-4" />
-                    {editingCalendarId ? "Salvar calendário" : "Criar calendário"}
-                  </Button>
-                  {editingCalendarId && (
-                    <Button
-                      variant="ghost"
-                      onClick={() => {
-                        setEditingCalendarId(null);
-                        setCalendarForm({
-                          ...DEFAULT_CALENDAR_FORM,
-                          clientId: selectedClientId,
-                        });
-                      }}
-                    >
-                      Cancelar edição
-                    </Button>
-                  )}
-                </div>
-
-                {editingCalendarId && calendarDetailQuery.data && (
-                  <div className="mt-6 border-t border-white/5 pt-6">
-                    <div className="flex items-center gap-2">
-                      <CalendarDays className="h-4 w-4 text-slate-400" />
-                      <h3 className="text-sm font-semibold text-white">Feriados do calendário</h3>
-                    </div>
-
-                    <div className="mt-4 space-y-4">
-                      {/* Tipo do feriado */}
-                      <Select
-                        label="Tipo do feriado"
-                        options={HOLIDAY_TYPE_OPTIONS}
-                        value={holidayType}
-                        onChange={(event) => setHolidayType(event.target.value)}
-                      />
-
-                      {/* Campos para Fixed / Yearly */}
-                      {(holidayType === "0" || holidayType === "1") && (
-                        <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto]">
-                          <Input
-                            label="Nome do feriado"
-                            value={holidayName}
-                            onChange={(event) => setHolidayName(event.target.value)}
-                            placeholder="Natal"
-                          />
-                          <Input
-                            label={holidayType === "1" ? "Dia/Mes (ignora ano)" : "Data"}
-                            type="date"
-                            value={holidayDate}
-                            onChange={(event) => setHolidayDate(event.target.value)}
-                          />
-                        </div>
-                      )}
-
-                      {/* Campos para Relative */}
-                      {holidayType === "2" && (
-                        <div className="space-y-4 rounded-xl border border-white/10 bg-white/5 p-4">
-                          <p className="text-xs font-medium text-slate-400 uppercase tracking-wide">
-                            Configuração de feriado relativo
-                          </p>
-                          <Input
-                            label="Nome do feriado"
-                            value={holidayName}
-                            onChange={(event) => setHolidayName(event.target.value)}
-                            placeholder="Corpus Christi"
-                          />
-                          <Select
-                            label="Metodo de cálculo"
-                            options={RELATIVE_METHOD_OPTIONS}
-                            value={holidayRelativeMethod}
-                            onChange={(event) => setHolidayRelativeMethod(event.target.value)}
-                          />
-                          <Select
-                            label="Mes"
-                            options={MONTH_OPTIONS}
-                            value={holidayRelativeMonth}
-                            onChange={(event) => setHolidayRelativeMonth(event.target.value)}
-                          />
-                          {holidayRelativeMethod === "0" && (
-                            <Select
-                              label="Dia da semana"
-                              options={DAY_OF_WEEK_OPTIONS}
-                              value={holidayRelativeDayOfWeek}
-                              onChange={(event) => setHolidayRelativeDayOfWeek(event.target.value)}
-                            />
-                          )}
-                          <Select
-                            label={holidayRelativeMethod === "1" ? "Ocorrencia (dia util)" : "Ocorrencia"}
-                            options={OCCURRENCE_OPTIONS}
-                            value={holidayRelativeOccurrence}
-                            onChange={(event) => setHolidayRelativeOccurrence(event.target.value)}
-                          />
-                        </div>
-                      )}
-
-                      <div className="flex justify-end">
-                        <Button
-                          onClick={() => void handleAddHoliday()}
-                          loading={addHoliday.isPending}
-                        >
-                          <Plus className="h-4 w-4" />
-                          Adicionar feriado
-                        </Button>
-                      </div>
-                    </div>
-
-                    <div className="mt-6 space-y-2">
-                      {calendarDetailQuery.data.holidays.length === 0 && (
-                        <p className="text-sm text-slate-500">Nenhum feriado cadastrado.</p>
-                      )}
-
-                      {[...calendarDetailQuery.data.holidays]
-                        .sort(
-                          (left, right) =>
-                            new Date(left.date).getTime() - new Date(right.date).getTime(),
-                        )
-                        .map((holiday) => (
-                          <div
-                            key={holiday.id}
-                            className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3"
-                          >
-                            <div>
-                              <p className="text-sm font-medium text-white">{holiday.name}</p>
-                              <div className="mt-0.5 flex flex-wrap gap-2 text-xs text-slate-400">
-                                {holiday.holidayType === 2 ? (
-                                  <span className="text-accent">Relativo: {getHolidayTypeLabel(holiday)}</span>
-                                ) : holiday.holidayType === 1 ? (
-                                  <span className="text-primary">Anual: {new Date(holiday.date).toLocaleDateString("pt-BR", { day: "numeric", month: "long" })}</span>
-                                ) : (
-                                  <span>{new Date(holiday.date).toLocaleDateString("pt-BR")}</span>
-                                )}
-                              </div>
-                            </div>
-                            <Button
-                              size="sm"
-                              variant="danger"
-                              onClick={() => void handleDeleteHoliday(holiday.id, holiday.name)}
-                              loading={deleteHoliday.isPending}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                              Remover
-                            </Button>
-                          </div>
-                        ))}
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
-          </Card>
-        </div>
-
-        <div className="space-y-6">
-          <Card>
-            <CardHeader
-              title="Regras de escalonamento"
-               subtitle="Dispare reatribuição, notificação e aumento de prioridade conforme o SLA se aproxima do limite."
-              action={
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    variant="secondary"
-                    onClick={() => navigate("/settings/workflow-profiles")}
-                  >
-                    <ExternalLink className="h-4 w-4" />
-                    Gerenciar perfis
-                  </Button>
-                  <Button variant="secondary" onClick={() => resetRuleForm()}>
-                    <Plus className="h-4 w-4" />
-                    Nova regra
-                  </Button>
-                </div>
-              }
-            />
-
-            <Select
-              label="Filtrar por workflow profile"
-              options={workflowProfileFilterOptions}
-              value={selectedWorkflowProfileId}
-              onChange={(event) => {
-                setSelectedWorkflowProfileId(event.target.value);
-                resetRuleForm(event.target.value);
-              }}
-            />
-
-            {workflowProfiles.length === 0 && (
-              <div className="mt-3 flex items-start gap-3 rounded-xl border border-warning/30 bg-warning/10 p-4 text-sm text-slate-300">
-                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
-                <div>
-                  <p className="font-medium text-warning">Nenhum workflow profile cadastrado</p>
-                  <p className="mt-1 text-slate-400">
-                    Regras de escalonamento exigem um workflow profile existente. Clique em <strong>"Gerenciar perfis"</strong> acima ou acesse <strong>Suporte &rarr; Workflow Profiles</strong> para criar um perfil com SLA configurado.
-                  </p>
-                </div>
-              </div>
-            )}
-            {!selectedWorkflowProfileId && workflowProfiles.length > 0 && (
-              <div className="mt-3 flex items-start gap-3 rounded-xl border border-white/10 bg-white/5 p-4 text-sm text-slate-300">
-                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
-                <p>
-                  Sem filtro, o backend retorna apenas regras ativas. Para editar regras inativas, selecione o workflow profile correspondente.
-                </p>
-              </div>
-            )}
-
-            <div className="mt-4 space-y-3">
-              {sortedRules.length === 0 && (
-                <p className="text-sm text-slate-500">Nenhuma regra encontrada para o filtro atual.</p>
-              )}
-
-              {sortedRules.map((rule) => {
-                const workflowProfile = workflowProfilesById.get(rule.workflowProfileId);
-                const user = rule.reassignToUserId
-                  ? usersById.get(rule.reassignToUserId)
-                  : null;
-                const department = rule.reassignToDepartmentId
-                  ? departmentsById.get(rule.reassignToDepartmentId)
-                  : null;
-
-                return (
-                  <div key={rule.id} className="rounded-xl border border-white/10 bg-white/5 p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <p className="truncate text-sm font-medium text-white">{rule.name}</p>
-                          <Badge color={rule.isActive ? "success" : "slate"}>
-                            {rule.isActive ? "Ativa" : "Inativa"}
-                          </Badge>
-                        </div>
-                        <p className="mt-1 text-xs text-slate-400">
-                          {workflowProfile
-                            ? getWorkflowProfileLabel(
-                                workflowProfile,
-                                departmentsById,
-                                clientsById,
-                              )
-                            : rule.workflowProfileId}
-                        </p>
-                      </div>
                       <Button
                         size="sm"
                         variant="secondary"
@@ -1227,269 +1108,576 @@ export default function TicketSlaPage() {
                           setSelectedWorkflowProfileId(rule.workflowProfileId);
                           setEditingRuleId(rule.id);
                           setRuleForm(toRuleFormState(rule));
+                          setIsRuleModalOpen(true);
                         }}
                       >
                         <Pencil className="h-4 w-4" />
                         Editar
                       </Button>
                     </div>
-
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {rule.triggerAtSlaPercent > 0 && (
-                        <Badge color="warning">Disparo em {rule.triggerAtSlaPercent}%</Badge>
-                      )}
-                      {rule.triggerAtHoursBefore > 0 && (
-                        <Badge color="accent">{formatHoursBefore(rule.triggerAtHoursBefore)}</Badge>
-                      )}
-                      {rule.bumpPriority && <Badge color="danger">Aumenta prioridade</Badge>}
-                      {rule.notifyAssignee && <Badge color="primary">Notifica responsável</Badge>}
-                    </div>
-
-                    <div className="mt-3 space-y-1 text-xs text-slate-400">
-                      <p>
-                         Usuário destino: {user ? user.fullName || user.login || user.email : "Sem reatribuição"}
-                       </p>
-                       <p>
-                         Departamento destino: {department?.name ?? "Sem reatribuição"}
-                      </p>
-                    </div>
-
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      <Button
-                        size="sm"
-                        variant="danger"
-                        onClick={() => void handleDeleteRule(rule.id, rule.name)}
-                        loading={deleteRule.isPending}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                        Excluir
-                      </Button>
-                    </div>
                   </div>
-                );
-              })}
-            </div>
-          </Card>
 
-          <Card>
-            <CardHeader
-              title={editingRuleId ? "Editar regra" : "Nova regra"}
-              subtitle="As regras sao vinculadas a um workflow profile existente."
-            />
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {rule.triggerAtSlaPercent > 0 && (
+                      <Badge color="warning">Disparo em {rule.triggerAtSlaPercent}%</Badge>
+                    )}
+                    {rule.triggerAtHoursBefore > 0 && (
+                      <Badge color="accent">{formatHoursBefore(rule.triggerAtHoursBefore)}</Badge>
+                    )}
+                    {rule.bumpPriority && <Badge color="danger">Aumenta prioridade</Badge>}
+                    {rule.notifyAssignee && <Badge color="primary">Notifica responsável</Badge>}
+                  </div>
 
-            {workflowProfiles.length === 0 ? (
-              <div className="flex items-start gap-3 rounded-xl border border-warning/30 bg-warning/10 p-4 text-sm">
-                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
-                <div>
-                  <p className="font-medium text-warning">Workflow profiles necessarios</p>
-                  <p className="mt-1 text-slate-400">
-                    Regras de escalonamento sao vinculadas a um <strong>workflow profile</strong>. Nenhum perfil foi encontrado no sistema.
-                  </p>
-                  <div className="mt-3">
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      onClick={() => navigate("/settings/workflow-profiles")}
-                    >
-                      <ExternalLink className="h-4 w-4" />
-                      Ir para Workflow Profiles
-                    </Button>
+                  <div className="mt-3 space-y-1 text-xs text-slate-400">
+                    <p>
+                      Usuário destino: {user ? user.fullName || user.login || user.email : "Sem reatribuição"}
+                    </p>
+                    <p>Departamento destino: {department?.name ?? "Sem reatribuição"}</p>
                   </div>
                 </div>
+              );
+            })}
+          </div>
+        </Card>
+      </div>
+
+      <Modal
+        open={isCalendarModalOpen}
+        onClose={closeCalendarModal}
+        title={editingCalendarId ? "Editar calendário" : "Novo calendário"}
+        maxWidth="max-w-3xl"
+      >
+        {editingCalendarId && calendarDetailQuery.isLoading ? (
+          <Loading />
+        ) : editingCalendarId && calendarDetailQuery.isError ? (
+          <ErrorDisplay onRetry={() => calendarDetailQuery.refetch()} />
+        ) : (
+          <div className="space-y-6">
+            <div className="grid gap-4 md:grid-cols-2">
+              <Input
+                label="Nome"
+                value={calendarForm.name}
+                onChange={(event) =>
+                  setCalendarForm((current) => ({
+                    ...current,
+                    name: event.target.value,
+                  }))
+                }
+                placeholder="Horário comercial Brasil"
+              />
+              <Select
+                label="Cliente"
+                options={clientOptions}
+                value={calendarForm.clientId}
+                disabled={!!editingCalendarId}
+                onChange={(event) =>
+                  setCalendarForm((current) => ({
+                    ...current,
+                    clientId: event.target.value,
+                  }))
+                }
+              />
+              <Select
+                label="Timezone"
+                options={TIMEZONE_OPTIONS}
+                value={
+                  TIMEZONE_OPTIONS.some((option) => option.value === calendarForm.timezone)
+                    ? calendarForm.timezone
+                    : "UTC"
+                }
+                onChange={(event) =>
+                  setCalendarForm((current) => ({
+                    ...current,
+                    timezone: event.target.value,
+                  }))
+                }
+              />
+              <div className="grid grid-cols-2 gap-3">
+                <Input
+                  label="Início"
+                  type="number"
+                  min="0"
+                  max="23"
+                  value={calendarForm.workDayStartHour}
+                  onChange={(event) =>
+                    setCalendarForm((current) => ({
+                      ...current,
+                      workDayStartHour: event.target.value,
+                    }))
+                  }
+                />
+                <Input
+                  label="Fim"
+                  type="number"
+                  min="1"
+                  max="24"
+                  value={calendarForm.workDayEndHour}
+                  onChange={(event) =>
+                    setCalendarForm((current) => ({
+                      ...current,
+                      workDayEndHour: event.target.value,
+                    }))
+                  }
+                />
               </div>
-            ) : (
-              <>
-                <div className="grid gap-4">
-                  <Select
-                    label="Workflow profile"
-                    options={workflowProfileOptions}
-                    value={ruleForm.workflowProfileId}
-                    onChange={(event) =>
-                      setRuleForm((current) => ({
-                        ...current,
-                        workflowProfileId: event.target.value,
-                      }))
-                    }
-                  />
-                  <Input
-                    label="Nome da regra"
-                    value={ruleForm.name}
-                    onChange={(event) =>
-                      setRuleForm((current) => ({
-                        ...current,
-                        name: event.target.value,
-                      }))
-                    }
-                    placeholder="Escalar proximo do vencimento"
-                  />
-                  <div className="grid grid-cols-2 gap-3">
-                    <Input
-                      label="Trigger em % SLA"
-                      type="number"
-                      min="0"
-                      max="100"
-                      value={ruleForm.triggerAtSlaPercent}
-                      onChange={(event) =>
-                        setRuleForm((current) => ({
-                          ...current,
-                          triggerAtSlaPercent: event.target.value,
-                        }))
-                      }
-                    />
-                    <Input
-                      label="Horas antes do vencimento"
-                      type="number"
-                      min="0"
-                      value={ruleForm.triggerAtHoursBefore}
-                      onChange={(event) =>
-                        setRuleForm((current) => ({
-                          ...current,
-                          triggerAtHoursBefore: event.target.value,
-                        }))
-                      }
-                    />
-                  </div>
-                  <Select
-                    label="Reatribuir para usuario"
-                    options={userOptions}
-                    value={ruleForm.reassignToUserId}
-                    onChange={(event) =>
-                      setRuleForm((current) => ({
-                        ...current,
-                        reassignToUserId: event.target.value,
-                      }))
-                    }
-                  />
-                  <Select
-                    label="Reatribuir para departamento"
-                    options={departmentOptions}
-                    value={ruleForm.reassignToDepartmentId}
-                    onChange={(event) =>
-                      setRuleForm((current) => ({
-                        ...current,
-                        reassignToDepartmentId: event.target.value,
-                      }))
-                    }
-                  />
-                </div>
+            </div>
 
-                <div className="mt-4 space-y-3">
-                  <label className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-300">
-                    <input
-                      type="checkbox"
-                      checked={ruleForm.bumpPriority}
-                      onChange={(event) =>
-                        setRuleForm((current) => ({
-                          ...current,
-                          bumpPriority: event.target.checked,
-                        }))
-                      }
-                      className="h-4 w-4 rounded border-white/20 bg-transparent"
-                    />
-                    <span>Aumentar prioridade do ticket quando a regra disparar</span>
-                  </label>
-                  <label className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-300">
-                    <input
-                      type="checkbox"
-                      checked={ruleForm.notifyAssignee}
-                      onChange={(event) =>
-                        setRuleForm((current) => ({
-                          ...current,
-                          notifyAssignee: event.target.checked,
-                        }))
-                      }
-                      className="h-4 w-4 rounded border-white/20 bg-transparent"
-                    />
-                    <span>Notificar o responsavel atual quando a regra disparar</span>
-                  </label>
-                  {editingRuleId && (
-                    <label className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-300">
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-slate-300">Dias úteis</p>
+              <div className="flex flex-wrap gap-2">
+                {WORKDAY_OPTIONS.map((option) => {
+                  const checked = calendarForm.workDays.includes(option.value);
+                  return (
+                    <label
+                      key={option.value}
+                      className={`inline-flex cursor-pointer items-center gap-2 rounded-full border px-3 py-1.5 text-xs ${
+                        checked
+                          ? "border-primary/40 bg-primary/10 text-white"
+                          : "border-white/10 bg-white/5 text-slate-400"
+                      }`}
+                    >
                       <input
                         type="checkbox"
-                        checked={ruleForm.isActive}
-                        onChange={(event) =>
-                          setRuleForm((current) => ({
+                        className="hidden"
+                        checked={checked}
+                        onChange={() =>
+                          setCalendarForm((current) => ({
                             ...current,
-                            isActive: event.target.checked,
+                            workDays: toggleWorkDay(current.workDays, option.value),
                           }))
                         }
-                        className="h-4 w-4 rounded border-white/20 bg-transparent"
                       />
-                      <span>Regra ativa</span>
+                      {option.label}
                     </label>
-                  )}
-                </div>
-
-                <div className="mt-6 flex flex-wrap gap-3">
-                  <Button
-                    onClick={() => void handleSaveRule()}
-                    loading={createRule.isPending || updateRule.isPending}
-                  >
-                    <BellRing className="h-4 w-4" />
-                    {editingRuleId ? "Salvar regra" : "Criar regra"}
-                  </Button>
-                  {(editingRuleId || ruleForm.workflowProfileId) && (
-                    <Button variant="ghost" onClick={() => resetRuleForm()}>
-                      <TimerReset className="h-4 w-4" />
-                      Limpar formulario
-                    </Button>
-                  )}
-                </div>
-              </>
-            )}
-          </Card>
-
-          <Card>
-            <CardHeader title="Ajuda rapida" subtitle="Entenda o fluxo completo de SLA e escalonamento." />
-            <div className="space-y-3 text-sm text-slate-300">
-              <div className="flex items-start gap-3 rounded-xl border border-white/10 bg-white/5 p-4">
-                <CalendarDays className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-                <div>
-                  <p className="font-medium text-white">1. Calendário de SLA</p>
-                   <p className="mt-1 text-slate-400">
-                    Define o fuso horário, dias úteis, horário comercial e feriados. Use um calendário global como padrão e específicos por cliente quando necessário.
-                  </p>
-                  <p className="mt-1 text-slate-500">
-                    <strong className="text-slate-300">Como o SLA é calculado:</strong> Quando um perfil de workflow está vinculado a um calendário, o prazo do SLA conta apenas dentro do                     <strong className="text-slate-300">horário comercial</strong> definido no calendário — ou seja, finais de semana, feriados e fora do expediente não consomem o tempo do SLA. Se o perfil não estiver vinculado a nenhum calendário, o prazo corre <strong className="text-slate-300">24 horas por dia, 7 dias por semana</strong>, sem pausas.
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-start gap-3 rounded-xl border border-white/10 bg-white/5 p-4">
-                <Clock3 className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
-                <div>
-                    <p className="font-medium text-white">2. Workflow Profile</p>
-                   <p className="mt-1 text-slate-400">
-                    Perfil vinculado a um departamento que define o SLA em horas, prioridade padrão e o calendário usado. Crie em <strong>Suporte &rarr; Workflow Profiles</strong>.
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-start gap-3 rounded-xl border border-white/10 bg-white/5 p-4">
-                <BellRing className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
-                <div>
-                  <p className="font-medium text-white">3. Regra de Escalonamento</p>
-                  <p className="mt-1 text-slate-400">
-                    Dispara automaticamente quando o SLA atingir um percentual ou estiver próximo do vencimento. Pode reatribuir, notificar ou aumentar a prioridade do ticket.
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-start gap-3 rounded-xl border border-white/10 bg-white/5 p-4">
-                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-danger" />
-                <p>
-                   A listagem global de regras retorna apenas regras ativas. Para editar regras inativas, filtre pelo workflow profile específico.
-                </p>
-              </div>
-              <div className="rounded-xl border border-primary/10 bg-primary/5 p-4">
-                <p className="font-medium text-white text-sm">Resumo rápido</p>
-                <ul className="mt-2 space-y-1 text-xs text-slate-400 list-disc pl-4">
-                  <li><strong className="text-slate-300">Com calendário:</strong> o SLA conta em horas úteis (dias de semana, horário comercial, ignorando feriados).</li>
-                  <li><strong className="text-slate-300">Sem calendário:</strong> o SLA conta 24 horas por dia, todos os dias da semana.</li>
-                  <li><strong className="text-slate-300">Sem perfil de workflow:</strong> o ticket não tem SLA calculado.</li>
-                </ul>
+                  );
+                })}
               </div>
             </div>
-          </Card>
+
+            {editingCalendarId && (
+              <p className="text-xs text-slate-500">
+                O cliente do calendário não pode ser alterado pelo endpoint atual. Para mudar o
+                escopo, crie um novo calendário.
+              </p>
+            )}
+
+            <div className="flex flex-wrap gap-3">
+              <Button
+                onClick={() => void handleSaveCalendar()}
+                loading={createCalendar.isPending || updateCalendar.isPending}
+              >
+                <CalendarDays className="h-4 w-4" />
+                {editingCalendarId ? "Salvar calendário" : "Criar calendário"}
+              </Button>
+              {editingCalendarId && (
+                <Button
+                  variant="secondary"
+                  onClick={() => openHolidayModal(editingCalendarId)}
+                >
+                  <CalendarDays className="h-4 w-4" />
+                  Gerenciar feriados
+                </Button>
+              )}
+              {editingCalendarId && (
+                <Button
+                  variant="danger"
+                  onClick={() =>
+                    void handleDeleteCalendar(
+                      editingCalendarId,
+                      calendarForm.name.trim() || "calendário sem nome",
+                    )
+                  }
+                  loading={deleteCalendar.isPending}
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Excluir calendário
+                </Button>
+              )}
+              <Button variant="ghost" onClick={closeCalendarModal}>
+                Cancelar
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      <Modal
+        open={isHolidayModalOpen}
+        onClose={closeHolidayModal}
+        title={
+          holidayCalendarSummary
+            ? `Feriados - ${holidayCalendarSummary.name}`
+            : "Gerenciar feriados"
+        }
+        maxWidth="max-w-3xl"
+      >
+        {holidayCalendarId && holidayDetailQuery.isLoading ? (
+          <Loading />
+        ) : holidayCalendarId && holidayDetailQuery.isError ? (
+          <ErrorDisplay onRetry={() => holidayDetailQuery.refetch()} />
+        ) : !holidayCalendarId || !holidayCalendarDetail ? (
+          <p className="text-sm text-slate-400">Selecione um calendário para gerenciar os feriados.</p>
+        ) : (
+          <div className="space-y-6">
+            <p className="text-sm text-slate-400">
+              Adicione e revise feriados sem poluir a tela principal de configuração.
+            </p>
+
+            <div className="space-y-4 rounded-xl border border-white/10 bg-white/5 p-4">
+              <Select
+                label="Tipo do feriado"
+                options={HOLIDAY_TYPE_OPTIONS}
+                value={holidayType}
+                onChange={(event) => setHolidayType(event.target.value)}
+              />
+
+              {(holidayType === "0" || holidayType === "1") && (
+                <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto]">
+                  <Input
+                    label="Nome do feriado"
+                    value={holidayName}
+                    onChange={(event) => setHolidayName(event.target.value)}
+                    placeholder="Natal"
+                  />
+                  <Input
+                    label={holidayType === "1" ? "Dia/Mês (ignora ano)" : "Data"}
+                    type="date"
+                    value={holidayDate}
+                    onChange={(event) => setHolidayDate(event.target.value)}
+                  />
+                </div>
+              )}
+
+              {holidayType === "2" && (
+                <div className="space-y-4 rounded-xl border border-white/10 bg-slate-950/30 p-4">
+                  <Input
+                    label="Nome do feriado"
+                    value={holidayName}
+                    onChange={(event) => setHolidayName(event.target.value)}
+                    placeholder="Corpus Christi"
+                  />
+                  <Select
+                    label="Método de cálculo"
+                    options={RELATIVE_METHOD_OPTIONS}
+                    value={holidayRelativeMethod}
+                    onChange={(event) => setHolidayRelativeMethod(event.target.value)}
+                  />
+                  <Select
+                    label="Mês"
+                    options={MONTH_OPTIONS}
+                    value={holidayRelativeMonth}
+                    onChange={(event) => setHolidayRelativeMonth(event.target.value)}
+                  />
+                  {holidayRelativeMethod === "0" && (
+                    <Select
+                      label="Dia da semana"
+                      options={DAY_OF_WEEK_OPTIONS}
+                      value={holidayRelativeDayOfWeek}
+                      onChange={(event) => setHolidayRelativeDayOfWeek(event.target.value)}
+                    />
+                  )}
+                  <Select
+                    label={
+                      holidayRelativeMethod === "1"
+                        ? "Ocorrência (dia útil)"
+                        : "Ocorrência"
+                    }
+                    options={OCCURRENCE_OPTIONS}
+                    value={holidayRelativeOccurrence}
+                    onChange={(event) => setHolidayRelativeOccurrence(event.target.value)}
+                  />
+                </div>
+              )}
+
+              <div className="flex justify-end">
+                <Button onClick={() => void handleAddHoliday()} loading={addHoliday.isPending}>
+                  <Plus className="h-4 w-4" />
+                  Adicionar feriado
+                </Button>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              {holidayCalendarDetail.holidays.length === 0 && (
+                <p className="text-sm text-slate-500">Nenhum feriado cadastrado.</p>
+              )}
+
+              {[...holidayCalendarDetail.holidays]
+                .sort(
+                  (left, right) =>
+                    new Date(left.date).getTime() - new Date(right.date).getTime(),
+                )
+                .map((holiday) => (
+                  <div
+                    key={holiday.id}
+                    className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3"
+                  >
+                    <div>
+                      <p className="text-sm font-medium text-white">{holiday.name}</p>
+                      <div className="mt-0.5 flex flex-wrap gap-2 text-xs text-slate-400">
+                        {holiday.holidayType === 2 ? (
+                          <span className="text-accent">Relativo: {getHolidayTypeLabel(holiday)}</span>
+                        ) : holiday.holidayType === 1 ? (
+                          <span className="text-primary">
+                            Anual:{" "}
+                            {new Date(holiday.date).toLocaleDateString("pt-BR", {
+                              day: "numeric",
+                              month: "long",
+                            })}
+                          </span>
+                        ) : (
+                          <span>{new Date(holiday.date).toLocaleDateString("pt-BR")}</span>
+                        )}
+                      </div>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="danger"
+                      onClick={() => void handleDeleteHoliday(holiday.id, holiday.name)}
+                      loading={deleteHoliday.isPending}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      Remover
+                    </Button>
+                  </div>
+                ))}
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      <Modal
+        open={isRuleModalOpen}
+        onClose={closeRuleModal}
+        title={editingRuleId ? "Editar regra de escalonamento" : "Nova regra de escalonamento"}
+        maxWidth="max-w-2xl"
+      >
+        {workflowProfiles.length === 0 ? (
+          <div className="flex items-start gap-3 rounded-xl border border-warning/30 bg-warning/10 p-4 text-sm">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+            <div>
+              <p className="font-medium text-warning">Workflow profiles necessários</p>
+              <p className="mt-1 text-slate-400">
+                Regras de escalonamento são vinculadas a um workflow profile. Nenhum perfil foi
+                encontrado no sistema.
+              </p>
+              <div className="mt-3">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => navigate("/settings/workflow-profiles")}
+                >
+                  <ExternalLink className="h-4 w-4" />
+                  Ir para Workflow Profiles
+                </Button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-6">
+            <div className="grid gap-4">
+              <Select
+                label="Workflow profile"
+                options={workflowProfileOptions}
+                value={ruleForm.workflowProfileId}
+                onChange={(event) =>
+                  setRuleForm((current) => ({
+                    ...current,
+                    workflowProfileId: event.target.value,
+                  }))
+                }
+              />
+              <Input
+                label="Nome da regra"
+                value={ruleForm.name}
+                onChange={(event) =>
+                  setRuleForm((current) => ({
+                    ...current,
+                    name: event.target.value,
+                  }))
+                }
+                placeholder="Escalar próximo do vencimento"
+              />
+              <div className="grid grid-cols-2 gap-3">
+                <Input
+                  label="Trigger em % SLA"
+                  type="number"
+                  min="0"
+                  max="100"
+                  value={ruleForm.triggerAtSlaPercent}
+                  onChange={(event) =>
+                    setRuleForm((current) => ({
+                      ...current,
+                      triggerAtSlaPercent: event.target.value,
+                    }))
+                  }
+                />
+                <Input
+                  label="Horas antes do vencimento"
+                  type="number"
+                  min="0"
+                  value={ruleForm.triggerAtHoursBefore}
+                  onChange={(event) =>
+                    setRuleForm((current) => ({
+                      ...current,
+                      triggerAtHoursBefore: event.target.value,
+                    }))
+                  }
+                />
+              </div>
+              <Select
+                label="Reatribuir para usuário"
+                options={userOptions}
+                value={ruleForm.reassignToUserId}
+                onChange={(event) =>
+                  setRuleForm((current) => ({
+                    ...current,
+                    reassignToUserId: event.target.value,
+                  }))
+                }
+              />
+              <Select
+                label="Reatribuir para departamento"
+                options={departmentOptions}
+                value={ruleForm.reassignToDepartmentId}
+                onChange={(event) =>
+                  setRuleForm((current) => ({
+                    ...current,
+                    reassignToDepartmentId: event.target.value,
+                  }))
+                }
+              />
+            </div>
+
+            <div className="space-y-3">
+              <label className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-300">
+                <input
+                  type="checkbox"
+                  checked={ruleForm.bumpPriority}
+                  onChange={(event) =>
+                    setRuleForm((current) => ({
+                      ...current,
+                      bumpPriority: event.target.checked,
+                    }))
+                  }
+                  className="h-4 w-4 rounded border-white/20 bg-transparent"
+                />
+                <span>Aumentar prioridade do ticket quando a regra disparar</span>
+              </label>
+              <label className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-300">
+                <input
+                  type="checkbox"
+                  checked={ruleForm.notifyAssignee}
+                  onChange={(event) =>
+                    setRuleForm((current) => ({
+                      ...current,
+                      notifyAssignee: event.target.checked,
+                    }))
+                  }
+                  className="h-4 w-4 rounded border-white/20 bg-transparent"
+                />
+                <span>Notificar o responsável atual quando a regra disparar</span>
+              </label>
+              {editingRuleId && (
+                <label className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-300">
+                  <input
+                    type="checkbox"
+                    checked={ruleForm.isActive}
+                    onChange={(event) =>
+                      setRuleForm((current) => ({
+                        ...current,
+                        isActive: event.target.checked,
+                      }))
+                    }
+                    className="h-4 w-4 rounded border-white/20 bg-transparent"
+                  />
+                  <span>Regra ativa</span>
+                </label>
+              )}
+            </div>
+
+            <div className="flex flex-wrap gap-3">
+              <Button
+                onClick={() => void handleSaveRule()}
+                loading={createRule.isPending || updateRule.isPending}
+              >
+                <BellRing className="h-4 w-4" />
+                {editingRuleId ? "Salvar regra" : "Criar regra"}
+              </Button>
+              {editingRuleId && (
+                <Button
+                  variant="danger"
+                  onClick={() =>
+                    void handleDeleteRule(
+                      editingRuleId,
+                      ruleForm.name.trim() || "regra sem nome",
+                    )
+                  }
+                  loading={deleteRule.isPending}
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Excluir regra
+                </Button>
+              )}
+              {(editingRuleId || ruleForm.workflowProfileId) && (
+                <Button variant="ghost" onClick={() => resetRuleForm()}>
+                  <TimerReset className="h-4 w-4" />
+                  Limpar formulário
+                </Button>
+              )}
+              <Button variant="ghost" onClick={closeRuleModal}>
+                Cancelar
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      <Modal
+        open={isHelpModalOpen}
+        onClose={() => setIsHelpModalOpen(false)}
+        title="Guia rápido de SLA"
+        maxWidth="max-w-3xl"
+      >
+        <div className="space-y-3 text-sm text-slate-300">
+          <div className="flex items-start gap-3 rounded-xl border border-white/10 bg-white/5 p-4">
+            <CalendarDays className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+            <div>
+              <p className="font-medium text-white">1. Calendário de SLA</p>
+              <p className="mt-1 text-slate-400">
+                Define fuso horário, dias úteis, horário comercial e feriados. Use calendário
+                global como padrão e específicos por cliente quando necessário.
+              </p>
+              <p className="mt-1 text-slate-500">
+                Com calendário, o SLA conta apenas em horário comercial. Sem calendário, o SLA
+                corre 24x7.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-start gap-3 rounded-xl border border-white/10 bg-white/5 p-4">
+            <Clock3 className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
+            <div>
+              <p className="font-medium text-white">2. Workflow Profile</p>
+              <p className="mt-1 text-slate-400">
+                Perfil de workflow define SLA em horas, prioridade padrão e calendário usado.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-start gap-3 rounded-xl border border-white/10 bg-white/5 p-4">
+            <BellRing className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+            <div>
+              <p className="font-medium text-white">3. Regra de escalonamento</p>
+              <p className="mt-1 text-slate-400">
+                Dispara ao atingir percentual do SLA ou proximidade do vencimento, podendo
+                reatribuir, notificar e aumentar prioridade.
+              </p>
+            </div>
+          </div>
+          <div className="rounded-xl border border-primary/10 bg-primary/5 p-4 text-xs text-slate-400">
+            Dica: sem filtro de workflow profile, o backend retorna apenas regras ativas.
+          </div>
         </div>
-      </div>
+      </Modal>
     </div>
   );
 }
