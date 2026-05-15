@@ -1,6 +1,6 @@
 ﻿import { useState, useRef, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Send, Lock, Unlock, Clock, Activity, ChevronDown, BookOpen, Paperclip, Upload, File, CheckCircle, XCircle, Loader2, UserPlus, UserMinus, Eye, Wrench, Copy } from 'lucide-react';
+import { ArrowLeft, Send, Lock, Unlock, Clock, Activity, ChevronDown, BookOpen, Paperclip, Upload, File, CheckCircle, XCircle, Loader2, UserPlus, UserMinus, Wrench, Copy } from 'lucide-react';
 import { useAuth } from '@/auth/AuthContext';
 import { getUserIdFromJwt } from '@/auth/jwt';
 import { AppApprovalScopeType, AutomationTaskActionType } from '@/api';
@@ -94,15 +94,27 @@ type CommentSeed = {
   content: string;
 };
 
+function resolveUserDisplayName(usersById: Map<string, UserDto>, userId: string | null | undefined) {
+  if (!userId) return '—';
+  const user = usersById.get(userId);
+  if (!user) return userId;
+  return user.fullName || user.email || user.login || user.id;
+}
+
 export default function TicketDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const ticket   = useTicket(id!);
   const comments = useTicketComments(id!);
   const states   = useWorkflowStates();
+  const iamUsers = useIamUsers();
   const [tab, setTab] = useState<Tab>('comments');
   const [editing, setEditing] = useState(false);
   const [commentSeed, setCommentSeed] = useState<CommentSeed | null>(null);
+  const iamUsersById = useMemo(
+    () => new Map<string, UserDto>((iamUsers.data ?? []).map((user) => [user.id, user])),
+    [iamUsers.data],
+  );
 
   if (ticket.isLoading) return <Loading />;
   if (ticket.isError || !ticket.data) return <ErrorDisplay onRetry={() => ticket.refetch()} />;
@@ -110,6 +122,12 @@ export default function TicketDetail() {
   const t = ticket.data;
   const p = PRIORITY_META[t.priority] ?? { label: t.priority, color: 'slate' as const };
   const currentState = states.data?.find(s => s.id === t.workflowStateId);
+  const assignedUser = t.assignedToUserId ? iamUsersById.get(t.assignedToUserId) : undefined;
+  const assignedDisplayName = t.assignedToUserId && iamUsers.isLoading
+    ? 'Carregando usuario...'
+    : resolveUserDisplayName(iamUsersById, t.assignedToUserId);
+  const assignedEmail =
+    assignedUser?.email && assignedUser.email !== assignedDisplayName ? assignedUser.email : null;
   const knowledgeQuery = new URLSearchParams();
   if (t.clientId) knowledgeQuery.set('clientId', t.clientId);
   if (t.siteId) knowledgeQuery.set('siteId', t.siteId);
@@ -237,22 +255,19 @@ export default function TicketDetail() {
 
         {/* Sidebar */}
         <div className="space-y-4">
-          <SlaPanel ticketId={id!} />
-          <WatchersPanel ticketId={id!} assignedToUserId={t.assignedToUserId} />
+          <TicketSummaryPanel
+            ticketId={id!}
+            category={t.category}
+            priorityLabel={p.label}
+            priorityColor={p.color}
+            assignedDisplayName={assignedDisplayName}
+            assignedEmail={assignedEmail}
+            updatedAt={t.updatedAt}
+            closedAt={t.closedAt}
+          />
           <TicketCustomFieldsPanel ticketId={id!} />
-
-          <Card>
-            <CardHeader title="Detalhes" />
-            <dl className="space-y-3 text-sm">
-              <div><dt className="text-slate-400">Categoria</dt><dd className="text-white">{t.category ?? '—'}</dd></div>
-              <div><dt className="text-slate-400">Prioridade</dt><dd><Badge color={p.color}>{p.label}</Badge></dd></div>
-              <div><dt className="text-slate-400">Responsável</dt><dd className="text-white">{t.assignedToUserId ?? '—'}</dd></div>
-              <div><dt className="text-slate-400">Atualizado</dt><dd className="text-white">{new Date(t.updatedAt).toLocaleString('pt-BR')}</dd></div>
-              {t.closedAt && <div><dt className="text-slate-400">Encerrado em</dt><dd className="text-white">{new Date(t.closedAt).toLocaleString('pt-BR')}</dd></div>}
-            </dl>
-          </Card>
-
           <WorkflowPanel ticketId={id!} currentStateId={t.workflowStateId} />
+          <WatchersPanel ticketId={id!} assignedToUserId={t.assignedToUserId} />
         </div>
       </div>
     </div>
@@ -1305,6 +1320,8 @@ function WatchersPanel({
   const addWatcher = useAddTicketWatcher();
   const removeWatcher = useRemoveTicketWatcher();
   const [selectedUserId, setSelectedUserId] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [isAdding, setIsAdding] = useState(false);
 
   const watcherItems = watchers.data ?? [];
   const userItems = users.data ?? [];
@@ -1319,15 +1336,42 @@ function WatchersPanel({
     [watcherItems],
   );
 
-  const availableUsers = userItems.filter((user) => !existingWatcherIds.has(user.id));
+  const availableUsers = useMemo(
+    () => userItems.filter((user) => !existingWatcherIds.has(user.id)),
+    [existingWatcherIds, userItems],
+  );
+
+  const filteredAvailableUsers = useMemo(() => {
+    const term = searchTerm.trim().toLowerCase();
+
+    if (!term) {
+      return availableUsers.slice(0, 30);
+    }
+
+    return availableUsers
+      .filter((user) => {
+        const haystack = `${user.fullName ?? ''} ${user.login ?? ''} ${user.email ?? ''}`.toLowerCase();
+        return haystack.includes(term);
+      })
+      .slice(0, 30);
+  }, [availableUsers, searchTerm]);
 
   const userOptions = [
-    { value: '', label: 'Selecione um usuario' },
-    ...availableUsers.map((user) => ({
+    {
+      value: '',
+      label: filteredAvailableUsers.length === 0 ? 'Nenhum usuario encontrado' : 'Selecione um usuario',
+    },
+    ...filteredAvailableUsers.map((user) => ({
       value: user.id,
       label: user.fullName || user.login || user.email,
     })),
   ];
+
+  const closeAddWatcher = () => {
+    setIsAdding(false);
+    setSelectedUserId('');
+    setSearchTerm('');
+  };
 
   const handleAddWatcher = () => {
     if (!selectedUserId) return;
@@ -1339,7 +1383,7 @@ function WatchersPanel({
       },
       {
         onSuccess: () => {
-          setSelectedUserId('');
+          closeAddWatcher();
           toast.success('Watcher adicionado com sucesso.');
         },
         onError: (error) => {
@@ -1365,7 +1409,24 @@ function WatchersPanel({
 
   return (
     <Card>
-      <CardHeader title="Watchers" subtitle="Usuários que acompanham este ticket e recebem notificações." />
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <div>
+          <h3 className="text-base font-semibold text-white">Watchers</h3>
+          <p className="text-xs text-slate-500">
+            {watcherItems.length === 0 ? 'Sem watchers' : `${watcherItems.length} acompanhando`}
+          </p>
+        </div>
+        <Button
+          size="sm"
+          variant={isAdding ? 'secondary' : 'ghost'}
+          className="px-2"
+          onClick={() => (isAdding ? closeAddWatcher() : setIsAdding(true))}
+          aria-label="Adicionar watcher"
+        >
+          <UserPlus className="h-4 w-4" />
+        </Button>
+      </div>
+
       <div className="space-y-3">
         {watchers.isLoading || users.isLoading ? (
           <Loading />
@@ -1373,11 +1434,8 @@ function WatchersPanel({
           <p className="text-sm text-danger">Erro ao carregar watchers.</p>
         ) : (
           <>
-            <div className="space-y-2">
-              {watcherItems.length === 0 && (
-                <p className="text-sm text-slate-500">Nenhum watcher cadastrado.</p>
-              )}
-
+            {watcherItems.length > 0 && (
+              <div className="space-y-2">
               {watcherItems.map((watcher) => {
                 const user = userMap.get(watcher.userId);
                 const displayName = user?.fullName || user?.login || user?.email || watcher.userId;
@@ -1385,54 +1443,63 @@ function WatchersPanel({
 
                 return (
                   <div key={watcher.id} className="rounded-lg border border-white/5 bg-white/[0.03] px-3 py-2">
-                    <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center justify-between gap-2">
                       <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <Eye className="h-4 w-4 text-slate-400" />
-                          <p className="truncate text-sm font-medium text-white">{displayName}</p>
-                        </div>
+                        <p className="truncate text-sm font-medium text-white">{displayName}</p>
                         <div className="mt-1 flex flex-wrap gap-2">
-                          {user?.email && <Badge color="slate">{user.email}</Badge>}
+                          {user?.email && user.email !== displayName && <Badge color="slate">{user.email}</Badge>}
                           {isAssignedUser && <Badge color="accent">Responsavel</Badge>}
                         </div>
-                        <p className="mt-2 text-[11px] text-slate-500">
-                          Adicionado em {new Date(watcher.addedAt).toLocaleString('pt-BR')}
-                          {watcher.addedBy ? ` por ${watcher.addedBy}` : ''}
-                        </p>
                       </div>
                       <Button
                         size="sm"
                         variant="ghost"
                         onClick={() => handleRemoveWatcher(watcher.userId)}
                         loading={removeWatcher.isPending}
+                        aria-label={`Remover watcher ${displayName}`}
                       >
                         <UserMinus className="h-4 w-4" />
-                        Remover
                       </Button>
                     </div>
                   </div>
                 );
               })}
-            </div>
+              </div>
+            )}
 
-            <div className="space-y-3 border-t border-white/5 pt-3">
-              <Select
-                label="Adicionar watcher"
-                options={userOptions}
-                value={selectedUserId}
-                onChange={(event) => setSelectedUserId(event.target.value)}
-              />
-              <Button
-                size="sm"
-                className="w-full"
-                onClick={handleAddWatcher}
-                loading={addWatcher.isPending}
-                disabled={!selectedUserId}
-              >
-                <UserPlus className="h-4 w-4" />
-                Adicionar watcher
-              </Button>
-            </div>
+            {isAdding && (
+              <div className={`${watcherItems.length > 0 ? 'border-t border-white/5 pt-3' : ''} space-y-3`}>
+                <Input
+                  label="Pesquisar usuario"
+                  value={searchTerm}
+                  onChange={(event) => {
+                    setSearchTerm(event.target.value);
+                    setSelectedUserId('');
+                  }}
+                  placeholder="Nome, login ou e-mail"
+                />
+                <Select
+                  label="Selecionar usuario"
+                  options={userOptions}
+                  value={selectedUserId}
+                  onChange={(event) => setSelectedUserId(event.target.value)}
+                  disabled={filteredAvailableUsers.length === 0}
+                />
+                <div className="flex justify-end gap-2">
+                  <Button size="sm" variant="ghost" onClick={closeAddWatcher}>
+                    Cancelar
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={handleAddWatcher}
+                    loading={addWatcher.isPending}
+                    disabled={!selectedUserId}
+                  >
+                    Adicionar
+                  </Button>
+                </div>
+              </div>
+            )}
           </>
         )}
       </div>
@@ -1462,135 +1529,133 @@ function SlaProgressBar({ pct, barColor }: { pct: number; barColor: string }) {
   );
 }
 
-function SlaPanel({ ticketId }: { ticketId: string }) {
+function TicketSummaryPanel({
+  ticketId,
+  category,
+  priorityLabel,
+  priorityColor,
+  assignedDisplayName,
+  assignedEmail,
+  updatedAt,
+  closedAt,
+}: {
+  ticketId: string;
+  category: string | null;
+  priorityLabel: string;
+  priorityColor: 'slate' | 'success' | 'warning' | 'danger';
+  assignedDisplayName: string;
+  assignedEmail: string | null;
+  updatedAt: string;
+  closedAt: string | null;
+}) {
   const sla = useSlaDetails(ticketId);
   const navigate = useNavigate();
 
-  if (sla.isLoading) return (
-    <Card><div className="flex items-center gap-2 text-slate-400"><Clock className="h-4 w-4 animate-pulse" /><span className="text-sm">Carregando SLA...</span></div></Card>
-  );
-  if (sla.isError || !sla.data) return null;
+  const renderSlaContent = () => {
+    if (sla.isLoading) {
+      return (
+        <div className="flex items-center gap-2 text-slate-400">
+          <Clock className="h-4 w-4 animate-pulse" />
+          <span className="text-sm">Carregando SLA...</span>
+        </div>
+      );
+    }
 
-  const d = sla.data;
-  const pct = Math.min(d.percentUsed ?? 0, 100);
-  const isBreached = Boolean(d.breached);
-  const barColor = isBreached ? 'bg-danger' : pct >= 75 ? 'bg-warning' : 'bg-success';
-  const frt = d.firstResponseSla;
+    if (sla.isError || !sla.data) {
+      return <p className="text-sm text-slate-400">Não foi possível carregar os dados de SLA.</p>;
+    }
 
-  if (d.message && !d.slaExpiresAt) {
-    return (
-      <Card>
-        <CardHeader title="SLA" subtitle="Sem SLA configurado" />
-        <div className="space-y-3">
+    const d = sla.data;
+    const pct = Math.min(d.percentUsed ?? 0, 100);
+    const isBreached = Boolean(d.breached);
+    const barColor = isBreached ? 'bg-danger' : pct >= 75 ? 'bg-warning' : 'bg-success';
+
+    if (d.message && !d.slaExpiresAt) {
+      return (
+        <div className="space-y-2">
           <p className="text-sm text-slate-400">{d.message}</p>
           <p className="text-xs text-slate-500">
-            O SLA é definido pelo perfil de workflow vinculado ao departamento do chamado. Se o departamento não tiver um perfil, nenhum prazo é calculado.
+            O SLA depende do perfil de workflow do departamento. Sem perfil definido, o prazo não é calculado.
           </p>
-          <Button size="sm" variant="secondary" onClick={() => navigate('/tickets/sla')}>
-            <Clock className="h-4 w-4" /> Gerenciar SLA
-          </Button>
         </div>
-      </Card>
-    );
-  }
+      );
+    }
 
-  return (
-    <Card>
-      <CardHeader
-        title="SLA"
-        subtitle={d.status ?? 'Sem status'}
-        action={
-          <Button size="sm" variant="secondary" onClick={() => navigate('/tickets/sla')}>
-            <Clock className="h-4 w-4" /> Operação SLA
-          </Button>
-        }
-      />
+    return (
       <div className="space-y-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge color={isBreached ? 'danger' : d.onHold ? 'accent' : 'success'}>
+            {isBreached ? 'SLA violado' : d.onHold ? 'SLA em pausa' : d.status ?? 'SLA ativo'}
+          </Badge>
+          {d.warningLevel && !isBreached && (
+            <Badge color={d.warningLevel === 'low' ? 'success' : d.warningLevel === 'medium' ? 'warning' : 'danger'}>
+              Nivel {d.warningLevel}
+            </Badge>
+          )}
+        </div>
         {d.slaExpiresAt && (
-          <div className="text-xs text-slate-400">
+          <p className="text-xs text-slate-400">
             Expira em {new Date(d.slaExpiresAt).toLocaleString('pt-BR')}
-          </div>
-        )}
-        {d.effectiveSlaExpiresAt && d.effectiveSlaExpiresAt !== d.slaExpiresAt && (
-          <div className="text-xs text-slate-400">
-            Vencimento efetivo em {new Date(d.effectiveSlaExpiresAt).toLocaleString('pt-BR')}
-          </div>
+          </p>
         )}
         {d.percentUsed != null && (
           <div>
             <div className="mb-1 flex justify-between text-xs text-slate-400">
               <span>{pct.toFixed(0)}% utilizado</span>
-              {d.hoursRemaining != null && (
-                <span>{d.hoursRemaining.toFixed(1)}h restantes</span>
-              )}
+              {typeof d.hoursRemaining === 'number' && <span>{d.hoursRemaining.toFixed(1)}h restantes</span>}
             </div>
             <SlaProgressBar pct={pct} barColor={barColor} />
           </div>
         )}
-        {(d.totalSlaHours != null || d.elapsedHours != null) && (
-          <div className="grid grid-cols-2 gap-2 text-xs text-slate-400">
-            <div className="rounded-lg bg-white/5 px-3 py-2">
-              <p className="text-slate-500">Horas totais</p>
-              <p className="mt-0.5 text-sm font-semibold text-white">
-                {d.totalSlaHours ?? '—'}
-              </p>
-            </div>
-            <div className="rounded-lg bg-white/5 px-3 py-2">
-              <p className="text-slate-500">Horas corridas</p>
-              <p className="mt-0.5 text-sm font-semibold text-white">
-                {d.elapsedHours ?? '—'}
-              </p>
-            </div>
-          </div>
-        )}
-        {d.totalSlaHours != null && d.elapsedHours != null && d.totalSlaHours !== d.elapsedHours && (
-          <p className="text-[11px] text-slate-500">
-            As horas corridas e totais são diferentes porque o SLA está sendo calculado em horas úteis (dias úteis e horário comercial). Fora do expediente e feriados o tempo não consome o SLA.
-          </p>
-        )}
-        <div className="flex flex-wrap gap-2">
-          {isBreached && <Badge color="danger">SLA violado</Badge>}
-          {d.onHold && <Badge color="accent">Em pausa</Badge>}
-          {d.warningLevel && !isBreached && (
-            <Badge color={d.warningLevel === 'low' ? 'success' : d.warningLevel === 'medium' ? 'warning' : 'danger'}>
-              <Clock className="mr-1 h-3 w-3" /> Nivel: {d.warningLevel}
-            </Badge>
-          )}
+      </div>
+    );
+  };
+
+  return (
+    <Card>
+      <CardHeader
+        title="Resumo geral"
+        subtitle="Detalhes do chamado e status de SLA"
+        action={
+          <Button size="sm" variant="secondary" onClick={() => navigate('/tickets/sla')}>
+            <Clock className="h-4 w-4" /> Gerenciar SLA
+          </Button>
+        }
+      />
+      <dl className="grid gap-3 text-sm sm:grid-cols-2">
+        <div>
+          <dt className="text-slate-400">Categoria</dt>
+          <dd className="text-white">{category ?? '—'}</dd>
         </div>
-        {(d.slaHoldStartedAt || d.slaPausedSeconds) && (
-          <div className="space-y-1 text-xs text-slate-400">
-            {d.slaHoldStartedAt && (
-              <p>Em pausa desde {new Date(d.slaHoldStartedAt).toLocaleString('pt-BR')}</p>
-            )}
-            {typeof d.slaPausedSeconds === 'number' && d.slaPausedSeconds > 0 && (
-              <p>Tempo pausado acumulado: {(d.slaPausedSeconds / 3600).toFixed(1)}h</p>
-            )}
+        <div>
+          <dt className="text-slate-400">Prioridade</dt>
+          <dd><Badge color={priorityColor}>{priorityLabel}</Badge></dd>
+        </div>
+        <div className="sm:col-span-2">
+          <dt className="text-slate-400">Responsável</dt>
+          <dd className="text-white">
+            <p className="break-words">{assignedDisplayName}</p>
+            {assignedEmail && <p className="text-xs text-slate-400">{assignedEmail}</p>}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-slate-400">Atualizado</dt>
+          <dd className="text-white">{new Date(updatedAt).toLocaleString('pt-BR')}</dd>
+        </div>
+        {closedAt && (
+          <div>
+            <dt className="text-slate-400">Encerrado em</dt>
+            <dd className="text-white">{new Date(closedAt).toLocaleString('pt-BR')}</dd>
           </div>
         )}
-        {frt && (
-          <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-sm font-medium text-white">Primeira resposta</p>
-              <Badge color={frt.breached ? 'danger' : frt.achieved ? 'success' : 'warning'}>
-                {frt.breached ? 'Violado' : frt.achieved ? 'Concluido' : 'Em andamento'}
-              </Badge>
-            </div>
-            <div className="mt-2 space-y-1 text-xs text-slate-400">
-              {frt.slaFirstResponseExpiresAt && (
-                <p>Vence em {new Date(frt.slaFirstResponseExpiresAt).toLocaleString('pt-BR')}</p>
-              )}
-              {frt.firstRespondedAt && (
-                <p>Respondido em {new Date(frt.firstRespondedAt).toLocaleString('pt-BR')}</p>
-              )}
-              {typeof frt.percentUsed === 'number' && (
-                <p>{frt.percentUsed.toFixed(0)}% consumido</p>
-              )}
-              {typeof frt.hoursRemaining === 'number' && (
-                <p>{frt.hoursRemaining.toFixed(1)}h restantes</p>
-              )}
-            </div>
-          </div>
-        )}
+      </dl>
+
+      <div className="mt-4 border-t border-white/10 pt-4">
+        <div className="mb-2 flex items-center gap-2 text-slate-300">
+          <Clock className="h-4 w-4" />
+          <p className="text-sm font-medium">SLA</p>
+        </div>
+        {renderSlaContent()}
       </div>
     </Card>
   );
