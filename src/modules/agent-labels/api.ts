@@ -52,6 +52,10 @@ export const agentLabelsApi = {
     }));
   },
 
+  async getDistinctLabels(): Promise<string[]> {
+    return api.get<string[]>(`${BASE}/distinct`);
+  },
+
   async addManualLabel(agentId: string, label: string): Promise<AgentLabel> {
     const raw = await api.post<Record<string, unknown>>(`${BASE}/manual`, { agentId, label });
     return {

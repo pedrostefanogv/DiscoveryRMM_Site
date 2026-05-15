@@ -3,6 +3,7 @@
 export enum AgentLabelApplyMode {
   ApplyOnly = 0,
   ApplyAndRemove = 1,
+  Manual = 2,
 }
 
 export enum AgentLabelNodeType {
@@ -359,7 +360,14 @@ export function getAgentLabelFieldLabel(field: AgentLabelField): string {
 }
 
 export function getAgentLabelApplyModeLabel(mode: AgentLabelApplyMode): string {
-  return mode === AgentLabelApplyMode.ApplyAndRemove ? "Aplicar e remover" : "Aplicar apenas";
+  switch (mode) {
+    case AgentLabelApplyMode.ApplyAndRemove:
+      return "Aplicar e remover";
+    case AgentLabelApplyMode.Manual:
+      return "Manual";
+    default:
+      return "Aplicar apenas";
+  }
 }
 
 export function getAgentLabelLogicalOperatorLabel(value: AgentLabelLogicalOperator): string {

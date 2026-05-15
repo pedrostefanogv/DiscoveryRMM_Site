@@ -1,8 +1,8 @@
-﻿import { useEffect, useMemo, useState } from 'react';
+﻿import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Cpu, MemoryStick, Ticket as TicketIcon, Tags,
-  Wifi, WifiOff, AppWindow, Search, Clock, HardDrive, Printer, Bug, AlertTriangle, Trash2, ShieldCheck,
+  Wifi, WifiOff, AppWindow, Search, Clock, HardDrive, Printer, Bug, AlertTriangle, Trash2, ShieldCheck, Plus,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getDeleteAgentErrorMessage, useAgent, useAgentHardware, useAgentSoftware, useAgentSoftwareSnapshot, useApproveZeroTouch, useDeleteAgent } from '@/hooks/useAgents';
@@ -150,8 +150,11 @@ export default function AgentDetail() {
   const [allLabels, setAllLabels] = useState<AgentLabel[]>([]);
   const [isLoadingLabels, setIsLoadingLabels] = useState(true);
   const [labelsError, setLabelsError] = useState<string | null>(null);
-  const [manualLabelInput, setManualLabelInput] = useState('');
   const [isAddingManualLabel, setIsAddingManualLabel] = useState(false);
+  const [distinctLabels, setDistinctLabels] = useState<string[]>([]);
+  const [showLabelPicker, setShowLabelPicker] = useState(false);
+  const [labelPickerQuery, setLabelPickerQuery] = useState('');
+  const labelPickerRef = useRef<HTMLDivElement>(null);
   const [isOpeningRemoteDebug, setIsOpeningRemoteDebug] = useState(false);
   const [isReconcilingNodeLink, setIsReconcilingNodeLink] = useState(false);
   const [isApplyingNodeLink, setIsApplyingNodeLink] = useState(false);
@@ -198,11 +201,15 @@ export default function AgentDetail() {
       setLabelsError(null);
 
       try {
-        const data = await agentLabelsApi.getAgentLabels(id);
+        const [data, distinct] = await Promise.all([
+          agentLabelsApi.getAgentLabels(id),
+          agentLabelsApi.getDistinctLabels(),
+        ]);
         if (isCancelled) return;
 
         const sorted = data.sort((a, b) => a.label.localeCompare(b.label, 'pt-BR'));
         setAllLabels(sorted);
+        setDistinctLabels(distinct);
       } catch {
         if (isCancelled) return;
         setLabelsError('Falha ao carregar labels.');
@@ -220,8 +227,19 @@ export default function AgentDetail() {
     };
   }, [id]);
 
-  async function handleAddManualLabel() {
-    const label = manualLabelInput.trim();
+  // Close label picker on outside click
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (labelPickerRef.current && !labelPickerRef.current.contains(event.target as Node)) {
+        setShowLabelPicker(false);
+        setLabelPickerQuery('');
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  async function handleAddManualLabel(label: string) {
     if (!label || !id) return;
 
     setIsAddingManualLabel(true);
@@ -230,7 +248,6 @@ export default function AgentDetail() {
       setAllLabels(prev =>
         [...prev, created].sort((a, b) => a.label.localeCompare(b.label, 'pt-BR')),
       );
-      setManualLabelInput('');
       toast.success(`Label "${label}" adicionada.`);
     } catch (err) {
       if (err && typeof err === 'object' && 'status' in err) {
@@ -826,25 +843,72 @@ export default function AgentDetail() {
                 <p className="mb-3 text-sm text-slate-400">Nenhuma label aplicada.</p>
               )}
 
-              <div className="mt-3 flex items-center gap-2">
-                <Input
-                  placeholder="Nova label manual..."
-                  value={manualLabelInput}
-                  maxLength={120}
-                  className="flex-1"
-                  onChange={event => setManualLabelInput(event.target.value)}
-                  onKeyDown={event => {
-                    if (event.key === 'Enter') void handleAddManualLabel();
-                  }}
-                />
+              <div className="mt-3 flex items-center gap-2 relative" ref={labelPickerRef}>
                 <Button
                   size="sm"
-                  loading={isAddingManualLabel}
-                  disabled={!manualLabelInput.trim()}
-                  onClick={() => void handleAddManualLabel()}
+                  variant="ghost"
+                  className="shrink-0"
+                  title="Vincular label manual existente"
+                  onClick={() => {
+                    setLabelPickerQuery('');
+                    setShowLabelPicker(prev => !prev);
+                  }}
                 >
-                  Adicionar
+                  <Plus className="h-4 w-4" />
+                  Label
                 </Button>
+
+                {showLabelPicker ? (
+                  <div className="absolute left-0 top-full z-50 mt-1 w-72 rounded-xl border border-white/10 bg-slate-900 p-2 shadow-xl">
+                    <Input
+                      placeholder="Filtrar labels..."
+                      value={labelPickerQuery}
+                      onChange={event => setLabelPickerQuery(event.target.value)}
+                      className="mb-2"
+                      autoFocus
+                    />
+                    <div className="max-h-48 overflow-y-auto space-y-1">
+                      {distinctLabels
+                        .filter(l => l.toLowerCase().includes(labelPickerQuery.toLowerCase()))
+                        .map(l => {
+                          const alreadyHas = allLabels.some(
+                            al => al.label.toLowerCase() === l.toLowerCase(),
+                          );
+                          return (
+                            <button
+                              key={l}
+                              disabled={alreadyHas || isAddingManualLabel}
+                              className={`w-full rounded-lg px-3 py-2 text-left text-sm transition-colors ${
+                                alreadyHas
+                                  ? 'cursor-not-allowed text-slate-600'
+                                  : 'text-slate-200 hover:bg-white/10'
+                              }`}
+                              onClick={() => {
+                                if (alreadyHas || !id) return;
+                                void handleAddManualLabel(l);
+                                setShowLabelPicker(false);
+                                setLabelPickerQuery('');
+                              }}
+                            >
+                              {l}
+                              {alreadyHas ? (
+                                <span className="ml-2 text-xs text-slate-600">(já vinculada)</span>
+                              ) : null}
+                            </button>
+                          );
+                        })}
+                      {distinctLabels.length === 0 ? (
+                        <p className="px-3 py-2 text-xs text-slate-500">
+                          Nenhuma label cadastrada. Crie uma regra com modo Manual em Labels Automáticas.
+                        </p>
+                      ) : null}
+                      {distinctLabels.filter(l => l.toLowerCase().includes(labelPickerQuery.toLowerCase())).length ===
+                      0 ? (
+                        <p className="px-3 py-2 text-xs text-slate-500">Nenhuma label encontrada.</p>
+                      ) : null}
+                    </div>
+                  </div>
+                ) : null}
               </div>
             </>
           )}

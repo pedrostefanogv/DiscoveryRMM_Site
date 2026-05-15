@@ -325,24 +325,29 @@ export default function AgentLabelsSettings() {
   }, [expressionBuilder]);
 
   async function handleSaveRule() {
+    const isManualMode = applyMode === AgentLabelApplyMode.Manual;
     let parsedExpression: AgentLabelRuleExpressionNodeDto;
 
-    try {
-      parsedExpression = JSON.parse(expressionText) as AgentLabelRuleExpressionNodeDto;
-    } catch {
-      toast.error('Expressão inválida: JSON malformado.');
-      return;
-    }
+    if (isManualMode) {
+      parsedExpression = { nodeType: AgentLabelNodeType.Group, logicalOperator: AgentLabelLogicalOperator.And, children: [] };
+    } else {
+      try {
+        parsedExpression = JSON.parse(expressionText) as AgentLabelRuleExpressionNodeDto;
+      } catch {
+        toast.error('Expressão inválida: JSON malformado.');
+        return;
+      }
 
-    const errors = validateRulePayload({
-      name,
-      label,
-      expression: parsedExpression,
-      customFieldDataTypes,
-    });
-    if (errors.length > 0) {
-      toast.error(errors[0]);
-      return;
+      const errors = validateRulePayload({
+        name,
+        label,
+        expression: parsedExpression,
+        customFieldDataTypes,
+      });
+      if (errors.length > 0) {
+        toast.error(errors[0]);
+        return;
+      }
     }
 
     setIsSaving(true);
@@ -711,6 +716,16 @@ export default function AgentLabelsSettings() {
               <Select label="Modo de Aplicação" value={String(applyMode)} options={applyModeOptions} onChange={event => setApplyMode(Number(event.target.value) as AgentLabelApplyMode)} />
             </div>
 
+            {applyMode === AgentLabelApplyMode.Manual ? (
+              <div className="mt-4 rounded-xl border border-amber-500/20 bg-amber-500/5 p-4">
+                <p className="text-sm text-amber-300 font-medium">Modo Manual</p>
+                <p className="mt-1 text-xs text-slate-400">
+                  As labels serão vinculadas manualmente aos agentes pela página do agente. Nenhuma expressão automática será processada.
+                  Após criar a regra, vá até o agente desejado e vincule esta label pelo ícone <strong>+</strong>.
+                </p>
+              </div>
+            ) : (
+              <>
             <div className="mt-4 flex flex-wrap gap-2">
               <Button size="sm" variant={editorMode === 'visual' ? 'primary' : 'secondary'} onClick={() => setEditorMode('visual')}>Editor Visual</Button>
               <Button size="sm" variant={editorMode === 'json' ? 'primary' : 'secondary'} onClick={() => setEditorMode('json')}>Editor JSON</Button>
@@ -749,6 +764,8 @@ export default function AgentLabelsSettings() {
                 <Button size="sm" variant="secondary" onClick={handleApplyJsonToVisual}>Aplicar JSON no Editor Visual</Button>
               </div>
             ) : null}
+            </>
+            )}
 
             <div className="mt-4 flex justify-end gap-2">
               <Button variant="ghost" onClick={() => { resetCreateState(); setViewMode('list'); }}>Cancelar</Button>
@@ -756,6 +773,7 @@ export default function AgentLabelsSettings() {
             </div>
           </Card>
 
+          {applyMode === AgentLabelApplyMode.Manual ? null : (
           <Card>
             <CardHeader title="Prévia de Aplicação" subtitle="Simule em lote por site ou em um agente específico antes de salvar" />
 
@@ -827,6 +845,8 @@ export default function AgentLabelsSettings() {
               <p className="mt-4 text-sm text-slate-500">Execute a prévia para ver em quais agentes a regra teria efeito.</p>
             )}
           </Card>
+          )}
+
         </>
       ) : null}
 
@@ -946,6 +966,16 @@ export default function AgentLabelsSettings() {
               <Select label="Modo de Aplicação" value={String(applyMode)} options={applyModeOptions} disabled={isReadOnly} onChange={event => setApplyMode(Number(event.target.value) as AgentLabelApplyMode)} />
             </div>
 
+            {applyMode === AgentLabelApplyMode.Manual ? (
+              <div className="mt-4 rounded-xl border border-amber-500/20 bg-amber-500/5 p-4">
+                <p className="text-sm text-amber-300 font-medium">Modo Manual</p>
+                <p className="mt-1 text-xs text-slate-400">
+                  Labels manuais não usam expressão — são vinculadas individualmente pela página do agente.
+                  {!isReadOnly ? ' Altere para "Aplicar apenas" ou "Aplicar e remover" para editar a expressão.' : ''}
+                </p>
+              </div>
+            ) : (
+              <>
             <div className="mt-4 flex flex-wrap gap-2">
               <Button size="sm" variant={editorMode === 'visual' ? 'primary' : 'secondary'} disabled={isReadOnly} onClick={() => setEditorMode('visual')}>Editor Visual</Button>
               <Button size="sm" variant={editorMode === 'json' ? 'primary' : 'secondary'} disabled={isReadOnly} onClick={() => setEditorMode('json')}>Editor JSON</Button>
@@ -978,6 +1008,8 @@ export default function AgentLabelsSettings() {
                 <TextArea label="Expressão (JSON)" rows={14} value={expressionText} disabled={isReadOnly} onChange={event => setExpressionText(event.target.value)} className="font-mono" />
               </div>
             ) : null}
+            </>
+            )}
 
             <div className="mt-4 flex justify-between gap-2">
               <div className="flex gap-2">
@@ -1001,6 +1033,7 @@ export default function AgentLabelsSettings() {
             </div>
           </Card>
 
+          {applyMode === AgentLabelApplyMode.Manual ? null : (
           <Card>
             <CardHeader title="Dry-Run" subtitle="Simule a regra em lote por site ou em um agente específico" />
 
@@ -1072,6 +1105,7 @@ export default function AgentLabelsSettings() {
               <p className="mt-4 text-sm text-slate-500">Execute o dry-run para ver em quais agentes a regra teria efeito.</p>
             )}
           </Card>
+          )}
         </>
       ) : null}
 
