@@ -60,6 +60,7 @@ export * from "./useTicketAi";
 export * from "./useKnowledge";
 export * from "./useAutomation";
 export * from "./useCustomFields";
+export * from "./useDepartmentCustomFields";
 export * from "./useAuthSecurity";
 export * from "./useIdentity";
 export * from "./useNowTick";

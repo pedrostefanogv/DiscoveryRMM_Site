@@ -6,6 +6,7 @@ export enum CustomFieldScopeType {
   Site = 2,
   Agent = 3,
   Ticket = 4,
+  Department = 5,
 }
 
 export enum CustomFieldDataType {
@@ -39,6 +40,83 @@ export interface CreateCustomFieldDefinitionRequest {
   scopeType: CustomFieldScopeType;
   dataType: CustomFieldDataType;
   options?: string[];
+}
+
+// ── Department-scoped custom field types ──────────────
+
+export interface DepartmentCustomFieldDefinition {
+  id: string;
+  name: string;
+  label: string;
+  description: string | null;
+  scopeType: CustomFieldScopeType;
+  dataType: CustomFieldDataType;
+  isRequired: boolean;
+  isActive: boolean;
+  isSecret: boolean;
+  isInternal: boolean;
+  departmentId: string;
+  optionsJson: string | null;
+  validationRegex: string | null;
+  minLength: number | null;
+  maxLength: number | null;
+  minValue: number | null;
+  maxValue: number | null;
+  allowRuntimeRead: boolean;
+  allowAgentWrite: boolean;
+  runtimeAccessMode: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateDepartmentCustomFieldRequest {
+  name: string;
+  label: string;
+  description?: string | null;
+  dataType: CustomFieldDataType;
+  isRequired?: boolean;
+  isInternal?: boolean;
+  isActive?: boolean;
+  options?: string[];
+  validationRegex?: string | null;
+  minLength?: number | null;
+  maxLength?: number | null;
+  minValue?: number | null;
+  maxValue?: number | null;
+}
+
+export interface UpdateDepartmentCustomFieldRequest {
+  name: string;
+  label: string;
+  description?: string | null;
+  dataType: CustomFieldDataType;
+  isRequired?: boolean;
+  isInternal?: boolean;
+  isActive?: boolean;
+  options?: string[];
+  validationRegex?: string | null;
+  minLength?: number | null;
+  maxLength?: number | null;
+  minValue?: number | null;
+  maxValue?: number | null;
+}
+
+export interface TicketSchemaField {
+  definitionId: string;
+  name: string;
+  label: string;
+  description: string | null;
+  dataType: CustomFieldDataType;
+  isRequired: boolean;
+  isInternal: boolean;
+  isActive: boolean;
+  options: string[];
+  validationRegex: string | null;
+  minLength: number | null;
+  maxLength: number | null;
+  minValue: number | null;
+  maxValue: number | null;
+  currentValueJson: string | null;
 }
 
 export interface UpdateCustomFieldDefinitionRequest {
@@ -240,6 +318,7 @@ export function normalizeCustomFieldScopeType(value: unknown): CustomFieldScopeT
     if (value === "Site") return CustomFieldScopeType.Site;
     if (value === "Agent") return CustomFieldScopeType.Agent;
     if (value === "Ticket") return CustomFieldScopeType.Ticket;
+    if (value === "Department") return CustomFieldScopeType.Department;
   }
   return CustomFieldScopeType.Agent;
 }
@@ -287,6 +366,8 @@ export function getCustomFieldScopeLabel(value: CustomFieldScopeType): string {
       return "Agente";
     case CustomFieldScopeType.Ticket:
       return "Chamado";
+    case CustomFieldScopeType.Department:
+      return "Departamento";
     default:
       return String(value);
   }

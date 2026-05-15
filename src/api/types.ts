@@ -1421,6 +1421,7 @@ export interface CreateTicketRequest {
   priority: TicketPriority;
   category: string | null;
   assignedToUserId: string | null;
+  customFieldValues?: Record<string, unknown>;
 }
 
 export interface UpdateTicketRequest {

@@ -21,13 +21,14 @@ import { useWorkflowStates } from '@/hooks/useWorkflow';
 import { useDepartments } from '@/hooks/useDepartments';
 import { useWorkflowProfilesByDepartment } from '@/hooks/useWorkflowProfiles';
 import { useTicketKpi } from '@/hooks/useTicketKpi';
+import { useDepartmentTicketSchema } from '@/hooks/useDepartmentCustomFields';
 import {
   useCreateTicketSavedView,
   useDeleteTicketSavedView,
   useTicketSavedViews,
   useUpdateTicketSavedView,
 } from '@/hooks/useTicketSavedViews';
-import { Button, Card, DataTable, Badge, Loading, Modal, Input, Select } from '@/components/ui';
+import { Button, Card, DataTable, Badge, Loading, Modal, Input, Select, TextArea } from '@/components/ui';
 import type {
   CreateTicketRequest,
   Ticket,
@@ -35,6 +36,8 @@ import type {
   TicketSavedView,
   TicketSavedViewFilter,
 } from '@/api';
+import { CustomFieldDataType, parseCustomFieldValue } from '@/api';
+import type { TicketSchemaField } from '@/api';
 import type { Column } from '@/components/ui';
 import toast from 'react-hot-toast';
 
@@ -765,6 +768,15 @@ function CreateTicketModal({ open, onClose }: { open: boolean; onClose: () => vo
   const departments = useDepartments({ clientId: selectedClient || undefined, includeGlobal: true });
   const profiles = useWorkflowProfilesByDepartment(selectedDept);
 
+  // Ticket schema (dynamic fields) for the selected department
+  const schemaQuery = useDepartmentTicketSchema(selectedDept || null, !!selectedDept);
+  const schemaFields = useMemo(() => {
+    if (!schemaQuery.data) return [];
+    return schemaQuery.data.filter((f) => f.isActive).sort((a, b) => a.label.localeCompare(b.label, 'pt-BR'));
+  }, [schemaQuery.data]);
+
+  const [customFieldDrafts, setCustomFieldDrafts] = useState<Record<string, string>>({});
+
   const [form, setForm] = useState<CreateTicketRequest>({
     clientId: '',
     siteId: null,
@@ -781,10 +793,13 @@ function CreateTicketModal({ open, onClose }: { open: boolean; onClose: () => vo
   const set = <K extends keyof CreateTicketRequest>(key: K, value: CreateTicketRequest[K]) =>
     setForm((current) => ({ ...current, [key]: value }));
 
+  const clearCustomFields = () => setCustomFieldDrafts({});
+
   const handleClientChange = (id: string) => {
     setSelectedClient(id);
     setSelectedSite('');
     setSelectedDept('');
+    clearCustomFields();
     setForm((current) => ({
       ...current,
       clientId: id,
@@ -802,6 +817,7 @@ function CreateTicketModal({ open, onClose }: { open: boolean; onClose: () => vo
 
   const handleDeptChange = (id: string) => {
     setSelectedDept(id);
+    clearCustomFields();
     setForm((current) => ({ ...current, departmentId: id || null, workflowProfileId: null }));
   };
 
@@ -824,6 +840,7 @@ function CreateTicketModal({ open, onClose }: { open: boolean; onClose: () => vo
     setSelectedClient('');
     setSelectedSite('');
     setSelectedDept('');
+    clearCustomFields();
     setForm({
       clientId: '',
       siteId: null,
@@ -841,7 +858,19 @@ function CreateTicketModal({ open, onClose }: { open: boolean; onClose: () => vo
   const handleSubmit = () => {
     if (!valid) return;
 
-    create.mutate(form, {
+    // Build customFieldValues from schema drafts
+    const customFieldValues: Record<string, unknown> = {};
+    for (const field of schemaFields) {
+      const draftValue = customFieldDrafts[field.definitionId] ?? '';
+      customFieldValues[field.definitionId] = parseCustomFieldValue(field.dataType, draftValue);
+    }
+
+    const payload: CreateTicketRequest = {
+      ...form,
+      ...(Object.keys(customFieldValues).length > 0 ? { customFieldValues } : {}),
+    };
+
+    create.mutate(payload, {
       onSuccess: () => {
         toast.success('Chamado criado');
         resetAndClose();
@@ -873,6 +902,28 @@ function CreateTicketModal({ open, onClose }: { open: boolean; onClose: () => vo
             onChange={(event) => set('description', event.target.value)}
           />
         </div>
+
+        {/* Dynamic custom fields from department schema */}
+        {schemaFields.length > 0 && (
+          <div className="rounded-lg border border-white/10 bg-white/5 p-4">
+            <p className="text-xs font-medium text-slate-400 mb-3">
+              Campos do Departamento
+            </p>
+            <div className="space-y-3">
+              {schemaFields.map((field) => (
+                <TicketSchemaFieldInput
+                  key={field.definitionId}
+                  field={field}
+                  value={customFieldDrafts[field.definitionId] ?? ''}
+                  onChange={(value) =>
+                    setCustomFieldDrafts((prev) => ({ ...prev, [field.definitionId]: value }))
+                  }
+                />
+              ))}
+            </div>
+          </div>
+        )}
+
         <div className="grid grid-cols-2 gap-4">
           <Select label="Prioridade" options={priorityOpts} value={form.priority} onChange={(event) => set('priority', event.target.value as TicketPriority)} />
           <Input label="Categoria" value={form.category ?? ''} onChange={(event) => set('category', event.target.value || null)} placeholder="Opcional, ate 100 chars" />
@@ -884,4 +935,66 @@ function CreateTicketModal({ open, onClose }: { open: boolean; onClose: () => vo
       </div>
     </Modal>
   );
+}
+
+/** Renders a single dynamic schema field in the ticket creation form */
+function TicketSchemaFieldInput({
+  field,
+  value,
+  onChange,
+}: {
+  field: TicketSchemaField;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const label = `${field.label}${field.isRequired ? ' *' : ''}`;
+  const hint = field.validationRegex ? `Formato: ${field.validationRegex}` : undefined;
+
+  switch (field.dataType) {
+    case CustomFieldDataType.Boolean:
+      return (
+        <Select
+          label={label}
+          value={value}
+          options={[
+            { value: '', label: 'Selecione...' },
+            { value: 'true', label: 'Sim' },
+            { value: 'false', label: 'Não' },
+          ]}
+          onChange={(e) => onChange(e.target.value)}
+        />
+      );
+    case CustomFieldDataType.Dropdown:
+      return (
+        <Select
+          label={label}
+          value={value}
+          options={[
+            { value: '', label: 'Selecione...' },
+            ...field.options.map((opt) => ({ value: opt, label: opt })),
+          ]}
+          onChange={(e) => onChange(e.target.value)}
+        />
+      );
+    case CustomFieldDataType.ListBox:
+      return (
+        <TextArea
+          label={label}
+          rows={2}
+          value={value}
+          hint={field.options.length > 0 ? `Opções: ${field.options.join(', ')}` : 'Valores separados por vírgula'}
+          onChange={(e) => onChange(e.target.value)}
+        />
+      );
+    case CustomFieldDataType.Integer:
+      return <Input label={label} type="number" step="1" value={value} onChange={(e) => onChange(e.target.value)} hint={hint} />;
+    case CustomFieldDataType.Decimal:
+      return <Input label={label} type="number" step="any" value={value} onChange={(e) => onChange(e.target.value)} hint={hint} />;
+    case CustomFieldDataType.Date:
+      return <Input label={label} type="date" value={value} onChange={(e) => onChange(e.target.value)} />;
+    case CustomFieldDataType.DateTime:
+      return <Input label={label} type="datetime-local" value={value} onChange={(e) => onChange(e.target.value)} />;
+    default:
+      return <Input label={label} value={value} onChange={(e) => onChange(e.target.value)} hint={hint} placeholder={field.description ?? undefined} />;
+  }
 }

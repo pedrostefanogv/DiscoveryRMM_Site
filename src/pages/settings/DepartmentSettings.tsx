@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, Trash2, Pencil, Globe } from 'lucide-react';
+import { Plus, Trash2, Pencil, Globe, Settings, ListTodo } from 'lucide-react';
 import {
   useDepartments,
   useCreateDepartment,
@@ -8,6 +8,7 @@ import {
 } from '@/hooks/useDepartments';
 import { useClients } from '@/hooks/useClients';
 import { Card, CardHeader, Button, Modal, Input, Select, Badge, Loading, ErrorDisplay } from '@/components/ui';
+import { DepartmentCustomFieldsSection } from '@/components/configuration/DepartmentCustomFieldsSection';
 import type { Department, CreateDepartmentRequest, UpdateDepartmentRequest } from '@/api';
 import toast from 'react-hot-toast';
 
@@ -148,6 +149,7 @@ function CreateDepartmentModal({ open, onClose }: { open: boolean; onClose: () =
 
 function EditDepartmentModal({ dept, onClose }: { dept: Department; onClose: () => void }) {
   const update = useUpdateDepartment();
+  const [tab, setTab] = useState<'general' | 'fields'>('general');
   const [form, setForm] = useState<UpdateDepartmentRequest>({
     name: dept.name,
     description: dept.description,
@@ -161,26 +163,54 @@ function EditDepartmentModal({ dept, onClose }: { dept: Department; onClose: () 
   const handleSubmit = () => {
     if (!valid) return;
     update.mutate({ id: dept.id, data: form }, {
-      onSuccess: () => { toast.success('Departamento atualizado'); onClose(); },
+      onSuccess: () => { toast.success('Departamento atualizado'); },
       onError:   () => toast.error('Erro ao atualizar'),
     });
   };
 
   return (
-    <Modal open={true} onClose={onClose} title={`Editar: ${dept.name}`}>
-      <div className="space-y-4">
-        <Input label="Nome *" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
-        <Input label="Descrição" value={form.description ?? ''} onChange={e => setForm(f => ({ ...f, description: e.target.value || null }))} />
-        <Input label="Ordem" type="number" value={form.sortOrder} onChange={e => setForm(f => ({ ...f, sortOrder: Math.max(0, Number(e.target.value)) }))} />
-        <label className="flex items-center gap-2 text-sm text-slate-300">
-          <input type="checkbox" checked={form.isActive} onChange={e => setForm(f => ({ ...f, isActive: e.target.checked }))} className="rounded bg-white/5 border-white/10" />
-          Ativo
-        </label>
-        <div className="flex justify-end gap-3 pt-2">
-          <Button variant="ghost" onClick={onClose}>Cancelar</Button>
-          <Button onClick={handleSubmit} loading={update.isPending} disabled={!valid}>Salvar</Button>
-        </div>
+    <Modal open={true} onClose={onClose} title={`Editar: ${dept.name}`} maxWidth="max-w-2xl">
+      {/* Tabs */}
+      <div className="flex border-b border-white/5 mb-4">
+        <button
+          className={`px-4 py-2.5 text-sm font-medium transition-colors ${
+            tab === 'general' ? 'border-b-2 border-primary text-white' : 'text-slate-400 hover:text-white'
+          }`}
+          onClick={() => setTab('general')}
+        >
+          <Settings className="inline h-4 w-4 mr-1.5" />
+          Geral
+        </button>
+        <button
+          className={`px-4 py-2.5 text-sm font-medium transition-colors ${
+            tab === 'fields' ? 'border-b-2 border-primary text-white' : 'text-slate-400 hover:text-white'
+          }`}
+          onClick={() => setTab('fields')}
+        >
+          <ListTodo className="inline h-4 w-4 mr-1.5" />
+          Campos Customizados
+        </button>
       </div>
+
+      {tab === 'general' ? (
+        <div className="space-y-4">
+          <Input label="Nome *" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
+          <Input label="Descrição" value={form.description ?? ''} onChange={e => setForm(f => ({ ...f, description: e.target.value || null }))} />
+          <Input label="Ordem" type="number" value={form.sortOrder} onChange={e => setForm(f => ({ ...f, sortOrder: Math.max(0, Number(e.target.value)) }))} />
+          <label className="flex items-center gap-2 text-sm text-slate-300">
+            <input type="checkbox" checked={form.isActive} onChange={e => setForm(f => ({ ...f, isActive: e.target.checked }))} className="rounded bg-white/5 border-white/10" />
+            Ativo
+          </label>
+          <div className="flex justify-end gap-3 pt-2">
+            <Button variant="ghost" onClick={onClose}>Cancelar</Button>
+            <Button onClick={handleSubmit} loading={update.isPending} disabled={!valid}>Salvar</Button>
+          </div>
+        </div>
+      ) : (
+        <div className="pb-2">
+          <DepartmentCustomFieldsSection departmentId={dept.id} />
+        </div>
+      )}
     </Modal>
   );
 }

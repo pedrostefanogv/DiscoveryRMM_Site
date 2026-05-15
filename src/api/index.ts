@@ -81,6 +81,10 @@ export type {
   UpdateCustomFieldDefinitionRequest,
   CustomFieldValueItem,
   UpsertCustomFieldValueRequest,
+  DepartmentCustomFieldDefinition,
+  CreateDepartmentCustomFieldRequest,
+  UpdateDepartmentCustomFieldRequest,
+  TicketSchemaField,
 } from "./custom-fields";
 export {
   CustomFieldScopeType,
@@ -90,6 +94,7 @@ export {
   formatCustomFieldValue,
   parseCustomFieldValue,
 } from "./custom-fields";
+export { departmentCustomFieldsApi } from "./department-custom-fields";
 export type {
   LoginRequest,
   LoginResponse,
