@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Plus, Monitor, Trash2, AppWindow, Building2, Ticket as TicketIcon, Copy, KeyRound, BookOpen, CheckCircle2, XCircle, AlertTriangle, Activity } from 'lucide-react';
 import { useClient, useDeleteClient } from '@/hooks/useClients';
@@ -606,7 +606,7 @@ export default function ClientDetail() {
                   {generatedDeployToken.multiUse ? 'Multiuso' : 'Uso único'}
                 </Badge>
                 <Badge color="slate">
-                  Expira: {generatedDeployToken.expiresAt ? new Date(generatedDeployToken.expiresAt).toLocaleString('pt-BR') : 'Sem expiracao'}
+                  Expira: {generatedDeployToken.expiresAt ? new Date(generatedDeployToken.expiresAt).toLocaleString('pt-BR') : 'Sem expiração'}
                 </Badge>
               </div>
               <div className="flex justify-end">

@@ -1,4 +1,4 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import { KeyRound, LaptopMinimal, ShieldPlus, ShieldEllipsis } from "lucide-react";
@@ -69,7 +69,7 @@ export default function MfaRegistrationPage() {
 
         const sanitizedCode = verificationCode.replace(/\D/g, "");
         if (sanitizedCode.length < 6) {
-          const message = "Informe o codigo de verificacao TOTP com 6 digitos.";
+          const message = "Informe o código de verificação TOTP com 6 dígitos.";
           setError(message);
           toast.error(message);
           return;
@@ -83,7 +83,7 @@ export default function MfaRegistrationPage() {
         });
 
         if (result.backupCodes.length) {
-          toast.success("OTP registrado. Guarde os codigos de backup em local seguro.");
+          toast.success("OTP registrado. Guarde os códigos de backup em local seguro.");
         } else {
           toast.success(result.message);
         }
@@ -113,7 +113,7 @@ export default function MfaRegistrationPage() {
 
       if (session.temporaryMfaToken) {
         clearTemporarySession();
-        toast.success("MFA registrado. Faca login novamente para concluir a autenticacao.");
+        toast.success("MFA registrado. Faça login novamente para concluir a autenticação.");
         navigate("/auth/login", { replace: true });
         return;
       }
@@ -131,7 +131,7 @@ export default function MfaRegistrationPage() {
       }
 
       if (caught instanceof ApiError && caught.status === 403) {
-        const message = "Seu perfil exige outro metodo de MFA. Faca login novamente e siga o fluxo correspondente.";
+        const message = "Seu perfil exige outro metodo de MFA. Faça login novamente e siga o fluxo correspondente.";
         setError(message);
         toast.error(message);
         return;
@@ -182,7 +182,7 @@ export default function MfaRegistrationPage() {
               <p className="mt-3 text-xs text-slate-400">{totpSetupData.message}</p>
             </div>
             <Input
-              label="Codigo de verificacao"
+              label="Código de verificação"
               inputMode="numeric"
               autoComplete="one-time-code"
               maxLength={8}
@@ -204,7 +204,7 @@ export default function MfaRegistrationPage() {
               <LaptopMinimal className="mt-0.5 h-4 w-4 text-primary" />
             )}
             {isTotpFlow
-              ? "Escaneie o QR code (ou use o URI), gere o codigo e confirme para finalizar o cadastro OTP."
+              ? "Escaneie o QR code (ou use o URI), gere o código e confirme para finalizar o cadastro OTP."
               : "Use um nome amigavel para distinguir passkeys, chaves fisicas e autenticadores de plataforma."}
           </div>
           <div className="mt-3 flex items-start gap-3">

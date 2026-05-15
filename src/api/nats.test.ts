@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+﻿import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
   apiPostMock,
@@ -58,7 +58,7 @@ describe("NatsService auth mode", () => {
     credsAuthenticatorMock.mockReset().mockReturnValue(vi.fn());
   });
 
-  it("connect em auth_token nao chama endpoint de credenciais", async () => {
+  it("connect em auth_token não chama endpoint de credenciais", async () => {
     wsconnectMock.mockResolvedValue(createConnectionMock());
 
     const natsService = getNatsService({
@@ -76,7 +76,7 @@ describe("NatsService auth mode", () => {
     expect(credsAuthenticatorMock).not.toHaveBeenCalled();
   });
 
-  it("connect em auth_error nao agenda reconexao infinita", async () => {
+  it("connect em auth_error não agenda reconexao infinita", async () => {
     const authorizationError = new Error("Authorization Violation");
     authorizationError.name = "AuthorizationError";
     wsconnectMock.mockRejectedValue(authorizationError);
@@ -96,7 +96,7 @@ describe("NatsService auth mode", () => {
     expect(setTimeoutSpy).not.toHaveBeenCalled();
   });
 
-  it("subscribe com connectIfNeeded false nao dispara connect extra", async () => {
+  it("subscribe com connectIfNeeded false não dispara connect extra", async () => {
     const natsService = getNatsService({
       url: "ws://localhost:9222",
       enabled: true,

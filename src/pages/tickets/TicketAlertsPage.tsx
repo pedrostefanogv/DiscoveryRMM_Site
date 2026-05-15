@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+﻿import { useMemo, useState } from 'react';
 import { AlertTriangle, Bell, Pencil, Plus, Power, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import {
@@ -57,7 +57,7 @@ const DEFAULT_FORM: RuleFormState = {
 
 const ALERT_TYPE_OPTIONS = [
   { value: String(PsadtAlertType.Toast), label: 'Toast (fecha sozinho)' },
-  { value: String(PsadtAlertType.Modal), label: 'Modal (exige interacao)' },
+  { value: String(PsadtAlertType.Modal), label: 'Modal (exige interação)' },
 ];
 
 const TIMEOUT_OPTIONS = [
@@ -207,7 +207,7 @@ export default function TicketAlertsPage() {
     }
 
     if (!form.title.trim()) {
-      toast.error('Informe um titulo para a regra.');
+      toast.error('Informe um título para a regra.');
       return;
     }
 
@@ -412,7 +412,7 @@ export default function TicketAlertsPage() {
 
             <div className="mt-4 grid gap-4 md:grid-cols-2">
               <Input
-                label="Titulo"
+                label="Título"
                 value={form.title}
                 onChange={(event) =>
                   setForm((current) => ({
@@ -447,7 +447,7 @@ export default function TicketAlertsPage() {
                   }))
                 }
                 rows={5}
-                placeholder="Seu ticket mudou de estado e requer atencao do usuario."
+                placeholder="Seu ticket mudou de estado e requer atenção do usuario."
               />
 
               <TextArea
@@ -468,11 +468,11 @@ export default function TicketAlertsPage() {
             <div className="mt-6 flex flex-wrap gap-3">
               <Button onClick={handleSubmit} loading={isSaving}>
                 <Bell className="h-4 w-4" />
-                {editingRuleId ? 'Salvar alteracoes' : 'Criar regra'}
+                {editingRuleId ? 'Salvar alterações' : 'Criar regra'}
               </Button>
               {editingRuleId && (
                 <Button variant="ghost" onClick={handleResetForm}>
-                  Cancelar edicao
+                  Cancelar edição
                 </Button>
               )}
             </div>
@@ -480,7 +480,7 @@ export default function TicketAlertsPage() {
 
           <Card>
             <CardHeader
-              title="Observacoes"
+              title="Observações"
               subtitle="Comportamento do backend para estas regras."
             />
 
@@ -500,7 +500,7 @@ export default function TicketAlertsPage() {
               <div className="flex items-start gap-3 rounded-xl border border-white/10 bg-white/5 p-4">
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
                 <p>
-                  O escopo preferencial usa o contexto do ticket e faz fallback conforme os dados disponiveis no servidor.
+                  O escopo preferencial usa o contexto do ticket e faz fallback conforme os dados disponíveis no servidor.
                 </p>
               </div>
             </div>

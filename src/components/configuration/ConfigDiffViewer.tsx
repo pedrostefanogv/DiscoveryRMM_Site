@@ -1,4 +1,4 @@
-import type { ConfigurationValue } from "@/api";
+﻿import type { ConfigurationValue } from "@/api";
 import { EffectiveValueBadge } from "./EffectiveValueBadge";
 import type { ConfigurationOrigin } from "@/api";
 
@@ -24,7 +24,7 @@ function formatValue(value: ConfigurationValue | null | undefined): string {
   try {
     return JSON.stringify(value, null, 2);
   } catch {
-    return "[valor nao serializavel]";
+    return "[valor não serializável]";
   }
 }
 

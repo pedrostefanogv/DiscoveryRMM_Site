@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
 import {
   Badge,
@@ -415,7 +415,7 @@ export default function AutomationTasksPage() {
   const handleConfirmRestore = () => {
     if (!restoreTask) return;
     if (restoreConfirmationText.trim().toLowerCase() !== "yes") {
-      toast.error('Digite "yes" para confirmar a reativacao');
+      toast.error('Digite "yes" para confirmar a reativação');
       return;
     }
 
@@ -514,7 +514,7 @@ export default function AutomationTasksPage() {
       },
       {
         key: "actions",
-        header: "Acoes",
+        header: "Ações",
         render: (item) => {
           const deleted = isTaskDeleted(item);
           return (
@@ -714,7 +714,7 @@ export default function AutomationTasksPage() {
   const handleSubmit = () => {
     const name = form.name.trim();
     if (!name) return toast.error("Nome obrigatorio");
-    if (name.length > 200) return toast.error("Nome deve ter no maximo 200 caracteres");
+    if (name.length > 200) return toast.error("Nome deve ter no máximo 200 caracteres");
 
     const triggerCount = [
       form.triggerImmediate,
@@ -843,7 +843,7 @@ export default function AutomationTasksPage() {
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-white">Tarefas de Automacao</h1>
+          <h1 className="text-2xl font-bold text-white">Tarefas de Automação</h1>
           <p className="text-sm text-slate-400">Regras operacionais por escopo.</p>
         </div>
         <Button
@@ -1062,7 +1062,7 @@ export default function AutomationTasksPage() {
                 }}
               />
               <Select
-                label="Tipo de acao"
+                label="Tipo de ação"
                 options={actionFilterOptions}
                 value={filterActionType}
                 onChange={(e) => {
@@ -1947,7 +1947,7 @@ export default function AutomationTasksPage() {
       <Modal
         open={!!restoreTask}
         onClose={closeRestoreModal}
-        title="Confirmar reativacao"
+        title="Confirmar reativação"
         maxWidth="max-w-lg"
       >
         <div className="space-y-4">

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Badge, Button, Card, CardHeader, ErrorDisplay, Input, Loading, Select, TextArea } from '@/components/ui';
+import { Layers, Clock, HardDrive, Monitor, Filter, Tags, CheckCircle2, XCircle } from 'lucide-react';
+import { Badge, Button, Card, CardHeader, ErrorDisplay, Input, Loading, Modal, Select, TextArea } from '@/components/ui';
 import { agentsApi, clientsApi, sitesApi, type Agent, type Client, type Site } from '@/api';
 import { agentLabelsApi } from '@/modules/agent-labels/api';
 import {
@@ -69,7 +70,7 @@ const fieldOptions = Object.values(AgentLabelField)
 const diskFieldOptions = Object.values(AgentLabelField)
   .filter((value): value is AgentLabelField => typeof value === 'number')
   .filter(field => isDiskAgentLabelField(field))
-  .map(field => ({ value: String(field), label: `💿 ${getAgentLabelFieldLabel(field)}` }));
+  .map(field => ({ value: String(field), label: getAgentLabelFieldLabel(field) }));
 
 const logicalOperatorOptions = Object.values(AgentLabelLogicalOperator)
   .filter((value): value is AgentLabelLogicalOperator => typeof value === 'number')
@@ -91,6 +92,40 @@ const GROUP_ACCENTS = [
 ];
 
 type DryRunMode = 'site-batch' | 'single-agent';
+
+function countExpressionNodes(node: AgentLabelRuleExpressionNodeDto | null | undefined): { conditions: number; groups: number; disks: number } {
+  if (!node) return { conditions: 0, groups: 0, disks: 0 };
+  const result = { conditions: 0, groups: 0, disks: 0 };
+  function walk(n: AgentLabelRuleExpressionNodeDto) {
+    if (n.nodeType === AgentLabelNodeType.Condition) result.conditions++;
+    else if (n.nodeType === AgentLabelNodeType.DiskGroup) result.disks++;
+    else if (n.nodeType === AgentLabelNodeType.Group) result.groups++;
+    const children = n.children ?? [];
+    children.forEach(walk);
+  }
+  walk(node);
+  return result;
+}
+
+function summarizeExpression(node: AgentLabelRuleExpressionNodeDto | null | undefined, maxConditions = 3): string | null {
+  if (!node) return null;
+  const conditions: string[] = [];
+  function collect(n: AgentLabelRuleExpressionNodeDto) {
+    if (n.nodeType === AgentLabelNodeType.Condition && n.field != null && n.operator != null && n.value) {
+      const fieldLabel = getAgentLabelFieldLabel(n.field);
+      const opLabel = getAgentLabelComparisonOperatorLabel(n.operator);
+      const val = n.value.length > 20 ? n.value.slice(0, 20) + '…' : n.value;
+      conditions.push(`${fieldLabel} ${opLabel.toLowerCase()} "${val}"`);
+    }
+    const children = n.children ?? [];
+    children.forEach(collect);
+  }
+  collect(node);
+  if (conditions.length === 0) return null;
+  const shown = conditions.slice(0, maxConditions);
+  const suffix = conditions.length > maxConditions ? ` +${conditions.length - maxConditions}` : '';
+  return shown.join(', ') + suffix;
+}
 
 export default function AgentLabelsSettings() {
   const [viewMode, setViewMode] = useState<'list' | 'create' | 'view'>('list');
@@ -125,7 +160,7 @@ export default function AgentLabelsSettings() {
   const [previewLimit, setPreviewLimit] = useState(25);
   const [previewResults, setPreviewResults] = useState<Array<AgentLabelRuleDryRunResponse & { agentName: string }>>([]);
 
-  const [expandedRuleId, setExpandedRuleId] = useState<string | null>(null);
+  const [agentsModalRule, setAgentsModalRule] = useState<AgentLabelRuleResponse | null>(null);
   const [appliedAgentsTotal, setAppliedAgentsTotal] = useState(0);
   const [appliedResults, setAppliedResults] = useState<Array<{
     agentId: string;
@@ -194,16 +229,15 @@ export default function AgentLabelsSettings() {
     setIsReadOnly(false);
   }
 
-  function toggleAppliedAgentsPanel(rule: AgentLabelRuleResponse) {
-    if (expandedRuleId === rule.id) {
-      setExpandedRuleId(null);
-      return;
-    }
-
-    setExpandedRuleId(rule.id);
+  function openAgentsModal(rule: AgentLabelRuleResponse) {
+    setAgentsModalRule(rule);
     setAppliedAgentsTotal(0);
     setAppliedResults([]);
     void handleLoadAppliedAgents(rule);
+  }
+
+  function closeAgentsModal() {
+    setAgentsModalRule(null);
   }
 
   async function loadAll() {
@@ -1054,76 +1088,151 @@ export default function AgentLabelsSettings() {
           />
 
           {sortedRules.length === 0 ? (
-            <div className="space-y-3">
+            <div className="flex flex-col items-center gap-3 py-12">
+              <Layers className="h-10 w-10 text-slate-600" />
               <p className="text-sm text-slate-500">Nenhuma regra cadastrada.</p>
               <Button size="sm" onClick={startCreateRule}>Criar primeira regra</Button>
             </div>
           ) : (
             <div className="space-y-3">
-              {sortedRules.map(rule => (
-                <div key={rule.id} className="rounded-lg border border-white/10 bg-white/5 p-4">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h3 className="font-medium text-white">{rule.name}</h3>
-                    <Badge color={rule.isEnabled ? 'success' : 'slate'}>{rule.isEnabled ? 'Habilitada' : 'Desabilitada'}</Badge>
-                    <Badge color="accent">{rule.label}</Badge>
-                    <Badge color="slate">{getAgentLabelApplyModeLabel(rule.applyMode)}</Badge>
-                  </div>
+              {sortedRules.map(rule => {
+                const stats = countExpressionNodes(rule.expression);
+                const summary = summarizeExpression(rule.expression, 4);
 
-                  <p className="mt-2 text-xs text-slate-400">Atualizada em {formatDateTime(rule.updatedAt)}</p>
-
-                  {rule.description?.trim() ? <p className="mt-2 whitespace-pre-wrap text-sm text-slate-300">{rule.description}</p> : null}
-
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <Button size="sm" variant="secondary" onClick={() => startViewRule(rule)}>Visualizar</Button>
-                    <Button size="sm" variant="ghost" onClick={() => void handleToggleRule(rule)}>{rule.isEnabled ? 'Desabilitar' : 'Habilitar'}</Button>
-                    <Button size="sm" variant="secondary" onClick={() => toggleAppliedAgentsPanel(rule)}>{expandedRuleId === rule.id ? 'Ocultar Agentes com Label' : 'Ver Agentes com Label'}</Button>
-                  </div>
-
-                  {expandedRuleId === rule.id ? (
-                    <div className="mt-4 space-y-3 rounded-lg border border-white/10 bg-slate-900/30 p-3">
-                      <h4 className="text-sm font-medium text-slate-100">Agentes com a label "{rule.label}"</h4>
-
-                      {isLoadingAppliedAgents ? (
-                        <Loading message="Carregando agentes..." />
-                      ) : (
-                        <>
-                      <p className="text-xs text-slate-400">Total informado pela API: {appliedAgentsTotal} • Retornados nesta consulta: {appliedResults.length}</p>
-
-                      {appliedResults.length > 0 ? (
-                        <div className="overflow-x-auto rounded-lg border border-white/10">
-                          <table className="min-w-full divide-y divide-white/10 text-sm">
-                            <thead className="bg-white/5">
-                              <tr>
-                                <th className="px-3 py-2 text-left font-medium text-slate-300">Agente</th>
-                                <th className="px-3 py-2 text-left font-medium text-slate-300">Status</th>
-                                <th className="px-3 py-2 text-left font-medium text-slate-300">Match em</th>
-                                <th className="px-3 py-2 text-left font-medium text-slate-300">Última avaliação</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-white/5">
-                              {appliedResults.map(item => (
-                                <tr key={item.agentId} className="bg-slate-900/20">
-                                  <td className="px-3 py-2 text-slate-200">{item.agentName}</td>
-                                  <td className="px-3 py-2 text-slate-300">{item.status}</td>
-                                  <td className="px-3 py-2 text-slate-300">{item.matchedAt ? formatDateTime(item.matchedAt) : '-'}</td>
-                                  <td className="px-3 py-2 text-slate-300">{item.lastEvaluatedAt ? formatDateTime(item.lastEvaluatedAt) : '-'}</td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
+                return (
+                  <div key={rule.id} className="group rounded-xl border border-white/10 bg-slate-900/30 p-5 transition-all hover:border-white/20 hover:bg-slate-900/40">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="font-semibold text-white text-lg">{rule.name}</h3>
+                          <Badge color={rule.isEnabled ? 'success' : 'slate'}>{rule.isEnabled ? 'Ativa' : 'Inativa'}</Badge>
+                          <Badge color="accent" className="font-mono">{rule.label}</Badge>
                         </div>
-                      ) : (
-                        <p className="text-sm text-slate-500">Nenhum agente retornado pela regra.</p>
-                      )}
-                      </>
-                      )}
+
+                        {rule.description?.trim() ? (
+                          <p className="mt-2 text-sm text-slate-400 line-clamp-2">{rule.description}</p>
+                        ) : null}
+
+                        {summary ? (
+                          <div className="mt-2 flex items-start gap-2 rounded-lg bg-slate-950/40 px-3 py-2">
+                            <Filter className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-500" />
+                            <p className="text-xs text-slate-500 font-mono leading-relaxed">{summary}</p>
+                          </div>
+                        ) : null}
+
+                        <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-500">
+                          <span className="inline-flex items-center gap-1">
+                            <Clock className="h-3 w-3" />
+                            {formatDateTime(rule.updatedAt)}
+                          </span>
+                          <span className="inline-flex items-center gap-1">
+                            <Tags className="h-3 w-3" />
+                            {getAgentLabelApplyModeLabel(rule.applyMode)}
+                          </span>
+                          <span className="inline-flex items-center gap-1" title="Condições">
+                            <Filter className="h-3 w-3" />
+                            {stats.conditions}
+                          </span>
+                          {stats.groups > 0 ? (
+                            <span className="inline-flex items-center gap-1" title="Grupos">
+                              <Layers className="h-3 w-3" />
+                              {stats.groups}
+                            </span>
+                          ) : null}
+                          {stats.disks > 0 ? (
+                            <span className="inline-flex items-center gap-1" title="Grupos de Disco">
+                              <HardDrive className="h-3 w-3" />
+                              {stats.disks}
+                            </span>
+                          ) : null}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        <div className="flex flex-col items-end gap-1">
+                          <Badge color={rule.isEnabled ? 'success' : 'slate'} className="text-[10px] uppercase tracking-wider">
+                            {rule.isEnabled ? 'Ativo' : 'Inativo'}
+                          </Badge>
+                        </div>
+                      </div>
                     </div>
-                  ) : null}
-                </div>
-              ))}
+
+                    <div className="mt-4 flex flex-wrap gap-2 border-t border-white/5 pt-4">
+                      <Button size="sm" variant="secondary" onClick={() => startViewRule(rule)}>
+                        <Clock className="h-3.5 w-3.5" /> Visualizar
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => void handleToggleRule(rule)}>
+                        {rule.isEnabled ? (
+                          <><XCircle className="h-3.5 w-3.5" /> Desabilitar</>
+                        ) : (
+                          <><CheckCircle2 className="h-3.5 w-3.5" /> Habilitar</>
+                        )}
+                      </Button>
+                      <Button size="sm" variant="secondary" onClick={() => openAgentsModal(rule)}>
+                        <Monitor className="h-3.5 w-3.5" /> Ver Agentes
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
         </Card>
+      ) : null}
+
+      {agentsModalRule ? (
+        <Modal
+          open={true}
+          onClose={closeAgentsModal}
+          title={`Agentes com a label "${agentsModalRule.label}"`}
+        >
+          <div className="space-y-3">
+            <p className="text-sm text-slate-400">
+              Regra: <strong className="text-white">{agentsModalRule.name}</strong>
+            </p>
+
+            {isLoadingAppliedAgents ? (
+              <Loading message="Carregando agentes..." />
+            ) : (
+              <>
+                <p className="text-xs text-slate-500">
+                  Total: <strong className="text-white">{appliedAgentsTotal}</strong> • Exibidos: <strong className="text-white">{appliedResults.length}</strong>
+                </p>
+
+                {appliedResults.length > 0 ? (
+                  <div className="overflow-x-auto rounded-lg border border-white/10">
+                    <table className="min-w-full divide-y divide-white/10 text-sm">
+                      <thead className="bg-white/5">
+                        <tr>
+                          <th className="px-4 py-2.5 text-left font-medium text-slate-300">Agente</th>
+                          <th className="px-4 py-2.5 text-left font-medium text-slate-300">Status</th>
+                          <th className="px-4 py-2.5 text-left font-medium text-slate-300">Match em</th>
+                          <th className="px-4 py-2.5 text-left font-medium text-slate-300">Última avaliação</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-white/5">
+                        {appliedResults.map(item => (
+                          <tr key={item.agentId} className="bg-slate-900/20">
+                            <td className="px-4 py-2.5 text-slate-200 font-medium">{item.agentName}</td>
+                            <td className="px-4 py-2.5 text-slate-300">{item.status}</td>
+                            <td className="px-4 py-2.5 text-slate-300">{item.matchedAt ? formatDateTime(item.matchedAt) : '-'}</td>
+                            <td className="px-4 py-2.5 text-slate-300">{item.lastEvaluatedAt ? formatDateTime(item.lastEvaluatedAt) : '-'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <p className="text-sm text-slate-500">Nenhum agente retornado pela regra.</p>
+                )}
+              </>
+            )}
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-white/10">
+              <Button variant="secondary" onClick={closeAgentsModal}>Fechar</Button>
+            </div>
+          </div>
+        </Modal>
       ) : null}
     </div>
   );
@@ -1326,7 +1435,7 @@ function ExpressionNodeEditor({ node, path, isRoot = false, insideDiskGroup = fa
         <Select
           label="Campo"
           value={String(currentField)}
-          options={insideDiskGroup ? [...diskFieldOptions, ...fieldOptions] : fieldOptions}
+          options={insideDiskGroup ? diskFieldOptions : fieldOptions}
           onChange={event => {
             const field = Number(event.target.value) as AgentLabelField;
             onUpdateNode(path, current => {

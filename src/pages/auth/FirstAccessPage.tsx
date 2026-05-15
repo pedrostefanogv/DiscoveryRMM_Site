@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -12,7 +12,7 @@ import { Button, Card, CardHeader, Input, Loading } from "@/components/ui";
 const passwordRules = [
   "Minimo de 12 caracteres.",
   "Pelo menos uma letra maiuscula.",
-  "Pelo menos um numero.",
+  "Pelo menos um número.",
   "Pelo menos um caractere especial.",
 ];
 
@@ -24,15 +24,15 @@ const firstAccessSchema = z
     currentPassword: z.string().min(1, "Informe a senha atual."),
     newPassword: z
       .string()
-      .min(12, "A senha deve ter no minimo 12 caracteres.")
+      .min(12, "A senha deve ter no mínimo 12 caracteres.")
       .regex(/[A-Z]/, "A senha deve conter pelo menos uma letra maiuscula.")
-      .regex(/[0-9]/, "A senha deve conter pelo menos um numero.")
+      .regex(/[0-9]/, "A senha deve conter pelo menos um número.")
       .regex(/[^A-Za-z0-9]/, "A senha deve conter pelo menos um caractere especial."),
     confirmPassword: z.string().min(1, "Confirme a nova senha."),
   })
   .refine((data) => data.newPassword === data.confirmPassword, {
     path: ["confirmPassword"],
-    message: "A confirmacao de senha nao confere.",
+    message: "A confirmação de senha nao confere.",
   });
 
 type FirstAccessFormValues = z.infer<typeof firstAccessSchema>;
@@ -140,19 +140,19 @@ export default function FirstAccessPage() {
       return;
     }
 
-    toast.error("Fluxo de onboarding retornou um estado inesperado. Faca login novamente.");
+    toast.error("Fluxo de onboarding retornou um estado inesperado. Faça login novamente.");
     navigate("/auth/login", { replace: true });
   };
 
   if (loadingStatus) {
-    return <Loading message="Carregando obrigacoes do primeiro acesso..." />;
+    return <Loading message="Carregando obrigações do primeiro acesso..." />;
   }
 
   return (
     <Card className="border-white/10 bg-slate-900/80 shadow-2xl backdrop-blur" padding>
       <CardHeader
         title="Primeiro acesso"
-        subtitle="Atualize seus dados iniciais antes de concluir o cadastro da chave de seguranca."
+        subtitle="Atualize seus dados iniciais antes de concluir o cadastro da chave de segurança."
       />
 
       {statusError && (
@@ -204,7 +204,7 @@ export default function FirstAccessPage() {
         <div className="rounded-xl border border-white/10 bg-white/5 p-4 text-sm text-slate-300">
           <div className="flex items-start gap-3">
             <UserRoundPen className="mt-0.5 h-4 w-4 text-primary" />
-            A API continua sendo a fonte de verdade para conflitos de login, e-mail e politica final de senha.
+            A API continua sendo a fonte de verdade para conflitos de login, e-mail e política final de senha.
           </div>
         </div>
 

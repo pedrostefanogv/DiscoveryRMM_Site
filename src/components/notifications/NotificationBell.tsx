@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+﻿import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Bell, CheckCheck, RefreshCw, Trash2, X } from "lucide-react";
 import toast from "react-hot-toast";
@@ -137,7 +137,7 @@ export function NotificationBell() {
           <Card className="space-y-3">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <h3 className="text-sm font-semibold text-white">Notificacoes</h3>
+                <h3 className="text-sm font-semibold text-white">Notificações</h3>
                 <p className="text-xs text-slate-400">
                   {isFetching ? "Sincronizando..." : `${visibleList.length} item(ns)`}
                 </p>

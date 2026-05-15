@@ -1,4 +1,4 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+﻿import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ReactNode } from "react";
@@ -80,7 +80,7 @@ describe("useAgentStatusNats bootstrap stabilization", () => {
     });
   });
 
-  it("nao dispara multiplos bootstrap_start em oscilacao curta de escopo", async () => {
+  it("não dispara múltiplos bootstrap_start em oscilação curta de escopo", async () => {
     const infoSpy = vi.spyOn(console, "info").mockImplementation(() => {});
 
     const wrapper = createWrapper();

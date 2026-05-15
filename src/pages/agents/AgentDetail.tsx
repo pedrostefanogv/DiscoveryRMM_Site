@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+﻿import { useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Cpu, MemoryStick, Ticket as TicketIcon, Tags,
@@ -738,7 +738,7 @@ export default function AgentDetail() {
           variant="ghost"
           onClick={() => navigate(`/automation/operations?agentId=${a.id}`)}
         >
-          Automacao
+          Automação
         </Button>
         {canManageAgent && (
           <Button

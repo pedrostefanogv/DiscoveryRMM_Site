@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from 'react';
+﻿import { useState, useMemo, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Monitor, Wifi, WifiOff, Activity, Building2, Clock, LayoutGrid, List, Bug, Trash2, ShieldCheck, ArrowUp, ArrowDown, Radio, RefreshCw, Move } from 'lucide-react';
 import { useQueries } from '@tanstack/react-query';
@@ -1046,7 +1046,7 @@ export default function AgentList() {
         maxWidth="max-w-6xl"
       >
         <div className="space-y-3">
-          {remoteLoading && <Loading message="Gerando sessao remota..." />}
+          {remoteLoading && <Loading message="Gerando sessão remota..." />}
 
           {!remoteLoading && remoteError && (
             <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-200">

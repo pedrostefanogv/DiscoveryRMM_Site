@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+﻿import { useMemo, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { Copy, KeyRound, Trash2 } from 'lucide-react';
 import { Button, Card, CardHeader, Input, TextArea, Badge, Select } from '@/components/ui';
@@ -96,7 +96,7 @@ export default function DeployTokens() {
   const refreshAgentUpdateBuild = useMutation({
     mutationFn: () => agentUpdatesApi.refreshBuild(),
     onSuccess: () => {
-      toast.success('Rebuild do agente de atualizacao iniciado.');
+      toast.success('Rebuild do agente de atualização iniciado.');
     },
     onError: (error: unknown) => {
       const message = error instanceof ApiError
@@ -125,7 +125,7 @@ export default function DeployTokens() {
         dataJson: data,
       });
     } catch {
-      // Telemetria nao deve bloquear o fluxo principal.
+      // Telemetria não deve bloquear o fluxo principal.
     }
   };
 
@@ -283,7 +283,7 @@ export default function DeployTokens() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-white">Instalacao de Agentes</h1>
+        <h1 className="text-2xl font-bold text-white">Instalação de Agentes</h1>
         <p className="text-sm text-slate-400">Crie token e instalador para provisionar agentes em novos dispositivos</p>
         <div className="mt-3 flex justify-start">
           <Button
@@ -293,14 +293,14 @@ export default function DeployTokens() {
             }}
             loading={refreshAgentUpdateBuild.isPending}
           >
-            Rebuildar agente de atualizacao
+            Rebuildar agente de atualização
           </Button>
         </div>
       </div>
 
       <Card>
         <CardHeader
-          title="Criar agente para instalacao"
+          title="Criar agente para instalação"
           subtitle="Gere token e instalador para onboarding de novos agentes"
         />
         <div className="space-y-4">
@@ -390,7 +390,7 @@ export default function DeployTokens() {
 
       {generatedToken && (
         <Card>
-          <CardHeader title="Token Gerado" subtitle="Copie e guarde com seguranca" />
+          <CardHeader title="Token Gerado" subtitle="Copie e guarde com segurança" />
           <div className="space-y-4">
             <div className="rounded-lg border border-white/10 bg-black/20 p-3">
               <p className="break-all font-mono text-sm text-slate-200">{generatedToken.token}</p>
@@ -398,10 +398,10 @@ export default function DeployTokens() {
 
             <div className="flex flex-wrap items-center gap-2">
               <Badge color={generatedToken.multiUse ? 'accent' : 'slate'}>
-                {generatedToken.multiUse ? 'Multiuso' : 'Uso unico'}
+                {generatedToken.multiUse ? 'Multiuso' : 'Uso único'}
               </Badge>
               <Badge color="slate">
-                Expira: {generatedToken.expiresAt ? new Date(generatedToken.expiresAt).toLocaleString('pt-BR') : 'Sem expiracao'}
+                Expira: {generatedToken.expiresAt ? new Date(generatedToken.expiresAt).toLocaleString('pt-BR') : 'Sem expiração'}
               </Badge>
             </div>
 
@@ -454,13 +454,13 @@ export default function DeployTokens() {
                   <div className="min-w-0 space-y-2">
                     <div className="flex flex-wrap items-center gap-2">
                       <Badge color={token.multiUse ? 'accent' : 'slate'}>
-                        {token.multiUse ? 'Multiuso' : 'Uso unico'}
+                        {token.multiUse ? 'Multiuso' : 'Uso único'}
                       </Badge>
                       <Badge color="slate">
                         Criado em {new Date(token.createdAt).toLocaleString('pt-BR')}
                       </Badge>
                       <Badge color="slate">
-                        Expira: {token.expiresAt ? new Date(token.expiresAt).toLocaleString('pt-BR') : 'Sem expiracao'}
+                        Expira: {token.expiresAt ? new Date(token.expiresAt).toLocaleString('pt-BR') : 'Sem expiração'}
                       </Badge>
                     </div>
 
@@ -512,7 +512,7 @@ export default function DeployTokens() {
 
           {tokensFilter !== null && deployTokens.isError && (
             <p className="text-sm text-rose-300">
-              Nao foi possivel carregar os deploy tokens.
+              Não foi possível carregar os deploy tokens.
             </p>
           )}
         </div>

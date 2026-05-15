@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   useAgentsByClient,
@@ -310,7 +310,7 @@ export default function ReportTemplateForm() {
     errors.push(...layoutErrors);
 
     if (!layout.title || !layout.title.trim()) {
-      errors.push("Layout precisa de um titulo.");
+      errors.push("Layout precisa de um título.");
     }
 
     if ((layout.columns?.length ?? 0) === 0 && (layout.sections?.length ?? 0) === 0) {
@@ -409,23 +409,23 @@ export default function ReportTemplateForm() {
 
     const limits = layoutSchemaQuery.data?.limits;
     if (limits?.maxColumns && (layout.columns?.length ?? 0) > limits.maxColumns) {
-      errors.push(`Limite de colunas excedido: maximo ${limits.maxColumns}.`);
+      errors.push(`Limite de colunas excedido: máximo ${limits.maxColumns}.`);
     }
     if (limits?.maxSummaries && (layout.summaries?.length ?? 0) > limits.maxSummaries) {
-      errors.push(`Limite de summaries excedido: maximo ${limits.maxSummaries}.`);
+      errors.push(`Limite de summaries excedido: máximo ${limits.maxSummaries}.`);
     }
     if (limits?.maxGroupDetails && (layout.groupDetails?.length ?? 0) > limits.maxGroupDetails) {
-      errors.push(`Limite de groupDetails excedido: maximo ${limits.maxGroupDetails}.`);
+      errors.push(`Limite de groupDetails excedido: máximo ${limits.maxGroupDetails}.`);
     }
     if (limits?.maxSections && (layout.sections?.length ?? 0) > limits.maxSections) {
-      errors.push(`Limite de sections excedido: maximo ${limits.maxSections}.`);
+      errors.push(`Limite de sections excedido: máximo ${limits.maxSections}.`);
     }
     if (limits?.maxSectionColumns) {
       const sectionExceed = (layout.sections ?? []).find(
         (section) => (section.columns?.length ?? 0) > limits.maxSectionColumns!,
       );
       if (sectionExceed) {
-        errors.push(`Uma secao excede o limite de colunas (${limits.maxSectionColumns}).`);
+        errors.push(`Uma seção excede o limite de colunas (${limits.maxSectionColumns}).`);
       }
     }
 
@@ -572,7 +572,7 @@ export default function ReportTemplateForm() {
             setPreviewHtml(sanitized.html);
 
             if (sanitized.unexpectedHeaders.length > 0) {
-              toast.error("Preview retornou colunas extras. Exibicao filtrada para respeitar o layout.");
+              toast.error("Preview retornou colunas extras. Exibição filtrada para respeitar o layout.");
             }
 
             toast.success("Preview HTML atualizado.");

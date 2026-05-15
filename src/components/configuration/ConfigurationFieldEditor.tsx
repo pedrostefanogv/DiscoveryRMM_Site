@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+﻿import { useMemo, useState } from "react";
 import { ChevronDown, ChevronUp, GitCompare } from "lucide-react";
 import type { ConfigurationValue } from "@/api";
 import { Button, Input, Modal, Select, TextArea } from "@/components/ui";
@@ -244,7 +244,7 @@ export function ConfigurationFieldEditor({
           placeholder={
             fieldRange
               ? `${fieldRange.min}..${fieldRange.max} ${unit || ""}`
-              : "Digite um numero"
+              : "Digite um número"
           }
         />
       );
@@ -347,14 +347,14 @@ export function ConfigurationFieldEditor({
               />
             </div>
 
-            {/* Configuracao avancada de chat */}
+            {/* Configuração avancada de chat */}
             <div className="rounded-lg border border-white/10 bg-white/[0.02] p-2">
               <button
                 type="button"
                 onClick={() => setShowAiAdvanced((prev) => !prev)}
                 className="flex w-full items-center justify-between rounded-md px-2 py-1.5 text-xs font-medium text-slate-300 hover:bg-white/5"
               >
-                <span>Configuracao avancada (Chat)</span>
+                <span>Configuração avancada (Chat)</span>
                 {showAiAdvanced ? (
                   <ChevronUp className="h-4 w-4" />
                 ) : (
@@ -402,14 +402,14 @@ export function ConfigurationFieldEditor({
               )}
             </div>
 
-            {/* Configuracao de embedding */}
+            {/* Configuração de embedding */}
             <div className="rounded-lg border border-white/10 bg-white/[0.02] p-2">
               <button
                 type="button"
                 onClick={() => setShowAiEmbedding((prev) => !prev)}
                 className="flex w-full items-center justify-between rounded-md px-2 py-1.5 text-xs font-medium text-slate-300 hover:bg-white/5"
               >
-                <span>Configuracao de Embedding</span>
+                <span>Configuração de Embedding</span>
                 {showAiEmbedding ? (
                   <ChevronUp className="h-4 w-4" />
                 ) : (
@@ -687,7 +687,7 @@ export function ConfigurationFieldEditor({
         )}
         {fieldKind === "json" && fieldKey === "autoUpdateSettingsJson" && (
           <p className="text-xs text-slate-400">
-            Ajuste o comportamento de atualizacao automatica por campos estruturados.
+            Ajuste o comportamento de atualização automatica por campos estruturados.
           </p>
         )}
         {fieldKind === "json" && fieldKey === "brandingSettingsJson" && (
@@ -697,7 +697,7 @@ export function ConfigurationFieldEditor({
         )}
         {fieldKind === "json" && fieldKey === "lockedFieldsJson" && (
           <p className="text-xs text-slate-400">
-            Informe um campo por linha para bloquear override em niveis inferiores.
+            Informe um campo por linha para bloquear override em níveis inferiores.
           </p>
         )}
         {renderInput()}

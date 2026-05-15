@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
 import {
   Badge,
@@ -173,7 +173,7 @@ export default function AutomationScriptsPage() {
       },
       {
         key: "actions",
-        header: "Acoes",
+        header: "Ações",
         render: (item) => (
           <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
             <Button
@@ -260,9 +260,9 @@ export default function AutomationScriptsPage() {
     );
 
     if (!name) return toast.error("Nome obrigatorio");
-    if (name.length > 200) return toast.error("Nome deve ter no maximo 200 caracteres");
+    if (name.length > 200) return toast.error("Nome deve ter no máximo 200 caracteres");
     if (!summary) return toast.error("Resumo obrigatorio");
-    if (summary.length > 2000) return toast.error("Resumo deve ter no maximo 2000 caracteres");
+    if (summary.length > 2000) return toast.error("Resumo deve ter no máximo 2000 caracteres");
     if (!content) return toast.error("Conteudo obrigatorio");
     if (content.length > 200000) return toast.error("Conteudo acima do limite");
     if (!triggerModes.length) return toast.error("Informe ao menos um trigger mode");
@@ -327,8 +327,8 @@ export default function AutomationScriptsPage() {
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-white">Scripts de Automacao</h1>
-          <p className="text-sm text-slate-400">Catalogo de scripts reutilizaveis.</p>
+          <h1 className="text-2xl font-bold text-white">Scripts de Automação</h1>
+          <p className="text-sm text-slate-400">Catálogo de scripts reutilizaveis.</p>
         </div>
         <Button
           onClick={() => {

@@ -1,4 +1,4 @@
-import type { Dispatch, SetStateAction } from "react";
+﻿import type { Dispatch, SetStateAction } from "react";
 import { Eye, Plus, Save, Trash2, X } from "lucide-react";
 import { Button, Card, Input, TextArea } from "@/components/ui";
 import { ReportTemplateHistoryPanel } from "@/components/reports/ReportTemplateHistoryPanel";
@@ -48,7 +48,7 @@ export function TemplateHistoryCard({ templateId, version }: HistoryProps) {
     <Card>
       <div className="mb-3 flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-semibold text-white">Historico do Template</h2>
+          <h2 className="text-lg font-semibold text-white">Histórico do Template</h2>
           <p className="text-xs text-slate-400">Versao atual v{version}</p>
         </div>
       </div>
@@ -65,7 +65,7 @@ type IdentificationProps = {
 export function IdentificationCard({ draft, setDraft }: IdentificationProps) {
   return (
     <Card>
-      <h2 className="mb-4 text-lg font-semibold text-white">Identificacao</h2>
+      <h2 className="mb-4 text-lg font-semibold text-white">Identificação</h2>
       <div className="grid gap-4 md:grid-cols-2">
         <Input
           label="Nome do template"
@@ -265,8 +265,8 @@ export function LayoutBuilderTopSection({
             <Plus className="h-4 w-4" /> Coluna
           </Button>
           <select
-            aria-label="Adicionar secao"
-            title="Adicionar secao"
+            aria-label="Adicionar seção"
+            title="Adicionar seção"
             className="cursor-pointer rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-sm text-white hover:bg-white/10"
             value=""
             onChange={(e) => {
@@ -281,7 +281,7 @@ export function LayoutBuilderTopSection({
               }
             }}
           >
-            <option value="" className="bg-slate-900">+ Secao...</option>
+            <option value="" className="bg-slate-900">+ Seção...</option>
             <option value="__blank" className="bg-slate-900">Em branco</option>
             {(DATASET_SECTION_SOURCES[selectedDataset?.key.toLowerCase() ?? ""] ?? []).length > 0 && (
               <>
@@ -298,7 +298,7 @@ export function LayoutBuilderTopSection({
 
       <div className="grid gap-4 md:grid-cols-2">
         <Input
-          label="Titulo"
+          label="Título"
           value={layoutEditor.title}
           onChange={(event) =>
             setLayoutEditor((prev) => ({
@@ -309,7 +309,7 @@ export function LayoutBuilderTopSection({
           hint="Título principal exibido no cabeçalho do relatório."
         />
         <Input
-          label="Subtitulo"
+          label="Subtítulo"
           value={layoutEditor.subtitle}
           onChange={(event) =>
             setLayoutEditor((prev) => ({
@@ -764,7 +764,7 @@ export function LayoutBuilderTopSection({
                     </div>
                     {joinSuggestions.length > 0 && index > 0 && (
                       <div className="md:col-span-6 rounded-lg border border-white/10 bg-black/10 px-3 py-2 text-xs text-slate-300">
-                        Sugestoes de join: {joinSuggestions.map((join) => `${join.sourceKey} -> ${join.targetKey}`).join(" | ")}
+                        Sugestões de join: {joinSuggestions.map((join) => `${join.sourceKey} -> ${join.targetKey}`).join(" | ")}
                       </div>
                     )}
                   </div>
@@ -1331,7 +1331,7 @@ export function LayoutBuilderDetailsSection({
       {layoutEditor.sections.length > 0 && (
         <div className="mt-5 space-y-4">
           <div className="flex items-center gap-3">
-            <h3 className="text-sm font-semibold text-slate-200">Secoes adicionais</h3>
+            <h3 className="text-sm font-semibold text-slate-200">Seções adicionais</h3>
             {selectedDataset && (DATASET_SECTION_SOURCES[selectedDataset.key.toLowerCase()] ?? []).length > 0 && (
               <span className="rounded bg-blue-500/10 px-2 py-0.5 text-xs text-blue-300">
                 Fontes disponíveis para <strong>{selectedDataset.name}</strong>: {" "}
@@ -1343,7 +1343,7 @@ export function LayoutBuilderDetailsSection({
             <div key={`section-${sectionIndex}`} className="rounded-lg border border-white/10 bg-white/5 p-3">
               <div className="mb-3 grid gap-3 md:grid-cols-3">
                 <Input
-                  label={`Titulo da secao ${sectionIndex + 1}`}
+                  label={`Título da seção ${sectionIndex + 1}`}
                   value={section.title}
                   onChange={(event) =>
                     setLayoutEditor((prev) => ({
@@ -1355,7 +1355,7 @@ export function LayoutBuilderDetailsSection({
                   }
                 />
                 <Input
-                  label={`Source da secao ${sectionIndex + 1}`}
+                  label={`Source da seção ${sectionIndex + 1}`}
                   value={section.source ?? ""}
                   onChange={(event) =>
                     setLayoutEditor((prev) => ({
@@ -1366,7 +1366,7 @@ export function LayoutBuilderDetailsSection({
                     }))
                   }
                   placeholder="ex.: softwareItems"
-                  hint={`Sub-array retornado no response para esta secao. Fontes: ${(DATASET_SECTION_SOURCES[selectedDataset?.key.toLowerCase() ?? ""] ?? []).map((s) => s.source).join(", ") || "nenhuma mapeada"}`}
+                  hint={`Sub-array retornado no response para esta seção. Fontes: ${(DATASET_SECTION_SOURCES[selectedDataset?.key.toLowerCase() ?? ""] ?? []).map((s) => s.source).join(", ") || "nenhuma mapeada"}`}
                   list={`sources-datalist-${sectionIndex}`}
                 />
                 <datalist id={`sources-datalist-${sectionIndex}`}>
@@ -1401,7 +1401,7 @@ export function LayoutBuilderDetailsSection({
                       <th className="px-2 py-2">Campo</th>
                       <th className="px-2 py-2">Label</th>
                       <th className="px-2 py-2">Formato</th>
-                      <th className="px-2 py-2">Acoes</th>
+                      <th className="px-2 py-2">Ações</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1409,8 +1409,8 @@ export function LayoutBuilderDetailsSection({
                       <tr key={`section-${sectionIndex}-col-${columnIndex}`} className="border-b border-white/5">
                         <td className="px-2 py-2">
                           <select
-                            aria-label={`Campo da secao ${sectionIndex + 1} coluna ${columnIndex + 1}`}
-                            title={`Campo da secao ${sectionIndex + 1} coluna ${columnIndex + 1}`}
+                            aria-label={`Campo da seção ${sectionIndex + 1} coluna ${columnIndex + 1}`}
+                            title={`Campo da seção ${sectionIndex + 1} coluna ${columnIndex + 1}`}
                             value={column.field}
                             onChange={(event) =>
                               setLayoutEditor((prev) => ({
@@ -1443,8 +1443,8 @@ export function LayoutBuilderDetailsSection({
                         </td>
                         <td className="px-2 py-2">
                           <input
-                            aria-label={`Label da secao ${sectionIndex + 1} coluna ${columnIndex + 1}`}
-                            title={`Label da secao ${sectionIndex + 1} coluna ${columnIndex + 1}`}
+                            aria-label={`Label da seção ${sectionIndex + 1} coluna ${columnIndex + 1}`}
+                            title={`Label da seção ${sectionIndex + 1} coluna ${columnIndex + 1}`}
                             placeholder="Label"
                             value={column.label}
                             onChange={(event) =>
@@ -1467,8 +1467,8 @@ export function LayoutBuilderDetailsSection({
                         </td>
                         <td className="px-2 py-2">
                           <select
-                            aria-label={`Formato da secao ${sectionIndex + 1} coluna ${columnIndex + 1}`}
-                            title={`Formato da secao ${sectionIndex + 1} coluna ${columnIndex + 1}`}
+                            aria-label={`Formato da seção ${sectionIndex + 1} coluna ${columnIndex + 1}`}
+                            title={`Formato da seção ${sectionIndex + 1} coluna ${columnIndex + 1}`}
                             value={column.format ?? "text"}
                             onChange={(event) =>
                               setLayoutEditor((prev) => ({
@@ -1579,7 +1579,7 @@ export function LayoutBrandingSection({
             }))
           }
           placeholder="https://cdn.empresa.local/logo.png"
-          hint="URL opcional da marca exibida no cabeçalho do relatório."
+          hint="URL opcional da marca é exibida no cabeçalho do relatório."
         />
         <Input
           label="Altura máxima da logo"
@@ -1835,7 +1835,7 @@ export function PreviewCard({
 
       {(previewMeta.title || previewMeta.rowCount !== undefined || previewMeta.format) && (
         <div className="mt-4 rounded-lg border border-white/10 bg-white/5 p-3 text-xs text-slate-300">
-          <p>Titulo: {previewMeta.title || "-"}</p>
+          <p>Título: {previewMeta.title || "-"}</p>
           <p>Linhas: {previewMeta.rowCount ?? "-"}</p>
           <p>Formato retornado: {previewMeta.format || "-"}</p>
         </div>
@@ -2016,7 +2016,7 @@ export function PreviewFiltersCard({
               );
             }
 
-            if (n === "orientation" || n === "orientacao") {
+            if (n === "orientation" || n === "orientação") {
               return (
                 <div key={filter.name}>
                   {labelEl}

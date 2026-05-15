@@ -1,4 +1,4 @@
-import { Navigate, Outlet, useLocation } from "react-router-dom";
+﻿import { Navigate, Outlet, useLocation } from "react-router-dom";
 import type { ReactNode } from "react";
 import { Loading } from "@/components/ui";
 import { useAuth } from "@/auth/AuthContext";
@@ -9,7 +9,7 @@ export function RequireAuth() {
   const { isAuthenticated, isBootstrapping } = useAuth();
 
   if (isBootstrapping) {
-    return <Loading message="Verificando sessao..." />;
+    return <Loading message="Verificando sessão..." />;
   }
 
   if (!isAuthenticated) {
@@ -23,7 +23,7 @@ export function PublicOnlyAuth() {
   const { isAuthenticated, isBootstrapping } = useAuth();
 
   if (isBootstrapping) {
-    return <Loading message="Verificando sessao..." />;
+    return <Loading message="Verificando sessão..." />;
   }
 
   if (isAuthenticated) {

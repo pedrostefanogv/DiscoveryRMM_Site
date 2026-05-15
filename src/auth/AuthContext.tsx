@@ -1,4 +1,4 @@
-import {
+﻿import {
   createContext,
   useCallback,
   useContext,
@@ -149,7 +149,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await authApi.logout(accessToken, refreshToken);
       }
     } catch {
-      // Logout local deve prosseguir mesmo se a revogacao falhar.
+      // Logout local deve prosseguir mesmo se a revogação falhar.
     } finally {
       clearSession();
     }

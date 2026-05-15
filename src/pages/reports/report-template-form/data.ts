@@ -1,4 +1,4 @@
-import type { ScopeTypeString } from "@/api/types";
+﻿import type { ScopeTypeString } from "@/api/types";
 import type { DatasetSectionSourcePreset, SupportedFormat } from "./types";
 
 export const FORMAT_OPTIONS: SupportedFormat[] = ["pdf", "xlsx", "csv"];
@@ -106,7 +106,7 @@ export const DATASET_SECTION_SOURCES: Record<
         { field: "softwareName", label: "Software", format: "text" },
         { field: "publisher", label: "Fabricante", format: "text" },
         { field: "version", label: "Versao", format: "text" },
-        { field: "installCount", label: "Instalacoes", format: "number" },
+        { field: "installCount", label: "Instalações", format: "number" },
       ],
     },
     {
@@ -155,7 +155,7 @@ export const DATASET_SECTION_SOURCES: Record<
       source: "items",
       label: "Tickets",
       columns: [
-        { field: "title", label: "Titulo", format: "text" },
+        { field: "title", label: "Título", format: "text" },
         { field: "priority", label: "Prioridade", format: "text" },
         { field: "category", label: "Categoria", format: "text" },
         { field: "createdAt", label: "Criado em", format: "date" },
@@ -215,7 +215,7 @@ export const DATASET_SECTION_SOURCES: Record<
       source: "articles",
       label: "Artigos",
       columns: [
-        { field: "title", label: "Titulo", format: "text" },
+        { field: "title", label: "Título", format: "text" },
         { field: "category", label: "Categoria", format: "text" },
         { field: "author", label: "Autor", format: "text" },
         { field: "isPublished", label: "Publicado", format: "text" },

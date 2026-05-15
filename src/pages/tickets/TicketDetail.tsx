@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo } from 'react';
+﻿import { useState, useRef, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Send, Lock, Unlock, Clock, Activity, ChevronDown, BookOpen, Paperclip, Upload, File, CheckCircle, XCircle, Loader2, UserPlus, UserMinus, Eye, Wrench, Copy } from 'lucide-react';
 import { useAuth } from '@/auth/AuthContext';
@@ -195,7 +195,7 @@ export default function TicketDetail() {
                 onClick={() => setTab('automation')}
               >
                 <Wrench className="inline h-4 w-4 mr-1" />
-                Automacao
+                Automação
               </button>
               <button
                 className={`px-4 py-3 text-sm font-medium transition-colors ${tab === 'ai' ? 'border-b-2 border-primary text-white' : 'text-slate-400 hover:text-white'}`}
@@ -452,7 +452,7 @@ function TicketAiPanel({
       <div className="rounded-xl border border-white/10 bg-white/5 p-4">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h3 className="text-sm font-semibold text-white">Triagem automatica</h3>
+            <h3 className="text-sm font-semibold text-white">Triagem automática</h3>
             <p className="text-xs text-slate-400">
               Sugere categoria, prioridade e departamento para o chamado.
             </p>
@@ -560,7 +560,7 @@ function TicketAiPanel({
           <div>
             <h3 className="text-sm font-semibold text-white">Resumo executivo</h3>
             <p className="text-xs text-slate-400">
-              Consolida problema, historico e status atual em texto curto.
+              Consolida problema, histórico e status atual em texto curto.
             </p>
           </div>
           <Button
@@ -925,7 +925,7 @@ function AutomationLinksPanel({
 
         {usingFallbackTasks && (
           <p className="mt-3 text-xs text-slate-500">
-            Nenhuma tarefa aderente ao escopo do ticket foi encontrada; exibindo o catalogo ativo completo.
+            Nenhuma tarefa aderente ao escopo do ticket foi encontrada; exibindo o catálogo ativo completo.
           </p>
         )}
 
@@ -1021,7 +1021,7 @@ function AutomationLinksPanel({
                           [link.id]: event.target.value,
                         }))
                       }
-                      placeholder="Opcional: motivo ou instrucoes adicionais"
+                      placeholder="Opcional: motivo ou instruções adicionais"
                     />
                     <div className="flex flex-wrap gap-2">
                       <Button
@@ -1238,8 +1238,8 @@ function TicketCustomFieldInput({
           value={value}
           hint={
             definition.options.length > 0
-              ? `Opcoes permitidas: ${definition.options.join(', ')}`
-              : 'Separe multiplos valores por virgula.'
+              ? `Opções permitidas: ${definition.options.join(', ')}`
+              : 'Separe múltiplos valores por vírgula.'
           }
           onChange={(event) => onChange(event.target.value)}
         />
@@ -1501,7 +1501,7 @@ function SlaPanel({ ticketId }: { ticketId: string }) {
         subtitle={d.status ?? 'Sem status'}
         action={
           <Button size="sm" variant="secondary" onClick={() => navigate('/tickets/sla')}>
-            <Clock className="h-4 w-4" /> Operacao SLA
+            <Clock className="h-4 w-4" /> Operação SLA
           </Button>
         }
       />

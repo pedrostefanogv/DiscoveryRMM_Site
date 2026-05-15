@@ -145,7 +145,7 @@ function ensureRpIdMatchesCurrentHost(
 
   const flowLabel = flow === "assertion" ? "validação" : "registro";
   throw new Error(
-    `RP ID WebAuthn incompativel no fluxo de ${flowLabel}. rpId recebido: "${normalizedRpId}". Host atual: "${hostname}". Verifique se o backend gerou o challenge para este mesmo dominio.`,
+    `RP ID WebAuthn incompativel no fluxo de ${flowLabel}. rpId recebido: "${normalizedRpId}". Host atual: "${hostname}". Verifique se o backend gerou o challenge para este mesmo domínio.`,
   );
 }
 
@@ -317,7 +317,7 @@ export function describeWebAuthnError(error: unknown): string {
       case "SecurityError": {
         const environment = getWebAuthnEnvironmentInfo();
         return environment.isSecureContext
-          ? `O navegador bloqueou o WebAuthn por incompatibilidade de dominio, RP ID ou politica de seguranca da pagina. Host atual: ${environment.host}. Verifique se o challenge foi gerado para este host e sem troca de dominio entre begin e complete.${detail}`
+          ? `O navegador bloqueou o WebAuthn por incompatibilidade de domínio, RP ID ou política de segurança da página. Host atual: ${environment.host}. Verifique se o challenge foi gerado para este host e sem troca de domínio entre begin e complete.${detail}`
           : "O navegador exige contexto seguro para WebAuthn. Em localhost isso costuma funcionar, mas IPs, hosts customizados ou páginas inseguras em HTTP podem ser bloqueados.";
       }
       case "NotAllowedError":

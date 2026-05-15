@@ -1,4 +1,4 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import { Fingerprint, ShieldCheck, ShieldEllipsis, TriangleAlert } from "lucide-react";
@@ -95,7 +95,7 @@ export default function MfaAssertionPage() {
       });
 
       await completeAuthenticatedSession(tokens);
-      toast.success("Autenticacao concluida com sucesso.");
+      toast.success("Autenticação concluida com sucesso.");
       navigate("/", { replace: true });
     } catch (caught) {
       if (caught instanceof ApiError && caught.status === 403) {
@@ -132,7 +132,7 @@ export default function MfaAssertionPage() {
 
     const code = otpCode.trim();
     if (code.length < 6) {
-      const message = "Informe o codigo OTP com 6 digitos.";
+      const message = "Informe o código OTP com 6 dígitos.";
       setError(message);
       toast.error(message);
       return;

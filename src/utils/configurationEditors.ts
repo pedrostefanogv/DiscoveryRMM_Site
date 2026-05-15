@@ -1,4 +1,4 @@
-import type {
+﻿import type {
   ClientConfiguration,
   ConfigurationFieldMetadata,
   ConfigurationOrigin,
@@ -659,7 +659,7 @@ export function validateFieldValue(
 
   if (kind === "number") {
     if (trimmed.length === 0 || Number.isNaN(Number(trimmed))) {
-      return "Informe um numero valido";
+      return "Informe um número valido";
     }
 
     const numeric = Number(trimmed);

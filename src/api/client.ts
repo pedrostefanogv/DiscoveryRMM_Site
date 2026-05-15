@@ -1,4 +1,4 @@
-export const API_BASE_URL = import.meta.env.VITE_API_URL ?? "";
+﻿export const API_BASE_URL = import.meta.env.VITE_API_URL ?? "";
 export const API_VERSION_PREFIX = "/api/v1";
 
 export interface ApiRequestInit extends RequestInit {
@@ -89,7 +89,7 @@ async function parseErrorMessage(res: Response): Promise<string> {
   return (
     STATUS_FALLBACK_MESSAGE[res.status] ??
     res.statusText ??
-    "Erro de requisicao"
+    "Erro de requisição"
   );
 }
 

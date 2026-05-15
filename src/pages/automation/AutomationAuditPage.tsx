@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+﻿import { useMemo, useState } from "react";
 import {
   Badge,
   Card,
@@ -43,7 +43,7 @@ export default function AutomationAuditPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-white">Auditoria de Automacao</h1>
+        <h1 className="text-2xl font-bold text-white">Auditoria de Automação</h1>
         <p className="text-sm text-slate-400">
           Consulte a trilha funcional de scripts e tarefas com correlation id.
         </p>

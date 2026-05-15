@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+﻿import { useMemo, useState } from "react";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -44,7 +44,7 @@ const renameSchema = z.object({
     .string()
     .trim()
     .min(2, "Informe um nome com pelo menos 2 caracteres.")
-    .max(80, "Use no maximo 80 caracteres."),
+    .max(80, "Use no máximo 80 caracteres."),
 });
 
 type RenameFormValues = z.infer<typeof renameSchema>;
@@ -119,7 +119,7 @@ export default function AuthenticationSettingsPage() {
       },
       {
         key: "actions",
-        header: "Acoes",
+        header: "Ações",
         className: "w-[160px]",
         render: (item) => (
           <div className="flex items-center justify-end gap-2">
@@ -153,7 +153,7 @@ export default function AuthenticationSettingsPage() {
 
   const handleRegister = async () => {
     if (!session.accessToken) {
-      toast.error("Sessao autenticada ausente. Faca login novamente.");
+      toast.error("Sessao autenticada ausente. Faça login novamente.");
       return;
     }
 
@@ -231,7 +231,7 @@ export default function AuthenticationSettingsPage() {
   if (keysQuery.isError) {
     return (
       <ErrorDisplay
-        message="Falha ao carregar suas chaves de autenticacao."
+        message="Falha ao carregar suas chaves de autenticação."
         onRetry={() => void keysQuery.refetch()}
       />
     );
@@ -247,9 +247,9 @@ export default function AuthenticationSettingsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-white">Autenticacao</h1>
+        <h1 className="text-2xl font-bold text-white">Autenticação</h1>
         <p className="text-sm text-slate-400">
-          Gerencie suas chaves MFA e acompanhe o estado da sessao atual.
+          Gerencie suas chaves MFA e acompanhe o estado da sessão atual.
         </p>
       </div>
 
@@ -264,12 +264,12 @@ export default function AuthenticationSettingsPage() {
               <p className="mt-1 text-lg font-semibold text-white">
                 {session.stage === "authenticated"
                   ? "Autenticada"
-                  : "Sem sessao valida"}
+                  : "Sem sessão valida"}
               </p>
               <p className="mt-1 text-xs text-slate-500">
                 {expiresInText
                   ? `Expira em ${expiresInText}`
-                  : "Sem expiracao local registrada"}
+                  : "Sem expiração local registrada"}
               </p>
             </div>
           </div>
@@ -328,11 +328,11 @@ export default function AuthenticationSettingsPage() {
       <Card>
         <CardHeader
           title="Regras atuais"
-          subtitle="Comportamentos importantes expostos pelo backend para o fluxo de autenticacao."
+          subtitle="Comportamentos importantes expostos pelo backend para o fluxo de autenticação."
         />
         <div className="grid gap-3 md:grid-cols-2">
           <div className="rounded-xl border border-white/10 bg-white/5 p-4 text-sm text-slate-300">
-            O backend impede remover a ultima chave ativa do usuario. A mensagem retornada pela API e exibida como fonte de verdade.
+            O backend impede remover a última chave ativa do usuario. A mensagem retornada pela API e é exibida como fonte de verdade.
           </div>
           <div className="rounded-xl border border-white/10 bg-white/5 p-4 text-sm text-slate-300">
             Registros novos usam WebAuthn com navigator.credentials.create e sao gravados com o nome amigavel informado na UI.

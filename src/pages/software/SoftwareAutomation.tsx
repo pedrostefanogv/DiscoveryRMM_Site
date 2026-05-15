@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+﻿import { Link } from 'react-router-dom';
 import { Wrench } from 'lucide-react';
 import { Button, Card, CardHeader } from '@/components/ui';
 
@@ -24,13 +24,13 @@ export default function SoftwareAutomation() {
             <span className="text-sm">Status atual: módulo de automação ativo em nova navegação</span>
           </div>
           <p className="text-sm text-slate-400">
-            Acesse Scripts, Tarefas e Operacoes para gerir automacoes administrativas.
+            Acesse Scripts, Tarefas e Operações para gerir automações administrativas.
           </p>
         </div>
 
         <div className="mt-4 flex justify-end">
           <Link to="/automation">
-            <Button size="sm">Abrir novo modulo de Automacao</Button>
+            <Button size="sm">Abrir novo modulo de Automação</Button>
           </Link>
         </div>
       </Card>

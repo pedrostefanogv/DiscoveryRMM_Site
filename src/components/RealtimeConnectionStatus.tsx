@@ -1,4 +1,4 @@
-import { useRealtimeStatus } from '@/hooks/useRealtimeStatus';
+﻿import { useRealtimeStatus } from '@/hooks/useRealtimeStatus';
 import { AlertTriangle, Wifi, WifiOff } from 'lucide-react';
 
 export function RealtimeConnectionStatus() {
@@ -53,7 +53,7 @@ export function RealtimeConnectionStatus() {
             : isRecovering
               ? 'Conectando'
               : isAuthError
-                ? 'Erro de autenticacao'
+                ? 'Erro de autenticação'
               : 'Offline'}
         </span>
       </div>

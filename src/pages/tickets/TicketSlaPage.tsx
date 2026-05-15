@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   AlertTriangle,
@@ -94,7 +94,7 @@ const TIMEZONE_OPTIONS = [
 const HOLIDAY_TYPE_OPTIONS = [
    { value: "0", label: "Fixo (data específica, não recorre)" },
   { value: "1", label: "Anual (recorre todo ano - ex: Natal)" },
-  { value: "2", label: "Relativo (calculo por regra - ex: 3ª seg de jan)" },
+  { value: "2", label: "Relativo (cálculo por regra - ex: 3ª seg de jan)" },
 ];
 
 const RELATIVE_METHOD_OPTIONS = [
@@ -205,7 +205,7 @@ function formatWorkDays(raw: string) {
 }
 
 function formatHoursBefore(hours: number) {
-  if (hours <= 0) return "Sem gatilho por antecedencia";
+  if (hours <= 0) return "Sem gatilho por antecedência";
   if (hours === 1) return "1h antes do vencimento";
   return `${hours}h antes do vencimento`;
 }
@@ -452,7 +452,7 @@ export default function TicketSlaPage() {
     const endHour = Number(calendarForm.workDayEndHour);
 
     if (!calendarForm.name.trim()) {
-      toast.error("Informe o nome do calendario.");
+      toast.error("Informe o nome do calendário.");
       return;
     }
 
@@ -488,7 +488,7 @@ export default function TicketSlaPage() {
             workDaysJson: buildWorkDaysJson(calendarForm.workDays),
           },
         });
-        toast.success("Calendario atualizado com sucesso.");
+        toast.success("Calendário atualizado com sucesso.");
       } else {
         const created = await createCalendar.mutateAsync({
           name: calendarForm.name.trim(),
@@ -520,7 +520,7 @@ export default function TicketSlaPage() {
       if (editingCalendarId === id) {
         setEditingCalendarId(null);
       }
-      toast.success("Calendario removido com sucesso.");
+      toast.success("Calendário removido com sucesso.");
     } catch (error) {
       toast.error(
          error instanceof Error
@@ -543,7 +543,7 @@ export default function TicketSlaPage() {
 
     const typeNum = Number(holidayType);
 
-    // Validacao especifica por tipo
+    // Validação específica por tipo
     if (typeNum === 0 || typeNum === 1) {
       // Fixed ou Yearly: precisa de data
       if (!holidayDate) {
@@ -735,13 +735,13 @@ export default function TicketSlaPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white">SLA, calendarios e escalonamento</h1>
+          <h1 className="text-2xl font-bold text-white">SLA, calendários e escalonamento</h1>
           <p className="text-sm text-slate-400">
-            Gerencie horas uteis, feriados e regras que escalam tickets com base no consumo de SLA.
+            Gerencie horas úteis, feriados e regras que escalam tickets com base no consumo de SLA.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Badge color="primary">Calendarios uteis</Badge>
+          <Badge color="primary">Calendários úteis</Badge>
           <Badge color="warning">Escalonamento automático</Badge>
         </div>
       </div>
@@ -749,7 +749,7 @@ export default function TicketSlaPage() {
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <div className="space-y-1">
-            <p className="text-xs uppercase tracking-wide text-slate-500">Calendarios</p>
+            <p className="text-xs uppercase tracking-wide text-slate-500">Calendários</p>
             <p className="text-2xl font-semibold text-white">{sortedCalendars.length}</p>
           </div>
         </Card>
@@ -771,8 +771,8 @@ export default function TicketSlaPage() {
         <div className="space-y-6">
           <Card>
             <CardHeader
-              title="Calendarios de SLA"
-              subtitle="Cada calendario define dias uteis, faixa horaria e feriados usados no calculo de vencimento."
+              title="Calendários de SLA"
+              subtitle="Cada calendário define dias úteis, faixa horaria e feriados usados no cálculo de vencimento."
               action={
                 <Button
                   variant="secondary"
@@ -785,7 +785,7 @@ export default function TicketSlaPage() {
                   }}
                 >
                   <Plus className="h-4 w-4" />
-                  Novo calendario
+                  Novo calendário
                 </Button>
               }
             />
@@ -800,14 +800,14 @@ export default function TicketSlaPage() {
               <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-300">
                 <p className="font-medium text-white">Quando usar</p>
                 <p className="mt-1 text-slate-400">
-                  Use um calendario global como padrao e crie calendarios por client quando houver horario comercial ou feriados proprios.
+                  Use um calendário global como padrão e crie calendários por client quando houver horario comercial ou feriados próprios.
                 </p>
               </div>
             </div>
 
             <div className="space-y-3">
               {sortedCalendars.length === 0 && (
-                <p className="text-sm text-slate-500">Nenhum calendario encontrado para o filtro atual.</p>
+                <p className="text-sm text-slate-500">Nenhum calendário encontrado para o filtro atual.</p>
               )}
 
               {sortedCalendars.map((calendar) => (
@@ -865,8 +865,8 @@ export default function TicketSlaPage() {
 
           <Card>
             <CardHeader
-              title={editingCalendarId ? "Editar calendario" : "Novo calendario"}
-              subtitle="Defina fuso, dias uteis e a jornada base usada no calculo do SLA."
+              title={editingCalendarId ? "Editar calendário" : "Novo calendário"}
+              subtitle="Defina fuso, dias úteis e a jornada base usada no cálculo do SLA."
             />
 
             {editingCalendarId && calendarDetailQuery.isLoading ? (
@@ -941,7 +941,7 @@ export default function TicketSlaPage() {
                 </div>
 
                 <div className="mt-4 space-y-2">
-                  <p className="text-sm font-medium text-slate-300">Dias uteis</p>
+                  <p className="text-sm font-medium text-slate-300">Dias úteis</p>
                   <div className="flex flex-wrap gap-2">
                     {WORKDAY_OPTIONS.map((option) => {
                       const checked = calendarForm.workDays.includes(option.value);
@@ -984,7 +984,7 @@ export default function TicketSlaPage() {
                     loading={createCalendar.isPending || updateCalendar.isPending}
                   >
                     <CalendarDays className="h-4 w-4" />
-                    {editingCalendarId ? "Salvar calendario" : "Criar calendario"}
+                    {editingCalendarId ? "Salvar calendário" : "Criar calendário"}
                   </Button>
                   {editingCalendarId && (
                     <Button
@@ -997,7 +997,7 @@ export default function TicketSlaPage() {
                         });
                       }}
                     >
-                      Cancelar edicao
+                      Cancelar edição
                     </Button>
                   )}
                 </div>
@@ -1006,7 +1006,7 @@ export default function TicketSlaPage() {
                   <div className="mt-6 border-t border-white/5 pt-6">
                     <div className="flex items-center gap-2">
                       <CalendarDays className="h-4 w-4 text-slate-400" />
-                      <h3 className="text-sm font-semibold text-white">Feriados do calendario</h3>
+                      <h3 className="text-sm font-semibold text-white">Feriados do calendário</h3>
                     </div>
 
                     <div className="mt-4 space-y-4">
@@ -1040,7 +1040,7 @@ export default function TicketSlaPage() {
                       {holidayType === "2" && (
                         <div className="space-y-4 rounded-xl border border-white/10 bg-white/5 p-4">
                           <p className="text-xs font-medium text-slate-400 uppercase tracking-wide">
-                            Configuracao de feriado relativo
+                            Configuração de feriado relativo
                           </p>
                           <Input
                             label="Nome do feriado"
@@ -1049,7 +1049,7 @@ export default function TicketSlaPage() {
                             placeholder="Corpus Christi"
                           />
                           <Select
-                            label="Metodo de calculo"
+                            label="Metodo de cálculo"
                             options={RELATIVE_METHOD_OPTIONS}
                             value={holidayRelativeMethod}
                             onChange={(event) => setHolidayRelativeMethod(event.target.value)}

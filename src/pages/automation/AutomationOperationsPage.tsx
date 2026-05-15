@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import toast from "react-hot-toast";
 import {
@@ -217,9 +217,9 @@ export default function AutomationOperationsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-white">Operacoes de Automacao</h1>
+        <h1 className="text-2xl font-bold text-white">Operacoes de Automação</h1>
         <p className="text-sm text-slate-400">
-          Execute tarefas/scripts por agent e acompanhe o historico.
+          Execute tarefas/scripts por agent e acompanhe o histórico.
         </p>
       </div>
 
@@ -322,9 +322,9 @@ export default function AutomationOperationsPage() {
       </div>
 
       <Card>
-        <CardHeader title="Historico de execucoes" subtitle={agentId ? "Eventos recentes do agent" : "Selecione um agent para consultar"} />
+        <CardHeader title="Histórico de execuções" subtitle={agentId ? "Eventos recentes do agent" : "Selecione um agent para consultar"} />
         {!agentId && <p className="text-sm text-slate-400">Nenhum agent selecionado.</p>}
-        {agentId && executions.isLoading && <Loading message="Carregando execucoes..." />}
+        {agentId && executions.isLoading && <Loading message="Carregando execuções..." />}
         {agentId && executions.isError && <ErrorDisplay onRetry={() => executions.refetch()} />}
         {agentId && !executions.isLoading && !executions.isError && (
           <DataTable

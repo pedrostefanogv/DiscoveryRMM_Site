@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+﻿import { useState, useEffect, useRef } from 'react';
 import toast from 'react-hot-toast';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -1176,7 +1176,7 @@ function PackageDetailsModal({ open, onClose, pkg, installationType }: PackageDe
             </div>
 
             <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-              <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Descricao</div>
+              <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Descrição</div>
               <div className="mt-1">
                 <MarkdownDescription
                   content={details.description}
@@ -1361,14 +1361,14 @@ function CatalogTab() {
       <Modal
         open={syncConfirmOpen}
         onClose={() => setSyncConfirmOpen(false)}
-        title="Confirmar sincronizacao Chocolatey"
+        title="Confirmar sincronização Chocolatey"
         maxWidth="max-w-xl"
       >
         <div className="space-y-4">
           <div className="rounded-lg border border-white/10 bg-white/5 p-4 text-sm text-slate-200">
             <p>
               Esta operação consulta a API do Chocolatey. Continue apenas se você
-              tem autorizacao para acessar e sincronizar dados do catalogo.
+              tem autorização para acessar e sincronizar dados do catálogo.
             </p>
             <p className="mt-2">
               Ao confirmar, voce declara que leu e concorda com os Termos de Uso:
@@ -1500,16 +1500,16 @@ function CatalogTab() {
               variant="primary"
               onClick={handleSyncRequest}
               loading={syncCatalog.isPending}
-              title={`Sincronizar catalogo ${syncLabel}`}
+              title={`Sincronizar catálogo ${syncLabel}`}
             >
-              <RefreshCw className="h-4 w-4" /> Sincronizar Catalogo
+              <RefreshCw className="h-4 w-4" /> Sincronizar Catálogo
             </Button>
           )}
         </div>
         {(isChocolatey || isWinget) && (
           <div className="mt-3 space-y-2">
             <p className="text-xs text-slate-500">
-              A sincronizacao do catalogo {syncLabel} e idempotente e pode levar alguns minutos.
+              A sincronização do catálogo {syncLabel} e idempotente e pode levar alguns minutos.
             </p>
             {lastSyncInfo && (
               <div
@@ -1520,14 +1520,14 @@ function CatalogTab() {
                 }`}
               >
                 <p>
-                  Ultima sincronizacao: {formatDate(lastSyncInfo.syncedAt ?? null)}
+                  Ultima sincronização: {formatDate(lastSyncInfo.syncedAt ?? null)}
                 </p>
                 <p>
                   Pacotes atualizados: {lastSyncInfo.packagesUpserted}
                   {lastSyncInfo.pagesProcessed !== undefined
                     ? ` - Paginas: ${lastSyncInfo.pagesProcessed}`
                     : ''}
-                  {lastSyncInfo.duration ? ` - Duracao: ${lastSyncInfo.duration}` : ''}
+                  {lastSyncInfo.duration ? ` - Duração: ${lastSyncInfo.duration}` : ''}
                 </p>
                 {!lastSyncInfo.success && lastSyncInfo.error && (
                   <p className="text-danger">Erro: {lastSyncInfo.error}</p>
@@ -1580,7 +1580,7 @@ function CatalogTab() {
                 onClick={handleSyncRequest}
                 loading={syncCatalog.isPending}
               >
-                <RefreshCw className="h-4 w-4" /> Sincronizar catalogo agora
+                <RefreshCw className="h-4 w-4" /> Sincronizar catálogo agora
               </Button>
             )}
             {searchApplied && (

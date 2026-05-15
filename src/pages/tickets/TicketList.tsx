@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+﻿import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   AlertTriangle,
@@ -262,7 +262,7 @@ export default function TicketList() {
   const columns: Column<Ticket>[] = [
     {
       key: 'title',
-      header: 'Titulo',
+      header: 'Título',
       render: (ticket) => (
         <div className="flex items-center gap-3">
           <TicketIcon className="h-4 w-4 shrink-0 text-primary" />
@@ -450,7 +450,7 @@ export default function TicketList() {
         <div>
           <h1 className="text-2xl font-bold text-white">Chamados</h1>
           <p className="text-sm text-slate-400">
-            {visibleTickets.length} chamados na pagina {page}
+            {visibleTickets.length} chamados na página {page}
           </p>
         </div>
         <Button onClick={() => setModalOpen(true)}>
@@ -476,10 +476,10 @@ export default function TicketList() {
           <div>
             <div className="flex items-center gap-2">
               <Bookmark className="h-4 w-4 text-slate-400" />
-              <h2 className="text-lg font-semibold text-white">Visoes salvas</h2>
+              <h2 className="text-lg font-semibold text-white">Visões salvas</h2>
             </div>
             <p className="mt-1 text-sm text-slate-400">
-              Salve combinacoes de filtros da fila para reaplicar em um clique.
+              Salve combinações de filtros da fila para reaplicar em um clique.
             </p>
           </div>
           <Button variant="secondary" onClick={openCreateSavedViewModal} disabled={!currentUserId}>
@@ -647,7 +647,7 @@ export default function TicketList() {
               showPagination={false}
             />
             <div className="flex items-center justify-between border-t border-white/5 px-4 py-3 text-xs text-slate-400">
-              <span>Mostrando ate {PAGE_SIZE} registros por pagina</span>
+              <span>Mostrando ate {PAGE_SIZE} registros por página</span>
               <div className="flex items-center gap-2">
                 <Button
                   variant="ghost"
@@ -862,9 +862,9 @@ function CreateTicketModal({ open, onClose }: { open: boolean; onClose: () => vo
           <Select label="Departamento" options={deptOpts} value={selectedDept} onChange={(event) => handleDeptChange(event.target.value)} disabled={!selectedClient} />
           <Select label="Perfil de Workflow" options={profileOpts} value={form.workflowProfileId ?? ''} onChange={(event) => set('workflowProfileId', event.target.value || null)} disabled={!selectedDept} />
         </div>
-        <Input label="Titulo *" value={form.title} onChange={(event) => set('title', event.target.value)} placeholder="Min. 3 caracteres" />
+        <Input label="Título *" value={form.title} onChange={(event) => set('title', event.target.value)} placeholder="Min. 3 caracteres" />
         <div>
-          <label className="mb-1 block text-sm font-medium text-slate-300">Descricao *</label>
+          <label className="mb-1 block text-sm font-medium text-slate-300">Descrição *</label>
           <textarea
             className="w-full resize-none rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder-slate-500 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
             rows={4}
