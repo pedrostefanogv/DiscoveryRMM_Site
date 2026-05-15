@@ -155,15 +155,16 @@ export default function AgentLabelsSettings() {
     setViewMode('create');
   }
 
-  function toggleAppliedAgentsPanel(ruleId: string) {
-    if (expandedRuleId === ruleId) {
+  function toggleAppliedAgentsPanel(rule: AgentLabelRuleResponse) {
+    if (expandedRuleId === rule.id) {
       setExpandedRuleId(null);
       return;
     }
 
-    setExpandedRuleId(ruleId);
+    setExpandedRuleId(rule.id);
     setAppliedAgentsTotal(0);
     setAppliedResults([]);
+    void handleLoadAppliedAgents(rule);
   }
 
   async function loadAll() {
@@ -526,10 +527,41 @@ export default function AgentLabelsSettings() {
             </div>
 
             {showHelp ? (
-              <div className="mb-4 space-y-3 rounded-xl border border-white/10 bg-white/5 p-4 text-sm text-slate-300">
-                <p>Use grupos para combinar condições com E/OU.</p>
-                <p>Ao escolher custom fields, o operador disponível depende do DataType da definição selecionada.</p>
-                <p>O dry-run suporta lote por site ou simulação individual em um agente específico.</p>
+              <div className="mb-4 space-y-4 rounded-xl border border-white/10 bg-white/5 p-4 text-sm text-slate-300">
+                <div>
+                  <p className="mb-1 font-medium text-white">Como combinar condições com E / OU</p>
+                  <p>Use <strong>grupos (E / OU)</strong> para aninhar condições e criar regras complexas:</p>
+                  <div className="mt-2 rounded-lg bg-slate-900/60 p-3 font-mono text-xs text-slate-400">
+                    <p className="text-slate-300">Exemplo: Windows <strong class="text-yellow-400">(E)</strong> producao OU memoria</p>
+                    <p className="mt-1">Grupo raiz: <strong class="text-yellow-400">E</strong></p>
+                    <p className="ml-2">├─ Condição: SO <em>contém</em> "Windows"</p>
+                    <p className="ml-2">└─ Grupo filho: <strong class="text-yellow-400">OU</strong></p>
+                    <p className="ml-4">&nbsp;&nbsp;├─ Condição: Hostname <em>contém</em> "PROD"</p>
+                    <p className="ml-4">&nbsp;&nbsp;└─ Condição: Memória <em>&gt;=</em> "8589934592"</p>
+                    <p className="mt-2 text-slate-500">Resultado: (SO contém "Windows") <strong class="text-yellow-400">E</strong> (Hostname contém "PROD" <strong class="text-yellow-400">OU</strong> Memória &gt;= 8GB)</p>
+                  </div>
+                </div>
+
+                <div>
+                  <p className="mb-1 font-medium text-white">Custom fields e operadores</p>
+                  <p>Ao selecionar um <strong>Custom Field</strong>, os operadores disponíveis mudam conforme o <strong>tipo de dado</strong>:</p>
+                  <div className="mt-2 rounded-lg bg-slate-900/60 p-3 text-xs text-slate-400">
+                    <p><strong class="text-slate-300">Texto:</strong> Contém, Não contém, Começa com, Termina com, Igual, Diferente, Regex</p>
+                    <p><strong class="text-slate-300">Número inteiro/Decimal:</strong> &gt;, &gt;=, &lt;, &lt;=, Igual, Diferente</p>
+                    <p><strong class="text-slate-300">Data / DataHora:</strong> &gt;, &gt;=, &lt;, &lt;=, Igual, Diferente</p>
+                    <p><strong class="text-slate-300">Booleano (Sim/Não):</strong> Igual</p>
+                    <p><strong class="text-slate-300">Dropdown/Lista:</strong> Igual, Diferente</p>
+                  </div>
+                </div>
+
+                <div>
+                  <p className="mb-1 font-medium text-white">Dry-run: simulando a regra antes de salvar</p>
+                  <p>Você pode testar a regra de duas formas:</p>
+                  <div className="mt-2 rounded-lg bg-slate-900/60 p-3 text-xs text-slate-400">
+                    <p className="text-slate-300"><strong>Lote por site:</strong> selecione um cliente + site e defina um limite de agentes. A regra será testada em lote.</p>
+                    <p className="mt-1 text-slate-300"><strong>Agente específico:</strong> selecione um cliente + site + agente para testar a regra em um único agente.</p>
+                  </div>
+                </div>
               </div>
             ) : null}
 
@@ -699,17 +731,18 @@ export default function AgentLabelsSettings() {
                   <div className="mt-3 flex flex-wrap gap-2">
                     <Button size="sm" variant="secondary" onClick={() => startEditRule(rule)}>Editar</Button>
                     <Button size="sm" variant="ghost" onClick={() => void handleToggleRule(rule)}>{rule.isEnabled ? 'Desabilitar' : 'Habilitar'}</Button>
-                    <Button size="sm" variant="secondary" onClick={() => toggleAppliedAgentsPanel(rule.id)}>{expandedRuleId === rule.id ? 'Ocultar Agentes com Label' : 'Ver Agentes com Label'}</Button>
+                    <Button size="sm" variant="secondary" onClick={() => toggleAppliedAgentsPanel(rule)}>{expandedRuleId === rule.id ? 'Ocultar Agentes com Label' : 'Ver Agentes com Label'}</Button>
                     <Button size="sm" variant="danger" onClick={() => void handleDeleteRule(rule)}>Excluir</Button>
                   </div>
 
                   {expandedRuleId === rule.id ? (
                     <div className="mt-4 space-y-3 rounded-lg border border-white/10 bg-slate-900/30 p-3">
                       <h4 className="text-sm font-medium text-slate-100">Agentes com a label "{rule.label}"</h4>
-                      <div className="flex justify-end">
-                        <Button variant="secondary" loading={isLoadingAppliedAgents} onClick={() => void handleLoadAppliedAgents(rule)}>Carregar Todos os Agentes</Button>
-                      </div>
 
+                      {isLoadingAppliedAgents ? (
+                        <Loading message="Carregando agentes..." />
+                      ) : (
+                        <>
                       <p className="text-xs text-slate-400">Total informado pela API: {appliedAgentsTotal} • Retornados nesta consulta: {appliedResults.length}</p>
 
                       {appliedResults.length > 0 ? (
@@ -736,7 +769,9 @@ export default function AgentLabelsSettings() {
                           </table>
                         </div>
                       ) : (
-                        <p className="text-sm text-slate-500">Clique em carregar para listar os agentes retornados pela regra.</p>
+                        <p className="text-sm text-slate-500">Nenhum agente retornado pela regra.</p>
+                      )}
+                      </>
                       )}
                     </div>
                   ) : null}
