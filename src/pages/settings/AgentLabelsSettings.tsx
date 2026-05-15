@@ -791,6 +791,101 @@ export default function AgentLabelsSettings() {
               subtitle={isReadOnly ? 'Visualizando regra — clique em Editar para alterar.' : 'Modo de edição ativo.'}
             />
 
+            <div className="mb-4 flex justify-end">
+              <Button size="sm" variant="ghost" onClick={() => setShowHelp(prev => !prev)}>
+                {showHelp ? 'Recolher ajuda' : 'Ajuda das regras'}
+              </Button>
+            </div>
+
+            {showHelp ? (
+              <div className="mb-4 space-y-4 rounded-xl border border-white/10 bg-white/5 p-4 text-sm text-slate-300">
+                <div>
+                  <p className="mb-1 font-medium text-white">Como combinar condições com E / OU</p>
+                  <p>Use <strong>grupos (E / OU)</strong> para aninhar condições e criar regras complexas:</p>
+
+                  <div className="mt-3 space-y-3">
+                    <div className="rounded-lg bg-slate-900/60 p-3 font-mono text-xs text-slate-400">
+                      <p className="text-slate-300 font-medium mb-1">Exemplo 1 — Simples: SO + (hostname OU memória)</p>
+                      <p>Grupo raiz: <strong className="text-yellow-400">E</strong></p>
+                      <p className="ml-2">├─ Condição: SO <em>contém</em> "Windows"</p>
+                      <p className="ml-2">└─ Grupo filho: <strong className="text-yellow-400">OU</strong></p>
+                      <p className="ml-4">&nbsp;&nbsp;├─ Condição: Hostname <em>contém</em> "PROD"</p>
+                      <p className="ml-4">&nbsp;&nbsp;└─ Condição: Memória <em>&gt;=</em> "8589934592"</p>
+                      <p className="mt-2 text-slate-500">Resultado: (SO contém "Windows") <strong className="text-yellow-400">E</strong> (Hostname contém "PROD" <strong className="text-yellow-400">OU</strong> Memória &gt;= 8GB)</p>
+                    </div>
+
+                    <div className="rounded-lg bg-slate-900/60 p-3 font-mono text-xs text-slate-400">
+                      <p className="text-slate-300 font-medium mb-1">Exemplo 2 — Intermediário: Windows + (PROD OU 8GB) E (SP OU RJ)</p>
+                      <p>Grupo raiz: <strong className="text-yellow-400">E</strong></p>
+                      <p className="ml-2">├─ Condição: SO <em>contém</em> "Windows"</p>
+                      <p className="ml-2">├─ Grupo filho: <strong className="text-yellow-400">OU</strong></p>
+                      <p className="ml-4">&nbsp;&nbsp;├─ Condição: Hostname <em>contém</em> "PROD"</p>
+                      <p className="ml-4">&nbsp;&nbsp;└─ Condição: Memória <em>&gt;=</em> "8589934592"</p>
+                      <p className="ml-2">└─ Grupo filho: <strong className="text-yellow-400">OU</strong></p>
+                      <p className="ml-4">&nbsp;&nbsp;├─ Condição: DisplayName <em>contém</em> "SP"</p>
+                      <p className="ml-4">&nbsp;&nbsp;└─ Condição: DisplayName <em>contém</em> "RJ"</p>
+                      <p className="mt-2 text-slate-500">Resultado: SO Windows <strong className="text-yellow-400">E</strong> (PROD <strong className="text-yellow-400">OU</strong> 8GB) <strong className="text-yellow-400">E</strong> (SP <strong className="text-yellow-400">OU</strong> RJ)</p>
+                    </div>
+
+                    <div className="rounded-lg bg-slate-900/60 p-3 font-mono text-xs text-slate-400">
+                      <p className="text-slate-300 font-medium mb-1">Exemplo 3 — Avançado: servidores Windows com bastante memória OU estações Linux</p>
+                      <p>Grupo raiz: <strong className="text-yellow-400">OU</strong></p>
+                      <p className="ml-2">├─ Grupo filho: <strong className="text-yellow-400">E</strong> — Servidores Windows</p>
+                      <p className="ml-4">&nbsp;&nbsp;├─ Condição: SO <em>contém</em> "Windows"</p>
+                      <p className="ml-4">&nbsp;&nbsp;├─ Condição: Hostname <em>contém</em> "SRV"</p>
+                      <p className="ml-4">&nbsp;&nbsp;└─ Condição: Memória <em>&gt;=</em> "17179869184"</p>
+                      <p className="ml-2">└─ Grupo filho: <strong className="text-yellow-400">E</strong> — Estações Linux</p>
+                      <p className="ml-4">&nbsp;&nbsp;├─ Condição: SO <em>contém</em> "Linux"</p>
+                      <p className="ml-4">&nbsp;&nbsp;└─ Condição: Hostname <em>NÃO contém</em> "SRV"</p>
+                      <p className="mt-2 text-slate-500">Resultado: (Windows <strong className="text-yellow-400">E</strong> SRV <strong className="text-yellow-400">E</strong> 16GB+) <strong className="text-yellow-400">OU</strong> (Linux <strong className="text-yellow-400">E</strong> NÃO estação)</p>
+                    </div>
+
+                    <div className="rounded-lg bg-slate-900/60 p-3 font-mono text-xs text-slate-400">
+                      <p className="text-slate-300 font-medium mb-1">Exemplo 4 — Discos: SSD C: com menos de 20% livre</p>
+                      <p>Grupo raiz: <strong className="text-yellow-400">E</strong></p>
+                      <p className="ml-2">├─ <strong className="text-orange-400">Disco</strong> [<strong className="text-yellow-400">OU</strong> — algum disco atende]</p>
+                      <p className="ml-4">&nbsp;&nbsp;├─ Condição: Letra <em>=</em> "C:"</p>
+                      <p className="ml-4">&nbsp;&nbsp;├─ Condição: Tipo <em>=</em> "SSD"</p>
+                      <p className="ml-4">&nbsp;&nbsp;└─ Condição: % Livre <em>&lt;</em> "20"</p>
+                      <p className="ml-2">└─ Condição: Status <em>=</em> "Online"</p>
+                      <p className="mt-2 text-slate-500">Resultado: (C: SSD &lt;20% livre) <strong className="text-yellow-400">E</strong> Online</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <p className="mb-1 font-medium text-white">Custom fields e operadores</p>
+                  <p>Ao selecionar um <strong>Custom Field</strong>, os operadores disponíveis mudam conforme o <strong>tipo de dado</strong>:</p>
+                  <div className="mt-2 rounded-lg bg-slate-900/60 p-3 text-xs text-slate-400">
+                    <p><strong className="text-slate-300">Texto:</strong> Contém, Não contém, Começa com, Termina com, Igual, Diferente, Regex</p>
+                    <p><strong className="text-slate-300">Número inteiro/Decimal:</strong> &gt;, &gt;=, &lt;, &lt;=, Igual, Diferente</p>
+                    <p><strong className="text-slate-300">Data / DataHora:</strong> &gt;, &gt;=, &lt;, &lt;=, Igual, Diferente</p>
+                    <p><strong className="text-slate-300">Booleano (Sim/Não):</strong> Igual</p>
+                    <p><strong className="text-slate-300">Dropdown/Lista:</strong> Igual, Diferente</p>
+                  </div>
+                </div>
+
+                <div>
+                  <p className="mb-1 font-medium text-white">Dry-run: simulando a regra antes de salvar</p>
+                  <p>Você pode testar a regra de duas formas:</p>
+                  <div className="mt-2 rounded-lg bg-slate-900/60 p-3 text-xs text-slate-400">
+                    <p className="text-slate-300"><strong>Lote por site:</strong> selecione um cliente + site e defina um limite de agentes. A regra será testada em lote.</p>
+                    <p className="mt-1 text-slate-300"><strong>Agente específico:</strong> selecione um cliente + site + agente para testar a regra em um único agente.</p>
+                  </div>
+                </div>
+
+                <div>
+                  <p className="mb-1 font-medium text-white">Grupo de Discos</p>
+                  <p>Use o botão <strong>+ Disco</strong> para criar condições que avaliam discos do agente. Dentro de um grupo de discos, você pode usar campos como Letra da Unidade, Tipo de Mídia (SSD/HDD), % Livre, Sistema de Arquivos, entre outros.</p>
+                  <div className="mt-2 rounded-lg bg-slate-900/60 p-3 text-xs text-slate-400">
+                    <p className="text-slate-300"><strong>ANY (OU):</strong> pelo menos um disco do agente deve atender a todas as condições.</p>
+                    <p className="mt-1 text-slate-300"><strong>ALL (E):</strong> todos os discos do agente devem atender a todas as condições.</p>
+                    <p className="mt-2 text-slate-500">Campos de disco (Letra, Tipo, % Livre, etc.) só podem ser usados dentro de um grupo Disco.</p>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
             <div className="grid gap-4 lg:grid-cols-2">
               <Input label="Nome" placeholder="Ex.: Windows Produção" value={name} maxLength={200} disabled={isReadOnly} onChange={event => setName(event.target.value)} />
               <Input label="Label" placeholder="Ex.: PROD" value={label} maxLength={120} disabled={isReadOnly} onChange={event => setLabel(event.target.value)} />
@@ -1094,11 +1189,13 @@ function ExpressionNodeEditor({ node, path, isRoot = false, insideDiskGroup = fa
               }}
             />
           </div>
+          <Button size="sm" variant="secondary" onClick={() => onAddCondition(path)}>+ Condição</Button>
           {!isDisk ? (
-            <Button size="sm" variant="secondary" onClick={() => onAddCondition(path)}>+ Condição</Button>
+            <>
+              <Button size="sm" variant="secondary" onClick={() => onAddDiskGroup(path)}>+ Disco</Button>
+              <Button size="sm" variant="secondary" onClick={() => onAddGroup(path)}>+ Grupo</Button>
+            </>
           ) : null}
-          <Button size="sm" variant="secondary" onClick={() => onAddDiskGroup(path)}>+ Disco</Button>
-          <Button size="sm" variant="secondary" onClick={() => onAddGroup(path)}>+ Grupo</Button>
           {!isRoot ? <Button size="sm" variant="danger" onClick={() => onRemoveNode(path)}>Remover</Button> : null}
         </div>
 
