@@ -501,8 +501,8 @@ export default function AgentLabelsSettings() {
   function handleApplyJsonToVisual() {
     try {
       const parsed = JSON.parse(expressionText) as AgentLabelRuleExpressionNodeDto;
-      if (parsed.nodeType !== AgentLabelNodeType.Group) {
-        toast.error('A raiz da expressão precisa ser um Group.');
+      if (parsed.nodeType !== AgentLabelNodeType.Group && parsed.nodeType !== AgentLabelNodeType.DiskGroup) {
+        toast.error('A raiz da expressão precisa ser um Group ou DiskGroup.');
         return;
       }
 
@@ -1360,9 +1360,13 @@ function ExpressionNodeEditor({ node, path, isRoot = false, insideDiskGroup = fa
   );
 }
 
+function isContainerNode(node: AgentLabelRuleExpressionNodeDto): boolean {
+  return node.nodeType === AgentLabelNodeType.Group || node.nodeType === AgentLabelNodeType.DiskGroup;
+}
+
 function addChildAtPath(root: AgentLabelRuleExpressionNodeDto, path: number[], child: AgentLabelRuleExpressionNodeDto): AgentLabelRuleExpressionNodeDto {
   return updateNodeAtPath(root, path, node => {
-    if (node.nodeType !== AgentLabelNodeType.Group) {
+    if (!isContainerNode(node)) {
       return node;
     }
 
@@ -1380,7 +1384,7 @@ function removeNodeAtPath(root: AgentLabelRuleExpressionNodeDto, path: number[])
   const removeIndex = path[path.length - 1];
 
   return updateNodeAtPath(root, parentPath, parent => {
-    if (parent.nodeType !== AgentLabelNodeType.Group) {
+    if (!isContainerNode(parent)) {
       return parent;
     }
 
@@ -1399,7 +1403,7 @@ function updateNodeAtPath(
   }
 
   const [currentIndex, ...nextPath] = path;
-  if (root.nodeType !== AgentLabelNodeType.Group) {
+  if (!isContainerNode(root)) {
     return root;
   }
 
