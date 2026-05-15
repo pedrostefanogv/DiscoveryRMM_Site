@@ -416,7 +416,9 @@ function FieldFormModal({
     form.dataType === CustomFieldDataType.Decimal;
 
   const showLength =
-    form.dataType === CustomFieldDataType.Text;
+    form.dataType === CustomFieldDataType.Text && !form.validationRegex;
+
+  const showRegex = form.dataType === CustomFieldDataType.Text;
 
   const availableRegexPresets = useMemo(
     () =>
@@ -541,63 +543,75 @@ function FieldFormModal({
       title={isEdit ? `Editar: ${field.label}` : "Adicionar Campo Customizado"}
       maxWidth="max-w-lg"
     >
-      <div className="space-y-4">
-        <div className="grid grid-cols-2 gap-3">
+      <div className="space-y-5">
+
+        {/* ── Basic Info ── */}
+        <div>
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
+            Informações Básicas
+          </p>
+          <div className="grid grid-cols-2 gap-3">
+            <Input
+              label="Nome do Campo *"
+              value={form.name}
+              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+              placeholder="ex: tipo_solicitacao"
+              hint="Identificador único ([a-z0-9_-])"
+            />
+            <Input
+              label="Label *"
+              value={form.label}
+              onChange={(e) => setForm((f) => ({ ...f, label: e.target.value }))}
+              placeholder="ex: Tipo de Solicitação"
+            />
+          </div>
+
           <Input
-            label="Nome do Campo *"
-            value={form.name}
-            onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-            placeholder="ex: tipo_solicitacao"
-            hint="Identificador único ([a-z0-9_-])"
+            label="Descrição"
+            value={form.description ?? ""}
+            onChange={(e) =>
+              setForm((f) => ({ ...f, description: e.target.value || null }))
+            }
+            placeholder="Texto de ajuda exibido no formulário"
           />
-          <Input
-            label="Label *"
-            value={form.label}
-            onChange={(e) => setForm((f) => ({ ...f, label: e.target.value }))}
-            placeholder="ex: Tipo de Solicitação"
+
+          <Select
+            label="Tipo do Campo *"
+            value={String(form.dataType)}
+            options={DATA_TYPE_OPTIONS}
+            onChange={(e) =>
+              setForm((f) => ({
+                ...f,
+                dataType: Number(e.target.value) as CustomFieldDataType,
+              }))
+            }
           />
+
+          {needsOptions && (
+            <TextArea
+              label="Opções *"
+              rows={3}
+              value={optionsText}
+              onChange={(e) => setOptionsText(e.target.value)}
+              hint="Valores separados por vírgula. Ex: Orçamento, Compra, Cotação"
+            />
+          )}
         </div>
 
-        <Input
-          label="Descrição"
-          value={form.description ?? ""}
-          onChange={(e) =>
-            setForm((f) => ({ ...f, description: e.target.value || null }))
-          }
-          placeholder="Texto de ajuda exibido no formulário"
-        />
-
-        <Select
-          label="Tipo do Campo *"
-          value={String(form.dataType)}
-          options={DATA_TYPE_OPTIONS}
-          onChange={(e) =>
-            setForm((f) => ({
-              ...f,
-              dataType: Number(e.target.value) as CustomFieldDataType,
-            }))
-          }
-        />
-
-        {needsOptions && (
-          <TextArea
-            label="Opções *"
-            rows={3}
-            value={optionsText}
-            onChange={(e) => setOptionsText(e.target.value)}
-            hint="Valores separados por vírgula. Ex: Orçamento, Compra, Cotação"
-          />
-        )}
-
-        <div className="flex flex-wrap gap-4">
-          <label className="flex items-center gap-2 text-sm text-slate-300">
-            <input
-              type="checkbox"
-              checked={form.isRequired ?? false}
-              onChange={(e) => setForm((f) => ({ ...f, isRequired: e.target.checked }))}
-              className="rounded bg-white/5 border-white/10"
-            />
-            Obrigatório
+        {/* ── Behaviour ── */}
+        <div>
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
+            Comportamento
+          </p>
+          <div className="flex flex-wrap gap-4">
+            <label className="flex items-center gap-2 text-sm text-slate-300">
+              <input
+                type="checkbox"
+                checked={form.isRequired ?? false}
+                onChange={(e) => setForm((f) => ({ ...f, isRequired: e.target.checked }))}
+                className="rounded bg-white/5 border-white/10"
+              />
+              Obrigatório
           </label>
           <label className="flex items-center gap-2 text-sm text-slate-300">
             <input
@@ -619,40 +633,18 @@ function FieldFormModal({
             Ativo
           </label>
         </div>
+        </div>
 
-        {/* Validation constraints */}
-        {(showMinMax || showLength || true) && (
-          <div className="rounded-lg border border-white/10 bg-white/5 p-3">
-            <p className="text-xs font-medium text-slate-400 mb-2">Validações Adicionais</p>
-            <div className="grid grid-cols-2 gap-3">
-              {showLength && (
-                <>
-                  <Input
-                    label="Tamanho Mínimo"
-                    type="number"
-                    value={form.minLength ?? ""}
-                    onChange={(e) =>
-                      setForm((f) => ({
-                        ...f,
-                        minLength: e.target.value ? Number(e.target.value) : null,
-                      }))
-                    }
-                  />
-                  <Input
-                    label="Tamanho Máximo"
-                    type="number"
-                    value={form.maxLength ?? ""}
-                    onChange={(e) =>
-                      setForm((f) => ({
-                        ...f,
-                        maxLength: e.target.value ? Number(e.target.value) : null,
-                      }))
-                    }
-                  />
-                </>
-              )}
-              {showMinMax && (
-                <>
+        {/* ── Validation ── */}
+        {(showMinMax || showLength || showRegex) && (
+          <div>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
+              Validação
+            </p>
+            {showMinMax && (
+              <div className="rounded-lg border border-white/10 bg-white/5 p-3">
+                <p className="text-xs font-medium text-slate-400 mb-2">Faixa de Valor</p>
+                <div className="grid grid-cols-2 gap-3">
                   <Input
                     label="Valor Mínimo"
                     type="number"
@@ -675,164 +667,205 @@ function FieldFormModal({
                       }))
                     }
                   />
-                </>
-              )}
-            </div>
-            <div className="mt-2">
-              <Input
-                label="Regex de Validação"
-                value={form.validationRegex ?? ""}
-                onChange={(e) =>
-                  setForm((f) => ({
-                    ...f,
-                    validationRegex: e.target.value || null,
-                  }))
-                }
-                placeholder="ex: ^CC-\d{4}$"
-              />
+                </div>
+              </div>
+            )}
 
-              <div className="mt-3 rounded-lg border border-white/10 bg-slate-950/30 p-3">
-                <p className="text-xs font-medium text-slate-400">Assistente de Regex</p>
-                <p className="mt-1 text-xs text-slate-500">
-                  Escolha um modelo pronto, ajuste se necessario e teste antes de salvar.
-                </p>
-
-                <div className="mt-3 grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
-                  <Select
-                    label="Modelo sugerido"
-                    value={selectedRegexPreset}
-                    options={[
-                      { value: "", label: "Selecionar modelo" },
-                      ...availableRegexPresets.map((preset) => ({
-                        value: preset.value,
-                        label: preset.label,
-                      })),
-                    ]}
-                    onChange={(e) => setSelectedRegexPreset(e.target.value)}
+            {showLength && (
+              <div className="rounded-lg border border-white/10 bg-white/5 p-3">
+                <p className="text-xs font-medium text-slate-400 mb-2">Tamanho do Texto</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <Input
+                    label="Tamanho Mínimo"
+                    type="number"
+                    value={form.minLength ?? ""}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        minLength: e.target.value ? Number(e.target.value) : null,
+                      }))
+                    }
                   />
-                  <div className="flex items-end gap-2">
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      onClick={applySelectedRegexPreset}
-                      disabled={!selectedPreset}
-                    >
-                      Aplicar modelo
-                    </Button>
+                  <Input
+                    label="Tamanho Máximo"
+                    type="number"
+                    value={form.maxLength ?? ""}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        maxLength: e.target.value ? Number(e.target.value) : null,
+                      }))
+                    }
+                  />
+                </div>
+              </div>
+            )}
+
+            {form.dataType === CustomFieldDataType.Text && form.validationRegex && (
+              <p className="mb-2 text-xs text-slate-500">
+                Regex ativo — os campos de tamanho mínimo/máximo foram ocultados pois o próprio regex já controla o comprimento.
+              </p>
+            )}
+
+            {showRegex && (
+              <div className="space-y-3">
+                <Input
+                  label="Regex de Validação"
+                  value={form.validationRegex ?? ""}
+                  onChange={(e) =>
+                    setForm((f) => ({
+                      ...f,
+                      validationRegex: e.target.value || null,
+                    }))
+                  }
+                  placeholder="ex: ^CC-\d{4}$"
+                />
+
+                {form.validationRegex && (
+                  <div className="rounded-lg border border-white/10 bg-slate-950/30 p-3">
+                    <p className="text-xs font-medium text-slate-400">Assistente de Regex</p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Escolha um modelo pronto, ajuste se necessario e teste antes de salvar.
+                    </p>
+
+                    <div className="mt-3 grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
+                      <Select
+                        label="Modelo sugerido"
+                        value={selectedRegexPreset}
+                        options={[
+                          { value: "", label: "Selecionar modelo" },
+                          ...availableRegexPresets.map((preset) => ({
+                            value: preset.value,
+                            label: preset.label,
+                          })),
+                        ]}
+                        onChange={(e) => setSelectedRegexPreset(e.target.value)}
+                      />
+                      <div className="flex items-end gap-2">
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={applySelectedRegexPreset}
+                          disabled={!selectedPreset}
+                        >
+                          Aplicar modelo
+                        </Button>
+                        {selectedPreset && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => {
+                              setRegexValidCasesText(selectedPreset.validSamples.join("\n"));
+                              setRegexInvalidCasesText(selectedPreset.invalidSamples.join("\n"));
+                            }}
+                          >
+                            Usar exemplos
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+
                     {selectedPreset && (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => {
-                          setRegexValidCasesText(selectedPreset.validSamples.join("\n"));
-                          setRegexInvalidCasesText(selectedPreset.invalidSamples.join("\n"));
-                        }}
-                      >
-                        Usar exemplos
-                      </Button>
+                      <p className="mt-2 text-xs text-slate-400">{selectedPreset.description}</p>
+                    )}
+
+                    <div className="mt-3 grid gap-3 md:grid-cols-2">
+                      <TextArea
+                        label="Casos que devem passar"
+                        rows={4}
+                        value={regexValidCasesText}
+                        onChange={(e) => setRegexValidCasesText(e.target.value)}
+                        hint="Um valor por linha."
+                      />
+                      <TextArea
+                        label="Casos que devem falhar"
+                        rows={4}
+                        value={regexInvalidCasesText}
+                        onChange={(e) => setRegexInvalidCasesText(e.target.value)}
+                        hint="Um valor por linha."
+                      />
+                    </div>
+
+                    {regexEvaluation.error && (
+                      <p className="mt-2 text-xs text-danger">
+                        Regex invalida: {regexEvaluation.error}
+                      </p>
+                    )}
+
+                    {!regexEvaluation.error && regexCaseEvaluation.total > 0 && (
+                      <div className="mt-3 space-y-3 rounded-lg border border-white/10 bg-white/5 p-3">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge
+                            color={
+                              regexCaseEvaluation.passed === regexCaseEvaluation.total
+                                ? "success"
+                                : "warning"
+                            }
+                          >
+                            {regexCaseEvaluation.passed}/{regexCaseEvaluation.total} cenarios aprovados
+                          </Badge>
+                          <Badge color="slate">
+                            {regexCaseEvaluation.total - regexCaseEvaluation.passed} falha(s)
+                          </Badge>
+                        </div>
+
+                        <div className="grid gap-3 md:grid-cols-2">
+                          <div>
+                            <p className="mb-2 text-xs font-medium text-slate-400">
+                              Esperado: passar
+                            </p>
+                            <div className="space-y-1">
+                              {regexCaseEvaluation.valid.length === 0 && (
+                                <p className="text-xs text-slate-500">Sem casos definidos.</p>
+                              )}
+                              {regexCaseEvaluation.valid.map((item) => (
+                                <div
+                                  key={`valid-${item.value}`}
+                                  className="flex items-center justify-between gap-2 rounded bg-slate-950/40 px-2 py-1"
+                                >
+                                  <code className="truncate text-xs text-slate-300">{item.value}</code>
+                                  <Badge color={item.passed ? "success" : "danger"}>
+                                    {item.passed ? "OK" : "Falhou"}
+                                  </Badge>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div>
+                            <p className="mb-2 text-xs font-medium text-slate-400">
+                              Esperado: falhar
+                            </p>
+                            <div className="space-y-1">
+                              {regexCaseEvaluation.invalid.length === 0 && (
+                                <p className="text-xs text-slate-500">Sem casos definidos.</p>
+                              )}
+                              {regexCaseEvaluation.invalid.map((item) => (
+                                <div
+                                  key={`invalid-${item.value}`}
+                                  className="flex items-center justify-between gap-2 rounded bg-slate-950/40 px-2 py-1"
+                                >
+                                  <code className="truncate text-xs text-slate-300">{item.value}</code>
+                                  <Badge color={item.passed ? "success" : "danger"}>
+                                    {item.passed ? "OK" : "Falhou"}
+                                  </Badge>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {!regexEvaluation.error && regexCaseEvaluation.total === 0 && (
+                      <p className="mt-2 text-xs text-slate-500">
+                        Adicione casos de teste para validar o comportamento do regex antes de salvar.
+                      </p>
                     )}
                   </div>
-                </div>
-
-                {selectedPreset && (
-                  <p className="mt-2 text-xs text-slate-400">{selectedPreset.description}</p>
-                )}
-
-                <div className="mt-3 grid gap-3 md:grid-cols-2">
-                  <TextArea
-                    label="Casos que devem passar"
-                    rows={4}
-                    value={regexValidCasesText}
-                    onChange={(e) => setRegexValidCasesText(e.target.value)}
-                    hint="Um valor por linha."
-                  />
-                  <TextArea
-                    label="Casos que devem falhar"
-                    rows={4}
-                    value={regexInvalidCasesText}
-                    onChange={(e) => setRegexInvalidCasesText(e.target.value)}
-                    hint="Um valor por linha."
-                  />
-                </div>
-
-                {regexEvaluation.error && (
-                  <p className="mt-2 text-xs text-danger">
-                    Regex invalida: {regexEvaluation.error}
-                  </p>
-                )}
-
-                {!regexEvaluation.error && regexCaseEvaluation.total > 0 && (
-                  <div className="mt-3 space-y-3 rounded-lg border border-white/10 bg-white/5 p-3">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Badge
-                        color={
-                          regexCaseEvaluation.passed === regexCaseEvaluation.total
-                            ? "success"
-                            : "warning"
-                        }
-                      >
-                        {regexCaseEvaluation.passed}/{regexCaseEvaluation.total} cenarios aprovados
-                      </Badge>
-                      <Badge color="slate">
-                        {regexCaseEvaluation.total - regexCaseEvaluation.passed} falha(s)
-                      </Badge>
-                    </div>
-
-                    <div className="grid gap-3 md:grid-cols-2">
-                      <div>
-                        <p className="mb-2 text-xs font-medium text-slate-400">
-                          Esperado: passar
-                        </p>
-                        <div className="space-y-1">
-                          {regexCaseEvaluation.valid.length === 0 && (
-                            <p className="text-xs text-slate-500">Sem casos definidos.</p>
-                          )}
-                          {regexCaseEvaluation.valid.map((item) => (
-                            <div
-                              key={`valid-${item.value}`}
-                              className="flex items-center justify-between gap-2 rounded bg-slate-950/40 px-2 py-1"
-                            >
-                              <code className="truncate text-xs text-slate-300">{item.value}</code>
-                              <Badge color={item.passed ? "success" : "danger"}>
-                                {item.passed ? "OK" : "Falhou"}
-                              </Badge>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div>
-                        <p className="mb-2 text-xs font-medium text-slate-400">
-                          Esperado: falhar
-                        </p>
-                        <div className="space-y-1">
-                          {regexCaseEvaluation.invalid.length === 0 && (
-                            <p className="text-xs text-slate-500">Sem casos definidos.</p>
-                          )}
-                          {regexCaseEvaluation.invalid.map((item) => (
-                            <div
-                              key={`invalid-${item.value}`}
-                              className="flex items-center justify-between gap-2 rounded bg-slate-950/40 px-2 py-1"
-                            >
-                              <code className="truncate text-xs text-slate-300">{item.value}</code>
-                              <Badge color={item.passed ? "success" : "danger"}>
-                                {item.passed ? "OK" : "Falhou"}
-                              </Badge>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {!regexEvaluation.error && regexCaseEvaluation.total === 0 && (
-                  <p className="mt-2 text-xs text-slate-500">
-                    Adicione casos de teste para validar o comportamento do regex antes de salvar.
-                  </p>
                 )}
               </div>
-            </div>
+            )}
           </div>
         )}
 
