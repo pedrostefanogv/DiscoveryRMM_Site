@@ -58,6 +58,17 @@ const applyModeOptions = Object.values(AgentLabelApplyMode)
   .filter((value): value is AgentLabelApplyMode => typeof value === 'number')
   .map(mode => ({ value: String(mode), label: getAgentLabelApplyModeLabel(mode) }));
 
+const GROUP_ACCENTS = [
+  { border: 'border-l-cyan-500/50', dot: 'bg-cyan-500' },
+  { border: 'border-l-violet-500/50', dot: 'bg-violet-500' },
+  { border: 'border-l-amber-500/50', dot: 'bg-amber-500' },
+  { border: 'border-l-emerald-500/50', dot: 'bg-emerald-500' },
+  { border: 'border-l-rose-500/50', dot: 'bg-rose-500' },
+  { border: 'border-l-sky-500/50', dot: 'bg-sky-500' },
+  { border: 'border-l-orange-500/50', dot: 'bg-orange-500' },
+  { border: 'border-l-teal-500/50', dot: 'bg-teal-500' },
+];
+
 type DryRunMode = 'site-batch' | 'single-agent';
 
 export default function AgentLabelsSettings() {
@@ -531,14 +542,43 @@ export default function AgentLabelsSettings() {
                 <div>
                   <p className="mb-1 font-medium text-white">Como combinar condições com E / OU</p>
                   <p>Use <strong>grupos (E / OU)</strong> para aninhar condições e criar regras complexas:</p>
-                  <div className="mt-2 rounded-lg bg-slate-900/60 p-3 font-mono text-xs text-slate-400">
-                    <p className="text-slate-300">Exemplo: Windows <strong className="text-yellow-400">(E)</strong> producao OU memoria</p>
-                    <p className="mt-1">Grupo raiz: <strong className="text-yellow-400">E</strong></p>
-                    <p className="ml-2">├─ Condição: SO <em>contém</em> "Windows"</p>
-                    <p className="ml-2">└─ Grupo filho: <strong className="text-yellow-400">OU</strong></p>
-                    <p className="ml-4">&nbsp;&nbsp;├─ Condição: Hostname <em>contém</em> "PROD"</p>
-                    <p className="ml-4">&nbsp;&nbsp;└─ Condição: Memória <em>&gt;=</em> "8589934592"</p>
-                    <p className="mt-2 text-slate-500">Resultado: (SO contém "Windows") <strong className="text-yellow-400">E</strong> (Hostname contém "PROD" <strong className="text-yellow-400">OU</strong> Memória &gt;= 8GB)</p>
+
+                  <div className="mt-3 space-y-3">
+                    <div className="rounded-lg bg-slate-900/60 p-3 font-mono text-xs text-slate-400">
+                      <p className="text-slate-300 font-medium mb-1">Exemplo 1 — Simples: SO + (hostname OU memória)</p>
+                      <p>Grupo raiz: <strong className="text-yellow-400">E</strong></p>
+                      <p className="ml-2">├─ Condição: SO <em>contém</em> "Windows"</p>
+                      <p className="ml-2">└─ Grupo filho: <strong className="text-yellow-400">OU</strong></p>
+                      <p className="ml-4">&nbsp;&nbsp;├─ Condição: Hostname <em>contém</em> "PROD"</p>
+                      <p className="ml-4">&nbsp;&nbsp;└─ Condição: Memória <em>&gt;=</em> "8589934592"</p>
+                      <p className="mt-2 text-slate-500">Resultado: (SO contém "Windows") <strong className="text-yellow-400">E</strong> (Hostname contém "PROD" <strong className="text-yellow-400">OU</strong> Memória &gt;= 8GB)</p>
+                    </div>
+
+                    <div className="rounded-lg bg-slate-900/60 p-3 font-mono text-xs text-slate-400">
+                      <p className="text-slate-300 font-medium mb-1">Exemplo 2 — Intermediário: Windows + (PROD OU 8GB) E (SP OU RJ)</p>
+                      <p>Grupo raiz: <strong className="text-yellow-400">E</strong></p>
+                      <p className="ml-2">├─ Condição: SO <em>contém</em> "Windows"</p>
+                      <p className="ml-2">├─ Grupo filho: <strong className="text-yellow-400">OU</strong></p>
+                      <p className="ml-4">&nbsp;&nbsp;├─ Condição: Hostname <em>contém</em> "PROD"</p>
+                      <p className="ml-4">&nbsp;&nbsp;└─ Condição: Memória <em>&gt;=</em> "8589934592"</p>
+                      <p className="ml-2">└─ Grupo filho: <strong className="text-yellow-400">OU</strong></p>
+                      <p className="ml-4">&nbsp;&nbsp;├─ Condição: DisplayName <em>contém</em> "SP"</p>
+                      <p className="ml-4">&nbsp;&nbsp;└─ Condição: DisplayName <em>contém</em> "RJ"</p>
+                      <p className="mt-2 text-slate-500">Resultado: SO Windows <strong className="text-yellow-400">E</strong> (PROD <strong className="text-yellow-400">OU</strong> 8GB) <strong className="text-yellow-400">E</strong> (SP <strong className="text-yellow-400">OU</strong> RJ)</p>
+                    </div>
+
+                    <div className="rounded-lg bg-slate-900/60 p-3 font-mono text-xs text-slate-400">
+                      <p className="text-slate-300 font-medium mb-1">Exemplo 3 — Avançado: servidores Windows com bastante memória OU estações Linux</p>
+                      <p>Grupo raiz: <strong className="text-yellow-400">OU</strong></p>
+                      <p className="ml-2">├─ Grupo filho: <strong className="text-yellow-400">E</strong> — Servidores Windows</p>
+                      <p className="ml-4">&nbsp;&nbsp;├─ Condição: SO <em>contém</em> "Windows"</p>
+                      <p className="ml-4">&nbsp;&nbsp;├─ Condição: Hostname <em>contém</em> "SRV"</p>
+                      <p className="ml-4">&nbsp;&nbsp;└─ Condição: Memória <em>&gt;=</em> "17179869184"</p>
+                      <p className="ml-2">└─ Grupo filho: <strong className="text-yellow-400">E</strong> — Estações Linux</p>
+                      <p className="ml-4">&nbsp;&nbsp;├─ Condição: SO <em>contém</em> "Linux"</p>
+                      <p className="ml-4">&nbsp;&nbsp;└─ Condição: Hostname <em>NÃO contém</em> "SRV"</p>
+                      <p className="mt-2 text-slate-500">Resultado: (Windows <strong className="text-yellow-400">E</strong> SRV <strong className="text-yellow-400">E</strong> 16GB+) <strong className="text-yellow-400">OU</strong> (Linux <strong className="text-yellow-400">E</strong> NÃO estação)</p>
+                    </div>
                   </div>
                 </div>
 
@@ -835,12 +875,16 @@ interface ExpressionNodeEditorProps {
 }
 
 function ExpressionNodeEditor({ node, path, isRoot = false, availableCustomFields, onUpdateNode, onAddCondition, onAddGroup, onRemoveNode }: ExpressionNodeEditorProps) {
+  const depth = path.length - 1;
+  const nodeAccent = depth >= 0 ? GROUP_ACCENTS[depth % GROUP_ACCENTS.length] : null;
+
   if (node.nodeType === AgentLabelNodeType.Group) {
     const children = node.children ?? [];
 
     return (
-      <div className="space-y-3 rounded-lg border border-white/10 bg-slate-900/40 p-3">
+      <div className={`space-y-3 rounded-lg border ${nodeAccent ? `${nodeAccent.border} border-t-white/10 border-r-white/10 border-b-white/10` : 'border-white/10'} bg-slate-900/40 p-3`}>
         <div className="flex flex-wrap items-center gap-2">
+          {nodeAccent ? <span className={`inline-block h-2 w-2 rounded-full ${nodeAccent.dot} shrink-0`} /> : null}
           <Badge color="primary">Grupo</Badge>
           <div className="min-w-[180px]">
             <Select
@@ -948,10 +992,11 @@ function ExpressionNodeEditor({ node, path, isRoot = false, availableCustomField
     return <Input label="Valor" value={currentValue} hint={valueHint} onChange={e => handleValueChange(e.target.value)} />;
   })();
 
-  return (
-    <div className="space-y-3 rounded-lg border border-white/10 bg-slate-900/40 p-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <Badge color="accent">Condição</Badge>
+    return (
+      <div className={`space-y-3 rounded-lg border ${nodeAccent ? `${nodeAccent.border} border-t-white/10 border-r-white/10 border-b-white/10` : 'border-white/10'} bg-slate-900/40 p-3`}>
+        <div className="flex flex-wrap items-center gap-2">
+          {nodeAccent ? <span className={`inline-block h-2 w-2 rounded-full ${nodeAccent.dot} shrink-0`} /> : null}
+          <Badge color="accent">Condição</Badge>
         <Button size="sm" variant="danger" onClick={() => onRemoveNode(path)}>Remover</Button>
       </div>
 

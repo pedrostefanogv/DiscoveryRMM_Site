@@ -1447,7 +1447,10 @@ export default function TicketSlaPage() {
                 <div>
                   <p className="font-medium text-white">1. Calendário de SLA</p>
                    <p className="mt-1 text-slate-400">
-                     Define o fuso horário, dias úteis, horário comercial e feriados. Use um calendário global como padrão e específicos por cliente quando necessário.
+                    Define o fuso horário, dias úteis, horário comercial e feriados. Use um calendário global como padrão e específicos por cliente quando necessário.
+                  </p>
+                  <p className="mt-1 text-slate-500">
+                    <strong className="text-slate-300">Como o SLA é calculado:</strong> Quando um perfil de workflow está vinculado a um calendário, o prazo do SLA conta apenas dentro do                     <strong className="text-slate-300">horário comercial</strong> definido no calendário — ou seja, finais de semana, feriados e fora do expediente não consomem o tempo do SLA. Se o perfil não estiver vinculado a nenhum calendário, o prazo corre <strong className="text-slate-300">24 horas por dia, 7 dias por semana</strong>, sem pausas.
                   </p>
                 </div>
               </div>
@@ -1456,7 +1459,7 @@ export default function TicketSlaPage() {
                 <div>
                     <p className="font-medium text-white">2. Workflow Profile</p>
                    <p className="mt-1 text-slate-400">
-                     Perfil vinculado a um departamento que define o SLA em horas, prioridade padrão e o calendário usado. Crie em <strong>Suporte &rarr; Workflow Profiles</strong>.
+                    Perfil vinculado a um departamento que define o SLA em horas, prioridade padrão e o calendário usado. Crie em <strong>Suporte &rarr; Workflow Profiles</strong>.
                   </p>
                 </div>
               </div>
@@ -1474,6 +1477,14 @@ export default function TicketSlaPage() {
                 <p>
                    A listagem global de regras retorna apenas regras ativas. Para editar regras inativas, filtre pelo workflow profile específico.
                 </p>
+              </div>
+              <div className="rounded-xl border border-primary/10 bg-primary/5 p-4">
+                <p className="font-medium text-white text-sm">Resumo rápido</p>
+                <ul className="mt-2 space-y-1 text-xs text-slate-400 list-disc pl-4">
+                  <li><strong className="text-slate-300">Com calendário:</strong> o SLA conta em horas úteis (dias de semana, horário comercial, ignorando feriados).</li>
+                  <li><strong className="text-slate-300">Sem calendário:</strong> o SLA conta 24 horas por dia, todos os dias da semana.</li>
+                  <li><strong className="text-slate-300">Sem perfil de workflow:</strong> o ticket não tem SLA calculado.</li>
+                </ul>
               </div>
             </div>
           </Card>

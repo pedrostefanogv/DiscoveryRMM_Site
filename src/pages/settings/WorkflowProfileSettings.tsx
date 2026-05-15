@@ -58,6 +58,24 @@ export default function WorkflowProfileSettings() {
         </div>
       </Card>
 
+      <div className="rounded-xl border border-primary/10 bg-primary/5 p-4 text-sm">
+        <p className="font-medium text-white">Entendendo o SLA</p>
+        <p className="mt-1 text-slate-400">
+          O SLA define o prazo para atendimento de um chamado. Esse prazo pode ser calculado de duas formas:
+        </p>
+        <ul className="mt-2 space-y-1 text-xs text-slate-400 list-disc pl-4">
+          <li>
+            <strong className="text-slate-300">Em horas úteis:</strong> se o perfil estiver vinculado a um calendário de SLA (cadastrado em <strong className="text-slate-300">SLA, Calendários e Perfis</strong>), o prazo conta apenas em dias úteis, dentro do horário comercial, desconsiderando feriados. Por exemplo, um SLA de 8 horas pode levar mais de um dia para vencer se o horário comercial for das 8h às 18h.
+          </li>
+          <li>
+            <strong className="text-slate-300">24 horas por dia, 7 dias por semana:</strong> se o perfil não estiver vinculado a um calendário, o prazo corre ininterruptamente — finais de semana e madrugadas contam normalmente.
+          </li>
+        </ul>
+        <p className="mt-2 text-xs text-slate-500">
+          Se um chamado for criado em um departamento sem perfil de workflow, nenhum SLA será calculado.
+        </p>
+      </div>
+
       <Card>
         <CardHeader title="Perfis" subtitle={`${profiles.data?.length ?? 0} perfis`} />
         <div className="divide-y divide-white/5">

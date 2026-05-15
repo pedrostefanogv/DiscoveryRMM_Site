@@ -1,8 +1,10 @@
 import { useMemo, useState } from "react";
-import { Bell, CheckCheck, RefreshCw, X } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { Bell, CheckCheck, RefreshCw, Trash2, X } from "lucide-react";
 import toast from "react-hot-toast";
 import { Badge, Button, Card, Loading } from "@/components/ui";
 import { useNotifications } from "@/hooks/useNotifications";
+import type { AppNotification } from "@/api/notifications";
 
 function getSeverityColor(severity: string): "slate" | "warning" | "danger" | "primary" {
   const normalized = severity.trim().toLowerCase();
@@ -22,8 +24,34 @@ function getSeverityLabel(severity: string) {
   return severity;
 }
 
+interface NavigationTarget {
+  path: string;
+  label: string;
+}
+
+function parseNavigationTarget(payloadJson: string | null | undefined): NavigationTarget | null {
+  if (!payloadJson) return null;
+
+  try {
+    const parsed = JSON.parse(payloadJson) as Record<string, unknown>;
+    const ticketId = String(parsed.ticketId ?? parsed.ticket_id ?? "");
+    const agentId = String(parsed.agentId ?? parsed.agent_id ?? "");
+    const clientId = String(parsed.clientId ?? parsed.client_id ?? "");
+
+    if (ticketId) return { path: `/tickets/${ticketId}`, label: "chamado" };
+    if (agentId) return { path: `/agents/${agentId}`, label: "agente" };
+    if (clientId) return { path: `/clients/${clientId}`, label: "cliente" };
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 export function NotificationBell() {
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
+  const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
   const {
     notifications,
     unreadCount,
@@ -34,22 +62,60 @@ export function NotificationBell() {
     refetch,
   } = useNotifications({ limit: 50 });
 
-  const list = useMemo(() => notifications.slice(0, 20), [notifications]);
+  const visibleList = useMemo(
+    () => notifications
+      .filter(item => !dismissedIds.has(item.id))
+      .slice(0, 20),
+    [notifications, dismissedIds],
+  );
 
-  const handleMarkAsRead = async (notificationId: string) => {
+  const handleNotificationClick = async (item: AppNotification) => {
     try {
-      await markAsRead(notificationId);
+      await markAsRead(item.id);
     } catch {
       toast.error("Não foi possível marcar a notificação como lida.");
+    }
+
+    const target = parseNavigationTarget(item.payloadJson);
+    if (target) {
+      setOpen(false);
+      navigate(target.path);
     }
   };
 
   const handleMarkAllAsRead = async () => {
     try {
       await markAllAsRead();
+      toast.success("Todas marcadas como lidas.");
     } catch {
       toast.error("Não foi possível marcar todas as notificações como lidas.");
     }
+  };
+
+  const handleDismissReadAll = () => {
+    const readIds = notifications
+      .filter(item => item.isRead)
+      .map(item => item.id);
+
+    if (readIds.length === 0) {
+      toast("Nenhuma notificação lida para limpar.");
+      return;
+    }
+
+    setDismissedIds(prev => {
+      const next = new Set(prev);
+      readIds.forEach(id => next.add(id));
+      return next;
+    });
+    toast.success(`${readIds.length} notificação(ns) lida(s) removida(s).`);
+  };
+
+  const handleDismissNotification = (notificationId: string) => {
+    setDismissedIds(prev => {
+      const next = new Set(prev);
+      next.add(notificationId);
+      return next;
+    });
   };
 
   return (
@@ -73,7 +139,7 @@ export function NotificationBell() {
               <div>
                 <h3 className="text-sm font-semibold text-white">Notificacoes</h3>
                 <p className="text-xs text-slate-400">
-                  {isFetching ? "Sincronizando..." : `${notifications.length} item(ns)`}
+                  {isFetching ? "Sincronizando..." : `${visibleList.length} item(ns)`}
                 </p>
               </div>
 
@@ -84,6 +150,9 @@ export function NotificationBell() {
                 <Button variant="ghost" size="sm" onClick={() => void handleMarkAllAsRead()}>
                   <CheckCheck className="h-4 w-4" />
                 </Button>
+                <Button variant="ghost" size="sm" onClick={handleDismissReadAll}>
+                  <Trash2 className="h-4 w-4" />
+                </Button>
                 <Button variant="ghost" size="sm" onClick={() => setOpen(false)}>
                   <X className="h-4 w-4" />
                 </Button>
@@ -91,38 +160,60 @@ export function NotificationBell() {
             </div>
 
             <div className="max-h-80 space-y-2 overflow-auto pr-1">
-              {isLoading && list.length === 0 && <Loading />}
+              {isLoading && visibleList.length === 0 && <Loading />}
 
-              {!isLoading && list.length === 0 && (
+              {!isLoading && visibleList.length === 0 && (
                 <p className="text-sm text-slate-400">Sem notificações.</p>
               )}
 
-              {list.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => void handleMarkAsRead(item.id)}
-                  className={`w-full rounded-lg border p-3 text-left transition ${
-                    item.isRead
-                      ? "border-white/10 bg-white/5"
-                      : "border-primary/30 bg-primary/10"
-                  }`}
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-sm font-medium text-white">{item.title}</p>
-                    <Badge color={getSeverityColor(item.severity)}>
-                      {getSeverityLabel(item.severity)}
-                    </Badge>
-                  </div>
+              {visibleList.map((item) => {
+                const target = parseNavigationTarget(item.payloadJson);
 
-                  <p className="mt-1 text-xs text-slate-400">{item.message}</p>
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => void handleNotificationClick(item)}
+                    className={`group relative w-full rounded-lg border p-3 text-left transition ${
+                      item.isRead
+                        ? "border-white/10 bg-white/5"
+                        : "border-primary/30 bg-primary/10"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-sm font-medium text-white">{item.title}</p>
+                      <div className="flex items-center gap-2">
+                        <Badge color={getSeverityColor(item.severity)}>
+                          {getSeverityLabel(item.severity)}
+                        </Badge>
+                        {item.isRead ? (
+                          <span
+                            className="inline-flex items-center justify-center rounded p-0.5 text-slate-600 opacity-0 transition-opacity hover:text-danger group-hover:opacity-100"
+                            onClick={event => {
+                              event.stopPropagation();
+                              handleDismissNotification(item.id);
+                            }}
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </span>
+                        ) : null}
+                      </div>
+                    </div>
 
-                  <div className="mt-2 flex items-center justify-between gap-2 text-[11px] text-slate-500">
-                    <span>{item.topic || item.eventType}</span>
-                    <span>{new Date(item.createdAt).toLocaleString("pt-BR")}</span>
-                  </div>
-                </button>
-              ))}
+                    <p className="mt-1 text-xs text-slate-400">{item.message}</p>
+
+                    <div className="mt-2 flex items-center justify-between gap-2 text-[11px] text-slate-500">
+                      <span>
+                        {item.topic || item.eventType}
+                        {target ? (
+                          <span className="ml-1.5 text-primary/70">Abrir {target.label} &rarr;</span>
+                        ) : null}
+                      </span>
+                      <span>{new Date(item.createdAt).toLocaleString("pt-BR")}</span>
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           </Card>
         </div>

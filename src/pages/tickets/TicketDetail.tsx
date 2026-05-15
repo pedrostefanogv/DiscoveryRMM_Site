@@ -1483,6 +1483,9 @@ function SlaPanel({ ticketId }: { ticketId: string }) {
         <CardHeader title="SLA" subtitle="Sem SLA configurado" />
         <div className="space-y-3">
           <p className="text-sm text-slate-400">{d.message}</p>
+          <p className="text-xs text-slate-500">
+            O SLA é definido pelo perfil de workflow vinculado ao departamento do chamado. Se o departamento não tiver um perfil, nenhum prazo é calculado.
+          </p>
           <Button size="sm" variant="secondary" onClick={() => navigate('/tickets/sla')}>
             <Clock className="h-4 w-4" /> Gerenciar SLA
           </Button>
@@ -1539,6 +1542,11 @@ function SlaPanel({ ticketId }: { ticketId: string }) {
               </p>
             </div>
           </div>
+        )}
+        {d.totalSlaHours != null && d.elapsedHours != null && d.totalSlaHours !== d.elapsedHours && (
+          <p className="text-[11px] text-slate-500">
+            As horas corridas e totais são diferentes porque o SLA está sendo calculado em horas úteis (dias úteis e horário comercial). Fora do expediente e feriados o tempo não consome o SLA.
+          </p>
         )}
         <div className="flex flex-wrap gap-2">
           {isBreached && <Badge color="danger">SLA violado</Badge>}
