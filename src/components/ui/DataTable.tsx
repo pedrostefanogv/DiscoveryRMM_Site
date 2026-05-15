@@ -1,4 +1,4 @@
-import { useState, useMemo, type KeyboardEvent } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { ChevronUp, ChevronDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
 import { EmptyState } from './EmptyState';
 
@@ -16,6 +16,9 @@ interface DataTableProps<T> {
   data: T[];
   keyExtractor: (item: T) => string;
   onRowClick?: (item: T) => void;
+  rowHoverCard?: (item: T) => React.ReactNode;
+  rowHoverDelayMs?: number;
+  onRowHoverCardChange?: (item: T | null) => void;
   emptyMessage?: string;
   emptyIcon?: string;
   pageSize?: number;
@@ -34,12 +37,17 @@ export function DataTable<T>({
   data,
   keyExtractor,
   onRowClick,
+  rowHoverCard,
+  rowHoverDelayMs = 1200,
+  onRowHoverCardChange,
   emptyMessage = 'Nenhum registro encontrado',
   pageSize = 20,
   showPagination = true,
 }: DataTableProps<T>) {
   const [sort, setSort] = useState<SortState | null>(null);
   const [page, setPage] = useState(1);
+  const [activeHoverKey, setActiveHoverKey] = useState<string | null>(null);
+  const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const sorted = useMemo(() => {
     if (!sort || !sort.key || !sort.direction) return data;
@@ -56,6 +64,63 @@ export function DataTable<T>({
   const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
   const safePage = Math.min(page, totalPages);
   const paginated = showPagination ? sorted.slice((safePage - 1) * pageSize, safePage * pageSize) : sorted;
+
+  const clearHoverTimeout = () => {
+    if (hoverTimeoutRef.current) {
+      clearTimeout(hoverTimeoutRef.current);
+      hoverTimeoutRef.current = null;
+    }
+  };
+
+  const closeHoverCard = () => {
+    if (!rowHoverCard) return;
+    setActiveHoverKey((current) => {
+      if (current) {
+        onRowHoverCardChange?.(null);
+      }
+      return null;
+    });
+  };
+
+  const handleRowMouseEnter = (item: T) => {
+    if (!rowHoverCard) return;
+    const rowKey = keyExtractor(item);
+
+    clearHoverTimeout();
+
+    setActiveHoverKey((current) => {
+      if (current && current !== rowKey) {
+        onRowHoverCardChange?.(null);
+        return null;
+      }
+      return current;
+    });
+
+    hoverTimeoutRef.current = setTimeout(() => {
+      setActiveHoverKey(rowKey);
+      onRowHoverCardChange?.(item);
+    }, rowHoverDelayMs);
+  };
+
+  const handleBodyMouseLeave = () => {
+    clearHoverTimeout();
+    closeHoverCard();
+  };
+
+  useEffect(() => {
+    if (!rowHoverCard || !activeHoverKey) return;
+
+    const stillVisible = paginated.some((item) => keyExtractor(item) === activeHoverKey);
+    if (!stillVisible) {
+      closeHoverCard();
+    }
+  }, [activeHoverKey, closeHoverCard, keyExtractor, paginated, rowHoverCard]);
+
+  useEffect(() => {
+    return () => {
+      clearHoverTimeout();
+    };
+  }, []);
 
   const handleSort = (col: Column<T>) => {
     const key = col.sortKey ?? col.key;
@@ -105,24 +170,41 @@ export function DataTable<T>({
                 ))}
               </tr>
             </thead>
-            <tbody>
-              {paginated.map((item, idx) => (
-                <tr
-                  key={keyExtractor(item)}
-                  onClick={() => onRowClick?.(item)}
-                  onKeyDown={(event) => handleRowKeyDown(event, item)}
-                  tabIndex={onRowClick ? 0 : -1}
-                  className={`border-b border-white/5 transition-colors last:border-b-0 ${
-                    onRowClick ? 'cursor-pointer hover:bg-white/[0.04] focus-visible:bg-white/[0.06] focus-visible:outline-none' : idx % 2 === 1 ? 'bg-white/[0.01]' : ''
-                  }`}
-                >
-                  {columns.map(col => (
-                    <td key={col.key} className={`px-4 py-3 text-slate-300 ${col.className ?? ''}`}>
-                      {col.render(item)}
-                    </td>
-                  ))}
-                </tr>
-              ))}
+            <tbody onMouseLeave={handleBodyMouseLeave}>
+              {paginated.map((item, idx) => {
+                const rowKey = keyExtractor(item);
+                const showHoverCard = !!rowHoverCard && activeHoverKey === rowKey;
+
+                return (
+                  <Fragment key={rowKey}>
+                    <tr
+                      onClick={() => onRowClick?.(item)}
+                      onMouseEnter={() => handleRowMouseEnter(item)}
+                      onKeyDown={(event) => handleRowKeyDown(event, item)}
+                      tabIndex={onRowClick ? 0 : -1}
+                      className={`border-b border-white/5 transition-colors ${
+                        onRowClick ? 'cursor-pointer hover:bg-white/[0.04] focus-visible:bg-white/[0.06] focus-visible:outline-none' : idx % 2 === 1 ? 'bg-white/[0.01]' : ''
+                      } ${showHoverCard ? 'border-b-0' : 'last:border-b-0'}`}
+                    >
+                      {columns.map(col => (
+                        <td key={col.key} className={`px-4 py-3 text-slate-300 ${col.className ?? ''}`}>
+                          {col.render(item)}
+                        </td>
+                      ))}
+                    </tr>
+
+                    {showHoverCard && (
+                      <tr className="border-b border-white/5 bg-white/[0.02]">
+                        <td colSpan={columns.length} className="px-4 pb-4 pt-0">
+                          <div className="rounded-xl border border-white/10 bg-slate-950/40 p-4">
+                            {rowHoverCard(item)}
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                );
+              })}
             </tbody>
           </table>
         </div>

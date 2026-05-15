@@ -4,6 +4,8 @@ import {
   AlertTriangle,
   BarChart3,
   Bookmark,
+  ChevronDown,
+  ChevronUp,
   Filter,
   Pencil,
   Plus,
@@ -13,15 +15,16 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/auth/AuthContext';
 import { getUserIdFromJwt } from '@/auth/jwt';
-import { useTickets, useCreateTicket } from '@/hooks/useTickets';
+import { useCreateTicket, useTicket, useTicketWatchers, useTickets } from '@/hooks/useTickets';
 import { useClients } from '@/hooks/useClients';
 import { useSites } from '@/hooks/useSites';
-import { useAgentsBySite } from '@/hooks/useAgents';
+import { useAgent, useAgentsBySite } from '@/hooks/useAgents';
 import { useWorkflowStates } from '@/hooks/useWorkflow';
 import { useDepartments } from '@/hooks/useDepartments';
 import { useWorkflowProfilesByDepartment } from '@/hooks/useWorkflowProfiles';
 import { useTicketKpi } from '@/hooks/useTicketKpi';
 import { useDepartmentTicketSchema } from '@/hooks/useDepartmentCustomFields';
+import { useIamUsers } from '@/hooks/useIdentity';
 import {
   useCreateTicketSavedView,
   useDeleteTicketSavedView,
@@ -35,6 +38,7 @@ import type {
   TicketPriority,
   TicketSavedView,
   TicketSavedViewFilter,
+  UserDto,
 } from '@/api';
 import { CustomFieldDataType, parseCustomFieldValue } from '@/api';
 import type { TicketSchemaField } from '@/api';
@@ -147,6 +151,20 @@ function suggestSavedViewName(
   return parts.join(' • ');
 }
 
+function formatTicketPreviewDescription(value: string, maxLength = 180) {
+  const normalized = value.trim();
+  if (!normalized) return 'Sem descrição.';
+  if (normalized.length <= maxLength) return normalized;
+  return `${normalized.slice(0, maxLength).trimEnd()}...`;
+}
+
+function resolveUserDisplayName(usersById: Map<string, UserDto>, userId: string | null | undefined) {
+  if (!userId) return 'Não atribuído';
+  const user = usersById.get(userId);
+  if (!user) return userId;
+  return user.fullName || user.login || user.email || user.id;
+}
+
 function KpiTile({
   label,
   value,
@@ -191,6 +209,8 @@ export default function TicketList() {
   const [filterPriority, setFilterPriority] = useState<TicketPriority | ''>('');
   const [filterStatus, setFilterStatus] = useState<'' | 'true' | 'false'>('');
   const [filterText, setFilterText] = useState('');
+  const [savedViewsExpanded, setSavedViewsExpanded] = useState(false);
+  const [hoverPreviewTicketId, setHoverPreviewTicketId] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [savedViewForm, setSavedViewForm] = useState<SavedViewFormState>({
     name: 'Minha visao',
@@ -211,6 +231,8 @@ export default function TicketList() {
     limit: PAGE_SIZE,
     offset: (page - 1) * PAGE_SIZE,
   });
+  const hoverPreviewTicketQuery = useTicket(hoverPreviewTicketId ?? '');
+  const hoverPreviewWatchersQuery = useTicketWatchers(hoverPreviewTicketId ?? '');
   const kpiQuery = useTicketKpi({ clientId: filterClient || undefined });
   const savedViewsQuery = useTicketSavedViews(currentUserId ?? undefined);
   const createSavedView = useCreateTicketSavedView();
@@ -218,6 +240,7 @@ export default function TicketList() {
   const deleteSavedView = useDeleteTicketSavedView();
   const states = useWorkflowStates();
   const clients = useClients();
+  const iamUsersQuery = useIamUsers();
 
   const stateMap = useMemo(
     () => new Map((states.data ?? []).map((state) => [state.id, state])),
@@ -237,6 +260,12 @@ export default function TicketList() {
   );
 
   const visibleTickets = tickets.data ?? [];
+  const hoverPreviewTicket = useMemo(() => {
+    if (!hoverPreviewTicketId) return null;
+    if (hoverPreviewTicketQuery.data) return hoverPreviewTicketQuery.data;
+    return visibleTickets.find((ticket) => ticket.id === hoverPreviewTicketId) ?? null;
+  }, [hoverPreviewTicketId, hoverPreviewTicketQuery.data, visibleTickets]);
+  const hoverPreviewAgentQuery = useAgent(hoverPreviewTicket?.agentId ?? '');
   const savedViews = useMemo(
     () =>
       [...(savedViewsQuery.data ?? [])].sort(
@@ -244,11 +273,29 @@ export default function TicketList() {
       ),
     [savedViewsQuery.data],
   );
+  const iamUsersById = useMemo(
+    () => new Map<string, UserDto>((iamUsersQuery.data ?? []).map((user) => [user.id, user])),
+    [iamUsersQuery.data],
+  );
   const kpi = kpiQuery.data;
 
   useEffect(() => {
     setPage(1);
   }, [filterClient, filterPriority, filterState, filterStatus, filterText]);
+
+  useEffect(() => {
+    if (activeSavedViewId) {
+      setSavedViewsExpanded(true);
+    }
+  }, [activeSavedViewId]);
+
+  useEffect(() => {
+    if (!hoverPreviewTicketId) return;
+    const existsInCurrentPage = visibleTickets.some((ticket) => ticket.id === hoverPreviewTicketId);
+    if (!existsInCurrentPage) {
+      setHoverPreviewTicketId(null);
+    }
+  }, [hoverPreviewTicketId, visibleTickets]);
 
   const hasNextPage = visibleTickets.length === PAGE_SIZE;
   const hasPrevPage = page > 1;
@@ -330,6 +377,66 @@ export default function TicketList() {
       ),
     },
   ];
+
+  const renderTicketHoverCard = (ticket: Ticket) => {
+    const isPreviewTarget = hoverPreviewTicketId === ticket.id;
+    const previewTicket = isPreviewTarget && hoverPreviewTicket ? hoverPreviewTicket : ticket;
+    const assigneeLabel = resolveUserDisplayName(iamUsersById, previewTicket.assignedToUserId);
+    const watcherItems = isPreviewTarget ? (hoverPreviewWatchersQuery.data ?? []) : [];
+    const watcherNames = watcherItems.map((watcher) => resolveUserDisplayName(iamUsersById, watcher.userId));
+    const watcherSummary = !isPreviewTarget || hoverPreviewWatchersQuery.isLoading
+      ? 'Carregando watchers...'
+      : hoverPreviewWatchersQuery.isError
+        ? 'Erro ao carregar watchers.'
+        : watcherNames.length === 0
+          ? 'Nenhum watcher.'
+          : `${watcherNames.slice(0, 3).join(', ')}${watcherNames.length > 3 ? ` +${watcherNames.length - 3}` : ''}`;
+    const linkedMachineLabel = !previewTicket.agentId
+      ? 'Sem máquina vinculada'
+      : isPreviewTarget
+        ? hoverPreviewAgentQuery.isLoading
+          ? 'Carregando máquina...'
+          : hoverPreviewAgentQuery.data?.displayName || hoverPreviewAgentQuery.data?.hostname || previewTicket.agentId
+        : previewTicket.agentId;
+    const stateLabel = previewTicket.workflowStateId
+      ? stateMap.get(previewTicket.workflowStateId)?.name ?? 'Estado não mapeado'
+      : 'Sem estado';
+    const clientLabel = clientMap.get(previewTicket.clientId)?.name ?? '-';
+    const detailsAreLoading = isPreviewTarget && (hoverPreviewTicketQuery.isLoading || iamUsersQuery.isLoading);
+
+    return (
+      <div className="space-y-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold text-white">{previewTicket.title}</p>
+            <p className="mt-1 text-xs leading-relaxed text-slate-400">
+              {formatTicketPreviewDescription(previewTicket.description)}
+            </p>
+          </div>
+          {detailsAreLoading && <span className="text-[11px] text-slate-500">Carregando detalhes...</span>}
+        </div>
+
+        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2">
+            <p className="text-[11px] uppercase tracking-wide text-slate-500">Responsável</p>
+            <p className="mt-1 truncate text-sm text-slate-200">{assigneeLabel}</p>
+          </div>
+          <div className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2">
+            <p className="text-[11px] uppercase tracking-wide text-slate-500">Watchers</p>
+            <p className="mt-1 text-sm text-slate-200">{watcherSummary}</p>
+          </div>
+          <div className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 sm:col-span-2">
+            <p className="text-[11px] uppercase tracking-wide text-slate-500">Máquina vinculada</p>
+            <p className="mt-1 truncate text-sm text-slate-200">{linkedMachineLabel}</p>
+          </div>
+        </div>
+
+        <div className="text-[11px] text-slate-500">
+          Estado: {stateLabel} • Cliente: {clientLabel} • Criado em {new Date(previewTicket.createdAt).toLocaleString('pt-BR')}
+        </div>
+      </div>
+    );
+  };
 
   const handleClearFilters = () => {
     setActiveSavedViewId(null);
@@ -478,94 +585,32 @@ export default function TicketList() {
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <div className="flex items-center gap-2">
-              <Bookmark className="h-4 w-4 text-slate-400" />
-              <h2 className="text-lg font-semibold text-white">Visões salvas</h2>
+              <Filter className="h-4 w-4 text-slate-400" />
+              <h2 className="text-lg font-semibold text-white">Filtros e visões salvas</h2>
             </div>
             <p className="mt-1 text-sm text-slate-400">
-              Salve combinações de filtros da fila para reaplicar em um clique.
+              Ajuste a fila com os filtros abaixo e salve combinações para reaplicar em um clique.
             </p>
           </div>
-          <Button variant="secondary" onClick={openCreateSavedViewModal} disabled={!currentUserId}>
-            <Save className="h-4 w-4" /> Salvar visao atual
-          </Button>
-        </div>
-
-        {savedViewsQuery.isLoading ? (
-          <div className="mt-4"><Loading /></div>
-        ) : savedViewsQuery.isError ? (
-          <div className="mt-4 flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3">
-            <AlertTriangle className="h-4 w-4 text-danger" />
-            <p className="text-sm text-slate-400">Não foi possível carregar as visões salvas.</p>
-            <Button size="sm" variant="ghost" onClick={() => savedViewsQuery.refetch()}>
-              Tentar novamente
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="secondary" onClick={openCreateSavedViewModal} disabled={!currentUserId}>
+              <Save className="h-4 w-4" /> Salvar visao atual
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setSavedViewsExpanded((current) => !current)}
+              disabled={savedViewsQuery.isLoading || savedViews.length === 0}
+              aria-expanded={savedViewsExpanded}
+            >
+              <Bookmark className="h-4 w-4" />
+              {savedViewsExpanded ? 'Ocultar visoes salvas' : `Ver visoes salvas (${savedViews.length})`}
+              {savedViewsExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
             </Button>
           </div>
-        ) : savedViews.length === 0 ? (
-          <p className="mt-4 text-sm text-slate-500">Nenhuma visão salva disponível.</p>
-        ) : (
-          <div className="mt-4 grid gap-3 lg:grid-cols-2">
-            {savedViews.map((view) => {
-              const canManage = !!currentUserId && view.userId === currentUserId;
-              const isActive = activeSavedViewId === view.id;
-
-              return (
-                <div
-                  key={view.id}
-                  className={`rounded-xl border px-4 py-3 ${isActive ? 'border-primary/40 bg-primary/10' : 'border-white/10 bg-white/5'}`}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="truncate text-sm font-medium text-white">{view.name}</p>
-                        <Badge color={view.isShared ? 'accent' : 'slate'}>
-                          {view.isShared ? 'Compartilhada' : 'Privada'}
-                        </Badge>
-                      </div>
-                      <p className="mt-2 text-xs text-slate-400">
-                        {formatSavedViewSummary(view, clientNameMap, stateNameMap)}
-                      </p>
-                      <p className="mt-2 text-[11px] text-slate-500">
-                        Atualizada em {new Date(view.updatedAt).toLocaleString('pt-BR')}
-                      </p>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      <Button size="sm" variant="secondary" onClick={() => applySavedView(view)}>
-                        Aplicar
-                      </Button>
-                      {canManage && (
-                        <>
-                          <Button size="sm" variant="ghost" onClick={() => openEditSavedViewModal(view)}>
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="danger"
-                            onClick={() => void handleDeleteSavedView(view)}
-                            loading={deleteSavedView.isPending}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </Card>
-
-      <Card>
-        <div className="mb-4 flex items-center gap-2">
-          <Filter className="h-4 w-4 text-slate-400" />
-          <div>
-            <h2 className="text-lg font-semibold text-white">Filtros</h2>
-            <p className="text-sm text-slate-400">Os filtros abaixo também alimentam as visões salvas.</p>
-          </div>
         </div>
 
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
           <div className="xl:col-span-2">
             <Input
               label="Buscar"
@@ -615,13 +660,90 @@ export default function TicketList() {
           />
         </div>
 
-        {(filterClient || filterState || filterPriority || filterStatus || filterText) && (
-          <div className="mt-4 flex justify-end">
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+          {(filterClient || filterState || filterPriority || filterStatus || filterText) && (
             <Button variant="ghost" size="sm" onClick={handleClearFilters}>
               Limpar filtros
             </Button>
+          )}
+
+          {!savedViewsQuery.isLoading && !savedViewsQuery.isError && savedViews.length === 0 && (
+            <p className="text-sm text-slate-500">Nenhuma visão salva disponível.</p>
+          )}
+        </div>
+
+        {savedViewsQuery.isLoading ? (
+          <div className="mt-4"><Loading /></div>
+        ) : savedViewsQuery.isError ? (
+          <div className="mt-4 flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3">
+            <AlertTriangle className="h-4 w-4 text-danger" />
+            <p className="text-sm text-slate-400">Não foi possível carregar as visões salvas.</p>
+            <Button size="sm" variant="ghost" onClick={() => savedViewsQuery.refetch()}>
+              Tentar novamente
+            </Button>
           </div>
-        )}
+        ) : savedViewsExpanded && savedViews.length > 0 ? (
+          <div className="mt-4 rounded-xl border border-white/10 bg-white/5 p-3 sm:p-4">
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <Bookmark className="h-4 w-4 text-slate-400" />
+                <h3 className="text-sm font-semibold text-white">Visões salvas</h3>
+              </div>
+              <Badge color="slate">{savedViews.length}</Badge>
+            </div>
+
+            <div className="grid max-h-80 gap-3 overflow-y-auto pr-1 lg:grid-cols-2">
+              {savedViews.map((view) => {
+                const canManage = !!currentUserId && view.userId === currentUserId;
+                const isActive = activeSavedViewId === view.id;
+
+                return (
+                  <div
+                    key={view.id}
+                    className={`rounded-xl border px-4 py-3 ${isActive ? 'border-primary/40 bg-primary/10' : 'border-white/10 bg-white/5'}`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="truncate text-sm font-medium text-white">{view.name}</p>
+                          <Badge color={view.isShared ? 'accent' : 'slate'}>
+                            {view.isShared ? 'Compartilhada' : 'Privada'}
+                          </Badge>
+                        </div>
+                        <p className="mt-2 text-xs text-slate-400">
+                          {formatSavedViewSummary(view, clientNameMap, stateNameMap)}
+                        </p>
+                        <p className="mt-2 text-[11px] text-slate-500">
+                          Atualizada em {new Date(view.updatedAt).toLocaleString('pt-BR')}
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <Button size="sm" variant="secondary" onClick={() => applySavedView(view)}>
+                          Aplicar
+                        </Button>
+                        {canManage && (
+                          <>
+                            <Button size="sm" variant="ghost" onClick={() => openEditSavedViewModal(view)}>
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="danger"
+                              onClick={() => void handleDeleteSavedView(view)}
+                              loading={deleteSavedView.isPending}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
       </Card>
 
       <Card padding={false}>
@@ -647,6 +769,9 @@ export default function TicketList() {
               data={visibleTickets}
               keyExtractor={(ticket) => ticket.id}
               onRowClick={(ticket) => navigate(`/tickets/${ticket.id}`)}
+              rowHoverDelayMs={1800}
+              rowHoverCard={renderTicketHoverCard}
+              onRowHoverCardChange={(ticket) => setHoverPreviewTicketId(ticket?.id ?? null)}
               showPagination={false}
             />
             <div className="flex items-center justify-between border-t border-white/5 px-4 py-3 text-xs text-slate-400">
