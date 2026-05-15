@@ -49,6 +49,7 @@ export function DataTable<T>({
   const [activeHover, setActiveHover] = useState<{ key: string; item: T } | null>(null);
   const [popoverPosition, setPopoverPosition] = useState<{ top: number; left: number; width: number } | null>(null);
   const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
   const popoverRef = useRef<HTMLDivElement | null>(null);
   const rowRefs = useRef(new Map<string, HTMLTableRowElement>());
 
@@ -82,29 +83,30 @@ export function DataTable<T>({
     }
 
     const rowElement = rowRefs.current.get(activeHover.key);
-    if (!rowElement) {
+    const containerElement = containerRef.current;
+    if (!rowElement || !containerElement) {
       setPopoverPosition(null);
       return;
     }
 
-    const viewportPadding = 12;
     const offset = 10;
     const preferredWidth = 460;
-    const availableWidth = Math.max(260, window.innerWidth - viewportPadding * 2);
+    const containerRect = containerElement.getBoundingClientRect();
+    const availableWidth = Math.max(260, containerRect.width - 16);
     const width = Math.min(preferredWidth, availableWidth);
 
     const rowRect = rowElement.getBoundingClientRect();
+    const rowTop = rowRect.top - containerRect.top;
+    const rowBottom = rowRect.bottom - containerRect.top;
     const estimatedHeight = popoverRef.current?.offsetHeight ?? 220;
+    const viewportPadding = 12;
 
     const canShowBelow = rowRect.bottom + offset + estimatedHeight <= window.innerHeight - viewportPadding;
     const top = canShowBelow
-      ? Math.min(rowRect.bottom + offset, window.innerHeight - estimatedHeight - viewportPadding)
-      : Math.max(viewportPadding, rowRect.top - estimatedHeight - offset);
+      ? rowBottom + offset
+      : Math.max(0, rowTop - estimatedHeight - offset);
 
-    const left = Math.max(
-      viewportPadding,
-      Math.min(rowRect.left + 8, window.innerWidth - width - viewportPadding),
-    );
+    const left = Math.max(0, Math.min(rowRect.left - containerRect.left + 8, containerRect.width - width));
 
     setPopoverPosition({ top, left, width });
   }, [activeHover, rowHoverCard]);
@@ -176,11 +178,9 @@ export function DataTable<T>({
     };
 
     window.addEventListener('resize', handleViewportChange);
-    window.addEventListener('scroll', handleViewportChange, true);
 
     return () => {
       window.removeEventListener('resize', handleViewportChange);
-      window.removeEventListener('scroll', handleViewportChange, true);
     };
   }, [activeHover, rowHoverCard, updateHoverPopoverPosition]);
 
@@ -215,7 +215,7 @@ export function DataTable<T>({
   }
 
   return (
-    <div className="relative space-y-3">
+    <div ref={containerRef} className="relative space-y-3">
       <div className="overflow-hidden rounded-xl border border-white/10 bg-surface">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm" role="grid">
@@ -278,7 +278,7 @@ export function DataTable<T>({
       {rowHoverCard && activeHover && popoverPosition && (
         <div
           ref={popoverRef}
-          className="pointer-events-none fixed z-50"
+          className="pointer-events-none absolute z-50"
           style={{
             top: popoverPosition.top,
             left: popoverPosition.left,
