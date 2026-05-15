@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react';
 import { ChevronUp, ChevronDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
 import { EmptyState } from './EmptyState';
 
@@ -16,6 +16,7 @@ interface DataTableProps<T> {
   data: T[];
   keyExtractor: (item: T) => string;
   onRowClick?: (item: T) => void;
+  onRowContextMenu?: (event: MouseEvent<HTMLTableRowElement>, item: T) => void;
   rowHoverCard?: (item: T) => React.ReactNode;
   rowHoverDelayMs?: number;
   onRowHoverCardChange?: (item: T | null) => void;
@@ -37,6 +38,7 @@ export function DataTable<T>({
   data,
   keyExtractor,
   onRowClick,
+  onRowContextMenu,
   rowHoverCard,
   rowHoverDelayMs = 1200,
   onRowHoverCardChange,
@@ -255,6 +257,7 @@ export function DataTable<T>({
                       rowRefs.current.delete(rowKey);
                     }}
                     onClick={() => onRowClick?.(item)}
+                    onContextMenu={(event) => onRowContextMenu?.(event, item)}
                     onMouseEnter={() => handleRowMouseEnter(item, rowKey)}
                     onKeyDown={(event) => handleRowKeyDown(event, item)}
                     tabIndex={onRowClick ? 0 : -1}

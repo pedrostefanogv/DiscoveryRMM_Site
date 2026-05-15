@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from 'react';
+﻿import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   AlertTriangle,
@@ -15,7 +15,14 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/auth/AuthContext';
 import { getUserIdFromJwt } from '@/auth/jwt';
-import { useCreateTicket, useTicket, useTicketWatchers, useTickets } from '@/hooks/useTickets';
+import {
+  useAddTicketWatcher,
+  useCreateTicket,
+  useTicket,
+  useTicketWatchers,
+  useTickets,
+  useUpdateTicket,
+} from '@/hooks/useTickets';
 import { useClients } from '@/hooks/useClients';
 import { useSites } from '@/hooks/useSites';
 import { useAgent, useAgentsBySite } from '@/hooks/useAgents';
@@ -72,6 +79,12 @@ const DEFAULT_STATUS_FILTER: '' | 'true' | 'false' = 'false';
 type SavedViewFormState = {
   name: string;
   isShared: boolean;
+};
+
+type TicketContextMenuState = {
+  ticket: Ticket;
+  x: number;
+  y: number;
 };
 
 function isTicketPriority(value: unknown): value is TicketPriority {
@@ -194,7 +207,7 @@ function KpiTile({
     <Tooltip
       className="block w-full"
       content={description}
-      delay={1000}
+      delay={700}
       position="bottom"
     >
       <Card>
@@ -211,6 +224,8 @@ export default function TicketList() {
   const DEFAULT_PAGE_SIZE = 50;
   const navigate = useNavigate();
   const { session } = useAuth();
+  const pageRef = useRef<HTMLDivElement | null>(null);
+  const contextMenuRef = useRef<HTMLDivElement | null>(null);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [savedViewModalOpen, setSavedViewModalOpen] = useState(false);
@@ -224,6 +239,10 @@ export default function TicketList() {
   const [advancedFiltersExpanded, setAdvancedFiltersExpanded] = useState(false);
   const [savedViewsExpanded, setSavedViewsExpanded] = useState(false);
   const [hoverPreviewTicketId, setHoverPreviewTicketId] = useState<string | null>(null);
+  const [ticketContextMenu, setTicketContextMenu] = useState<TicketContextMenuState | null>(null);
+  const [assignModalOpen, setAssignModalOpen] = useState(false);
+  const [assignTargetTicket, setAssignTargetTicket] = useState<Ticket | null>(null);
+  const [assignTargetUserId, setAssignTargetUserId] = useState('');
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [page, setPage] = useState(1);
   const [savedViewForm, setSavedViewForm] = useState<SavedViewFormState>({
@@ -252,6 +271,8 @@ export default function TicketList() {
   const createSavedView = useCreateTicketSavedView();
   const updateSavedView = useUpdateTicketSavedView();
   const deleteSavedView = useDeleteTicketSavedView();
+  const addTicketWatcher = useAddTicketWatcher();
+  const updateTicket = useUpdateTicket();
   const states = useWorkflowStates();
   const clients = useClients();
   const iamUsersQuery = useIamUsers();
@@ -317,6 +338,38 @@ export default function TicketList() {
     }
   }, [hoverPreviewTicketId, visibleTickets]);
 
+  useEffect(() => {
+    if (!ticketContextMenu) return;
+
+    const handleClickOutside = (event: MouseEvent) => {
+      if (contextMenuRef.current && event.target instanceof Node && !contextMenuRef.current.contains(event.target)) {
+        setTicketContextMenu(null);
+      }
+    };
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setTicketContextMenu(null);
+      }
+    };
+
+    const handleViewportChange = () => {
+      setTicketContextMenu(null);
+    };
+
+    window.addEventListener('mousedown', handleClickOutside, true);
+    window.addEventListener('resize', handleViewportChange);
+    window.addEventListener('scroll', handleViewportChange, true);
+    window.addEventListener('keydown', handleEscape);
+
+    return () => {
+      window.removeEventListener('mousedown', handleClickOutside, true);
+      window.removeEventListener('resize', handleViewportChange);
+      window.removeEventListener('scroll', handleViewportChange, true);
+      window.removeEventListener('keydown', handleEscape);
+    };
+  }, [ticketContextMenu]);
+
   const hasNextPage = visibleTickets.length === pageSize;
   const hasPrevPage = page > 1;
   const advancedFiltersActiveCount = Number(Boolean(filterClient)) + Number(Boolean(filterState));
@@ -334,6 +387,16 @@ export default function TicketList() {
   const stateOpts = [
     { value: '', label: 'Todos os estados' },
     ...(states.data ?? []).map((state) => ({ value: state.id, label: state.name })),
+  ];
+  const assignUserOptions = [
+    {
+      value: '',
+      label: iamUsersQuery.isLoading ? 'Carregando usuarios...' : 'Selecione um usuario',
+    },
+    ...(iamUsersQuery.data ?? []).map((user) => ({
+      value: user.id,
+      label: user.fullName || user.login || user.email || user.id,
+    })),
   ];
 
   const columns: Column<Ticket>[] = [
@@ -465,6 +528,125 @@ export default function TicketList() {
     );
   };
 
+  const closeAssignModal = () => {
+    setAssignModalOpen(false);
+    setAssignTargetTicket(null);
+    setAssignTargetUserId('');
+  };
+
+  const assignTicketToUser = async (ticket: Ticket, assignedToUserId: string | null, successMessage: string) => {
+    await updateTicket.mutateAsync({
+      id: ticket.id,
+      data: {
+        title: ticket.title,
+        description: ticket.description,
+        priority: ticket.priority,
+        assignedToUserId,
+        category: ticket.category,
+      },
+    });
+
+    toast.success(successMessage);
+  };
+
+  const openTicketContextMenu = (event: React.MouseEvent<HTMLTableRowElement>, ticket: Ticket) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (!pageRef.current) return;
+
+    const rect = pageRef.current.getBoundingClientRect();
+    const menuWidth = 248;
+    const menuHeight = 164;
+    const rawX = event.clientX - rect.left;
+    const rawY = event.clientY - rect.top;
+
+    const x = Math.max(8, Math.min(rawX, rect.width - menuWidth - 8));
+    const y = Math.max(8, Math.min(rawY, rect.height - menuHeight - 8));
+
+    setTicketContextMenu({ ticket, x, y });
+  };
+
+  const handleContextMenuFollow = async () => {
+    if (!ticketContextMenu) return;
+
+    if (!currentUserId) {
+      toast.error('Não foi possível identificar o usuário autenticado.');
+      return;
+    }
+
+    try {
+      await addTicketWatcher.mutateAsync({
+        ticketId: ticketContextMenu.ticket.id,
+        data: { userId: currentUserId },
+      });
+      toast.success('Você agora acompanha este chamado.');
+      setTicketContextMenu(null);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Não foi possível acompanhar o chamado.';
+      const normalized = message.toLowerCase();
+
+      if (normalized.includes('already') || normalized.includes('exists') || normalized.includes('já')) {
+        toast('Você já acompanha este chamado.');
+      } else {
+        toast.error(message);
+      }
+    }
+  };
+
+  const handleContextMenuTakeOwnership = async () => {
+    if (!ticketContextMenu) return;
+
+    if (!currentUserId) {
+      toast.error('Não foi possível identificar o usuário autenticado.');
+      return;
+    }
+
+    if (ticketContextMenu.ticket.assignedToUserId === currentUserId) {
+      toast('Você já é o responsável deste chamado.');
+      setTicketContextMenu(null);
+      return;
+    }
+
+    try {
+      await assignTicketToUser(ticketContextMenu.ticket, currentUserId, 'Chamado assumido com sucesso.');
+      setTicketContextMenu(null);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Não foi possível assumir o chamado.');
+    }
+  };
+
+  const handleContextMenuOpenAssign = () => {
+    if (!ticketContextMenu) return;
+
+    setAssignTargetTicket(ticketContextMenu.ticket);
+    setAssignTargetUserId(ticketContextMenu.ticket.assignedToUserId ?? '');
+    setAssignModalOpen(true);
+    setTicketContextMenu(null);
+  };
+
+  const handleConfirmAssign = async () => {
+    if (!assignTargetTicket) return;
+
+    if (!assignTargetUserId) {
+      toast.error('Selecione um usuário para atribuir o chamado.');
+      return;
+    }
+
+    if (assignTargetTicket.assignedToUserId === assignTargetUserId) {
+      toast('Este usuário já é o responsável deste chamado.');
+      closeAssignModal();
+      return;
+    }
+
+    try {
+      await assignTicketToUser(assignTargetTicket, assignTargetUserId, 'Responsável atualizado com sucesso.');
+      closeAssignModal();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Não foi possível transferir a responsabilidade.');
+    }
+  };
+
   const handleClearFilters = () => {
     setActiveSavedViewId(null);
     setFilterClient('');
@@ -510,6 +692,8 @@ export default function TicketList() {
     >
       <div className="flex items-center gap-3">
         <span>Mostrando ate {pageSize} registros por pagina</span>
+      </div>
+      <div className="flex items-center gap-3">
         <label className="flex items-center gap-2">
           <span className="text-slate-500">Por pagina</span>
           <select
@@ -532,8 +716,6 @@ export default function TicketList() {
             ))}
           </select>
         </label>
-      </div>
-      <div className="flex items-center gap-2">
         <Button
           variant="ghost"
           size="sm"
@@ -637,7 +819,7 @@ export default function TicketList() {
   };
 
   return (
-    <div className="space-y-6">
+    <div ref={pageRef} className="relative space-y-6">
       <div className="flex items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-white">Chamados</h1>
@@ -899,7 +1081,8 @@ export default function TicketList() {
               data={visibleTickets}
               keyExtractor={(ticket) => ticket.id}
               onRowClick={(ticket) => navigate(`/tickets/${ticket.id}`)}
-              rowHoverDelayMs={1800}
+              onRowContextMenu={openTicketContextMenu}
+              rowHoverDelayMs={1260}
               rowHoverCard={renderTicketHoverCard}
               onRowHoverCardChange={(ticket) => setHoverPreviewTicketId(ticket?.id ?? null)}
               showPagination={false}
@@ -909,7 +1092,77 @@ export default function TicketList() {
         )}
       </Card>
 
+      {ticketContextMenu && (
+        <div
+          ref={contextMenuRef}
+          className="absolute z-[80] w-64 overflow-hidden rounded-xl border border-white/10 bg-slate-900/95 p-1 shadow-2xl backdrop-blur"
+          style={{ top: ticketContextMenu.y, left: ticketContextMenu.x }}
+          role="menu"
+          aria-label={`Acoes do chamado ${ticketContextMenu.ticket.title}`}
+        >
+          <button
+            type="button"
+            className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm text-slate-200 transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+            onClick={() => void handleContextMenuFollow()}
+            disabled={addTicketWatcher.isPending || !currentUserId}
+            role="menuitem"
+          >
+            <span>Acompanhar</span>
+            <span className="text-xs text-slate-500">watcher</span>
+          </button>
+          <button
+            type="button"
+            className="mt-1 flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm text-slate-200 transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+            onClick={() => void handleContextMenuTakeOwnership()}
+            disabled={updateTicket.isPending || !currentUserId}
+            role="menuitem"
+          >
+            <span>Assumir</span>
+            <span className="text-xs text-slate-500">atribuicao rapida</span>
+          </button>
+          <button
+            type="button"
+            className="mt-1 flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm text-slate-200 transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+            onClick={handleContextMenuOpenAssign}
+            disabled={updateTicket.isPending || iamUsersQuery.isLoading || (iamUsersQuery.data?.length ?? 0) === 0}
+            role="menuitem"
+          >
+            <span>Transferir / Atribuir</span>
+            <span className="text-xs text-slate-500">selecionar usuario</span>
+          </button>
+        </div>
+      )}
+
       <CreateTicketModal open={modalOpen} onClose={() => setModalOpen(false)} />
+
+      <Modal open={assignModalOpen} onClose={closeAssignModal} title="Transferir / Atribuir chamado">
+        <div className="space-y-4">
+          <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
+            <p className="text-[11px] uppercase tracking-wide text-slate-500">Chamado selecionado</p>
+            <p className="mt-1 truncate text-sm text-slate-200">{assignTargetTicket?.title ?? '-'}</p>
+          </div>
+
+          <Select
+            label="Novo responsável"
+            options={assignUserOptions}
+            value={assignTargetUserId}
+            onChange={(event) => setAssignTargetUserId(event.target.value)}
+          />
+
+          <div className="flex justify-end gap-3 pt-2">
+            <Button variant="ghost" onClick={closeAssignModal}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={() => void handleConfirmAssign()}
+              loading={updateTicket.isPending}
+              disabled={iamUsersQuery.isLoading || (iamUsersQuery.data?.length ?? 0) === 0}
+            >
+              Confirmar
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       <Modal
         open={savedViewModalOpen}
