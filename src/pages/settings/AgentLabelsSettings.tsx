@@ -47,6 +47,14 @@ const defaultCondition: AgentLabelRuleExpressionNodeDto = {
   customFieldDefinitionId: null,
 };
 
+const defaultDiskCondition: AgentLabelRuleExpressionNodeDto = {
+  nodeType: AgentLabelNodeType.Condition,
+  field: AgentLabelField.DiskDriveLetter,
+  operator: AgentLabelComparisonOperator.Equals,
+  value: '',
+  customFieldDefinitionId: null,
+};
+
 const defaultDiskGroup: AgentLabelRuleExpressionNodeDto = {
   nodeType: AgentLabelNodeType.DiskGroup,
   logicalOperator: AgentLabelLogicalOperator.Or,
@@ -61,7 +69,7 @@ const fieldOptions = Object.values(AgentLabelField)
 const diskFieldOptions = Object.values(AgentLabelField)
   .filter((value): value is AgentLabelField => typeof value === 'number')
   .filter(field => isDiskAgentLabelField(field))
-  .map(field => ({ value: String(field), label: getAgentLabelFieldLabel(field) }));
+  .map(field => ({ value: String(field), label: `💿 ${getAgentLabelFieldLabel(field)}` }));
 
 const logicalOperatorOptions = Object.values(AgentLabelLogicalOperator)
   .filter((value): value is AgentLabelLogicalOperator => typeof value === 'number')
@@ -486,6 +494,10 @@ export default function AgentLabelsSettings() {
     setExpressionBuilder(prev => addChildAtPath(prev, path, defaultCondition));
   }
 
+  function handleAddDiskCondition(path: number[]) {
+    setExpressionBuilder(prev => addChildAtPath(prev, path, defaultDiskCondition));
+  }
+
   function handleAddGroup(path: number[]) {
     setExpressionBuilder(prev => addChildAtPath(prev, path, defaultExpression));
   }
@@ -684,6 +696,7 @@ export default function AgentLabelsSettings() {
                   availableCustomFields={availableCustomFields}
                   onUpdateNode={handleUpdateNode}
                   onAddCondition={handleAddCondition}
+                  onAddDiskCondition={handleAddDiskCondition}
                   onAddGroup={handleAddGroup}
                   onAddDiskGroup={handleAddDiskGroup}
                   onRemoveNode={handleRemoveNode}
@@ -918,6 +931,7 @@ export default function AgentLabelsSettings() {
                   availableCustomFields={availableCustomFields}
                   onUpdateNode={isReadOnly ? () => {} : handleUpdateNode}
                   onAddCondition={isReadOnly ? () => {} : handleAddCondition}
+                  onAddDiskCondition={isReadOnly ? () => {} : handleAddDiskCondition}
                   onAddGroup={isReadOnly ? () => {} : handleAddGroup}
                   onAddDiskGroup={isReadOnly ? () => {} : handleAddDiskGroup}
                   onRemoveNode={isReadOnly ? () => {} : handleRemoveNode}
@@ -1161,12 +1175,13 @@ interface ExpressionNodeEditorProps {
   availableCustomFields: AgentLabelAvailableCustomField[];
   onUpdateNode: (path: number[], updater: (node: AgentLabelRuleExpressionNodeDto) => AgentLabelRuleExpressionNodeDto) => void;
   onAddCondition: (path: number[]) => void;
+  onAddDiskCondition: (path: number[]) => void;
   onAddGroup: (path: number[]) => void;
   onAddDiskGroup: (path: number[]) => void;
   onRemoveNode: (path: number[]) => void;
 }
 
-function ExpressionNodeEditor({ node, path, isRoot = false, insideDiskGroup = false, availableCustomFields, onUpdateNode, onAddCondition, onAddGroup, onAddDiskGroup, onRemoveNode }: ExpressionNodeEditorProps) {
+function ExpressionNodeEditor({ node, path, isRoot = false, insideDiskGroup = false, availableCustomFields, onUpdateNode, onAddCondition, onAddDiskCondition, onAddGroup, onAddDiskGroup, onRemoveNode }: ExpressionNodeEditorProps) {
   const depth = path.length - 1;
   const nodeAccent = depth >= 0 ? GROUP_ACCENTS[depth % GROUP_ACCENTS.length] : null;
 
@@ -1189,7 +1204,7 @@ function ExpressionNodeEditor({ node, path, isRoot = false, insideDiskGroup = fa
               }}
             />
           </div>
-          <Button size="sm" variant="secondary" onClick={() => onAddCondition(path)}>+ Condição</Button>
+          <Button size="sm" variant="secondary" onClick={() => (isDisk ? onAddDiskCondition : onAddCondition)(path)}>+ Condição</Button>
           {!isDisk ? (
             <>
               <Button size="sm" variant="secondary" onClick={() => onAddDiskGroup(path)}>+ Disco</Button>
@@ -1218,6 +1233,7 @@ function ExpressionNodeEditor({ node, path, isRoot = false, insideDiskGroup = fa
                 availableCustomFields={availableCustomFields}
                 onUpdateNode={onUpdateNode}
                 onAddCondition={onAddCondition}
+                onAddDiskCondition={onAddDiskCondition}
                 onAddGroup={onAddGroup}
                 onAddDiskGroup={onAddDiskGroup}
                 onRemoveNode={onRemoveNode}
