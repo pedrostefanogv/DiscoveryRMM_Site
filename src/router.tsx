@@ -34,6 +34,7 @@ const AutomationAuditPage = lazy(() => import('@/pages/automation/AutomationAudi
 const BrandingSettings = lazy(() => import('@/pages/settings/BrandingSettings'));
 const WorkflowSettings = lazy(() => import('@/pages/settings/WorkflowSettings'));
 const DepartmentSettings = lazy(() => import('@/pages/settings/DepartmentSettings'));
+const DepartmentDetailPage = lazy(() => import('@/pages/settings/DepartmentDetailPage'));
 const WorkflowProfileSettings = lazy(() => import('@/pages/settings/WorkflowProfileSettings'));
 const ConfigurationSettings = lazy(() => import('@/pages/settings/ConfigurationSettings'));
 const ServerConfigurationPage = lazy(() => import('@/pages/settings/ServerConfigurationPage'));
@@ -161,6 +162,14 @@ export const router = createBrowserRouter([
         element: (
           <PermissionGate anyOf={['settings.*', 'settings.read', 'departments.*', 'admin.*']}>
             <LazyPage><DepartmentSettings /></LazyPage>
+          </PermissionGate>
+        ),
+      },
+      {
+        path: 'tickets/departments/:departmentId',
+        element: (
+          <PermissionGate anyOf={['settings.*', 'settings.read', 'departments.*', 'admin.*']}>
+            <LazyPage><DepartmentDetailPage /></LazyPage>
           </PermissionGate>
         ),
       },

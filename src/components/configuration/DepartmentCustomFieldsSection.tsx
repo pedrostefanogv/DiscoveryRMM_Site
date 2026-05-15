@@ -52,6 +52,117 @@ const DATA_TYPE_OPTIONS = Object.values(CustomFieldDataType)
   .filter((v): v is CustomFieldDataType => typeof v === "number")
   .map((v) => ({ value: String(v), label: getCustomFieldDataTypeLabel(v) }));
 
+type RegexPreset = {
+  value: string;
+  label: string;
+  regex: string;
+  validSamples: string[];
+  invalidSamples: string[];
+  description: string;
+  dataTypes?: CustomFieldDataType[];
+};
+
+const REGEX_ASSISTANT_PRESETS: RegexPreset[] = [
+  {
+    value: "numbers-only",
+    label: "Apenas numeros",
+    regex: "^\\d+$",
+    validSamples: ["123456", "0099"],
+    invalidSamples: ["123A", "12 34"],
+    description: "Aceita apenas caracteres numericos.",
+    dataTypes: [CustomFieldDataType.Text, CustomFieldDataType.Integer],
+  },
+  {
+    value: "email",
+    label: "Email basico",
+    regex: "^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$",
+    validSamples: ["suporte@empresa.com", "nome.sobrenome@dominio.com"],
+    invalidSamples: ["usuario@@dominio.com", "usuario sem arroba"],
+    description: "Valida formato comum de email.",
+    dataTypes: [CustomFieldDataType.Text],
+  },
+  {
+    value: "cpf",
+    label: "CPF sem pontuacao",
+    regex: "^\\d{11}$",
+    validSamples: ["12345678901", "00011122233"],
+    invalidSamples: ["123.456.789-01", "1234567890"],
+    description: "Exige exatamente 11 digitos numericos.",
+    dataTypes: [CustomFieldDataType.Text],
+  },
+  {
+    value: "cnpj",
+    label: "CNPJ sem pontuacao",
+    regex: "^\\d{14}$",
+    validSamples: ["12345678000199", "00998877000155"],
+    invalidSamples: ["12.345.678/0001-99", "1234567800019"],
+    description: "Exige exatamente 14 digitos numericos.",
+    dataTypes: [CustomFieldDataType.Text],
+  },
+  {
+    value: "phone-br",
+    label: "Telefone BR",
+    regex: "^\\(?\\d{2}\\)?\\s?\\d{4,5}-?\\d{4}$",
+    validSamples: ["(11) 98888-7777", "1133334444"],
+    invalidSamples: ["11-333", "(11) 33333-444"],
+    description: "Aceita formatos comuns de telefone brasileiro.",
+    dataTypes: [CustomFieldDataType.Text],
+  },
+  {
+    value: "custom-code",
+    label: "Codigo no formato CC-0000",
+    regex: "^CC-\\d{4}$",
+    validSamples: ["CC-1024", "CC-0001"],
+    invalidSamples: ["cc-1024", "CC-123"],
+    description: "Padrao de codigo com prefixo fixo e 4 digitos.",
+    dataTypes: [CustomFieldDataType.Text],
+  },
+  {
+    value: "slug",
+    label: "Slug alfanumerico",
+    regex: "^[A-Za-z0-9_-]+$",
+    validSamples: ["campo_personalizado_01", "setor-financeiro"],
+    invalidSamples: ["setor financeiro", "setor@financeiro"],
+    description: "Permite letras, numeros, underline e hifen.",
+    dataTypes: [CustomFieldDataType.Text],
+  },
+];
+
+function parseRegexTestCasesInput(input: string): string[] {
+  return input
+    .split(/\r?\n/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function runRegexTest(regex: RegExp, value: string): boolean {
+  const isolatedRegex = new RegExp(regex.source, regex.flags);
+  return isolatedRegex.test(value);
+}
+
+function parseRegexInput(input: string): { regex: RegExp | null; error: string | null } {
+  const trimmed = input.trim();
+  if (!trimmed) return { regex: null, error: null };
+
+  try {
+    if (trimmed.startsWith("/") && trimmed.length > 2) {
+      const lastSlashIndex = trimmed.lastIndexOf("/");
+      if (lastSlashIndex > 0) {
+        const pattern = trimmed.slice(1, lastSlashIndex);
+        const flags = trimmed.slice(lastSlashIndex + 1);
+        return { regex: new RegExp(pattern, flags), error: null };
+      }
+    }
+
+    return { regex: new RegExp(trimmed), error: null };
+  } catch (error) {
+    return {
+      regex: null,
+      error: error instanceof Error ? error.message : "Regex invalida.",
+    };
+  }
+}
+
 // ── Main Component ──────────────────────────────────────
 
 export function DepartmentCustomFieldsSection({
@@ -271,6 +382,28 @@ function FieldFormModal({
     return formatOptionsForInput(parseOptionsFromJson(field.optionsJson));
   });
 
+  const [selectedRegexPreset, setSelectedRegexPreset] = useState(() => {
+    if (!field?.validationRegex) return "";
+    const preset = REGEX_ASSISTANT_PRESETS.find(
+      (item) => item.regex === field.validationRegex,
+    );
+    return preset?.value ?? "";
+  });
+  const [regexValidCasesText, setRegexValidCasesText] = useState(() => {
+    if (!field?.validationRegex) return "";
+    const preset = REGEX_ASSISTANT_PRESETS.find(
+      (item) => item.regex === field.validationRegex,
+    );
+    return preset ? preset.validSamples.join("\n") : "";
+  });
+  const [regexInvalidCasesText, setRegexInvalidCasesText] = useState(() => {
+    if (!field?.validationRegex) return "";
+    const preset = REGEX_ASSISTANT_PRESETS.find(
+      (item) => item.regex === field.validationRegex,
+    );
+    return preset ? preset.invalidSamples.join("\n") : "";
+  });
+
   const isPending = createMutation.isPending || updateMutation.isPending;
   const isValid = form.name.trim().length >= 2 && form.label.trim().length >= 1;
 
@@ -284,6 +417,79 @@ function FieldFormModal({
 
   const showLength =
     form.dataType === CustomFieldDataType.Text;
+
+  const availableRegexPresets = useMemo(
+    () =>
+      REGEX_ASSISTANT_PRESETS.filter(
+        (preset) => !preset.dataTypes || preset.dataTypes.includes(form.dataType),
+      ),
+    [form.dataType],
+  );
+
+  const selectedPreset = useMemo(
+    () =>
+      availableRegexPresets.find((preset) => preset.value === selectedRegexPreset) ?? null,
+    [availableRegexPresets, selectedRegexPreset],
+  );
+
+  const regexEvaluation = useMemo(
+    () => parseRegexInput(form.validationRegex ?? ""),
+    [form.validationRegex],
+  );
+
+  const validRegexCases = useMemo(
+    () => parseRegexTestCasesInput(regexValidCasesText),
+    [regexValidCasesText],
+  );
+
+  const invalidRegexCases = useMemo(
+    () => parseRegexTestCasesInput(regexInvalidCasesText),
+    [regexInvalidCasesText],
+  );
+
+  const regexCaseEvaluation = useMemo(() => {
+    if (!regexEvaluation.regex) {
+      return {
+        valid: [] as Array<{ value: string; passed: boolean }>,
+        invalid: [] as Array<{ value: string; passed: boolean }>,
+        total: 0,
+        passed: 0,
+      };
+    }
+
+    const valid = validRegexCases.map((value) => ({
+      value,
+      passed: runRegexTest(regexEvaluation.regex as RegExp, value),
+    }));
+
+    const invalid = invalidRegexCases.map((value) => ({
+      value,
+      passed: !runRegexTest(regexEvaluation.regex as RegExp, value),
+    }));
+
+    const passedCount =
+      valid.filter((item) => item.passed).length +
+      invalid.filter((item) => item.passed).length;
+    const totalCount = valid.length + invalid.length;
+
+    return {
+      valid,
+      invalid,
+      total: totalCount,
+      passed: passedCount,
+    };
+  }, [invalidRegexCases, regexEvaluation.regex, validRegexCases]);
+
+  function applySelectedRegexPreset() {
+    if (!selectedPreset) return;
+
+    setForm((current) => ({
+      ...current,
+      validationRegex: selectedPreset.regex,
+    }));
+    setRegexValidCasesText(selectedPreset.validSamples.join("\n"));
+    setRegexInvalidCasesText(selectedPreset.invalidSamples.join("\n"));
+  }
 
   const handleSubmit = async () => {
     if (!isValid) return;
@@ -300,6 +506,12 @@ function FieldFormModal({
       options: needsOptions ? parseOptionsFromInput(optionsText) : [],
       validationRegex: form.validationRegex?.trim() || null,
     };
+
+    const parsedRegex = parseRegexInput(payload.validationRegex ?? "");
+    if (parsedRegex.error) {
+      toast.error(`Regex invalida: ${parsedRegex.error}`);
+      return;
+    }
 
     try {
       if (isEdit) {
@@ -478,6 +690,148 @@ function FieldFormModal({
                 }
                 placeholder="ex: ^CC-\d{4}$"
               />
+
+              <div className="mt-3 rounded-lg border border-white/10 bg-slate-950/30 p-3">
+                <p className="text-xs font-medium text-slate-400">Assistente de Regex</p>
+                <p className="mt-1 text-xs text-slate-500">
+                  Escolha um modelo pronto, ajuste se necessario e teste antes de salvar.
+                </p>
+
+                <div className="mt-3 grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
+                  <Select
+                    label="Modelo sugerido"
+                    value={selectedRegexPreset}
+                    options={[
+                      { value: "", label: "Selecionar modelo" },
+                      ...availableRegexPresets.map((preset) => ({
+                        value: preset.value,
+                        label: preset.label,
+                      })),
+                    ]}
+                    onChange={(e) => setSelectedRegexPreset(e.target.value)}
+                  />
+                  <div className="flex items-end gap-2">
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={applySelectedRegexPreset}
+                      disabled={!selectedPreset}
+                    >
+                      Aplicar modelo
+                    </Button>
+                    {selectedPreset && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => {
+                          setRegexValidCasesText(selectedPreset.validSamples.join("\n"));
+                          setRegexInvalidCasesText(selectedPreset.invalidSamples.join("\n"));
+                        }}
+                      >
+                        Usar exemplos
+                      </Button>
+                    )}
+                  </div>
+                </div>
+
+                {selectedPreset && (
+                  <p className="mt-2 text-xs text-slate-400">{selectedPreset.description}</p>
+                )}
+
+                <div className="mt-3 grid gap-3 md:grid-cols-2">
+                  <TextArea
+                    label="Casos que devem passar"
+                    rows={4}
+                    value={regexValidCasesText}
+                    onChange={(e) => setRegexValidCasesText(e.target.value)}
+                    hint="Um valor por linha."
+                  />
+                  <TextArea
+                    label="Casos que devem falhar"
+                    rows={4}
+                    value={regexInvalidCasesText}
+                    onChange={(e) => setRegexInvalidCasesText(e.target.value)}
+                    hint="Um valor por linha."
+                  />
+                </div>
+
+                {regexEvaluation.error && (
+                  <p className="mt-2 text-xs text-danger">
+                    Regex invalida: {regexEvaluation.error}
+                  </p>
+                )}
+
+                {!regexEvaluation.error && regexCaseEvaluation.total > 0 && (
+                  <div className="mt-3 space-y-3 rounded-lg border border-white/10 bg-white/5 p-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge
+                        color={
+                          regexCaseEvaluation.passed === regexCaseEvaluation.total
+                            ? "success"
+                            : "warning"
+                        }
+                      >
+                        {regexCaseEvaluation.passed}/{regexCaseEvaluation.total} cenarios aprovados
+                      </Badge>
+                      <Badge color="slate">
+                        {regexCaseEvaluation.total - regexCaseEvaluation.passed} falha(s)
+                      </Badge>
+                    </div>
+
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <div>
+                        <p className="mb-2 text-xs font-medium text-slate-400">
+                          Esperado: passar
+                        </p>
+                        <div className="space-y-1">
+                          {regexCaseEvaluation.valid.length === 0 && (
+                            <p className="text-xs text-slate-500">Sem casos definidos.</p>
+                          )}
+                          {regexCaseEvaluation.valid.map((item) => (
+                            <div
+                              key={`valid-${item.value}`}
+                              className="flex items-center justify-between gap-2 rounded bg-slate-950/40 px-2 py-1"
+                            >
+                              <code className="truncate text-xs text-slate-300">{item.value}</code>
+                              <Badge color={item.passed ? "success" : "danger"}>
+                                {item.passed ? "OK" : "Falhou"}
+                              </Badge>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div>
+                        <p className="mb-2 text-xs font-medium text-slate-400">
+                          Esperado: falhar
+                        </p>
+                        <div className="space-y-1">
+                          {regexCaseEvaluation.invalid.length === 0 && (
+                            <p className="text-xs text-slate-500">Sem casos definidos.</p>
+                          )}
+                          {regexCaseEvaluation.invalid.map((item) => (
+                            <div
+                              key={`invalid-${item.value}`}
+                              className="flex items-center justify-between gap-2 rounded bg-slate-950/40 px-2 py-1"
+                            >
+                              <code className="truncate text-xs text-slate-300">{item.value}</code>
+                              <Badge color={item.passed ? "success" : "danger"}>
+                                {item.passed ? "OK" : "Falhou"}
+                              </Badge>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {!regexEvaluation.error && regexCaseEvaluation.total === 0 && (
+                  <p className="mt-2 text-xs text-slate-500">
+                    Adicione casos de teste para validar o comportamento do regex antes de salvar.
+                  </p>
+                )}
+              </div>
             </div>
           </div>
         )}
