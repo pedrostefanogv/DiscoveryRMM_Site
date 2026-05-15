@@ -532,13 +532,13 @@ export default function AgentLabelsSettings() {
                   <p className="mb-1 font-medium text-white">Como combinar condições com E / OU</p>
                   <p>Use <strong>grupos (E / OU)</strong> para aninhar condições e criar regras complexas:</p>
                   <div className="mt-2 rounded-lg bg-slate-900/60 p-3 font-mono text-xs text-slate-400">
-                    <p className="text-slate-300">Exemplo: Windows <strong class="text-yellow-400">(E)</strong> producao OU memoria</p>
-                    <p className="mt-1">Grupo raiz: <strong class="text-yellow-400">E</strong></p>
+                    <p className="text-slate-300">Exemplo: Windows <strong className="text-yellow-400">(E)</strong> producao OU memoria</p>
+                    <p className="mt-1">Grupo raiz: <strong className="text-yellow-400">E</strong></p>
                     <p className="ml-2">├─ Condição: SO <em>contém</em> "Windows"</p>
-                    <p className="ml-2">└─ Grupo filho: <strong class="text-yellow-400">OU</strong></p>
+                    <p className="ml-2">└─ Grupo filho: <strong className="text-yellow-400">OU</strong></p>
                     <p className="ml-4">&nbsp;&nbsp;├─ Condição: Hostname <em>contém</em> "PROD"</p>
                     <p className="ml-4">&nbsp;&nbsp;└─ Condição: Memória <em>&gt;=</em> "8589934592"</p>
-                    <p className="mt-2 text-slate-500">Resultado: (SO contém "Windows") <strong class="text-yellow-400">E</strong> (Hostname contém "PROD" <strong class="text-yellow-400">OU</strong> Memória &gt;= 8GB)</p>
+                    <p className="mt-2 text-slate-500">Resultado: (SO contém "Windows") <strong className="text-yellow-400">E</strong> (Hostname contém "PROD" <strong className="text-yellow-400">OU</strong> Memória &gt;= 8GB)</p>
                   </div>
                 </div>
 
@@ -546,11 +546,11 @@ export default function AgentLabelsSettings() {
                   <p className="mb-1 font-medium text-white">Custom fields e operadores</p>
                   <p>Ao selecionar um <strong>Custom Field</strong>, os operadores disponíveis mudam conforme o <strong>tipo de dado</strong>:</p>
                   <div className="mt-2 rounded-lg bg-slate-900/60 p-3 text-xs text-slate-400">
-                    <p><strong class="text-slate-300">Texto:</strong> Contém, Não contém, Começa com, Termina com, Igual, Diferente, Regex</p>
-                    <p><strong class="text-slate-300">Número inteiro/Decimal:</strong> &gt;, &gt;=, &lt;, &lt;=, Igual, Diferente</p>
-                    <p><strong class="text-slate-300">Data / DataHora:</strong> &gt;, &gt;=, &lt;, &lt;=, Igual, Diferente</p>
-                    <p><strong class="text-slate-300">Booleano (Sim/Não):</strong> Igual</p>
-                    <p><strong class="text-slate-300">Dropdown/Lista:</strong> Igual, Diferente</p>
+                    <p><strong className="text-slate-300">Texto:</strong> Contém, Não contém, Começa com, Termina com, Igual, Diferente, Regex</p>
+                    <p><strong className="text-slate-300">Número inteiro/Decimal:</strong> &gt;, &gt;=, &lt;, &lt;=, Igual, Diferente</p>
+                    <p><strong className="text-slate-300">Data / DataHora:</strong> &gt;, &gt;=, &lt;, &lt;=, Igual, Diferente</p>
+                    <p><strong className="text-slate-300">Booleano (Sim/Não):</strong> Igual</p>
+                    <p><strong className="text-slate-300">Dropdown/Lista:</strong> Igual, Diferente</p>
                   </div>
                 </div>
 
