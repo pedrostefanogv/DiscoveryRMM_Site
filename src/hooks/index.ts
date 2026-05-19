@@ -4,10 +4,8 @@ import {
 } from "./useAgentStatusRealtime";
 
 /**
- * Backward-compatible entry point for realtime agent status updates.
- *
- * Contract v4.0.0:
- * Dashboard consumes agent events exclusively from NATS.
+ * @deprecated Desde Contract v4.0.0 — dashboard consome agent events exclusivamente via NATS.
+ * Use `useAgentStatusRealtime` diretamente se necessário.
  */
 export function useAgentStatusRealtime_Combined(
   enabled = true,
@@ -17,7 +15,7 @@ export function useAgentStatusRealtime_Combined(
 }
 
 /**
- * Export for backward compatibility - apps using the original hook continue to work
+ * @deprecated Prefira `useAgentStatusRealtime` diretamente.
  */
 export { useAgentStatusRealtime } from "./useAgentStatusRealtime";
 export type { AgentRealtimeScope } from "./useAgentStatusRealtime";
@@ -32,9 +30,6 @@ export * from "./useWorkflow";
 export * from "./useDepartments";
 export * from "./useWorkflowProfiles";
 export * from "./useDeployTokens";
-export * from "./useApiTokens";
-export * from "./useMonitoringEvents";
-export * from "./useBackgroundServices";
 
 // Reports
 export * from "./useReportDatasets";
@@ -42,12 +37,10 @@ export * from "./useReportTemplates";
 export * from "./useReportExecutions";
 export * from "./useReportFavorites";
 export * from "./useReportTemplateHistory";
-export * from "./useReportNotifications";
 export * from "./useReportDownload";
 export * from "./useReportLayoutSchema";
 export * from "./useReportPreview";
 export * from "./useReportAutocomplete";
-export * from "./useReportSchedules";
 export * from "./useNotifications";
 export * from "./useTicketAlertRules";
 export * from "./useSlaCalendars";
@@ -69,7 +62,3 @@ export { useDashboardSummary } from "./useDashboardSummary";
 export { useDashboardRealtime } from "./useDashboardRealtime";
 export type { DashboardRealtimeScope } from "./useDashboardRealtime";
 export { useP2POverview } from "./useP2POverview";
-export { useP2PTimeseries } from "./useP2PTimeseries";
-export { useP2PArtifactsDistribution } from "./useP2PArtifactsDistribution";
-export { useP2PAgentsRanking } from "./useP2PAgentsRanking";
-export { useP2PSeedPlan } from "./useP2PSeedPlan";

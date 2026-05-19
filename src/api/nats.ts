@@ -6,6 +6,7 @@ import type {
   WsConnectionOptions,
 } from "@nats-io/nats-core";
 import { natsSubjectMatches } from "@/utils/natsSubjects";
+import { natsLogger, natsTelemetryLogger } from "@/utils/debugLogger";
 
 type NatsConnection = Pick<
   CoreNatsConnection,
@@ -309,7 +310,7 @@ class NatsService {
     if (this.connectionState === state) return;
 
     const previousState = this.connectionState;
-    console.log("[NATS] Estado:", { anterior: previousState, novo: state, tentativa: this.reconnectAttempts, subjects: Array.from(this.subscriptions.keys()) });
+    natsLogger.log("Estado:", { anterior: previousState, novo: state, tentativa: this.reconnectAttempts, subjects: Array.from(this.subscriptions.keys()) });
     this.connectionState = state;
     this.emitTelemetry("info", "connection_state_changed", {
       previousState,
@@ -340,16 +341,16 @@ class NatsService {
     };
 
     if (level === "error") {
-      console.error("[NATS][telemetry]", payload);
+      natsTelemetryLogger.error(payload);
       return;
     }
 
     if (level === "warn") {
-      console.warn("[NATS][telemetry]", payload);
+      natsTelemetryLogger.warn(payload);
       return;
     }
 
-    console.info("[NATS][telemetry]", payload);
+    natsTelemetryLogger.info(payload);
   }
 
   private async loadClient(): Promise<NatsClientModule | null> {
@@ -369,7 +370,7 @@ class NatsService {
     } catch {
       if (!this.warnedUnavailableClient) {
         this.warnedUnavailableClient = true;
-        console.warn(
+        natsLogger.warn(
           "NATS WebSocket client (@nats-io/nats-core) não disponível. Realtime NATS desativado.",
         );
       }
@@ -442,7 +443,7 @@ class NatsService {
 
     if (activeConnection && !activeConnection.isClosed()) {
       void activeConnection.close().catch((error) => {
-        console.warn("Failed to close NATS connection during restart:", error);
+        natsLogger.warn("Failed to close NATS connection during restart:", error);
       });
     }
 
@@ -564,7 +565,7 @@ class NatsService {
 
       if (this.manualDisconnect) {
         this.manualDisconnect = false;
-        console.log("[NATS] Desconexão manual, não vai reconectar.");
+        natsLogger.log("Desconexão manual, não vai reconectar.");
         this.emitTelemetry("info", "connection_closed_manual", {
           subscribedSubjects: subjects,
         });
@@ -583,7 +584,7 @@ class NatsService {
             errorCode: getErrorCode(error),
             subscribedSubjects: subjects,
           });
-          console.warn("[NATS] Conexão encerrada por erro de autorização.", {
+          natsLogger.warn("Conexão encerrada por erro de autorização.", {
             error,
             subjects,
           });
@@ -597,13 +598,13 @@ class NatsService {
           subscribedSubjects: subjects,
         });
 
-        console.warn("[NATS] Conexão fechada com erro:", { error, subjects, reconnectAttempts: this.reconnectAttempts });
+        natsLogger.warn("Conexão fechada com erro:", { error, subjects, reconnectAttempts: this.reconnectAttempts });
       } else {
         this.clearConnectionError();
         this.emitTelemetry("info", "connection_closed_clean", {
           subscribedSubjects: subjects,
         });
-        console.log("[NATS] Conexão fechada (sem erro).", { subjects, reconnectAttempts: this.reconnectAttempts });
+        natsLogger.log("Conexão fechada (sem erro).", { subjects, reconnectAttempts: this.reconnectAttempts });
       }
 
       this.scheduleReconnect();
@@ -629,13 +630,13 @@ class NatsService {
       this.emitTelemetry("info", "subscribe_subject_start", {
         subject,
       });
-      console.log("[NATS] Inscrevendo em subject:", subject);
+      natsLogger.log("Inscrevendo em subject:", subject);
       const subscription = this.connection.subscribe(subject) as Subscription;
       this.subscriptions.set(subject, subscription);
       this.emitTelemetry("info", "subscribe_subject_success", {
         subject,
       });
-      console.log("[NATS] Inscrito em:", subject, "(subscriptions ativas:", this.subscriptions.size, ")");
+      natsLogger.log("Inscrito em:", subject, "(subscriptions ativas:", this.subscriptions.size, ")");
 
       void (async () => {
         try {
@@ -643,24 +644,24 @@ class NatsService {
             try {
               const raw = new TextDecoder().decode(msg.data);
               const data = JSON.parse(raw);
-              console.log("[NATS] Mensagem recebida em", subject, ":", typeof data === "object" ? Object.keys(data).join(", ") : raw.slice(0, 200));
+              natsLogger.log("Mensagem recebida em", subject, ":", typeof data === "object" ? Object.keys(data).join(", ") : raw.slice(0, 200));
               const listeners = this.listeners.get(subject);
               if (listeners) {
                 listeners.forEach((listener) => {
                   try {
                     listener(data);
                   } catch (error) {
-                    console.error("Error in NATS listener:", error);
+                    natsLogger.error("Error in NATS listener:", error);
                   }
                 });
               }
             } catch (error) {
-              console.error("Error parsing NATS message:", error);
+              natsLogger.error("Error parsing NATS message:", error);
             }
           }
         } catch (error) {
           if (!this.connection?.isClosed()) {
-            console.error(`Failed to read NATS subscription ${subject}:`, error);
+            natsLogger.error(`Failed to read NATS subscription ${subject}:`, error);
           }
         } finally {
           if (this.subscriptions.get(subject) === subscription) {
@@ -676,7 +677,7 @@ class NatsService {
         errorMessage: getNatsErrorMessage(error),
         errorCode: getErrorCode(error),
       });
-      console.error(`Failed to subscribe to ${subject}:`, error);
+      natsLogger.error(`Failed to subscribe to ${subject}:`, error);
       return false;
     }
   }
@@ -689,7 +690,7 @@ class NatsService {
       const restored = await this.ensureSubjectSubscription(subject);
       if (!restored) {
         failedCount++;
-        console.warn("[NATS] Falha ao restaurar subject:", subject);
+        natsLogger.warn("Falha ao restaurar subject:", subject);
       } else {
         restoredCount++;
       }
@@ -740,7 +741,7 @@ class NatsService {
     if (!this.isBrowserWsUrl(url)) {
       if (!this.warnedInvalidUrl) {
         this.warnedInvalidUrl = true;
-        console.warn(
+        natsLogger.warn(
           "NATS desativado no browser: use VITE_NATS_URL com ws://, wss://, nats:// ou tls://.",
         );
       }
@@ -810,11 +811,11 @@ class NatsService {
             restoredSubscriptions: this.subscriptions.size,
             url: sanitizeNatsUrl(url),
           });
-          console.info(
-            "[realtime] NATS conectado em",
+          natsLogger.info(
+            "NATS conectado em",
             url,
             this.subscriptions.size > 0
-              ? `(restaurou ${this.subscriptions.size} subscriÃ§Ãµes)`
+              ? `(restaurou ${this.subscriptions.size} subscrições)`
               : "",
           );
           return true;
@@ -832,7 +833,7 @@ class NatsService {
             errorCode: getErrorCode(error),
             nonRetryable,
           });
-          console.error("Failed to connect to NATS:", error);
+          natsLogger.error("Failed to connect to NATS:", error);
 
           const canRetryWithFreshCredentials =
             authMode === "jwt_credentials" &&
@@ -846,8 +847,8 @@ class NatsService {
               failedAuthAttempt: authAttempt,
               nextAuthAttempt: authAttempt + 1,
             });
-            console.warn(
-              "[NATS] AuthorizationError no CONNECT. Reemitindo credencial e tentando novamente.",
+            natsLogger.warn(
+              "AuthorizationError no CONNECT. Reemitindo credencial e tentando novamente.",
             );
             continue;
           }
@@ -894,7 +895,7 @@ class NatsService {
         hasConnectInFlight: Boolean(this.connectInFlight),
         hasReconnectTimer: Boolean(this.reconnectTimer),
       });
-      console.log("[NATS] Reconexão já agendada ou em voo, ignorando.");
+      natsLogger.log("Reconexão já agendada ou em voo, ignorando.");
       return;
     }
 
@@ -908,13 +909,13 @@ class NatsService {
         attempt: this.reconnectAttempts,
         delayMs: cappedDelay,
       });
-      console.log("[NATS] Agendando reconexão", { tentativa: this.reconnectAttempts, max: this.maxReconnectAttempts, delay: cappedDelay });
+      natsLogger.log("Agendando reconexão", { tentativa: this.reconnectAttempts, max: this.maxReconnectAttempts, delay: cappedDelay });
       this.reconnectTimer = setTimeout(() => {
         this.reconnectTimer = null;
         this.emitTelemetry("info", "reconnect_attempt_execute", {
           attempt: this.reconnectAttempts,
         });
-        console.log("[NATS] Executando reconexão (tentativa", this.reconnectAttempts, ")");
+        natsLogger.log("Executando reconexão (tentativa", this.reconnectAttempts, ")");
         void this.connect();
       }, cappedDelay);
       return;
@@ -923,7 +924,7 @@ class NatsService {
     this.emitTelemetry("error", "reconnect_exhausted", {
       maxReconnectAttempts: this.maxReconnectAttempts,
     });
-    console.log("[NATS] Máximo de tentativas de reconexão atingido (", this.maxReconnectAttempts, "). Desconectando.");
+    natsLogger.log("Máximo de tentativas de reconexão atingido (", this.maxReconnectAttempts, "). Desconectando.");
     this.setConnectionState("disconnected");
   }
 
@@ -936,7 +937,7 @@ class NatsService {
       this.listeners.set(subject, new Set());
     }
     this.listeners.get(subject)!.add(callback);
-    console.log("[NATS] subscribe() chamado para:", subject, "(listeners:", this.listeners.get(subject)?.size, ")");
+    natsLogger.log("subscribe() chamado para:", subject, "(listeners:", this.listeners.get(subject)?.size, ")");
 
     const connectIfNeeded = options?.connectIfNeeded ?? true;
     this.emitTelemetry("info", "subscribe_requested", {
@@ -950,18 +951,18 @@ class NatsService {
         this.emitTelemetry("warn", "subscribe_aborted_no_connection", {
           subject,
         });
-        console.warn("[NATS] Cannot subscribe sem conexão ativa para subject:", subject);
+        natsLogger.warn("Cannot subscribe sem conexão ativa para subject:", subject);
         return false;
       }
 
-      console.log("[NATS] Sem conexão ativa, conectando antes de subscrever...");
+      natsLogger.log("Sem conexão ativa, conectando antes de subscrever...");
       const connected = await this.connect();
       if (!connected) {
         this.emitTelemetry("warn", "subscribe_aborted_connect_failed", {
           subject,
           diagnostics: this.getConnectionDiagnostics(),
         });
-        console.warn("[NATS] Conexão falhou antes de subscrever:", subject);
+        natsLogger.warn("Conexão falhou antes de subscrever:", subject);
         return false;
       }
     }
@@ -970,7 +971,7 @@ class NatsService {
       this.emitTelemetry("warn", "subscribe_aborted_not_connected", {
         subject,
       });
-      console.warn("[NATS] Cannot subscribe: NATS not connected para subject:", subject);
+      natsLogger.warn("Cannot subscribe: NATS not connected para subject:", subject);
       return false;
     }
 
@@ -979,8 +980,8 @@ class NatsService {
         subject,
         allowedSubjectsCount: this.getAllowedSubscribeSubjects().length,
       });
-      console.warn(
-        "[NATS] Subject fora da allow-list do token, ignorando:",
+      natsLogger.warn(
+        "Subject fora da allow-list do token, ignorando:",
         subject,
       );
       return false;
@@ -1001,7 +1002,7 @@ class NatsService {
     const listeners = this.listeners.get(subject);
     if (listeners) {
       listeners.delete(callback);
-      console.log("[NATS] unsubscribe() chamado para:", subject, "(listeners restantes:", listeners.size, ")");
+      natsLogger.log("unsubscribe() chamado para:", subject, "(listeners restantes:", listeners.size, ")");
       this.emitTelemetry("info", "unsubscribe_requested", {
         subject,
         listenersRemaining: listeners.size,

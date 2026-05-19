@@ -17,6 +17,12 @@ import {
   buildDashboardNatsSubjects,
   type DashboardNatsScope,
 } from "@/utils/natsSubjects";
+import {
+  natsLogger,
+  natsTelemetryLogger,
+  natsDashboardLogger,
+  natsGlobalPongLogger,
+} from "@/utils/debugLogger";
 
 type AgentRealtimeStatus = "Online" | "Offline";
 
@@ -372,7 +378,7 @@ function logDiscardedHeartbeat(
   envelope: Record<string, unknown>,
   payload: Record<string, unknown>,
 ) {
-  console.debug("[NATS][dashboard.events] heartbeat descartado por payload inválido", {
+  natsDashboardLogger.debug("heartbeat descartado por payload inválido", {
     normalizedType,
     envelopeKeys: describeKeys(envelope),
     payloadKeys: describeKeys(payload),
@@ -529,7 +535,7 @@ export function useAgentStatusNats(
       const eventData = eventEnvelope.data;
       const safeData = isRecord(eventData) ? eventData : null;
 
-      console.log("[NATS][dashboard.events]", {
+      natsDashboardLogger.log({
         eventType,
         normalizedType,
         hasData: Boolean(safeData),
@@ -607,7 +613,7 @@ export function useAgentStatusNats(
       const pong = parsePongMessage(message);
       if (!pong) return;
 
-      console.log("[NATS][global.pong]", pong);
+      natsGlobalPongLogger.log(pong);
       setServerPongState(pong.overloaded, pong.observedAtUtc);
     };
 
@@ -636,7 +642,7 @@ export function useAgentStatusNats(
 
     const incompleteAgentScope = isIncompleteAgentScope(stableScope);
 
-    console.log("[NATS] Configurando serviço NATS:", {
+    natsLogger.log("Configurando serviço NATS:", {
       url: NATS_URL,
       enabled: NATS_ENABLED,
       scope: describeScope(stableScope),
@@ -657,7 +663,7 @@ export function useAgentStatusNats(
     const unsubscribeConnectionState = natsService.onConnectionStateChange(
       (state) => {
         if (disposed) return;
-        console.log("[NATS] Estado da conexão mudou:", state);
+        natsLogger.log("Estado da conexão mudou:", state);
         setNatsConnectionState(state);
         const diagnostics = natsService.getConnectionDiagnostics();
         setNatsConnectionDiagnostics(
@@ -673,7 +679,7 @@ export function useAgentStatusNats(
       if (disposed) return;
 
       bootstrapStarted = true;
-      console.info("[NATS][telemetry]", {
+      natsTelemetryLogger.info({
         event: "bootstrap_start",
         ...telemetryContext,
         atUtc: new Date().toISOString(),
@@ -691,11 +697,11 @@ export function useAgentStatusNats(
         );
 
         if (!connected) {
-          console.warn(
-            "[NATS] Conexão não estabelecida. Bootstrap de subscriptions abortado.",
+          natsLogger.warn(
+            "Conexão não estabelecida. Bootstrap de subscriptions abortado.",
             diagnostics,
           );
-          console.warn("[NATS][telemetry]", {
+          natsTelemetryLogger.warn({
             event: "bootstrap_connect_failed",
             ...telemetryContext,
             diagnostics,
@@ -703,15 +709,15 @@ export function useAgentStatusNats(
           return;
         }
 
-        console.log("[NATS] Conectado. Inscrevendo subjects...");
+        natsLogger.log("Conectado. Inscrevendo subjects...");
 
         const activeSubjects: string[] = [];
         const blockedSubjects: string[] = [];
         const failedSubjects: string[] = [];
         for (const [subject, handler] of subscriptions) {
           if (!natsService.canSubscribeToSubject(subject)) {
-            console.debug(
-              "[NATS] Subject fora da allow-list do token, ignorando:",
+            natsLogger.debug(
+              "Subject fora da allow-list do token, ignorando:",
               subject,
             );
             blockedSubjects.push(subject);
@@ -728,8 +734,8 @@ export function useAgentStatusNats(
           }
         }
 
-        console.log("[NATS] Subscriptions ativas:", activeSubjects);
-        console.info("[NATS][telemetry]", {
+        natsLogger.log("Subscriptions ativas:", activeSubjects);
+        natsTelemetryLogger.info({
           event: "bootstrap_subscriptions_result",
           ...telemetryContext,
           connected,
@@ -746,7 +752,7 @@ export function useAgentStatusNats(
     return () => {
       disposed = true;
       window.clearTimeout(bootstrapTimer);
-      console.log("[NATS] Cleanup: removendo subscriptions.");
+      natsLogger.log("Cleanup: removendo subscriptions.");
       unsubscribeConnectionState();
       subscriptions.forEach((handler, subject) => {
         natsService.unsubscribe(subject, handler);
@@ -755,12 +761,12 @@ export function useAgentStatusNats(
       setNatsConnectionDiagnostics(null, null, null);
       setServerPongState(null, null);
       if (bootstrapStarted) {
-        console.info("[NATS][telemetry]", {
+        natsTelemetryLogger.info({
           event: "bootstrap_cleanup",
           ...telemetryContext,
         });
       }
-      console.log("[NATS] Cleanup concluído.");
+      natsLogger.log("Cleanup concluído.");
     };
   }, [enabled, queryClient, scopeKey, stableScope]);
 }
