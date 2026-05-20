@@ -23,7 +23,6 @@ type FormState = {
   content: string;
   category: string;
   tags: string;
-  createdBy: string;
   clientId: string;
   siteId: string;
   departmentId: string;
@@ -64,7 +63,6 @@ export default function KnowledgeEditor() {
     content: '## Novo Artigo\n\nDescreva aqui o procedimento em Markdown.',
     category: '',
     tags: '',
-    createdBy: '',
     clientId: '',
     siteId: '',
     departmentId: '',
@@ -90,7 +88,6 @@ export default function KnowledgeEditor() {
       content: article.content,
       category: article.category ?? '',
       tags: article.tags.join(', '),
-      createdBy: article.createdBy ?? '',
       clientId: article.clientId ?? '',
       siteId: article.siteId ?? '',
       departmentId: article.departmentId ?? '',
@@ -127,7 +124,7 @@ export default function KnowledgeEditor() {
 
   const valid = form.title.trim().length >= 3 && form.content.trim().length >= 10;
 
-  const submit = async () => {
+  const submit = async (targetStatus: ArticleStatus = 'Draft') => {
     if (!valid) {
       toast.error('Preencha título e conteúdo do artigo.');
       return;
@@ -138,25 +135,26 @@ export default function KnowledgeEditor() {
       return;
     }
 
+    if (targetStatus === 'Internal' && !form.departmentId) {
+      toast.error('Selecione um departamento para artigo Interno.');
+      return;
+    }
+
     if (isEdit && id) {
       const payload: UpdateKnowledgeArticleRequest = {
         title: form.title.trim(),
         content: form.content,
         category: form.category.trim() || null,
         tags: toTagArray(form.tags),
-        lastEditedBy: form.createdBy.trim() || null,
       };
 
-      updateMutation.mutate(
-        { id, data: payload },
-        {
-          onSuccess: () => {
-            toast.success('Artigo atualizado (rascunho).');
-            navigate('/knowledge');
-          },
-          onError: () => toast.error('Não foi possível atualizar o artigo.'),
+      updateMutation.mutate({ id, data: payload }, {
+        onSuccess: () => {
+          toast.success('Artigo atualizado (rascunho).');
+          navigate('/knowledge');
         },
-      );
+        onError: () => toast.error('Não foi possível atualizar o artigo.'),
+      });
 
       return;
     }
@@ -166,16 +164,32 @@ export default function KnowledgeEditor() {
       content: form.content,
       category: form.category.trim() || null,
       tags: toTagArray(form.tags),
-      createdBy: form.createdBy.trim() || null,
       clientId: form.clientId || null,
       siteId: form.siteId || null,
       departmentId: form.departmentId || null,
     };
 
     createMutation.mutate(payload, {
-      onSuccess: () => {
-        toast.success('Artigo criado como rascunho.');
-        navigate('/knowledge');
+      onSuccess: (created) => {
+        if (targetStatus === 'Draft') {
+          toast.success('Artigo criado como rascunho.');
+          navigate('/knowledge');
+          return;
+        }
+
+        const publishPayload: PublishArticleRequest = {
+          status: targetStatus,
+        };
+
+        publishMutation.mutate({ id: created.id, data: publishPayload }, {
+          onSuccess: () => {
+            toast.success(targetStatus === 'Published'
+              ? 'Artigo criado e publicado!'
+              : 'Artigo criado e marcado como Interno!');
+            navigate('/knowledge');
+          },
+          onError: () => toast.error('Artigo criado, mas falhou ao publicar.'),
+        });
       },
       onError: () => toast.error('Não foi possível criar o artigo.'),
     });
@@ -236,14 +250,17 @@ export default function KnowledgeEditor() {
                 onChange={(event) => setField('category', event.target.value)}
                 placeholder="Ex.: Active Directory"
               />
-              <Input
-                label="Autor (criador)"
-                value={form.createdBy}
-                onChange={(event) => setField('createdBy', event.target.value)}
-                placeholder="Nome do autor"
-                disabled={isEdit}
-                hint={isEdit ? 'Autor original não pode ser alterado.' : undefined}
-              />
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-slate-300">Autor (criador)</label>
+                <div className="rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-slate-300">
+                  {isEdit
+                    ? (detailQuery.data?.createdBy ?? 'Não informado')
+                    : 'Definido automaticamente pelo usuário logado'}
+                </div>
+                <p className="mt-1 text-xs text-slate-500">
+                  O backend define automaticamente o autor original no momento da criação.
+                </p>
+              </div>
             </div>
 
             <Input
@@ -306,7 +323,6 @@ export default function KnowledgeEditor() {
                         const newStatus = detailQuery.data.status === 'Published' ? 'Internal' : 'Published';
                         const data: PublishArticleRequest = {
                           status: newStatus as 'Published' | 'Internal',
-                          lastEditedBy: form.createdBy || null,
                         };
                         publishMutation.mutate({ id: id!, data }, {
                           onSuccess: () => toast.success(`Artigo republicado como ${newStatus === 'Published' ? 'Público' : 'Interno'}`),
@@ -328,7 +344,6 @@ export default function KnowledgeEditor() {
                   onClick={() => {
                     const data: PublishArticleRequest = {
                       status: 'Published',
-                      lastEditedBy: form.createdBy || null,
                     };
                     publishMutation.mutate({ id: id!, data }, {
                       onSuccess: () => toast.success('Artigo publicado!'),
@@ -347,7 +362,6 @@ export default function KnowledgeEditor() {
                     }
                     const data: PublishArticleRequest = {
                       status: 'Internal',
-                      lastEditedBy: form.createdBy || null,
                     };
                     publishMutation.mutate({ id: id!, data }, {
                       onSuccess: () => toast.success('Artigo marcado como Interno!'),
@@ -423,13 +437,39 @@ export default function KnowledgeEditor() {
               <Button variant="ghost" onClick={() => navigate('/knowledge')}>
                 Cancelar
               </Button>
-              <Button
-                onClick={submit}
-                loading={createMutation.isPending || updateMutation.isPending}
-                disabled={!valid}
-              >
-                <Save className="h-4 w-4" /> Salvar
-              </Button>
+              {isEdit ? (
+                <Button
+                  onClick={() => void submit('Draft')}
+                  loading={createMutation.isPending || updateMutation.isPending || publishMutation.isPending}
+                  disabled={!valid}
+                >
+                  <Save className="h-4 w-4" /> Salvar rascunho
+                </Button>
+              ) : (
+                <>
+                  <Button
+                    variant="ghost"
+                    onClick={() => void submit('Internal')}
+                    disabled={!valid || createMutation.isPending || publishMutation.isPending}
+                  >
+                    Salvar como Interno
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    onClick={() => void submit('Published')}
+                    disabled={!valid || createMutation.isPending || publishMutation.isPending}
+                  >
+                    <Send className="h-4 w-4" /> Publicar agora
+                  </Button>
+                  <Button
+                    onClick={() => void submit('Draft')}
+                    loading={createMutation.isPending || publishMutation.isPending}
+                    disabled={!valid}
+                  >
+                    <Save className="h-4 w-4" /> Salvar rascunho
+                  </Button>
+                </>
+              )}
             </div>
           </div>
         </Card>

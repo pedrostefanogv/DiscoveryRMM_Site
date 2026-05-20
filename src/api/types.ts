@@ -1624,7 +1624,7 @@ export interface CreateKnowledgeArticleRequest {
   content: string;
   category: string | null;
   tags: string[];
-  createdBy: string | null;
+  createdBy?: string | null;
   clientId: string | null;
   siteId: string | null;
   departmentId?: string | null;
@@ -1635,12 +1635,12 @@ export interface UpdateKnowledgeArticleRequest {
   content: string;
   category: string | null;
   tags: string[];
-  lastEditedBy: string | null;
+  lastEditedBy?: string | null;
 }
 
 export interface PublishArticleRequest {
   status: "Published" | "Internal";
-  lastEditedBy: string | null;
+  lastEditedBy?: string | null;
   changeSummary?: string | null;
 }
 
