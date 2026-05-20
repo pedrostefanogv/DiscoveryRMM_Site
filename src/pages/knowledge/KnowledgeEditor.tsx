@@ -151,7 +151,7 @@ export default function KnowledgeEditor() {
       updateMutation.mutate({ id, data: payload }, {
         onSuccess: () => {
           toast.success('Artigo atualizado (rascunho).');
-          navigate('/knowledge');
+          navigate(`/knowledge/${id}`);
         },
         onError: () => toast.error('Não foi possível atualizar o artigo.'),
       });
@@ -173,7 +173,7 @@ export default function KnowledgeEditor() {
       onSuccess: (created) => {
         if (targetStatus === 'Draft') {
           toast.success('Artigo criado como rascunho.');
-          navigate('/knowledge');
+          navigate(`/knowledge/${created.id}`);
           return;
         }
 
@@ -186,9 +186,12 @@ export default function KnowledgeEditor() {
             toast.success(targetStatus === 'Published'
               ? 'Artigo criado e publicado!'
               : 'Artigo criado e marcado como Interno!');
-            navigate('/knowledge');
+            navigate(`/knowledge/${created.id}`);
           },
-          onError: () => toast.error('Artigo criado, mas falhou ao publicar.'),
+          onError: () => {
+            toast.error('Artigo criado, mas falhou ao publicar.');
+            navigate(`/knowledge/${created.id}`);
+          },
         });
       },
       onError: () => toast.error('Não foi possível criar o artigo.'),
