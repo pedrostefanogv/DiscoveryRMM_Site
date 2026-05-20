@@ -58,11 +58,36 @@ const ReportSchedulesPage = lazy(() => import('@/pages/reports/ReportSchedulesPa
 const RunReport = lazy(() => import('@/pages/reports/RunReport'));
 const ReportExecutionList = lazy(() => import('@/pages/reports/ReportExecutionList'));
 const KnowledgeList = lazy(() => import('@/pages/knowledge/KnowledgeList'));
+const KnowledgeViewer = lazy(() => import('@/pages/knowledge/KnowledgeViewer'));
 const KnowledgeEditor = lazy(() => import('@/pages/knowledge/KnowledgeEditor'));
 const LoginPage = lazy(() => import('@/pages/auth/LoginPage'));
 const FirstAccessPage = lazy(() => import('@/pages/auth/FirstAccessPage'));
 const MfaAssertionPage = lazy(() => import('@/pages/auth/MfaAssertionPage'));
 const MfaRegistrationPage = lazy(() => import('@/pages/auth/MfaRegistrationPage'));
+
+const KNOWLEDGE_VIEW_PERMISSIONS = [
+  'KnowledgeBase.View',
+  'KnowledgeBase.*',
+  'knowledgebase.view',
+  'knowledgebase.*',
+  'admin.*',
+];
+
+const KNOWLEDGE_CREATE_PERMISSIONS = [
+  'KnowledgeBase.Create',
+  'KnowledgeBase.*',
+  'knowledgebase.create',
+  'knowledgebase.*',
+  'admin.*',
+];
+
+const KNOWLEDGE_EDIT_PERMISSIONS = [
+  'KnowledgeBase.Edit',
+  'KnowledgeBase.*',
+  'knowledgebase.edit',
+  'knowledgebase.*',
+  'admin.*',
+];
 
 function LazyPage({ children }: { children: React.ReactNode }) {
   return (
@@ -507,15 +532,35 @@ export const router = createBrowserRouter([
       },
       {
         path: 'knowledge',
-        element: <LazyPage><KnowledgeList /></LazyPage>,
+        element: (
+          <PermissionGate anyOf={KNOWLEDGE_VIEW_PERMISSIONS}>
+            <LazyPage><KnowledgeList /></LazyPage>
+          </PermissionGate>
+        ),
       },
       {
         path: 'knowledge/new',
-        element: <LazyPage><KnowledgeEditor /></LazyPage>,
+        element: (
+          <PermissionGate anyOf={KNOWLEDGE_CREATE_PERMISSIONS}>
+            <LazyPage><KnowledgeEditor /></LazyPage>
+          </PermissionGate>
+        ),
+      },
+      {
+        path: 'knowledge/:id',
+        element: (
+          <PermissionGate anyOf={KNOWLEDGE_VIEW_PERMISSIONS}>
+            <LazyPage><KnowledgeViewer /></LazyPage>
+          </PermissionGate>
+        ),
       },
       {
         path: 'knowledge/:id/edit',
-        element: <LazyPage><KnowledgeEditor /></LazyPage>,
+        element: (
+          <PermissionGate anyOf={KNOWLEDGE_EDIT_PERMISSIONS}>
+            <LazyPage><KnowledgeEditor /></LazyPage>
+          </PermissionGate>
+        ),
       },
       {
         path: '*',

@@ -13,6 +13,7 @@ import {
 import type { Column } from '@/components/ui';
 import type { ArticleStatus, KnowledgeArticle, KnowledgeSearchMode, PublishArticleRequest } from '@/api';
 import { useClients, useDeleteKnowledgeArticle, useDepartments, useKnowledgeArticles, useKnowledgeSearch, usePublishKnowledgeArticle, useSites, useUnpublishKnowledgeArticle } from '@/hooks';
+import { useAuthorization } from '@/auth/authorization';
 import { BookOpen, ChevronDown, ChevronUp, Filter, Pencil, Plus, Search, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -42,6 +43,30 @@ const SORT_OPTIONS: Array<{ value: SortField; label: string }> = [
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50];
 const DEFAULT_PAGE_SIZE = 10;
+
+const KNOWLEDGE_CREATE_PERMISSIONS = [
+  'KnowledgeBase.Create',
+  'KnowledgeBase.*',
+  'knowledgebase.create',
+  'knowledgebase.*',
+  'admin.*',
+];
+
+const KNOWLEDGE_EDIT_PERMISSIONS = [
+  'KnowledgeBase.Edit',
+  'KnowledgeBase.*',
+  'knowledgebase.edit',
+  'knowledgebase.*',
+  'admin.*',
+];
+
+const KNOWLEDGE_DELETE_PERMISSIONS = [
+  'KnowledgeBase.Delete',
+  'KnowledgeBase.*',
+  'knowledgebase.delete',
+  'knowledgebase.*',
+  'admin.*',
+];
 
 function normalizeCategory(category: string | null | undefined) {
   if (!category) return 'Sem categoria';
@@ -119,6 +144,12 @@ export default function KnowledgeList() {
   const publishMutation = usePublishKnowledgeArticle();
   const unpublishMutation = useUnpublishKnowledgeArticle();
   const deleteMutation = useDeleteKnowledgeArticle();
+  const { hasAnyPermission } = useAuthorization();
+
+  const canCreateArticle = hasAnyPermission(KNOWLEDGE_CREATE_PERMISSIONS);
+  const canEditArticle = hasAnyPermission(KNOWLEDGE_EDIT_PERMISSIONS);
+  const canDeleteArticle = hasAnyPermission(KNOWLEDGE_DELETE_PERMISSIONS);
+  const canPublishArticle = canEditArticle;
 
   useEffect(() => {
     const params = new URLSearchParams();
@@ -332,20 +363,32 @@ export default function KnowledgeList() {
       header: '',
       render: (article) => (
         <div className="flex items-center gap-2" onClick={(event) => event.stopPropagation()}>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => onTogglePublish(article)}
-            loading={publishMutation.isPending || unpublishMutation.isPending}
-          >
-            {article.status === 'Draft' ? 'Publicar' : 'Despublicar'}
-          </Button>
-          <Button variant="ghost" size="sm" onClick={() => navigate(`/knowledge/${article.id}/edit`)}>
-            <Pencil className="h-4 w-4" />
-          </Button>
-          <Button variant="ghost" size="sm" onClick={() => onDelete(article)}>
-            <Trash2 className="h-4 w-4 text-red-400" />
-          </Button>
+          {!canPublishArticle && !canEditArticle && !canDeleteArticle ? (
+            <span className="text-xs text-slate-500">Sem ações</span>
+          ) : (
+            <>
+              {canPublishArticle && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => onTogglePublish(article)}
+                  loading={publishMutation.isPending || unpublishMutation.isPending}
+                >
+                  {article.status === 'Draft' ? 'Publicar' : 'Despublicar'}
+                </Button>
+              )}
+              {canEditArticle && (
+                <Button variant="ghost" size="sm" onClick={() => navigate(`/knowledge/${article.id}/edit`)}>
+                  <Pencil className="h-4 w-4" />
+                </Button>
+              )}
+              {canDeleteArticle && (
+                <Button variant="ghost" size="sm" onClick={() => onDelete(article)}>
+                  <Trash2 className="h-4 w-4 text-red-400" />
+                </Button>
+              )}
+            </>
+          )}
         </div>
       ),
     },
@@ -401,9 +444,11 @@ export default function KnowledgeList() {
           <h1 className="text-2xl font-bold text-white">Base de Conhecimento</h1>
           <p className="text-sm text-slate-400">Busque artigos rapidamente e abra filtros avançados só quando precisar.</p>
         </div>
-        <Button onClick={() => navigate('/knowledge/new')}>
-          <Plus className="h-4 w-4" /> Novo Artigo
-        </Button>
+        {canCreateArticle && (
+          <Button onClick={() => navigate('/knowledge/new')}>
+            <Plus className="h-4 w-4" /> Novo Artigo
+          </Button>
+        )}
       </div>
 
       <Card>
@@ -552,7 +597,7 @@ export default function KnowledgeList() {
             <div className="mb-2 flex items-center justify-between gap-2">
               <div>
                 <p className="text-sm font-semibold text-white">Resultados da busca inteligente</p>
-                <p className="text-xs text-slate-400">Consulta: "{query}". Clique em um artigo para abrir no editor.</p>
+                <p className="text-xs text-slate-400">Consulta: "{query}". Clique em um artigo para abrir em modo leitura.</p>
               </div>
               {!searchQuery.isLoading && !searchQuery.isError && (
                 <Badge color="accent">{(searchQuery.data ?? []).length}</Badge>
@@ -573,7 +618,7 @@ export default function KnowledgeList() {
                     <button
                       type="button"
                       key={item.id}
-                      onClick={() => navigate(`/knowledge/${item.id}/edit`)}
+                      onClick={() => navigate(`/knowledge/${item.id}`)}
                       className="w-full rounded-lg border border-white/10 bg-white/5 p-3 text-left transition-colors hover:bg-white/10"
                     >
                       <p className="font-medium text-white">{item.title}</p>
@@ -603,7 +648,7 @@ export default function KnowledgeList() {
               columns={columns}
               data={pagedArticles}
               keyExtractor={(item) => item.id}
-              onRowClick={(item) => navigate(`/knowledge/${item.id}/edit`)}
+              onRowClick={(item) => navigate(`/knowledge/${item.id}`)}
               emptyMessage="Nenhum artigo encontrado para os filtros selecionados."
               showPagination={false}
             />
