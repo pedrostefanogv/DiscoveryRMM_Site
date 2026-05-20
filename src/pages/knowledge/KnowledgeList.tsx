@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Badge,
@@ -14,7 +14,7 @@ import type { Column } from '@/components/ui';
 import type { ArticleStatus, KnowledgeArticle, KnowledgeSearchMode, PublishArticleRequest } from '@/api';
 import { useClients, useDeleteKnowledgeArticle, useDepartments, useKnowledgeArticles, useKnowledgeSearch, usePublishKnowledgeArticle, useSites, useUnpublishKnowledgeArticle } from '@/hooks';
 import { useAuthorization } from '@/auth/authorization';
-import { BookOpen, ChevronDown, ChevronUp, Filter, Pencil, Plus, Search, Trash2 } from 'lucide-react';
+import { BookOpen, ChevronDown, ChevronUp, Eye, Filter, Pencil, Plus, Search, Send, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 const SEARCH_MODE_OPTIONS: Array<{ value: KnowledgeSearchMode; label: string }> = [
@@ -32,6 +32,7 @@ const STATUS_OPTIONS: Array<{ value: string; label: string }> = [
 
 type SortField = 'title' | 'updatedAt' | 'createdBy' | 'scope' | 'status';
 type SortDirection = 'asc' | 'desc';
+type ContextMenuState = { x: number; y: number; article: KnowledgeArticle } | null;
 
 const SORT_OPTIONS: Array<{ value: SortField; label: string }> = [
   { value: 'updatedAt', label: 'Última atualização' },
@@ -117,6 +118,8 @@ export default function KnowledgeList() {
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [page, setPage] = useState(1);
   const [advancedFiltersExpanded, setAdvancedFiltersExpanded] = useState(false);
+  const [contextMenu, setContextMenu] = useState<ContextMenuState>(null);
+  const contextMenuRef = useRef<HTMLDivElement | null>(null);
 
   const sites = useSites(clientId);
   const departments = useDepartments({ clientId: clientId || undefined, activeOnly: true });
@@ -161,6 +164,49 @@ export default function KnowledgeList() {
     setSearchParams(params, { replace: true });
   }, [category, clientId, statusFilter, departmentId, setSearchParams, siteId]);
 
+  useEffect(() => {
+    if (clientId) return;
+    if (!siteId && !departmentId) return;
+
+    setSiteId('');
+    setDepartmentId('');
+  }, [clientId, departmentId, siteId]);
+
+  useEffect(() => {
+    if (!contextMenu) return;
+
+    const closeMenu = () => setContextMenu(null);
+    window.addEventListener('click', closeMenu);
+    window.addEventListener('scroll', closeMenu, true);
+    window.addEventListener('contextmenu', closeMenu);
+
+    return () => {
+      window.removeEventListener('click', closeMenu);
+      window.removeEventListener('scroll', closeMenu, true);
+      window.removeEventListener('contextmenu', closeMenu);
+    };
+  }, [contextMenu]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      setContextMenu(null);
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
+
+  useEffect(() => {
+    if (!contextMenu || !contextMenuRef.current) return;
+
+    const left = Math.max(8, Math.min(contextMenu.x, window.innerWidth - 240));
+    const top = Math.max(8, Math.min(contextMenu.y, window.innerHeight - 220));
+
+    contextMenuRef.current.style.left = `${left}px`;
+    contextMenuRef.current.style.top = `${top}px`;
+  }, [contextMenu]);
+
   const categoryOptions = useMemo(() => {
     const source = listQuery.data ?? [];
     const unique = Array.from(new Set(source.map((item) => normalizeCategory(item.category))));
@@ -170,7 +216,7 @@ export default function KnowledgeList() {
   }, [listQuery.data]);
 
   const clientOptions = [
-    { value: '', label: 'Global (todos)' },
+    { value: '', label: 'Global (todos os clientes e sites)' },
     ...(clients.data ?? []).map((c) => ({ value: c.id, label: c.name })),
   ];
 
@@ -266,6 +312,8 @@ export default function KnowledgeList() {
   };
 
   const onTogglePublish = (article: KnowledgeArticle) => {
+    setContextMenu(null);
+
     if (article.status === 'Draft') {
       // Prompt para escolher Published ou Internal
       const choice = window.confirm(
@@ -294,6 +342,8 @@ export default function KnowledgeList() {
   };
 
   const onDelete = (article: KnowledgeArticle) => {
+    setContextMenu(null);
+
     const confirmed = window.confirm(`Excluir o artigo "${article.title}"?`);
     if (!confirmed) return;
 
@@ -360,35 +410,21 @@ export default function KnowledgeList() {
     },
     {
       key: 'actions',
-      header: '',
+      header: 'Visualizar',
+      className: 'w-20',
+      sortable: false,
       render: (article) => (
         <div className="flex items-center gap-2" onClick={(event) => event.stopPropagation()}>
-          {!canPublishArticle && !canEditArticle && !canDeleteArticle ? (
-            <span className="text-xs text-slate-500">Sem ações</span>
-          ) : (
-            <>
-              {canPublishArticle && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => onTogglePublish(article)}
-                  loading={publishMutation.isPending || unpublishMutation.isPending}
-                >
-                  {article.status === 'Draft' ? 'Publicar' : 'Despublicar'}
-                </Button>
-              )}
-              {canEditArticle && (
-                <Button variant="ghost" size="sm" onClick={() => navigate(`/knowledge/${article.id}/edit`)}>
-                  <Pencil className="h-4 w-4" />
-                </Button>
-              )}
-              {canDeleteArticle && (
-                <Button variant="ghost" size="sm" onClick={() => onDelete(article)}>
-                  <Trash2 className="h-4 w-4 text-red-400" />
-                </Button>
-              )}
-            </>
-          )}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 w-8 p-0"
+            onClick={() => navigate(`/knowledge/${article.id}`)}
+            title="Visualizar artigo"
+            aria-label="Visualizar artigo"
+          >
+            <Eye className="h-4 w-4" />
+          </Button>
         </div>
       ),
     },
@@ -452,38 +488,41 @@ export default function KnowledgeList() {
       </div>
 
       <Card>
-        <form className="space-y-4" onSubmit={handleSearchSubmit}>
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
-            <div className="flex-1">
-              <Input
-                label="Busca inteligente (semântica + keyword)"
-                value={searchInput}
-                onChange={(event) => setSearchInput(event.target.value)}
-                placeholder="Ex.: como resetar senha do AD"
-                hint="Use linguagem natural para encontrar artigos mesmo sem palavras exatas."
-              />
-            </div>
-            <div className="w-full lg:w-44">
-              <Select
-                label="Modo"
-                options={SEARCH_MODE_OPTIONS}
-                value={searchMode}
-                onChange={(event) => setSearchMode(event.target.value as KnowledgeSearchMode)}
-              />
-            </div>
-            <div className="w-full lg:w-32">
-              <Input
-                label="Máx resultados"
-                type="number"
-                value={maxResults}
-                min={1}
-                max={50}
-                onChange={(event) => setMaxResults(Number(event.target.value) || 10)}
-              />
-            </div>
-            <div className="flex gap-2 lg:pb-[2px]">
-              <Button type="submit" variant="ghost" disabled={!searchInput.trim()}>
-                <Search className="h-4 w-4" /> Buscar na base
+        <form className="space-y-3" onSubmit={handleSearchSubmit}>
+          <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_11rem_8.5rem_auto] lg:items-end">
+            <Input
+              label="Busca inteligente (semântica + keyword)"
+              value={searchInput}
+              onChange={(event) => setSearchInput(event.target.value)}
+              placeholder="Ex.: como resetar senha do AD"
+            />
+
+            <Select
+              label="Modo"
+              options={SEARCH_MODE_OPTIONS}
+              value={searchMode}
+              onChange={(event) => setSearchMode(event.target.value as KnowledgeSearchMode)}
+            />
+
+            <Input
+              label="Máx resultados"
+              type="number"
+              value={maxResults}
+              min={1}
+              max={50}
+              onChange={(event) => setMaxResults(Number(event.target.value) || 10)}
+            />
+
+            <div className="flex items-end gap-2">
+              <Button
+                type="submit"
+                variant="ghost"
+                disabled={!searchInput.trim()}
+                className="h-[38px] w-[38px] shrink-0 px-0"
+                title="Buscar na base"
+                aria-label="Buscar na base"
+              >
+                <Search className="h-4 w-4" />
               </Button>
               {hasSemanticSearch && (
                 <Button type="button" variant="ghost" onClick={handleClearSearch}>
@@ -492,6 +531,10 @@ export default function KnowledgeList() {
               )}
             </div>
           </div>
+
+          <p className="text-xs text-slate-400">
+            Use linguagem natural para encontrar artigos mesmo sem palavras exatas.
+          </p>
         </form>
 
         <div className="mt-1 flex flex-wrap items-center gap-2">
@@ -531,8 +574,10 @@ export default function KnowledgeList() {
                 options={clientOptions}
                 value={clientId}
                 onChange={(event) => {
-                  setClientId(event.target.value);
+                  const nextClientId = event.target.value;
+                  setClientId(nextClientId);
                   setSiteId('');
+                  setDepartmentId('');
                 }}
               />
 
@@ -563,8 +608,15 @@ export default function KnowledgeList() {
                 options={departmentOptions}
                 value={departmentId}
                 onChange={(event) => setDepartmentId(event.target.value)}
+                disabled={!clientId}
               />
             </div>
+
+            {!clientId && (
+              <p className="text-xs text-slate-400">
+                Cliente em Global exibe artigos de todos os clientes e sites visíveis para seu perfil.
+              </p>
+            )}
 
             <div className="grid gap-4 md:grid-cols-3">
               <Select
@@ -649,6 +701,10 @@ export default function KnowledgeList() {
               data={pagedArticles}
               keyExtractor={(item) => item.id}
               onRowClick={(item) => navigate(`/knowledge/${item.id}`)}
+              onRowContextMenu={(event, item) => {
+                event.preventDefault();
+                setContextMenu({ x: event.clientX, y: event.clientY, article: item });
+              }}
               emptyMessage="Nenhum artigo encontrado para os filtros selecionados."
               showPagination={false}
             />
@@ -678,6 +734,62 @@ export default function KnowledgeList() {
           </div>
         )}
       </Card>
+
+      {contextMenu && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setContextMenu(null)} />
+          <div
+            ref={contextMenuRef}
+            className="fixed z-50 min-w-[220px] overflow-hidden rounded-lg border border-white/10 bg-slate-900 shadow-xl"
+          >
+            <button
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-200 transition-colors hover:bg-white/10"
+              onClick={() => {
+                navigate(`/knowledge/${contextMenu.article.id}`);
+                setContextMenu(null);
+              }}
+            >
+              <Eye className="h-4 w-4" />
+              Visualizar artigo
+            </button>
+
+            {canEditArticle && (
+              <button
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-200 transition-colors hover:bg-white/10"
+                onClick={() => {
+                  navigate(`/knowledge/${contextMenu.article.id}/edit`);
+                  setContextMenu(null);
+                }}
+              >
+                <Pencil className="h-4 w-4" />
+                Editar artigo
+              </button>
+            )}
+
+            {canPublishArticle && (
+              <button
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-200 transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+                onClick={() => onTogglePublish(contextMenu.article)}
+                disabled={publishMutation.isPending || unpublishMutation.isPending}
+              >
+                <Send className="h-4 w-4" />
+                {contextMenu.article.status === 'Draft' ? 'Publicar artigo' : 'Despublicar artigo'}
+              </button>
+            )}
+
+            {canDeleteArticle && (
+              <button
+                className="flex w-full items-center gap-2 border-t border-white/10 px-3 py-2 text-left text-sm text-red-300 transition-colors hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+                onClick={() => onDelete(contextMenu.article)}
+                disabled={deleteMutation.isPending}
+              >
+                <Trash2 className="h-4 w-4" />
+                Excluir artigo
+              </button>
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 }
