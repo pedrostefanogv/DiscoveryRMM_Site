@@ -2,9 +2,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { knowledgeApi } from "@/api";
 import type {
   CreateKnowledgeArticleRequest,
+  KbSearchRequest,
   KnowledgeListQuery,
   KnowledgeSearchQuery,
   LinkTicketKnowledgeRequest,
+  PublishArticleRequest,
   TicketKnowledgeSuggestQuery,
   UpdateKnowledgeArticleRequest,
 } from "@/api";
@@ -13,8 +15,13 @@ const KEYS = {
   all: ["knowledge"] as const,
   list: (params?: KnowledgeListQuery) => [...KEYS.all, "list", params] as const,
   detail: (id: string) => [...KEYS.all, "detail", id] as const,
+  versions: (id: string) => [...KEYS.all, "versions", id] as const,
+  version: (id: string, versionNumber: number) =>
+    [...KEYS.all, "version", id, versionNumber] as const,
   search: (params: KnowledgeSearchQuery) =>
     [...KEYS.all, "search", params] as const,
+  chatSearch: (params: KbSearchRequest) =>
+    [...KEYS.all, "chat-search", params] as const,
   ticketLinks: (ticketId: string) =>
     [...KEYS.all, "ticket-links", ticketId] as const,
   ticketSuggest: (ticketId: string, params?: TicketKnowledgeSuggestQuery) =>
@@ -36,6 +43,22 @@ export function useKnowledgeArticle(id: string) {
   });
 }
 
+export function useKnowledgeArticleVersions(id: string) {
+  return useQuery({
+    queryKey: KEYS.versions(id),
+    queryFn: () => knowledgeApi.getVersions(id),
+    enabled: !!id,
+  });
+}
+
+export function useKnowledgeArticleVersion(id: string, versionNumber: number) {
+  return useQuery({
+    queryKey: KEYS.version(id, versionNumber),
+    queryFn: () => knowledgeApi.getVersion(id, versionNumber),
+    enabled: !!id && versionNumber > 0,
+  });
+}
+
 export function useKnowledgeSearch(
   params: KnowledgeSearchQuery,
   enabled = true,
@@ -44,6 +67,12 @@ export function useKnowledgeSearch(
     queryKey: KEYS.search(params),
     queryFn: () => knowledgeApi.search(params),
     enabled: enabled && !!params.q?.trim(),
+  });
+}
+
+export function useKnowledgeChatSearch() {
+  return useMutation({
+    mutationFn: (data: KbSearchRequest) => knowledgeApi.chatSearch(data),
   });
 }
 
@@ -84,10 +113,12 @@ export function useDeleteKnowledgeArticle() {
 export function usePublishKnowledgeArticle() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => knowledgeApi.publish(id),
-    onSuccess: (_, id) => {
+    mutationFn: ({ id, data }: { id: string; data: PublishArticleRequest }) =>
+      knowledgeApi.publish(id, data),
+    onSuccess: (_, vars) => {
       qc.invalidateQueries({ queryKey: KEYS.all });
-      qc.invalidateQueries({ queryKey: KEYS.detail(id) });
+      qc.invalidateQueries({ queryKey: KEYS.detail(vars.id) });
+      qc.invalidateQueries({ queryKey: KEYS.versions(vars.id) });
     },
   });
 }
@@ -95,10 +126,16 @@ export function usePublishKnowledgeArticle() {
 export function useUnpublishKnowledgeArticle() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => knowledgeApi.unpublish(id),
-    onSuccess: (_, id) => {
+    mutationFn: ({
+      id,
+      lastEditedBy,
+    }: {
+      id: string;
+      lastEditedBy?: string;
+    }) => knowledgeApi.unpublish(id, lastEditedBy),
+    onSuccess: (_, vars) => {
       qc.invalidateQueries({ queryKey: KEYS.all });
-      qc.invalidateQueries({ queryKey: KEYS.detail(id) });
+      qc.invalidateQueries({ queryKey: KEYS.detail(vars.id) });
     },
   });
 }

@@ -1581,6 +1581,7 @@ export interface UpdateNoteRequest {
 }
 
 export type KnowledgeSearchMode = "semantic" | "keyword" | "hybrid";
+export type ArticleStatus = "Draft" | "Published" | "Internal";
 
 export interface KnowledgeArticle {
   id: string;
@@ -1588,12 +1589,34 @@ export interface KnowledgeArticle {
   content: string;
   category: string | null;
   tags: string[];
-  author: string | null;
+  createdBy: string | null;
+  lastEditedBy: string | null;
+  lastEditedAt: string | null;
+  status: ArticleStatus;
+  scope: string;
   clientId: string | null;
   siteId: string | null;
-  isPublished: boolean;
+  departmentId: string | null;
+  currentVersionNumber: number;
+  publishedAt: string | null;
+  chunkCount: number;
+  embeddingsReady: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ArticleVersion {
+  id: string;
+  articleId: string;
+  versionNumber: number;
+  title: string;
+  content: string;
+  category: string | null;
+  tags: string[];
+  status: string;
+  editedBy: string | null;
+  changeSummary: string | null;
+  createdAt: string;
 }
 
 export interface CreateKnowledgeArticleRequest {
@@ -1601,9 +1624,10 @@ export interface CreateKnowledgeArticleRequest {
   content: string;
   category: string | null;
   tags: string[];
-  author: string | null;
+  createdBy: string | null;
   clientId: string | null;
   siteId: string | null;
+  departmentId?: string | null;
 }
 
 export interface UpdateKnowledgeArticleRequest {
@@ -1611,13 +1635,29 @@ export interface UpdateKnowledgeArticleRequest {
   content: string;
   category: string | null;
   tags: string[];
-  author: string | null;
+  lastEditedBy: string | null;
+}
+
+export interface PublishArticleRequest {
+  status: "Published" | "Internal";
+  lastEditedBy: string | null;
+  changeSummary?: string | null;
+}
+
+export interface KbSearchRequest {
+  query: string;
+  clientId?: string | null;
+  siteId?: string | null;
+  departmentId?: string | null;
+  mode?: KnowledgeSearchMode;
+  maxResults?: number;
 }
 
 export interface KnowledgeListQuery {
   clientId?: string;
   siteId?: string;
-  publishedOnly?: boolean;
+  status?: ArticleStatus;
+  departmentId?: string;
   category?: string;
 }
 
@@ -1625,6 +1665,7 @@ export interface KnowledgeSearchQuery {
   q: string;
   clientId?: string;
   siteId?: string;
+  departmentId?: string;
   mode?: KnowledgeSearchMode;
   maxResults?: number;
 }
@@ -1639,7 +1680,24 @@ export interface TicketKnowledgeSuggestQuery {
   q: string;
   clientId?: string;
   siteId?: string;
+  departmentId?: string;
   maxResults?: number;
+}
+
+export interface KbSearchResult {
+  articleId: string;
+  articleTitle: string;
+  sectionTitle: string | null;
+  excerpt: string;
+  category: string | null;
+  scope: string;
+  clientId: string | null;
+  siteId: string | null;
+  score: number | null;
+}
+
+export interface KbSuggestResult {
+  suggestions: KbSearchResult[];
 }
 
 // ── Ticket Attachments ─────────────────────────────────

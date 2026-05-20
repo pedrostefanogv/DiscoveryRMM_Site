@@ -1,11 +1,15 @@
 ﻿import { api } from "./client";
 import type {
+  ArticleVersion,
   CreateKnowledgeArticleRequest,
   KbLinkFeedbackRequest,
+  KbSearchRequest,
+  KbSuggestResult,
   KnowledgeArticle,
   KnowledgeListQuery,
   KnowledgeSearchQuery,
   LinkTicketKnowledgeRequest,
+  PublishArticleRequest,
   TicketKnowledgeSuggestQuery,
   UpdateKnowledgeArticleRequest,
 } from "./types";
@@ -35,9 +39,22 @@ export const knowledgeApi = {
 
   delete: (id: string) => api.del<void>(`${BASE}/${id}`),
 
-  publish: (id: string) => api.post<void>(`${BASE}/${id}/publish`),
+  publish: (id: string, data: PublishArticleRequest) =>
+    api.post<KnowledgeArticle>(`${BASE}/${id}/publish`, data),
 
-  unpublish: (id: string) => api.post<void>(`${BASE}/${id}/unpublish`),
+  unpublish: (id: string, lastEditedBy?: string) =>
+    api.post<KnowledgeArticle>(
+      `${BASE}/${id}/unpublish${lastEditedBy ? `?lastEditedBy=${encodeURIComponent(lastEditedBy)}` : ''}`,
+    ),
+
+  getVersions: (id: string) =>
+    api.get<ArticleVersion[]>(`${BASE}/${id}/versions`),
+
+  getVersion: (id: string, versionNumber: number) =>
+    api.get<ArticleVersion>(`${BASE}/${id}/versions/${versionNumber}`),
+
+  chatSearch: (data: KbSearchRequest) =>
+    api.post<KbSuggestResult>(`${BASE}/chat-search`, data),
 
   listTicketKnowledge: (ticketId: string) =>
     api.get<KnowledgeArticle[]>(`/api/v1/tickets/${ticketId}/knowledge`),

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Eye, Save } from 'lucide-react';
+import { ArrowLeft, Eye, History, Save, Send } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import MDEditor from '@uiw/react-md-editor';
@@ -14,8 +14,8 @@ import {
   Loading,
   Select,
 } from '@/components/ui';
-import { useClients, useCreateKnowledgeArticle, useKnowledgeArticle, useSites, useUpdateKnowledgeArticle } from '@/hooks';
-import type { CreateKnowledgeArticleRequest, UpdateKnowledgeArticleRequest } from '@/api';
+import { useClients, useCreateKnowledgeArticle, useDepartments, useKnowledgeArticle, useKnowledgeArticleVersions, usePublishKnowledgeArticle, useSites, useUpdateKnowledgeArticle } from '@/hooks';
+import type { ArticleStatus, ArticleVersion, CreateKnowledgeArticleRequest, PublishArticleRequest, UpdateKnowledgeArticleRequest } from '@/api';
 import toast from 'react-hot-toast';
 
 type FormState = {
@@ -23,9 +23,10 @@ type FormState = {
   content: string;
   category: string;
   tags: string;
-  author: string;
+  createdBy: string;
   clientId: string;
   siteId: string;
+  departmentId: string;
 };
 
 function toTagArray(tags: string): string[] {
@@ -33,6 +34,24 @@ function toTagArray(tags: string): string[] {
     .split(',')
     .map((item) => item.trim())
     .filter(Boolean);
+}
+
+function statusLabel(status: ArticleStatus): string {
+  switch (status) {
+    case 'Published': return 'Publicado';
+    case 'Internal': return 'Interno';
+    case 'Draft': return 'Rascunho';
+    default: return status;
+  }
+}
+
+function statusColor(status: ArticleStatus): 'success' | 'warning' | 'accent' {
+  switch (status) {
+    case 'Published': return 'success';
+    case 'Internal': return 'accent';
+    case 'Draft': return 'warning';
+    default: return 'warning';
+  }
 }
 
 export default function KnowledgeEditor() {
@@ -45,16 +64,22 @@ export default function KnowledgeEditor() {
     content: '## Novo Artigo\n\nDescreva aqui o procedimento em Markdown.',
     category: '',
     tags: '',
-    author: '',
+    createdBy: '',
     clientId: '',
     siteId: '',
+    departmentId: '',
   });
+
+  const [showVersions, setShowVersions] = useState(false);
 
   const clients = useClients();
   const sites = useSites(form.clientId);
+  const departments = useDepartments({ clientId: form.clientId || undefined, activeOnly: true });
   const detailQuery = useKnowledgeArticle(id ?? '');
+  const versionsQuery = useKnowledgeArticleVersions(id ?? '');
   const createMutation = useCreateKnowledgeArticle();
   const updateMutation = useUpdateKnowledgeArticle();
+  const publishMutation = usePublishKnowledgeArticle();
 
   useEffect(() => {
     if (!isEdit || !detailQuery.data) return;
@@ -65,9 +90,10 @@ export default function KnowledgeEditor() {
       content: article.content,
       category: article.category ?? '',
       tags: article.tags.join(', '),
-      author: article.author ?? '',
+      createdBy: article.createdBy ?? '',
       clientId: article.clientId ?? '',
       siteId: article.siteId ?? '',
+      departmentId: article.departmentId ?? '',
     });
   }, [detailQuery.data, isEdit]);
 
@@ -85,6 +111,14 @@ export default function KnowledgeEditor() {
       ...(sites.data ?? []).map((item) => ({ value: item.id, label: item.name })),
     ],
     [sites.data],
+  );
+
+  const departmentOptions = useMemo(
+    () => [
+      { value: '', label: 'Nenhum (artigo sem departamento)' },
+      ...(departments.data ?? []).map((item) => ({ value: item.id, label: item.name })),
+    ],
+    [departments.data],
   );
 
   const setField = <K extends keyof FormState>(field: K, value: FormState[K]) => {
@@ -110,14 +144,14 @@ export default function KnowledgeEditor() {
         content: form.content,
         category: form.category.trim() || null,
         tags: toTagArray(form.tags),
-        author: form.author.trim() || null,
+        lastEditedBy: form.createdBy.trim() || null,
       };
 
       updateMutation.mutate(
         { id, data: payload },
         {
           onSuccess: () => {
-            toast.success('Artigo atualizado.');
+            toast.success('Artigo atualizado (rascunho).');
             navigate('/knowledge');
           },
           onError: () => toast.error('Não foi possível atualizar o artigo.'),
@@ -132,9 +166,10 @@ export default function KnowledgeEditor() {
       content: form.content,
       category: form.category.trim() || null,
       tags: toTagArray(form.tags),
-      author: form.author.trim() || null,
+      createdBy: form.createdBy.trim() || null,
       clientId: form.clientId || null,
       siteId: form.siteId || null,
+      departmentId: form.departmentId || null,
     };
 
     createMutation.mutate(payload, {
@@ -171,9 +206,16 @@ export default function KnowledgeEditor() {
           <p className="text-sm text-slate-400">Conteúdo em Markdown com preview em tempo real.</p>
         </div>
         {isEdit && detailQuery.data && (
-          <Badge color={detailQuery.data.isPublished ? 'success' : 'warning'}>
-            {detailQuery.data.isPublished ? 'Publicado' : 'Rascunho'}
-          </Badge>
+          <div className="flex items-center gap-3">
+            <Badge color={statusColor(detailQuery.data.status)}>
+              {statusLabel(detailQuery.data.status)}
+            </Badge>
+            {detailQuery.data.status !== 'Draft' && (
+              <span className="text-xs text-slate-400">
+                v{detailQuery.data.currentVersionNumber}
+              </span>
+            )}
+          </div>
         )}
       </div>
 
@@ -195,10 +237,12 @@ export default function KnowledgeEditor() {
                 placeholder="Ex.: Active Directory"
               />
               <Input
-                label="Autor"
-                value={form.author}
-                onChange={(event) => setField('author', event.target.value)}
+                label="Autor (criador)"
+                value={form.createdBy}
+                onChange={(event) => setField('createdBy', event.target.value)}
                 placeholder="Nome do autor"
+                disabled={isEdit}
+                hint={isEdit ? 'Autor original não pode ser alterado.' : undefined}
               />
             </div>
 
@@ -217,6 +261,7 @@ export default function KnowledgeEditor() {
                 onChange={(event) => {
                   setField('clientId', event.target.value);
                   setField('siteId', '');
+                  setField('departmentId', '');
                 }}
               />
               <Select
@@ -227,6 +272,130 @@ export default function KnowledgeEditor() {
                 disabled={!form.clientId}
               />
             </div>
+
+            <Select
+              label="Departamento (obrigatório para artigos Internos)"
+              options={departmentOptions}
+              value={form.departmentId}
+              onChange={(event) => setField('departmentId', event.target.value)}
+            />
+
+            {isEdit && detailQuery.data && detailQuery.data.status !== 'Draft' && (
+              <div className="rounded-lg border border-white/10 bg-white/5 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-medium text-white">
+                      Publicado como <Badge color={statusColor(detailQuery.data.status)}>{statusLabel(detailQuery.data.status)}</Badge>
+                      {' '}v{detailQuery.data.currentVersionNumber}
+                    </p>
+                    {detailQuery.data.publishedAt && (
+                      <p className="text-xs text-slate-400">
+                        Publicado em {new Date(detailQuery.data.publishedAt).toLocaleDateString('pt-BR')}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        const confirmMsg = detailQuery.data.status === 'Published'
+                          ? 'Republicar como Interno? (visível apenas para o departamento)'
+                          : 'Republicar como Público? (visível para todos)';
+                        if (!window.confirm(confirmMsg)) return;
+                        const newStatus = detailQuery.data.status === 'Published' ? 'Internal' : 'Published';
+                        const data: PublishArticleRequest = {
+                          status: newStatus as 'Published' | 'Internal',
+                          lastEditedBy: form.createdBy || null,
+                        };
+                        publishMutation.mutate({ id: id!, data }, {
+                          onSuccess: () => toast.success(`Artigo republicado como ${newStatus === 'Published' ? 'Público' : 'Interno'}`),
+                          onError: () => toast.error('Falha ao republicar'),
+                        });
+                      }}
+                    >
+                      Mudar para {detailQuery.data.status === 'Published' ? 'Interno' : 'Público'}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {isEdit && detailQuery.data && detailQuery.data.status === 'Draft' && (
+              <div className="flex gap-2">
+                <Button
+                  variant="ghost"
+                  onClick={() => {
+                    const data: PublishArticleRequest = {
+                      status: 'Published',
+                      lastEditedBy: form.createdBy || null,
+                    };
+                    publishMutation.mutate({ id: id!, data }, {
+                      onSuccess: () => toast.success('Artigo publicado!'),
+                      onError: () => toast.error('Falha ao publicar'),
+                    });
+                  }}
+                >
+                  <Send className="h-4 w-4" /> Publicar
+                </Button>
+                <Button
+                  variant="ghost"
+                  onClick={() => {
+                    if (!form.departmentId) {
+                      toast.error('Selecione um departamento para artigo Interno.');
+                      return;
+                    }
+                    const data: PublishArticleRequest = {
+                      status: 'Internal',
+                      lastEditedBy: form.createdBy || null,
+                    };
+                    publishMutation.mutate({ id: id!, data }, {
+                      onSuccess: () => toast.success('Artigo marcado como Interno!'),
+                      onError: () => toast.error('Falha ao internalizar'),
+                    });
+                  }}
+                >
+                  Interno
+                </Button>
+              </div>
+            )}
+
+            {isEdit && (
+              <div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowVersions(!showVersions);
+                    if (!showVersions) versionsQuery.refetch();
+                  }}
+                  className="inline-flex items-center gap-2 text-sm text-slate-400 transition-colors hover:text-white"
+                >
+                  <History className="h-4 w-4" />
+                  Histórico de versões ({detailQuery.data?.currentVersionNumber ?? 0})
+                </button>
+                {showVersions && (
+                  <div className="mt-2 space-y-2">
+                    {versionsQuery.isLoading && <Loading message="Carregando versões..." />}
+                    {versionsQuery.data?.map((v: ArticleVersion) => (
+                      <div key={v.id} className="rounded border border-white/10 bg-white/5 p-2 text-xs">
+                        <p className="text-slate-300">
+                          <span className="font-medium text-white">v{v.versionNumber}</span>
+                          {' '}{v.status === 'Published' ? 'Publicado' : 'Interno'}
+                          {v.changeSummary && <span className="text-slate-500"> — {v.changeSummary}</span>}
+                        </p>
+                        <p className="text-slate-500">
+                          {new Date(v.createdAt).toLocaleString('pt-BR')}
+                          {v.editedBy && ` por ${v.editedBy}`}
+                        </p>
+                      </div>
+                    ))}
+                    {versionsQuery.data?.length === 0 && (
+                      <p className="text-xs text-slate-500">Nenhuma versão publicada ainda.</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
 
             <div>
               <label className="mb-1.5 block text-sm font-medium text-slate-300">Markdown</label>

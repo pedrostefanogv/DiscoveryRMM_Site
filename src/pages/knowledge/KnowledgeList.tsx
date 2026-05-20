@@ -11,8 +11,8 @@ import {
   Select,
 } from '@/components/ui';
 import type { Column } from '@/components/ui';
-import type { KnowledgeArticle, KnowledgeSearchMode } from '@/api';
-import { useClients, useDeleteKnowledgeArticle, useKnowledgeArticles, useKnowledgeSearch, usePublishKnowledgeArticle, useSites, useUnpublishKnowledgeArticle } from '@/hooks';
+import type { ArticleStatus, KnowledgeArticle, KnowledgeSearchMode, PublishArticleRequest } from '@/api';
+import { useClients, useDeleteKnowledgeArticle, useDepartments, useKnowledgeArticles, useKnowledgeSearch, usePublishKnowledgeArticle, useSites, useUnpublishKnowledgeArticle } from '@/hooks';
 import { BookOpen, ChevronDown, ChevronUp, Filter, Pencil, Plus, Search, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -22,13 +22,20 @@ const SEARCH_MODE_OPTIONS: Array<{ value: KnowledgeSearchMode; label: string }> 
   { value: 'keyword', label: 'Keyword' },
 ];
 
-type SortField = 'title' | 'updatedAt' | 'author' | 'scope' | 'status';
+const STATUS_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: '', label: 'Todos os status' },
+  { value: 'Published', label: 'Publicados' },
+  { value: 'Internal', label: 'Internos' },
+  { value: 'Draft', label: 'Rascunhos' },
+];
+
+type SortField = 'title' | 'updatedAt' | 'createdBy' | 'scope' | 'status';
 type SortDirection = 'asc' | 'desc';
 
 const SORT_OPTIONS: Array<{ value: SortField; label: string }> = [
   { value: 'updatedAt', label: 'Última atualização' },
   { value: 'title', label: 'Título' },
-  { value: 'author', label: 'Autor' },
+  { value: 'createdBy', label: 'Autor' },
   { value: 'scope', label: 'Escopo' },
   { value: 'status', label: 'Status' },
 ];
@@ -42,9 +49,28 @@ function normalizeCategory(category: string | null | undefined) {
 }
 
 function scopeLabel(article: KnowledgeArticle): string {
+  if (article.scope) return article.scope === 'Global' ? 'Global' : article.scope === 'Client' ? 'Cliente' : 'Site';
   if (article.clientId && article.siteId) return 'Site';
   if (article.clientId) return 'Cliente';
   return 'Global';
+}
+
+function statusLabel(article: KnowledgeArticle): string {
+  switch (article.status) {
+    case 'Published': return 'Publicado';
+    case 'Internal': return 'Interno';
+    case 'Draft': return 'Rascunho';
+    default: return article.status;
+  }
+}
+
+function statusColor(status: ArticleStatus): 'success' | 'warning' | 'accent' {
+  switch (status) {
+    case 'Published': return 'success';
+    case 'Internal': return 'accent';
+    case 'Draft': return 'warning';
+    default: return 'warning';
+  }
 }
 
 export default function KnowledgeList() {
@@ -55,7 +81,8 @@ export default function KnowledgeList() {
   const [clientId, setClientId] = useState(searchParams.get('clientId') ?? '');
   const [siteId, setSiteId] = useState(searchParams.get('siteId') ?? '');
   const [category, setCategory] = useState(searchParams.get('category') ?? '');
-  const [publishedOnly, setPublishedOnly] = useState(searchParams.get('publishedOnly') !== 'false');
+  const [statusFilter, setStatusFilter] = useState<ArticleStatus | ''>(searchParams.get('status') as ArticleStatus | '' ?? '');
+  const [departmentId, setDepartmentId] = useState(searchParams.get('departmentId') ?? '');
   const [searchInput, setSearchInput] = useState('');
   const [query, setQuery] = useState('');
   const [searchMode, setSearchMode] = useState<KnowledgeSearchMode>('hybrid');
@@ -67,12 +94,14 @@ export default function KnowledgeList() {
   const [advancedFiltersExpanded, setAdvancedFiltersExpanded] = useState(false);
 
   const sites = useSites(clientId);
+  const departments = useDepartments({ clientId: clientId || undefined, activeOnly: true });
 
   const listQuery = useKnowledgeArticles({
     clientId: clientId || undefined,
     siteId: siteId || undefined,
     category: category || undefined,
-    publishedOnly,
+    status: statusFilter || undefined,
+    departmentId: departmentId || undefined,
   });
 
   const searchQuery = useKnowledgeSearch(
@@ -80,6 +109,7 @@ export default function KnowledgeList() {
       q: query.trim(),
       clientId: clientId || undefined,
       siteId: siteId || undefined,
+      departmentId: departmentId || undefined,
       mode: searchMode,
       maxResults,
     },
@@ -95,9 +125,10 @@ export default function KnowledgeList() {
     if (clientId) params.set('clientId', clientId);
     if (siteId) params.set('siteId', siteId);
     if (category) params.set('category', category);
-    if (!publishedOnly) params.set('publishedOnly', 'false');
+    if (statusFilter) params.set('status', statusFilter);
+    if (departmentId) params.set('departmentId', departmentId);
     setSearchParams(params, { replace: true });
-  }, [category, clientId, publishedOnly, setSearchParams, siteId]);
+  }, [category, clientId, statusFilter, departmentId, setSearchParams, siteId]);
 
   const categoryOptions = useMemo(() => {
     const source = listQuery.data ?? [];
@@ -117,6 +148,11 @@ export default function KnowledgeList() {
     ...(sites.data ?? []).map((s) => ({ value: s.id, label: s.name })),
   ];
 
+  const departmentOptions = [
+    { value: '', label: 'Todos os departamentos' },
+    ...(departments.data ?? []).map((d) => ({ value: d.id, label: d.name })),
+  ];
+
   const sortLabel = SORT_OPTIONS.find((option) => option.value === sortBy)?.label ?? 'Última atualização';
   const selectedClientLabel = clientOptions.find((option) => option.value === clientId)?.label ?? 'Global (todos)';
   const selectedSiteLabel = siteOptions.find((option) => option.value === siteId)?.label ?? 'Todos os sites';
@@ -125,7 +161,8 @@ export default function KnowledgeList() {
     Number(Boolean(clientId)) +
     Number(Boolean(siteId)) +
     Number(Boolean(category)) +
-    Number(!publishedOnly) +
+    Number(Boolean(statusFilter)) +
+    Number(Boolean(departmentId)) +
     Number(sortBy !== 'updatedAt') +
     Number(sortDirection !== 'desc') +
     Number(pageSize !== DEFAULT_PAGE_SIZE);
@@ -138,7 +175,8 @@ export default function KnowledgeList() {
     if (clientId) parts.push(`Cliente: ${selectedClientLabel}`);
     if (siteId) parts.push(`Site: ${selectedSiteLabel}`);
     if (category) parts.push(`Categoria: ${category}`);
-    if (!publishedOnly) parts.push('Inclui rascunhos');
+    if (statusFilter) parts.push(`Status: ${statusFilter === 'Published' ? 'Publicados' : statusFilter === 'Internal' ? 'Internos' : 'Rascunhos'}`);
+    if (departmentId) parts.push(`Departamento: ${departmentOptions.find(d => d.value === departmentId)?.label ?? departmentId}`);
     if (sortBy !== 'updatedAt') parts.push(`Ordenação: ${sortLabel}`);
     if (sortDirection !== 'desc') parts.push('Direção crescente');
     if (pageSize !== DEFAULT_PAGE_SIZE) parts.push(`${pageSize} itens por página`);
@@ -147,8 +185,10 @@ export default function KnowledgeList() {
   }, [
     category,
     clientId,
+    statusFilter,
+    departmentId,
+    departmentOptions,
     pageSize,
-    publishedOnly,
     selectedClientLabel,
     selectedSiteLabel,
     siteId,
@@ -186,7 +226,8 @@ export default function KnowledgeList() {
     setClientId('');
     setSiteId('');
     setCategory('');
-    setPublishedOnly(true);
+    setStatusFilter('');
+    setDepartmentId('');
     setSortBy('updatedAt');
     setSortDirection('desc');
     setPageSize(DEFAULT_PAGE_SIZE);
@@ -194,15 +235,31 @@ export default function KnowledgeList() {
   };
 
   const onTogglePublish = (article: KnowledgeArticle) => {
-    const action = article.isPublished ? unpublishMutation : publishMutation;
-    action.mutate(article.id, {
-      onSuccess: () => {
-        toast.success(article.isPublished ? 'Artigo despublicado' : 'Artigo publicado');
+    if (article.status === 'Draft') {
+      // Prompt para escolher Published ou Internal
+      const choice = window.confirm(
+        `Publicar "${article.title}"?\n\nOK = Publicado (visível para todos)\nCancelar = vamos abrir o editor para configurar.`
+      );
+      if (choice) {
+        const data: PublishArticleRequest = { status: 'Published', lastEditedBy: null };
+        publishMutation.mutate({ id: article.id, data }, {
+          onSuccess: () => toast.success('Artigo publicado'),
+          onError: () => toast.error('Falha ao publicar artigo'),
+        });
+      } else {
+        navigate(`/knowledge/${article.id}/edit`);
+      }
+      return;
+    }
+
+    // Published/Internal → Unpublish
+    unpublishMutation.mutate(
+      { id: article.id },
+      {
+        onSuccess: () => toast.success('Artigo voltou para rascunho'),
+        onError: () => toast.error('Falha ao despublicar artigo'),
       },
-      onError: () => {
-        toast.error('Falha ao alterar status do artigo');
-      },
-    });
+    );
   };
 
   const onDelete = (article: KnowledgeArticle) => {
@@ -242,15 +299,24 @@ export default function KnowledgeList() {
       key: 'status',
       header: 'Status',
       render: (article) => (
-        <Badge color={article.isPublished ? 'success' : 'warning'}>
-          {article.isPublished ? 'Publicado' : 'Rascunho'}
+        <Badge color={statusColor(article.status)}>
+          {statusLabel(article)}
         </Badge>
       ),
     },
     {
-      key: 'author',
+      key: 'createdBy',
       header: 'Autor',
-      render: (article) => <span className="text-slate-300">{article.author || '—'}</span>,
+      render: (article) => (
+        <div>
+          <span className="text-slate-300">{article.createdBy || '—'}</span>
+          {article.lastEditedBy && article.lastEditedBy !== article.createdBy && (
+            <span className="text-xs text-slate-500 block">
+              Editado por {article.lastEditedBy}
+            </span>
+          )}
+        </div>
+      ),
     },
     {
       key: 'updatedAt',
@@ -272,7 +338,7 @@ export default function KnowledgeList() {
             onClick={() => onTogglePublish(article)}
             loading={publishMutation.isPending || unpublishMutation.isPending}
           >
-            {article.isPublished ? 'Despublicar' : 'Publicar'}
+            {article.status === 'Draft' ? 'Publicar' : 'Despublicar'}
           </Button>
           <Button variant="ghost" size="sm" onClick={() => navigate(`/knowledge/${article.id}/edit`)}>
             <Pencil className="h-4 w-4" />
@@ -297,15 +363,15 @@ export default function KnowledgeList() {
         return a.title.localeCompare(b.title, 'pt-BR');
       }
 
-      if (sortBy === 'author') {
-        return (a.author ?? '').localeCompare(b.author ?? '', 'pt-BR');
+      if (sortBy === 'createdBy') {
+        return (a.createdBy ?? '').localeCompare(b.createdBy ?? '', 'pt-BR');
       }
 
       if (sortBy === 'scope') {
         return scopeLabel(a).localeCompare(scopeLabel(b), 'pt-BR');
       }
 
-      return Number(a.isPublished) - Number(b.isPublished);
+      return (a.status ?? '').localeCompare(b.status ?? '', 'pt-BR');
     };
 
     items.sort((a, b) => {
@@ -326,7 +392,7 @@ export default function KnowledgeList() {
 
   useEffect(() => {
     setPage(1);
-  }, [clientId, siteId, category, publishedOnly, sortBy, sortDirection, pageSize]);
+  }, [clientId, siteId, category, statusFilter, departmentId, sortBy, sortDirection, pageSize]);
 
   return (
     <div className="space-y-6">
@@ -441,13 +507,17 @@ export default function KnowledgeList() {
               />
 
               <Select
-                label="Publicação"
-                options={[
-                  { value: 'published', label: 'Somente publicados' },
-                  { value: 'all', label: 'Publicados + rascunhos' },
-                ]}
-                value={publishedOnly ? 'published' : 'all'}
-                onChange={(event) => setPublishedOnly(event.target.value === 'published')}
+                label="Status"
+                options={STATUS_OPTIONS}
+                value={statusFilter}
+                onChange={(event) => setStatusFilter(event.target.value as ArticleStatus | '')}
+              />
+
+              <Select
+                label="Departamento"
+                options={departmentOptions}
+                value={departmentId}
+                onChange={(event) => setDepartmentId(event.target.value)}
               />
             </div>
 
@@ -508,7 +578,7 @@ export default function KnowledgeList() {
                     >
                       <p className="font-medium text-white">{item.title}</p>
                       <p className="text-xs text-slate-400">
-                        {normalizeCategory(item.category)} • {scopeLabel(item)} • {item.isPublished ? 'Publicado' : 'Rascunho'}
+                        {normalizeCategory(item.category)} • {scopeLabel(item)} • {statusLabel(item)}
                       </p>
                     </button>
                   ))}
