@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Badge,
@@ -13,7 +13,7 @@ import {
 import type { Column } from '@/components/ui';
 import type { KnowledgeArticle, KnowledgeSearchMode } from '@/api';
 import { useClients, useDeleteKnowledgeArticle, useKnowledgeArticles, useKnowledgeSearch, usePublishKnowledgeArticle, useSites, useUnpublishKnowledgeArticle } from '@/hooks';
-import { BookOpen, Pencil, Plus, Search, Trash2 } from 'lucide-react';
+import { BookOpen, ChevronDown, ChevronUp, Filter, Pencil, Plus, Search, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 const SEARCH_MODE_OPTIONS: Array<{ value: KnowledgeSearchMode; label: string }> = [
@@ -34,6 +34,7 @@ const SORT_OPTIONS: Array<{ value: SortField; label: string }> = [
 ];
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50];
+const DEFAULT_PAGE_SIZE = 10;
 
 function normalizeCategory(category: string | null | undefined) {
   if (!category) return 'Sem categoria';
@@ -55,13 +56,15 @@ export default function KnowledgeList() {
   const [siteId, setSiteId] = useState(searchParams.get('siteId') ?? '');
   const [category, setCategory] = useState(searchParams.get('category') ?? '');
   const [publishedOnly, setPublishedOnly] = useState(searchParams.get('publishedOnly') !== 'false');
+  const [searchInput, setSearchInput] = useState('');
   const [query, setQuery] = useState('');
   const [searchMode, setSearchMode] = useState<KnowledgeSearchMode>('hybrid');
   const [maxResults, setMaxResults] = useState(10);
   const [sortBy, setSortBy] = useState<SortField>('updatedAt');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
-  const [pageSize, setPageSize] = useState(10);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [page, setPage] = useState(1);
+  const [advancedFiltersExpanded, setAdvancedFiltersExpanded] = useState(false);
 
   const sites = useSites(clientId);
 
@@ -113,6 +116,82 @@ export default function KnowledgeList() {
     { value: '', label: 'Todos os sites' },
     ...(sites.data ?? []).map((s) => ({ value: s.id, label: s.name })),
   ];
+
+  const sortLabel = SORT_OPTIONS.find((option) => option.value === sortBy)?.label ?? 'Última atualização';
+  const selectedClientLabel = clientOptions.find((option) => option.value === clientId)?.label ?? 'Global (todos)';
+  const selectedSiteLabel = siteOptions.find((option) => option.value === siteId)?.label ?? 'Todos os sites';
+
+  const advancedFiltersActiveCount =
+    Number(Boolean(clientId)) +
+    Number(Boolean(siteId)) +
+    Number(Boolean(category)) +
+    Number(!publishedOnly) +
+    Number(sortBy !== 'updatedAt') +
+    Number(sortDirection !== 'desc') +
+    Number(pageSize !== DEFAULT_PAGE_SIZE);
+
+  const hasSemanticSearch = query.trim().length > 0;
+
+  const listingFiltersSummary = useMemo(() => {
+    const parts: string[] = [];
+
+    if (clientId) parts.push(`Cliente: ${selectedClientLabel}`);
+    if (siteId) parts.push(`Site: ${selectedSiteLabel}`);
+    if (category) parts.push(`Categoria: ${category}`);
+    if (!publishedOnly) parts.push('Inclui rascunhos');
+    if (sortBy !== 'updatedAt') parts.push(`Ordenação: ${sortLabel}`);
+    if (sortDirection !== 'desc') parts.push('Direção crescente');
+    if (pageSize !== DEFAULT_PAGE_SIZE) parts.push(`${pageSize} itens por página`);
+
+    return parts.length > 0 ? parts.join(' • ') : 'Sem filtros adicionais na listagem.';
+  }, [
+    category,
+    clientId,
+    pageSize,
+    publishedOnly,
+    selectedClientLabel,
+    selectedSiteLabel,
+    siteId,
+    sortBy,
+    sortDirection,
+    sortLabel,
+  ]);
+
+  useEffect(() => {
+    if (advancedFiltersActiveCount > 0) {
+      setAdvancedFiltersExpanded(true);
+    }
+  }, [advancedFiltersActiveCount]);
+
+  const handleSearchSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const trimmed = searchInput.trim();
+
+    if (!trimmed) return;
+
+    if (trimmed === query.trim()) {
+      void searchQuery.refetch();
+      return;
+    }
+
+    setQuery(trimmed);
+  };
+
+  const handleClearSearch = () => {
+    setSearchInput('');
+    setQuery('');
+  };
+
+  const handleClearAdvancedFilters = () => {
+    setClientId('');
+    setSiteId('');
+    setCategory('');
+    setPublishedOnly(true);
+    setSortBy('updatedAt');
+    setSortDirection('desc');
+    setPageSize(DEFAULT_PAGE_SIZE);
+    setAdvancedFiltersExpanded(false);
+  };
 
   const onTogglePublish = (article: KnowledgeArticle) => {
     const action = article.isPublished ? unpublishMutation : publishMutation;
@@ -254,7 +333,7 @@ export default function KnowledgeList() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-white">Base de Conhecimento</h1>
-          <p className="text-sm text-slate-400">Crie, publique e mantenha artigos em Markdown.</p>
+          <p className="text-sm text-slate-400">Busque artigos rapidamente e abra filtros avançados só quando precisar.</p>
         </div>
         <Button onClick={() => navigate('/knowledge/new')}>
           <Plus className="h-4 w-4" /> Novo Artigo
@@ -262,66 +341,185 @@ export default function KnowledgeList() {
       </div>
 
       <Card>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <Select
-            label="Cliente"
-            options={clientOptions}
-            value={clientId}
-            onChange={(event) => {
-              setClientId(event.target.value);
-              setSiteId('');
-            }}
-          />
+        <form className="space-y-4" onSubmit={handleSearchSubmit}>
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
+            <div className="flex-1">
+              <Input
+                label="Busca inteligente (semântica + keyword)"
+                value={searchInput}
+                onChange={(event) => setSearchInput(event.target.value)}
+                placeholder="Ex.: como resetar senha do AD"
+                hint="Use linguagem natural para encontrar artigos mesmo sem palavras exatas."
+              />
+            </div>
+            <div className="w-full lg:w-44">
+              <Select
+                label="Modo"
+                options={SEARCH_MODE_OPTIONS}
+                value={searchMode}
+                onChange={(event) => setSearchMode(event.target.value as KnowledgeSearchMode)}
+              />
+            </div>
+            <div className="w-full lg:w-32">
+              <Input
+                label="Máx resultados"
+                type="number"
+                value={maxResults}
+                min={1}
+                max={50}
+                onChange={(event) => setMaxResults(Number(event.target.value) || 10)}
+              />
+            </div>
+            <div className="flex gap-2 lg:pb-[2px]">
+              <Button type="submit" variant="ghost" disabled={!searchInput.trim()}>
+                <Search className="h-4 w-4" /> Buscar na base
+              </Button>
+              {hasSemanticSearch && (
+                <Button type="button" variant="ghost" onClick={handleClearSearch}>
+                  Limpar busca
+                </Button>
+              )}
+            </div>
+          </div>
+        </form>
 
-          <Select
-            label="Site"
-            options={siteOptions}
-            value={siteId}
-            onChange={(event) => setSiteId(event.target.value)}
-            disabled={!clientId}
-          />
+        <div className="mt-1 flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => setAdvancedFiltersExpanded((current) => !current)}
+            aria-expanded={advancedFiltersExpanded}
+          >
+            <Filter className="h-4 w-4" />
+            Filtros avançados da listagem
+            {advancedFiltersActiveCount > 0 && <Badge color="accent">{advancedFiltersActiveCount}</Badge>}
+            {advancedFiltersExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          </Button>
 
-          <Select
-            label="Categoria"
-            options={categoryOptions}
-            value={category}
-            onChange={(event) => setCategory(event.target.value)}
-          />
+          {advancedFiltersActiveCount > 0 && !advancedFiltersExpanded && (
+            <span className="text-xs text-slate-500">Filtros ativos aplicados à tabela.</span>
+          )}
 
-          <Select
-            label="Publicação"
-            options={[
-              { value: 'published', label: 'Somente publicados' },
-              { value: 'all', label: 'Publicados + rascunhos' },
-            ]}
-            value={publishedOnly ? 'published' : 'all'}
-            onChange={(event) => setPublishedOnly(event.target.value === 'published')}
-          />
+          {advancedFiltersActiveCount > 0 && (
+            <Button type="button" variant="ghost" size="sm" onClick={handleClearAdvancedFilters}>
+              Limpar filtros
+            </Button>
+          )}
         </div>
 
-        <div className="mt-4 grid gap-4 md:grid-cols-3">
-          <Select
-            label="Ordenar por"
-            options={SORT_OPTIONS}
-            value={sortBy}
-            onChange={(event) => setSortBy(event.target.value as SortField)}
-          />
-          <Select
-            label="Direção"
-            options={[
-              { value: 'desc', label: 'Decrescente' },
-              { value: 'asc', label: 'Crescente' },
-            ]}
-            value={sortDirection}
-            onChange={(event) => setSortDirection(event.target.value as SortDirection)}
-          />
-          <Select
-            label="Itens por página"
-            options={PAGE_SIZE_OPTIONS.map((size) => ({ value: String(size), label: String(size) }))}
-            value={String(pageSize)}
-            onChange={(event) => setPageSize(Number(event.target.value) || 10)}
-          />
-        </div>
+        {!advancedFiltersExpanded && (
+          <p className="mt-2 text-xs text-slate-500">{listingFiltersSummary}</p>
+        )}
+
+        {advancedFiltersExpanded && (
+          <div className="mt-3 space-y-4 rounded-xl border border-white/10 bg-white/5 p-3 sm:p-4">
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              <Select
+                label="Cliente"
+                options={clientOptions}
+                value={clientId}
+                onChange={(event) => {
+                  setClientId(event.target.value);
+                  setSiteId('');
+                }}
+              />
+
+              <Select
+                label="Site"
+                options={siteOptions}
+                value={siteId}
+                onChange={(event) => setSiteId(event.target.value)}
+                disabled={!clientId}
+              />
+
+              <Select
+                label="Categoria"
+                options={categoryOptions}
+                value={category}
+                onChange={(event) => setCategory(event.target.value)}
+              />
+
+              <Select
+                label="Publicação"
+                options={[
+                  { value: 'published', label: 'Somente publicados' },
+                  { value: 'all', label: 'Publicados + rascunhos' },
+                ]}
+                value={publishedOnly ? 'published' : 'all'}
+                onChange={(event) => setPublishedOnly(event.target.value === 'published')}
+              />
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-3">
+              <Select
+                label="Ordenar por"
+                options={SORT_OPTIONS}
+                value={sortBy}
+                onChange={(event) => setSortBy(event.target.value as SortField)}
+              />
+              <Select
+                label="Direção"
+                options={[
+                  { value: 'desc', label: 'Decrescente' },
+                  { value: 'asc', label: 'Crescente' },
+                ]}
+                value={sortDirection}
+                onChange={(event) => setSortDirection(event.target.value as SortDirection)}
+              />
+              <Select
+                label="Itens por página"
+                options={PAGE_SIZE_OPTIONS.map((size) => ({ value: String(size), label: String(size) }))}
+                value={String(pageSize)}
+                onChange={(event) => setPageSize(Number(event.target.value) || DEFAULT_PAGE_SIZE)}
+              />
+            </div>
+          </div>
+        )}
+
+        {hasSemanticSearch && (
+          <div className="mt-4 border-t border-white/10 pt-4">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <div>
+                <p className="text-sm font-semibold text-white">Resultados da busca inteligente</p>
+                <p className="text-xs text-slate-400">Consulta: "{query}". Clique em um artigo para abrir no editor.</p>
+              </div>
+              {!searchQuery.isLoading && !searchQuery.isError && (
+                <Badge color="accent">{(searchQuery.data ?? []).length}</Badge>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              {searchQuery.isLoading && <Loading message="Buscando artigos relevantes..." />}
+              {searchQuery.isError && (
+                <ErrorDisplay
+                  message="Falha na busca de conhecimento."
+                  onRetry={() => searchQuery.refetch()}
+                />
+              )}
+              {!searchQuery.isLoading && !searchQuery.isError && (
+                <div className="space-y-2">
+                  {(searchQuery.data ?? []).map((item) => (
+                    <button
+                      type="button"
+                      key={item.id}
+                      onClick={() => navigate(`/knowledge/${item.id}/edit`)}
+                      className="w-full rounded-lg border border-white/10 bg-white/5 p-3 text-left transition-colors hover:bg-white/10"
+                    >
+                      <p className="font-medium text-white">{item.title}</p>
+                      <p className="text-xs text-slate-400">
+                        {normalizeCategory(item.category)} • {scopeLabel(item)} • {item.isPublished ? 'Publicado' : 'Rascunho'}
+                      </p>
+                    </button>
+                  ))}
+                  {(searchQuery.data ?? []).length === 0 && (
+                    <p className="text-sm text-slate-400">Nenhum resultado para esta busca.</p>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </Card>
 
       <Card padding={false}>
@@ -362,72 +560,6 @@ export default function KnowledgeList() {
                 </Button>
               </div>
             </div>
-          </div>
-        )}
-      </Card>
-
-      <Card>
-        <div className="flex items-end gap-3">
-          <div className="flex-1">
-            <Input
-              label="Busca semântica/keyword"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Ex.: resetar senha AD"
-            />
-          </div>
-          <div className="w-44">
-            <Select
-              label="Modo"
-              options={SEARCH_MODE_OPTIONS}
-              value={searchMode}
-              onChange={(event) => setSearchMode(event.target.value as KnowledgeSearchMode)}
-            />
-          </div>
-          <div className="w-32">
-            <Input
-              label="Máx resultados"
-              type="number"
-              value={maxResults}
-              min={1}
-              max={50}
-              onChange={(event) => setMaxResults(Number(event.target.value) || 10)}
-            />
-          </div>
-          <Button variant="ghost" onClick={() => searchQuery.refetch()}>
-            <Search className="h-4 w-4" /> Buscar
-          </Button>
-        </div>
-
-        {query.trim() && (
-          <div className="mt-4 space-y-2">
-            {searchQuery.isLoading && <Loading message="Buscando artigos relevantes..." />}
-            {searchQuery.isError && (
-              <ErrorDisplay
-                message="Falha na busca de conhecimento."
-                onRetry={() => searchQuery.refetch()}
-              />
-            )}
-            {!searchQuery.isLoading && !searchQuery.isError && (
-              <div className="space-y-2">
-                {(searchQuery.data ?? []).map((item) => (
-                  <button
-                    type="button"
-                    key={item.id}
-                    onClick={() => navigate(`/knowledge/${item.id}/edit`)}
-                    className="w-full rounded-lg border border-white/10 bg-white/5 p-3 text-left transition-colors hover:bg-white/10"
-                  >
-                    <p className="font-medium text-white">{item.title}</p>
-                    <p className="text-xs text-slate-400">
-                      {normalizeCategory(item.category)} • {scopeLabel(item)} • {item.isPublished ? 'Publicado' : 'Rascunho'}
-                    </p>
-                  </button>
-                ))}
-                {(searchQuery.data ?? []).length === 0 && (
-                  <p className="text-sm text-slate-400">Nenhum resultado para esta busca.</p>
-                )}
-              </div>
-            )}
           </div>
         )}
       </Card>
