@@ -396,7 +396,7 @@ export default function KnowledgeList() {
           <div>
             <p className="font-medium text-white">{article.title}</p>
             <p className="text-xs text-slate-400">
-              {normalizeCategory(article.category)} • {article.tags.join(', ') || 'sem tags'}
+              {normalizeCategory(article.category)} • {Array.isArray(article.tags) && article.tags.length > 0 ? article.tags.join(', ') : 'sem tags'}
             </p>
           </div>
         </div>

@@ -87,7 +87,7 @@ export default function KnowledgeEditor() {
       title: article.title,
       content: article.content,
       category: article.category ?? '',
-      tags: article.tags.join(', '),
+      tags: Array.isArray(article.tags) ? article.tags.join(', ') : '',
       clientId: article.clientId ?? '',
       siteId: article.siteId ?? '',
       departmentId: article.departmentId ?? '',
