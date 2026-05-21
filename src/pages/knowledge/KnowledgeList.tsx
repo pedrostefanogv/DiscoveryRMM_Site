@@ -44,6 +44,7 @@ const SORT_OPTIONS: Array<{ value: SortField; label: string }> = [
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50];
 const DEFAULT_PAGE_SIZE = 10;
+const DEFAULT_SEARCH_MAX_RESULTS = 10;
 
 const KNOWLEDGE_CREATE_PERMISSIONS = [
   'KnowledgeBase.Create',
@@ -117,7 +118,6 @@ export default function KnowledgeList() {
   const [searchInput, setSearchInput] = useState('');
   const [query, setQuery] = useState('');
   const [searchMode, setSearchMode] = useState<KnowledgeSearchMode>('hybrid');
-  const [maxResults, setMaxResults] = useState(10);
   const [sortBy, setSortBy] = useState<SortField>('updatedAt');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
@@ -168,7 +168,7 @@ export default function KnowledgeList() {
       siteId: siteId || undefined,
       departmentId: departmentId || undefined,
       mode: searchMode,
-      maxResults,
+      maxResults: DEFAULT_SEARCH_MAX_RESULTS,
       scopeMode: isAllVisible ? 'all-visible' : undefined,
     },
     query.trim().length > 0,
@@ -438,26 +438,6 @@ export default function KnowledgeList() {
         </span>
       ),
     },
-    {
-      key: 'actions',
-      header: 'Visualizar',
-      className: 'w-20',
-      sortable: false,
-      render: (article) => (
-        <div className="flex items-center gap-2" onClick={(event) => event.stopPropagation()}>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-8 w-8 p-0"
-            onClick={() => navigate(`/knowledge/${article.id}`)}
-            title="Visualizar artigo"
-            aria-label="Visualizar artigo"
-          >
-            <Eye className="h-4 w-4" />
-          </Button>
-        </div>
-      ),
-    },
   ];
 
   const sortedArticles = useMemo(() => {
@@ -526,7 +506,7 @@ export default function KnowledgeList() {
 
       <Card>
         <form className="space-y-3" onSubmit={handleSearchSubmit}>
-          <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_11rem_8.5rem_auto] lg:items-end">
+          <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_11rem_auto] lg:items-end">
             <Input
               label="Busca inteligente (semântica + keyword)"
               value={searchInput}
@@ -541,25 +521,16 @@ export default function KnowledgeList() {
               onChange={(event) => setSearchMode(event.target.value as KnowledgeSearchMode)}
             />
 
-            <Input
-              label="Máx resultados"
-              type="number"
-              value={maxResults}
-              min={1}
-              max={50}
-              onChange={(event) => setMaxResults(Number(event.target.value) || 10)}
-            />
-
             <div className="flex items-end gap-2">
               <Button
                 type="submit"
-                variant="ghost"
                 disabled={!searchInput.trim()}
-                className="h-[38px] w-[38px] shrink-0 px-0"
+                className="h-[38px] shrink-0 px-3"
                 title="Buscar na base"
                 aria-label="Buscar na base"
               >
                 <Search className="h-4 w-4" />
+                Buscar
               </Button>
               {hasSemanticSearch && (
                 <Button type="button" variant="ghost" onClick={handleClearSearch}>
@@ -747,7 +718,7 @@ export default function KnowledgeList() {
             />
             <div className="flex items-center justify-between border-t border-white/10 px-4 py-3">
               <p className="text-xs text-slate-400">
-                {totalItems} artigo(s) • página {currentPage}
+                {totalItems} artigo(s) • {pageSize} por página • página {currentPage}
                 {isAllVisible && listPage?.hasMore
                   ? ` • mais itens disponíveis`
                   : !isAllVisible

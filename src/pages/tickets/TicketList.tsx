@@ -68,9 +68,9 @@ const PRIORITY_OPTIONS = [
 ];
 
 const STATUS_OPTIONS = [
-  { value: 'false', label: 'Abertos' },
   { value: '', label: 'Todos' },
   { value: 'true', label: 'Encerrados' },
+  { value: 'false', label: 'Abertos' },
 ];
 
 const PAGE_SIZE_OPTIONS = [25, 50, 100];
@@ -692,9 +692,10 @@ export default function TicketList() {
       }`}
     >
       <div className="flex items-center gap-3">
-        <span>Mostrando ate {pageSize} registros por pagina</span>
+        <span>Mostrando ate {pageSize} chamados por pagina</span>
       </div>
       <div className="flex items-center gap-3">
+        <span className="text-slate-500">{pageSize} chamados/pagina</span>
         <label className="flex items-center gap-2">
           <span className="text-slate-500">Por pagina</span>
           <select

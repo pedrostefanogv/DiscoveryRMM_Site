@@ -381,7 +381,7 @@ export default function AgentDetail() {
           : 'warning';
   const machineScoreHint =
     machineScore === null
-      ? 'Sem cálculo'
+      ? null
       : machineScore >= 100
         ? 'Acima da baseline'
         : machineScore >= 60
@@ -849,15 +849,17 @@ export default function AgentDetail() {
             </div>
           </div>
         </Tooltip>
-        <StatCard
-          icon={MemoryStick}
-          label="Memória RAM"
-          value={formatBytes(hw.data?.hardware?.totalMemoryBytes ?? null)}
-          tone="accent"
-          trend={hw.data?.memoryModules?.length
-            ? <span className="text-xs text-slate-400">{hw.data.memoryModules.length} módulo(s)</span>
-            : undefined}
-        />
+        <div className="h-full [&>div]:h-full">
+          <StatCard
+            icon={MemoryStick}
+            label="Memória RAM"
+            value={formatBytes(hw.data?.hardware?.totalMemoryBytes ?? null)}
+            tone="accent"
+            trend={hw.data?.memoryModules?.length
+              ? <span className="text-xs text-slate-400">{hw.data.memoryModules.length} módulo(s)</span>
+              : undefined}
+          />
+        </div>
         <Tooltip
           position="bottom"
           delay={1200}
@@ -894,13 +896,15 @@ export default function AgentDetail() {
             </div>
           )}
         >
-          <StatCard
-            icon={Gauge}
-            label="MachineScore"
-            value={machineScore === null ? '—' : machineScore}
-            tone={machineScoreTone}
-            trend={<span className="text-xs text-slate-400">{machineScoreHint}</span>}
-          />
+          <div className="h-full [&>div]:h-full">
+            <StatCard
+              icon={Gauge}
+              label="MachineScore"
+              value={machineScore === null ? '—' : machineScore}
+              tone={machineScoreTone}
+              trend={machineScoreHint ? <span className="text-xs text-slate-400">{machineScoreHint}</span> : undefined}
+            />
+          </div>
         </Tooltip>
         <Tooltip
           position="bottom"
@@ -925,12 +929,12 @@ export default function AgentDetail() {
             </div>
           )}
         >
-          <Card className="h-full border border-cyan-500/20 bg-gradient-to-br from-cyan-500/10 via-slate-900/30 to-slate-900/20 p-4">
-            <div className="relative mb-3 flex items-center" ref={labelPickerRef}>
+          <Card className="relative h-full border border-cyan-500/20 bg-gradient-to-br from-cyan-500/10 via-slate-900/30 to-slate-900/20 p-4">
+            <div className="relative mb-3 h-8" ref={labelPickerRef}>
               <Button
                 size="sm"
                 variant="ghost"
-                className="h-8 w-8 shrink-0 p-0"
+                className="absolute left-0 top-0 h-8 w-8 shrink-0 p-0"
                 title="Vincular label manual existente"
                 aria-label="Adicionar label manual"
                 onClick={() => {
