@@ -2,14 +2,14 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Cpu, MemoryStick, Ticket as TicketIcon, Tags,
-  Wifi, WifiOff, AppWindow, Search, Clock, HardDrive, Printer, Bug, AlertTriangle, Trash2, ShieldCheck, Plus,
+  Wifi, WifiOff, AppWindow, Search, Clock, HardDrive, Printer, Bug, AlertTriangle, Trash2, ShieldCheck, Plus, Gauge, Info,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getDeleteAgentErrorMessage, useAgent, useAgentHardware, useAgentSoftware, useAgentSoftwareSnapshot, useApproveZeroTouch, useDeleteAgent } from '@/hooks/useAgents';
 import { useTickets } from '@/hooks/useTickets';
 import { useLogs } from '@/hooks/useLogs';
 import { useRunMeshCentralNodeLinksBackfill, useRunMeshCentralNodeLinksBackfillDryRun } from '@/hooks';
-import { Button, Card, CardHeader, Badge, Loading, ErrorDisplay, Input, Select, DataTable, Modal, StatCard, AgentHeartbeatCard, type Column } from '@/components/ui';
+import { Button, Card, CardHeader, Badge, Loading, ErrorDisplay, Input, Select, DataTable, Modal, StatCard, AgentHeartbeatCard, Tooltip, type Column } from '@/components/ui';
 import { NotesPanel } from '@/components/notes/NotesPanel';
 import type { AgentSoftwareInventoryItem, ListeningPortInfo, MeshCentralNodeLinksBackfillItem, MeshCentralNodeLinksBackfillReport, OpenSocketInfo } from '@/api';
 import { ApiError, LogLevel, agentUpdatesApi } from '@/api';
@@ -136,7 +136,7 @@ function nodeLinkStatusColor(status: string): 'success' | 'warning' | 'danger' |
   return 'slate';
 }
 
-type AgentDetailDataTab = 'software' | 'tickets' | 'listeningPorts' | 'openSockets' | 'logs';
+type AgentDetailDataTab = 'software' | 'printers' | 'tickets' | 'listeningPorts' | 'openSockets' | 'logs';
 
 export default function AgentDetail() {
   const { id } = useParams<{ id: string }>();
@@ -367,6 +367,28 @@ export default function AgentDetail() {
   const listeningPorts: ListeningPortInfo[] = hw.data?.listeningPorts ?? [];
   const openSockets: OpenSocketInfo[] = hw.data?.openSockets ?? [];
   const currentNodeLinkItem = nodeLinkPreviewReport?.items.find((item) => item.agentId === a.id) ?? null;
+  const machineScoreRaw = a.machineScore ?? hw.data?.hardware?.machineScore ?? null;
+  const machineScore = typeof machineScoreRaw === 'number' && Number.isFinite(machineScoreRaw)
+    ? Math.max(0, Math.min(100, Math.round(machineScoreRaw)))
+    : null;
+  const machineScoreTone: 'success' | 'accent' | 'warning' =
+    machineScore === null
+      ? 'warning'
+      : machineScore >= 85
+        ? 'success'
+        : machineScore >= 65
+          ? 'accent'
+          : 'warning';
+  const machineScoreHint =
+    machineScore === null
+      ? 'Sem cálculo'
+      : machineScore >= 85
+        ? 'Excelente'
+        : machineScore >= 65
+          ? 'Bom'
+          : machineScore >= 45
+            ? 'Atenção'
+            : 'Crítico';
 
   const listeningPortColumns: Column<ListeningPortInfo>[] = [
     {
@@ -776,7 +798,7 @@ export default function AgentDetail() {
       <AgentHeartbeatCard metrics={aWithHeartbeat.heartbeatMetrics} showEmpty />
 
       {/* Stat Cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         <StatCard
           icon={Cpu}
           label="Processador"
@@ -794,6 +816,31 @@ export default function AgentDetail() {
           trend={hw.data?.memoryModules?.length
             ? <span className="text-xs text-slate-400">{hw.data.memoryModules.length} módulo(s)</span>
             : undefined}
+        />
+        <StatCard
+          icon={Gauge}
+          label="MachineScore"
+          value={machineScore === null ? '—' : `${machineScore}/100`}
+          tone={machineScoreTone}
+          trend={(
+            <Tooltip
+              position="bottom"
+              delay={250}
+              className="inline-flex items-center"
+              content={(
+                <div className="space-y-1 text-left">
+                  <p>Nota calculada pela API com base na saúde geral da máquina.</p>
+                  <p>Considera telemetria e inventário disponíveis, como CPU, memória, disco e estabilidade de operação.</p>
+                  <p>Escala de 0 a 100: quanto maior, melhor.</p>
+                </div>
+              )}
+            >
+              <span className="inline-flex items-center gap-1 text-xs text-slate-400">
+                {machineScoreHint}
+                <Info className="h-3.5 w-3.5 text-slate-500" />
+              </span>
+            </Tooltip>
+          )}
         />
         <Card className="border border-cyan-500/20 bg-gradient-to-br from-cyan-500/10 via-slate-900/30 to-slate-900/20 p-4">
           <div className="mb-3 flex items-center gap-2">
@@ -1002,7 +1049,7 @@ export default function AgentDetail() {
       </div>
 
       {/* Agent Info + Hardware Detail */}
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="grid gap-6 lg:grid-cols-2">
         {/* Info do Agente */}
         <Card>
           <CardHeader title="Informações" />
@@ -1093,47 +1140,6 @@ export default function AgentDetail() {
           </dl>
         </Card>
 
-        {/* Impressoras */}
-        <Card>
-          <CardHeader title="Impressoras" subtitle={`${printers.length} impressora(s) detectada(s)`} />
-          {printers.length === 0 ? (
-            <p className="text-sm text-slate-500">Nenhuma impressora coletada para este agente.</p>
-          ) : (
-            <div className="space-y-2">
-              {printers.map((printer, index) => (
-                <div key={`${printer.name}-${printer.portName ?? index}`} className="rounded-lg bg-white/5 px-3 py-2.5">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-white">{printer.name}</p>
-                      {printer.driverName && (
-                        <p className="truncate text-xs text-slate-500">Driver: {printer.driverName}</p>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {printer.isDefault && <Badge color="primary">Padrão</Badge>}
-                      <Badge color={printerStatusColor(printer.printerStatus)}>{printer.printerStatus ?? 'Sem status'}</Badge>
-                    </div>
-                  </div>
-
-                  <div className="mt-2 grid gap-2 text-xs text-slate-400 sm:grid-cols-2">
-                    <span className="flex items-center gap-1">
-                      <Printer className="h-3.5 w-3.5" />
-                      {printer.isNetworkPrinter ? 'Rede' : 'Local'}
-                    </span>
-                    <span>{printer.portName ? `Porta: ${printer.portName}` : 'Porta não informada'}</span>
-                    <span>{printer.location ? `Local: ${printer.location}` : 'Local não informado'}</span>
-                    <span>
-                      {printer.shared
-                        ? `Compartilhada${printer.shareName ? ` (${printer.shareName})` : ''}`
-                        : 'Não compartilhada'}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </Card>
-
         {/* Adaptadores de Rede */}
         {hw.data?.networkAdapters && hw.data.networkAdapters.length > 0 && (
           <Card>
@@ -1182,6 +1188,15 @@ export default function AgentDetail() {
           >
             Inventário de Aplicativos
             <span className="rounded-full bg-black/25 px-2 py-0.5 text-xs text-slate-300">{softwareTotalCount}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveDataTab('printers')}
+            aria-pressed={activeDataTab === 'printers'}
+            className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors ${activeDataTab === 'printers' ? 'border-primary/40 bg-primary/15 text-primary' : 'border-white/10 bg-white/5 text-slate-300 hover:text-slate-100'}`}
+          >
+            Impressoras
+            <span className="rounded-full bg-black/25 px-2 py-0.5 text-xs text-slate-300">{printers.length}</span>
           </button>
           <button
             type="button"
@@ -1399,6 +1414,48 @@ export default function AgentDetail() {
                 </div>
               )}
             </div>
+          </>
+        )}
+
+        {activeDataTab === 'printers' && (
+          <>
+            <CardHeader title="Impressoras" subtitle={`${printers.length} impressora(s) detectada(s)`} />
+            {printers.length === 0 ? (
+              <p className="text-sm text-slate-500">Nenhuma impressora coletada para este agente.</p>
+            ) : (
+              <div className="space-y-2">
+                {printers.map((printer, index) => (
+                  <div key={`${printer.name}-${printer.portName ?? index}`} className="rounded-lg bg-white/5 px-3 py-2.5">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-white">{printer.name}</p>
+                        {printer.driverName && (
+                          <p className="truncate text-xs text-slate-500">Driver: {printer.driverName}</p>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {printer.isDefault && <Badge color="primary">Padrão</Badge>}
+                        <Badge color={printerStatusColor(printer.printerStatus)}>{printer.printerStatus ?? 'Sem status'}</Badge>
+                      </div>
+                    </div>
+
+                    <div className="mt-2 grid gap-2 text-xs text-slate-400 sm:grid-cols-2">
+                      <span className="flex items-center gap-1">
+                        <Printer className="h-3.5 w-3.5" />
+                        {printer.isNetworkPrinter ? 'Rede' : 'Local'}
+                      </span>
+                      <span>{printer.portName ? `Porta: ${printer.portName}` : 'Porta não informada'}</span>
+                      <span>{printer.location ? `Local: ${printer.location}` : 'Local não informado'}</span>
+                      <span>
+                        {printer.shared
+                          ? `Compartilhada${printer.shareName ? ` (${printer.shareName})` : ''}`
+                          : 'Não compartilhada'}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </>
         )}
 

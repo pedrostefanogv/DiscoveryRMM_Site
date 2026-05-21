@@ -108,6 +108,7 @@ export interface Agent {
   siteId: string;
   hostname: string;
   displayName: string | null;
+  machineScore?: number | null;
   meshCentralNodeId?: string | null;
   zeroTouchPending?: boolean;
   operatingSystem: string | null;
@@ -126,6 +127,7 @@ export interface Agent {
 export interface AgentHardwareInfo {
   id: string;
   agentId: string;
+  machineScore?: number | null;
   inventoryRaw: string | null;
   inventorySchemaVersion: string | null;
   inventoryCollectedAt: string | null;
