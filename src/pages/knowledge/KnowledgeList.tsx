@@ -261,6 +261,7 @@ export default function KnowledgeList() {
   ];
 
   const sortLabel = SORT_OPTIONS.find((option) => option.value === sortBy)?.label ?? 'Última atualização';
+  const searchModeLabel = SEARCH_MODE_OPTIONS.find((option) => option.value === searchMode)?.label ?? 'Híbrido';
   const selectedClientLabel = clientOptions.find((option) => option.value === clientId)?.label ?? 'Global (todos)';
   const selectedSiteLabel = siteOptions.find((option) => option.value === siteId)?.label ?? 'Todos os sites';
 
@@ -652,19 +653,24 @@ export default function KnowledgeList() {
           </div>
         )}
 
-        {hasSemanticSearch && (
-          <div className="mt-4 border-t border-white/10 pt-4">
-            <div className="mb-2 flex items-center justify-between gap-2">
+      </Card>
+
+      <Card padding={false}>
+        {hasSemanticSearch ? (
+          <div>
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
               <div>
                 <p className="text-sm font-semibold text-white">Resultados da busca inteligente</p>
-                <p className="text-xs text-slate-400">Consulta: "{query}". Clique em um artigo para abrir em modo leitura.</p>
+                <p className="text-xs text-slate-400">
+                  Consulta: "{query}" • modo {searchModeLabel}. Clique em um artigo para abrir em modo leitura.
+                </p>
               </div>
               {!searchQuery.isLoading && !searchQuery.isError && (
                 <Badge color="accent">{(searchQuery.data ?? []).length}</Badge>
               )}
             </div>
 
-            <div className="space-y-2">
+            <div className="p-4">
               {searchQuery.isLoading && <Loading message="Buscando artigos relevantes..." />}
               {searchQuery.isError && (
                 <ErrorDisplay
@@ -673,32 +679,33 @@ export default function KnowledgeList() {
                 />
               )}
               {!searchQuery.isLoading && !searchQuery.isError && (
-                <div className="space-y-2">
-                  {(searchQuery.data ?? []).map((item) => (
-                    <button
-                      type="button"
-                      key={item.id}
-                      onClick={() => navigate(`/knowledge/${item.id}`)}
-                      className="w-full rounded-lg border border-white/10 bg-white/5 p-3 text-left transition-colors hover:bg-white/10"
-                    >
-                      <p className="font-medium text-white">{item.title}</p>
-                      <p className="text-xs text-slate-400">
-                        {normalizeCategory(item.category)} • {scopeLabel(item)} • {statusLabel(item)}
-                      </p>
-                    </button>
-                  ))}
-                  {(searchQuery.data ?? []).length === 0 && (
-                    <p className="text-sm text-slate-400">Nenhum resultado para esta busca.</p>
-                  )}
+                <div className="space-y-3">
+                  <DataTable
+                    columns={columns}
+                    data={searchQuery.data ?? []}
+                    keyExtractor={(item) => item.id}
+                    onRowClick={(item) => navigate(`/knowledge/${item.id}`)}
+                    onRowContextMenu={(event, item) => {
+                      event.preventDefault();
+                      setContextMenu({ x: event.clientX, y: event.clientY, article: item });
+                    }}
+                    emptyMessage="Nenhum resultado para esta busca."
+                    showPagination={false}
+                  />
+
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-t border-white/10 pt-3">
+                    <p className="text-xs text-slate-400">
+                      {(searchQuery.data ?? []).length} artigo(s) relevantes para "{query}".
+                    </p>
+                    <Button type="button" variant="ghost" size="sm" onClick={handleClearSearch}>
+                      Voltar para listagem completa
+                    </Button>
+                  </div>
                 </div>
               )}
             </div>
           </div>
-        )}
-      </Card>
-
-      <Card padding={false}>
-        {(listQueryLegacy.isLoading || listQueryAllVisible.isLoading) ? (
+        ) : (listQueryLegacy.isLoading || listQueryAllVisible.isLoading) ? (
           <Loading message="Carregando artigos..." />
         ) : (listQueryLegacy.isError || listQueryAllVisible.isError) ? (
           <ErrorDisplay message="Falha ao carregar artigos." onRetry={() => listQuery.refetch()} />
