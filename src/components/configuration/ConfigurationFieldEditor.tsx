@@ -11,6 +11,7 @@ type FieldKind = "boolean" | "number" | "string" | "json" | "policy";
 interface ConfigurationFieldEditorProps {
   fieldLabel: string;
   fieldKey: string;
+  showFieldKey?: boolean;
   fieldKind?: FieldKind;
   value: string;
   error?: string;
@@ -34,6 +35,7 @@ interface ConfigurationFieldEditorProps {
 export function ConfigurationFieldEditor({
   fieldLabel,
   fieldKey,
+  showFieldKey = true,
   fieldKind = "string",
   value,
   error,
@@ -658,7 +660,7 @@ export function ConfigurationFieldEditor({
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="flex-1">
           <p className="text-sm font-semibold text-white">{fieldLabel}</p>
-          <p className="font-mono text-xs text-slate-400">{fieldKey}</p>
+          {showFieldKey && <p className="font-mono text-xs text-slate-400">{fieldKey}</p>}
           {description && (
             <p className="mt-1 text-xs text-slate-300">{description}</p>
           )}

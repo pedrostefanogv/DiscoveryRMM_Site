@@ -5,6 +5,8 @@ import {
   Activity,
   AlertTriangle,
   Bot,
+  ChevronDown,
+  ChevronUp,
   CheckCircle2,
   Clock,
   Cloud,
@@ -47,6 +49,15 @@ interface FormValues {
   values: Record<string, string>;
 }
 
+type SectionKey =
+  | "features"
+  | "policy"
+  | "agent"
+  | "storage"
+  | "nats"
+  | "attachments"
+  | "advanced";
+
 const featureIcons: Record<string, React.ReactNode> = {
   recoveryEnabled: <HardDrive className="h-4 w-4" />,
   discoveryEnabled: <Wifi className="h-4 w-4" />,
@@ -70,6 +81,15 @@ export default function ServerConfigurationPage() {
   const [togglingKey, setTogglingKey] = useState<string | null>(null);
   const [savingNats, setSavingNats] = useState(false);
   const [savingStorage, setSavingStorage] = useState(false);
+  const [collapsedSections, setCollapsedSections] = useState<Record<SectionKey, boolean>>({
+    features: false,
+    policy: false,
+    agent: false,
+    storage: false,
+    nats: true,
+    attachments: true,
+    advanced: true,
+  });
   const [natsTestResult, setNatsTestResult] = useState<{
     ok: boolean;
     errors: string[];
@@ -247,6 +267,27 @@ export default function ServerConfigurationPage() {
     }
   };
 
+  const toggleSection = (section: SectionKey) => {
+    setCollapsedSections((current) => ({
+      ...current,
+      [section]: !current[section],
+    }));
+  };
+
+  const renderSectionAction = (section: SectionKey) => {
+    const collapsed = collapsedSections[section];
+    return (
+      <button
+        type="button"
+        onClick={() => toggleSection(section)}
+        className="inline-flex items-center gap-1 rounded-md border border-white/10 bg-white/5 px-2.5 py-1 text-xs text-slate-300 transition-colors hover:border-white/20 hover:text-white"
+      >
+        {collapsed ? "Expandir" : "Recolher"}
+        {collapsed ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronUp className="h-3.5 w-3.5" />}
+      </button>
+    );
+  };
+
   if (serverQuery.isLoading) {
     return <Loading message="Carregando configuração do servidor..." />;
   }
@@ -259,8 +300,13 @@ export default function ServerConfigurationPage() {
   const policyFields = serverEditableFields.filter((f) => f.group === "policy");
   const agentFields = serverEditableFields.filter((f) => f.group === "agent");
   const natsFields = serverEditableFields.filter((f) => f.group === "nats");
+  const hiddenAdvancedFieldKeys = new Set([
+    "brandingSettingsJson",
+    "autoUpdateSettingsJson",
+    "aiIntegrationSettingsJson",
+  ]);
   const advancedFields = serverEditableFields.filter(
-    (f) => f.group === "advanced" && f.key !== "brandingSettingsJson",
+    (f) => f.group === "advanced" && !hiddenAdvancedFieldKeys.has(f.key),
   );
   const storageTextFields = serverEditableFields.filter(
     (f) => f.group === "storage" && (f.kind === "string" || f.kind === "number"),
@@ -268,6 +314,13 @@ export default function ServerConfigurationPage() {
   const storageToggleFields = serverEditableFields.filter(
     (f) => f.group === "storage" && f.kind === "boolean",
   );
+  const enabledFeatureCount = featureFields.filter(
+    (field) => String(formValues.values?.[field.key] ?? "false") === "true",
+  ).length;
+  const natsEnabled = String(formValues.values?.natsEnabled ?? "false") === "true";
+  const storageConfigured =
+    String(formValues.values?.objectStorageEndpoint ?? "").trim().length > 0 &&
+    String(formValues.values?.objectStorageBucketName ?? "").trim().length > 0;
 
   const renderStorageFieldEditor = (field: EditableField) => {
     const value = formValues.values?.[field.key] ?? "";
@@ -277,6 +330,7 @@ export default function ServerConfigurationPage() {
         key={field.key}
         fieldLabel={field.label}
         fieldKey={field.key}
+        showFieldKey={false}
         fieldKind={field.kind}
         value={String(value)}
         error={typeof error === "string" ? error : undefined}
@@ -309,6 +363,7 @@ export default function ServerConfigurationPage() {
         key={field.key}
         fieldLabel={field.label}
         fieldKey={field.key}
+        showFieldKey={false}
         fieldKind={field.kind}
         value={String(value)}
         error={typeof error === "string" ? error : undefined}
@@ -340,6 +395,7 @@ export default function ServerConfigurationPage() {
         key={field.key}
         fieldLabel={field.label}
         fieldKey={field.key}
+        showFieldKey={false}
         fieldKind={field.kind}
         value={String(value)}
         error={typeof error === "string" ? error : undefined}
@@ -479,15 +535,49 @@ export default function ServerConfigurationPage() {
           </div>
         </div>
 
+        <Card className="border-cyan-500/20 bg-gradient-to-br from-cyan-500/10 via-transparent to-blue-500/10">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
+              <p className="text-xs uppercase tracking-wide text-slate-400">Módulos ativos</p>
+              <p className="mt-1 text-lg font-semibold text-white">
+                {enabledFeatureCount}/{featureFields.length}
+              </p>
+              <p className="text-xs text-slate-500">Funcionalidades globais habilitadas</p>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
+              <p className="text-xs uppercase tracking-wide text-slate-400">NATS</p>
+              <p className={`mt-1 text-lg font-semibold ${natsEnabled ? "text-emerald-300" : "text-amber-300"}`}>
+                {natsEnabled ? "Habilitado" : "Desabilitado"}
+              </p>
+              <p className="text-xs text-slate-500">Canal de realtime e comunicação</p>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
+              <p className="text-xs uppercase tracking-wide text-slate-400">Object Storage</p>
+              <p className={`mt-1 text-lg font-semibold ${storageConfigured ? "text-emerald-300" : "text-amber-300"}`}>
+                {storageConfigured ? "Configurado" : "Pendente"}
+              </p>
+              <p className="text-xs text-slate-500">Endpoint + bucket para anexos</p>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
+              <p className="text-xs uppercase tracking-wide text-slate-400">Campos técnicos</p>
+              <p className="mt-1 text-lg font-semibold text-sky-300">Ocultos</p>
+              <p className="text-xs text-slate-500">autoUpdateSettingsJson e aiIntegrationSettingsJson</p>
+            </div>
+          </div>
+        </Card>
+
         {/* Funcionalidades */}
         <Card>
           <CardHeader
             title="Funcionalidades do Sistema"
             subtitle="Ative ou desative módulos globalmente. Clique no card para alternar."
+            action={renderSectionAction("features")}
           />
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {featureFields.map((field) => renderBooleanToggleCard(field))}
-          </div>
+          {!collapsedSections.features && (
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              {featureFields.map((field) => renderBooleanToggleCard(field))}
+            </div>
+          )}
         </Card>
 
         {/* Política de loja */}
@@ -495,15 +585,18 @@ export default function ServerConfigurationPage() {
           <CardHeader
             title="Política da Loja de Aplicativos"
             subtitle="Define quais aplicativos podem ser instalados pelos agentes."
+            action={renderSectionAction("policy")}
           />
-          <div className="flex items-start gap-3">
-            <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-500/20 text-violet-400">
-              <Store className="h-4 w-4" />
+          {!collapsedSections.policy && (
+            <div className="flex items-start gap-3">
+              <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-500/20 text-violet-400">
+                <Store className="h-4 w-4" />
+              </div>
+              <div className="flex-1">
+                {policyFields.map((field) => renderFieldEditor(field))}
+              </div>
             </div>
-            <div className="flex-1">
-              {policyFields.map((field) => renderFieldEditor(field))}
-            </div>
-          </div>
+          )}
         </Card>
 
         {/* Agente */}
@@ -511,17 +604,20 @@ export default function ServerConfigurationPage() {
           <CardHeader
             title="Intervalos e Comportamento do Agente"
             subtitle="Frequência de heartbeat, detecção de offline e coleta de inventário."
+            action={renderSectionAction("agent")}
           />
-          <div className="flex items-start gap-3">
-            <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-500/20 text-emerald-400">
-              <Clock className="h-4 w-4" />
+          {!collapsedSections.agent && (
+            <div className="flex items-start gap-3">
+              <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-500/20 text-emerald-400">
+                <Clock className="h-4 w-4" />
+              </div>
+              <div className="grid flex-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                {agentFields.map((field) => (
+                  <div key={field.key}>{renderFieldEditor(field)}</div>
+                ))}
+              </div>
             </div>
-            <div className="grid flex-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-              {agentFields.map((field) => (
-                <div key={field.key}>{renderFieldEditor(field)}</div>
-              ))}
-            </div>
-          </div>
+          )}
         </Card>
 
         {/* Object Storage */}
@@ -529,73 +625,76 @@ export default function ServerConfigurationPage() {
           <CardHeader
             title="Armazenamento de Objetos (S3 / MinIO)"
             subtitle="Configuração do backend S3-compatível usado para arquivos de tickets e outros uploads."
+            action={renderSectionAction("storage")}
           />
-          <div className="space-y-5">
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-              {storageTextFields.map((field) => renderStorageFieldEditor(field))}
-            </div>
-
-            {storageToggleFields.length > 0 && (
-              <div className="grid gap-3 sm:grid-cols-2">
-                {storageToggleFields.map((field) => renderBooleanToggleCard(field))}
+          {!collapsedSections.storage && (
+            <div className="space-y-5">
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                {storageTextFields.map((field) => renderStorageFieldEditor(field))}
               </div>
-            )}
 
-            <div className="flex flex-wrap items-center justify-end gap-3 border-t border-white/5 pt-4">
-              <Button size="sm" onClick={saveStorageFields} loading={savingStorage}>
-                <Save className="h-3.5 w-3.5" />
-                Salvar
-              </Button>
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={testConnection}
-                loading={testStorageMutation.isPending}
-                disabled={savingStorage}
-              >
-                <Cloud className="h-3.5 w-3.5" />
-                Testar Conexão
-              </Button>
-            </div>
+              {storageToggleFields.length > 0 && (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {storageToggleFields.map((field) => renderBooleanToggleCard(field))}
+                </div>
+              )}
 
-            {testResult && (
-              <div
-                className={`flex items-start gap-3 rounded-lg border p-3 text-sm ${
-                  testResult.success
-                    ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-300"
-                    : "border-red-500/20 bg-red-500/10 text-red-300"
-                }`}
-              >
-                {testResult.success ? (
-                  <>
-                    <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
-                    <span>Conexão OK — {testResult.latencyMs}ms</span>
-                  </>
-                ) : (
-                  <>
-                    <XCircle className="mt-0.5 h-4 w-4 shrink-0" />
-                    <div>
-                      <p className="font-medium">
-                        {!testResult.configurationValid
-                          ? "Configuração inválida"
-                          : !testResult.bucketReachable
-                            ? "Bucket inacessível"
-                            : "Falha na conexão"}
-                      </p>
-                      <p className="mt-1 text-xs">
-                        Configuração válida: {testResult.configurationValid ? "sim" : "não"} · Bucket acessível: {testResult.bucketReachable ? "sim" : "não"}
-                      </p>
-                      <ul className="mt-1 list-inside list-disc space-y-0.5 text-xs">
-                        {testResult.errors.map((e, i) => (
-                          <li key={i}>{e}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  </>
-                )}
+              <div className="flex flex-wrap items-center justify-end gap-3 border-t border-white/5 pt-4">
+                <Button size="sm" onClick={saveStorageFields} loading={savingStorage}>
+                  <Save className="h-3.5 w-3.5" />
+                  Salvar
+                </Button>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={testConnection}
+                  loading={testStorageMutation.isPending}
+                  disabled={savingStorage}
+                >
+                  <Cloud className="h-3.5 w-3.5" />
+                  Testar Conexão
+                </Button>
               </div>
-            )}
-          </div>
+
+              {testResult && (
+                <div
+                  className={`flex items-start gap-3 rounded-lg border p-3 text-sm ${
+                    testResult.success
+                      ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-300"
+                      : "border-red-500/20 bg-red-500/10 text-red-300"
+                  }`}
+                >
+                  {testResult.success ? (
+                    <>
+                      <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+                      <span>Conexão OK — {testResult.latencyMs}ms</span>
+                    </>
+                  ) : (
+                    <>
+                      <XCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                      <div>
+                        <p className="font-medium">
+                          {!testResult.configurationValid
+                            ? "Configuração inválida"
+                            : !testResult.bucketReachable
+                              ? "Bucket inacessível"
+                              : "Falha na conexão"}
+                        </p>
+                        <p className="mt-1 text-xs">
+                          Configuração válida: {testResult.configurationValid ? "sim" : "não"} · Bucket acessível: {testResult.bucketReachable ? "sim" : "não"}
+                        </p>
+                        <ul className="mt-1 list-inside list-disc space-y-0.5 text-xs">
+                          {testResult.errors.map((e, i) => (
+                            <li key={i}>{e}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </Card>
 
         {/* NATS */}
@@ -603,115 +702,132 @@ export default function ServerConfigurationPage() {
           <CardHeader
             title="Servidor NATS"
             subtitle="Configuração exclusiva do servidor. Informe apenas host/IP; porta 4222 é fixa."
+            action={renderSectionAction("nats")}
           />
-          <div className="space-y-5">
-            <div className="grid gap-4 sm:grid-cols-2">
-              {natsFields.map((field) => renderNatsFieldEditor(field))}
-            </div>
-
-            <div className="flex flex-wrap items-center justify-end gap-3 border-t border-white/5 pt-4">
-              <Button size="sm" onClick={saveNatsFields} loading={savingNats}>
-                <Save className="h-3.5 w-3.5" />
-                Salvar
-              </Button>
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={testNatsConnection}
-                loading={testNatsMutation.isPending}
-                disabled={savingNats}
-              >
-                <Wifi className="h-3.5 w-3.5" />
-                Testar Conexão
-              </Button>
-            </div>
-
-            {natsTestResult && (
-              <div
-                className={`flex items-start gap-3 rounded-lg border p-3 text-sm ${
-                  natsTestResult.ok
-                    ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-300"
-                    : "border-red-500/20 bg-red-500/10 text-red-300"
-                }`}
-              >
-                {natsTestResult.ok ? (
-                  <>
-                    <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
-                    <div>
-                      <p>
-                        Conexão OK{typeof natsTestResult.latencyMs === "number" ? ` — ${natsTestResult.latencyMs}ms` : ""}
-                      </p>
-                      <p className="mt-1 text-xs">Host testado: {natsTestResult.host}</p>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <XCircle className="mt-0.5 h-4 w-4 shrink-0" />
-                    <div>
-                      <p className="font-medium">Falha na conexão</p>
-                      <p className="mt-1 text-xs">Host testado: {natsTestResult.host}</p>
-                      {natsTestResult.errors.length > 0 && (
-                        <ul className="mt-1 list-inside list-disc space-y-0.5 text-xs">
-                          {natsTestResult.errors.map((e, i) => (
-                            <li key={i}>{e}</li>
-                          ))}
-                        </ul>
-                      )}
-                    </div>
-                  </>
-                )}
+          {!collapsedSections.nats && (
+            <div className="space-y-5">
+              <div className="grid gap-4 sm:grid-cols-2">
+                {natsFields.map((field) => renderNatsFieldEditor(field))}
               </div>
-            )}
 
-            <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 p-4 text-sm text-amber-100">
-              <p className="font-medium">Fluxo de geração de Account Key fora do escopo documentado</p>
-              <p className="mt-1 text-xs text-amber-100/80">
-                O OpenAPI atual não documenta mais um endpoint para geração de account seed/xKey. O portal permanece alinhado aos endpoints publicados de configuração e teste do NATS.
-              </p>
+              <div className="flex flex-wrap items-center justify-end gap-3 border-t border-white/5 pt-4">
+                <Button size="sm" onClick={saveNatsFields} loading={savingNats}>
+                  <Save className="h-3.5 w-3.5" />
+                  Salvar
+                </Button>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={testNatsConnection}
+                  loading={testNatsMutation.isPending}
+                  disabled={savingNats}
+                >
+                  <Wifi className="h-3.5 w-3.5" />
+                  Testar Conexão
+                </Button>
+              </div>
+
+              {natsTestResult && (
+                <div
+                  className={`flex items-start gap-3 rounded-lg border p-3 text-sm ${
+                    natsTestResult.ok
+                      ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-300"
+                      : "border-red-500/20 bg-red-500/10 text-red-300"
+                  }`}
+                >
+                  {natsTestResult.ok ? (
+                    <>
+                      <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+                      <div>
+                        <p>
+                          Conexão OK{typeof natsTestResult.latencyMs === "number" ? ` — ${natsTestResult.latencyMs}ms` : ""}
+                        </p>
+                        <p className="mt-1 text-xs">Host testado: {natsTestResult.host}</p>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <XCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                      <div>
+                        <p className="font-medium">Falha na conexão</p>
+                        <p className="mt-1 text-xs">Host testado: {natsTestResult.host}</p>
+                        {natsTestResult.errors.length > 0 && (
+                          <ul className="mt-1 list-inside list-disc space-y-0.5 text-xs">
+                            {natsTestResult.errors.map((e, i) => (
+                              <li key={i}>{e}</li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+
+              <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 p-4 text-sm text-amber-100">
+                <p className="font-medium">Geração de Account Key fora do escopo atual da API</p>
+                <p className="mt-1 text-xs text-amber-100/80">
+                  O OpenAPI publicado não expõe endpoint de geração de account seed/xKey. Esta tela segue apenas os endpoints documentados para configuração e teste de conectividade.
+                </p>
+              </div>
             </div>
-          </div>
+          )}
         </Card>
 
         {/* Anexos de Tickets */}
-        <TicketAttachmentSettingsCard />
+        <TicketAttachmentSettingsCard
+          collapsed={collapsedSections.attachments}
+          onToggleCollapse={() => toggleSection("attachments")}
+        />
 
-        {/* Configurações avançadas (JSON) */}
+        {/* Governança */}
         <Card>
           <CardHeader
-            title="Configurações Avançadas"
-            subtitle="Auto-update, IA estruturada e bloqueio de campos. Branding fica em /settings/branding."
+            title="Governança e Herança"
+            subtitle="Campos de controle e bloqueio de configuração. Branding permanece em /settings/branding."
+            action={renderSectionAction("advanced")}
           />
-          <div className="space-y-6">
-            {advancedFields.map((field) => {
-              const icons: Record<string, React.ReactNode> = {
-                autoUpdateSettingsJson: <Zap className="h-4 w-4" />,
-                aiIntegrationSettingsJson: <Bot className="h-4 w-4" />,
-                lockedFieldsJson: <Lock className="h-4 w-4" />,
-              };
-              const colors: Record<string, string> = {
-                autoUpdateSettingsJson: "bg-blue-500/20 text-blue-400",
-                aiIntegrationSettingsJson: "bg-purple-500/20 text-purple-400",
-                lockedFieldsJson: "bg-red-500/20 text-red-400",
-              };
-              return (
-                <div key={field.key} className="flex items-start gap-3">
-                  <div
-                    className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
-                      colors[field.key] ?? "bg-white/5 text-slate-400"
-                    }`}
-                  >
-                    {icons[field.key] ?? <Layers className="h-4 w-4" />}
-                  </div>
-                  <div className="min-w-0 flex-1 space-y-1">
-                    {field.description && (
-                      <p className="text-xs text-slate-500">{field.description}</p>
-                    )}
-                    {renderFieldEditor(field)}
-                  </div>
+          {!collapsedSections.advanced && (
+            <div className="space-y-6">
+              <div className="rounded-lg border border-sky-500/20 bg-sky-500/10 p-3 text-xs text-sky-200">
+                Campos técnicos de JSON bruto foram ocultados desta tela para reduzir ruído operacional: autoUpdateSettingsJson e aiIntegrationSettingsJson.
+              </div>
+
+              {advancedFields.length === 0 && (
+                <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3 text-sm text-slate-300">
+                  Nenhum campo adicional de governança disponível neste momento.
                 </div>
-              );
-            })}
-          </div>
+              )}
+
+              {advancedFields.map((field) => {
+                const icons: Record<string, React.ReactNode> = {
+                  lockedFieldsJson: <Lock className="h-4 w-4" />,
+                  meshCentralGroupPolicyProfile: <ShieldCheck className="h-4 w-4" />,
+                };
+                const colors: Record<string, string> = {
+                  lockedFieldsJson: "bg-red-500/20 text-red-400",
+                  meshCentralGroupPolicyProfile: "bg-emerald-500/20 text-emerald-400",
+                };
+                return (
+                  <div key={field.key} className="flex items-start gap-3">
+                    <div
+                      className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
+                        colors[field.key] ?? "bg-white/5 text-slate-400"
+                      }`}
+                    >
+                      {icons[field.key] ?? <Layers className="h-4 w-4" />}
+                    </div>
+                    <div className="min-w-0 flex-1 space-y-1">
+                      {field.description && (
+                        <p className="text-xs text-slate-500">{field.description}</p>
+                      )}
+                      {renderFieldEditor(field)}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </Card>
       </div>
 
@@ -784,7 +900,15 @@ const MIME_PRESETS: { label: string; value: string }[] = [
 const MIME_TYPE_REGEX = /^[a-z]+\/[a-z0-9!#$&\-^_.+]+$/i;
 const BYTES_PER_MB = 1024 * 1024;
 
-function TicketAttachmentSettingsCard() {
+interface TicketAttachmentSettingsCardProps {
+  collapsed: boolean;
+  onToggleCollapse: () => void;
+}
+
+function TicketAttachmentSettingsCard({
+  collapsed,
+  onToggleCollapse,
+}: TicketAttachmentSettingsCardProps) {
   const query = useTicketAttachmentSettings();
   const mutation = useUpdateTicketAttachmentSettings();
 
@@ -798,6 +922,17 @@ function TicketAttachmentSettingsCard() {
   const [customTypeError, setCustomTypeError] = useState("");
   const [typesError, setTypesError] = useState("");
   const [loaded, setLoaded] = useState(false);
+
+  const collapseButton = (
+    <button
+      type="button"
+      onClick={onToggleCollapse}
+      className="inline-flex items-center gap-1 rounded-md border border-white/10 bg-white/5 px-2.5 py-1 text-xs text-slate-300 transition-colors hover:border-white/20 hover:text-white"
+    >
+      {collapsed ? "Expandir" : "Recolher"}
+      {collapsed ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronUp className="h-3.5 w-3.5" />}
+    </button>
+  );
 
   useEffect(() => {
     if (query.data && !loaded) {
@@ -880,7 +1015,14 @@ function TicketAttachmentSettingsCard() {
   if (query.isLoading) {
     return (
       <Card>
-        <div className="py-2 text-sm text-slate-400">Carregando configurações de anexos…</div>
+        <CardHeader
+          title="Anexos de Tickets"
+          subtitle="Controla o upload de arquivos via URL pré-assinada (S3). Requer Object Storage configurado."
+          action={collapseButton}
+        />
+        {!collapsed && (
+          <div className="py-2 text-sm text-slate-400">Carregando configurações de anexos…</div>
+        )}
       </Card>
     );
   }
@@ -890,8 +1032,9 @@ function TicketAttachmentSettingsCard() {
       <CardHeader
         title="Anexos de Tickets"
         subtitle="Controla o upload de arquivos via URL pré-assinada (S3). Requer Object Storage configurado."
+        action={collapseButton}
       />
-      <div className="space-y-5">
+      {!collapsed && <div className="space-y-5">
         {/* Enable toggle */}
         <button
           type="button"
@@ -1087,7 +1230,7 @@ function TicketAttachmentSettingsCard() {
             Salvar Configurações de Anexos
           </Button>
         </div>
-      </div>
+      </div>}
     </Card>
   );
 }
