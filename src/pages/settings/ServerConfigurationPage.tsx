@@ -86,9 +86,9 @@ export default function ServerConfigurationPage() {
     policy: false,
     agent: false,
     storage: false,
-    nats: true,
-    attachments: true,
-    advanced: true,
+    nats: false,
+    attachments: false,
+    advanced: false,
   });
   const [natsTestResult, setNatsTestResult] = useState<{
     ok: boolean;
@@ -300,11 +300,7 @@ export default function ServerConfigurationPage() {
   const policyFields = serverEditableFields.filter((f) => f.group === "policy");
   const agentFields = serverEditableFields.filter((f) => f.group === "agent");
   const natsFields = serverEditableFields.filter((f) => f.group === "nats");
-  const hiddenAdvancedFieldKeys = new Set([
-    "brandingSettingsJson",
-    "autoUpdateSettingsJson",
-    "aiIntegrationSettingsJson",
-  ]);
+  const hiddenAdvancedFieldKeys = new Set(["brandingSettingsJson"]);
   const advancedFields = serverEditableFields.filter(
     (f) => f.group === "advanced" && !hiddenAdvancedFieldKeys.has(f.key),
   );
@@ -560,8 +556,8 @@ export default function ServerConfigurationPage() {
             </div>
             <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
               <p className="text-xs uppercase tracking-wide text-slate-400">Campos técnicos</p>
-              <p className="mt-1 text-lg font-semibold text-sky-300">Ocultos</p>
-              <p className="text-xs text-slate-500">autoUpdateSettingsJson e aiIntegrationSettingsJson</p>
+              <p className="mt-1 text-lg font-semibold text-sky-300">Parcial</p>
+              <p className="text-xs text-slate-500">Branding separado em /settings/branding</p>
             </div>
           </div>
         </Card>
@@ -780,17 +776,17 @@ export default function ServerConfigurationPage() {
           onToggleCollapse={() => toggleSection("attachments")}
         />
 
-        {/* Governança */}
+        {/* Configurações avançadas */}
         <Card>
           <CardHeader
-            title="Governança e Herança"
-            subtitle="Campos de controle e bloqueio de configuração. Branding permanece em /settings/branding."
+            title="Configurações Avançadas"
+            subtitle="IA, auto-update e governança de herança. Branding permanece em /settings/branding."
             action={renderSectionAction("advanced")}
           />
           {!collapsedSections.advanced && (
             <div className="space-y-6">
               <div className="rounded-lg border border-sky-500/20 bg-sky-500/10 p-3 text-xs text-sky-200">
-                Campos técnicos de JSON bruto foram ocultados desta tela para reduzir ruído operacional: autoUpdateSettingsJson e aiIntegrationSettingsJson.
+                Apenas o campo de branding foi separado para a tela dedicada. IA e auto-update continuam editáveis aqui.
               </div>
 
               {advancedFields.length === 0 && (
@@ -801,10 +797,14 @@ export default function ServerConfigurationPage() {
 
               {advancedFields.map((field) => {
                 const icons: Record<string, React.ReactNode> = {
+                  autoUpdateSettingsJson: <Zap className="h-4 w-4" />,
+                  aiIntegrationSettingsJson: <Bot className="h-4 w-4" />,
                   lockedFieldsJson: <Lock className="h-4 w-4" />,
                   meshCentralGroupPolicyProfile: <ShieldCheck className="h-4 w-4" />,
                 };
                 const colors: Record<string, string> = {
+                  autoUpdateSettingsJson: "bg-blue-500/20 text-blue-400",
+                  aiIntegrationSettingsJson: "bg-purple-500/20 text-purple-400",
                   lockedFieldsJson: "bg-red-500/20 text-red-400",
                   meshCentralGroupPolicyProfile: "bg-emerald-500/20 text-emerald-400",
                 };
