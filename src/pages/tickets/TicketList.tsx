@@ -207,8 +207,9 @@ function KpiTile({
     <Tooltip
       className="block w-full"
       content={description}
-      delay={700}
+      delay={1200}
       position="bottom"
+      variant="hover-card"
     >
       <Card>
         <div className="space-y-1">

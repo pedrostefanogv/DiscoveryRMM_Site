@@ -825,8 +825,9 @@ export default function AgentDetail() {
           trend={(
             <Tooltip
               position="bottom"
-              delay={250}
+              delay={1200}
               className="inline-flex items-center"
+              variant="hover-card"
               content={(
                 <div className="space-y-1 text-left">
                   <p>Nota calculada pela API com base na saúde geral da máquina.</p>

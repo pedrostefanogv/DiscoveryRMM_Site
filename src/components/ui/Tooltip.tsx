@@ -6,9 +6,10 @@ interface TooltipProps {
   position?: 'top' | 'bottom' | 'left' | 'right';
   delay?: number;
   className?: string;
+  variant?: 'default' | 'hover-card';
 }
 
-export function Tooltip({ children, content, position = 'top', delay = 300, className = 'inline-flex' }: TooltipProps) {
+export function Tooltip({ children, content, position = 'top', delay = 300, className = 'inline-flex', variant = 'default' }: TooltipProps) {
   const [visible, setVisible] = useState(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -39,6 +40,11 @@ export function Tooltip({ children, content, position = 'top', delay = 300, clas
     right: 'right-full top-1/2 -translate-y-1/2 border-r-slate-800 border-y-transparent border-l-transparent border-4',
   };
 
+  const contentClassName =
+    variant === 'hover-card'
+      ? 'w-[min(460px,calc(100vw-2rem))] whitespace-normal rounded-xl border border-white/15 bg-slate-950/95 px-4 py-3 text-xs text-slate-200 shadow-2xl backdrop-blur-sm'
+      : 'max-w-xs whitespace-normal rounded-lg border border-white/10 bg-slate-800 px-3 py-1.5 text-xs text-justify text-slate-200 shadow-xl backdrop-blur-sm sm:max-w-[40rem]';
+
   return (
     <div className={`relative ${className}`} onMouseEnter={show} onMouseLeave={hide} onFocus={show} onBlur={hide}>
       {children}
@@ -47,10 +53,10 @@ export function Tooltip({ children, content, position = 'top', delay = 300, clas
           role="tooltip"
           className={`pointer-events-none absolute z-50 ${positionClasses[position]}`}
         >
-          <div className="max-w-xs whitespace-normal rounded-lg border border-white/10 bg-slate-800 px-3 py-1.5 text-xs text-justify text-slate-200 shadow-xl backdrop-blur-sm sm:max-w-[40rem]">
+          <div className={contentClassName}>
             {content}
           </div>
-          <div className={`absolute ${arrowClasses[position]}`} />
+          {variant === 'default' && <div className={`absolute ${arrowClasses[position]}`} />}
         </div>
       )}
     </div>
