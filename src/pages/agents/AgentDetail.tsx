@@ -934,7 +934,7 @@ export default function AgentDetail() {
               <Button
                 size="sm"
                 variant="ghost"
-                className="absolute left-0 top-0 h-8 w-8 shrink-0 p-0"
+                className="absolute right-0 top-0 h-9 w-9 shrink-0 p-0"
                 title="Vincular label manual existente"
                 aria-label="Adicionar label manual"
                 onClick={() => {
@@ -942,11 +942,11 @@ export default function AgentDetail() {
                   setShowLabelPicker(prev => !prev);
                 }}
               >
-                <Plus className="h-4 w-4" />
+                <Plus className="h-5 w-5" />
               </Button>
 
               {showLabelPicker ? (
-                <div className="absolute left-0 top-full z-50 mt-1 w-72 rounded-xl border border-white/10 bg-slate-900 p-2 shadow-xl">
+                <div className="absolute right-0 top-full z-50 mt-1 w-72 rounded-xl border border-white/10 bg-slate-900 p-2 shadow-xl">
                   <Input
                     placeholder="Filtrar labels..."
                     value={labelPickerQuery}
