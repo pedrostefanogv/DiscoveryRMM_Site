@@ -1596,8 +1596,11 @@ export interface KnowledgeArticle {
   lastEditedAt: string | null;
   status: ArticleStatus;
   scope: string;
+  scopeOrigin?: string | null;
   clientId: string | null;
   siteId: string | null;
+  clientName?: string | null;
+  siteName?: string | null;
   departmentId: string | null;
   currentVersionNumber: number;
   publishedAt: string | null;
@@ -1605,6 +1608,15 @@ export interface KnowledgeArticle {
   embeddingsReady: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ArticleListPage {
+  items: KnowledgeArticle[];
+  count: number;
+  cursor: string | null;
+  nextCursor: string | null;
+  hasMore: boolean;
+  limit: number;
 }
 
 export interface ArticleVersion {
@@ -1661,6 +1673,9 @@ export interface KnowledgeListQuery {
   status?: ArticleStatus;
   departmentId?: string;
   category?: string;
+  scopeMode?: 'all-visible';
+  cursor?: string;
+  limit?: number;
 }
 
 export interface KnowledgeSearchQuery {
@@ -1670,6 +1685,7 @@ export interface KnowledgeSearchQuery {
   departmentId?: string;
   mode?: KnowledgeSearchMode;
   maxResults?: number;
+  scopeMode?: 'all-visible';
 }
 
 export interface LinkTicketKnowledgeRequest {
@@ -1693,8 +1709,11 @@ export interface KbSearchResult {
   excerpt: string;
   category: string | null;
   scope: string;
+  scopeOrigin?: string | null;
   clientId: string | null;
   siteId: string | null;
+  clientName?: string | null;
+  siteName?: string | null;
   score: number | null;
 }
 

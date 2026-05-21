@@ -1,8 +1,8 @@
 ﻿import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  ArrowLeft, Cpu, MemoryStick, Ticket as TicketIcon, Tags,
-  Wifi, WifiOff, AppWindow, Search, Clock, HardDrive, Printer, Bug, AlertTriangle, Trash2, ShieldCheck, Plus, Gauge, Info,
+  ArrowLeft, Cpu, MemoryStick, Ticket as TicketIcon,
+  Wifi, WifiOff, AppWindow, Search, Clock, HardDrive, Printer, Bug, AlertTriangle, Trash2, ShieldCheck, Plus, Gauge,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getDeleteAgentErrorMessage, useAgent, useAgentHardware, useAgentSoftware, useAgentSoftwareSnapshot, useApproveZeroTouch, useDeleteAgent } from '@/hooks/useAgents';
@@ -369,26 +369,38 @@ export default function AgentDetail() {
   const currentNodeLinkItem = nodeLinkPreviewReport?.items.find((item) => item.agentId === a.id) ?? null;
   const machineScoreRaw = a.machineScore ?? hw.data?.hardware?.machineScore ?? null;
   const machineScore = typeof machineScoreRaw === 'number' && Number.isFinite(machineScoreRaw)
-    ? Math.max(0, Math.min(100, Math.round(machineScoreRaw)))
+    ? Math.max(1, Math.round(machineScoreRaw))
     : null;
   const machineScoreTone: 'success' | 'accent' | 'warning' =
     machineScore === null
       ? 'warning'
-      : machineScore >= 85
+      : machineScore >= 100
         ? 'success'
-        : machineScore >= 65
+        : machineScore >= 60
           ? 'accent'
           : 'warning';
   const machineScoreHint =
     machineScore === null
       ? 'Sem cálculo'
-      : machineScore >= 85
-        ? 'Excelente'
-        : machineScore >= 65
-          ? 'Bom'
-          : machineScore >= 45
-            ? 'Atenção'
-            : 'Crítico';
+      : machineScore >= 100
+        ? 'Acima da baseline'
+        : machineScore >= 60
+          ? 'Intermediário'
+          : 'Entrada';
+  const processorModelFull = hw.data?.hardware?.processor ?? null;
+  const processorModelDisplay = processorModelFull
+    ? processorModelFull.split(' ').slice(0, 4).join(' ')
+    : 'Modelo indisponível';
+  const processorValue = hw.data?.hardware?.processor
+    ? `${hw.data.hardware.processorCores ?? '?'}C / ${hw.data.hardware.processorThreads ?? '?'}T`
+    : '—';
+  const softwareTotalInstalled = softwareSnapshot.isLoading ? '—' : (softwareSnapshot.data?.totalInstalled ?? 0);
+  const softwareLastCollectedAt = softwareSnapshot.data?.lastCollectedAt ?? softwareSnapshot.data?.updatedAt ?? null;
+  const softwareLastCollectedLabel = softwareLastCollectedAt
+    ? new Date(softwareLastCollectedAt).toLocaleString('pt-BR')
+    : 'Sem coleta registrada';
+  const manualLabelsCount = allLabels.filter((item) => item.sourceType === AgentLabelSourceType.Manual).length;
+  const automaticLabelsCount = Math.max(0, allLabels.length - manualLabelsCount);
 
   const listeningPortColumns: Column<ListeningPortInfo>[] = [
     {
@@ -799,15 +811,44 @@ export default function AgentDetail() {
 
       {/* Stat Cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-        <StatCard
-          icon={Cpu}
-          label="Processador"
-          value={hw.data?.hardware?.processor ? `${hw.data.hardware.processorCores ?? '?'}C / ${hw.data.hardware.processorThreads ?? '?'}T` : '—'}
-          tone="primary"
-          trend={hw.data?.hardware?.processor
-            ? <span className="max-w-[120px] truncate text-xs text-slate-400" title={hw.data.hardware.processor}>{hw.data.hardware.processor.split(' ').slice(0, 3).join(' ')}</span>
-            : undefined}
-        />
+        <Tooltip
+          position="bottom"
+          delay={1200}
+          className="block h-full"
+          variant="hover-card"
+          content={(
+            <div className="space-y-2 text-left text-[11px] text-slate-300">
+              <p>
+                <span className="text-slate-400">Modelo completo:</span>{' '}
+                {processorModelFull ?? 'Não informado'}
+              </p>
+              <p>
+                <span className="text-slate-400">Núcleos físicos:</span>{' '}
+                {hw.data?.hardware?.processorCores ?? '—'}
+              </p>
+              <p>
+                <span className="text-slate-400">Threads lógicas:</span>{' '}
+                {hw.data?.hardware?.processorThreads ?? '—'}
+              </p>
+              <p>
+                <span className="text-slate-400">Arquitetura:</span>{' '}
+                {hw.data?.hardware?.processorArchitecture ?? 'Não informada'}
+              </p>
+            </div>
+          )}
+        >
+          <div className="glass-card flex h-full items-center gap-4 rounded-xl border border-white/5 bg-surface p-5">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary/15 ring-1 ring-white/5">
+              <Cpu className="h-6 w-6 text-primary" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-xs font-medium text-slate-400" title={processorModelFull ?? undefined}>
+                {processorModelDisplay}
+              </p>
+              <p className="text-2xl font-bold text-white tabular-nums">{processorValue}</p>
+            </div>
+          </div>
+        </Tooltip>
         <StatCard
           icon={MemoryStick}
           label="Memória RAM"
@@ -817,159 +858,199 @@ export default function AgentDetail() {
             ? <span className="text-xs text-slate-400">{hw.data.memoryModules.length} módulo(s)</span>
             : undefined}
         />
-        <StatCard
-          icon={Gauge}
-          label="MachineScore"
-          value={machineScore === null ? '—' : `${machineScore}/100`}
-          tone={machineScoreTone}
-          trend={(
-            <Tooltip
-              position="bottom"
-              delay={1200}
-              className="inline-flex items-center"
-              variant="hover-card"
-              content={(
-                <div className="space-y-1 text-left">
-                  <p>Nota calculada pela API com base na saúde geral da máquina.</p>
-                  <p>Considera telemetria e inventário disponíveis, como CPU, memória, disco e estabilidade de operação.</p>
-                  <p>Escala de 0 a 100: quanto maior, melhor.</p>
-                </div>
-              )}
-            >
-              <span className="inline-flex items-center gap-1 text-xs text-slate-400">
-                {machineScoreHint}
-                <Info className="h-3.5 w-3.5 text-slate-500" />
-              </span>
-            </Tooltip>
+        <Tooltip
+          position="bottom"
+          delay={1200}
+          className="block h-full"
+          variant="hover-card"
+          content={(
+            <div className="space-y-3 text-left">
+              <p className="text-[11px] text-slate-300">
+                O score combina CPU (50%) e RAM (50%), com baseline em 16c/32t + 64 GB = score 100.
+              </p>
+
+              <div className="grid gap-1 text-[11px] text-slate-300">
+                <p><span className="text-slate-400">CPU (50%):</span> núcleos físicos valem 1.0 e threads extras valem 0.3 cada.</p>
+                <p><span className="text-slate-400">RAM (50%):</span> progressão linear pela quantidade de GB.</p>
+              </div>
+
+              <div className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 font-mono text-[11px] text-slate-200">
+                <p>cpuRaw = cores + (threads - cores) * 0.3</p>
+                <p>cpuScore = (cpuRaw / 20.8) * 100</p>
+                <p>ramScore = (ramGB / 64) * 100</p>
+                <p>machineScore = round((cpuScore * 0.5) + (ramScore * 0.5), min=1)</p>
+              </div>
+
+              <div className="grid gap-1 text-[11px] text-slate-300">
+                <p>2c/2t + 4 GB -&gt; ~8</p>
+                <p>8c/16t + 16 GB -&gt; ~38</p>
+                <p>16c/32t + 64 GB -&gt; 100</p>
+                <p>32c/64t + 128 GB -&gt; acima de 100</p>
+              </div>
+
+              <p className="text-[11px] text-slate-400">
+                Sem teto: quanto mais recurso, maior o MachineScore.
+              </p>
+            </div>
           )}
-        />
-        <Card className="border border-cyan-500/20 bg-gradient-to-br from-cyan-500/10 via-slate-900/30 to-slate-900/20 p-4">
-          <div className="mb-3 flex items-center gap-2">
-            <span className="rounded-md bg-cyan-400/15 p-1.5 text-cyan-300">
-              <Tags className="h-4 w-4" />
-            </span>
-            <div>
-              <p className="text-xs uppercase tracking-[0.12em] text-cyan-200/80">Labels</p>
-              <p className="text-xs text-slate-400">Automáticas por regras • Manuais</p>
+        >
+          <StatCard
+            icon={Gauge}
+            label="MachineScore"
+            value={machineScore === null ? '—' : machineScore}
+            tone={machineScoreTone}
+            trend={<span className="text-xs text-slate-400">{machineScoreHint}</span>}
+          />
+        </Tooltip>
+        <Tooltip
+          position="bottom"
+          delay={1200}
+          className="block h-full"
+          variant="hover-card"
+          content={(
+            <div className="space-y-2 text-left text-[11px] text-slate-300">
+              <p>Labels do agente: automáticas por regras e manuais.</p>
+              {isLoadingLabels ? (
+                <p>Carregando labels...</p>
+              ) : labelsError ? (
+                <p>{labelsError}</p>
+              ) : (
+                <>
+                  <p><span className="text-slate-400">Total:</span> {allLabels.length}</p>
+                  <p><span className="text-slate-400">Automáticas:</span> {automaticLabelsCount}</p>
+                  <p><span className="text-slate-400">Manuais:</span> {manualLabelsCount}</p>
+                  <p className="text-slate-400">Use o botão + para vincular labels manuais existentes.</p>
+                </>
+              )}
+            </div>
+          )}
+        >
+          <Card className="h-full border border-cyan-500/20 bg-gradient-to-br from-cyan-500/10 via-slate-900/30 to-slate-900/20 p-4">
+            <div className="relative mb-3 flex items-center" ref={labelPickerRef}>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-8 w-8 shrink-0 p-0"
+                title="Vincular label manual existente"
+                aria-label="Adicionar label manual"
+                onClick={() => {
+                  setLabelPickerQuery('');
+                  setShowLabelPicker(prev => !prev);
+                }}
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
+
+              {showLabelPicker ? (
+                <div className="absolute left-0 top-full z-50 mt-1 w-72 rounded-xl border border-white/10 bg-slate-900 p-2 shadow-xl">
+                  <Input
+                    placeholder="Filtrar labels..."
+                    value={labelPickerQuery}
+                    onChange={event => setLabelPickerQuery(event.target.value)}
+                    className="mb-2"
+                    autoFocus
+                  />
+                  <div className="max-h-48 overflow-y-auto space-y-1">
+                    {distinctLabels
+                      .filter(l => l.toLowerCase().includes(labelPickerQuery.toLowerCase()))
+                      .map(l => {
+                        const alreadyHas = allLabels.some(
+                          al => al.label.toLowerCase() === l.toLowerCase(),
+                        );
+                        return (
+                          <button
+                            key={l}
+                            disabled={alreadyHas || isAddingManualLabel}
+                            className={`w-full rounded-lg px-3 py-2 text-left text-sm transition-colors ${
+                              alreadyHas
+                                ? 'cursor-not-allowed text-slate-600'
+                                : 'text-slate-200 hover:bg-white/10'
+                            }`}
+                            onClick={() => {
+                              if (alreadyHas || !id) return;
+                              void handleAddManualLabel(l);
+                              setShowLabelPicker(false);
+                              setLabelPickerQuery('');
+                            }}
+                          >
+                            {l}
+                            {alreadyHas ? (
+                              <span className="ml-2 text-xs text-slate-600">(já vinculada)</span>
+                            ) : null}
+                          </button>
+                        );
+                      })}
+                    {distinctLabels.length === 0 ? (
+                      <p className="px-3 py-2 text-xs text-slate-500">
+                        Nenhuma label cadastrada. Crie uma regra com modo Manual em Labels Automáticas.
+                      </p>
+                    ) : null}
+                    {distinctLabels.filter(l => l.toLowerCase().includes(labelPickerQuery.toLowerCase())).length === 0 ? (
+                      <p className="px-3 py-2 text-xs text-slate-500">Nenhuma label encontrada.</p>
+                    ) : null}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+
+            {isLoadingLabels ? (
+              <div className="flex flex-wrap gap-2">
+                {Array.from({ length: 4 }).map((_, idx) => (
+                  <span key={idx} className="h-6 w-20 animate-pulse rounded-full bg-white/10" />
+                ))}
+              </div>
+            ) : labelsError ? (
+              <p className="text-sm text-danger">{labelsError}</p>
+            ) : allLabels.length > 0 ? (
+              <div className="max-h-[100px] overflow-y-auto pr-1">
+                <div className="flex flex-wrap gap-2">
+                  {allLabels.map(item => (
+                    <Badge
+                      key={item.id}
+                      color={item.sourceType === AgentLabelSourceType.Manual ? 'slate' : 'accent'}
+                      className="group relative"
+                    >
+                      <span>{item.label}</span>
+                      {item.sourceType === AgentLabelSourceType.Manual ? (
+                        <button
+                          className="ml-1.5 inline-flex items-center justify-center rounded-full p-0.5 text-slate-500 transition-colors hover:bg-white/10 hover:text-danger"
+                          title="Remover label manual"
+                          onClick={() => void handleRemoveManualLabel(item.id)}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </button>
+                      ) : null}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm text-slate-400">Nenhuma label aplicada.</p>
+            )}
+          </Card>
+        </Tooltip>
+        <Tooltip
+          position="bottom"
+          delay={1200}
+          className="block h-full"
+          variant="hover-card"
+          content={(
+            <div className="space-y-2 text-left text-[11px] text-slate-300">
+              <p>Inventário de softwares instalados no agente.</p>
+              <p><span className="text-slate-400">Quantidade total:</span> {softwareTotalInstalled}</p>
+              <p><span className="text-slate-400">Última coleta:</span> {softwareLastCollectedLabel}</p>
+            </div>
+          )}
+        >
+          <div className="glass-card flex h-full items-center gap-4 rounded-xl border border-white/5 bg-surface p-5">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-success/15 ring-1 ring-white/5">
+              <AppWindow className="h-6 w-6 text-success" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-3xl font-bold text-white tabular-nums">{softwareTotalInstalled}</p>
             </div>
           </div>
-
-          {isLoadingLabels ? (
-            <div className="flex flex-wrap gap-2">
-              {Array.from({ length: 4 }).map((_, idx) => (
-                <span key={idx} className="h-6 w-20 animate-pulse rounded-full bg-white/10" />
-              ))}
-            </div>
-          ) : labelsError ? (
-            <p className="text-sm text-danger">{labelsError}</p>
-          ) : (
-            <>
-              {allLabels.length > 0 ? (
-                <div className="max-h-[86px] overflow-y-auto pr-1">
-                  <div className="flex flex-wrap gap-2">
-                    {allLabels.map(item => (
-                      <Badge
-                        key={item.id}
-                        color={item.sourceType === AgentLabelSourceType.Manual ? 'slate' : 'accent'}
-                        className="group relative"
-                      >
-                        <span>{item.label}</span>
-                        {item.sourceType === AgentLabelSourceType.Manual ? (
-                          <button
-                            className="ml-1.5 inline-flex items-center justify-center rounded-full p-0.5 text-slate-500 transition-colors hover:bg-white/10 hover:text-danger"
-                            title="Remover label manual"
-                            onClick={() => void handleRemoveManualLabel(item.id)}
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </button>
-                        ) : null}
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
-              ) : (
-                <p className="mb-3 text-sm text-slate-400">Nenhuma label aplicada.</p>
-              )}
-
-              <div className="mt-3 flex items-center gap-2 relative" ref={labelPickerRef}>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="shrink-0"
-                  title="Vincular label manual existente"
-                  onClick={() => {
-                    setLabelPickerQuery('');
-                    setShowLabelPicker(prev => !prev);
-                  }}
-                >
-                  <Plus className="h-4 w-4" />
-                  Label
-                </Button>
-
-                {showLabelPicker ? (
-                  <div className="absolute left-0 top-full z-50 mt-1 w-72 rounded-xl border border-white/10 bg-slate-900 p-2 shadow-xl">
-                    <Input
-                      placeholder="Filtrar labels..."
-                      value={labelPickerQuery}
-                      onChange={event => setLabelPickerQuery(event.target.value)}
-                      className="mb-2"
-                      autoFocus
-                    />
-                    <div className="max-h-48 overflow-y-auto space-y-1">
-                      {distinctLabels
-                        .filter(l => l.toLowerCase().includes(labelPickerQuery.toLowerCase()))
-                        .map(l => {
-                          const alreadyHas = allLabels.some(
-                            al => al.label.toLowerCase() === l.toLowerCase(),
-                          );
-                          return (
-                            <button
-                              key={l}
-                              disabled={alreadyHas || isAddingManualLabel}
-                              className={`w-full rounded-lg px-3 py-2 text-left text-sm transition-colors ${
-                                alreadyHas
-                                  ? 'cursor-not-allowed text-slate-600'
-                                  : 'text-slate-200 hover:bg-white/10'
-                              }`}
-                              onClick={() => {
-                                if (alreadyHas || !id) return;
-                                void handleAddManualLabel(l);
-                                setShowLabelPicker(false);
-                                setLabelPickerQuery('');
-                              }}
-                            >
-                              {l}
-                              {alreadyHas ? (
-                                <span className="ml-2 text-xs text-slate-600">(já vinculada)</span>
-                              ) : null}
-                            </button>
-                          );
-                        })}
-                      {distinctLabels.length === 0 ? (
-                        <p className="px-3 py-2 text-xs text-slate-500">
-                          Nenhuma label cadastrada. Crie uma regra com modo Manual em Labels Automáticas.
-                        </p>
-                      ) : null}
-                      {distinctLabels.filter(l => l.toLowerCase().includes(labelPickerQuery.toLowerCase())).length ===
-                      0 ? (
-                        <p className="px-3 py-2 text-xs text-slate-500">Nenhuma label encontrada.</p>
-                      ) : null}
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-            </>
-          )}
-        </Card>
-        <StatCard
-          icon={AppWindow}
-          label="Softwares instalados"
-          value={softwareSnapshot.isLoading ? '—' : (softwareSnapshot.data?.totalInstalled ?? 0)}
-          tone="success"
-          trend={softwareSnapshot.data?.lastCollectedAt
-            ? <span className="text-xs text-slate-400">Coletado {new Date(softwareSnapshot.data.lastCollectedAt).toLocaleDateString('pt-BR')}</span>
-            : undefined}
-        />
+        </Tooltip>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">

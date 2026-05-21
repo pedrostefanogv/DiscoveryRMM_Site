@@ -14,6 +14,7 @@ import type {
 const KEYS = {
   all: ["knowledge"] as const,
   list: (params?: KnowledgeListQuery) => [...KEYS.all, "list", params] as const,
+  allVisible: (params?: { cursor?: string; limit?: number; status?: string; category?: string }) => [...KEYS.all, "all-visible", params] as const,
   detail: (id: string) => [...KEYS.all, "detail", id] as const,
   versions: (id: string) => [...KEYS.all, "versions", id] as const,
   version: (id: string, versionNumber: number) =>
@@ -32,6 +33,30 @@ export function useKnowledgeArticles(params?: KnowledgeListQuery) {
   return useQuery({
     queryKey: KEYS.list(params),
     queryFn: () => knowledgeApi.list(params),
+  });
+}
+
+export function useKnowledgeAllArticles(params?: {
+  cursor?: string;
+  limit?: number;
+  status?: string;
+  category?: string;
+}) {
+  return useQuery({
+    queryKey: KEYS.allVisible({
+      cursor: params?.cursor,
+      limit: params?.limit,
+      status: params?.status,
+      category: params?.category,
+    }),
+    queryFn: () =>
+      knowledgeApi.listAllVisible({
+        scopeMode: 'all-visible',
+        cursor: params?.cursor,
+        limit: params?.limit,
+        status: params?.status as import('@/api').ArticleStatus | undefined,
+        category: params?.category,
+      }),
   });
 }
 

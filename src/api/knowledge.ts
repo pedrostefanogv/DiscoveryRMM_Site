@@ -1,5 +1,6 @@
 ﻿import { api } from "./client";
 import type {
+  ArticleListPage,
   ArticleVersion,
   CreateKnowledgeArticleRequest,
   KbLinkFeedbackRequest,
@@ -19,6 +20,12 @@ const BASE = "/api/v1/knowledge";
 export const knowledgeApi = {
   list: (params?: KnowledgeListQuery) =>
     api.get<KnowledgeArticle[]>(
+      BASE,
+      (params ?? {}) as unknown as Record<string, unknown>,
+    ),
+
+  listAllVisible: (params?: KnowledgeListQuery) =>
+    api.get<ArticleListPage>(
       BASE,
       (params ?? {}) as unknown as Record<string, unknown>,
     ),

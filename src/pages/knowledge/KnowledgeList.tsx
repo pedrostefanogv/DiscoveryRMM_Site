@@ -11,8 +11,8 @@ import {
   Select,
 } from '@/components/ui';
 import type { Column } from '@/components/ui';
-import type { ArticleStatus, KnowledgeArticle, KnowledgeSearchMode, PublishArticleRequest } from '@/api';
-import { useClients, useDeleteKnowledgeArticle, useDepartments, useKnowledgeArticles, useKnowledgeSearch, usePublishKnowledgeArticle, useSites, useUnpublishKnowledgeArticle } from '@/hooks';
+import type { ArticleStatus, ArticleListPage, KnowledgeArticle, KnowledgeSearchMode, PublishArticleRequest } from '@/api';
+import { useClients, useDeleteKnowledgeArticle, useDepartments, useKnowledgeAllArticles, useKnowledgeArticles, useKnowledgeSearch, usePublishKnowledgeArticle, useSites, useUnpublishKnowledgeArticle } from '@/hooks';
 import { useAuthorization } from '@/auth/authorization';
 import { BookOpen, ChevronDown, ChevronUp, Eye, Filter, Pencil, Plus, Search, Send, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -75,6 +75,11 @@ function normalizeCategory(category: string | null | undefined) {
 }
 
 function scopeLabel(article: KnowledgeArticle): string {
+  if (article.scopeOrigin) {
+    if (article.scopeOrigin === 'global') return 'Global';
+    if (article.scopeOrigin === 'client') return 'Cliente';
+    return 'Site';
+  }
   if (article.scope) return article.scope === 'Global' ? 'Global' : article.scope === 'Client' ? 'Cliente' : 'Site';
   if (article.clientId && article.siteId) return 'Site';
   if (article.clientId) return 'Cliente';
@@ -120,17 +125,41 @@ export default function KnowledgeList() {
   const [advancedFiltersExpanded, setAdvancedFiltersExpanded] = useState(false);
   const [contextMenu, setContextMenu] = useState<ContextMenuState>(null);
   const contextMenuRef = useRef<HTMLDivElement | null>(null);
+  const [cursorStack, setCursorStack] = useState<Array<string | undefined>>([undefined]);
+
+  const isAllVisible = !clientId;
 
   const sites = useSites(clientId);
   const departments = useDepartments({ clientId: clientId || undefined, activeOnly: true });
 
-  const listQuery = useKnowledgeArticles({
+  const currentCursor =
+    cursorStack.length > 0 ? cursorStack[cursorStack.length - 1] : undefined;
+
+  const allVisibleParams = useMemo(() => ({
+    cursor: currentCursor,
+    limit: pageSize,
+    status: statusFilter || undefined,
+    category: category || undefined,
+  }), [currentCursor, pageSize, statusFilter, category]);
+
+  const listQueryLegacy = useKnowledgeArticles({
     clientId: clientId || undefined,
     siteId: siteId || undefined,
     category: category || undefined,
     status: statusFilter || undefined,
     departmentId: departmentId || undefined,
   });
+
+  const listQueryAllVisible = useKnowledgeAllArticles(allVisibleParams);
+
+  const listQuery = isAllVisible ? listQueryAllVisible : listQueryLegacy;
+  const listPage: ArticleListPage | undefined =
+    isAllVisible
+      ? (listQueryAllVisible.data as ArticleListPage | undefined)
+      : undefined;
+  const listItems: KnowledgeArticle[] = isAllVisible
+    ? (listPage?.items ?? [])
+    : ((listQueryLegacy.data as KnowledgeArticle[]) ?? []);
 
   const searchQuery = useKnowledgeSearch(
     {
@@ -140,6 +169,7 @@ export default function KnowledgeList() {
       departmentId: departmentId || undefined,
       mode: searchMode,
       maxResults,
+      scopeMode: isAllVisible ? 'all-visible' : undefined,
     },
     query.trim().length > 0,
   );
@@ -208,15 +238,15 @@ export default function KnowledgeList() {
   }, [contextMenu]);
 
   const categoryOptions = useMemo(() => {
-    const source = listQuery.data ?? [];
+    const source = listItems;
     const unique = Array.from(new Set(source.map((item) => normalizeCategory(item.category))));
     unique.sort((a, b) => a.localeCompare(b));
 
     return [{ value: '', label: 'Todas categorias' }, ...unique.map((name) => ({ value: name, label: name }))];
-  }, [listQuery.data]);
+  }, [listItems]);
 
   const clientOptions = [
-    { value: '', label: 'Global (todos os clientes e sites)' },
+    { value: '', label: 'Todos os artigos que posso acessar (multi-escopo)' },
     ...(clients.data ?? []).map((c) => ({ value: c.id, label: c.name })),
   ];
 
@@ -431,7 +461,9 @@ export default function KnowledgeList() {
   ];
 
   const sortedArticles = useMemo(() => {
-    const items = [...(listQuery.data ?? [])];
+    const items = [...listItems];
+
+    if (isAllVisible) return items; // Server-side ordering
 
     const compare = (a: KnowledgeArticle, b: KnowledgeArticle) => {
       if (sortBy === 'updatedAt') {
@@ -459,19 +491,24 @@ export default function KnowledgeList() {
     });
 
     return items;
-  }, [listQuery.data, sortBy, sortDirection]);
+  }, [listItems, sortBy, sortDirection, isAllVisible]);
 
-  const totalItems = sortedArticles.length;
-  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
-  const currentPage = Math.min(page, totalPages);
-  const pagedArticles = useMemo(() => {
-    const start = (currentPage - 1) * pageSize;
-    return sortedArticles.slice(start, start + pageSize);
-  }, [currentPage, pageSize, sortedArticles]);
+  const totalItems = isAllVisible ? (listPage?.count ?? listItems.length) : sortedArticles.length;
+  const totalPages = isAllVisible
+    ? (listPage?.hasMore ? cursorStack.length + 1 : cursorStack.length || 1)
+    : Math.max(1, Math.ceil(totalItems / pageSize));
+  const currentPage = isAllVisible ? cursorStack.length : Math.min(page, totalPages);
+  const pagedArticles = isAllVisible
+    ? listItems
+    : useMemo(() => {
+        const start = (Math.min(page, totalPages) - 1) * pageSize;
+        return sortedArticles.slice(start, start + pageSize);
+      }, [page, pageSize, sortedArticles, totalPages]);
 
   useEffect(() => {
     setPage(1);
-  }, [clientId, siteId, category, statusFilter, departmentId, sortBy, sortDirection, pageSize]);
+    setCursorStack([undefined]);
+  }, [clientId, siteId, category, statusFilter, departmentId, pageSize]);
 
   return (
     <div className="space-y-6">
@@ -614,7 +651,7 @@ export default function KnowledgeList() {
 
             {!clientId && (
               <p className="text-xs text-slate-400">
-                Cliente em Global exibe artigos de todos os clientes e sites visíveis para seu perfil.
+                Modo multi-escopo ativo: exibe todos os artigos globais e de clientes/sites que seu perfil pode acessar.
               </p>
             )}
 
@@ -690,9 +727,9 @@ export default function KnowledgeList() {
       </Card>
 
       <Card padding={false}>
-        {listQuery.isLoading ? (
+        {(listQueryLegacy.isLoading || listQueryAllVisible.isLoading) ? (
           <Loading message="Carregando artigos..." />
-        ) : listQuery.isError ? (
+        ) : (listQueryLegacy.isError || listQueryAllVisible.isError) ? (
           <ErrorDisplay message="Falha ao carregar artigos." onRetry={() => listQuery.refetch()} />
         ) : (
           <div>
@@ -710,22 +747,51 @@ export default function KnowledgeList() {
             />
             <div className="flex items-center justify-between border-t border-white/10 px-4 py-3">
               <p className="text-xs text-slate-400">
-                {totalItems} artigo(s) • página {currentPage} de {totalPages}
+                {totalItems} artigo(s) • página {currentPage}
+                {isAllVisible && listPage?.hasMore
+                  ? ` • mais itens disponíveis`
+                  : !isAllVisible
+                    ? ` de ${totalPages}`
+                    : ''}
               </p>
               <div className="flex gap-2">
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => setPage((prev) => Math.max(1, prev - 1))}
-                  disabled={currentPage === 1}
+                  onClick={() => {
+                    if (isAllVisible) {
+                      setCursorStack((prev) => {
+                        if (prev.length <= 1) return prev;
+                        return prev.slice(0, -1);
+                      });
+                    } else {
+                      setPage((prev) => Math.max(1, prev - 1));
+                    }
+                  }}
+                  disabled={
+                    isAllVisible
+                      ? cursorStack.length <= 1
+                      : currentPage === 1
+                  }
                 >
                   Anterior
                 </Button>
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
-                  disabled={currentPage === totalPages}
+                  onClick={() => {
+                    if (isAllVisible && listPage?.nextCursor) {
+                      setCursorStack((prev) => [...prev, listPage.nextCursor!]);
+                    } else if (!isAllVisible) {
+                      setPage((prev) => Math.min(totalPages, prev + 1));
+                    }
+                  }}
+                  disabled={
+                    isAllVisible
+                      ? (!listPage?.hasMore || !listPage?.nextCursor || listQueryAllVisible.isFetching)
+                      : (currentPage === totalPages || listQueryLegacy.isFetching)
+                  }
+                  loading={listQueryAllVisible.isFetching}
                 >
                   Próxima
                 </Button>
