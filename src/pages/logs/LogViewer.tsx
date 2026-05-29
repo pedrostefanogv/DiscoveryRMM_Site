@@ -1,9 +1,9 @@
-import { useState, useMemo } from 'react';
-import { AlertTriangle, Info, AlertCircle, Bug, Shield, RefreshCw, ChevronDown, ChevronUp, Clipboard, Check } from 'lucide-react';
-import { useLogScopeOptions, useLogSummary, useLogsPage } from '@/hooks/useLogs';
-import { Card, CardHeader, Badge, Loading, ErrorDisplay, Select, Input, Button } from '@/components/ui';
+import { useMemo, useState } from 'react';
+import { AlertCircle, AlertTriangle, Bug, Check, ChevronDown, ChevronUp, Clipboard, Info, RefreshCw, Shield } from 'lucide-react';
 import { LogLevel, LogSource, LogType } from '@/api';
-import type { LogsQuery, LogEntry } from '@/api';
+import type { LogEntry, LogsQuery } from '@/api';
+import { useLogScopeOptions, useLogSummary, useLogsPage } from '@/hooks/useLogs';
+import { Badge, Button, Card, CardHeader, ErrorDisplay, Input, Loading, PageHeader, Select } from '@/components/ui';
 
 const initialFilters: LogsQuery = {
   limit: 50,
@@ -56,6 +56,46 @@ const periodLabels: Record<string, string> = {
   '30d': 'Últimos 30 dias',
 };
 
+const advancedFilterKeys = new Set<keyof LogsQuery>([
+  'clientId',
+  'siteId',
+  'agentId',
+  'type',
+  'traceId',
+  'correlationId',
+  'requestPath',
+  'from',
+  'to',
+  'limit',
+]);
+
+const filterPresets: Array<{ id: string; label: string; filters: LogsQuery; tone: 'slate' | 'primary' | 'warning' | 'danger' }> = [
+  {
+    id: 'recent-errors',
+    label: 'Erros 1h',
+    filters: { period: '1h', level: LogLevel.Error, limit: 50 },
+    tone: 'danger',
+  },
+  {
+    id: 'auth-failures',
+    label: 'Falhas auth 24h',
+    filters: { period: '24h', type: LogType.Auth, level: LogLevel.Error, limit: 50 },
+    tone: 'warning',
+  },
+  {
+    id: 'nats-watch',
+    label: 'NATS 24h',
+    filters: { period: '24h', source: LogSource.Nats, limit: 50 },
+    tone: 'primary',
+  },
+  {
+    id: 'warn-overview',
+    label: 'Warn 24h',
+    filters: { period: '24h', level: LogLevel.Warn, limit: 50 },
+    tone: 'slate',
+  },
+];
+
 function normalizeFilters(filters: LogsQuery): LogsQuery {
   return {
     clientId: filters.clientId || undefined,
@@ -78,6 +118,7 @@ function normalizeFilters(filters: LogsQuery): LogsQuery {
 
 function parseLogData(dataJson: unknown): Record<string, unknown> | null {
   if (!dataJson) return null;
+
   if (typeof dataJson === 'string') {
     try {
       return JSON.parse(dataJson) as Record<string, unknown>;
@@ -101,11 +142,12 @@ function getNumberValue(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
-// buildSiteLookup/buildAgentLookup now inline via useMemo inside component
-
 export default function LogViewer() {
   const [draftFilters, setDraftFilters] = useState<LogsQuery>(initialFilters);
   const [appliedFilters, setAppliedFilters] = useState<LogsQuery>(initialFilters);
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const [showDetailedAnalytics, setShowDetailedAnalytics] = useState(false);
+  const [compactMode, setCompactMode] = useState(false);
 
   const scopeOptions = useLogScopeOptions();
   const logs = useLogsPage(appliedFilters);
@@ -164,6 +206,7 @@ export default function LogViewer() {
 
   const activeFilterChips = useMemo(() => {
     const chips: Array<{ key: keyof LogsQuery; label: string }> = [];
+
     if (appliedFilters.clientId) {
       const clientName = clientMap.get(appliedFilters.clientId)?.name ?? appliedFilters.clientId;
       chips.push({ key: 'clientId', label: `Cliente: ${clientName}` });
@@ -193,10 +236,29 @@ export default function LogViewer() {
     if (appliedFilters.correlationId) chips.push({ key: 'correlationId', label: `Corr: ${appliedFilters.correlationId}` });
     if (appliedFilters.requestPath) chips.push({ key: 'requestPath', label: `Path: ${appliedFilters.requestPath}` });
     if (appliedFilters.statusCode !== undefined) chips.push({ key: 'statusCode', label: `HTTP: ${appliedFilters.statusCode}` });
+    if (appliedFilters.limit && appliedFilters.limit !== 50) chips.push({ key: 'limit', label: `Limite: ${appliedFilters.limit}` });
     if (appliedFilters.from) chips.push({ key: 'from', label: `De: ${appliedFilters.from}` });
     if (appliedFilters.to) chips.push({ key: 'to', label: `Até: ${appliedFilters.to}` });
+
     return chips;
   }, [appliedFilters, clientMap, siteMap, agentMap]);
+
+  const advancedActiveCount = useMemo(
+    () => activeFilterChips.filter(chip => advancedFilterKeys.has(chip.key)).length,
+    [activeFilterChips],
+  );
+
+  const quickStats = useMemo(() => {
+    if (!summary.data) {
+      return { criticalErrors: 0, warn: 0 };
+    }
+
+    const levels = new Map(summary.data.levels.map(item => [item.key.toLowerCase(), item.count]));
+    return {
+      criticalErrors: (levels.get('error') ?? 0) + (levels.get('fatal') ?? 0),
+      warn: levels.get('warn') ?? 0,
+    };
+  }, [summary.data]);
 
   function setTextFilter<K extends keyof LogsQuery>(key: K, value: string) {
     setDraftFilters(current => ({ ...current, [key]: value || undefined }));
@@ -207,13 +269,26 @@ export default function LogViewer() {
   }
 
   function clearAppliedFilter(key: keyof LogsQuery) {
-    setDraftFilters(current => ({ ...current, [key]: undefined }));
-    setAppliedFilters(current => ({ ...current, [key]: undefined }));
+    const nextValue = key === 'limit' ? 50 : undefined;
+    setDraftFilters(current => ({ ...current, [key]: nextValue } as LogsQuery));
+    setAppliedFilters(current => ({ ...current, [key]: nextValue } as LogsQuery));
   }
 
   function resetFilters() {
     setDraftFilters(initialFilters);
     setAppliedFilters(initialFilters);
+    setShowAdvancedFilters(false);
+  }
+
+  function refreshData() {
+    logs.refetch();
+    summary.refetch();
+  }
+
+  function applyPreset(preset: LogsQuery) {
+    const next = normalizeFilters({ ...initialFilters, ...preset });
+    setDraftFilters(next);
+    setAppliedFilters(next);
   }
 
   function handleClientChange(value: string) {
@@ -248,39 +323,63 @@ export default function LogViewer() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-white">Logs</h1>
-        <p className="text-sm text-slate-400">Consulta operacional com escopo, filtros avançados e paginação por cursor</p>
-      </div>
+      <PageHeader
+        title="Logs"
+        description="Monitoramento operacional com foco em triagem rápida e investigação progressiva"
+      >
+        <Button variant="ghost" onClick={refreshData}>
+          <RefreshCw className="h-4 w-4" />
+          Atualizar
+        </Button>
+      </PageHeader>
 
-      <Card>
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="text-sm text-slate-400">
-            {summary.data ? `${summary.data.total} eventos no filtro atual` : `${allLogs.length} eventos carregados`}
+      <Card className="border-primary/30 bg-gradient-to-r from-primary/15 via-slate-900/60 to-slate-900/30">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="text-xs uppercase tracking-wide text-primary/90">Visão atual</p>
+            <p className="mt-2 text-3xl font-semibold text-white">{summary.data ? summary.data.total : allLogs.length}</p>
+            <p className="mt-1 text-sm text-slate-300">
+              {summary.data ? 'eventos no filtro aplicado' : 'eventos carregados no momento'}
+            </p>
           </div>
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" onClick={() => { logs.refetch(); summary.refetch(); }}>
-              <RefreshCw className="h-4 w-4" />
-              Atualizar
-            </Button>
-            <Button variant="secondary" onClick={applyFilters}>Reaplicar</Button>
+          <div className="flex flex-col items-start gap-2 text-xs text-slate-400 sm:items-end">
+            <Badge color={logs.isFetching || summary.isFetching ? 'warning' : 'accent'}>
+              {logs.isFetching || summary.isFetching ? 'Atualizando dados...' : 'Dados sincronizados'}
+            </Badge>
+            <span>{firstPage ? `Lote ${allLogs.length}${firstPage.hasMore ? '+' : ''}` : 'Sem paginação ativa'}</span>
           </div>
         </div>
       </Card>
 
       {summary.data ? (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <StatCard title="Total no filtro" value={String(summary.data.total)} hint={summary.data.period ? `Janela ${summary.data.period}` : 'Período manual'} />
-          <StatCard title="Nível líder" value={summary.data.levels[0]?.key ?? 'N/A'} hint={summary.data.levels[0] ? `${summary.data.levels[0].count} ocorrências` : 'Sem dados'} />
-          <StatCard title="Fonte líder" value={summary.data.sources[0]?.key ?? 'N/A'} hint={summary.data.sources[0] ? `${summary.data.sources[0].count} ocorrências` : 'Sem dados'} />
-          <StatCard title="Tipo líder" value={summary.data.types[0]?.key ?? 'N/A'} hint={summary.data.types[0] ? `${summary.data.types[0].count} ocorrências` : 'Sem dados'} />
+          <StatCard
+            title="Erros críticos"
+            value={String(quickStats.criticalErrors)}
+            hint="Ocorrências Error + Fatal"
+          />
+          <StatCard
+            title="Alertas Warn"
+            value={String(quickStats.warn)}
+            hint="Eventos que pedem atenção"
+          />
+          <StatCard
+            title="Fontes ativas"
+            value={String(summary.data.sources.length)}
+            hint={summary.data.sources[0] ? `Líder: ${summary.data.sources[0].key}` : 'Sem fonte predominante'}
+          />
+          <StatCard
+            title="Tipos ativos"
+            value={String(summary.data.types.length)}
+            hint={summary.data.types[0] ? `Líder: ${summary.data.types[0].key}` : 'Sem tipo predominante'}
+          />
         </div>
       ) : null}
 
       <Card>
         <CardHeader
           title="Filtros"
-          subtitle="Os selects de cliente, site e agente já respeitam o escopo retornado pelo backend."
+          subtitle="Filtros rápidos para o dia a dia e painel avançado para investigações profundas."
           action={
             <div className="flex items-center gap-2">
               <Button variant="ghost" onClick={resetFilters}>Limpar</Button>
@@ -288,50 +387,14 @@ export default function LogViewer() {
             </div>
           }
         />
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <Select
-            label="Cliente"
-            options={[{ value: '', label: 'Todos os clientes' }, ...(options?.clients ?? []).map(client => ({ value: client.id, label: client.name }))]}
-            value={draftFilters.clientId ?? ''}
-            onChange={e => handleClientChange(e.target.value)}
-            disabled={scopeOptions.isLoading}
-          />
-          <Select
-            label="Site"
-            options={[{ value: '', label: 'Todos os sites' }, ...visibleSites.map(site => ({ value: site.id, label: site.name }))]}
-            value={draftFilters.siteId ?? ''}
-            onChange={e => handleSiteChange(e.target.value)}
-            disabled={scopeOptions.isLoading}
-          />
-          <Select
-            label="Agente"
-            options={[{ value: '', label: 'Todos os agentes' }, ...visibleAgents.map(agent => ({ value: agent.id, label: agent.label }))]}
-            value={draftFilters.agentId ?? ''}
-            onChange={e => handleAgentChange(e.target.value)}
-            disabled={scopeOptions.isLoading}
-          />
+
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
           <Select
             label="Período"
             options={periodOptions}
             value={draftFilters.period ?? ''}
             onChange={e => setTextFilter('period', e.target.value)}
           />
-          {draftFilters.period ? null : (
-            <>
-              <Input
-                label="De"
-                type="datetime-local"
-                value={draftFilters.from ?? ''}
-                onChange={e => setTextFilter('from', e.target.value)}
-              />
-              <Input
-                label="Até"
-                type="datetime-local"
-                value={draftFilters.to ?? ''}
-                onChange={e => setTextFilter('to', e.target.value)}
-              />
-            </>
-          )}
           <Select
             label="Nível"
             options={levelOptions}
@@ -344,43 +407,12 @@ export default function LogViewer() {
             value={draftFilters.source !== undefined ? String(draftFilters.source) : ''}
             onChange={e => setDraftFilters(f => ({ ...f, source: e.target.value ? Number(e.target.value) as LogSource : undefined }))}
           />
-          <Select
-            label="Tipo"
-            options={typeOptions}
-            value={draftFilters.type !== undefined ? String(draftFilters.type) : ''}
-            onChange={e => setDraftFilters(f => ({ ...f, type: e.target.value ? Number(e.target.value) as LogType : undefined }))}
-          />
-          <Input
-            label="Limite"
-            type="number"
-            min={1}
-            max={200}
-            value={draftFilters.limit ?? 50}
-            onChange={e => setDraftFilters(f => ({ ...f, limit: Number(e.target.value) || 50 }))}
-          />
           <Input
             label="Busca textual"
             placeholder="Mensagem ou conteúdo do DataJson"
             value={draftFilters.search ?? ''}
             onChange={e => setTextFilter('search', e.target.value)}
-          />
-          <Input
-            label="Trace ID"
-            placeholder="trace-123"
-            value={draftFilters.traceId ?? ''}
-            onChange={e => setTextFilter('traceId', e.target.value)}
-          />
-          <Input
-            label="Correlation ID"
-            placeholder="corr-55"
-            value={draftFilters.correlationId ?? ''}
-            onChange={e => setTextFilter('correlationId', e.target.value)}
-          />
-          <Input
-            label="Request Path"
-            placeholder="/api/v1/auth/refresh"
-            value={draftFilters.requestPath ?? ''}
-            onChange={e => setTextFilter('requestPath', e.target.value)}
+            className="xl:col-span-2"
           />
           <Input
             label="Status Code"
@@ -390,6 +422,117 @@ export default function LogViewer() {
             onChange={e => setDraftFilters(f => ({ ...f, statusCode: e.target.value ? Number(e.target.value) : undefined }))}
           />
         </div>
+
+        <div className="mt-4 rounded-xl border border-white/10 bg-white/5 p-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="text-xs uppercase tracking-wide text-slate-400">Atalhos operacionais</div>
+            <Button variant="ghost" size="sm" onClick={() => applyPreset(initialFilters)}>
+              Visão padrão
+            </Button>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {filterPresets.map(preset => (
+              <button
+                key={preset.id}
+                type="button"
+                onClick={() => applyPreset(preset.filters)}
+                className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-slate-900/50 px-3 py-1.5 text-xs text-slate-300 transition-colors hover:bg-slate-800/80"
+              >
+                <Badge color={preset.tone}>{preset.label}</Badge>
+                <span>Aplicar</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-4">
+          <button
+            type="button"
+            className="inline-flex items-center gap-2 text-sm text-slate-300 hover:text-white"
+            onClick={() => setShowAdvancedFilters(current => !current)}
+            aria-expanded={showAdvancedFilters}
+          >
+            {showAdvancedFilters ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            <span>{showAdvancedFilters ? 'Ocultar filtros avançados' : 'Mostrar filtros avançados'}</span>
+          </button>
+          <span className="text-xs text-slate-500">
+            {advancedActiveCount > 0 ? `${advancedActiveCount} filtros avançados ativos` : 'Nenhum filtro avançado ativo'}
+          </span>
+        </div>
+
+        {showAdvancedFilters ? (
+          <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <Select
+              label="Cliente"
+              options={[{ value: '', label: 'Todos os clientes' }, ...(options?.clients ?? []).map(client => ({ value: client.id, label: client.name }))]}
+              value={draftFilters.clientId ?? ''}
+              onChange={e => handleClientChange(e.target.value)}
+              disabled={scopeOptions.isLoading}
+            />
+            <Select
+              label="Site"
+              options={[{ value: '', label: 'Todos os sites' }, ...visibleSites.map(site => ({ value: site.id, label: site.name }))]}
+              value={draftFilters.siteId ?? ''}
+              onChange={e => handleSiteChange(e.target.value)}
+              disabled={scopeOptions.isLoading}
+            />
+            <Select
+              label="Agente"
+              options={[{ value: '', label: 'Todos os agentes' }, ...visibleAgents.map(agent => ({ value: agent.id, label: agent.label }))]}
+              value={draftFilters.agentId ?? ''}
+              onChange={e => handleAgentChange(e.target.value)}
+              disabled={scopeOptions.isLoading}
+            />
+            <Select
+              label="Tipo"
+              options={typeOptions}
+              value={draftFilters.type !== undefined ? String(draftFilters.type) : ''}
+              onChange={e => setDraftFilters(f => ({ ...f, type: e.target.value ? Number(e.target.value) as LogType : undefined }))}
+            />
+            <Input
+              label="Limite"
+              type="number"
+              min={1}
+              max={200}
+              value={draftFilters.limit ?? 50}
+              onChange={e => setDraftFilters(f => ({ ...f, limit: Number(e.target.value) || 50 }))}
+            />
+            <Input
+              label="Trace ID"
+              placeholder="trace-123"
+              value={draftFilters.traceId ?? ''}
+              onChange={e => setTextFilter('traceId', e.target.value)}
+            />
+            <Input
+              label="Correlation ID"
+              placeholder="corr-55"
+              value={draftFilters.correlationId ?? ''}
+              onChange={e => setTextFilter('correlationId', e.target.value)}
+            />
+            <Input
+              label="Request Path"
+              placeholder="/api/v1/auth/refresh"
+              value={draftFilters.requestPath ?? ''}
+              onChange={e => setTextFilter('requestPath', e.target.value)}
+            />
+            {draftFilters.period ? null : (
+              <>
+                <Input
+                  label="De"
+                  type="datetime-local"
+                  value={draftFilters.from ?? ''}
+                  onChange={e => setTextFilter('from', e.target.value)}
+                />
+                <Input
+                  label="Até"
+                  type="datetime-local"
+                  value={draftFilters.to ?? ''}
+                  onChange={e => setTextFilter('to', e.target.value)}
+                />
+              </>
+            )}
+          </div>
+        ) : null}
       </Card>
 
       {activeFilterChips.length > 0 ? (
@@ -412,19 +555,40 @@ export default function LogViewer() {
       ) : null}
 
       {summary.data ? (
-        <div className="grid gap-4 xl:grid-cols-3">
-          <FacetCard title="Níveis" items={summary.data.levels} />
-          <FacetCard title="Fontes" items={summary.data.sources} />
-          <FacetCard title="Tipos" items={summary.data.types} />
-        </div>
-      ) : null}
-
-      {summary.data ? (
-        <div className="grid gap-4 xl:grid-cols-3">
-          <FacetCard title="Clientes (top)" items={summary.data.clients.map(item => ({ key: item.name ?? 'Desconhecido', count: item.count }))} />
-          <FacetCard title="Sites (top)" items={summary.data.sites.map(item => ({ key: item.name ?? 'Desconhecido', count: item.count }))} />
-          <FacetCard title="Agentes (top)" items={summary.data.agents.map(item => ({ key: item.name ?? 'Desconhecido', count: item.count }))} />
-        </div>
+        <Card>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 className="text-lg font-semibold text-white">Análise detalhada</h3>
+              <p className="text-sm text-slate-400">Distribuições por nível, fonte, tipo e escopo operacional.</p>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowDetailedAnalytics(current => !current)}
+            >
+              {showDetailedAnalytics ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              {showDetailedAnalytics ? 'Ocultar detalhes' : 'Exibir detalhes'}
+            </Button>
+          </div>
+          {showDetailedAnalytics ? (
+            <div className="mt-4 space-y-4">
+              <div className="grid gap-4 xl:grid-cols-3">
+                <FacetCard title="Níveis" items={summary.data.levels} />
+                <FacetCard title="Fontes" items={summary.data.sources} />
+                <FacetCard title="Tipos" items={summary.data.types} />
+              </div>
+              <div className="grid gap-4 xl:grid-cols-3">
+                <FacetCard title="Clientes (top)" items={summary.data.clients.map(item => ({ key: item.name ?? 'Desconhecido', count: item.count }))} />
+                <FacetCard title="Sites (top)" items={summary.data.sites.map(item => ({ key: item.name ?? 'Desconhecido', count: item.count }))} />
+                <FacetCard title="Agentes (top)" items={summary.data.agents.map(item => ({ key: item.name ?? 'Desconhecido', count: item.count }))} />
+              </div>
+            </div>
+          ) : (
+            <div className="mt-4 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-400">
+              Abra os detalhes somente quando precisar analisar distribuição e concentração de eventos.
+            </div>
+          )}
+        </Card>
       ) : null}
 
       {scopeOptions.isLoading && !options ? (
@@ -437,10 +601,23 @@ export default function LogViewer() {
         <ErrorDisplay onRetry={() => logs.refetch()} />
       ) : (
         <Card padding={false}>
-          <div className="flex items-center justify-between border-b border-white/10 px-4 py-3 text-sm text-slate-400">
-            <span>{summary.data ? `${summary.data.total} logs no filtro` : `${allLogs.length} logs carregados`}</span>
-            <span>{firstPage ? `Lote ${allLogs.length}${firstPage.hasMore ? '+' : ''}` : 'Sem paginação ativa'}</span>
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 px-4 py-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge color="slate">{summary.data ? `${summary.data.total} no filtro` : `${allLogs.length} carregados`}</Badge>
+              <span className="text-xs text-slate-500">
+                {firstPage?.nextCursor ? 'Cursor disponível para próxima página' : 'Fim da paginação'}
+              </span>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-slate-500">
+                {logs.isFetchingNextPage ? 'Carregando próxima página...' : 'Lista pronta para análise'}
+              </span>
+              <Button variant="ghost" size="sm" onClick={() => setCompactMode(current => !current)}>
+                {compactMode ? 'Modo confortável' : 'Modo compacto'}
+              </Button>
+            </div>
           </div>
+
           <div className="max-h-[70vh] overflow-y-auto">
             {allLogs.length === 0 ? (
               <div className="flex h-40 items-center justify-center text-sm text-slate-500">
@@ -452,6 +629,7 @@ export default function LogViewer() {
                   <LogRow
                     key={log.id}
                     log={log}
+                    compact={compactMode}
                     clientName={log.clientId ? clientMap.get(log.clientId)?.name : undefined}
                     siteName={log.siteId ? siteMap.get(log.siteId)?.name : undefined}
                     agentName={log.agentId ? agentMap.get(log.agentId)?.label : undefined}
@@ -460,6 +638,7 @@ export default function LogViewer() {
               </div>
             )}
           </div>
+
           <div className="flex items-center justify-between border-t border-white/10 px-4 py-3">
             <div className="text-sm text-slate-400">
               {firstPage?.nextCursor ? 'Cursor disponível para próxima página' : 'Fim da paginação'}
@@ -481,11 +660,13 @@ export default function LogViewer() {
 
 function LogRow({
   log,
+  compact = false,
   clientName,
   siteName,
   agentName,
 }: {
   log: LogEntry;
+  compact?: boolean;
   clientName?: string;
   siteName?: string;
   agentName?: string;
@@ -501,6 +682,17 @@ function LogRow({
   const requestPath = getStringValue(data?.path) ?? getStringValue(data?.requestPath);
   const queryString = getStringValue(data?.queryString);
   const statusCode = getNumberValue(data?.statusCode);
+  const toneClass =
+    log.level === LogLevel.Error || log.level === LogLevel.Fatal
+      ? 'border-l-danger/60'
+      : log.level === LogLevel.Warn
+        ? 'border-l-warning/60'
+        : 'border-l-primary/40';
+  const scopeLabel = [
+    clientName ? `Cliente: ${clientName}` : null,
+    siteName ? `Site: ${siteName}` : null,
+    agentName ? `Agente: ${agentName}` : null,
+  ].filter(Boolean).join(' • ');
 
   async function copyField(label: string, value: string) {
     try {
@@ -513,33 +705,40 @@ function LogRow({
   }
 
   return (
-    <div className="flex items-start gap-3 px-4 py-3 hover:bg-white/5 transition-colors">
+    <div className={`group flex items-start gap-3 border-l-2 ${compact ? 'px-3 py-2' : 'px-4 py-3'} transition-colors hover:bg-white/5 ${toneClass}`}>
       <LogIcon level={log.level} />
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
           <Badge color={lvl.color}>{lvl.label}</Badge>
           <Badge color="slate">{sourceLabels[log.source] ?? 'N/A'}</Badge>
           <Badge color="slate">{typeLabels[log.type] ?? 'N/A'}</Badge>
-          {clientName ? <Badge color="slate">Cliente: {clientName}</Badge> : null}
-          {siteName ? <Badge color="slate">Site: {siteName}</Badge> : null}
-          {agentName ? <Badge color="slate">Agente: {agentName}</Badge> : null}
           <span className="text-xs text-slate-500">
             {new Date(log.createdAt).toLocaleString('pt-BR')}
           </span>
         </div>
-        <p className="mt-1 text-sm text-slate-200">{log.message}</p>
+        <p className={`${compact ? 'mt-0.5' : 'mt-1'} text-sm font-medium text-slate-100`}>{log.message}</p>
+        {scopeLabel && !compact ? <p className="mt-1 text-xs text-slate-400">{scopeLabel}</p> : null}
+
         {(traceId || correlationId || requestPath || statusCode !== null || queryString) ? (
           <div className="mt-2 flex flex-wrap gap-2 text-xs text-slate-400">
             {statusCode !== null ? <span className="rounded-full border border-white/10 px-2 py-1">HTTP {statusCode}</span> : null}
             {requestPath ? <span className="rounded-full border border-white/10 px-2 py-1">{requestPath}</span> : null}
             {traceId ? (
-              <button type="button" onClick={() => copyField('traceId', traceId)} className="inline-flex items-center gap-1 rounded-full border border-white/10 px-2 py-1 hover:bg-white/10">
+              <button
+                type="button"
+                onClick={() => copyField('traceId', traceId)}
+                className="inline-flex items-center gap-1 rounded-full border border-white/10 px-2 py-1 transition-colors hover:bg-white/10"
+              >
                 <span>Trace: {traceId}</span>
                 {copiedField === 'traceId' ? <Check className="h-3.5 w-3.5 text-success" /> : <Clipboard className="h-3.5 w-3.5" />}
               </button>
             ) : null}
             {correlationId ? (
-              <button type="button" onClick={() => copyField('correlationId', correlationId)} className="inline-flex items-center gap-1 rounded-full border border-white/10 px-2 py-1 hover:bg-white/10">
+              <button
+                type="button"
+                onClick={() => copyField('correlationId', correlationId)}
+                className="inline-flex items-center gap-1 rounded-full border border-white/10 px-2 py-1 transition-colors hover:bg-white/10"
+              >
                 <span>Corr: {correlationId}</span>
                 {copiedField === 'correlationId' ? <Check className="h-3.5 w-3.5 text-success" /> : <Clipboard className="h-3.5 w-3.5" />}
               </button>
@@ -547,6 +746,7 @@ function LogRow({
             {queryString ? <span className="rounded-full border border-white/10 px-2 py-1">Query: {queryString}</span> : null}
           </div>
         ) : null}
+
         {formattedData ? (
           <div className="mt-2">
             <button
