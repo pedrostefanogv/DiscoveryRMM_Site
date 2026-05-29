@@ -76,6 +76,7 @@ const FORMAT_LABELS: Record<ReportFormat, string> = {
   [ReportFormat.Xlsx]: "Excel (.xlsx)",
   [ReportFormat.Csv]: "CSV (.csv)",
   [ReportFormat.Pdf]: "PDF (.pdf)",
+  [ReportFormat.Markdown]: "Markdown (.md)",
 };
 
 const STATUS_CONFIG = {

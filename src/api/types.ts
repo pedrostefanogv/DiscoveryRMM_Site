@@ -1960,14 +1960,18 @@ export enum ReportDatasetType {
   ConfigurationAudit = 2,
   Tickets = 3,
   AgentHardware = 4,
-  AgentLabels = 5,
-  KnowledgeBase = 6,
+  AgentInventoryComposite = 5,
+  AgentLabels = 6,
+  AutomaticLabelRules = 7,
+  AutomationExecutions = 8,
+  KnowledgeBase = 9,
 }
 
 export enum ReportFormat {
   Xlsx = 0,
   Pdf = 1,
   Csv = 2,
+  Markdown = 3,
 }
 
 export enum ReportExecutionStatus {
@@ -2082,6 +2086,43 @@ export enum KnowledgeBaseOrderBy {
   UpdatedAt = "updatedAt",
 }
 
+export enum AgentInventoryCompositeOrderBy {
+  SiteName = "siteName",
+  AgentHostname = "agentHostname",
+  SoftwareName = "softwareName",
+  CollectedAt = "collectedAt",
+}
+
+export enum AutomaticLabelRulesOrderBy {
+  RuleName = "ruleName",
+  LabelName = "labelName",
+  MatchCount = "matchCount",
+  CreatedAt = "createdAt",
+}
+
+export enum AutomationExecutionsOrderBy {
+  Timestamp = "timestamp",
+  AgentHostname = "agentHostname",
+  Status = "status",
+  ExitCode = "exitCode",
+}
+
+// ── Join Compatibility ──────────────────────────────────────
+
+export interface JoinCompatibilityItem {
+  sourceA: string;
+  sourceB: string;
+  commonKeys: string[];
+  preferredKey: string;
+  recommendedJoinType: string;
+}
+
+export interface JoinCompatibilityResponse {
+  compatibility: Record<string, string[]>;
+  joinSuggestions: JoinCompatibilityItem[];
+  note: string;
+}
+
 // Legacy type for backward compatibility
 export type ReportFilterType = "DateTime" | "Long" | "String" | "Boolean";
 
@@ -2124,9 +2165,11 @@ export type ReportFormatString =
   | "pdf"
   | "xlsx"
   | "csv"
+  | "markdown"
   | "Pdf"
   | "Xlsx"
-  | "Csv";
+  | "Csv"
+  | "Markdown";
 export type ReportFormatValue = ReportFormat | ReportFormatString;
 export type PreviewMode = "document" | "html";
 export type ResponseDisposition = "inline" | "attachment";

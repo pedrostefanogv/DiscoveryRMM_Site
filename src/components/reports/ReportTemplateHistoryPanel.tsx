@@ -19,6 +19,7 @@ const FORMAT_LABELS: Record<ReportFormat, string> = {
   [ReportFormat.Xlsx]: "Excel",
   [ReportFormat.Csv]: "CSV",
   [ReportFormat.Pdf]: "PDF",
+  [ReportFormat.Markdown]: "Markdown",
 };
 
 const DATASET_LABELS: Record<ReportDatasetType, string> = {
@@ -27,7 +28,10 @@ const DATASET_LABELS: Record<ReportDatasetType, string> = {
   [ReportDatasetType.ConfigurationAudit]: "Auditoria de Configuração",
   [ReportDatasetType.Tickets]: "Tickets",
   [ReportDatasetType.AgentHardware]: "Hardware de Agentes",
+  [ReportDatasetType.AgentInventoryComposite]: "Inventário Composto",
   [ReportDatasetType.AgentLabels]: "Labels de Agentes",
+  [ReportDatasetType.AutomaticLabelRules]: "Regras de Labels",
+  [ReportDatasetType.AutomationExecutions]: "Execuções de Automação",
   [ReportDatasetType.KnowledgeBase]: "Base de Conhecimento",
 };
 

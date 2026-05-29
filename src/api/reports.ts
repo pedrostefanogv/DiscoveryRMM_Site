@@ -16,6 +16,7 @@ import type {
   PreviewReportResponse,
   PreviewMode,
   ReportAutocompleteResponse,
+  JoinCompatibilityResponse,
 } from "./types";
 import { ApiError, apiFetchResponse, parseErrorMessage } from "./client";
 
@@ -41,11 +42,29 @@ const DEFAULT_PREVIEW_FIELDS: Partial<Record<ReportDatasetType, string[]>> = {
     "totalMemoryBytes",
     "collectedAt",
   ],
-  [ReportDatasetType.AgentLabels]: [
-    "label",
-    "sourceType",
+  [ReportDatasetType.AgentInventoryComposite]: [
     "agentHostname",
-    "updatedAt",
+    "softwareName",
+    "osName",
+    "totalMemoryGB",
+  ],
+  [ReportDatasetType.AgentLabels]: [
+    "labelName",
+    "labelSource",
+    "agentHostname",
+    "labelAppliedAt",
+  ],
+  [ReportDatasetType.AutomaticLabelRules]: [
+    "ruleName",
+    "labelName",
+    "matchCount",
+    "affectedAgentHostnames",
+  ],
+  [ReportDatasetType.AutomationExecutions]: [
+    "agentHostname",
+    "status",
+    "exitCode",
+    "createdAt",
   ],
   [ReportDatasetType.KnowledgeBase]: [
     "title",
@@ -97,6 +116,10 @@ export async function getDatasetCatalog(): Promise<DatasetCatalogItem[]> {
 
 export async function getReportLayoutSchema(): Promise<LayoutSchemaResponse> {
   return api.get<LayoutSchemaResponse>("/api/v1/reports/layout-schema");
+}
+
+export async function getJoinCompatibility(): Promise<JoinCompatibilityResponse> {
+  return api.get<JoinCompatibilityResponse>("/api/v1/reports/join-compatibility");
 }
 
 export async function getReportAutocomplete(params: {

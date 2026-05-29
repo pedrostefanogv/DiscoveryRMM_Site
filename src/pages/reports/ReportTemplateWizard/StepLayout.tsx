@@ -1,0 +1,445 @@
+import { Button } from "@/components/ui";
+import { LiveMarkdownPreview } from "./components/LiveMarkdownPreview";
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+
+interface Props {
+  wizard: ReturnType<typeof import("./hooks/useWizardState").useWizardState>;
+  onBack: () => void;
+  onNext: () => void;
+}
+
+export function StepLayout({ wizard, onBack, onNext }: Props) {
+  const { state } = wizard;
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+  );
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-lg font-semibold text-white">
+          Organize os dados
+        </h2>
+        <p className="text-sm text-slate-400">
+          Defina agrupamentos, colunas principais e sub-tabelas.
+        </p>
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-[1fr_400px]">
+        {/* Left: Editor */}
+        <div className="space-y-6">
+          {/* Grouping */}
+          <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+            <h3 className="mb-3 text-sm font-semibold text-slate-200">
+              Agrupamento
+            </h3>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-400">
+                  Agrupar por
+                </label>
+                <select
+                  value={state.groupBy}
+                  onChange={(e) => wizard.setField("groupBy", e.target.value)}
+                  className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white"
+                >
+                  <option value="" className="bg-slate-900">
+                    Sem agrupamento
+                  </option>
+                  {wizard.allFields.map((f) => (
+                    <option
+                      key={f.reference}
+                      value={f.reference}
+                      className="bg-slate-900"
+                    >
+                      {f.reference} ({f.datasetName})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {state.groupBy && (
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-400">
+                    Título do grupo
+                  </label>
+                  <input
+                    type="text"
+                    placeholder={"{{" + state.groupBy + "}}"}
+                    value={state.groupTitleTemplate}
+                    onChange={(e) =>
+                      wizard.setField("groupTitleTemplate", e.target.value)
+                    }
+                    className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-100 placeholder-slate-500"
+                  />
+                </div>
+              )}
+            </div>
+            {state.groupBy && (
+              <label className="mt-2 flex items-center gap-2 text-sm text-slate-400">
+                <input
+                  type="checkbox"
+                  checked={state.hideGroupColumn}
+                  onChange={(e) =>
+                    wizard.setField("hideGroupColumn", e.target.checked)
+                  }
+                />
+                Ocultar coluna de agrupamento
+              </label>
+            )}
+          </div>
+
+          {/* Main columns */}
+          <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-slate-200">
+                📋 Tabela Principal
+              </h3>
+              <select
+                onChange={(e) => {
+                  if (e.target.value) wizard.addColumn(e.target.value);
+                  e.target.value = "";
+                }}
+                className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-xs text-white"
+                defaultValue=""
+              >
+                <option value="" className="bg-slate-900">
+                  + Adicionar coluna
+                </option>
+                {wizard.allFields.map((f) => (
+                  <option
+                    key={f.reference}
+                    value={f.reference}
+                    className="bg-slate-900"
+                  >
+                    {f.reference}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {state.columns.length === 0 ? (
+              <p className="text-xs text-slate-500">
+                Nenhuma coluna. Adicione campos acima.
+              </p>
+            ) : (
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={(event: DragEndEvent) => {
+                  const { active, over } = event;
+                  if (over && active.id !== over.id) {
+                    const oldIndex = state.columns.findIndex((_, i) => `col-${i}` === active.id);
+                    const newIndex = state.columns.findIndex((_, i) => `col-${i}` === over.id);
+                    if (oldIndex !== -1 && newIndex !== -1) {
+                      const reordered = [...state.columns];
+                      const [moved] = reordered.splice(oldIndex, 1);
+                      reordered.splice(newIndex, 0, moved);
+                      wizard.setColumns(reordered);
+                    }
+                  }
+                }}
+              >
+                <div className="overflow-x-auto">
+                  <table className="min-w-full text-xs text-slate-300">
+                    <thead>
+                      <tr className="border-b border-white/10 text-slate-400">
+                        <th className="w-6 px-1 py-1" />
+                        <th className="px-2 py-1 text-left">Campo</th>
+                        <th className="px-2 py-1 text-left">Label</th>
+                        <th className="px-2 py-1 text-left">Formato</th>
+                        <th className="px-2 py-1 text-left">Alinhamento</th>
+                        <th />
+                      </tr>
+                    </thead>
+                    <SortableContext
+                      items={state.columns.map((_, i) => `col-${i}`)}
+                      strategy={verticalListSortingStrategy}
+                    >
+                      <tbody>
+                        {state.columns.map((col, i) => (
+                          <SortableRow key={i} id={`col-${i}`}>
+                            <td className="px-1 py-1 text-center text-slate-600 cursor-grab active:cursor-grabbing">
+                              ⠿
+                            </td>
+                            <td className="px-2 py-1">
+                              <span className="rounded bg-white/5 px-1.5 py-0.5 text-[11px] text-slate-300">
+                                {col.field}
+                              </span>
+                            </td>
+                            <td className="px-2 py-1">
+                              <input
+                                value={col.header}
+                                onChange={(e) =>
+                                  wizard.updateColumn(i, { header: e.target.value })
+                                }
+                                className="w-28 rounded border border-white/10 bg-white/5 px-1.5 py-0.5 text-slate-200"
+                              />
+                            </td>
+                            <td className="px-2 py-1">
+                              <select
+                                value={col.format}
+                                onChange={(e) =>
+                                  wizard.updateColumn(i, { format: e.target.value as any })
+                                }
+                                className="rounded border border-white/10 bg-white/5 px-1.5 py-0.5 text-slate-200"
+                              >
+                                <option value="text" className="bg-slate-900">texto</option>
+                                <option value="number" className="bg-slate-900">número</option>
+                                <option value="date" className="bg-slate-900">data</option>
+                                <option value="datetime" className="bg-slate-900">data/hora</option>
+                              </select>
+                            </td>
+                            <td className="px-2 py-1">
+                              <select
+                                value={col.align}
+                                onChange={(e) =>
+                                  wizard.updateColumn(i, { align: e.target.value as any })
+                                }
+                                className="rounded border border-white/10 bg-white/5 px-1.5 py-0.5 text-slate-200"
+                              >
+                                <option value="left" className="bg-slate-900">←</option>
+                                <option value="center" className="bg-slate-900">↔</option>
+                                <option value="right" className="bg-slate-900">→</option>
+                              </select>
+                            </td>
+                            <td className="px-2 py-1">
+                              <button
+                                onClick={() => wizard.removeColumn(i)}
+                                className="text-red-400 hover:text-red-300"
+                                title="Remover"
+                              >
+                                ✕
+                              </button>
+                            </td>
+                          </SortableRow>
+                        ))}
+                      </tbody>
+                    </SortableContext>
+                  </table>
+                </div>
+              </DndContext>
+            )}
+          </div>
+
+          {/* Sub-tables */}
+          <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-slate-200">
+                📑 Sub-tabelas
+              </h3>
+              <Button
+                onClick={() => {
+                  const ds = state.selectedDatasets.find(
+                    (d) => !d.isPrimary,
+                  );
+                  if (ds) {
+                    wizard.addSubTable(
+                      ds.alias,
+                      ds.catalogItem.name ?? ds.alias,
+                    );
+                  }
+                }}
+                disabled={state.selectedDatasets.length < 2}
+                variant="secondary"
+                className="text-xs"
+              >
+                + Adicionar
+              </Button>
+            </div>
+            {state.subTables.length === 0 ? (
+              <p className="text-xs text-slate-500">
+                Adicione mais datasets no passo anterior para criar sub-tabelas.
+              </p>
+            ) : (
+              <div className="space-y-4">
+                {state.subTables.map((st) => (
+                  <div
+                    key={st.id}
+                    className="rounded-lg border border-white/5 bg-black/10 p-3"
+                  >
+                    <div className="mb-2 flex items-center justify-between">
+                      <input
+                        value={st.title}
+                        onChange={(e) => {
+                          const updated = state.subTables.map((s) =>
+                            s.id === st.id
+                              ? { ...s, title: e.target.value }
+                              : s,
+                          );
+                          wizard.setField("subTables", updated as any);
+                        }}
+                        className="rounded border border-white/10 bg-white/5 px-2 py-1 text-sm font-medium text-slate-200"
+                      />
+                      <button
+                        onClick={() => wizard.removeSubTable(st.id)}
+                        className="text-xs text-red-400 hover:text-red-300"
+                      >
+                        Remover
+                      </button>
+                    </div>
+
+                    {st.columns.length === 0 ? (
+                      <select
+                        onChange={(e) => {
+                          if (e.target.value) {
+                            const updated = state.subTables.map((s) =>
+                              s.id === st.id
+                                ? {
+                                    ...s,
+                                    columns: [
+                                      ...s.columns,
+                                      {
+                                        field: e.target.value,
+                                        header: e.target.value,
+                                        format: "text" as const,
+                                        align: "left" as const,
+                                        sourceAlias: st.sourceAlias,
+                                      },
+                                    ],
+                                  }
+                                : s,
+                            );
+                            wizard.setField("subTables", updated as any);
+                          }
+                          e.target.value = "";
+                        }}
+                        className="w-full rounded border border-white/10 bg-white/5 px-2 py-1 text-xs text-white"
+                        defaultValue=""
+                      >
+                        <option value="" className="bg-slate-900">
+                          + Adicionar campo
+                        </option>
+                        {wizard.allFields
+                          .filter((f) => f.alias === st.sourceAlias)
+                          .map((f) => (
+                            <option
+                              key={f.reference}
+                              value={f.reference}
+                              className="bg-slate-900"
+                            >
+                              {f.reference}
+                            </option>
+                          ))}
+                      </select>
+                    ) : (
+                      <table className="min-w-full text-xs text-slate-300">
+                        <thead>
+                          <tr className="border-b border-white/10 text-slate-400">
+                            <th className="px-1 py-1 text-left">Campo</th>
+                            <th className="px-1 py-1 text-left">Label</th>
+                            <th />
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {st.columns.map((col, ci) => (
+                            <tr key={ci} className="border-b border-white/5">
+                              <td className="px-1 py-1">
+                                <span className="text-[11px] text-slate-400">
+                                  {col.field}
+                                </span>
+                              </td>
+                              <td className="px-1 py-1">
+                                <input
+                                  value={col.header}
+                                  onChange={(e) => {
+                                    const updated = state.subTables.map((s) =>
+                                      s.id === st.id
+                                        ? {
+                                            ...s,
+                                            columns: s.columns.map((c, j) =>
+                                              j === ci
+                                                ? {
+                                                    ...c,
+                                                    header: e.target.value,
+                                                  }
+                                                : c,
+                                            ),
+                                          }
+                                        : s,
+                                    );
+                                    wizard.setField("subTables", updated as any);
+                                  }}
+                                  className="w-24 rounded border border-white/10 bg-white/5 px-1.5 py-0.5 text-slate-200"
+                                />
+                              </td>
+                              <td className="px-1 py-1">
+                                <button
+                                  onClick={() => {
+                                    const updated = state.subTables.map((s) =>
+                                      s.id === st.id
+                                        ? {
+                                            ...s,
+                                            columns: s.columns.filter(
+                                              (_, j) => j !== ci,
+                                            ),
+                                          }
+                                        : s,
+                                    );
+                                    wizard.setField("subTables", updated as any);
+                                  }}
+                                  className="text-red-400 hover:text-red-300"
+                                >
+                                  ✕
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Right: Live Preview */}
+        <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4">
+          <h3 className="mb-3 text-sm font-semibold text-emerald-200">
+            👁 Preview ao vivo
+          </h3>
+          <LiveMarkdownPreview wizard={wizard} />
+        </div>
+      </div>
+
+      {/* Actions */}
+      <div className="flex justify-between">
+        <Button onClick={onBack} variant="secondary">
+          ← Voltar
+        </Button>
+        <Button onClick={onNext} variant="primary">
+          Próximo: Metadados →
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/** Draggable table row wrapper for @dnd-kit */
+function SortableRow({ id, children }: { id: string; children: React.ReactNode }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({ id });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+  return (
+    <tr ref={setNodeRef} style={style} {...attributes} {...listeners} className="border-b border-white/5">
+      {children}
+    </tr>
+  );
+}

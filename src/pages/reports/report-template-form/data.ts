@@ -1,7 +1,7 @@
 ﻿import type { ScopeTypeString } from "@/api/types";
 import type { DatasetSectionSourcePreset, SupportedFormat } from "./types";
 
-export const FORMAT_OPTIONS: SupportedFormat[] = ["pdf", "xlsx", "csv"];
+export const FORMAT_OPTIONS: SupportedFormat[] = ["pdf", "xlsx", "csv", "markdown"];
 export const SCOPE_OPTIONS: ScopeTypeString[] = [
   "global",
   "client",

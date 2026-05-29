@@ -42,6 +42,7 @@ const FORMAT_LABELS: Record<ReportFormat, string> = {
   [ReportFormat.Xlsx]: "Excel",
   [ReportFormat.Csv]: "CSV",
   [ReportFormat.Pdf]: "PDF",
+  [ReportFormat.Markdown]: "Markdown",
 };
 
 function normalizeExecutionStatus(

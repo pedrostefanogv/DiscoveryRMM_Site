@@ -53,7 +53,9 @@ const IamGroupsPage = lazy(() => import('@/pages/settings/IamGroupsPage'));
 const IamRolesPage = lazy(() => import('@/pages/settings/IamRolesPage'));
 const IamMeshProfilesPage = lazy(() => import('@/pages/settings/IamMeshProfilesPage'));
 const ReportTemplateList = lazy(() => import('@/pages/reports/ReportTemplateList'));
-const ReportTemplateForm = lazy(() => import('@/pages/reports/ReportTemplateForm'));
+const ReportTemplateWizard = lazy(() => import('@/pages/reports/ReportTemplateWizard'));
+const ReportTemplateWizardEdit = lazy(() => import('@/pages/reports/ReportTemplateWizard/ReportTemplateWizardEdit'));
+const ReportTemplateCatalog = lazy(() => import('@/pages/reports/ReportTemplateCatalog'));
 const ReportSchedulesPage = lazy(() => import('@/pages/reports/ReportSchedulesPage'));
 const RunReport = lazy(() => import('@/pages/reports/RunReport'));
 const ReportExecutionList = lazy(() => import('@/pages/reports/ReportExecutionList'));
@@ -494,6 +496,14 @@ export const router = createBrowserRouter([
         path: 'reports/templates',
         element: (
           <PermissionGate anyOf={['reports.*', 'reports.read', 'admin.*']}>
+            <LazyPage><ReportTemplateCatalog /></LazyPage>
+          </PermissionGate>
+        ),
+      },
+      {
+        path: 'reports/templates/list',
+        element: (
+          <PermissionGate anyOf={['reports.*', 'reports.read', 'admin.*']}>
             <LazyPage><ReportTemplateList /></LazyPage>
           </PermissionGate>
         ),
@@ -502,7 +512,7 @@ export const router = createBrowserRouter([
         path: 'reports/templates/new',
         element: (
           <PermissionGate anyOf={['reports.*', 'reports.read', 'admin.*']}>
-            <LazyPage><ReportTemplateForm /></LazyPage>
+            <LazyPage><ReportTemplateWizard /></LazyPage>
           </PermissionGate>
         ),
       },
@@ -510,7 +520,7 @@ export const router = createBrowserRouter([
         path: 'reports/templates/:id/edit',
         element: (
           <PermissionGate anyOf={['reports.*', 'reports.read', 'admin.*']}>
-            <LazyPage><ReportTemplateForm /></LazyPage>
+            <LazyPage><ReportTemplateWizardEdit /></LazyPage>
           </PermissionGate>
         ),
       },

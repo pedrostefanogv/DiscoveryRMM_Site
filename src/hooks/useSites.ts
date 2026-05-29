@@ -10,10 +10,10 @@ const KEYS = {
     [...KEYS.all, "detail", clientId, id] as const,
 };
 
-export function useSites(clientId: string, includeInactive = false) {
+export function useSites(clientId?: string, includeInactive = false) {
   return useQuery({
-    queryKey: KEYS.byClient(clientId, includeInactive),
-    queryFn: () => sitesApi.list(clientId, includeInactive),
+    queryKey: KEYS.byClient(clientId ?? "", includeInactive),
+    queryFn: () => sitesApi.list(clientId ?? "", includeInactive),
     enabled: !!clientId,
   });
 }
