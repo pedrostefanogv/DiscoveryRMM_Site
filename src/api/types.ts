@@ -853,6 +853,8 @@ export interface DeployToken {
   expiresAt: string | null;
   multiUse: boolean;
   createdAt: string;
+  revokedAt?: string | null;
+  isActive?: boolean;
 }
 
 export interface ApiToken {
