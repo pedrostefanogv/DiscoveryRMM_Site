@@ -34,6 +34,7 @@ interface Props {
 export function StepMetadata({ wizard, onBack, onCreate, isCreating }: Props) {
   const { state, setField } = wizard;
   const logoPreviewUrl = normalizeLogoPreviewUrl(state.logoUrl);
+  const watermarkPreviewEnabled = state.watermarkEnabled && !!logoPreviewUrl;
   const selectedFontFamily = state.style.fontFamily ?? "Segoe UI, sans-serif";
   const fontOptions = REPORT_FONT_OPTIONS.some(
     (option) => option.value === selectedFontFamily,
@@ -268,7 +269,13 @@ export function StepMetadata({ wizard, onBack, onCreate, isCreating }: Props) {
                 <input
                   type="text"
                   value={state.logoUrl}
-                  onChange={(e) => setField("logoUrl", e.target.value)}
+                  onChange={(e) => {
+                    const nextLogo = e.target.value;
+                    setField("logoUrl", nextLogo);
+                    if (!nextLogo.trim() && state.watermarkEnabled) {
+                      setField("watermarkEnabled", false);
+                    }
+                  }}
                   placeholder="https://..."
                   className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-100 placeholder-slate-500"
                 />
@@ -285,6 +292,54 @@ export function StepMetadata({ wizard, onBack, onCreate, isCreating }: Props) {
                       alt="Pré-visualização do logo"
                       className="max-h-12 w-auto rounded bg-white/80 p-1 object-contain"
                     />
+                  </div>
+                ) : null}
+
+                <label className="mt-3 flex items-center gap-2 text-xs text-slate-300">
+                  <input
+                    type="checkbox"
+                    checked={watermarkPreviewEnabled}
+                    disabled={!logoPreviewUrl}
+                    onChange={(e) => setField("watermarkEnabled", e.target.checked)}
+                  />
+                  Usar a logo como marca d'água de fundo
+                </label>
+
+                {!logoPreviewUrl ? (
+                  <p className="mt-1 text-[11px] leading-4 text-slate-500">
+                    Informe uma Logo URL para habilitar a marca d'água.
+                  </p>
+                ) : null}
+
+                {watermarkPreviewEnabled ? (
+                  <div className="mt-2 grid gap-3 rounded-lg border border-white/10 bg-black/20 p-2 sm:grid-cols-2">
+                    <div>
+                      <label className="mb-1 block text-[11px] font-medium text-slate-400">
+                        Ajuste da marca d'água
+                      </label>
+                      <select
+                        value={state.watermarkFit}
+                        onChange={(e) => setField("watermarkFit", e.target.value as "contain" | "cover")}
+                        className="w-full rounded border border-white/10 bg-white/5 px-2 py-1 text-xs text-slate-200"
+                      >
+                        <option value="contain" className="bg-slate-900">Centralizado</option>
+                        <option value="cover" className="bg-slate-900">Ajustar para toda a página</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="mb-1 block text-[11px] font-medium text-slate-400">
+                        Opacidade (%)
+                      </label>
+                      <input
+                        type="number"
+                        min={1}
+                        max={40}
+                        value={state.watermarkOpacityPercent}
+                        onChange={(e) => setField("watermarkOpacityPercent", e.target.value)}
+                        className="w-full rounded border border-white/10 bg-white/5 px-2 py-1 text-xs text-slate-200"
+                      />
+                    </div>
                   </div>
                 ) : null}
               </div>

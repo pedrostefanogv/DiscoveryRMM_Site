@@ -2288,6 +2288,18 @@ export interface ReportLayoutStyleDefinition {
   showRowStripes?: boolean;
 }
 
+export interface ReportLayoutWatermarkDefinition {
+  text?: string;
+  color?: string;
+  fontSize?: number;
+  angle?: number;
+  repeat?: boolean;
+  useLogo?: boolean;
+  imageUrl?: string;
+  imageFit?: "contain" | "cover" | string;
+  imageOpacity?: number;
+}
+
 export interface ReportLayoutDefinition {
   title: string;
   subtitle?: string;
@@ -2304,6 +2316,7 @@ export interface ReportLayoutDefinition {
   summaries?: ReportLayoutSummaryDefinition[];
   groupSummaries?: ReportLayoutSummaryDefinition[];
   style?: ReportLayoutStyleDefinition;
+  watermark?: ReportLayoutWatermarkDefinition;
 }
 
 export interface ReportTemplateContractInput {

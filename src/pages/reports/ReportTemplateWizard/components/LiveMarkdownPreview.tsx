@@ -18,7 +18,7 @@ export function LiveMarkdownPreview({ wizard }: Props) {
   const [mode, setMode] = useState<"structure" | "data">("structure");
   const [clientId, setClientId] = useState<string>("");
   const [siteId, setSiteId] = useState<string>("");
-  const [dataLimit, setDataLimit] = useState(10);
+  const [dataLimit, setDataLimit] = useState<string>("10");
   const [isExpandedPreviewOpen, setIsExpandedPreviewOpen] = useState(false);
 
   const { data: clients = [] } = useClients();
@@ -112,7 +112,12 @@ export function LiveMarkdownPreview({ wizard }: Props) {
     if (!state.name && state.columns.length === 0) return;
     const primaryDs = state.selectedDatasets[0];
     const dsType = primaryDs?.catalogItem.datasetType ?? primaryDs?.catalogItem.type;
-    const filters: Record<string, unknown> = { limit: dataLimit };
+    const filters: Record<string, unknown> = {};
+    if (dataLimit === "all") {
+      filters.allRows = true;
+    } else {
+      filters.limit = Number(dataLimit);
+    }
     if (clientId) filters.clientId = clientId;
     if (siteId) filters.siteId = siteId;
     previewMutation.mutate({
@@ -199,12 +204,14 @@ export function LiveMarkdownPreview({ wizard }: Props) {
               <option value="">Todos sites</option>
               {sites.map((s) => <option key={s.id} value={s.id} className="bg-slate-900">{s.name}</option>)}
             </select>
-            <select value={dataLimit} onChange={(e) => setDataLimit(Number(e.target.value))}
+            <select value={dataLimit} onChange={(e) => setDataLimit(e.target.value)}
               className="rounded border border-white/10 bg-white/5 px-2 py-1 text-xs text-slate-200">
               <option value="5" className="bg-slate-900">5 linhas</option>
               <option value="10" className="bg-slate-900">10 linhas</option>
               <option value="25" className="bg-slate-900">25 linhas</option>
               <option value="50" className="bg-slate-900">50 linhas</option>
+              <option value="100" className="bg-slate-900">100 linhas</option>
+              <option value="all" className="bg-slate-900">Todos os registros</option>
             </select>
             <button onClick={loadDataPreview} disabled={previewMutation.isPending}
               className="rounded bg-primary/80 px-2 py-1 text-xs font-medium text-white hover:bg-primary disabled:opacity-50">

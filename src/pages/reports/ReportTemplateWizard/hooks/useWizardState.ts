@@ -59,6 +59,9 @@ export interface WizardState {
   scopeType: "global" | "client" | "site" | "agent";
   style: ReportLayoutStyleDefinition;
   logoUrl: string;
+  watermarkEnabled: boolean;
+  watermarkFit: "contain" | "cover";
+  watermarkOpacityPercent: string;
   createdBy: string;
 }
 
@@ -217,6 +220,9 @@ export function useWizardState(initialState?: Partial<WizardState>) {
       showRowStripes: true,
     },
     logoUrl: initialState?.logoUrl ?? initialState?.style?.logoUrl ?? "",
+    watermarkEnabled: initialState?.watermarkEnabled ?? false,
+    watermarkFit: initialState?.watermarkFit ?? "contain",
+    watermarkOpacityPercent: initialState?.watermarkOpacityPercent ?? "8",
     createdBy: initialState?.createdBy ?? "",
   }));
 
@@ -402,6 +408,10 @@ export function useWizardState(initialState?: Partial<WizardState>) {
 
   const buildLayoutJson = useCallback((): string => {
     const normalizedLogoUrl = normalizeLogoUrl(state.logoUrl);
+    const watermarkOpacityRaw = Number(state.watermarkOpacityPercent);
+    const watermarkOpacity = Number.isFinite(watermarkOpacityRaw)
+      ? Math.min(0.4, Math.max(0.01, watermarkOpacityRaw / 100))
+      : 0.08;
     const useAliases = state.selectedDatasets.length > 1;
     const primaryAlias = state.selectedDatasets[0]?.alias;
 
@@ -522,6 +532,14 @@ export function useWizardState(initialState?: Partial<WizardState>) {
           align: c.align,
         })),
       }));
+    }
+
+    if (state.watermarkEnabled && normalizedLogoUrl) {
+      layout.watermark = {
+        useLogo: true,
+        imageFit: state.watermarkFit,
+        imageOpacity: watermarkOpacity,
+      };
     }
 
     return JSON.stringify(layout);
