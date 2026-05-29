@@ -117,6 +117,10 @@ function normalizeLogoUrl(value: string): string | undefined {
   return `https://${trimmed}`;
 }
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 export function findJoinKeys(sourceKey: string, targetKey: string): string[] {
   const source = JOIN_KEYS[sourceKey] ?? [];
   const target = JOIN_KEYS[targetKey] ?? [];
@@ -398,6 +402,42 @@ export function useWizardState(initialState?: Partial<WizardState>) {
 
   const buildLayoutJson = useCallback((): string => {
     const normalizedLogoUrl = normalizeLogoUrl(state.logoUrl);
+    const useAliases = state.selectedDatasets.length > 1;
+    const primaryAlias = state.selectedDatasets[0]?.alias;
+
+    const normalizeSingleSourceField = (
+      field: string,
+      sourceAlias?: string,
+    ): string => {
+      const alias = sourceAlias ?? primaryAlias;
+      if (!alias) return field;
+      return normalizeFieldReference(field, alias);
+    };
+
+    const toLayoutField = (field: string, sourceAlias?: string): string => {
+      if (!useAliases) {
+        return normalizeSingleSourceField(field, sourceAlias);
+      }
+
+      if (sourceAlias) {
+        return `${sourceAlias}.${normalizeFieldReference(field, sourceAlias)}`;
+      }
+
+      return field;
+    };
+
+    const normalizedGroupBy = state.groupBy
+      ? toLayoutField(state.groupBy, primaryAlias)
+      : undefined;
+
+    const normalizedGroupTitleTemplate = !state.groupTitleTemplate
+      ? undefined
+      : !useAliases && primaryAlias
+        ? state.groupTitleTemplate.replace(
+            new RegExp(`\\{\\{\\s*${escapeRegExp(primaryAlias)}\\.`, "g"),
+            "{{",
+          )
+        : state.groupTitleTemplate;
 
     const dataSources: ReportLayoutDataSourceDefinition[] =
       state.selectedDatasets.map((ds) => {
@@ -421,13 +461,11 @@ export function useWizardState(initialState?: Partial<WizardState>) {
       title: state.name || "Novo Relatório",
       orientation: state.orientation,
       logoUrl: normalizedLogoUrl,
-      groupBy: state.groupBy || undefined,
-      groupTitleTemplate: state.groupTitleTemplate || undefined,
+      groupBy: normalizedGroupBy,
+      groupTitleTemplate: normalizedGroupTitleTemplate,
       hideGroupColumn: state.hideGroupColumn,
       columns: state.columns.map((c) => ({
-        field: c.sourceAlias
-          ? `${c.sourceAlias}.${normalizeFieldReference(c.field, c.sourceAlias)}`
-          : c.field,
+        field: toLayoutField(c.field, c.sourceAlias),
         header: c.header,
         format: c.format,
         align: c.align,
@@ -450,18 +488,35 @@ export function useWizardState(initialState?: Partial<WizardState>) {
 
     if (state.subtitle) layout.subtitle = state.subtitle;
     if (dataSources.length > 1) layout.dataSources = dataSources;
-    if (state.groupDetails.length > 0) layout.groupDetails = state.groupDetails;
-    if (state.summaries.length > 0) layout.summaries = state.summaries;
-    if (state.groupSummaries.length > 0) layout.groupSummaries = state.groupSummaries;
+    if (state.groupDetails.length > 0) {
+      layout.groupDetails = state.groupDetails.map((detail) => ({
+        ...detail,
+        field: toLayoutField(detail.field, primaryAlias),
+      }));
+    }
+    if (state.summaries.length > 0) {
+      layout.summaries = state.summaries.map((summary) => ({
+        ...summary,
+        field: summary.field
+          ? toLayoutField(summary.field, primaryAlias)
+          : summary.field,
+      }));
+    }
+    if (state.groupSummaries.length > 0) {
+      layout.groupSummaries = state.groupSummaries.map((summary) => ({
+        ...summary,
+        field: summary.field
+          ? toLayoutField(summary.field, primaryAlias)
+          : summary.field,
+      }));
+    }
 
     if (state.subTables.length > 0) {
       layout.sections = state.subTables.map((st) => ({
         title: st.title,
         source: st.sourceAlias,
         columns: st.columns.map((c) => ({
-          field: c.sourceAlias
-            ? `${c.sourceAlias}.${normalizeFieldReference(c.field, c.sourceAlias)}`
-            : normalizeFieldReference(c.field, st.sourceAlias),
+          field: toLayoutField(c.field, c.sourceAlias ?? st.sourceAlias),
           header: c.header,
           format: c.format,
           align: c.align,

@@ -732,6 +732,25 @@ export function buildLayoutJson(state: LayoutEditorState): {
 } {
   const errors: string[] = [];
   const hasSections = state.sections.length > 0;
+  const useSingleSourceNormalization = state.dataSources.length === 0;
+
+  const normalizeSingleSourceField = (field: string): string => {
+    if (!useSingleSourceNormalization) return field;
+
+    const trimmed = field.trim();
+    const dotIndex = trimmed.indexOf(".");
+    if (dotIndex <= 0) return trimmed;
+
+    const prefix = trimmed.slice(0, dotIndex);
+    if (!/^[A-Za-z_][A-Za-z0-9_-]*$/.test(prefix)) return trimmed;
+
+    return trimmed.slice(dotIndex + 1);
+  };
+
+  const normalizeGroupTitleTemplate = (value: string): string => {
+    if (!useSingleSourceNormalization) return value;
+    return value.replace(/\{\{\s*[A-Za-z_][A-Za-z0-9_-]*\./g, "{{");
+  };
 
   const layout: ReportLayoutDefinition = {
     title: state.title.trim(),
@@ -739,8 +758,12 @@ export function buildLayoutJson(state: LayoutEditorState): {
     orientation: state.orientation || undefined,
     logoUrl: state.logoUrl.trim() || undefined,
     dataSources: state.dataSources.length > 0 ? state.dataSources : undefined,
-    groupBy: state.groupBy.trim() || undefined,
-    groupTitleTemplate: state.groupTitleTemplate.trim() || undefined,
+    groupBy: state.groupBy.trim()
+      ? normalizeSingleSourceField(state.groupBy.trim())
+      : undefined,
+    groupTitleTemplate: state.groupTitleTemplate.trim()
+      ? normalizeGroupTitleTemplate(state.groupTitleTemplate.trim())
+      : undefined,
     groupTitlePrefix: state.groupTitlePrefix.trim() || undefined,
     hideGroupColumn: state.hideGroupColumn || undefined,
     columns: hasSections
@@ -748,27 +771,44 @@ export function buildLayoutJson(state: LayoutEditorState): {
       : state.columns
           .filter((col) => col.field.trim() && col.label.trim())
           .map((col) => ({
-            field: col.field,
+            field: normalizeSingleSourceField(col.field),
             header: col.label,
             format: col.format,
             width: col.width,
             align: col.align,
           })),
-    groupDetails: state.groupDetails.filter(
-      (detail) => detail.field.trim() && detail.label.trim(),
-    ),
-    summaries: state.summaries.filter(
-      (summary) =>
-        summary.label.trim() &&
-        summary.aggregate.trim() &&
-        (summary.aggregate === "count" || !!summary.field?.trim()),
-    ),
-    groupSummaries: state.groupSummaries.filter(
-      (summary) =>
-        summary.label.trim() &&
-        summary.aggregate.trim() &&
-        (summary.aggregate === "count" || !!summary.field?.trim()),
-    ),
+    groupDetails: state.groupDetails
+      .filter((detail) => detail.field.trim() && detail.label.trim())
+      .map((detail) => ({
+        ...detail,
+        field: normalizeSingleSourceField(detail.field),
+      })),
+    summaries: state.summaries
+      .filter(
+        (summary) =>
+          summary.label.trim() &&
+          summary.aggregate.trim() &&
+          (summary.aggregate === "count" || !!summary.field?.trim()),
+      )
+      .map((summary) => ({
+        ...summary,
+        field: summary.field
+          ? normalizeSingleSourceField(summary.field)
+          : summary.field,
+      })),
+    groupSummaries: state.groupSummaries
+      .filter(
+        (summary) =>
+          summary.label.trim() &&
+          summary.aggregate.trim() &&
+          (summary.aggregate === "count" || !!summary.field?.trim()),
+      )
+      .map((summary) => ({
+        ...summary,
+        field: summary.field
+          ? normalizeSingleSourceField(summary.field)
+          : summary.field,
+      })),
     style: {
       primaryColor: state.style.primaryColor || undefined,
       secondaryColor: state.style.secondaryColor || undefined,
@@ -791,7 +831,7 @@ export function buildLayoutJson(state: LayoutEditorState): {
           columns: section.columns
             .filter((column) => column.field.trim() && column.label.trim())
             .map((column) => ({
-              field: column.field,
+              field: normalizeSingleSourceField(column.field),
               header: column.label,
               format: column.format,
               width: column.width,
