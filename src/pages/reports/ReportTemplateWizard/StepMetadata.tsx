@@ -34,7 +34,10 @@ interface Props {
 export function StepMetadata({ wizard, onBack, onCreate, isCreating }: Props) {
   const { state, setField } = wizard;
   const logoPreviewUrl = normalizeLogoPreviewUrl(state.logoUrl);
-  const watermarkPreviewEnabled = state.watermarkEnabled && !!logoPreviewUrl;
+  const watermarkLogoPreviewUrl = normalizeLogoPreviewUrl(state.watermarkLogoUrl);
+  const watermarkSourcePreviewUrl = watermarkLogoPreviewUrl || logoPreviewUrl;
+  const canEnableWatermark = Boolean(watermarkSourcePreviewUrl);
+  const watermarkPreviewEnabled = state.watermarkEnabled && canEnableWatermark;
   const selectedFontFamily = state.style.fontFamily ?? "Segoe UI, sans-serif";
   const fontOptions = REPORT_FONT_OPTIONS.some(
     (option) => option.value === selectedFontFamily,
@@ -272,7 +275,7 @@ export function StepMetadata({ wizard, onBack, onCreate, isCreating }: Props) {
                   onChange={(e) => {
                     const nextLogo = e.target.value;
                     setField("logoUrl", nextLogo);
-                    if (!nextLogo.trim() && state.watermarkEnabled) {
+                    if (!nextLogo.trim() && !state.watermarkLogoUrl.trim() && state.watermarkEnabled) {
                       setField("watermarkEnabled", false);
                     }
                   }}
@@ -295,19 +298,52 @@ export function StepMetadata({ wizard, onBack, onCreate, isCreating }: Props) {
                   </div>
                 ) : null}
 
+                <label className="mt-3 mb-1 block text-xs font-medium text-slate-400">
+                  URL da marca d'água (opcional)
+                </label>
+                <input
+                  type="text"
+                  value={state.watermarkLogoUrl}
+                  onChange={(e) => {
+                    const nextWatermarkLogo = e.target.value;
+                    setField("watermarkLogoUrl", nextWatermarkLogo);
+                    if (!nextWatermarkLogo.trim() && !state.logoUrl.trim() && state.watermarkEnabled) {
+                      setField("watermarkEnabled", false);
+                    }
+                  }}
+                  placeholder="https://cdn.exemplo.com/watermark.png"
+                  className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-100 placeholder-slate-500"
+                />
+                <p className="mt-1 text-[11px] leading-4 text-slate-500">
+                  Se informado, esta URL será usada na marca d'água sem alterar o logo do cabeçalho.
+                </p>
+
+                {watermarkLogoPreviewUrl ? (
+                  <div className="mt-2 rounded-lg border border-white/10 bg-black/20 p-2">
+                    <p className="mb-1 text-[10px] uppercase tracking-wide text-slate-500">
+                      Pré-visualização da marca d'água
+                    </p>
+                    <img
+                      src={watermarkLogoPreviewUrl}
+                      alt="Pré-visualização da marca d'água"
+                      className="max-h-12 w-auto rounded bg-white/80 p-1 object-contain"
+                    />
+                  </div>
+                ) : null}
+
                 <label className="mt-3 flex items-center gap-2 text-xs text-slate-300">
                   <input
                     type="checkbox"
-                    checked={watermarkPreviewEnabled}
-                    disabled={!logoPreviewUrl}
+                    checked={state.watermarkEnabled}
+                    disabled={!canEnableWatermark}
                     onChange={(e) => setField("watermarkEnabled", e.target.checked)}
                   />
-                  Usar a logo como marca d'água de fundo
+                  Usar imagem como marca d'água de fundo
                 </label>
 
-                {!logoPreviewUrl ? (
+                {!canEnableWatermark ? (
                   <p className="mt-1 text-[11px] leading-4 text-slate-500">
-                    Informe uma Logo URL para habilitar a marca d'água.
+                    Informe uma Logo URL ou URL da marca d'água para habilitar esta opção.
                   </p>
                 ) : null}
 

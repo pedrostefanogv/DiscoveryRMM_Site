@@ -27,6 +27,7 @@ export function ReportTemplateWizardEdit() {
 
   const layoutStyle = layout.style ?? {};
   const layoutWatermark = layout.watermark;
+  const watermarkLogoUrl = layoutWatermark?.logoUrl ?? layoutWatermark?.imageUrl ?? "";
   const watermarkOpacityPercent = layoutWatermark?.imageOpacity !== undefined && layoutWatermark?.imageOpacity !== null
     ? String(Math.round(layoutWatermark.imageOpacity * 100))
     : "8";
@@ -40,7 +41,8 @@ export function ReportTemplateWizardEdit() {
       : "xlsx") as WizardState["defaultFormat"],
     createdBy: template.createdBy ?? "",
     logoUrl: layout.logoUrl ?? layoutStyle.logoUrl ?? "",
-    watermarkEnabled: Boolean(layoutWatermark?.useLogo),
+    watermarkEnabled: Boolean(layoutWatermark?.useLogo || watermarkLogoUrl),
+    watermarkLogoUrl,
     watermarkFit: layoutWatermark?.imageFit === "cover" ? "cover" : "contain",
     watermarkOpacityPercent,
     style: {

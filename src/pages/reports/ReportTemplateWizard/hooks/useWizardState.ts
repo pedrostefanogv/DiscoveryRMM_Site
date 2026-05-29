@@ -60,6 +60,7 @@ export interface WizardState {
   style: ReportLayoutStyleDefinition;
   logoUrl: string;
   watermarkEnabled: boolean;
+  watermarkLogoUrl: string;
   watermarkFit: "contain" | "cover";
   watermarkOpacityPercent: string;
   createdBy: string;
@@ -221,6 +222,7 @@ export function useWizardState(initialState?: Partial<WizardState>) {
     },
     logoUrl: initialState?.logoUrl ?? initialState?.style?.logoUrl ?? "",
     watermarkEnabled: initialState?.watermarkEnabled ?? false,
+    watermarkLogoUrl: initialState?.watermarkLogoUrl ?? "",
     watermarkFit: initialState?.watermarkFit ?? "contain",
     watermarkOpacityPercent: initialState?.watermarkOpacityPercent ?? "8",
     createdBy: initialState?.createdBy ?? "",
@@ -408,6 +410,7 @@ export function useWizardState(initialState?: Partial<WizardState>) {
 
   const buildLayoutJson = useCallback((): string => {
     const normalizedLogoUrl = normalizeLogoUrl(state.logoUrl);
+    const normalizedWatermarkLogoUrl = normalizeLogoUrl(state.watermarkLogoUrl);
     const watermarkOpacityRaw = Number(state.watermarkOpacityPercent);
     const watermarkOpacity = Number.isFinite(watermarkOpacityRaw)
       ? Math.min(0.4, Math.max(0.01, watermarkOpacityRaw / 100))
@@ -534,9 +537,12 @@ export function useWizardState(initialState?: Partial<WizardState>) {
       }));
     }
 
-    if (state.watermarkEnabled && normalizedLogoUrl) {
+    if (state.watermarkEnabled && (normalizedLogoUrl || normalizedWatermarkLogoUrl)) {
       layout.watermark = {
-        useLogo: true,
+        useLogo: !normalizedWatermarkLogoUrl,
+        logoUrl: normalizedWatermarkLogoUrl,
+        // Mantem compatibilidade com backends antigos que priorizam imageUrl.
+        imageUrl: normalizedWatermarkLogoUrl,
         imageFit: state.watermarkFit,
         imageOpacity: watermarkOpacity,
       };

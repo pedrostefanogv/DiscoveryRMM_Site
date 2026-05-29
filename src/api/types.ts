@@ -2295,6 +2295,7 @@ export interface ReportLayoutWatermarkDefinition {
   angle?: number;
   repeat?: boolean;
   useLogo?: boolean;
+  logoUrl?: string;
   imageUrl?: string;
   imageFit?: "contain" | "cover" | string;
   imageOpacity?: number;
