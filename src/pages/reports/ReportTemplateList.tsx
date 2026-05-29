@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   Plus,
@@ -95,6 +95,12 @@ function getFormatLabel(format: ReportFormatValue): string {
   return FORMAT_LABELS[format] ?? String(format);
 }
 
+type TemplateContextMenuState = {
+  template: ReportTemplate;
+  x: number;
+  y: number;
+};
+
 export default function ReportTemplateList() {
   const [searchParams] = useSearchParams();
   const clientIdParam = searchParams.get("clientId");
@@ -103,6 +109,8 @@ export default function ReportTemplateList() {
       ? clientIdParam
       : undefined;
   const navigate = useNavigate();
+  const pageRef = useRef<HTMLDivElement | null>(null);
+  const contextMenuRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [showInactive, setShowInactive] = useState(false);
@@ -111,6 +119,8 @@ export default function ReportTemplateList() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [historyId, setHistoryId] = useState<string | null>(null);
   const [historyName, setHistoryName] = useState<string>("");
+  const [templateContextMenu, setTemplateContextMenu] =
+    useState<TemplateContextMenuState | null>(null);
 
   const buildTemplatePath = (basePath: string): string => {
     if (!clientId) return basePath;
@@ -249,6 +259,88 @@ export default function ReportTemplateList() {
     }
   };
 
+  const openTemplateContextMenu = (
+    event: React.MouseEvent<HTMLTableRowElement>,
+    template: ReportTemplate,
+  ) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (!pageRef.current) return;
+
+    const rect = pageRef.current.getBoundingClientRect();
+    const menuWidth = 248;
+    const menuHeight = 160;
+    const rawX = event.clientX - rect.left;
+    const rawY = event.clientY - rect.top;
+
+    const x = Math.max(8, Math.min(rawX, rect.width - menuWidth - 8));
+    const y = Math.max(8, Math.min(rawY, rect.height - menuHeight - 8));
+
+    setTemplateContextMenu({ template, x, y });
+  };
+
+  const closeTemplateContextMenu = () => {
+    setTemplateContextMenu(null);
+  };
+
+  const handleContextMenuEdit = () => {
+    if (!templateContextMenu) return;
+    navigate(
+      buildTemplatePath(`/reports/templates/${templateContextMenu.template.id}/edit`),
+    );
+    closeTemplateContextMenu();
+  };
+
+  const handleContextMenuHistory = () => {
+    if (!templateContextMenu) return;
+    setHistoryId(templateContextMenu.template.id);
+    setHistoryName(templateContextMenu.template.name);
+    closeTemplateContextMenu();
+  };
+
+  const handleContextMenuDelete = () => {
+    if (!templateContextMenu) return;
+    setDeleteId(templateContextMenu.template.id);
+    closeTemplateContextMenu();
+  };
+
+  useEffect(() => {
+    if (!templateContextMenu) return;
+
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        contextMenuRef.current &&
+        event.target instanceof Node &&
+        !contextMenuRef.current.contains(event.target)
+      ) {
+        closeTemplateContextMenu();
+      }
+    };
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        closeTemplateContextMenu();
+      }
+    };
+
+    const handleViewportChange = () => {
+      closeTemplateContextMenu();
+    };
+
+    window.addEventListener("mousedown", handleClickOutside, true);
+    window.addEventListener("resize", handleViewportChange);
+    window.addEventListener("scroll", handleViewportChange, true);
+    window.addEventListener("keydown", handleEscape);
+
+    return () => {
+      window.removeEventListener("mousedown", handleClickOutside, true);
+      window.removeEventListener("resize", handleViewportChange);
+      window.removeEventListener("scroll", handleViewportChange, true);
+      window.removeEventListener("keydown", handleEscape);
+    };
+  }, [templateContextMenu]);
+
   const columns: Column<ReportTemplate>[] = [
     {
       key: "favorite",
@@ -275,8 +367,8 @@ export default function ReportTemplateList() {
       header: "Nome",
       render: (t) => (
         <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/20">
-            <FileText className="h-4 w-4 text-primary" />
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/20">
+            <FileText className="h-4 w-4 shrink-0 text-primary" />
           </div>
           <div>
             <p className="font-medium text-white">{t.name}</p>
@@ -331,38 +423,6 @@ export default function ReportTemplateList() {
             <Play className="h-4 w-4" />
             <span className="hidden xl:inline">Gerar</span>
           </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() =>
-              navigate(buildTemplatePath(`/reports/templates/${t.id}/edit`))
-            }
-            title="Editar template"
-            aria-label="Editar template"
-          >
-            <Edit2 className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              setHistoryId(t.id);
-              setHistoryName(t.name);
-            }}
-            title="Ver histórico de alterações"
-            aria-label="Ver histórico de alterações"
-          >
-            <History className="h-4 w-4 text-slate-300" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setDeleteId(t.id)}
-            title="Excluir template"
-            aria-label="Excluir template"
-          >
-            <Trash2 className="h-4 w-4 text-red-400" />
-          </Button>
         </div>
       ),
     },
@@ -394,7 +454,7 @@ export default function ReportTemplateList() {
   const inactiveCount = (templates.data?.length ?? 0) - activeCount;
 
   return (
-    <div className="space-y-6">
+    <div ref={pageRef} className="relative space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-white">Central de Relatórios</h1>
@@ -500,8 +560,47 @@ export default function ReportTemplateList() {
             columns={columns}
             data={filteredTemplates}
             keyExtractor={(t) => t.id}
+            onRowContextMenu={openTemplateContextMenu}
           />
         </Card>
+      )}
+
+      {templateContextMenu && (
+        <div
+          ref={contextMenuRef}
+          className="absolute z-[80] w-64 overflow-hidden rounded-xl border border-white/10 bg-slate-900/95 p-1 shadow-2xl backdrop-blur"
+          style={{ top: templateContextMenu.y, left: templateContextMenu.x }}
+          role="menu"
+          aria-label={`Ações do template ${templateContextMenu.template.name}`}
+        >
+          <button
+            type="button"
+            className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm text-slate-200 transition-colors hover:bg-white/10"
+            onClick={handleContextMenuEdit}
+            role="menuitem"
+          >
+            <span>Editar template</span>
+            <Edit2 className="h-4 w-4 text-slate-400" />
+          </button>
+          <button
+            type="button"
+            className="mt-1 flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm text-slate-200 transition-colors hover:bg-white/10"
+            onClick={handleContextMenuHistory}
+            role="menuitem"
+          >
+            <span>Ver histórico de alterações</span>
+            <History className="h-4 w-4 text-slate-400" />
+          </button>
+          <button
+            type="button"
+            className="mt-1 flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm text-red-300 transition-colors hover:bg-red-500/15"
+            onClick={handleContextMenuDelete}
+            role="menuitem"
+          >
+            <span>Excluir template</span>
+            <Trash2 className="h-4 w-4 text-red-400" />
+          </button>
+        </div>
       )}
 
       <Modal
