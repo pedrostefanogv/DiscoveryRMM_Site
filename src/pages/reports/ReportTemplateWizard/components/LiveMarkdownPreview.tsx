@@ -23,6 +23,16 @@ export function LiveMarkdownPreview({ wizard }: Props) {
   const { data: sites = [] } = useSites(clientId || undefined);
   const previewMutation = useReportPreview();
 
+  const previewErrorMessage = useMemo(() => {
+    if (!previewMutation.isError || !previewMutation.error)
+      return null;
+
+    if (previewMutation.error instanceof Error && previewMutation.error.message?.trim())
+      return previewMutation.error.message;
+
+    return "Erro ao carregar preview. Verifique os filtros.";
+  }, [previewMutation.error, previewMutation.isError]);
+
   const markdown = useMemo(() => {
     if (!state.name && state.columns.length === 0) {
       return "_Adicione colunas para ver o preview..._";
@@ -185,7 +195,7 @@ export function LiveMarkdownPreview({ wizard }: Props) {
         )}
         {mode === "data" && previewMutation.isError && (
           <div className="rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-xs text-red-300">
-            Erro ao carregar preview. Verifique os filtros.
+            {previewErrorMessage ?? "Erro ao carregar preview. Verifique os filtros."}
           </div>
         )}
       </div>

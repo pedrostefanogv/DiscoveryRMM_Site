@@ -1,5 +1,5 @@
-import { useState, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useCallback, useEffect } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Loading } from "@/components/ui";
 import { useReportDatasets } from "@/hooks/useReportDatasets";
 import { useCreateReportTemplate } from "@/hooks/useReportTemplates";
@@ -7,6 +7,7 @@ import { useWizardState, WizardState } from "./hooks/useWizardState";
 import { StepDataSources } from "./StepDataSources";
 import { StepLayout } from "./StepLayout";
 import { StepMetadata } from "./StepMetadata";
+import { buildRunReportPath, resolveBuiltInTemplateId } from "../builtInTemplates";
 
 interface Props {
   initialTemplate?: Partial<WizardState>;
@@ -14,11 +15,19 @@ interface Props {
 
 export function ReportTemplateWizard({ initialTemplate }: Props) {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const clientId = searchParams.get("clientId") || undefined;
   const [step, setStep] = useState(0);
   const { data: datasets = [], isLoading } = useReportDatasets();
   const createMutation = useCreateReportTemplate();
+  const legacyBuiltInTemplateId = resolveBuiltInTemplateId(searchParams.get("template"));
 
   const wizard = useWizardState(initialTemplate);
+
+  useEffect(() => {
+    if (!legacyBuiltInTemplateId) return;
+    navigate(buildRunReportPath(legacyBuiltInTemplateId, clientId), { replace: true });
+  }, [legacyBuiltInTemplateId, clientId, navigate]);
 
   const handleCreate = useCallback(async () => {
     const request = wizard.buildRequest();
@@ -30,7 +39,7 @@ export function ReportTemplateWizard({ initialTemplate }: Props) {
     }
   }, [wizard, createMutation, navigate]);
 
-  if (isLoading) return <Loading />;
+  if (isLoading || legacyBuiltInTemplateId) return <Loading />;
 
   const steps = [
     { title: "Fontes de Dados", subtitle: "Escolha os datasets e combine-os" },

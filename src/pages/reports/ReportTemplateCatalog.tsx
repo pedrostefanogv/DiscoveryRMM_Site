@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button, Loading } from "@/components/ui";
 import { useReportDatasets } from "@/hooks/useReportDatasets";
+import { buildRunReportPath, resolveBuiltInTemplateId } from "./builtInTemplates";
 
 const DATASET_ICONS: Record<string, string> = {
   softwareInventory: "💿",
@@ -84,6 +85,8 @@ const BUILT_IN_TEMPLATES = [
 
 export function ReportTemplateCatalog() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const clientId = searchParams.get("clientId") || undefined;
   const { data: datasets = [], isLoading } = useReportDatasets();
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<"all" | "builtin" | "custom">("all");
@@ -158,11 +161,16 @@ export function ReportTemplateCatalog() {
             {filteredBuiltIn.map((t) => (
               <button
                 key={t.id}
-                onClick={() =>
-                  navigate(
-                    `/reports/templates/new?template=${t.id}`,
-                  )
-                }
+                onClick={() => {
+                  const builtInTemplateId = resolveBuiltInTemplateId(t.id);
+                  if (builtInTemplateId) {
+                    navigate(buildRunReportPath(builtInTemplateId, clientId));
+                    return;
+                  }
+
+                  // Fallback de compatibilidade para slugs sem mapeamento.
+                  navigate(`/reports/templates/new?template=${t.id}`);
+                }}
                 className="rounded-xl border border-white/10 bg-white/5 p-4 text-left transition-all hover:border-primary/30 hover:bg-white/10"
               >
                 <div className="mb-2 text-2xl">{t.icon}</div>
