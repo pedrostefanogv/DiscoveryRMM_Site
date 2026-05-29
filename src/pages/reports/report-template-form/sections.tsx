@@ -17,6 +17,18 @@ import type { FieldOption, LayoutEditorState, NormalizedDataset, SupportedFormat
 
 type DraftSetter = Dispatch<SetStateAction<TemplateDraft>>;
 
+const REPORT_FONT_OPTIONS = [
+  { label: "Segoe UI (padrão)", value: "Segoe UI, sans-serif" },
+  { label: "Inter", value: "Inter, system-ui, sans-serif" },
+  { label: "Roboto", value: "Roboto, Arial, sans-serif" },
+  { label: "Helvetica Neue", value: "Helvetica Neue, Helvetica, Arial, sans-serif" },
+  { label: "Arial", value: "Arial, sans-serif" },
+  { label: "Trebuchet MS", value: "Trebuchet MS, sans-serif" },
+  { label: "Georgia", value: "Georgia, serif" },
+  { label: "Times New Roman", value: "Times New Roman, Times, serif" },
+  { label: "Courier New", value: "Courier New, monospace" },
+];
+
 type HeaderProps = {
   isEdit: boolean;
   onBack: () => void;
@@ -1566,6 +1578,16 @@ export function LayoutBrandingSection({
   setLayoutEditor,
   supportedAggregates,
 }: LayoutBrandingSectionProps) {
+  const selectedFontFamily = layoutEditor.style.fontFamily || "Segoe UI, sans-serif";
+  const fontOptions = REPORT_FONT_OPTIONS.some(
+    (option) => option.value === selectedFontFamily,
+  )
+    ? REPORT_FONT_OPTIONS
+    : [
+        { label: `Atual (${selectedFontFamily})`, value: selectedFontFamily },
+        ...REPORT_FONT_OPTIONS,
+      ];
+
   return (
     <>
       <div className="mt-5 grid gap-4 md:grid-cols-3">
@@ -1604,7 +1626,7 @@ export function LayoutBrandingSection({
               style: { ...prev.style, primaryColor: event.target.value },
             }))
           }
-          hint="Cor de fundo do cabeçalho da tabela e elementos principais."
+          hint="Aplicada no título principal, linhas de destaque e elementos visuais de maior evidência."
         />
         <Input
           label="Cor secundaria"
@@ -1616,7 +1638,7 @@ export function LayoutBrandingSection({
               style: { ...prev.style, secondaryColor: event.target.value },
             }))
           }
-          hint="Cor de fundo alternado nas linhas (listras pares)."
+          hint="Cor de apoio usada em blocos secundários e fundos auxiliares do relatório."
         />
         <Input
           label="Cor de destaque"
@@ -1628,7 +1650,7 @@ export function LayoutBrandingSection({
               style: { ...prev.style, accentColor: event.target.value },
             }))
           }
-          hint="Usada em totais, bordas de destaque e rodapé."
+          hint="Usada em totais, indicadores de ênfase e pontos de chamada de atenção no documento."
         />
         <Input
           label="Cor texto cabecalho"
@@ -1640,7 +1662,7 @@ export function LayoutBrandingSection({
               style: { ...prev.style, headerTextColor: event.target.value },
             }))
           }
-          hint="Cor do texto nas células de cabeçalho."
+          hint="Cor do texto dos cabeçalhos das tabelas. Mantenha contraste com o fundo do cabeçalho."
         />
         <Input
           label="Fundo do cabecalho"
@@ -1652,7 +1674,7 @@ export function LayoutBrandingSection({
               style: { ...prev.style, headerBackgroundColor: event.target.value },
             }))
           }
-          hint="Cor de fundo específica do cabeçalho da tabela."
+          hint="Cor de fundo das células de cabeçalho em todas as tabelas do relatório."
         />
         <Input
           label="Cor alternada das linhas"
@@ -1664,7 +1686,7 @@ export function LayoutBrandingSection({
               style: { ...prev.style, alternateRowColor: event.target.value },
             }))
           }
-          hint="Usada no zebra striping quando showRowStripes estiver ativo."
+          hint="Cor aplicada nas linhas alternadas quando a opção de listras zebradas estiver habilitada."
         />
         <Input
           label="Cor da borda"
@@ -1676,19 +1698,30 @@ export function LayoutBrandingSection({
               style: { ...prev.style, borderColor: event.target.value },
             }))
           }
-          hint="Cor usada em bordas e divisores principais."
+          hint="Define a cor das bordas de tabelas, cards de detalhe e divisores de seção."
         />
-        <Input
-          label="Fonte"
-          value={layoutEditor.style.fontFamily}
-          onChange={(event) =>
-            setLayoutEditor((prev) => ({
-              ...prev,
-              style: { ...prev.style, fontFamily: event.target.value },
-            }))
-          }
-          hint="Família tipográfica CSS válida. Ex.: Arial, Segoe UI, sans-serif."
-        />
+        <div className="space-y-1">
+          <label className="block text-sm font-medium text-slate-300">Fonte</label>
+          <select
+            value={selectedFontFamily}
+            onChange={(event) =>
+              setLayoutEditor((prev) => ({
+                ...prev,
+                style: { ...prev.style, fontFamily: event.target.value },
+              }))
+            }
+            className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none transition-colors focus-visible:border-primary/60 focus-visible:ring-2 focus-visible:ring-primary/30"
+          >
+            {fontOptions.map((option) => (
+              <option key={option.value} value={option.value} className="bg-slate-900 text-slate-100">
+                {option.label}
+              </option>
+            ))}
+          </select>
+          <p className="text-xs text-slate-400">
+            Selecione uma fonte validada para evitar erros de preenchimento e manter consistência visual.
+          </p>
+        </div>
         <div className="flex items-end pb-2">
           <label className="flex items-center gap-2 text-sm text-slate-300">
             <input

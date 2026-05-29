@@ -12,7 +12,6 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronDown,
-  ChevronUp,
   Shield,
   FileBarChart,
   Wrench,
@@ -98,6 +97,17 @@ type SidebarAccordionSection =
   | 'reports'
   | 'identity'
   | 'settings';
+
+function submenuAnimationClass(isOpen: boolean): string {
+  return [
+    'overflow-hidden transition-[max-height,opacity,transform] duration-200 ease-out',
+    isOpen ? 'max-h-96 opacity-100 translate-y-0' : 'max-h-0 opacity-0 -translate-y-1 pointer-events-none',
+  ].join(' ');
+}
+
+function chevronAnimationClass(isOpen: boolean): string {
+  return `h-4 w-4 transition-transform duration-200 ${isOpen ? 'rotate-180' : 'rotate-0'}`;
+}
 
 export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMobile }: SidebarProps) {
   const { branding } = useTheme();
@@ -246,30 +256,32 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
             <>
               <span className="truncate">Clientes</span>
               <span className="ml-auto">
-                {clientsOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                <ChevronDown className={chevronAnimationClass(clientsOpen)} />
               </span>
             </>
           )}
         </button>
 
-        {!collapsed && clientsOpen && (
-          <div className="ml-8 space-y-1 border-l border-white/10 pl-3">
-            {clientLinks.map(({ to, label }) => (
-              <NavLink
-                key={to}
-                to={to}
-                end={to === '/clients'}
-                className={({ isActive }) =>
-                  `block rounded-md px-2 py-1.5 text-sm transition-colors ${
-                    isActive
-                      ? 'bg-white/10 text-white'
-                      : 'text-slate-400 hover:bg-white/5 hover:text-white'
-                  }`
-                }
-              >
-                {label}
-              </NavLink>
-            ))}
+        {!collapsed && (
+          <div className={submenuAnimationClass(clientsOpen)} aria-hidden={!clientsOpen}>
+            <div className="ml-8 space-y-1 border-l border-white/10 pl-3 pb-1">
+              {clientLinks.map(({ to, label }) => (
+                <NavLink
+                  key={to}
+                  to={to}
+                  end={to === '/clients'}
+                  className={({ isActive }) =>
+                    `block rounded-md px-2 py-1.5 text-sm transition-colors ${
+                      isActive
+                        ? 'bg-white/10 text-white'
+                        : 'text-slate-400 hover:bg-white/5 hover:text-white'
+                    }`
+                  }
+                >
+                  {label}
+                </NavLink>
+              ))}
+            </div>
           </div>
         )}
 
@@ -312,30 +324,32 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
             <>
               <span className="truncate">Suporte</span>
               <span className="ml-auto">
-                {ticketsOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                <ChevronDown className={chevronAnimationClass(ticketsOpen)} />
               </span>
             </>
           )}
         </button>
 
-        {!collapsed && ticketsOpen && (
-          <div className="ml-8 space-y-1 border-l border-white/10 pl-3">
-            {visibleTicketsLinks.map(({ to, label }) => (
-              <NavLink
-                key={to}
-                to={to}
-                end={to === '/tickets'}
-                className={({ isActive }) =>
-                  `block rounded-md px-2 py-1.5 text-sm transition-colors ${
-                    isActive
-                      ? 'bg-white/10 text-white'
-                      : 'text-slate-400 hover:bg-white/5 hover:text-white'
-                  }`
-                }
-              >
-                {label}
-              </NavLink>
-            ))}
+        {!collapsed && (
+          <div className={submenuAnimationClass(ticketsOpen)} aria-hidden={!ticketsOpen}>
+            <div className="ml-8 space-y-1 border-l border-white/10 pl-3 pb-1">
+              {visibleTicketsLinks.map(({ to, label }) => (
+                <NavLink
+                  key={to}
+                  to={to}
+                  end={to === '/tickets'}
+                  className={({ isActive }) =>
+                    `block rounded-md px-2 py-1.5 text-sm transition-colors ${
+                      isActive
+                        ? 'bg-white/10 text-white'
+                        : 'text-slate-400 hover:bg-white/5 hover:text-white'
+                    }`
+                  }
+                >
+                  {label}
+                </NavLink>
+              ))}
+            </div>
           </div>
         )}
 
@@ -362,29 +376,31 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
                 <>
                   <span className="truncate">Softwares</span>
                   <span className="ml-auto">
-                    {softwareOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                    <ChevronDown className={chevronAnimationClass(softwareOpen)} />
                   </span>
                 </>
               )}
             </button>
 
-            {!collapsed && softwareOpen && (
-              <div className="ml-8 space-y-1 border-l border-white/10 pl-3">
-                {softwareLinks.map(({ to, label }) => (
-                  <NavLink
-                    key={to}
-                    to={to}
-                    className={({ isActive }) =>
-                      `block rounded-md px-2 py-1.5 text-sm transition-colors ${
-                        isActive
-                          ? 'bg-white/10 text-white'
-                          : 'text-slate-400 hover:bg-white/5 hover:text-white'
-                      }`
-                    }
-                  >
-                    {label}
-                  </NavLink>
-                ))}
+            {!collapsed && (
+              <div className={submenuAnimationClass(softwareOpen)} aria-hidden={!softwareOpen}>
+                <div className="ml-8 space-y-1 border-l border-white/10 pl-3 pb-1">
+                  {softwareLinks.map(({ to, label }) => (
+                    <NavLink
+                      key={to}
+                      to={to}
+                      className={({ isActive }) =>
+                        `block rounded-md px-2 py-1.5 text-sm transition-colors ${
+                          isActive
+                            ? 'bg-white/10 text-white'
+                            : 'text-slate-400 hover:bg-white/5 hover:text-white'
+                        }`
+                      }
+                    >
+                      {label}
+                    </NavLink>
+                  ))}
+                </div>
               </div>
             )}
           </>
@@ -413,30 +429,32 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
                 <>
                   <span className="truncate">Automação</span>
                   <span className="ml-auto">
-                    {automationOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                    <ChevronDown className={chevronAnimationClass(automationOpen)} />
                   </span>
                 </>
               )}
             </button>
 
-            {!collapsed && automationOpen && (
-              <div className="ml-8 space-y-1 border-l border-white/10 pl-3">
-                {visibleAutomationLinks.map(({ to, label }) => (
-                  <NavLink
-                    key={to}
-                    to={to}
-                    end={to === '/automation'}
-                    className={({ isActive }) =>
-                      `block rounded-md px-2 py-1.5 text-sm transition-colors ${
-                        isActive
-                          ? 'bg-white/10 text-white'
-                          : 'text-slate-400 hover:bg-white/5 hover:text-white'
-                      }`
-                    }
-                  >
-                    {label}
-                  </NavLink>
-                ))}
+            {!collapsed && (
+              <div className={submenuAnimationClass(automationOpen)} aria-hidden={!automationOpen}>
+                <div className="ml-8 space-y-1 border-l border-white/10 pl-3 pb-1">
+                  {visibleAutomationLinks.map(({ to, label }) => (
+                    <NavLink
+                      key={to}
+                      to={to}
+                      end={to === '/automation'}
+                      className={({ isActive }) =>
+                        `block rounded-md px-2 py-1.5 text-sm transition-colors ${
+                          isActive
+                            ? 'bg-white/10 text-white'
+                            : 'text-slate-400 hover:bg-white/5 hover:text-white'
+                        }`
+                      }
+                    >
+                      {label}
+                    </NavLink>
+                  ))}
+                </div>
               </div>
             )}
           </>
@@ -465,29 +483,31 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
                 <>
                   <span className="truncate">Relatórios</span>
                   <span className="ml-auto">
-                    {reportsOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                    <ChevronDown className={chevronAnimationClass(reportsOpen)} />
                   </span>
                 </>
               )}
             </button>
 
-            {!collapsed && reportsOpen && (
-              <div className="ml-8 space-y-1 border-l border-white/10 pl-3">
-                {reportsLinks.map(({ to, label }) => (
-                  <NavLink
-                    key={to}
-                    to={to}
-                    className={({ isActive }) =>
-                      `block rounded-md px-2 py-1.5 text-sm transition-colors ${
-                        isActive
-                          ? 'bg-white/10 text-white'
-                          : 'text-slate-400 hover:bg-white/5 hover:text-white'
-                      }`
-                    }
-                  >
-                    {label}
-                  </NavLink>
-                ))}
+            {!collapsed && (
+              <div className={submenuAnimationClass(reportsOpen)} aria-hidden={!reportsOpen}>
+                <div className="ml-8 space-y-1 border-l border-white/10 pl-3 pb-1">
+                  {reportsLinks.map(({ to, label }) => (
+                    <NavLink
+                      key={to}
+                      to={to}
+                      className={({ isActive }) =>
+                        `block rounded-md px-2 py-1.5 text-sm transition-colors ${
+                          isActive
+                            ? 'bg-white/10 text-white'
+                            : 'text-slate-400 hover:bg-white/5 hover:text-white'
+                        }`
+                      }
+                    >
+                      {label}
+                    </NavLink>
+                  ))}
+                </div>
               </div>
             )}
           </>
@@ -514,29 +534,31 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
             <>
               <span className="truncate">Identidade</span>
               <span className="ml-auto">
-                {identityOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                <ChevronDown className={chevronAnimationClass(identityOpen)} />
               </span>
             </>
           )}
         </button>
 
-        {!collapsed && identityOpen && (
-          <div className="ml-8 space-y-1 border-l border-white/10 pl-3">
-            {visibleIdentityLinks.map(({ to, label }) => (
-              <NavLink
-                key={to}
-                to={to}
-                className={({ isActive }) =>
-                  `block rounded-md px-2 py-1.5 text-sm transition-colors ${
-                    isActive
-                      ? 'bg-white/10 text-white'
-                      : 'text-slate-400 hover:bg-white/5 hover:text-white'
-                  }`
-                }
-              >
-                {label}
-              </NavLink>
-            ))}
+        {!collapsed && (
+          <div className={submenuAnimationClass(identityOpen)} aria-hidden={!identityOpen}>
+            <div className="ml-8 space-y-1 border-l border-white/10 pl-3 pb-1">
+              {visibleIdentityLinks.map(({ to, label }) => (
+                <NavLink
+                  key={to}
+                  to={to}
+                  className={({ isActive }) =>
+                    `block rounded-md px-2 py-1.5 text-sm transition-colors ${
+                      isActive
+                        ? 'bg-white/10 text-white'
+                        : 'text-slate-400 hover:bg-white/5 hover:text-white'
+                    }`
+                  }
+                >
+                  {label}
+                </NavLink>
+              ))}
+            </div>
           </div>
         )}
 
@@ -563,30 +585,32 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
                 <>
                   <span className="truncate">Configurações</span>
                   <span className="ml-auto">
-                    {settingsOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                    <ChevronDown className={chevronAnimationClass(settingsOpen)} />
                   </span>
                 </>
               )}
             </button>
 
-            {!collapsed && settingsOpen && (
-              <div className="ml-8 space-y-1 border-l border-white/10 pl-3">
-                {settingsLinks.map(({ to, label }) => (
-                  <NavLink
-                    key={to}
-                    to={to}
-                    end={to === '/settings'}
-                    className={({ isActive }) =>
-                      `block rounded-md px-2 py-1.5 text-sm transition-colors ${
-                        isActive
-                          ? 'bg-white/10 text-white'
-                          : 'text-slate-400 hover:bg-white/5 hover:text-white'
-                      }`
-                    }
-                  >
-                    {label}
-                  </NavLink>
-                ))}
+            {!collapsed && (
+              <div className={submenuAnimationClass(settingsOpen)} aria-hidden={!settingsOpen}>
+                <div className="ml-8 space-y-1 border-l border-white/10 pl-3 pb-1">
+                  {settingsLinks.map(({ to, label }) => (
+                    <NavLink
+                      key={to}
+                      to={to}
+                      end={to === '/settings'}
+                      className={({ isActive }) =>
+                        `block rounded-md px-2 py-1.5 text-sm transition-colors ${
+                          isActive
+                            ? 'bg-white/10 text-white'
+                            : 'text-slate-400 hover:bg-white/5 hover:text-white'
+                        }`
+                      }
+                    >
+                      {label}
+                    </NavLink>
+                  ))}
+                </div>
               </div>
             )}
           </>

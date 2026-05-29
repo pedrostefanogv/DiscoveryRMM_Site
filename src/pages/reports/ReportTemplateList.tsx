@@ -30,6 +30,7 @@ import { ReportTemplateHistoryPanel } from "@/components/reports/ReportTemplateH
 import type { ReportTemplate } from "@/api/types";
 import type { Column } from "@/components/ui";
 import toast from "react-hot-toast";
+import { buildRunReportPath } from "./builtInTemplates";
 import {
   ReportDatasetType,
   ReportFormat,
@@ -96,7 +97,11 @@ function getFormatLabel(format: ReportFormatValue): string {
 
 export default function ReportTemplateList() {
   const [searchParams] = useSearchParams();
-  const clientId = searchParams.get("clientId") || undefined;
+  const clientIdParam = searchParams.get("clientId");
+  const clientId =
+    clientIdParam && clientIdParam !== "undefined" && clientIdParam !== "null"
+      ? clientIdParam
+      : undefined;
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -106,6 +111,13 @@ export default function ReportTemplateList() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [historyId, setHistoryId] = useState<string | null>(null);
   const [historyName, setHistoryName] = useState<string>("");
+
+  const buildTemplatePath = (basePath: string): string => {
+    if (!clientId) return basePath;
+    const params = new URLSearchParams();
+    params.set("clientId", clientId);
+    return `${basePath}?${params.toString()}`;
+  };
 
   const templates = useReportTemplates({
     isActive: !showInactive ? true : undefined,
@@ -311,7 +323,7 @@ export default function ReportTemplateList() {
             variant="secondary"
             size="sm"
             onClick={() =>
-              navigate(`/reports/run?templateId=${t.id}&clientId=${clientId}`)
+              navigate(buildRunReportPath(t.id, clientId))
             }
             title="Gerar relatório"
             aria-label="Gerar relatório"
@@ -323,7 +335,7 @@ export default function ReportTemplateList() {
             variant="ghost"
             size="sm"
             onClick={() =>
-              navigate(`/reports/templates/${t.id}/edit?clientId=${clientId}`)
+              navigate(buildTemplatePath(`/reports/templates/${t.id}/edit`))
             }
             title="Editar template"
             aria-label="Editar template"
@@ -393,7 +405,7 @@ export default function ReportTemplateList() {
         <div className="flex flex-wrap items-center gap-3 justify-end">
           <Button
             onClick={() =>
-              navigate(`/reports/templates/new?clientId=${clientId}`)
+              navigate(buildTemplatePath("/reports/templates/new"))
             }
           >
             <Plus className="h-4 w-4" /> Novo Template
@@ -476,7 +488,7 @@ export default function ReportTemplateList() {
               Ajuste os filtros ou crie um novo template para começar a geração de relatórios.
             </p>
             <div className="flex justify-center">
-              <Button onClick={() => navigate(`/reports/templates/new?clientId=${clientId}`)}>
+              <Button onClick={() => navigate(buildTemplatePath("/reports/templates/new"))}>
                 <Plus className="h-4 w-4" /> Criar Template
               </Button>
             </div>

@@ -16,7 +16,11 @@ interface Props {
 export function ReportTemplateWizard({ initialTemplate }: Props) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const clientId = searchParams.get("clientId") || undefined;
+  const clientIdParam = searchParams.get("clientId");
+  const clientId =
+    clientIdParam && clientIdParam !== "undefined" && clientIdParam !== "null"
+      ? clientIdParam
+      : undefined;
   const [step, setStep] = useState(0);
   const { data: datasets = [], isLoading } = useReportDatasets();
   const createMutation = useCreateReportTemplate();
@@ -33,11 +37,18 @@ export function ReportTemplateWizard({ initialTemplate }: Props) {
     const request = wizard.buildRequest();
     try {
       const result = await createMutation.mutateAsync(request as any);
-      navigate(`/reports/templates/${result.id}/edit`);
+      const basePath = `/reports/templates/${result.id}/edit/wizard`;
+      if (clientId) {
+        const params = new URLSearchParams();
+        params.set("clientId", clientId);
+        navigate(`${basePath}?${params.toString()}`);
+      } else {
+        navigate(basePath);
+      }
     } catch {
       // Error handled by mutation
     }
-  }, [wizard, createMutation, navigate]);
+  }, [wizard, createMutation, navigate, clientId]);
 
   if (isLoading || legacyBuiltInTemplateId) return <Loading />;
 

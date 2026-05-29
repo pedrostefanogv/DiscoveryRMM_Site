@@ -59,7 +59,11 @@ export default function ReportTemplateForm() {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const [searchParams] = useSearchParams();
-  const clientId = searchParams.get("clientId") || undefined;
+  const clientIdParam = searchParams.get("clientId");
+  const clientId =
+    clientIdParam && clientIdParam !== "undefined" && clientIdParam !== "null"
+      ? clientIdParam
+      : undefined;
   const isEdit = !!id && id !== "new";
 
   const templateQuery = useReportTemplate(id || "", clientId);

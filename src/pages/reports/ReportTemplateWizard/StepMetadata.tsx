@@ -1,6 +1,29 @@
 import { Button } from "@/components/ui";
 import { LiveMarkdownPreview } from "./components/LiveMarkdownPreview";
 
+const REPORT_FONT_OPTIONS = [
+  { label: "Segoe UI (padrão)", value: "Segoe UI, sans-serif" },
+  { label: "Inter", value: "Inter, system-ui, sans-serif" },
+  { label: "Roboto", value: "Roboto, Arial, sans-serif" },
+  { label: "Helvetica Neue", value: "Helvetica Neue, Helvetica, Arial, sans-serif" },
+  { label: "Arial", value: "Arial, sans-serif" },
+  { label: "Trebuchet MS", value: "Trebuchet MS, sans-serif" },
+  { label: "Georgia", value: "Georgia, serif" },
+  { label: "Times New Roman", value: "Times New Roman, Times, serif" },
+  { label: "Courier New", value: "Courier New, monospace" },
+];
+
+function normalizeLogoPreviewUrl(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+
+  if (/^(https?:\/\/|data:image\/|blob:|\/)/i.test(trimmed)) {
+    return trimmed;
+  }
+
+  return `https://${trimmed}`;
+}
+
 interface Props {
   wizard: ReturnType<typeof import("./hooks/useWizardState").useWizardState>;
   onBack: () => void;
@@ -10,6 +33,16 @@ interface Props {
 
 export function StepMetadata({ wizard, onBack, onCreate, isCreating }: Props) {
   const { state, setField } = wizard;
+  const logoPreviewUrl = normalizeLogoPreviewUrl(state.logoUrl);
+  const selectedFontFamily = state.style.fontFamily ?? "Segoe UI, sans-serif";
+  const fontOptions = REPORT_FONT_OPTIONS.some(
+    (option) => option.value === selectedFontFamily,
+  )
+    ? REPORT_FONT_OPTIONS
+    : [
+        { label: `Atual (${selectedFontFamily})`, value: selectedFontFamily },
+        ...REPORT_FONT_OPTIONS,
+      ];
 
   return (
     <div className="space-y-6">
@@ -18,7 +51,7 @@ export function StepMetadata({ wizard, onBack, onCreate, isCreating }: Props) {
           Metadados e aparência
         </h2>
         <p className="text-sm text-slate-400">
-          Dê um nome ao template, escolha o formato padrão e ajuste as cores.
+          Dê um nome ao template, escolha o formato padrão e ajuste a identidade visual do relatório.
         </p>
       </div>
 
@@ -143,6 +176,9 @@ export function StepMetadata({ wizard, onBack, onCreate, isCreating }: Props) {
                   }
                   className="h-10 w-full rounded-lg border border-white/10"
                 />
+                <p className="mt-1 text-[11px] leading-4 text-slate-500">
+                  Usada no título principal, linhas de destaque e separadores do relatório.
+                </p>
               </div>
               <div>
                 <label className="mb-1 block text-xs font-medium text-slate-400">
@@ -159,6 +195,9 @@ export function StepMetadata({ wizard, onBack, onCreate, isCreating }: Props) {
                   }
                   className="h-10 w-full rounded-lg border border-white/10"
                 />
+                <p className="mt-1 text-[11px] leading-4 text-slate-500">
+                  Cor de fundo das células de cabeçalho das tabelas.
+                </p>
               </div>
               <div>
                 <label className="mb-1 block text-xs font-medium text-slate-400">
@@ -175,6 +214,9 @@ export function StepMetadata({ wizard, onBack, onCreate, isCreating }: Props) {
                   }
                   className="h-10 w-full rounded-lg border border-white/10"
                 />
+                <p className="mt-1 text-[11px] leading-4 text-slate-500">
+                  Cor do texto nos cabeçalhos. Prefira alto contraste com o fundo do cabeçalho.
+                </p>
               </div>
               <div>
                 <label className="mb-1 block text-xs font-medium text-slate-400">
@@ -191,22 +233,33 @@ export function StepMetadata({ wizard, onBack, onCreate, isCreating }: Props) {
                   }
                   className="h-10 w-full rounded-lg border border-white/10"
                 />
+                <p className="mt-1 text-[11px] leading-4 text-slate-500">
+                  Aplicada nas linhas alternadas quando o modo zebrado estiver ativo.
+                </p>
               </div>
               <div>
                 <label className="mb-1 block text-xs font-medium text-slate-400">
                   Fonte
                 </label>
-                <input
-                  type="text"
-                  value={state.style.fontFamily ?? "Segoe UI, sans-serif"}
+                <select
+                  value={selectedFontFamily}
                   onChange={(e) =>
                     setField("style", {
                       ...state.style,
                       fontFamily: e.target.value,
                     })
                   }
-                  className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-100"
-                />
+                  className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white"
+                >
+                  {fontOptions.map((option) => (
+                    <option key={option.value} value={option.value} className="bg-slate-900">
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-[11px] leading-4 text-slate-500">
+                  Selecione uma fonte validada para evitar erros de preenchimento e renderização.
+                </p>
               </div>
               <div>
                 <label className="mb-1 block text-xs font-medium text-slate-400">
@@ -219,6 +272,21 @@ export function StepMetadata({ wizard, onBack, onCreate, isCreating }: Props) {
                   placeholder="https://..."
                   className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-100 placeholder-slate-500"
                 />
+                <p className="mt-1 text-[11px] leading-4 text-slate-500">
+                  Endereço da imagem exibida no cabeçalho do relatório.
+                </p>
+                {logoPreviewUrl ? (
+                  <div className="mt-2 rounded-lg border border-white/10 bg-black/20 p-2">
+                    <p className="mb-1 text-[10px] uppercase tracking-wide text-slate-500">
+                      Pré-visualização do logo
+                    </p>
+                    <img
+                      src={logoPreviewUrl}
+                      alt="Pré-visualização do logo"
+                      className="max-h-12 w-auto rounded bg-white/80 p-1 object-contain"
+                    />
+                  </div>
+                ) : null}
               </div>
             </div>
             <label className="mt-3 flex items-center gap-2 text-sm text-slate-400">

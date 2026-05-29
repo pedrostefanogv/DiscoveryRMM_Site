@@ -105,6 +105,18 @@ function normalizeFieldReference(field: string, sourceAlias?: string): string {
     : field;
 }
 
+function normalizeLogoUrl(value: string): string | undefined {
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+
+  if (/^(https?:\/\/|data:image\/|blob:|\/)/i.test(trimmed)) {
+    return trimmed;
+  }
+
+  // Permite colar domínio sem protocolo sem quebrar o render do logo.
+  return `https://${trimmed}`;
+}
+
 export function findJoinKeys(sourceKey: string, targetKey: string): string[] {
   const source = JOIN_KEYS[sourceKey] ?? [];
   const target = JOIN_KEYS[targetKey] ?? [];
@@ -200,7 +212,7 @@ export function useWizardState(initialState?: Partial<WizardState>) {
       fontFamily: "Segoe UI, sans-serif",
       showRowStripes: true,
     },
-    logoUrl: initialState?.logoUrl ?? "",
+    logoUrl: initialState?.logoUrl ?? initialState?.style?.logoUrl ?? "",
     createdBy: initialState?.createdBy ?? "",
   }));
 
@@ -385,6 +397,8 @@ export function useWizardState(initialState?: Partial<WizardState>) {
   // ── Build layout JSON ─────────────────────────────────
 
   const buildLayoutJson = useCallback((): string => {
+    const normalizedLogoUrl = normalizeLogoUrl(state.logoUrl);
+
     const dataSources: ReportLayoutDataSourceDefinition[] =
       state.selectedDatasets.map((ds) => {
         const dsType = ds.catalogItem.datasetType ?? ds.catalogItem.type;
@@ -406,6 +420,7 @@ export function useWizardState(initialState?: Partial<WizardState>) {
     const layout: Record<string, unknown> = {
       title: state.name || "Novo Relatório",
       orientation: state.orientation,
+      logoUrl: normalizedLogoUrl,
       groupBy: state.groupBy || undefined,
       groupTitleTemplate: state.groupTitleTemplate || undefined,
       hideGroupColumn: state.hideGroupColumn,
@@ -420,10 +435,16 @@ export function useWizardState(initialState?: Partial<WizardState>) {
       })),
       style: {
         primaryColor: state.style.primaryColor,
+        secondaryColor: state.style.secondaryColor,
+        accentColor: state.style.accentColor,
         headerBackgroundColor: state.style.headerBackgroundColor,
         headerTextColor: state.style.headerTextColor,
         alternateRowColor: state.style.alternateRowColor,
+        borderColor: state.style.borderColor,
         fontFamily: state.style.fontFamily,
+        logoUrl: normalizedLogoUrl,
+        logoMaxHeightPx: state.style.logoMaxHeightPx,
+        showRowStripes: state.style.showRowStripes,
       },
     };
 

@@ -53,6 +53,7 @@ const IamGroupsPage = lazy(() => import('@/pages/settings/IamGroupsPage'));
 const IamRolesPage = lazy(() => import('@/pages/settings/IamRolesPage'));
 const IamMeshProfilesPage = lazy(() => import('@/pages/settings/IamMeshProfilesPage'));
 const ReportTemplateList = lazy(() => import('@/pages/reports/ReportTemplateList'));
+const ReportTemplateForm = lazy(() => import('@/pages/reports/ReportTemplateForm'));
 const ReportTemplateWizard = lazy(() => import('@/pages/reports/ReportTemplateWizard'));
 const ReportTemplateWizardEdit = lazy(() => import('@/pages/reports/ReportTemplateWizard/ReportTemplateWizardEdit'));
 const ReportTemplateCatalog = lazy(() => import('@/pages/reports/ReportTemplateCatalog'));
@@ -522,6 +523,14 @@ export const router = createBrowserRouter([
       },
       {
         path: 'reports/templates/:id/edit',
+        element: (
+          <PermissionGate anyOf={['reports.*', 'reports.read', 'admin.*']}>
+            <LazyPage><ReportTemplateForm /></LazyPage>
+          </PermissionGate>
+        ),
+      },
+      {
+        path: 'reports/templates/:id/edit/wizard',
         element: (
           <PermissionGate anyOf={['reports.*', 'reports.read', 'admin.*']}>
             <LazyPage><ReportTemplateWizardEdit /></LazyPage>
