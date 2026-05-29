@@ -33,6 +33,14 @@ export function LiveMarkdownPreview({ wizard }: Props) {
     return "Erro ao carregar preview. Verifique os filtros.";
   }, [previewMutation.error, previewMutation.isError]);
 
+  const previewSrcDoc = useMemo(() => {
+    const html = previewMutation.data?.html;
+    if (!html)
+      return null;
+
+    return toPreviewSrcDoc(html);
+  }, [previewMutation.data?.html]);
+
   const markdown = useMemo(() => {
     if (!state.name && state.columns.length === 0) {
       return "_Adicione colunas para ver o preview..._";
@@ -173,28 +181,37 @@ export function LiveMarkdownPreview({ wizard }: Props) {
         </div>
       )}
 
-      <div className="max-h-[600px] overflow-y-auto rounded-lg border border-white/10 bg-black/30 p-4">
+      <div
+        className={`rounded-lg border border-white/10 bg-black/30 ${
+          mode === "data" ? "p-0" : "max-h-[600px] overflow-y-auto p-4"
+        }`}
+      >
         {mode === "structure" && (
           <div className="prose prose-sm prose-invert max-w-none">
             <ReactMarkdown remarkPlugins={[remarkGfm]}>{markdown}</ReactMarkdown>
           </div>
         )}
         {mode === "data" && previewMutation.isPending && (
-          <div className="flex items-center justify-center gap-2 py-8 text-sm text-slate-400">
+          <div className="flex items-center justify-center gap-2 py-8 text-sm text-slate-400 p-4">
             <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
             Carregando dados...
           </div>
         )}
-        {mode === "data" && !previewMutation.isPending && previewMutation.data?.html && (
-          <div className="max-w-none text-xs" dangerouslySetInnerHTML={{ __html: sanitizePreviewHtml(previewMutation.data.html) }} />
+        {mode === "data" && !previewMutation.isPending && previewSrcDoc && (
+          <iframe
+            title="Preview de dados do relatorio"
+            className="h-[520px] w-full rounded-lg bg-white"
+            sandbox=""
+            srcDoc={previewSrcDoc}
+          />
         )}
         {mode === "data" && !previewMutation.isPending && !previewMutation.data?.html && hasColumns && (
-          <div className="py-8 text-center">
+          <div className="py-8 text-center p-4">
             <p className="text-sm text-slate-400">Clique em 'Atualizar' para carregar dados reais.</p>
           </div>
         )}
         {mode === "data" && previewMutation.isError && (
-          <div className="rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-xs text-red-300">
+          <div className="rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-xs text-red-300 m-4">
             {previewErrorMessage ?? "Erro ao carregar preview. Verifique os filtros."}
           </div>
         )}
@@ -216,4 +233,15 @@ function sanitizePreviewHtml(html: string): string {
     .replace(/<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe>/gi, "")
     .replace(/\son\w+\s*=\s*"[^"]*"/gi, "")
     .replace(/\son\w+\s*=\s*'[^']*'/gi, "");
+}
+
+function toPreviewSrcDoc(html: string): string {
+  const sanitized = sanitizePreviewHtml(html).trim();
+  if (!sanitized)
+    return "<!doctype html><html><head><meta charset=\"utf-8\"></head><body></body></html>";
+
+  if (/<!doctype|<html[\s>]/i.test(sanitized))
+    return sanitized;
+
+  return `<!doctype html><html><head><meta charset="utf-8"></head><body>${sanitized}</body></html>`;
 }
