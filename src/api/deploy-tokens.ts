@@ -17,7 +17,7 @@ const BASE = "/api/v1/deploy-tokens";
 
 function parseContentDispositionFileName(
   contentDisposition: string | null,
-  fallbackFileName = "discovery-installer.exe",
+  fallbackFileName = "discovery-agent-bootstrap.exe",
 ): string {
   if (!contentDisposition) return fallbackFileName;
 
@@ -46,7 +46,7 @@ function normalizeInstallerType(type: DeployInstallerTypeInput): DeployInstaller
 function installerFallbackFileName(type: DeployInstallerType): string {
   return type === "offline"
     ? "discovery-installer-offline.zip"
-    : "discovery-installer.exe";
+    : "discovery-agent-bootstrap.exe";
 }
 
 function packageFallbackFileName(artifact: string | null | undefined): string {
@@ -163,6 +163,28 @@ export const deployTokensApi = {
       fileName: parseContentDispositionFileName(
         response.headers.get("content-disposition"),
         installerFallbackFileName(normalizedType),
+      ),
+      blob,
+    };
+  },
+
+  /** Downloads the generic (zero-touch) installer directly — no token needed. */
+  downloadGenericInstaller: async (): Promise<DeployInstallerPayload> => {
+    const response = await apiFetchResponse(
+      "/api/v1/download/agent/generic",
+      { method: "GET" },
+    );
+
+    if (!response.ok) {
+      const message = await parseErrorMessage(response);
+      throw new ApiError(response.status, message);
+    }
+
+    const blob = await response.blob();
+    return {
+      fileName: parseContentDispositionFileName(
+        response.headers.get("content-disposition"),
+        "discovery-agent-zerotouch.exe",
       ),
       blob,
     };

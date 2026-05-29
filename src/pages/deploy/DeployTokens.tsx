@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
-import { Copy, KeyRound } from 'lucide-react';
+import { Copy, Download, KeyRound } from 'lucide-react';
 import { Badge, Button, Card, CardHeader, Input, Select, TextArea } from '@/components/ui';
 import {
   useCreateDeployToken,
@@ -13,6 +13,7 @@ import { useSites } from '@/hooks/useSites';
 import {
   agentUpdatesApi,
   ApiError,
+  deployTokensApi,
   LogLevel,
   LogSource,
   LogType,
@@ -45,7 +46,7 @@ function triggerInstallerDownload(fileName: string, blob: Blob) {
   const objectUrl = URL.createObjectURL(blob);
   const anchor = document.createElement('a');
   anchor.href = objectUrl;
-  anchor.download = fileName || 'discovery-installer.exe';
+  anchor.download = fileName || 'discovery-agent-bootstrap.exe';
   document.body.appendChild(anchor);
   anchor.click();
   anchor.remove();
@@ -321,6 +322,25 @@ export default function DeployTokens() {
     }
   };
 
+  const downloadGenericInstaller = useMutation({
+    mutationFn: () => deployTokensApi.downloadGenericInstaller(),
+    onSuccess: (result) => {
+      triggerInstallerDownload(result.fileName, result.blob);
+      toast.success('Instalador zero-touch baixado com sucesso.');
+    },
+    onError: (error: unknown) => {
+      const message = error instanceof ApiError
+        ? error.message
+        : 'Não foi possível baixar o instalador zero-touch.';
+      toast.error(message);
+    },
+  });
+
+  function handleDownloadGenericInstaller() {
+    emitInstallerTelemetry('generic_download_started', LogLevel.Info, {});
+    downloadGenericInstaller.mutate();
+  }
+
   function resetListingState() {
     setTokensFilter(null);
     setVisibleTokenIds(new Set());
@@ -513,15 +533,25 @@ export default function DeployTokens() {
           <h1 className="text-2xl font-bold text-white">Instalação de Agentes</h1>
           <p className="text-sm text-slate-400">Console de provisionamento com criação e gestão operacional de deploy tokens.</p>
         </div>
-        <Button
-          variant="secondary"
-          onClick={() => {
-            refreshAgentUpdateBuild.mutate();
-          }}
-          loading={refreshAgentUpdateBuild.isPending}
-        >
-          Rebuildar agente de atualização
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="secondary"
+            onClick={handleDownloadGenericInstaller}
+            loading={downloadGenericInstaller.isPending}
+          >
+            <Download className="h-4 w-4" />
+            Baixar instalador zero-touch
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={() => {
+              refreshAgentUpdateBuild.mutate();
+            }}
+            loading={refreshAgentUpdateBuild.isPending}
+          >
+            Rebuildar agente de atualização
+          </Button>
+        </div>
       </div>
 
       <Card>
@@ -637,7 +667,7 @@ export default function DeployTokens() {
                 onChange={e => setForm(current => ({ ...current, delivery: e.target.value as DeployTokenDelivery }))}
                 options={[
                   { value: 'token', label: 'Somente token' },
-                  { value: 'installer', label: 'Token + download do instalador (.exe)' },
+                  { value: 'installer', label: 'Token + download do instalador mínimo (.exe)' },
                 ]}
               />
 
@@ -800,8 +830,8 @@ export default function DeployTokens() {
                       value={installerType}
                       onChange={e => setInstallerType(e.target.value as DeployInstallerType)}
                       options={[
-                        { value: 'online', label: 'Download online (.exe)' },
-                        { value: 'offline', label: 'Pacote offline (.zip)' },
+                        { value: 'online', label: 'Instalador mínimo (.exe) — Recomendado' },
+                        { value: 'offline', label: 'Pacote offline completo (.zip)' },
                       ]}
                     />
                     <Button
@@ -820,6 +850,10 @@ export default function DeployTokens() {
                     </Button>
                   </div>
                 </div>
+                <p className="text-xs text-slate-500">
+                  <strong>Instalador mínimo:</strong> ~2 MB, baixa o restante durante a instalação (requer internet).
+                  {' '}<strong>Pacote offline:</strong> ~150 MB, instalação completa sem internet.
+                </p>
               </div>
             )}
           </Card>
@@ -881,7 +915,7 @@ export default function DeployTokens() {
                               loading={downloadingTokenId === token.id}
                               disabled={!canDownload}
                             >
-                              Baixar {installerType === 'offline' ? 'offline' : 'online'}
+                              Baixar {installerType === 'offline' ? 'pacote offline' : 'instalador mínimo'}
                             </Button>
 
                             <div className="relative">
