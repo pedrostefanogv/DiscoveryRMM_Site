@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Button, Loading } from "@/components/ui";
-import { useReportDatasets } from "@/hooks/useReportDatasets";
+import { Button } from "@/components/ui";
 import { buildRunReportPath, resolveBuiltInTemplateId } from "./builtInTemplates";
 
 const DATASET_ICONS: Record<string, string> = {
@@ -87,9 +86,8 @@ export function ReportTemplateCatalog() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const clientId = searchParams.get("clientId") || undefined;
-  const { data: datasets = [], isLoading } = useReportDatasets();
   const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState<"all" | "builtin" | "custom">("all");
+  const [filter, setFilter] = useState<"all" | "builtin">("all");
 
   const filteredBuiltIn = BUILT_IN_TEMPLATES.filter((t) => {
     if (search) {
@@ -103,22 +101,30 @@ export function ReportTemplateCatalog() {
     return true;
   });
 
-  if (isLoading) return <Loading />;
-
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-white">
-            📊 Templates de Relatório
+            📚 Catálogo de Templates Prontos
           </h1>
           <p className="text-sm text-slate-400">
-            Use um template pronto ou crie um personalizado.
+            Execute templates built-in imediatamente ou crie novos no fluxo guiado.
           </p>
         </div>
-        <Button onClick={() => navigate("/reports/templates/new")} variant="primary">
-          + Novo Template
-        </Button>
+        <div className="flex gap-2">
+          <Button onClick={() => navigate("/reports/templates")} variant="secondary">
+            Ver Lista de Geração
+          </Button>
+          <Button onClick={() => navigate(`/reports/templates/new${clientId ? `?clientId=${clientId}` : ""}`)} variant="primary">
+            + Novo Template
+          </Button>
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/10 p-3 text-xs text-cyan-200">
+        A seleção de dataset inicial foi movida para o fluxo de criação. Clique em
+        "Novo Template" para escolher datasets e montar um relatório do zero.
       </div>
 
       {/* Search & Filter */}
@@ -134,11 +140,10 @@ export function ReportTemplateCatalog() {
           {[
             ["all", "Todos"],
             ["builtin", "Built-in"],
-            ["custom", "Meus"],
           ].map(([value, label]) => (
             <button
               key={value}
-              onClick={() => setFilter(value as any)}
+              onClick={() => setFilter(value as "all" | "builtin")}
               className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
                 filter === value
                   ? "bg-primary text-white"
@@ -194,49 +199,6 @@ export function ReportTemplateCatalog() {
                 </div>
               </button>
             ))}
-          </div>
-        </div>
-      )}
-
-      {/* Dataset quick-start cards */}
-      {(filter === "all" || filter === "custom") && (
-        <div>
-          <h2 className="mb-3 text-sm font-semibold text-slate-400">
-            📦 Começar com um Dataset
-          </h2>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {datasets.map((ds) => {
-              const key = ds.key ?? ds.type ?? "";
-              return (
-                <button
-                  key={key}
-                  onClick={() =>
-                    navigate(
-                      `/reports/templates/new?dataset=${key}`,
-                    )
-                  }
-                  className="rounded-xl border border-white/10 bg-white/5 p-4 text-left transition-all hover:border-primary/30 hover:bg-white/10"
-                >
-                  <div className="mb-2 text-2xl">
-                    {DATASET_ICONS[key] ?? "📄"}
-                  </div>
-                  <div className="text-sm font-semibold text-white">
-                    {ds.name ?? key}
-                  </div>
-                  <div className="mt-1 text-xs text-slate-400">
-                    {ds.description ?? `${(ds.fields ?? []).length} campos`}
-                  </div>
-                  <div className="mt-2 text-[10px] text-slate-500">
-                    {(ds.fields ?? []).length} campos · Escopo:{" "}
-                    {ds.executionSchema?.scopeType !== undefined
-                      ? ["Global", "Cliente", "Site", "Agente"][
-                          ds.executionSchema.scopeType
-                        ]
-                      : "global"}
-                  </div>
-                </button>
-              );
-            })}
           </div>
         </div>
       )}

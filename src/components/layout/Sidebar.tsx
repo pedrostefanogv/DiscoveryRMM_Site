@@ -90,6 +90,15 @@ interface SidebarProps {
   onCloseMobile: () => void;
 }
 
+type SidebarAccordionSection =
+  | 'clients'
+  | 'tickets'
+  | 'software'
+  | 'automation'
+  | 'reports'
+  | 'identity'
+  | 'settings';
+
 export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMobile }: SidebarProps) {
   const { branding } = useTheme();
   const {
@@ -113,13 +122,30 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
     location.pathname.startsWith('/tickets') || location.pathname.startsWith('/knowledge');
   const settingsIsActive = location.pathname.startsWith('/settings');
   const identityIsActive = location.pathname.startsWith('/identity');
-  const [clientsOpen, setClientsOpen] = useState(clientsIsActive);
-  const [softwareOpen, setSoftwareOpen] = useState(softwareIsActive);
-  const [automationOpen, setAutomationOpen] = useState(automationIsActive);
-  const [reportsOpen, setReportsOpen] = useState(reportsIsActive);
-  const [ticketsOpen, setTicketsOpen] = useState(ticketsIsActive);
-  const [settingsOpen, setSettingsOpen] = useState(settingsIsActive);
-  const [identityOpen, setIdentityOpen] = useState(identityIsActive);
+
+  const resolveActiveSection = (): SidebarAccordionSection | null => {
+    if (clientsIsActive) return 'clients';
+    if (ticketsIsActive) return 'tickets';
+    if (softwareIsActive) return 'software';
+    if (automationIsActive) return 'automation';
+    if (reportsIsActive) return 'reports';
+    if (identityIsActive) return 'identity';
+    if (settingsIsActive) return 'settings';
+    return null;
+  };
+
+  const [openSection, setOpenSection] = useState<SidebarAccordionSection | null>(() =>
+    resolveActiveSection(),
+  );
+
+  const clientsOpen = openSection === 'clients';
+  const ticketsOpen = openSection === 'tickets';
+  const softwareOpen = openSection === 'software';
+  const automationOpen = openSection === 'automation';
+  const reportsOpen = openSection === 'reports';
+  const identityOpen = openSection === 'identity';
+  const settingsOpen = openSection === 'settings';
+
   const visibleIdentityLinks = canManageIdentity ? identityLinks : identityLinks.slice(0, 1);
   const canViewAgentLabels = hasAnyPermission(['settings.*', 'settings.read', 'admin.*']);
   const canViewAutomationMenu = canViewAutomation || canViewAgentLabels;
@@ -141,6 +167,21 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
   useEffect(() => {
     if (!isDesktop) onCloseMobile();
   }, [location.pathname, isDesktop, onCloseMobile]);
+
+  useEffect(() => {
+    const activeSection = resolveActiveSection();
+    if (activeSection) {
+      setOpenSection(activeSection);
+    }
+  }, [
+    clientsIsActive,
+    ticketsIsActive,
+    softwareIsActive,
+    automationIsActive,
+    reportsIsActive,
+    identityIsActive,
+    settingsIsActive,
+  ]);
 
   const expandedWidthClass = collapsed ? 'lg:w-16' : 'lg:w-60';
   const mobileVisibleClass = mobileOpen ? 'translate-x-0' : '-translate-x-full';
@@ -191,7 +232,7 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
               navigate('/clients');
               return;
             }
-            setClientsOpen(prev => !prev);
+            setOpenSection((prev) => (prev === 'clients' ? null : 'clients'));
           }}
           className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
             clientsIsActive
@@ -257,7 +298,7 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
               navigate('/tickets');
               return;
             }
-            setTicketsOpen(prev => !prev);
+            setOpenSection((prev) => (prev === 'tickets' ? null : 'tickets'));
           }}
           className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
             ticketsIsActive
@@ -307,7 +348,7 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
                   navigate('/software');
                   return;
                 }
-                setSoftwareOpen(prev => !prev);
+                setOpenSection((prev) => (prev === 'software' ? null : 'software'));
               }}
               className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
                 softwareIsActive
@@ -358,7 +399,7 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
                   navigate(visibleAutomationLinks[0]?.to ?? '/automation');
                   return;
                 }
-                setAutomationOpen(prev => !prev);
+                setOpenSection((prev) => (prev === 'automation' ? null : 'automation'));
               }}
               className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
                 automationIsActive
@@ -410,7 +451,7 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
                   navigate('/reports/templates');
                   return;
                 }
-                setReportsOpen(prev => !prev);
+                setOpenSection((prev) => (prev === 'reports' ? null : 'reports'));
               }}
               className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
                 reportsIsActive
@@ -459,7 +500,7 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
               navigate('/identity/authentication');
               return;
             }
-            setIdentityOpen(prev => !prev);
+            setOpenSection((prev) => (prev === 'identity' ? null : 'identity'));
           }}
           className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
             identityIsActive
@@ -508,7 +549,7 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
                   navigate('/settings');
                   return;
                 }
-                setSettingsOpen(prev => !prev);
+                setOpenSection((prev) => (prev === 'settings' ? null : 'settings'));
               }}
               className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
                 settingsIsActive

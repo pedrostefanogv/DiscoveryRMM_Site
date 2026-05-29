@@ -14,7 +14,6 @@ import {
 import {
   useReportTemplates,
   useDeleteReportTemplate,
-  useReportDatasets,
   useReportFavorites,
   useCreateReportTemplate,
 } from "@/hooks";
@@ -23,6 +22,7 @@ import {
   Card,
   DataTable,
   Badge,
+  Input,
   Loading,
   Modal,
 } from "@/components/ui";
@@ -102,6 +102,7 @@ export default function ReportTemplateList() {
 
   const [showInactive, setShowInactive] = useState(false);
   const [showOnlyFavorites, setShowOnlyFavorites] = useState(false);
+  const [search, setSearch] = useState("");
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [historyId, setHistoryId] = useState<string | null>(null);
   const [historyName, setHistoryName] = useState<string>("");
@@ -109,7 +110,6 @@ export default function ReportTemplateList() {
   const templates = useReportTemplates({
     isActive: !showInactive ? true : undefined,
   });
-  const datasets = useReportDatasets();
   const deleteMutation = useDeleteReportTemplate();
   const createMutation = useCreateReportTemplate();
   const { isFavorite, toggleFavorite } = useReportFavorites();
@@ -308,13 +308,16 @@ export default function ReportTemplateList() {
       render: (t) => (
         <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
           <Button
-            variant="ghost"
+            variant="secondary"
             size="sm"
             onClick={() =>
               navigate(`/reports/run?templateId=${t.id}&clientId=${clientId}`)
             }
+            title="Gerar relatório"
+            aria-label="Gerar relatório"
           >
             <Play className="h-4 w-4" />
+            <span className="hidden xl:inline">Gerar</span>
           </Button>
           <Button
             variant="ghost"
@@ -322,6 +325,8 @@ export default function ReportTemplateList() {
             onClick={() =>
               navigate(`/reports/templates/${t.id}/edit?clientId=${clientId}`)
             }
+            title="Editar template"
+            aria-label="Editar template"
           >
             <Edit2 className="h-4 w-4" />
           </Button>
@@ -341,6 +346,8 @@ export default function ReportTemplateList() {
             variant="ghost"
             size="sm"
             onClick={() => setDeleteId(t.id)}
+            title="Excluir template"
+            aria-label="Excluir template"
           >
             <Trash2 className="h-4 w-4 text-red-400" />
           </Button>
@@ -349,30 +356,96 @@ export default function ReportTemplateList() {
     },
   ];
 
-  if (templates.isLoading || datasets.isLoading) return <Loading />;
+  if (templates.isLoading) return <Loading />;
 
-  // Filter templates by favorites if needed
-  const filteredTemplates = showOnlyFavorites
+  const favoritesFilteredTemplates = showOnlyFavorites
     ? templates.data?.filter((t) => isFavorite(t.id)) || []
     : templates.data || [];
 
+  const query = search.trim().toLowerCase();
+  const filteredTemplates =
+    query.length === 0
+      ? favoritesFilteredTemplates
+      : favoritesFilteredTemplates.filter((template) => {
+          const searchable = [
+            template.name,
+            template.description ?? "",
+            getDatasetLabel(template.datasetType),
+            getFormatLabel(template.defaultFormat),
+          ]
+            .join(" ")
+            .toLowerCase();
+          return searchable.includes(query);
+        });
+
+  const activeCount = templates.data?.filter((t) => t.isActive).length ?? 0;
+  const inactiveCount = (templates.data?.length ?? 0) - activeCount;
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-white">Templates de Relatórios</h1>
+          <h1 className="text-2xl font-bold text-white">Central de Relatórios</h1>
           <p className="text-sm text-slate-400">
-            {filteredTemplates.length} templates
-            {showOnlyFavorites && " favoritos"}
+            Gere relatórios diretamente da lista de templates. Dataset inicial fica no fluxo de Novo Template.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3 justify-end">
+          <Button
+            onClick={() =>
+              navigate(`/reports/templates/new?clientId=${clientId}`)
+            }
+          >
+            <Plus className="h-4 w-4" /> Novo Template
+          </Button>
           <Button variant="secondary" onClick={handleExportTemplates}>
             <Download className="h-4 w-4" /> Exportar
           </Button>
           <Button variant="secondary" onClick={handleImportClick}>
             <Upload className="h-4 w-4" /> Importar
           </Button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="application/json"
+            className="hidden"
+            aria-label="Selecionar arquivo de templates para importação"
+            title="Selecionar arquivo de templates para importação"
+            onChange={handleImportTemplates}
+          />
+        </div>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <Card className="p-3">
+          <p className="text-xs uppercase tracking-wide text-slate-400">Templates Visíveis</p>
+          <p className="mt-1 text-xl font-semibold text-white">{filteredTemplates.length}</p>
+        </Card>
+        <Card className="p-3">
+          <p className="text-xs uppercase tracking-wide text-slate-400">Ativos</p>
+          <p className="mt-1 text-xl font-semibold text-emerald-300">{activeCount}</p>
+        </Card>
+        <Card className="p-3">
+          <p className="text-xs uppercase tracking-wide text-slate-400">Inativos</p>
+          <p className="mt-1 text-xl font-semibold text-amber-300">{inactiveCount}</p>
+        </Card>
+        <Card className="p-3">
+          <p className="text-xs uppercase tracking-wide text-slate-400">Favoritos</p>
+          <p className="mt-1 text-xl font-semibold text-sky-300">
+            {templates.data?.filter((t) => isFavorite(t.id)).length ?? 0}
+          </p>
+        </Card>
+      </div>
+
+      <Card>
+        <div className="grid gap-3 lg:grid-cols-[minmax(260px,1fr)_auto] lg:items-end">
+          <Input
+            label="Buscar templates"
+            placeholder="Nome, descrição, dataset ou formato"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          <div className="flex flex-wrap items-center gap-3">
           <label className="flex items-center gap-2 text-sm text-slate-400">
             <input
               type="checkbox"
@@ -391,32 +464,33 @@ export default function ReportTemplateList() {
             />
             Mostrar inativos
           </label>
-          <Button
-            onClick={() =>
-              navigate(`/reports/templates/new?clientId=${clientId}`)
-            }
-          >
-            <Plus className="h-4 w-4" /> Novo Template
-          </Button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="application/json"
-            className="hidden"
-            aria-label="Selecionar arquivo de templates para importação"
-            title="Selecionar arquivo de templates para importação"
-            onChange={handleImportTemplates}
-          />
+          </div>
         </div>
-      </div>
-
-      <Card padding={false}>
-        <DataTable
-          columns={columns}
-          data={filteredTemplates}
-          keyExtractor={(t) => t.id}
-        />
       </Card>
+
+      {filteredTemplates.length === 0 ? (
+        <Card>
+          <div className="space-y-3 py-6 text-center">
+            <p className="text-base font-semibold text-white">Nenhum template encontrado</p>
+            <p className="text-sm text-slate-400">
+              Ajuste os filtros ou crie um novo template para começar a geração de relatórios.
+            </p>
+            <div className="flex justify-center">
+              <Button onClick={() => navigate(`/reports/templates/new?clientId=${clientId}`)}>
+                <Plus className="h-4 w-4" /> Criar Template
+              </Button>
+            </div>
+          </div>
+        </Card>
+      ) : (
+        <Card padding={false}>
+          <DataTable
+            columns={columns}
+            data={filteredTemplates}
+            keyExtractor={(t) => t.id}
+          />
+        </Card>
+      )}
 
       <Modal
         open={!!deleteId}

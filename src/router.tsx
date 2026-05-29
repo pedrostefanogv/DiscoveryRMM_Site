@@ -496,15 +496,19 @@ export const router = createBrowserRouter([
         path: 'reports/templates',
         element: (
           <PermissionGate anyOf={['reports.*', 'reports.read', 'admin.*']}>
-            <LazyPage><ReportTemplateCatalog /></LazyPage>
+            <LazyPage><ReportTemplateList /></LazyPage>
           </PermissionGate>
         ),
       },
       {
         path: 'reports/templates/list',
+        element: <Navigate to="/reports/templates" replace />,
+      },
+      {
+        path: 'reports/templates/catalog',
         element: (
           <PermissionGate anyOf={['reports.*', 'reports.read', 'admin.*']}>
-            <LazyPage><ReportTemplateList /></LazyPage>
+            <LazyPage><ReportTemplateCatalog /></LazyPage>
           </PermissionGate>
         ),
       },
