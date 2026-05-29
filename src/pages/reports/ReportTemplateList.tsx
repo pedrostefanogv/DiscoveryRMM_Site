@@ -150,15 +150,8 @@ export default function ReportTemplateList() {
     });
   };
 
-  const handleExportTemplates = () => {
-    const source = showOnlyFavorites
-      ? templates.data?.filter((t) => isFavorite(t.id)) ?? []
-      : templates.data ?? [];
-
-    if (source.length === 0) {
-      toast.error("Não há templates para exportar");
-      return;
-    }
+  const exportTemplates = (source: ReportTemplate[], fileName: string) => {
+    if (source.length === 0) return;
 
     const payload = {
       version: 1,
@@ -182,13 +175,11 @@ export default function ReportTemplateList() {
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = `report-templates-${new Date().toISOString().slice(0, 10)}.json`;
+    anchor.download = fileName;
     document.body.appendChild(anchor);
     anchor.click();
     anchor.remove();
     URL.revokeObjectURL(url);
-
-    toast.success("Exportação concluída");
   };
 
   const handleImportClick = () => {
@@ -270,7 +261,7 @@ export default function ReportTemplateList() {
 
     const rect = pageRef.current.getBoundingClientRect();
     const menuWidth = 248;
-    const menuHeight = 160;
+    const menuHeight = 204;
     const rawX = event.clientX - rect.left;
     const rawY = event.clientY - rect.top;
 
@@ -302,6 +293,26 @@ export default function ReportTemplateList() {
   const handleContextMenuDelete = () => {
     if (!templateContextMenu) return;
     setDeleteId(templateContextMenu.template.id);
+    closeTemplateContextMenu();
+  };
+
+  const handleContextMenuExport = () => {
+    if (!templateContextMenu) return;
+
+    const template = templateContextMenu.template;
+    const safeName = template.name
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "") || "template";
+
+    exportTemplates(
+      [template],
+      `report-template-${safeName}-${new Date().toISOString().slice(0, 10)}.json`,
+    );
+
+    toast.success(`Template \"${template.name}\" exportado com sucesso`);
     closeTemplateContextMenu();
   };
 
@@ -470,9 +481,6 @@ export default function ReportTemplateList() {
           >
             <Plus className="h-4 w-4" /> Novo Template
           </Button>
-          <Button variant="secondary" onClick={handleExportTemplates}>
-            <Download className="h-4 w-4" /> Exportar
-          </Button>
           <Button variant="secondary" onClick={handleImportClick}>
             <Upload className="h-4 w-4" /> Importar
           </Button>
@@ -581,6 +589,15 @@ export default function ReportTemplateList() {
           >
             <span>Editar template</span>
             <Edit2 className="h-4 w-4 text-slate-400" />
+          </button>
+          <button
+            type="button"
+            className="mt-1 flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm text-slate-200 transition-colors hover:bg-white/10"
+            onClick={handleContextMenuExport}
+            role="menuitem"
+          >
+            <span>Exportar template</span>
+            <Download className="h-4 w-4 text-slate-400" />
           </button>
           <button
             type="button"
