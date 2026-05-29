@@ -98,6 +98,13 @@ function getDefaultAlias(key: string): string {
   return DATASET_ALIASES[key] ?? key.substring(0, 3);
 }
 
+function normalizeFieldReference(field: string, sourceAlias?: string): string {
+  if (!sourceAlias) return field;
+  return field.startsWith(`${sourceAlias}.`)
+    ? field.slice(sourceAlias.length + 1)
+    : field;
+}
+
 export function findJoinKeys(sourceKey: string, targetKey: string): string[] {
   const source = JOIN_KEYS[sourceKey] ?? [];
   const target = JOIN_KEYS[targetKey] ?? [];
@@ -318,13 +325,19 @@ export function useWizardState(initialState?: Partial<WizardState>) {
   // ── Sub-table actions ─────────────────────────────────
 
   const addSubTable = useCallback((sourceAlias: string, title: string) => {
-    setState((prev) => ({
-      ...prev,
-      subTables: [
-        ...prev.subTables,
-        { id: `sub-${Date.now()}`, title, sourceAlias, columns: [] },
-      ],
-    }));
+    setState((prev) => {
+      if (prev.subTables.some((st) => st.sourceAlias === sourceAlias)) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        subTables: [
+          ...prev.subTables,
+          { id: `sub-${Date.now()}`, title, sourceAlias, columns: [] },
+        ],
+      };
+    });
   }, []);
 
   const removeSubTable = useCallback((id: string) => {
@@ -397,7 +410,9 @@ export function useWizardState(initialState?: Partial<WizardState>) {
       groupTitleTemplate: state.groupTitleTemplate || undefined,
       hideGroupColumn: state.hideGroupColumn,
       columns: state.columns.map((c) => ({
-        field: c.sourceAlias ? `${c.sourceAlias}.${c.field}` : c.field,
+        field: c.sourceAlias
+          ? `${c.sourceAlias}.${normalizeFieldReference(c.field, c.sourceAlias)}`
+          : c.field,
         header: c.header,
         format: c.format,
         align: c.align,
@@ -423,7 +438,9 @@ export function useWizardState(initialState?: Partial<WizardState>) {
         title: st.title,
         source: st.sourceAlias,
         columns: st.columns.map((c) => ({
-          field: c.sourceAlias ? `${c.sourceAlias}.${c.field}` : c.field,
+          field: c.sourceAlias
+            ? `${c.sourceAlias}.${normalizeFieldReference(c.field, c.sourceAlias)}`
+            : normalizeFieldReference(c.field, st.sourceAlias),
           header: c.header,
           format: c.format,
           align: c.align,

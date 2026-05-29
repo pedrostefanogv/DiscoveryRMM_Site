@@ -1,4 +1,5 @@
 import { useMemo, useState, useCallback, useEffect } from "react";
+import { createPortal } from "react-dom";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useReportPreview } from "@/hooks/useReportPreview";
@@ -18,6 +19,7 @@ export function LiveMarkdownPreview({ wizard }: Props) {
   const [clientId, setClientId] = useState<string>("");
   const [siteId, setSiteId] = useState<string>("");
   const [dataLimit, setDataLimit] = useState(10);
+  const [isExpandedPreviewOpen, setIsExpandedPreviewOpen] = useState(false);
 
   const { data: clients = [] } = useClients();
   const { data: sites = [] } = useSites(clientId || undefined);
@@ -131,11 +133,30 @@ export function LiveMarkdownPreview({ wizard }: Props) {
     }
   }, [mode, clientId, siteId, dataLimit]);
 
+  useEffect(() => {
+    if (!isExpandedPreviewOpen)
+      return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape")
+        setIsExpandedPreviewOpen(false);
+    };
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isExpandedPreviewOpen]);
+
   const hasColumns = state.columns.length > 0;
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between gap-2">
         <div className="flex rounded-lg border border-white/10 bg-white/5 p-0.5">
           <button
             onClick={() => setMode("structure")}
@@ -151,6 +172,18 @@ export function LiveMarkdownPreview({ wizard }: Props) {
             disabled={!hasColumns}
           >📊 Dados</button>
         </div>
+
+        {mode === "data" && (
+          <button
+            type="button"
+            onClick={() => setIsExpandedPreviewOpen(true)}
+            disabled={!previewSrcDoc}
+            title="Abrir preview ampliado"
+            className="rounded-md border border-white/10 bg-white/5 px-2 py-1 text-xs font-medium text-slate-200 transition-colors hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            ⤢ Ampliar
+          </button>
+        )}
       </div>
 
       {mode === "data" && (
@@ -222,6 +255,41 @@ export function LiveMarkdownPreview({ wizard }: Props) {
           {previewMutation.data.headers.rowCount} linhas ·{" "}
           {previewMutation.data.headers.format ?? "html"}
         </p>
+      )}
+
+      {isExpandedPreviewOpen && previewSrcDoc && typeof document !== "undefined" && createPortal(
+        <div
+          className="fixed inset-0 z-[2147483640] flex items-center justify-center bg-black/75 p-4"
+          onClick={(event) => {
+            if (event.target === event.currentTarget)
+              setIsExpandedPreviewOpen(false);
+          }}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Preview ampliado"
+        >
+          <div className="h-[90vh] w-[min(1200px,96vw)] rounded-xl border border-white/10 bg-slate-950 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-white/10 px-4 py-2">
+              <h4 className="text-sm font-semibold text-slate-100">Preview ampliado</h4>
+              <button
+                type="button"
+                onClick={() => setIsExpandedPreviewOpen(false)}
+                className="rounded-md border border-white/10 bg-white/5 px-2 py-1 text-xs font-medium text-slate-200 transition-colors hover:bg-white/10 hover:text-white"
+              >
+                ✕ Fechar
+              </button>
+            </div>
+            <div className="h-[calc(90vh-49px)] p-3">
+              <iframe
+                title="Preview de dados do relatorio ampliado"
+                className="h-full w-full rounded-lg bg-white"
+                sandbox=""
+                srcDoc={previewSrcDoc}
+              />
+            </div>
+          </div>
+        </div>,
+        document.body,
       )}
     </div>
   );

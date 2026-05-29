@@ -27,6 +27,62 @@ export function StepLayout({ wizard, onBack, onNext }: Props) {
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
   );
 
+  const normalizeSubTableField = (field: string, alias: string) =>
+    field.startsWith(`${alias}.`) ? field.slice(alias.length + 1) : field;
+
+  const availableSubTableDatasets = state.selectedDatasets.filter(
+    (dataset) =>
+      !dataset.isPrimary &&
+      !state.subTables.some((subTable) => subTable.sourceAlias === dataset.alias),
+  );
+
+  const getAvailableFieldsForSubTable = (subTable: typeof state.subTables[number]) => {
+    const usedFields = new Set(
+      subTable.columns.map((column) =>
+        normalizeSubTableField(column.field, subTable.sourceAlias),
+      ),
+    );
+
+    return wizard.allFields.filter(
+      (field) => field.alias === subTable.sourceAlias && !usedFields.has(field.name),
+    );
+  };
+
+  const addFieldToSubTable = (
+    subTableId: string,
+    sourceAlias: string,
+    selectedField: string,
+  ) => {
+    const fieldName = normalizeSubTableField(selectedField, sourceAlias);
+
+    const updated = state.subTables.map((subTable) => {
+      if (subTable.id !== subTableId) return subTable;
+
+      const alreadyExists = subTable.columns.some(
+        (column) =>
+          normalizeSubTableField(column.field, subTable.sourceAlias) === fieldName,
+      );
+
+      if (alreadyExists) return subTable;
+
+      return {
+        ...subTable,
+        columns: [
+          ...subTable.columns,
+          {
+            field: fieldName,
+            header: fieldName,
+            format: "text" as const,
+            align: "left" as const,
+            sourceAlias,
+          },
+        ],
+      };
+    });
+
+    wizard.setField("subTables", updated as any);
+  };
+
   return (
     <div className="space-y-6">
       <div>
@@ -241,9 +297,7 @@ export function StepLayout({ wizard, onBack, onNext }: Props) {
               </h3>
               <Button
                 onClick={() => {
-                  const ds = state.selectedDatasets.find(
-                    (d) => !d.isPrimary,
-                  );
+                  const ds = availableSubTableDatasets[0];
                   if (ds) {
                     wizard.addSubTable(
                       ds.alias,
@@ -251,7 +305,7 @@ export function StepLayout({ wizard, onBack, onNext }: Props) {
                     );
                   }
                 }}
-                disabled={state.selectedDatasets.length < 2}
+                disabled={availableSubTableDatasets.length === 0}
                 variant="secondary"
                 className="text-xs"
               >
@@ -260,147 +314,143 @@ export function StepLayout({ wizard, onBack, onNext }: Props) {
             </div>
             {state.subTables.length === 0 ? (
               <p className="text-xs text-slate-500">
-                Adicione mais datasets no passo anterior para criar sub-tabelas.
+                {state.selectedDatasets.length < 2
+                  ? "Adicione mais datasets no passo anterior para criar sub-tabelas."
+                  : "Clique em '+ Adicionar' para criar a sub-tabela do dataset secundário."}
               </p>
             ) : (
               <div className="space-y-4">
-                {state.subTables.map((st) => (
-                  <div
-                    key={st.id}
-                    className="rounded-lg border border-white/5 bg-black/10 p-3"
-                  >
-                    <div className="mb-2 flex items-center justify-between">
-                      <input
-                        value={st.title}
-                        onChange={(e) => {
-                          const updated = state.subTables.map((s) =>
-                            s.id === st.id
-                              ? { ...s, title: e.target.value }
-                              : s,
-                          );
-                          wizard.setField("subTables", updated as any);
-                        }}
-                        className="rounded border border-white/10 bg-white/5 px-2 py-1 text-sm font-medium text-slate-200"
-                      />
-                      <button
-                        onClick={() => wizard.removeSubTable(st.id)}
-                        className="text-xs text-red-400 hover:text-red-300"
-                      >
-                        Remover
-                      </button>
-                    </div>
+                {state.subTables.map((st) => {
+                  const availableFields = getAvailableFieldsForSubTable(st);
 
-                    {st.columns.length === 0 ? (
-                      <select
-                        onChange={(e) => {
-                          if (e.target.value) {
+                  return (
+                    <div
+                      key={st.id}
+                      className="rounded-lg border border-white/5 bg-black/10 p-3"
+                    >
+                      <div className="mb-2 flex items-center justify-between">
+                        <input
+                          value={st.title}
+                          onChange={(e) => {
                             const updated = state.subTables.map((s) =>
                               s.id === st.id
-                                ? {
-                                    ...s,
-                                    columns: [
-                                      ...s.columns,
-                                      {
-                                        field: e.target.value,
-                                        header: e.target.value,
-                                        format: "text" as const,
-                                        align: "left" as const,
-                                        sourceAlias: st.sourceAlias,
-                                      },
-                                    ],
-                                  }
+                                ? { ...s, title: e.target.value }
                                 : s,
                             );
                             wizard.setField("subTables", updated as any);
-                          }
-                          e.target.value = "";
-                        }}
-                        className="w-full rounded border border-white/10 bg-white/5 px-2 py-1 text-xs text-white"
-                        defaultValue=""
-                      >
-                        <option value="" className="bg-slate-900">
-                          + Adicionar campo
-                        </option>
-                        {wizard.allFields
-                          .filter((f) => f.alias === st.sourceAlias)
-                          .map((f) => (
+                          }}
+                          className="rounded border border-white/10 bg-white/5 px-2 py-1 text-sm font-medium text-slate-200"
+                        />
+                        <button
+                          onClick={() => wizard.removeSubTable(st.id)}
+                          className="text-xs text-red-400 hover:text-red-300"
+                        >
+                          Remover
+                        </button>
+                      </div>
+
+                      <div className="mb-2">
+                        <select
+                          onChange={(e) => {
+                            if (e.target.value) {
+                              addFieldToSubTable(st.id, st.sourceAlias, e.target.value);
+                            }
+                            e.target.value = "";
+                          }}
+                          className="w-full rounded border border-white/10 bg-white/5 px-2 py-1 text-xs text-white disabled:opacity-60"
+                          defaultValue=""
+                          disabled={availableFields.length === 0}
+                        >
+                          <option value="" className="bg-slate-900">
+                            {availableFields.length === 0
+                              ? "Todos os campos adicionados"
+                              : "+ Adicionar campo"}
+                          </option>
+                          {availableFields.map((field) => (
                             <option
-                              key={f.reference}
-                              value={f.reference}
+                              key={field.reference}
+                              value={field.name}
                               className="bg-slate-900"
                             >
-                              {f.reference}
+                              {field.name}
                             </option>
                           ))}
-                      </select>
-                    ) : (
-                      <table className="min-w-full text-xs text-slate-300">
-                        <thead>
-                          <tr className="border-b border-white/10 text-slate-400">
-                            <th className="px-1 py-1 text-left">Campo</th>
-                            <th className="px-1 py-1 text-left">Label</th>
-                            <th />
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {st.columns.map((col, ci) => (
-                            <tr key={ci} className="border-b border-white/5">
-                              <td className="px-1 py-1">
-                                <span className="text-[11px] text-slate-400">
-                                  {col.field}
-                                </span>
-                              </td>
-                              <td className="px-1 py-1">
-                                <input
-                                  value={col.header}
-                                  onChange={(e) => {
-                                    const updated = state.subTables.map((s) =>
-                                      s.id === st.id
-                                        ? {
-                                            ...s,
-                                            columns: s.columns.map((c, j) =>
-                                              j === ci
-                                                ? {
-                                                    ...c,
-                                                    header: e.target.value,
-                                                  }
-                                                : c,
-                                            ),
-                                          }
-                                        : s,
-                                    );
-                                    wizard.setField("subTables", updated as any);
-                                  }}
-                                  className="w-24 rounded border border-white/10 bg-white/5 px-1.5 py-0.5 text-slate-200"
-                                />
-                              </td>
-                              <td className="px-1 py-1">
-                                <button
-                                  onClick={() => {
-                                    const updated = state.subTables.map((s) =>
-                                      s.id === st.id
-                                        ? {
-                                            ...s,
-                                            columns: s.columns.filter(
-                                              (_, j) => j !== ci,
-                                            ),
-                                          }
-                                        : s,
-                                    );
-                                    wizard.setField("subTables", updated as any);
-                                  }}
-                                  className="text-red-400 hover:text-red-300"
-                                >
-                                  ✕
-                                </button>
-                              </td>
+                        </select>
+                      </div>
+
+                      {st.columns.length === 0 ? (
+                        <p className="text-xs text-slate-500">
+                          Nenhuma coluna nesta sub-tabela.
+                        </p>
+                      ) : (
+                        <table className="min-w-full text-xs text-slate-300">
+                          <thead>
+                            <tr className="border-b border-white/10 text-slate-400">
+                              <th className="px-1 py-1 text-left">Campo</th>
+                              <th className="px-1 py-1 text-left">Label</th>
+                              <th />
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    )}
-                  </div>
-                ))}
+                          </thead>
+                          <tbody>
+                            {st.columns.map((col, ci) => (
+                              <tr key={ci} className="border-b border-white/5">
+                                <td className="px-1 py-1">
+                                  <span className="text-[11px] text-slate-400">
+                                    {normalizeSubTableField(col.field, st.sourceAlias)}
+                                  </span>
+                                </td>
+                                <td className="px-1 py-1">
+                                  <input
+                                    value={col.header}
+                                    onChange={(e) => {
+                                      const updated = state.subTables.map((s) =>
+                                        s.id === st.id
+                                          ? {
+                                              ...s,
+                                              columns: s.columns.map((c, j) =>
+                                                j === ci
+                                                  ? {
+                                                      ...c,
+                                                      header: e.target.value,
+                                                    }
+                                                  : c,
+                                              ),
+                                            }
+                                          : s,
+                                      );
+                                      wizard.setField("subTables", updated as any);
+                                    }}
+                                    className="w-24 rounded border border-white/10 bg-white/5 px-1.5 py-0.5 text-slate-200"
+                                  />
+                                </td>
+                                <td className="px-1 py-1">
+                                  <button
+                                    onClick={() => {
+                                      const updated = state.subTables.map((s) =>
+                                        s.id === st.id
+                                          ? {
+                                              ...s,
+                                              columns: s.columns.filter(
+                                                (_, j) => j !== ci,
+                                              ),
+                                            }
+                                          : s,
+                                      );
+                                      wizard.setField("subTables", updated as any);
+                                    }}
+                                    className="text-red-400 hover:text-red-300"
+                                  >
+                                    ✕
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
