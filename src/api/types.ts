@@ -926,7 +926,7 @@ export interface AdminJobActionResult {
   status?: string | null;
 }
 
-export type DeployTokenDelivery = "token" | "installer";
+export type DeployTokenDelivery = "token" | "installer" | "full-installer";
 
 export interface DeployInstallerPayload {
   fileName: string;

@@ -668,6 +668,7 @@ export default function DeployTokens() {
                 options={[
                   { value: 'token', label: 'Somente token' },
                   { value: 'installer', label: 'Token + download do instalador mínimo (.exe)' },
+                  { value: 'full-installer', label: 'Token + download do instalador completo (.exe)' },
                 ]}
               />
 
@@ -700,7 +701,11 @@ export default function DeployTokens() {
                   disabled={!selectedClientId || !selectedSiteId}
                 >
                   <KeyRound className="h-4 w-4" />
-                  {form.delivery === 'installer' ? 'Gerar e baixar instalador' : 'Gerar token'}
+                  {form.delivery === 'token'
+                    ? 'Gerar token'
+                    : form.delivery === 'full-installer'
+                      ? 'Gerar e baixar instalador completo'
+                      : 'Gerar e baixar instalador mínimo'}
                 </Button>
               </div>
             </div>
