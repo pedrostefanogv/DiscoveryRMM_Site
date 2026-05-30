@@ -11,6 +11,16 @@ export default defineConfig({
     VitePWA({
       registerType: "autoUpdate",
       includeAssets: ["favicon.svg"],
+      workbox: {
+        // API/docs/realtime routes must bypass SPA navigation fallback.
+        navigateFallbackDenylist: [
+          /^\/api\//,
+          /^\/hubs\//,
+          /^\/nats\//,
+          /^\/openapi(?:\/|$)/,
+          /^\/scalar(?:\/|$)/,
+        ],
+      },
       manifest: {
         name: "Discovery RMM",
         short_name: "Discovery",
