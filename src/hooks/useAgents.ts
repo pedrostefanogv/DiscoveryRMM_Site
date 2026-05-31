@@ -5,6 +5,9 @@ import type {
   UpdateAgentRequest,
   SendCommandRequest,
   CreateTokenRequest,
+  RestartRequest,
+  ShutdownRequest,
+  WakeOnLanRequest,
 } from "@/api";
 
 const KEYS = {
@@ -225,5 +228,34 @@ export function useApproveZeroTouch() {
       qc.invalidateQueries({ queryKey: KEYS.all });
       qc.invalidateQueries({ queryKey: KEYS.detail(agentId) });
     },
+  });
+}
+
+export function useRestartAgent() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data?: RestartRequest }) =>
+      agentsApi.restart(id, data),
+    onSuccess: (_d, vars) => {
+      qc.invalidateQueries({ queryKey: KEYS.commands(vars.id) });
+    },
+  });
+}
+
+export function useShutdownAgent() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data?: ShutdownRequest }) =>
+      agentsApi.shutdown(id, data),
+    onSuccess: (_d, vars) => {
+      qc.invalidateQueries({ queryKey: KEYS.commands(vars.id) });
+    },
+  });
+}
+
+export function useWakeOnLan() {
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data?: WakeOnLanRequest }) =>
+      agentsApi.wakeOnLan(id, data),
   });
 }

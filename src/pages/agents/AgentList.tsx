@@ -1,13 +1,15 @@
 ﻿import { useState, useMemo, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Monitor, Wifi, WifiOff, Activity, Building2, Clock, LayoutGrid, List, Bug, Trash2, ShieldCheck, ArrowUp, ArrowDown, Radio, RefreshCw, Move } from 'lucide-react';
+import { Monitor, Wifi, WifiOff, Activity, Building2, Clock, LayoutGrid, List, Bug, Trash2, ShieldCheck, ArrowUp, ArrowDown, Radio, RefreshCw, Move, RotateCcw, Power, Zap } from 'lucide-react';
 import { useQueries } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { useClients } from '@/hooks/useClients';
-import { getDeleteAgentErrorMessage, useApproveZeroTouch, useDeleteAgent } from '@/hooks/useAgents';
+import { getDeleteAgentErrorMessage, useApproveZeroTouch, useDeleteAgent, useRestartAgent, useShutdownAgent, useWakeOnLan } from '@/hooks/useAgents';
 import { ApiError, agentUpdatesApi, agentsApi, authApi } from '@/api';
 import { Badge, Loading, ErrorDisplay, Input, Select, StatCard, Modal, PageHeader, SkeletonCard, EmptyState, MetricBar } from '@/components/ui';
 import { TransferAgentModal } from '@/components/agents/TransferAgentModal';
+import PowerActionModal from '@/components/agents/PowerActionModal';
+import WakeOnLanModal from '@/components/agents/WakeOnLanModal';
 import type { Agent } from '@/api';
 import { getAgentLastSeen, isAgentOnlineNow } from '@/utils/agentStatus';
 import { useNowTick } from '@/hooks/useNowTick';
@@ -144,6 +146,9 @@ export default function AgentList() {
   const clients = useClients();
   const deleteAgent = useDeleteAgent();
   const approveZeroTouch = useApproveZeroTouch();
+  const restartAgent = useRestartAgent();
+  const shutdownAgent = useShutdownAgent();
+  const wakeOnLan = useWakeOnLan();
   const { hasAnyPermission } = useAuthorization();
   const canManageAgent = hasAnyPermission(['Agents.Edit', 'agents.*', 'admin.*']);
 
@@ -166,6 +171,8 @@ export default function AgentList() {
   const [deleteConfirmAgent, setDeleteConfirmAgent] = useState<AgentWithClient | null>(null);
   const [updatingAgentId, setUpdatingAgentId] = useState<string | null>(null);
   const [transferAgent, setTransferAgent] = useState<AgentWithClient | null>(null);
+  const [powerActionAgent, setPowerActionAgent] = useState<{ agent: AgentWithClient; action: "restart" | "shutdown" } | null>(null);
+  const [wolAgent, setWolAgent] = useState<AgentWithClient | null>(null);
   const contextMenuRef = useRef<HTMLDivElement | null>(null);
   const lastKnownIpByAgentRef = useRef<Map<string, string>>(new Map());
 
@@ -348,6 +355,36 @@ export default function AgentList() {
     } finally {
       setApprovingAgentId(null);
     }
+  };
+
+  const handleRestartAgent = (agent: AgentWithClient) => {
+    setContextMenu(null);
+    setPowerActionAgent({ agent, action: "restart" });
+  };
+
+  const handleShutdownAgent = (agent: AgentWithClient) => {
+    setContextMenu(null);
+    setPowerActionAgent({ agent, action: "shutdown" });
+  };
+
+  const handleWakeOnLan = (agent: AgentWithClient) => {
+    setContextMenu(null);
+    setWolAgent(agent);
+  };
+
+  const handlePowerActionConfirm = async (data: { delaySeconds: number; force: boolean; message: string }) => {
+    if (!powerActionAgent) return;
+    const { agent, action } = powerActionAgent;
+    if (action === "restart") {
+      await restartAgent.mutateAsync({ id: agent.id, data });
+    } else {
+      await shutdownAgent.mutateAsync({ id: agent.id, data });
+    }
+  };
+
+  const handleWakeOnLanConfirm = async (data: { broadcastAddress?: string }) => {
+    if (!wolAgent) throw new Error("No agent selected");
+    return await wakeOnLan.mutateAsync({ id: wolAgent.id, data });
   };
 
   const queriedClients = useMemo(() => {
@@ -965,6 +1002,34 @@ export default function AgentList() {
               <RefreshCw className="h-4 w-4" />
               {updatingAgentId === contextMenu.agent.id ? 'Disparando update...' : 'Atualizar agente'}
             </button>
+            {isAgentOnlineNow(contextMenu.agent, now) && (
+              <>
+                <button
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-amber-300 transition-colors hover:bg-amber-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+                  onClick={() => handleRestartAgent(contextMenu.agent)}
+                >
+                  <RotateCcw className="h-4 w-4" />
+                  Reiniciar
+                </button>
+                <button
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-300 transition-colors hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+                  onClick={() => handleShutdownAgent(contextMenu.agent)}
+                >
+                  <Power className="h-4 w-4" />
+                  Desligar
+                </button>
+              </>
+            )}
+            {!isAgentOnlineNow(contextMenu.agent, now) && (
+              <button
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-violet-300 transition-colors hover:bg-violet-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+                onClick={() => handleWakeOnLan(contextMenu.agent)}
+                disabled={wakeOnLan.isPending}
+              >
+                <Zap className="h-4 w-4" />
+                {wakeOnLan.isPending ? 'Enviando...' : 'Wake-on-LAN'}
+              </button>
+            )}
             {canManageAgent && contextMenu.agent.zeroTouchPending && (
               <button
                 className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-warning transition-colors hover:bg-warning/10 disabled:cursor-not-allowed disabled:opacity-60"
@@ -1071,6 +1136,25 @@ export default function AgentList() {
         onClose={closeTransferAgentModal}
         agent={transferAgent ? { id: transferAgent.id, siteId: transferAgent.siteId, hostname: transferAgent.hostname, displayName: transferAgent.displayName } as Agent : null}
       />
+
+      {powerActionAgent && (
+        <PowerActionModal
+          agent={powerActionAgent.agent}
+          action={powerActionAgent.action}
+          onClose={() => setPowerActionAgent(null)}
+          onConfirm={handlePowerActionConfirm}
+          isLoading={restartAgent.isPending || shutdownAgent.isPending}
+        />
+      )}
+
+      {wolAgent && (
+        <WakeOnLanModal
+          agent={wolAgent}
+          onClose={() => setWolAgent(null)}
+          onConfirm={handleWakeOnLanConfirm}
+          isLoading={wakeOnLan.isPending}
+        />
+      )}
     </div>
   );
 }

@@ -36,11 +36,18 @@ export enum LogSource {
 }
 
 export enum CommandType {
-  Restart = 0,
-  Shutdown = 1,
-  RunScript = 2,
-  Update = 3,
-  CollectInventory = 4,
+  Shell = 0,
+  PowerShell = 1,
+  Script = 2,
+  FileTransfer = 3,
+  SystemInfo = 4,
+  Restart = 5,
+  Shutdown = 6,
+  Update = 7,
+  RemoteDebug = 8,
+  ShowPsadtAlert = 9,
+  Notification = 10,
+  WakeOnLan = 11,
 }
 
 export type TicketPriority = "Low" | "Medium" | "High" | "Critical";
@@ -1407,6 +1414,43 @@ export interface UpdateAgentRequest {
 export interface SendCommandRequest {
   commandType: CommandType;
   payload: string;
+}
+
+// ── Power Management DTOs ──────────────────────────────
+
+export interface RestartRequest {
+  delaySeconds?: number;
+  force?: boolean;
+  message?: string;
+}
+
+export interface ShutdownRequest {
+  delaySeconds?: number;
+  force?: boolean;
+  message?: string;
+}
+
+export interface WakeOnLanRequest {
+  broadcastAddress?: string;
+}
+
+export interface WakeOnLanResponse {
+  dispatchId: string;
+  onlineAgentsInSite: number;
+  onlineAgentHostnames: string[];
+  targetMacAddress: string;
+  targetHostname: string;
+  broadcastAddress: string;
+  expiresAtUtc: string;
+}
+
+export interface PowerCommandResponse {
+  commandId: string;
+  agentId: string;
+  commandType: string;
+  delaySeconds: number;
+  force: boolean;
+  status: string;
 }
 
 export interface CreateTokenRequest {

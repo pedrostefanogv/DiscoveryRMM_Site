@@ -28,6 +28,11 @@ import type {
   TransferAgentBulkRequest,
   TransferBulkResult,
   ValidateTransferResponse,
+  RestartRequest,
+  ShutdownRequest,
+  WakeOnLanRequest,
+  WakeOnLanResponse,
+  PowerCommandResponse,
 } from "./types";
 
 const BASE = "/api/v1/agents";
@@ -210,4 +215,14 @@ export const agentsApi = {
     api.get<ValidateTransferResponse>(
       `${BASE}/${agentId}/validate-transfer?targetSiteId=${targetSiteId}`,
     ),
+
+  // Power management
+  restart: (id: string, data?: RestartRequest) =>
+    api.post<PowerCommandResponse>(`${BASE}/${id}/restart`, data ?? {}),
+
+  shutdown: (id: string, data?: ShutdownRequest) =>
+    api.post<PowerCommandResponse>(`${BASE}/${id}/shutdown`, data ?? {}),
+
+  wakeOnLan: (id: string, data?: WakeOnLanRequest) =>
+    api.post<WakeOnLanResponse>(`${BASE}/${id}/wake-on-lan`, data ?? {}),
 };
