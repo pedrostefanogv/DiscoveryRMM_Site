@@ -33,7 +33,7 @@ export const agentUpdatesApi = {
     api.get<unknown>(`${BASE}/dashboard/rollout`),
 
   forceAgentCheck: (agentId: string) =>
-    api.post<void>(`${BASE}/agents/${agentId}/force-check`),
+    api.post<void>(`${BASE}/agents/${agentId}/force-update`),
 
   buildArtifact: (releaseId: string, data: unknown) =>
     api.post<unknown>(`${BASE}/releases/${releaseId}/build-artifact`, data),
