@@ -2,14 +2,16 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Cpu, MemoryStick, Ticket as TicketIcon,
-  Wifi, WifiOff, AppWindow, Search, Clock, HardDrive, Printer, Bug, AlertTriangle, Trash2, ShieldCheck, Plus, Gauge,
+  Wifi, WifiOff, AppWindow, Search, Clock, HardDrive, Printer, Bug, AlertTriangle, Trash2, ShieldCheck, Plus, Gauge, Power, RotateCcw, Zap, ChevronDown,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { getDeleteAgentErrorMessage, useAgent, useAgentHardware, useAgentSoftware, useAgentSoftwareSnapshot, useApproveZeroTouch, useDeleteAgent } from '@/hooks/useAgents';
+import { getDeleteAgentErrorMessage, useAgent, useAgentHardware, useAgentSoftware, useAgentSoftwareSnapshot, useApproveZeroTouch, useDeleteAgent, useRestartAgent, useShutdownAgent, useWakeOnLan } from '@/hooks/useAgents';
 import { useTickets } from '@/hooks/useTickets';
 import { useLogs } from '@/hooks/useLogs';
 import { useRunMeshCentralNodeLinksBackfill, useRunMeshCentralNodeLinksBackfillDryRun } from '@/hooks';
 import { Button, Card, CardHeader, Badge, Loading, ErrorDisplay, Input, Select, DataTable, Modal, StatCard, AgentHeartbeatCard, Tooltip, type Column } from '@/components/ui';
+import PowerActionModal from '@/components/agents/PowerActionModal';
+import WakeOnLanModal from '@/components/agents/WakeOnLanModal';
 import { NotesPanel } from '@/components/notes/NotesPanel';
 import type { AgentSoftwareInventoryItem, ListeningPortInfo, MeshCentralNodeLinksBackfillItem, MeshCentralNodeLinksBackfillReport, OpenSocketInfo } from '@/api';
 import { ApiError, LogLevel, agentUpdatesApi } from '@/api';
@@ -165,11 +167,17 @@ export default function AgentDetail() {
   const [nodeLinkPreviewError, setNodeLinkPreviewError] = useState<string | null>(null);
   const [nodeLinkPreviewReport, setNodeLinkPreviewReport] = useState<MeshCentralNodeLinksBackfillReport | null>(null);
   const [activeDataTab, setActiveDataTab] = useState<AgentDetailDataTab>('software');
+  const [isPowerMenuOpen, setIsPowerMenuOpen] = useState(false);
+  const [powerAction, setPowerAction] = useState<'restart' | 'shutdown' | null>(null);
+  const [wakeOnLanModalOpen, setWakeOnLanModalOpen] = useState(false);
 
   const { hasAnyPermission } = useAuthorization();
   const canManageAgent = hasAnyPermission(['Agents.Edit', 'agents.*', 'admin.*']);
   const deleteAgent = useDeleteAgent();
   const approveZeroTouch = useApproveZeroTouch();
+  const restartAgent = useRestartAgent();
+  const shutdownAgent = useShutdownAgent();
+  const wakeOnLan = useWakeOnLan();
   const agent = useAgent(id!);
   const liveHeartbeat = useAgentHeartbeat(id!);
   const hw = useAgentHardware(id!);
@@ -186,6 +194,7 @@ export default function AgentDetail() {
   const nodeLinkBackfillDryRun = useRunMeshCentralNodeLinksBackfillDryRun();
   const nodeLinkBackfillApply = useRunMeshCentralNodeLinksBackfill();
   const now = useNowTick(5_000);
+  const powerMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let isCancelled = false;
@@ -233,6 +242,10 @@ export default function AgentDetail() {
       if (labelPickerRef.current && !labelPickerRef.current.contains(event.target as Node)) {
         setShowLabelPicker(false);
         setLabelPickerQuery('');
+      }
+
+      if (powerMenuRef.current && !powerMenuRef.current.contains(event.target as Node)) {
+        setIsPowerMenuOpen(false);
       }
     }
     document.addEventListener('mousedown', handleClickOutside);
@@ -600,6 +613,38 @@ export default function AgentDetail() {
     }
   };
 
+  const handleOpenPowerAction = (action: 'restart' | 'shutdown') => {
+    setIsPowerMenuOpen(false);
+    setPowerAction(action);
+  };
+
+  const handleOpenWakeOnLan = () => {
+    setIsPowerMenuOpen(false);
+    setWakeOnLanModalOpen(true);
+  };
+
+  const handlePowerActionConfirm = async (data: { delaySeconds: number; force: boolean; message: string }) => {
+    if (!id || !powerAction) return;
+
+    if (powerAction === 'restart') {
+      await restartAgent.mutateAsync({ id, data });
+    } else {
+      await shutdownAgent.mutateAsync({ id, data });
+    }
+
+    await agent.refetch();
+  };
+
+  const handleWakeOnLanConfirm = async (data: { broadcastAddress?: string }) => {
+    if (!id) {
+      throw new Error('Agente inválido para Wake-on-LAN.');
+    }
+
+    const response = await wakeOnLan.mutateAsync({ id, data });
+    await agent.refetch();
+    return response;
+  };
+
   const handleNodeLinkDryRun = async () => {
     if (!a.siteId || isReconcilingNodeLink) return;
 
@@ -791,6 +836,53 @@ export default function AgentDetail() {
         >
           Automação
         </Button>
+        <div className="relative" ref={powerMenuRef}>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => setIsPowerMenuOpen((current) => !current)}
+          >
+            <Power className="h-4 w-4" />
+            Energia
+            <ChevronDown className="h-4 w-4" />
+          </Button>
+          {isPowerMenuOpen && (
+            <div className="absolute right-0 top-full z-50 mt-2 min-w-[220px] overflow-hidden rounded-lg border border-white/10 bg-slate-900 shadow-xl">
+              {isOnlineNow ? (
+                <>
+                  <button
+                    type="button"
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-amber-300 transition-colors hover:bg-amber-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+                    onClick={() => handleOpenPowerAction('restart')}
+                    disabled={restartAgent.isPending || shutdownAgent.isPending}
+                  >
+                    <RotateCcw className="h-4 w-4" />
+                    Reiniciar
+                  </button>
+                  <button
+                    type="button"
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-300 transition-colors hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+                    onClick={() => handleOpenPowerAction('shutdown')}
+                    disabled={restartAgent.isPending || shutdownAgent.isPending}
+                  >
+                    <Power className="h-4 w-4" />
+                    Desligar
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-violet-300 transition-colors hover:bg-violet-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+                  onClick={handleOpenWakeOnLan}
+                  disabled={wakeOnLan.isPending}
+                >
+                  <Zap className="h-4 w-4" />
+                  {wakeOnLan.isPending ? 'Enviando Wake-on-LAN...' : 'Wake-on-LAN'}
+                </button>
+              )}
+            </div>
+          )}
+        </div>
         {canManageAgent && (
           <Button
             size="sm"
@@ -1771,6 +1863,29 @@ export default function AgentDetail() {
           </div>
         </div>
       </Modal>
+
+      {powerAction && (
+        <PowerActionModal
+          agent={a}
+          action={powerAction}
+          onClose={() => {
+            setPowerAction(null);
+          }}
+          onConfirm={handlePowerActionConfirm}
+          isLoading={restartAgent.isPending || shutdownAgent.isPending}
+        />
+      )}
+
+      {wakeOnLanModalOpen && (
+        <WakeOnLanModal
+          agent={a}
+          onClose={() => {
+            setWakeOnLanModalOpen(false);
+          }}
+          onConfirm={handleWakeOnLanConfirm}
+          isLoading={wakeOnLan.isPending}
+        />
+      )}
     </div>
   );
 }
