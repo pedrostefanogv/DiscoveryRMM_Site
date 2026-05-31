@@ -2,7 +2,7 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Cpu, MemoryStick, Ticket as TicketIcon,
-  Wifi, WifiOff, AppWindow, Search, Clock, HardDrive, Printer, Bug, AlertTriangle, Trash2, ShieldCheck, Plus, Gauge, Power, RotateCcw, Zap, ChevronDown,
+  Wifi, WifiOff, AppWindow, Search, Clock, HardDrive, Printer, Bug, AlertTriangle, Trash2, ShieldCheck, Plus, Gauge, Power, RotateCcw, Zap, ChevronDown, RefreshCw,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getDeleteAgentErrorMessage, useAgent, useAgentHardware, useAgentSoftware, useAgentSoftwareSnapshot, useApproveZeroTouch, useDeleteAgent, useRestartAgent, useShutdownAgent, useWakeOnLan } from '@/hooks/useAgents';
@@ -793,49 +793,8 @@ export default function AgentDetail() {
         {isZeroTouchPending && (
           <>
             <Badge color="warning">Zero-Touch: aguardando aprovação</Badge>
-            {canManageAgent && (
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => {
-                  void handleApproveZeroTouch();
-                }}
-                loading={isApprovingZeroTouch}
-              >
-                <ShieldCheck className="h-4 w-4" />
-                Aprovar
-              </Button>
-            )}
           </>
         )}
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={() => {
-            void handleOpenRemoteDebug();
-          }}
-          loading={isOpeningRemoteDebug}
-        >
-          <Bug className="h-4 w-4" />
-          Ver Debug
-        </Button>
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={() => {
-            void handleTriggerAgentUpdate();
-          }}
-          loading={isTriggeringAgentUpdate}
-        >
-          Atualizar agente
-        </Button>
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={() => navigate(`/automation/operations?agentId=${a.id}`)}
-        >
-          Automação
-        </Button>
         <div className="relative" ref={powerMenuRef}>
           <Button
             size="sm"
@@ -843,11 +802,49 @@ export default function AgentDetail() {
             onClick={() => setIsPowerMenuOpen((current) => !current)}
           >
             <Power className="h-4 w-4" />
-            Energia
+            Ações
             <ChevronDown className="h-4 w-4" />
           </Button>
           {isPowerMenuOpen && (
             <div className="absolute right-0 top-full z-50 mt-2 min-w-[220px] overflow-hidden rounded-lg border border-white/10 bg-slate-900 shadow-xl">
+              <button
+                type="button"
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-200 transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+                onClick={() => {
+                  setIsPowerMenuOpen(false);
+                  void handleOpenRemoteDebug();
+                }}
+                disabled={isOpeningRemoteDebug}
+              >
+                <Bug className="h-4 w-4" />
+                {isOpeningRemoteDebug ? 'Abrindo debug...' : 'Ver Debug'}
+              </button>
+              <button
+                type="button"
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-200 transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+                onClick={() => {
+                  setIsPowerMenuOpen(false);
+                  void handleTriggerAgentUpdate();
+                }}
+                disabled={isTriggeringAgentUpdate}
+              >
+                <RefreshCw className="h-4 w-4" />
+                {isTriggeringAgentUpdate ? 'Atualizando...' : 'Atualizar agente'}
+              </button>
+              <button
+                type="button"
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-200 transition-colors hover:bg-white/10"
+                onClick={() => {
+                  setIsPowerMenuOpen(false);
+                  navigate(`/automation/operations?agentId=${a.id}`);
+                }}
+              >
+                <AppWindow className="h-4 w-4" />
+                Automação
+              </button>
+
+              <div className="border-t border-white/10" />
+
               {isOnlineNow ? (
                 <>
                   <button
@@ -880,22 +877,39 @@ export default function AgentDetail() {
                   {wakeOnLan.isPending ? 'Enviando Wake-on-LAN...' : 'Wake-on-LAN'}
                 </button>
               )}
+
+              {isZeroTouchPending && canManageAgent && (
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-2 border-t border-white/10 px-3 py-2 text-left text-sm text-warning transition-colors hover:bg-warning/10 disabled:cursor-not-allowed disabled:opacity-60"
+                  onClick={() => {
+                    setIsPowerMenuOpen(false);
+                    void handleApproveZeroTouch();
+                  }}
+                  disabled={isApprovingZeroTouch}
+                >
+                  <ShieldCheck className="h-4 w-4" />
+                  {isApprovingZeroTouch ? 'Aprovando...' : 'Aprovar Zero-Touch'}
+                </button>
+              )}
+
+              {canManageAgent && (
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-2 border-t border-white/10 px-3 py-2 text-left text-sm text-red-300 transition-colors hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+                  onClick={() => {
+                    setIsPowerMenuOpen(false);
+                    handleDeleteAgent();
+                  }}
+                  disabled={deleteAgent.isPending}
+                >
+                  <Trash2 className="h-4 w-4" />
+                  {deleteAgent.isPending ? 'Excluindo...' : 'Excluir agente'}
+                </button>
+              )}
             </div>
           )}
         </div>
-        {canManageAgent && (
-          <Button
-            size="sm"
-            variant="danger"
-            onClick={() => {
-              handleDeleteAgent();
-            }}
-            loading={deleteAgent.isPending}
-          >
-            <Trash2 className="h-4 w-4" />
-            Excluir
-          </Button>
-        )}
       </div>
 
       {/* Live Heartbeat Metrics */}
