@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Power, RotateCcw, AlertTriangle, Loader2 } from "lucide-react";
-import { toast } from "sonner";
+import toast from "react-hot-toast";
 import type { Agent } from "@/api";
 
 export interface PowerActionModalProps {

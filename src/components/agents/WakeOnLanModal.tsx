@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Zap, Loader2, Wifi, WifiOff, Info } from "lucide-react";
-import { toast } from "sonner";
+import toast from "react-hot-toast";
 import type { Agent, WakeOnLanResponse } from "@/api";
 
 export interface WakeOnLanModalProps {
@@ -25,10 +25,7 @@ export default function WakeOnLanModal({
       });
 
       toast.success(
-        `Wake-on-LAN enviado por ${response.onlineAgentsInSite} agente(s) online para ${response.targetHostname}.`,
-        {
-          description: `MAC: ${response.targetMacAddress} · Broadcast: ${response.broadcastAddress}`,
-        },
+        `Wake-on-LAN enviado por ${response.onlineAgentsInSite} agente(s) online para ${response.targetHostname}. MAC: ${response.targetMacAddress} · Broadcast: ${response.broadcastAddress}`,
       );
       onClose();
     } catch (error) {
