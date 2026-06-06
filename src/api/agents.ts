@@ -225,4 +225,22 @@ export const agentsApi = {
 
   wakeOnLan: (id: string, data?: WakeOnLanRequest) =>
     api.post<WakeOnLanResponse>(`${BASE}/${id}/wake-on-lan`, data ?? {}),
+
+  // On-demand data refresh (ports, connections, software, printers, hardware)
+  refreshData: (
+    id: string,
+    flags: {
+      listeningPorts?: boolean;
+      openConnections?: boolean;
+      software?: boolean;
+      printers?: boolean;
+      hardware?: boolean;
+    },
+  ) =>
+    api.post<{
+      success: boolean;
+      commandId: string;
+      status: string;
+      flags: Record<string, boolean>;
+    }>(`${BASE}/${id}/refresh-data`, flags),
 };

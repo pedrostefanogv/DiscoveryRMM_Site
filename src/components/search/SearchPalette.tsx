@@ -56,6 +56,15 @@ function normalizeResultUrl(url: string, entityType: string): string {
     return "/software/store";
   }
 
+  // Normaliza rota legada de agent (/clients/{}/sites/{}/agents/{})
+  // para a rota canônica /agents/:id.
+  if (entityType === "agent") {
+    const match = trimmed.match(/\/agents\/([a-f0-9-]+)$/i);
+    if (match) {
+      return `/agents/${match[1]}`;
+    }
+  }
+
   return trimmed;
 }
 

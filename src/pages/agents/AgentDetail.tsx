@@ -14,7 +14,7 @@ import PowerActionModal from '@/components/agents/PowerActionModal';
 import WakeOnLanModal from '@/components/agents/WakeOnLanModal';
 import { NotesPanel } from '@/components/notes/NotesPanel';
 import type { AgentSoftwareInventoryItem, ListeningPortInfo, MeshCentralNodeLinksBackfillItem, MeshCentralNodeLinksBackfillReport, OpenSocketInfo } from '@/api';
-import { ApiError, LogLevel, agentUpdatesApi } from '@/api';
+import { ApiError, LogLevel, agentUpdatesApi, agentsApi } from '@/api';
 import { isAgentOnlineNow } from '@/utils/agentStatus';
 import { useNowTick } from '@/hooks/useNowTick';
 import { isHeartbeatTimestampFresh, useAgentHeartbeat } from '@/stores/heartbeatStore';
@@ -162,6 +162,10 @@ export default function AgentDetail() {
   const [isApplyingNodeLink, setIsApplyingNodeLink] = useState(false);
   const [isTriggeringAgentUpdate, setIsTriggeringAgentUpdate] = useState(false);
   const [isApprovingZeroTouch, setIsApprovingZeroTouch] = useState(false);
+  const [isRefreshingPorts, setIsRefreshingPorts] = useState(false);
+  const [isRefreshingConnections, setIsRefreshingConnections] = useState(false);
+  const [isRefreshingSoftware, setIsRefreshingSoftware] = useState(false);
+  const [isRefreshingPrinters, setIsRefreshingPrinters] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [nodeLinkPreviewOpen, setNodeLinkPreviewOpen] = useState(false);
   const [nodeLinkPreviewError, setNodeLinkPreviewError] = useState<string | null>(null);
@@ -733,6 +737,73 @@ export default function AgentDetail() {
 
   const goToPreviousSoftwarePage = () => {
     setSoftwarePage((p) => Math.max(1, p - 1));
+  };
+
+  // ── On-demand data refresh handlers ──────────────────────────────────
+
+  const handleRefreshPorts = async () => {
+    if (!id || isRefreshingPorts) return;
+    setIsRefreshingPorts(true);
+    try {
+      await agentsApi.refreshData(id, { listeningPorts: true });
+      toast.success('Solicitação de coleta de portas enviada ao agente.');
+      await new Promise(r => setTimeout(r, 2000));
+      await hw.refetch();
+    } catch (error) {
+      const msg = error instanceof ApiError ? error.message : 'Falha ao solicitar refresh de portas.';
+      toast.error(msg);
+    } finally {
+      setIsRefreshingPorts(false);
+    }
+  };
+
+  const handleRefreshConnections = async () => {
+    if (!id || isRefreshingConnections) return;
+    setIsRefreshingConnections(true);
+    try {
+      await agentsApi.refreshData(id, { openConnections: true });
+      toast.success('Solicitação de coleta de conexões enviada ao agente.');
+      await new Promise(r => setTimeout(r, 2000));
+      await hw.refetch();
+    } catch (error) {
+      const msg = error instanceof ApiError ? error.message : 'Falha ao solicitar refresh de conexões.';
+      toast.error(msg);
+    } finally {
+      setIsRefreshingConnections(false);
+    }
+  };
+
+  const handleRefreshSoftware = async () => {
+    if (!id || isRefreshingSoftware) return;
+    setIsRefreshingSoftware(true);
+    try {
+      await agentsApi.refreshData(id, { software: true });
+      toast.success('Solicitação de coleta de software enviada ao agente.');
+      await new Promise(r => setTimeout(r, 3000));
+      await software.refetch();
+      await softwareSnapshot.refetch();
+    } catch (error) {
+      const msg = error instanceof ApiError ? error.message : 'Falha ao solicitar refresh de software.';
+      toast.error(msg);
+    } finally {
+      setIsRefreshingSoftware(false);
+    }
+  };
+
+  const handleRefreshPrinters = async () => {
+    if (!id || isRefreshingPrinters) return;
+    setIsRefreshingPrinters(true);
+    try {
+      await agentsApi.refreshData(id, { printers: true, hardware: true });
+      toast.success('Solicitação de coleta de impressoras enviada ao agente.');
+      await new Promise(r => setTimeout(r, 2000));
+      await hw.refetch();
+    } catch (error) {
+      const msg = error instanceof ApiError ? error.message : 'Falha ao solicitar refresh de impressoras.';
+      toast.error(msg);
+    } finally {
+      setIsRefreshingPrinters(false);
+    }
   };
 
   const softwareLimitOptions = [
@@ -1430,10 +1501,23 @@ export default function AgentDetail() {
 
         {activeDataTab === 'software' && (
           <>
-            <CardHeader
-              title="Inventário de Aplicativos"
-              subtitle={`${softwareTotalCount} aplicativo(s) no inventário`}
-            />
+            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h3 className="text-lg font-semibold text-white sm:text-xl">Inventário de Aplicativos</h3>
+                <p className="text-sm text-slate-400">{softwareTotalCount} aplicativo(s) no inventário</p>
+              </div>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={handleRefreshSoftware}
+                loading={isRefreshingSoftware}
+                disabled={!isOnlineNow}
+                title={!isOnlineNow ? 'Agente offline — refresh indisponível' : 'Solicitar nova coleta de software ao agente'}
+              >
+                <RefreshCw className="h-4 w-4" />
+                Atualizar
+              </Button>
+            </div>
             {software.isLoading ? (
               <Loading message="Carregando inventário de aplicativos..." />
             ) : software.isError ? (
@@ -1611,7 +1695,23 @@ export default function AgentDetail() {
 
         {activeDataTab === 'printers' && (
           <>
-            <CardHeader title="Impressoras" subtitle={`${printers.length} impressora(s) detectada(s)`} />
+            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h3 className="text-lg font-semibold text-white sm:text-xl">Impressoras</h3>
+                <p className="text-sm text-slate-400">{printers.length} impressora(s) detectada(s)</p>
+              </div>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={handleRefreshPrinters}
+                loading={isRefreshingPrinters || hw.isFetching}
+                disabled={!isOnlineNow}
+                title={!isOnlineNow ? 'Agente offline — refresh indisponível' : 'Solicitar nova coleta de impressoras ao agente'}
+              >
+                <RefreshCw className="h-4 w-4" />
+                Atualizar
+              </Button>
+            </div>
             {printers.length === 0 ? (
               <p className="text-sm text-slate-500">Nenhuma impressora coletada para este agente.</p>
             ) : (
@@ -1653,10 +1753,23 @@ export default function AgentDetail() {
 
         {activeDataTab === 'listeningPorts' && (
           <>
-            <CardHeader
-              title="Portas em Escuta"
-              subtitle={`${listeningPorts.length} porta(s) ativa(s)`}
-            />
+            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h3 className="text-lg font-semibold text-white sm:text-xl">Portas em Escuta</h3>
+                <p className="text-sm text-slate-400">{listeningPorts.length} porta(s) ativa(s)</p>
+              </div>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={handleRefreshPorts}
+                loading={isRefreshingPorts || hw.isFetching}
+                disabled={!isOnlineNow}
+                title={!isOnlineNow ? 'Agente offline — refresh indisponível' : 'Solicitar nova coleta de portas ao agente'}
+              >
+                <RefreshCw className="h-4 w-4" />
+                Atualizar
+              </Button>
+            </div>
             {listeningPorts.length === 200 && (
               <div className="mb-3 flex items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-400">
                 <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
@@ -1674,10 +1787,23 @@ export default function AgentDetail() {
 
         {activeDataTab === 'openSockets' && (
           <>
-            <CardHeader
-              title="Conexões Abertas"
-              subtitle={`${openSockets.length} conexão(ões) ativa(s)`}
-            />
+            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h3 className="text-lg font-semibold text-white sm:text-xl">Conexões Abertas</h3>
+                <p className="text-sm text-slate-400">{openSockets.length} conexão(ões) ativa(s)</p>
+              </div>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={handleRefreshConnections}
+                loading={isRefreshingConnections || hw.isFetching}
+                disabled={!isOnlineNow}
+                title={!isOnlineNow ? 'Agente offline — refresh indisponível' : 'Solicitar nova coleta de conexões ao agente'}
+              >
+                <RefreshCw className="h-4 w-4" />
+                Atualizar
+              </Button>
+            </div>
             {openSockets.length === 500 && (
               <div className="mb-3 flex items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-400">
                 <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
