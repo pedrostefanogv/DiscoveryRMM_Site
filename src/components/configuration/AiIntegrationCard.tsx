@@ -87,11 +87,11 @@ export function AiIntegrationCard({ aiSettings, onSave, saving }: Props) {
     (async () => {
       setFetching(true);
       try {
-        const res = await configurationApi.listOpenRouterModels();
-        const data = res.data as unknown as { chatModels?: OrModel[]; embeddingModels?: OrModel[] };
+        const data = await configurationApi.listOpenRouterModels();
         if (!c) {
-          if (data.chatModels?.length) setAllChat(data.chatModels);
-          if (data.embeddingModels?.length) setAllEmbed(data.embeddingModels);
+          const payload = data as unknown as { chatModels?: OrModel[]; embeddingModels?: OrModel[] };
+          if (payload.chatModels?.length) setAllChat(payload.chatModels);
+          if (payload.embeddingModels?.length) setAllEmbed(payload.embeddingModels);
         }
       } catch {
         if (!c) setFetchError(true);
