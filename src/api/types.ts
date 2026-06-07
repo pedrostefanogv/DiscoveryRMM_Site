@@ -1071,6 +1071,26 @@ export interface AIIntegrationSettings {
   costControlEnabled?: boolean;
   minSimilarityScore?: number;
   maxKbChunks?: number;
+  // ── Fase 3: Sampling Parameters ──
+  topP?: number;
+  frequencyPenalty?: number;
+  presencePenalty?: number;
+  seed?: number | null;
+  // ── OpenRouter features ──
+  reasoningEnabled?: boolean;
+  reasoningEffort?: string | null;
+  webSearchEnabled?: boolean;
+  responseFormat?: string | null;
+  // ── Fase 4: Rerank ──
+  rerankEnabled?: boolean;
+  rerankModel?: string;
+  rerankTopN?: number;
+  // ── Fase 5: Chunking ──
+  chunkingStrategy?: string;
+  chunkSizeTokens?: number;
+  chunkOverlapTokens?: number;
+  // ── Fase 6: Citations ──
+  citationsEnabled?: boolean;
 }
 
 export interface AIIntegrationSettingsOverride {

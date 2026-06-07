@@ -140,6 +140,19 @@ export const configurationApi = {
   validateAiModel: (data: AiModelValidationRequest) =>
     api.post<Record<string, unknown>>(`${BASE}/ai/models/validate`, data),
 
+  // ── Novos endpoints (Fases 1-4) ──
+  listOpenRouterModels: (params?: { modality?: string; refresh?: boolean }) =>
+    api.get<Record<string, unknown>>(`${BASE}/ai/openrouter/models`, params as Record<string, unknown>),
+
+  validateApiKey: (data: { apiKey: string; provider?: string; baseUrl?: string }) =>
+    api.post<Record<string, unknown>>(`${BASE}/ai/validate-key`, data),
+
+  rerankDocuments: (data: { query: string; documents: string[]; model?: string; topN?: number }) =>
+    api.post<Record<string, unknown>>(`${BASE}/ai/rerank`, data),
+
+  getRecommendedModels: () =>
+    api.get<Record<string, unknown>>(`${BASE}/ai/recommended-models`),
+
   getClient: (clientId: string) =>
     api.get<ClientConfiguration>(`${BASE}/clients/${clientId}`),
   getClientMetadata: (clientId: string) =>

@@ -22,7 +22,7 @@ import {
   XCircle,
   Zap,
 } from "lucide-react";
-import { ConfigurationFieldEditor } from "@/components/configuration";
+import { ConfigurationFieldEditor, AiIntegrationCard } from "@/components/configuration";
 import { Button, Card, CardHeader, ErrorDisplay, Loading, Modal } from "@/components/ui";
 import {
   usePatchServerNatsConfig,
@@ -41,6 +41,7 @@ import {
   serverEditableFields,
   validateFieldValue,
 } from "@/utils/configurationEditors";
+import { parseAIIntegrationSettings } from "@/services/configurationApi";
 import { ApiError } from "@/api";
 import type { ConfigurationValue, TicketAttachmentSettings } from "@/api";
 import type { EditableField } from "@/utils/configurationEditors";
@@ -796,6 +797,27 @@ export default function ServerConfigurationPage() {
               )}
 
               {advancedFields.map((field) => {
+                // IA usa componente dedicado
+                if (field.key === "aiIntegrationSettingsJson") {
+                  return (
+                    <div key={field.key} className="flex items-start gap-3">
+                      <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-purple-500/20 text-purple-400">
+                        <Bot className="h-4 w-4" />
+                      </div>
+                      <div className="min-w-0 flex-1 space-y-1">
+                        <AiIntegrationCard
+                          aiSettings={parseAIIntegrationSettings(serverQuery.data?.aiIntegrationSettingsJson)}
+                          onSave={async (json) => {
+                            await patchMutation.mutateAsync({ aiIntegrationSettingsJson: json });
+                            toast.success("Configuração de IA salva.");
+                            serverQuery.refetch();
+                          }}
+                          saving={patchMutation.isPending}
+                        />
+                      </div>
+                    </div>
+                  );
+                }
                 const icons: Record<string, React.ReactNode> = {
                   autoUpdateSettingsJson: <Zap className="h-4 w-4" />,
                   aiIntegrationSettingsJson: <Bot className="h-4 w-4" />,
