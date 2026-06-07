@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Bot, CheckCircle2, ChevronDown, ChevronUp, RefreshCw, XCircle } from "lucide-react";
-import { Button, Card, CardHeader, Input, Modal, Select } from "@/components/ui";
+import { Button, Card, CardHeader, Input, Select } from "@/components/ui";
 import { configurationApi } from "@/api/configuration";
 import type { AIIntegrationSettings } from "@/api";
 
@@ -29,7 +29,6 @@ interface Props {
 
 export function AiIntegrationCard({ aiSettings, onSave, saving }: Props) {
   const [expanded, setExpanded] = useState(false);
-  const [expandedEmbedding, setExpandedEmbedding] = useState(false);
   const [expandedAdvanced, setExpandedAdvanced] = useState(false);
 
   // ── Local state ──
@@ -123,14 +122,10 @@ export function AiIntegrationCard({ aiSettings, onSave, saving }: Props) {
 
   return (
     <Card className="space-y-3 rounded-lg border border-white/5 bg-white/5 p-4">
-      <CardHeader className="flex flex-wrap items-start justify-between gap-2">
-        <div className="flex-1">
-          <p className="text-sm font-semibold text-white">Integração com IA</p>
-          <p className="mt-1 text-xs text-slate-300">
-            Chave de API, modelo e parâmetros do provedor de IA. A chave é write-only e só deve ser enviada quando informada novamente.
-          </p>
-        </div>
-      </CardHeader>
+      <CardHeader
+        title="Integração com IA"
+        subtitle="Chave de API, modelo e parâmetros do provedor de IA. A chave é write-only e só deve ser enviada quando informada novamente."
+      />
 
       <div className="grid gap-3">
         <p className="text-xs text-amber-300">ApiKey é write-only: o valor atual não é retornado pela API. Preencha apenas para trocar a chave.</p>
@@ -215,14 +210,14 @@ export function AiIntegrationCard({ aiSettings, onSave, saving }: Props) {
                 <Button
                   type="button"
                   size="sm"
-                  variant="outline"
+                  variant="ghost"
                   onClick={handleValidateKey}
                   disabled={validating || !apiKey.trim()}
                 >
                   {validating ? <RefreshCw className="h-3 w-3 animate-spin" /> : "Validar"}
                 </Button>
                 {keyValid === true && <CheckCircle2 className="h-5 w-5 text-green-400 self-center" />}
-                {keyValid === false && <XCircle className="h-5 w-5 text-red-400 self-center" title={keyError ?? ""} />}
+                {keyValid === false && <span title={keyError ?? ""}><XCircle className="h-5 w-5 text-red-400 self-center" /></span>}
               </div>
               {keyValid === false && keyError && <p className="text-xs text-red-400 mt-1">{keyError}</p>}
             </div>
