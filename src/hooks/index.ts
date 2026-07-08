@@ -48,6 +48,7 @@ export * from "./useEscalationRules";
 export * from "./useTicketSavedViews";
 export * from "./useTicketKpi";
 export * from "./useTicketAutomationLinks";
+export * from "./useCursorPagination";
 export * from "./useTicketCustomFields";
 export * from "./useTicketAi";
 export * from "./useKnowledge";

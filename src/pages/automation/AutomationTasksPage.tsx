@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
 import {
   Badge,
@@ -23,7 +23,6 @@ import {
   type UpdateAutomationTaskRequest,
 } from "@/api";
 import {
-  useAutomationTaskPreviewAgents,
   useAutomationKnownTags,
   useAutomationScripts,
   useAutomationTask,
@@ -178,7 +177,8 @@ export default function AutomationTasksPage() {
   const [filterLabels, setFilterLabels] = useState<string[]>([]);
   const [filterLabelSearch, setFilterLabelSearch] = useState("");
   const [limit, setLimit] = useState(20);
-  const [offset, setOffset] = useState(0);
+  const [page, setPage] = useState(1);
+  const [pageCursors, setPageCursors] = useState<Array<string | undefined>>([undefined]);
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<AutomationTaskSummary | null>(null);
@@ -189,7 +189,6 @@ export default function AutomationTasksPage() {
   const [deleteConfirmationText, setDeleteConfirmationText] = useState("");
   const [restoreTask, setRestoreTask] = useState<AutomationTaskSummary | null>(null);
   const [restoreConfirmationText, setRestoreConfirmationText] = useState("");
-  const [previewAgentsEnabled, setPreviewAgentsEnabled] = useState(false);
   const [form, setForm] = useState<TaskFormState>(defaultForm);
   const [scopeClientId, setScopeClientId] = useState("");
   const [scopeSiteId, setScopeSiteId] = useState("");
@@ -206,6 +205,7 @@ export default function AutomationTasksPage() {
     return () => clearTimeout(timer);
   }, [packageSearch]);
 
+  const cursor = pageCursors[page - 1];
   const list = useAutomationTasks({
     search: searchFilter.trim() || undefined,
     clientId: filterClientId || undefined,
@@ -218,11 +218,11 @@ export default function AutomationTasksPage() {
     activeOnly: false,
     deletedOnly: listMode === "deleted" ? true : undefined,
     includeDeleted: listMode === "all" ? true : undefined,
+    cursor,
     limit,
-    offset,
   });
 
-  const scripts = useAutomationScripts({ activeOnly: true, limit: 200, offset: 0 });
+  const scripts = useAutomationScripts({ activeOnly: true, limit: 200 });
   const knownTags = useAutomationKnownTags();
   const availableKnownFilterLabels = useMemo(
     () =>
@@ -259,15 +259,6 @@ export default function AutomationTasksPage() {
   const auditQuery = useAutomationTaskAudit(auditTaskId ?? "", 50, !!auditTaskId);
   const taskDetail = useAutomationTask(editingId);
   const detailTask = useAutomationTask(detailTaskId ?? "");
-  const previewAgents = useAutomationTaskPreviewAgents(detailTaskId ?? "", 100, 0, previewAgentsEnabled && !!detailTaskId);
-
-  useEffect(() => {
-    if (!detailTaskId) {
-      setPreviewAgentsEnabled(false);
-      return;
-    }
-    setPreviewAgentsEnabled(true);
-  }, [detailTaskId]);
 
   useEffect(() => {
     const scopeType = Number(scopeTypeFilter);
@@ -370,9 +361,27 @@ export default function AutomationTasksPage() {
     setForm(defaultForm);
   };
 
-  const total = list.data?.total ?? 0;
-  const canPrev = offset > 0;
-  const canNext = offset + limit < total;
+  const canPrev = page > 1 && !list.isFetching;
+  const canNext = Boolean(list.data?.hasMore && list.data?.nextCursor) && !list.isFetching;
+
+  const goToNextPage = () => {
+    if (!list.data?.nextCursor) return;
+    setPageCursors((prev) => {
+      const next = [...prev];
+      next[page] = list.data!.nextCursor!;
+      return next;
+    });
+    setPage((p) => p + 1);
+  };
+
+  const goToPrevPage = () => {
+    setPage((p) => Math.max(1, p - 1));
+  };
+
+  const resetPagination = () => {
+    setPage(1);
+    setPageCursors([undefined]);
+  };
 
   const closeDeleteModal = () => {
     if (deleteMutation.isPending) return;
@@ -415,7 +424,7 @@ export default function AutomationTasksPage() {
   const handleConfirmRestore = () => {
     if (!restoreTask) return;
     if (restoreConfirmationText.trim().toLowerCase() !== "yes") {
-      toast.error('Digite "yes" para confirmar a reativação');
+      toast.error('Digite "yes" para confirmar a reativa��o');
       return;
     }
 
@@ -467,13 +476,13 @@ export default function AutomationTasksPage() {
         render: (item) => (
           <div>
             <p className="font-medium text-white">{item.name}</p>
-            <p className="text-xs text-slate-500">{item.description || "Sem descrição"}</p>
+            <p className="text-xs text-slate-500">{item.description || "Sem descri��o"}</p>
           </div>
         ),
       },
       {
         key: "action",
-        header: "Ação",
+        header: "A��o",
         render: (item) => <Badge color="primary">{actionLabel(item.actionType)}</Badge>,
       },
       {
@@ -488,7 +497,7 @@ export default function AutomationTasksPage() {
       },
       {
         key: "approval",
-        header: "Aprovação",
+        header: "Aprova��o",
         render: (item) => (
           <Badge color={item.requiresApproval ? "warning" : "slate"}>
             {item.requiresApproval ? "Requer" : "Nao"}
@@ -514,7 +523,7 @@ export default function AutomationTasksPage() {
       },
       {
         key: "actions",
-        header: "Ações",
+        header: "A��es",
         render: (item) => {
           const deleted = isTaskDeleted(item);
           return (
@@ -714,7 +723,7 @@ export default function AutomationTasksPage() {
   const handleSubmit = () => {
     const name = form.name.trim();
     if (!name) return toast.error("Nome obrigatorio");
-    if (name.length > 200) return toast.error("Nome deve ter no máximo 200 caracteres");
+    if (name.length > 200) return toast.error("Nome deve ter no m�ximo 200 caracteres");
 
     const triggerCount = [
       form.triggerImmediate,
@@ -733,7 +742,7 @@ export default function AutomationTasksPage() {
     }
 
     if (scopeType !== AppApprovalScopeType.Global && !form.scopeId.trim()) {
-      return toast.error("ScopeId obrigatório para escopos não globais");
+      return toast.error("ScopeId obrigat�rio para escopos n�o globais");
     }
 
     if (
@@ -743,7 +752,7 @@ export default function AutomationTasksPage() {
         actionType === AutomationTaskActionType.UpdateOrInstallPackage) &&
       !form.packageId.trim()
     ) {
-      return toast.error("PackageId obrigatorio para esta ação");
+      return toast.error("PackageId obrigatorio para esta a��o");
     }
 
     if (actionType === AutomationTaskActionType.RunScript && !form.scriptId) {
@@ -843,7 +852,7 @@ export default function AutomationTasksPage() {
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-white">Tarefas de Automação</h1>
+          <h1 className="text-2xl font-bold text-white">Tarefas de Automa��o</h1>
           <p className="text-sm text-slate-400">Regras operacionais por escopo.</p>
         </div>
         <Button
@@ -864,16 +873,16 @@ export default function AutomationTasksPage() {
       </div>
 
       <Card>
-        <CardHeader title="Filtros" subtitle="Busca rápida, escopo e filtros avançados" />
+        <CardHeader title="Filtros" subtitle="Busca r�pida, escopo e filtros avan�ados" />
         <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-          <p className="text-xs text-slate-500">Use o modo simples para a maioria dos casos e abra o avançado para filtros combinados.</p>
+          <p className="text-xs text-slate-500">Use o modo simples para a maioria dos casos e abra o avan�ado para filtros combinados.</p>
           <Button
             type="button"
             size="sm"
             variant="secondary"
             onClick={() => setShowAdvancedFilters((prev) => !prev)}
           >
-            {showAdvancedFilters ? "Ocultar filtro avançado" : "Mostrar filtro avançado"}
+            {showAdvancedFilters ? "Ocultar filtro avan�ado" : "Mostrar filtro avan�ado"}
           </Button>
         </div>
 
@@ -881,10 +890,10 @@ export default function AutomationTasksPage() {
           <Input
             label="Busca"
             value={searchFilter}
-            placeholder="Nome, descrição, packageId ou comando"
+            placeholder="Nome, descri��o, packageId ou comando"
             onChange={(e) => {
               setSearchFilter(e.target.value);
-              setOffset(0);
+              resetPagination();
             }}
           />
           <Select
@@ -897,7 +906,7 @@ export default function AutomationTasksPage() {
             value={listMode}
             onChange={(e) => {
               setListMode(e.target.value as "default" | "all" | "deleted");
-              setOffset(0);
+              resetPagination();
             }}
           />
           <Select
@@ -916,7 +925,7 @@ export default function AutomationTasksPage() {
               setFilterScopeClientId("");
               setFilterScopeSiteId("");
               setFilterScopeAgentId("");
-              setOffset(0);
+              resetPagination();
             }}
           />
           <Select
@@ -929,7 +938,7 @@ export default function AutomationTasksPage() {
             value={String(limit)}
             onChange={(e) => {
               setLimit(Number(e.target.value));
-              setOffset(0);
+              resetPagination();
             }}
           />
         </div>
@@ -943,7 +952,7 @@ export default function AutomationTasksPage() {
               onChange={(e) => {
                 setFilterScopeClientId(e.target.value);
                 setScopeIdFilter(e.target.value);
-                setOffset(0);
+                resetPagination();
               }}
             />
             <Input label="ScopeId selecionado" value={scopeIdFilter} readOnly />
@@ -961,7 +970,7 @@ export default function AutomationTasksPage() {
                 setFilterScopeSiteId("");
                 setFilterScopeAgentId("");
                 setScopeIdFilter("");
-                setOffset(0);
+                resetPagination();
               }}
             />
             <Select
@@ -972,7 +981,7 @@ export default function AutomationTasksPage() {
               onChange={(e) => {
                 setFilterScopeSiteId(e.target.value);
                 setScopeIdFilter(e.target.value);
-                setOffset(0);
+                resetPagination();
               }}
             />
             <Input label="ScopeId selecionado" value={scopeIdFilter} readOnly />
@@ -990,7 +999,7 @@ export default function AutomationTasksPage() {
                 setFilterScopeSiteId("");
                 setFilterScopeAgentId("");
                 setScopeIdFilter("");
-                setOffset(0);
+                resetPagination();
               }}
             />
             <Select
@@ -1002,7 +1011,7 @@ export default function AutomationTasksPage() {
                 setFilterScopeSiteId(e.target.value);
                 setFilterScopeAgentId("");
                 setScopeIdFilter("");
-                setOffset(0);
+                resetPagination();
               }}
             />
             <Select
@@ -1013,7 +1022,7 @@ export default function AutomationTasksPage() {
               onChange={(e) => {
                 setFilterScopeAgentId(e.target.value);
                 setScopeIdFilter(e.target.value);
-                setOffset(0);
+                resetPagination();
               }}
             />
             <Input label="ScopeId selecionado" value={scopeIdFilter} readOnly />
@@ -1022,7 +1031,7 @@ export default function AutomationTasksPage() {
 
         {scopeTypeFilter === String(AppApprovalScopeType.Global) && (
           <div className="mt-3 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-400">
-            Escopo global não exige ScopeId.
+            Escopo global n�o exige ScopeId.
           </div>
         )}
 
@@ -1037,7 +1046,7 @@ export default function AutomationTasksPage() {
                   setFilterClientId(e.target.value);
                   setFilterSiteId("");
                   setFilterAgentId("");
-                  setOffset(0);
+                  resetPagination();
                 }}
               />
               <Select
@@ -1048,7 +1057,7 @@ export default function AutomationTasksPage() {
                 onChange={(e) => {
                   setFilterSiteId(e.target.value);
                   setFilterAgentId("");
-                  setOffset(0);
+                  resetPagination();
                 }}
               />
               <Select
@@ -1058,16 +1067,16 @@ export default function AutomationTasksPage() {
                 disabled={!filterSiteId}
                 onChange={(e) => {
                   setFilterAgentId(e.target.value);
-                  setOffset(0);
+                  resetPagination();
                 }}
               />
               <Select
-                label="Tipo de ação"
+                label="Tipo de a��o"
                 options={actionFilterOptions}
                 value={filterActionType}
                 onChange={(e) => {
                   setFilterActionType(e.target.value);
-                  setOffset(0);
+                  resetPagination();
                 }}
               />
             </div>
@@ -1089,7 +1098,7 @@ export default function AutomationTasksPage() {
                       className="rounded-full border border-primary/40 bg-primary/20 px-2.5 py-1 text-xs text-primary-100"
                       onClick={() => {
                         removeFilterLabel(tag);
-                        setOffset(0);
+                        resetPagination();
                       }}
                     >
                       {tag} x
@@ -1121,7 +1130,7 @@ export default function AutomationTasksPage() {
                           } else {
                             addFilterLabel(tag);
                           }
-                          setOffset(0);
+                          resetPagination();
                         }}
                       >
                         {selected ? "[x] " : "[ ] "}
@@ -1138,7 +1147,7 @@ export default function AutomationTasksPage() {
       <Card>
         <CardHeader
           title="Tarefas"
-          subtitle={`${list.data?.count ?? 0} itens retornados de ${total} total`}
+          subtitle={`${list.data?.items?.length ?? 0} itens retornados`}
         />
         {list.isLoading && <Loading message="Carregando tarefas..." />}
         {list.isError && <ErrorDisplay onRetry={() => list.refetch()} />}
@@ -1151,10 +1160,10 @@ export default function AutomationTasksPage() {
               showPagination={false}
             />
             <div className="mt-4 flex justify-end gap-2">
-              <Button size="sm" variant="secondary" disabled={!canPrev} onClick={() => setOffset((x) => Math.max(0, x - limit))}>
+              <Button size="sm" variant="secondary" disabled={!canPrev} onClick={goToPrevPage}>
                 Anterior
               </Button>
-              <Button size="sm" variant="secondary" disabled={!canNext} onClick={() => setOffset((x) => x + limit)}>
+              <Button size="sm" variant="secondary" disabled={!canNext} onClick={goToNextPage}>
                 Proxima
               </Button>
             </div>
@@ -1185,7 +1194,7 @@ export default function AutomationTasksPage() {
             onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
           />
           <Input
-            label="Descrição"
+            label="Descri��o"
             value={form.description}
             onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
           />
@@ -1474,7 +1483,7 @@ export default function AutomationTasksPage() {
                     ? "bg-primary-600 text-white"
                     : "text-slate-400 hover:text-white hover:bg-white/10"
                 }`}
-                title="Visualização em lista"
+                title="Visualiza��o em lista"
               >
                 <List className="h-4 w-4" />
               </button>
@@ -1486,14 +1495,14 @@ export default function AutomationTasksPage() {
                     ? "bg-primary-600 text-white"
                     : "text-slate-400 hover:text-white hover:bg-white/10"
                 }`}
-                title="Visualização em cards"
+                title="Visualiza��o em cards"
               >
                 <LayoutGrid className="h-4 w-4" />
               </button>
             </div>
           </div>
 
-          {packageCatalog.isLoading && <Loading message="Carregando catálogo..." />}
+          {packageCatalog.isLoading && <Loading message="Carregando cat�logo..." />}
           {packageCatalog.isError && <ErrorDisplay onRetry={() => packageCatalog.refetch()} />}
 
           {!packageCatalog.isLoading && !packageCatalog.isError && (
@@ -1657,7 +1666,7 @@ export default function AutomationTasksPage() {
       {/* Modal de detalhes da tarefa */}
       <Modal
         open={!!detailTaskId}
-        onClose={() => { setDetailTaskId(null); setPreviewAgentsEnabled(false); }}
+        onClose={() => { setDetailTaskId(null); }}
         title="Detalhes da tarefa"
         maxWidth="max-w-4xl"
       >
@@ -1668,7 +1677,7 @@ export default function AutomationTasksPage() {
           const detailIsDeleted = isTaskDeleted(d);
           return (
             <div className="space-y-4">
-              {/* Cabeçalho */}
+              {/* Cabe�alho */}
               <div className="flex items-start gap-3">
                 <div className="flex-1 space-y-1">
                   <h3 className="text-lg font-semibold text-white">{d.name}</h3>
@@ -1678,14 +1687,14 @@ export default function AutomationTasksPage() {
                   <Badge color={detailIsDeleted ? "danger" : d.isActive ? "success" : "slate"}>
                     {detailIsDeleted ? "Excluida" : d.isActive ? "Ativa" : "Inativa"}
                   </Badge>
-                  <Badge color={d.requiresApproval ? "warning" : "slate"}>{d.requiresApproval ? "Requer aprovação" : "Auto"}</Badge>
+                  <Badge color={d.requiresApproval ? "warning" : "slate"}>{d.requiresApproval ? "Requer aprova��o" : "Auto"}</Badge>
                 </div>
               </div>
 
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {/* Ação */}
+                {/* A��o */}
                 <div className="rounded-lg bg-white/5 border border-white/10 p-3">
-                  <p className="text-xs text-slate-500 mb-1">Ação</p>
+                  <p className="text-xs text-slate-500 mb-1">A��o</p>
                   <Badge color="primary">{actionLabel(d.actionType)}</Badge>
                   {d.installationType !== null && d.installationType !== undefined && (
                     <p className="text-xs text-slate-400 mt-1">{d.installationType === 0 ? "Winget" : d.installationType === 1 ? "Chocolatey" : "Custom"}</p>
@@ -1740,75 +1749,6 @@ export default function AutomationTasksPage() {
                 <p>Atualizado: {new Date(d.updatedAt).toLocaleString("pt-BR")}</p>
               </div>
 
-              {/* Preview de agents */}
-              <div className="rounded-lg border border-white/10 p-3">
-                <div className="flex items-center justify-between mb-3">
-                  <div>
-                    <p className="text-sm font-medium text-white">Preview de agentes</p>
-                    <p className="text-xs text-slate-500">Agentes que receberão esta tarefa com base no escopo e tags</p>
-                  </div>
-                  {!previewAgentsEnabled && (
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="secondary"
-                      onClick={() => setPreviewAgentsEnabled(true)}
-                    >
-                      Carregar preview
-                    </Button>
-                  )}
-                </div>
-
-                {previewAgentsEnabled && (
-                  <>
-                    {previewAgents.isLoading && <Loading message="Calculando agentes..." />}
-                    {previewAgents.isError && <ErrorDisplay onRetry={() => previewAgents.refetch()} />}
-                    {previewAgents.data && !previewAgents.isLoading && (
-                      <>
-                        <p className="text-xs text-slate-400 mb-2">
-                          {previewAgents.data.count} agente(s) correspondem ao escopo
-                          {previewAgents.data.total > previewAgents.data.count && ` (de ${previewAgents.data.total} no total)`}
-                        </p>
-                        {previewAgents.data.items.length === 0 ? (
-                          <p className="text-sm text-slate-500 py-2 text-center">Nenhum agente encontrado para este escopo/tags.</p>
-                        ) : (
-                          <div className="max-h-[40vh] overflow-y-auto space-y-2">
-                            {previewAgents.data.items.map((agent) => (
-                              <div key={agent.agentId} className="flex items-center gap-3 rounded-lg bg-white/5 px-3 py-2">
-                                <div className="min-w-0 flex-1">
-                                  <p className="text-sm font-medium text-white truncate">
-                                    {agent.displayName || agent.hostname || agent.agentId}
-                                  </p>
-                                  {agent.hostname && agent.displayName && (
-                                    <p className="text-xs text-slate-500 font-mono truncate">{agent.hostname}</p>
-                                  )}
-                                </div>
-                                <Badge color={
-                                  agent.status?.toLowerCase() === "online" ? "success" :
-                                  agent.status?.toLowerCase() === "offline" ? "slate" : "warning"
-                                }>
-                                  {agent.status || "?"}
-                                </Badge>
-                                {agent.agentTags?.length > 0 && (
-                                  <div className="flex gap-1 flex-wrap max-w-[140px] justify-end">
-                                    {agent.agentTags.slice(0, 3).map((t) => (
-                                      <span key={t} className="text-xs bg-slate-700 text-slate-300 px-1.5 py-0.5 rounded">{t}</span>
-                                    ))}
-                                    {agent.agentTags.length > 3 && (
-                                      <span className="text-xs text-slate-500">+{agent.agentTags.length - 3}</span>
-                                    )}
-                                  </div>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </>
-                    )}
-                  </>
-                )}
-              </div>
-
               {/* Ações */}
               <div className="flex justify-end gap-2 pt-2">
                 {detailIsDeleted && (
@@ -1817,7 +1757,7 @@ export default function AutomationTasksPage() {
                     variant="primary"
                     onClick={() => {
                       setDetailTaskId(null);
-                      setPreviewAgentsEnabled(false);
+                      
                       const item = list.data?.items.find((i) => i.id === d.id);
                       setRestoreTask(
                         item ?? {
@@ -1846,7 +1786,7 @@ export default function AutomationTasksPage() {
                   disabled={detailIsDeleted}
                   onClick={() => {
                     setDetailTaskId(null);
-                    setPreviewAgentsEnabled(false);
+                    
                     const item = list.data?.items.find((i) => i.id === detailTaskId);
                     if (item) {
                       setEditing(item);
@@ -1870,7 +1810,7 @@ export default function AutomationTasksPage() {
                 <Button
                   type="button"
                   variant="ghost"
-                  onClick={() => { setDetailTaskId(null); setPreviewAgentsEnabled(false); }}
+                  onClick={() => { setDetailTaskId(null);  }}
                 >
                   Fechar
                 </Button>
@@ -1915,12 +1855,12 @@ export default function AutomationTasksPage() {
       >
         <div className="space-y-4">
           <div className="rounded-lg border border-danger/30 bg-danger/10 p-3 text-sm text-slate-200">
-            <p>Você está prestes a excluir a tarefa <span className="font-semibold text-white">{deleteTask?.name}</span>.</p>
+            <p>Voc� est� prestes a excluir a tarefa <span className="font-semibold text-white">{deleteTask?.name}</span>.</p>
             <p className="mt-1 text-slate-400">Digite <span className="font-semibold text-white">yes</span> para confirmar.</p>
           </div>
 
           <Input
-            label="Confirmação"
+            label="Confirma��o"
              value={deleteConfirmationText}
             onChange={(e) => setDeleteConfirmationText(e.target.value)}
             placeholder="Digite yes"
@@ -1947,17 +1887,17 @@ export default function AutomationTasksPage() {
       <Modal
         open={!!restoreTask}
         onClose={closeRestoreModal}
-        title="Confirmar reativação"
+        title="Confirmar reativa��o"
         maxWidth="max-w-lg"
       >
         <div className="space-y-4">
           <div className="rounded-lg border border-primary/30 bg-primary/10 p-3 text-sm text-slate-200">
-            <p>Você está prestes a reativar a tarefa <span className="font-semibold text-white">{restoreTask?.name}</span>.</p>
+            <p>Voc� est� prestes a reativar a tarefa <span className="font-semibold text-white">{restoreTask?.name}</span>.</p>
             <p className="mt-1 text-slate-400">Digite <span className="font-semibold text-white">yes</span> para confirmar.</p>
           </div>
 
           <Input
-            label="Confirmação"
+            label="Confirma��o"
              value={restoreConfirmationText}
             onChange={(e) => setRestoreConfirmationText(e.target.value)}
             placeholder="Digite yes"

@@ -9,16 +9,13 @@ import type {
   AutomationScriptAudit,
   AutomationScriptConsume,
   AutomationScriptDetail,
-  AutomationScriptPage,
   AutomationTaskAudit,
   AutomationTaskDetail,
-  AutomationTaskPage,
   CreateAutomationScriptRequest,
   CreateAutomationTaskRequest,
   CursorPageDto,
   AutomationScriptSummary,
   AutomationTaskSummary,
-  TaskPreviewAgentsResponse,
   UpdateAutomationScriptRequest,
   UpdateAutomationTaskRequest,
 } from "./types";
@@ -39,8 +36,8 @@ function correlationInit(correlationId?: string): RequestInit | undefined {
 export interface ListAutomationScriptsParams {
   clientId?: string;
   activeOnly?: boolean;
+  cursor?: string;
   limit?: number;
-  offset?: number;
 }
 
 export interface ListAutomationTasksParams {
@@ -56,20 +53,14 @@ export interface ListAutomationTasksParams {
   activeOnly?: boolean;
   deletedOnly?: boolean;
   includeDeleted?: boolean;
+  cursor?: string;
   limit?: number;
-  offset?: number;
 }
 
 export const automationApi = {
   listScripts: (params: ListAutomationScriptsParams = {}) =>
-    api.get<AutomationScriptPage>(
-      SCRIPTS_BASE,
-      params as Record<string, unknown>,
-    ),
-
-  listScriptsPage: (params: { clientId?: string; activeOnly?: boolean; cursor?: string; limit?: number } = {}) =>
     api.get<CursorPageDto<AutomationScriptSummary>>(
-      `${SCRIPTS_BASE}/page`,
+      SCRIPTS_BASE,
       params as Record<string, unknown>,
     ),
 
@@ -109,11 +100,8 @@ export const automationApi = {
     api.get<AutomationScriptAudit[]>(`${SCRIPTS_BASE}/${id}/audit`, { limit }),
 
   listTasks: (params: ListAutomationTasksParams = {}) =>
-    api.get<AutomationTaskPage>(TASKS_BASE, params as Record<string, unknown>),
-
-  listTasksPage: (params: { scopeType?: AppApprovalScopeType; scopeId?: string; activeOnly?: boolean; deletedOnly?: boolean; includeDeleted?: boolean; search?: string; clientId?: string; siteId?: string; agentId?: string; scopeTypes?: Array<AppApprovalScopeType | string>; actionTypes?: Array<AutomationTaskActionType | string>; labels?: string[]; cursor?: string; limit?: number } = {}) =>
     api.get<CursorPageDto<AutomationTaskSummary>>(
-      `${TASKS_BASE}/page`,
+      TASKS_BASE,
       params as Record<string, unknown>,
     ),
 
@@ -156,12 +144,6 @@ export const automationApi = {
 
   getTaskAudit: (id: string, limit = 50) =>
     api.get<AutomationTaskAudit[]>(`${TASKS_BASE}/${id}/audit`, { limit }),
-
-  getTaskPreviewAgents: (id: string, limit = 50, offset = 0) =>
-    api.get<TaskPreviewAgentsResponse>(`${TASKS_BASE}/${id}/preview-agents`, {
-      limit,
-      offset,
-    }),
 
   runTaskNow: (agentId: string, taskId: string, correlationId?: string) =>
     api.post<AutomationRunNowTaskResponse>(

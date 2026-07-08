@@ -623,7 +623,10 @@ export interface SlaCalendarHoliday {
   relativeMethod: number | null; // 0=DayOfWeekOccurrence, 1=NthBusinessDay
 }
 
-export interface SlaCalendarDetail extends Omit<SlaCalendarSummary, "holidayCount"> {
+export interface SlaCalendarDetail extends Omit<
+  SlaCalendarSummary,
+  "holidayCount"
+> {
   holidays: SlaCalendarHoliday[];
 }
 
@@ -1739,7 +1742,7 @@ export interface KnowledgeListQuery {
   status?: ArticleStatus;
   departmentId?: string;
   category?: string;
-  scopeMode?: 'all-visible';
+  scopeMode?: "all-visible";
   cursor?: string;
   limit?: number;
 }
@@ -1751,7 +1754,7 @@ export interface KnowledgeSearchQuery {
   departmentId?: string;
   mode?: KnowledgeSearchMode;
   maxResults?: number;
-  scopeMode?: 'all-visible';
+  scopeMode?: "all-visible";
 }
 
 export interface LinkTicketKnowledgeRequest {
@@ -1916,8 +1919,8 @@ export interface AgentAlertsQuery {
   scopeSiteId?: string;
   scopeAgentId?: string;
   ticketId?: string;
+  cursor?: string;
   limit?: number;
-  offset?: number;
 }
 
 export interface AgentAlertScopeOptionAgent {
@@ -1997,7 +2000,6 @@ export interface LogsQuery {
   to?: string;
   cursor?: string;
   limit?: number;
-  offset?: number;
 }
 
 export interface TicketsQuery {
@@ -2012,7 +2014,9 @@ export interface TicketsQuery {
   slaBreached?: boolean;
   isClosed?: boolean;
   text?: string;
+  cursor?: string;
   limit?: number;
+  /** @deprecated Use cursor-based pagination instead */
   offset?: number;
 }
 
@@ -2924,14 +2928,6 @@ export interface AutomationScriptConsume extends AutomationScriptDetail {
   scriptId: string;
 }
 
-export interface AutomationScriptPage {
-  items: AutomationScriptSummary[];
-  count: number;
-  total: number;
-  limit: number;
-  offset: number;
-}
-
 export interface CreateAutomationScriptRequest {
   clientId?: string | null;
   name: string;
@@ -2993,14 +2989,6 @@ export interface AutomationTaskDetail extends AutomationTaskSummary {
   updatedAt: string;
 }
 
-export interface AutomationTaskPage {
-  items: AutomationTaskSummary[];
-  count: number;
-  total: number;
-  limit: number;
-  offset: number;
-}
-
 export interface CreateAutomationTaskRequest {
   name: string;
   description?: string | null;
@@ -3017,7 +3005,7 @@ export interface CreateAutomationTaskRequest {
   triggerRecurring?: boolean;
   triggerOnUserLogin?: boolean;
   triggerOnAgentCheckIn?: boolean;
-  scheduleCron?: string | null;
+  scheduleCron: string | null;
   requiresApproval?: boolean;
   isActive?: boolean;
 }
@@ -3037,28 +3025,6 @@ export interface AutomationTaskAudit {
   ipAddress: string | null;
   correlationId: string | null;
   changedAt: string;
-}
-
-export interface TaskPreviewAgentItem {
-  agentId: string;
-  siteId: string | null;
-  hostname: string | null;
-  displayName: string | null;
-  status: string | null;
-  agentTags: string[];
-}
-
-export interface TaskPreviewAgentsResponse {
-  taskId: string;
-  taskName: string;
-  scopeType: AppApprovalScopeType | string | number;
-  includeTags: string[];
-  excludeTags: string[];
-  items: TaskPreviewAgentItem[];
-  count: number;
-  total: number;
-  limit: number;
-  offset: number;
 }
 
 export interface AutomationRunNowTaskResponse {

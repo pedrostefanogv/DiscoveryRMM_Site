@@ -21,8 +21,8 @@ export default function AutomationAuditPage() {
   const [entityId, setEntityId] = useState("");
   const [limit, setLimit] = useState(50);
 
-  const scripts = useAutomationScripts({ activeOnly: false, limit: 200, offset: 0 });
-  const tasks = useAutomationTasks({ activeOnly: false, limit: 200, offset: 0 });
+  const scripts = useAutomationScripts({ activeOnly: false, limit: 200 });
+  const tasks = useAutomationTasks({ activeOnly: false, limit: 200 });
 
   const scriptAudit = useAutomationScriptAudit(entityId, limit, entity === "script" && !!entityId);
   const taskAudit = useAutomationTaskAudit(entityId, limit, entity === "task" && !!entityId);

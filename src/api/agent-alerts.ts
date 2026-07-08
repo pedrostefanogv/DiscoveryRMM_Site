@@ -45,15 +45,23 @@ function normalizeAgentAlert(raw: Record<string, unknown>): AgentAlert {
     title: String(raw.title ?? raw.Title ?? ""),
     message: String(raw.message ?? raw.Message ?? ""),
     alertType: normalizeOptionalNumber(raw.alertType ?? raw.AlertType) ?? 0,
-    timeoutSeconds: normalizeOptionalNumber(raw.timeoutSeconds ?? raw.TimeoutSeconds),
+    timeoutSeconds: normalizeOptionalNumber(
+      raw.timeoutSeconds ?? raw.TimeoutSeconds,
+    ),
     actionsJson: normalizeNullableString(raw.actionsJson ?? raw.ActionsJson),
-    defaultAction: normalizeNullableString(raw.defaultAction ?? raw.DefaultAction),
+    defaultAction: normalizeNullableString(
+      raw.defaultAction ?? raw.DefaultAction,
+    ),
     icon: normalizeNullableString(raw.icon ?? raw.Icon),
     scopeType: normalizeScopeType(raw.scopeType ?? raw.ScopeType),
     scopeAgentId: normalizeNullableString(raw.scopeAgentId ?? raw.ScopeAgentId),
     scopeSiteId: normalizeNullableString(raw.scopeSiteId ?? raw.ScopeSiteId),
-    scopeClientId: normalizeNullableString(raw.scopeClientId ?? raw.ScopeClientId),
-    scopeLabelName: normalizeNullableString(raw.scopeLabelName ?? raw.ScopeLabelName),
+    scopeClientId: normalizeNullableString(
+      raw.scopeClientId ?? raw.ScopeClientId,
+    ),
+    scopeLabelName: normalizeNullableString(
+      raw.scopeLabelName ?? raw.ScopeLabelName,
+    ),
     scheduledAt: normalizeNullableString(raw.scheduledAt ?? raw.ScheduledAt),
     expiresAt: normalizeNullableString(raw.expiresAt ?? raw.ExpiresAt),
     ticketId: normalizeNullableString(raw.ticketId ?? raw.TicketId),
@@ -65,11 +73,14 @@ function normalizeAgentAlert(raw: Record<string, unknown>): AgentAlert {
 }
 
 export const agentAlertsApi = {
+  /** @deprecated Endpoint base removido. Use listPage() */
   async list(params: AgentAlertsQuery = {}): Promise<AgentAlert[]> {
     const raw = await api.get<unknown>(BASE, params as Record<string, unknown>);
 
     if (Array.isArray(raw)) {
-      return raw.map(item => normalizeAgentAlert(item as Record<string, unknown>));
+      return raw.map((item) =>
+        normalizeAgentAlert(item as Record<string, unknown>),
+      );
     }
 
     if (raw && typeof raw === "object") {
@@ -80,18 +91,32 @@ export const agentAlertsApi = {
           ? record.data
           : [];
 
-      return collection.map(item => normalizeAgentAlert(item as Record<string, unknown>));
+      return collection.map((item) =>
+        normalizeAgentAlert(item as Record<string, unknown>),
+      );
     }
 
     return [];
   },
 
-  listPage: async (params: AgentAlertsQuery & { cursor?: string; limit?: number } = {}): Promise<CursorPageDto<AgentAlert>> => {
-    const raw = await api.get<Record<string, unknown>>(`${BASE}/page`, params as Record<string, unknown>);
-    const items = Array.isArray(raw.items) ? raw.items.map(item => normalizeAgentAlert(item as Record<string, unknown>)) : [];
+  listPage: async (
+    params: AgentAlertsQuery & { cursor?: string; limit?: number } = {},
+  ): Promise<CursorPageDto<AgentAlert>> => {
+    const raw = await api.get<Record<string, unknown>>(
+      `${BASE}/page`,
+      params as Record<string, unknown>,
+    );
+    const items = Array.isArray(raw.items)
+      ? raw.items.map((item) =>
+          normalizeAgentAlert(item as Record<string, unknown>),
+        )
+      : [];
     return {
       items,
-      returnedItems: typeof raw.returnedItems === "number" ? raw.returnedItems : items.length,
+      returnedItems:
+        typeof raw.returnedItems === "number"
+          ? raw.returnedItems
+          : items.length,
       cursor: typeof raw.cursor === "string" ? raw.cursor : null,
       nextCursor: typeof raw.nextCursor === "string" ? raw.nextCursor : null,
       hasMore: Boolean(raw.hasMore),

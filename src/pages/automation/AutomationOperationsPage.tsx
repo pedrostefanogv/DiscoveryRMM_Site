@@ -67,8 +67,8 @@ export default function AutomationOperationsPage() {
   const clients = useClients();
   const sites = useSites(clientId);
   const agents = useAgentsBySite(siteId);
-  const tasks = useAutomationTasks({ activeOnly: true, limit: 200, offset: 0 });
-  const scripts = useAutomationScripts({ activeOnly: true, limit: 200, offset: 0 });
+  const tasks = useAutomationTasks({ activeOnly: true, limit: 200 });
+  const scripts = useAutomationScripts({ activeOnly: true, limit: 200 });
   const executions = useAutomationExecutions(agentId, 50, !!agentId);
 
   const runTaskNow = useRunAutomationTaskNow();

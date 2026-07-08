@@ -85,7 +85,8 @@ export default function AutomationScriptsPage() {
   const [activeOnly, setActiveOnly] = useState(true);
   const [clientId, setClientId] = useState("");
   const [limit, setLimit] = useState(20);
-  const [offset, setOffset] = useState(0);
+  const [page, setPage] = useState(1);
+  const [pageCursors, setPageCursors] = useState<Array<string | undefined>>([undefined]);
 
   const [formOpen, setFormOpen] = useState(false);
   const [auditScriptId, setAuditScriptId] = useState<string | null>(null);
@@ -93,11 +94,12 @@ export default function AutomationScriptsPage() {
   const [editingId, setEditingId] = useState("");
   const [form, setForm] = useState<ScriptFormState>(defaultForm);
 
+  const cursor = pageCursors[page - 1];
   const list = useAutomationScripts({
     clientId: clientId || undefined,
     activeOnly,
+    cursor,
     limit,
-    offset,
   });
 
   const createMutation = useCreateAutomationScript();
@@ -125,9 +127,27 @@ export default function AutomationScriptsPage() {
     });
   }, [editingId, scriptDetail.data]);
 
-  const total = list.data?.total ?? 0;
-  const canPrev = offset > 0;
-  const canNext = offset + limit < total;
+  const canPrev = page > 1 && !list.isFetching;
+  const canNext = Boolean(list.data?.hasMore && list.data?.nextCursor) && !list.isFetching;
+
+  const goToNextPage = () => {
+    if (!list.data?.nextCursor) return;
+    setPageCursors((prev) => {
+      const next = [...prev];
+      next[page] = list.data!.nextCursor!;
+      return next;
+    });
+    setPage((p) => p + 1);
+  };
+
+  const goToPrevPage = () => {
+    setPage((p) => Math.max(1, p - 1));
+  };
+
+  const resetPagination = () => {
+    setPage(1);
+    setPageCursors([undefined]);
+  };
 
   const columns = useMemo<Column<AutomationScriptSummary>[]>(
     () => [
@@ -351,7 +371,7 @@ export default function AutomationScriptsPage() {
             value={clientId}
             onChange={(e) => {
               setClientId(e.target.value);
-              setOffset(0);
+              resetPagination();
             }}
           />
           <Select
@@ -363,7 +383,7 @@ export default function AutomationScriptsPage() {
             value={String(activeOnly)}
             onChange={(e) => {
               setActiveOnly(e.target.value === "true");
-              setOffset(0);
+              resetPagination();
             }}
           />
           <Select
@@ -376,15 +396,8 @@ export default function AutomationScriptsPage() {
             value={String(limit)}
             onChange={(e) => {
               setLimit(Number(e.target.value));
-              setOffset(0);
+              resetPagination();
             }}
-          />
-          <Input
-            label="Offset"
-            type="number"
-            min={0}
-            value={String(offset)}
-            onChange={(e) => setOffset(Math.max(0, Number(e.target.value || 0)))}
           />
         </div>
       </Card>
@@ -392,7 +405,7 @@ export default function AutomationScriptsPage() {
       <Card>
         <CardHeader
           title="Scripts"
-          subtitle={`${list.data?.count ?? 0} itens retornados de ${total} total`}
+          subtitle={`${list.data?.items?.length ?? 0} itens retornados`}
         />
         {list.isLoading && <Loading message="Carregando scripts..." />}
         {list.isError && <ErrorDisplay onRetry={() => list.refetch()} />}
@@ -405,10 +418,10 @@ export default function AutomationScriptsPage() {
               showPagination={false}
             />
             <div className="mt-4 flex justify-end gap-2">
-              <Button size="sm" variant="secondary" disabled={!canPrev} onClick={() => setOffset((x) => Math.max(0, x - limit))}>
+              <Button size="sm" variant="secondary" disabled={!canPrev} onClick={goToPrevPage}>
                 Anterior
               </Button>
-              <Button size="sm" variant="secondary" disabled={!canNext} onClick={() => setOffset((x) => x + limit)}>
+              <Button size="sm" variant="secondary" disabled={!canNext} onClick={goToNextPage}>
                 Proxima
               </Button>
             </div>

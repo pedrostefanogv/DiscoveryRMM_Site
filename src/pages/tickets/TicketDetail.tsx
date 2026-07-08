@@ -192,7 +192,7 @@ export default function TicketDetail() {
                 className={`px-4 py-3 text-sm font-medium transition-colors ${tab === 'comments' ? 'border-b-2 border-primary text-white' : 'text-slate-400 hover:text-white'}`}
                 onClick={() => setTab('comments')}
               >
-                Comentários ({comments.data?.length ?? 0})
+                Comentários ({comments.data?.items?.length ?? 0})
               </button>
               <button
                 className={`px-4 py-3 text-sm font-medium transition-colors ${tab === 'timeline' ? 'border-b-2 border-primary text-white' : 'text-slate-400 hover:text-white'}`}
@@ -790,7 +790,7 @@ function AutomationLinksPanel({
 }) {
   const { session } = useAuth();
   const linksQuery = useTicketAutomationLinks(ticketId);
-  const tasksQuery = useAutomationTasks({ activeOnly: true, limit: 200, offset: 0 });
+  const tasksQuery = useAutomationTasks({ activeOnly: true, limit: 200 });
   const createLink = useCreateTicketAutomationLink();
   const approveLink = useApproveTicketAutomationLink();
   const rejectLink = useRejectTicketAutomationLink();
@@ -1672,7 +1672,7 @@ function CommentsPanel({
   return (
     <>
       <div className="space-y-3 max-h-80 overflow-y-auto">
-        {(comments.data ?? []).map(c => (
+        {(comments.data?.items ?? []).map(c => (
           <div key={c.id} className={`rounded-lg px-4 py-3 ${c.isInternal ? 'bg-warning/10 border border-warning/20' : 'bg-white/5'}`}>
             <div className="mb-1 flex items-center gap-2">
               <span className="text-sm font-medium text-white">{c.author}</span>
@@ -1682,7 +1682,7 @@ function CommentsPanel({
             <p className="text-sm text-slate-300 whitespace-pre-wrap">{c.content}</p>
           </div>
         ))}
-        {(comments.data?.length ?? 0) === 0 && (
+        {(comments.data?.items?.length ?? 0) === 0 && (
           <p className="text-sm text-slate-500 py-4 text-center">Sem comentários ainda</p>
         )}
       </div>

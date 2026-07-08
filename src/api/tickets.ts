@@ -88,7 +88,10 @@ export const ticketsApi = {
     api.get<Ticket[]>(BASE, params as Record<string, unknown>),
 
   listPage: (params: TicketsPageParams = {}) =>
-    api.get<CursorPageDto<Ticket>>(`${BASE}/page`, params as Record<string, unknown>),
+    api.get<CursorPageDto<Ticket>>(
+      `${BASE}/page`,
+      params as Record<string, unknown>,
+    ),
 
   listByClient: (clientId: string, workflowStateId?: string) =>
     api.get<Ticket[]>(`${BASE}/by-client/${clientId}`, { workflowStateId }),
@@ -104,8 +107,11 @@ export const ticketsApi = {
     api.patch<void>(`${BASE}/${id}/workflow-state`, data),
 
   // Comments
-  listComments: (id: string) =>
-    api.get<TicketComment[]>(`${BASE}/${id}/comments`),
+  listComments: (id: string, params?: { cursor?: string; limit?: number }) =>
+    api.get<CursorPageDto<TicketComment>>(
+      `${BASE}/${id}/comments`,
+      params ?? {},
+    ),
 
   addComment: (id: string, data: AddCommentRequest) =>
     api.post<TicketComment>(`${BASE}/${id}/comments`, data),

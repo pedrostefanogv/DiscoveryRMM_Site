@@ -1331,23 +1331,25 @@ export default function AgentDetail() {
             </div>
             <div className="border-t border-white/5 pt-3">
               <dt className="text-slate-400">MeshCentral Node ID</dt>
-              <dd className="mt-0.5 font-mono text-white">{a.meshCentralNodeId ?? '—'}</dd>
-              <p className="mt-1 text-xs text-slate-500">
-                Valor persistido no agent, utilizado automaticamente no suporte remoto.
-              </p>
-              {canManageAgent && (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="mt-2"
-                  onClick={() => {
-                    void handleNodeLinkDryRun();
-                  }}
-                  loading={isReconcilingNodeLink}
-                >
-                  Validar Node Link (dry-run)
-                </Button>
-              )}
+              <dd className="mt-0.5 text-white">
+                <span className="font-mono">{a.meshCentralNodeId ?? '—'}</span>
+                <p className="mt-1 text-xs text-slate-500">
+                  Valor persistido no agent, utilizado automaticamente no suporte remoto.
+                </p>
+                {canManageAgent && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="mt-2"
+                    onClick={() => {
+                      void handleNodeLinkDryRun();
+                    }}
+                    loading={isReconcilingNodeLink}
+                  >
+                    Validar Node Link (dry-run)
+                  </Button>
+                )}
+              </dd>
             </div>
             {hw.data?.hardware?.osBuild && (
               <div>
@@ -1442,11 +1444,12 @@ export default function AgentDetail() {
       </div>
 
       <Card className="surface-card">
-        <div className="mb-4 flex flex-wrap gap-2 border-b border-white/10 pb-3">
+        <div role="tablist" aria-label="Abas de dados do agente" className="mb-4 flex flex-wrap gap-2 border-b border-white/10 pb-3">
           <button
             type="button"
+            role="tab"
             onClick={() => setActiveDataTab('software')}
-            aria-pressed={activeDataTab === 'software'}
+            aria-selected={activeDataTab === 'software'}
             className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors ${activeDataTab === 'software' ? 'border-primary/40 bg-primary/15 text-primary' : 'border-white/10 bg-white/5 text-slate-300 hover:text-slate-100'}`}
           >
             Inventário de Aplicativos
@@ -1454,8 +1457,9 @@ export default function AgentDetail() {
           </button>
           <button
             type="button"
+            role="tab"
             onClick={() => setActiveDataTab('printers')}
-            aria-pressed={activeDataTab === 'printers'}
+            aria-selected={activeDataTab === 'printers'}
             className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors ${activeDataTab === 'printers' ? 'border-primary/40 bg-primary/15 text-primary' : 'border-white/10 bg-white/5 text-slate-300 hover:text-slate-100'}`}
           >
             Impressoras
@@ -1463,8 +1467,9 @@ export default function AgentDetail() {
           </button>
           <button
             type="button"
+            role="tab"
             onClick={() => setActiveDataTab('tickets')}
-            aria-pressed={activeDataTab === 'tickets'}
+            aria-selected={activeDataTab === 'tickets'}
             className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors ${activeDataTab === 'tickets' ? 'border-primary/40 bg-primary/15 text-primary' : 'border-white/10 bg-white/5 text-slate-300 hover:text-slate-100'}`}
           >
             Últimos Chamados
@@ -1472,8 +1477,9 @@ export default function AgentDetail() {
           </button>
           <button
             type="button"
+            role="tab"
             onClick={() => setActiveDataTab('listeningPorts')}
-            aria-pressed={activeDataTab === 'listeningPorts'}
+            aria-selected={activeDataTab === 'listeningPorts'}
             className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors ${activeDataTab === 'listeningPorts' ? 'border-primary/40 bg-primary/15 text-primary' : 'border-white/10 bg-white/5 text-slate-300 hover:text-slate-100'}`}
           >
             Portas em Escuta
@@ -1481,8 +1487,9 @@ export default function AgentDetail() {
           </button>
           <button
             type="button"
+            role="tab"
             onClick={() => setActiveDataTab('openSockets')}
-            aria-pressed={activeDataTab === 'openSockets'}
+            aria-selected={activeDataTab === 'openSockets'}
             className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors ${activeDataTab === 'openSockets' ? 'border-primary/40 bg-primary/15 text-primary' : 'border-white/10 bg-white/5 text-slate-300 hover:text-slate-100'}`}
           >
             Conexões Abertas
@@ -1490,8 +1497,9 @@ export default function AgentDetail() {
           </button>
           <button
             type="button"
+            role="tab"
             onClick={() => setActiveDataTab('logs')}
-            aria-pressed={activeDataTab === 'logs'}
+            aria-selected={activeDataTab === 'logs'}
             className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors ${activeDataTab === 'logs' ? 'border-primary/40 bg-primary/15 text-primary' : 'border-white/10 bg-white/5 text-slate-300 hover:text-slate-100'}`}
           >
             Logs Recentes

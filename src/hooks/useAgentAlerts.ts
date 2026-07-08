@@ -8,14 +8,16 @@ import type {
 
 const KEYS = {
   all: ["agent-alerts"] as const,
-  list: (params: AgentAlertsQuery) => [...KEYS.all, "list", params] as const,
+  listPage: (params: AgentAlertsQuery) =>
+    [...KEYS.all, "page", params] as const,
   scopeOptions: () => [...KEYS.all, "scope-options"] as const,
 };
 
+/** @deprecated O endpoint base /agent-alerts foi removido. Use listPage via agendamento/alerts page. */
 export function useAgentAlerts(params: AgentAlertsQuery = {}) {
   return useQuery({
-    queryKey: KEYS.list(params),
-    queryFn: () => agentAlertsApi.list(params),
+    queryKey: KEYS.listPage(params),
+    queryFn: () => agentAlertsApi.listPage(params as Record<string, unknown>),
   });
 }
 

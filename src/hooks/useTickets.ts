@@ -16,6 +16,7 @@ import type {
 const KEYS = {
   all: ["tickets"] as const,
   list: (params: TicketsQuery) => [...KEYS.all, "list", params] as const,
+  page: (params: TicketsQuery) => [...KEYS.all, "page", params] as const,
   byClient: (clientId: string) => [...KEYS.all, "byClient", clientId] as const,
   detail: (id: string) => [...KEYS.all, "detail", id] as const,
   comments: (id: string) => [...KEYS.all, "comments", id] as const,
@@ -31,6 +32,15 @@ export function useTickets(params: TicketsQuery = {}) {
   return useQuery({
     queryKey: KEYS.list(params),
     queryFn: () => ticketsApi.list(params),
+  });
+}
+
+/** Hook para paginação cursor-based de tickets (via /tickets/page) */
+export function useTicketsPage(params: TicketsQuery = {}) {
+  return useQuery({
+    queryKey: KEYS.page(params),
+    queryFn: () => ticketsApi.listPage(params as Record<string, unknown>),
+    placeholderData: (prev) => prev,
   });
 }
 
@@ -50,10 +60,13 @@ export function useTicket(id: string) {
   });
 }
 
-export function useTicketComments(id: string) {
+export function useTicketComments(
+  id: string,
+  params?: { cursor?: string; limit?: number },
+) {
   return useQuery({
-    queryKey: KEYS.comments(id),
-    queryFn: () => ticketsApi.listComments(id),
+    queryKey: [...KEYS.comments(id), params],
+    queryFn: () => ticketsApi.listComments(id, params),
     enabled: !!id,
   });
 }
@@ -159,13 +172,8 @@ export function useAddTicketWatcher() {
 export function useRemoveTicketWatcher() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({
-      ticketId,
-      userId,
-    }: {
-      ticketId: string;
-      userId: string;
-    }) => ticketsApi.removeWatcher(ticketId, userId),
+    mutationFn: ({ ticketId, userId }: { ticketId: string; userId: string }) =>
+      ticketsApi.removeWatcher(ticketId, userId),
     onSuccess: (_result, vars) =>
       qc.invalidateQueries({ queryKey: KEYS.watchers(vars.ticketId) }),
   });

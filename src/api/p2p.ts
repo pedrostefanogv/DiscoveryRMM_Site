@@ -1,5 +1,4 @@
 ﻿import { api } from "./client";
-import type { CursorPageDto } from "./types";
 
 export type P2PScope = "global" | "tenant" | "site" | "agent";
 
@@ -50,29 +49,6 @@ export interface P2PTimeseriesResponse {
   };
 }
 
-export interface P2PArtifactsDistributionItem {
-  artifactId: string;
-  artifactName: string;
-  peerCount: number;
-  peerAgentIds?: string[];
-  lastUpdatedUtc: string;
-}
-
-export interface P2PArtifactsDistributionResponse {
-  total: number;
-  limit: number;
-  offset: number;
-  items: P2PArtifactsDistributionItem[];
-}
-
-export type P2PDistributionPage = CursorPageDto<P2PArtifactsDistributionItem>;
-
-export interface P2PArtifactsDistributionPageParams extends P2PQueryScope {
-  artifactId?: string;
-  cursor?: string;
-  limit?: number;
-}
-
 export interface P2PAgentsRankingItem {
   agentId: string;
   siteId: string;
@@ -118,12 +94,6 @@ export interface P2PTimeseriesParams extends P2PQueryScope {
   toUtc?: string;
 }
 
-export interface P2PArtifactsDistributionParams extends P2PQueryScope {
-  artifactId?: string;
-  limit?: number;
-  offset?: number;
-}
-
 function toTimeseriesQuery(params: P2PTimeseriesParams) {
   const { from, fromUtc, to, toUtc, ...rest } = params;
 
@@ -134,7 +104,9 @@ function toTimeseriesQuery(params: P2PTimeseriesParams) {
   };
 }
 
-function withoutAgentId<T extends { agentId?: unknown }>(params: T): Omit<T, 'agentId'> {
+function withoutAgentId<T extends { agentId?: unknown }>(
+  params: T,
+): Omit<T, "agentId"> {
   const { agentId: _agentId, ...rest } = params;
   return rest;
 }
@@ -152,18 +124,6 @@ export const p2pApi = {
     api.get<P2PTimeseriesResponse>(
       `${BASE}/timeseries`,
       toTimeseriesQuery(params) as unknown as Record<string, unknown>,
-    ),
-
-  getArtifactsDistribution: (params: P2PArtifactsDistributionParams) =>
-    api.get<P2PArtifactsDistributionResponse>(
-      `${BASE}/artifacts/distribution`,
-      withoutAgentId(params) as unknown as Record<string, unknown>,
-    ),
-
-  getArtifactsDistributionPage: (params: P2PArtifactsDistributionPageParams) =>
-    api.get<P2PDistributionPage>(
-      `${BASE}/artifacts/distribution/page`,
-      withoutAgentId(params) as unknown as Record<string, unknown>,
     ),
 
   getAgentsRanking: (params: P2PAgentsRankingParams) =>

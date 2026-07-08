@@ -7,7 +7,6 @@ import type {
   AutomationForceSyncRequest,
   AutomationScriptAudit,
   AutomationTaskAudit,
-  TaskPreviewAgentsResponse,
   CreateAutomationScriptRequest,
   CreateAutomationTaskRequest,
   UpdateAutomationScriptRequest,
@@ -20,8 +19,8 @@ const KEYS = {
     list: (params: {
       clientId?: string;
       activeOnly?: boolean;
+      cursor?: string;
       limit?: number;
-      offset?: number;
     }) => [...KEYS.scripts.all, "list", params] as const,
     detail: (id: string) => [...KEYS.scripts.all, "detail", id] as const,
     audit: (id: string, limit: number) =>
@@ -42,8 +41,8 @@ const KEYS = {
       activeOnly?: boolean;
       deletedOnly?: boolean;
       includeDeleted?: boolean;
+      cursor?: string;
       limit?: number;
-      offset?: number;
     }) => [...KEYS.tasks.all, "list", params] as const,
     detail: (id: string) => [...KEYS.tasks.all, "detail", id] as const,
     audit: (id: string, limit: number) =>
@@ -59,12 +58,13 @@ const KEYS = {
 export function useAutomationScripts(params: {
   clientId?: string;
   activeOnly?: boolean;
+  cursor?: string;
   limit?: number;
-  offset?: number;
 }) {
   return useQuery({
     queryKey: KEYS.scripts.list(params),
     queryFn: () => automationApi.listScripts(params),
+    placeholderData: (prev) => prev,
   });
 }
 
@@ -165,12 +165,13 @@ export function useAutomationTasks(params: {
   activeOnly?: boolean;
   deletedOnly?: boolean;
   includeDeleted?: boolean;
+  cursor?: string;
   limit?: number;
-  offset?: number;
 }) {
   return useQuery({
     queryKey: KEYS.tasks.list(params),
     queryFn: () => automationApi.listTasks(params),
+    placeholderData: (prev) => prev,
   });
 }
 
@@ -358,135 +359,5 @@ export function useAutomationKnownTags() {
       return Array.from(tags).sort((a, b) => a.localeCompare(b, "pt-BR"));
     },
     staleTime: 60_000,
-  });
-}
-
-export function useAutomationTaskPreviewAgents(
-  taskId: string,
-  limit = 50,
-  offset = 0,
-  enabled = false,
-) {
-  return useQuery({
-    queryKey: ["automationTaskPreviewAgents", taskId, limit, offset],
-    queryFn: async (): Promise<TaskPreviewAgentsResponse> => {
-      const raw = await automationApi.getTaskPreviewAgents(
-        taskId,
-        limit,
-        offset,
-      );
-      const response = raw as unknown as Record<string, unknown>;
-      const itemsSource =
-        (Array.isArray(raw) ? raw : undefined) ??
-        (Array.isArray(response.items) ? response.items : undefined) ??
-        (Array.isArray(response.data) ? response.data : undefined) ??
-        (Array.isArray(response.agents) ? response.agents : undefined) ??
-        (Array.isArray(response.returnedItems)
-          ? response.returnedItems
-          : undefined) ??
-        [];
-
-      const items = itemsSource
-        .map((entry) => {
-          const item = entry as Record<string, unknown>;
-          const agentId =
-            (item.agentId as string | undefined) ??
-            (item.AgentId as string | undefined) ??
-            (item.id as string | undefined) ??
-            (item.Id as string | undefined) ??
-            "";
-
-          if (!agentId) return null;
-
-          const tagsRaw =
-            (item.agentTags as unknown[] | undefined) ??
-            (item.AgentTags as unknown[] | undefined) ??
-            [];
-          const normalizedStatus =
-            item.status ??
-            item.Status ??
-            (item.isOnline === true
-              ? "Online"
-              : item.isOnline === false
-                ? "Offline"
-                : null);
-
-          return {
-            agentId,
-            siteId:
-              (item.siteId as string | null | undefined) ??
-              (item.SiteId as string | null | undefined) ??
-              null,
-            hostname:
-              (item.hostname as string | null | undefined) ??
-              (item.Hostname as string | null | undefined) ??
-              null,
-            displayName:
-              (item.displayName as string | null | undefined) ??
-              (item.DisplayName as string | null | undefined) ??
-              null,
-            status:
-              normalizedStatus === null || normalizedStatus === undefined
-                ? null
-                : String(normalizedStatus),
-            agentTags: tagsRaw
-              .map((tag) => String(tag ?? "").trim())
-              .filter(Boolean),
-          };
-        })
-        .filter(
-          (item): item is TaskPreviewAgentsResponse["items"][number] => !!item,
-        );
-
-      const countRaw =
-        response.count ?? response.Count ?? response.returnedItems;
-      const totalRaw = response.total ?? response.Total;
-      const limitRaw = response.limit ?? response.Limit;
-      const offsetRaw = response.offset ?? response.Offset;
-
-      return {
-        taskId:
-          (response.taskId as string | undefined) ??
-          (response.TaskId as string | undefined) ??
-          taskId,
-        taskName:
-          (response.taskName as string | undefined) ??
-          (response.TaskName as string | undefined) ??
-          "",
-        scopeType:
-          (response.scopeType as
-            | TaskPreviewAgentsResponse["scopeType"]
-            | undefined) ??
-          (response.ScopeType as
-            | TaskPreviewAgentsResponse["scopeType"]
-            | undefined) ??
-          "",
-        includeTags: (
-          (response.includeTags as string[] | undefined) ??
-          (response.IncludeTags as string[] | undefined) ??
-          []
-        )
-          .map((tag) => String(tag ?? "").trim())
-          .filter(Boolean),
-        excludeTags: (
-          (response.excludeTags as string[] | undefined) ??
-          (response.ExcludeTags as string[] | undefined) ??
-          []
-        )
-          .map((tag) => String(tag ?? "").trim())
-          .filter(Boolean),
-        items,
-        count: Number.isFinite(Number(countRaw))
-          ? Number(countRaw)
-          : items.length,
-        total: Number.isFinite(Number(totalRaw))
-          ? Number(totalRaw)
-          : items.length,
-        limit: Number.isFinite(Number(limitRaw)) ? Number(limitRaw) : limit,
-        offset: Number.isFinite(Number(offsetRaw)) ? Number(offsetRaw) : offset,
-      };
-    },
-    enabled: enabled && !!taskId,
-    staleTime: 30_000,
   });
 }

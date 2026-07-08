@@ -12,6 +12,7 @@ import {
 } from '@/components/ui';
 import type { Column } from '@/components/ui';
 import type { ArticleStatus, ArticleListPage, KnowledgeArticle, KnowledgeSearchMode, PublishArticleRequest } from '@/api';
+import { useCursorPagination } from '@/hooks/useCursorPagination';
 import { useClients, useDeleteKnowledgeArticle, useDepartments, useKnowledgeAllArticles, useKnowledgeArticles, useKnowledgeSearch, usePublishKnowledgeArticle, useSites, useUnpublishKnowledgeArticle } from '@/hooks';
 import { useAuthorization } from '@/auth/authorization';
 import { BookOpen, ChevronDown, ChevronUp, Eye, Filter, Pencil, Plus, Search, Send, Trash2 } from 'lucide-react';
@@ -125,22 +126,19 @@ export default function KnowledgeList() {
   const [advancedFiltersExpanded, setAdvancedFiltersExpanded] = useState(false);
   const [contextMenu, setContextMenu] = useState<ContextMenuState>(null);
   const contextMenuRef = useRef<HTMLDivElement | null>(null);
-  const [cursorStack, setCursorStack] = useState<Array<string | undefined>>([undefined]);
+  const knowledgePag = useCursorPagination({ initialLimit: DEFAULT_PAGE_SIZE });
 
   const isAllVisible = !clientId;
 
   const sites = useSites(clientId);
   const departments = useDepartments({ clientId: clientId || undefined, activeOnly: true });
 
-  const currentCursor =
-    cursorStack.length > 0 ? cursorStack[cursorStack.length - 1] : undefined;
-
   const allVisibleParams = useMemo(() => ({
-    cursor: currentCursor,
+    cursor: knowledgePag.cursor,
     limit: pageSize,
     status: statusFilter || undefined,
     category: category || undefined,
-  }), [currentCursor, pageSize, statusFilter, category]);
+  }), [knowledgePag.cursor, pageSize, statusFilter, category]);
 
   const listQueryLegacy = useKnowledgeArticles({
     clientId: clientId || undefined,
@@ -476,9 +474,9 @@ export default function KnowledgeList() {
 
   const totalItems = isAllVisible ? (listPage?.count ?? listItems.length) : sortedArticles.length;
   const totalPages = isAllVisible
-    ? (listPage?.hasMore ? cursorStack.length + 1 : cursorStack.length || 1)
+    ? (listPage?.hasMore ? knowledgePag.page + 1 : knowledgePag.page || 1)
     : Math.max(1, Math.ceil(totalItems / pageSize));
-  const currentPage = isAllVisible ? cursorStack.length : Math.min(page, totalPages);
+  const currentPage = isAllVisible ? knowledgePag.page : Math.min(page, totalPages);
   const pagedArticles = isAllVisible
     ? listItems
     : useMemo(() => {
@@ -488,7 +486,7 @@ export default function KnowledgeList() {
 
   useEffect(() => {
     setPage(1);
-    setCursorStack([undefined]);
+    knowledgePag.reset();
   }, [clientId, siteId, category, statusFilter, departmentId, pageSize]);
 
   return (
@@ -738,17 +736,14 @@ export default function KnowledgeList() {
                   size="sm"
                   onClick={() => {
                     if (isAllVisible) {
-                      setCursorStack((prev) => {
-                        if (prev.length <= 1) return prev;
-                        return prev.slice(0, -1);
-                      });
+                      knowledgePag.goToPrev();
                     } else {
                       setPage((prev) => Math.max(1, prev - 1));
                     }
                   }}
                   disabled={
                     isAllVisible
-                      ? cursorStack.length <= 1
+                      ? knowledgePag.page <= 1
                       : currentPage === 1
                   }
                 >
@@ -759,7 +754,7 @@ export default function KnowledgeList() {
                   size="sm"
                   onClick={() => {
                     if (isAllVisible && listPage?.nextCursor) {
-                      setCursorStack((prev) => [...prev, listPage.nextCursor!]);
+                      knowledgePag.goToNext(listPage.nextCursor);
                     } else if (!isAllVisible) {
                       setPage((prev) => Math.min(totalPages, prev + 1));
                     }

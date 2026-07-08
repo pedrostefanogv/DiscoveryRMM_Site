@@ -4,6 +4,7 @@ import { Card, CardHeader, DataTable, ErrorDisplay, Input, Loading, Select, Stat
 import { useClients } from "@/hooks/useClients";
 import { useSites } from "@/hooks/useSites";
 import { useSoftwareInventoryList, useSoftwareInventorySnapshot, type SoftwareInventoryScope } from "@/hooks/useSoftwareInventory";
+import { useCursorPagination } from "@/hooks/useCursorPagination";
 import { agentsApi, clientsApi, sitesApi, type Agent, type SoftwareInventoryCatalogItem } from "@/api";
 import { useNavigate } from "react-router-dom";
 
@@ -28,12 +29,10 @@ export default function SoftwareInventory() {
   const [scope, setScope] = useState<SoftwareInventoryScope>("global");
   const [selectedClientId, setSelectedClientId] = useState("");
   const [selectedSiteId, setSelectedSiteId] = useState("");
-  const [limit, setLimit] = useState("10");
   const [order, setOrder] = useState<"asc" | "desc">("desc");
   const [searchInput, setSearchInput] = useState("");
   const [searchApplied, setSearchApplied] = useState("");
-  const [page, setPage] = useState(1);
-  const [pageCursors, setPageCursors] = useState<Array<string | undefined>>([undefined]);
+  const pag = useCursorPagination({ initialLimit: 10 });
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [detailsSoftware, setDetailsSoftware] = useState<SoftwareInventoryCatalogItem | null>(null);
   const [detailsRows, setDetailsRows] = useState<SoftwareInstallationRow[]>([]);
@@ -44,13 +43,12 @@ export default function SoftwareInventory() {
   const clients = useClients();
   const sites = useSites(selectedClientId);
 
-  const cursor = pageCursors[page - 1];
   const list = useSoftwareInventoryList({
     scope,
     clientId: selectedClientId || undefined,
     siteId: selectedSiteId || undefined,
-    cursor,
-    limit: Number(limit),
+    cursor: pag.cursor,
+    limit: pag.limit,
     search: searchApplied,
     order,
   });
@@ -61,43 +59,37 @@ export default function SoftwareInventory() {
     selectedSiteId || undefined,
   );
 
-  const resetPagination = () => {
-    setPage(1);
-    setPageCursors([undefined]);
-  };
-
   const handleScopeChange = (value: SoftwareInventoryScope) => {
     setScope(value);
     setSelectedSiteId("");
-    resetPagination();
+    pag.reset();
   };
 
   const handleClientChange = (value: string) => {
     setSelectedClientId(value);
     setSelectedSiteId("");
-    resetPagination();
+    pag.reset();
   };
 
   const handleApplySearch = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setSearchApplied(searchInput.trim());
-    resetPagination();
+    pag.reset();
   };
 
   const handleClearSearch = () => {
     setSearchInput("");
     setSearchApplied("");
-    resetPagination();
+    pag.reset();
   };
 
   const handleOrderChange = (value: "asc" | "desc") => {
     setOrder(value);
-    resetPagination();
+    pag.reset();
   };
 
   const handleLimitChange = (value: string) => {
-    setLimit(value);
-    resetPagination();
+    pag.setLimit(Number(value));
   };
 
   const canQuery =
@@ -110,32 +102,18 @@ export default function SoftwareInventory() {
   const totalSoftware = list.data?.totalSoftware ?? snapshot.data?.distinctSoftware ?? 0;
   const totalAgents = list.data?.totalAgents ?? snapshot.data?.distinctAgents ?? 0;
   const totalCount = list.data?.totalSoftware ?? list.data?.count ?? snapshot.data?.distinctSoftware ?? 0;
-  const resolvedLimit = list.data?.limit ?? Number(limit);
+  const resolvedLimit = list.data?.limit ?? pag.limit;
   const totalPages = Math.max(1, Math.ceil(totalCount / resolvedLimit));
-  const currentPage = Math.min(page, totalPages);
+  const currentPage = Math.min(pag.page, totalPages);
 
   useEffect(() => {
-    if (page > totalPages) {
-      resetPagination();
+    if (pag.page > totalPages) {
+      pag.reset();
     }
-  }, [page, totalPages]);
+  }, [pag.page, totalPages]);
 
-  const canPrev = page > 1 && !list.isFetching;
+  const canPrev = pag.page > 1 && !list.isFetching;
   const canNext = Boolean(list.data?.hasMore && list.data?.nextCursor) && !list.isFetching;
-
-  const goToNextPage = () => {
-    if (!list.data?.nextCursor) return;
-    setPageCursors((prev) => {
-      const next = [...prev];
-      next[page] = list.data.nextCursor ?? undefined;
-      return next;
-    });
-    setPage((p) => p + 1);
-  };
-
-  const goToPrevPage = () => {
-    setPage((p) => Math.max(1, p - 1));
-  };
 
   const scopeOptions = [
     { value: "global", label: "Global" },
@@ -398,11 +376,11 @@ export default function SoftwareInventory() {
           )}
 
           {scope === "site" && (
-            <Select value={selectedSiteId} options={siteOptions} onChange={(e) => { setSelectedSiteId(e.target.value); resetPagination(); }} />
+            <Select value={selectedSiteId} options={siteOptions} onChange={(e) => { setSelectedSiteId(e.target.value); pag.reset(); }} />
           )}
 
           <Select value={order} options={orderOptions} onChange={(e) => handleOrderChange(e.target.value as "asc" | "desc")} />
-          <Select value={limit} options={limitOptions} onChange={(e) => handleLimitChange(e.target.value)} />
+          <Select value={String(pag.limit)} options={limitOptions} onChange={(e) => handleLimitChange(e.target.value)} />
         </div>
 
         <form className="mt-3 grid gap-3 lg:grid-cols-[1fr_auto_auto]" onSubmit={handleApplySearch}>
@@ -449,7 +427,7 @@ export default function SoftwareInventory() {
               </p>
 
               <div className="flex items-center gap-2">
-                <Button variant="secondary" size="sm" onClick={goToPrevPage} disabled={!canPrev}>
+                <Button variant="secondary" size="sm" onClick={pag.goToPrev} disabled={!canPrev}>
                   Voltar
                 </Button>
 
@@ -457,7 +435,7 @@ export default function SoftwareInventory() {
                   {currentPage} / {totalPages}
                 </span>
 
-                <Button variant="secondary" size="sm" onClick={goToNextPage} disabled={!canNext} loading={list.isFetching}>
+                <Button variant="secondary" size="sm" onClick={() => pag.goToNext(list.data?.nextCursor)} disabled={!canNext} loading={list.isFetching}>
                   Avançar
                 </Button>
               </div>

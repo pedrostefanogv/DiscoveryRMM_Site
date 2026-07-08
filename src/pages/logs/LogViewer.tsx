@@ -450,7 +450,7 @@ export default function LogViewer() {
             type="button"
             className="inline-flex items-center gap-2 text-sm text-slate-300 hover:text-white"
             onClick={() => setShowAdvancedFilters(current => !current)}
-            aria-expanded={showAdvancedFilters}
+            aria-expanded={showAdvancedFilters ? 'true' : 'false'}
           >
             {showAdvancedFilters ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
             <span>{showAdvancedFilters ? 'Ocultar filtros avançados' : 'Mostrar filtros avançados'}</span>

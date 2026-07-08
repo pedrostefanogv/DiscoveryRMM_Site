@@ -20,7 +20,7 @@ import {
   useCreateTicket,
   useTicket,
   useTicketWatchers,
-  useTickets,
+  useTicketsPage,
   useUpdateTicket,
 } from '@/hooks/useTickets';
 import { useClients } from '@/hooks/useClients';
@@ -246,6 +246,7 @@ export default function TicketList() {
   const [assignTargetUserId, setAssignTargetUserId] = useState('');
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [page, setPage] = useState(1);
+  const [pageCursors, setPageCursors] = useState<Array<string | undefined>>([undefined]);
   const [savedViewForm, setSavedViewForm] = useState<SavedViewFormState>({
     name: 'Minha visao',
     isShared: false,
@@ -256,14 +257,15 @@ export default function TicketList() {
     [session.accessToken],
   );
 
-  const tickets = useTickets({
+  const cursor = pageCursors[page - 1];
+  const tickets = useTicketsPage({
     clientId: filterClient || undefined,
     workflowStateId: filterState || undefined,
     priority: filterPriority || undefined,
     isClosed: filterStatus === '' ? undefined : filterStatus === 'true',
     text: filterText.trim() || undefined,
+    cursor,
     limit: pageSize,
-    offset: (page - 1) * pageSize,
   });
   const hoverPreviewTicketQuery = useTicket(hoverPreviewTicketId ?? '');
   const hoverPreviewWatchersQuery = useTicketWatchers(hoverPreviewTicketId ?? '');
@@ -295,7 +297,7 @@ export default function TicketList() {
     [states.data],
   );
 
-  const visibleTickets = tickets.data ?? [];
+  const visibleTickets = tickets.data?.items ?? [];
   const hoverPreviewTicket = useMemo(() => {
     if (!hoverPreviewTicketId) return null;
     if (hoverPreviewTicketQuery.data) return hoverPreviewTicketQuery.data;
@@ -316,7 +318,7 @@ export default function TicketList() {
   const kpi = kpiQuery.data;
 
   useEffect(() => {
-    setPage(1);
+    resetPagination();
   }, [filterClient, filterPriority, filterState, filterStatus, filterText, pageSize]);
 
   useEffect(() => {
@@ -371,8 +373,28 @@ export default function TicketList() {
     };
   }, [ticketContextMenu]);
 
-  const hasNextPage = visibleTickets.length === pageSize;
+  const hasNextPage = tickets.data?.hasMore ?? false;
   const hasPrevPage = page > 1;
+
+  const goToNextPage = () => {
+    if (!tickets.data?.nextCursor) return;
+    setPageCursors((prev) => {
+      const next = [...prev];
+      next[page] = tickets.data!.nextCursor!;
+      return next;
+    });
+    setPage((p) => p + 1);
+  };
+
+  const goToPrevPage = () => {
+    setPage((p) => Math.max(1, p - 1));
+  };
+
+  const resetPagination = () => {
+    setPage(1);
+    setPageCursors([undefined]);
+  };
+
   const advancedFiltersActiveCount = Number(Boolean(filterClient)) + Number(Boolean(filterState));
   const hasActiveFilters =
     Boolean(filterClient) ||
@@ -721,7 +743,7 @@ export default function TicketList() {
         <Button
           variant="ghost"
           size="sm"
-          onClick={() => setPage((current) => Math.max(1, current - 1))}
+          onClick={goToPrevPage}
           disabled={!hasPrevPage || tickets.isFetching}
         >
           Anterior
@@ -730,7 +752,7 @@ export default function TicketList() {
         <Button
           variant="ghost"
           size="sm"
-          onClick={() => setPage((current) => current + 1)}
+          onClick={goToNextPage}
           disabled={!hasNextPage || tickets.isFetching}
         >
           Proxima
