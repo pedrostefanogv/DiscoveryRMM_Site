@@ -20,7 +20,7 @@ interface SoftwareInstallationRow {
 }
 
 function formatDate(date: string | null): string {
-  if (!date) return "—";
+  if (!date) return "\u2014";
   return new Date(date).toLocaleString("pt-BR");
 }
 
@@ -162,7 +162,7 @@ export default function SoftwareInventory() {
     {
       key: "source",
       header: "Fonte",
-      render: (item) => item.source ?? "—",
+      render: (item) => item.source ?? "\u2014",
     },
     {
       key: "lastSeen",
@@ -341,7 +341,7 @@ export default function SoftwareInventory() {
   const detailsUniqueClients = new Set(detailsRows.map((row) => row.clientName)).size;
   const detailsUniqueSites = new Set(detailsRows.map((row) => row.siteName)).size;
   const detailsUniqueAgents = new Set(detailsRows.map((row) => row.agentId)).size;
-  const detailsUniqueVersions = new Set(detailsRows.map((row) => row.version ?? "—")).size;
+  const detailsUniqueVersions = new Set(detailsRows.map((row) => row.version ?? "\u2014")).size;
 
   if (clients.isLoading) return <Loading />;
   if (clients.isError) return <ErrorDisplay onRetry={() => clients.refetch()} />;
@@ -357,7 +357,7 @@ export default function SoftwareInventory() {
         <StatCard icon={AppWindow} label="Instalados" value={totalInstalled} tone="primary" />
         <StatCard icon={AppWindow} label="Softwares distintos" value={totalSoftware} tone="accent" />
         <StatCard icon={AppWindow} label="Agents distintos" value={totalAgents} tone="success" />
-        <StatCard icon={AppWindow} label="Última coleta" value={snapshot.data?.lastCollectedAt ? new Date(snapshot.data.lastCollectedAt).toLocaleDateString("pt-BR") : "—"} tone="warning" />
+        <StatCard icon={AppWindow} label="Última coleta" value={snapshot.data?.lastCollectedAt ? new Date(snapshot.data.lastCollectedAt).toLocaleDateString("pt-BR") : "\u2014"} tone="warning" />
       </div>
 
       <Card>
@@ -483,8 +483,8 @@ export default function SoftwareInventory() {
                       <td className="px-3 py-2 text-foreground">{row.clientName}</td>
                       <td className="px-3 py-2 text-muted-foreground">{row.siteName}</td>
                       <td className="px-3 py-2 text-muted-foreground">{row.agentName}</td>
-                      <td className="px-3 py-2 font-mono text-muted-foreground">{row.version ?? "—"}</td>
-                      <td className="px-3 py-2 text-muted-foreground">{row.source ?? "—"}</td>
+                      <td className="px-3 py-2 font-mono text-muted-foreground">{row.version ?? "\u2014"}</td>
+                      <td className="px-3 py-2 text-muted-foreground">{row.source ?? "\u2014"}</td>
                       <td className="px-3 py-2 text-muted">{formatDate(row.lastSeenAt ?? row.collectedAt)}</td>
                       <td className="px-3 py-2 text-right">
                         <Button

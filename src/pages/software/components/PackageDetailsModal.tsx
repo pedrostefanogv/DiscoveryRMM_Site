@@ -67,7 +67,7 @@ export function PackageDetailsModal({ open, onClose, pkg, installationType }: Pa
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="rounded-xl border border-border bg-surface-light p-3">
                 <div className="text-xs font-medium uppercase tracking-wide text-muted">Publisher</div>
-                <div className="mt-1 text-sm text-foreground">{details.publisher ?? '—'}</div>
+                <div className="mt-1 text-sm text-foreground">{details.publisher ?? '\u2014'}</div>
               </div>
               <div className="rounded-xl border border-border bg-surface-light p-3">
                 <div className="text-xs font-medium uppercase tracking-wide text-muted">Tipo</div>

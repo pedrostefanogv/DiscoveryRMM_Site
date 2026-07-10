@@ -25,7 +25,7 @@ import { useSoftwareInventorySnapshot } from '@/hooks/useSoftwareInventory';
 import type { DashboardWindow } from '@/api/dashboard';
 
 function formatBytes(value?: number | null): string {
-  if (!value || value <= 0) return '—';
+  if (!value || value <= 0) return '\u2014';
   const gb = value / (1024 ** 3);
   if (gb >= 1) return `${gb.toFixed(2)} GB`;
   const mb = value / (1024 ** 2);
@@ -33,7 +33,7 @@ function formatBytes(value?: number | null): string {
 }
 
 function formatUptime(uptime?: string | number | null): string {
-  if (uptime === null || uptime === undefined) return '—';
+  if (uptime === null || uptime === undefined) return '\u2014';
   if (typeof uptime === 'string') return uptime;
 
   const totalSeconds = Math.max(0, Math.floor(uptime));
@@ -47,7 +47,7 @@ function formatUptime(uptime?: string | number | null): string {
 }
 
 function formatMegabytes(value?: number | null): string {
-  if (!value || value <= 0) return '—';
+  if (!value || value <= 0) return '\u2014';
   if (value >= 1024) return `${(value / 1024).toFixed(2)} GB`;
   return `${value.toFixed(2)} MB`;
 }
@@ -190,7 +190,7 @@ export default function Dashboard() {
           <StatCard
             icon={AppWindow}
             label="Softwares instalados"
-            value={softwareSnapshot.isLoading ? '—' : totalInstalledSoftware}
+            value={softwareSnapshot.isLoading ? '\u2014' : totalInstalledSoftware}
             tone="success"
           />
         </button>
@@ -203,7 +203,7 @@ export default function Dashboard() {
           <StatCard
             icon={Users}
             label="Clientes"
-            value={realtimeStats.data?.business?.clients?.total ?? '—'}
+            value={realtimeStats.data?.business?.clients?.total ?? '\u2014'}
             tone="primary"
           />
         </button>
@@ -247,7 +247,7 @@ export default function Dashboard() {
                 <span>Sucesso</span>
               </div>
               <p className={`mt-1 text-base font-semibold ${(cmds?.successRate ?? 0) >= 80 ? 'text-success' : 'text-danger'}`}>
-                {cmds?.total ? `${cmds.successRate.toFixed(1)}%` : '—'}
+                {cmds?.total ? `${cmds.successRate.toFixed(1)}%` : '\u2014'}
               </p>
             </div>
           </div>
@@ -273,7 +273,7 @@ export default function Dashboard() {
                 <span>Sucesso</span>
               </div>
               <p className={`mt-1 text-base font-semibold ${(auto?.successRate ?? 0) >= 80 ? 'text-success' : 'text-danger'}`}>
-                {auto?.total ? `${auto.successRate.toFixed(1)}%` : '—'}
+                {auto?.total ? `${auto.successRate.toFixed(1)}%` : '\u2014'}
               </p>
             </div>
           </div>
@@ -394,20 +394,20 @@ export default function Dashboard() {
           <div className="grid grid-cols-2 gap-3 text-sm">
             <MetricTile label="Working Set" value={workingSet} icon={Cpu} />
             <MetricTile label="GC Heap" value={gcHeap} icon={Database} />
-            <MetricTile label="Threads" value={processMetrics?.threadCount ?? '—'} icon={Activity} />
+            <MetricTile label="Threads" value={processMetrics?.threadCount ?? '\u2014'} icon={Activity} />
             <MetricTile label="Uptime" value={formatUptime(uptimeValue)} icon={Server} />
           </div>
           <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-muted">
             <div className="rounded-lg bg-surface-light px-3 py-2">
               <p className="text-muted">ThreadPool worker</p>
               <p className="mt-0.5 text-sm font-semibold text-foreground">
-                {workerAvailable ?? '—'} disp / {workerMin ?? '—'} min
+                {workerAvailable ?? '\u2014'} disp / {workerMin ?? '\u2014'} min
               </p>
             </div>
             <div className="rounded-lg bg-surface-light px-3 py-2">
               <p className="text-muted">ThreadPool IO</p>
               <p className="mt-0.5 text-sm font-semibold text-foreground">
-                {ioAvailable ?? '—'} disp / {ioMin ?? '—'} min
+                {ioAvailable ?? '\u2014'} disp / {ioMin ?? '\u2014'} min
               </p>
             </div>
           </div>
@@ -416,9 +416,9 @@ export default function Dashboard() {
 
       {/* Linha 6 – P2P Summary Cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard icon={Monitor} label="Agentes ativos P2P" value={p2pKpis?.activeAgents ?? '—'} tone="accent" />
-        <StatCard icon={Server} label="Seeders ativos" value={p2pKpis?.activeSeeders ?? '—'} tone="primary" />
-        <StatCard icon={CheckCircle2} label="Success rate" value={typeof p2pKpis?.replicationSuccessRate === 'number' ? `${p2pKpis.replicationSuccessRate.toFixed(1)}%` : '—'} tone="success" />
+        <StatCard icon={Monitor} label="Agentes ativos P2P" value={p2pKpis?.activeAgents ?? '\u2014'} tone="accent" />
+        <StatCard icon={Server} label="Seeders ativos" value={p2pKpis?.activeSeeders ?? '\u2014'} tone="primary" />
+        <StatCard icon={CheckCircle2} label="Success rate" value={typeof p2pKpis?.replicationSuccessRate === 'number' ? `${p2pKpis.replicationSuccessRate.toFixed(1)}%` : '\u2014'} tone="success" />
         <StatCard icon={Database} label="Bytes servidos" value={formatBytes(p2pKpis?.bytesServedDelta)} tone="warning" />
       </div>
     </div>

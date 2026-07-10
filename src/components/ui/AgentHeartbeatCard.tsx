@@ -10,7 +10,7 @@ interface AgentHeartbeatCardProps {
 }
 
 function formatUptime(seconds: number | undefined | null): string {
-  if (seconds == null || !Number.isFinite(seconds)) return '—';
+  if (seconds == null || !Number.isFinite(seconds)) return '\u2014';
   if (seconds < 60) return `${Math.round(seconds)}s`;
   if (seconds < 3600) return `${Math.floor(seconds / 60)}m ${Math.round(seconds % 60)}s`;
   const hours = Math.floor(seconds / 3600);
@@ -98,7 +98,7 @@ export function AgentHeartbeatCard({ metrics, showEmpty = false }: AgentHeartbea
             P2P
           </p>
           <p className="mt-0.5 font-semibold tabular-nums text-foreground">
-            {metrics.p2pPeers ?? '—'}
+            {metrics.p2pPeers ?? '\u2014'}
           </p>
         </div>
         <div className="text-center">
@@ -116,7 +116,7 @@ export function AgentHeartbeatCard({ metrics, showEmpty = false }: AgentHeartbea
             Processos
           </p>
           <p className="mt-0.5 font-semibold tabular-nums text-foreground">
-            {metrics.processCount ?? '—'}
+            {metrics.processCount ?? '\u2014'}
           </p>
         </div>
       </div>

@@ -419,7 +419,7 @@ export default function KnowledgeList() {
       header: 'Autor',
       render: (article) => (
         <div>
-          <span className="text-muted-foreground">{article.createdBy || '—'}</span>
+          <span className="text-muted-foreground">{article.createdBy || '\u2014'}</span>
           {article.lastEditedBy && article.lastEditedBy !== article.createdBy && (
             <span className="text-xs text-muted block">
               Editado por {article.lastEditedBy}

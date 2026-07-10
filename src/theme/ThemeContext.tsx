@@ -44,12 +44,20 @@ function saveBranding(b: BrandingConfig) {
   localStorage.setItem(BRANDING_STORAGE_KEY, JSON.stringify(b));
 }
 
-function applyCSSVars(b: BrandingConfig) {
+function applyCSSVars(b: BrandingConfig, mode: ThemeMode) {
   const root = document.documentElement;
   root.style.setProperty('--color-primary', b.primaryColor);
   root.style.setProperty('--color-accent', b.accentColor);
-  root.style.setProperty('--color-sidebar', b.sidebarColor);
-  root.style.setProperty('--color-header', b.headerColor);
+
+  // Em light mode, sidebar e header usam os valores do tema claro do CSS.
+  // Em dark mode, usa as cores do branding.
+  if (mode === 'dark') {
+    root.style.setProperty('--color-sidebar', b.sidebarColor);
+    root.style.setProperty('--color-header', b.headerColor);
+  } else {
+    root.style.removeProperty('--color-sidebar');
+    root.style.removeProperty('--color-header');
+  }
 }
 
 function loadThemeMode(): ThemeMode {
@@ -79,15 +87,16 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   // Aplica branding
   useEffect(() => {
     saveBranding(branding);
-    applyCSSVars(branding);
+    applyCSSVars(branding, mode);
     document.title = branding.appName;
-  }, [branding]);
+  }, [branding, mode]);
 
   // Aplica modo claro/escuro
   useEffect(() => {
     applyThemeMode(mode);
+    applyCSSVars(branding, mode);
     localStorage.setItem(THEME_MODE_STORAGE_KEY, mode);
-  }, [mode]);
+  }, [mode, branding]);
 
   // Escuta mudanças de prefers-color-scheme (se o usuário não escolheu manualmente)
   useEffect(() => {

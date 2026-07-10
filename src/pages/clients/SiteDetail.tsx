@@ -261,7 +261,7 @@ export default function SiteDetail() {
               >
                 {dashboard.data.commands.total > 0
                   ? `${dashboard.data.commands.successRate.toFixed(1)}% sucesso`
-                  : '—'}
+                  : '\u2014'}
               </p>
               <p className="mt-0.5 text-xs text-muted">
                 {dashboard.data.commands.total} total
@@ -288,7 +288,7 @@ export default function SiteDetail() {
               >
                 {dashboard.data.automation.total > 0
                   ? `${dashboard.data.automation.successRate.toFixed(1)}% sucesso`
-                  : '—'}
+                  : '\u2014'}
               </p>
               <p className="mt-0.5 text-xs text-muted">
                 {dashboard.data.automation.total} execuções
@@ -302,7 +302,7 @@ export default function SiteDetail() {
         <StatCard
           icon={Monitor}
           label="Agentes"
-          value={agents.isLoading ? '—' : totalAgents}
+          value={agents.isLoading ? '\u2014' : totalAgents}
           tone="primary"
           trend={
             !agents.isLoading && totalAgents > 0 ? (
@@ -315,7 +315,7 @@ export default function SiteDetail() {
         <StatCard
           icon={TicketIcon}
           label="Chamados do site"
-          value={dashboard.isLoading ? '—' : dashboard.data?.tickets.open ?? totalTickets}
+          value={dashboard.isLoading ? '\u2014' : dashboard.data?.tickets.open ?? totalTickets}
           tone="warning"
           trend={
             dashboard.data && dashboard.data.tickets.slaBreachedOpen > 0 ? (
@@ -328,13 +328,13 @@ export default function SiteDetail() {
         <StatCard
           icon={AppWindow}
           label="Softwares instalados"
-          value={softwareSnapshot.isLoading ? '—' : totalInstalledSoftware}
+          value={softwareSnapshot.isLoading ? '\u2014' : totalInstalledSoftware}
           tone="success"
         />
         <StatCard
           icon={Building2}
           label={`Logs ${window}`}
-          value={dashboard.isLoading ? '—' : dashboard.data?.logs.total ?? recentLogs.length}
+          value={dashboard.isLoading ? '\u2014' : dashboard.data?.logs.total ?? recentLogs.length}
           tone="accent"
         />
       </div>
@@ -349,7 +349,7 @@ export default function SiteDetail() {
             </div>
             <div>
               <dt className="text-muted">Observações</dt>
-              <dd className="mt-0.5 text-foreground">{currentSite.notes ?? '—'}</dd>
+              <dd className="mt-0.5 text-foreground">{currentSite.notes ?? '\u2014'}</dd>
             </div>
             <div>
               <dt className="text-muted">Criado em</dt>
@@ -366,13 +366,13 @@ export default function SiteDetail() {
             <div className="border-t border-border pt-3">
               <dt className="text-muted">Softwares distintos</dt>
               <dd className="mt-0.5 text-foreground">
-                {softwareSnapshot.isLoading ? '—' : softwareSnapshot.data?.distinctSoftware ?? 0}
+                {softwareSnapshot.isLoading ? '\u2014' : softwareSnapshot.data?.distinctSoftware ?? 0}
               </dd>
             </div>
             <div>
               <dt className="text-muted">Agentes com inventário</dt>
               <dd className="mt-0.5 text-foreground">
-                {softwareSnapshot.isLoading ? '—' : softwareSnapshot.data?.distinctAgents ?? 0}
+                {softwareSnapshot.isLoading ? '\u2014' : softwareSnapshot.data?.distinctAgents ?? 0}
               </dd>
             </div>
           </dl>

@@ -102,7 +102,7 @@ export function scopeLabel(s: AppApprovalScopeType) {
 }
 
 export function formatDate(d: string | null) {
-  if (!d) return "—";
+  if (!d) return "\u2014";
   return new Date(d).toLocaleString("pt-BR");
 }
 

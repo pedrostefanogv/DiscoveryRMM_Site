@@ -39,8 +39,8 @@ function autoColor(value: number | undefined | null): MetricBarColor {
 }
 
 function formatMetricValue(value: number | undefined | null): string {
-  if (value == null) return '—';
-  if (!Number.isFinite(value)) return '—';
+  if (value == null) return '\u2014';
+  if (!Number.isFinite(value)) return '\u2014';
   return String(Math.round(value));
 }
 

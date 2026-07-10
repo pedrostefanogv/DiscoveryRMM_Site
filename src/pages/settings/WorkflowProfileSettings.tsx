@@ -83,8 +83,8 @@ export default function WorkflowProfileSettings() {
             <ProfileRow
               key={p.id}
               profile={p}
-              deptName={deptMap.get(p.departmentId)?.name ?? '—'}
-              clientName={p.clientId ? (clientMap.get(p.clientId)?.name ?? '—') : null}
+              deptName={deptMap.get(p.departmentId)?.name ?? '\u2014'}
+              clientName={p.clientId ? (clientMap.get(p.clientId)?.name ?? '\u2014') : null}
               onEdit={() => setEditTarget(p)}
             />
           ))}

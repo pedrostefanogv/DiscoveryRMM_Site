@@ -68,7 +68,7 @@ export function ReportPreview({
     header: field,
     render: (row) => {
       const value = row[field];
-      if (value === null || value === undefined) return "—";
+      if (value === null || value === undefined) return "\u2014";
       if (typeof value === "boolean") return value ? "Sim" : "Não";
       if (field.toLowerCase().includes("date") || field.toLowerCase().includes("at")) {
         try {

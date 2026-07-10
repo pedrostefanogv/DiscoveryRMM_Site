@@ -104,7 +104,7 @@ export default function ReportExecutionList() {
   const shortId = (id: string) => `${id.slice(0, 8)}...`;
 
   const formatDate = (dateStr: string | null | undefined) => {
-    if (!dateStr) return "—";
+    if (!dateStr) return "\u2014";
     try {
       const date = new Date(dateStr);
       return date.toLocaleString("pt-BR", {
@@ -115,12 +115,12 @@ export default function ReportExecutionList() {
         minute: "2-digit",
       });
     } catch {
-      return "—";
+      return "\u2014";
     }
   };
 
   const formatBytes = (bytes: number | null | undefined) => {
-    if (!bytes) return "—";
+    if (!bytes) return "\u2014";
     const mb = bytes / 1024 / 1024;
     return `${mb.toFixed(2)} MB`;
   };
@@ -161,10 +161,10 @@ export default function ReportExecutionList() {
           </p>
           <p>
             <span className="text-muted">Duração:</span>{" "}
-            {e.executionTimeMs ? `${(e.executionTimeMs / 1000).toFixed(1)}s` : "—"}
+            {e.executionTimeMs ? `${(e.executionTimeMs / 1000).toFixed(1)}s` : "\u2014"}
           </p>
           <p className="truncate max-w-48">
-            <span className="text-muted">Por:</span> {e.createdBy || "—"}
+            <span className="text-muted">Por:</span> {e.createdBy || "\u2014"}
           </p>
         </div>
       ),
@@ -211,7 +211,7 @@ export default function ReportExecutionList() {
       header: "Linhas",
       render: (e) => (
         <span className="text-muted-foreground">
-          {e.rowCount ? e.rowCount.toLocaleString() : "—"}
+          {e.rowCount ? e.rowCount.toLocaleString() : "\u2014"}
         </span>
       ),
     },

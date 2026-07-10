@@ -32,7 +32,7 @@ export default function ClientList() {
     {
       key: 'notes',
       header: 'Observações',
-      render: c => <span className="text-muted">{c.notes ?? '—'}</span>,
+      render: c => <span className="text-muted">{c.notes ?? '\u2014'}</span>,
     },
     {
       key: 'status',

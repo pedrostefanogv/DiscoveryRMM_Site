@@ -108,8 +108,8 @@ export function AuditTab() {
                     <td className="px-5 py-2"><Badge color={changeTypeBadgeColor[entry.changeType]}>{changeTypeLabel[entry.changeType] ?? String(entry.changeType)}</Badge></td>
                     <td className="px-5 py-2">{entry.action === AppApprovalActionType.Allow ? <Badge color="success">Permitido</Badge> : <Badge color="danger">Negado</Badge>}</td>
                     <td className="px-5 py-2 text-xs text-muted">{scopeLabel(entry.scopeType)}{entry.scopeId && <div className="font-mono text-muted truncate max-w-[6rem]" title={entry.scopeId}>{entry.scopeId.slice(0, 8)}…</div>}</td>
-                    <td className="px-5 py-2 text-xs text-muted">{entry.changedBy ?? '—'}</td>
-                    <td className="max-w-[12rem] px-5 py-2 text-xs text-muted truncate">{entry.reason ?? '—'}</td>
+                    <td className="px-5 py-2 text-xs text-muted">{entry.changedBy ?? '\u2014'}</td>
+                    <td className="max-w-[12rem] px-5 py-2 text-xs text-muted truncate">{entry.reason ?? '\u2014'}</td>
                   </tr>
                 ))}
               </tbody>
