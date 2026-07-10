@@ -69,7 +69,7 @@ export const notificationsApi = {
     ),
 
   delete: (id: string, params: DeleteNotificationParams = {}) =>
-    api.delete<void>(
+    api.del<void>(
       `/api/v1/notifications/${id}${buildQueryString(params as Record<string, unknown>)}`,
     ),
 };

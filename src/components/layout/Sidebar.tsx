@@ -121,6 +121,10 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
   } = useAuthorization();
   const location = useLocation();
   const navigate = useNavigate();
+  const [hovered, setHovered] = useState(false);
+
+  // Quando colapsado no desktop e o mouse está sobre a sidebar, expande visualmente
+  const effectiveCollapsed = collapsed && (!hovered || !isDesktop);
   const clientsIsActive =
     location.pathname.startsWith('/clients') || location.pathname.startsWith('/sites');
   const softwareIsActive = location.pathname.startsWith('/software') || location.pathname === '/software-inventory';
@@ -192,11 +196,13 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
     settingsIsActive,
   ]);
 
-  const expandedWidthClass = collapsed ? 'lg:w-16' : 'lg:w-60';
+  const expandedWidthClass = effectiveCollapsed ? 'lg:w-16' : 'lg:w-60';
   const mobileVisibleClass = mobileOpen ? 'translate-x-0' : '-translate-x-full';
 
   return (
     <aside
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
       className={`sidebar-transition fixed left-0 top-0 z-30 flex h-screen w-60 flex-col border-r border-border bg-sidebar/95 shadow-2xl backdrop-blur-xl ${
         isDesktop ? `translate-x-0 ${expandedWidthClass}` : mobileVisibleClass
       }`}
@@ -208,7 +214,7 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
         ) : (
           <img src="/icon.ico" alt="Discovery RMM" className="h-8 w-8 rounded" />
         )}
-        {!collapsed && (
+        {!effectiveCollapsed && (
           <span className="text-lg font-bold text-foreground truncate">
             {branding.appName}
           </span>
@@ -229,13 +235,13 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
           }
         >
           <LayoutDashboard className="h-5 w-5 shrink-0" />
-          {!collapsed && <span className="truncate">Dashboard</span>}
+          {!effectiveCollapsed && <span className="truncate">Dashboard</span>}
         </NavLink>
 
         <button
           type="button"
           onClick={() => {
-            if (collapsed) {
+            if (effectiveCollapsed) {
               navigate('/clients');
               return;
             }
@@ -249,7 +255,7 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
           aria-label="Abrir submenu de clientes"
         >
           <Users className="h-5 w-5 shrink-0" />
-          {!collapsed && (
+          {!effectiveCollapsed && (
             <>
               <span className="truncate">Clientes</span>
               <span className="ml-auto">
@@ -259,7 +265,7 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
           )}
         </button>
 
-        {!collapsed && (
+        {!effectiveCollapsed && (
           <div className={submenuAnimationClass(clientsOpen)} aria-hidden={!clientsOpen}>
             <div className="ml-8 space-y-1 border-l border-border pl-3 pb-1">
               {clientLinks.map(({ to, label }) => (
@@ -296,14 +302,14 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
             }
           >
             <Icon className="h-5 w-5 shrink-0" />
-            {!collapsed && <span className="truncate">{label}</span>}
+            {!effectiveCollapsed && <span className="truncate">{label}</span>}
           </NavLink>
         ))}
 
         <button
           type="button"
           onClick={() => {
-            if (collapsed) {
+            if (effectiveCollapsed) {
               navigate('/tickets');
               return;
             }
@@ -317,7 +323,7 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
           aria-label="Abrir submenu de suporte"
         >
           <Ticket className="h-5 w-5 shrink-0" />
-          {!collapsed && (
+          {!effectiveCollapsed && (
             <>
               <span className="truncate">Suporte</span>
               <span className="ml-auto">
@@ -327,7 +333,7 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
           )}
         </button>
 
-        {!collapsed && (
+        {!effectiveCollapsed && (
           <div className={submenuAnimationClass(ticketsOpen)} aria-hidden={!ticketsOpen}>
             <div className="ml-8 space-y-1 border-l border-border pl-3 pb-1">
               {visibleTicketsLinks.map(({ to, label }) => (
@@ -355,7 +361,7 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
             <button
               type="button"
               onClick={() => {
-                if (collapsed) {
+                if (effectiveCollapsed) {
                   navigate('/software');
                   return;
                 }
@@ -369,7 +375,7 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
               aria-label="Abrir submenu de softwares"
             >
               <AppWindow className="h-5 w-5 shrink-0" />
-              {!collapsed && (
+              {!effectiveCollapsed && (
                 <>
                   <span className="truncate">Softwares</span>
                   <span className="ml-auto">
@@ -379,7 +385,7 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
               )}
             </button>
 
-            {!collapsed && (
+            {!effectiveCollapsed && (
               <div className={submenuAnimationClass(softwareOpen)} aria-hidden={!softwareOpen}>
                 <div className="ml-8 space-y-1 border-l border-border pl-3 pb-1">
                   {softwareLinks.map(({ to, label }) => (
@@ -408,7 +414,7 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
             <button
               type="button"
               onClick={() => {
-                if (collapsed) {
+                if (effectiveCollapsed) {
                   navigate(visibleAutomationLinks[0]?.to ?? '/automation');
                   return;
                 }
@@ -422,7 +428,7 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
               aria-label="Abrir submenu de automação"
             >
               <Wrench className="h-5 w-5 shrink-0" />
-              {!collapsed && (
+              {!effectiveCollapsed && (
                 <>
                   <span className="truncate">Automação</span>
                   <span className="ml-auto">
@@ -432,7 +438,7 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
               )}
             </button>
 
-            {!collapsed && (
+            {!effectiveCollapsed && (
               <div className={submenuAnimationClass(automationOpen)} aria-hidden={!automationOpen}>
                 <div className="ml-8 space-y-1 border-l border-border pl-3 pb-1">
                   {visibleAutomationLinks.map(({ to, label }) => (
@@ -462,7 +468,7 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
             <button
               type="button"
               onClick={() => {
-                if (collapsed) {
+                if (effectiveCollapsed) {
                   navigate('/reports/templates');
                   return;
                 }
@@ -476,7 +482,7 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
               aria-label="Abrir submenu de relatórios"
             >
               <FileBarChart className="h-5 w-5 shrink-0" />
-              {!collapsed && (
+              {!effectiveCollapsed && (
                 <>
                   <span className="truncate">Relatórios</span>
                   <span className="ml-auto">
@@ -486,7 +492,7 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
               )}
             </button>
 
-            {!collapsed && (
+            {!effectiveCollapsed && (
               <div className={submenuAnimationClass(reportsOpen)} aria-hidden={!reportsOpen}>
                 <div className="ml-8 space-y-1 border-l border-border pl-3 pb-1">
                   {reportsLinks.map(({ to, label }) => (
@@ -513,7 +519,7 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
         <button
           type="button"
           onClick={() => {
-            if (collapsed) {
+            if (effectiveCollapsed) {
               navigate('/identity/authentication');
               return;
             }
@@ -527,7 +533,7 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
           aria-label="Abrir submenu de identidade"
         >
           <ShieldCheck className="h-5 w-5 shrink-0" />
-          {!collapsed && (
+          {!effectiveCollapsed && (
             <>
               <span className="truncate">Identidade</span>
               <span className="ml-auto">
@@ -537,7 +543,7 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
           )}
         </button>
 
-        {!collapsed && (
+        {!effectiveCollapsed && (
           <div className={submenuAnimationClass(identityOpen)} aria-hidden={!identityOpen}>
             <div className="ml-8 space-y-1 border-l border-border pl-3 pb-1">
               {visibleIdentityLinks.map(({ to, label }) => (
@@ -564,7 +570,7 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
             <button
               type="button"
               onClick={() => {
-                if (collapsed) {
+                if (effectiveCollapsed) {
                   navigate('/settings');
                   return;
                 }
@@ -578,7 +584,7 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
               aria-label="Abrir submenu de configurações"
             >
               <Settings className="h-5 w-5 shrink-0" />
-              {!collapsed && (
+              {!effectiveCollapsed && (
                 <>
                   <span className="truncate">Configurações</span>
                   <span className="ml-auto">
@@ -588,7 +594,7 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
               )}
             </button>
 
-            {!collapsed && (
+            {!effectiveCollapsed && (
               <div className={submenuAnimationClass(settingsOpen)} aria-hidden={!settingsOpen}>
                 <div className="ml-8 space-y-1 border-l border-border pl-3 pb-1">
                   {settingsLinks.map(({ to, label }) => (
@@ -619,10 +625,10 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
         <button
           onClick={onToggle}
           className="flex h-11 w-full items-center justify-center gap-2 text-xs font-medium text-muted transition-colors hover:bg-surface-light hover:text-muted-foreground"
-          aria-label={collapsed ? 'Expandir sidebar' : 'Recolher sidebar'}
+          aria-label={effectiveCollapsed ? 'Expandir sidebar' : 'Recolher sidebar'}
         >
-          {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
-          {!collapsed && <span>Recolher</span>}
+          {effectiveCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+          {!effectiveCollapsed && <span>Recolher</span>}
         </button>
       </div>
     </aside>

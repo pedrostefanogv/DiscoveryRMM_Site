@@ -55,7 +55,7 @@ function applyCSSVars(b: BrandingConfig, mode: ThemeMode) {
     root.style.setProperty('--color-sidebar', b.sidebarColor);
     root.style.setProperty('--color-header', b.headerColor);
   } else {
-    root.style.setProperty('--color-primary', '#2563eb');
+    root.style.setProperty('--color-primary', '#3b82f6');
     root.style.removeProperty('--color-sidebar');
     root.style.removeProperty('--color-header');
   }

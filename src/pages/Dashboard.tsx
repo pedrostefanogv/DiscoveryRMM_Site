@@ -22,7 +22,6 @@ import { useP2POverview } from '@/hooks/useP2POverview';
 import { StatCard, Card, CardHeader, Badge, SkeletonDashboard, ErrorDisplay } from '@/components/ui';
 import { getRealtimeStats } from '@/api';
 import { useSoftwareInventorySnapshot } from '@/hooks/useSoftwareInventory';
-import { useTheme } from '@/theme/ThemeContext';
 import type { DashboardWindow } from '@/api/dashboard';
 
 function formatBytes(value?: number | null): string {
@@ -62,7 +61,6 @@ const WINDOWS: { value: DashboardWindow; label: string }[] = [
 export default function Dashboard() {
   const navigate = useNavigate();
   const [window, setWindow] = useState<DashboardWindow>('24h');
-  const { branding } = useTheme();
 
   const dashboard = useDashboardSummary('global', window);
   const softwareSnapshot = useSoftwareInventorySnapshot('global');
