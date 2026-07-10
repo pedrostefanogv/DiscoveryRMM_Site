@@ -620,7 +620,7 @@ export function ConfigurationFieldEditor({
       return (
         <>
           {structuredJsonField && (
-            <p className="text-xs text-amber-300">
+            <p className="text-xs text-amber-700 dark:text-amber-300">
                Conteúdo legado inválido detectado. Ajuste o JSON para continuar usando os campos estruturados.
             </p>
           )}
@@ -683,7 +683,7 @@ export function ConfigurationFieldEditor({
 
       <div className="grid gap-3">
         {fieldKind === "json" && fieldKey === "aiIntegrationSettingsJson" && (
-          <p className="text-xs text-amber-300">
+          <p className="text-xs text-amber-700 dark:text-amber-300">
              ApiKey é write-only: o valor atual não é retornado pela API. Preencha apenas para trocar a chave.
           </p>
         )}

@@ -33,7 +33,7 @@ export function SessionCountdown({ expiresAt, authenticated }: SessionCountdownP
   return (
     <span
       className={`text-xs font-mono tabular-nums ${
-        isLow ? 'text-amber-400' : 'text-muted'
+        isLow ? 'text-amber-600 dark:text-amber-400' : 'text-muted'
       }`}
       title="Tempo restante da sessão"
     >

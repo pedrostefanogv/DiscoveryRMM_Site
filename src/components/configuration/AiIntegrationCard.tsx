@@ -162,7 +162,7 @@ export function AiIntegrationCard({ aiSettings, onSave, saving }: Props) {
       <CardHeader title="Integracao com IA" subtitle="Chave de API, modelo e parametros do provedor." />
 
       <div className="grid gap-3">
-        <p className="text-xs text-amber-300">ApiKey nao e retornada pela API. Preencha apenas para trocar.</p>
+        <p className="text-xs text-amber-700 dark:text-amber-300">ApiKey nao e retornada pela API. Preencha apenas para trocar.</p>
 
         <div className="space-y-3">
           <div className="grid gap-3 sm:grid-cols-2">

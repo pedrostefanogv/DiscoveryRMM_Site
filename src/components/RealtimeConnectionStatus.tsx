@@ -34,10 +34,10 @@ export function RealtimeConnectionStatus() {
   }
 
   const toneClasses = isConnected
-    ? 'bg-green-950 text-green-300'
+    ? 'bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300'
     : isRecovering
-      ? 'bg-amber-950 text-amber-300'
-      : 'bg-red-950 text-red-300';
+      ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
+      : 'bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300';
 
   return (
     <div className="flex items-center gap-2">
@@ -59,7 +59,7 @@ export function RealtimeConnectionStatus() {
       </div>
       {hasConnectionError && (
         <div
-          className="flex items-center gap-1 rounded-full bg-red-950 px-2 py-1 text-xs font-medium text-red-200"
+          className="flex items-center gap-1 rounded-full bg-red-100 px-2 py-1 text-xs font-medium text-red-800 dark:bg-red-950 dark:text-red-200"
           title={
             status.natsLastErrorAtUtc
               ? `${status.natsLastErrorMessage ?? 'Erro NATS'} @ ${status.natsLastErrorAtUtc}`
@@ -74,14 +74,14 @@ export function RealtimeConnectionStatus() {
         <button
           type="button"
           onClick={handleReloadSession}
-          className="rounded-full border border-red-800 bg-red-950/80 px-2 py-1 text-xs font-medium text-red-100 transition hover:bg-red-900"
+          className="rounded-full border border-red-300 bg-red-100/80 px-2 py-1 text-xs font-medium text-red-800 transition hover:bg-red-200 dark:border-red-800 dark:bg-red-950/80 dark:text-red-100 dark:hover:bg-red-900"
           title="Recarregar sessão autenticada"
         >
           Recarregar sessão
         </button>
       )}
       {isServerOverloaded && (
-        <div className="flex items-center gap-1 rounded-full bg-amber-950 px-2 py-1 text-xs font-medium text-amber-200">
+        <div className="flex items-center gap-1 rounded-full bg-amber-100 px-2 py-1 text-xs font-medium text-amber-800 dark:bg-amber-950 dark:text-amber-200">
           <AlertTriangle className="h-3 w-3" />
           <span>Servidor sobrecarregado</span>
         </div>

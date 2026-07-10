@@ -1006,14 +1006,14 @@ export default function AgentList() {
             {isAgentOnlineNow(contextMenu.agent, now) && (
               <>
                 <button
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-amber-300 transition-colors hover:bg-amber-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-amber-700 transition-colors hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-60 dark:text-amber-300 dark:hover:bg-amber-500/10"
                   onClick={() => handleRestartAgent(contextMenu.agent)}
                 >
                   <RotateCcw className="h-4 w-4" />
                   Reiniciar
                 </button>
                 <button
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-300 transition-colors hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-600 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60 dark:text-red-300 dark:hover:bg-red-500/10"
                   onClick={() => handleShutdownAgent(contextMenu.agent)}
                 >
                   <Power className="h-4 w-4" />
@@ -1056,7 +1056,7 @@ export default function AgentList() {
             )}
             {canManageAgent && (
               <button
-                className="flex w-full items-center gap-2 border-t border-border px-3 py-2 text-left text-sm text-red-300 transition-colors hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+                className="flex w-full items-center gap-2 border-t border-border px-3 py-2 text-left text-sm text-red-600 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60 dark:text-red-300 dark:hover:bg-red-500/10"
                 onClick={() => {
                   openDeleteAgentModal(contextMenu.agent);
                 }}
@@ -1115,7 +1115,7 @@ export default function AgentList() {
           {remoteLoading && <Loading message="Gerando sessão remota..." />}
 
           {!remoteLoading && remoteError && (
-            <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+            <div className="rounded-lg border border-red-500/30 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-200">
               {remoteError}
             </div>
           )}

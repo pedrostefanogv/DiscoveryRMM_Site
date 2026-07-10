@@ -68,9 +68,9 @@ export default function PowerActionModal({
         </div>
 
         {/* Warning */}
-        <div className="mb-4 flex items-start gap-2 rounded-lg border border-amber-500/20 bg-amber-500/10 p-3">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
-          <p className="text-xs text-amber-300">
+        <div className="mb-4 flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-50 p-3 dark:border-amber-500/20 dark:bg-amber-500/10">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+          <p className="text-xs text-amber-800 dark:text-amber-300">
             {isRestart
               ? "O agente será reiniciado após o tempo configurado. Certifique-se de que não há tarefas críticas em execução."
               : "O agente será desligado após o tempo configurado. Você precisará de acesso físico ou Wake-on-LAN para religá-lo."}
