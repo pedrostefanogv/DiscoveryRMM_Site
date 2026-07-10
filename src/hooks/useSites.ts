@@ -15,6 +15,7 @@ export function useSites(clientId?: string, includeInactive = false) {
     queryKey: KEYS.byClient(clientId ?? "", includeInactive),
     queryFn: () => sitesApi.list(clientId ?? "", includeInactive),
     enabled: !!clientId,
+    staleTime: 60_000,
   });
 }
 
@@ -36,7 +37,10 @@ export function useCreateSite() {
       clientId: string;
       data: CreateSiteRequest;
     }) => sitesApi.create(clientId, data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: KEYS.all }),
+    onSuccess: (_d, vars) => {
+      qc.invalidateQueries({ queryKey: KEYS.byClient(vars.clientId, false) });
+      qc.invalidateQueries({ queryKey: KEYS.byClient(vars.clientId, true) });
+    },
   });
 }
 
@@ -52,7 +56,11 @@ export function useUpdateSite() {
       id: string;
       data: UpdateSiteRequest;
     }) => sitesApi.update(clientId, id, data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: KEYS.all }),
+    onSuccess: (_d, vars) => {
+      qc.invalidateQueries({ queryKey: KEYS.detail(vars.clientId, vars.id) });
+      qc.invalidateQueries({ queryKey: KEYS.byClient(vars.clientId, false) });
+      qc.invalidateQueries({ queryKey: KEYS.byClient(vars.clientId, true) });
+    },
   });
 }
 
@@ -61,6 +69,9 @@ export function useDeleteSite() {
   return useMutation({
     mutationFn: ({ clientId, id }: { clientId: string; id: string }) =>
       sitesApi.delete(clientId, id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: KEYS.all }),
+    onSuccess: (_d, vars) => {
+      qc.invalidateQueries({ queryKey: KEYS.byClient(vars.clientId, false) });
+      qc.invalidateQueries({ queryKey: KEYS.byClient(vars.clientId, true) });
+    },
   });
 }

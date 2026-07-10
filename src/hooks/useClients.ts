@@ -13,6 +13,7 @@ export function useClients(includeInactive = false) {
   return useQuery({
     queryKey: KEYS.list(includeInactive),
     queryFn: () => clientsApi.list(includeInactive),
+    staleTime: 60_000,
   });
 }
 
@@ -37,7 +38,11 @@ export function useUpdateClient() {
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: UpdateClientRequest }) =>
       clientsApi.update(id, data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: KEYS.all }),
+    onSuccess: (_d, vars) => {
+      qc.invalidateQueries({ queryKey: KEYS.list(false) });
+      qc.invalidateQueries({ queryKey: KEYS.list(true) });
+      qc.invalidateQueries({ queryKey: KEYS.detail(vars.id) });
+    },
   });
 }
 
@@ -45,6 +50,9 @@ export function useDeleteClient() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => clientsApi.delete(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: KEYS.all }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: KEYS.list(false) });
+      qc.invalidateQueries({ queryKey: KEYS.list(true) });
+    },
   });
 }

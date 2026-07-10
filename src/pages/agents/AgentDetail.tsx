@@ -1473,7 +1473,7 @@ export default function AgentDetail() {
             className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors ${activeDataTab === 'tickets' ? 'border-primary/40 bg-primary/15 text-primary' : 'border-white/10 bg-white/5 text-slate-300 hover:text-slate-100'}`}
           >
             Últimos Chamados
-            <span className="rounded-full bg-black/25 px-2 py-0.5 text-xs text-slate-300">{agentTickets.data?.length ?? 0}</span>
+            <span className="rounded-full bg-black/25 px-2 py-0.5 text-xs text-slate-300">{agentTickets.data?.items?.length ?? 0}</span>
           </button>
           <button
             type="button"
@@ -1642,21 +1642,21 @@ export default function AgentDetail() {
 
         {activeDataTab === 'tickets' && (
           <>
-            <CardHeader title="Últimos Chamados" subtitle={`${agentTickets.data?.length ?? 0} chamado(s) retornado(s)`} />
+            <CardHeader title="Últimos Chamados" subtitle={`${agentTickets.data?.items?.length ?? 0} chamado(s) retornado(s)`} />
             <div className="space-y-2">
               {agentTickets.isLoading && (
                 <div className="py-4 text-center text-sm text-slate-400">
                   Carregando chamados...
                 </div>
               )}
-              {!agentTickets.isLoading && (!agentTickets.data || agentTickets.data.length === 0) && (
+              {!agentTickets.isLoading && (!agentTickets.data || agentTickets.data.items.length === 0) && (
                 <div className="py-4 text-center text-sm text-slate-400">
                   Nenhum chamado encontrado
                 </div>
               )}
-              {!agentTickets.isLoading && agentTickets.data && agentTickets.data.length > 0 && (
+              {!agentTickets.isLoading && agentTickets.data && agentTickets.data.items.length > 0 && (
                 <div className="space-y-2">
-                  {agentTickets.data.map(ticket => {
+                  {agentTickets.data.items.map(ticket => {
                     const priorityColors: Record<string, 'slate' | 'success' | 'warning' | 'danger'> = {
                       Low: 'slate',
                       Medium: 'success',

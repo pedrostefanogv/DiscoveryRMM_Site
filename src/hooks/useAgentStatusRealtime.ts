@@ -3,10 +3,7 @@ import {
   type AgentRealtimeScope,
 } from "./useAgentStatusNats";
 
-/**
- * Backward-compatible hook name.
- * Realtime transport is now NATS-only.
- */
+/** @deprecated Use useAgentStatusNats directly. This is a backward-compatible wrapper. */
 export function useAgentStatusRealtime(
   enabled = true,
   scope?: AgentRealtimeScope,

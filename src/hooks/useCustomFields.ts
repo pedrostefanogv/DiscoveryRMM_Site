@@ -10,10 +10,15 @@ import {
 
 const KEYS = {
   all: ["customFields"] as const,
-  definitions: (params?: { scopeType?: CustomFieldScopeType; includeInactive?: boolean }) =>
-    [...KEYS.all, "definitions", params ?? {}] as const,
+  definitions: (params?: {
+    scopeType?: CustomFieldScopeType;
+    includeInactive?: boolean;
+  }) => [...KEYS.all, "definitions", params ?? {}] as const,
   definition: (id: string) => [...KEYS.all, "definition", id] as const,
-  values: (scopeType: CustomFieldScopeType, params: CustomFieldValueQueryParams = {}) =>
+  values: (
+    scopeType: CustomFieldScopeType,
+    params: CustomFieldValueQueryParams = {},
+  ) =>
     [
       ...KEYS.all,
       "values",
@@ -47,16 +52,24 @@ export function useCreateCustomFieldDefinition() {
   return useMutation({
     mutationFn: (payload: CreateCustomFieldDefinitionRequest) =>
       customFieldsApi.createDefinition(payload),
-    onSuccess: () => qc.invalidateQueries({ queryKey: KEYS.all }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: KEYS.definitions() }),
   });
 }
 
 export function useUpdateCustomFieldDefinition() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, payload }: { id: string; payload: UpdateCustomFieldDefinitionRequest }) =>
-      customFieldsApi.updateDefinition(id, payload),
-    onSuccess: () => qc.invalidateQueries({ queryKey: KEYS.all }),
+    mutationFn: ({
+      id,
+      payload,
+    }: {
+      id: string;
+      payload: UpdateCustomFieldDefinitionRequest;
+    }) => customFieldsApi.updateDefinition(id, payload),
+    onSuccess: (_d, vars) => {
+      qc.invalidateQueries({ queryKey: KEYS.definition(vars.id) });
+      qc.invalidateQueries({ queryKey: KEYS.definitions() });
+    },
   });
 }
 
@@ -64,7 +77,7 @@ export function useDeleteCustomFieldDefinition() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => customFieldsApi.deleteDefinition(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: KEYS.all }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: KEYS.definitions() }),
   });
 }
 
@@ -91,7 +104,8 @@ export function useUpsertCustomFieldValue() {
       definitionId: string;
       payload: UpsertCustomFieldValueRequest;
       clientId?: string;
-    }) => customFieldsApi.upsertScopedValue(definitionId, payload, { clientId }),
+    }) =>
+      customFieldsApi.upsertScopedValue(definitionId, payload, { clientId }),
     onSuccess: (result, vars) => {
       qc.invalidateQueries({
         queryKey: KEYS.values(result.scopeType, {

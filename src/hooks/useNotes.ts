@@ -52,7 +52,8 @@ export function useCreateClientNote() {
       clientId: string;
       data: CreateNoteRequest;
     }) => notesApi.createForClient(clientId, data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: KEYS.all }),
+    onSuccess: (_d, vars) =>
+      qc.invalidateQueries({ queryKey: KEYS.byClient(vars.clientId) }),
   });
 }
 
@@ -66,7 +67,8 @@ export function useCreateSiteNote() {
       siteId: string;
       data: CreateNoteRequest;
     }) => notesApi.createForSite(siteId, data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: KEYS.all }),
+    onSuccess: (_d, vars) =>
+      qc.invalidateQueries({ queryKey: KEYS.bySite(vars.siteId) }),
   });
 }
 
@@ -80,7 +82,8 @@ export function useCreateAgentNote() {
       agentId: string;
       data: CreateNoteRequest;
     }) => notesApi.createForAgent(agentId, data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: KEYS.all }),
+    onSuccess: (_d, vars) =>
+      qc.invalidateQueries({ queryKey: KEYS.byAgent(vars.agentId) }),
   });
 }
 
@@ -89,7 +92,8 @@ export function useUpdateNote() {
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: UpdateNoteRequest }) =>
       notesApi.update(id, data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: KEYS.all }),
+    onSuccess: (_d, vars) =>
+      qc.invalidateQueries({ queryKey: KEYS.detail(vars.id) }),
   });
 }
 
@@ -97,6 +101,8 @@ export function useDeleteNote() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => notesApi.delete(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: KEYS.all }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: KEYS.all });
+    },
   });
 }

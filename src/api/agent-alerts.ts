@@ -41,34 +41,26 @@ function normalizeScopeType(value: unknown): AgentAlertScopeType {
 
 function normalizeAgentAlert(raw: Record<string, unknown>): AgentAlert {
   return {
-    id: String(raw.id ?? raw.Id ?? ""),
-    title: String(raw.title ?? raw.Title ?? ""),
-    message: String(raw.message ?? raw.Message ?? ""),
-    alertType: normalizeOptionalNumber(raw.alertType ?? raw.AlertType) ?? 0,
-    timeoutSeconds: normalizeOptionalNumber(
-      raw.timeoutSeconds ?? raw.TimeoutSeconds,
-    ),
-    actionsJson: normalizeNullableString(raw.actionsJson ?? raw.ActionsJson),
-    defaultAction: normalizeNullableString(
-      raw.defaultAction ?? raw.DefaultAction,
-    ),
-    icon: normalizeNullableString(raw.icon ?? raw.Icon),
-    scopeType: normalizeScopeType(raw.scopeType ?? raw.ScopeType),
-    scopeAgentId: normalizeNullableString(raw.scopeAgentId ?? raw.ScopeAgentId),
-    scopeSiteId: normalizeNullableString(raw.scopeSiteId ?? raw.ScopeSiteId),
-    scopeClientId: normalizeNullableString(
-      raw.scopeClientId ?? raw.ScopeClientId,
-    ),
-    scopeLabelName: normalizeNullableString(
-      raw.scopeLabelName ?? raw.ScopeLabelName,
-    ),
-    scheduledAt: normalizeNullableString(raw.scheduledAt ?? raw.ScheduledAt),
-    expiresAt: normalizeNullableString(raw.expiresAt ?? raw.ExpiresAt),
-    ticketId: normalizeNullableString(raw.ticketId ?? raw.TicketId),
-    createdBy: normalizeNullableString(raw.createdBy ?? raw.CreatedBy),
-    createdAt: normalizeNullableString(raw.createdAt ?? raw.CreatedAt),
-    updatedAt: normalizeNullableString(raw.updatedAt ?? raw.UpdatedAt),
-    status: normalizeOptionalNumber(raw.status ?? raw.Status),
+    id: String(raw.id ?? ""),
+    title: String(raw.title ?? ""),
+    message: String(raw.message ?? ""),
+    alertType: normalizeOptionalNumber(raw.alertType) ?? 0,
+    timeoutSeconds: normalizeOptionalNumber(raw.timeoutSeconds),
+    actionsJson: normalizeNullableString(raw.actionsJson),
+    defaultAction: normalizeNullableString(raw.defaultAction),
+    icon: normalizeNullableString(raw.icon),
+    scopeType: normalizeScopeType(raw.scopeType),
+    scopeAgentId: normalizeNullableString(raw.scopeAgentId),
+    scopeSiteId: normalizeNullableString(raw.scopeSiteId),
+    scopeClientId: normalizeNullableString(raw.scopeClientId),
+    scopeLabelName: normalizeNullableString(raw.scopeLabelName),
+    scheduledAt: normalizeNullableString(raw.scheduledAt),
+    expiresAt: normalizeNullableString(raw.expiresAt),
+    ticketId: normalizeNullableString(raw.ticketId),
+    createdBy: normalizeNullableString(raw.createdBy),
+    createdAt: normalizeNullableString(raw.createdAt),
+    updatedAt: normalizeNullableString(raw.updatedAt),
+    status: normalizeOptionalNumber(raw.status),
   };
 }
 
@@ -103,7 +95,7 @@ export const agentAlertsApi = {
     params: AgentAlertsQuery & { cursor?: string; limit?: number } = {},
   ): Promise<CursorPageDto<AgentAlert>> => {
     const raw = await api.get<Record<string, unknown>>(
-      `${BASE}/page`,
+      BASE,
       params as Record<string, unknown>,
     );
     const items = Array.isArray(raw.items)

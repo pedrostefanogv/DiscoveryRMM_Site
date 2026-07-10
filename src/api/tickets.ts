@@ -32,24 +32,20 @@ function normalizeTicketRemoteSession(
   ticketId: string,
 ): TicketRemoteSession {
   return {
-    id: String(raw.id ?? raw.sessionId ?? raw.Id ?? ""),
-    ticketId: String(raw.ticketId ?? raw.TicketId ?? ticketId),
-    agentId: normalizeNullableString(raw.agentId ?? raw.AgentId),
-    meshNodeId: normalizeNullableString(raw.meshNodeId ?? raw.MeshNodeId),
-    sessionUrl: normalizeNullableString(
-      raw.sessionUrl ?? raw.SessionUrl ?? raw.url ?? raw.Url,
-    ),
-    startedBy: normalizeNullableString(raw.startedBy ?? raw.StartedBy),
-    note: normalizeNullableString(raw.note ?? raw.Note),
-    startedAt: normalizeNullableString(
-      raw.startedAt ?? raw.StartedAt ?? raw.createdAt ?? raw.CreatedAt,
-    ),
-    endedAt: normalizeNullableString(raw.endedAt ?? raw.EndedAt),
-    endedBy: normalizeNullableString(raw.endedBy ?? raw.EndedBy),
-    endNote: normalizeNullableString(raw.endNote ?? raw.EndNote),
-    status: normalizeNullableString(raw.status ?? raw.Status),
-    createdAt: normalizeNullableString(raw.createdAt ?? raw.CreatedAt),
-    updatedAt: normalizeNullableString(raw.updatedAt ?? raw.UpdatedAt),
+    id: String(raw.id ?? raw.sessionId ?? ""),
+    ticketId: String(raw.ticketId ?? ticketId),
+    agentId: normalizeNullableString(raw.agentId),
+    meshNodeId: normalizeNullableString(raw.meshNodeId),
+    sessionUrl: normalizeNullableString(raw.sessionUrl ?? raw.url),
+    startedBy: normalizeNullableString(raw.startedBy),
+    note: normalizeNullableString(raw.note),
+    startedAt: normalizeNullableString(raw.startedAt ?? raw.createdAt),
+    endedAt: normalizeNullableString(raw.endedAt),
+    endedBy: normalizeNullableString(raw.endedBy),
+    endNote: normalizeNullableString(raw.endNote),
+    status: normalizeNullableString(raw.status),
+    createdAt: normalizeNullableString(raw.createdAt),
+    updatedAt: normalizeNullableString(raw.updatedAt),
   };
 }
 
@@ -79,19 +75,9 @@ function normalizeTicketRemoteSessions(
   return [];
 }
 
-export interface TicketsPageParams extends TicketsQuery {
-  cursor?: string;
-}
-
 export const ticketsApi = {
   list: (params: TicketsQuery = {}) =>
-    api.get<Ticket[]>(BASE, params as Record<string, unknown>),
-
-  listPage: (params: TicketsPageParams = {}) =>
-    api.get<CursorPageDto<Ticket>>(
-      `${BASE}/page`,
-      params as Record<string, unknown>,
-    ),
+    api.get<CursorPageDto<Ticket>>(BASE, params as Record<string, unknown>),
 
   listByClient: (clientId: string, workflowStateId?: string) =>
     api.get<Ticket[]>(`${BASE}/by-client/${clientId}`, { workflowStateId }),

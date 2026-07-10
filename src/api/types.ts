@@ -2016,8 +2016,6 @@ export interface TicketsQuery {
   text?: string;
   cursor?: string;
   limit?: number;
-  /** @deprecated Use cursor-based pagination instead */
-  offset?: number;
 }
 
 // ── Reports ────────────────────────────────────────────

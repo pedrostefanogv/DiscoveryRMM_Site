@@ -20,7 +20,7 @@ import {
   useCreateTicket,
   useTicket,
   useTicketWatchers,
-  useTicketsPage,
+  useTickets,
   useUpdateTicket,
 } from '@/hooks/useTickets';
 import { useClients } from '@/hooks/useClients';
@@ -258,7 +258,7 @@ export default function TicketList() {
   );
 
   const cursor = pageCursors[page - 1];
-  const tickets = useTicketsPage({
+  const tickets = useTickets({
     clientId: filterClient || undefined,
     workflowStateId: filterState || undefined,
     priority: filterPriority || undefined,

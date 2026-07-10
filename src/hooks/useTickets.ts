@@ -16,7 +16,6 @@ import type {
 const KEYS = {
   all: ["tickets"] as const,
   list: (params: TicketsQuery) => [...KEYS.all, "list", params] as const,
-  page: (params: TicketsQuery) => [...KEYS.all, "page", params] as const,
   byClient: (clientId: string) => [...KEYS.all, "byClient", clientId] as const,
   detail: (id: string) => [...KEYS.all, "detail", id] as const,
   comments: (id: string) => [...KEYS.all, "comments", id] as const,
@@ -32,14 +31,6 @@ export function useTickets(params: TicketsQuery = {}) {
   return useQuery({
     queryKey: KEYS.list(params),
     queryFn: () => ticketsApi.list(params),
-  });
-}
-
-/** Hook para paginação cursor-based de tickets (via /tickets/page) */
-export function useTicketsPage(params: TicketsQuery = {}) {
-  return useQuery({
-    queryKey: KEYS.page(params),
-    queryFn: () => ticketsApi.listPage(params as Record<string, unknown>),
     placeholderData: (prev) => prev,
   });
 }

@@ -23,6 +23,7 @@ export function useDepartments(
   return useQuery({
     queryKey: KEYS.list(params),
     queryFn: () => departmentsApi.list(params),
+    staleTime: 60_000,
   });
 }
 
@@ -45,7 +46,10 @@ export function useCreateDepartment() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (data: CreateDepartmentRequest) => departmentsApi.create(data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: KEYS.all }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: KEYS.list({}) });
+      qc.invalidateQueries({ queryKey: KEYS.global });
+    },
   });
 }
 
@@ -54,7 +58,11 @@ export function useUpdateDepartment() {
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: UpdateDepartmentRequest }) =>
       departmentsApi.update(id, data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: KEYS.all }),
+    onSuccess: (_d, vars) => {
+      qc.invalidateQueries({ queryKey: KEYS.list({}) });
+      qc.invalidateQueries({ queryKey: KEYS.detail(vars.id) });
+      qc.invalidateQueries({ queryKey: KEYS.global });
+    },
   });
 }
 
@@ -62,6 +70,9 @@ export function useDeleteDepartment() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => departmentsApi.delete(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: KEYS.all }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: KEYS.list({}) });
+      qc.invalidateQueries({ queryKey: KEYS.global });
+    },
   });
 }

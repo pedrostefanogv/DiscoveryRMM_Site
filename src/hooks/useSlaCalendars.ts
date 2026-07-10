@@ -9,7 +9,8 @@ import type {
 
 const KEYS = {
   all: ["sla-calendars"] as const,
-  list: (clientId?: string) => [...KEYS.all, "list", clientId ?? "all"] as const,
+  list: (clientId?: string) =>
+    [...KEYS.all, "list", clientId ?? "all"] as const,
   detail: (id: string) => [...KEYS.all, "detail", id] as const,
 };
 
@@ -33,9 +34,10 @@ export function useCreateSlaCalendar() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (data: CreateSlaCalendarRequest) => slaCalendarsApi.create(data),
+    mutationFn: (data: CreateSlaCalendarRequest) =>
+      slaCalendarsApi.create(data),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: KEYS.all });
+      void queryClient.invalidateQueries({ queryKey: KEYS.list() });
     },
   });
 }
@@ -52,8 +54,8 @@ export function useUpdateSlaCalendar() {
       data: UpdateSlaCalendarRequest;
     }) => slaCalendarsApi.update(id, data),
     onSuccess: (_result, vars) => {
-      void queryClient.invalidateQueries({ queryKey: KEYS.all });
       void queryClient.invalidateQueries({ queryKey: KEYS.detail(vars.id) });
+      void queryClient.invalidateQueries({ queryKey: KEYS.list() });
     },
   });
 }
@@ -64,7 +66,7 @@ export function useDeleteSlaCalendar() {
   return useMutation({
     mutationFn: (id: string) => slaCalendarsApi.delete(id),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: KEYS.all });
+      void queryClient.invalidateQueries({ queryKey: KEYS.list() });
     },
   });
 }
@@ -91,13 +93,8 @@ export function useDeleteSlaCalendarHoliday() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({
-      id,
-      holidayId,
-    }: {
-      id: string;
-      holidayId: string;
-    }) => slaCalendarsApi.deleteHoliday(id, holidayId),
+    mutationFn: ({ id, holidayId }: { id: string; holidayId: string }) =>
+      slaCalendarsApi.deleteHoliday(id, holidayId),
     onSuccess: (_result, vars) => {
       void queryClient.invalidateQueries({ queryKey: KEYS.all });
       void queryClient.invalidateQueries({ queryKey: KEYS.detail(vars.id) });

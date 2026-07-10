@@ -1,4 +1,9 @@
-import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
+import {
+  useQuery,
+  useMutation,
+  useQueryClient,
+  keepPreviousData,
+} from "@tanstack/react-query";
 import { ApiError, agentsApi } from "@/api";
 import type {
   AgentSoftwareOrder,
@@ -25,7 +30,8 @@ const KEYS = {
       order: AgentSoftwareOrder;
     },
   ) => [...KEYS.all, "software", id, params] as const,
-  softwareSnapshot: (id: string) => [...KEYS.all, "softwareSnapshot", id] as const,
+  softwareSnapshot: (id: string) =>
+    [...KEYS.all, "softwareSnapshot", id] as const,
   commands: (id: string) => [...KEYS.all, "commands", id] as const,
   tokens: (id: string) => [...KEYS.all, "tokens", id] as const,
 };
@@ -138,7 +144,8 @@ export function useAgentSoftware(
 ) {
   const safeLimit = Math.min(500, Math.max(1, params?.limit ?? 100));
   const safeSearch = params?.search?.trim() ?? "";
-  const safeOrder: AgentSoftwareOrder = params?.order === "asc" ? "asc" : "desc";
+  const safeOrder: AgentSoftwareOrder =
+    params?.order === "asc" ? "asc" : "desc";
 
   return useQuery({
     queryKey: KEYS.software(id, {
@@ -188,7 +195,10 @@ export function useUpdateAgent() {
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: UpdateAgentRequest }) =>
       agentsApi.update(id, data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: KEYS.all }),
+    onSuccess: (_d, vars) => {
+      qc.invalidateQueries({ queryKey: KEYS.detail(vars.id) });
+      qc.invalidateQueries({ queryKey: KEYS.all });
+    },
   });
 }
 
@@ -196,7 +206,9 @@ export function useDeleteAgent() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => agentsApi.delete(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: KEYS.all }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: KEYS.all });
+    },
   });
 }
 
@@ -225,8 +237,8 @@ export function useApproveZeroTouch() {
   return useMutation({
     mutationFn: (agentId: string) => agentsApi.approveZeroTouch(agentId),
     onSuccess: (_d, agentId) => {
-      qc.invalidateQueries({ queryKey: KEYS.all });
       qc.invalidateQueries({ queryKey: KEYS.detail(agentId) });
+      qc.invalidateQueries({ queryKey: KEYS.all });
     },
   });
 }

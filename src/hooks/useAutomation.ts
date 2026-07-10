@@ -86,15 +86,8 @@ export function useAutomationScriptAudit(
     queryFn: async (): Promise<AutomationScriptAudit[]> => {
       const raw = await automationApi.getScriptAudit(id, limit);
       if (Array.isArray(raw)) return raw as AutomationScriptAudit[];
-      const obj = raw as unknown as {
-        items?: AutomationScriptAudit[];
-        data?: AutomationScriptAudit[];
-      };
-      return Array.isArray(obj?.items)
-        ? obj.items
-        : Array.isArray(obj?.data)
-          ? obj.data
-          : [];
+      const obj = raw as unknown as { items?: AutomationScriptAudit[] };
+      return Array.isArray(obj?.items) ? obj.items : [];
     },
     enabled: !!id && enabled,
   });
@@ -188,17 +181,9 @@ export function useAutomationTaskAudit(id: string, limit = 50, enabled = true) {
     queryKey: KEYS.tasks.audit(id, limit),
     queryFn: async (): Promise<AutomationTaskAudit[]> => {
       const raw = await automationApi.getTaskAudit(id, limit);
-      // API may return a paginated object { items: [...] } or a direct array
       if (Array.isArray(raw)) return raw as AutomationTaskAudit[];
-      const obj = raw as unknown as {
-        items?: AutomationTaskAudit[];
-        data?: AutomationTaskAudit[];
-      };
-      return Array.isArray(obj?.items)
-        ? obj.items
-        : Array.isArray(obj?.data)
-          ? obj.data
-          : [];
+      const obj = raw as unknown as { items?: AutomationTaskAudit[] };
+      return Array.isArray(obj?.items) ? obj.items : [];
     },
     enabled: !!id && enabled,
   });

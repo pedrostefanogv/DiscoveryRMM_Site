@@ -47,7 +47,7 @@ export function useCreateEscalationRule() {
     mutationFn: (data: CreateEscalationRuleRequest) =>
       escalationRulesApi.create(data),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: KEYS.all });
+      void queryClient.invalidateQueries({ queryKey: KEYS.list() });
     },
   });
 }
@@ -64,8 +64,8 @@ export function useUpdateEscalationRule() {
       data: UpdateEscalationRuleRequest;
     }) => escalationRulesApi.update(id, data),
     onSuccess: (_result, vars) => {
-      void queryClient.invalidateQueries({ queryKey: KEYS.all });
       void queryClient.invalidateQueries({ queryKey: KEYS.detail(vars.id) });
+      void queryClient.invalidateQueries({ queryKey: KEYS.list() });
     },
   });
 }
@@ -76,7 +76,7 @@ export function useDeleteEscalationRule() {
   return useMutation({
     mutationFn: (id: string) => escalationRulesApi.delete(id),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: KEYS.all });
+      void queryClient.invalidateQueries({ queryKey: KEYS.list() });
     },
   });
 }

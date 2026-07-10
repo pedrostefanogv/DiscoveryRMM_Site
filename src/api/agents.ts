@@ -53,26 +53,16 @@ interface StartRemoteDebugSessionWireResponse extends Omit<
   "natsTenantSubject" | "natsWssUrl"
 > {
   natsTenantSubject?: string | null;
-  natsSubject?: string | null;
   natsWssUrl?: string | null;
-  stream?: {
-    natsSubject?: string | null;
-    natsWssUrl?: string | null;
-  } | null;
 }
 
 function normalizeStartRemoteDebugSessionResponse(
   session: StartRemoteDebugSessionWireResponse,
 ): StartRemoteDebugSessionResponse {
-  const natsTenantSubject =
-    session.natsTenantSubject ??
-    session.natsSubject ??
-    session.stream?.natsSubject ??
-    null;
+  const natsTenantSubject = session.natsTenantSubject ?? null;
+  const natsWssUrl = session.natsWssUrl ?? null;
 
-  const natsWssUrl = session.natsWssUrl ?? session.stream?.natsWssUrl ?? null;
-
-  const { stream: _stream, natsSubject: _natsSubject, ...base } = session;
+  const { natsTenantSubject: _t, natsWssUrl: _w, ...base } = session;
 
   return {
     ...base,
@@ -187,12 +177,15 @@ export const agentsApi = {
       `/api/v1/agents/${agentId}/automation/scripts/${scriptId}/run-now`,
     ),
 
-  forceAutomationSync: (agentId: string, data: {
-    policies?: boolean;
-    inventory?: boolean;
-    software?: boolean;
-    appStore?: boolean;
-  }) =>
+  forceAutomationSync: (
+    agentId: string,
+    data: {
+      policies?: boolean;
+      inventory?: boolean;
+      software?: boolean;
+      appStore?: boolean;
+    },
+  ) =>
     api.post<Record<string, unknown>>(
       `/api/v1/agents/${agentId}/automation/force-sync`,
       data,
