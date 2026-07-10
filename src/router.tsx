@@ -100,6 +100,14 @@ function LazyPage({ children }: { children: React.ReactNode }) {
   );
 }
 
+function AuthLazyPage({ children }: { children: React.ReactNode }) {
+  return (
+    <Suspense fallback={null}>
+      <div className="animate-fade-in-up">{children}</div>
+    </Suspense>
+  );
+}
+
 export const router = createBrowserRouter([
   {
     path: '/auth',
@@ -115,19 +123,19 @@ export const router = createBrowserRouter([
           },
           {
             path: 'login',
-            element: <LazyPage><LoginPage /></LazyPage>,
+            element: <AuthLazyPage><LoginPage /></AuthLazyPage>,
           },
           {
             path: 'first-access',
-            element: <LazyPage><FirstAccessPage /></LazyPage>,
+            element: <AuthLazyPage><FirstAccessPage /></AuthLazyPage>,
           },
           {
             path: 'mfa',
-            element: <LazyPage><MfaAssertionPage /></LazyPage>,
+            element: <AuthLazyPage><MfaAssertionPage /></AuthLazyPage>,
           },
           {
             path: 'mfa/register',
-            element: <LazyPage><MfaRegistrationPage /></LazyPage>,
+            element: <AuthLazyPage><MfaRegistrationPage /></AuthLazyPage>,
           },
         ],
       },

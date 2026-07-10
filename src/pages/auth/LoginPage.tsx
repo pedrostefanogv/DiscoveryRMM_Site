@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import { ArrowRight, LockKeyhole, UserRound, AlertTriangle } from "lucide-react";
 import { ApiError } from "@/api";
@@ -16,10 +16,10 @@ const loginSchema = z.object({
 
 type LoginFormValues = z.infer<typeof loginSchema>;
 
-function routeForStage(stage: string) {
+function routeForStage(stage: string, redirectTo: string) {
   switch (stage) {
     case "authenticated":
-      return "/";
+      return redirectTo;
     case "first-access":
       return "/auth/first-access";
     case "mfa-register-begin":
@@ -33,6 +33,7 @@ function routeForStage(stage: string) {
 
 export default function LoginPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { login } = useAuth();
   const [submitError, setSubmitError] = useState<string | null>(null);
   const {
@@ -47,12 +48,27 @@ export default function LoginPage() {
     },
   });
 
+  const redirectTo = useMemo(() => {
+    // Prioridade: 1) state.from (RequireAuth) 2) sessionStorage (preservado entre recargas MFA)
+    const fromState = (location.state as { from?: { pathname: string; search?: string } })?.from;
+    if (fromState?.pathname) {
+      const full = fromState.pathname + (fromState.search ?? "");
+      sessionStorage.setItem("discovery.auth.redirectTo", full);
+      return full;
+    }
+    return sessionStorage.getItem("discovery.auth.redirectTo") ?? "/";
+  }, [location.state]);
+
   const onSubmit = async (values: LoginFormValues) => {
     setSubmitError(null);
 
     try {
       const nextStage = await login(values);
-      navigate(routeForStage(nextStage), { replace: true });
+      const target = routeForStage(nextStage, redirectTo);
+      if (nextStage === "authenticated") {
+        sessionStorage.removeItem("discovery.auth.redirectTo");
+      }
+      navigate(target, { replace: true });
     } catch (error) {
       const message =
         error instanceof ApiError
@@ -64,7 +80,7 @@ export default function LoginPage() {
   };
 
   return (
-    <Card className="border-border bg-surface/80 shadow-2xl backdrop-blur-xl" padding>
+    <Card className="bg-surface/80 shadow-2xl backdrop-blur-xl" padding>
       <CardHeader
         title="Entrar"
         subtitle="Use seu login ou e-mail e conclua o fluxo de segurança exigido."

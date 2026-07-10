@@ -62,7 +62,7 @@ export function AuthLayout() {
           </div>
           <div className="grid gap-3 text-sm text-muted-foreground sm:grid-cols-2">
             {authCards.map((cardText, index) => (
-              <div key={index} className="rounded-2xl border border-border bg-surface-light p-4">
+              <div key={index} className="rounded-2xl border border-border bg-surface-light/70 backdrop-blur-sm p-4">
                 {cardText}
               </div>
             ))}

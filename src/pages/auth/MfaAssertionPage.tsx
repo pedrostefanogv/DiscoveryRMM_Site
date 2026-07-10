@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import { Fingerprint, ShieldCheck, ShieldEllipsis, TriangleAlert } from "lucide-react";
@@ -29,6 +29,11 @@ export default function MfaAssertionPage() {
   const [error, setError] = useState<string | null>(null);
   const [isRunning, setIsRunning] = useState(false);
   const [otpCode, setOtpCode] = useState("");
+
+  const redirectTo = useMemo(
+    () => sessionStorage.getItem("discovery.auth.redirectTo") ?? "/",
+    [],
+  );
 
   const token = session.temporaryMfaToken;
   const roleMfaRequirement = resolveRoleMfaRequirement(
@@ -96,7 +101,9 @@ export default function MfaAssertionPage() {
 
       await completeAuthenticatedSession(tokens);
       toast.success("Autenticação concluida com sucesso.");
-      navigate("/", { replace: true });
+      const target = sessionStorage.getItem("discovery.auth.redirectTo") ?? "/";
+      sessionStorage.removeItem("discovery.auth.redirectTo");
+      navigate(target, { replace: true });
     } catch (caught) {
       if (caught instanceof ApiError && caught.status === 403) {
         const message = "Seu perfil exige outro metodo de MFA. Inicie novamente o login para seguir o fluxo correto.";
@@ -143,10 +150,11 @@ export default function MfaAssertionPage() {
 
     try {
       setTemporaryStage("mfa-assert-complete");
-      const tokens = await authApi.completeLoginOtp(token, { code });
        await completeAuthenticatedSession(tokens);
        toast.success("Autenticação concluída com sucesso.");
-       navigate("/", { replace: true });
+       const target = sessionStorage.getItem("discovery.auth.redirectTo") ?? "/";
+       sessionStorage.removeItem("discovery.auth.redirectTo");
+       navigate(target, { replace: true });
      } catch (caught) {
        if (caught instanceof ApiError && caught.status === 403) {
          const message = "Seu perfil exige outro método de MFA. Inicie novamente o login para seguir o fluxo correto.";

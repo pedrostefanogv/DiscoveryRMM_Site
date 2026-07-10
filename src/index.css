@@ -240,7 +240,7 @@ select optgroup {
 }
 
 .animate-fade-in-up {
-  animation: fadeInUp 0.3s ease-out;
+  animation: fadeInUp 0.2s ease-out;
 }
 
 /* Modal backdrop animation */

@@ -118,7 +118,8 @@ export default function MfaRegistrationPage() {
         return;
       }
 
-      navigate("/", { replace: true });
+      const target = sessionStorage.getItem("discovery.auth.redirectTo") ?? "/";
+      navigate(target, { replace: true });
     } catch (caught) {
       if (caught instanceof ApiError && caught.status === 401) {
         clearTemporarySession();

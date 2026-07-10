@@ -21,13 +21,18 @@ export function RequireAuth() {
 
 export function PublicOnlyAuth() {
   const { isAuthenticated, isBootstrapping } = useAuth();
+  const location = useLocation();
 
   if (isBootstrapping) {
     return <Loading message="Verificando sessão..." />;
   }
 
   if (isAuthenticated) {
-    return <Navigate to="/" replace />;
+    // Se veio de um redirect com "from", redireciona de volta para lá;
+    // caso contrário vai para home.
+    const from = (location.state as { from?: { pathname: string; search?: string } })?.from;
+    const target = from ? from.pathname + (from.search ?? "") : "/";
+    return <Navigate to={target} replace />;
   }
 
   return <Outlet />;
