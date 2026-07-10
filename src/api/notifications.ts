@@ -26,23 +26,25 @@ export interface AppNotification {
 export interface ListNotificationsParams {
   recipientUserId?: string;
   recipientAgentId?: string;
-  recipientKey?: string;
   topic?: string;
-  severity?: AppNotificationSeverity | number;
   isRead?: boolean;
   limit?: number;
 }
 
 export interface MarkNotificationAsReadParams {
-  recipientUserId?: string;
-  recipientAgentId?: string;
-  recipientKey?: string;
+  userId?: string;
+  agentId?: string;
 }
 
-function buildQueryString(params: object) {
+export interface DeleteNotificationParams {
+  userId?: string;
+  agentId?: string;
+}
+
+function buildQueryString(params: Record<string, unknown>) {
   const searchParams = new URLSearchParams();
 
-  for (const [key, value] of Object.entries(params as Record<string, unknown>)) {
+  for (const [key, value] of Object.entries(params)) {
     if (value === undefined || value === null || value === "") {
       continue;
     }
@@ -54,20 +56,20 @@ function buildQueryString(params: object) {
   return query ? `?${query}` : "";
 }
 
-function buildMarkAsReadPath(
-  id: string,
-  params: MarkNotificationAsReadParams = {},
-) {
-  return `/api/v1/notifications/${id}/read${buildQueryString(params)}`;
-}
-
 export const notificationsApi = {
-  listRecent: (params: ListNotificationsParams = {}) =>
+  list: (params: ListNotificationsParams = {}) =>
     api.get<AppNotification[]>(
-      "/api/v1/notifications",
-      params as unknown as Record<string, unknown>,
+      `/api/v1/notifications${buildQueryString(params as Record<string, unknown>)}`,
     ),
 
   markAsRead: (id: string, params: MarkNotificationAsReadParams = {}) =>
-    api.patch<void>(buildMarkAsReadPath(id, params), {}),
+    api.put<void>(
+      `/api/v1/notifications/${id}/read${buildQueryString(params as Record<string, unknown>)}`,
+      {},
+    ),
+
+  delete: (id: string, params: DeleteNotificationParams = {}) =>
+    api.delete<void>(
+      `/api/v1/notifications/${id}${buildQueryString(params as Record<string, unknown>)}`,
+    ),
 };

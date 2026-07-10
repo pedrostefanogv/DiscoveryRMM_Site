@@ -54,29 +54,18 @@ export function useSoftwareInventoryList(params: SoftwareInventoryListParams) {
       order: safeOrder,
     }),
     queryFn: () => {
-      if (params.scope === "client") {
-        return softwareInventoryApi.listByClient(params.clientId!, {
-          cursor: params.cursor,
-          limit: safeLimit,
-          search: safeSearch,
-          order: safeOrder,
-        });
-      }
-
-      if (params.scope === "site") {
-        return softwareInventoryApi.listBySite(params.siteId!, {
-          cursor: params.cursor,
-          limit: safeLimit,
-          search: safeSearch,
-          order: safeOrder,
-        });
-      }
+      const scope = params.scope;
+      let scopeId: string | undefined;
+      if (scope === "client") scopeId = params.clientId;
+      else if (scope === "site") scopeId = params.siteId;
 
       return softwareInventoryApi.list({
         cursor: params.cursor,
         limit: safeLimit,
         search: safeSearch,
         order: safeOrder,
+        scope,
+        scopeId,
       });
     },
     enabled: hasScopeTarget,
@@ -97,10 +86,10 @@ export function useSoftwareInventorySnapshot(
   return useQuery({
     queryKey: KEYS.snapshot(scope, clientId, siteId),
     queryFn: () => {
-      if (scope === "client")
-        return softwareInventoryApi.snapshotByClient(clientId!);
-      if (scope === "site") return softwareInventoryApi.snapshotBySite(siteId!);
-      return softwareInventoryApi.snapshot();
+      let scopeId: string | undefined;
+      if (scope === "client") scopeId = clientId;
+      else if (scope === "site") scopeId = siteId;
+      return softwareInventoryApi.snapshot({ scope, scopeId });
     },
     enabled: hasScopeTarget,
   });
@@ -129,11 +118,10 @@ export function useSoftwareInventoryTop(
       safeLimit,
     ],
     queryFn: () => {
-      if (scope === "site") {
-        return softwareInventoryApi.topBySite(params!.siteId!, safeLimit);
-      }
-
-      return softwareInventoryApi.top(safeLimit);
+      let scopeId: string | undefined;
+      if (scope === "client") scopeId = params?.clientId;
+      else if (scope === "site") scopeId = params?.siteId;
+      return softwareInventoryApi.top({ scope, scopeId, limit: safeLimit });
     },
     enabled: hasScopeTarget,
   });

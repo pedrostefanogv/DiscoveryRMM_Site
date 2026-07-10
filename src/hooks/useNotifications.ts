@@ -7,8 +7,17 @@ import { useAuth } from "@/auth/AuthContext";
 import { getUserIdFromJwt } from "@/auth/jwt";
 
 const NOTIFICATION_KEYS = {
-  list: (recipientUserId: string | null, topic: string | undefined, limit: number) =>
-    ["notifications", recipientUserId ?? "anonymous", topic ?? "all", limit] as const,
+  list: (
+    recipientUserId: string | null,
+    topic: string | undefined,
+    limit: number,
+  ) =>
+    [
+      "notifications",
+      recipientUserId ?? "anonymous",
+      topic ?? "all",
+      limit,
+    ] as const,
 };
 
 const NATS_ENABLED = realtimeConfig.useNats && realtimeConfig.natsEnabled;
@@ -55,7 +64,8 @@ function upsertNotification(
   return [incoming, ...items]
     .sort(
       (left, right) =>
-        new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime(),
+        new Date(right.createdAt).getTime() -
+        new Date(left.createdAt).getTime(),
     )
     .slice(0, limit);
 }
@@ -136,7 +146,8 @@ function toNotificationPayload(
 
   return {
     id,
-    eventType: readOptionalString(payload, "eventType") ?? "NotificationReceived",
+    eventType:
+      readOptionalString(payload, "eventType") ?? "NotificationReceived",
     topic: readOptionalString(payload, "topic") ?? fallbackTopic ?? "general",
     severity: readOptionalString(payload, "severity") ?? "Informational",
     recipientUserId: readOptionalString(payload, "recipientUserId") ?? null,
@@ -146,7 +157,8 @@ function toNotificationPayload(
     message: readOptionalString(payload, "message") ?? "",
     payloadJson,
     isRead: readOptionalBoolean(payload, "isRead") ?? false,
-    createdAt: readOptionalString(payload, "createdAt") ?? new Date().toISOString(),
+    createdAt:
+      readOptionalString(payload, "createdAt") ?? new Date().toISOString(),
     readAt: readOptionalString(payload, "readAt") ?? null,
     createdBy: readOptionalString(payload, "createdBy") ?? null,
   };
@@ -181,7 +193,7 @@ export function useNotifications(options?: {
   const query = useQuery({
     queryKey,
     queryFn: () =>
-      notificationsApi.listRecent({
+      notificationsApi.list({
         recipientUserId: recipientUserId ?? undefined,
         topic,
         limit,
@@ -253,7 +265,15 @@ export function useNotifications(options?: {
       disposed = true;
       natsService.unsubscribe(notificationSubject, onNotificationMessage);
     };
-  }, [canQuery, limit, notificationSubject, queryClient, queryKey, recipientUserId, topic]);
+  }, [
+    canQuery,
+    limit,
+    notificationSubject,
+    queryClient,
+    queryKey,
+    recipientUserId,
+    topic,
+  ]);
 
   const notifications = query.data ?? [];
   const unreadCount = useMemo(
@@ -271,7 +291,9 @@ export function useNotifications(options?: {
       );
 
       try {
-        await notificationsApi.markAsRead(notificationId, { recipientUserId });
+        await notificationsApi.markAsRead(notificationId, {
+          userId: recipientUserId,
+        });
       } catch (error) {
         queryClient.setQueryData(queryKey, previous);
         throw error;
@@ -294,7 +316,7 @@ export function useNotifications(options?: {
     try {
       await Promise.all(
         unread.map((item) =>
-          notificationsApi.markAsRead(item.id, { recipientUserId }),
+          notificationsApi.markAsRead(item.id, { userId: recipientUserId }),
         ),
       );
     } catch (error) {

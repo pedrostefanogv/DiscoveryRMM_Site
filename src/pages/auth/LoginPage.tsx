@@ -105,7 +105,7 @@ export default function LoginPage() {
         />
 
         {submitError && (
-          <div className="flex items-start gap-3 rounded-xl border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-red-100">
+          <div className="flex items-start gap-3 rounded-xl border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-red-800 dark:text-red-100">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-danger" />
             <span>{submitError}</span>
           </div>

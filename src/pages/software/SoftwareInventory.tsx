@@ -98,19 +98,21 @@ export default function SoftwareInventory() {
     (scope === "site" && !!selectedSiteId);
 
   const items = list.data?.items ?? [];
-  const totalInstalled = list.data?.totalInstalled ?? snapshot.data?.totalInstalled ?? 0;
-  const totalSoftware = list.data?.totalSoftware ?? snapshot.data?.distinctSoftware ?? 0;
-  const totalAgents = list.data?.totalAgents ?? snapshot.data?.distinctAgents ?? 0;
-  const totalCount = list.data?.totalSoftware ?? list.data?.count ?? snapshot.data?.distinctSoftware ?? 0;
-  const resolvedLimit = list.data?.limit ?? pag.limit;
-  const totalPages = Math.max(1, Math.ceil(totalCount / resolvedLimit));
-  const currentPage = Math.min(pag.page, totalPages);
+  const totalInstalled = snapshot.data?.totalInstalled ?? 0;
+  const totalSoftware = snapshot.data?.distinctSoftware ?? 0;
+  const totalAgents = snapshot.data?.distinctAgents ?? 0;
+  const resolvedLimit = pag.limit;
+  // Como a API é cursor-based pura e não retorna count/totalPages, usamos estimativa via snapshot
+  const estimatedTotalPages = totalSoftware > 0
+    ? Math.max(1, Math.ceil(totalSoftware / resolvedLimit))
+    : 1;
+  const currentPage = Math.min(pag.page, Math.max(1, pag.pageCursors.length || 1));
 
   useEffect(() => {
-    if (pag.page > totalPages) {
+    if (pag.page > estimatedTotalPages) {
       pag.reset();
     }
-  }, [pag.page, totalPages]);
+  }, [pag.page, estimatedTotalPages]);
 
   const canPrev = pag.page > 1 && !list.isFetching;
   const canNext = Boolean(list.data?.hasMore && list.data?.nextCursor) && !list.isFetching;
@@ -417,7 +419,7 @@ export default function SoftwareInventory() {
 
             <div className="mt-4 flex items-center justify-between gap-3">
               <p className="text-xs text-muted">
-                Página {currentPage} de {totalPages} | {items.length} item(ns) nesta página
+                Página {currentPage} de ~{estimatedTotalPages} | {items.length} item(ns) nesta página
                 {searchApplied ? ` | filtro: "${searchApplied}"` : ""}
               </p>
 
@@ -427,7 +429,7 @@ export default function SoftwareInventory() {
                 </Button>
 
                 <span className="px-2 text-xs tabular-nums text-muted">
-                  {currentPage} / {totalPages}
+                  {currentPage} / ~{estimatedTotalPages}
                 </span>
 
                 <Button variant="secondary" size="sm" onClick={() => pag.goToNext(list.data?.nextCursor)} disabled={!canNext} loading={list.isFetching}>

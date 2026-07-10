@@ -356,6 +356,20 @@ export default function AgentDetail() {
   const needsMoreItems = software.hasNextPage && startIdx + limit > softwareAllItems.length;
   const canGoPrevSoftwarePage = softwarePage > 1 && !software.isFetching;
   const canGoNextSoftwarePage = softwarePage < softwareTotalPages && !software.isFetching;
+
+  // Auto-fetch next pages quando necessário (ex.: após refetch que reseta o cursor)
+  useEffect(() => {
+    if (needsMoreItems && !software.isFetching && !software.isFetchingNextPage) {
+      software.fetchNextPage();
+    }
+  }, [needsMoreItems, software.isFetching, software.isFetchingNextPage, software.fetchNextPage]);
+
+  // Corrige página para o range válido quando o total de itens diminui (ex.: após refetch)
+  useEffect(() => {
+    if (softwareTotalPages > 0 && softwarePage > softwareTotalPages) {
+      setSoftwarePage(softwareTotalPages);
+    }
+  }, [softwareTotalPages, softwarePage]);
   const disks = hw.data?.disks ?? [];
   const totalDiskBytes = disks.reduce((acc, disk) => acc + (disk.totalSizeBytes ?? 0), 0);
   const freeDiskBytes = disks.reduce((acc, disk) => acc + (disk.freeSpaceBytes ?? 0), 0);

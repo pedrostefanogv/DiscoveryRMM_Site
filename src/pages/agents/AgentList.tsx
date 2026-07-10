@@ -937,21 +937,21 @@ export default function AgentList() {
                           {a.heartbeatMetrics?.cpuPercent != null ? (
                             <MetricBar label="" value={a.heartbeatMetrics.cpuPercent} compact hideValue />
                           ) : (
-                            <span className="text-xs text-muted">\u2014</span>
+                            <span className="text-xs text-muted">{'\u2014'}</span>
                           )}
                         </td>
                         <td className="hidden px-4 py-3 2xl:table-cell">
                           {a.heartbeatMetrics?.memoryPercent != null ? (
                             <MetricBar label="" value={a.heartbeatMetrics.memoryPercent} compact hideValue />
                           ) : (
-                            <span className="text-xs text-muted">\u2014</span>
+                            <span className="text-xs text-muted">{'\u2014'}</span>
                           )}
                         </td>
                         <td className="hidden px-4 py-3 2xl:table-cell">
                           {a.heartbeatMetrics?.diskPercent != null ? (
                             <MetricBar label="" value={a.heartbeatMetrics.diskPercent} compact hideValue />
                           ) : (
-                            <span className="text-xs text-muted">\u2014</span>
+                            <span className="text-xs text-muted">{'\u2014'}</span>
                           )}
                         </td>
                         <td className="hidden px-4 py-3 text-xs text-muted lg:table-cell" title={relativeTime.fullDate ?? undefined}>

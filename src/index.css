@@ -104,9 +104,14 @@ h3 {
     0 4px 16px rgb(0 0 0 / 0.06);
 }
 
-:where(button, a, input, select, textarea, [tabindex]):focus-visible {
+:where(button, a, [tabindex]):focus-visible {
   outline: 2px solid rgb(56 189 248 / 0.8);
   outline-offset: 2px;
+}
+
+/* Inputs e selects usam ring próprio — evita dupla borda com outline global */
+:where(input, select, textarea):focus-visible {
+  outline: none;
 }
 
 .app-grid-bg {

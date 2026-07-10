@@ -284,16 +284,8 @@ export interface SoftwareInventoryCatalogItem {
 
 export interface SoftwareInventoryCatalogPage {
   items: SoftwareInventoryCatalogItem[];
-  count: number;
-  totalInstalled: number;
-  totalSoftware: number;
-  totalAgents: number;
-  cursor: string | null;
   nextCursor: string | null;
   hasMore: boolean;
-  limit: number;
-  search: string | null;
-  order: AgentSoftwareOrder;
 }
 
 export interface AgentSoftwareInventorySnapshot {
@@ -309,10 +301,7 @@ export interface SoftwareInventorySnapshot {
   totalInstalled: number;
   distinctSoftware: number;
   distinctAgents: number;
-  firstSeenAt: string | null;
   lastCollectedAt: string | null;
-  lastSeenAt: string | null;
-  updatedAt: string;
 }
 
 export interface SoftwareInventoryTopItem {

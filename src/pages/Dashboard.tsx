@@ -122,14 +122,7 @@ export default function Dashboard() {
       {/* Header + Window Selector */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-foreground inline-flex items-center gap-2">
-            {branding.logoUrl ? (
-              <img src={branding.logoUrl} alt="Logo" className="h-6 w-6 rounded" />
-            ) : (
-              <img src="/icon.ico" alt="Discovery RMM" className="h-6 w-6 rounded" />
-            )}
-            Dashboard
-          </h1>
+          <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
           <p className="text-sm text-muted">Visão geral do ambiente</p>
         </div>
         <div className="flex items-center gap-1 rounded-lg border border-border bg-surface-light p-1">
