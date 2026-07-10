@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { AppWindow, Eye, Search } from "lucide-react";
 import { Card, CardHeader, DataTable, ErrorDisplay, Input, Loading, Select, StatCard, Button, Modal, Badge, type Column } from "@/components/ui";
 import { useClients } from "@/hooks/useClients";
@@ -102,20 +102,19 @@ export default function SoftwareInventory() {
   const totalSoftware = snapshot.data?.distinctSoftware ?? 0;
   const totalAgents = snapshot.data?.distinctAgents ?? 0;
   const resolvedLimit = pag.limit;
-  // Como a API é cursor-based pura e não retorna count/totalPages, usamos estimativa via snapshot
+  // Quando há busca ativa, o snapshot reflete o total sem filtro — não tentamos estimar páginas
+  const hasActiveSearch = searchApplied.length > 0;
   const estimatedTotalPages = totalSoftware > 0
     ? Math.max(1, Math.ceil(totalSoftware / resolvedLimit))
     : 1;
   const currentPage = Math.min(pag.page, Math.max(1, pag.pageCursors.length || 1));
 
-  useEffect(() => {
-    if (pag.page > estimatedTotalPages) {
-      pag.reset();
-    }
-  }, [pag.page, estimatedTotalPages]);
-
   const canPrev = pag.page > 1 && !list.isFetching;
-  const canNext = Boolean(list.data?.nextCursor) && !list.isFetching;
+  const canNext = (list.data?.hasMore ?? Boolean(list.data?.nextCursor)) && !list.isFetching;
+
+  const paginationInfoText = hasActiveSearch
+    ? `Página ${currentPage} | ${items.length} item(ns) nesta página | filtro: "${searchApplied}"`
+    : `Página ${currentPage} de ~${estimatedTotalPages} | ${items.length} item(ns) nesta página`;
 
   const scopeOptions = [
     { value: "global", label: "Global" },
@@ -409,19 +408,9 @@ export default function SoftwareInventory() {
           <ErrorDisplay onRetry={() => list.refetch()} />
         ) : (
           <div className="p-5">
-            <DataTable
-              columns={columns}
-              data={items}
-              keyExtractor={(item) => item.softwareId}
-              emptyMessage="Nenhum software encontrado para os filtros atuais"
-              showPagination={false}
-            />
-
-            <div className="mt-4 flex items-center justify-between gap-3">
-              <p className="text-xs text-muted">
-                Página {currentPage} de ~{estimatedTotalPages} | {items.length} item(ns) nesta página
-                {searchApplied ? ` | filtro: "${searchApplied}"` : ""}
-              </p>
+            {/* Paginação superior */}
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-xs text-muted">{paginationInfoText}</p>
 
               <div className="flex items-center gap-2">
                 <Button variant="secondary" size="sm" onClick={pag.goToPrev} disabled={!canPrev}>
@@ -429,7 +418,36 @@ export default function SoftwareInventory() {
                 </Button>
 
                 <span className="px-2 text-xs tabular-nums text-muted">
-                  {currentPage} / ~{estimatedTotalPages}
+                  {hasActiveSearch ? currentPage : `${currentPage} / ~${estimatedTotalPages}`}
+                </span>
+
+                <Button variant="secondary" size="sm" onClick={() => pag.goToNext(list.data?.nextCursor)} disabled={!canNext} loading={list.isFetching}>
+                  Avançar
+                </Button>
+              </div>
+            </div>
+
+            <div className="mt-3">
+              <DataTable
+                columns={columns}
+                data={items}
+                keyExtractor={(item) => item.softwareId}
+                emptyMessage="Nenhum software encontrado para os filtros atuais"
+                showPagination={false}
+              />
+            </div>
+
+            {/* Paginação inferior */}
+            <div className="mt-4 flex items-center justify-between gap-3">
+              <p className="text-xs text-muted">{paginationInfoText}</p>
+
+              <div className="flex items-center gap-2">
+                <Button variant="secondary" size="sm" onClick={pag.goToPrev} disabled={!canPrev}>
+                  Voltar
+                </Button>
+
+                <span className="px-2 text-xs tabular-nums text-muted">
+                  {hasActiveSearch ? currentPage : `${currentPage} / ~${estimatedTotalPages}`}
                 </span>
 
                 <Button variant="secondary" size="sm" onClick={() => pag.goToNext(list.data?.nextCursor)} disabled={!canNext} loading={list.isFetching}>

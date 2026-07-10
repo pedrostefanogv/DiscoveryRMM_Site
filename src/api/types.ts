@@ -285,6 +285,7 @@ export interface SoftwareInventoryCatalogItem {
 export interface SoftwareInventoryCatalogPage {
   items: SoftwareInventoryCatalogItem[];
   nextCursor: string | null;
+  hasMore: boolean;
 }
 
 export interface AgentSoftwareInventorySnapshot {

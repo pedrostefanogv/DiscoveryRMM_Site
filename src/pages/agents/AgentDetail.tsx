@@ -725,7 +725,9 @@ export default function AgentDetail() {
 
   const goToNextSoftwarePage = () => {
     const nextPage = softwarePage + 1;
-    if (needsMoreItems) {
+    const nextStartIdx = (nextPage - 1) * limit;
+    // Verifica se precisa buscar mais itens para a PRÓXIMA página (não a atual)
+    if (software.hasNextPage && nextStartIdx + limit > softwareAllItems.length) {
       software.fetchNextPage();
     }
     setSoftwarePage(nextPage);
