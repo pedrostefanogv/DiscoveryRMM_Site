@@ -1436,7 +1436,7 @@ export default function AgentDetail() {
             className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors ${activeDataTab === 'software' ? 'border-primary/40 bg-primary/15 text-primary' : 'border-border bg-surface-light text-muted-foreground hover:text-foreground'}`}
           >
             Inventário de Aplicativos
-            <span className="rounded-full bg-black/25 px-2 py-0.5 text-xs text-muted-foreground">{softwareTotalCount}</span>
+            <span className="rounded-full bg-surface-hover/60 px-2 py-0.5 text-xs text-muted-foreground">{softwareTotalCount}</span>
           </button>
           <button
             type="button"
@@ -1446,7 +1446,7 @@ export default function AgentDetail() {
             className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors ${activeDataTab === 'printers' ? 'border-primary/40 bg-primary/15 text-primary' : 'border-border bg-surface-light text-muted-foreground hover:text-foreground'}`}
           >
             Impressoras
-            <span className="rounded-full bg-black/25 px-2 py-0.5 text-xs text-muted-foreground">{printers.length}</span>
+            <span className="rounded-full bg-surface-hover/60 px-2 py-0.5 text-xs text-muted-foreground">{printers.length}</span>
           </button>
           <button
             type="button"
@@ -1456,7 +1456,7 @@ export default function AgentDetail() {
             className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors ${activeDataTab === 'tickets' ? 'border-primary/40 bg-primary/15 text-primary' : 'border-border bg-surface-light text-muted-foreground hover:text-foreground'}`}
           >
             Últimos Chamados
-            <span className="rounded-full bg-black/25 px-2 py-0.5 text-xs text-muted-foreground">{agentTickets.data?.items?.length ?? 0}</span>
+            <span className="rounded-full bg-surface-hover/60 px-2 py-0.5 text-xs text-muted-foreground">{agentTickets.data?.items?.length ?? 0}</span>
           </button>
           <button
             type="button"
@@ -1466,7 +1466,7 @@ export default function AgentDetail() {
             className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors ${activeDataTab === 'listeningPorts' ? 'border-primary/40 bg-primary/15 text-primary' : 'border-border bg-surface-light text-muted-foreground hover:text-foreground'}`}
           >
             Portas em Escuta
-            <span className="rounded-full bg-black/25 px-2 py-0.5 text-xs text-muted-foreground">{listeningPorts.length}</span>
+            <span className="rounded-full bg-surface-hover/60 px-2 py-0.5 text-xs text-muted-foreground">{listeningPorts.length}</span>
           </button>
           <button
             type="button"
@@ -1476,7 +1476,7 @@ export default function AgentDetail() {
             className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors ${activeDataTab === 'openSockets' ? 'border-primary/40 bg-primary/15 text-primary' : 'border-border bg-surface-light text-muted-foreground hover:text-foreground'}`}
           >
             Conexões Abertas
-            <span className="rounded-full bg-black/25 px-2 py-0.5 text-xs text-muted-foreground">{openSockets.length}</span>
+            <span className="rounded-full bg-surface-hover/60 px-2 py-0.5 text-xs text-muted-foreground">{openSockets.length}</span>
           </button>
           <button
             type="button"
@@ -1486,7 +1486,7 @@ export default function AgentDetail() {
             className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors ${activeDataTab === 'logs' ? 'border-primary/40 bg-primary/15 text-primary' : 'border-border bg-surface-light text-muted-foreground hover:text-foreground'}`}
           >
             Logs Recentes
-            <span className="rounded-full bg-black/25 px-2 py-0.5 text-xs text-muted-foreground">{agentLogs.data?.length ?? 0}</span>
+            <span className="rounded-full bg-surface-hover/60 px-2 py-0.5 text-xs text-muted-foreground">{agentLogs.data?.length ?? 0}</span>
           </button>
         </div>
 

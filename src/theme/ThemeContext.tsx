@@ -46,15 +46,16 @@ function saveBranding(b: BrandingConfig) {
 
 function applyCSSVars(b: BrandingConfig, mode: ThemeMode) {
   const root = document.documentElement;
-  root.style.setProperty('--color-primary', b.primaryColor);
   root.style.setProperty('--color-accent', b.accentColor);
 
-  // Em light mode, sidebar e header usam os valores do tema claro do CSS.
-  // Em dark mode, usa as cores do branding.
+  // Em light mode, usa azul profissional em vez do indigo/roxo do branding.
+  // Em dark mode, mantém a cor de branding original.
   if (mode === 'dark') {
+    root.style.setProperty('--color-primary', b.primaryColor);
     root.style.setProperty('--color-sidebar', b.sidebarColor);
     root.style.setProperty('--color-header', b.headerColor);
   } else {
+    root.style.setProperty('--color-primary', '#2563eb');
     root.style.removeProperty('--color-sidebar');
     root.style.removeProperty('--color-header');
   }

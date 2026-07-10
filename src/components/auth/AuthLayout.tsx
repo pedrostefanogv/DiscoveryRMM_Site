@@ -49,7 +49,7 @@ export function AuthLayout() {
       <div className="relative z-[2] mx-auto flex min-h-screen w-full max-w-6xl flex-col justify-center gap-10 px-6 py-12 lg:flex-row lg:items-center lg:justify-between">
         <div className="max-w-xl space-y-6">
           <div className="inline-flex items-center gap-3 rounded-full border border-border bg-surface-light px-4 py-2 text-sm text-foreground">
-            <ShieldCheck className="h-4 w-4 text-primary" />
+            <img src="/icon.ico" alt="Discovery RMM" className="h-4 w-4" />
             Portal de operações de TI
           </div>
           <div className="space-y-4">

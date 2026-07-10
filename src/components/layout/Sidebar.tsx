@@ -207,9 +207,7 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
         {branding.logoUrl ? (
           <img src={branding.logoUrl} alt="Logo" className="h-8 w-8 rounded" />
         ) : (
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-            <Shield className="h-5 w-5 text-foreground" />
-          </div>
+          <img src="/icon.ico" alt="Discovery RMM" className="h-8 w-8 rounded" />
         )}
         {!collapsed && (
           <span className="text-lg font-bold text-foreground truncate">

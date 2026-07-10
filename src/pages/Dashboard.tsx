@@ -127,7 +127,7 @@ export default function Dashboard() {
             {branding.logoUrl ? (
               <img src={branding.logoUrl} alt="Logo" className="h-6 w-6 rounded" />
             ) : (
-              <Shield className="h-6 w-6 text-primary" />
+              <img src="/icon.ico" alt="Discovery RMM" className="h-6 w-6 rounded" />
             )}
             Dashboard
           </h1>
