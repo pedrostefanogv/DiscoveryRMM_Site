@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Monitor, Wifi, WifiOff, Activity, Building2, Clock, LayoutGrid, List, Bug, Trash2, ShieldCheck, ArrowUp, ArrowDown, Radio, RefreshCw, Move, RotateCcw, Power, Zap } from 'lucide-react';
+import { Monitor, Wifi, WifiOff, Activity, Building2, Clock, LayoutGrid, List, Bug, Trash2, ShieldCheck, ArrowUp, ArrowDown, Radio, RefreshCw, Move, RotateCcw, Power, Zap, Laptop, Server, Apple } from 'lucide-react';
 import { useQueries } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { useClients } from '@/hooks/useClients';
@@ -131,13 +131,13 @@ function formatUptimeShort(seconds: number | undefined | null): string {
   return `${hours}h`;
 }
 
-function getOsIcon(os: string | null): string {
-  if (!os) return '??';
+function getOsIconComponent(os: string | null) {
+  if (!os) return <Monitor className="h-5 w-5 text-primary" />;
   const lower = os.toLowerCase();
-  if (lower.includes('windows')) return '??';
-  if (lower.includes('linux') || lower.includes('ubuntu') || lower.includes('debian') || lower.includes('centos')) return '??';
-  if (lower.includes('mac') || lower.includes('darwin')) return '';
-  return '??';
+  if (lower.includes('windows')) return <Monitor className="h-5 w-5 text-primary" />;
+  if (lower.includes('linux') || lower.includes('ubuntu') || lower.includes('debian') || lower.includes('centos')) return <Server className="h-5 w-5 text-accent" />;
+  if (lower.includes('mac') || lower.includes('darwin')) return <Apple className="h-5 w-5 text-foreground" />;
+  return <Monitor className="h-5 w-5 text-primary" />;
 }
 
 export default function AgentList() {
@@ -745,8 +745,8 @@ export default function AgentList() {
                   >
                     <span className={`absolute right-4 top-4 h-2.5 w-2.5 rounded-full ${online ? 'bg-success shadow-[0_0_6px_theme(colors.success)]' : 'bg-slate-600'}`} />
                     <div className="flex items-start gap-3 pr-6">
-                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-xl">
-                        {getOsIcon(a.operatingSystem)}
+                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-primary/15">
+                        {getOsIconComponent(a.operatingSystem)}
                       </div>
                       <div className="min-w-0 flex-1">
                         <p className="truncate font-semibold text-foreground transition-colors group-hover:text-primary">{displayName}</p>
@@ -879,8 +879,8 @@ export default function AgentList() {
                       >
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-3">
-                            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-base">
-                              {getOsIcon(a.operatingSystem)}
+                            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/15">
+                              {getOsIconComponent(a.operatingSystem)}
                             </div>
                             <div className="min-w-0">
                               <p className="truncate font-medium text-foreground">{displayName}</p>

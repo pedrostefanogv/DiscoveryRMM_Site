@@ -12,6 +12,7 @@ import {
   XCircle,
   Clock,
   Zap,
+  Shield,
 } from 'lucide-react';
 import type { ComponentType } from 'react';
 import { memo, useState } from 'react';
@@ -22,6 +23,7 @@ import { useP2POverview } from '@/hooks/useP2POverview';
 import { StatCard, Card, CardHeader, Badge, SkeletonDashboard, ErrorDisplay } from '@/components/ui';
 import { getRealtimeStats } from '@/api';
 import { useSoftwareInventorySnapshot } from '@/hooks/useSoftwareInventory';
+import { useTheme } from '@/theme/ThemeContext';
 import type { DashboardWindow } from '@/api/dashboard';
 
 function formatBytes(value?: number | null): string {
@@ -61,6 +63,7 @@ const WINDOWS: { value: DashboardWindow; label: string }[] = [
 export default function Dashboard() {
   const navigate = useNavigate();
   const [window, setWindow] = useState<DashboardWindow>('24h');
+  const { branding } = useTheme();
 
   const dashboard = useDashboardSummary('global', window);
   const softwareSnapshot = useSoftwareInventorySnapshot('global');
@@ -120,7 +123,14 @@ export default function Dashboard() {
       {/* Header + Window Selector */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
+          <h1 className="text-2xl font-bold text-foreground inline-flex items-center gap-2">
+            {branding.logoUrl ? (
+              <img src={branding.logoUrl} alt="Logo" className="h-6 w-6 rounded" />
+            ) : (
+              <Shield className="h-6 w-6 text-primary" />
+            )}
+            Dashboard
+          </h1>
           <p className="text-sm text-muted">Visão geral do ambiente</p>
         </div>
         <div className="flex items-center gap-1 rounded-lg border border-border bg-surface-light p-1">
