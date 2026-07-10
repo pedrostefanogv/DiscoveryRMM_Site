@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Monitor, Wifi, WifiOff, Activity, Building2, Clock, LayoutGrid, List, Bug, Trash2, ShieldCheck, ArrowUp, ArrowDown, Radio, RefreshCw, Move, RotateCcw, Power, Zap, Laptop, Server, Apple } from 'lucide-react';
+import { Monitor, Wifi, WifiOff, Activity, Building2, Clock, LayoutGrid, List, Bug, Trash2, ShieldCheck, ArrowUp, ArrowDown, Radio, RefreshCw, Move, RotateCcw, Power, Zap, Server, Apple } from 'lucide-react';
 import { useQueries } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { useClients } from '@/hooks/useClients';

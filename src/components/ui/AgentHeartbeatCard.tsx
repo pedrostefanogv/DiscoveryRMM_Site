@@ -34,9 +34,9 @@ export function AgentHeartbeatCard({ metrics, showEmpty = false }: AgentHeartbea
   }
 
   return (
-    <div className="rounded-xl border border-border bg-gradient-to-br from-emerald-500/5 via-slate-900/30 to-slate-900/20 p-5">
+    <div className="rounded-xl border border-border bg-gradient-to-br from-emerald-500/5 via-surface-light to-surface-light p-5 dark:from-emerald-500/5 dark:via-slate-900/30 dark:to-slate-900/20">
       <div className="mb-4 flex items-center gap-2">
-        <span className="rounded-md bg-emerald-400/15 p-1.5 text-emerald-300">
+        <span className="rounded-md bg-emerald-500/15 p-1.5 text-emerald-600 dark:bg-emerald-400/15 dark:text-emerald-300">
           <Activity className="h-4 w-4" />
         </span>
         <div>

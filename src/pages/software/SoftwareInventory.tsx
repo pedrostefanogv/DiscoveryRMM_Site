@@ -202,8 +202,8 @@ export default function SoftwareInventory() {
         order: "desc",
       });
 
-      // API now returns flat array instead of paginated object
-      const pageItems = rawResult;
+      // API now returns paginated object with items array
+      const pageItems = rawResult.items ?? [];
 
       const matched = pageItems.filter(
         (row) => row.softwareId === software.softwareId,
