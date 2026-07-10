@@ -3,6 +3,8 @@ import { slaCalendarsApi } from "@/api/sla-calendars";
 import type {
   AddSlaCalendarHolidayRequest,
   CreateSlaCalendarRequest,
+  CursorPageDto,
+  SlaCalendarSummary,
   UpdateSlaCalendarHolidayRequest,
   UpdateSlaCalendarRequest,
 } from "@/api";
@@ -14,11 +16,20 @@ const KEYS = {
   detail: (id: string) => [...KEYS.all, "detail", id] as const,
 };
 
+function normalizeArray<T>(data: CursorPageDto<T> | T[]): T[] {
+  if (Array.isArray(data)) return data;
+  return (data as CursorPageDto<T>).items ?? [];
+}
+
 export function useSlaCalendars(clientId?: string, enabled = true) {
   return useQuery({
     queryKey: KEYS.list(clientId),
     queryFn: () => slaCalendarsApi.list(clientId),
     enabled,
+    select: (data) =>
+      normalizeArray(
+        data as CursorPageDto<SlaCalendarSummary> | SlaCalendarSummary[],
+      ),
   });
 }
 

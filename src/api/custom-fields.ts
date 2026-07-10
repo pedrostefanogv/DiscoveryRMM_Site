@@ -158,7 +158,9 @@ async function listEntityValues(
   entityId: string,
   params?: { includeSecrets?: boolean },
 ): Promise<CustomFieldValueItem[]> {
-  const raw = await api.get<unknown>(path, { includeSecrets: params?.includeSecrets });
+  const raw = await api.get<unknown>(path, {
+    includeSecrets: params?.includeSecrets,
+  });
   return normalizeValues(raw, scopeType, entityId);
 }
 
@@ -178,19 +180,35 @@ export const customFieldsApi = {
     scopeType?: CustomFieldScopeType;
     includeInactive?: boolean;
   }): Promise<CustomFieldDefinition[]> {
-    const raw = await api.get<Array<Record<string, unknown>>>(`${BASE}/definitions`, params ?? {});
-    return raw.map(normalizeDefinition);
+    const raw = await api.get<unknown>(`${BASE}/definitions`, params ?? {});
+    if (Array.isArray(raw))
+      return (raw as Array<Record<string, unknown>>).map(normalizeDefinition);
+    if (
+      raw &&
+      typeof raw === "object" &&
+      Array.isArray((raw as Record<string, unknown>).items)
+    ) {
+      return (
+        (raw as Record<string, unknown>).items as Array<Record<string, unknown>>
+      ).map(normalizeDefinition);
+    }
+    return [];
   },
 
   async getDefinition(id: string): Promise<CustomFieldDefinition> {
-    const raw = await api.get<Record<string, unknown>>(`${BASE}/definitions/${id}`);
+    const raw = await api.get<Record<string, unknown>>(
+      `${BASE}/definitions/${id}`,
+    );
     return normalizeDefinition(raw);
   },
 
   async createDefinition(
     payload: CreateCustomFieldDefinitionRequest,
   ): Promise<CustomFieldDefinition> {
-    const raw = await api.post<Record<string, unknown>>(`${BASE}/definitions`, payload);
+    const raw = await api.post<Record<string, unknown>>(
+      `${BASE}/definitions`,
+      payload,
+    );
     return normalizeDefinition(raw);
   },
 
@@ -198,7 +216,10 @@ export const customFieldsApi = {
     id: string,
     payload: UpdateCustomFieldDefinitionRequest,
   ): Promise<CustomFieldDefinition> {
-    const raw = await api.put<Record<string, unknown>>(`${BASE}/definitions/${id}`, payload);
+    const raw = await api.put<Record<string, unknown>>(
+      `${BASE}/definitions/${id}`,
+      payload,
+    );
     return normalizeDefinition(raw);
   },
 
@@ -210,7 +231,10 @@ export const customFieldsApi = {
     scopeType: CustomFieldScopeType,
     params?: { entityId?: string; includeSecrets?: boolean },
   ): Promise<CustomFieldValueItem[]> {
-    const raw = await api.get<unknown>(`${BASE}/values/${scopeType}`, params ?? {});
+    const raw = await api.get<unknown>(
+      `${BASE}/values/${scopeType}`,
+      params ?? {},
+    );
     return normalizeValues(raw, scopeType, params?.entityId ?? null);
   },
 
@@ -218,8 +242,16 @@ export const customFieldsApi = {
     definitionId: string,
     payload: UpsertCustomFieldValueRequest,
   ): Promise<CustomFieldValueItem> {
-    const raw = await api.put<Record<string, unknown>>(`${BASE}/values/${definitionId}`, payload);
-    return normalizeValueItem(raw, payload.scopeType, payload.entityId ?? null, definitionId);
+    const raw = await api.put<Record<string, unknown>>(
+      `${BASE}/values/${definitionId}`,
+      payload,
+    );
+    return normalizeValueItem(
+      raw,
+      payload.scopeType,
+      payload.entityId ?? null,
+      definitionId,
+    );
   },
 
   async getScopedValues(
@@ -304,7 +336,9 @@ export const customFieldsApi = {
   },
 };
 
-export function normalizeCustomFieldScopeType(value: unknown): CustomFieldScopeType {
+export function normalizeCustomFieldScopeType(
+  value: unknown,
+): CustomFieldScopeType {
   if (typeof value === "number" && Number.isFinite(value)) {
     return value as CustomFieldScopeType;
   }
@@ -323,7 +357,9 @@ export function normalizeCustomFieldScopeType(value: unknown): CustomFieldScopeT
   return CustomFieldScopeType.Agent;
 }
 
-export function normalizeCustomFieldDataType(value: unknown): CustomFieldDataType {
+export function normalizeCustomFieldDataType(
+  value: unknown,
+): CustomFieldDataType {
   if (typeof value === "number" && Number.isFinite(value)) {
     return value as CustomFieldDataType;
   }
@@ -373,7 +409,9 @@ export function getCustomFieldScopeLabel(value: CustomFieldScopeType): string {
   }
 }
 
-export function getCustomFieldDataTypeLabel(value: CustomFieldDataType): string {
+export function getCustomFieldDataTypeLabel(
+  value: CustomFieldDataType,
+): string {
   switch (value) {
     case CustomFieldDataType.Integer:
       return "Inteiro";
@@ -438,7 +476,9 @@ export function parseCustomFieldValue(
   }
 }
 
-function normalizeDefinition(raw: Record<string, unknown>): CustomFieldDefinition {
+function normalizeDefinition(
+  raw: Record<string, unknown>,
+): CustomFieldDefinition {
   return {
     id: String(raw.id ?? ""),
     name: String(raw.name ?? ""),
@@ -450,7 +490,9 @@ function normalizeDefinition(raw: Record<string, unknown>): CustomFieldDefinitio
     scopeType: normalizeCustomFieldScopeType(raw.scopeType ?? raw.ScopeType),
     dataType: normalizeCustomFieldDataType(raw.dataType ?? raw.DataType),
     isActive: Boolean(raw.isActive ?? raw.IsActive ?? true),
-    options: normalizeOptions(raw.options ?? raw.Options ?? raw.allowedValues ?? raw.AllowedValues),
+    options: normalizeOptions(
+      raw.options ?? raw.Options ?? raw.allowedValues ?? raw.AllowedValues,
+    ),
     createdAt:
       raw.createdAt === null || raw.createdAt === undefined
         ? null
@@ -490,7 +532,11 @@ function normalizeValues(
     const record = raw as Record<string, unknown>;
     if (Array.isArray(record.items)) {
       return record.items.map((item) =>
-        normalizeValueItem(item as Record<string, unknown>, scopeType, entityId),
+        normalizeValueItem(
+          item as Record<string, unknown>,
+          scopeType,
+          entityId,
+        ),
       );
     }
 
@@ -514,12 +560,16 @@ function normalizeValueItem(
   fallbackDefinitionId?: string,
 ): CustomFieldValueItem {
   return {
-    definitionId: String(raw.definitionId ?? raw.DefinitionId ?? fallbackDefinitionId ?? ""),
+    definitionId: String(
+      raw.definitionId ?? raw.DefinitionId ?? fallbackDefinitionId ?? "",
+    ),
     entityId:
       raw.entityId === null || raw.EntityId === null
         ? null
         : String(raw.entityId ?? raw.EntityId ?? entityId ?? "") || null,
-    scopeType: normalizeCustomFieldScopeType(raw.scopeType ?? raw.ScopeType ?? scopeType),
+    scopeType: normalizeCustomFieldScopeType(
+      raw.scopeType ?? raw.ScopeType ?? scopeType,
+    ),
     value: raw.value ?? raw.Value ?? null,
     isSecret: Boolean(raw.isSecret ?? raw.IsSecret ?? false),
     updatedAt:

@@ -1,6 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import * as reportsApi from "@/api/reports";
-import type { RunReportRequest } from "@/api/types";
+import type {
+  CursorPageDto,
+  ReportExecution,
+  RunReportRequest,
+} from "@/api/types";
 
 const KEYS = {
   all: ["reportExecutions"] as const,
@@ -10,6 +14,11 @@ const KEYS = {
     [...KEYS.all, "detail", id, clientId] as const,
 };
 
+function normalizeArray<T>(data: CursorPageDto<T> | T[]): T[] {
+  if (Array.isArray(data)) return data;
+  return (data as CursorPageDto<T>).items ?? [];
+}
+
 export function useReportExecutions(params?: {
   clientId?: string;
   limit?: number;
@@ -17,6 +26,10 @@ export function useReportExecutions(params?: {
   return useQuery({
     queryKey: KEYS.list(params),
     queryFn: () => reportsApi.getReportExecutions(params),
+    select: (data) =>
+      normalizeArray(
+        data as CursorPageDto<ReportExecution> | ReportExecution[],
+      ),
   });
 }
 

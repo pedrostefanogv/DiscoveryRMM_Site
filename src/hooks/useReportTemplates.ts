@@ -2,6 +2,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import * as reportsApi from "@/api/reports";
 import type {
   CreateReportTemplateRequest,
+  CursorPageDto,
+  ReportTemplate,
   UpdateReportTemplateRequest,
   ReportDatasetTypeValue,
 } from "@/api/types";
@@ -16,6 +18,11 @@ const KEYS = {
     [...KEYS.all, "detail", id, clientId] as const,
 };
 
+function normalizeArray<T>(data: CursorPageDto<T> | T[]): T[] {
+  if (Array.isArray(data)) return data;
+  return (data as CursorPageDto<T>).items ?? [];
+}
+
 export function useReportTemplates(params?: {
   datasetType?: ReportDatasetTypeValue;
   isActive?: boolean;
@@ -23,6 +30,8 @@ export function useReportTemplates(params?: {
   return useQuery({
     queryKey: KEYS.list(params),
     queryFn: () => reportsApi.getReportTemplates(params),
+    select: (data) =>
+      normalizeArray(data as CursorPageDto<ReportTemplate> | ReportTemplate[]),
   });
 }
 

@@ -2,6 +2,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { escalationRulesApi } from "@/api/escalation-rules";
 import type {
   CreateEscalationRuleRequest,
+  CursorPageDto,
+  TicketEscalationRule,
   UpdateEscalationRuleRequest,
 } from "@/api";
 
@@ -13,11 +15,20 @@ const KEYS = {
   detail: (id: string) => [...KEYS.all, "detail", id] as const,
 };
 
+function normalizeArray<T>(data: CursorPageDto<T> | T[]): T[] {
+  if (Array.isArray(data)) return data;
+  return (data as CursorPageDto<T>).items ?? [];
+}
+
 export function useEscalationRules(enabled = true) {
   return useQuery({
     queryKey: KEYS.list(),
     queryFn: () => escalationRulesApi.list(),
     enabled,
+    select: (data) =>
+      normalizeArray(
+        data as CursorPageDto<TicketEscalationRule> | TicketEscalationRule[],
+      ),
   });
 }
 
@@ -29,6 +40,10 @@ export function useEscalationRulesByWorkflowProfile(
     queryKey: KEYS.byWorkflowProfile(workflowProfileId),
     queryFn: () => escalationRulesApi.listByWorkflowProfile(workflowProfileId),
     enabled: enabled && !!workflowProfileId,
+    select: (data) =>
+      normalizeArray(
+        data as CursorPageDto<TicketEscalationRule> | TicketEscalationRule[],
+      ),
   });
 }
 

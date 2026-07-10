@@ -2,7 +2,9 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { workflowProfilesApi } from "@/api";
 import type {
   CreateWorkflowProfileRequest,
+  CursorPageDto,
   UpdateWorkflowProfileRequest,
+  WorkflowProfile,
 } from "@/api";
 
 const KEYS = {
@@ -14,12 +16,21 @@ const KEYS = {
   detail: (id: string) => [...KEYS.all, "detail", id] as const,
 };
 
+function normalizeArray<T>(data: CursorPageDto<T> | T[]): T[] {
+  if (Array.isArray(data)) return data;
+  return (data as CursorPageDto<T>).items ?? [];
+}
+
 export function useWorkflowProfiles(
   params: { clientId?: string; includeGlobal?: boolean } = {},
 ) {
   return useQuery({
     queryKey: KEYS.list(params),
     queryFn: () => workflowProfilesApi.list(params),
+    select: (data) =>
+      normalizeArray(
+        data as CursorPageDto<WorkflowProfile> | WorkflowProfile[],
+      ),
   });
 }
 

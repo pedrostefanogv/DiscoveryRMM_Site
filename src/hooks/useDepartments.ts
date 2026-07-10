@@ -1,6 +1,11 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { departmentsApi } from "@/api";
-import type { CreateDepartmentRequest, UpdateDepartmentRequest } from "@/api";
+import type {
+  CreateDepartmentRequest,
+  CursorPageDto,
+  Department,
+  UpdateDepartmentRequest,
+} from "@/api";
 
 const KEYS = {
   all: ["departments"] as const,
@@ -13,6 +18,11 @@ const KEYS = {
   detail: (id: string) => [...KEYS.all, "detail", id] as const,
 };
 
+function normalizeArray<T>(data: CursorPageDto<T> | T[]): T[] {
+  if (Array.isArray(data)) return data;
+  return (data as CursorPageDto<T>).items ?? [];
+}
+
 export function useDepartments(
   params: {
     clientId?: string;
@@ -24,6 +34,8 @@ export function useDepartments(
     queryKey: KEYS.list(params),
     queryFn: () => departmentsApi.list(params),
     staleTime: 60_000,
+    select: (data) =>
+      normalizeArray(data as CursorPageDto<Department> | Department[]),
   });
 }
 

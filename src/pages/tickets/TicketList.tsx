@@ -150,7 +150,7 @@ function formatSavedViewSummary(
     parts.push(`Busca: ${filter.text}`);
   }
 
-  return parts.length > 0 ? parts.join(' ï ') : 'Sem filtros adicionais';
+  return parts.length > 0 ? parts.join(' ¬∑ ') : 'Sem filtros adicionais';
 }
 
 function suggestSavedViewName(
@@ -164,18 +164,18 @@ function suggestSavedViewName(
     return 'Minha visao';
   }
 
-  return parts.join(' ï ');
+  return parts.join(' ¬∑ ');
 }
 
 function formatTicketPreviewDescription(value: string, maxLength = 180) {
   const normalized = value.trim();
-  if (!normalized) return 'Sem descriÁ„o.';
+  if (!normalized) return 'Sem descri√ß√£o.';
   if (normalized.length <= maxLength) return normalized;
   return `${normalized.slice(0, maxLength).trimEnd()}...`;
 }
 
 function resolveUserDisplayName(usersById: Map<string, UserDto>, userId: string | null | undefined) {
-  if (!userId) return 'N„o atribuÌdo';
+  if (!userId) return 'N√£o atribu√≠do';
   const user = usersById.get(userId);
   if (!user) return userId;
   return user.fullName || user.login || user.email || user.id;
@@ -426,7 +426,7 @@ export default function TicketList() {
   const columns: Column<Ticket>[] = [
     {
       key: 'title',
-      header: 'TÌtulo',
+      header: 'T√≠tulo',
       render: (ticket) => (
         <div className="flex items-center gap-3">
           <TicketIcon className="h-4 w-4 shrink-0 text-primary" />
@@ -506,14 +506,14 @@ export default function TicketList() {
           ? 'Nenhum watcher.'
           : `${watcherNames.slice(0, 3).join(', ')}${watcherNames.length > 3 ? ` +${watcherNames.length - 3}` : ''}`;
     const linkedMachineLabel = !previewTicket.agentId
-      ? 'Sem m·quina vinculada'
+      ? 'Sem m√°quina vinculada'
       : isPreviewTarget
         ? hoverPreviewAgentQuery.isLoading
-          ? 'Carregando m·quina...'
+          ? 'Carregando m√°quina...'
           : hoverPreviewAgentQuery.data?.displayName || hoverPreviewAgentQuery.data?.hostname || previewTicket.agentId
         : previewTicket.agentId;
     const stateLabel = previewTicket.workflowStateId
-      ? stateMap.get(previewTicket.workflowStateId)?.name ?? 'Estado n„o mapeado'
+      ? stateMap.get(previewTicket.workflowStateId)?.name ?? 'Estado n√£o mapeado'
       : 'Sem estado';
     const clientLabel = clientMap.get(previewTicket.clientId)?.name ?? '-';
     const detailsAreLoading = isPreviewTarget && (hoverPreviewTicketQuery.isLoading || iamUsersQuery.isLoading);
@@ -532,7 +532,7 @@ export default function TicketList() {
 
         <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
           <div className="rounded-lg border border-border bg-surface-light px-3 py-2">
-            <p className="text-[11px] uppercase tracking-wide text-muted">Respons·vel</p>
+            <p className="text-[11px] uppercase tracking-wide text-muted">Respons√°vel</p>
             <p className="mt-1 truncate text-sm text-foreground">{assigneeLabel}</p>
           </div>
           <div className="rounded-lg border border-border bg-surface-light px-3 py-2">
@@ -540,13 +540,13 @@ export default function TicketList() {
             <p className="mt-1 text-sm text-foreground">{watcherSummary}</p>
           </div>
           <div className="rounded-lg border border-border bg-surface-light px-3 py-2 sm:col-span-2">
-            <p className="text-[11px] uppercase tracking-wide text-muted">M·quina vinculada</p>
+            <p className="text-[11px] uppercase tracking-wide text-muted">M√°quina vinculada</p>
             <p className="mt-1 truncate text-sm text-foreground">{linkedMachineLabel}</p>
           </div>
         </div>
 
         <div className="text-[11px] text-muted">
-          Estado: {stateLabel} ï Cliente: {clientLabel} ï Criado em {new Date(previewTicket.createdAt).toLocaleString('pt-BR')}
+          Estado: {stateLabel} ¬∑ Cliente: {clientLabel} ¬∑ Criado em {new Date(previewTicket.createdAt).toLocaleString('pt-BR')}
         </div>
       </div>
     );
@@ -595,7 +595,7 @@ export default function TicketList() {
     if (!ticketContextMenu) return;
 
     if (!currentUserId) {
-      toast.error('N„o foi possÌvel identificar o usu·rio autenticado.');
+      toast.error('N√£o foi poss√≠vel identificar o usu√°rio autenticado.');
       return;
     }
 
@@ -604,14 +604,14 @@ export default function TicketList() {
         ticketId: ticketContextMenu.ticket.id,
         data: { userId: currentUserId },
       });
-      toast.success('VocÍ agora acompanha este chamado.');
+      toast.success('Voc√™ agora acompanha este chamado.');
       setTicketContextMenu(null);
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'N„o foi possÌvel acompanhar o chamado.';
+      const message = error instanceof Error ? error.message : 'N√£o foi poss√≠vel acompanhar o chamado.';
       const normalized = message.toLowerCase();
 
-      if (normalized.includes('already') || normalized.includes('exists') || normalized.includes('j·')) {
-        toast('VocÍ j· acompanha este chamado.');
+      if (normalized.includes('already') || normalized.includes('exists') || normalized.includes('j√°')) {
+        toast('Voc√™ j√° acompanha este chamado.');
       } else {
         toast.error(message);
       }
@@ -622,12 +622,12 @@ export default function TicketList() {
     if (!ticketContextMenu) return;
 
     if (!currentUserId) {
-      toast.error('N„o foi possÌvel identificar o usu·rio autenticado.');
+      toast.error('N√£o foi poss√≠vel identificar o usu√°rio autenticado.');
       return;
     }
 
     if (ticketContextMenu.ticket.assignedToUserId === currentUserId) {
-      toast('VocÍ j· È o respons·vel deste chamado.');
+      toast('Voc√™ j√° √© o respons√°vel deste chamado.');
       setTicketContextMenu(null);
       return;
     }
@@ -636,7 +636,7 @@ export default function TicketList() {
       await assignTicketToUser(ticketContextMenu.ticket, currentUserId, 'Chamado assumido com sucesso.');
       setTicketContextMenu(null);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'N„o foi possÌvel assumir o chamado.');
+      toast.error(error instanceof Error ? error.message : 'N√£o foi poss√≠vel assumir o chamado.');
     }
   };
 
@@ -653,21 +653,21 @@ export default function TicketList() {
     if (!assignTargetTicket) return;
 
     if (!assignTargetUserId) {
-      toast.error('Selecione um usu·rio para atribuir o chamado.');
+      toast.error('Selecione um usu√°rio para atribuir o chamado.');
       return;
     }
 
     if (assignTargetTicket.assignedToUserId === assignTargetUserId) {
-      toast('Este usu·rio j· È o respons·vel deste chamado.');
+      toast('Este usu√°rio j√° √© o respons√°vel deste chamado.');
       closeAssignModal();
       return;
     }
 
     try {
-      await assignTicketToUser(assignTargetTicket, assignTargetUserId, 'Respons·vel atualizado com sucesso.');
+      await assignTicketToUser(assignTargetTicket, assignTargetUserId, 'Respons√°vel atualizado com sucesso.');
       closeAssignModal();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'N„o foi possÌvel transferir a responsabilidade.');
+      toast.error(error instanceof Error ? error.message : 'N√£o foi poss√≠vel transferir a responsabilidade.');
     }
   };
 
@@ -764,7 +764,7 @@ export default function TicketList() {
 
   const openCreateSavedViewModal = () => {
     if (!currentUserId) {
-      toast.error('N„o foi possÌvel identificar o usu·rio autenticado.');
+      toast.error('N√£o foi poss√≠vel identificar o usu√°rio autenticado.');
       return;
     }
 
@@ -819,12 +819,12 @@ export default function TicketList() {
       setSavedViewModalOpen(false);
       setEditingSavedView(null);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'N„o foi possÌvel salvar a vis„o.');
+      toast.error(error instanceof Error ? error.message : 'N√£o foi poss√≠vel salvar a vis√£o.');
      }
    };
 
    const handleDeleteSavedView = async (view: TicketSavedView) => {
-     if (!window.confirm(`Excluir a vis„o "${view.name}"?`)) {
+     if (!window.confirm(`Excluir a vis√£o "${view.name}"?`)) {
        return;
      }
 
@@ -837,9 +837,9 @@ export default function TicketList() {
          setEditingSavedView(null);
          setSavedViewModalOpen(false);
        }
-       toast.success('Vis„o removida com sucesso.');
+       toast.success('Vis√£o removida com sucesso.');
      } catch (error) {
-       toast.error(error instanceof Error ? error.message : 'N„o foi possÌvel excluir a vis„o.');
+       toast.error(error instanceof Error ? error.message : 'N√£o foi poss√≠vel excluir a vis√£o.');
     }
   };
 
@@ -849,7 +849,7 @@ export default function TicketList() {
         <div>
           <h1 className="text-2xl font-bold text-foreground">Chamados</h1>
           <p className="text-sm text-muted">
-            {visibleTickets.length} chamados na p·gina {page}
+            {visibleTickets.length} chamados na p√°gina {page}
           </p>
         </div>
         <Button onClick={() => setModalOpen(true)}>
@@ -900,10 +900,10 @@ export default function TicketList() {
           <div>
             <div className="flex items-center gap-2">
               <Filter className="h-4 w-4 text-muted" />
-              <h2 className="text-lg font-semibold text-foreground">Filtros e visıes salvas</h2>
+              <h2 className="text-lg font-semibold text-foreground">Filtros e vis√µes salvas</h2>
             </div>
             <p className="mt-1 text-sm text-muted">
-              Ajuste a fila com os filtros abaixo e salve combinaÁıes para reaplicar em um clique.
+              Ajuste a fila com os filtros abaixo e salve combina√ß√µes para reaplicar em um clique.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -918,7 +918,7 @@ export default function TicketList() {
               aria-expanded={savedViewsExpanded}
             >
               <Bookmark className="h-4 w-4" />
-              {savedViewsExpanded ? 'Ocultar visoes salvas' : `Ver visoes salvas (${savedViews.length})`}
+              {savedViewsExpanded ? 'Ocultar vis√µes salvas' : `Ver vis√µes salvas (${savedViews.length})`}
               {savedViewsExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
             </Button>
           </div>
@@ -933,7 +933,7 @@ export default function TicketList() {
                 setActiveSavedViewId(null);
                 setFilterText(event.target.value);
               }}
-              placeholder="TÌtulo, descriÁ„o ou termo livre"
+              placeholder="T√≠tulo, descri√ß√£o ou termo livre"
             />
           </div>
           <Select
@@ -946,7 +946,7 @@ export default function TicketList() {
             }}
           />
           <Select
-            label="SituaÁ„o"
+            label="Situa√ß√£o"
             options={STATUS_OPTIONS}
             value={filterStatus}
             onChange={(event) => {
@@ -964,7 +964,7 @@ export default function TicketList() {
             aria-expanded={advancedFiltersExpanded}
           >
             <Filter className="h-4 w-4" />
-            Filtros avanÁados
+            Filtros avan√ßados
             {advancedFiltersActiveCount > 0 && <Badge color="accent">{advancedFiltersActiveCount}</Badge>}
             {advancedFiltersExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
           </Button>
@@ -1004,7 +1004,7 @@ export default function TicketList() {
           )}
 
           {!savedViewsQuery.isLoading && !savedViewsQuery.isError && savedViews.length === 0 && (
-            <p className="text-sm text-muted">Nenhuma vis„o salva disponÌvel.</p>
+            <p className="text-sm text-muted">Nenhuma vis√£o salva dispon√≠vel.</p>
           )}
         </div>
 
@@ -1013,7 +1013,7 @@ export default function TicketList() {
         ) : savedViewsQuery.isError ? (
           <div className="mt-4 flex items-center gap-3 rounded-xl border border-border bg-surface-light px-4 py-3">
             <AlertTriangle className="h-4 w-4 text-danger" />
-            <p className="text-sm text-muted">N„o foi possÌvel carregar as visıes salvas.</p>
+            <p className="text-sm text-muted">N√£o foi poss√≠vel carregar as vis√µes salvas.</p>
             <Button size="sm" variant="ghost" onClick={() => savedViewsQuery.refetch()}>
               Tentar novamente
             </Button>
@@ -1023,7 +1023,7 @@ export default function TicketList() {
             <div className="mb-3 flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <Bookmark className="h-4 w-4 text-muted" />
-                <h3 className="text-sm font-semibold text-foreground">Visıes salvas</h3>
+                <h3 className="text-sm font-semibold text-foreground">Vis√µes salvas</h3>
               </div>
               <Badge color="slate">{savedViews.length}</Badge>
             </div>
@@ -1168,7 +1168,7 @@ export default function TicketList() {
           </div>
 
           <Select
-            label="Novo respons·vel"
+            label="Novo respons√°vel"
             options={assignUserOptions}
             value={assignTargetUserId}
             onChange={(event) => setAssignTargetUserId(event.target.value)}
@@ -1403,9 +1403,9 @@ function CreateTicketModal({ open, onClose }: { open: boolean; onClose: () => vo
           <Select label="Departamento" options={deptOpts} value={selectedDept} onChange={(event) => handleDeptChange(event.target.value)} disabled={!selectedClient} />
           <Select label="Perfil de Workflow" options={profileOpts} value={form.workflowProfileId ?? ''} onChange={(event) => set('workflowProfileId', event.target.value || null)} disabled={!selectedDept} />
         </div>
-        <Input label="TÌtulo *" value={form.title} onChange={(event) => set('title', event.target.value)} placeholder="Min. 3 caracteres" />
+        <Input label="T√≠tulo *" value={form.title} onChange={(event) => set('title', event.target.value)} placeholder="Min. 3 caracteres" />
         <div>
-          <label className="mb-1 block text-sm font-medium text-muted-foreground">DescriÁ„o *</label>
+          <label className="mb-1 block text-sm font-medium text-muted-foreground">Descri√ß√£o *</label>
           <textarea
             className="w-full resize-none rounded-lg border border-border bg-surface-light px-3 py-2 text-sm text-foreground placeholder-muted focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
             rows={4}
@@ -1471,7 +1471,7 @@ function TicketSchemaFieldInput({
           options={[
             { value: '', label: 'Selecione...' },
             { value: 'true', label: 'Sim' },
-            { value: 'false', label: 'N„o' },
+            { value: 'false', label: 'N√£o' },
           ]}
           onChange={(e) => onChange(e.target.value)}
         />
@@ -1494,7 +1494,7 @@ function TicketSchemaFieldInput({
           label={label}
           rows={2}
           value={value}
-          hint={field.options.length > 0 ? `OpÁıes: ${field.options.join(', ')}` : 'Valores separados por vÌrgula'}
+          hint={field.options.length > 0 ? `Op√ß√µes: ${field.options.join(', ')}` : 'Valores separados por v√≠rgula'}
           onChange={(e) => onChange(e.target.value)}
         />
       );

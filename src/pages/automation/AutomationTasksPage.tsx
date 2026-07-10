@@ -424,7 +424,7 @@ export default function AutomationTasksPage() {
   const handleConfirmRestore = () => {
     if (!restoreTask) return;
     if (restoreConfirmationText.trim().toLowerCase() !== "yes") {
-      toast.error('Digite "yes" para confirmar a reativa��o');
+      toast.error('Digite "yes" para confirmar a reativação');
       return;
     }
 
@@ -476,13 +476,13 @@ export default function AutomationTasksPage() {
         render: (item) => (
           <div>
             <p className="font-medium text-foreground">{item.name}</p>
-            <p className="text-xs text-muted">{item.description || "Sem descri��o"}</p>
+            <p className="text-xs text-muted">{item.description || "Sem descrição"}</p>
           </div>
         ),
       },
       {
         key: "action",
-        header: "A��o",
+        header: "Ação",
         render: (item) => <Badge color="primary">{actionLabel(item.actionType)}</Badge>,
       },
       {
@@ -497,10 +497,10 @@ export default function AutomationTasksPage() {
       },
       {
         key: "approval",
-        header: "Aprova��o",
+        header: "Aprovação",
         render: (item) => (
           <Badge color={item.requiresApproval ? "warning" : "slate"}>
-            {item.requiresApproval ? "Requer" : "Nao"}
+            {item.requiresApproval ? "Requer" : "Não"}
           </Badge>
         ),
       },
@@ -523,7 +523,7 @@ export default function AutomationTasksPage() {
       },
       {
         key: "actions",
-        header: "A��es",
+        header: "Ações",
         render: (item) => {
           const deleted = isTaskDeleted(item);
           return (
@@ -723,7 +723,7 @@ export default function AutomationTasksPage() {
   const handleSubmit = () => {
     const name = form.name.trim();
     if (!name) return toast.error("Nome obrigatorio");
-    if (name.length > 200) return toast.error("Nome deve ter no m�ximo 200 caracteres");
+    if (name.length > 200) return toast.error("Nome deve ter no máximo 200 caracteres");
 
     const triggerCount = [
       form.triggerImmediate,
@@ -742,7 +742,7 @@ export default function AutomationTasksPage() {
     }
 
     if (scopeType !== AppApprovalScopeType.Global && !form.scopeId.trim()) {
-      return toast.error("ScopeId obrigat�rio para escopos n�o globais");
+      return toast.error("ScopeId obrigatório para escopos não globais");
     }
 
     if (
@@ -752,7 +752,7 @@ export default function AutomationTasksPage() {
         actionType === AutomationTaskActionType.UpdateOrInstallPackage) &&
       !form.packageId.trim()
     ) {
-      return toast.error("PackageId obrigatorio para esta a��o");
+      return toast.error("PackageId obrigatorio para esta ação");
     }
 
     if (actionType === AutomationTaskActionType.RunScript && !form.scriptId) {
@@ -852,7 +852,7 @@ export default function AutomationTasksPage() {
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Tarefas de Automa��o</h1>
+          <h1 className="text-2xl font-bold text-foreground">Tarefas de Automação</h1>
           <p className="text-sm text-muted">Regras operacionais por escopo.</p>
         </div>
         <Button
@@ -873,16 +873,16 @@ export default function AutomationTasksPage() {
       </div>
 
       <Card>
-        <CardHeader title="Filtros" subtitle="Busca r�pida, escopo e filtros avan�ados" />
+        <CardHeader title="Filtros" subtitle="Busca rápida, escopo e filtros avançados" />
         <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-          <p className="text-xs text-muted">Use o modo simples para a maioria dos casos e abra o avan�ado para filtros combinados.</p>
+          <p className="text-xs text-muted">Use o modo simples para a maioria dos casos e abra o avançado para filtros combinados.</p>
           <Button
             type="button"
             size="sm"
             variant="secondary"
             onClick={() => setShowAdvancedFilters((prev) => !prev)}
           >
-            {showAdvancedFilters ? "Ocultar filtro avan�ado" : "Mostrar filtro avan�ado"}
+            {showAdvancedFilters ? "Ocultar filtro avançado" : "Mostrar filtro avançado"}
           </Button>
         </div>
 
@@ -890,7 +890,7 @@ export default function AutomationTasksPage() {
           <Input
             label="Busca"
             value={searchFilter}
-            placeholder="Nome, descri��o, packageId ou comando"
+            placeholder="Nome, descrição, packageId ou comando"
             onChange={(e) => {
               setSearchFilter(e.target.value);
               resetPagination();
@@ -1031,7 +1031,7 @@ export default function AutomationTasksPage() {
 
         {scopeTypeFilter === String(AppApprovalScopeType.Global) && (
           <div className="mt-3 rounded-lg border border-border bg-surface-light px-3 py-2 text-sm text-muted">
-            Escopo global n�o exige ScopeId.
+            Escopo global não exige ScopeId.
           </div>
         )}
 
@@ -1071,7 +1071,7 @@ export default function AutomationTasksPage() {
                 }}
               />
               <Select
-                label="Tipo de a��o"
+                label="Tipo de ação"
                 options={actionFilterOptions}
                 value={filterActionType}
                 onChange={(e) => {
@@ -1194,7 +1194,7 @@ export default function AutomationTasksPage() {
             onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
           />
           <Input
-            label="Descri��o"
+            label="Descrição"
             value={form.description}
             onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
           />
@@ -1483,7 +1483,7 @@ export default function AutomationTasksPage() {
                     ? "bg-primary-600 text-foreground"
                     : "text-muted hover:text-foreground hover:bg-surface-hover"
                 }`}
-                title="Visualiza��o em lista"
+                title="Visualização em lista"
               >
                 <List className="h-4 w-4" />
               </button>
@@ -1495,14 +1495,14 @@ export default function AutomationTasksPage() {
                     ? "bg-primary-600 text-foreground"
                     : "text-muted hover:text-foreground hover:bg-surface-hover"
                 }`}
-                title="Visualiza��o em cards"
+                title="Visualização em cards"
               >
                 <LayoutGrid className="h-4 w-4" />
               </button>
             </div>
           </div>
 
-          {packageCatalog.isLoading && <Loading message="Carregando cat�logo..." />}
+          {packageCatalog.isLoading && <Loading message="Carregando catálogo..." />}
           {packageCatalog.isError && <ErrorDisplay onRetry={() => packageCatalog.refetch()} />}
 
           {!packageCatalog.isLoading && !packageCatalog.isError && (
@@ -1677,7 +1677,7 @@ export default function AutomationTasksPage() {
           const detailIsDeleted = isTaskDeleted(d);
           return (
             <div className="space-y-4">
-              {/* Cabe�alho */}
+              {/* Cabeçalho */}
               <div className="flex items-start gap-3">
                 <div className="flex-1 space-y-1">
                   <h3 className="text-lg font-semibold text-foreground">{d.name}</h3>
@@ -1687,14 +1687,14 @@ export default function AutomationTasksPage() {
                   <Badge color={detailIsDeleted ? "danger" : d.isActive ? "success" : "slate"}>
                     {detailIsDeleted ? "Excluida" : d.isActive ? "Ativa" : "Inativa"}
                   </Badge>
-                  <Badge color={d.requiresApproval ? "warning" : "slate"}>{d.requiresApproval ? "Requer aprova��o" : "Auto"}</Badge>
+                  <Badge color={d.requiresApproval ? "warning" : "slate"}>{d.requiresApproval ? "Requer aprovação" : "Auto"}</Badge>
                 </div>
               </div>
 
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {/* A��o */}
+                {/* Ação */}
                 <div className="rounded-lg bg-surface-light border border-border p-3">
-                  <p className="text-xs text-muted mb-1">A��o</p>
+                  <p className="text-xs text-muted mb-1">Ação</p>
                   <Badge color="primary">{actionLabel(d.actionType)}</Badge>
                   {d.installationType !== null && d.installationType !== undefined && (
                     <p className="text-xs text-muted mt-1">{d.installationType === 0 ? "Winget" : d.installationType === 1 ? "Chocolatey" : "Custom"}</p>
@@ -1855,12 +1855,12 @@ export default function AutomationTasksPage() {
       >
         <div className="space-y-4">
           <div className="rounded-lg border border-danger/30 bg-danger/10 p-3 text-sm text-foreground">
-            <p>Voc� est� prestes a excluir a tarefa <span className="font-semibold text-foreground">{deleteTask?.name}</span>.</p>
+            <p>Você está prestes a excluir a tarefa <span className="font-semibold text-foreground">{deleteTask?.name}</span>.</p>
             <p className="mt-1 text-muted">Digite <span className="font-semibold text-foreground">yes</span> para confirmar.</p>
           </div>
 
           <Input
-            label="Confirma��o"
+            label="Confirmação"
              value={deleteConfirmationText}
             onChange={(e) => setDeleteConfirmationText(e.target.value)}
             placeholder="Digite yes"
@@ -1887,17 +1887,17 @@ export default function AutomationTasksPage() {
       <Modal
         open={!!restoreTask}
         onClose={closeRestoreModal}
-        title="Confirmar reativa��o"
+        title="Confirmar reativação"
         maxWidth="max-w-lg"
       >
         <div className="space-y-4">
           <div className="rounded-lg border border-primary/30 bg-primary/10 p-3 text-sm text-foreground">
-            <p>Voc� est� prestes a reativar a tarefa <span className="font-semibold text-foreground">{restoreTask?.name}</span>.</p>
+            <p>Você está prestes a reativar a tarefa <span className="font-semibold text-foreground">{restoreTask?.name}</span>.</p>
             <p className="mt-1 text-muted">Digite <span className="font-semibold text-foreground">yes</span> para confirmar.</p>
           </div>
 
           <Input
-            label="Confirma��o"
+            label="Confirmação"
              value={restoreConfirmationText}
             onChange={(e) => setRestoreConfirmationText(e.target.value)}
             placeholder="Digite yes"

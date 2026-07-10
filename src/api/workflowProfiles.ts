@@ -5,7 +5,7 @@ import type {
   UpdateWorkflowProfileRequest,
 } from "./types";
 
-const BASE = "/api/v1/workflowprofiles";
+const BASE = "/api/v1/workflow-profiles";
 
 export const workflowProfilesApi = {
   listGlobal: () => api.get<WorkflowProfile[]>(`${BASE}/global`),

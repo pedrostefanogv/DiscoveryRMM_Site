@@ -6,7 +6,10 @@ import {
   type CreateCustomFieldDefinitionRequest,
   type UpdateCustomFieldDefinitionRequest,
   type UpsertCustomFieldValueRequest,
+  type CustomFieldDefinition,
+  type CustomFieldValueItem,
 } from "@/api/custom-fields";
+import type { CursorPageDto } from "@/api";
 
 const KEYS = {
   all: ["customFields"] as const,
@@ -29,6 +32,11 @@ const KEYS = {
     ] as const,
 };
 
+function normalizeArray<T>(data: CursorPageDto<T> | T[]): T[] {
+  if (Array.isArray(data)) return data;
+  return (data as CursorPageDto<T>).items ?? [];
+}
+
 export function useCustomFieldDefinitions(params?: {
   scopeType?: CustomFieldScopeType;
   includeInactive?: boolean;
@@ -36,6 +44,10 @@ export function useCustomFieldDefinitions(params?: {
   return useQuery({
     queryKey: KEYS.definitions(params),
     queryFn: () => customFieldsApi.listDefinitions(params),
+    select: (data) =>
+      normalizeArray(
+        data as CursorPageDto<CustomFieldDefinition> | CustomFieldDefinition[],
+      ),
   });
 }
 
@@ -90,6 +102,10 @@ export function useCustomFieldValues(
     queryKey: KEYS.values(scopeType, params),
     queryFn: () => customFieldsApi.getScopedValues(scopeType, params),
     enabled,
+    select: (data) =>
+      normalizeArray(
+        data as CursorPageDto<CustomFieldValueItem> | CustomFieldValueItem[],
+      ),
   });
 }
 

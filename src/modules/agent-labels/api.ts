@@ -41,12 +41,16 @@ async function toJson<T>(res: Response): Promise<T> {
 
 export const agentLabelsApi = {
   async getAgentLabels(agentId: string): Promise<AgentLabel[]> {
-    const raw = await api.get<Array<Record<string, unknown>>>(`${BASE}/agents/${agentId}`);
+    const raw = await api.get<Array<Record<string, unknown>>>(
+      `${BASE}/agents/${agentId}`,
+    );
     return raw.map((item) => ({
       id: String(item.id ?? ""),
       agentId: String(item.agentId ?? item.AgentId ?? agentId),
       label: String(item.label ?? ""),
-      sourceType: normalizeAgentLabelSourceType(item.sourceType ?? item.SourceType),
+      sourceType: normalizeAgentLabelSourceType(
+        item.sourceType ?? item.SourceType,
+      ),
       createdAt: String(item.createdAt ?? item.CreatedAt ?? ""),
       updatedAt: String(item.updatedAt ?? item.UpdatedAt ?? ""),
     }));
@@ -57,7 +61,10 @@ export const agentLabelsApi = {
   },
 
   async addManualLabel(agentId: string, label: string): Promise<AgentLabel> {
-    const raw = await api.post<Record<string, unknown>>(`${BASE}/manual`, { agentId, label });
+    const raw = await api.post<Record<string, unknown>>(`${BASE}/manual`, {
+      agentId,
+      label,
+    });
     return {
       id: String(raw.id ?? ""),
       agentId: String(raw.agentId ?? agentId),
@@ -73,10 +80,22 @@ export const agentLabelsApi = {
   },
 
   async getRules(includeDisabled = true): Promise<AgentLabelRuleResponse[]> {
-    const raw = await api.get<Array<Record<string, unknown>>>(`${BASE}/rules`, {
+    const raw = await api.get<unknown>(`${BASE}/rules`, {
       includeDisabled,
     });
-    return raw.map(normalizeRuleResponse);
+    if (Array.isArray(raw)) {
+      return (raw as Array<Record<string, unknown>>).map(normalizeRuleResponse);
+    }
+    if (
+      raw &&
+      typeof raw === "object" &&
+      Array.isArray((raw as Record<string, unknown>).items)
+    ) {
+      return (
+        (raw as Record<string, unknown>).items as Array<Record<string, unknown>>
+      ).map(normalizeRuleResponse);
+    }
+    return [];
   },
 
   async getRuleAgents(ruleId: string): Promise<AgentLabelRuleAgentsResponse> {
@@ -116,7 +135,10 @@ export const agentLabelsApi = {
   async createRule(
     payload: CreateAgentLabelRuleRequest,
   ): Promise<AgentLabelRuleResponse> {
-    const raw = await api.post<Record<string, unknown>>(`${BASE}/rules`, payload);
+    const raw = await api.post<Record<string, unknown>>(
+      `${BASE}/rules`,
+      payload,
+    );
     return normalizeRuleResponse(raw);
   },
 
@@ -124,7 +146,10 @@ export const agentLabelsApi = {
     id: string,
     payload: UpdateAgentLabelRuleRequest,
   ): Promise<AgentLabelRuleResponse> {
-    const raw = await api.put<Record<string, unknown>>(`${BASE}/rules/${id}`, payload);
+    const raw = await api.put<Record<string, unknown>>(
+      `${BASE}/rules/${id}`,
+      payload,
+    );
     return normalizeRuleResponse(raw);
   },
 
@@ -146,19 +171,52 @@ export const agentLabelsApi = {
   },
 
   async getAvailableCustomFields(): Promise<AgentLabelAvailableCustomField[]> {
-    const raw = await api.get<Array<Record<string, unknown>>>(`${BASE}/rules/available-custom-fields`);
-    return raw.map((item) => ({
-      id: String(item.id ?? ""),
-      name: String(item.name ?? ""),
-      label: String(item.label ?? item.name ?? ""),
-      description:
-        item.description === null || item.description === undefined
-          ? null
-          : String(item.description),
-      scopeType: Number(item.scopeType ?? item.ScopeType ?? 3) as 1 | 2 | 3,
-      dataType: Number(item.dataType ?? item.DataType ?? 0),
-      options: normalizeStringArray(item.options ?? item.Options ?? item.allowedValues ?? item.AllowedValues),
-    }));
+    const raw = await api.get<unknown>(`${BASE}/rules/available-custom-fields`);
+    if (Array.isArray(raw)) {
+      return (raw as Array<Record<string, unknown>>).map((item) => ({
+        id: String(item.id ?? ""),
+        name: String(item.name ?? ""),
+        label: String(item.label ?? item.name ?? ""),
+        description:
+          item.description === null || item.description === undefined
+            ? null
+            : String(item.description),
+        scopeType: Number(item.scopeType ?? item.ScopeType ?? 3) as 1 | 2 | 3,
+        dataType: Number(item.dataType ?? item.DataType ?? 0),
+        options: normalizeStringArray(
+          item.options ??
+            item.Options ??
+            item.allowedValues ??
+            item.AllowedValues,
+        ),
+      }));
+    }
+    if (
+      raw &&
+      typeof raw === "object" &&
+      Array.isArray((raw as Record<string, unknown>).items)
+    ) {
+      return (
+        (raw as Record<string, unknown>).items as Array<Record<string, unknown>>
+      ).map((item) => ({
+        id: String(item.id ?? ""),
+        name: String(item.name ?? ""),
+        label: String(item.label ?? item.name ?? ""),
+        description:
+          item.description === null || item.description === undefined
+            ? null
+            : String(item.description),
+        scopeType: Number(item.scopeType ?? item.ScopeType ?? 3) as 1 | 2 | 3,
+        dataType: Number(item.dataType ?? item.DataType ?? 0),
+        options: normalizeStringArray(
+          item.options ??
+            item.Options ??
+            item.allowedValues ??
+            item.AllowedValues,
+        ),
+      }));
+    }
+    return [];
   },
 };
 
@@ -167,12 +225,17 @@ function normalizeStringArray(value: unknown): string[] {
     return value.map((item) => String(item ?? "")).filter(Boolean);
   }
   if (typeof value === "string") {
-    return value.split(",").map((item) => item.trim()).filter(Boolean);
+    return value
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
   }
   return [];
 }
 
-function normalizeRuleResponse(raw: Record<string, unknown>): AgentLabelRuleResponse {
+function normalizeRuleResponse(
+  raw: Record<string, unknown>,
+): AgentLabelRuleResponse {
   return {
     id: String(raw.id ?? raw.ruleId ?? ""),
     name: String(raw.name ?? ""),
@@ -189,18 +252,23 @@ function normalizeRuleResponse(raw: Record<string, unknown>): AgentLabelRuleResp
   };
 }
 
-function normalizeExpressionNode(input: unknown): import("./types").AgentLabelRuleExpressionNodeDto {
+function normalizeExpressionNode(
+  input: unknown,
+): import("./types").AgentLabelRuleExpressionNodeDto {
   const raw = (input ?? {}) as Record<string, unknown>;
   const nodeType = normalizeAgentLabelNodeType(raw.nodeType ?? raw.NodeType);
   const childrenRaw = raw.children ?? raw.Children;
-  const isContainer = nodeType === AgentLabelNodeType.Group || nodeType === AgentLabelNodeType.DiskGroup;
+  const isContainer =
+    nodeType === AgentLabelNodeType.Group ||
+    nodeType === AgentLabelNodeType.DiskGroup;
 
   return {
     nodeType,
-    logicalOperator:
-      isContainer
-        ? normalizeAgentLabelLogicalOperator(raw.logicalOperator ?? raw.LogicalOperator)
-        : null,
+    logicalOperator: isContainer
+      ? normalizeAgentLabelLogicalOperator(
+          raw.logicalOperator ?? raw.LogicalOperator,
+        )
+      : null,
     children: Array.isArray(childrenRaw)
       ? childrenRaw.map((child) => normalizeExpressionNode(child))
       : [],
@@ -209,9 +277,12 @@ function normalizeExpressionNode(input: unknown): import("./types").AgentLabelRu
         ? normalizeAgentLabelField(raw.field ?? raw.Field)
         : null,
     customFieldDefinitionId:
-      raw.customFieldDefinitionId === null || raw.CustomFieldDefinitionId === null
+      raw.customFieldDefinitionId === null ||
+      raw.CustomFieldDefinitionId === null
         ? null
-        : String(raw.customFieldDefinitionId ?? raw.CustomFieldDefinitionId ?? "") || null,
+        : String(
+            raw.customFieldDefinitionId ?? raw.CustomFieldDefinitionId ?? "",
+          ) || null,
     operator:
       nodeType === AgentLabelNodeType.Condition
         ? normalizeAgentLabelComparisonOperator(raw.operator ?? raw.Operator)
