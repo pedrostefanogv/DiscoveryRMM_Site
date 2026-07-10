@@ -275,7 +275,7 @@ export interface SoftwareInventoryCatalogItem {
   name: string;
   publisher: string | null;
   source: string | null;
-  installedCount: number;
+  installedCount: number | null;
   firstSeenAt: string | null;
   lastCollectedAt: string | null;
   lastSeenAt: string | null;
@@ -285,7 +285,6 @@ export interface SoftwareInventoryCatalogItem {
 export interface SoftwareInventoryCatalogPage {
   items: SoftwareInventoryCatalogItem[];
   nextCursor: string | null;
-  hasMore: boolean;
 }
 
 export interface AgentSoftwareInventorySnapshot {

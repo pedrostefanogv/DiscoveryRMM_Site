@@ -166,13 +166,13 @@ export function LiveMarkdownPreview({ wizard }: Props) {
           <button
             onClick={() => setMode("structure")}
             className={`rounded-md px-2 py-1 text-xs font-medium transition-colors ${
-              mode === "structure" ? "bg-primary text-foreground" : "text-muted hover:text-foreground"
+              mode === "structure" ? "bg-primary text-white" : "text-muted hover:text-foreground"
             }`}
           >📐 Estrutura</button>
           <button
             onClick={() => setMode("data")}
             className={`rounded-md px-2 py-1 text-xs font-medium transition-colors ${
-              mode === "data" ? "bg-primary text-foreground" : "text-muted hover:text-foreground"
+              mode === "data" ? "bg-primary text-white" : "text-muted hover:text-foreground"
             }`}
             disabled={!hasColumns}
           >📊 Dados</button>

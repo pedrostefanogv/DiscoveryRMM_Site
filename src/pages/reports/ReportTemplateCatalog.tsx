@@ -146,7 +146,7 @@ export function ReportTemplateCatalog() {
               onClick={() => setFilter(value as "all" | "builtin")}
               className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
                 filter === value
-                  ? "bg-primary text-foreground"
+                  ? "bg-primary text-white"
                   : "text-muted hover:text-foreground"
               }`}
             >

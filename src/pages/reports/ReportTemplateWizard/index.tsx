@@ -68,7 +68,7 @@ export function ReportTemplateWizard({ initialTemplate }: Props) {
               onClick={() => setStep(i)}
               className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
                 i === step
-                  ? "bg-primary text-foreground"
+                  ? "bg-primary text-white"
                   : i < step
                     ? "bg-primary/20 text-primary"
                     : "bg-surface-light text-muted"
@@ -77,9 +77,9 @@ export function ReportTemplateWizard({ initialTemplate }: Props) {
               <span
                 className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold ${
                   i === step
-                    ? "bg-white/20 text-foreground"
+                    ? "bg-white/20 text-white"
                     : i < step
-                      ? "bg-primary text-foreground"
+                      ? "bg-primary text-white"
                       : "bg-surface-hover text-muted"
                 }`}
               >

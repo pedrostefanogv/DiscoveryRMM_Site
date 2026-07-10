@@ -115,7 +115,7 @@ export default function SoftwareInventory() {
   }, [pag.page, estimatedTotalPages]);
 
   const canPrev = pag.page > 1 && !list.isFetching;
-  const canNext = Boolean(list.data?.hasMore && list.data?.nextCursor) && !list.isFetching;
+  const canNext = Boolean(list.data?.nextCursor) && !list.isFetching;
 
   const scopeOptions = [
     { value: "global", label: "Global" },
@@ -159,7 +159,7 @@ export default function SoftwareInventory() {
       key: "installedCount",
       header: "Instalado em",
       className: "font-mono",
-      render: (item) => `${item.installedCount} agent(s)`,
+      render: (item) => item.installedCount != null ? `${item.installedCount} agent(s)` : "\u2014",
     },
     {
       key: "source",

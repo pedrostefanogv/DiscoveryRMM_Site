@@ -193,7 +193,7 @@ export default function SiteDetail() {
                 className={[
                   'rounded-lg px-3 py-1.5 text-sm transition-colors',
                   active
-                    ? 'bg-primary text-foreground shadow-sm'
+                    ? 'bg-primary text-white shadow-sm'
                     : 'text-muted hover:text-foreground',
                 ].join(' ')}
               >

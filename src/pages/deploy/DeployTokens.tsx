@@ -593,14 +593,14 @@ export default function DeployTokens() {
         <button
           type="button"
           onClick={() => setActiveTab('create')}
-          className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${activeTab === 'create' ? 'bg-primary text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+          className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${activeTab === 'create' ? 'bg-primary text-white' : 'text-muted-foreground hover:text-foreground'}`}
         >
           Criar token
         </button>
         <button
           type="button"
           onClick={() => setActiveTab('manage')}
-          className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${activeTab === 'manage' ? 'bg-primary text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+          className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${activeTab === 'manage' ? 'bg-primary text-white' : 'text-muted-foreground hover:text-foreground'}`}
         >
           Gerenciar tokens
         </button>
