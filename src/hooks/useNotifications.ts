@@ -325,6 +325,27 @@ export function useNotifications(options?: {
     }
   }, [notifications, queryClient, queryKey, recipientUserId]);
 
+  const deleteNotification = useCallback(
+    async (notificationId: string) => {
+      if (!recipientUserId) return;
+
+      const previous = queryClient.getQueryData<AppNotification[]>(queryKey);
+      queryClient.setQueryData<AppNotification[]>(queryKey, (current) =>
+        (current ?? []).filter((item) => item.id !== notificationId),
+      );
+
+      try {
+        await notificationsApi.delete(notificationId, {
+          userId: recipientUserId,
+        });
+      } catch (error) {
+        queryClient.setQueryData(queryKey, previous);
+        throw error;
+      }
+    },
+    [queryClient, queryKey, recipientUserId],
+  );
+
   return {
     ...query,
     notifications,
@@ -332,5 +353,6 @@ export function useNotifications(options?: {
     recipientUserId,
     markAsRead,
     markAllAsRead,
+    deleteNotification,
   };
 }

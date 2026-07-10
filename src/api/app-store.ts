@@ -120,7 +120,7 @@ function normalizeCatalogPage(
     cursor: page.cursor ?? null,
     nextCursor: page.nextCursor ?? null,
     limit: page.limit,
-    hasMore: Boolean(page.hasMore),
+    hasMore: Boolean(page.hasMore) || Boolean(page.nextCursor),
     search: page.search ?? null,
     architecture: page.architecture ?? null,
     items: (page.items ?? []).map((item) =>

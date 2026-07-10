@@ -51,7 +51,6 @@ function parseNavigationTarget(payloadJson: string | null | undefined): Navigati
 export function NotificationBell() {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
-  const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
   const {
     notifications,
     unreadCount,
@@ -59,14 +58,13 @@ export function NotificationBell() {
     isFetching,
     markAsRead,
     markAllAsRead,
+    deleteNotification,
     refetch,
   } = useNotifications({ limit: 50 });
 
   const visibleList = useMemo(
-    () => notifications
-      .filter(item => !dismissedIds.has(item.id))
-      .slice(0, 20),
-    [notifications, dismissedIds],
+    () => notifications.slice(0, 20),
+    [notifications],
   );
 
   const handleNotificationClick = async (item: AppNotification) => {
@@ -92,7 +90,7 @@ export function NotificationBell() {
     }
   };
 
-  const handleDismissReadAll = () => {
+  const handleDismissReadAll = async () => {
     const readIds = notifications
       .filter(item => item.isRead)
       .map(item => item.id);
@@ -102,20 +100,20 @@ export function NotificationBell() {
       return;
     }
 
-    setDismissedIds(prev => {
-      const next = new Set(prev);
-      readIds.forEach(id => next.add(id));
-      return next;
-    });
-    toast.success(`${readIds.length} notificação(ns) lida(s) removida(s).`);
+    try {
+      await Promise.all(readIds.map(id => deleteNotification(id)));
+      toast.success(`${readIds.length} notificação(ns) excluída(s).`);
+    } catch {
+      toast.error("Erro ao excluir notificações.");
+    }
   };
 
-  const handleDismissNotification = (notificationId: string) => {
-    setDismissedIds(prev => {
-      const next = new Set(prev);
-      next.add(notificationId);
-      return next;
-    });
+  const handleDismissNotification = async (notificationId: string) => {
+    try {
+      await deleteNotification(notificationId);
+    } catch {
+      toast.error("Erro ao excluir notificação.");
+    }
   };
 
   return (
