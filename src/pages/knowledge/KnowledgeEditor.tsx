@@ -16,6 +16,7 @@ import {
 } from '@/components/ui';
 import { useClients, useCreateKnowledgeArticle, useDepartments, useKnowledgeArticle, useKnowledgeArticleVersions, usePublishKnowledgeArticle, useSites, useUpdateKnowledgeArticle } from '@/hooks';
 import type { ArticleStatus, ArticleVersion, CreateKnowledgeArticleRequest, PublishArticleRequest, UpdateKnowledgeArticleRequest } from '@/api';
+import { useTheme } from '@/theme/ThemeContext';
 import toast from 'react-hot-toast';
 
 type FormState = {
@@ -57,6 +58,7 @@ export default function KnowledgeEditor() {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const isEdit = !!id;
+  const { mode } = useTheme();
 
   const [form, setForm] = useState<FormState>({
     title: '',
@@ -246,24 +248,13 @@ export default function KnowledgeEditor() {
               placeholder="Ex.: Como resetar senha do AD"
             />
 
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid gap-4 md:grid-cols-1">
               <Input
                 label="Categoria"
                 value={form.category}
                 onChange={(event) => setField('category', event.target.value)}
                 placeholder="Ex.: Active Directory"
               />
-              <div>
-                <label className="mb-1.5 block text-sm font-medium text-muted-foreground">Autor (criador)</label>
-                <div className="rounded-xl border border-border bg-background/60 px-3 py-2 text-sm text-muted-foreground">
-                  {isEdit
-                    ? (detailQuery.data?.createdBy ?? 'Não informado')
-                    : 'Definido automaticamente pelo usuário logado'}
-                </div>
-                <p className="mt-1 text-xs text-muted">
-                  O backend define automaticamente o autor original no momento da criação.
-                </p>
-              </div>
             </div>
 
             <Input
@@ -417,7 +408,7 @@ export default function KnowledgeEditor() {
             <div>
               <label className="mb-1.5 block text-sm font-medium text-muted-foreground">Markdown</label>
               <div
-                data-color-mode="dark"
+                data-color-mode={mode}
                 className="overflow-hidden rounded-xl border border-border bg-background"
               >
                 <MDEditor

@@ -2,10 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import {
   ArrowLeft,
   Building2,
-  ChevronRight,
   Copy,
   Globe,
-  ListTodo,
   Settings,
   Trash2,
 } from "lucide-react";
@@ -144,31 +142,17 @@ export default function DepartmentDetailPage() {
     }
   }
 
+  const scopedTo = department.clientId
+    ? `Cliente: ${clientName ?? "—"}`
+    : "Global — visível para todos os clientes";
+  const statusText = department.isActive ? "Ativo" : "Inativo";
+  const desc = `${scopedTo} · ${statusText} · Ordem #${department.sortOrder}`;
+
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
-        <button
-          type="button"
-          onClick={() => navigate("/tickets")}
-          className="transition-colors hover:text-muted-foreground"
-        >
-          Suporte
-        </button>
-        <ChevronRight className="h-3.5 w-3.5" />
-        <button
-          type="button"
-          onClick={() => navigate("/tickets/departments")}
-          className="transition-colors hover:text-muted-foreground"
-        >
-          Departamentos
-        </button>
-        <ChevronRight className="h-3.5 w-3.5" />
-        <span className="font-medium text-muted-foreground">{department.name}</span>
-      </div>
-
       <PageHeader
         title={department.name}
-        description="Detalhes do departamento com URL direta para consulta e configuração."
+        description={desc}
       >
         <Button variant="ghost" onClick={() => navigate("/tickets/departments")}>
           <ArrowLeft className="h-4 w-4" />
@@ -180,7 +164,7 @@ export default function DepartmentDetailPage() {
         </Button>
       </PageHeader>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <StatCard
           icon={department.clientId ? Building2 : Globe}
           label="Escopo"
@@ -198,12 +182,6 @@ export default function DepartmentDetailPage() {
           label="Status"
           value={department.isActive ? "Ativo" : "Inativo"}
           tone={department.isActive ? "success" : "warning"}
-        />
-        <StatCard
-          icon={ListTodo}
-          label="Identificador"
-          value={department.id.slice(0, 8)}
-          tone="primary"
         />
       </div>
 

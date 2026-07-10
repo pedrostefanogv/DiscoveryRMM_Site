@@ -131,7 +131,7 @@ export default function Dashboard() {
               onClick={() => setWindow(w.value)}
               className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
                 window === w.value
-                  ? 'bg-primary text-foreground'
+                  ? 'bg-primary/20 text-primary'
                   : 'text-muted hover:text-foreground'
               }`}
             >
