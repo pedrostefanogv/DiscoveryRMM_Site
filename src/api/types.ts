@@ -263,13 +263,11 @@ export type AgentSoftwareOrder = "asc" | "desc";
 
 export interface AgentSoftwareInventoryPage {
   items: AgentSoftwareInventoryItem[];
-  count: number;
+  returnedItems: number;
   cursor: string | null;
   nextCursor: string | null;
   hasMore: boolean;
   limit: number;
-  search: string | null;
-  order: AgentSoftwareOrder;
 }
 
 export interface SoftwareInventoryCatalogItem {

@@ -155,6 +155,11 @@ export function useAgentSoftware(
         order: safeOrder,
       }),
     enabled: !!id,
+    select: (data) => ({
+      items: Array.isArray(data?.items) ? data.items : [],
+      totalInstalled: data?.returnedItems ?? 0,
+      hasMore: data?.hasMore ?? false,
+    }),
   });
 }
 

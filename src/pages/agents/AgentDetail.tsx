@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getDeleteAgentErrorMessage, useAgent, useAgentHardware, useAgentSoftware, useAgentSoftwareSnapshot, useApproveZeroTouch, useDeleteAgent, useRestartAgent, useShutdownAgent, useWakeOnLan } from '@/hooks/useAgents';
+import { formatBytes, formatDate, formatSocketFamily } from './agentDetailUtils';
 import { useTickets } from '@/hooks/useTickets';
 import { useLogs } from '@/hooks/useLogs';
 import { useRunMeshCentralNodeLinksBackfill, useRunMeshCentralNodeLinksBackfillDryRun } from '@/hooks';
@@ -31,25 +32,7 @@ const levelLabels: Record<number, { label: string; color: 'slate' | 'primary' | 
   [LogLevel.Critical]: { label: 'Crítico', color: 'danger' },
 };
 
-function formatBytes(bytes: number | null): string {
-  if (!bytes) return '';
-  const gb = bytes / (1024 ** 3);
-  if (gb >= 1) return `${gb.toFixed(1)} GB`;
-  const mb = bytes / (1024 ** 2);
-  return `${mb.toFixed(0)} MB`;
-}
-
-function formatDate(date: string | null): string {
-  if (!date) return '';
-  return new Date(date).toLocaleString('pt-BR');
-}
-
-function formatSocketFamily(family: string | null): string {
-  if (!family) return '';
-  if (family === '2') return 'IPv4';
-  if (family === '23') return 'IPv6';
-  return family;
-}
+// formatBytes, formatDate, formatSocketFamily — importadas de ./agentDetailUtils
 
 interface InventoryPrinter {
   name: string;
@@ -362,7 +345,7 @@ export default function AgentDetail() {
 
   const isOnlineNow = isAgentOnlineNow(aWithHeartbeat, now);
   const isZeroTouchPending = aWithHeartbeat.zeroTouchPending === true;
-  const softwareAllItems = software.data ?? [];
+  const softwareAllItems = software.data?.items ?? [];
   const softwareTotalCount = softwareAllItems.length > 0 ? softwareAllItems.length : (softwareSnapshot.data?.totalInstalled ?? 0);
   // Client-side pagination: slice based on current page
   const startIdx = (softwarePage - 1) * Number(softwareLimitSelected);
@@ -409,8 +392,8 @@ export default function AgentDetail() {
     : 'Modelo indisponível';
   const processorValue = hw.data?.hardware?.processor
     ? `${hw.data.hardware.processorCores ?? '?'}C / ${hw.data.hardware.processorThreads ?? '?'}T`
-    : '';
-  const softwareTotalInstalled = softwareSnapshot.isLoading ? '' : (softwareSnapshot.data?.totalInstalled ?? 0);
+    : '\u2014';
+  const softwareTotalInstalled = softwareSnapshot.isLoading ? '\u2014' : (softwareSnapshot.data?.totalInstalled ?? 0);
   const softwareLastCollectedAt = softwareSnapshot.data?.lastCollectedAt ?? softwareSnapshot.data?.updatedAt ?? null;
   const softwareLastCollectedLabel = softwareLastCollectedAt
     ? new Date(softwareLastCollectedAt).toLocaleString('pt-BR')
@@ -423,14 +406,14 @@ export default function AgentDetail() {
       key: 'protocol',
       header: 'Protocolo',
       className: 'w-24',
-      render: item => <span className="font-mono uppercase text-muted-foreground">{item.protocol ?? ''}</span>,
+      render: item => <span className="font-mono uppercase text-muted-foreground">{item.protocol ?? '\u2014'}</span>,
     },
     {
       key: 'address',
       header: 'Endereço',
       render: item => (
         <span className="font-mono text-muted-foreground">
-          {item.address ?? ''}:{item.port}
+          {item.address ?? '\u2014'}:{item.port}
         </span>
       ),
     },
@@ -439,7 +422,7 @@ export default function AgentDetail() {
       header: 'Processo',
       render: item => (
         <div>
-          <p className="text-sm text-foreground">{item.processName ?? ''}</p>
+          <p className="text-sm text-foreground">{item.processName ?? '\u2014'}</p>
           <p className="text-xs text-muted">PID {item.processId}</p>
         </div>
       ),
@@ -456,7 +439,7 @@ export default function AgentDetail() {
       key: 'protocol',
       header: 'Protocolo',
       className: 'w-24',
-      render: item => <span className="font-mono uppercase text-muted-foreground">{item.protocol ?? ''}</span>,
+      render: item => <span className="font-mono uppercase text-muted-foreground">{item.protocol ?? '\u2014'}</span>,
     },
     {
       key: 'family',
@@ -469,7 +452,7 @@ export default function AgentDetail() {
       header: 'Origem',
       render: item => (
         <span className="font-mono text-muted-foreground">
-          {item.localAddress ?? ''}:{item.localPort}
+          {item.localAddress ?? '\u2014'}:{item.localPort}
         </span>
       ),
     },
@@ -478,7 +461,7 @@ export default function AgentDetail() {
       header: 'Destino',
       render: item => (
         <span className="font-mono text-muted-foreground">
-          {item.remoteAddress ?? ''}:{item.remotePort}
+          {item.remoteAddress ?? '\u2014'}:{item.remotePort}
         </span>
       ),
     },
@@ -487,7 +470,7 @@ export default function AgentDetail() {
       header: 'Processo',
       render: item => (
         <div>
-          <p className="text-sm text-foreground">{item.processName ?? ''}</p>
+          <p className="text-sm text-foreground">{item.processName ?? '\u2014'}</p>
           <p className="text-xs text-muted">PID {item.processId}</p>
         </div>
       ),
@@ -822,17 +805,17 @@ export default function AgentDetail() {
       key: 'version',
       header: 'Versão',
       className: 'font-mono',
-      render: item => item.version ?? '',
+      render: item => item.version ?? '\u2014',
     },
     {
       key: 'source',
       header: 'Fonte',
-      render: item => item.source ?? '',
+      render: item => item.source ?? '\u2014',
     },
     {
-      key: 'lastSeenAt',
+      key: 'collectedAt',
       header: 'Última coleta',
-      render: item => formatDate(item.lastSeenAt ?? item.collectedAt),
+      render: item => formatDate(item.collectedAt),
     },
   ];
 
@@ -845,7 +828,7 @@ export default function AgentDetail() {
         </button>
         <div className="flex-1">
           <h1 className="text-2xl font-bold text-foreground">{a.displayName ?? a.hostname}</h1>
-          <p className="text-sm text-muted">{a.hostname}  {a.operatingSystem} {a.osVersion}</p>
+          <p className="text-sm text-muted">{a.hostname} \u2014 {a.operatingSystem} {a.osVersion}</p>
         </div>
         <Badge color={isOnlineNow ? 'success' : 'slate'}>
           <span className="flex items-center gap-1">
@@ -993,11 +976,11 @@ export default function AgentDetail() {
               </p>
               <p>
                 <span className="text-muted">Núcleos físicos:</span>{' '}
-                {hw.data?.hardware?.processorCores ?? ''}
+                {hw.data?.hardware?.processorCores ?? '\u2014'}
               </p>
               <p>
                 <span className="text-muted">Threads lógicas:</span>{' '}
-                {hw.data?.hardware?.processorThreads ?? ''}
+                {hw.data?.hardware?.processorThreads ?? '\u2014'}
               </p>
               <p>
                 <span className="text-muted">Arquitetura:</span>{' '}
@@ -1069,7 +1052,7 @@ export default function AgentDetail() {
             <StatCard
               icon={Gauge}
               label="MachineScore"
-              value={machineScore === null ? '' : machineScore}
+              value={machineScore === null ? '\u2014' : machineScore}
               tone={machineScoreTone}
               trend={machineScoreHint ? <span className="text-xs text-muted">{machineScoreHint}</span> : undefined}
             />
@@ -1098,7 +1081,7 @@ export default function AgentDetail() {
             </div>
           )}
         >
-          <Card className="glass-card relative h-full rounded-xl border border-border bg-surface p-5">
+          <div className="glass-card relative h-full rounded-xl border border-border bg-surface p-5">
             <div className="relative mb-3 h-8" ref={labelPickerRef}>
               <Button
                 size="sm"
@@ -1200,7 +1183,7 @@ export default function AgentDetail() {
             ) : (
               <p className="text-sm text-muted">Nenhuma label aplicada.</p>
             )}
-          </Card>
+          </div>
         </Tooltip>
         <Tooltip
           position="bottom"
@@ -1315,16 +1298,16 @@ export default function AgentDetail() {
             </div>
             <div>
               <dt className="text-muted">Sistema Operacional</dt>
-              <dd className="mt-0.5 text-foreground">{a.operatingSystem ?? ''}</dd>
+              <dd className="mt-0.5 text-foreground">{a.operatingSystem ?? '\u2014'}</dd>
             </div>
             <div>
               <dt className="text-muted">Versão do SO</dt>
-              <dd className="mt-0.5 font-mono text-foreground">{a.osVersion ?? ''}</dd>
+              <dd className="mt-0.5 font-mono text-foreground">{a.osVersion ?? '\u2014'}</dd>
             </div>
             <div className="border-t border-border pt-3">
               <dt className="text-muted">MeshCentral Node ID</dt>
               <dd className="mt-0.5 text-foreground">
-                <span className="font-mono">{a.meshCentralNodeId ?? ''}</span>
+                <span className="font-mono">{a.meshCentralNodeId ?? '\u2014'}</span>
                 <p className="mt-1 text-xs text-muted">
                   Valor persistido no agent, utilizado automaticamente no suporte remoto.
                 </p>
@@ -1351,7 +1334,7 @@ export default function AgentDetail() {
             )}
             <div className="border-t border-border pt-3">
               <dt className="text-muted">Versão do Agente</dt>
-              <dd className="mt-0.5 font-mono text-foreground">{a.agentVersion ?? ''}</dd>
+              <dd className="mt-0.5 font-mono text-foreground">{a.agentVersion ?? '\u2014'}</dd>
             </div>
             {isZeroTouchPending && (
               <div>
@@ -1376,11 +1359,11 @@ export default function AgentDetail() {
             )}
             <div>
               <dt className="text-muted">Último IP</dt>
-              <dd className="mt-0.5 font-mono text-foreground">{a.lastIpAddress ?? hw.data?.networkAdapters?.find(n => n.ipAddress && !n.ipAddress.startsWith('169.254'))?.ipAddress ?? ''}</dd>
+              <dd className="mt-0.5 font-mono text-foreground">{a.lastIpAddress ?? hw.data?.networkAdapters?.find(n => n.ipAddress && !n.ipAddress.startsWith('169.254'))?.ipAddress ?? '\u2014'}</dd>
             </div>
             <div>
               <dt className="text-muted">Última vez online</dt>
-              <dd className="mt-0.5 text-foreground">{a.lastSeen ? formatDate(a.lastSeen) : (a.lastSeenAt ? formatDate(a.lastSeenAt) : '')}</dd>
+              <dd className="mt-0.5 text-foreground">{a.lastSeen ? formatDate(a.lastSeen) : (a.lastSeenAt ? formatDate(a.lastSeenAt) : '\u2014')}</dd>
             </div>
             {hw.data?.hardware?.manufacturer && (
               <div className="border-t border-border pt-3">
@@ -1512,7 +1495,7 @@ export default function AgentDetail() {
                 onClick={handleRefreshSoftware}
                 loading={isRefreshingSoftware}
                 disabled={!isOnlineNow}
-                title={!isOnlineNow ? 'Agente offline  refresh indisponível' : 'Solicitar nova coleta de software ao agente'}
+                title={!isOnlineNow ? 'Agente offline \u2014 refresh indisponível' : 'Solicitar nova coleta de software ao agente'}
               >
                 <RefreshCw className="h-4 w-4" />
                 Atualizar
@@ -1706,7 +1689,7 @@ export default function AgentDetail() {
                 onClick={handleRefreshPrinters}
                 loading={isRefreshingPrinters || hw.isFetching}
                 disabled={!isOnlineNow}
-                title={!isOnlineNow ? 'Agente offline  refresh indisponível' : 'Solicitar nova coleta de impressoras ao agente'}
+                title={!isOnlineNow ? 'Agente offline \u2014 refresh indisponível' : 'Solicitar nova coleta de impressoras ao agente'}
               >
                 <RefreshCw className="h-4 w-4" />
                 Atualizar
@@ -1764,7 +1747,7 @@ export default function AgentDetail() {
                 onClick={handleRefreshPorts}
                 loading={isRefreshingPorts || hw.isFetching}
                 disabled={!isOnlineNow}
-                title={!isOnlineNow ? 'Agente offline  refresh indisponível' : 'Solicitar nova coleta de portas ao agente'}
+                title={!isOnlineNow ? 'Agente offline \u2014 refresh indisponível' : 'Solicitar nova coleta de portas ao agente'}
               >
                 <RefreshCw className="h-4 w-4" />
                 Atualizar
@@ -1798,7 +1781,7 @@ export default function AgentDetail() {
                 onClick={handleRefreshConnections}
                 loading={isRefreshingConnections || hw.isFetching}
                 disabled={!isOnlineNow}
-                title={!isOnlineNow ? 'Agente offline  refresh indisponível' : 'Solicitar nova coleta de conexões ao agente'}
+                title={!isOnlineNow ? 'Agente offline \u2014 refresh indisponível' : 'Solicitar nova coleta de conexões ao agente'}
               >
                 <RefreshCw className="h-4 w-4" />
                 Atualizar
