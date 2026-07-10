@@ -110,7 +110,7 @@ export function MainLayout() {
 
   const routeAgentId = routeScope.kind === 'agent' ? routeScope.agentId : undefined;
   const agentQuery = useAgent(routeAgentId);
-  const heartbeat = routeAgentId ? useAgentHeartbeat(routeAgentId) : undefined;
+  const heartbeat = useAgentHeartbeat(routeAgentId ?? '');
   const heartbeatClientId = heartbeat?.clientId;
   const heartbeatSiteId = heartbeat?.siteId;
   const agentSiteId = agentQuery.data?.siteId;
