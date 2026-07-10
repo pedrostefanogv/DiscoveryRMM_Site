@@ -43,7 +43,7 @@ export default function AutomationAuditPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-foreground">Auditoria de Automação</h1>
+        <h1 className="text-2xl font-bold text-foreground">Auditoria de AutomaÃ§Ã£o</h1>
         <p className="text-sm text-muted">
           Consulte a trilha funcional de scripts e tarefas com correlation id.
         </p>
@@ -103,7 +103,7 @@ export default function AutomationAuditPage() {
                 <p className="text-sm text-muted-foreground">Alterado por: {entry.changedBy || "-"}</p>
                 <p className="text-xs text-muted">Correlation: {entry.correlationId || "-"}</p>
                 <details className="mt-2 rounded border border-border bg-background/40 p-2">
-                  <summary className="cursor-pointer text-xs text-muted">Snapshot técnico</summary>
+                  <summary className="cursor-pointer text-xs text-muted">Snapshot tÃ©cnico</summary>
                   <div className="mt-2 grid gap-2 md:grid-cols-2">
                     <pre className="overflow-auto rounded border border-border bg-surface/60 p-2 text-xs text-foreground">
 {entry.oldValueJson || "null"}

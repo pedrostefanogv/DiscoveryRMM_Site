@@ -57,7 +57,7 @@ const DEFAULT_FORM: RuleFormState = {
 
 const ALERT_TYPE_OPTIONS = [
   { value: String(PsadtAlertType.Toast), label: 'Toast (fecha sozinho)' },
-  { value: String(PsadtAlertType.Modal), label: 'Modal (exige interação)' },
+  { value: String(PsadtAlertType.Modal), label: 'Modal (exige interaÃ§Ã£o)' },
 ];
 
 const TIMEOUT_OPTIONS = [
@@ -207,7 +207,7 @@ export default function TicketAlertsPage() {
     }
 
     if (!form.title.trim()) {
-      toast.error('Informe um título para a regra.');
+      toast.error('Informe um tÃ­tulo para a regra.');
       return;
     }
 
@@ -233,7 +233,7 @@ export default function TicketAlertsPage() {
       const message =
         error instanceof Error
           ? error.message
-          : 'Não foi possível salvar a regra.';
+          : 'NÃ£o foi possÃ­vel salvar a regra.';
       toast.error(message);
     }
   }
@@ -256,7 +256,7 @@ export default function TicketAlertsPage() {
       const message =
         error instanceof Error
           ? error.message
-          : 'Não foi possível alterar o status da regra.';
+          : 'NÃ£o foi possÃ­vel alterar o status da regra.';
       toast.error(message);
     }
   }
@@ -276,7 +276,7 @@ export default function TicketAlertsPage() {
       const message =
         error instanceof Error
           ? error.message
-          : 'Não foi possível remover a regra.';
+          : 'NÃ£o foi possÃ­vel remover a regra.';
       toast.error(message);
     }
   }
@@ -412,7 +412,7 @@ export default function TicketAlertsPage() {
 
             <div className="mt-4 grid gap-4 md:grid-cols-2">
               <Input
-                label="Título"
+                label="TÃ­tulo"
                 value={form.title}
                 onChange={(event) =>
                   setForm((current) => ({
@@ -447,7 +447,7 @@ export default function TicketAlertsPage() {
                   }))
                 }
                 rows={5}
-                placeholder="Seu ticket mudou de estado e requer atenção do usuario."
+                placeholder="Seu ticket mudou de estado e requer atenÃ§Ã£o do usuario."
               />
 
               <TextArea
@@ -468,11 +468,11 @@ export default function TicketAlertsPage() {
             <div className="mt-6 flex flex-wrap gap-3">
               <Button onClick={handleSubmit} loading={isSaving}>
                 <Bell className="h-4 w-4" />
-                {editingRuleId ? 'Salvar alterações' : 'Criar regra'}
+                {editingRuleId ? 'Salvar alteraÃ§Ãµes' : 'Criar regra'}
               </Button>
               {editingRuleId && (
                 <Button variant="ghost" onClick={handleResetForm}>
-                  Cancelar edição
+                  Cancelar ediÃ§Ã£o
                 </Button>
               )}
             </div>
@@ -480,7 +480,7 @@ export default function TicketAlertsPage() {
 
           <Card>
             <CardHeader
-              title="Observações"
+              title="ObservaÃ§Ãµes"
               subtitle="Comportamento do backend para estas regras."
             />
 
@@ -500,7 +500,7 @@ export default function TicketAlertsPage() {
               <div className="flex items-start gap-3 rounded-xl border border-border bg-surface-light p-4">
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
                 <p>
-                  O escopo preferencial usa o contexto do ticket e faz fallback conforme os dados disponíveis no servidor.
+                  O escopo preferencial usa o contexto do ticket e faz fallback conforme os dados disponÃ­veis no servidor.
                 </p>
               </div>
             </div>

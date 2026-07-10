@@ -112,17 +112,17 @@ function formatDateBrazil(value: string): string {
 }
 
 function formatRelative(dateStr: string | null, now: number): { text: string; fullDate: string | null } {
-  if (!dateStr) return { text: '—', fullDate: null };
+  if (!dateStr) return { text: 'Â—', fullDate: null };
   const diff = now - new Date(dateStr).getTime();
   const fullDate = formatDateBrazil(dateStr);
   if (diff < 60_000) return { text: 'agora mesmo', fullDate };
-  if (diff < 3_600_000) return { text: `há ${Math.floor(diff / 60_000)} min`, fullDate };
-  if (diff < 86_400_000) return { text: `há ${Math.floor(diff / 3_600_000)} h`, fullDate };
+  if (diff < 3_600_000) return { text: `hÃ¡ ${Math.floor(diff / 60_000)} min`, fullDate };
+  if (diff < 86_400_000) return { text: `hÃ¡ ${Math.floor(diff / 3_600_000)} h`, fullDate };
   return { text: fullDate, fullDate };
 }
 
 function formatUptimeShort(seconds: number | undefined | null): string {
-  if (seconds == null || !Number.isFinite(seconds)) return '—';
+  if (seconds == null || !Number.isFinite(seconds)) return 'Â—';
   if (seconds < 60) return `${Math.round(seconds)}s`;
   if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
   const hours = Math.floor(seconds / 3600);
@@ -237,9 +237,9 @@ export default function AgentList() {
     } catch (error) {
       if (error instanceof ApiError) {
         if (error.status === 403) {
-          setRemoteError('Suporte remoto desabilitado para este escopo ou sem permissão de acesso.');
+          setRemoteError('Suporte remoto desabilitado para este escopo ou sem permissÃ£o de acesso.');
         } else if (error.status === 503) {
-          setRemoteError('MeshCentral indisponível no momento. Verifique a integração operacional.');
+          setRemoteError('MeshCentral indisponÃ­vel no momento. Verifique a integraÃ§Ã£o operacional.');
         } else {
           setRemoteError(error.message);
         }
@@ -304,7 +304,7 @@ export default function AgentList() {
     setDeletingAgentId(agent.id);
     try {
       await deleteAgent.mutateAsync(agent.id);
-      toast.success(`Agente ${agent.displayName ?? agent.hostname} excluído com sucesso.`);
+      toast.success(`Agente ${agent.displayName ?? agent.hostname} excluÃ­do com sucesso.`);
       setDeleteConfirmAgent(null);
     } catch (error) {
       toast.error(getDeleteAgentErrorMessage(error));
@@ -320,13 +320,13 @@ export default function AgentList() {
     setUpdatingAgentId(agent.id);
     try {
       await agentUpdatesApi.forceAgentCheck(agent.id);
-      toast.success(`Verificação de update disparada para ${agent.displayName ?? agent.hostname}.`);
+      toast.success(`VerificaÃ§Ã£o de update disparada para ${agent.displayName ?? agent.hostname}.`);
     } catch (error) {
       const message = error instanceof ApiError
         ? error.message
         : error instanceof Error
           ? error.message
-          : 'Falha ao disparar atualização do agente.';
+          : 'Falha ao disparar atualizaÃ§Ã£o do agente.';
       toast.error(message);
     } finally {
       setUpdatingAgentId(null);
@@ -345,7 +345,7 @@ export default function AgentList() {
     setApprovingAgentId(agent.id);
     try {
       await approveZeroTouch.mutateAsync(agent.id);
-      toast.success(`Agente ${agent.displayName ?? agent.hostname} aprovado para comunicação com a API.`);
+      toast.success(`Agente ${agent.displayName ?? agent.hostname} aprovado para comunicaÃ§Ã£o com a API.`);
     } catch (error) {
       const message = error instanceof ApiError
         ? error.message
@@ -415,7 +415,7 @@ export default function AgentList() {
     });
   }, [queriedClients, agentQueries]);
 
-  // Merge live heartbeat metrics from the reactive store — survives REST polling overwrites
+  // Merge live heartbeat metrics from the reactive store Â— survives REST polling overwrites
   const allHeartbeats = useAllAgentHeartbeats();
 
   const agentsWithHeartbeat = useMemo<AgentWithClient[]>(() => {
@@ -542,16 +542,16 @@ export default function AgentList() {
   ];
 
   const provisioningOptions = [
-    { value: 'all', label: 'Autorização: todos' },
-    { value: 'approved', label: 'Autorização: autorizados' },
-    { value: 'pendingApproval', label: 'Autorização: aguardando aprovação' },
+    { value: 'all', label: 'AutorizaÃ§Ã£o: todos' },
+    { value: 'approved', label: 'AutorizaÃ§Ã£o: autorizados' },
+    { value: 'pendingApproval', label: 'AutorizaÃ§Ã£o: aguardando aprovaÃ§Ã£o' },
   ];
 
   const sortOptions: Array<{ value: AgentSortField; label: string }> = [
     { value: 'name', label: 'Nome' },
     { value: 'site', label: 'Site' },
     { value: 'client', label: 'Cliente' },
-    { value: 'lastSeen', label: 'Último ping' },
+    { value: 'lastSeen', label: 'Ãšltimo ping' },
     { value: 'status', label: 'Status' },
   ];
 
@@ -609,7 +609,7 @@ export default function AgentList() {
         />
         <StatCard
           icon={ShieldCheck}
-          label="Aguardando autorização/aprovação"
+          label="Aguardando autorizaÃ§Ã£o/aprovaÃ§Ã£o"
           value={totalPendingApproval}
           tone="accent"
           onClick={() => setFilterProvisioning('pendingApproval')}
@@ -624,7 +624,7 @@ export default function AgentList() {
         />
       </div>
 
-      {/* Filtros + toggle de visualização */}
+      {/* Filtros + toggle de visualizaÃ§Ã£o */}
       <div className="flex gap-3">
         <div className="grid flex-1 gap-3 md:grid-cols-2 xl:grid-cols-[minmax(240px,1fr)_220px_180px_260px_180px_48px]">
           <Input
@@ -656,8 +656,8 @@ export default function AgentList() {
             type="button"
             onClick={() => setSortDirection((current) => (current === 'asc' ? 'desc' : 'asc'))}
             className="flex h-10 w-12 items-center justify-center self-end rounded-xl border border-border bg-surface-light text-foreground transition-colors hover:bg-surface-hover"
-            title={sortDirection === 'asc' ? 'Ordenação crescente' : 'Ordenação decrescente'}
-            aria-label={sortDirection === 'asc' ? 'Ordenação crescente' : 'Ordenação decrescente'}
+            title={sortDirection === 'asc' ? 'OrdenaÃ§Ã£o crescente' : 'OrdenaÃ§Ã£o decrescente'}
+            aria-label={sortDirection === 'asc' ? 'OrdenaÃ§Ã£o crescente' : 'OrdenaÃ§Ã£o decrescente'}
           >
             {sortDirection === 'asc' ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />}
           </button>
@@ -668,14 +668,14 @@ export default function AgentList() {
             <button
               onClick={() => setViewMode('card')}
               className={`flex h-9 w-9 items-center justify-center transition-colors ${viewMode === 'card' ? 'bg-primary/20 text-primary' : 'bg-surface-light text-muted hover:text-foreground'}`}
-              title="Visualização em cards"
+              title="VisualizaÃ§Ã£o em cards"
             >
               <LayoutGrid className="h-4 w-4" />
             </button>
             <button
               onClick={() => setViewMode('list')}
               className={`flex h-9 w-9 items-center justify-center transition-colors ${viewMode === 'list' ? 'bg-primary/20 text-primary' : 'bg-surface-light text-muted hover:text-foreground'}`}
-              title="Visualização em lista"
+              title="VisualizaÃ§Ã£o em lista"
             >
               <List className="h-4 w-4" />
             </button>
@@ -685,11 +685,11 @@ export default function AgentList() {
 
       {!filterClient && (clients.data?.length ?? 0) > MAX_CLIENTS_IN_OVERVIEW && (
         <div className="rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning">
-          Exibindo agentes dos primeiros {MAX_CLIENTS_IN_OVERVIEW} clientes para reduzir carga. Selecione um cliente no filtro para visualizar dados específicos.
+          Exibindo agentes dos primeiros {MAX_CLIENTS_IN_OVERVIEW} clientes para reduzir carga. Selecione um cliente no filtro para visualizar dados especÃ­ficos.
         </div>
       )}
 
-      {/* Conteúdo */}
+      {/* ConteÃºdo */}
       {isLoadingAgents ? (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} />)}
@@ -712,7 +712,7 @@ export default function AgentList() {
       ) : (
         <>
           <p className="text-xs text-muted">
-            {filtered.length} agente{filtered.length !== 1 ? 's' : ''} exibido{filtered.length !== 1 ? 's' : ''} · Ordenação: {activeSortLabel} ({sortDirection === 'asc' ? 'crescente' : 'decrescente'})
+            {filtered.length} agente{filtered.length !== 1 ? 's' : ''} exibido{filtered.length !== 1 ? 's' : ''} Â· OrdenaÃ§Ã£o: {activeSortLabel} ({sortDirection === 'asc' ? 'crescente' : 'decrescente'})
           </p>
 
           {/* -- CARD VIEW -- */}
@@ -761,7 +761,7 @@ export default function AgentList() {
                             </span>
                           </Badge>
                           {isZeroTouchPending && (
-                            <Badge color="warning">Aguardando aprovação</Badge>
+                            <Badge color="warning">Aguardando aprovaÃ§Ã£o</Badge>
                           )}
                         </div>
                       </div>
@@ -769,11 +769,11 @@ export default function AgentList() {
                     <div className="space-y-1.5 text-xs">
                       <div className="flex items-center gap-2 text-muted">
                         <Activity className="h-3.5 w-3.5 shrink-0 text-muted" />
-                        <span className="truncate">{a.operatingSystem ?? '—'}{a.osVersion ? ` · ${a.osVersion}` : ''}</span>
+                        <span className="truncate">{a.operatingSystem ?? 'Â—'}{a.osVersion ? ` Â· ${a.osVersion}` : ''}</span>
                       </div>
                       <div className="flex items-center gap-2 text-muted">
                         <span className="h-3.5 w-3.5 shrink-0 pt-px text-center font-mono text-[10px] leading-none text-muted">IP</span>
-                        <span className="font-mono">{a.lastIpAddress ?? 'IP indisponível'}</span>
+                        <span className="font-mono">{a.lastIpAddress ?? 'IP indisponÃ­vel'}</span>
                       </div>
                       <div className="flex items-center gap-2 text-muted">
                         <Building2 className="h-3.5 w-3.5 shrink-0 text-muted" />
@@ -856,7 +856,7 @@ export default function AgentList() {
                     <th className="hidden px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted 2xl:table-cell">CPU</th>
                     <th className="hidden px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted 2xl:table-cell">RAM</th>
                     <th className="hidden px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted 2xl:table-cell">Disco</th>
-                    <th className="hidden px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted lg:table-cell">Último contato</th>
+                    <th className="hidden px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted lg:table-cell">Ãšltimo contato</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
@@ -891,10 +891,10 @@ export default function AgentList() {
                           </div>
                         </td>
                         <td className="hidden px-4 py-3 text-muted-foreground md:table-cell">
-                          {a.operatingSystem ?? '—'}{a.osVersion ? ` · ${a.osVersion}` : ''}
+                          {a.operatingSystem ?? 'Â—'}{a.osVersion ? ` Â· ${a.osVersion}` : ''}
                         </td>
                         <td className="hidden px-4 py-3 font-mono text-muted lg:table-cell">
-                          {a.lastIpAddress ?? '—'}
+                          {a.lastIpAddress ?? 'Â—'}
                         </td>
                         <td className="hidden px-4 py-3 text-muted sm:table-cell">
                           {a.clientName}
@@ -911,7 +911,7 @@ export default function AgentList() {
                           <div className="flex flex-col items-start gap-1.5">
                             {isZeroTouchPending ? (
                               <>
-                                <Badge color="warning">Aguardando aprovação</Badge>
+                                <Badge color="warning">Aguardando aprovaÃ§Ã£o</Badge>
                                 {canManageAgent && (
                                   <button
                                     type="button"
@@ -928,7 +928,7 @@ export default function AgentList() {
                                 )}
                               </>
                             ) : (
-                              <span className="text-xs text-muted">—</span>
+                              <span className="text-xs text-muted">Â—</span>
                             )}
                           </div>
                         </td>
@@ -937,21 +937,21 @@ export default function AgentList() {
                           {a.heartbeatMetrics?.cpuPercent != null ? (
                             <MetricBar label="" value={a.heartbeatMetrics.cpuPercent} compact hideValue />
                           ) : (
-                            <span className="text-xs text-muted">—</span>
+                            <span className="text-xs text-muted">Â—</span>
                           )}
                         </td>
                         <td className="hidden px-4 py-3 2xl:table-cell">
                           {a.heartbeatMetrics?.memoryPercent != null ? (
                             <MetricBar label="" value={a.heartbeatMetrics.memoryPercent} compact hideValue />
                           ) : (
-                            <span className="text-xs text-muted">—</span>
+                            <span className="text-xs text-muted">Â—</span>
                           )}
                         </td>
                         <td className="hidden px-4 py-3 2xl:table-cell">
                           {a.heartbeatMetrics?.diskPercent != null ? (
                             <MetricBar label="" value={a.heartbeatMetrics.diskPercent} compact hideValue />
                           ) : (
-                            <span className="text-xs text-muted">—</span>
+                            <span className="text-xs text-muted">Â—</span>
                           )}
                         </td>
                         <td className="hidden px-4 py-3 text-xs text-muted lg:table-cell" title={relativeTime.fullDate ?? undefined}>
@@ -1073,15 +1073,15 @@ export default function AgentList() {
       <Modal
         open={!!deleteConfirmAgent}
         onClose={closeDeleteAgentModal}
-        title="Confirmar exclusão de agente"
+        title="Confirmar exclusÃ£o de agente"
       >
         <div className="space-y-4">
           <div className="rounded-lg border border-danger/30 bg-danger/10 p-3 text-sm text-foreground">
             <p>
-              Você está prestes a excluir o agente{' '}
+              VocÃª estÃ¡ prestes a excluir o agente{' '}
               <span className="font-semibold text-foreground">{deleteConfirmAgent?.displayName ?? deleteConfirmAgent?.hostname}</span>.
             </p>
-            <p className="mt-1 text-muted">Esta ação não pode ser desfeita.</p>
+            <p className="mt-1 text-muted">Esta aÃ§Ã£o nÃ£o pode ser desfeita.</p>
           </div>
 
           <div className="flex justify-end gap-2">
@@ -1112,7 +1112,7 @@ export default function AgentList() {
         maxWidth="max-w-6xl"
       >
         <div className="space-y-3">
-          {remoteLoading && <Loading message="Gerando sessão remota..." />}
+          {remoteLoading && <Loading message="Gerando sessÃ£o remota..." />}
 
           {!remoteLoading && remoteError && (
             <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-200">

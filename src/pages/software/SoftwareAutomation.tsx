@@ -6,31 +6,31 @@ export default function SoftwareAutomation() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-foreground">Automação de Softwares</h1>
+        <h1 className="text-2xl font-bold text-foreground">AutomaÃ§Ã£o de Softwares</h1>
         <p className="text-sm text-muted">
-          Esta página foi mantida por compatibilidade. O novo módulo de automação fica em área própria.
+          Esta pÃ¡gina foi mantida por compatibilidade. O novo mÃ³dulo de automaÃ§Ã£o fica em Ã¡rea prÃ³pria.
         </p>
       </div>
 
       <Card>
         <CardHeader
           title="Modulo migrado"
-          subtitle="Use a nova área para scripts, tarefas e operações por agent."
+          subtitle="Use a nova Ã¡rea para scripts, tarefas e operaÃ§Ãµes por agent."
         />
 
         <div className="rounded-lg border border-border bg-surface-light p-4">
           <div className="mb-2 flex items-center gap-2 text-muted-foreground">
             <Wrench className="h-4 w-4" />
-            <span className="text-sm">Status atual: módulo de automação ativo em nova navegação</span>
+            <span className="text-sm">Status atual: mÃ³dulo de automaÃ§Ã£o ativo em nova navegaÃ§Ã£o</span>
           </div>
           <p className="text-sm text-muted">
-            Acesse Scripts, Tarefas e Operações para gerir automações administrativas.
+            Acesse Scripts, Tarefas e OperaÃ§Ãµes para gerir automaÃ§Ãµes administrativas.
           </p>
         </div>
 
         <div className="mt-4 flex justify-end">
           <Link to="/automation">
-            <Button size="sm">Abrir novo modulo de Automação</Button>
+            <Button size="sm">Abrir novo modulo de AutomaÃ§Ã£o</Button>
           </Link>
         </div>
       </Card>

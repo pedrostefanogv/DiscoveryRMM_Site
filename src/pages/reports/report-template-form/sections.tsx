@@ -18,7 +18,7 @@ import type { FieldOption, LayoutEditorState, NormalizedDataset, SupportedFormat
 type DraftSetter = Dispatch<SetStateAction<TemplateDraft>>;
 
 const REPORT_FONT_OPTIONS = [
-  { label: "Segoe UI (padr„o)", value: "Segoe UI, sans-serif" },
+  { label: "Segoe UI (padr√£o)", value: "Segoe UI, sans-serif" },
   { label: "Inter", value: "Inter, system-ui, sans-serif" },
   { label: "Roboto", value: "Roboto, Arial, sans-serif" },
   { label: "Helvetica Neue", value: "Helvetica Neue, Helvetica, Arial, sans-serif" },
@@ -60,7 +60,7 @@ export function TemplateHistoryCard({ templateId, version }: HistoryProps) {
     <Card>
       <div className="mb-3 flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-semibold text-foreground">HistÛrico do Template</h2>
+          <h2 className="text-lg font-semibold text-foreground">Hist√≥rico do Template</h2>
           <p className="text-xs text-muted">Versao atual v{version}</p>
         </div>
       </div>
@@ -77,7 +77,7 @@ type IdentificationProps = {
 export function IdentificationCard({ draft, setDraft }: IdentificationProps) {
   return (
     <Card>
-      <h2 className="mb-4 text-lg font-semibold text-foreground">IdentificaÁ„o</h2>
+      <h2 className="mb-4 text-lg font-semibold text-foreground">Identifica√ß√£o</h2>
       <div className="grid gap-4 md:grid-cols-2">
         <Input
           label="Nome do template"
@@ -90,7 +90,7 @@ export function IdentificationCard({ draft, setDraft }: IdentificationProps) {
           }
           placeholder="Ex: Inventario de software por agent"
           required
-          hint="Nome exibido na listagem de templates e no cabeÁalho do relatÛrio gerado."
+          hint="Nome exibido na listagem de templates e no cabe√ßalho do relat√≥rio gerado."
         />
         <Input
           label="Usuario de auditoria"
@@ -102,12 +102,12 @@ export function IdentificationCard({ draft, setDraft }: IdentificationProps) {
             }))
           }
           placeholder="usuario@empresa.local"
-          hint="Registrado nos logs de criaÁ„o e atualizaÁ„o. N„o afeta permissıes de acesso."
+          hint="Registrado nos logs de cria√ß√£o e atualiza√ß√£o. N√£o afeta permiss√µes de acesso."
         />
       </div>
       <div className="mt-4">
         <TextArea
-          label="DescriÁ„o"
+          label="Descri√ß√£o"
            value={draft.description}
           onChange={(event) =>
             setDraft((prev) => ({
@@ -116,8 +116,8 @@ export function IdentificationCard({ draft, setDraft }: IdentificationProps) {
             }))
           }
           rows={3}
-          placeholder="DescriÁ„o opcional do template"
-          hint="Texto livre para descrever o objetivo do template. VisÌvel apenas no formul·rio de ediÁ„o."
+          placeholder="Descri√ß√£o opcional do template"
+          hint="Texto livre para descrever o objetivo do template. Vis√≠vel apenas no formul√°rio de edi√ß√£o."
         />
       </div>
     </Card>
@@ -187,7 +187,7 @@ export function DataSourceScopeCard({
               </option>
             ))}
           </select>
-          <p className="mt-1 text-xs text-muted">Formato padr„o do arquivo gerado. Pode ser sobrescrito na execuÁ„o.</p>
+          <p className="mt-1 text-xs text-muted">Formato padr√£o do arquivo gerado. Pode ser sobrescrito na execu√ß√£o.</p>
         </div>
 
         <div>
@@ -210,7 +210,7 @@ export function DataSourceScopeCard({
               </option>
             ))}
           </select>
-          <p className="mt-1 text-xs text-muted">Define para qual nÌvel o template pode ser executado: <strong className="text-muted">global</strong> (todos), <strong className="text-muted">client</strong>, <strong className="text-muted">site</strong> ou <strong className="text-muted">agent</strong>.</p>
+          <p className="mt-1 text-xs text-muted">Define para qual n√≠vel o template pode ser executado: <strong className="text-muted">global</strong> (todos), <strong className="text-muted">client</strong>, <strong className="text-muted">site</strong> ou <strong className="text-muted">agent</strong>.</p>
         </div>
       </div>
     </Card>
@@ -277,8 +277,8 @@ export function LayoutBuilderTopSection({
             <Plus className="h-4 w-4" /> Coluna
           </Button>
           <select
-            aria-label="Adicionar seÁ„o"
-            title="Adicionar seÁ„o"
+            aria-label="Adicionar se√ß√£o"
+            title="Adicionar se√ß√£o"
             className="cursor-pointer rounded-lg border border-border bg-surface-light px-3 py-1.5 text-sm text-foreground hover:bg-surface-hover"
             value=""
             onChange={(e) => {
@@ -293,7 +293,7 @@ export function LayoutBuilderTopSection({
               }
             }}
           >
-            <option value="" className="bg-surface">+ SeÁ„o...</option>
+            <option value="" className="bg-surface">+ Se√ß√£o...</option>
             <option value="__blank" className="bg-surface">Em branco</option>
             {(DATASET_SECTION_SOURCES[selectedDataset?.key.toLowerCase() ?? ""] ?? []).length > 0 && (
               <>
@@ -310,7 +310,7 @@ export function LayoutBuilderTopSection({
 
       <div className="grid gap-4 md:grid-cols-2">
         <Input
-          label="TÌtulo"
+          label="T√≠tulo"
           value={layoutEditor.title}
           onChange={(event) =>
             setLayoutEditor((prev) => ({
@@ -318,10 +318,10 @@ export function LayoutBuilderTopSection({
               title: event.target.value,
             }))
           }
-          hint="TÌtulo principal exibido no cabeÁalho do relatÛrio."
+          hint="T√≠tulo principal exibido no cabe√ßalho do relat√≥rio."
         />
         <Input
-          label="SubtÌtulo"
+          label="Subt√≠tulo"
           value={layoutEditor.subtitle}
           onChange={(event) =>
             setLayoutEditor((prev) => ({
@@ -329,13 +329,13 @@ export function LayoutBuilderTopSection({
               subtitle: event.target.value,
             }))
           }
-          hint="Linha secund·ria abaixo do tÌtulo. Deixe vazio para omitir."
+          hint="Linha secund√°ria abaixo do t√≠tulo. Deixe vazio para omitir."
         />
         <div>
-          <label className="mb-2 block text-sm font-medium text-muted-foreground">OrientaÁ„o</label>
+          <label className="mb-2 block text-sm font-medium text-muted-foreground">Orienta√ß√£o</label>
            <select
-             aria-label="OrientaÁ„o do layout"
-             title="OrientaÁ„o do layout"
+             aria-label="Orienta√ß√£o do layout"
+             title="Orienta√ß√£o do layout"
             value={layoutEditor.orientation}
             onChange={(event) =>
               setLayoutEditor((prev) => ({
@@ -364,7 +364,7 @@ export function LayoutBuilderTopSection({
             }))
           }
           placeholder="campo do dataset para agrupamento"
-          hint="Campo do dataset para agrupar linhas no relatÛrio. Ex.: siteId agrupa os dados por site."
+          hint="Campo do dataset para agrupar linhas no relat√≥rio. Ex.: siteId agrupa os dados por site."
         />
         <Input
           label="Group title template"
@@ -376,7 +376,7 @@ export function LayoutBuilderTopSection({
             }))
           }
           placeholder="Agent: {{agentName}}"
-          hint="Modelo do tÌtulo de cada grupo. Use {{campo}} para interpolar valores do dataset."
+          hint="Modelo do t√≠tulo de cada grupo. Use {{campo}} para interpolar valores do dataset."
         />
         <Input
           label="Group title prefix"
@@ -415,7 +415,7 @@ export function LayoutBuilderTopSection({
         />
         <span>
           Ocultar coluna de agrupamento
-          <span className="ml-1 text-xs text-muted">Quando ativo, a coluna usada no GroupBy n„o aparece nas linhas da tabela.</span>
+          <span className="ml-1 text-xs text-muted">Quando ativo, a coluna usada no GroupBy n√£o aparece nas linhas da tabela.</span>
         </span>
       </div>
 
@@ -776,7 +776,7 @@ export function LayoutBuilderTopSection({
                     </div>
                     {joinSuggestions.length > 0 && index > 0 && (
                       <div className="md:col-span-6 rounded-lg border border-border bg-black/10 px-3 py-2 text-xs text-muted-foreground">
-                        Sugestıes de join: {joinSuggestions.map((join) => `${join.sourceKey} -> ${join.targetKey}`).join(" | ")}
+                        Sugest√µes de join: {joinSuggestions.map((join) => `${join.sourceKey} -> ${join.targetKey}`).join(" | ")}
                       </div>
                     )}
                   </div>
@@ -821,8 +821,8 @@ export function LayoutBuilderTopSection({
             <div className="rounded-lg border border-border bg-black/10 p-3">
               <div className="mb-2 text-xs text-muted">
                 {autocompleteQuery.isLoading
-                  ? "Buscando sugestıes..."
-                  : `${autocompleteQuery.data?.total ?? 0} sugest„o(ıes) retornadas`}
+                  ? "Buscando sugest√µes..."
+                  : `${autocompleteQuery.data?.total ?? 0} sugest√£o(√µes) retornadas`}
               </div>
               <div className="flex flex-wrap gap-2">
                 {(autocompleteQuery.data?.items ?? []).map((item) => {
@@ -1043,11 +1043,11 @@ export function LayoutBuilderDetailsSection({
 
       <details className="mt-5">
         <summary className="flex cursor-pointer select-none items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-sm font-medium text-amber-300 hover:bg-amber-500/10">
-          <span>&#9654;</span> OpÁıes avanÁadas &mdash; Group details, Summaries e Group summaries
+          <span>&#9654;</span> Op√ß√µes avan√ßadas &mdash; Group details, Summaries e Group summaries
         </summary>
         <div className="mt-3 rounded-lg border border-border bg-surface-light p-3">
           <p className="mb-3 text-xs text-muted">
-            Campos para personalizaÁ„o avanÁada do layout via editor visual.
+            Campos para personaliza√ß√£o avan√ßada do layout via editor visual.
           </p>
           <div className="grid gap-4 md:grid-cols-1">
             <div className="rounded-lg border border-border bg-surface-light p-3">
@@ -1152,7 +1152,7 @@ export function LayoutBuilderDetailsSection({
                   <Plus className="h-4 w-4" /> Item
                 </Button>
               </div>
-              <p className="mb-3 text-xs text-muted">Totalizadores gerais no rodapÈ do relatÛrio.</p>
+              <p className="mb-3 text-xs text-muted">Totalizadores gerais no rodap√© do relat√≥rio.</p>
               <div className="space-y-2">
                 {layoutEditor.summaries.map((summary, index) => (
                   <div key={`summary-${index}`} className="grid gap-2 md:grid-cols-[1fr_1fr_1fr_auto]">
@@ -1343,10 +1343,10 @@ export function LayoutBuilderDetailsSection({
       {layoutEditor.sections.length > 0 && (
         <div className="mt-5 space-y-4">
           <div className="flex items-center gap-3">
-            <h3 className="text-sm font-semibold text-foreground">SeÁıes adicionais</h3>
+            <h3 className="text-sm font-semibold text-foreground">Se√ß√µes adicionais</h3>
             {selectedDataset && (DATASET_SECTION_SOURCES[selectedDataset.key.toLowerCase()] ?? []).length > 0 && (
               <span className="rounded bg-blue-500/10 px-2 py-0.5 text-xs text-blue-300">
-                Fontes disponÌveis para <strong>{selectedDataset.name}</strong>: {" "}
+                Fontes dispon√≠veis para <strong>{selectedDataset.name}</strong>: {" "}
                 {(DATASET_SECTION_SOURCES[selectedDataset.key.toLowerCase()] ?? []).map((s) => s.source).join(", ")}
               </span>
             )}
@@ -1355,7 +1355,7 @@ export function LayoutBuilderDetailsSection({
             <div key={`section-${sectionIndex}`} className="rounded-lg border border-border bg-surface-light p-3">
               <div className="mb-3 grid gap-3 md:grid-cols-3">
                 <Input
-                  label={`TÌtulo da seÁ„o ${sectionIndex + 1}`}
+                  label={`T√≠tulo da se√ß√£o ${sectionIndex + 1}`}
                   value={section.title}
                   onChange={(event) =>
                     setLayoutEditor((prev) => ({
@@ -1367,7 +1367,7 @@ export function LayoutBuilderDetailsSection({
                   }
                 />
                 <Input
-                  label={`Source da seÁ„o ${sectionIndex + 1}`}
+                  label={`Source da se√ß√£o ${sectionIndex + 1}`}
                   value={section.source ?? ""}
                   onChange={(event) =>
                     setLayoutEditor((prev) => ({
@@ -1378,7 +1378,7 @@ export function LayoutBuilderDetailsSection({
                     }))
                   }
                   placeholder="ex.: softwareItems"
-                  hint={`Sub-array retornado no response para esta seÁ„o. Fontes: ${(DATASET_SECTION_SOURCES[selectedDataset?.key.toLowerCase() ?? ""] ?? []).map((s) => s.source).join(", ") || "nenhuma mapeada"}`}
+                  hint={`Sub-array retornado no response para esta se√ß√£o. Fontes: ${(DATASET_SECTION_SOURCES[selectedDataset?.key.toLowerCase() ?? ""] ?? []).map((s) => s.source).join(", ") || "nenhuma mapeada"}`}
                   list={`sources-datalist-${sectionIndex}`}
                 />
                 <datalist id={`sources-datalist-${sectionIndex}`}>
@@ -1413,7 +1413,7 @@ export function LayoutBuilderDetailsSection({
                       <th className="px-2 py-2">Campo</th>
                       <th className="px-2 py-2">Label</th>
                       <th className="px-2 py-2">Formato</th>
-                      <th className="px-2 py-2">AÁıes</th>
+                      <th className="px-2 py-2">A√ß√µes</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1421,8 +1421,8 @@ export function LayoutBuilderDetailsSection({
                       <tr key={`section-${sectionIndex}-col-${columnIndex}`} className="border-b border-border">
                         <td className="px-2 py-2">
                           <select
-                            aria-label={`Campo da seÁ„o ${sectionIndex + 1} coluna ${columnIndex + 1}`}
-                            title={`Campo da seÁ„o ${sectionIndex + 1} coluna ${columnIndex + 1}`}
+                            aria-label={`Campo da se√ß√£o ${sectionIndex + 1} coluna ${columnIndex + 1}`}
+                            title={`Campo da se√ß√£o ${sectionIndex + 1} coluna ${columnIndex + 1}`}
                             value={column.field}
                             onChange={(event) =>
                               setLayoutEditor((prev) => ({
@@ -1455,8 +1455,8 @@ export function LayoutBuilderDetailsSection({
                         </td>
                         <td className="px-2 py-2">
                           <input
-                            aria-label={`Label da seÁ„o ${sectionIndex + 1} coluna ${columnIndex + 1}`}
-                            title={`Label da seÁ„o ${sectionIndex + 1} coluna ${columnIndex + 1}`}
+                            aria-label={`Label da se√ß√£o ${sectionIndex + 1} coluna ${columnIndex + 1}`}
+                            title={`Label da se√ß√£o ${sectionIndex + 1} coluna ${columnIndex + 1}`}
                             placeholder="Label"
                             value={column.label}
                             onChange={(event) =>
@@ -1479,8 +1479,8 @@ export function LayoutBuilderDetailsSection({
                         </td>
                         <td className="px-2 py-2">
                           <select
-                            aria-label={`Formato da seÁ„o ${sectionIndex + 1} coluna ${columnIndex + 1}`}
-                            title={`Formato da seÁ„o ${sectionIndex + 1} coluna ${columnIndex + 1}`}
+                            aria-label={`Formato da se√ß√£o ${sectionIndex + 1} coluna ${columnIndex + 1}`}
+                            title={`Formato da se√ß√£o ${sectionIndex + 1} coluna ${columnIndex + 1}`}
                             value={column.format ?? "text"}
                             onChange={(event) =>
                               setLayoutEditor((prev) => ({
@@ -1540,11 +1540,11 @@ export function LayoutBuilderDetailsSection({
 
       <details className="mt-5">
         <summary className="flex cursor-pointer select-none items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-sm font-medium text-amber-300 hover:bg-amber-500/10">
-          <span>&#9654;</span> OpÁıes avanÁadas &mdash; SeÁıes adicionais (JSON)
+          <span>&#9654;</span> Op√ß√µes avan√ßadas &mdash; Se√ß√µes adicionais (JSON)
         </summary>
         <div className="mt-3 rounded-lg border border-border bg-surface-light p-3">
           <p className="mb-3 text-xs text-muted">
-            SeÁıes extras que aparecem apÛs a tabela principal, como listas de softwares ou detalhes de hardware. Edite via visual acima ou diretamente no JSON abaixo.
+            Se√ß√µes extras que aparecem ap√≥s a tabela principal, como listas de softwares ou detalhes de hardware. Edite via visual acima ou diretamente no JSON abaixo.
           </p>
           <div className="grid gap-4 md:grid-cols-2">
             <TextArea
@@ -1557,8 +1557,8 @@ export function LayoutBuilderDetailsSection({
                   sections: parseJsonObject<LayoutEditorState["sections"]>(event.target.value, prev.sections),
                 }))
               }
-              placeholder='[{"title":"SeÁ„o","source":"items","columns":[{"field":"name","label":"Nome"}]}]'
-              hint="Cada seÁ„o possui title, source (chave de dados) e columns. Use o editor visual acima para n„o precisar editar JSON."
+              placeholder='[{"title":"Se√ß√£o","source":"items","columns":[{"field":"name","label":"Nome"}]}]'
+              hint="Cada se√ß√£o possui title, source (chave de dados) e columns. Use o editor visual acima para n√£o precisar editar JSON."
             />
           </div>
         </div>
@@ -1601,10 +1601,10 @@ export function LayoutBrandingSection({
             }))
           }
           placeholder="https://cdn.empresa.local/logo.png"
-          hint="URL opcional da marca È exibida no cabeÁalho do relatÛrio."
+          hint="URL opcional da marca √© exibida no cabe√ßalho do relat√≥rio."
         />
         <Input
-          label="Altura m·xima da logo"
+          label="Altura m√°xima da logo"
           type="number"
           min={0}
           value={layoutEditor.logoMaxHeightPx}
@@ -1626,7 +1626,7 @@ export function LayoutBrandingSection({
               style: { ...prev.style, primaryColor: event.target.value },
             }))
           }
-          hint="Aplicada no tÌtulo principal, linhas de destaque e elementos visuais de maior evidÍncia."
+          hint="Aplicada no t√≠tulo principal, linhas de destaque e elementos visuais de maior evid√™ncia."
         />
         <Input
           label="Cor secundaria"
@@ -1638,7 +1638,7 @@ export function LayoutBrandingSection({
               style: { ...prev.style, secondaryColor: event.target.value },
             }))
           }
-          hint="Cor de apoio usada em blocos secund·rios e fundos auxiliares do relatÛrio."
+          hint="Cor de apoio usada em blocos secund√°rios e fundos auxiliares do relat√≥rio."
         />
         <Input
           label="Cor de destaque"
@@ -1650,7 +1650,7 @@ export function LayoutBrandingSection({
               style: { ...prev.style, accentColor: event.target.value },
             }))
           }
-          hint="Usada em totais, indicadores de Ínfase e pontos de chamada de atenÁ„o no documento."
+          hint="Usada em totais, indicadores de √™nfase e pontos de chamada de aten√ß√£o no documento."
         />
         <Input
           label="Cor texto cabecalho"
@@ -1662,7 +1662,7 @@ export function LayoutBrandingSection({
               style: { ...prev.style, headerTextColor: event.target.value },
             }))
           }
-          hint="Cor do texto dos cabeÁalhos das tabelas. Mantenha contraste com o fundo do cabeÁalho."
+          hint="Cor do texto dos cabe√ßalhos das tabelas. Mantenha contraste com o fundo do cabe√ßalho."
         />
         <Input
           label="Fundo do cabecalho"
@@ -1674,7 +1674,7 @@ export function LayoutBrandingSection({
               style: { ...prev.style, headerBackgroundColor: event.target.value },
             }))
           }
-          hint="Cor de fundo das cÈlulas de cabeÁalho em todas as tabelas do relatÛrio."
+          hint="Cor de fundo das c√©lulas de cabe√ßalho em todas as tabelas do relat√≥rio."
         />
         <Input
           label="Cor alternada das linhas"
@@ -1686,7 +1686,7 @@ export function LayoutBrandingSection({
               style: { ...prev.style, alternateRowColor: event.target.value },
             }))
           }
-          hint="Cor aplicada nas linhas alternadas quando a opÁ„o de listras zebradas estiver habilitada."
+          hint="Cor aplicada nas linhas alternadas quando a op√ß√£o de listras zebradas estiver habilitada."
         />
         <Input
           label="Cor da borda"
@@ -1698,7 +1698,7 @@ export function LayoutBrandingSection({
               style: { ...prev.style, borderColor: event.target.value },
             }))
           }
-          hint="Define a cor das bordas de tabelas, cards de detalhe e divisores de seÁ„o."
+          hint="Define a cor das bordas de tabelas, cards de detalhe e divisores de se√ß√£o."
         />
         <div className="space-y-1">
           <label className="block text-sm font-medium text-muted-foreground">Fonte</label>
@@ -1719,7 +1719,7 @@ export function LayoutBrandingSection({
             ))}
           </select>
           <p className="text-xs text-muted">
-            Selecione uma fonte validada para evitar erros de preenchimento e manter consistÍncia visual.
+            Selecione uma fonte validada para evitar erros de preenchimento e manter consist√™ncia visual.
           </p>
         </div>
         <div className="flex items-end pb-2">
@@ -1796,7 +1796,7 @@ export function PreviewCard({
               fileName: event.target.value,
             }))
           }
-          hint="Nome sugerido para o arquivo ao fazer download. Sem extens„o."
+          hint="Nome sugerido para o arquivo ao fazer download. Sem extens√£o."
         />
         <div>
           <label className="mb-2 block text-sm font-medium text-muted-foreground">Modo</label>
@@ -1818,7 +1818,7 @@ export function PreviewCard({
               </option>
             ))}
           </select>
-          <p className="mt-1 text-xs text-muted"><strong className="text-muted">html</strong>: renderiza inline na p·gina. <strong className="text-muted">document</strong>: gera o arquivo bin·rio (PDF/XLSX/CSV).</p>
+          <p className="mt-1 text-xs text-muted"><strong className="text-muted">html</strong>: renderiza inline na p√°gina. <strong className="text-muted">document</strong>: gera o arquivo bin√°rio (PDF/XLSX/CSV).</p>
         </div>
         <div>
           <label className="mb-2 block text-sm font-medium text-muted-foreground">Disposition</label>
@@ -1840,7 +1840,7 @@ export function PreviewCard({
               </option>
             ))}
           </select>
-          <p className="mt-1 text-xs text-muted"><strong className="text-muted">inline</strong>: exibe no navegador. <strong className="text-muted">attachment</strong>: forÁa download do arquivo.</p>
+          <p className="mt-1 text-xs text-muted"><strong className="text-muted">inline</strong>: exibe no navegador. <strong className="text-muted">attachment</strong>: for√ßa download do arquivo.</p>
         </div>
         <div>
           <label className="mb-2 block text-sm font-medium text-muted-foreground">Formato para preview</label>
@@ -1868,7 +1868,7 @@ export function PreviewCard({
 
       {(previewMeta.title || previewMeta.rowCount !== undefined || previewMeta.format) && (
         <div className="mt-4 rounded-lg border border-border bg-surface-light p-3 text-xs text-muted-foreground">
-          <p>TÌtulo: {previewMeta.title || "-"}</p>
+          <p>T√≠tulo: {previewMeta.title || "-"}</p>
           <p>Linhas: {previewMeta.rowCount ?? "-"}</p>
           <p>Formato retornado: {previewMeta.format || "-"}</p>
         </div>
@@ -2041,7 +2041,7 @@ export function PreviewFiltersCard({
                     }
                     className={selectClass}
                   >
-                    <option value="" className="bg-surface text-foreground">Padr„o</option>
+                    <option value="" className="bg-surface text-foreground">Padr√£o</option>
                     <option value="asc" className="bg-surface text-foreground">Crescente (asc)</option>
                     <option value="desc" className="bg-surface text-foreground">Decrescente (desc)</option>
                   </select>
@@ -2049,7 +2049,7 @@ export function PreviewFiltersCard({
               );
             }
 
-            if (n === "orientation" || n === "orientaÁ„o") {
+            if (n === "orientation" || n === "orienta√ß√£o") {
               return (
                 <div key={filter.name}>
                   {labelEl}
@@ -2062,7 +2062,7 @@ export function PreviewFiltersCard({
                     }
                     className={selectClass}
                   >
-                    <option value="" className="bg-surface text-foreground">Padr„o</option>
+                    <option value="" className="bg-surface text-foreground">Padr√£o</option>
                     <option value="portrait" className="bg-surface text-foreground">Retrato (portrait)</option>
                     <option value="landscape" className="bg-surface text-foreground">Paisagem (landscape)</option>
                   </select>
@@ -2083,7 +2083,7 @@ export function PreviewFiltersCard({
                     }
                     className={selectClass}
                   >
-                    <option value="" className="bg-surface text-foreground">Padr„o</option>
+                    <option value="" className="bg-surface text-foreground">Padr√£o</option>
                     {fieldOptions.map((field) => (
                       <option key={field.value} value={field.value} className="bg-surface text-foreground">{field.label}</option>
                     ))}
@@ -2109,9 +2109,9 @@ export function PreviewFiltersCard({
                     }
                     className={selectClass}
                   >
-                    <option value="" className="bg-surface text-foreground">N„o definido</option>
+                    <option value="" className="bg-surface text-foreground">N√£o definido</option>
                     <option value="true" className="bg-surface text-foreground">Sim (true)</option>
-                    <option value="false" className="bg-surface text-foreground">N„o (false)</option>
+                    <option value="false" className="bg-surface text-foreground">N√£o (false)</option>
                   </select>
                 </div>
               );
@@ -2136,7 +2136,7 @@ export function PreviewFiltersCard({
           })}
         </div>
       ) : (
-        <p className="text-sm text-muted">Dataset sem filtros din‚micos declarados pela API.</p>
+        <p className="text-sm text-muted">Dataset sem filtros din√¢micos declarados pela API.</p>
       )}
     </Card>
   );
@@ -2151,7 +2151,7 @@ export function ValidationErrorsCard({ errors }: ValidationErrorsCardProps) {
 
   return (
     <Card>
-      <h2 className="text-sm font-semibold text-red-300">Erros de validaÁ„o</h2>
+      <h2 className="text-sm font-semibold text-red-300">Erros de valida√ß√£o</h2>
       <ul className="mt-2 list-disc pl-5 text-xs text-red-200">
         {errors.map((error, index) => (
           <li key={`${error}-${index}`}>{error}</li>

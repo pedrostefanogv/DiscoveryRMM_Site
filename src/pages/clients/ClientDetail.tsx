@@ -20,9 +20,9 @@ import toast from 'react-hot-toast';
 
 const priorityLabels: Record<TicketPriority, { label: string; color: 'slate' | 'success' | 'warning' | 'danger' }> = {
   Low: { label: 'Baixa', color: 'slate' },
-  Medium: { label: 'Média', color: 'success' },
+  Medium: { label: 'MÃ©dia', color: 'success' },
   High: { label: 'Alta', color: 'warning' },
-  Critical: { label: 'Crítica', color: 'danger' },
+  Critical: { label: 'CrÃ­tica', color: 'danger' },
 };
 
 const levelLabels: Record<number, { label: string; color: 'slate' | 'primary' | 'warning' | 'danger' | 'accent' }> = {
@@ -30,7 +30,7 @@ const levelLabels: Record<number, { label: string; color: 'slate' | 'primary' | 
   [LogLevel.Info]: { label: 'Info', color: 'primary' },
   [LogLevel.Warning]: { label: 'Aviso', color: 'warning' },
   [LogLevel.Error]: { label: 'Erro', color: 'danger' },
-  [LogLevel.Critical]: { label: 'Crítico', color: 'danger' },
+  [LogLevel.Critical]: { label: 'CrÃ­tico', color: 'danger' },
 };
 
 export default function ClientDetail() {
@@ -78,7 +78,7 @@ export default function ClientDetail() {
     } else {
       if (!confirm('Tem certeza que deseja excluir este cliente?')) return;
       deleteClient.mutate(c.id, {
-        onSuccess: () => { toast.success('Cliente excluído'); navigate('/clients'); },
+        onSuccess: () => { toast.success('Cliente excluÃ­do'); navigate('/clients'); },
         onError: () => toast.error('Erro ao excluir'),
       });
     }
@@ -87,8 +87,8 @@ export default function ClientDetail() {
   const handleTransferAndDelete = () => {
     setTransferModalOpen(false);
     deleteClient.mutate(c.id, {
-      onSuccess: () => { toast.success('Cliente excluído'); navigate('/clients'); },
-      onError: () => toast.error('Erro ao excluir cliente após transferência'),
+      onSuccess: () => { toast.success('Cliente excluÃ­do'); navigate('/clients'); },
+      onError: () => toast.error('Erro ao excluir cliente apÃ³s transferÃªncia'),
     });
   };
 
@@ -166,7 +166,7 @@ export default function ClientDetail() {
       await navigator.clipboard.writeText(generatedDeployToken.token);
       toast.success('Token copiado para a area de transferencia');
     } catch {
-      toast.error('Não foi possível copiar o token');
+      toast.error('NÃ£o foi possÃ­vel copiar o token');
     }
   };
 
@@ -194,12 +194,12 @@ export default function ClientDetail() {
         </Button>
       </div>
 
-      {/* Mini-dashboard do cliente (últimas 24h) */}
+      {/* Mini-dashboard do cliente (Ãºltimas 24h) */}
       {clientDashboard.data && (
         <Card>
           <CardHeader
             title="Resumo do Cliente"
-            subtitle="Agregado das últimas 24h"
+            subtitle="Agregado das Ãºltimas 24h"
           />
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 text-sm">
             {/* Agentes */}
@@ -243,24 +243,24 @@ export default function ClientDetail() {
               <p className={`mt-1 text-base font-semibold ${clientDashboard.data.commands.total > 0 && clientDashboard.data.commands.successRate >= 80 ? 'text-success' : clientDashboard.data.commands.total > 0 ? 'text-danger' : 'text-foreground'}`}>
                 {clientDashboard.data.commands.total > 0
                   ? `${clientDashboard.data.commands.successRate.toFixed(1)}% sucesso`
-                  : '—'}
+                  : 'Â—'}
               </p>
               <p className="mt-0.5 text-xs text-muted">{clientDashboard.data.commands.total} total</p>
             </div>
-            {/* Automação */}
+            {/* AutomaÃ§Ã£o */}
             <div className="rounded-lg bg-surface-light px-3 py-2">
               <div className="flex items-center gap-1.5 text-muted">
                 {clientDashboard.data.automation.failed > 0
                   ? <XCircle className="h-3.5 w-3.5 text-danger" />
                   : <CheckCircle2 className="h-3.5 w-3.5" />}
-                <span>Automação</span>
+                <span>AutomaÃ§Ã£o</span>
               </div>
               <p className={`mt-1 text-base font-semibold ${clientDashboard.data.automation.total > 0 && clientDashboard.data.automation.successRate >= 80 ? 'text-success' : clientDashboard.data.automation.total > 0 ? 'text-danger' : 'text-foreground'}`}>
                 {clientDashboard.data.automation.total > 0
                   ? `${clientDashboard.data.automation.successRate.toFixed(1)}% sucesso`
-                  : '—'}
+                  : 'Â—'}
               </p>
-              <p className="mt-0.5 text-xs text-muted">{clientDashboard.data.automation.total} execuções</p>
+              <p className="mt-0.5 text-xs text-muted">{clientDashboard.data.automation.total} execuÃ§Ãµes</p>
             </div>
           </div>
         </Card>
@@ -271,7 +271,7 @@ export default function ClientDetail() {
         <StatCard
           icon={Monitor}
           label="Agentes"
-          value={agents.isLoading ? '—' : totalAgents}
+          value={agents.isLoading ? 'Â—' : totalAgents}
           tone="primary"
           trend={
             !agents.isLoading && totalAgents > 0 ? (
@@ -284,7 +284,7 @@ export default function ClientDetail() {
         <StatCard
           icon={Building2}
           label="Sites"
-          value={sites.isLoading ? '—' : totalSites}
+          value={sites.isLoading ? 'Â—' : totalSites}
           tone="accent"
           trend={
             !sites.isLoading && totalSites > 0 ? (
@@ -295,26 +295,26 @@ export default function ClientDetail() {
         <StatCard
           icon={AppWindow}
           label="Softwares instalados"
-          value={softwareSnapshot.isLoading ? '—' : totalInstalledSoftware}
+          value={softwareSnapshot.isLoading ? 'Â—' : totalInstalledSoftware}
           tone="success"
         />
         <StatCard
           icon={TicketIcon}
           label="Chamados"
-          value={tickets.isLoading ? '—' : totalTickets}
+          value={tickets.isLoading ? 'Â—' : totalTickets}
           tone="warning"
         />
       </div>
 
       {/* Main grid: Info + Sites + Agents */}
       <div className="grid gap-6 lg:grid-cols-3">
-        {/* Informações */}
+        {/* InformaÃ§Ãµes */}
         <Card>
-          <CardHeader title="Informações" />
+          <CardHeader title="InformaÃ§Ãµes" />
           <dl className="space-y-3 text-sm">
             <div>
-              <dt className="text-muted">Observações</dt>
-              <dd className="mt-0.5 text-foreground">{c.notes ?? '—'}</dd>
+              <dt className="text-muted">ObservaÃ§Ãµes</dt>
+              <dd className="mt-0.5 text-foreground">{c.notes ?? 'Â—'}</dd>
             </div>
             <div>
               <dt className="text-muted">Criado em</dt>
@@ -327,13 +327,13 @@ export default function ClientDetail() {
             <div className="border-t border-border pt-3">
               <dt className="text-muted">Softwares distintos</dt>
               <dd className="mt-0.5 text-foreground">
-                {softwareSnapshot.isLoading ? '—' : (softwareSnapshot.data?.distinctSoftware ?? 0)}
+                {softwareSnapshot.isLoading ? 'Â—' : (softwareSnapshot.data?.distinctSoftware ?? 0)}
               </dd>
             </div>
             <div>
-              <dt className="text-muted">Agentes com inventário</dt>
+              <dt className="text-muted">Agentes com inventÃ¡rio</dt>
               <dd className="mt-0.5 text-foreground">
-                {softwareSnapshot.isLoading ? '—' : (softwareSnapshot.data?.distinctAgents ?? 0)}
+                {softwareSnapshot.isLoading ? 'Â—' : (softwareSnapshot.data?.distinctAgents ?? 0)}
               </dd>
             </div>
           </dl>
@@ -528,7 +528,7 @@ export default function ClientDetail() {
       <Modal open={siteModalOpen} onClose={() => setSiteModalOpen(false)} title="Cadastrar Site">
         <div className="space-y-4">
           <Input label="Nome" value={siteName} onChange={e => setSiteName(e.target.value)} />
-          <TextArea label="Observações" value={siteNotes} onChange={e => setSiteNotes(e.target.value)} rows={3} />
+          <TextArea label="ObservaÃ§Ãµes" value={siteNotes} onChange={e => setSiteNotes(e.target.value)} rows={3} />
           <div className="flex justify-end gap-3 pt-2">
             <Button variant="ghost" onClick={() => setSiteModalOpen(false)}>Cancelar</Button>
             <Button onClick={handleCreateSite} loading={createSite.isPending}>Salvar</Button>
@@ -569,7 +569,7 @@ export default function ClientDetail() {
           />
 
           <TextArea
-             label="Descrição"
+             label="DescriÃ§Ã£o"
             placeholder="Ex: onboarding de novo agente"
             value={deployDescription}
             onChange={(e) => setDeployDescription(e.target.value)}
@@ -603,10 +603,10 @@ export default function ClientDetail() {
               <p className="break-all font-mono text-sm text-foreground">{generatedDeployToken.token}</p>
               <div className="flex flex-wrap items-center gap-2">
                 <Badge color={generatedDeployToken.multiUse ? 'accent' : 'slate'}>
-                  {generatedDeployToken.multiUse ? 'Multiuso' : 'Uso único'}
+                  {generatedDeployToken.multiUse ? 'Multiuso' : 'Uso Ãºnico'}
                 </Badge>
                 <Badge color="slate">
-                  Expira: {generatedDeployToken.expiresAt ? new Date(generatedDeployToken.expiresAt).toLocaleString('pt-BR') : 'Sem expiração'}
+                  Expira: {generatedDeployToken.expiresAt ? new Date(generatedDeployToken.expiresAt).toLocaleString('pt-BR') : 'Sem expiraÃ§Ã£o'}
                 </Badge>
               </div>
               <div className="flex justify-end">

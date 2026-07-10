@@ -64,15 +64,15 @@ import toast from 'react-hot-toast';
 
 const PRIORITY_META: Record<TicketPriority, { label: string; color: 'slate' | 'success' | 'warning' | 'danger' }> = {
   Low:      { label: 'Baixa',    color: 'slate'   },
-  Medium:   { label: 'Média',    color: 'success' },
+  Medium:   { label: 'MÃ©dia',    color: 'success' },
   High:     { label: 'Alta',     color: 'warning' },
-  Critical: { label: 'Crítica',  color: 'danger'  },
+  Critical: { label: 'CrÃ­tica',  color: 'danger'  },
 };
 
 const ACTIVITY_LABELS: Record<string, string> = {
   Created:           'Criado',
   StateChanged:      'Estado alterado',
-  Assigned:          'Atribuído',
+  Assigned:          'AtribuÃ­do',
   Commented:         'Comentado',
   SlaWarning:        'Aviso SLA',
   SlaBreached:       'SLA violado',
@@ -80,11 +80,11 @@ const ACTIVITY_LABELS: Record<string, string> = {
   Reopened:          'Reaberto',
   DepartmentChanged: 'Depto. alterado',
   PriorityChanged:   'Prioridade alterada',
-  DescriptionUpdated:'Descrição atualizada',
+  DescriptionUpdated:'DescriÃ§Ã£o atualizada',
   CategoryChanged:   'Categoria alterada',
-   AutomationLinked:  'Automação vinculada',
-   AutomationApproved:'Automação aprovada',
-   AutomationRejected:'Automação rejeitada',
+   AutomationLinked:  'AutomaÃ§Ã£o vinculada',
+   AutomationApproved:'AutomaÃ§Ã£o aprovada',
+   AutomationRejected:'AutomaÃ§Ã£o rejeitada',
 };
 
 type Tab = 'comments' | 'timeline' | 'attachments' | 'automation' | 'ai';
@@ -95,7 +95,7 @@ type CommentSeed = {
 };
 
 function resolveUserDisplayName(usersById: Map<string, UserDto>, userId: string | null | undefined) {
-  if (!userId) return '—';
+  if (!userId) return 'Â—';
   const user = usersById.get(userId);
   if (!user) return userId;
   return user.fullName || user.email || user.login || user.id;
@@ -148,7 +148,7 @@ export default function TicketDetail() {
           <h1 className="text-2xl font-bold text-foreground truncate">{t.title}</h1>
           <p className="text-sm text-muted">
             Criado em {new Date(t.createdAt).toLocaleDateString('pt-BR')}
-            {t.closedAt && ` • Encerrado em ${new Date(t.closedAt).toLocaleDateString('pt-BR')}`}
+            {t.closedAt && ` Â• Encerrado em ${new Date(t.closedAt).toLocaleDateString('pt-BR')}`}
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
@@ -166,7 +166,7 @@ export default function TicketDetail() {
             </Badge>
           )}
           <Button size="sm" variant="ghost" onClick={() => setEditing(e => !e)}>
-            {editing ? 'Cancelar edição' : 'Editar'}
+            {editing ? 'Cancelar ediÃ§Ã£o' : 'Editar'}
           </Button>
           <Button size="sm" variant="ghost" onClick={() => navigate(knowledgeUrl)}>
             <BookOpen className="h-4 w-4" /> Conhecimento
@@ -181,7 +181,7 @@ export default function TicketDetail() {
         <div className="space-y-6 lg:col-span-2">
           {/* Description */}
           <Card>
-            <CardHeader title="Descrição" />
+            <CardHeader title="DescriÃ§Ã£o" />
             <p className="text-sm text-muted-foreground whitespace-pre-wrap">{t.description}</p>
           </Card>
 
@@ -192,7 +192,7 @@ export default function TicketDetail() {
                 className={`px-4 py-3 text-sm font-medium transition-colors ${tab === 'comments' ? 'border-b-2 border-primary text-foreground' : 'text-muted hover:text-foreground'}`}
                 onClick={() => setTab('comments')}
               >
-                Comentários ({comments.data?.items?.length ?? 0})
+                ComentÃ¡rios ({comments.data?.items?.length ?? 0})
               </button>
               <button
                 className={`px-4 py-3 text-sm font-medium transition-colors ${tab === 'timeline' ? 'border-b-2 border-primary text-foreground' : 'text-muted hover:text-foreground'}`}
@@ -213,7 +213,7 @@ export default function TicketDetail() {
                 onClick={() => setTab('automation')}
               >
                 <Wrench className="inline h-4 w-4 mr-1" />
-                Automação
+                AutomaÃ§Ã£o
               </button>
               <button
                 className={`px-4 py-3 text-sm font-medium transition-colors ${tab === 'ai' ? 'border-b-2 border-primary text-foreground' : 'text-muted hover:text-foreground'}`}
@@ -384,7 +384,7 @@ async function copyTextToClipboard(text: string, successMessage: string) {
     await navigator.clipboard.writeText(text);
     toast.success(successMessage);
   } catch {
-    toast.error('Não foi possível copiar o texto.');
+    toast.error('NÃ£o foi possÃ­vel copiar o texto.');
   }
 }
 
@@ -398,7 +398,7 @@ function TicketAiMetadata({
 }) {
   return (
     <p className="mt-2 text-[11px] text-muted">
-      Modelo {data.model ?? 'desconhecido'} • {data.tokensUsed} tokens
+      Modelo {data.model ?? 'desconhecido'} Â• {data.tokensUsed} tokens
     </p>
   );
 }
@@ -425,7 +425,7 @@ function TicketAiPanel({
     const nextPriority = parsedTriage?.priority ?? ticket.priority;
 
     if (nextCategory === ticket.category && nextPriority === ticket.priority) {
-      toast.error('A triagem não trouxe categoria ou prioridade aplicáveis.');
+      toast.error('A triagem nÃ£o trouxe categoria ou prioridade aplicÃ¡veis.');
       return;
     }
 
@@ -448,7 +448,7 @@ function TicketAiPanel({
           toast.error(
             error instanceof Error
               ? error.message
-              : 'Não foi possível aplicar a triagem ao ticket.',
+              : 'NÃ£o foi possÃ­vel aplicar a triagem ao ticket.',
           );
         },
       },
@@ -460,14 +460,14 @@ function TicketAiPanel({
       <div className="rounded-xl border border-border bg-surface-light p-4 text-sm text-muted-foreground">
         <p className="font-medium text-foreground">Assistente de IA do ticket</p>
         <p className="mt-1 text-muted">
-           Usa o contrato real do backend para triagem, resumo e próxima resposta. A triagem pode aplicar apenas categoria e prioridade, porque o update atual do ticket não aceita departamento.
+           Usa o contrato real do backend para triagem, resumo e prÃ³xima resposta. A triagem pode aplicar apenas categoria e prioridade, porque o update atual do ticket nÃ£o aceita departamento.
         </p>
       </div>
 
       <div className="rounded-xl border border-border bg-surface-light p-4">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h3 className="text-sm font-semibold text-foreground">Triagem automática</h3>
+            <h3 className="text-sm font-semibold text-foreground">Triagem automÃ¡tica</h3>
             <p className="text-xs text-muted">
               Sugere categoria, prioridade e departamento para o chamado.
             </p>
@@ -545,7 +545,7 @@ function TicketAiPanel({
             ) : (
               <div className="space-y-3">
                 <p className="text-sm text-muted-foreground">
-                   A IA retornou uma saída não estruturada. O conteúdo bruto continua disponível abaixo.
+                   A IA retornou uma saÃ­da nÃ£o estruturada. O conteÃºdo bruto continua disponÃ­vel abaixo.
                 </p>
                 <pre className="overflow-x-auto whitespace-pre-wrap rounded-lg bg-black/20 p-3 text-xs text-muted-foreground">
                   {triage.data.suggestion}
@@ -575,7 +575,7 @@ function TicketAiPanel({
           <div>
             <h3 className="text-sm font-semibold text-foreground">Resumo executivo</h3>
             <p className="text-xs text-muted">
-              Consolida problema, histórico e status atual em texto curto.
+              Consolida problema, histÃ³rico e status atual em texto curto.
             </p>
           </div>
           <Button
@@ -713,7 +713,7 @@ function getAutomationActionLabel(value: unknown) {
     case AutomationTaskActionType.UpdateOrInstallPackage:
       return 'Atualizar ou instalar';
     default:
-      return 'Automação';
+      return 'AutomaÃ§Ã£o';
   }
 }
 
@@ -836,12 +836,12 @@ function AutomationLinksPanel({
         tasksQuery.isLoading
           ? 'Carregando tarefas...'
           : availableTasks.length === 0
-            ? 'Nenhuma tarefa ativa disponível'
+            ? 'Nenhuma tarefa ativa disponÃ­vel'
             : 'Selecione uma tarefa',
     },
     ...availableTasks.map((task) => ({
       value: task.id,
-      label: `${task.name} • ${getAutomationScopeLabel(task.scopeType)}`,
+      label: `${task.name} Â• ${getAutomationScopeLabel(task.scopeType)}`,
     })),
   ];
 
@@ -861,13 +861,13 @@ function AutomationLinksPanel({
         onSuccess: () => {
           setSelectedTaskId('');
           setRequestNote('');
-           toast.success('Solicitação de automação vinculada ao ticket.');
+           toast.success('SolicitaÃ§Ã£o de automaÃ§Ã£o vinculada ao ticket.');
          },
          onError: (error) => {
            toast.error(
              error instanceof Error
                ? error.message
-               : 'Não foi possível vincular a automação.',
+               : 'NÃ£o foi possÃ­vel vincular a automaÃ§Ã£o.',
           );
         },
       },
@@ -894,15 +894,15 @@ function AutomationLinksPanel({
           setReviewNotes((current) => ({ ...current, [link.id]: '' }));
           toast.success(
             action === 'approve'
-              ? 'Automação aprovada com sucesso.'
-               : 'Automação rejeitada com sucesso.',
+              ? 'AutomaÃ§Ã£o aprovada com sucesso.'
+               : 'AutomaÃ§Ã£o rejeitada com sucesso.',
           );
         },
         onError: (error) => {
           toast.error(
             error instanceof Error
               ? error.message
-              : 'Não foi possível revisar a automação.',
+              : 'NÃ£o foi possÃ­vel revisar a automaÃ§Ã£o.',
           );
         },
       },
@@ -915,9 +915,9 @@ function AutomationLinksPanel({
         <div className="mb-3 flex items-center gap-2">
           <Wrench className="h-4 w-4 text-muted" />
           <div>
-            <h3 className="text-sm font-semibold text-foreground">Solicitar automação</h3>
+            <h3 className="text-sm font-semibold text-foreground">Solicitar automaÃ§Ã£o</h3>
              <p className="text-xs text-muted">
-               Vincule uma tarefa ativa ao ticket e deixe a revisão pendente quando necessário.
+               Vincule uma tarefa ativa ao ticket e deixe a revisÃ£o pendente quando necessÃ¡rio.
             </p>
           </div>
         </div>
@@ -934,19 +934,19 @@ function AutomationLinksPanel({
             label="Nota"
             value={requestNote}
             onChange={(event) => setRequestNote(event.target.value)}
-            placeholder="Opcional: contexto da solicitação"
+            placeholder="Opcional: contexto da solicitaÃ§Ã£o"
           />
         </div>
 
         {usingFallbackTasks && (
           <p className="mt-3 text-xs text-muted">
-            Nenhuma tarefa aderente ao escopo do ticket foi encontrada; exibindo o catálogo ativo completo.
+            Nenhuma tarefa aderente ao escopo do ticket foi encontrada; exibindo o catÃ¡logo ativo completo.
           </p>
         )}
 
         {tasksQuery.isError && (
           <p className="mt-3 text-sm text-danger">
-            Não foi possível carregar as tarefas de automação ativas.
+            NÃ£o foi possÃ­vel carregar as tarefas de automaÃ§Ã£o ativas.
           </p>
         )}
 
@@ -957,7 +957,7 @@ function AutomationLinksPanel({
             loading={createLink.isPending}
             disabled={!selectedTaskId}
           >
-            <Wrench className="h-4 w-4" /> Vincular automação
+            <Wrench className="h-4 w-4" /> Vincular automaÃ§Ã£o
           </Button>
         </div>
       </div>
@@ -966,10 +966,10 @@ function AutomationLinksPanel({
         {linksQuery.isLoading ? (
           <Loading />
         ) : linksQuery.isError ? (
-          <p className="text-sm text-danger">Erro ao carregar vinculações de automação.</p>
+          <p className="text-sm text-danger">Erro ao carregar vinculaÃ§Ãµes de automaÃ§Ã£o.</p>
          ) : linkItems.length === 0 ? (
            <p className="py-6 text-center text-sm text-muted">
-             Nenhuma automação vinculada a este ticket.
+             Nenhuma automaÃ§Ã£o vinculada a este ticket.
           </p>
         ) : (
           linkItems.map((link) => {
@@ -992,7 +992,7 @@ function AutomationLinksPanel({
                       )}
                       {task && (
                         <Badge color={task.requiresApproval ? 'warning' : 'accent'}>
-                          {task.requiresApproval ? 'Requer aprovação' : 'Execução direta'}
+                          {task.requiresApproval ? 'Requer aprovaÃ§Ã£o' : 'ExecuÃ§Ã£o direta'}
                         </Badge>
                       )}
                     </div>
@@ -1036,7 +1036,7 @@ function AutomationLinksPanel({
                           [link.id]: event.target.value,
                         }))
                       }
-                      placeholder="Opcional: motivo ou instruções adicionais"
+                      placeholder="Opcional: motivo ou instruÃ§Ãµes adicionais"
                     />
                     <div className="flex flex-wrap gap-2">
                       <Button
@@ -1121,7 +1121,7 @@ function TicketCustomFieldsPanel({ ticketId }: { ticketId: string }) {
       toast.error(
         error instanceof Error
           ? error.message
-          : 'Não foi possível salvar o campo customizado.',
+          : 'NÃ£o foi possÃ­vel salvar o campo customizado.',
       );
     } finally {
       setSavingDefinitionId(null);
@@ -1132,7 +1132,7 @@ function TicketCustomFieldsPanel({ ticketId }: { ticketId: string }) {
     <Card>
       <CardHeader
         title="Campos customizados"
-        subtitle="Valores específicos deste chamado definidos pela operação."
+        subtitle="Valores especÃ­ficos deste chamado definidos pela operaÃ§Ã£o."
       />
       <div className="space-y-3">
         {definitionsQuery.isLoading || valuesQuery.isLoading ? (
@@ -1223,7 +1223,7 @@ function TicketCustomFieldInput({
           label="Valor"
           value={value}
           options={[
-            { value: '', label: 'Não definido' },
+            { value: '', label: 'NÃ£o definido' },
             { value: 'true', label: 'Verdadeiro' },
             { value: 'false', label: 'Falso' },
           ]}
@@ -1253,8 +1253,8 @@ function TicketCustomFieldInput({
           value={value}
           hint={
             definition.options.length > 0
-              ? `Opções permitidas: ${definition.options.join(', ')}`
-              : 'Separe múltiplos valores por vírgula.'
+              ? `OpÃ§Ãµes permitidas: ${definition.options.join(', ')}`
+              : 'Separe mÃºltiplos valores por vÃ­rgula.'
           }
           onChange={(event) => onChange(event.target.value)}
         />
@@ -1562,7 +1562,7 @@ function TicketSummaryPanel({
     }
 
     if (sla.isError || !sla.data) {
-      return <p className="text-sm text-muted">Não foi possível carregar os dados de SLA.</p>;
+      return <p className="text-sm text-muted">NÃ£o foi possÃ­vel carregar os dados de SLA.</p>;
     }
 
     const d = sla.data;
@@ -1575,7 +1575,7 @@ function TicketSummaryPanel({
         <div className="space-y-2">
           <p className="text-sm text-muted">{d.message}</p>
           <p className="text-xs text-muted">
-            O SLA depende do perfil de workflow do departamento. Sem perfil definido, o prazo não é calculado.
+            O SLA depende do perfil de workflow do departamento. Sem perfil definido, o prazo nÃ£o Ã© calculado.
           </p>
         </div>
       );
@@ -1625,14 +1625,14 @@ function TicketSummaryPanel({
       <dl className="grid gap-3 text-sm sm:grid-cols-2">
         <div>
           <dt className="text-muted">Categoria</dt>
-          <dd className="text-foreground">{category ?? '—'}</dd>
+          <dd className="text-foreground">{category ?? 'Â—'}</dd>
         </div>
         <div>
           <dt className="text-muted">Prioridade</dt>
           <dd><Badge color={priorityColor}>{priorityLabel}</Badge></dd>
         </div>
         <div className="sm:col-span-2">
-          <dt className="text-muted">Responsável</dt>
+          <dt className="text-muted">ResponsÃ¡vel</dt>
           <dd className="text-foreground">
             <p className="break-words">{assignedDisplayName}</p>
             {assignedEmail && <p className="text-xs text-muted">{assignedEmail}</p>}
@@ -1683,7 +1683,7 @@ function CommentsPanel({
           </div>
         ))}
         {(comments.data?.items?.length ?? 0) === 0 && (
-          <p className="text-sm text-muted py-4 text-center">Sem comentários ainda</p>
+          <p className="text-sm text-muted py-4 text-center">Sem comentÃ¡rios ainda</p>
         )}
       </div>
       <CommentForm ticketId={ticketId} draftSeed={draftSeed} />
@@ -1751,7 +1751,7 @@ function CommentForm({
     addComment.mutate(
       { id: ticketId, data: { author, content, isInternal } },
       {
-        onSuccess: () => { setContent(''); toast.success('Comentário adicionado'); },
+        onSuccess: () => { setContent(''); toast.success('ComentÃ¡rio adicionado'); },
         onError:   () => toast.error('Erro'),
       },
     );
@@ -1759,7 +1759,7 @@ function CommentForm({
 
   return (
     <div className="mt-4 space-y-3 border-t border-border pt-4">
-      <TextArea placeholder="Escreva um comentário... (mín. 3 chars)" value={content} onChange={e => setContent(e.target.value)} />
+      <TextArea placeholder="Escreva um comentÃ¡rio... (mÃ­n. 3 chars)" value={content} onChange={e => setContent(e.target.value)} />
       <div className="flex items-center justify-between">
         <label className="flex items-center gap-2 text-sm text-muted">
           <input type="checkbox" checked={isInternal} onChange={e => setIsInternal(e.target.checked)} className="rounded bg-surface-light border-border" />
@@ -1790,7 +1790,7 @@ function WorkflowPanel({ ticketId, currentStateId }: { ticketId: string; current
       { id: ticketId, data: { workflowStateId: selected } },
       {
         onSuccess: () => toast.success('Estado atualizado'),
-        onError:   () => toast.error('Transição inválida ou erro ao atualizar'),
+        onError:   () => toast.error('TransiÃ§Ã£o invÃ¡lida ou erro ao atualizar'),
       },
     );
   };
@@ -1844,11 +1844,11 @@ function EditTicketForm({ ticket, onDone }: { ticket: { id: string; title: strin
     <Card>
       <CardHeader title="Editar Chamado" />
       <div className="space-y-4">
-        <Input label="Título *" value={form.title} onChange={e => set('title', e.target.value)} />
+        <Input label="TÃ­tulo *" value={form.title} onChange={e => set('title', e.target.value)} />
         <div>
-          <label className="block text-sm font-medium text-muted-foreground mb-1">Descrição *</label>
+          <label className="block text-sm font-medium text-muted-foreground mb-1">DescriÃ§Ã£o *</label>
           <textarea
-            aria-label="Descrição do chamado"
+            aria-label="DescriÃ§Ã£o do chamado"
             className="w-full rounded-lg border border-border bg-surface-light px-3 py-2 text-sm text-foreground placeholder-muted focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary resize-none"
             rows={4}
             placeholder="Descreva o chamado..."
@@ -1861,9 +1861,9 @@ function EditTicketForm({ ticket, onDone }: { ticket: { id: string; title: strin
             label="Prioridade"
             options={[
               { value: 'Low',      label: 'Baixa'   },
-              { value: 'Medium',   label: 'Média'   },
+              { value: 'Medium',   label: 'MÃ©dia'   },
               { value: 'High',     label: 'Alta'    },
-              { value: 'Critical', label: 'Crítica' },
+              { value: 'Critical', label: 'CrÃ­tica' },
             ]}
             value={form.priority}
             onChange={e => set('priority', e.target.value as TicketPriority)}
@@ -1904,7 +1904,7 @@ function AttachmentsPanel({
   siteId: string | null
   clientId: string | null
 }) {
-  // Prioridade de herança: Site > Client > Server
+  // Prioridade de heranÃ§a: Site > Client > Server
   const siteSettings = useSiteTicketAttachmentSettings(siteId);
   const clientSettings = useClientTicketAttachmentSettings(!siteId ? clientId : null);
   const serverSettings = useTicketAttachmentSettings();
@@ -1938,7 +1938,7 @@ function AttachmentsPanel({
         continue;
       }
       if (cfg?.allowedContentTypes && !cfg.allowedContentTypes.includes(file.type)) {
-        entries.push({ file, status: 'error', error: `Tipo não permitido: ${file.type}` });
+        entries.push({ file, status: 'error', error: `Tipo nÃ£o permitido: ${file.type}` });
         continue;
       }
       entries.push({ file, status: 'idle' });
@@ -2020,10 +2020,10 @@ function AttachmentsPanel({
 
   const STATUS_LABEL: Record<UploadStatus, string> = {
     idle: 'Aguardando',
-    preparing: 'Preparando…',
-    uploading: 'Enviando…',
-    confirming: 'Confirmando…',
-    done: 'Concluído',
+    preparing: 'PreparandoÂ…',
+    uploading: 'EnviandoÂ…',
+    confirming: 'ConfirmandoÂ…',
+    done: 'ConcluÃ­do',
     error: 'Erro',
   };
 
@@ -2031,7 +2031,7 @@ function AttachmentsPanel({
     <div className="space-y-4">
       {!isEnabled && (
         <div className="rounded-lg border border-warning/20 bg-warning/10 px-4 py-3 text-sm text-warning">
-          Upload de anexos está desabilitado nas configurações do servidor.
+          Upload de anexos estÃ¡ desabilitado nas configuraÃ§Ãµes do servidor.
         </div>
       )}
 
@@ -2049,7 +2049,7 @@ function AttachmentsPanel({
               <span className="text-primary underline">clique para selecionar</span>
             </p>
             <p className="text-xs text-muted">
-              Máx. {formatBytes(maxBytes)} · {accept}
+              MÃ¡x. {formatBytes(maxBytes)} Â· {accept}
             </p>
           </div>
           <input
@@ -2108,7 +2108,7 @@ function AttachmentsPanel({
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm text-foreground">{a.fileName}</p>
               <p className="text-xs text-muted">
-                {formatBytes(a.sizeBytes)} · {a.contentType} · {new Date(a.createdAt).toLocaleString('pt-BR')}
+                {formatBytes(a.sizeBytes)} Â· {a.contentType} Â· {new Date(a.createdAt).toLocaleString('pt-BR')}
               </p>
             </div>
             <Badge color="slate">{a.uploadedBy}</Badge>

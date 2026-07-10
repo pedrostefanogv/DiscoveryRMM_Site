@@ -73,7 +73,7 @@ export function NotificationBell() {
     try {
       await markAsRead(item.id);
     } catch {
-      toast.error("Não foi possível marcar a notificação como lida.");
+      toast.error("NÃ£o foi possÃ­vel marcar a notificaÃ§Ã£o como lida.");
     }
 
     const target = parseNavigationTarget(item.payloadJson);
@@ -88,7 +88,7 @@ export function NotificationBell() {
       await markAllAsRead();
       toast.success("Todas marcadas como lidas.");
     } catch {
-      toast.error("Não foi possível marcar todas as notificações como lidas.");
+      toast.error("NÃ£o foi possÃ­vel marcar todas as notificaÃ§Ãµes como lidas.");
     }
   };
 
@@ -98,7 +98,7 @@ export function NotificationBell() {
       .map(item => item.id);
 
     if (readIds.length === 0) {
-      toast("Nenhuma notificação lida para limpar.");
+      toast("Nenhuma notificaÃ§Ã£o lida para limpar.");
       return;
     }
 
@@ -107,7 +107,7 @@ export function NotificationBell() {
       readIds.forEach(id => next.add(id));
       return next;
     });
-    toast.success(`${readIds.length} notificação(ns) lida(s) removida(s).`);
+    toast.success(`${readIds.length} notificaÃ§Ã£o(ns) lida(s) removida(s).`);
   };
 
   const handleDismissNotification = (notificationId: string) => {
@@ -124,7 +124,7 @@ export function NotificationBell() {
         variant="ghost"
         size="sm"
         onClick={() => setOpen((prev) => !prev)}
-        aria-label="Abrir notificações"
+        aria-label="Abrir notificaÃ§Ãµes"
       >
         <Bell className="h-4 w-4" />
         {unreadCount > 0 && (
@@ -137,7 +137,7 @@ export function NotificationBell() {
           <Card className="space-y-3">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <h3 className="text-sm font-semibold text-foreground">Notificações</h3>
+                <h3 className="text-sm font-semibold text-foreground">NotificaÃ§Ãµes</h3>
                 <p className="text-xs text-muted">
                   {isFetching ? "Sincronizando..." : `${visibleList.length} item(ns)`}
                 </p>
@@ -163,7 +163,7 @@ export function NotificationBell() {
               {isLoading && visibleList.length === 0 && <Loading />}
 
               {!isLoading && visibleList.length === 0 && (
-                <p className="text-sm text-muted">Sem notificações.</p>
+                <p className="text-sm text-muted">Sem notificaÃ§Ãµes.</p>
               )}
 
               {visibleList.map((item) => {

@@ -217,14 +217,14 @@ export default function AutomationOperationsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-foreground">Operacoes de Automação</h1>
+        <h1 className="text-2xl font-bold text-foreground">Operacoes de AutomaÃ§Ã£o</h1>
         <p className="text-sm text-muted">
-          Execute tarefas/scripts por agent e acompanhe o histórico.
+          Execute tarefas/scripts por agent e acompanhe o histÃ³rico.
         </p>
       </div>
 
       <Card>
-        <CardHeader title="Contexto do Agent" subtitle="Selecione alvo para operações" />
+        <CardHeader title="Contexto do Agent" subtitle="Selecione alvo para operaÃ§Ãµes" />
         <div className="grid gap-3 md:grid-cols-3">
           <Select
             label="Cliente"
@@ -288,7 +288,7 @@ export default function AutomationOperationsPage() {
         </Card>
 
         <Card>
-          <CardHeader title="Force Sync" subtitle="Sincronização técnica" />
+          <CardHeader title="Force Sync" subtitle="SincronizaÃ§Ã£o tÃ©cnica" />
           <div className="space-y-3">
             <Select
               label="Policies"
@@ -322,16 +322,16 @@ export default function AutomationOperationsPage() {
       </div>
 
       <Card>
-        <CardHeader title="Histórico de execuções" subtitle={agentId ? "Eventos recentes do agent" : "Selecione um agent para consultar"} />
+        <CardHeader title="HistÃ³rico de execuÃ§Ãµes" subtitle={agentId ? "Eventos recentes do agent" : "Selecione um agent para consultar"} />
         {!agentId && <p className="text-sm text-muted">Nenhum agent selecionado.</p>}
-        {agentId && executions.isLoading && <Loading message="Carregando execuções..." />}
+        {agentId && executions.isLoading && <Loading message="Carregando execuÃ§Ãµes..." />}
         {agentId && executions.isError && <ErrorDisplay onRetry={() => executions.refetch()} />}
         {agentId && !executions.isLoading && !executions.isError && (
           <DataTable
             columns={columns}
             data={executions.data ?? []}
             keyExtractor={(item) => item.id}
-            emptyMessage="Nenhuma execução encontrada."
+            emptyMessage="Nenhuma execuÃ§Ã£o encontrada."
           />
         )}
       </Card>

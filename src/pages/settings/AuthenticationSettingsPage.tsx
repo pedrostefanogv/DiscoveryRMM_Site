@@ -44,7 +44,7 @@ const renameSchema = z.object({
     .string()
     .trim()
     .min(2, "Informe um nome com pelo menos 2 caracteres.")
-    .max(80, "Use no m·ximo 80 caracteres."),
+    .max(80, "Use no m√°ximo 80 caracteres."),
 });
 
 type RenameFormValues = z.infer<typeof renameSchema>;
@@ -119,7 +119,7 @@ export default function AuthenticationSettingsPage() {
       },
       {
         key: "actions",
-        header: "AÁıes",
+        header: "A√ß√µes",
         className: "w-[160px]",
         render: (item) => (
           <div className="flex items-center justify-end gap-2">
@@ -153,7 +153,7 @@ export default function AuthenticationSettingsPage() {
 
   const handleRegister = async () => {
     if (!session.accessToken) {
-      toast.error("Sessao autenticada ausente. FaÁa login novamente.");
+      toast.error("Sessao autenticada ausente. Fa√ßa login novamente.");
       return;
     }
 
@@ -178,7 +178,7 @@ export default function AuthenticationSettingsPage() {
       });
 
       if (!(credential instanceof PublicKeyCredential)) {
-        throw new Error("O navegador n„o retornou uma credencial v·lida.");
+        throw new Error("O navegador n√£o retornou uma credencial v√°lida.");
       }
 
       const result = await authApi.completeRegistrationFido2(
@@ -206,7 +206,7 @@ export default function AuthenticationSettingsPage() {
 
   const handleDelete = async (item: MfaKey) => {
     const confirmed = window.confirm(
-      `Remover a chave \"${item.name}\"? Esta aÁ„o n„o pode ser desfeita.`,
+      `Remover a chave \"${item.name}\"? Esta a√ß√£o n√£o pode ser desfeita.`,
     );
     if (!confirmed) {
       return;
@@ -219,19 +219,19 @@ export default function AuthenticationSettingsPage() {
       const message =
         error instanceof ApiError
           ? error.message
-          : "N„o foi possÌvel remover a chave de seguranÁa.";
+          : "N√£o foi poss√≠vel remover a chave de seguran√ßa.";
       toast.error(message);
     }
   };
 
   if (keysQuery.isLoading) {
-    return <Loading message="Carregando configuraÁıes de autenticaÁ„o..." />;
+    return <Loading message="Carregando configura√ß√µes de autentica√ß√£o..." />;
   }
 
   if (keysQuery.isError) {
     return (
       <ErrorDisplay
-        message="Falha ao carregar suas chaves de autenticaÁ„o."
+        message="Falha ao carregar suas chaves de autentica√ß√£o."
         onRetry={() => void keysQuery.refetch()}
       />
     );
@@ -247,9 +247,9 @@ export default function AuthenticationSettingsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-foreground">AutenticaÁ„o</h1>
+        <h1 className="text-2xl font-bold text-foreground">Autentica√ß√£o</h1>
         <p className="text-sm text-muted">
-          Gerencie suas chaves MFA e acompanhe o estado da sess„o atual.
+          Gerencie suas chaves MFA e acompanhe o estado da sess√£o atual.
         </p>
       </div>
 
@@ -264,12 +264,12 @@ export default function AuthenticationSettingsPage() {
               <p className="mt-1 text-lg font-semibold text-foreground">
                 {session.stage === "authenticated"
                   ? "Autenticada"
-                  : "Sem sess„o valida"}
+                  : "Sem sess√£o valida"}
               </p>
               <p className="mt-1 text-xs text-muted">
                 {expiresInText
                   ? `Expira em ${expiresInText}`
-                  : "Sem expiraÁ„o local registrada"}
+                  : "Sem expira√ß√£o local registrada"}
               </p>
             </div>
           </div>
@@ -328,11 +328,11 @@ export default function AuthenticationSettingsPage() {
       <Card>
         <CardHeader
           title="Regras atuais"
-          subtitle="Comportamentos importantes expostos pelo backend para o fluxo de autenticaÁ„o."
+          subtitle="Comportamentos importantes expostos pelo backend para o fluxo de autentica√ß√£o."
         />
         <div className="grid gap-3 md:grid-cols-2">
           <div className="rounded-xl border border-border bg-surface-light p-4 text-sm text-muted-foreground">
-            O backend impede remover a ˙ltima chave ativa do usuario. A mensagem retornada pela API e È exibida como fonte de verdade.
+            O backend impede remover a √∫ltima chave ativa do usuario. A mensagem retornada pela API e √© exibida como fonte de verdade.
           </div>
           <div className="rounded-xl border border-border bg-surface-light p-4 text-sm text-muted-foreground">
             Registros novos usam WebAuthn com navigator.credentials.create e sao gravados com o nome amigavel informado na UI.
@@ -391,7 +391,7 @@ function RenameMfaKeyModal({
       const message =
         error instanceof ApiError
           ? error.message
-          : "N„o foi possÌvel renomear a chave de seguranÁa.";
+          : "N√£o foi poss√≠vel renomear a chave de seguran√ßa.";
       toast.error(message);
     }
   };

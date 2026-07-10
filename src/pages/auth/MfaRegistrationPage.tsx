@@ -69,7 +69,7 @@ export default function MfaRegistrationPage() {
 
         const sanitizedCode = verificationCode.replace(/\D/g, "");
         if (sanitizedCode.length < 6) {
-          const message = "Informe o cÛdigo de verificaÁ„o TOTP com 6 dÌgitos.";
+          const message = "Informe o c√≥digo de verifica√ß√£o TOTP com 6 d√≠gitos.";
           setError(message);
           toast.error(message);
           return;
@@ -83,7 +83,7 @@ export default function MfaRegistrationPage() {
         });
 
         if (result.backupCodes.length) {
-          toast.success("OTP registrado. Guarde os cÛdigos de backup em local seguro.");
+          toast.success("OTP registrado. Guarde os c√≥digos de backup em local seguro.");
         } else {
           toast.success(result.message);
         }
@@ -97,7 +97,7 @@ export default function MfaRegistrationPage() {
         });
 
         if (!(credential instanceof PublicKeyCredential)) {
-          throw new Error("O navegador n„o retornou uma credencial v·lida.");
+          throw new Error("O navegador n√£o retornou uma credencial v√°lida.");
         }
 
         setTemporaryStage("mfa-register-complete");
@@ -113,7 +113,7 @@ export default function MfaRegistrationPage() {
 
       if (session.temporaryMfaToken) {
         clearTemporarySession();
-        toast.success("MFA registrado. FaÁa login novamente para concluir a autenticaÁ„o.");
+        toast.success("MFA registrado. Fa√ßa login novamente para concluir a autentica√ß√£o.");
         navigate("/auth/login", { replace: true });
         return;
       }
@@ -124,14 +124,14 @@ export default function MfaRegistrationPage() {
         clearTemporarySession();
         setTemporaryStage("anonymous");
         toast.error(
-          "Seu token tempor·rio de MFA n„o È mais v·lido. FaÁa login novamente para emitir um novo token de configuraÁ„o.",
+          "Seu token tempor√°rio de MFA n√£o √© mais v√°lido. Fa√ßa login novamente para emitir um novo token de configura√ß√£o.",
         );
         navigate("/auth/login", { replace: true });
         return;
       }
 
       if (caught instanceof ApiError && caught.status === 403) {
-        const message = "Seu perfil exige outro metodo de MFA. FaÁa login novamente e siga o fluxo correspondente.";
+        const message = "Seu perfil exige outro metodo de MFA. Fa√ßa login novamente e siga o fluxo correspondente.";
         setError(message);
         toast.error(message);
         return;
@@ -182,7 +182,7 @@ export default function MfaRegistrationPage() {
               <p className="mt-3 text-xs text-muted">{totpSetupData.message}</p>
             </div>
             <Input
-              label="CÛdigo de verificaÁ„o"
+              label="C√≥digo de verifica√ß√£o"
               inputMode="numeric"
               autoComplete="one-time-code"
               maxLength={8}
@@ -204,7 +204,7 @@ export default function MfaRegistrationPage() {
               <LaptopMinimal className="mt-0.5 h-4 w-4 text-primary" />
             )}
             {isTotpFlow
-              ? "Escaneie o QR code (ou use o URI), gere o cÛdigo e confirme para finalizar o cadastro OTP."
+              ? "Escaneie o QR code (ou use o URI), gere o c√≥digo e confirme para finalizar o cadastro OTP."
               : "Use um nome amigavel para distinguir passkeys, chaves fisicas e autenticadores de plataforma."}
           </div>
           <div className="mt-3 flex items-start gap-3">
@@ -216,7 +216,7 @@ export default function MfaRegistrationPage() {
         <div className={`rounded-2xl border px-4 py-3 text-sm ${environment.isSecureContext ? 'border-accent/30 bg-accent/10 text-cyan-100' : 'border-warning/30 bg-warning/10 text-amber-50'}`}>
           Local atual: <strong>{environment.origin}</strong>. {environment.isSecureContext
             ? "Este contexto e considerado seguro para WebAuthn; se houver 401, o problema e de token/permissao no backend."
-            : "Este contexto n„o È seguro para WebAuthn; o navegador pode bloquear a operaÁ„o."}
+            : "Este contexto n√£o √© seguro para WebAuthn; o navegador pode bloquear a opera√ß√£o."}
         </div>
 
         {error && (
@@ -230,7 +230,7 @@ export default function MfaRegistrationPage() {
           {isTotpFlow
             ? totpSetupData
               ? " Confirmar OTP"
-              : "Iniciar configuraÁ„o OTP"
+              : "Iniciar configura√ß√£o OTP"
             : " Registrar chave"}
         </Button>
       </form>

@@ -84,7 +84,7 @@ export default function MfaAssertionPage() {
       }
 
       if (!(credential instanceof PublicKeyCredential)) {
-        throw new Error("O navegador n„o retornou uma credencial v·lida.");
+        throw new Error("O navegador n√£o retornou uma credencial v√°lida.");
       }
 
       setTemporaryStage("mfa-assert-complete");
@@ -95,7 +95,7 @@ export default function MfaAssertionPage() {
       });
 
       await completeAuthenticatedSession(tokens);
-      toast.success("AutenticaÁ„o concluida com sucesso.");
+      toast.success("Autentica√ß√£o concluida com sucesso.");
       navigate("/", { replace: true });
     } catch (caught) {
       if (caught instanceof ApiError && caught.status === 403) {
@@ -109,7 +109,7 @@ export default function MfaAssertionPage() {
         clearTemporarySession();
         setTemporaryStage("anonymous");
         toast.error(
-          "Seu token tempor·rio de MFA n„o È mais v·lido. FaÁa login novamente para emitir um novo token.",
+          "Seu token tempor√°rio de MFA n√£o √© mais v√°lido. Fa√ßa login novamente para emitir um novo token.",
          );
          navigate("/auth/login", { replace: true });
          return;
@@ -132,7 +132,7 @@ export default function MfaAssertionPage() {
 
     const code = otpCode.trim();
     if (code.length < 6) {
-      const message = "Informe o cÛdigo OTP com 6 dÌgitos.";
+      const message = "Informe o c√≥digo OTP com 6 d√≠gitos.";
       setError(message);
       toast.error(message);
       return;
@@ -145,11 +145,11 @@ export default function MfaAssertionPage() {
       setTemporaryStage("mfa-assert-complete");
       const tokens = await authApi.completeLoginOtp(token, { code });
        await completeAuthenticatedSession(tokens);
-       toast.success("AutenticaÁ„o concluÌda com sucesso.");
+       toast.success("Autentica√ß√£o conclu√≠da com sucesso.");
        navigate("/", { replace: true });
      } catch (caught) {
        if (caught instanceof ApiError && caught.status === 403) {
-         const message = "Seu perfil exige outro mÈtodo de MFA. Inicie novamente o login para seguir o fluxo correto.";
+         const message = "Seu perfil exige outro m√©todo de MFA. Inicie novamente o login para seguir o fluxo correto.";
         setError(message);
         toast.error(message);
         return;
@@ -159,7 +159,7 @@ export default function MfaAssertionPage() {
         clearTemporarySession();
         setTemporaryStage("anonymous");
         toast.error(
-           "Seu token tempor·rio de MFA n„o È mais v·lido. FaÁa login novamente para emitir um novo token.",
+           "Seu token tempor√°rio de MFA n√£o √© mais v√°lido. Fa√ßa login novamente para emitir um novo token.",
          );
          navigate("/auth/login", { replace: true });
          return;
@@ -168,7 +168,7 @@ export default function MfaAssertionPage() {
        const message =
          caught instanceof ApiError
            ? caught.message
-           : "N„o foi possÌvel validar o cÛdigo OTP.";
+           : "N√£o foi poss√≠vel validar o c√≥digo OTP.";
       setError(message);
       toast.error(message);
       setTemporaryStage("mfa-assert-begin");
@@ -180,11 +180,11 @@ export default function MfaAssertionPage() {
   return (
     <Card className="border-border bg-surface/80 shadow-2xl backdrop-blur" padding>
       <CardHeader
-        title={isTotpFlow ? "Validar OTP" : "Validar chave de seguranÁa"}
+        title={isTotpFlow ? "Validar OTP" : "Validar chave de seguran√ßa"}
         subtitle={
           isTotpFlow
-            ? "Informe o cÛdigo do autenticador para trocar o token tempor·rio por uma sess„o autenticada."
-             : "Conclua a asserÁ„o WebAuthn para trocar o token tempor·rio por uma sess„o autenticada."
+            ? "Informe o c√≥digo do autenticador para trocar o token tempor√°rio por uma sess√£o autenticada."
+             : "Conclua a asser√ß√£o WebAuthn para trocar o token tempor√°rio por uma sess√£o autenticada."
         }
       />
 
@@ -197,14 +197,14 @@ export default function MfaAssertionPage() {
               <Fingerprint className="mt-0.5 h-5 w-5 text-primary" />
             )}
             {isTotpFlow
-               ? "Seu perfil exige OTP. Digite o cÛdigo tempor·rio gerado no autenticador."
-               : "Seu perfil exige FIDO2. Use sua passkey, chave fÌsica ou autenticador compatÌvel registrado para concluir o login."}
+               ? "Seu perfil exige OTP. Digite o c√≥digo tempor√°rio gerado no autenticador."
+               : "Seu perfil exige FIDO2. Use sua passkey, chave f√≠sica ou autenticador compat√≠vel registrado para concluir o login."}
           </div>
         </div>
 
         {isTotpFlow && (
           <Input
-            label="CÛdigo OTP"
+            label="C√≥digo OTP"
             inputMode="numeric"
             autoComplete="one-time-code"
             maxLength={8}
@@ -233,7 +233,7 @@ export default function MfaAssertionPage() {
           onClick={isTotpFlow ? handleAuthenticateOtp : handleAuthenticateFido2}
         >
           <ShieldCheck className="h-4 w-4" />
-          {isTotpFlow ? "Validar OTP" : "Iniciar validaÁ„o FIDO2"}
+          {isTotpFlow ? "Validar OTP" : "Iniciar valida√ß√£o FIDO2"}
         </Button>
       </div>
     </Card>

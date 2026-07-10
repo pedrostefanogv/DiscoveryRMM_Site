@@ -28,11 +28,11 @@ const levelLabels: Record<number, { label: string; color: 'slate' | 'primary' | 
   [LogLevel.Info]: { label: 'Info', color: 'primary' },
   [LogLevel.Warning]: { label: 'Aviso', color: 'warning' },
   [LogLevel.Error]: { label: 'Erro', color: 'danger' },
-  [LogLevel.Critical]: { label: 'Crítico', color: 'danger' },
+  [LogLevel.Critical]: { label: 'CrÃ­tico', color: 'danger' },
 };
 
 function formatBytes(bytes: number | null): string {
-  if (!bytes) return '—';
+  if (!bytes) return 'Â—';
   const gb = bytes / (1024 ** 3);
   if (gb >= 1) return `${gb.toFixed(1)} GB`;
   const mb = bytes / (1024 ** 2);
@@ -40,12 +40,12 @@ function formatBytes(bytes: number | null): string {
 }
 
 function formatDate(date: string | null): string {
-  if (!date) return '—';
+  if (!date) return 'Â—';
   return new Date(date).toLocaleString('pt-BR');
 }
 
 function formatSocketFamily(family: string | null): string {
-  if (!family) return '—';
+  if (!family) return 'Â—';
   if (family === '2') return 'IPv4';
   if (family === '23') return 'IPv6';
   return family;
@@ -270,11 +270,11 @@ export default function AgentDetail() {
       if (err && typeof err === 'object' && 'status' in err) {
         const apiErr = err as { status?: number; message?: string };
         if (apiErr.status === 409) {
-          toast.error('Este agente já possui essa label.');
+          toast.error('Este agente jÃ¡ possui essa label.');
           return;
         }
         if (apiErr.status === 400) {
-          toast.error(apiErr.message || 'Label inválida.');
+          toast.error(apiErr.message || 'Label invÃ¡lida.');
           return;
         }
       }
@@ -293,11 +293,11 @@ export default function AgentDetail() {
       if (err && typeof err === 'object' && 'status' in err) {
         const apiErr = err as { status?: number; message?: string };
         if (apiErr.status === 400) {
-          toast.error(apiErr.message || 'Não é possível remover label automática por este endpoint.');
+          toast.error(apiErr.message || 'NÃ£o Ã© possÃ­vel remover label automÃ¡tica por este endpoint.');
           return;
         }
         if (apiErr.status === 404) {
-          toast.error('Label não encontrada.');
+          toast.error('Label nÃ£o encontrada.');
           return;
         }
       }
@@ -402,16 +402,16 @@ export default function AgentDetail() {
       : machineScore >= 100
         ? 'Acima da baseline'
         : machineScore >= 60
-          ? 'Intermediário'
+          ? 'IntermediÃ¡rio'
           : 'Entrada';
   const processorModelFull = hw.data?.hardware?.processor ?? null;
   const processorModelDisplay = processorModelFull
     ? processorModelFull.split(' ').slice(0, 4).join(' ')
-    : 'Modelo indisponível';
+    : 'Modelo indisponÃ­vel';
   const processorValue = hw.data?.hardware?.processor
     ? `${hw.data.hardware.processorCores ?? '?'}C / ${hw.data.hardware.processorThreads ?? '?'}T`
-    : '—';
-  const softwareTotalInstalled = softwareSnapshot.isLoading ? '—' : (softwareSnapshot.data?.totalInstalled ?? 0);
+    : 'Â—';
+  const softwareTotalInstalled = softwareSnapshot.isLoading ? 'Â—' : (softwareSnapshot.data?.totalInstalled ?? 0);
   const softwareLastCollectedAt = softwareSnapshot.data?.lastCollectedAt ?? softwareSnapshot.data?.updatedAt ?? null;
   const softwareLastCollectedLabel = softwareLastCollectedAt
     ? new Date(softwareLastCollectedAt).toLocaleString('pt-BR')
@@ -424,14 +424,14 @@ export default function AgentDetail() {
       key: 'protocol',
       header: 'Protocolo',
       className: 'w-24',
-      render: item => <span className="font-mono uppercase text-muted-foreground">{item.protocol ?? '—'}</span>,
+      render: item => <span className="font-mono uppercase text-muted-foreground">{item.protocol ?? 'Â—'}</span>,
     },
     {
       key: 'address',
-      header: 'Endereço',
+      header: 'EndereÃ§o',
       render: item => (
         <span className="font-mono text-muted-foreground">
-          {item.address ?? '—'}:{item.port}
+          {item.address ?? 'Â—'}:{item.port}
         </span>
       ),
     },
@@ -440,14 +440,14 @@ export default function AgentDetail() {
       header: 'Processo',
       render: item => (
         <div>
-          <p className="text-sm text-foreground">{item.processName ?? '—'}</p>
+          <p className="text-sm text-foreground">{item.processName ?? 'Â—'}</p>
           <p className="text-xs text-muted">PID {item.processId}</p>
         </div>
       ),
     },
     {
       key: 'collectedAt',
-      header: 'Última coleta',
+      header: 'Ãšltima coleta',
       render: item => formatDate(item.collectedAt),
     },
   ];
@@ -457,11 +457,11 @@ export default function AgentDetail() {
       key: 'protocol',
       header: 'Protocolo',
       className: 'w-24',
-      render: item => <span className="font-mono uppercase text-muted-foreground">{item.protocol ?? '—'}</span>,
+      render: item => <span className="font-mono uppercase text-muted-foreground">{item.protocol ?? 'Â—'}</span>,
     },
     {
       key: 'family',
-      header: 'Família',
+      header: 'FamÃ­lia',
       className: 'w-20',
       render: item => <Badge color="slate">{formatSocketFamily(item.family)}</Badge>,
     },
@@ -470,7 +470,7 @@ export default function AgentDetail() {
       header: 'Origem',
       render: item => (
         <span className="font-mono text-muted-foreground">
-          {item.localAddress ?? '—'}:{item.localPort}
+          {item.localAddress ?? 'Â—'}:{item.localPort}
         </span>
       ),
     },
@@ -479,7 +479,7 @@ export default function AgentDetail() {
       header: 'Destino',
       render: item => (
         <span className="font-mono text-muted-foreground">
-          {item.remoteAddress ?? '—'}:{item.remotePort}
+          {item.remoteAddress ?? 'Â—'}:{item.remotePort}
         </span>
       ),
     },
@@ -488,14 +488,14 @@ export default function AgentDetail() {
       header: 'Processo',
       render: item => (
         <div>
-          <p className="text-sm text-foreground">{item.processName ?? '—'}</p>
+          <p className="text-sm text-foreground">{item.processName ?? 'Â—'}</p>
           <p className="text-xs text-muted">PID {item.processId}</p>
         </div>
       ),
     },
     {
       key: 'collectedAt',
-      header: 'Última coleta',
+      header: 'Ãšltima coleta',
       render: item => formatDate(item.collectedAt),
     },
   ];
@@ -565,7 +565,7 @@ export default function AgentDetail() {
     if (!id) return;
     try {
       await deleteAgent.mutateAsync(id);
-      toast.success('Agente excluído com sucesso.');
+      toast.success('Agente excluÃ­do com sucesso.');
       setDeleteConfirmOpen(false);
       navigate('/agents', { replace: true });
     } catch (error) {
@@ -579,13 +579,13 @@ export default function AgentDetail() {
     setIsTriggeringAgentUpdate(true);
     try {
       await agentUpdatesApi.forceAgentCheck(id);
-      toast.success('Atualização do agente disparada com sucesso.');
+      toast.success('AtualizaÃ§Ã£o do agente disparada com sucesso.');
     } catch (error) {
       const message = error instanceof ApiError
         ? error.message
         : error instanceof Error
           ? error.message
-          : 'Falha ao disparar atualização do agente.';
+          : 'Falha ao disparar atualizaÃ§Ã£o do agente.';
       toast.error(message);
     } finally {
       setIsTriggeringAgentUpdate(false);
@@ -603,7 +603,7 @@ export default function AgentDetail() {
     setIsApprovingZeroTouch(true);
     try {
       await approveZeroTouch.mutateAsync(id);
-      toast.success('Agente aprovado para comunicação com a API.');
+      toast.success('Agente aprovado para comunicaÃ§Ã£o com a API.');
       await agent.refetch();
     } catch (error) {
       const message = error instanceof ApiError
@@ -641,7 +641,7 @@ export default function AgentDetail() {
 
   const handleWakeOnLanConfirm = async (data: { broadcastAddress?: string }) => {
     if (!id) {
-      throw new Error('Agente inválido para Wake-on-LAN.');
+      throw new Error('Agente invÃ¡lido para Wake-on-LAN.');
     }
 
     const response = await wakeOnLan.mutateAsync({ id, data });
@@ -664,18 +664,18 @@ export default function AgentDetail() {
       const current = report.items.find((item) => item.agentId === a.id);
       if (current) {
         toast.success(
-          `Node link dry-run: ${current.status} · sugestão ${current.suggestedNodeId ?? 'N/A'}`,
+          `Node link dry-run: ${current.status} Â· sugestÃ£o ${current.suggestedNodeId ?? 'N/A'}`,
         );
       } else {
-        toast.success('Dry-run de node links concluído para o site.');
+        toast.success('Dry-run de node links concluÃ­do para o site.');
       }
     } catch (error) {
       if (error instanceof ApiError && error.status === 403) {
-        setNodeLinkPreviewError('Sem permissão para reconciliar links de node neste escopo.');
-        toast.error('Sem permissão para reconciliar links de node neste escopo.');
+        setNodeLinkPreviewError('Sem permissÃ£o para reconciliar links de node neste escopo.');
+        toast.error('Sem permissÃ£o para reconciliar links de node neste escopo.');
       } else if (error instanceof ApiError && error.status === 503) {
-        setNodeLinkPreviewError('Falha operacional/configuração do MeshCentral.');
-        toast.error('Falha operacional/configuração do MeshCentral.');
+        setNodeLinkPreviewError('Falha operacional/configuraÃ§Ã£o do MeshCentral.');
+        toast.error('Falha operacional/configuraÃ§Ã£o do MeshCentral.');
       } else {
         const message = error instanceof Error
           ? error.message
@@ -691,12 +691,12 @@ export default function AgentDetail() {
   const handleNodeLinkApply = async () => {
     if (!a.siteId || isApplyingNodeLink || !nodeLinkPreviewReport) return;
     if (nodeLinkPreviewReport.ambiguousAgents > 0) {
-      toast.error('Existem links ambiguos no site. Faça tratativa manual antes de aplicar.');
+      toast.error('Existem links ambiguos no site. FaÃ§a tratativa manual antes de aplicar.');
       return;
     }
 
     const confirmed = window.confirm(
-      'Aplicar reconcile atualizará vínculos meshcentral_node_id no site. Deseja continuar?',
+      'Aplicar reconcile atualizarÃ¡ vÃ­nculos meshcentral_node_id no site. Deseja continuar?',
     );
     if (!confirmed) return;
 
@@ -711,9 +711,9 @@ export default function AgentDetail() {
       toast.success('Reconcile de node links aplicado com sucesso.');
     } catch (error) {
       if (error instanceof ApiError && error.status === 403) {
-        toast.error('Sem permissão para aplicar reconcile de node links neste escopo.');
+        toast.error('Sem permissÃ£o para aplicar reconcile de node links neste escopo.');
       } else if (error instanceof ApiError && error.status === 503) {
-        toast.error('Falha operacional/configuração do MeshCentral.');
+        toast.error('Falha operacional/configuraÃ§Ã£o do MeshCentral.');
       } else {
         const message = error instanceof Error
           ? error.message
@@ -746,7 +746,7 @@ export default function AgentDetail() {
     setIsRefreshingPorts(true);
     try {
       await agentsApi.refreshData(id, { listeningPorts: true });
-      toast.success('Solicitação de coleta de portas enviada ao agente.');
+      toast.success('SolicitaÃ§Ã£o de coleta de portas enviada ao agente.');
       await new Promise(r => setTimeout(r, 2000));
       await hw.refetch();
     } catch (error) {
@@ -762,11 +762,11 @@ export default function AgentDetail() {
     setIsRefreshingConnections(true);
     try {
       await agentsApi.refreshData(id, { openConnections: true });
-      toast.success('Solicitação de coleta de conexões enviada ao agente.');
+      toast.success('SolicitaÃ§Ã£o de coleta de conexÃµes enviada ao agente.');
       await new Promise(r => setTimeout(r, 2000));
       await hw.refetch();
     } catch (error) {
-      const msg = error instanceof ApiError ? error.message : 'Falha ao solicitar refresh de conexões.';
+      const msg = error instanceof ApiError ? error.message : 'Falha ao solicitar refresh de conexÃµes.';
       toast.error(msg);
     } finally {
       setIsRefreshingConnections(false);
@@ -778,7 +778,7 @@ export default function AgentDetail() {
     setIsRefreshingSoftware(true);
     try {
       await agentsApi.refreshData(id, { software: true });
-      toast.success('Solicitação de coleta de software enviada ao agente.');
+      toast.success('SolicitaÃ§Ã£o de coleta de software enviada ao agente.');
       await new Promise(r => setTimeout(r, 3000));
       await software.refetch();
       await softwareSnapshot.refetch();
@@ -795,7 +795,7 @@ export default function AgentDetail() {
     setIsRefreshingPrinters(true);
     try {
       await agentsApi.refreshData(id, { printers: true, hardware: true });
-      toast.success('Solicitação de coleta de impressoras enviada ao agente.');
+      toast.success('SolicitaÃ§Ã£o de coleta de impressoras enviada ao agente.');
       await new Promise(r => setTimeout(r, 2000));
       await hw.refetch();
     } catch (error) {
@@ -807,9 +807,9 @@ export default function AgentDetail() {
   };
 
   const softwareLimitOptions = [
-    { value: '10', label: '10 por página' },
-    { value: '30', label: '30 por página' },
-    { value: '50', label: '50 por página' },
+    { value: '10', label: '10 por pÃ¡gina' },
+    { value: '30', label: '30 por pÃ¡gina' },
+    { value: '50', label: '50 por pÃ¡gina' },
   ];
   const softwareOrderOptions = [
     { value: 'desc', label: 'Mais recente primeiro' },
@@ -828,18 +828,18 @@ export default function AgentDetail() {
     },
     {
       key: 'version',
-      header: 'Versão',
+      header: 'VersÃ£o',
       className: 'font-mono',
-      render: item => item.version ?? '—',
+      render: item => item.version ?? 'Â—',
     },
     {
       key: 'source',
       header: 'Fonte',
-      render: item => item.source ?? '—',
+      render: item => item.source ?? 'Â—',
     },
     {
       key: 'lastSeenAt',
-      header: 'Última coleta',
+      header: 'Ãšltima coleta',
       render: item => formatDate(item.lastSeenAt ?? item.collectedAt),
     },
   ];
@@ -853,7 +853,7 @@ export default function AgentDetail() {
         </button>
         <div className="flex-1">
           <h1 className="text-2xl font-bold text-foreground">{a.displayName ?? a.hostname}</h1>
-          <p className="text-sm text-muted">{a.hostname} — {a.operatingSystem} {a.osVersion}</p>
+          <p className="text-sm text-muted">{a.hostname} Â— {a.operatingSystem} {a.osVersion}</p>
         </div>
         <Badge color={isOnlineNow ? 'success' : 'slate'}>
           <span className="flex items-center gap-1">
@@ -863,7 +863,7 @@ export default function AgentDetail() {
         </Badge>
         {isZeroTouchPending && (
           <>
-            <Badge color="warning">Zero-Touch: aguardando aprovação</Badge>
+            <Badge color="warning">Zero-Touch: aguardando aprovaÃ§Ã£o</Badge>
           </>
         )}
         <div className="relative" ref={powerMenuRef}>
@@ -873,7 +873,7 @@ export default function AgentDetail() {
             onClick={() => setIsPowerMenuOpen((current) => !current)}
           >
             <Power className="h-4 w-4" />
-            Ações
+            AÃ§Ãµes
             <ChevronDown className="h-4 w-4" />
           </Button>
           {isPowerMenuOpen && (
@@ -911,7 +911,7 @@ export default function AgentDetail() {
                 }}
               >
                 <AppWindow className="h-4 w-4" />
-                Automação
+                AutomaÃ§Ã£o
               </button>
 
               <div className="border-t border-border" />
@@ -920,7 +920,7 @@ export default function AgentDetail() {
                 <>
                   <button
                     type="button"
-                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-amber-300 transition-colors hover:bg-amber-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-warning transition-colors hover:bg-warning/10 disabled:cursor-not-allowed disabled:opacity-60"
                     onClick={() => handleOpenPowerAction('restart')}
                     disabled={restartAgent.isPending || shutdownAgent.isPending}
                   >
@@ -929,7 +929,7 @@ export default function AgentDetail() {
                   </button>
                   <button
                     type="button"
-                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-300 transition-colors hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-danger transition-colors hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-60"
                     onClick={() => handleOpenPowerAction('shutdown')}
                     disabled={restartAgent.isPending || shutdownAgent.isPending}
                   >
@@ -940,7 +940,7 @@ export default function AgentDetail() {
               ) : (
                 <button
                   type="button"
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-violet-300 transition-colors hover:bg-violet-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-accent transition-colors hover:bg-accent/10 disabled:cursor-not-allowed disabled:opacity-60"
                   onClick={handleOpenWakeOnLan}
                   disabled={wakeOnLan.isPending}
                 >
@@ -967,7 +967,7 @@ export default function AgentDetail() {
               {canManageAgent && (
                 <button
                   type="button"
-                  className="flex w-full items-center gap-2 border-t border-border px-3 py-2 text-left text-sm text-red-300 transition-colors hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="flex w-full items-center gap-2 border-t border-border px-3 py-2 text-left text-sm text-danger transition-colors hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-60"
                   onClick={() => {
                     setIsPowerMenuOpen(false);
                     handleDeleteAgent();
@@ -997,19 +997,19 @@ export default function AgentDetail() {
             <div className="space-y-2 text-left text-[11px] text-muted-foreground">
               <p>
                 <span className="text-muted">Modelo completo:</span>{' '}
-                {processorModelFull ?? 'Não informado'}
+                {processorModelFull ?? 'NÃ£o informado'}
               </p>
               <p>
-                <span className="text-muted">Núcleos físicos:</span>{' '}
-                {hw.data?.hardware?.processorCores ?? '—'}
+                <span className="text-muted">NÃºcleos fÃ­sicos:</span>{' '}
+                {hw.data?.hardware?.processorCores ?? 'Â—'}
               </p>
               <p>
-                <span className="text-muted">Threads lógicas:</span>{' '}
-                {hw.data?.hardware?.processorThreads ?? '—'}
+                <span className="text-muted">Threads lÃ³gicas:</span>{' '}
+                {hw.data?.hardware?.processorThreads ?? 'Â—'}
               </p>
               <p>
                 <span className="text-muted">Arquitetura:</span>{' '}
-                {hw.data?.hardware?.processorArchitecture ?? 'Não informada'}
+                {hw.data?.hardware?.processorArchitecture ?? 'NÃ£o informada'}
               </p>
             </div>
           )}
@@ -1029,11 +1029,11 @@ export default function AgentDetail() {
         <div className="h-full [&>div]:h-full">
           <StatCard
             icon={MemoryStick}
-            label="Memória RAM"
+            label="MemÃ³ria RAM"
             value={formatBytes(hw.data?.hardware?.totalMemoryBytes ?? null)}
             tone="accent"
             trend={hw.data?.memoryModules?.length
-              ? <span className="text-xs text-muted">{hw.data.memoryModules.length} módulo(s)</span>
+              ? <span className="text-xs text-muted">{hw.data.memoryModules.length} mÃ³dulo(s)</span>
               : undefined}
           />
         </div>
@@ -1049,8 +1049,8 @@ export default function AgentDetail() {
               </p>
 
               <div className="grid gap-1 text-[11px] text-muted-foreground">
-                <p><span className="text-muted">CPU (50%):</span> núcleos físicos valem 1.0 e threads extras valem 0.3 cada.</p>
-                <p><span className="text-muted">RAM (50%):</span> progressão linear pela quantidade de GB.</p>
+                <p><span className="text-muted">CPU (50%):</span> nÃºcleos fÃ­sicos valem 1.0 e threads extras valem 0.3 cada.</p>
+                <p><span className="text-muted">RAM (50%):</span> progressÃ£o linear pela quantidade de GB.</p>
               </div>
 
               <div className="rounded-lg border border-border bg-surface-light px-3 py-2 font-mono text-[11px] text-foreground">
@@ -1077,7 +1077,7 @@ export default function AgentDetail() {
             <StatCard
               icon={Gauge}
               label="MachineScore"
-              value={machineScore === null ? '—' : machineScore}
+              value={machineScore === null ? 'Â—' : machineScore}
               tone={machineScoreTone}
               trend={machineScoreHint ? <span className="text-xs text-muted">{machineScoreHint}</span> : undefined}
             />
@@ -1090,7 +1090,7 @@ export default function AgentDetail() {
           variant="hover-card"
           content={(
             <div className="space-y-2 text-left text-[11px] text-muted-foreground">
-              <p>Labels do agente: automáticas por regras e manuais.</p>
+              <p>Labels do agente: automÃ¡ticas por regras e manuais.</p>
               {isLoadingLabels ? (
                 <p>Carregando labels...</p>
               ) : labelsError ? (
@@ -1098,15 +1098,15 @@ export default function AgentDetail() {
               ) : (
                 <>
                   <p><span className="text-muted">Total:</span> {allLabels.length}</p>
-                  <p><span className="text-muted">Automáticas:</span> {automaticLabelsCount}</p>
+                  <p><span className="text-muted">AutomÃ¡ticas:</span> {automaticLabelsCount}</p>
                   <p><span className="text-muted">Manuais:</span> {manualLabelsCount}</p>
-                  <p className="text-muted">Use o botão + para vincular labels manuais existentes.</p>
+                  <p className="text-muted">Use o botÃ£o + para vincular labels manuais existentes.</p>
                 </>
               )}
             </div>
           )}
         >
-          <Card className="relative h-full border border-cyan-500/20 bg-gradient-to-br from-cyan-500/10 via-slate-900/30 to-slate-900/20 p-4">
+          <Card className="glass-card relative h-full rounded-xl border border-border bg-surface p-5">
             <div className="relative mb-3 h-8" ref={labelPickerRef}>
               <Button
                 size="sm"
@@ -1156,14 +1156,14 @@ export default function AgentDetail() {
                           >
                             {l}
                             {alreadyHas ? (
-                              <span className="ml-2 text-xs text-muted">(já vinculada)</span>
+                              <span className="ml-2 text-xs text-muted">(jÃ¡ vinculada)</span>
                             ) : null}
                           </button>
                         );
                       })}
                     {distinctLabels.length === 0 ? (
                       <p className="px-3 py-2 text-xs text-muted">
-                        Nenhuma label cadastrada. Crie uma regra com modo Manual em Labels Automáticas.
+                        Nenhuma label cadastrada. Crie uma regra com modo Manual em Labels AutomÃ¡ticas.
                       </p>
                     ) : null}
                     {distinctLabels.filter(l => l.toLowerCase().includes(labelPickerQuery.toLowerCase())).length === 0 ? (
@@ -1217,9 +1217,9 @@ export default function AgentDetail() {
           variant="hover-card"
           content={(
             <div className="space-y-2 text-left text-[11px] text-muted-foreground">
-              <p>Inventário de softwares instalados no agente.</p>
+              <p>InventÃ¡rio de softwares instalados no agente.</p>
               <p><span className="text-muted">Quantidade total:</span> {softwareTotalInstalled}</p>
-              <p><span className="text-muted">Última coleta:</span> {softwareLastCollectedLabel}</p>
+              <p><span className="text-muted">Ãšltima coleta:</span> {softwareLastCollectedLabel}</p>
             </div>
           )}
         >
@@ -1243,7 +1243,7 @@ export default function AgentDetail() {
 
         {/* Disk */}
         <Card>
-          <CardHeader title="Disco" subtitle="Espaço agregado do agente" />
+          <CardHeader title="Disco" subtitle="EspaÃ§o agregado do agente" />
 
           {disks.length === 0 ? (
             <p className="text-sm text-muted">Sem dados de disco coletados para este agente.</p>
@@ -1268,7 +1268,7 @@ export default function AgentDetail() {
                 <div className="mb-1 flex items-center justify-between text-xs">
                   <span className="flex items-center gap-1 text-muted">
                     <HardDrive className="h-3.5 w-3.5" />
-                    Utilização
+                    UtilizaÃ§Ã£o
                   </span>
                   <span className="font-medium text-muted-foreground">{diskUsagePercent ?? 0}%</span>
                 </div>
@@ -1315,7 +1315,7 @@ export default function AgentDetail() {
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Info do Agente */}
         <Card>
-          <CardHeader title="Informações" />
+          <CardHeader title="InformaÃ§Ãµes" />
           <dl className="space-y-3 text-sm">
             <div>
               <dt className="text-muted">Hostname</dt>
@@ -1323,16 +1323,16 @@ export default function AgentDetail() {
             </div>
             <div>
               <dt className="text-muted">Sistema Operacional</dt>
-              <dd className="mt-0.5 text-foreground">{a.operatingSystem ?? '—'}</dd>
+              <dd className="mt-0.5 text-foreground">{a.operatingSystem ?? 'Â—'}</dd>
             </div>
             <div>
-              <dt className="text-muted">Versão do SO</dt>
-              <dd className="mt-0.5 font-mono text-foreground">{a.osVersion ?? '—'}</dd>
+              <dt className="text-muted">VersÃ£o do SO</dt>
+              <dd className="mt-0.5 font-mono text-foreground">{a.osVersion ?? 'Â—'}</dd>
             </div>
             <div className="border-t border-border pt-3">
               <dt className="text-muted">MeshCentral Node ID</dt>
               <dd className="mt-0.5 text-foreground">
-                <span className="font-mono">{a.meshCentralNodeId ?? '—'}</span>
+                <span className="font-mono">{a.meshCentralNodeId ?? 'Â—'}</span>
                 <p className="mt-1 text-xs text-muted">
                   Valor persistido no agent, utilizado automaticamente no suporte remoto.
                 </p>
@@ -1358,14 +1358,14 @@ export default function AgentDetail() {
               </div>
             )}
             <div className="border-t border-border pt-3">
-              <dt className="text-muted">Versão do Agente</dt>
-              <dd className="mt-0.5 font-mono text-foreground">{a.agentVersion ?? '—'}</dd>
+              <dt className="text-muted">VersÃ£o do Agente</dt>
+              <dd className="mt-0.5 font-mono text-foreground">{a.agentVersion ?? 'Â—'}</dd>
             </div>
             {isZeroTouchPending && (
               <div>
                 <dt className="text-muted">Zero-Touch Config Registration</dt>
                 <dd className="mt-1 flex items-center gap-2">
-                  <Badge color="warning">Aguardando aprovação</Badge>
+                  <Badge color="warning">Aguardando aprovaÃ§Ã£o</Badge>
                   {canManageAgent && (
                     <Button
                       size="sm"
@@ -1383,12 +1383,12 @@ export default function AgentDetail() {
               </div>
             )}
             <div>
-              <dt className="text-muted">Último IP</dt>
-              <dd className="mt-0.5 font-mono text-foreground">{a.lastIpAddress ?? hw.data?.networkAdapters?.find(n => n.ipAddress && !n.ipAddress.startsWith('169.254'))?.ipAddress ?? '—'}</dd>
+              <dt className="text-muted">Ãšltimo IP</dt>
+              <dd className="mt-0.5 font-mono text-foreground">{a.lastIpAddress ?? hw.data?.networkAdapters?.find(n => n.ipAddress && !n.ipAddress.startsWith('169.254'))?.ipAddress ?? 'Â—'}</dd>
             </div>
             <div>
-              <dt className="text-muted">Última vez online</dt>
-              <dd className="mt-0.5 text-foreground">{a.lastSeen ? formatDate(a.lastSeen) : (a.lastSeenAt ? formatDate(a.lastSeenAt) : '—')}</dd>
+              <dt className="text-muted">Ãšltima vez online</dt>
+              <dd className="mt-0.5 text-foreground">{a.lastSeen ? formatDate(a.lastSeen) : (a.lastSeenAt ? formatDate(a.lastSeenAt) : 'Â—')}</dd>
             </div>
             {hw.data?.hardware?.manufacturer && (
               <div className="border-t border-border pt-3">
@@ -1398,7 +1398,7 @@ export default function AgentDetail() {
             )}
             {hw.data?.hardware?.serialNumber && (
               <div>
-                <dt className="text-muted">Número de série</dt>
+                <dt className="text-muted">NÃºmero de sÃ©rie</dt>
                 <dd className="mt-0.5 font-mono text-foreground">{hw.data.hardware.serialNumber}</dd>
               </div>
             )}
@@ -1417,7 +1417,7 @@ export default function AgentDetail() {
                       <p className="truncate text-sm font-medium text-foreground">{n.name}</p>
                       {n.macAddress && <p className="font-mono text-xs text-muted">{n.macAddress}</p>}
                     </div>
-                    <Badge color={n.isDhcpEnabled ? 'success' : 'slate'}>{n.isDhcpEnabled ? 'DHCP' : 'Estático'}</Badge>
+                    <Badge color={n.isDhcpEnabled ? 'success' : 'slate'}>{n.isDhcpEnabled ? 'DHCP' : 'EstÃ¡tico'}</Badge>
                   </div>
                   {(n.ipAddress || n.gateway) && (
                     <div className="mt-1.5 grid grid-cols-2 gap-2 text-xs">
@@ -1452,7 +1452,7 @@ export default function AgentDetail() {
             aria-selected={activeDataTab === 'software'}
             className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors ${activeDataTab === 'software' ? 'border-primary/40 bg-primary/15 text-primary' : 'border-border bg-surface-light text-muted-foreground hover:text-foreground'}`}
           >
-            Inventário de Aplicativos
+            InventÃ¡rio de Aplicativos
             <span className="rounded-full bg-black/25 px-2 py-0.5 text-xs text-muted-foreground">{softwareTotalCount}</span>
           </button>
           <button
@@ -1472,7 +1472,7 @@ export default function AgentDetail() {
             aria-selected={activeDataTab === 'tickets'}
             className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors ${activeDataTab === 'tickets' ? 'border-primary/40 bg-primary/15 text-primary' : 'border-border bg-surface-light text-muted-foreground hover:text-foreground'}`}
           >
-            Últimos Chamados
+            Ãšltimos Chamados
             <span className="rounded-full bg-black/25 px-2 py-0.5 text-xs text-muted-foreground">{agentTickets.data?.items?.length ?? 0}</span>
           </button>
           <button
@@ -1492,7 +1492,7 @@ export default function AgentDetail() {
             aria-selected={activeDataTab === 'openSockets'}
             className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors ${activeDataTab === 'openSockets' ? 'border-primary/40 bg-primary/15 text-primary' : 'border-border bg-surface-light text-muted-foreground hover:text-foreground'}`}
           >
-            Conexões Abertas
+            ConexÃµes Abertas
             <span className="rounded-full bg-black/25 px-2 py-0.5 text-xs text-muted-foreground">{openSockets.length}</span>
           </button>
           <button
@@ -1511,8 +1511,8 @@ export default function AgentDetail() {
           <>
             <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h3 className="text-lg font-semibold text-foreground sm:text-xl">Inventário de Aplicativos</h3>
-                <p className="text-sm text-muted">{softwareTotalCount} aplicativo(s) no inventário</p>
+                <h3 className="text-lg font-semibold text-foreground sm:text-xl">InventÃ¡rio de Aplicativos</h3>
+                <p className="text-sm text-muted">{softwareTotalCount} aplicativo(s) no inventÃ¡rio</p>
               </div>
               <Button
                 size="sm"
@@ -1520,14 +1520,14 @@ export default function AgentDetail() {
                 onClick={handleRefreshSoftware}
                 loading={isRefreshingSoftware}
                 disabled={!isOnlineNow}
-                title={!isOnlineNow ? 'Agente offline — refresh indisponível' : 'Solicitar nova coleta de software ao agente'}
+                title={!isOnlineNow ? 'Agente offline Â— refresh indisponÃ­vel' : 'Solicitar nova coleta de software ao agente'}
               >
                 <RefreshCw className="h-4 w-4" />
                 Atualizar
               </Button>
             </div>
             {software.isLoading ? (
-              <Loading message="Carregando inventário de aplicativos..." />
+              <Loading message="Carregando inventÃ¡rio de aplicativos..." />
             ) : software.isError ? (
               <ErrorDisplay onRetry={() => software.refetch()} />
             ) : (
@@ -1535,7 +1535,7 @@ export default function AgentDetail() {
                 {softwareSnapshot.data?.updatedAt && (
                   <div className="mb-3 flex items-center justify-end gap-2 text-xs text-muted">
                     <Clock className="h-3.5 w-3.5" />
-                    <span>Última coleta: <span className="text-muted-foreground">{formatDate(softwareSnapshot.data.updatedAt)}</span></span>
+                    <span>Ãšltima coleta: <span className="text-muted-foreground">{formatDate(softwareSnapshot.data.updatedAt)}</span></span>
                   </div>
                 )}
 
@@ -1545,11 +1545,11 @@ export default function AgentDetail() {
                     <p className="text-sm font-medium text-foreground">{softwareSnapshot.data?.totalInstalled ?? softwareTotalCount}</p>
                   </div>
                   <div className="rounded-lg bg-surface-light px-3 py-2">
-                    <p className="text-xs text-muted">Primeira detecção</p>
+                    <p className="text-xs text-muted">Primeira detecÃ§Ã£o</p>
                     <p className="text-sm text-muted-foreground">{formatDate(softwareSnapshot.data?.firstSeenAt ?? null)}</p>
                   </div>
                   <div className="rounded-lg bg-surface-light px-3 py-2">
-                    <p className="text-xs text-muted">Última coleta</p>
+                    <p className="text-xs text-muted">Ãšltima coleta</p>
                     <p className="text-sm text-muted-foreground">{formatDate(softwareSnapshot.data?.lastCollectedAt ?? null)}</p>
                   </div>
                 </div>
@@ -1558,7 +1558,7 @@ export default function AgentDetail() {
                   <Input
                     value={softwareSearchInput}
                     onChange={(e) => setSoftwareSearchInput(e.target.value)}
-                    placeholder="Pesquisar por nome, versão, fabricante, installId, serial ou fonte"
+                    placeholder="Pesquisar por nome, versÃ£o, fabricante, installId, serial ou fonte"
                   />
                   <Select
                     value={softwareOrder}
@@ -1582,7 +1582,7 @@ export default function AgentDetail() {
                 {softwareItems.length > 0 && (
                   <div className="mb-4 flex items-center justify-between gap-3">
                     <p className="text-xs text-muted">
-                      Página {softwarePage} de {softwareTotalPages} | {softwareItems.length} item(ns) nesta página
+                      PÃ¡gina {softwarePage} de {softwareTotalPages} | {softwareItems.length} item(ns) nesta pÃ¡gina
                       {softwareSearchApplied ? ` | filtro: "${softwareSearchApplied}"` : ''}
                     </p>
                     <div className="flex items-center gap-2">
@@ -1599,7 +1599,7 @@ export default function AgentDetail() {
                         disabled={!canGoNextSoftwarePage}
                         loading={software.isFetching}
                       >
-                        Avançar
+                        AvanÃ§ar
                       </Button>
                     </div>
                   </div>
@@ -1614,7 +1614,7 @@ export default function AgentDetail() {
                 />
                 <div className="mt-4 flex items-center justify-between gap-3">
                   <p className="text-xs text-muted">
-                    Página {softwarePage} de {softwareTotalPages} | {softwareItems.length} item(ns) nesta página
+                    PÃ¡gina {softwarePage} de {softwareTotalPages} | {softwareItems.length} item(ns) nesta pÃ¡gina
                     {softwareSearchApplied ? ` | filtro: "${softwareSearchApplied}"` : ''}
                   </p>
                   <div className="flex items-center gap-2">
@@ -1631,7 +1631,7 @@ export default function AgentDetail() {
                       disabled={!canGoNextSoftwarePage}
                       loading={software.isFetching}
                     >
-                      Avançar
+                      AvanÃ§ar
                     </Button>
                   </div>
                 </div>
@@ -1642,7 +1642,7 @@ export default function AgentDetail() {
 
         {activeDataTab === 'tickets' && (
           <>
-            <CardHeader title="Últimos Chamados" subtitle={`${agentTickets.data?.items?.length ?? 0} chamado(s) retornado(s)`} />
+            <CardHeader title="Ãšltimos Chamados" subtitle={`${agentTickets.data?.items?.length ?? 0} chamado(s) retornado(s)`} />
             <div className="space-y-2">
               {agentTickets.isLoading && (
                 <div className="py-4 text-center text-sm text-muted">
@@ -1665,9 +1665,9 @@ export default function AgentDetail() {
                     };
                     const priorityLabels: Record<string, string> = {
                       Low: 'Baixa',
-                      Medium: 'Média',
+                      Medium: 'MÃ©dia',
                       High: 'Alta',
-                      Critical: 'Crítica',
+                      Critical: 'CrÃ­tica',
                     };
                     return (
                       <button
@@ -1685,7 +1685,7 @@ export default function AgentDetail() {
                             </div>
                             <p className="mt-1 text-xs text-muted">
                               {new Date(ticket.createdAt).toLocaleDateString('pt-BR')}
-                              {ticket.closedAt && ' • Encerrado'}
+                              {ticket.closedAt && ' Â• Encerrado'}
                             </p>
                           </div>
                           <Badge color={priorityColors[ticket.priority] ?? 'slate'} className="shrink-0">
@@ -1714,7 +1714,7 @@ export default function AgentDetail() {
                 onClick={handleRefreshPrinters}
                 loading={isRefreshingPrinters || hw.isFetching}
                 disabled={!isOnlineNow}
-                title={!isOnlineNow ? 'Agente offline — refresh indisponível' : 'Solicitar nova coleta de impressoras ao agente'}
+                title={!isOnlineNow ? 'Agente offline Â— refresh indisponÃ­vel' : 'Solicitar nova coleta de impressoras ao agente'}
               >
                 <RefreshCw className="h-4 w-4" />
                 Atualizar
@@ -1734,7 +1734,7 @@ export default function AgentDetail() {
                         )}
                       </div>
                       <div className="flex items-center gap-2">
-                        {printer.isDefault && <Badge color="primary">Padrão</Badge>}
+                        {printer.isDefault && <Badge color="primary">PadrÃ£o</Badge>}
                         <Badge color={printerStatusColor(printer.printerStatus)}>{printer.printerStatus ?? 'Sem status'}</Badge>
                       </div>
                     </div>
@@ -1744,12 +1744,12 @@ export default function AgentDetail() {
                         <Printer className="h-3.5 w-3.5" />
                         {printer.isNetworkPrinter ? 'Rede' : 'Local'}
                       </span>
-                      <span>{printer.portName ? `Porta: ${printer.portName}` : 'Porta não informada'}</span>
-                      <span>{printer.location ? `Local: ${printer.location}` : 'Local não informado'}</span>
+                      <span>{printer.portName ? `Porta: ${printer.portName}` : 'Porta nÃ£o informada'}</span>
+                      <span>{printer.location ? `Local: ${printer.location}` : 'Local nÃ£o informado'}</span>
                       <span>
                         {printer.shared
                           ? `Compartilhada${printer.shareName ? ` (${printer.shareName})` : ''}`
-                          : 'Não compartilhada'}
+                          : 'NÃ£o compartilhada'}
                       </span>
                     </div>
                   </div>
@@ -1772,7 +1772,7 @@ export default function AgentDetail() {
                 onClick={handleRefreshPorts}
                 loading={isRefreshingPorts || hw.isFetching}
                 disabled={!isOnlineNow}
-                title={!isOnlineNow ? 'Agente offline — refresh indisponível' : 'Solicitar nova coleta de portas ao agente'}
+                title={!isOnlineNow ? 'Agente offline Â— refresh indisponÃ­vel' : 'Solicitar nova coleta de portas ao agente'}
               >
                 <RefreshCw className="h-4 w-4" />
                 Atualizar
@@ -1797,8 +1797,8 @@ export default function AgentDetail() {
           <>
             <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h3 className="text-lg font-semibold text-foreground sm:text-xl">Conexões Abertas</h3>
-                <p className="text-sm text-muted">{openSockets.length} conexão(ões) ativa(s)</p>
+                <h3 className="text-lg font-semibold text-foreground sm:text-xl">ConexÃµes Abertas</h3>
+                <p className="text-sm text-muted">{openSockets.length} conexÃ£o(Ãµes) ativa(s)</p>
               </div>
               <Button
                 size="sm"
@@ -1806,7 +1806,7 @@ export default function AgentDetail() {
                 onClick={handleRefreshConnections}
                 loading={isRefreshingConnections || hw.isFetching}
                 disabled={!isOnlineNow}
-                title={!isOnlineNow ? 'Agente offline — refresh indisponível' : 'Solicitar nova coleta de conexões ao agente'}
+                title={!isOnlineNow ? 'Agente offline Â— refresh indisponÃ­vel' : 'Solicitar nova coleta de conexÃµes ao agente'}
               >
                 <RefreshCw className="h-4 w-4" />
                 Atualizar
@@ -1815,14 +1815,14 @@ export default function AgentDetail() {
             {openSockets.length === 500 && (
               <div className="mb-3 flex items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-400">
                 <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-                Lista truncada pelo backend no limite de 500 itens. Podem existir mais conexões abertas.
+                Lista truncada pelo backend no limite de 500 itens. Podem existir mais conexÃµes abertas.
               </div>
             )}
             <DataTable
               columns={openSocketColumns}
               data={openSockets}
               keyExtractor={item => item.id}
-              emptyMessage="Nenhuma conexão aberta encontrada"
+              emptyMessage="Nenhuma conexÃ£o aberta encontrada"
             />
           </>
         )}
@@ -1855,16 +1855,16 @@ export default function AgentDetail() {
       <Modal
         open={deleteConfirmOpen}
         onClose={closeDeleteAgentModal}
-        title="Confirmar exclusão de agente"
+        title="Confirmar exclusÃ£o de agente"
         maxWidth="max-w-lg"
       >
         <div className="space-y-4">
           <div className="rounded-lg border border-danger/30 bg-danger/10 p-3 text-sm text-foreground">
             <p>
-              Você está prestes a excluir o agente{' '}
+              VocÃª estÃ¡ prestes a excluir o agente{' '}
               <span className="font-semibold text-foreground">{a.displayName ?? a.hostname}</span>.
             </p>
-            <p className="mt-1 text-muted">Esta ação não pode ser desfeita.</p>
+            <p className="mt-1 text-muted">Esta aÃ§Ã£o nÃ£o pode ser desfeita.</p>
           </div>
 
           <div className="flex justify-end gap-2">
@@ -1923,8 +1923,8 @@ export default function AgentDetail() {
               </div>
 
               {nodeLinkPreviewReport.ambiguousAgents > 0 && (
-                <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
-                  Foram encontrados vínculos ambíguos no site. Trate manualmente antes de aplicar reconcile.
+                <div className="rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning">
+                  Foram encontrados vÃ­nculos ambÃ­guos no site. Trate manualmente antes de aplicar reconcile.
                 </div>
               )}
 
@@ -1940,14 +1940,14 @@ export default function AgentDetail() {
                         {currentNodeLinkItem.status}
                       </Badge>
                       <Badge color={currentNodeLinkItem.applied ? 'success' : 'slate'}>
-                        {currentNodeLinkItem.applied ? 'Aplicado' : 'Não aplicado'}
+                        {currentNodeLinkItem.applied ? 'Aplicado' : 'NÃ£o aplicado'}
                       </Badge>
                     </div>
                     <p className="font-mono text-xs text-muted-foreground">
-                      Atual: {currentNodeLinkItem.currentNodeId ?? 'Sem vínculo'}
+                      Atual: {currentNodeLinkItem.currentNodeId ?? 'Sem vÃ­nculo'}
                     </p>
                     <p className="font-mono text-xs text-muted-foreground">
-                      Sugerido: {currentNodeLinkItem.suggestedNodeId ?? 'Sem sugestão'}
+                      Sugerido: {currentNodeLinkItem.suggestedNodeId ?? 'Sem sugestÃ£o'}
                     </p>
                     {(currentNodeLinkItem.candidateNodeIds?.length ?? 0) > 0 && (
                       <p className="font-mono text-xs text-muted-foreground">
@@ -1960,7 +1960,7 @@ export default function AgentDetail() {
                   </div>
                 ) : (
                   <p className="mt-2 text-sm text-muted">
-                    O dry-run não retornou este agent no conjunto de itens do site.
+                    O dry-run nÃ£o retornou este agent no conjunto de itens do site.
                   </p>
                 )}
               </div>
@@ -1975,7 +1975,7 @@ export default function AgentDetail() {
                       <Badge color={nodeLinkStatusColor(item.status)}>{item.status}</Badge>
                     </div>
                     <p className="font-mono text-xs text-muted">
-                      Atual: {item.currentNodeId ?? 'Sem vínculo'} | Sugerido: {item.suggestedNodeId ?? 'Sem sugestão'}
+                      Atual: {item.currentNodeId ?? 'Sem vÃ­nculo'} | Sugerido: {item.suggestedNodeId ?? 'Sem sugestÃ£o'}
                     </p>
                   </div>
                 ))}

@@ -24,7 +24,7 @@ function formatValue(value: ConfigurationValue | null | undefined): string {
   try {
     return JSON.stringify(value, null, 2);
   } catch {
-    return "[valor n„o serializ·vel]";
+    return "[valor n√£o serializ√°vel]";
   }
 }
 

@@ -246,7 +246,7 @@ export function ConfigurationFieldEditor({
           placeholder={
             fieldRange
               ? `${fieldRange.min}..${fieldRange.max} ${unit || ""}`
-              : "Digite um n˙mero"
+              : "Digite um n√∫mero"
           }
         />
       );
@@ -268,7 +268,7 @@ export function ConfigurationFieldEditor({
             disabled={inputDisabled}
             placeholder={
               inherited
-                ? "Herdando do nÌvel acima"
+                ? "Herdando do n√≠vel acima"
                 : "SupportEnabled\nTokenExpirationDays\nAIIntegrationSettingsJson"
             }
           />
@@ -349,14 +349,14 @@ export function ConfigurationFieldEditor({
               />
             </div>
 
-            {/* ConfiguraÁ„o avancada de chat */}
+            {/* Configura√ß√£o avancada de chat */}
             <div className="rounded-lg border border-border bg-surface-light p-2">
               <button
                 type="button"
                 onClick={() => setShowAiAdvanced((prev) => !prev)}
                 className="flex w-full items-center justify-between rounded-md px-2 py-1.5 text-xs font-medium text-muted-foreground hover:bg-surface-light"
               >
-                <span>ConfiguraÁ„o avancada (Chat)</span>
+                <span>Configura√ß√£o avancada (Chat)</span>
                 {showAiAdvanced ? (
                   <ChevronUp className="h-4 w-4" />
                 ) : (
@@ -404,14 +404,14 @@ export function ConfigurationFieldEditor({
               )}
             </div>
 
-            {/* ConfiguraÁ„o de embedding */}
+            {/* Configura√ß√£o de embedding */}
             <div className="rounded-lg border border-border bg-surface-light p-2">
               <button
                 type="button"
                 onClick={() => setShowAiEmbedding((prev) => !prev)}
                 className="flex w-full items-center justify-between rounded-md px-2 py-1.5 text-xs font-medium text-muted-foreground hover:bg-surface-light"
               >
-                <span>ConfiguraÁ„o de Embedding</span>
+                <span>Configura√ß√£o de Embedding</span>
                 {showAiEmbedding ? (
                   <ChevronUp className="h-4 w-4" />
                 ) : (
@@ -621,7 +621,7 @@ export function ConfigurationFieldEditor({
         <>
           {structuredJsonField && (
             <p className="text-xs text-amber-300">
-               Conte˙do legado inv·lido detectado. Ajuste o JSON para continuar usando os campos estruturados.
+               Conte√∫do legado inv√°lido detectado. Ajuste o JSON para continuar usando os campos estruturados.
             </p>
           )}
           <TextArea
@@ -633,7 +633,7 @@ export function ConfigurationFieldEditor({
             error={error}
             placeholder={
               inherited
-                 ? "Herdando do nÌvel acima"
+                 ? "Herdando do n√≠vel acima"
                 : fieldKey === "lockedFieldsJson"
                   ? '["SupportEnabled", "TokenExpirationDays"]'
                   : "{\n  \"key\": \"value\"\n}"
@@ -650,7 +650,7 @@ export function ConfigurationFieldEditor({
         onChange={(event) => onValueChange(event.target.value)}
         disabled={inputDisabled}
         error={error}
-        placeholder={inherited ? "Herdando do nÌvel acima" : "Digite o valor local"}
+        placeholder={inherited ? "Herdando do n√≠vel acima" : "Digite o valor local"}
       />
     );
   };
@@ -684,12 +684,12 @@ export function ConfigurationFieldEditor({
       <div className="grid gap-3">
         {fieldKind === "json" && fieldKey === "aiIntegrationSettingsJson" && (
           <p className="text-xs text-amber-300">
-             ApiKey È write-only: o valor atual n„o È retornado pela API. Preencha apenas para trocar a chave.
+             ApiKey √© write-only: o valor atual n√£o √© retornado pela API. Preencha apenas para trocar a chave.
           </p>
         )}
         {fieldKind === "json" && fieldKey === "autoUpdateSettingsJson" && (
           <p className="text-xs text-muted">
-            Ajuste o comportamento de atualizaÁ„o automatica por campos estruturados.
+            Ajuste o comportamento de atualiza√ß√£o automatica por campos estruturados.
           </p>
         )}
         {fieldKind === "json" && fieldKey === "brandingSettingsJson" && (
@@ -699,7 +699,7 @@ export function ConfigurationFieldEditor({
         )}
         {fieldKind === "json" && fieldKey === "lockedFieldsJson" && (
           <p className="text-xs text-muted">
-            Informe um campo por linha para bloquear override em nÌveis inferiores.
+            Informe um campo por linha para bloquear override em n√≠veis inferiores.
           </p>
         )}
         {renderInput()}
