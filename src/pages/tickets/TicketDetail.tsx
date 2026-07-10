@@ -95,7 +95,7 @@ type CommentSeed = {
 };
 
 function resolveUserDisplayName(usersById: Map<string, UserDto>, userId: string | null | undefined) {
-  if (!userId) return '';
+  if (!userId) return '\u2014';
   const user = usersById.get(userId);
   if (!user) return userId;
   return user.fullName || user.email || user.login || user.id;
@@ -111,9 +111,13 @@ export default function TicketDetail() {
   const [tab, setTab] = useState<Tab>('comments');
   const [editing, setEditing] = useState(false);
   const [commentSeed, setCommentSeed] = useState<CommentSeed | null>(null);
-  const iamUsersById = useMemo(
-    () => new Map<string, UserDto>((iamUsers.data ?? []).map((user) => [user.id, user])),
+  const iamUsersData = useMemo(
+    () => (Array.isArray(iamUsers.data) ? iamUsers.data : []),
     [iamUsers.data],
+  );
+  const iamUsersById = useMemo(
+    () => new Map<string, UserDto>(iamUsersData.map((user) => [user.id, user])),
+    [iamUsersData],
   );
 
   if (ticket.isLoading) return <Loading />;
@@ -1078,14 +1082,14 @@ function TicketCustomFieldsPanel({ ticketId }: { ticketId: string }) {
 
   const definitions = useMemo(
     () =>
-      [...(definitionsQuery.data ?? [])]
+      (Array.isArray(definitionsQuery.data) ? [...definitionsQuery.data] : [])
         .filter((definition) => definition.isActive)
         .sort((left, right) => left.label.localeCompare(right.label, 'pt-BR')),
     [definitionsQuery.data],
   );
 
   const valuesByDefinitionId = useMemo(
-    () => new Map((valuesQuery.data ?? []).map((item) => [item.definitionId, item])),
+    () => new Map((Array.isArray(valuesQuery.data) ? valuesQuery.data : []).map((item) => [item.definitionId, item])),
     [valuesQuery.data],
   );
 
@@ -1625,7 +1629,7 @@ function TicketSummaryPanel({
       <dl className="grid gap-3 text-sm sm:grid-cols-2">
         <div>
           <dt className="text-muted">Categoria</dt>
-          <dd className="text-foreground">{category ?? ''}</dd>
+          <dd className="text-foreground">{category ?? '\u2014'}</dd>
         </div>
         <div>
           <dt className="text-muted">Prioridade</dt>
@@ -1781,7 +1785,7 @@ function WorkflowPanel({ ticketId, currentStateId }: { ticketId: string; current
 
   const stateOptions = [
     { value: '', label: 'Selecione...' },
-    ...(states.data ?? []).map(s => ({ value: s.id, label: s.name })),
+    ...(Array.isArray(states.data) ? states.data : []).map(s => ({ value: s.id, label: s.name })),
   ];
 
   const handleChange = () => {
@@ -2099,10 +2103,10 @@ function AttachmentsPanel({
       <div className="space-y-2">
         <p className="text-xs font-medium uppercase tracking-wide text-muted">Arquivos anexados</p>
         {attachments.isLoading && <Loading />}
-        {(attachments.data ?? []).length === 0 && !attachments.isLoading && (
+        {(Array.isArray(attachments.data) ? attachments.data : []).length === 0 && !attachments.isLoading && (
           <p className="py-4 text-center text-sm text-muted">Nenhum anexo ainda.</p>
         )}
-        {(attachments.data ?? []).map((a) => (
+        {(Array.isArray(attachments.data) ? attachments.data : []).map((a) => (
           <div key={a.id} className="flex items-center gap-3 rounded-lg border border-border bg-surface-light px-3 py-2">
             <File className="h-4 w-4 shrink-0 text-muted" />
             <div className="min-w-0 flex-1">

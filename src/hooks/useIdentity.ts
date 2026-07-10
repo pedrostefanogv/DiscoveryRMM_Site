@@ -25,7 +25,14 @@ import {
 
 function normalizeArray<T>(data: CursorPageDto<T> | T[]): T[] {
   if (Array.isArray(data)) return data;
-  return (data as CursorPageDto<T>).items ?? [];
+  if (
+    data &&
+    typeof data === "object" &&
+    Array.isArray((data as CursorPageDto<T>).items)
+  ) {
+    return (data as CursorPageDto<T>).items;
+  }
+  return [];
 }
 
 const IAM_KEYS = {
