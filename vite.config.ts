@@ -77,7 +77,7 @@ export default defineConfig({
           ],
           editor: ["@uiw/react-md-editor"],
           dnd: ["@dnd-kit/core", "@dnd-kit/sortable", "@dnd-kit/utilities"],
-          nats: ["@nats-io/nats-core", "nats"],
+          nats: ["@nats-io/nats-core"],
           markdown: ["react-markdown", "remark-gfm"],
           forms: ["react-hook-form", "@hookform/resolvers", "zod"],
         },

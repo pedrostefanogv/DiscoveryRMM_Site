@@ -180,7 +180,7 @@ export const customFieldsApi = {
     scopeType?: CustomFieldScopeType;
     includeInactive?: boolean;
   }): Promise<CustomFieldDefinition[]> {
-    const raw = await api.get<unknown>(`${BASE}/definitions`, params ?? {});
+    const raw = await api.get<unknown>(`${BASE}`, params ?? {});
     if (Array.isArray(raw))
       return (raw as Array<Record<string, unknown>>).map(normalizeDefinition);
     if (
@@ -196,19 +196,14 @@ export const customFieldsApi = {
   },
 
   async getDefinition(id: string): Promise<CustomFieldDefinition> {
-    const raw = await api.get<Record<string, unknown>>(
-      `${BASE}/definitions/${id}`,
-    );
+    const raw = await api.get<Record<string, unknown>>(`${BASE}/${id}`);
     return normalizeDefinition(raw);
   },
 
   async createDefinition(
     payload: CreateCustomFieldDefinitionRequest,
   ): Promise<CustomFieldDefinition> {
-    const raw = await api.post<Record<string, unknown>>(
-      `${BASE}/definitions`,
-      payload,
-    );
+    const raw = await api.post<Record<string, unknown>>(`${BASE}`, payload);
     return normalizeDefinition(raw);
   },
 
@@ -217,14 +212,14 @@ export const customFieldsApi = {
     payload: UpdateCustomFieldDefinitionRequest,
   ): Promise<CustomFieldDefinition> {
     const raw = await api.put<Record<string, unknown>>(
-      `${BASE}/definitions/${id}`,
+      `${BASE}/${id}`,
       payload,
     );
     return normalizeDefinition(raw);
   },
 
   async deleteDefinition(id: string): Promise<void> {
-    await api.del<void>(`${BASE}/definitions/${id}`);
+    await api.del<void>(`${BASE}/${id}`);
   },
 
   async getValues(
@@ -283,6 +278,14 @@ export const customFieldsApi = {
           params.entityId,
           params,
         );
+      case CustomFieldScopeType.Ticket:
+        if (!params.entityId) return [];
+        return listEntityValues(
+          `/api/v1/Tickets/${params.entityId}/custom-fields`,
+          scopeType,
+          params.entityId,
+          params,
+        );
       default:
         return customFieldsApi.getValues(scopeType, {
           entityId: params.entityId,
@@ -325,6 +328,17 @@ export const customFieldsApi = {
         }
         return upsertEntityValue(
           `/api/v1/Agents/${payload.entityId}/custom-fields/${definitionId}`,
+          payload.scopeType,
+          payload.entityId,
+          definitionId,
+          payload.value,
+        );
+      case CustomFieldScopeType.Ticket:
+        if (!payload.entityId) {
+          throw new Error("Ticket entityId is required.");
+        }
+        return upsertEntityValue(
+          `/api/v1/Tickets/${payload.entityId}/custom-fields/${definitionId}`,
           payload.scopeType,
           payload.entityId,
           definitionId,
