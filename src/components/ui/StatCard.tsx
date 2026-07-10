@@ -20,7 +20,7 @@ const toneMap: Record<NonNullable<StatCardProps['tone']>, { bg: string; icon: st
 
 export const StatCard = memo(function StatCard({ icon: Icon, label, value, trend, tone = 'primary', onClick, active = false }: StatCardProps) {
   const styles = toneMap[tone];
-  const baseClassName = 'glass-card flex items-center gap-4 rounded-xl border border-border bg-surface p-5';
+  const baseClassName = 'glass-card flex items-center gap-4 rounded-xl border border-border bg-surface p-5 h-full';
 
   if (onClick) {
     return (

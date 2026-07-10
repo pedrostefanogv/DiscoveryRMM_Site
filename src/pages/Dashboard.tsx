@@ -12,7 +12,6 @@ import {
   XCircle,
   Clock,
   Zap,
-  Shield,
 } from 'lucide-react';
 import type { ComponentType } from 'react';
 import { memo, useState } from 'react';

@@ -928,7 +928,7 @@ export default function AgentList() {
                                 )}
                               </>
                             ) : (
-                              <span className="text-xs text-muted">\u2014</span>
+                              <Badge color="success">Aprovado</Badge>
                             )}
                           </div>
                         </td>

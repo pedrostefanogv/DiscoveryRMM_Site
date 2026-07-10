@@ -12,7 +12,6 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronDown,
-  Shield,
   FileBarChart,
   Wrench,
   ShieldCheck,

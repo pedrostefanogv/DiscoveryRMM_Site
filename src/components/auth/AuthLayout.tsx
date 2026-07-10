@@ -1,6 +1,5 @@
 import { useMemo } from "react";
 import { Outlet } from "react-router-dom";
-import { ShieldCheck } from "lucide-react";
 import { useTheme } from "@/theme/ThemeContext";
 import { ThemeToggle } from "@/components/auth/ThemeToggle";
 import { ParticlesBackground } from "@/components/ui/ParticlesBackground";
