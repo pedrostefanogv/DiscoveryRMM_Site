@@ -148,7 +148,6 @@ export default function AgentDetail() {
   const [softwareSearchInput, setSoftwareSearchInput] = useState('');
   const [softwareSearchApplied, setSoftwareSearchApplied] = useState('');
   const [softwarePage, setSoftwarePage] = useState(1);
-  const [softwarePageCursors, setSoftwarePageCursors] = useState<Array<string | undefined>>([undefined]);
   const [allLabels, setAllLabels] = useState<AgentLabel[]>([]);
   const [isLoadingLabels, setIsLoadingLabels] = useState(true);
   const [labelsError, setLabelsError] = useState<string | null>(null);
@@ -185,9 +184,7 @@ export default function AgentDetail() {
   const agent = useAgent(id!);
   const liveHeartbeat = useAgentHeartbeat(id!);
   const hw = useAgentHardware(id!);
-  const softwareCursor = softwarePageCursors[softwarePage - 1];
   const software = useAgentSoftware(id!, {
-    cursor: softwareCursor,
     limit: Number(softwareLimitSelected),
     search: softwareSearchApplied,
     order: softwareOrder,
@@ -365,12 +362,14 @@ export default function AgentDetail() {
 
   const isOnlineNow = isAgentOnlineNow(aWithHeartbeat, now);
   const isZeroTouchPending = aWithHeartbeat.zeroTouchPending === true;
-  const softwareItems = software.data?.items ?? [];
-  const softwareLimitReturned = software.data?.limit ?? Number(softwareLimitSelected);
-  const softwareTotalCount = software.data?.count ?? softwareSnapshot.data?.totalInstalled ?? 0;
-  const softwareTotalPages = Math.max(1, Math.ceil(softwareTotalCount / softwareLimitReturned));
+  const softwareAllItems = software.data ?? [];
+  const softwareTotalCount = softwareAllItems.length > 0 ? softwareAllItems.length : (softwareSnapshot.data?.totalInstalled ?? 0);
+  // Client-side pagination: slice based on current page
+  const startIdx = (softwarePage - 1) * Number(softwareLimitSelected);
+  const softwareItems = softwareAllItems.slice(startIdx, startIdx + Number(softwareLimitSelected));
+  const softwareTotalPages = Math.max(1, Math.ceil(softwareAllItems.length / Math.max(1, Number(softwareLimitSelected))));
   const canGoPrevSoftwarePage = softwarePage > 1 && !software.isFetching;
-  const canGoNextSoftwarePage = Boolean(software.data?.hasMore && software.data?.nextCursor) && !software.isFetching;
+  const canGoNextSoftwarePage = softwarePage < softwareTotalPages && !software.isFetching;
   const disks = hw.data?.disks ?? [];
   const totalDiskBytes = disks.reduce((acc, disk) => acc + (disk.totalSizeBytes ?? 0), 0);
   const freeDiskBytes = disks.reduce((acc, disk) => acc + (disk.freeSpaceBytes ?? 0), 0);
@@ -502,7 +501,6 @@ export default function AgentDetail() {
 
   const resetSoftwarePagination = () => {
     setSoftwarePage(1);
-    setSoftwarePageCursors([undefined]);
   };
 
   const handleApplySoftwareFilters = (e: React.FormEvent<HTMLFormElement>) => {
@@ -726,12 +724,6 @@ export default function AgentDetail() {
   };
 
   const goToNextSoftwarePage = () => {
-    if (!software.data?.nextCursor) return;
-    setSoftwarePageCursors((prev) => {
-      const next = [...prev];
-      next[softwarePage] = software.data.nextCursor ?? undefined;
-      return next;
-    });
     setSoftwarePage((p) => p + 1);
   };
 

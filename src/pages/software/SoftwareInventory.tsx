@@ -196,16 +196,16 @@ export default function SoftwareInventory() {
     siteLookup: Map<string, { siteName: string; clientName: string }>,
   ) => {
     const collectedRows: SoftwareInstallationRow[] = [];
-    let cursorForAgent: string | undefined = undefined;
 
-    while (true) {
-      const pageResult = await agentsApi.getSoftware(agent.id, {
-        cursor: cursorForAgent,
+    const rawResult = await agentsApi.getSoftware(agent.id, {
         limit: 200,
         order: "desc",
       });
 
-      const matched = pageResult.items.filter(
+      // API now returns flat array instead of paginated object
+      const pageItems = rawResult;
+
+      const matched = pageItems.filter(
         (row) => row.softwareId === software.softwareId,
       );
 
@@ -226,12 +226,7 @@ export default function SoftwareInventory() {
         });
       }
 
-      if (!pageResult.hasMore || !pageResult.nextCursor) {
-        break;
-      }
-
-      cursorForAgent = pageResult.nextCursor;
-    }
+      // No more pages since API returns all data at once
 
     return collectedRows;
   };

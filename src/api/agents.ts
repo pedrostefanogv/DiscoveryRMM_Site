@@ -8,7 +8,7 @@ import type {
   MemoryModuleInfo,
   ListeningPortInfo,
   OpenSocketInfo,
-  AgentSoftwareInventoryPage,
+  AgentSoftwareInventoryItem,
   AgentSoftwareOrder,
   AgentSoftwareInventorySnapshot,
   AgentCommand,
@@ -93,7 +93,7 @@ export const agentsApi = {
   reportHardware: (id: string, data: HardwareReportRequest) =>
     api.post<void>(`${BASE}/${id}/hardware`, data),
 
-  // Software inventory
+  // Software inventory (API now returns flat array, no longer paginated object)
   getSoftware: (
     id: string,
     params?: {
@@ -103,7 +103,7 @@ export const agentsApi = {
       order?: AgentSoftwareOrder;
     },
   ) =>
-    api.get<AgentSoftwareInventoryPage>(`${BASE}/${id}/software`, {
+    api.get<AgentSoftwareInventoryItem[]>(`${BASE}/${id}/software`, {
       cursor: params?.cursor,
       limit: params?.limit,
       search: params?.search,

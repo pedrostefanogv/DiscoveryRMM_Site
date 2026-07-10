@@ -1,9 +1,4 @@
-import {
-  useQuery,
-  useMutation,
-  useQueryClient,
-  keepPreviousData,
-} from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { ApiError, agentsApi } from "@/api";
 import type {
   AgentSoftwareOrder,
@@ -136,7 +131,6 @@ export function useAgentHardware(id: string) {
 export function useAgentSoftware(
   id: string,
   params?: {
-    cursor?: string;
     limit?: number;
     search?: string;
     order?: AgentSoftwareOrder;
@@ -149,20 +143,18 @@ export function useAgentSoftware(
 
   return useQuery({
     queryKey: KEYS.software(id, {
-      cursor: params?.cursor,
+      cursor: undefined,
       limit: safeLimit,
       search: safeSearch,
       order: safeOrder,
     }),
     queryFn: () =>
       agentsApi.getSoftware(id, {
-        cursor: params?.cursor,
         limit: safeLimit,
         search: safeSearch,
         order: safeOrder,
       }),
     enabled: !!id,
-    placeholderData: keepPreviousData,
   });
 }
 
