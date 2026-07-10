@@ -62,15 +62,15 @@ const WORKDAY_OPTIONS = [
 ];
 
 const TIMEZONE_OPTIONS = [
-  { value: "UTC", label: "UTC (UTC±0)" },
-  { value: "America/Sao_Paulo", label: "BrasÌlia (GMT-3)" },
+  { value: "UTC", label: "UTC (UTC¬±0)" },
+  { value: "America/Sao_Paulo", label: "Bras√≠lia (GMT-3)" },
   { value: "America/New_York", label: "Nova York (GMT-5/-4)" },
   { value: "America/Chicago", label: "Chicago (GMT-6/-5)" },
   { value: "America/Denver", label: "Denver (GMT-7/-6)" },
   { value: "America/Los_Angeles", label: "Los Angeles (GMT-8/-7)" },
   { value: "America/Argentina/Buenos_Aires", label: "Buenos Aires (GMT-3)" },
-  { value: "America/Mexico_City", label: "Cidade do MÈxico (GMT-6)" },
-  { value: "America/Bogota", label: "Bogot· (GMT-5)" },
+  { value: "America/Mexico_City", label: "Cidade do M√©xico (GMT-6)" },
+  { value: "America/Bogota", label: "Bogot√° (GMT-5)" },
   { value: "America/Santiago", label: "Santiago (GMT-4/-3)" },
   { value: "America/Caracas", label: "Caracas (GMT-4)" },
   { value: "America/Lima", label: "Lima (GMT-5)" },
@@ -80,22 +80,22 @@ const TIMEZONE_OPTIONS = [
   { value: "Europe/Berlin", label: "Berlim (GMT+1/+2)" },
   { value: "Europe/Paris", label: "Paris (GMT+1/+2)" },
   { value: "Europe/Rome", label: "Roma (GMT+1/+2)" },
-  { value: "Asia/Tokyo", label: "TÛquio (GMT+9)" },
+  { value: "Asia/Tokyo", label: "T√≥quio (GMT+9)" },
   { value: "Asia/Shanghai", label: "China (GMT+8)" },
   { value: "Asia/Singapore", label: "Singapura (GMT+8)" },
   { value: "Asia/Dubai", label: "Dubai (GMT+4)" },
   { value: "Asia/Seoul", label: "Seul (GMT+9)" },
-  { value: "Asia/Kolkata", label: "Õndia (GMT+5:30)" },
+  { value: "Asia/Kolkata", label: "√çndia (GMT+5:30)" },
   { value: "Australia/Sydney", label: "Sydney (GMT+10/+11)" },
   { value: "Pacific/Auckland", label: "Auckland (GMT+12/+13)" },
   { value: "Africa/Cairo", label: "Cairo (GMT+2)" },
-  { value: "Africa/Johannesburg", label: "¡frica do Sul (GMT+2)" },
+  { value: "Africa/Johannesburg", label: "√Åfrica do Sul (GMT+2)" },
 ];
 
 const HOLIDAY_TYPE_OPTIONS = [
-   { value: "0", label: "Fixo (data especÌfica, n„o recorre)" },
+   { value: "0", label: "Fixo (data espec√≠fica, n√£o recorre)" },
   { value: "1", label: "Anual (recorre todo ano - ex: Natal)" },
-  { value: "2", label: "Relativo (c·lculo por regra - ex: 3™ seg de jan)" },
+  { value: "2", label: "Relativo (c√°lculo por regra - ex: 3¬™ seg de jan)" },
 ];
 
 const RELATIVE_METHOD_OPTIONS = [
@@ -129,10 +129,10 @@ const DAY_OF_WEEK_OPTIONS = [
 ];
 
 const OCCURRENCE_OPTIONS = [
-  { value: "1", label: "1™" },
-  { value: "2", label: "2™" },
-  { value: "3", label: "3™" },
-  { value: "4", label: "4™" },
+  { value: "1", label: "1¬™" },
+  { value: "2", label: "2¬™" },
+  { value: "3", label: "3¬™" },
+  { value: "4", label: "4¬™" },
   { value: "5", label: "Ultima" },
 ];
 
@@ -206,7 +206,7 @@ function formatWorkDays(raw: string) {
 }
 
 function formatHoursBefore(hours: number) {
-  if (hours <= 0) return "Sem gatilho por antecedÍncia";
+  if (hours <= 0) return "Sem gatilho por anteced√™ncia";
   if (hours === 1) return "1h antes do vencimento";
   return `${hours}h antes do vencimento`;
 }
@@ -249,8 +249,8 @@ function getWorkflowProfileLabel(
 ) {
   const department = departmentsById.get(profile.departmentId);
   const client = profile.clientId ? clientsById.get(profile.clientId) : null;
-  const suffix = [department?.name, client?.name].filter(Boolean).join(" ï ");
-  return suffix ? `${profile.name} ï ${suffix}` : profile.name;
+  const suffix = [department?.name, client?.name].filter(Boolean).join(" ¬∑ ");
+  return suffix ? `${profile.name} ¬∑ ${suffix}` : profile.name;
 }
 
 export default function TicketSlaPage() {
@@ -369,7 +369,7 @@ export default function TicketSlaPage() {
 
   const userOptions = useMemo(
     () => [
-      { value: "", label: "N„o reatribuir usu·rio" },
+      { value: "", label: "N√£o reatribuir usu√°rio" },
       ...users.map((user) => ({
         value: user.id,
         label: user.fullName || user.login || user.email,
@@ -380,7 +380,7 @@ export default function TicketSlaPage() {
 
   const departmentOptions = useMemo(
     () => [
-      { value: "", label: "N„o reatribuir departamento" },
+      { value: "", label: "N√£o reatribuir departamento" },
       ...departments.map((department) => ({
         value: department.id,
         label: department.name,
@@ -556,22 +556,22 @@ export default function TicketSlaPage() {
     const endHour = Number(calendarForm.workDayEndHour);
 
     if (!calendarForm.name.trim()) {
-      toast.error("Informe o nome do calend·rio.");
+      toast.error("Informe o nome do calend√°rio.");
       return;
     }
 
     if (!Number.isInteger(startHour) || startHour < 0 || startHour > 23) {
-      toast.error("Hor·rio inicial inv·lido.");
+      toast.error("Hor√°rio inicial inv√°lido.");
       return;
     }
 
     if (!Number.isInteger(endHour) || endHour < 1 || endHour > 24) {
-      toast.error("Hor·rio final inv·lido.");
+      toast.error("Hor√°rio final inv√°lido.");
       return;
     }
 
     if (endHour <= startHour) {
-      toast.error("Hor·rio final deve ser maior que o inicial.");
+      toast.error("Hor√°rio final deve ser maior que o inicial.");
       return;
     }
 
@@ -592,7 +592,7 @@ export default function TicketSlaPage() {
             workDaysJson: buildWorkDaysJson(calendarForm.workDays),
           },
         });
-        toast.success("Calend·rio atualizado com sucesso.");
+        toast.success("Calend√°rio atualizado com sucesso.");
       } else {
         await createCalendar.mutateAsync({
           name: calendarForm.name.trim(),
@@ -602,7 +602,7 @@ export default function TicketSlaPage() {
           workDayEndHour: endHour,
           workDaysJson: buildWorkDaysJson(calendarForm.workDays),
         });
-        toast.success("Calend·rio criado com sucesso.");
+        toast.success("Calend√°rio criado com sucesso.");
       }
 
       closeCalendarModal();
@@ -610,13 +610,13 @@ export default function TicketSlaPage() {
       toast.error(
         error instanceof Error
           ? error.message
-          : "N„o foi possÌvel salvar o calend·rio.",
+          : "N√£o foi poss√≠vel salvar o calend√°rio.",
       );
     }
   }
 
   async function handleDeleteCalendar(id: string, name: string) {
-    if (!window.confirm(`Excluir o calend·rio \"${name}\"?`)) {
+    if (!window.confirm(`Excluir o calend√°rio \"${name}\"?`)) {
       return;
     }
 
@@ -628,19 +628,19 @@ export default function TicketSlaPage() {
       if (holidayCalendarId === id) {
         closeHolidayModal();
       }
-      toast.success("Calend·rio removido com sucesso.");
+      toast.success("Calend√°rio removido com sucesso.");
     } catch (error) {
       toast.error(
         error instanceof Error
           ? error.message
-          : "N„o foi possÌvel excluir o calend·rio.",
+          : "N√£o foi poss√≠vel excluir o calend√°rio.",
       );
     }
   }
 
   async function handleAddHoliday() {
     if (!holidayCalendarId) {
-      toast.error("Selecione um calend·rio para gerenciar os feriados.");
+      toast.error("Selecione um calend√°rio para gerenciar os feriados.");
       return;
     }
 
@@ -651,7 +651,7 @@ export default function TicketSlaPage() {
 
     const typeNum = Number(holidayType);
 
-    // ValidaÁ„o especÌfica por tipo
+    // Valida√ß√£o espec√≠fica por tipo
     if (typeNum === 0 || typeNum === 1) {
       // Fixed ou Yearly: precisa de data
       if (!holidayDate) {
@@ -697,7 +697,7 @@ export default function TicketSlaPage() {
       toast.error(
         error instanceof Error
           ? error.message
-          : "N„o foi possÌvel adicionar o feriado.",
+          : "N√£o foi poss√≠vel adicionar o feriado.",
       );
     }
   }
@@ -741,7 +741,7 @@ export default function TicketSlaPage() {
       toast.error(
         error instanceof Error
           ? error.message
-          : "N„o foi possÌvel remover o feriado.",
+          : "N√£o foi poss√≠vel remover o feriado.",
       );
     }
   }
@@ -769,7 +769,7 @@ export default function TicketSlaPage() {
     const triggerAtHoursBefore = Number(ruleForm.triggerAtHoursBefore || "0");
 
     if (!Number.isFinite(triggerAtSlaPercent) || triggerAtSlaPercent < 0) {
-      toast.error("Percentual de disparo inv·lido.");
+      toast.error("Percentual de disparo inv√°lido.");
       return;
     }
 
@@ -815,7 +815,7 @@ export default function TicketSlaPage() {
       toast.error(
         error instanceof Error
           ? error.message
-          : "N„o foi possÌvel salvar a regra.",
+          : "N√£o foi poss√≠vel salvar a regra.",
       );
     }
   }
@@ -836,7 +836,7 @@ export default function TicketSlaPage() {
       toast.error(
         error instanceof Error
           ? error.message
-          : "N„o foi possÌvel remover a regra.",
+          : "N√£o foi poss√≠vel remover a regra.",
       );
     }
   }
@@ -850,25 +850,25 @@ export default function TicketSlaPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">SLA, calend·rios e escalonamento</h1>
+          <h1 className="text-2xl font-bold text-foreground">SLA, calend√°rios e escalonamento</h1>
           <p className="text-sm text-muted">
-            Visualize rapidamente calend·rios e regras, e abra os detalhes somente quando precisar.
+            Visualize rapidamente calend√°rios e regras, e abra os detalhes somente quando precisar.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button variant="secondary" onClick={() => setIsHelpModalOpen(true)}>
             <Clock3 className="h-4 w-4" />
-            Guia r·pido
+            Guia r√°pido
           </Button>
-          <Badge color="primary">Calend·rios ˙teis</Badge>
-          <Badge color="warning">Escalonamento autom·tico</Badge>
+          <Badge color="primary">Calend√°rios √∫teis</Badge>
+          <Badge color="warning">Escalonamento autom√°tico</Badge>
         </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <div className="space-y-1">
-            <p className="text-xs uppercase tracking-wide text-muted">Calend·rios</p>
+            <p className="text-xs uppercase tracking-wide text-muted">Calend√°rios</p>
             <p className="text-2xl font-semibold text-foreground">{sortedCalendars.length}</p>
           </div>
         </Card>
@@ -880,7 +880,7 @@ export default function TicketSlaPage() {
         </Card>
         <Card>
           <div className="space-y-1">
-            <p className="text-xs uppercase tracking-wide text-muted">Regras visÌveis</p>
+            <p className="text-xs uppercase tracking-wide text-muted">Regras vis√≠veis</p>
             <p className="text-2xl font-semibold text-foreground">{sortedRules.length}</p>
           </div>
         </Card>
@@ -889,12 +889,12 @@ export default function TicketSlaPage() {
       <div className="grid gap-6 xl:grid-cols-2">
         <Card>
           <CardHeader
-            title="Calend·rios de SLA"
-            subtitle="Liste e filtre calend·rios. EdiÁ„o detalhada e feriados ficam em modal."
+            title="Calend√°rios de SLA"
+            subtitle="Liste e filtre calend√°rios. Edi√ß√£o detalhada e feriados ficam em modal."
             action={
               <Button variant="secondary" onClick={openCreateCalendarModal}>
                 <Plus className="h-4 w-4" />
-                Novo calend·rio
+                Novo calend√°rio
               </Button>
             }
           />
@@ -907,7 +907,7 @@ export default function TicketSlaPage() {
               onChange={(event) => setSelectedClientId(event.target.value)}
             />
             <Input
-              label="Buscar calend·rio"
+              label="Buscar calend√°rio"
               value={calendarSearchTerm}
               onChange={(event) => setCalendarSearchTerm(event.target.value)}
               placeholder="Nome, timezone ou cliente"
@@ -917,22 +917,22 @@ export default function TicketSlaPage() {
           <div className="mb-4 rounded-xl border border-border bg-surface-light px-4 py-3 text-sm text-muted-foreground">
             <p className="font-medium text-foreground">Uso recomendado</p>
             <p className="mt-1 text-muted">
-              Mantenha um calend·rio global e crie exceÁıes por cliente apenas quando houver jornada ou feriados diferentes.
+              Mantenha um calend√°rio global e crie exce√ß√µes por cliente apenas quando houver jornada ou feriados diferentes.
             </p>
           </div>
 
           <div className="space-y-3">
             <p className="text-xs text-muted">
-              Mostrando {filteredCalendars.length} de {sortedCalendars.length} calend·rios.
+              Mostrando {filteredCalendars.length} de {sortedCalendars.length} calend√°rios.
             </p>
 
             {sortedCalendars.length === 0 && (
-              <p className="text-sm text-muted">Nenhum calend·rio encontrado para o filtro atual.</p>
+              <p className="text-sm text-muted">Nenhum calend√°rio encontrado para o filtro atual.</p>
             )}
 
             {sortedCalendars.length > 0 && filteredCalendars.length === 0 && (
               <div className="rounded-xl border border-border bg-surface-light px-4 py-3 text-sm text-muted">
-                <p>Nenhum calend·rio encontrado para a busca atual.</p>
+                <p>Nenhum calend√°rio encontrado para a busca atual.</p>
                 <div className="mt-2">
                   <Button size="sm" variant="ghost" onClick={() => setCalendarSearchTerm("")}>
                     Limpar busca
@@ -992,7 +992,7 @@ export default function TicketSlaPage() {
         <Card>
           <CardHeader
             title="Regras de escalonamento"
-            subtitle="Liste regras e abra o formul·rio apenas quando for criar ou editar."
+            subtitle="Liste regras e abra o formul√°rio apenas quando for criar ou editar."
             action={
               <div className="flex flex-wrap gap-2">
                 <Button
@@ -1125,14 +1125,14 @@ export default function TicketSlaPage() {
                       <Badge color="accent">{formatHoursBefore(rule.triggerAtHoursBefore)}</Badge>
                     )}
                     {rule.bumpPriority && <Badge color="danger">Aumenta prioridade</Badge>}
-                    {rule.notifyAssignee && <Badge color="primary">Notifica respons·vel</Badge>}
+                    {rule.notifyAssignee && <Badge color="primary">Notifica respons√°vel</Badge>}
                   </div>
 
                   <div className="mt-3 space-y-1 text-xs text-muted">
                     <p>
-                      Usu·rio destino: {user ? user.fullName || user.login || user.email : "Sem reatribuiÁ„o"}
+                      Usu√°rio destino: {user ? user.fullName || user.login || user.email : "Sem reatribui√ß√£o"}
                     </p>
-                    <p>Departamento destino: {department?.name ?? "Sem reatribuiÁ„o"}</p>
+                    <p>Departamento destino: {department?.name ?? "Sem reatribui√ß√£o"}</p>
                   </div>
                 </div>
               );
@@ -1144,7 +1144,7 @@ export default function TicketSlaPage() {
       <Modal
         open={isCalendarModalOpen}
         onClose={closeCalendarModal}
-        title={editingCalendarId ? "Editar calend·rio" : "Novo calend·rio"}
+        title={editingCalendarId ? "Editar calend√°rio" : "Novo calend√°rio"}
         maxWidth="max-w-3xl"
       >
         {editingCalendarId && calendarDetailQuery.isLoading ? (
@@ -1163,7 +1163,7 @@ export default function TicketSlaPage() {
                     name: event.target.value,
                   }))
                 }
-                placeholder="Hor·rio comercial Brasil"
+                placeholder="Hor√°rio comercial Brasil"
               />
               <Select
                 label="Cliente"
@@ -1194,7 +1194,7 @@ export default function TicketSlaPage() {
               />
               <div className="grid grid-cols-2 gap-3">
                 <Input
-                  label="InÌcio"
+                  label="In√≠cio"
                   type="number"
                   min="0"
                   max="23"
@@ -1223,7 +1223,7 @@ export default function TicketSlaPage() {
             </div>
 
             <div className="space-y-2">
-              <p className="text-sm font-medium text-muted-foreground">Dias ˙teis</p>
+              <p className="text-sm font-medium text-muted-foreground">Dias √∫teis</p>
               <div className="flex flex-wrap gap-2">
                 {WORKDAY_OPTIONS.map((option) => {
                   const checked = calendarForm.workDays.includes(option.value);
@@ -1256,8 +1256,8 @@ export default function TicketSlaPage() {
 
             {editingCalendarId && (
               <p className="text-xs text-muted">
-                O cliente do calend·rio n„o pode ser alterado pelo endpoint atual. Para mudar o
-                escopo, crie um novo calend·rio.
+                O cliente do calend√°rio n√£o pode ser alterado pelo endpoint atual. Para mudar o
+                escopo, crie um novo calend√°rio.
               </p>
             )}
 
@@ -1267,7 +1267,7 @@ export default function TicketSlaPage() {
                 loading={createCalendar.isPending || updateCalendar.isPending}
               >
                 <CalendarDays className="h-4 w-4" />
-                {editingCalendarId ? "Salvar calend·rio" : "Criar calend·rio"}
+                {editingCalendarId ? "Salvar calend√°rio" : "Criar calend√°rio"}
               </Button>
               {editingCalendarId && (
                 <Button
@@ -1284,13 +1284,13 @@ export default function TicketSlaPage() {
                   onClick={() =>
                     void handleDeleteCalendar(
                       editingCalendarId,
-                      calendarForm.name.trim() || "calend·rio sem nome",
+                      calendarForm.name.trim() || "calend√°rio sem nome",
                     )
                   }
                   loading={deleteCalendar.isPending}
                 >
                   <Trash2 className="h-4 w-4" />
-                  Excluir calend·rio
+                  Excluir calend√°rio
                 </Button>
               )}
               <Button variant="ghost" onClick={closeCalendarModal}>
@@ -1316,11 +1316,11 @@ export default function TicketSlaPage() {
         ) : holidayCalendarId && holidayDetailQuery.isError ? (
           <ErrorDisplay onRetry={() => holidayDetailQuery.refetch()} />
         ) : !holidayCalendarId || !holidayCalendarDetail ? (
-          <p className="text-sm text-muted">Selecione um calend·rio para gerenciar os feriados.</p>
+          <p className="text-sm text-muted">Selecione um calend√°rio para gerenciar os feriados.</p>
         ) : (
           <div className="space-y-6">
             <p className="text-sm text-muted">
-              Adicione e revise feriados sem poluir a tela principal de configuraÁ„o.
+              Adicione e revise feriados sem poluir a tela principal de configura√ß√£o.
             </p>
 
             <div className="space-y-4 rounded-xl border border-border bg-surface-light p-4">
@@ -1340,7 +1340,7 @@ export default function TicketSlaPage() {
                     placeholder="Natal"
                   />
                   <Input
-                    label={holidayType === "1" ? "Dia/MÍs (ignora ano)" : "Data"}
+                    label={holidayType === "1" ? "Dia/M√™s (ignora ano)" : "Data"}
                     type="date"
                     value={holidayDate}
                     onChange={(event) => setHolidayDate(event.target.value)}
@@ -1357,13 +1357,13 @@ export default function TicketSlaPage() {
                     placeholder="Corpus Christi"
                   />
                   <Select
-                    label="MÈtodo de c·lculo"
+                    label="M√©todo de c√°lculo"
                     options={RELATIVE_METHOD_OPTIONS}
                     value={holidayRelativeMethod}
                     onChange={(event) => setHolidayRelativeMethod(event.target.value)}
                   />
                   <Select
-                    label="MÍs"
+                    label="M√™s"
                     options={MONTH_OPTIONS}
                     value={holidayRelativeMonth}
                     onChange={(event) => setHolidayRelativeMonth(event.target.value)}
@@ -1379,8 +1379,8 @@ export default function TicketSlaPage() {
                   <Select
                     label={
                       holidayRelativeMethod === "1"
-                        ? "OcorrÍncia (dia ˙til)"
-                        : "OcorrÍncia"
+                        ? "Ocorr√™ncia (dia √∫til)"
+                        : "Ocorr√™ncia"
                     }
                     options={OCCURRENCE_OPTIONS}
                     value={holidayRelativeOccurrence}
@@ -1456,9 +1456,9 @@ export default function TicketSlaPage() {
           <div className="flex items-start gap-3 rounded-xl border border-warning/30 bg-warning/10 p-4 text-sm">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
             <div>
-              <p className="font-medium text-warning">Workflow profiles necess·rios</p>
+              <p className="font-medium text-warning">Workflow profiles necess√°rios</p>
               <p className="mt-1 text-muted">
-                Regras de escalonamento s„o vinculadas a um workflow profile. Nenhum perfil foi
+                Regras de escalonamento s√£o vinculadas a um workflow profile. Nenhum perfil foi
                 encontrado no sistema.
               </p>
               <div className="mt-3">
@@ -1496,7 +1496,7 @@ export default function TicketSlaPage() {
                     name: event.target.value,
                   }))
                 }
-                placeholder="Escalar prÛximo do vencimento"
+                placeholder="Escalar pr√≥ximo do vencimento"
               />
               <div className="grid grid-cols-2 gap-3">
                 <Input
@@ -1526,7 +1526,7 @@ export default function TicketSlaPage() {
                 />
               </div>
               <Select
-                label="Reatribuir para usu·rio"
+                label="Reatribuir para usu√°rio"
                 options={userOptions}
                 value={ruleForm.reassignToUserId}
                 onChange={(event) =>
@@ -1576,7 +1576,7 @@ export default function TicketSlaPage() {
                   }
                   className="h-4 w-4 rounded border-border-strong bg-transparent"
                 />
-                <span>Notificar o respons·vel atual quando a regra disparar</span>
+                <span>Notificar o respons√°vel atual quando a regra disparar</span>
               </label>
               {editingRuleId && (
                 <label className="flex items-center gap-3 rounded-xl border border-border bg-surface-light px-4 py-3 text-sm text-muted-foreground">
@@ -1622,7 +1622,7 @@ export default function TicketSlaPage() {
               {(editingRuleId || ruleForm.workflowProfileId) && (
                 <Button variant="ghost" onClick={() => resetRuleForm()}>
                   <TimerReset className="h-4 w-4" />
-                  Limpar formul·rio
+                  Limpar formul√°rio
                 </Button>
               )}
               <Button variant="ghost" onClick={closeRuleModal}>
@@ -1636,20 +1636,20 @@ export default function TicketSlaPage() {
       <Modal
         open={isHelpModalOpen}
         onClose={() => setIsHelpModalOpen(false)}
-        title="Guia r·pido de SLA"
+        title="Guia r√°pido de SLA"
         maxWidth="max-w-3xl"
       >
         <div className="space-y-3 text-sm text-muted-foreground">
           <div className="flex items-start gap-3 rounded-xl border border-border bg-surface-light p-4">
             <CalendarDays className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
             <div>
-              <p className="font-medium text-foreground">1. Calend·rio de SLA</p>
+              <p className="font-medium text-foreground">1. Calend√°rio de SLA</p>
               <p className="mt-1 text-muted">
-                Define fuso hor·rio, dias ˙teis, hor·rio comercial e feriados. Use calend·rio
-                global como padr„o e especÌficos por cliente quando necess·rio.
+                Define fuso hor√°rio, dias √∫teis, hor√°rio comercial e feriados. Use calend√°rio
+                global como padr√£o e espec√≠ficos por cliente quando necess√°rio.
               </p>
               <p className="mt-1 text-muted">
-                Com calend·rio, o SLA conta apenas em hor·rio comercial. Sem calend·rio, o SLA
+                Com calend√°rio, o SLA conta apenas em hor√°rio comercial. Sem calend√°rio, o SLA
                 corre 24x7.
               </p>
             </div>
@@ -1659,7 +1659,7 @@ export default function TicketSlaPage() {
             <div>
               <p className="font-medium text-foreground">2. Workflow Profile</p>
               <p className="mt-1 text-muted">
-                Perfil de workflow define SLA em horas, prioridade padr„o e calend·rio usado.
+                Perfil de workflow define SLA em horas, prioridade padr√£o e calend√°rio usado.
               </p>
             </div>
           </div>

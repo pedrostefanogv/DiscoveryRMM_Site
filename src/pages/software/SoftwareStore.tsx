@@ -16,7 +16,7 @@ export default function SoftwareStore() {
         <div>
           <h1 className="text-2xl font-bold text-foreground">Loja de Softwares</h1>
           <p className="mt-1 text-sm text-muted">
-            Cat·logo de apps com aprovaÁ„o por escopo e trilha de auditoria.
+            Cat√°logo de apps com aprova√ß√£o por escopo e trilha de auditoria.
           </p>
         </div>
       </div>
@@ -27,13 +27,13 @@ export default function SoftwareStore() {
             variant={tab === 'catalog' ? 'primary' : 'ghost'}
             onClick={() => setTab('catalog')}
           >
-            <Package className="h-4 w-4" /> Cat·logo
+            <Package className="h-4 w-4" /> Cat√°logo
           </Button>
           <Button
             variant={tab === 'approvals' ? 'primary' : 'ghost'}
             onClick={() => setTab('approvals')}
           >
-            <ShieldCheck className="h-4 w-4" /> AprovaÁıes
+            <ShieldCheck className="h-4 w-4" /> Aprova√ß√µes
           </Button>
           <Button
             variant={tab === 'audit' ? 'primary' : 'ghost'}
