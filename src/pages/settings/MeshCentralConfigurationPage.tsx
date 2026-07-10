@@ -139,8 +139,8 @@ export default function MeshCentralConfigurationPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-white">Configurações MeshCentral</h1>
-        <p className="text-sm text-slate-400">
+        <h1 className="text-2xl font-bold text-foreground">Configurações MeshCentral</h1>
+        <p className="text-sm text-muted">
           Gerencie herança de perfil de policy e reconciliação operacional por site.
         </p>
       </div>
@@ -179,7 +179,7 @@ export default function MeshCentralConfigurationPage() {
         <CardHeader
           title="Hierarquia de Perfil"
           subtitle="Valor global e overrides por cliente/site para MeshCentralGroupPolicyProfile."
-          action={<ShieldCheck className="h-4 w-4 text-slate-400" />}
+          action={<ShieldCheck className="h-4 w-4 text-muted" />}
         />
 
         <div className="space-y-3 px-5 pb-5">
@@ -258,7 +258,7 @@ export default function MeshCentralConfigurationPage() {
               />
 
               {siteId && (
-                <div className="rounded-md border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-400">
+                <div className="rounded-md border border-border bg-surface-light px-3 py-2 text-xs text-muted">
                   Campo bloqueado: {isMeshPolicyBlocked(siteEffectiveQuery.data) ? "Sim" : "Não"}
                 </div>
               )}
@@ -285,7 +285,7 @@ export default function MeshCentralConfigurationPage() {
 
         <div className="space-y-3 px-5 pb-5">
           {!siteId && (
-            <p className="text-sm text-slate-500">Selecione um site para consultar status.</p>
+            <p className="text-sm text-muted">Selecione um site para consultar status.</p>
           )}
 
           {siteId && statusQuery.isLoading && (
@@ -324,21 +324,21 @@ export default function MeshCentralConfigurationPage() {
                 />
               </div>
 
-              <div className="rounded-md border border-white/10 bg-white/5 px-3 py-2">
-                <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
+              <div className="rounded-md border border-border bg-surface-light px-3 py-2">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted">
                   Drift Reasons
                 </p>
                 <div className="mt-2 space-y-1">
                   {toArray(statusQuery.data.driftReasons).length === 0 && (
-                    <p className="text-sm text-slate-500">Sem divergências reportadas.</p>
+                    <p className="text-sm text-muted">Sem divergências reportadas.</p>
                   )}
                   {toArray(statusQuery.data.driftReasons).map((reason, index) => (
-                    <p key={`${reason}-${index}`} className="text-sm text-slate-300">
+                    <p key={`${reason}-${index}`} className="text-sm text-muted-foreground">
                       - {reason}
                     </p>
                   ))}
                 </div>
-                <p className="mt-2 text-xs text-slate-500">
+                <p className="mt-2 text-xs text-muted">
                   AppliedAtUtc: {toText(statusQuery.data.appliedAtUtc, "N/A")}
                 </p>
               </div>
@@ -351,7 +351,7 @@ export default function MeshCentralConfigurationPage() {
         <CardHeader
           title="Reconcile de Policy"
           subtitle="Use dry-run para simular e apply para aplicar alterações no MeshCentral."
-          action={<Shuffle className="h-4 w-4 text-slate-400" />}
+          action={<Shuffle className="h-4 w-4 text-muted" />}
         />
 
         <div className="space-y-4 px-5 pb-5">
@@ -372,7 +372,7 @@ export default function MeshCentralConfigurationPage() {
               Aplicar reconcile
             </Button>
             {!canApply && (
-              <p className="text-xs text-slate-500">
+              <p className="text-xs text-muted">
                 Sem permissão de edição para reconciliar policy.
               </p>
             )}
@@ -397,10 +397,10 @@ function HierarchyRow({
   badge: string;
 }) {
   return (
-    <div className="flex items-center justify-between rounded-md border border-white/10 bg-white/5 px-3 py-2">
+    <div className="flex items-center justify-between rounded-md border border-border bg-surface-light px-3 py-2">
       <div>
-        <p className="text-xs uppercase tracking-wide text-slate-400">{label}</p>
-        <p className="text-sm text-white">{value}</p>
+        <p className="text-xs uppercase tracking-wide text-muted">{label}</p>
+        <p className="text-sm text-foreground">{value}</p>
       </div>
       <Badge color="slate">{badge}</Badge>
     </div>
@@ -409,9 +409,9 @@ function HierarchyRow({
 
 function StatusBox({ title, value }: { title: string; value: string }) {
   return (
-    <div className="rounded-md border border-white/10 bg-white/5 px-3 py-2">
-      <p className="text-xs uppercase tracking-wide text-slate-400">{title}</p>
-      <p className="mt-1 text-sm text-white">{value}</p>
+    <div className="rounded-md border border-border bg-surface-light px-3 py-2">
+      <p className="text-xs uppercase tracking-wide text-muted">{title}</p>
+      <p className="mt-1 text-sm text-foreground">{value}</p>
     </div>
   );
 }
@@ -448,7 +448,7 @@ function ReconcileReportView({ report }: { report: MeshGroupPolicyReconcileRepor
   const items = Array.isArray(report.items) ? report.items : [];
 
   return (
-    <div className="space-y-3 rounded-lg border border-white/10 bg-white/5 p-3">
+    <div className="space-y-3 rounded-lg border border-border bg-surface-light p-3">
       <div className="flex flex-wrap items-center gap-2">
         <Badge color="accent">Total: {total}</Badge>
         <Badge color="success">Sucesso: {success}</Badge>
@@ -456,13 +456,13 @@ function ReconcileReportView({ report }: { report: MeshGroupPolicyReconcileRepor
         <Badge color="slate">Modo: {report.applyChanges ? "Apply" : "Dry-run"}</Badge>
       </div>
 
-      <p className="text-xs text-slate-500">
+      <p className="text-xs text-muted">
         Início: {toText(report.startedAtUtc, "N/A")} | Fim: {toText(report.finishedAtUtc, "N/A")}
       </p>
 
       <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
         {items.length === 0 && (
-          <p className="text-sm text-slate-500">Sem itens detalhados no retorno.</p>
+          <p className="text-sm text-muted">Sem itens detalhados no retorno.</p>
         )}
 
         {items.map((item, index) => {
@@ -483,10 +483,10 @@ function ReconcileReportView({ report }: { report: MeshGroupPolicyReconcileRepor
           return (
             <div
               key={`${siteLabel}-${groupLabel}-${index}`}
-              className="rounded-md border border-white/10 bg-black/20 px-3 py-2"
+              className="rounded-md border border-border bg-black/20 px-3 py-2"
             >
               <div className="flex items-center justify-between gap-2">
-                <p className="text-sm font-medium text-white">
+                <p className="text-sm font-medium text-foreground">
                   {siteLabel} · {groupLabel}
                 </p>
                 <Badge color={successItem ? "success" : "danger"}>
@@ -494,14 +494,14 @@ function ReconcileReportView({ report }: { report: MeshGroupPolicyReconcileRepor
                 </Badge>
               </div>
 
-              <p className="text-xs text-slate-400">Desired: {desired}</p>
-              <p className="text-xs text-slate-400">Applied: {applied}</p>
-              <p className="text-xs text-slate-400">Applied Before: {appliedBefore}</p>
-              <p className="text-xs text-slate-400">Applied After: {appliedAfter}</p>
-              <p className="text-xs text-slate-400">MeshId Before: {meshBefore}</p>
-              <p className="text-xs text-slate-400">MeshId After: {meshAfter}</p>
-              <p className="text-xs text-slate-400">Drift: {hasDrift ? "Sim" : "Não"}</p>
-              <p className="text-xs text-slate-400">Applied: {appliedItem ? "Sim" : "Não"}</p>
+              <p className="text-xs text-muted">Desired: {desired}</p>
+              <p className="text-xs text-muted">Applied: {applied}</p>
+              <p className="text-xs text-muted">Applied Before: {appliedBefore}</p>
+              <p className="text-xs text-muted">Applied After: {appliedAfter}</p>
+              <p className="text-xs text-muted">MeshId Before: {meshBefore}</p>
+              <p className="text-xs text-muted">MeshId After: {meshAfter}</p>
+              <p className="text-xs text-muted">Drift: {hasDrift ? "Sim" : "Não"}</p>
+              <p className="text-xs text-muted">Applied: {appliedItem ? "Sim" : "Não"}</p>
               {error && <p className="text-xs text-danger">Erro: {error}</p>}
             </div>
           );

@@ -108,9 +108,9 @@ export function MainLayout() {
     [location.pathname],
   );
 
-  const routeAgentId = routeScope.kind === 'agent' ? routeScope.agentId : '';
+  const routeAgentId = routeScope.kind === 'agent' ? routeScope.agentId : undefined;
   const agentQuery = useAgent(routeAgentId);
-  const heartbeat = useAgentHeartbeat(routeAgentId);
+  const heartbeat = routeAgentId ? useAgentHeartbeat(routeAgentId) : undefined;
   const heartbeatClientId = heartbeat?.clientId;
   const heartbeatSiteId = heartbeat?.siteId;
   const agentSiteId = agentQuery.data?.siteId;
@@ -197,7 +197,7 @@ export function MainLayout() {
   }, []);
 
   return (
-    <div className="app-shell relative flex min-h-screen text-slate-100">
+    <div className="app-shell relative flex min-h-screen text-foreground">
       <div className="app-grid-bg" aria-hidden="true" />
 
       <Sidebar
@@ -212,7 +212,7 @@ export function MainLayout() {
         <button
           type="button"
           aria-label="Fechar menu lateral"
-          className="fixed inset-0 z-20 bg-slate-950/65 backdrop-blur-sm"
+          className="fixed inset-0 z-20 bg-overlay backdrop-blur-sm"
           onClick={closeMobileMenu}
         />
       )}

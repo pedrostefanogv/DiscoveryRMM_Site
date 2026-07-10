@@ -120,10 +120,10 @@ export default function Dashboard() {
       {/* Header + Window Selector */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white">Dashboard</h1>
-          <p className="text-sm text-slate-400">Visão geral do ambiente</p>
+          <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
+          <p className="text-sm text-muted">Visão geral do ambiente</p>
         </div>
-        <div className="flex items-center gap-1 rounded-lg border border-white/10 bg-white/5 p-1">
+        <div className="flex items-center gap-1 rounded-lg border border-border bg-surface-light p-1">
           {WINDOWS.map(w => (
             <button
               key={w.value}
@@ -131,8 +131,8 @@ export default function Dashboard() {
               onClick={() => setWindow(w.value)}
               className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
                 window === w.value
-                  ? 'bg-primary text-white'
-                  : 'text-slate-400 hover:text-white'
+                  ? 'bg-primary text-foreground'
+                  : 'text-muted hover:text-foreground'
               }`}
             >
               {w.label}
@@ -155,7 +155,7 @@ export default function Dashboard() {
             value={agentsTotal}
             tone="accent"
             trend={
-              <span className="text-xs text-slate-400">
+              <span className="text-xs text-muted">
                 {agentsOnline} online / {agentsOffline} offline
               </span>
             }
@@ -176,7 +176,7 @@ export default function Dashboard() {
               ticketsSlaBreached > 0 ? (
                 <Badge color="danger">{ticketsSlaBreached} SLA</Badge>
               ) : (
-                <span className="text-xs text-slate-400">{ds?.tickets.closed ?? 0} fechados</span>
+                <span className="text-xs text-muted">{ds?.tickets.closed ?? 0} fechados</span>
               )
             }
           />
@@ -241,8 +241,8 @@ export default function Dashboard() {
             <MetricTile label="Completed" value={cmds?.completed ?? 0} icon={CheckCircle2} />
             <MetricTile label="Failed" value={cmds?.failed ?? 0} icon={XCircle} />
             <MetricTile label="Total" value={cmds?.total ?? 0} icon={Cpu} />
-            <div className="rounded-lg bg-white/5 px-3 py-2 text-sm">
-              <div className="flex items-center gap-1.5 text-slate-500">
+            <div className="rounded-lg bg-surface-light px-3 py-2 text-sm">
+              <div className="flex items-center gap-1.5 text-muted">
                 <Zap className="h-3.5 w-3.5" />
                 <span>Sucesso</span>
               </div>
@@ -267,8 +267,8 @@ export default function Dashboard() {
             <MetricTile label="Completed" value={auto?.completed ?? 0} icon={CheckCircle2} />
             <MetricTile label="Failed" value={auto?.failed ?? 0} icon={XCircle} />
             <MetricTile label="Total" value={auto?.total ?? 0} icon={Cpu} />
-            <div className="rounded-lg bg-white/5 px-3 py-2 text-sm">
-              <div className="flex items-center gap-1.5 text-slate-500">
+            <div className="rounded-lg bg-surface-light px-3 py-2 text-sm">
+              <div className="flex items-center gap-1.5 text-muted">
                 <Zap className="h-3.5 w-3.5" />
                 <span>Sucesso</span>
               </div>
@@ -288,30 +288,30 @@ export default function Dashboard() {
             <div className="rounded-lg bg-danger/10 px-3 py-2">
               <div className="flex items-center gap-1.5">
                 <AlertTriangle className="h-3.5 w-3.5 text-danger" />
-                <span className="text-slate-400">Erros</span>
+                <span className="text-muted">Erros</span>
               </div>
-              <p className="mt-1 text-2xl font-bold text-white">{logs?.error ?? 0}</p>
+              <p className="mt-1 text-2xl font-bold text-foreground">{logs?.error ?? 0}</p>
             </div>
             <div className="rounded-lg bg-warning/10 px-3 py-2">
               <div className="flex items-center gap-1.5">
                 <AlertTriangle className="h-3.5 w-3.5 text-warning" />
-                <span className="text-slate-400">Avisos</span>
+                <span className="text-muted">Avisos</span>
               </div>
-              <p className="mt-1 text-2xl font-bold text-white">{logs?.warn ?? 0}</p>
+              <p className="mt-1 text-2xl font-bold text-foreground">{logs?.warn ?? 0}</p>
             </div>
-            <div className="rounded-lg bg-white/5 px-3 py-2">
-              <div className="flex items-center gap-1.5 text-slate-500">
+            <div className="rounded-lg bg-surface-light px-3 py-2">
+              <div className="flex items-center gap-1.5 text-muted">
                 <Activity className="h-3.5 w-3.5" />
                 <span>Info</span>
               </div>
-              <p className="mt-1 text-2xl font-bold text-white">{logs?.info ?? 0}</p>
+              <p className="mt-1 text-2xl font-bold text-foreground">{logs?.info ?? 0}</p>
             </div>
-            <div className="rounded-lg bg-white/5 px-3 py-2">
-              <div className="flex items-center gap-1.5 text-slate-500">
+            <div className="rounded-lg bg-surface-light px-3 py-2">
+              <div className="flex items-center gap-1.5 text-muted">
                 <Database className="h-3.5 w-3.5" />
                 <span>Total</span>
               </div>
-              <p className="mt-1 text-2xl font-bold text-white">{logs?.total ?? 0}</p>
+              <p className="mt-1 text-2xl font-bold text-foreground">{logs?.total ?? 0}</p>
             </div>
           </div>
         </Card>
@@ -325,8 +325,8 @@ export default function Dashboard() {
             subtitle="Conectividade em tempo real e infraestrutura"
           />
           <div className="space-y-3 text-sm">
-            <div className="flex items-center justify-between rounded-lg bg-white/5 px-3 py-2">
-              <span className="flex items-center gap-2 text-slate-300">
+            <div className="flex items-center justify-between rounded-lg bg-surface-light px-3 py-2">
+              <span className="flex items-center gap-2 text-muted-foreground">
                 <Activity className="h-4 w-4" /> NATS
               </span>
               <div className="flex items-center gap-2">
@@ -334,13 +334,13 @@ export default function Dashboard() {
                   {realtime?.natsConnected ? 'Conectado' : 'Desconectado'}
                 </Badge>
                 {realtime?.natsConnectionState && (
-                  <span className="text-xs text-slate-500">{realtime.natsConnectionState}</span>
+                  <span className="text-xs text-muted">{realtime.natsConnectionState}</span>
                 )}
               </div>
             </div>
 
-            <div className="flex items-center justify-between rounded-lg bg-white/5 px-3 py-2">
-              <span className="flex items-center gap-2 text-slate-300">
+            <div className="flex items-center justify-between rounded-lg bg-surface-light px-3 py-2">
+              <span className="flex items-center gap-2 text-muted-foreground">
                 <Database className="h-4 w-4" /> Redis
               </span>
               <div className="flex items-center gap-2">
@@ -348,13 +348,13 @@ export default function Dashboard() {
                   {realtime?.redisConnected ? 'Conectado' : 'Desconectado'}
                 </Badge>
                 {typeof realtime?.redisPingMs === 'number' && (
-                  <span className="text-xs text-slate-500">{realtime.redisPingMs} ms</span>
+                  <span className="text-xs text-muted">{realtime.redisPingMs} ms</span>
                 )}
               </div>
             </div>
 
-            <div className="flex items-center justify-between rounded-lg bg-white/5 px-3 py-2">
-              <span className="flex items-center gap-2 text-slate-300">
+            <div className="flex items-center justify-between rounded-lg bg-surface-light px-3 py-2">
+              <span className="flex items-center gap-2 text-muted-foreground">
                 <Server className="h-4 w-4" /> Banco de dados
               </span>
               <div className="flex items-center gap-2">
@@ -362,21 +362,21 @@ export default function Dashboard() {
                   {database?.connected ? 'Conectado' : 'Desconectado'}
                 </Badge>
                 {database?.provider && (
-                  <span className="text-xs text-slate-500">{database.provider}</span>
+                  <span className="text-xs text-muted">{database.provider}</span>
                 )}
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-2 pt-1 text-xs text-slate-400">
-              <div className="rounded-lg bg-white/5 px-3 py-2">
-                <p className="text-slate-500">Realtime agents</p>
-                <p className="mt-0.5 text-sm font-semibold text-white">
+            <div className="grid grid-cols-2 gap-2 pt-1 text-xs text-muted">
+              <div className="rounded-lg bg-surface-light px-3 py-2">
+                <p className="text-muted">Realtime agents</p>
+                <p className="mt-0.5 text-sm font-semibold text-foreground">
                   {realtime?.realtimeConnectedAgents ?? realtime?.signalrConnectedAgents ?? 0}
                 </p>
               </div>
-              <div className="rounded-lg bg-white/5 px-3 py-2">
-                <p className="text-slate-500">NATS TCP</p>
-                <p className="mt-0.5 text-sm font-semibold text-white">
+              <div className="rounded-lg bg-surface-light px-3 py-2">
+                <p className="text-muted">NATS TCP</p>
+                <p className="mt-0.5 text-sm font-semibold text-foreground">
                   {realtime?.natsTcpReachable ? 'Reachable' : 'Unreachable'}
                 </p>
               </div>
@@ -397,16 +397,16 @@ export default function Dashboard() {
             <MetricTile label="Threads" value={processMetrics?.threadCount ?? '—'} icon={Activity} />
             <MetricTile label="Uptime" value={formatUptime(uptimeValue)} icon={Server} />
           </div>
-          <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-400">
-            <div className="rounded-lg bg-white/5 px-3 py-2">
-              <p className="text-slate-500">ThreadPool worker</p>
-              <p className="mt-0.5 text-sm font-semibold text-white">
+          <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-muted">
+            <div className="rounded-lg bg-surface-light px-3 py-2">
+              <p className="text-muted">ThreadPool worker</p>
+              <p className="mt-0.5 text-sm font-semibold text-foreground">
                 {workerAvailable ?? '—'} disp / {workerMin ?? '—'} min
               </p>
             </div>
-            <div className="rounded-lg bg-white/5 px-3 py-2">
-              <p className="text-slate-500">ThreadPool IO</p>
-              <p className="mt-0.5 text-sm font-semibold text-white">
+            <div className="rounded-lg bg-surface-light px-3 py-2">
+              <p className="text-muted">ThreadPool IO</p>
+              <p className="mt-0.5 text-sm font-semibold text-foreground">
                 {ioAvailable ?? '—'} disp / {ioMin ?? '—'} min
               </p>
             </div>
@@ -451,9 +451,9 @@ const StatusBar = memo(function StatusBar({
   const pct = total > 0 ? Math.round((value / total) * 100) : 0;
   const tone = BG_TO_TONE[bg] ?? 'primary';
   return (
-    <div className="rounded-lg bg-white/5 px-3 py-2">
+    <div className="rounded-lg bg-surface-light px-3 py-2">
       <div className="flex items-center justify-between text-xs">
-        <span className="text-slate-400">{label}</span>
+        <span className="text-muted">{label}</span>
         <span className={`font-semibold ${color}`}>{value}</span>
       </div>
       <progress
@@ -476,12 +476,12 @@ const MetricTile = memo(function MetricTile({
   icon: ComponentType<{ className?: string }>;
 }) {
   return (
-    <div className="rounded-lg bg-white/5 px-3 py-2">
-      <div className="flex items-center gap-1.5 text-slate-500">
+    <div className="rounded-lg bg-surface-light px-3 py-2">
+      <div className="flex items-center gap-1.5 text-muted">
         <Icon className="h-3.5 w-3.5" />
         <span>{label}</span>
       </div>
-      <p className="mt-1 text-base font-semibold text-white">{value}</p>
+      <p className="mt-1 text-base font-semibold text-foreground">{value}</p>
     </div>
   );
 });

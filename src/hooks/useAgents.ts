@@ -115,10 +115,10 @@ export function useAgentsBySite(siteId: string) {
   });
 }
 
-export function useAgent(id: string) {
+export function useAgent(id: string | undefined) {
   return useQuery({
-    queryKey: KEYS.detail(id),
-    queryFn: () => agentsApi.get(id),
+    queryKey: KEYS.detail(id ?? ""),
+    queryFn: () => agentsApi.get(id!),
     enabled: !!id,
     refetchInterval: 300_000,
     refetchIntervalInBackground: true,

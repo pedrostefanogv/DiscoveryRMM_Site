@@ -196,8 +196,8 @@ export default function IamRolesPage() {
         header: "Role",
         render: (item) => (
           <div className="space-y-1">
-            <p className="font-medium text-white">{item.name}</p>
-            <p className="text-xs text-slate-400">{item.description ?? "Sem descrição"}</p>
+            <p className="font-medium text-foreground">{item.name}</p>
+            <p className="text-xs text-muted">{item.description ?? "Sem descrição"}</p>
           </div>
         ),
       },
@@ -224,7 +224,7 @@ export default function IamRolesPage() {
         key: "meshRights",
         header: "Permissão Mesh",
         render: (item) => (
-          <span className="text-xs text-slate-300">{summarizeRoleMeshRights(item)}</span>
+          <span className="text-xs text-muted-foreground">{summarizeRoleMeshRights(item)}</span>
         ),
       },
       {
@@ -299,8 +299,8 @@ export default function IamRolesPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-white">Roles e Permissões</h1>
-        <p className="text-sm text-slate-400">
+        <h1 className="text-2xl font-bold text-foreground">Roles e Permissões</h1>
+        <p className="text-sm text-muted">
           Gerencie roles customizadas e atribua permissões do catálogo disponível na API.
         </p>
       </div>
@@ -473,7 +473,7 @@ function RolePermissionsPanel({
               <KeyRound className="h-4 w-4" /> Atribuir
             </Button>
           </div>
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-muted">
             {filteredCatalog.length} permissão(ões) encontrada(s).
           </p>
         </div>
@@ -489,10 +489,10 @@ function RolePermissionsPanel({
             const code = getPermissionCode(permission);
 
             return (
-            <div key={permissionId || permissionLabel} className="flex items-center justify-between rounded-lg border border-white/10 bg-white/5 px-3 py-2">
+            <div key={permissionId || permissionLabel} className="flex items-center justify-between rounded-lg border border-border bg-surface-light px-3 py-2">
               <div className="space-y-1">
-                <p className="font-medium text-white">{permissionLabel}</p>
-                <p className="text-xs text-slate-400">{code || permissionId}</p>
+                <p className="font-medium text-foreground">{permissionLabel}</p>
+                <p className="text-xs text-muted">{code || permissionId}</p>
               </div>
               {canManage && (
                 <Button
@@ -513,7 +513,7 @@ function RolePermissionsPanel({
             );
           })}
           {permissions.length === 0 && (
-            <div className="rounded-lg border border-dashed border-white/15 p-4 text-sm text-slate-500">
+            <div className="rounded-lg border border-dashed border-border-strong p-4 text-sm text-muted">
               Nenhuma permissão vinculada a esta role.
             </div>
           )}
@@ -851,12 +851,12 @@ function EditRoleModal({
           <p className="text-xs text-warning">Use um inteiro válido para a máscara Mesh (ex.: 61176 ou -1).</p>
         )}
 
-        <label className="flex items-center gap-2 text-sm text-slate-300">
+        <label className="flex items-center gap-2 text-sm text-muted-foreground">
           <input
             type="checkbox"
             checked={payload.isActive}
             onChange={(e) => setPayload((prev) => ({ ...prev, isActive: e.target.checked }))}
-            className="rounded border-white/20 bg-white/5"
+            className="rounded border-border-strong bg-surface-light"
           />
           Role ativa
         </label>
@@ -888,7 +888,7 @@ function MeshMaskEditor({
   const fullSelected = maskInput.trim() === "-1";
 
   return (
-    <div className="space-y-3 rounded-lg border border-white/10 bg-white/5 p-3">
+    <div className="space-y-3 rounded-lg border border-border bg-surface-light p-3">
       <Input
         label="MeshRightsMask (número)"
         value={maskInput}
@@ -900,12 +900,12 @@ function MeshMaskEditor({
         disabled={disabled}
       />
 
-      <label className="flex items-center gap-2 text-sm text-slate-300">
+      <label className="flex items-center gap-2 text-sm text-muted-foreground">
         <input
           type="checkbox"
           checked={fullSelected}
           onChange={(event) => onToggleFull(event.target.checked)}
-          className="rounded border-white/20 bg-white/5"
+          className="rounded border-border-strong bg-surface-light"
           disabled={disabled}
         />
         Full (-1)
@@ -915,13 +915,13 @@ function MeshMaskEditor({
         {MESH_RIGHT_BITS.map((item) => (
           <label
             key={item.bit}
-            className="flex items-center gap-2 rounded border border-white/10 px-2 py-1 text-xs text-slate-300"
+            className="flex items-center gap-2 rounded border border-border px-2 py-1 text-xs text-muted-foreground"
           >
             <input
               type="checkbox"
               checked={selectedBits.includes(item.bit)}
               onChange={(event) => onToggleBit(item.bit, event.target.checked)}
-              className="rounded border-white/20 bg-white/5"
+              className="rounded border-border-strong bg-surface-light"
               disabled={disabled || fullSelected}
             />
             <span>

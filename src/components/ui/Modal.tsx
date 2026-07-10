@@ -27,18 +27,18 @@ export function Modal({ open, onClose, title, children, maxWidth = 'max-w-lg' }:
   const modalContent = (
     <div
       ref={overlayRef}
-      className="animate-backdrop-in fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+      className="animate-backdrop-in fixed inset-0 z-[100] flex items-center justify-center bg-overlay p-4 backdrop-blur-sm"
       onClick={e => { if (e.target === overlayRef.current) onClose(); }}
       onKeyDown={e => { if (e.key === 'Escape') onClose(); }}
     >
-      <div className={`animate-modal-in w-full ${maxWidth} rounded-xl border border-white/10 bg-slate-900 shadow-2xl`}>
+      <div className={`animate-modal-in w-full ${maxWidth} rounded-xl border border-border bg-surface shadow-2xl`}>
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-white/5 px-6 py-4">
-          <h2 className="text-lg font-semibold text-white">{title}</h2>
+        <div className="flex items-center justify-between border-b border-border px-6 py-4">
+          <h2 className="text-lg font-semibold text-foreground">{title}</h2>
           <button
             onClick={onClose}
             aria-label="Fechar"
-            className="rounded-lg p-1 text-slate-400 hover:bg-white/5 hover:text-white transition-colors"
+            className="rounded-lg p-1 text-muted-foreground hover:bg-surface-light hover:text-foreground transition-colors"
           >
             <X className="h-5 w-5" />
           </button>

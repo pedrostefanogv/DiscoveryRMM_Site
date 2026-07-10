@@ -112,11 +112,11 @@ export default function IamMeshProfilesPage() {
         render: (item) => (
           <div className="space-y-1">
             <div className="flex items-center gap-2">
-              <p className="font-medium text-white">{item.name}</p>
+              <p className="font-medium text-foreground">{item.name}</p>
               {item.isSystem && <Badge color="warning">Sistema</Badge>}
             </div>
             {item.description && (
-              <p className="text-xs text-slate-400">{item.description}</p>
+              <p className="text-xs text-muted">{item.description}</p>
             )}
           </div>
         ),
@@ -126,8 +126,8 @@ export default function IamMeshProfilesPage() {
         header: "Máscara de direitos",
         render: (item) => (
           <div className="space-y-1">
-            <p className="text-sm text-white font-mono">{item.rightsMask}</p>
-            <p className="text-xs text-slate-400">{describeMask(item.rightsMask)}</p>
+            <p className="text-sm text-foreground font-mono">{item.rightsMask}</p>
+            <p className="text-xs text-muted">{describeMask(item.rightsMask)}</p>
           </div>
         ),
       },
@@ -220,8 +220,8 @@ export default function IamMeshProfilesPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-white">Perfis MeshCentral</h1>
-        <p className="text-sm text-slate-400">
+        <h1 className="text-2xl font-bold text-foreground">Perfis MeshCentral</h1>
+        <p className="text-sm text-muted">
           Gerencie os perfis de direitos MeshCentral disponíveis para atribuição em roles.
           Perfis de sistema (viewer, operator, admin) não podem ser excluídos.
         </p>
@@ -289,7 +289,7 @@ function MaskEditor({
   const fullSelected = maskInput.trim() === "-1";
 
   return (
-    <div className="space-y-3 rounded-lg border border-white/10 bg-white/5 p-3">
+    <div className="space-y-3 rounded-lg border border-border bg-surface-light p-3">
       <Input
         label="RightsMask (número)"
         value={maskInput}
@@ -301,13 +301,13 @@ function MaskEditor({
         }}
       />
 
-      <label className="flex items-center gap-2 text-sm text-slate-300">
+      <label className="flex items-center gap-2 text-sm text-muted-foreground">
         <input
           type="checkbox"
           checked={fullSelected}
           disabled={disabled}
           onChange={(e) => onToggleFull(e.target.checked)}
-          className="rounded border-white/20 bg-white/5"
+          className="rounded border-border-strong bg-surface-light"
         />
         Full (-1): todos os direitos
       </label>
@@ -315,13 +315,13 @@ function MaskEditor({
       {!fullSelected && (
         <div className="grid grid-cols-2 gap-1">
           {MESH_RIGHT_BITS.map(({ bit, label }) => (
-            <label key={bit} className="flex items-center gap-2 text-xs text-slate-300">
+            <label key={bit} className="flex items-center gap-2 text-xs text-muted-foreground">
               <input
                 type="checkbox"
                 checked={selectedBits.includes(bit)}
                 disabled={disabled}
                 onChange={(e) => onToggleBit(bit, e.target.checked)}
-                className="rounded border-white/20 bg-white/5"
+                className="rounded border-border-strong bg-surface-light"
               />
               {label}
             </label>
@@ -383,7 +383,7 @@ function CreateProfileModal({
           onChange={(e) => setName(e.target.value)}
           placeholder="ex.: operator-restrito"
         />
-        <p className="text-xs text-slate-500">
+        <p className="text-xs text-muted">
           O nome será normalizado para minúsculas e não pode ser duplicado.
         </p>
         <Input

@@ -18,8 +18,8 @@ export default function WorkflowSettings() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-white">Workflow</h1>
-        <p className="text-sm text-slate-400">Gerencie estados e transições de chamados</p>
+        <h1 className="text-2xl font-bold text-foreground">Workflow</h1>
+        <p className="text-sm text-muted">Gerencie estados e transições de chamados</p>
       </div>
 
       {/* States */}
@@ -60,7 +60,7 @@ export default function WorkflowSettings() {
             );
           })}
           {(transitions.data?.length ?? 0) === 0 && (
-            <p className="text-sm text-slate-500">Nenhuma transição</p>
+            <p className="text-sm text-muted">Nenhuma transição</p>
           )}
         </div>
       </Card>
@@ -83,19 +83,19 @@ function StateCard({ state }: { state: { id: string; name: string; color: string
   };
 
   return (
-    <div className="flex items-center gap-3 rounded-lg border border-white/5 bg-white/5 p-3">
+    <div className="flex items-center gap-3 rounded-lg border border-border bg-surface-light p-3">
       <svg className="h-3 w-3 shrink-0" viewBox="0 0 12 12" aria-hidden="true">
         <circle cx="6" cy="6" r="6" fill={state.color ?? '#64748b'} />
       </svg>
       <div className="min-w-0 flex-1">
-        <p className="font-medium text-white">{state.name}</p>
+        <p className="font-medium text-foreground">{state.name}</p>
         <div className="flex gap-1 mt-1">
           {state.isInitial && <Badge color="accent">Inicial</Badge>}
           {state.isFinal && <Badge color="success">Final</Badge>}
           <Badge color="slate">Ordem: {state.sortOrder}</Badge>
         </div>
       </div>
-      <button onClick={handleDelete} aria-label="Excluir estado" className="p-1 text-slate-500 hover:text-danger transition-colors">
+      <button onClick={handleDelete} aria-label="Excluir estado" className="p-1 text-muted hover:text-danger transition-colors">
         <Trash2 className="h-4 w-4" />
       </button>
     </div>
@@ -106,25 +106,25 @@ function TransitionRow({ id, name, fromName, fromColor, toName, toColor }: { id:
   const deleteTrans = useDeleteWorkflowTransition();
 
   return (
-    <div className="flex items-center gap-3 rounded-lg bg-white/5 px-4 py-2">
-      <span className="flex items-center gap-1.5 text-sm text-white">
+    <div className="flex items-center gap-3 rounded-lg bg-surface-light px-4 py-2">
+      <span className="flex items-center gap-1.5 text-sm text-foreground">
         <svg className="h-2 w-2" viewBox="0 0 8 8" aria-hidden="true">
           <circle cx="4" cy="4" r="4" fill={fromColor ?? '#64748b'} />
         </svg>
         {fromName}
       </span>
-      <ArrowRight className="h-4 w-4 text-slate-500" />
-      <span className="flex items-center gap-1.5 text-sm text-white">
+      <ArrowRight className="h-4 w-4 text-muted" />
+      <span className="flex items-center gap-1.5 text-sm text-foreground">
         <svg className="h-2 w-2" viewBox="0 0 8 8" aria-hidden="true">
           <circle cx="4" cy="4" r="4" fill={toColor ?? '#64748b'} />
         </svg>
         {toName}
       </span>
-      <span className="ml-auto text-xs text-slate-400">{name}</span>
+      <span className="ml-auto text-xs text-muted">{name}</span>
       <button
         onClick={() => deleteTrans.mutate(id, { onSuccess: () => toast.success('Transição excluída'), onError: () => toast.error('Erro') })}
         aria-label="Excluir transição"
-        className="p-1 text-slate-500 hover:text-danger transition-colors"
+        className="p-1 text-muted hover:text-danger transition-colors"
       >
         <Trash2 className="h-3.5 w-3.5" />
       </button>
@@ -157,18 +157,18 @@ function CreateStateModal({ open, onClose }: { open: boolean; onClose: () => voi
         <Input label="Nome" value={name} onChange={e => setName(e.target.value)} />
         <div className="flex items-end gap-3">
           <div className="space-y-1">
-            <label className="block text-sm font-medium text-slate-300">Cor</label>
-            <input type="color" aria-label="Cor do estado" value={color} onChange={e => setColor(e.target.value)} className="h-10 w-14 rounded border border-white/10 bg-transparent cursor-pointer" />
+            <label className="block text-sm font-medium text-muted-foreground">Cor</label>
+            <input type="color" aria-label="Cor do estado" value={color} onChange={e => setColor(e.target.value)} className="h-10 w-14 rounded border border-border bg-transparent cursor-pointer" />
           </div>
           <Input label="Ordem" type="number" value={sortOrder} onChange={e => setSortOrder(Number(e.target.value))} />
         </div>
         <div className="flex gap-6">
-          <label className="flex items-center gap-2 text-sm text-slate-300">
-            <input type="checkbox" checked={isInitial} onChange={e => setIsInitial(e.target.checked)} className="rounded bg-white/5 border-white/10" />
+          <label className="flex items-center gap-2 text-sm text-muted-foreground">
+            <input type="checkbox" checked={isInitial} onChange={e => setIsInitial(e.target.checked)} className="rounded bg-surface-light border-border" />
             Estado Inicial
           </label>
-          <label className="flex items-center gap-2 text-sm text-slate-300">
-            <input type="checkbox" checked={isFinal} onChange={e => setIsFinal(e.target.checked)} className="rounded bg-white/5 border-white/10" />
+          <label className="flex items-center gap-2 text-sm text-muted-foreground">
+            <input type="checkbox" checked={isFinal} onChange={e => setIsFinal(e.target.checked)} className="rounded bg-surface-light border-border" />
             Estado Final
           </label>
         </div>
@@ -209,15 +209,15 @@ function CreateTransitionModal({ open, onClose, states }: { open: boolean; onClo
         <Input label="Nome" value={name} onChange={e => setName(e.target.value)} />
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-1">
-            <label htmlFor="transition-from" className="block text-sm font-medium text-slate-300">De</label>
-            <select id="transition-from" value={fromId} onChange={e => setFromId(e.target.value)} className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-200 outline-none">
-              {stateOptions.map(o => <option key={o.value} value={o.value} className="bg-slate-900">{o.label}</option>)}
+            <label htmlFor="transition-from" className="block text-sm font-medium text-muted-foreground">De</label>
+            <select id="transition-from" value={fromId} onChange={e => setFromId(e.target.value)} className="w-full rounded-lg border border-border bg-surface-light px-3 py-2 text-sm text-foreground outline-none">
+              {stateOptions.map(o => <option key={o.value} value={o.value} className="bg-surface">{o.label}</option>)}
             </select>
           </div>
           <div className="space-y-1">
-            <label htmlFor="transition-to" className="block text-sm font-medium text-slate-300">Para</label>
-            <select id="transition-to" value={toId} onChange={e => setToId(e.target.value)} className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-200 outline-none">
-              {stateOptions.map(o => <option key={o.value} value={o.value} className="bg-slate-900">{o.label}</option>)}
+            <label htmlFor="transition-to" className="block text-sm font-medium text-muted-foreground">Para</label>
+            <select id="transition-to" value={toId} onChange={e => setToId(e.target.value)} className="w-full rounded-lg border border-border bg-surface-light px-3 py-2 text-sm text-foreground outline-none">
+              {stateOptions.map(o => <option key={o.value} value={o.value} className="bg-surface">{o.label}</option>)}
             </select>
           </div>
         </div>

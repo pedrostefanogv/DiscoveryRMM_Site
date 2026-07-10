@@ -64,7 +64,7 @@ export default function LoginPage() {
   };
 
   return (
-    <Card className="border-white/10 bg-slate-900/80 shadow-2xl backdrop-blur-xl" padding>
+    <Card className="border-border bg-surface/80 shadow-2xl backdrop-blur-xl" padding>
       <CardHeader
         title="Entrar"
         subtitle="Use seu login ou e-mail e conclua o fluxo de segurança exigido."
@@ -95,7 +95,7 @@ export default function LoginPage() {
           </div>
         )}
 
-        <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 text-sm text-slate-400 space-y-2">
+        <div className="rounded-xl border border-border bg-surface-light p-4 text-sm text-muted space-y-2">
           <div className="flex items-start gap-3">
             <UserRound className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
             <span>Caso não seja possível acessar o sistema, revise suas credenciais e consulte o administrador.</span>

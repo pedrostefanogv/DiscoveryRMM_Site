@@ -23,7 +23,7 @@ export function PackageIcon({
   const currentSource = sources[sourceIndex] ?? null;
 
   return (
-    <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/5">
+    <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-lg border border-border bg-surface-light">
       {currentSource ? (
         <img
           src={currentSource}
@@ -40,7 +40,7 @@ export function PackageIcon({
         />
       ) : null}
       <Package
-        className="h-5 w-5 text-slate-500"
+        className="h-5 w-5 text-muted"
         style={{ display: currentSource ? 'none' : undefined }}
       />
     </div>

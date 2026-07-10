@@ -577,8 +577,8 @@ export default function AgentLabelsSettings() {
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-white">Labels Automáticas</h1>
-          <p className="text-sm text-slate-400">
+          <h1 className="text-2xl font-bold text-foreground">Labels Automáticas</h1>
+          <p className="text-sm text-muted">
             Gerencie regras automáticas com campos nativos e custom fields por Agente, Cliente e Site.
           </p>
         </div>
@@ -615,24 +615,24 @@ export default function AgentLabelsSettings() {
             </div>
 
             {showHelp ? (
-              <div className="mb-4 space-y-4 rounded-xl border border-white/10 bg-white/5 p-4 text-sm text-slate-300">
+              <div className="mb-4 space-y-4 rounded-xl border border-border bg-surface-light p-4 text-sm text-muted-foreground">
                 <div>
-                  <p className="mb-1 font-medium text-white">Como combinar condições com E / OU</p>
+                  <p className="mb-1 font-medium text-foreground">Como combinar condições com E / OU</p>
                   <p>Use <strong>grupos (E / OU)</strong> para aninhar condições e criar regras complexas:</p>
 
                   <div className="mt-3 space-y-3">
-                    <div className="rounded-lg bg-slate-900/60 p-3 font-mono text-xs text-slate-400">
-                      <p className="text-slate-300 font-medium mb-1">Exemplo 1 — Simples: SO + (hostname OU memória)</p>
+                    <div className="rounded-lg bg-surface/60 p-3 font-mono text-xs text-muted">
+                      <p className="text-muted-foreground font-medium mb-1">Exemplo 1 — Simples: SO + (hostname OU memória)</p>
                       <p>Grupo raiz: <strong className="text-yellow-400">E</strong></p>
                       <p className="ml-2">├─ Condição: SO <em>contém</em> "Windows"</p>
                       <p className="ml-2">└─ Grupo filho: <strong className="text-yellow-400">OU</strong></p>
                       <p className="ml-4">&nbsp;&nbsp;├─ Condição: Hostname <em>contém</em> "PROD"</p>
                       <p className="ml-4">&nbsp;&nbsp;└─ Condição: Memória <em>&gt;=</em> "8589934592"</p>
-                      <p className="mt-2 text-slate-500">Resultado: (SO contém "Windows") <strong className="text-yellow-400">E</strong> (Hostname contém "PROD" <strong className="text-yellow-400">OU</strong> Memória &gt;= 8GB)</p>
+                      <p className="mt-2 text-muted">Resultado: (SO contém "Windows") <strong className="text-yellow-400">E</strong> (Hostname contém "PROD" <strong className="text-yellow-400">OU</strong> Memória &gt;= 8GB)</p>
                     </div>
 
-                    <div className="rounded-lg bg-slate-900/60 p-3 font-mono text-xs text-slate-400">
-                      <p className="text-slate-300 font-medium mb-1">Exemplo 2 — Intermediário: Windows + (PROD OU 8GB) E (SP OU RJ)</p>
+                    <div className="rounded-lg bg-surface/60 p-3 font-mono text-xs text-muted">
+                      <p className="text-muted-foreground font-medium mb-1">Exemplo 2 — Intermediário: Windows + (PROD OU 8GB) E (SP OU RJ)</p>
                       <p>Grupo raiz: <strong className="text-yellow-400">E</strong></p>
                       <p className="ml-2">├─ Condição: SO <em>contém</em> "Windows"</p>
                       <p className="ml-2">├─ Grupo filho: <strong className="text-yellow-400">OU</strong></p>
@@ -641,11 +641,11 @@ export default function AgentLabelsSettings() {
                       <p className="ml-2">└─ Grupo filho: <strong className="text-yellow-400">OU</strong></p>
                       <p className="ml-4">&nbsp;&nbsp;├─ Condição: DisplayName <em>contém</em> "SP"</p>
                       <p className="ml-4">&nbsp;&nbsp;└─ Condição: DisplayName <em>contém</em> "RJ"</p>
-                      <p className="mt-2 text-slate-500">Resultado: SO Windows <strong className="text-yellow-400">E</strong> (PROD <strong className="text-yellow-400">OU</strong> 8GB) <strong className="text-yellow-400">E</strong> (SP <strong className="text-yellow-400">OU</strong> RJ)</p>
+                      <p className="mt-2 text-muted">Resultado: SO Windows <strong className="text-yellow-400">E</strong> (PROD <strong className="text-yellow-400">OU</strong> 8GB) <strong className="text-yellow-400">E</strong> (SP <strong className="text-yellow-400">OU</strong> RJ)</p>
                     </div>
 
-                    <div className="rounded-lg bg-slate-900/60 p-3 font-mono text-xs text-slate-400">
-                      <p className="text-slate-300 font-medium mb-1">Exemplo 3 — Avançado: servidores Windows com bastante memória OU estações Linux</p>
+                    <div className="rounded-lg bg-surface/60 p-3 font-mono text-xs text-muted">
+                      <p className="text-muted-foreground font-medium mb-1">Exemplo 3 — Avançado: servidores Windows com bastante memória OU estações Linux</p>
                       <p>Grupo raiz: <strong className="text-yellow-400">OU</strong></p>
                       <p className="ml-2">├─ Grupo filho: <strong className="text-yellow-400">E</strong> — Servidores Windows</p>
                       <p className="ml-4">&nbsp;&nbsp;├─ Condição: SO <em>contém</em> "Windows"</p>
@@ -654,50 +654,50 @@ export default function AgentLabelsSettings() {
                       <p className="ml-2">└─ Grupo filho: <strong className="text-yellow-400">E</strong> — Estações Linux</p>
                       <p className="ml-4">&nbsp;&nbsp;├─ Condição: SO <em>contém</em> "Linux"</p>
                       <p className="ml-4">&nbsp;&nbsp;└─ Condição: Hostname <em>NÃO contém</em> "SRV"</p>
-                      <p className="mt-2 text-slate-500">Resultado: (Windows <strong className="text-yellow-400">E</strong> SRV <strong className="text-yellow-400">E</strong> 16GB+) <strong className="text-yellow-400">OU</strong> (Linux <strong className="text-yellow-400">E</strong> NÃO estação)</p>
+                      <p className="mt-2 text-muted">Resultado: (Windows <strong className="text-yellow-400">E</strong> SRV <strong className="text-yellow-400">E</strong> 16GB+) <strong className="text-yellow-400">OU</strong> (Linux <strong className="text-yellow-400">E</strong> NÃO estação)</p>
                     </div>
 
-                    <div className="rounded-lg bg-slate-900/60 p-3 font-mono text-xs text-slate-400">
-                      <p className="text-slate-300 font-medium mb-1">Exemplo 4 — Discos: SSD C: com menos de 20% livre</p>
+                    <div className="rounded-lg bg-surface/60 p-3 font-mono text-xs text-muted">
+                      <p className="text-muted-foreground font-medium mb-1">Exemplo 4 — Discos: SSD C: com menos de 20% livre</p>
                       <p>Grupo raiz: <strong className="text-yellow-400">E</strong></p>
                       <p className="ml-2">├─ <strong className="text-orange-400">Disco</strong> [<strong className="text-yellow-400">OU</strong> — algum disco atende]</p>
                       <p className="ml-4">&nbsp;&nbsp;├─ Condição: Letra <em>=</em> "C:"</p>
                       <p className="ml-4">&nbsp;&nbsp;├─ Condição: Tipo <em>=</em> "SSD"</p>
                       <p className="ml-4">&nbsp;&nbsp;└─ Condição: % Livre <em>&lt;</em> "20"</p>
                       <p className="ml-2">└─ Condição: Status <em>=</em> "Online"</p>
-                      <p className="mt-2 text-slate-500">Resultado: (C: SSD &lt;20% livre) <strong className="text-yellow-400">E</strong> Online</p>
+                      <p className="mt-2 text-muted">Resultado: (C: SSD &lt;20% livre) <strong className="text-yellow-400">E</strong> Online</p>
                     </div>
                   </div>
                 </div>
 
                 <div>
-                  <p className="mb-1 font-medium text-white">Custom fields e operadores</p>
+                  <p className="mb-1 font-medium text-foreground">Custom fields e operadores</p>
                   <p>Ao selecionar um <strong>Custom Field</strong>, os operadores disponíveis mudam conforme o <strong>tipo de dado</strong>:</p>
-                  <div className="mt-2 rounded-lg bg-slate-900/60 p-3 text-xs text-slate-400">
-                    <p><strong className="text-slate-300">Texto:</strong> Contém, Não contém, Começa com, Termina com, Igual, Diferente, Regex</p>
-                    <p><strong className="text-slate-300">Número inteiro/Decimal:</strong> &gt;, &gt;=, &lt;, &lt;=, Igual, Diferente</p>
-                    <p><strong className="text-slate-300">Data / DataHora:</strong> &gt;, &gt;=, &lt;, &lt;=, Igual, Diferente</p>
-                    <p><strong className="text-slate-300">Booleano (Sim/Não):</strong> Igual</p>
-                    <p><strong className="text-slate-300">Dropdown/Lista:</strong> Igual, Diferente</p>
+                  <div className="mt-2 rounded-lg bg-surface/60 p-3 text-xs text-muted">
+                    <p><strong className="text-muted-foreground">Texto:</strong> Contém, Não contém, Começa com, Termina com, Igual, Diferente, Regex</p>
+                    <p><strong className="text-muted-foreground">Número inteiro/Decimal:</strong> &gt;, &gt;=, &lt;, &lt;=, Igual, Diferente</p>
+                    <p><strong className="text-muted-foreground">Data / DataHora:</strong> &gt;, &gt;=, &lt;, &lt;=, Igual, Diferente</p>
+                    <p><strong className="text-muted-foreground">Booleano (Sim/Não):</strong> Igual</p>
+                    <p><strong className="text-muted-foreground">Dropdown/Lista:</strong> Igual, Diferente</p>
                   </div>
                 </div>
 
                 <div>
-                  <p className="mb-1 font-medium text-white">Dry-run: simulando a regra antes de salvar</p>
+                  <p className="mb-1 font-medium text-foreground">Dry-run: simulando a regra antes de salvar</p>
                   <p>Você pode testar a regra de duas formas:</p>
-                  <div className="mt-2 rounded-lg bg-slate-900/60 p-3 text-xs text-slate-400">
-                    <p className="text-slate-300"><strong>Lote por site:</strong> selecione um cliente + site e defina um limite de agentes. A regra será testada em lote.</p>
-                    <p className="mt-1 text-slate-300"><strong>Agente específico:</strong> selecione um cliente + site + agente para testar a regra em um único agente.</p>
+                  <div className="mt-2 rounded-lg bg-surface/60 p-3 text-xs text-muted">
+                    <p className="text-muted-foreground"><strong>Lote por site:</strong> selecione um cliente + site e defina um limite de agentes. A regra será testada em lote.</p>
+                    <p className="mt-1 text-muted-foreground"><strong>Agente específico:</strong> selecione um cliente + site + agente para testar a regra em um único agente.</p>
                   </div>
                 </div>
 
                 <div>
-                  <p className="mb-1 font-medium text-white">Grupo de Discos</p>
+                  <p className="mb-1 font-medium text-foreground">Grupo de Discos</p>
                   <p>Use o botão <strong>+ Disco</strong> para criar condições que avaliam discos do agente. Dentro de um grupo de discos, você pode usar campos como Letra da Unidade, Tipo de Mídia (SSD/HDD), % Livre, Sistema de Arquivos, entre outros.</p>
-                  <div className="mt-2 rounded-lg bg-slate-900/60 p-3 text-xs text-slate-400">
-                    <p className="text-slate-300"><strong>ANY (OU):</strong> pelo menos um disco do agente deve atender a todas as condições.</p>
-                    <p className="mt-1 text-slate-300"><strong>ALL (E):</strong> todos os discos do agente devem atender a todas as condições.</p>
-                    <p className="mt-2 text-slate-500">Campos de disco (Letra, Tipo, % Livre, etc.) só podem ser usados dentro de um grupo Disco.</p>
+                  <div className="mt-2 rounded-lg bg-surface/60 p-3 text-xs text-muted">
+                    <p className="text-muted-foreground"><strong>ANY (OU):</strong> pelo menos um disco do agente deve atender a todas as condições.</p>
+                    <p className="mt-1 text-muted-foreground"><strong>ALL (E):</strong> todos os discos do agente devem atender a todas as condições.</p>
+                    <p className="mt-2 text-muted">Campos de disco (Letra, Tipo, % Livre, etc.) só podem ser usados dentro de um grupo Disco.</p>
                   </div>
                 </div>
               </div>
@@ -719,7 +719,7 @@ export default function AgentLabelsSettings() {
             {applyMode === AgentLabelApplyMode.Manual ? (
               <div className="mt-4 rounded-xl border border-amber-500/20 bg-amber-500/5 p-4">
                 <p className="text-sm text-amber-300 font-medium">Modo Manual</p>
-                <p className="mt-1 text-xs text-slate-400">
+                <p className="mt-1 text-xs text-muted">
                   As labels serão vinculadas manualmente aos agentes pela página do agente. Nenhuma expressão automática será processada.
                   Após criar a regra, vá até o agente desejado e vincule esta label pelo ícone <strong>+</strong>.
                 </p>
@@ -737,7 +737,7 @@ export default function AgentLabelsSettings() {
             </div>
 
             {editorMode === 'visual' ? (
-              <div className="mt-4 space-y-3 rounded-xl border border-white/10 bg-white/5 p-4">
+              <div className="mt-4 space-y-3 rounded-xl border border-border bg-surface-light p-4">
                 <ExpressionNodeEditor
                   node={expressionBuilder}
                   path={[]}
@@ -804,7 +804,7 @@ export default function AgentLabelsSettings() {
               <Button variant="secondary" loading={isRunningPreview} onClick={() => void handleRunPreview()}>Rodar Prévia</Button>
             </div>
 
-            <div className="mt-4 flex flex-wrap gap-2 text-xs text-slate-400">
+            <div className="mt-4 flex flex-wrap gap-2 text-xs text-muted">
               <span>Agentes no site: {agents.length}</span>
               <span>•</span>
               <span>Prévia atual: {previewResults.length}</span>
@@ -817,32 +817,32 @@ export default function AgentLabelsSettings() {
             </div>
 
             {previewResults.length > 0 ? (
-              <div className="mt-4 overflow-x-auto rounded-lg border border-white/10">
+              <div className="mt-4 overflow-x-auto rounded-lg border border-border">
                 <table className="min-w-full divide-y divide-white/10 text-sm">
-                  <thead className="bg-white/5">
+                  <thead className="bg-surface-light">
                     <tr>
-                      <th className="px-3 py-2 text-left font-medium text-slate-300">Agente</th>
-                      <th className="px-3 py-2 text-left font-medium text-slate-300">Match</th>
-                      <th className="px-3 py-2 text-left font-medium text-slate-300">Adicionar</th>
-                      <th className="px-3 py-2 text-left font-medium text-slate-300">Remover</th>
-                      <th className="px-3 py-2 text-left font-medium text-slate-300">Labels automáticas atuais</th>
+                      <th className="px-3 py-2 text-left font-medium text-muted-foreground">Agente</th>
+                      <th className="px-3 py-2 text-left font-medium text-muted-foreground">Match</th>
+                      <th className="px-3 py-2 text-left font-medium text-muted-foreground">Adicionar</th>
+                      <th className="px-3 py-2 text-left font-medium text-muted-foreground">Remover</th>
+                      <th className="px-3 py-2 text-left font-medium text-muted-foreground">Labels automáticas atuais</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/5">
                     {previewResults.map(result => (
-                      <tr key={result.agentId} className="bg-slate-900/20">
-                        <td className="px-3 py-2 text-slate-200">{result.agentName}</td>
+                      <tr key={result.agentId} className="bg-surface/20">
+                        <td className="px-3 py-2 text-foreground">{result.agentName}</td>
                         <td className="px-3 py-2"><Badge color={result.matched ? 'success' : 'slate'}>{result.matched ? 'Sim' : 'Não'}</Badge></td>
                         <td className="px-3 py-2"><Badge color={result.wouldAddLabel ? 'success' : 'slate'}>{result.wouldAddLabel ? 'Sim' : 'Não'}</Badge></td>
                         <td className="px-3 py-2"><Badge color={result.wouldRemoveLabel ? 'warning' : 'slate'}>{result.wouldRemoveLabel ? 'Sim' : 'Não'}</Badge></td>
-                        <td className="px-3 py-2 text-slate-300">{result.currentAutomaticLabels.length > 0 ? result.currentAutomaticLabels.join(', ') : '-'}</td>
+                        <td className="px-3 py-2 text-muted-foreground">{result.currentAutomaticLabels.length > 0 ? result.currentAutomaticLabels.join(', ') : '-'}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
             ) : (
-              <p className="mt-4 text-sm text-slate-500">Execute a prévia para ver em quais agentes a regra teria efeito.</p>
+              <p className="mt-4 text-sm text-muted">Execute a prévia para ver em quais agentes a regra teria efeito.</p>
             )}
           </Card>
           )}
@@ -865,24 +865,24 @@ export default function AgentLabelsSettings() {
             </div>
 
             {showHelp ? (
-              <div className="mb-4 space-y-4 rounded-xl border border-white/10 bg-white/5 p-4 text-sm text-slate-300">
+              <div className="mb-4 space-y-4 rounded-xl border border-border bg-surface-light p-4 text-sm text-muted-foreground">
                 <div>
-                  <p className="mb-1 font-medium text-white">Como combinar condições com E / OU</p>
+                  <p className="mb-1 font-medium text-foreground">Como combinar condições com E / OU</p>
                   <p>Use <strong>grupos (E / OU)</strong> para aninhar condições e criar regras complexas:</p>
 
                   <div className="mt-3 space-y-3">
-                    <div className="rounded-lg bg-slate-900/60 p-3 font-mono text-xs text-slate-400">
-                      <p className="text-slate-300 font-medium mb-1">Exemplo 1 — Simples: SO + (hostname OU memória)</p>
+                    <div className="rounded-lg bg-surface/60 p-3 font-mono text-xs text-muted">
+                      <p className="text-muted-foreground font-medium mb-1">Exemplo 1 — Simples: SO + (hostname OU memória)</p>
                       <p>Grupo raiz: <strong className="text-yellow-400">E</strong></p>
                       <p className="ml-2">├─ Condição: SO <em>contém</em> "Windows"</p>
                       <p className="ml-2">└─ Grupo filho: <strong className="text-yellow-400">OU</strong></p>
                       <p className="ml-4">&nbsp;&nbsp;├─ Condição: Hostname <em>contém</em> "PROD"</p>
                       <p className="ml-4">&nbsp;&nbsp;└─ Condição: Memória <em>&gt;=</em> "8589934592"</p>
-                      <p className="mt-2 text-slate-500">Resultado: (SO contém "Windows") <strong className="text-yellow-400">E</strong> (Hostname contém "PROD" <strong className="text-yellow-400">OU</strong> Memória &gt;= 8GB)</p>
+                      <p className="mt-2 text-muted">Resultado: (SO contém "Windows") <strong className="text-yellow-400">E</strong> (Hostname contém "PROD" <strong className="text-yellow-400">OU</strong> Memória &gt;= 8GB)</p>
                     </div>
 
-                    <div className="rounded-lg bg-slate-900/60 p-3 font-mono text-xs text-slate-400">
-                      <p className="text-slate-300 font-medium mb-1">Exemplo 2 — Intermediário: Windows + (PROD OU 8GB) E (SP OU RJ)</p>
+                    <div className="rounded-lg bg-surface/60 p-3 font-mono text-xs text-muted">
+                      <p className="text-muted-foreground font-medium mb-1">Exemplo 2 — Intermediário: Windows + (PROD OU 8GB) E (SP OU RJ)</p>
                       <p>Grupo raiz: <strong className="text-yellow-400">E</strong></p>
                       <p className="ml-2">├─ Condição: SO <em>contém</em> "Windows"</p>
                       <p className="ml-2">├─ Grupo filho: <strong className="text-yellow-400">OU</strong></p>
@@ -891,11 +891,11 @@ export default function AgentLabelsSettings() {
                       <p className="ml-2">└─ Grupo filho: <strong className="text-yellow-400">OU</strong></p>
                       <p className="ml-4">&nbsp;&nbsp;├─ Condição: DisplayName <em>contém</em> "SP"</p>
                       <p className="ml-4">&nbsp;&nbsp;└─ Condição: DisplayName <em>contém</em> "RJ"</p>
-                      <p className="mt-2 text-slate-500">Resultado: SO Windows <strong className="text-yellow-400">E</strong> (PROD <strong className="text-yellow-400">OU</strong> 8GB) <strong className="text-yellow-400">E</strong> (SP <strong className="text-yellow-400">OU</strong> RJ)</p>
+                      <p className="mt-2 text-muted">Resultado: SO Windows <strong className="text-yellow-400">E</strong> (PROD <strong className="text-yellow-400">OU</strong> 8GB) <strong className="text-yellow-400">E</strong> (SP <strong className="text-yellow-400">OU</strong> RJ)</p>
                     </div>
 
-                    <div className="rounded-lg bg-slate-900/60 p-3 font-mono text-xs text-slate-400">
-                      <p className="text-slate-300 font-medium mb-1">Exemplo 3 — Avançado: servidores Windows com bastante memória OU estações Linux</p>
+                    <div className="rounded-lg bg-surface/60 p-3 font-mono text-xs text-muted">
+                      <p className="text-muted-foreground font-medium mb-1">Exemplo 3 — Avançado: servidores Windows com bastante memória OU estações Linux</p>
                       <p>Grupo raiz: <strong className="text-yellow-400">OU</strong></p>
                       <p className="ml-2">├─ Grupo filho: <strong className="text-yellow-400">E</strong> — Servidores Windows</p>
                       <p className="ml-4">&nbsp;&nbsp;├─ Condição: SO <em>contém</em> "Windows"</p>
@@ -904,50 +904,50 @@ export default function AgentLabelsSettings() {
                       <p className="ml-2">└─ Grupo filho: <strong className="text-yellow-400">E</strong> — Estações Linux</p>
                       <p className="ml-4">&nbsp;&nbsp;├─ Condição: SO <em>contém</em> "Linux"</p>
                       <p className="ml-4">&nbsp;&nbsp;└─ Condição: Hostname <em>NÃO contém</em> "SRV"</p>
-                      <p className="mt-2 text-slate-500">Resultado: (Windows <strong className="text-yellow-400">E</strong> SRV <strong className="text-yellow-400">E</strong> 16GB+) <strong className="text-yellow-400">OU</strong> (Linux <strong className="text-yellow-400">E</strong> NÃO estação)</p>
+                      <p className="mt-2 text-muted">Resultado: (Windows <strong className="text-yellow-400">E</strong> SRV <strong className="text-yellow-400">E</strong> 16GB+) <strong className="text-yellow-400">OU</strong> (Linux <strong className="text-yellow-400">E</strong> NÃO estação)</p>
                     </div>
 
-                    <div className="rounded-lg bg-slate-900/60 p-3 font-mono text-xs text-slate-400">
-                      <p className="text-slate-300 font-medium mb-1">Exemplo 4 — Discos: SSD C: com menos de 20% livre</p>
+                    <div className="rounded-lg bg-surface/60 p-3 font-mono text-xs text-muted">
+                      <p className="text-muted-foreground font-medium mb-1">Exemplo 4 — Discos: SSD C: com menos de 20% livre</p>
                       <p>Grupo raiz: <strong className="text-yellow-400">E</strong></p>
                       <p className="ml-2">├─ <strong className="text-orange-400">Disco</strong> [<strong className="text-yellow-400">OU</strong> — algum disco atende]</p>
                       <p className="ml-4">&nbsp;&nbsp;├─ Condição: Letra <em>=</em> "C:"</p>
                       <p className="ml-4">&nbsp;&nbsp;├─ Condição: Tipo <em>=</em> "SSD"</p>
                       <p className="ml-4">&nbsp;&nbsp;└─ Condição: % Livre <em>&lt;</em> "20"</p>
                       <p className="ml-2">└─ Condição: Status <em>=</em> "Online"</p>
-                      <p className="mt-2 text-slate-500">Resultado: (C: SSD &lt;20% livre) <strong className="text-yellow-400">E</strong> Online</p>
+                      <p className="mt-2 text-muted">Resultado: (C: SSD &lt;20% livre) <strong className="text-yellow-400">E</strong> Online</p>
                     </div>
                   </div>
                 </div>
 
                 <div>
-                  <p className="mb-1 font-medium text-white">Custom fields e operadores</p>
+                  <p className="mb-1 font-medium text-foreground">Custom fields e operadores</p>
                   <p>Ao selecionar um <strong>Custom Field</strong>, os operadores disponíveis mudam conforme o <strong>tipo de dado</strong>:</p>
-                  <div className="mt-2 rounded-lg bg-slate-900/60 p-3 text-xs text-slate-400">
-                    <p><strong className="text-slate-300">Texto:</strong> Contém, Não contém, Começa com, Termina com, Igual, Diferente, Regex</p>
-                    <p><strong className="text-slate-300">Número inteiro/Decimal:</strong> &gt;, &gt;=, &lt;, &lt;=, Igual, Diferente</p>
-                    <p><strong className="text-slate-300">Data / DataHora:</strong> &gt;, &gt;=, &lt;, &lt;=, Igual, Diferente</p>
-                    <p><strong className="text-slate-300">Booleano (Sim/Não):</strong> Igual</p>
-                    <p><strong className="text-slate-300">Dropdown/Lista:</strong> Igual, Diferente</p>
+                  <div className="mt-2 rounded-lg bg-surface/60 p-3 text-xs text-muted">
+                    <p><strong className="text-muted-foreground">Texto:</strong> Contém, Não contém, Começa com, Termina com, Igual, Diferente, Regex</p>
+                    <p><strong className="text-muted-foreground">Número inteiro/Decimal:</strong> &gt;, &gt;=, &lt;, &lt;=, Igual, Diferente</p>
+                    <p><strong className="text-muted-foreground">Data / DataHora:</strong> &gt;, &gt;=, &lt;, &lt;=, Igual, Diferente</p>
+                    <p><strong className="text-muted-foreground">Booleano (Sim/Não):</strong> Igual</p>
+                    <p><strong className="text-muted-foreground">Dropdown/Lista:</strong> Igual, Diferente</p>
                   </div>
                 </div>
 
                 <div>
-                  <p className="mb-1 font-medium text-white">Dry-run: simulando a regra antes de salvar</p>
+                  <p className="mb-1 font-medium text-foreground">Dry-run: simulando a regra antes de salvar</p>
                   <p>Você pode testar a regra de duas formas:</p>
-                  <div className="mt-2 rounded-lg bg-slate-900/60 p-3 text-xs text-slate-400">
-                    <p className="text-slate-300"><strong>Lote por site:</strong> selecione um cliente + site e defina um limite de agentes. A regra será testada em lote.</p>
-                    <p className="mt-1 text-slate-300"><strong>Agente específico:</strong> selecione um cliente + site + agente para testar a regra em um único agente.</p>
+                  <div className="mt-2 rounded-lg bg-surface/60 p-3 text-xs text-muted">
+                    <p className="text-muted-foreground"><strong>Lote por site:</strong> selecione um cliente + site e defina um limite de agentes. A regra será testada em lote.</p>
+                    <p className="mt-1 text-muted-foreground"><strong>Agente específico:</strong> selecione um cliente + site + agente para testar a regra em um único agente.</p>
                   </div>
                 </div>
 
                 <div>
-                  <p className="mb-1 font-medium text-white">Grupo de Discos</p>
+                  <p className="mb-1 font-medium text-foreground">Grupo de Discos</p>
                   <p>Use o botão <strong>+ Disco</strong> para criar condições que avaliam discos do agente. Dentro de um grupo de discos, você pode usar campos como Letra da Unidade, Tipo de Mídia (SSD/HDD), % Livre, Sistema de Arquivos, entre outros.</p>
-                  <div className="mt-2 rounded-lg bg-slate-900/60 p-3 text-xs text-slate-400">
-                    <p className="text-slate-300"><strong>ANY (OU):</strong> pelo menos um disco do agente deve atender a todas as condições.</p>
-                    <p className="mt-1 text-slate-300"><strong>ALL (E):</strong> todos os discos do agente devem atender a todas as condições.</p>
-                    <p className="mt-2 text-slate-500">Campos de disco (Letra, Tipo, % Livre, etc.) só podem ser usados dentro de um grupo Disco.</p>
+                  <div className="mt-2 rounded-lg bg-surface/60 p-3 text-xs text-muted">
+                    <p className="text-muted-foreground"><strong>ANY (OU):</strong> pelo menos um disco do agente deve atender a todas as condições.</p>
+                    <p className="mt-1 text-muted-foreground"><strong>ALL (E):</strong> todos os discos do agente devem atender a todas as condições.</p>
+                    <p className="mt-2 text-muted">Campos de disco (Letra, Tipo, % Livre, etc.) só podem ser usados dentro de um grupo Disco.</p>
                   </div>
                 </div>
               </div>
@@ -969,7 +969,7 @@ export default function AgentLabelsSettings() {
             {applyMode === AgentLabelApplyMode.Manual ? (
               <div className="mt-4 rounded-xl border border-amber-500/20 bg-amber-500/5 p-4">
                 <p className="text-sm text-amber-300 font-medium">Modo Manual</p>
-                <p className="mt-1 text-xs text-slate-400">
+                <p className="mt-1 text-xs text-muted">
                   Labels manuais não usam expressão — são vinculadas individualmente pela página do agente.
                   {!isReadOnly ? ' Altere para "Aplicar apenas" ou "Aplicar e remover" para editar a expressão.' : ''}
                 </p>
@@ -987,7 +987,7 @@ export default function AgentLabelsSettings() {
             </div>
 
             {editorMode === 'visual' ? (
-              <div className="mt-4 space-y-3 rounded-xl border border-white/10 bg-white/5 p-4">
+              <div className="mt-4 space-y-3 rounded-xl border border-border bg-surface-light p-4">
                 <ExpressionNodeEditor
                   node={expressionBuilder}
                   path={[]}
@@ -1064,7 +1064,7 @@ export default function AgentLabelsSettings() {
               <Button variant="secondary" loading={isRunningPreview} onClick={() => void handleRunPreview()}>Rodar Dry-Run</Button>
             </div>
 
-            <div className="mt-4 flex flex-wrap gap-2 text-xs text-slate-400">
+            <div className="mt-4 flex flex-wrap gap-2 text-xs text-muted">
               <span>Agentes no site: {agents.length}</span>
               <span>•</span>
               <span>Prévia atual: {previewResults.length}</span>
@@ -1077,32 +1077,32 @@ export default function AgentLabelsSettings() {
             </div>
 
             {previewResults.length > 0 ? (
-              <div className="mt-4 overflow-x-auto rounded-lg border border-white/10">
+              <div className="mt-4 overflow-x-auto rounded-lg border border-border">
                 <table className="min-w-full divide-y divide-white/10 text-sm">
-                  <thead className="bg-white/5">
+                  <thead className="bg-surface-light">
                     <tr>
-                      <th className="px-3 py-2 text-left font-medium text-slate-300">Agente</th>
-                      <th className="px-3 py-2 text-left font-medium text-slate-300">Match</th>
-                      <th className="px-3 py-2 text-left font-medium text-slate-300">Adicionar</th>
-                      <th className="px-3 py-2 text-left font-medium text-slate-300">Remover</th>
-                      <th className="px-3 py-2 text-left font-medium text-slate-300">Labels automáticas atuais</th>
+                      <th className="px-3 py-2 text-left font-medium text-muted-foreground">Agente</th>
+                      <th className="px-3 py-2 text-left font-medium text-muted-foreground">Match</th>
+                      <th className="px-3 py-2 text-left font-medium text-muted-foreground">Adicionar</th>
+                      <th className="px-3 py-2 text-left font-medium text-muted-foreground">Remover</th>
+                      <th className="px-3 py-2 text-left font-medium text-muted-foreground">Labels automáticas atuais</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/5">
                     {previewResults.map(result => (
-                      <tr key={result.agentId} className="bg-slate-900/20">
-                        <td className="px-3 py-2 text-slate-200">{result.agentName}</td>
+                      <tr key={result.agentId} className="bg-surface/20">
+                        <td className="px-3 py-2 text-foreground">{result.agentName}</td>
                         <td className="px-3 py-2"><Badge color={result.matched ? 'success' : 'slate'}>{result.matched ? 'Sim' : 'Não'}</Badge></td>
                         <td className="px-3 py-2"><Badge color={result.wouldAddLabel ? 'success' : 'slate'}>{result.wouldAddLabel ? 'Sim' : 'Não'}</Badge></td>
                         <td className="px-3 py-2"><Badge color={result.wouldRemoveLabel ? 'warning' : 'slate'}>{result.wouldRemoveLabel ? 'Sim' : 'Não'}</Badge></td>
-                        <td className="px-3 py-2 text-slate-300">{result.currentAutomaticLabels.length > 0 ? result.currentAutomaticLabels.join(', ') : '-'}</td>
+                        <td className="px-3 py-2 text-muted-foreground">{result.currentAutomaticLabels.length > 0 ? result.currentAutomaticLabels.join(', ') : '-'}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
             ) : (
-              <p className="mt-4 text-sm text-slate-500">Execute o dry-run para ver em quais agentes a regra teria efeito.</p>
+              <p className="mt-4 text-sm text-muted">Execute o dry-run para ver em quais agentes a regra teria efeito.</p>
             )}
           </Card>
           )}
@@ -1123,8 +1123,8 @@ export default function AgentLabelsSettings() {
 
           {sortedRules.length === 0 ? (
             <div className="flex flex-col items-center gap-3 py-12">
-              <Layers className="h-10 w-10 text-slate-600" />
-              <p className="text-sm text-slate-500">Nenhuma regra cadastrada.</p>
+              <Layers className="h-10 w-10 text-muted" />
+              <p className="text-sm text-muted">Nenhuma regra cadastrada.</p>
               <Button size="sm" onClick={startCreateRule}>Criar primeira regra</Button>
             </div>
           ) : (
@@ -1134,27 +1134,27 @@ export default function AgentLabelsSettings() {
                 const summary = summarizeExpression(rule.expression, 4);
 
                 return (
-                  <div key={rule.id} className="group rounded-xl border border-white/10 bg-slate-900/30 p-5 transition-all hover:border-white/20 hover:bg-slate-900/40">
+                  <div key={rule.id} className="group rounded-xl border border-border bg-surface/30 p-5 transition-all hover:border-border-strong hover:bg-surface/40">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div className="flex-1 min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
-                          <h3 className="font-semibold text-white text-lg">{rule.name}</h3>
+                          <h3 className="font-semibold text-foreground text-lg">{rule.name}</h3>
                           <Badge color={rule.isEnabled ? 'success' : 'slate'}>{rule.isEnabled ? 'Ativa' : 'Inativa'}</Badge>
                           <Badge color="accent" className="font-mono">{rule.label}</Badge>
                         </div>
 
                         {rule.description?.trim() ? (
-                          <p className="mt-2 text-sm text-slate-400 line-clamp-2">{rule.description}</p>
+                          <p className="mt-2 text-sm text-muted line-clamp-2">{rule.description}</p>
                         ) : null}
 
                         {summary ? (
-                          <div className="mt-2 flex items-start gap-2 rounded-lg bg-slate-950/40 px-3 py-2">
-                            <Filter className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-500" />
-                            <p className="text-xs text-slate-500 font-mono leading-relaxed">{summary}</p>
+                          <div className="mt-2 flex items-start gap-2 rounded-lg bg-background/40 px-3 py-2">
+                            <Filter className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted" />
+                            <p className="text-xs text-muted font-mono leading-relaxed">{summary}</p>
                           </div>
                         ) : null}
 
-                        <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-500">
+                        <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-muted">
                           <span className="inline-flex items-center gap-1">
                             <Clock className="h-3 w-3" />
                             {formatDateTime(rule.updatedAt)}
@@ -1191,7 +1191,7 @@ export default function AgentLabelsSettings() {
                       </div>
                     </div>
 
-                    <div className="mt-4 flex flex-wrap gap-2 border-t border-white/5 pt-4">
+                    <div className="mt-4 flex flex-wrap gap-2 border-t border-border pt-4">
                       <Button size="sm" variant="secondary" onClick={() => startViewRule(rule)}>
                         <Clock className="h-3.5 w-3.5" /> Visualizar
                       </Button>
@@ -1221,48 +1221,48 @@ export default function AgentLabelsSettings() {
           title={`Agentes com a label "${agentsModalRule.label}"`}
         >
           <div className="space-y-3">
-            <p className="text-sm text-slate-400">
-              Regra: <strong className="text-white">{agentsModalRule.name}</strong>
+            <p className="text-sm text-muted">
+              Regra: <strong className="text-foreground">{agentsModalRule.name}</strong>
             </p>
 
             {isLoadingAppliedAgents ? (
               <Loading message="Carregando agentes..." />
             ) : (
               <>
-                <p className="text-xs text-slate-500">
-                  Total: <strong className="text-white">{appliedAgentsTotal}</strong> • Exibidos: <strong className="text-white">{appliedResults.length}</strong>
+                <p className="text-xs text-muted">
+                  Total: <strong className="text-foreground">{appliedAgentsTotal}</strong> • Exibidos: <strong className="text-foreground">{appliedResults.length}</strong>
                 </p>
 
                 {appliedResults.length > 0 ? (
-                  <div className="overflow-x-auto rounded-lg border border-white/10">
+                  <div className="overflow-x-auto rounded-lg border border-border">
                     <table className="min-w-full divide-y divide-white/10 text-sm">
-                      <thead className="bg-white/5">
+                      <thead className="bg-surface-light">
                         <tr>
-                          <th className="px-4 py-2.5 text-left font-medium text-slate-300">Agente</th>
-                          <th className="px-4 py-2.5 text-left font-medium text-slate-300">Status</th>
-                          <th className="px-4 py-2.5 text-left font-medium text-slate-300">Match em</th>
-                          <th className="px-4 py-2.5 text-left font-medium text-slate-300">Última avaliação</th>
+                          <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Agente</th>
+                          <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Status</th>
+                          <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Match em</th>
+                          <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Última avaliação</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-white/5">
                         {appliedResults.map(item => (
-                          <tr key={item.agentId} className="bg-slate-900/20">
-                            <td className="px-4 py-2.5 text-slate-200 font-medium">{item.agentName}</td>
-                            <td className="px-4 py-2.5 text-slate-300">{item.status}</td>
-                            <td className="px-4 py-2.5 text-slate-300">{item.matchedAt ? formatDateTime(item.matchedAt) : '-'}</td>
-                            <td className="px-4 py-2.5 text-slate-300">{item.lastEvaluatedAt ? formatDateTime(item.lastEvaluatedAt) : '-'}</td>
+                          <tr key={item.agentId} className="bg-surface/20">
+                            <td className="px-4 py-2.5 text-foreground font-medium">{item.agentName}</td>
+                            <td className="px-4 py-2.5 text-muted-foreground">{item.status}</td>
+                            <td className="px-4 py-2.5 text-muted-foreground">{item.matchedAt ? formatDateTime(item.matchedAt) : '-'}</td>
+                            <td className="px-4 py-2.5 text-muted-foreground">{item.lastEvaluatedAt ? formatDateTime(item.lastEvaluatedAt) : '-'}</td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
                   </div>
                 ) : (
-                  <p className="text-sm text-slate-500">Nenhum agente retornado pela regra.</p>
+                  <p className="text-sm text-muted">Nenhum agente retornado pela regra.</p>
                 )}
               </>
             )}
 
-            <div className="flex justify-end gap-2 pt-2 border-t border-white/10">
+            <div className="flex justify-end gap-2 pt-2 border-t border-border">
               <Button variant="secondary" onClick={closeAgentsModal}>Fechar</Button>
             </div>
           </div>
@@ -1333,7 +1333,7 @@ function ExpressionNodeEditor({ node, path, isRoot = false, insideDiskGroup = fa
     const isDisk = node.nodeType === AgentLabelNodeType.DiskGroup;
 
     return (
-      <div className={`space-y-3 rounded-lg border ${nodeAccent ? `${nodeAccent.border} border-t-white/10 border-r-white/10 border-b-white/10` : 'border-white/10'} bg-slate-900/40 p-3`}>
+      <div className={`space-y-3 rounded-lg border ${nodeAccent ? `${nodeAccent.border} border-t-white/10 border-r-white/10 border-b-white/10` : 'border-border'} bg-surface/40 p-3`}>
         <div className="flex flex-wrap items-center gap-2">
           {nodeAccent ? <span className={`inline-block h-2 w-2 rounded-full ${nodeAccent.dot} shrink-0`} /> : null}
           <Badge color={isDisk ? 'warning' : 'primary'}>{isDisk ? 'Disco' : 'Grupo'}</Badge>
@@ -1358,15 +1358,15 @@ function ExpressionNodeEditor({ node, path, isRoot = false, insideDiskGroup = fa
         </div>
 
         {isDisk ? (
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-muted">
             <strong>ANY (OU):</strong> algum disco atende todas as condições abaixo &nbsp;|&nbsp; <strong>ALL (E):</strong> todos os discos atendem
           </p>
         ) : null}
 
         {children.length === 0 ? (
-          <p className="text-xs text-slate-400">{isDisk ? 'Adicione condições de disco a este grupo.' : 'Este grupo ainda não possui filhos.'}</p>
+          <p className="text-xs text-muted">{isDisk ? 'Adicione condições de disco a este grupo.' : 'Este grupo ainda não possui filhos.'}</p>
         ) : (
-          <div className="space-y-3 border-l border-white/10 pl-3">
+          <div className="space-y-3 border-l border-border pl-3">
             {children.map((child, index) => (
               <ExpressionNodeEditor
                 key={index}
@@ -1458,7 +1458,7 @@ function ExpressionNodeEditor({ node, path, isRoot = false, insideDiskGroup = fa
   })();
 
     return (
-      <div className={`space-y-3 rounded-lg border ${nodeAccent ? `${nodeAccent.border} border-t-white/10 border-r-white/10 border-b-white/10` : 'border-white/10'} bg-slate-900/40 p-3`}>
+      <div className={`space-y-3 rounded-lg border ${nodeAccent ? `${nodeAccent.border} border-t-white/10 border-r-white/10 border-b-white/10` : 'border-border'} bg-surface/40 p-3`}>
         <div className="flex flex-wrap items-center gap-2">
           {nodeAccent ? <span className={`inline-block h-2 w-2 rounded-full ${nodeAccent.dot} shrink-0`} /> : null}
           <Badge color="accent">Condição</Badge>
@@ -1500,7 +1500,7 @@ function ExpressionNodeEditor({ node, path, isRoot = false, insideDiskGroup = fa
             }}
           />
         ) : (
-          <div className="rounded-lg border border-dashed border-white/10 px-3 py-2 text-sm text-slate-500 lg:pt-8">Campo nativo sem definição de custom field.</div>
+          <div className="rounded-lg border border-dashed border-border px-3 py-2 text-sm text-muted lg:pt-8">Campo nativo sem definição de custom field.</div>
         )}
 
         <Select

@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import { Inbox } from 'lucide-react';
 import { Button } from './Button';
@@ -13,7 +14,7 @@ interface EmptyStateProps {
   className?: string;
 }
 
-export function EmptyState({
+export const EmptyState = memo(function EmptyState({
   icon: Icon = Inbox,
   title,
   description,
@@ -22,13 +23,13 @@ export function EmptyState({
 }: EmptyStateProps) {
   return (
     <div className={`flex flex-col items-center justify-center gap-4 py-16 px-4 ${className}`}>
-      <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white/[0.03] ring-1 ring-white/5">
-        <Icon className="h-8 w-8 text-slate-500" strokeWidth={1.5} />
+      <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-surface-light ring-1 ring-border">
+        <Icon className="h-8 w-8 text-muted" strokeWidth={1.5} />
       </div>
       <div className="text-center space-y-1">
-        <p className="text-base font-medium text-slate-300">{title}</p>
+        <p className="text-base font-medium text-muted-foreground">{title}</p>
         {description && (
-          <p className="text-sm text-slate-500 max-w-sm">{description}</p>
+          <p className="text-sm text-muted max-w-sm">{description}</p>
         )}
       </div>
       {action && (
@@ -38,4 +39,4 @@ export function EmptyState({
       )}
     </div>
   );
-}
+});

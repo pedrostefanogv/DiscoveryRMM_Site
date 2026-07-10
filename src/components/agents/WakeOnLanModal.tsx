@@ -46,26 +46,26 @@ export default function WakeOnLanModal({
         className="absolute inset-0 bg-black/50 backdrop-blur-sm"
         onClick={onClose}
       />
-      <div className="relative z-10 w-full max-w-md rounded-xl border border-white/10 bg-slate-900 p-6 shadow-2xl">
+      <div className="relative z-10 w-full max-w-md rounded-xl border border-border bg-surface p-6 shadow-2xl">
         {/* Header */}
         <div className="mb-5 flex items-center gap-3">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-violet-500/15 text-violet-400">
             <Zap className="h-5 w-5" />
           </div>
           <div>
-            <h3 className="text-lg font-semibold text-white">Wake-on-LAN</h3>
-            <p className="truncate text-sm text-slate-400">{displayName}</p>
+            <h3 className="text-lg font-semibold text-foreground">Wake-on-LAN</h3>
+            <p className="truncate text-sm text-muted">{displayName}</p>
           </div>
         </div>
 
         {/* Status */}
-        <div className="mb-4 flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 p-3">
+        <div className="mb-4 flex items-center gap-2 rounded-lg border border-border bg-surface-light p-3">
           {isOnline ? (
             <Wifi className="h-4 w-4 text-success" />
           ) : (
-            <WifiOff className="h-4 w-4 text-slate-500" />
+            <WifiOff className="h-4 w-4 text-muted" />
           )}
-          <span className="text-sm text-slate-300">
+          <span className="text-sm text-muted-foreground">
             O agente está{" "}
             <strong className={isOnline ? "text-success" : "text-warning"}>
               {isOnline ? "Online" : "Offline"}
@@ -90,7 +90,7 @@ export default function WakeOnLanModal({
 
         {/* Broadcast address */}
         <div className="mb-6">
-          <label className="mb-1.5 block text-sm font-medium text-slate-300">
+          <label className="mb-1.5 block text-sm font-medium text-muted-foreground">
             Endereço de broadcast (opcional)
           </label>
           <input
@@ -98,9 +98,9 @@ export default function WakeOnLanModal({
             value={broadcastAddress}
             onChange={(e) => setBroadcastAddress(e.target.value)}
             placeholder="255.255.255.255"
-            className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder-slate-500 font-mono transition-colors focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/30"
+            className="w-full rounded-lg border border-border bg-surface-light px-3 py-2 text-sm text-foreground placeholder-muted font-mono transition-colors focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/30"
           />
-          <p className="mt-1 text-xs text-slate-500">
+          <p className="mt-1 text-xs text-muted">
             Deixe em branco para usar o broadcast padrão (255.255.255.255).
           </p>
         </div>
@@ -111,7 +111,7 @@ export default function WakeOnLanModal({
             type="button"
             onClick={onClose}
             disabled={isLoading}
-            className="rounded-lg border border-white/10 px-4 py-2 text-sm font-medium text-slate-300 transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-50"
           >
             Cancelar
           </button>
@@ -119,7 +119,7 @@ export default function WakeOnLanModal({
             type="button"
             onClick={handleSubmit}
             disabled={isLoading}
-            className="flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
             {isLoading ? "Enviando..." : "Enviar Magic Packet"}

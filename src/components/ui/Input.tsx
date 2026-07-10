@@ -14,7 +14,7 @@ export function Input({ label, error, hint, className = '', id, ...props }: Inpu
   return (
     <div className="space-y-1">
       {label && (
-        <label htmlFor={inputId} className="block text-sm font-medium text-slate-300">
+        <label htmlFor={inputId} className="block text-sm font-medium text-muted-foreground">
           {label}
         </label>
       )}
@@ -22,13 +22,13 @@ export function Input({ label, error, hint, className = '', id, ...props }: Inpu
         id={inputId}
         aria-invalid={Boolean(error)}
         aria-describedby={error || hint ? helpId : undefined}
-        className={`w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 outline-none transition-colors focus-visible:border-primary/60 focus-visible:ring-2 focus-visible:ring-primary/30 ${
+        className={`w-full rounded-xl border border-border bg-surface-light px-3 py-2 text-sm text-foreground placeholder-muted outline-none transition-colors focus-visible:border-primary/60 focus-visible:ring-2 focus-visible:ring-primary/30 ${
           error ? 'border-danger/50' : ''
         } ${className}`}
         {...props}
       />
       {error && <p id={helpId} className="text-xs text-danger">{error}</p>}
-      {hint && !error && <p id={helpId} className="text-xs text-slate-400">{hint}</p>}
+      {hint && !error && <p id={helpId} className="text-xs text-muted">{hint}</p>}
     </div>
   );
 }
@@ -44,20 +44,20 @@ export function Select({ label, options, className = '', id, ...props }: SelectP
   return (
     <div className="space-y-1">
       {label && (
-        <label htmlFor={selectId} className="block text-sm font-medium text-slate-300">
+        <label htmlFor={selectId} className="block text-sm font-medium text-muted-foreground">
           {label}
         </label>
       )}
       <select
         id={selectId}
-        className={`w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-100 outline-none transition-colors focus-visible:border-primary/60 focus-visible:ring-2 focus-visible:ring-primary/30 ${className}`}
+        className={`w-full rounded-xl border border-input-border bg-input px-3 py-2 text-sm text-foreground outline-none transition-colors focus-visible:border-primary/60 focus-visible:ring-2 focus-visible:ring-primary/30 ${className}`}
         {...props}
       >
         {options.map(opt => (
           <option
             key={opt.value}
             value={opt.value}
-            className="bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100"
+            className="bg-white text-slate-900 dark:bg-surface dark:text-foreground"
           >
             {opt.label}
           </option>
@@ -80,7 +80,7 @@ export function TextArea({ label, error, hint, className = '', id, ...props }: T
   return (
     <div className="space-y-1">
       {label && (
-        <label htmlFor={textId} className="block text-sm font-medium text-slate-300">
+        <label htmlFor={textId} className="block text-sm font-medium text-muted-foreground">
           {label}
         </label>
       )}
@@ -88,14 +88,14 @@ export function TextArea({ label, error, hint, className = '', id, ...props }: T
         id={textId}
         aria-invalid={Boolean(error)}
         aria-describedby={error || hint ? helpId : undefined}
-        className={`w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 outline-none transition-colors focus-visible:border-primary/60 focus-visible:ring-2 focus-visible:ring-primary/30 ${
+        className={`w-full rounded-xl border border-border bg-surface-light px-3 py-2 text-sm text-foreground placeholder-muted outline-none transition-colors focus-visible:border-primary/60 focus-visible:ring-2 focus-visible:ring-primary/30 ${
           error ? 'border-danger/50' : ''
         } ${className}`}
         rows={3}
         {...props}
       />
       {error && <p id={helpId} className="text-xs text-danger">{error}</p>}
-      {hint && !error && <p id={helpId} className="text-xs text-slate-400">{hint}</p>}
+      {hint && !error && <p id={helpId} className="text-xs text-muted">{hint}</p>}
     </div>
   );
 }

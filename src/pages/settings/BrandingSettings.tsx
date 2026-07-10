@@ -7,8 +7,8 @@ export default function BrandingSettings() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-white">Configurações</h1>
-        <p className="text-sm text-slate-400">Personalização e branding</p>
+        <h1 className="text-2xl font-bold text-foreground">Configurações</h1>
+        <p className="text-sm text-muted">Personalização e branding</p>
       </div>
 
       <Card>
@@ -68,21 +68,21 @@ export default function BrandingSettings() {
 function ColorPicker({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
   return (
     <div className="space-y-1">
-      <label className="block text-sm font-medium text-slate-300">{label}</label>
+      <label className="block text-sm font-medium text-muted-foreground">{label}</label>
       <div className="flex items-center gap-3">
         <input
           type="color"
           aria-label={label}
           value={value}
           onChange={e => onChange(e.target.value)}
-          className="h-10 w-14 cursor-pointer rounded border border-white/10 bg-transparent"
+          className="h-10 w-14 cursor-pointer rounded border border-border bg-transparent"
         />
         <input
           type="text"
           aria-label={`${label} (hex)`}
           value={value}
           onChange={e => onChange(e.target.value)}
-          className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-200 font-mono outline-none focus:border-primary/50"
+          className="w-full rounded-lg border border-border bg-surface-light px-3 py-2 text-sm text-foreground font-mono outline-none focus:border-primary/50"
         />
       </div>
     </div>
@@ -92,11 +92,11 @@ function ColorPicker({ label, value, onChange }: { label: string; value: string;
 function Swatch({ label, color }: { label: string; color: string }) {
   return (
     <div className="text-center">
-      <svg className="mb-2 h-16 w-full rounded-lg border border-white/10" viewBox="0 0 100 64" aria-hidden="true" preserveAspectRatio="none">
+      <svg className="mb-2 h-16 w-full rounded-lg border border-border" viewBox="0 0 100 64" aria-hidden="true" preserveAspectRatio="none">
         <rect x="0" y="0" width="100" height="64" fill={color} />
       </svg>
-      <p className="text-xs text-slate-400">{label}</p>
-      <p className="text-xs text-slate-500 font-mono">{color}</p>
+      <p className="text-xs text-muted">{label}</p>
+      <p className="text-xs text-muted font-mono">{color}</p>
     </div>
   );
 }

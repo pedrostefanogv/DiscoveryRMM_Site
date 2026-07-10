@@ -1,4 +1,4 @@
-Ôªøimport type { ConfigurationValue } from "@/api";
+import type { ConfigurationValue } from "@/api";
 import { EffectiveValueBadge } from "./EffectiveValueBadge";
 import type { ConfigurationOrigin } from "@/api";
 
@@ -24,7 +24,7 @@ function formatValue(value: ConfigurationValue | null | undefined): string {
   try {
     return JSON.stringify(value, null, 2);
   } catch {
-    return "[valor n√£o serializ√°vel]";
+    return "[valor n„o serializ·vel]";
   }
 }
 
@@ -34,22 +34,22 @@ export function ConfigDiffViewer({
   origin,
 }: ConfigDiffViewerProps) {
   return (
-    <div className="space-y-2 rounded-lg border border-white/10 bg-slate-950/30 p-3">
+    <div className="space-y-2 rounded-lg border border-border bg-background/30 p-3">
       <div className="flex items-center justify-between gap-2">
-        <p className="text-xs font-medium text-slate-300">Comparativo</p>
+        <p className="text-xs font-medium text-muted-foreground">Comparativo</p>
         <EffectiveValueBadge origin={origin} />
       </div>
 
       <div className="grid gap-3 lg:grid-cols-2">
         <div>
-          <p className="mb-1 text-xs text-slate-400">Valor local</p>
-          <pre className="min-h-16 rounded border border-white/10 bg-slate-950/50 p-2 text-xs text-slate-200 whitespace-pre-wrap">
+          <p className="mb-1 text-xs text-muted">Valor local</p>
+          <pre className="min-h-16 rounded border border-border bg-background/50 p-2 text-xs text-foreground whitespace-pre-wrap">
             {formatValue(localValue)}
           </pre>
         </div>
         <div>
-          <p className="mb-1 text-xs text-slate-400">Valor efetivo</p>
-          <pre className="min-h-16 rounded border border-white/10 bg-slate-950/50 p-2 text-xs text-slate-200 whitespace-pre-wrap">
+          <p className="mb-1 text-xs text-muted">Valor efetivo</p>
+          <pre className="min-h-16 rounded border border-border bg-background/50 p-2 text-xs text-foreground whitespace-pre-wrap">
             {formatValue(effectiveValue)}
           </pre>
         </div>

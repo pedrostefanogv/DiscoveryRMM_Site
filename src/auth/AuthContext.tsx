@@ -10,6 +10,7 @@
 } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
+  ApiError,
   authApi,
   configureApiClient,
   type LoginRequest,
@@ -104,6 +105,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const refreshTokenRef = useRef(session.refreshToken);
   const sessionRef = useRef(session);
 
+  // BUG-01: lastActivityAt / lastRefreshAttemptAt eram locais ao effect de inatividade,
+  // reiniciando a cada mudança de sessão. Agora são refs persistentes.
+  const lastActivityAtRef = useRef(Date.now());
+  const lastRefreshAttemptAtRef = useRef(0);
+
+  // BUG-02: refresh retry state — evita logout por erro de rede transitório
+  const refreshRetryCountRef = useRef(0);
+  const MAX_REFRESH_RETRIES = 3;
+  const REFRESH_RETRY_BASE_DELAY_MS = 2_000; // backoff: 2s, 4s, 8s
+
+  // Registra atividade do usuário para o mecanismo de inatividade
+  const recordActivity = useCallback(() => {
+    lastActivityAtRef.current = Date.now();
+  }, []);
+
   useEffect(() => {
     accessTokenRef.current = session.accessToken;
     refreshTokenRef.current = session.refreshToken;
@@ -115,6 +131,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     clearAuthSession();
     setSession(emptyAuthSession);
     queryClient.clear();
+    refreshRetryCountRef.current = 0;
   }, [queryClient]);
 
   const completeAuthenticatedSession = useCallback(async (tokens: TokenPair) => {
@@ -129,10 +146,48 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     try {
       const tokens = await authApi.refresh({ refreshToken });
+      refreshRetryCountRef.current = 0; // reset após sucesso
       const nextState = applyTokenPair(tokens, sessionRef.current);
       setSession(nextState);
       return tokens.accessToken;
-    } catch {
+    } catch (error: unknown) {
+      // BUG-02: Distinguir erro de rede (fetch falhou) de erro HTTP (401/403).
+      // Erro de rede → retry com backoff. Erro HTTP de auth → logout imediato.
+      const isApiError =
+        error instanceof ApiError ||
+        (typeof error === "object" && error !== null && "status" in error);
+
+      if (isApiError) {
+        const status = (error as { status?: number }).status;
+        // 401 Unauthorized ou 403 Forbidden → refresh token inválido/revogado
+        if (status === 401 || status === 403) {
+          clearSession();
+          return null;
+        }
+        // Outros erros HTTP (500, 502, 503) → retry como erro de rede
+      }
+
+      // Erro de rede (TypeError, fetch failed) ou erro HTTP 5xx → retry com backoff
+      refreshRetryCountRef.current += 1;
+      if (refreshRetryCountRef.current <= MAX_REFRESH_RETRIES) {
+        const delay =
+          REFRESH_RETRY_BASE_DELAY_MS *
+          Math.pow(2, refreshRetryCountRef.current - 1);
+        console.warn(
+          `[auth] Refresh falhou (tentativa ${refreshRetryCountRef.current}/${MAX_REFRESH_RETRIES}). ` +
+            `Nova tentativa em ${delay}ms.`,
+        );
+        await new Promise((resolve) => setTimeout(resolve, delay));
+        // Retorna o token atual se ainda válido, para não quebrar requests em andamento
+        const currentAccessToken = accessTokenRef.current;
+        if (currentAccessToken && (sessionRef.current.expiresAt ?? 0) > Date.now()) {
+          return currentAccessToken;
+        }
+        return null;
+      }
+
+      // Esgotou tentativas → logout
+      console.error("[auth] Refresh falhou após todas as tentativas. Encerrando sessão.");
       clearSession();
       return null;
     }
@@ -228,7 +283,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [refreshSession]);
 
-  // Inatividade: se o usuário não interagir até a expiração do access token,
+  // BUG-01 corrigido: inatividade/refresh proativo usa refs persistentes em vez de
+  // variáveis locais ao effect, que eram reiniciadas a cada mudança de sessão.
+  // Se o usuário não interagir até a expiração do access token,
   // a sessão é encerrada e os tokens limpos (forçando novo login).
   // Se houver atividade recente, o token é renovado proativamente ~5min antes do fim.
   useEffect(() => {
@@ -240,8 +297,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const ACTIVITY_WINDOW_MS = 5 * 60 * 1000; // considera "ativo" se interagiu nos últimos 5min
     const REFRESH_THROTTLE_MS = 30_000;
 
-    let lastActivityAt = Date.now();
-    let lastRefreshAttemptAt = 0;
+    // Reinicia marcadores de atividade ao montar (nova sessão)
+    lastActivityAtRef.current = Date.now();
+    lastRefreshAttemptAtRef.current = 0;
+
     const activityEvents: (keyof WindowEventMap)[] = [
       "mousedown",
       "keydown",
@@ -249,18 +308,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       "scroll",
       "click",
     ];
-    const handleActivity = () => {
-      lastActivityAt = Date.now();
-    };
     activityEvents.forEach((event) =>
-      window.addEventListener(event, handleActivity, { passive: true } as AddEventListenerOptions),
+      window.addEventListener(event, recordActivity, { passive: true } as AddEventListenerOptions),
     );
 
     const intervalId = window.setInterval(() => {
       const now = Date.now();
       const expiresAt = sessionRef.current.expiresAt ?? 0;
       const remaining = expiresAt - now;
-      const idleFor = now - lastActivityAt;
+      const idleFor = now - lastActivityAtRef.current;
 
       if (remaining <= 0) {
         console.warn("[auth] Sessão encerrada por inatividade. Tokens removidos.");
@@ -271,18 +327,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (
         remaining < REFRESH_THRESHOLD_MS &&
         idleFor < ACTIVITY_WINDOW_MS &&
-        now - lastRefreshAttemptAt > REFRESH_THROTTLE_MS
+        now - lastRefreshAttemptAtRef.current > REFRESH_THROTTLE_MS
       ) {
-        lastRefreshAttemptAt = now;
+        lastRefreshAttemptAtRef.current = now;
         void refreshSession();
       }
     }, 1_000);
 
     return () => {
       window.clearInterval(intervalId);
-      activityEvents.forEach((event) => window.removeEventListener(event, handleActivity));
+      activityEvents.forEach((event) => window.removeEventListener(event, recordActivity));
     };
-  }, [logout, refreshSession, session.accessToken, session.expiresAt, session.refreshToken]);
+  }, [logout, recordActivity, refreshSession, session.accessToken, session.expiresAt, session.refreshToken]);
 
   const value = useMemo<AuthContextValue>(
     () => ({

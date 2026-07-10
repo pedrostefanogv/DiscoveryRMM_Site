@@ -162,8 +162,11 @@ export const agentsApi = {
       `/api/v1/agents/${agentId}/approve-zero-touch`,
     ),
 
-  // Heartbeat cache (fallback REST — latest metrics from Redis)
-  getHeartbeat: (_agentId: string) =>
+  // Heartbeat do agente autenticado (fallback REST — métricas mais recentes do Redis).
+  // ATENÇÃO: Este endpoint retorna o heartbeat do USUÁRIO/AGENTE AUTENTICADO,
+  // NÃO de um agente arbitrário. Para heartbeat de agentes específicos, use
+  // a heartbeatStore alimentada por NATS (useAgentHeartbeat).
+  getMyHeartbeat: () =>
     api.get<AgentHeartbeat>(`/api/v1/agent-auth/me/heartbeat`),
 
   // Automation - run task/script on agent

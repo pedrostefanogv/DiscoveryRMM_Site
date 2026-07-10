@@ -1,4 +1,4 @@
-Ôªøimport type { Dispatch, SetStateAction } from "react";
+import type { Dispatch, SetStateAction } from "react";
 import { Eye, Plus, Save, Trash2, X } from "lucide-react";
 import { Button, Card, Input, TextArea } from "@/components/ui";
 import { ReportTemplateHistoryPanel } from "@/components/reports/ReportTemplateHistoryPanel";
@@ -18,7 +18,7 @@ import type { FieldOption, LayoutEditorState, NormalizedDataset, SupportedFormat
 type DraftSetter = Dispatch<SetStateAction<TemplateDraft>>;
 
 const REPORT_FONT_OPTIONS = [
-  { label: "Segoe UI (padr√£o)", value: "Segoe UI, sans-serif" },
+  { label: "Segoe UI (padr„o)", value: "Segoe UI, sans-serif" },
   { label: "Inter", value: "Inter, system-ui, sans-serif" },
   { label: "Roboto", value: "Roboto, Arial, sans-serif" },
   { label: "Helvetica Neue", value: "Helvetica Neue, Helvetica, Arial, sans-serif" },
@@ -38,8 +38,8 @@ export function TemplateFormHeader({ isEdit, onBack }: HeaderProps) {
   return (
     <div className="flex items-center justify-between gap-3">
       <div>
-        <h1 className="text-2xl font-bold text-white">{isEdit ? "Editar Template" : "Novo Template"}</h1>
-        <p className="text-sm text-slate-400">
+        <h1 className="text-2xl font-bold text-foreground">{isEdit ? "Editar Template" : "Novo Template"}</h1>
+        <p className="text-sm text-muted">
           Builder dinamico de relatorios com preview em HTML e documento.
         </p>
       </div>
@@ -60,8 +60,8 @@ export function TemplateHistoryCard({ templateId, version }: HistoryProps) {
     <Card>
       <div className="mb-3 flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-semibold text-white">Hist√≥rico do Template</h2>
-          <p className="text-xs text-slate-400">Versao atual v{version}</p>
+          <h2 className="text-lg font-semibold text-foreground">HistÛrico do Template</h2>
+          <p className="text-xs text-muted">Versao atual v{version}</p>
         </div>
       </div>
       <ReportTemplateHistoryPanel templateId={templateId} limit={20} />
@@ -77,7 +77,7 @@ type IdentificationProps = {
 export function IdentificationCard({ draft, setDraft }: IdentificationProps) {
   return (
     <Card>
-      <h2 className="mb-4 text-lg font-semibold text-white">Identifica√ß√£o</h2>
+      <h2 className="mb-4 text-lg font-semibold text-foreground">IdentificaÁ„o</h2>
       <div className="grid gap-4 md:grid-cols-2">
         <Input
           label="Nome do template"
@@ -90,7 +90,7 @@ export function IdentificationCard({ draft, setDraft }: IdentificationProps) {
           }
           placeholder="Ex: Inventario de software por agent"
           required
-          hint="Nome exibido na listagem de templates e no cabe√ßalho do relat√≥rio gerado."
+          hint="Nome exibido na listagem de templates e no cabeÁalho do relatÛrio gerado."
         />
         <Input
           label="Usuario de auditoria"
@@ -102,12 +102,12 @@ export function IdentificationCard({ draft, setDraft }: IdentificationProps) {
             }))
           }
           placeholder="usuario@empresa.local"
-          hint="Registrado nos logs de cria√ß√£o e atualiza√ß√£o. N√£o afeta permiss√µes de acesso."
+          hint="Registrado nos logs de criaÁ„o e atualizaÁ„o. N„o afeta permissıes de acesso."
         />
       </div>
       <div className="mt-4">
         <TextArea
-          label="Descri√ß√£o"
+          label="DescriÁ„o"
            value={draft.description}
           onChange={(event) =>
             setDraft((prev) => ({
@@ -116,8 +116,8 @@ export function IdentificationCard({ draft, setDraft }: IdentificationProps) {
             }))
           }
           rows={3}
-          placeholder="Descri√ß√£o opcional do template"
-          hint="Texto livre para descrever o objetivo do template. Vis√≠vel apenas no formul√°rio de edi√ß√£o."
+          placeholder="DescriÁ„o opcional do template"
+          hint="Texto livre para descrever o objetivo do template. VisÌvel apenas no formul·rio de ediÁ„o."
         />
       </div>
     </Card>
@@ -145,30 +145,30 @@ export function DataSourceScopeCard({
 }: DataSourceScopeProps) {
   return (
     <Card>
-      <h2 className="mb-4 text-lg font-semibold text-white">Fonte de Dados e Escopo</h2>
+      <h2 className="mb-4 text-lg font-semibold text-foreground">Fonte de Dados e Escopo</h2>
       <div className="grid gap-4 md:grid-cols-3">
         <div>
-          <label className="mb-2 block text-sm font-medium text-slate-300">Dataset</label>
+          <label className="mb-2 block text-sm font-medium text-muted-foreground">Dataset</label>
           <select
             aria-label="Dataset"
             title="Dataset"
             value={draft.datasetKey}
             onChange={(event) => onDatasetChange(event.target.value)}
-            className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white"
+            className="w-full rounded-lg border border-border bg-surface-light px-3 py-2 text-foreground"
           >
             {normalizedDatasets.map((dataset) => (
-              <option key={dataset.key} value={dataset.key} className="bg-slate-900 text-slate-100">
+              <option key={dataset.key} value={dataset.key} className="bg-surface text-foreground">
                 {dataset.name}
               </option>
             ))}
           </select>
           {selectedDataset?.description && (
-            <p className="mt-1 text-xs text-slate-500">{selectedDataset.description}</p>
+            <p className="mt-1 text-xs text-muted">{selectedDataset.description}</p>
           )}
         </div>
 
         <div>
-          <label className="mb-2 block text-sm font-medium text-slate-300">Formato</label>
+          <label className="mb-2 block text-sm font-medium text-muted-foreground">Formato</label>
           <select
             aria-label="Formato do template"
             title="Formato do template"
@@ -179,19 +179,19 @@ export function DataSourceScopeCard({
                 format: event.target.value as SupportedFormat,
               }))
             }
-            className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white"
+            className="w-full rounded-lg border border-border bg-surface-light px-3 py-2 text-foreground"
           >
             {(selectedDataset?.supportedFormats ?? defaultFormatOptions).map((format) => (
-              <option key={format} value={format} className="bg-slate-900 text-slate-100">
+              <option key={format} value={format} className="bg-surface text-foreground">
                 {format.toUpperCase()}
               </option>
             ))}
           </select>
-          <p className="mt-1 text-xs text-slate-500">Formato padr√£o do arquivo gerado. Pode ser sobrescrito na execu√ß√£o.</p>
+          <p className="mt-1 text-xs text-muted">Formato padr„o do arquivo gerado. Pode ser sobrescrito na execuÁ„o.</p>
         </div>
 
         <div>
-          <label className="mb-2 block text-sm font-medium text-slate-300">Escopo do template</label>
+          <label className="mb-2 block text-sm font-medium text-muted-foreground">Escopo do template</label>
           <select
             aria-label="Escopo do template"
             title="Escopo do template"
@@ -202,15 +202,15 @@ export function DataSourceScopeCard({
                 scopeType: event.target.value as ScopeTypeString,
               }))
             }
-            className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white"
+            className="w-full rounded-lg border border-border bg-surface-light px-3 py-2 text-foreground"
           >
             {scopeOptions.map((scope) => (
-              <option key={scope} value={scope} className="bg-slate-900 text-slate-100">
+              <option key={scope} value={scope} className="bg-surface text-foreground">
                 {scope}
               </option>
             ))}
           </select>
-          <p className="mt-1 text-xs text-slate-500">Define para qual n√≠vel o template pode ser executado: <strong className="text-slate-400">global</strong> (todos), <strong className="text-slate-400">client</strong>, <strong className="text-slate-400">site</strong> ou <strong className="text-slate-400">agent</strong>.</p>
+          <p className="mt-1 text-xs text-muted">Define para qual nÌvel o template pode ser executado: <strong className="text-muted">global</strong> (todos), <strong className="text-muted">client</strong>, <strong className="text-muted">site</strong> ou <strong className="text-muted">agent</strong>.</p>
         </div>
       </div>
     </Card>
@@ -271,15 +271,15 @@ export function LayoutBuilderTopSection({
   return (
     <>
       <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-white">Layout Builder</h2>
+        <h2 className="text-lg font-semibold text-foreground">Layout Builder</h2>
         <div className="flex gap-2">
           <Button type="button" variant="secondary" size="sm" onClick={handleAddColumn}>
             <Plus className="h-4 w-4" /> Coluna
           </Button>
           <select
-            aria-label="Adicionar se√ß√£o"
-            title="Adicionar se√ß√£o"
-            className="cursor-pointer rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-sm text-white hover:bg-white/10"
+            aria-label="Adicionar seÁ„o"
+            title="Adicionar seÁ„o"
+            className="cursor-pointer rounded-lg border border-border bg-surface-light px-3 py-1.5 text-sm text-foreground hover:bg-surface-hover"
             value=""
             onChange={(e) => {
               const val = e.target.value;
@@ -293,12 +293,12 @@ export function LayoutBuilderTopSection({
               }
             }}
           >
-            <option value="" className="bg-slate-900">+ Se√ß√£o...</option>
-            <option value="__blank" className="bg-slate-900">Em branco</option>
+            <option value="" className="bg-surface">+ SeÁ„o...</option>
+            <option value="__blank" className="bg-surface">Em branco</option>
             {(DATASET_SECTION_SOURCES[selectedDataset?.key.toLowerCase() ?? ""] ?? []).length > 0 && (
               <>
                 {(DATASET_SECTION_SOURCES[selectedDataset?.key.toLowerCase() ?? ""] ?? []).map((s) => (
-                  <option key={s.source} value={s.source} className="bg-slate-900">
+                  <option key={s.source} value={s.source} className="bg-surface">
                     {s.label} ({s.source})
                   </option>
                 ))}
@@ -310,7 +310,7 @@ export function LayoutBuilderTopSection({
 
       <div className="grid gap-4 md:grid-cols-2">
         <Input
-          label="T√≠tulo"
+          label="TÌtulo"
           value={layoutEditor.title}
           onChange={(event) =>
             setLayoutEditor((prev) => ({
@@ -318,10 +318,10 @@ export function LayoutBuilderTopSection({
               title: event.target.value,
             }))
           }
-          hint="T√≠tulo principal exibido no cabe√ßalho do relat√≥rio."
+          hint="TÌtulo principal exibido no cabeÁalho do relatÛrio."
         />
         <Input
-          label="Subt√≠tulo"
+          label="SubtÌtulo"
           value={layoutEditor.subtitle}
           onChange={(event) =>
             setLayoutEditor((prev) => ({
@@ -329,13 +329,13 @@ export function LayoutBuilderTopSection({
               subtitle: event.target.value,
             }))
           }
-          hint="Linha secund√°ria abaixo do t√≠tulo. Deixe vazio para omitir."
+          hint="Linha secund·ria abaixo do tÌtulo. Deixe vazio para omitir."
         />
         <div>
-          <label className="mb-2 block text-sm font-medium text-slate-300">Orienta√ß√£o</label>
+          <label className="mb-2 block text-sm font-medium text-muted-foreground">OrientaÁ„o</label>
            <select
-             aria-label="Orienta√ß√£o do layout"
-             title="Orienta√ß√£o do layout"
+             aria-label="OrientaÁ„o do layout"
+             title="OrientaÁ„o do layout"
             value={layoutEditor.orientation}
             onChange={(event) =>
               setLayoutEditor((prev) => ({
@@ -343,15 +343,15 @@ export function LayoutBuilderTopSection({
                 orientation: event.target.value,
               }))
             }
-            className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white"
+            className="w-full rounded-lg border border-border bg-surface-light px-3 py-2 text-foreground"
           >
             {supportedOrientations.map((orientation) => (
-              <option key={orientation} value={orientation} className="bg-slate-900 text-slate-100">
+              <option key={orientation} value={orientation} className="bg-surface text-foreground">
                 {orientation}
               </option>
             ))}
           </select>
-          <p className="mt-1 text-xs text-slate-500">Retrato (A4 vertical) ou Paisagem (A4 horizontal). Aplicado ao PDF.</p>
+          <p className="mt-1 text-xs text-muted">Retrato (A4 vertical) ou Paisagem (A4 horizontal). Aplicado ao PDF.</p>
         </div>
         <Input
           label="GroupBy"
@@ -364,7 +364,7 @@ export function LayoutBuilderTopSection({
             }))
           }
           placeholder="campo do dataset para agrupamento"
-          hint="Campo do dataset para agrupar linhas no relat√≥rio. Ex.: siteId agrupa os dados por site."
+          hint="Campo do dataset para agrupar linhas no relatÛrio. Ex.: siteId agrupa os dados por site."
         />
         <Input
           label="Group title template"
@@ -376,7 +376,7 @@ export function LayoutBuilderTopSection({
             }))
           }
           placeholder="Agent: {{agentName}}"
-          hint="Modelo do t√≠tulo de cada grupo. Use {{campo}} para interpolar valores do dataset."
+          hint="Modelo do tÌtulo de cada grupo. Use {{campo}} para interpolar valores do dataset."
         />
         <Input
           label="Group title prefix"
@@ -399,7 +399,7 @@ export function LayoutBuilderTopSection({
         ))}
       </datalist>
 
-      <div className="mt-3 flex items-start gap-2 text-sm text-slate-300">
+      <div className="mt-3 flex items-start gap-2 text-sm text-muted-foreground">
         <input
           aria-label="Ocultar coluna de agrupamento"
           title="Ocultar coluna de agrupamento"
@@ -415,7 +415,7 @@ export function LayoutBuilderTopSection({
         />
         <span>
           Ocultar coluna de agrupamento
-          <span className="ml-1 text-xs text-slate-500">Quando ativo, a coluna usada no GroupBy n√£o aparece nas linhas da tabela.</span>
+          <span className="ml-1 text-xs text-muted">Quando ativo, a coluna usada no GroupBy n„o aparece nas linhas da tabela.</span>
         </span>
       </div>
 
@@ -530,9 +530,9 @@ export function LayoutBuilderTopSection({
                 });
 
                 return (
-                  <div key={`${source.alias}-${index}`} className="grid gap-3 rounded-lg border border-white/10 bg-white/5 p-3 md:grid-cols-6">
+                  <div key={`${source.alias}-${index}`} className="grid gap-3 rounded-lg border border-border bg-surface-light p-3 md:grid-cols-6">
                     <div>
-                      <label className="mb-2 block text-xs font-medium text-slate-300">Dataset</label>
+                      <label className="mb-2 block text-xs font-medium text-muted-foreground">Dataset</label>
                       <select
                         aria-label={`Dataset da fonte ${index + 1}`}
                         title={`Dataset da fonte ${index + 1}`}
@@ -547,10 +547,10 @@ export function LayoutBuilderTopSection({
                             ),
                           }))
                         }
-                        className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white"
+                        className="w-full rounded-lg border border-border bg-surface-light px-3 py-2 text-foreground"
                       >
                         {normalizedDatasets.map((dataset) => (
-                          <option key={dataset.key} value={String(dataset.apiDatasetType)} className="bg-slate-900 text-slate-100">
+                          <option key={dataset.key} value={String(dataset.apiDatasetType)} className="bg-surface text-foreground">
                             {dataset.name}
                           </option>
                         ))}
@@ -575,7 +575,7 @@ export function LayoutBuilderTopSection({
                       />
                     </div>
                     <div>
-                      <label className="mb-2 block text-xs font-medium text-slate-300">Join com</label>
+                      <label className="mb-2 block text-xs font-medium text-muted-foreground">Join com</label>
                       <select
                         aria-label={`Join da fonte ${index + 1}`}
                         title={`Join da fonte ${index + 1}`}
@@ -626,20 +626,20 @@ export function LayoutBuilderTopSection({
                             ),
                           }));
                         }}
-                        className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white disabled:opacity-50"
+                        className="w-full rounded-lg border border-border bg-surface-light px-3 py-2 text-foreground disabled:opacity-50"
                       >
-                        <option value="" className="bg-slate-900 text-slate-100">{index === 0 ? "Principal" : "Selecione"}</option>
+                        <option value="" className="bg-surface text-foreground">{index === 0 ? "Principal" : "Selecione"}</option>
                         {layoutEditor.dataSources
                           .filter((_, candidateIndex) => candidateIndex !== index)
                           .map((candidate) => (
-                            <option key={candidate.alias} value={candidate.alias} className="bg-slate-900 text-slate-100">
+                            <option key={candidate.alias} value={candidate.alias} className="bg-surface text-foreground">
                               {candidate.alias}
                             </option>
                           ))}
                       </select>
                     </div>
                     <div>
-                      <label className="mb-2 block text-xs font-medium text-slate-300">Source key</label>
+                      <label className="mb-2 block text-xs font-medium text-muted-foreground">Source key</label>
                       <select
                         aria-label={`Source key da fonte ${index + 1}`}
                         title={`Source key da fonte ${index + 1}`}
@@ -663,18 +663,18 @@ export function LayoutBuilderTopSection({
                             ),
                           }))
                         }
-                        className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white disabled:opacity-50"
+                        className="w-full rounded-lg border border-border bg-surface-light px-3 py-2 text-foreground disabled:opacity-50"
                       >
-                        <option value="" className="bg-slate-900 text-slate-100">Selecione</option>
+                        <option value="" className="bg-surface text-foreground">Selecione</option>
                         {(source.join?.sourceKey && !sourceKeyFields.some((field) => (field.reference ?? field.field) === source.join?.sourceKey)) && (
-                          <option value={source.join.sourceKey} className="bg-slate-900 text-slate-100">
+                          <option value={source.join.sourceKey} className="bg-surface text-foreground">
                             {source.join.sourceKey} (atual)
                           </option>
                         )}
                         {sourceKeyFields.map((field) => {
                           const val = field.reference ?? field.field ?? "";
                           return (
-                            <option key={val} value={val} className="bg-slate-900 text-slate-100">
+                            <option key={val} value={val} className="bg-surface text-foreground">
                               {field.label ?? val}{field.isJoinKey ? " (join)" : ""}
                             </option>
                           );
@@ -682,7 +682,7 @@ export function LayoutBuilderTopSection({
                       </select>
                     </div>
                     <div>
-                      <label className="mb-2 block text-xs font-medium text-slate-300">Target key</label>
+                      <label className="mb-2 block text-xs font-medium text-muted-foreground">Target key</label>
                       <select
                         aria-label={`Target key da fonte ${index + 1}`}
                         title={`Target key da fonte ${index + 1}`}
@@ -706,18 +706,18 @@ export function LayoutBuilderTopSection({
                             ),
                           }))
                         }
-                        className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white disabled:opacity-50"
+                        className="w-full rounded-lg border border-border bg-surface-light px-3 py-2 text-foreground disabled:opacity-50"
                       >
-                        <option value="" className="bg-slate-900 text-slate-100">Selecione</option>
+                        <option value="" className="bg-surface text-foreground">Selecione</option>
                         {(source.join?.targetKey && !targetKeyFields.some((field) => (field.reference ?? field.field) === source.join?.targetKey)) && (
-                          <option value={source.join.targetKey} className="bg-slate-900 text-slate-100">
+                          <option value={source.join.targetKey} className="bg-surface text-foreground">
                             {source.join.targetKey} (atual)
                           </option>
                         )}
                         {targetKeyFields.map((field) => {
                           const val = field.reference ?? field.field ?? "";
                           return (
-                            <option key={val} value={val} className="bg-slate-900 text-slate-100">
+                            <option key={val} value={val} className="bg-surface text-foreground">
                               {field.label ?? val}{field.isJoinKey ? " (join)" : ""}
                             </option>
                           );
@@ -726,7 +726,7 @@ export function LayoutBuilderTopSection({
                     </div>
                     <div className="flex items-end gap-2">
                       <div className="flex-1">
-                        <label className="mb-2 block text-xs font-medium text-slate-300">Join type</label>
+                        <label className="mb-2 block text-xs font-medium text-muted-foreground">Join type</label>
                         <select
                           aria-label={`Tipo de join da fonte ${index + 1}`}
                           title={`Tipo de join da fonte ${index + 1}`}
@@ -750,10 +750,10 @@ export function LayoutBuilderTopSection({
                               ),
                             }))
                           }
-                          className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white disabled:opacity-50"
+                          className="w-full rounded-lg border border-border bg-surface-light px-3 py-2 text-foreground disabled:opacity-50"
                         >
                           {(multiSourceSchema?.joinTypes ?? ["left", "inner"]).map((joinType) => (
-                            <option key={joinType} value={joinType} className="bg-slate-900 text-slate-100">
+                            <option key={joinType} value={joinType} className="bg-surface text-foreground">
                               {joinType}
                             </option>
                           ))}
@@ -775,8 +775,8 @@ export function LayoutBuilderTopSection({
                       </Button>
                     </div>
                     {joinSuggestions.length > 0 && index > 0 && (
-                      <div className="md:col-span-6 rounded-lg border border-white/10 bg-black/10 px-3 py-2 text-xs text-slate-300">
-                        Sugest√µes de join: {joinSuggestions.map((join) => `${join.sourceKey} -> ${join.targetKey}`).join(" | ")}
+                      <div className="md:col-span-6 rounded-lg border border-border bg-black/10 px-3 py-2 text-xs text-muted-foreground">
+                        Sugestıes de join: {joinSuggestions.map((join) => `${join.sourceKey} -> ${join.targetKey}`).join(" | ")}
                       </div>
                     )}
                   </div>
@@ -785,24 +785,24 @@ export function LayoutBuilderTopSection({
             </div>
           )}
 
-          <div className="grid gap-3 rounded-lg border border-white/10 bg-black/10 p-3 md:grid-cols-[180px_1fr]">
+          <div className="grid gap-3 rounded-lg border border-border bg-black/10 p-3 md:grid-cols-[180px_1fr]">
             <div>
-              <label className="mb-2 block text-xs font-medium text-slate-300">Alias para busca</label>
+              <label className="mb-2 block text-xs font-medium text-muted-foreground">Alias para busca</label>
               <select
                 aria-label="Alias para autocomplete"
                 title="Alias para autocomplete"
                 value={autocompleteAlias}
                 onChange={(event) => setAutocompleteAlias(event.target.value)}
-                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white"
+                className="w-full rounded-lg border border-border bg-surface-light px-3 py-2 text-foreground"
               >
                 {layoutEditor.dataSources.length > 0
                   ? layoutEditor.dataSources.map((source) => (
-                      <option key={source.alias} value={source.alias} className="bg-slate-900 text-slate-100">
+                      <option key={source.alias} value={source.alias} className="bg-surface text-foreground">
                         {source.alias}
                       </option>
                     ))
                   : (
-                    <option value={selectedDataset.defaultAlias} className="bg-slate-900 text-slate-100">
+                    <option value={selectedDataset.defaultAlias} className="bg-surface text-foreground">
                       {selectedDataset.defaultAlias}
                     </option>
                   )}
@@ -818,11 +818,11 @@ export function LayoutBuilderTopSection({
           </div>
 
           {autocompleteTerm.trim() && (
-            <div className="rounded-lg border border-white/10 bg-black/10 p-3">
-              <div className="mb-2 text-xs text-slate-400">
+            <div className="rounded-lg border border-border bg-black/10 p-3">
+              <div className="mb-2 text-xs text-muted">
                 {autocompleteQuery.isLoading
-                  ? "Buscando sugest√µes..."
-                  : `${autocompleteQuery.data?.total ?? 0} sugest√£o(√µes) retornadas`}
+                  ? "Buscando sugestıes..."
+                  : `${autocompleteQuery.data?.total ?? 0} sugest„o(ıes) retornadas`}
               </div>
               <div className="flex flex-wrap gap-2">
                 {(autocompleteQuery.data?.items ?? []).map((item) => {
@@ -831,7 +831,7 @@ export function LayoutBuilderTopSection({
                     <button
                       key={option.value}
                       type="button"
-                      className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-slate-200 hover:bg-white/10"
+                      className="rounded-full border border-border bg-surface-light px-3 py-1 text-xs text-foreground hover:bg-surface-hover"
                       onClick={() => {
                         const exists = layoutEditor.columns.some((column) => column.field === option.value);
                         if (exists) return;
@@ -885,9 +885,9 @@ export function LayoutBuilderDetailsSection({
   return (
     <>
       <div className="mt-5 overflow-x-auto">
-        <table className="min-w-full text-left text-xs text-slate-300">
+        <table className="min-w-full text-left text-xs text-muted-foreground">
           <thead>
-            <tr className="border-b border-white/10 text-slate-400">
+            <tr className="border-b border-border text-muted">
               <th className="px-2 py-2">Campo</th>
               <th className="px-2 py-2">Label</th>
               <th className="px-2 py-2">Formato</th>
@@ -898,7 +898,7 @@ export function LayoutBuilderDetailsSection({
           </thead>
           <tbody>
             {layoutEditor.columns.map((column, index) => (
-              <tr key={`${column.field}-${index}`} className="border-b border-white/5">
+              <tr key={`${column.field}-${index}`} className="border-b border-border">
                 <td className="px-2 py-2">
                   {fieldOptions.length > 0 ? (
                     <select
@@ -913,11 +913,11 @@ export function LayoutBuilderDetailsSection({
                           ),
                         }))
                       }
-                      className="w-full rounded border border-white/10 bg-white/5 px-2 py-1 text-slate-200"
+                      className="w-full rounded border border-border bg-surface-light px-2 py-1 text-foreground"
                     >
-                      <option value="" className="bg-slate-900 text-slate-400">- selecione o campo -</option>
+                      <option value="" className="bg-surface text-muted">- selecione o campo -</option>
                       {fieldOptions.map((field) => (
-                        <option key={field.value} value={field.value} className="bg-slate-900 text-slate-100">
+                        <option key={field.value} value={field.value} className="bg-surface text-foreground">
                           {field.label}
                         </option>
                       ))}
@@ -938,7 +938,7 @@ export function LayoutBuilderDetailsSection({
                           ),
                         }))
                       }
-                      className="w-full rounded border border-white/10 bg-white/5 px-2 py-1 text-slate-200"
+                      className="w-full rounded border border-border bg-surface-light px-2 py-1 text-foreground"
                     />
                   )}
                 </td>
@@ -956,7 +956,7 @@ export function LayoutBuilderDetailsSection({
                         ),
                       }))
                     }
-                    className="w-full rounded border border-white/10 bg-white/5 px-2 py-1 text-slate-200"
+                    className="w-full rounded border border-border bg-surface-light px-2 py-1 text-foreground"
                   />
                 </td>
                 <td className="px-2 py-2">
@@ -972,10 +972,10 @@ export function LayoutBuilderDetailsSection({
                         ),
                       }))
                     }
-                    className="w-full rounded border border-white/10 bg-white/5 px-2 py-1 text-slate-200"
+                    className="w-full rounded border border-border bg-surface-light px-2 py-1 text-foreground"
                   >
                     {supportedColumnFormats.map((format) => (
-                      <option key={format} value={format} className="bg-slate-900 text-slate-100">
+                      <option key={format} value={format} className="bg-surface text-foreground">
                         {format}
                       </option>
                     ))}
@@ -994,10 +994,10 @@ export function LayoutBuilderDetailsSection({
                         ),
                       }))
                     }
-                    className="w-full rounded border border-white/10 bg-white/5 px-2 py-1 text-slate-200"
+                    className="w-full rounded border border-border bg-surface-light px-2 py-1 text-foreground"
                   >
                     {ALIGN_OPTIONS.map((align) => (
-                      <option key={align} value={align} className="bg-slate-900 text-slate-100">
+                      <option key={align} value={align} className="bg-surface text-foreground">
                         {align}
                       </option>
                     ))}
@@ -1017,7 +1017,7 @@ export function LayoutBuilderDetailsSection({
                       }))
                     }
                     placeholder="40%"
-                    className="w-full rounded border border-white/10 bg-white/5 px-2 py-1 text-slate-200"
+                    className="w-full rounded border border-border bg-surface-light px-2 py-1 text-foreground"
                   />
                 </td>
                 <td className="px-2 py-2 text-right">
@@ -1043,16 +1043,16 @@ export function LayoutBuilderDetailsSection({
 
       <details className="mt-5">
         <summary className="flex cursor-pointer select-none items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-sm font-medium text-amber-300 hover:bg-amber-500/10">
-          <span>&#9654;</span> Op√ß√µes avan√ßadas &mdash; Group details, Summaries e Group summaries
+          <span>&#9654;</span> OpÁıes avanÁadas &mdash; Group details, Summaries e Group summaries
         </summary>
-        <div className="mt-3 rounded-lg border border-white/5 bg-white/[0.02] p-3">
-          <p className="mb-3 text-xs text-slate-500">
-            Campos para personaliza√ß√£o avan√ßada do layout via editor visual.
+        <div className="mt-3 rounded-lg border border-border bg-surface-light p-3">
+          <p className="mb-3 text-xs text-muted">
+            Campos para personalizaÁ„o avanÁada do layout via editor visual.
           </p>
           <div className="grid gap-4 md:grid-cols-1">
-            <div className="rounded-lg border border-white/10 bg-white/5 p-3">
+            <div className="rounded-lg border border-border bg-surface-light p-3">
               <div className="mb-2 flex items-center justify-between">
-                <h4 className="text-sm font-semibold text-slate-200">Group details</h4>
+                <h4 className="text-sm font-semibold text-foreground">Group details</h4>
                 <Button
                   type="button"
                   size="sm"
@@ -1067,7 +1067,7 @@ export function LayoutBuilderDetailsSection({
                   <Plus className="h-4 w-4" /> Item
                 </Button>
               </div>
-              <p className="mb-3 text-xs text-slate-500">Lista de campos exibidos no detalhe de cada grupo.</p>
+              <p className="mb-3 text-xs text-muted">Lista de campos exibidos no detalhe de cada grupo.</p>
               <div className="space-y-2">
                 {layoutEditor.groupDetails.map((detail, index) => (
                   <div key={`group-detail-${index}`} className="grid gap-2 md:grid-cols-[1fr_1fr_auto]">
@@ -1083,11 +1083,11 @@ export function LayoutBuilderDetailsSection({
                           ),
                         }))
                       }
-                      className="w-full rounded border border-white/10 bg-white/5 px-2 py-1 text-slate-200"
+                      className="w-full rounded border border-border bg-surface-light px-2 py-1 text-foreground"
                     >
-                      <option value="" className="bg-slate-900 text-slate-100">Sem campo</option>
+                      <option value="" className="bg-surface text-foreground">Sem campo</option>
                       {fieldOptions.map((field) => (
-                        <option key={field.value} value={field.value} className="bg-slate-900 text-slate-100">
+                        <option key={field.value} value={field.value} className="bg-surface text-foreground">
                           {field.label}
                         </option>
                       ))}
@@ -1105,7 +1105,7 @@ export function LayoutBuilderDetailsSection({
                         }))
                       }
                       placeholder="Label"
-                      className="w-full rounded border border-white/10 bg-white/5 px-2 py-1 text-slate-200"
+                      className="w-full rounded border border-border bg-surface-light px-2 py-1 text-foreground"
                     />
                     <Button
                       type="button"
@@ -1123,14 +1123,14 @@ export function LayoutBuilderDetailsSection({
                   </div>
                 ))}
                 {layoutEditor.groupDetails.length === 0 && (
-                  <p className="text-xs text-slate-500">Nenhum item de group detail.</p>
+                  <p className="text-xs text-muted">Nenhum item de group detail.</p>
                 )}
               </div>
             </div>
 
-            <div className="rounded-lg border border-white/10 bg-white/5 p-3">
+            <div className="rounded-lg border border-border bg-surface-light p-3">
               <div className="mb-2 flex items-center justify-between">
-                <h4 className="text-sm font-semibold text-slate-200">Summaries</h4>
+                <h4 className="text-sm font-semibold text-foreground">Summaries</h4>
                 <Button
                   type="button"
                   size="sm"
@@ -1152,7 +1152,7 @@ export function LayoutBuilderDetailsSection({
                   <Plus className="h-4 w-4" /> Item
                 </Button>
               </div>
-              <p className="mb-3 text-xs text-slate-500">Totalizadores gerais no rodap√© do relat√≥rio.</p>
+              <p className="mb-3 text-xs text-muted">Totalizadores gerais no rodapÈ do relatÛrio.</p>
               <div className="space-y-2">
                 {layoutEditor.summaries.map((summary, index) => (
                   <div key={`summary-${index}`} className="grid gap-2 md:grid-cols-[1fr_1fr_1fr_auto]">
@@ -1168,11 +1168,11 @@ export function LayoutBuilderDetailsSection({
                           ),
                         }))
                       }
-                      className="w-full rounded border border-white/10 bg-white/5 px-2 py-1 text-slate-200"
+                      className="w-full rounded border border-border bg-surface-light px-2 py-1 text-foreground"
                     >
-                      <option value="" className="bg-slate-900 text-slate-100">Sem campo</option>
+                      <option value="" className="bg-surface text-foreground">Sem campo</option>
                       {fieldOptions.map((field) => (
-                        <option key={field.value} value={field.value} className="bg-slate-900 text-slate-100">
+                        <option key={field.value} value={field.value} className="bg-surface text-foreground">
                           {field.label}
                         </option>
                       ))}
@@ -1190,7 +1190,7 @@ export function LayoutBuilderDetailsSection({
                         }))
                       }
                       placeholder="Label"
-                      className="w-full rounded border border-white/10 bg-white/5 px-2 py-1 text-slate-200"
+                      className="w-full rounded border border-border bg-surface-light px-2 py-1 text-foreground"
                     />
                     <select
                       aria-label={`Aggregate do summary ${index + 1}`}
@@ -1204,10 +1204,10 @@ export function LayoutBuilderDetailsSection({
                           ),
                         }))
                       }
-                      className="w-full rounded border border-white/10 bg-white/5 px-2 py-1 text-slate-200"
+                      className="w-full rounded border border-border bg-surface-light px-2 py-1 text-foreground"
                     >
                       {supportedAggregates.map((aggregate) => (
-                        <option key={aggregate} value={aggregate} className="bg-slate-900 text-slate-100">
+                        <option key={aggregate} value={aggregate} className="bg-surface text-foreground">
                           {aggregate}
                         </option>
                       ))}
@@ -1228,14 +1228,14 @@ export function LayoutBuilderDetailsSection({
                   </div>
                 ))}
                 {layoutEditor.summaries.length === 0 && (
-                  <p className="text-xs text-slate-500">Nenhum summary configurado.</p>
+                  <p className="text-xs text-muted">Nenhum summary configurado.</p>
                 )}
               </div>
             </div>
 
-            <div className="rounded-lg border border-white/10 bg-white/5 p-3">
+            <div className="rounded-lg border border-border bg-surface-light p-3">
               <div className="mb-2 flex items-center justify-between">
-                <h4 className="text-sm font-semibold text-slate-200">Group summaries</h4>
+                <h4 className="text-sm font-semibold text-foreground">Group summaries</h4>
                 <Button
                   type="button"
                   size="sm"
@@ -1257,7 +1257,7 @@ export function LayoutBuilderDetailsSection({
                   <Plus className="h-4 w-4" /> Item
                 </Button>
               </div>
-              <p className="mb-3 text-xs text-slate-500">Totalizadores exibidos ao final de cada grupo.</p>
+              <p className="mb-3 text-xs text-muted">Totalizadores exibidos ao final de cada grupo.</p>
               <div className="space-y-2">
                 {layoutEditor.groupSummaries.map((summary, index) => (
                   <div key={`group-summary-${index}`} className="grid gap-2 md:grid-cols-[1fr_1fr_1fr_auto]">
@@ -1273,10 +1273,10 @@ export function LayoutBuilderDetailsSection({
                           ),
                         }))
                       }
-                      className="w-full rounded border border-white/10 bg-white/5 px-2 py-1 text-slate-200"
+                      className="w-full rounded border border-border bg-surface-light px-2 py-1 text-foreground"
                     >
                       {fieldOptions.map((field) => (
-                        <option key={field.value} value={field.value} className="bg-slate-900 text-slate-100">
+                        <option key={field.value} value={field.value} className="bg-surface text-foreground">
                           {field.label}
                         </option>
                       ))}
@@ -1294,7 +1294,7 @@ export function LayoutBuilderDetailsSection({
                         }))
                       }
                       placeholder="Label"
-                      className="w-full rounded border border-white/10 bg-white/5 px-2 py-1 text-slate-200"
+                      className="w-full rounded border border-border bg-surface-light px-2 py-1 text-foreground"
                     />
                     <select
                       aria-label={`Aggregate do group summary ${index + 1}`}
@@ -1308,10 +1308,10 @@ export function LayoutBuilderDetailsSection({
                           ),
                         }))
                       }
-                      className="w-full rounded border border-white/10 bg-white/5 px-2 py-1 text-slate-200"
+                      className="w-full rounded border border-border bg-surface-light px-2 py-1 text-foreground"
                     >
                       {supportedAggregates.map((aggregate) => (
-                        <option key={aggregate} value={aggregate} className="bg-slate-900 text-slate-100">
+                        <option key={aggregate} value={aggregate} className="bg-surface text-foreground">
                           {aggregate}
                         </option>
                       ))}
@@ -1332,7 +1332,7 @@ export function LayoutBuilderDetailsSection({
                   </div>
                 ))}
                 {layoutEditor.groupSummaries.length === 0 && (
-                  <p className="text-xs text-slate-500">Nenhum group summary configurado.</p>
+                  <p className="text-xs text-muted">Nenhum group summary configurado.</p>
                 )}
               </div>
             </div>
@@ -1343,19 +1343,19 @@ export function LayoutBuilderDetailsSection({
       {layoutEditor.sections.length > 0 && (
         <div className="mt-5 space-y-4">
           <div className="flex items-center gap-3">
-            <h3 className="text-sm font-semibold text-slate-200">Se√ß√µes adicionais</h3>
+            <h3 className="text-sm font-semibold text-foreground">SeÁıes adicionais</h3>
             {selectedDataset && (DATASET_SECTION_SOURCES[selectedDataset.key.toLowerCase()] ?? []).length > 0 && (
               <span className="rounded bg-blue-500/10 px-2 py-0.5 text-xs text-blue-300">
-                Fontes dispon√≠veis para <strong>{selectedDataset.name}</strong>: {" "}
+                Fontes disponÌveis para <strong>{selectedDataset.name}</strong>: {" "}
                 {(DATASET_SECTION_SOURCES[selectedDataset.key.toLowerCase()] ?? []).map((s) => s.source).join(", ")}
               </span>
             )}
           </div>
           {layoutEditor.sections.map((section, sectionIndex) => (
-            <div key={`section-${sectionIndex}`} className="rounded-lg border border-white/10 bg-white/5 p-3">
+            <div key={`section-${sectionIndex}`} className="rounded-lg border border-border bg-surface-light p-3">
               <div className="mb-3 grid gap-3 md:grid-cols-3">
                 <Input
-                  label={`T√≠tulo da se√ß√£o ${sectionIndex + 1}`}
+                  label={`TÌtulo da seÁ„o ${sectionIndex + 1}`}
                   value={section.title}
                   onChange={(event) =>
                     setLayoutEditor((prev) => ({
@@ -1367,7 +1367,7 @@ export function LayoutBuilderDetailsSection({
                   }
                 />
                 <Input
-                  label={`Source da se√ß√£o ${sectionIndex + 1}`}
+                  label={`Source da seÁ„o ${sectionIndex + 1}`}
                   value={section.source ?? ""}
                   onChange={(event) =>
                     setLayoutEditor((prev) => ({
@@ -1378,7 +1378,7 @@ export function LayoutBuilderDetailsSection({
                     }))
                   }
                   placeholder="ex.: softwareItems"
-                  hint={`Sub-array retornado no response para esta se√ß√£o. Fontes: ${(DATASET_SECTION_SOURCES[selectedDataset?.key.toLowerCase() ?? ""] ?? []).map((s) => s.source).join(", ") || "nenhuma mapeada"}`}
+                  hint={`Sub-array retornado no response para esta seÁ„o. Fontes: ${(DATASET_SECTION_SOURCES[selectedDataset?.key.toLowerCase() ?? ""] ?? []).map((s) => s.source).join(", ") || "nenhuma mapeada"}`}
                   list={`sources-datalist-${sectionIndex}`}
                 />
                 <datalist id={`sources-datalist-${sectionIndex}`}>
@@ -1407,22 +1407,22 @@ export function LayoutBuilderDetailsSection({
               </div>
 
               <div className="overflow-x-auto">
-                <table className="min-w-full text-left text-xs text-slate-300">
+                <table className="min-w-full text-left text-xs text-muted-foreground">
                   <thead>
-                    <tr className="border-b border-white/10 text-slate-400">
+                    <tr className="border-b border-border text-muted">
                       <th className="px-2 py-2">Campo</th>
                       <th className="px-2 py-2">Label</th>
                       <th className="px-2 py-2">Formato</th>
-                      <th className="px-2 py-2">A√ß√µes</th>
+                      <th className="px-2 py-2">AÁıes</th>
                     </tr>
                   </thead>
                   <tbody>
                     {section.columns.map((column, columnIndex) => (
-                      <tr key={`section-${sectionIndex}-col-${columnIndex}`} className="border-b border-white/5">
+                      <tr key={`section-${sectionIndex}-col-${columnIndex}`} className="border-b border-border">
                         <td className="px-2 py-2">
                           <select
-                            aria-label={`Campo da se√ß√£o ${sectionIndex + 1} coluna ${columnIndex + 1}`}
-                            title={`Campo da se√ß√£o ${sectionIndex + 1} coluna ${columnIndex + 1}`}
+                            aria-label={`Campo da seÁ„o ${sectionIndex + 1} coluna ${columnIndex + 1}`}
+                            title={`Campo da seÁ„o ${sectionIndex + 1} coluna ${columnIndex + 1}`}
                             value={column.field}
                             onChange={(event) =>
                               setLayoutEditor((prev) => ({
@@ -1439,7 +1439,7 @@ export function LayoutBuilderDetailsSection({
                                 ),
                               }))
                             }
-                            className="w-full rounded border border-white/10 bg-white/5 px-2 py-1 text-slate-200"
+                            className="w-full rounded border border-border bg-surface-light px-2 py-1 text-foreground"
                           >
                             {getSourceFieldOptions(
                               selectedDataset?.key,
@@ -1447,7 +1447,7 @@ export function LayoutBuilderDetailsSection({
                               fieldOptions,
                               section.columns.map((c) => c.field),
                             ).map((field) => (
-                              <option key={field} value={field} className="bg-slate-900 text-slate-100">
+                              <option key={field} value={field} className="bg-surface text-foreground">
                                 {field}
                               </option>
                             ))}
@@ -1455,8 +1455,8 @@ export function LayoutBuilderDetailsSection({
                         </td>
                         <td className="px-2 py-2">
                           <input
-                            aria-label={`Label da se√ß√£o ${sectionIndex + 1} coluna ${columnIndex + 1}`}
-                            title={`Label da se√ß√£o ${sectionIndex + 1} coluna ${columnIndex + 1}`}
+                            aria-label={`Label da seÁ„o ${sectionIndex + 1} coluna ${columnIndex + 1}`}
+                            title={`Label da seÁ„o ${sectionIndex + 1} coluna ${columnIndex + 1}`}
                             placeholder="Label"
                             value={column.label}
                             onChange={(event) =>
@@ -1474,13 +1474,13 @@ export function LayoutBuilderDetailsSection({
                                 ),
                               }))
                             }
-                            className="w-full rounded border border-white/10 bg-white/5 px-2 py-1 text-slate-200"
+                            className="w-full rounded border border-border bg-surface-light px-2 py-1 text-foreground"
                           />
                         </td>
                         <td className="px-2 py-2">
                           <select
-                            aria-label={`Formato da se√ß√£o ${sectionIndex + 1} coluna ${columnIndex + 1}`}
-                            title={`Formato da se√ß√£o ${sectionIndex + 1} coluna ${columnIndex + 1}`}
+                            aria-label={`Formato da seÁ„o ${sectionIndex + 1} coluna ${columnIndex + 1}`}
+                            title={`Formato da seÁ„o ${sectionIndex + 1} coluna ${columnIndex + 1}`}
                             value={column.format ?? "text"}
                             onChange={(event) =>
                               setLayoutEditor((prev) => ({
@@ -1497,10 +1497,10 @@ export function LayoutBuilderDetailsSection({
                                 ),
                               }))
                             }
-                            className="w-full rounded border border-white/10 bg-white/5 px-2 py-1 text-slate-200"
+                            className="w-full rounded border border-border bg-surface-light px-2 py-1 text-foreground"
                           >
                             {supportedColumnFormats.map((format) => (
-                              <option key={format} value={format} className="bg-slate-900 text-slate-100">
+                              <option key={format} value={format} className="bg-surface text-foreground">
                                 {format}
                               </option>
                             ))}
@@ -1540,11 +1540,11 @@ export function LayoutBuilderDetailsSection({
 
       <details className="mt-5">
         <summary className="flex cursor-pointer select-none items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-sm font-medium text-amber-300 hover:bg-amber-500/10">
-          <span>&#9654;</span> Op√ß√µes avan√ßadas &mdash; Se√ß√µes adicionais (JSON)
+          <span>&#9654;</span> OpÁıes avanÁadas &mdash; SeÁıes adicionais (JSON)
         </summary>
-        <div className="mt-3 rounded-lg border border-white/5 bg-white/[0.02] p-3">
-          <p className="mb-3 text-xs text-slate-500">
-            Se√ß√µes extras que aparecem ap√≥s a tabela principal, como listas de softwares ou detalhes de hardware. Edite via visual acima ou diretamente no JSON abaixo.
+        <div className="mt-3 rounded-lg border border-border bg-surface-light p-3">
+          <p className="mb-3 text-xs text-muted">
+            SeÁıes extras que aparecem apÛs a tabela principal, como listas de softwares ou detalhes de hardware. Edite via visual acima ou diretamente no JSON abaixo.
           </p>
           <div className="grid gap-4 md:grid-cols-2">
             <TextArea
@@ -1557,8 +1557,8 @@ export function LayoutBuilderDetailsSection({
                   sections: parseJsonObject<LayoutEditorState["sections"]>(event.target.value, prev.sections),
                 }))
               }
-              placeholder='[{"title":"Se√ß√£o","source":"items","columns":[{"field":"name","label":"Nome"}]}]'
-              hint="Cada se√ß√£o possui title, source (chave de dados) e columns. Use o editor visual acima para n√£o precisar editar JSON."
+              placeholder='[{"title":"SeÁ„o","source":"items","columns":[{"field":"name","label":"Nome"}]}]'
+              hint="Cada seÁ„o possui title, source (chave de dados) e columns. Use o editor visual acima para n„o precisar editar JSON."
             />
           </div>
         </div>
@@ -1601,10 +1601,10 @@ export function LayoutBrandingSection({
             }))
           }
           placeholder="https://cdn.empresa.local/logo.png"
-          hint="URL opcional da marca √© exibida no cabe√ßalho do relat√≥rio."
+          hint="URL opcional da marca È exibida no cabeÁalho do relatÛrio."
         />
         <Input
-          label="Altura m√°xima da logo"
+          label="Altura m·xima da logo"
           type="number"
           min={0}
           value={layoutEditor.logoMaxHeightPx}
@@ -1626,7 +1626,7 @@ export function LayoutBrandingSection({
               style: { ...prev.style, primaryColor: event.target.value },
             }))
           }
-          hint="Aplicada no t√≠tulo principal, linhas de destaque e elementos visuais de maior evid√™ncia."
+          hint="Aplicada no tÌtulo principal, linhas de destaque e elementos visuais de maior evidÍncia."
         />
         <Input
           label="Cor secundaria"
@@ -1638,7 +1638,7 @@ export function LayoutBrandingSection({
               style: { ...prev.style, secondaryColor: event.target.value },
             }))
           }
-          hint="Cor de apoio usada em blocos secund√°rios e fundos auxiliares do relat√≥rio."
+          hint="Cor de apoio usada em blocos secund·rios e fundos auxiliares do relatÛrio."
         />
         <Input
           label="Cor de destaque"
@@ -1650,7 +1650,7 @@ export function LayoutBrandingSection({
               style: { ...prev.style, accentColor: event.target.value },
             }))
           }
-          hint="Usada em totais, indicadores de √™nfase e pontos de chamada de aten√ß√£o no documento."
+          hint="Usada em totais, indicadores de Ínfase e pontos de chamada de atenÁ„o no documento."
         />
         <Input
           label="Cor texto cabecalho"
@@ -1662,7 +1662,7 @@ export function LayoutBrandingSection({
               style: { ...prev.style, headerTextColor: event.target.value },
             }))
           }
-          hint="Cor do texto dos cabe√ßalhos das tabelas. Mantenha contraste com o fundo do cabe√ßalho."
+          hint="Cor do texto dos cabeÁalhos das tabelas. Mantenha contraste com o fundo do cabeÁalho."
         />
         <Input
           label="Fundo do cabecalho"
@@ -1674,7 +1674,7 @@ export function LayoutBrandingSection({
               style: { ...prev.style, headerBackgroundColor: event.target.value },
             }))
           }
-          hint="Cor de fundo das c√©lulas de cabe√ßalho em todas as tabelas do relat√≥rio."
+          hint="Cor de fundo das cÈlulas de cabeÁalho em todas as tabelas do relatÛrio."
         />
         <Input
           label="Cor alternada das linhas"
@@ -1686,7 +1686,7 @@ export function LayoutBrandingSection({
               style: { ...prev.style, alternateRowColor: event.target.value },
             }))
           }
-          hint="Cor aplicada nas linhas alternadas quando a op√ß√£o de listras zebradas estiver habilitada."
+          hint="Cor aplicada nas linhas alternadas quando a opÁ„o de listras zebradas estiver habilitada."
         />
         <Input
           label="Cor da borda"
@@ -1698,10 +1698,10 @@ export function LayoutBrandingSection({
               style: { ...prev.style, borderColor: event.target.value },
             }))
           }
-          hint="Define a cor das bordas de tabelas, cards de detalhe e divisores de se√ß√£o."
+          hint="Define a cor das bordas de tabelas, cards de detalhe e divisores de seÁ„o."
         />
         <div className="space-y-1">
-          <label className="block text-sm font-medium text-slate-300">Fonte</label>
+          <label className="block text-sm font-medium text-muted-foreground">Fonte</label>
           <select
             value={selectedFontFamily}
             onChange={(event) =>
@@ -1710,20 +1710,20 @@ export function LayoutBrandingSection({
                 style: { ...prev.style, fontFamily: event.target.value },
               }))
             }
-            className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none transition-colors focus-visible:border-primary/60 focus-visible:ring-2 focus-visible:ring-primary/30"
+            className="w-full rounded-xl border border-border bg-surface-light px-3 py-2 text-sm text-foreground outline-none transition-colors focus-visible:border-primary/60 focus-visible:ring-2 focus-visible:ring-primary/30"
           >
             {fontOptions.map((option) => (
-              <option key={option.value} value={option.value} className="bg-slate-900 text-slate-100">
+              <option key={option.value} value={option.value} className="bg-surface text-foreground">
                 {option.label}
               </option>
             ))}
           </select>
-          <p className="text-xs text-slate-400">
-            Selecione uma fonte validada para evitar erros de preenchimento e manter consist√™ncia visual.
+          <p className="text-xs text-muted">
+            Selecione uma fonte validada para evitar erros de preenchimento e manter consistÍncia visual.
           </p>
         </div>
         <div className="flex items-end pb-2">
-          <label className="flex items-center gap-2 text-sm text-slate-300">
+          <label className="flex items-center gap-2 text-sm text-muted-foreground">
             <input
               type="checkbox"
               checked={layoutEditor.style.showRowStripes}
@@ -1780,7 +1780,7 @@ export function PreviewCard({
   return (
     <Card>
       <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-white">Preview</h2>
+        <h2 className="text-lg font-semibold text-foreground">Preview</h2>
         <Button type="button" onClick={onPreview} loading={loadingPreview}>
           <Eye className="h-4 w-4" /> Gerar preview
         </Button>
@@ -1796,10 +1796,10 @@ export function PreviewCard({
               fileName: event.target.value,
             }))
           }
-          hint="Nome sugerido para o arquivo ao fazer download. Sem extens√£o."
+          hint="Nome sugerido para o arquivo ao fazer download. Sem extens„o."
         />
         <div>
-          <label className="mb-2 block text-sm font-medium text-slate-300">Modo</label>
+          <label className="mb-2 block text-sm font-medium text-muted-foreground">Modo</label>
           <select
             aria-label="Modo de preview"
             title="Modo de preview"
@@ -1810,18 +1810,18 @@ export function PreviewCard({
                 previewMode: event.target.value as PreviewMode,
               }))
             }
-            className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white"
+            className="w-full rounded-lg border border-border bg-surface-light px-3 py-2 text-foreground"
           >
             {previewModes.map((mode) => (
-              <option key={mode} value={mode} className="bg-slate-900 text-slate-100">
+              <option key={mode} value={mode} className="bg-surface text-foreground">
                 {mode}
               </option>
             ))}
           </select>
-          <p className="mt-1 text-xs text-slate-500"><strong className="text-slate-400">html</strong>: renderiza inline na p√°gina. <strong className="text-slate-400">document</strong>: gera o arquivo bin√°rio (PDF/XLSX/CSV).</p>
+          <p className="mt-1 text-xs text-muted"><strong className="text-muted">html</strong>: renderiza inline na p·gina. <strong className="text-muted">document</strong>: gera o arquivo bin·rio (PDF/XLSX/CSV).</p>
         </div>
         <div>
-          <label className="mb-2 block text-sm font-medium text-slate-300">Disposition</label>
+          <label className="mb-2 block text-sm font-medium text-muted-foreground">Disposition</label>
           <select
             aria-label="Disposition de resposta"
             title="Disposition de resposta"
@@ -1832,18 +1832,18 @@ export function PreviewCard({
                 responseDisposition: event.target.value as ResponseDisposition,
               }))
             }
-            className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white"
+            className="w-full rounded-lg border border-border bg-surface-light px-3 py-2 text-foreground"
           >
             {responseDispositions.map((mode) => (
-              <option key={mode} value={mode} className="bg-slate-900 text-slate-100">
+              <option key={mode} value={mode} className="bg-surface text-foreground">
                 {mode}
               </option>
             ))}
           </select>
-          <p className="mt-1 text-xs text-slate-500"><strong className="text-slate-400">inline</strong>: exibe no navegador. <strong className="text-slate-400">attachment</strong>: for√ßa download do arquivo.</p>
+          <p className="mt-1 text-xs text-muted"><strong className="text-muted">inline</strong>: exibe no navegador. <strong className="text-muted">attachment</strong>: forÁa download do arquivo.</p>
         </div>
         <div>
-          <label className="mb-2 block text-sm font-medium text-slate-300">Formato para preview</label>
+          <label className="mb-2 block text-sm font-medium text-muted-foreground">Formato para preview</label>
           <select
             aria-label="Formato do preview"
             title="Formato do preview"
@@ -1854,21 +1854,21 @@ export function PreviewCard({
                 format: event.target.value as SupportedFormat,
               }))
             }
-            className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white"
+            className="w-full rounded-lg border border-border bg-surface-light px-3 py-2 text-foreground"
           >
             {(selectedDataset?.supportedFormats ?? defaultFormatOptions).map((format) => (
-              <option key={format} value={format} className="bg-slate-900 text-slate-100">
+              <option key={format} value={format} className="bg-surface text-foreground">
                 {format.toUpperCase()}
               </option>
             ))}
           </select>
-          <p className="mt-1 text-xs text-slate-500">Formato do arquivo gerado neste preview. Independente do formato salvo no template.</p>
+          <p className="mt-1 text-xs text-muted">Formato do arquivo gerado neste preview. Independente do formato salvo no template.</p>
         </div>
       </div>
 
       {(previewMeta.title || previewMeta.rowCount !== undefined || previewMeta.format) && (
-        <div className="mt-4 rounded-lg border border-white/10 bg-white/5 p-3 text-xs text-slate-300">
-          <p>T√≠tulo: {previewMeta.title || "-"}</p>
+        <div className="mt-4 rounded-lg border border-border bg-surface-light p-3 text-xs text-muted-foreground">
+          <p>TÌtulo: {previewMeta.title || "-"}</p>
           <p>Linhas: {previewMeta.rowCount ?? "-"}</p>
           <p>Formato retornado: {previewMeta.format || "-"}</p>
         </div>
@@ -1884,7 +1884,7 @@ export function PreviewCard({
       )}
 
       {draft.previewMode === "html" && previewHtml && (
-        <div className="mt-4 overflow-hidden rounded-lg border border-white/10">
+        <div className="mt-4 overflow-hidden rounded-lg border border-border">
           <iframe title="Preview HTML" className="h-[560px] w-full bg-white" srcDoc={previewHtml} />
         </div>
       )}
@@ -1892,9 +1892,9 @@ export function PreviewCard({
       {draft.previewMode === "document" && previewBlobUrl && (
         <div className="mt-4 space-y-3">
           {draft.format === "pdf" && draft.responseDisposition === "inline" ? (
-            <iframe title="Preview PDF" src={previewBlobUrl} className="h-[560px] w-full rounded-lg border border-white/10 bg-white" />
+            <iframe title="Preview PDF" src={previewBlobUrl} className="h-[560px] w-full rounded-lg border border-border bg-white" />
           ) : (
-            <div className="rounded-lg border border-white/10 bg-white/5 p-3 text-sm text-slate-300">
+            <div className="rounded-lg border border-border bg-surface-light p-3 text-sm text-muted-foreground">
               Preview gerado. Use o botao para baixar novamente.
             </div>
           )}
@@ -1936,17 +1936,17 @@ export function PreviewFiltersCard({
 }: PreviewFiltersCardProps) {
   return (
     <Card>
-      <h2 className="mb-4 text-lg font-semibold text-white">Filtros de Preview</h2>
+      <h2 className="mb-4 text-lg font-semibold text-foreground">Filtros de Preview</h2>
       {selectedDataset?.filters.length ? (
         <div className="grid gap-4 md:grid-cols-2">
           {selectedDataset.filters.map((filter) => {
             const currentValue = previewFilters[filter.name] ?? "";
             const label = filter.label || filter.name;
             const n = filter.name.toLowerCase();
-            const selectClass = "w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white";
-            const inputClass = "w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-slate-200";
+            const selectClass = "w-full rounded-lg border border-border bg-surface-light px-3 py-2 text-foreground";
+            const inputClass = "w-full rounded-lg border border-border bg-surface-light px-3 py-2 text-foreground";
             const labelEl = (
-              <label className="mb-2 block text-sm font-medium text-slate-300">
+              <label className="mb-2 block text-sm font-medium text-muted-foreground">
                 {label}{filter.required ? " *" : ""}
               </label>
             );
@@ -1966,9 +1966,9 @@ export function PreviewFiltersCard({
                     }}
                     className={selectClass}
                   >
-                    <option value="" className="bg-slate-900 text-slate-100">Selecione um cliente...</option>
+                    <option value="" className="bg-surface text-foreground">Selecione um cliente...</option>
                     {clients.map((c) => (
-                      <option key={c.id} value={c.id} className="bg-slate-900 text-slate-100">{c.name}</option>
+                      <option key={c.id} value={c.id} className="bg-surface text-foreground">{c.name}</option>
                     ))}
                   </select>
                 </div>
@@ -1990,11 +1990,11 @@ export function PreviewFiltersCard({
                     }}
                     className={selectClass}
                   >
-                    <option value="" className="bg-slate-900 text-slate-100">
+                    <option value="" className="bg-surface text-foreground">
                       {filterClientId ? "Selecione um site..." : "Selecione um cliente primeiro"}
                     </option>
                     {sites.map((s) => (
-                      <option key={s.id} value={s.id} className="bg-slate-900 text-slate-100">{s.name}</option>
+                      <option key={s.id} value={s.id} className="bg-surface text-foreground">{s.name}</option>
                     ))}
                   </select>
                 </div>
@@ -2015,11 +2015,11 @@ export function PreviewFiltersCard({
                     }
                     className={selectClass}
                   >
-                    <option value="" className="bg-slate-900 text-slate-100">
+                    <option value="" className="bg-surface text-foreground">
                       {filterClientId ? "Selecione um agente..." : "Selecione um cliente primeiro"}
                     </option>
                     {agents.map((a) => (
-                      <option key={a.id} value={a.id} className="bg-slate-900 text-slate-100">
+                      <option key={a.id} value={a.id} className="bg-surface text-foreground">
                         {a.displayName ?? a.hostname}
                       </option>
                     ))}
@@ -2041,15 +2041,15 @@ export function PreviewFiltersCard({
                     }
                     className={selectClass}
                   >
-                    <option value="" className="bg-slate-900 text-slate-100">Padr√£o</option>
-                    <option value="asc" className="bg-slate-900 text-slate-100">Crescente (asc)</option>
-                    <option value="desc" className="bg-slate-900 text-slate-100">Decrescente (desc)</option>
+                    <option value="" className="bg-surface text-foreground">Padr„o</option>
+                    <option value="asc" className="bg-surface text-foreground">Crescente (asc)</option>
+                    <option value="desc" className="bg-surface text-foreground">Decrescente (desc)</option>
                   </select>
                 </div>
               );
             }
 
-            if (n === "orientation" || n === "orienta√ß√£o") {
+            if (n === "orientation" || n === "orientaÁ„o") {
               return (
                 <div key={filter.name}>
                   {labelEl}
@@ -2062,9 +2062,9 @@ export function PreviewFiltersCard({
                     }
                     className={selectClass}
                   >
-                    <option value="" className="bg-slate-900 text-slate-100">Padr√£o</option>
-                    <option value="portrait" className="bg-slate-900 text-slate-100">Retrato (portrait)</option>
-                    <option value="landscape" className="bg-slate-900 text-slate-100">Paisagem (landscape)</option>
+                    <option value="" className="bg-surface text-foreground">Padr„o</option>
+                    <option value="portrait" className="bg-surface text-foreground">Retrato (portrait)</option>
+                    <option value="landscape" className="bg-surface text-foreground">Paisagem (landscape)</option>
                   </select>
                 </div>
               );
@@ -2083,9 +2083,9 @@ export function PreviewFiltersCard({
                     }
                     className={selectClass}
                   >
-                    <option value="" className="bg-slate-900 text-slate-100">Padr√£o</option>
+                    <option value="" className="bg-surface text-foreground">Padr„o</option>
                     {fieldOptions.map((field) => (
-                      <option key={field.value} value={field.value} className="bg-slate-900 text-slate-100">{field.label}</option>
+                      <option key={field.value} value={field.value} className="bg-surface text-foreground">{field.label}</option>
                     ))}
                   </select>
                 </div>
@@ -2109,9 +2109,9 @@ export function PreviewFiltersCard({
                     }
                     className={selectClass}
                   >
-                    <option value="" className="bg-slate-900 text-slate-100">N√£o definido</option>
-                    <option value="true" className="bg-slate-900 text-slate-100">Sim (true)</option>
-                    <option value="false" className="bg-slate-900 text-slate-100">N√£o (false)</option>
+                    <option value="" className="bg-surface text-foreground">N„o definido</option>
+                    <option value="true" className="bg-surface text-foreground">Sim (true)</option>
+                    <option value="false" className="bg-surface text-foreground">N„o (false)</option>
                   </select>
                 </div>
               );
@@ -2136,7 +2136,7 @@ export function PreviewFiltersCard({
           })}
         </div>
       ) : (
-        <p className="text-sm text-slate-400">Dataset sem filtros din√¢micos declarados pela API.</p>
+        <p className="text-sm text-muted">Dataset sem filtros din‚micos declarados pela API.</p>
       )}
     </Card>
   );
@@ -2151,7 +2151,7 @@ export function ValidationErrorsCard({ errors }: ValidationErrorsCardProps) {
 
   return (
     <Card>
-      <h2 className="text-sm font-semibold text-red-300">Erros de valida√ß√£o</h2>
+      <h2 className="text-sm font-semibold text-red-300">Erros de validaÁ„o</h2>
       <ul className="mt-2 list-disc pl-5 text-xs text-red-200">
         {errors.map((error, index) => (
           <li key={`${error}-${index}`}>{error}</li>

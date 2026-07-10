@@ -213,14 +213,14 @@ export default function KnowledgeEditor() {
           <button
             type="button"
             onClick={() => navigate('/knowledge')}
-            className="mb-2 inline-flex items-center gap-2 text-sm text-slate-400 transition-colors hover:text-white"
+            className="mb-2 inline-flex items-center gap-2 text-sm text-muted transition-colors hover:text-foreground"
           >
             <ArrowLeft className="h-4 w-4" /> Voltar
           </button>
-          <h1 className="text-2xl font-bold text-white">
+          <h1 className="text-2xl font-bold text-foreground">
             {isEdit ? 'Editar artigo' : 'Novo artigo'}
           </h1>
-          <p className="text-sm text-slate-400">Conteúdo em Markdown com preview em tempo real.</p>
+          <p className="text-sm text-muted">Conteúdo em Markdown com preview em tempo real.</p>
         </div>
         {isEdit && detailQuery.data && (
           <div className="flex items-center gap-3">
@@ -228,7 +228,7 @@ export default function KnowledgeEditor() {
               {statusLabel(detailQuery.data.status)}
             </Badge>
             {detailQuery.data.status !== 'Draft' && (
-              <span className="text-xs text-slate-400">
+              <span className="text-xs text-muted">
                 v{detailQuery.data.currentVersionNumber}
               </span>
             )}
@@ -254,13 +254,13 @@ export default function KnowledgeEditor() {
                 placeholder="Ex.: Active Directory"
               />
               <div>
-                <label className="mb-1.5 block text-sm font-medium text-slate-300">Autor (criador)</label>
-                <div className="rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-slate-300">
+                <label className="mb-1.5 block text-sm font-medium text-muted-foreground">Autor (criador)</label>
+                <div className="rounded-xl border border-border bg-background/60 px-3 py-2 text-sm text-muted-foreground">
                   {isEdit
                     ? (detailQuery.data?.createdBy ?? 'Não informado')
                     : 'Definido automaticamente pelo usuário logado'}
                 </div>
-                <p className="mt-1 text-xs text-slate-500">
+                <p className="mt-1 text-xs text-muted">
                   O backend define automaticamente o autor original no momento da criação.
                 </p>
               </div>
@@ -301,15 +301,15 @@ export default function KnowledgeEditor() {
             />
 
             {isEdit && detailQuery.data && detailQuery.data.status !== 'Draft' && (
-              <div className="rounded-lg border border-white/10 bg-white/5 p-4">
+              <div className="rounded-lg border border-border bg-surface-light p-4">
                 <div className="flex items-center justify-between gap-3">
                   <div>
-                    <p className="text-sm font-medium text-white">
+                    <p className="text-sm font-medium text-foreground">
                       Publicado como <Badge color={statusColor(detailQuery.data.status)}>{statusLabel(detailQuery.data.status)}</Badge>
                       {' '}v{detailQuery.data.currentVersionNumber}
                     </p>
                     {detailQuery.data.publishedAt && (
-                      <p className="text-xs text-slate-400">
+                      <p className="text-xs text-muted">
                         Publicado em {new Date(detailQuery.data.publishedAt).toLocaleDateString('pt-BR')}
                       </p>
                     )}
@@ -385,7 +385,7 @@ export default function KnowledgeEditor() {
                     setShowVersions(!showVersions);
                     if (!showVersions) versionsQuery.refetch();
                   }}
-                  className="inline-flex items-center gap-2 text-sm text-slate-400 transition-colors hover:text-white"
+                  className="inline-flex items-center gap-2 text-sm text-muted transition-colors hover:text-foreground"
                 >
                   <History className="h-4 w-4" />
                   Histórico de versões ({detailQuery.data?.currentVersionNumber ?? 0})
@@ -394,20 +394,20 @@ export default function KnowledgeEditor() {
                   <div className="mt-2 space-y-2">
                     {versionsQuery.isLoading && <Loading message="Carregando versões..." />}
                     {versionsQuery.data?.map((v: ArticleVersion) => (
-                      <div key={v.id} className="rounded border border-white/10 bg-white/5 p-2 text-xs">
-                        <p className="text-slate-300">
-                          <span className="font-medium text-white">v{v.versionNumber}</span>
+                      <div key={v.id} className="rounded border border-border bg-surface-light p-2 text-xs">
+                        <p className="text-muted-foreground">
+                          <span className="font-medium text-foreground">v{v.versionNumber}</span>
                           {' '}{v.status === 'Published' ? 'Publicado' : 'Interno'}
-                          {v.changeSummary && <span className="text-slate-500"> — {v.changeSummary}</span>}
+                          {v.changeSummary && <span className="text-muted"> — {v.changeSummary}</span>}
                         </p>
-                        <p className="text-slate-500">
+                        <p className="text-muted">
                           {new Date(v.createdAt).toLocaleString('pt-BR')}
                           {v.editedBy && ` por ${v.editedBy}`}
                         </p>
                       </div>
                     ))}
                     {versionsQuery.data?.length === 0 && (
-                      <p className="text-xs text-slate-500">Nenhuma versão publicada ainda.</p>
+                      <p className="text-xs text-muted">Nenhuma versão publicada ainda.</p>
                     )}
                   </div>
                 )}
@@ -415,10 +415,10 @@ export default function KnowledgeEditor() {
             )}
 
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-slate-300">Markdown</label>
+              <label className="mb-1.5 block text-sm font-medium text-muted-foreground">Markdown</label>
               <div
                 data-color-mode="dark"
-                className="overflow-hidden rounded-xl border border-white/10 bg-slate-950"
+                className="overflow-hidden rounded-xl border border-border bg-background"
               >
                 <MDEditor
                   value={form.content}
@@ -431,7 +431,7 @@ export default function KnowledgeEditor() {
                   onChange={(value) => setField('content', value ?? '')}
                 />
               </div>
-              <p className="mt-2 text-xs text-slate-500">
+              <p className="mt-2 text-xs text-muted">
                 Editor avançado com atalhos e toolbar para títulos, listas, links, tabelas e blocos de código.
               </p>
             </div>
@@ -478,11 +478,11 @@ export default function KnowledgeEditor() {
         </Card>
 
         <Card>
-          <div className="mb-3 flex items-center gap-2 text-slate-300">
+          <div className="mb-3 flex items-center gap-2 text-muted-foreground">
             <Eye className="h-4 w-4" />
             <h2 className="text-sm font-medium uppercase tracking-wide">Preview</h2>
           </div>
-          <article className="prose prose-invert max-w-none prose-headings:text-white prose-p:text-slate-200 prose-li:text-slate-200 prose-strong:text-white prose-code:text-emerald-300 prose-pre:bg-slate-950/70">
+          <article className="prose prose-invert max-w-none prose-headings:text-foreground prose-p:text-foreground prose-li:text-foreground prose-strong:text-foreground prose-code:text-emerald-300 prose-pre:bg-background/70">
             <ReactMarkdown remarkPlugins={[remarkGfm]}>
               {form.content || '_Sem conteúdo_'}
             </ReactMarkdown>

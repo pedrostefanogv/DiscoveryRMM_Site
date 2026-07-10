@@ -195,7 +195,7 @@ export function NotesPanel({ entityType, entityId, title = "Notas", subtitle }: 
             {sortedNotes.map((note) => {
               const isCurrentEdit = editingId === note.id;
               return (
-                <div key={note.id} className="rounded-lg border border-white/10 bg-white/5 p-3">
+                <div key={note.id} className="rounded-lg border border-border bg-surface-light p-3">
                   {isCurrentEdit ? (
                     <div className="space-y-3">
                       <Input
@@ -210,12 +210,12 @@ export function NotesPanel({ entityType, entityId, title = "Notas", subtitle }: 
                         onChange={(e) => setEditingContent(e.target.value)}
                         rows={4}
                       />
-                      <label className="flex items-center gap-2 text-sm text-slate-300">
+                      <label className="flex items-center gap-2 text-sm text-muted-foreground">
                         <input
                           type="checkbox"
                           checked={editingPinned}
                           onChange={(e) => setEditingPinned(e.target.checked)}
-                          className="rounded border-white/10 bg-white/5"
+                          className="rounded border-border bg-surface-light"
                         />
                         Fixar nota
                       </label>
@@ -235,7 +235,7 @@ export function NotesPanel({ entityType, entityId, title = "Notas", subtitle }: 
                       <div className="mb-2 flex items-start justify-between gap-3">
                         <div className="min-w-0">
                           <div className="mb-1 flex items-center gap-2">
-                            <p className="truncate text-sm font-medium text-white">{note.author ?? "Sem autor"}</p>
+                            <p className="truncate text-sm font-medium text-foreground">{note.author ?? "Sem autor"}</p>
                             {note.isPinned && (
                               <Badge color="warning" className="text-[10px]">
                                 <Pin className="h-3 w-3" />
@@ -243,7 +243,7 @@ export function NotesPanel({ entityType, entityId, title = "Notas", subtitle }: 
                               </Badge>
                             )}
                           </div>
-                          <p className="text-xs text-slate-500">
+                          <p className="text-xs text-muted">
                             {new Date(note.createdAt).toLocaleString("pt-BR")}
                           </p>
                         </div>
@@ -261,18 +261,18 @@ export function NotesPanel({ entityType, entityId, title = "Notas", subtitle }: 
                             </Button>
                             {openMenuId === note.id && (
                               <div
-                                className="absolute right-0 top-full z-20 mt-1 w-36 overflow-hidden rounded-lg border border-white/10 bg-slate-800 shadow-xl"
+                                className="absolute right-0 top-full z-20 mt-1 w-36 overflow-hidden rounded-lg border border-border bg-surface-light shadow-xl"
                                 onMouseLeave={() => setOpenMenuId(null)}
                               >
                                 <button
-                                  className="flex w-full items-center gap-2 px-3 py-2 text-sm text-slate-200 hover:bg-white/10 transition-colors"
+                                  className="flex w-full items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-surface-hover transition-colors"
                                   onClick={() => handleMenuEdit(note)}
                                 >
-                                  <Pencil className="h-3.5 w-3.5 text-slate-400" />
+                                  <Pencil className="h-3.5 w-3.5 text-muted" />
                                   Editar
                                 </button>
                                 <button
-                                  className="flex w-full items-center gap-2 px-3 py-2 text-sm text-red-400 hover:bg-white/10 transition-colors"
+                                  className="flex w-full items-center gap-2 px-3 py-2 text-sm text-red-400 hover:bg-surface-hover transition-colors"
                                   onClick={() => handleMenuDelete(note.id)}
                                   disabled={isDeleting}
                                 >
@@ -284,7 +284,7 @@ export function NotesPanel({ entityType, entityId, title = "Notas", subtitle }: 
                           </div>
                         </div>
                       </div>
-                      <p className="whitespace-pre-wrap text-sm text-slate-300">{note.content}</p>
+                      <p className="whitespace-pre-wrap text-sm text-muted-foreground">{note.content}</p>
                     </>
                   )}
                 </div>
@@ -292,12 +292,12 @@ export function NotesPanel({ entityType, entityId, title = "Notas", subtitle }: 
             })}
 
             {sortedNotes.length === 0 && (
-              <p className="text-sm text-slate-500">Nenhuma nota cadastrada</p>
+              <p className="text-sm text-muted">Nenhuma nota cadastrada</p>
             )}
           </div>
 
-          {createFormVisible && <div className="mt-4 space-y-3 border-t border-white/10 pt-4">
-            <p className="text-sm font-medium text-white">Nova nota</p>
+          {createFormVisible && <div className="mt-4 space-y-3 border-t border-border pt-4">
+            <p className="text-sm font-medium text-foreground">Nova nota</p>
             <Input
               label="Autor"
               value={newAuthor}
@@ -311,12 +311,12 @@ export function NotesPanel({ entityType, entityId, title = "Notas", subtitle }: 
               rows={4}
               placeholder="Escreva a nota"
             />
-            <label className="flex items-center gap-2 text-sm text-slate-300">
+            <label className="flex items-center gap-2 text-sm text-muted-foreground">
               <input
                 type="checkbox"
                 checked={newPinned}
                 onChange={(e) => setNewPinned(e.target.checked)}
-                className="rounded border-white/10 bg-white/5"
+                className="rounded border-border bg-surface-light"
               />
               Fixar nota
             </label>

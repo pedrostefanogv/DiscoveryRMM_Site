@@ -1,5 +1,5 @@
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   LayoutDashboard,
   Users,
@@ -133,7 +133,8 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
   const settingsIsActive = location.pathname.startsWith('/settings');
   const identityIsActive = location.pathname.startsWith('/identity');
 
-  const resolveActiveSection = (): SidebarAccordionSection | null => {
+  // BUG-12: resolveActiveSection memoizado para evitar recriação a cada render
+  const activeSection = useMemo((): SidebarAccordionSection | null => {
     if (clientsIsActive) return 'clients';
     if (ticketsIsActive) return 'tickets';
     if (softwareIsActive) return 'software';
@@ -142,10 +143,10 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
     if (identityIsActive) return 'identity';
     if (settingsIsActive) return 'settings';
     return null;
-  };
+  }, [clientsIsActive, ticketsIsActive, softwareIsActive, automationIsActive, reportsIsActive, identityIsActive, settingsIsActive]);
 
   const [openSection, setOpenSection] = useState<SidebarAccordionSection | null>(() =>
-    resolveActiveSection(),
+    activeSection,
   );
 
   const clientsOpen = openSection === 'clients';
@@ -179,7 +180,6 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
   }, [location.pathname, isDesktop, onCloseMobile]);
 
   useEffect(() => {
-    const activeSection = resolveActiveSection();
     if (activeSection) {
       setOpenSection(activeSection);
     }
@@ -198,7 +198,7 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
 
   return (
     <aside
-      className={`sidebar-transition fixed left-0 top-0 z-30 flex h-screen w-60 flex-col border-r border-white/10 bg-sidebar/95 shadow-2xl backdrop-blur-xl ${
+      className={`sidebar-transition fixed left-0 top-0 z-30 flex h-screen w-60 flex-col border-r border-border bg-sidebar/95 shadow-2xl backdrop-blur-xl ${
         isDesktop ? `translate-x-0 ${expandedWidthClass}` : mobileVisibleClass
       }`}
     >
@@ -208,11 +208,11 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
           <img src={branding.logoUrl} alt="Logo" className="h-8 w-8 rounded" />
         ) : (
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-            <Shield className="h-5 w-5 text-white" />
+            <Shield className="h-5 w-5 text-foreground" />
           </div>
         )}
         {!collapsed && (
-          <span className="text-lg font-bold text-white truncate">
+          <span className="text-lg font-bold text-foreground truncate">
             {branding.appName}
           </span>
         )}
@@ -226,8 +226,8 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
           className={({ isActive }) =>
             `flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
               isActive
-                ? 'bg-white/10 text-white'
-                : 'text-slate-400 hover:bg-white/5 hover:text-white'
+                ? 'bg-surface-hover text-foreground'
+                : 'text-muted hover:bg-surface-light hover:text-foreground'
             }`
           }
         >
@@ -246,8 +246,8 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
           }}
           className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
             clientsIsActive
-              ? 'bg-white/10 text-white'
-              : 'text-slate-400 hover:bg-white/5 hover:text-white'
+              ? 'bg-surface-hover text-foreground'
+              : 'text-muted hover:bg-surface-light hover:text-foreground'
           }`}
           aria-label="Abrir submenu de clientes"
         >
@@ -264,7 +264,7 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
 
         {!collapsed && (
           <div className={submenuAnimationClass(clientsOpen)} aria-hidden={!clientsOpen}>
-            <div className="ml-8 space-y-1 border-l border-white/10 pl-3 pb-1">
+            <div className="ml-8 space-y-1 border-l border-border pl-3 pb-1">
               {clientLinks.map(({ to, label }) => (
                 <NavLink
                   key={to}
@@ -273,8 +273,8 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
                   className={({ isActive }) =>
                     `block rounded-md px-2 py-1.5 text-sm transition-colors ${
                       isActive
-                        ? 'bg-white/10 text-white'
-                        : 'text-slate-400 hover:bg-white/5 hover:text-white'
+                        ? 'bg-surface-hover text-foreground'
+                        : 'text-muted hover:bg-surface-light hover:text-foreground'
                     }`
                   }
                 >
@@ -293,8 +293,8 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
             className={({ isActive }) =>
               `flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
                 isActive
-                  ? 'bg-white/10 text-white'
-                  : 'text-slate-400 hover:bg-white/5 hover:text-white'
+                  ? 'bg-surface-hover text-foreground'
+                  : 'text-muted hover:bg-surface-light hover:text-foreground'
               }`
             }
           >
@@ -314,8 +314,8 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
           }}
           className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
             ticketsIsActive
-              ? 'bg-white/10 text-white'
-              : 'text-slate-400 hover:bg-white/5 hover:text-white'
+              ? 'bg-surface-hover text-foreground'
+              : 'text-muted hover:bg-surface-light hover:text-foreground'
           }`}
           aria-label="Abrir submenu de suporte"
         >
@@ -332,7 +332,7 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
 
         {!collapsed && (
           <div className={submenuAnimationClass(ticketsOpen)} aria-hidden={!ticketsOpen}>
-            <div className="ml-8 space-y-1 border-l border-white/10 pl-3 pb-1">
+            <div className="ml-8 space-y-1 border-l border-border pl-3 pb-1">
               {visibleTicketsLinks.map(({ to, label }) => (
                 <NavLink
                   key={to}
@@ -341,8 +341,8 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
                   className={({ isActive }) =>
                     `block rounded-md px-2 py-1.5 text-sm transition-colors ${
                       isActive
-                        ? 'bg-white/10 text-white'
-                        : 'text-slate-400 hover:bg-white/5 hover:text-white'
+                        ? 'bg-surface-hover text-foreground'
+                        : 'text-muted hover:bg-surface-light hover:text-foreground'
                     }`
                   }
                 >
@@ -366,8 +366,8 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
               }}
               className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
                 softwareIsActive
-                  ? 'bg-white/10 text-white'
-                  : 'text-slate-400 hover:bg-white/5 hover:text-white'
+                  ? 'bg-surface-hover text-foreground'
+                  : 'text-muted hover:bg-surface-light hover:text-foreground'
               }`}
               aria-label="Abrir submenu de softwares"
             >
@@ -384,7 +384,7 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
 
             {!collapsed && (
               <div className={submenuAnimationClass(softwareOpen)} aria-hidden={!softwareOpen}>
-                <div className="ml-8 space-y-1 border-l border-white/10 pl-3 pb-1">
+                <div className="ml-8 space-y-1 border-l border-border pl-3 pb-1">
                   {softwareLinks.map(({ to, label }) => (
                     <NavLink
                       key={to}
@@ -392,8 +392,8 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
                       className={({ isActive }) =>
                         `block rounded-md px-2 py-1.5 text-sm transition-colors ${
                           isActive
-                            ? 'bg-white/10 text-white'
-                            : 'text-slate-400 hover:bg-white/5 hover:text-white'
+                            ? 'bg-surface-hover text-foreground'
+                            : 'text-muted hover:bg-surface-light hover:text-foreground'
                         }`
                       }
                     >
@@ -419,8 +419,8 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
               }}
               className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
                 automationIsActive
-                  ? 'bg-white/10 text-white'
-                  : 'text-slate-400 hover:bg-white/5 hover:text-white'
+                  ? 'bg-surface-hover text-foreground'
+                  : 'text-muted hover:bg-surface-light hover:text-foreground'
               }`}
               aria-label="Abrir submenu de automação"
             >
@@ -437,7 +437,7 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
 
             {!collapsed && (
               <div className={submenuAnimationClass(automationOpen)} aria-hidden={!automationOpen}>
-                <div className="ml-8 space-y-1 border-l border-white/10 pl-3 pb-1">
+                <div className="ml-8 space-y-1 border-l border-border pl-3 pb-1">
                   {visibleAutomationLinks.map(({ to, label }) => (
                     <NavLink
                       key={to}
@@ -446,8 +446,8 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
                       className={({ isActive }) =>
                         `block rounded-md px-2 py-1.5 text-sm transition-colors ${
                           isActive
-                            ? 'bg-white/10 text-white'
-                            : 'text-slate-400 hover:bg-white/5 hover:text-white'
+                            ? 'bg-surface-hover text-foreground'
+                            : 'text-muted hover:bg-surface-light hover:text-foreground'
                         }`
                       }
                     >
@@ -473,8 +473,8 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
               }}
               className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
                 reportsIsActive
-                  ? 'bg-white/10 text-white'
-                  : 'text-slate-400 hover:bg-white/5 hover:text-white'
+                  ? 'bg-surface-hover text-foreground'
+                  : 'text-muted hover:bg-surface-light hover:text-foreground'
               }`}
               aria-label="Abrir submenu de relatórios"
             >
@@ -491,7 +491,7 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
 
             {!collapsed && (
               <div className={submenuAnimationClass(reportsOpen)} aria-hidden={!reportsOpen}>
-                <div className="ml-8 space-y-1 border-l border-white/10 pl-3 pb-1">
+                <div className="ml-8 space-y-1 border-l border-border pl-3 pb-1">
                   {reportsLinks.map(({ to, label }) => (
                     <NavLink
                       key={to}
@@ -499,8 +499,8 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
                       className={({ isActive }) =>
                         `block rounded-md px-2 py-1.5 text-sm transition-colors ${
                           isActive
-                            ? 'bg-white/10 text-white'
-                            : 'text-slate-400 hover:bg-white/5 hover:text-white'
+                            ? 'bg-surface-hover text-foreground'
+                            : 'text-muted hover:bg-surface-light hover:text-foreground'
                         }`
                       }
                     >
@@ -524,8 +524,8 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
           }}
           className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
             identityIsActive
-              ? 'bg-white/10 text-white'
-              : 'text-slate-400 hover:bg-white/5 hover:text-white'
+              ? 'bg-surface-hover text-foreground'
+              : 'text-muted hover:bg-surface-light hover:text-foreground'
           }`}
           aria-label="Abrir submenu de identidade"
         >
@@ -542,7 +542,7 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
 
         {!collapsed && (
           <div className={submenuAnimationClass(identityOpen)} aria-hidden={!identityOpen}>
-            <div className="ml-8 space-y-1 border-l border-white/10 pl-3 pb-1">
+            <div className="ml-8 space-y-1 border-l border-border pl-3 pb-1">
               {visibleIdentityLinks.map(({ to, label }) => (
                 <NavLink
                   key={to}
@@ -550,8 +550,8 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
                   className={({ isActive }) =>
                     `block rounded-md px-2 py-1.5 text-sm transition-colors ${
                       isActive
-                        ? 'bg-white/10 text-white'
-                        : 'text-slate-400 hover:bg-white/5 hover:text-white'
+                        ? 'bg-surface-hover text-foreground'
+                        : 'text-muted hover:bg-surface-light hover:text-foreground'
                     }`
                   }
                 >
@@ -575,8 +575,8 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
               }}
               className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
                 settingsIsActive
-                  ? 'bg-white/10 text-white'
-                  : 'text-slate-400 hover:bg-white/5 hover:text-white'
+                  ? 'bg-surface-hover text-foreground'
+                  : 'text-muted hover:bg-surface-light hover:text-foreground'
               }`}
               aria-label="Abrir submenu de configurações"
             >
@@ -593,7 +593,7 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
 
             {!collapsed && (
               <div className={submenuAnimationClass(settingsOpen)} aria-hidden={!settingsOpen}>
-                <div className="ml-8 space-y-1 border-l border-white/10 pl-3 pb-1">
+                <div className="ml-8 space-y-1 border-l border-border pl-3 pb-1">
                   {settingsLinks.map(({ to, label }) => (
                     <NavLink
                       key={to}
@@ -602,8 +602,8 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
                       className={({ isActive }) =>
                         `block rounded-md px-2 py-1.5 text-sm transition-colors ${
                           isActive
-                            ? 'bg-white/10 text-white'
-                            : 'text-slate-400 hover:bg-white/5 hover:text-white'
+                            ? 'bg-surface-hover text-foreground'
+                            : 'text-muted hover:bg-surface-light hover:text-foreground'
                         }`
                       }
                     >
@@ -618,10 +618,10 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
       </nav>
 
       {/* Collapse toggle */}
-      <div className="hidden border-t border-white/5 lg:block">
+      <div className="hidden border-t border-border lg:block">
         <button
           onClick={onToggle}
-          className="flex h-11 w-full items-center justify-center gap-2 text-xs font-medium text-slate-500 transition-colors hover:bg-white/[0.03] hover:text-slate-300"
+          className="flex h-11 w-full items-center justify-center gap-2 text-xs font-medium text-muted transition-colors hover:bg-surface-light hover:text-muted-foreground"
           aria-label={collapsed ? 'Expandir sidebar' : 'Recolher sidebar'}
         >
           {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}

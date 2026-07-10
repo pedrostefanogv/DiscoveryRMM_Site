@@ -269,7 +269,7 @@ export default function ClientConfigurationPage() {
         {!clientsQuery.isLoading && !clientsQuery.isError && (
           <div className="space-y-4">
             <Select label="Cliente" options={clientOptions} value={clientId} onChange={(event) => setClientId(event.target.value)} />
-            {!clientId && <p className="text-sm text-slate-400">Selecione um cliente para editar a configuração.</p>}
+            {!clientId && <p className="text-sm text-muted">Selecione um cliente para editar a configuração.</p>}
           </div>
         )}
       </ConfigurationSectionCard>

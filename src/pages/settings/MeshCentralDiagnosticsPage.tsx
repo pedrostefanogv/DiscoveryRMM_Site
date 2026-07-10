@@ -92,8 +92,8 @@ export default function MeshCentralDiagnosticsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-white">Diagnostics MeshCentral</h1>
-        <p className="text-sm text-slate-400">
+        <h1 className="text-2xl font-bold text-foreground">Diagnostics MeshCentral</h1>
+        <p className="text-sm text-muted">
           Troubleshooting da integração MeshCentral por escopo. Use esta tela para investigação operacional.
         </p>
       </div>
@@ -102,7 +102,7 @@ export default function MeshCentralDiagnosticsPage() {
         <CardHeader
           title="Escopo"
           subtitle="Selecione o site e opcionalmente um agent para diagnóstico detalhado."
-          action={<Stethoscope className="h-4 w-4 text-slate-400" />}
+          action={<Stethoscope className="h-4 w-4 text-muted" />}
         />
 
         <div className="grid gap-3 px-5 pb-5 md:grid-cols-3">
@@ -149,7 +149,7 @@ export default function MeshCentralDiagnosticsPage() {
 
       {!siteId && (
         <Card>
-          <div className="px-5 py-4 text-sm text-slate-500">
+          <div className="px-5 py-4 text-sm text-muted">
             Selecione um site para carregar health/site/agent.
           </div>
         </Card>
@@ -178,37 +178,37 @@ export default function MeshCentralDiagnosticsPage() {
             <CardHeader title="Health" subtitle="Estado operacional da integração" />
             <div className="space-y-2 px-5 pb-5 text-sm">
               <div className="flex items-center justify-between">
-                <span className="text-slate-400">Control Socket</span>
+                <span className="text-muted">Control Socket</span>
                 <Badge color={diagnosticsQuery.data.health.controlSocketConnected ? "success" : "danger"}>
                   {diagnosticsQuery.data.health.controlSocketConnected ? "Conectado" : "Desconectado"}
                 </Badge>
               </div>
-              <p className="text-slate-300">Public URL: {toText(diagnosticsQuery.data.health.publicBaseUrl)}</p>
-              <p className="text-slate-300">Admin URL: {toText(diagnosticsQuery.data.health.administrativeBaseUrl)}</p>
-              <p className="text-slate-300">Technical User: {toText(diagnosticsQuery.data.health.technicalUsername)}</p>
-              <p className="text-slate-300">Mesh Count: {diagnosticsQuery.data.health.meshCount ?? 0}</p>
-              <p className="text-slate-300">User Count: {diagnosticsQuery.data.health.userCount ?? 0}</p>
+              <p className="text-muted-foreground">Public URL: {toText(diagnosticsQuery.data.health.publicBaseUrl)}</p>
+              <p className="text-muted-foreground">Admin URL: {toText(diagnosticsQuery.data.health.administrativeBaseUrl)}</p>
+              <p className="text-muted-foreground">Technical User: {toText(diagnosticsQuery.data.health.technicalUsername)}</p>
+              <p className="text-muted-foreground">Mesh Count: {diagnosticsQuery.data.health.meshCount ?? 0}</p>
+              <p className="text-muted-foreground">User Count: {diagnosticsQuery.data.health.userCount ?? 0}</p>
             </div>
           </Card>
 
           <Card>
             <CardHeader title="Site" subtitle="Status de policy e drift no escopo" />
             <div className="space-y-2 px-5 pb-5 text-sm">
-              <p className="text-slate-300">Cliente: {toText(diagnosticsQuery.data.site?.clientName)}</p>
-              <p className="text-slate-300">Site: {toText(diagnosticsQuery.data.site?.siteName)}</p>
-              <p className="text-slate-300">Desired: {toText(diagnosticsQuery.data.site?.desiredProfile)}</p>
-              <p className="text-slate-300">Applied: {toText(diagnosticsQuery.data.site?.appliedProfile)}</p>
-              <p className="text-slate-300">MeshId: {toText(diagnosticsQuery.data.site?.meshId)}</p>
-              <p className="text-slate-300">Group: {toText(diagnosticsQuery.data.site?.groupName)}</p>
+              <p className="text-muted-foreground">Cliente: {toText(diagnosticsQuery.data.site?.clientName)}</p>
+              <p className="text-muted-foreground">Site: {toText(diagnosticsQuery.data.site?.siteName)}</p>
+              <p className="text-muted-foreground">Desired: {toText(diagnosticsQuery.data.site?.desiredProfile)}</p>
+              <p className="text-muted-foreground">Applied: {toText(diagnosticsQuery.data.site?.appliedProfile)}</p>
+              <p className="text-muted-foreground">MeshId: {toText(diagnosticsQuery.data.site?.meshId)}</p>
+              <p className="text-muted-foreground">Group: {toText(diagnosticsQuery.data.site?.groupName)}</p>
               <div className="flex items-center justify-between">
-                <span className="text-slate-400">Drift</span>
+                <span className="text-muted">Drift</span>
                 <Badge color={toBool(diagnosticsQuery.data.site?.hasDrift) ? "warning" : "success"}>
                   {toBool(diagnosticsQuery.data.site?.hasDrift) ? "Com drift" : "Sincronizado"}
                 </Badge>
               </div>
               <div>
-                <p className="text-slate-400">Drift reasons</p>
-                <div className="mt-1 space-y-1 text-slate-300">
+                <p className="text-muted">Drift reasons</p>
+                <div className="mt-1 space-y-1 text-muted-foreground">
                   {toArray(diagnosticsQuery.data.site?.driftReasons).length === 0 && (
                     <p>Sem divergências reportadas.</p>
                   )}
@@ -223,10 +223,10 @@ export default function MeshCentralDiagnosticsPage() {
           <Card>
             <CardHeader title="Agent" subtitle="Vínculo de node persistido" />
             <div className="space-y-2 px-5 pb-5 text-sm">
-              <p className="text-slate-300">Agent ID: {toText(diagnosticsQuery.data.agent?.id)}</p>
-              <p className="text-slate-300">Hostname: {toText(diagnosticsQuery.data.agent?.hostname)}</p>
-              <p className="text-slate-300">Site ID: {toText(diagnosticsQuery.data.agent?.siteId)}</p>
-              <p className="text-slate-300">Node ID: {toText(diagnosticsQuery.data.agent?.meshCentralNodeId)}</p>
+              <p className="text-muted-foreground">Agent ID: {toText(diagnosticsQuery.data.agent?.id)}</p>
+              <p className="text-muted-foreground">Hostname: {toText(diagnosticsQuery.data.agent?.hostname)}</p>
+              <p className="text-muted-foreground">Site ID: {toText(diagnosticsQuery.data.agent?.siteId)}</p>
+              <p className="text-muted-foreground">Node ID: {toText(diagnosticsQuery.data.agent?.meshCentralNodeId)}</p>
             </div>
           </Card>
         </div>

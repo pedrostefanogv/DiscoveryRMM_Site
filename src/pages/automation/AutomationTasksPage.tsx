@@ -475,8 +475,8 @@ export default function AutomationTasksPage() {
         header: "Nome",
         render: (item) => (
           <div>
-            <p className="font-medium text-white">{item.name}</p>
-            <p className="text-xs text-slate-500">{item.description || "Sem descri��o"}</p>
+            <p className="font-medium text-foreground">{item.name}</p>
+            <p className="text-xs text-muted">{item.description || "Sem descri��o"}</p>
           </div>
         ),
       },
@@ -490,8 +490,8 @@ export default function AutomationTasksPage() {
         header: "Escopo",
         render: (item) => (
           <div>
-            <p className="text-sm text-slate-200">{scopeLabel(item.scopeType)}</p>
-            <p className="text-xs text-slate-500 font-mono">{item.scopeId || "-"}</p>
+            <p className="text-sm text-foreground">{scopeLabel(item.scopeType)}</p>
+            <p className="text-xs text-muted font-mono">{item.scopeId || "-"}</p>
           </div>
         ),
       },
@@ -852,8 +852,8 @@ export default function AutomationTasksPage() {
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-white">Tarefas de Automa��o</h1>
-          <p className="text-sm text-slate-400">Regras operacionais por escopo.</p>
+          <h1 className="text-2xl font-bold text-foreground">Tarefas de Automa��o</h1>
+          <p className="text-sm text-muted">Regras operacionais por escopo.</p>
         </div>
         <Button
           onClick={() => {
@@ -875,7 +875,7 @@ export default function AutomationTasksPage() {
       <Card>
         <CardHeader title="Filtros" subtitle="Busca r�pida, escopo e filtros avan�ados" />
         <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-          <p className="text-xs text-slate-500">Use o modo simples para a maioria dos casos e abra o avan�ado para filtros combinados.</p>
+          <p className="text-xs text-muted">Use o modo simples para a maioria dos casos e abra o avan�ado para filtros combinados.</p>
           <Button
             type="button"
             size="sm"
@@ -1030,13 +1030,13 @@ export default function AutomationTasksPage() {
         )}
 
         {scopeTypeFilter === String(AppApprovalScopeType.Global) && (
-          <div className="mt-3 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-400">
+          <div className="mt-3 rounded-lg border border-border bg-surface-light px-3 py-2 text-sm text-muted">
             Escopo global n�o exige ScopeId.
           </div>
         )}
 
         {showAdvancedFilters && (
-          <div className="mt-4 space-y-3 rounded-xl border border-white/10 bg-white/5 p-4">
+          <div className="mt-4 space-y-3 rounded-xl border border-border bg-surface-light p-4">
             <div className="grid gap-3 md:grid-cols-4">
               <Select
                 label="Cliente"
@@ -1081,7 +1081,7 @@ export default function AutomationTasksPage() {
               />
             </div>
 
-            <div className="space-y-2 rounded-lg border border-white/10 bg-black/10 p-3">
+            <div className="space-y-2 rounded-lg border border-border bg-black/10 p-3">
               <Input
                 label="Labels"
                 value={filterLabelSearch}
@@ -1108,9 +1108,9 @@ export default function AutomationTasksPage() {
               )}
 
               <div className="max-h-36 overflow-y-auto space-y-1">
-                {knownTags.isLoading && <p className="text-xs text-slate-500">Carregando labels...</p>}
+                {knownTags.isLoading && <p className="text-xs text-muted">Carregando labels...</p>}
                 {!knownTags.isLoading && availableKnownFilterLabels.length === 0 && (
-                  <p className="text-xs text-slate-500">Nenhuma label encontrada.</p>
+                  <p className="text-xs text-muted">Nenhuma label encontrada.</p>
                 )}
                 {!knownTags.isLoading &&
                   availableKnownFilterLabels.map((tag) => {
@@ -1122,7 +1122,7 @@ export default function AutomationTasksPage() {
                         className={`w-full rounded-md border px-2 py-1 text-left text-xs transition-colors ${
                           selected
                             ? "border-primary/40 bg-primary/20 text-primary-100"
-                            : "border-white/10 bg-white/5 text-slate-300 hover:bg-white/10"
+                            : "border-border bg-surface-light text-muted-foreground hover:bg-surface-hover"
                         }`}
                         onClick={() => {
                           if (selected) {
@@ -1303,7 +1303,7 @@ export default function AutomationTasksPage() {
             selectedActionType === AutomationTaskActionType.UpdateOrInstallPackage) && (
             <>
               <div className="space-y-1">
-                <label className="block text-sm font-medium text-slate-300">Nome do pacote</label>
+                <label className="block text-sm font-medium text-muted-foreground">Nome do pacote</label>
                 <div className="flex gap-2">
                   <Input
                     value={selectedPackageLabel}
@@ -1321,7 +1321,7 @@ export default function AutomationTasksPage() {
                     <Search className="h-4 w-4" />
                   </Button>
                 </div>
-                <p className="text-xs text-slate-500">PackageId: {form.packageId || "-"}</p>
+                <p className="text-xs text-muted">PackageId: {form.packageId || "-"}</p>
               </div>
             </>
           )}
@@ -1349,9 +1349,9 @@ export default function AutomationTasksPage() {
 
         <div className="mt-3 grid gap-3 md:grid-cols-2">
           <div className="space-y-2 md:col-span-2">
-            <p className="text-sm font-medium text-slate-300">Tags (IncludeTags)</p>
+            <p className="text-sm font-medium text-muted-foreground">Tags (IncludeTags)</p>
             <div className="space-y-1">
-              <label className="block text-sm font-medium text-slate-300">Selecionar tags</label>
+              <label className="block text-sm font-medium text-muted-foreground">Selecionar tags</label>
               <div className="flex gap-2">
                 <Input
                   value={form.includeTags.join(", ")}
@@ -1371,13 +1371,13 @@ export default function AutomationTasksPage() {
               </div>
             </div>
             {!!form.includeTags.length && (
-              <div className="flex flex-wrap gap-2 rounded-lg border border-white/10 bg-slate-900/40 p-2">
+              <div className="flex flex-wrap gap-2 rounded-lg border border-border bg-surface/40 p-2">
                 {form.includeTags.map((tag) => (
-                  <span key={tag} className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-slate-200">
+                  <span key={tag} className="inline-flex items-center gap-2 rounded-full border border-border bg-surface-light px-3 py-1 text-xs text-foreground">
                     {tag}
                     <button
                       type="button"
-                      className="text-slate-400 hover:text-white"
+                      className="text-muted hover:text-foreground"
                       onClick={() => removeIncludeTag(tag)}
                       aria-label={`Remover tag ${tag}`}
                     >
@@ -1480,8 +1480,8 @@ export default function AutomationTasksPage() {
                 onClick={() => setPackagePickerView("list")}
                 className={`rounded p-1.5 transition-colors ${
                   packagePickerView === "list"
-                    ? "bg-primary-600 text-white"
-                    : "text-slate-400 hover:text-white hover:bg-white/10"
+                    ? "bg-primary-600 text-foreground"
+                    : "text-muted hover:text-foreground hover:bg-surface-hover"
                 }`}
                 title="Visualiza��o em lista"
               >
@@ -1492,8 +1492,8 @@ export default function AutomationTasksPage() {
                 onClick={() => setPackagePickerView("card")}
                 className={`rounded p-1.5 transition-colors ${
                   packagePickerView === "card"
-                    ? "bg-primary-600 text-white"
-                    : "text-slate-400 hover:text-white hover:bg-white/10"
+                    ? "bg-primary-600 text-foreground"
+                    : "text-muted hover:text-foreground hover:bg-surface-hover"
                 }`}
                 title="Visualiza��o em cards"
               >
@@ -1512,7 +1512,7 @@ export default function AutomationTasksPage() {
                   {(packageCatalog.data?.items ?? []).map((pkg) => (
                     <div
                       key={pkg.packageId}
-                      className="flex items-center gap-3 rounded-lg border border-white/10 bg-white/5 px-3 py-2 hover:bg-white/10 transition-colors cursor-pointer"
+                      className="flex items-center gap-3 rounded-lg border border-border bg-surface-light px-3 py-2 hover:bg-surface-hover transition-colors cursor-pointer"
                       onClick={() => {
                         setForm((prev) => ({ ...prev, packageId: pkg.packageId }));
                         setPackagePickerOpen(false);
@@ -1520,22 +1520,22 @@ export default function AutomationTasksPage() {
                     >
                       <div className="shrink-0">
                         {pkg.icon ? (
-                          <img src={pkg.icon} alt="" className="h-8 w-8 rounded object-contain bg-white/5" />
+                          <img src={pkg.icon} alt="" className="h-8 w-8 rounded object-contain bg-surface-light" />
                         ) : (
-                          <div className="h-8 w-8 rounded bg-slate-700 flex items-center justify-center text-xs font-bold text-slate-300">
+                          <div className="h-8 w-8 rounded bg-slate-700 flex items-center justify-center text-xs font-bold text-muted-foreground">
                             {(pkg.name || pkg.packageId).charAt(0).toUpperCase()}
                           </div>
                         )}
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="text-sm text-white font-medium truncate">
+                        <p className="text-sm text-foreground font-medium truncate">
                           <HighlightText text={pkg.name || pkg.packageId} highlight={packageSearchDebounced} />
                         </p>
-                        <p className="font-mono text-xs text-slate-400 truncate">
+                        <p className="font-mono text-xs text-muted truncate">
                           <HighlightText text={pkg.packageId} highlight={packageSearchDebounced} />
                         </p>
                       </div>
-                      <p className="text-xs text-slate-500 shrink-0 max-w-[120px] truncate">
+                      <p className="text-xs text-muted shrink-0 max-w-[120px] truncate">
                         {pkg.publisher || ""}
                       </p>
                       <Button type="button" size="sm" onClick={(e) => { e.stopPropagation(); setForm((prev) => ({ ...prev, packageId: pkg.packageId })); setPackagePickerOpen(false); }}>
@@ -1549,7 +1549,7 @@ export default function AutomationTasksPage() {
                   {(packageCatalog.data?.items ?? []).map((pkg) => (
                     <div
                       key={pkg.packageId}
-                      className="flex flex-col gap-2 rounded-lg border border-white/10 bg-white/5 p-3 hover:bg-white/10 transition-colors cursor-pointer"
+                      className="flex flex-col gap-2 rounded-lg border border-border bg-surface-light p-3 hover:bg-surface-hover transition-colors cursor-pointer"
                       onClick={() => {
                         setForm((prev) => ({ ...prev, packageId: pkg.packageId }));
                         setPackagePickerOpen(false);
@@ -1557,21 +1557,21 @@ export default function AutomationTasksPage() {
                     >
                       <div className="flex items-center gap-2">
                         {pkg.icon ? (
-                          <img src={pkg.icon} alt="" className="h-9 w-9 rounded object-contain bg-white/5 shrink-0" />
+                          <img src={pkg.icon} alt="" className="h-9 w-9 rounded object-contain bg-surface-light shrink-0" />
                         ) : (
-                          <div className="h-9 w-9 rounded bg-slate-700 flex items-center justify-center text-sm font-bold text-slate-300 shrink-0">
+                          <div className="h-9 w-9 rounded bg-slate-700 flex items-center justify-center text-sm font-bold text-muted-foreground shrink-0">
                             {(pkg.name || pkg.packageId).charAt(0).toUpperCase()}
                           </div>
                         )}
-                        <p className="text-sm text-white font-medium leading-tight line-clamp-2">
+                        <p className="text-sm text-foreground font-medium leading-tight line-clamp-2">
                           <HighlightText text={pkg.name || pkg.packageId} highlight={packageSearchDebounced} />
                         </p>
                       </div>
-                      <p className="font-mono text-xs text-slate-400 truncate">
+                      <p className="font-mono text-xs text-muted truncate">
                         <HighlightText text={pkg.packageId} highlight={packageSearchDebounced} />
                       </p>
                       {pkg.publisher && (
-                        <p className="text-xs text-slate-500 truncate">{pkg.publisher}</p>
+                        <p className="text-xs text-muted truncate">{pkg.publisher}</p>
                       )}
                       <Button
                         type="button"
@@ -1586,7 +1586,7 @@ export default function AutomationTasksPage() {
                 </div>
               )}
               {!packageCatalog.data?.items?.length && (
-                <p className="text-sm text-slate-400 py-4 text-center">Nenhum pacote encontrado.</p>
+                <p className="text-sm text-muted py-4 text-center">Nenhum pacote encontrado.</p>
               )}
             </div>
           )}
@@ -1626,9 +1626,9 @@ export default function AutomationTasksPage() {
                   return (
                     <div
                       key={tag}
-                      className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/5 p-3"
+                      className="flex items-center justify-between gap-3 rounded-lg border border-border bg-surface-light p-3"
                     >
-                      <p className="text-sm text-slate-200">{tag}</p>
+                      <p className="text-sm text-foreground">{tag}</p>
                       <Button
                         type="button"
                         size="sm"
@@ -1656,7 +1656,7 @@ export default function AutomationTasksPage() {
                   ? true
                   : tag.toLowerCase().includes(tagSearch.trim().toLowerCase()),
               ).length === 0 && (
-                <p className="text-sm text-slate-400">Nenhuma tag encontrada.</p>
+                <p className="text-sm text-muted">Nenhuma tag encontrada.</p>
               )}
           </div>
 
@@ -1680,8 +1680,8 @@ export default function AutomationTasksPage() {
               {/* Cabe�alho */}
               <div className="flex items-start gap-3">
                 <div className="flex-1 space-y-1">
-                  <h3 className="text-lg font-semibold text-white">{d.name}</h3>
-                  {d.description && <p className="text-sm text-slate-400">{d.description}</p>}
+                  <h3 className="text-lg font-semibold text-foreground">{d.name}</h3>
+                  {d.description && <p className="text-sm text-muted">{d.description}</p>}
                 </div>
                 <div className="flex gap-2 shrink-0">
                   <Badge color={detailIsDeleted ? "danger" : d.isActive ? "success" : "slate"}>
@@ -1693,50 +1693,50 @@ export default function AutomationTasksPage() {
 
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {/* A��o */}
-                <div className="rounded-lg bg-white/5 border border-white/10 p-3">
-                  <p className="text-xs text-slate-500 mb-1">A��o</p>
+                <div className="rounded-lg bg-surface-light border border-border p-3">
+                  <p className="text-xs text-muted mb-1">A��o</p>
                   <Badge color="primary">{actionLabel(d.actionType)}</Badge>
                   {d.installationType !== null && d.installationType !== undefined && (
-                    <p className="text-xs text-slate-400 mt-1">{d.installationType === 0 ? "Winget" : d.installationType === 1 ? "Chocolatey" : "Custom"}</p>
+                    <p className="text-xs text-muted mt-1">{d.installationType === 0 ? "Winget" : d.installationType === 1 ? "Chocolatey" : "Custom"}</p>
                   )}
                   {d.packageId && (
-                    <p className="font-mono text-xs text-slate-300 mt-1 truncate">{d.packageId}</p>
+                    <p className="font-mono text-xs text-muted-foreground mt-1 truncate">{d.packageId}</p>
                   )}
                 </div>
 
                 {/* Escopo */}
-                <div className="rounded-lg bg-white/5 border border-white/10 p-3">
-                  <p className="text-xs text-slate-500 mb-1">Escopo</p>
-                  <p className="text-sm text-white">{scopeLabel(d.scopeType)}</p>
-                  {d.scopeId && <p className="font-mono text-xs text-slate-400 truncate">{d.scopeId}</p>}
+                <div className="rounded-lg bg-surface-light border border-border p-3">
+                  <p className="text-xs text-muted mb-1">Escopo</p>
+                  <p className="text-sm text-foreground">{scopeLabel(d.scopeType)}</p>
+                  {d.scopeId && <p className="font-mono text-xs text-muted truncate">{d.scopeId}</p>}
                 </div>
 
                 {/* Triggers */}
-                <div className="rounded-lg bg-white/5 border border-white/10 p-3">
-                  <p className="text-xs text-slate-500 mb-1">Triggers</p>
+                <div className="rounded-lg bg-surface-light border border-border p-3">
+                  <p className="text-xs text-muted mb-1">Triggers</p>
                   <div className="flex flex-wrap gap-1 mt-1">
                     {d.triggerImmediate && <Badge color="accent">Imediato</Badge>}
                     {d.triggerRecurring && <Badge color="accent">Recorrente</Badge>}
                     {d.triggerOnUserLogin && <Badge color="accent">Login</Badge>}
                     {d.triggerOnAgentCheckIn && <Badge color="accent">Check-in</Badge>}
                   </div>
-                  {d.scheduleCron && <p className="font-mono text-xs text-slate-400 mt-1">{d.scheduleCron}</p>}
+                  {d.scheduleCron && <p className="font-mono text-xs text-muted mt-1">{d.scheduleCron}</p>}
                 </div>
               </div>
 
               {/* Tags */}
               {(d.includeTags?.length > 0 || d.excludeTags?.length > 0) && (
-                <div className="rounded-lg bg-white/5 border border-white/10 p-3">
-                  <p className="text-xs text-slate-500 mb-2">Tags de filtragem</p>
+                <div className="rounded-lg bg-surface-light border border-border p-3">
+                  <p className="text-xs text-muted mb-2">Tags de filtragem</p>
                   {d.includeTags?.length > 0 && (
                     <div className="flex flex-wrap gap-1 mb-1">
-                      <span className="text-xs text-slate-500">Include:</span>
+                      <span className="text-xs text-muted">Include:</span>
                       {d.includeTags.map((t) => <Badge key={t} color="success">{t}</Badge>)}
                     </div>
                   )}
                   {d.excludeTags?.length > 0 && (
                     <div className="flex flex-wrap gap-1">
-                      <span className="text-xs text-slate-500">Exclude:</span>
+                      <span className="text-xs text-muted">Exclude:</span>
                       {d.excludeTags.map((t) => <Badge key={t} color="danger">{t}</Badge>)}
                     </div>
                   )}
@@ -1744,7 +1744,7 @@ export default function AutomationTasksPage() {
               )}
 
               {/* Datas */}
-              <div className="grid grid-cols-2 gap-3 text-xs text-slate-400">
+              <div className="grid grid-cols-2 gap-3 text-xs text-muted">
                 <p>Criado: {new Date(d.createdAt).toLocaleString("pt-BR")}</p>
                 <p>Atualizado: {new Date(d.updatedAt).toLocaleString("pt-BR")}</p>
               </div>
@@ -1831,17 +1831,17 @@ export default function AutomationTasksPage() {
         {!auditQuery.isLoading && !auditQuery.isError && (
           <div className="space-y-3">
             {(auditQuery.data ?? []).map((entry) => (
-              <div key={entry.id} className="rounded-lg border border-white/10 bg-white/5 p-3">
+              <div key={entry.id} className="rounded-lg border border-border bg-surface-light p-3">
                 <div className="mb-2 flex items-center justify-between gap-2">
                   <Badge color="accent">{String(entry.changeType)}</Badge>
-                  <p className="text-xs text-slate-500">{new Date(entry.changedAt).toLocaleString("pt-BR")}</p>
+                  <p className="text-xs text-muted">{new Date(entry.changedAt).toLocaleString("pt-BR")}</p>
                 </div>
-                <p className="text-sm text-slate-300">Motivo: {entry.reason || "-"}</p>
-                <p className="text-xs text-slate-500">Correlation: {entry.correlationId || "-"}</p>
+                <p className="text-sm text-muted-foreground">Motivo: {entry.reason || "-"}</p>
+                <p className="text-xs text-muted">Correlation: {entry.correlationId || "-"}</p>
               </div>
             ))}
             {!auditQuery.data?.length && (
-              <p className="text-sm text-slate-400">Nenhum evento de auditoria encontrado.</p>
+              <p className="text-sm text-muted">Nenhum evento de auditoria encontrado.</p>
             )}
           </div>
         )}
@@ -1854,9 +1854,9 @@ export default function AutomationTasksPage() {
         maxWidth="max-w-lg"
       >
         <div className="space-y-4">
-          <div className="rounded-lg border border-danger/30 bg-danger/10 p-3 text-sm text-slate-200">
-            <p>Voc� est� prestes a excluir a tarefa <span className="font-semibold text-white">{deleteTask?.name}</span>.</p>
-            <p className="mt-1 text-slate-400">Digite <span className="font-semibold text-white">yes</span> para confirmar.</p>
+          <div className="rounded-lg border border-danger/30 bg-danger/10 p-3 text-sm text-foreground">
+            <p>Voc� est� prestes a excluir a tarefa <span className="font-semibold text-foreground">{deleteTask?.name}</span>.</p>
+            <p className="mt-1 text-muted">Digite <span className="font-semibold text-foreground">yes</span> para confirmar.</p>
           </div>
 
           <Input
@@ -1891,9 +1891,9 @@ export default function AutomationTasksPage() {
         maxWidth="max-w-lg"
       >
         <div className="space-y-4">
-          <div className="rounded-lg border border-primary/30 bg-primary/10 p-3 text-sm text-slate-200">
-            <p>Voc� est� prestes a reativar a tarefa <span className="font-semibold text-white">{restoreTask?.name}</span>.</p>
-            <p className="mt-1 text-slate-400">Digite <span className="font-semibold text-white">yes</span> para confirmar.</p>
+          <div className="rounded-lg border border-primary/30 bg-primary/10 p-3 text-sm text-foreground">
+            <p>Voc� est� prestes a reativar a tarefa <span className="font-semibold text-foreground">{restoreTask?.name}</span>.</p>
+            <p className="mt-1 text-muted">Digite <span className="font-semibold text-foreground">yes</span> para confirmar.</p>
           </div>
 
           <Input

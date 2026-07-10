@@ -337,12 +337,12 @@ export default function LogViewer() {
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <p className="text-xs uppercase tracking-wide text-primary/90">Visão atual</p>
-            <p className="mt-2 text-3xl font-semibold text-white">{summary.data ? summary.data.total : allLogs.length}</p>
-            <p className="mt-1 text-sm text-slate-300">
+            <p className="mt-2 text-3xl font-semibold text-foreground">{summary.data ? summary.data.total : allLogs.length}</p>
+            <p className="mt-1 text-sm text-muted-foreground">
               {summary.data ? 'eventos no filtro aplicado' : 'eventos carregados no momento'}
             </p>
           </div>
-          <div className="flex flex-col items-start gap-2 text-xs text-slate-400 sm:items-end">
+          <div className="flex flex-col items-start gap-2 text-xs text-muted sm:items-end">
             <Badge color={logs.isFetching || summary.isFetching ? 'warning' : 'accent'}>
               {logs.isFetching || summary.isFetching ? 'Atualizando dados...' : 'Dados sincronizados'}
             </Badge>
@@ -423,9 +423,9 @@ export default function LogViewer() {
           />
         </div>
 
-        <div className="mt-4 rounded-xl border border-white/10 bg-white/5 p-3">
+        <div className="mt-4 rounded-xl border border-border bg-surface-light p-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="text-xs uppercase tracking-wide text-slate-400">Atalhos operacionais</div>
+            <div className="text-xs uppercase tracking-wide text-muted">Atalhos operacionais</div>
             <Button variant="ghost" size="sm" onClick={() => applyPreset(initialFilters)}>
               Visão padrão
             </Button>
@@ -436,7 +436,7 @@ export default function LogViewer() {
                 key={preset.id}
                 type="button"
                 onClick={() => applyPreset(preset.filters)}
-                className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-slate-900/50 px-3 py-1.5 text-xs text-slate-300 transition-colors hover:bg-slate-800/80"
+                className="inline-flex items-center gap-2 rounded-full border border-border bg-surface/50 px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-surface-light/80"
               >
                 <Badge color={preset.tone}>{preset.label}</Badge>
                 <span>Aplicar</span>
@@ -445,17 +445,17 @@ export default function LogViewer() {
           </div>
         </div>
 
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-4">
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
           <button
             type="button"
-            className="inline-flex items-center gap-2 text-sm text-slate-300 hover:text-white"
+            className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
             onClick={() => setShowAdvancedFilters(current => !current)}
             aria-expanded={showAdvancedFilters ? 'true' : 'false'}
           >
             {showAdvancedFilters ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
             <span>{showAdvancedFilters ? 'Ocultar filtros avançados' : 'Mostrar filtros avançados'}</span>
           </button>
-          <span className="text-xs text-slate-500">
+          <span className="text-xs text-muted">
             {advancedActiveCount > 0 ? `${advancedActiveCount} filtros avançados ativos` : 'Nenhum filtro avançado ativo'}
           </span>
         </div>
@@ -537,17 +537,17 @@ export default function LogViewer() {
 
       {activeFilterChips.length > 0 ? (
         <Card>
-          <div className="mb-3 text-xs uppercase tracking-wide text-slate-500">Filtros ativos</div>
+          <div className="mb-3 text-xs uppercase tracking-wide text-muted">Filtros ativos</div>
           <div className="flex flex-wrap gap-2">
             {activeFilterChips.map(chip => (
               <button
                 key={`${chip.key}-${chip.label}`}
                 type="button"
                 onClick={() => clearAppliedFilter(chip.key)}
-                className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-slate-300 hover:bg-white/10"
+                className="inline-flex items-center gap-2 rounded-full border border-border bg-surface-light px-3 py-1 text-xs text-muted-foreground hover:bg-surface-hover"
               >
                 <span>{chip.label}</span>
-                <span className="text-slate-500">x</span>
+                <span className="text-muted">x</span>
               </button>
             ))}
           </div>
@@ -558,8 +558,8 @@ export default function LogViewer() {
         <Card>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h3 className="text-lg font-semibold text-white">Análise detalhada</h3>
-              <p className="text-sm text-slate-400">Distribuições por nível, fonte, tipo e escopo operacional.</p>
+              <h3 className="text-lg font-semibold text-foreground">Análise detalhada</h3>
+              <p className="text-sm text-muted">Distribuições por nível, fonte, tipo e escopo operacional.</p>
             </div>
             <Button
               variant="ghost"
@@ -584,7 +584,7 @@ export default function LogViewer() {
               </div>
             </div>
           ) : (
-            <div className="mt-4 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-400">
+            <div className="mt-4 rounded-xl border border-border bg-surface-light px-4 py-3 text-sm text-muted">
               Abra os detalhes somente quando precisar analisar distribuição e concentração de eventos.
             </div>
           )}
@@ -601,15 +601,15 @@ export default function LogViewer() {
         <ErrorDisplay onRetry={() => logs.refetch()} />
       ) : (
         <Card padding={false}>
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 px-4 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3">
             <div className="flex flex-wrap items-center gap-2">
               <Badge color="slate">{summary.data ? `${summary.data.total} no filtro` : `${allLogs.length} carregados`}</Badge>
-              <span className="text-xs text-slate-500">
+              <span className="text-xs text-muted">
                 {firstPage?.nextCursor ? 'Cursor disponível para próxima página' : 'Fim da paginação'}
               </span>
             </div>
             <div className="flex items-center gap-3">
-              <span className="text-xs text-slate-500">
+              <span className="text-xs text-muted">
                 {logs.isFetchingNextPage ? 'Carregando próxima página...' : 'Lista pronta para análise'}
               </span>
               <Button variant="ghost" size="sm" onClick={() => setCompactMode(current => !current)}>
@@ -620,7 +620,7 @@ export default function LogViewer() {
 
           <div className="max-h-[70vh] overflow-y-auto">
             {allLogs.length === 0 ? (
-              <div className="flex h-40 items-center justify-center text-sm text-slate-500">
+              <div className="flex h-40 items-center justify-center text-sm text-muted">
                 Nenhum log encontrado
               </div>
             ) : (
@@ -639,8 +639,8 @@ export default function LogViewer() {
             )}
           </div>
 
-          <div className="flex items-center justify-between border-t border-white/10 px-4 py-3">
-            <div className="text-sm text-slate-400">
+          <div className="flex items-center justify-between border-t border-border px-4 py-3">
+            <div className="text-sm text-muted">
               {firstPage?.nextCursor ? 'Cursor disponível para próxima página' : 'Fim da paginação'}
             </div>
             <Button
@@ -705,29 +705,29 @@ function LogRow({
   }
 
   return (
-    <div className={`group flex items-start gap-3 border-l-2 ${compact ? 'px-3 py-2' : 'px-4 py-3'} transition-colors hover:bg-white/5 ${toneClass}`}>
+    <div className={`group flex items-start gap-3 border-l-2 ${compact ? 'px-3 py-2' : 'px-4 py-3'} transition-colors hover:bg-surface-light ${toneClass}`}>
       <LogIcon level={log.level} />
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
           <Badge color={lvl.color}>{lvl.label}</Badge>
           <Badge color="slate">{sourceLabels[log.source] ?? 'N/A'}</Badge>
           <Badge color="slate">{typeLabels[log.type] ?? 'N/A'}</Badge>
-          <span className="text-xs text-slate-500">
+          <span className="text-xs text-muted">
             {new Date(log.createdAt).toLocaleString('pt-BR')}
           </span>
         </div>
-        <p className={`${compact ? 'mt-0.5' : 'mt-1'} text-sm font-medium text-slate-100`}>{log.message}</p>
-        {scopeLabel && !compact ? <p className="mt-1 text-xs text-slate-400">{scopeLabel}</p> : null}
+        <p className={`${compact ? 'mt-0.5' : 'mt-1'} text-sm font-medium text-foreground`}>{log.message}</p>
+        {scopeLabel && !compact ? <p className="mt-1 text-xs text-muted">{scopeLabel}</p> : null}
 
         {(traceId || correlationId || requestPath || statusCode !== null || queryString) ? (
-          <div className="mt-2 flex flex-wrap gap-2 text-xs text-slate-400">
-            {statusCode !== null ? <span className="rounded-full border border-white/10 px-2 py-1">HTTP {statusCode}</span> : null}
-            {requestPath ? <span className="rounded-full border border-white/10 px-2 py-1">{requestPath}</span> : null}
+          <div className="mt-2 flex flex-wrap gap-2 text-xs text-muted">
+            {statusCode !== null ? <span className="rounded-full border border-border px-2 py-1">HTTP {statusCode}</span> : null}
+            {requestPath ? <span className="rounded-full border border-border px-2 py-1">{requestPath}</span> : null}
             {traceId ? (
               <button
                 type="button"
                 onClick={() => copyField('traceId', traceId)}
-                className="inline-flex items-center gap-1 rounded-full border border-white/10 px-2 py-1 transition-colors hover:bg-white/10"
+                className="inline-flex items-center gap-1 rounded-full border border-border px-2 py-1 transition-colors hover:bg-surface-hover"
               >
                 <span>Trace: {traceId}</span>
                 {copiedField === 'traceId' ? <Check className="h-3.5 w-3.5 text-success" /> : <Clipboard className="h-3.5 w-3.5" />}
@@ -737,13 +737,13 @@ function LogRow({
               <button
                 type="button"
                 onClick={() => copyField('correlationId', correlationId)}
-                className="inline-flex items-center gap-1 rounded-full border border-white/10 px-2 py-1 transition-colors hover:bg-white/10"
+                className="inline-flex items-center gap-1 rounded-full border border-border px-2 py-1 transition-colors hover:bg-surface-hover"
               >
                 <span>Corr: {correlationId}</span>
                 {copiedField === 'correlationId' ? <Check className="h-3.5 w-3.5 text-success" /> : <Clipboard className="h-3.5 w-3.5" />}
               </button>
             ) : null}
-            {queryString ? <span className="rounded-full border border-white/10 px-2 py-1">Query: {queryString}</span> : null}
+            {queryString ? <span className="rounded-full border border-border px-2 py-1">Query: {queryString}</span> : null}
           </div>
         ) : null}
 
@@ -751,14 +751,14 @@ function LogRow({
           <div className="mt-2">
             <button
               type="button"
-              className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-slate-200"
+              className="inline-flex items-center gap-1 text-xs text-muted hover:text-foreground"
               onClick={() => setShowData(current => !current)}
             >
               {showData ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
               <span>{showData ? 'Ocultar contexto JSON' : 'Mostrar contexto JSON'}</span>
             </button>
             {showData ? (
-              <pre className="mt-2 max-h-52 overflow-auto rounded-xl border border-white/10 bg-slate-950/60 p-3 text-xs text-slate-300">
+              <pre className="mt-2 max-h-52 overflow-auto rounded-xl border border-border bg-background/60 p-3 text-xs text-muted-foreground">
                 {formattedData}
               </pre>
             ) : null}
@@ -775,8 +775,8 @@ function LogIcon({ level }: { level: LogLevel }) {
     case LogLevel.Fatal: return <Shield className={`${cls} text-danger`} />;
     case LogLevel.Error: return <AlertCircle className={`${cls} text-danger`} />;
     case LogLevel.Warn: return <AlertTriangle className={`${cls} text-warning`} />;
-    case LogLevel.Trace: return <RefreshCw className={`${cls} text-slate-500`} />;
-    case LogLevel.Debug: return <Bug className={`${cls} text-slate-500`} />;
+    case LogLevel.Trace: return <RefreshCw className={`${cls} text-muted`} />;
+    case LogLevel.Debug: return <Bug className={`${cls} text-muted`} />;
     default: return <Info className={`${cls} text-primary`} />;
   }
 }
@@ -787,10 +787,10 @@ function FacetCard({ title, items }: { title: string; items: Array<{ key: string
       <CardHeader title={title} subtitle="Distribuição no filtro atual" />
       <div className="space-y-2">
         {items.length === 0 ? (
-          <div className="text-sm text-slate-500">Sem dados</div>
+          <div className="text-sm text-muted">Sem dados</div>
         ) : items.map(item => (
-          <div key={item.key} className="flex items-center justify-between rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm">
-            <span className="text-slate-200">{item.key}</span>
+          <div key={item.key} className="flex items-center justify-between rounded-xl border border-border bg-surface-light px-3 py-2 text-sm">
+            <span className="text-foreground">{item.key}</span>
             <Badge color="slate">{item.count}</Badge>
           </div>
         ))}
@@ -802,9 +802,9 @@ function FacetCard({ title, items }: { title: string; items: Array<{ key: string
 function StatCard({ title, value, hint }: { title: string; value: string; hint: string }) {
   return (
     <Card>
-      <div className="text-sm text-slate-400">{title}</div>
-      <div className="mt-2 text-3xl font-semibold text-white">{value}</div>
-      <div className="mt-2 text-xs text-slate-500">{hint}</div>
+      <div className="text-sm text-muted">{title}</div>
+      <div className="mt-2 text-3xl font-semibold text-foreground">{value}</div>
+      <div className="mt-2 text-xs text-muted">{hint}</div>
     </Card>
   );
 }

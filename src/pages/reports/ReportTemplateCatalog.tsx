@@ -105,10 +105,10 @@ export function ReportTemplateCatalog() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white">
+          <h1 className="text-2xl font-bold text-foreground">
             📚 Catálogo de Templates Prontos
           </h1>
-          <p className="text-sm text-slate-400">
+          <p className="text-sm text-muted">
             Execute templates built-in imediatamente ou crie novos no fluxo guiado.
           </p>
         </div>
@@ -134,9 +134,9 @@ export function ReportTemplateCatalog() {
           placeholder="🔍 Buscar templates..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="flex-1 min-w-[200px] rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 outline-none focus-visible:border-primary/60"
+          className="flex-1 min-w-[200px] rounded-xl border border-border bg-surface-light px-3 py-2 text-sm text-foreground placeholder-muted outline-none focus-visible:border-primary/60"
         />
-        <div className="flex rounded-lg border border-white/10 bg-white/5 p-0.5">
+        <div className="flex rounded-lg border border-border bg-surface-light p-0.5">
           {[
             ["all", "Todos"],
             ["builtin", "Built-in"],
@@ -146,8 +146,8 @@ export function ReportTemplateCatalog() {
               onClick={() => setFilter(value as "all" | "builtin")}
               className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
                 filter === value
-                  ? "bg-primary text-white"
-                  : "text-slate-400 hover:text-white"
+                  ? "bg-primary text-foreground"
+                  : "text-muted hover:text-foreground"
               }`}
             >
               {label}
@@ -159,7 +159,7 @@ export function ReportTemplateCatalog() {
       {/* Built-in templates */}
       {(filter === "all" || filter === "builtin") && (
         <div>
-          <h2 className="mb-3 text-sm font-semibold text-slate-400">
+          <h2 className="mb-3 text-sm font-semibold text-muted">
             🏗 Templates Prontos
           </h2>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
@@ -176,11 +176,11 @@ export function ReportTemplateCatalog() {
                   // Fallback de compatibilidade para slugs sem mapeamento.
                   navigate(`/reports/templates/new?template=${t.id}`);
                 }}
-                className="rounded-xl border border-white/10 bg-white/5 p-4 text-left transition-all hover:border-primary/30 hover:bg-white/10"
+                className="rounded-xl border border-border bg-surface-light p-4 text-left transition-all hover:border-primary/30 hover:bg-surface-hover"
               >
                 <div className="mb-2 text-2xl">{t.icon}</div>
-                <div className="text-sm font-semibold text-white">{t.name}</div>
-                <div className="mt-1 text-xs text-slate-400">{t.description}</div>
+                <div className="text-sm font-semibold text-foreground">{t.name}</div>
+                <div className="mt-1 text-xs text-muted">{t.description}</div>
                 <div className="mt-2 flex flex-wrap gap-1">
                   {t.datasets.map((ds) => (
                     <span
@@ -195,7 +195,7 @@ export function ReportTemplateCatalog() {
                   <span className="rounded bg-amber-500/10 px-1.5 py-0.5 text-[10px] text-amber-400">
                     Built-in
                   </span>
-                  <span className="text-[10px] text-slate-500">{t.category}</span>
+                  <span className="text-[10px] text-muted">{t.category}</span>
                 </div>
               </button>
             ))}

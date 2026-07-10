@@ -24,7 +24,7 @@ export function Loading({ message = 'Carregando...', variant = 'spinner', size =
           ))}
         </div>
       )}
-      <span className="text-sm text-slate-500">{message}</span>
+      <span className="text-sm text-muted">{message}</span>
     </div>
   );
 }
@@ -45,11 +45,11 @@ export function ErrorDisplay({
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
         </svg>
       </div>
-      <p className="text-sm text-slate-400 max-w-sm text-center">{message}</p>
+      <p className="text-sm text-muted-foreground max-w-sm text-center">{message}</p>
       {onRetry && (
         <button
           onClick={onRetry}
-          className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-slate-300 hover:bg-white/10 hover:text-white transition-colors"
+          className="inline-flex items-center gap-2 rounded-lg border border-border bg-surface-light px-4 py-2 text-sm font-medium text-muted-foreground hover:bg-surface-hover hover:text-foreground transition-colors"
         >
           Tentar novamente
         </button>

@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { memo, type ReactNode } from 'react';
 import type { LucideIcon } from 'lucide-react';
 
 interface StatCardProps {
@@ -18,9 +18,9 @@ const toneMap: Record<NonNullable<StatCardProps['tone']>, { bg: string; icon: st
   warning: { bg: 'bg-warning/15', icon: 'text-warning' },
 };
 
-export function StatCard({ icon: Icon, label, value, trend, tone = 'primary', onClick, active = false }: StatCardProps) {
+export const StatCard = memo(function StatCard({ icon: Icon, label, value, trend, tone = 'primary', onClick, active = false }: StatCardProps) {
   const styles = toneMap[tone];
-  const baseClassName = 'glass-card flex items-center gap-4 rounded-xl border border-white/5 bg-surface p-5';
+  const baseClassName = 'glass-card flex items-center gap-4 rounded-xl border border-border bg-surface p-5';
 
   if (onClick) {
     return (
@@ -34,8 +34,8 @@ export function StatCard({ icon: Icon, label, value, trend, tone = 'primary', on
           <Icon className={`h-6 w-6 ${styles.icon}`} />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-xs font-medium uppercase tracking-wider text-slate-500">{label}</p>
-          <p className="text-2xl font-bold text-white tabular-nums">{value}</p>
+          <p className="text-xs font-medium uppercase tracking-wider text-muted">{label}</p>
+          <p className="text-2xl font-bold text-foreground tabular-nums">{value}</p>
         </div>
         {trend && <div className="text-sm">{trend}</div>}
       </button>
@@ -44,14 +44,14 @@ export function StatCard({ icon: Icon, label, value, trend, tone = 'primary', on
 
   return (
     <div className={baseClassName}>
-      <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${styles.bg} ring-1 ring-white/5`}>
+      <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${styles.bg} ring-1 ring-border`}>
         <Icon className={`h-6 w-6 ${styles.icon}`} />
       </div>
       <div className="min-w-0 flex-1">
-        <p className="text-xs font-medium uppercase tracking-wider text-slate-500">{label}</p>
-        <p className="text-2xl font-bold text-white tabular-nums">{value}</p>
+        <p className="text-xs font-medium uppercase tracking-wider text-muted">{label}</p>
+        <p className="text-2xl font-bold text-foreground tabular-nums">{value}</p>
       </div>
       {trend && <div className="text-sm">{trend}</div>}
     </div>
   );
-}
+});

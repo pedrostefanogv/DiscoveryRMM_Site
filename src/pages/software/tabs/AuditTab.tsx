@@ -78,23 +78,23 @@ export function AuditTab() {
       </Card>
 
       <Card padding={false}>
-        <div className="border-b border-white/5 px-5 py-4 flex items-center justify-between">
-          <span className="text-sm font-medium text-white">{query.data ? `${query.data.returnedItems} evento(s)` : 'Histórico de auditoria'}</span>
+        <div className="border-b border-border px-5 py-4 flex items-center justify-between">
+          <span className="text-sm font-medium text-foreground">{query.data ? `${query.data.returnedItems} evento(s)` : 'Histórico de auditoria'}</span>
           <div className="flex items-center gap-2">
             <Button variant="ghost" size="sm" onClick={auditPag.goToPrev} disabled={auditPag.page <= 1}><ChevronLeft className="h-4 w-4" /></Button>
-            <span className="text-xs text-slate-400">Pág. {auditPag.page}</span>
+            <span className="text-xs text-muted">Pág. {auditPag.page}</span>
             <Button variant="ghost" size="sm" onClick={() => auditPag.goToNext(query.data?.nextCursor)} disabled={!query.data?.hasMore}><ChevronRight className="h-4 w-4" /></Button>
           </div>
         </div>
         {query.isLoading && <Loading />}
         {query.isError && <ErrorDisplay message="Erro ao carregar auditoria." onRetry={() => query.refetch()} />}
         {query.data && query.data.items.length === 0 && (
-          <div className="flex flex-col items-center py-16 text-slate-500"><ClipboardList className="mb-3 h-10 w-10 opacity-30" /><p className="text-sm">Nenhum evento encontrado.</p></div>
+          <div className="flex flex-col items-center py-16 text-muted"><ClipboardList className="mb-3 h-10 w-10 opacity-30" /><p className="text-sm">Nenhum evento encontrado.</p></div>
         )}
         {query.data && query.data.items.length > 0 && (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead><tr className="border-b border-white/5 text-xs text-slate-400">
+              <thead><tr className="border-b border-border text-xs text-muted">
                 <th className="px-5 py-2 text-left font-medium">Data</th><th className="px-5 py-2 text-left font-medium">Pacote</th>
                 <th className="px-5 py-2 text-left font-medium">Alteração</th><th className="px-5 py-2 text-left font-medium">Ação</th>
                 <th className="px-5 py-2 text-left font-medium">Escopo</th><th className="px-5 py-2 text-left font-medium">Por</th>
@@ -102,14 +102,14 @@ export function AuditTab() {
               </tr></thead>
               <tbody>
                 {query.data.items.map((entry) => (
-                  <tr key={entry.auditId} className="border-b border-white/5 hover:bg-white/5 transition-colors">
-                    <td className="whitespace-nowrap px-5 py-2 text-xs text-slate-400">{formatDate(entry.changedAt)}</td>
-                    <td className="px-5 py-2"><div className="font-mono text-xs text-slate-300">{entry.packageId}</div></td>
+                  <tr key={entry.auditId} className="border-b border-border hover:bg-surface-light transition-colors">
+                    <td className="whitespace-nowrap px-5 py-2 text-xs text-muted">{formatDate(entry.changedAt)}</td>
+                    <td className="px-5 py-2"><div className="font-mono text-xs text-muted-foreground">{entry.packageId}</div></td>
                     <td className="px-5 py-2"><Badge color={changeTypeBadgeColor[entry.changeType]}>{changeTypeLabel[entry.changeType] ?? String(entry.changeType)}</Badge></td>
                     <td className="px-5 py-2">{entry.action === AppApprovalActionType.Allow ? <Badge color="success">Permitido</Badge> : <Badge color="danger">Negado</Badge>}</td>
-                    <td className="px-5 py-2 text-xs text-slate-400">{scopeLabel(entry.scopeType)}{entry.scopeId && <div className="font-mono text-slate-600 truncate max-w-[6rem]" title={entry.scopeId}>{entry.scopeId.slice(0, 8)}…</div>}</td>
-                    <td className="px-5 py-2 text-xs text-slate-400">{entry.changedBy ?? '—'}</td>
-                    <td className="max-w-[12rem] px-5 py-2 text-xs text-slate-500 truncate">{entry.reason ?? '—'}</td>
+                    <td className="px-5 py-2 text-xs text-muted">{scopeLabel(entry.scopeType)}{entry.scopeId && <div className="font-mono text-muted truncate max-w-[6rem]" title={entry.scopeId}>{entry.scopeId.slice(0, 8)}…</div>}</td>
+                    <td className="px-5 py-2 text-xs text-muted">{entry.changedBy ?? '—'}</td>
+                    <td className="max-w-[12rem] px-5 py-2 text-xs text-muted truncate">{entry.reason ?? '—'}</td>
                   </tr>
                 ))}
               </tbody>

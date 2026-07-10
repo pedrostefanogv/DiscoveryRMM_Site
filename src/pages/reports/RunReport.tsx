@@ -24,8 +24,8 @@ import { downloadReportFile } from "@/api/reports";
 import toast from "react-hot-toast";
 
 const SELECT_CLASSNAME =
-  "w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white focus:border-primary focus:ring-1 focus:ring-primary";
-const SELECT_OPTION_CLASSNAME = "bg-slate-900 text-slate-100";
+  "w-full rounded-lg border border-border bg-surface-light px-3 py-2 text-foreground focus:border-primary focus:ring-1 focus:ring-primary";
+const SELECT_OPTION_CLASSNAME = "bg-surface text-foreground";
 
 function normalizeParamId(value: string | null): string {
   if (!value || value === "undefined" || value === "null") {
@@ -444,7 +444,7 @@ export default function RunReport() {
       case ReportFilterFieldType.Date:
         return (
           <div key={filter.name}>
-            <label className="mb-2 block text-sm font-medium text-slate-300">
+            <label className="mb-2 block text-sm font-medium text-muted-foreground">
               {filter.label}
               {filter.required && <span className="text-red-400 ml-1">*</span>}
             </label>
@@ -455,10 +455,10 @@ export default function RunReport() {
               className="w-full"
             />
             {filter.description && (
-              <p className="mt-1 text-xs text-slate-500">{filter.description}</p>
+              <p className="mt-1 text-xs text-muted">{filter.description}</p>
             )}
             {filter.name === "to" && (
-              <p className="mt-1 text-xs text-slate-500">A data final será considerada até 23:59:59</p>
+              <p className="mt-1 text-xs text-muted">A data final será considerada até 23:59:59</p>
             )}
           </div>
         );
@@ -468,7 +468,7 @@ export default function RunReport() {
         if (filter.name === "clientId") {
           return (
             <div key={filter.name}>
-              <label className="mb-2 block text-sm font-medium text-slate-300">
+              <label className="mb-2 block text-sm font-medium text-muted-foreground">
                 {filter.label}
                 {filter.required && <span className="text-red-400 ml-1">*</span>}
               </label>
@@ -488,7 +488,7 @@ export default function RunReport() {
                 ))}
               </select>
               {filter.description && (
-                <p className="mt-1 text-xs text-slate-500">{filter.description}</p>
+                <p className="mt-1 text-xs text-muted">{filter.description}</p>
               )}
             </div>
           );
@@ -497,7 +497,7 @@ export default function RunReport() {
         if (filter.name === "siteId") {
           return (
             <div key={filter.name}>
-              <label className="mb-2 block text-sm font-medium text-slate-300">
+              <label className="mb-2 block text-sm font-medium text-muted-foreground">
                 {filter.label}
                 {filter.required && <span className="text-red-400 ml-1">*</span>}
               </label>
@@ -518,10 +518,10 @@ export default function RunReport() {
                 ))}
               </select>
               {!dynamicFilters.clientId && (
-                <p className="mt-1 text-xs text-slate-500">Selecione um cliente primeiro</p>
+                <p className="mt-1 text-xs text-muted">Selecione um cliente primeiro</p>
               )}
               {filter.description && (
-                <p className="mt-1 text-xs text-slate-500">{filter.description}</p>
+                <p className="mt-1 text-xs text-muted">{filter.description}</p>
               )}
             </div>
           );
@@ -530,7 +530,7 @@ export default function RunReport() {
         if (filter.name === "agentId") {
           return (
             <div key={filter.name}>
-              <label className="mb-2 block text-sm font-medium text-slate-300">
+              <label className="mb-2 block text-sm font-medium text-muted-foreground">
                 {filter.label}
                 {filter.required && <span className="text-red-400 ml-1">*</span>}
               </label>
@@ -551,10 +551,10 @@ export default function RunReport() {
                 ))}
               </select>
               {!dynamicFilters.siteId && (
-                <p className="mt-1 text-xs text-slate-500">Selecione um site primeiro</p>
+                <p className="mt-1 text-xs text-muted">Selecione um site primeiro</p>
               )}
               {filter.description && (
-                <p className="mt-1 text-xs text-slate-500">{filter.description}</p>
+                <p className="mt-1 text-xs text-muted">{filter.description}</p>
               )}
             </div>
           );
@@ -563,7 +563,7 @@ export default function RunReport() {
         // Campo GUID genérico
         return (
           <div key={filter.name}>
-            <label className="mb-2 block text-sm font-medium text-slate-300">
+            <label className="mb-2 block text-sm font-medium text-muted-foreground">
               {filter.label}
               {filter.required && <span className="text-red-400 ml-1">*</span>}
             </label>
@@ -575,7 +575,7 @@ export default function RunReport() {
               className="w-full"
             />
             {filter.description && (
-              <p className="mt-1 text-xs text-slate-500">{filter.description}</p>
+              <p className="mt-1 text-xs text-muted">{filter.description}</p>
             )}
           </div>
         );
@@ -584,7 +584,7 @@ export default function RunReport() {
       case ReportFilterFieldType.Decimal:
         return (
           <div key={filter.name}>
-            <label className="mb-2 block text-sm font-medium text-slate-300">
+            <label className="mb-2 block text-sm font-medium text-muted-foreground">
               {filter.label}
               {filter.required && <span className="text-red-400 ml-1">*</span>}
             </label>
@@ -595,7 +595,7 @@ export default function RunReport() {
               className="w-full"
             />
             {filter.description && (
-              <p className="mt-1 text-xs text-slate-500">{filter.description}</p>
+              <p className="mt-1 text-xs text-muted">{filter.description}</p>
             )}
           </div>
         );
@@ -604,7 +604,7 @@ export default function RunReport() {
         if (filter.allowedValues && filter.allowedValues.length > 0) {
           return (
             <div key={filter.name}>
-              <label className="mb-2 block text-sm font-medium text-slate-300">
+              <label className="mb-2 block text-sm font-medium text-muted-foreground">
                 {filter.label}
                 {filter.required && <span className="text-red-400 ml-1">*</span>}
               </label>
@@ -624,14 +624,14 @@ export default function RunReport() {
                 ))}
               </select>
               {filter.description && (
-                <p className="mt-1 text-xs text-slate-500">{filter.description}</p>
+                <p className="mt-1 text-xs text-muted">{filter.description}</p>
               )}
             </div>
           );
         }
         return (
           <div key={filter.name}>
-            <label className="mb-2 block text-sm font-medium text-slate-300">
+            <label className="mb-2 block text-sm font-medium text-muted-foreground">
               {filter.label}
               {filter.required && <span className="text-red-400 ml-1">*</span>}
             </label>
@@ -642,7 +642,7 @@ export default function RunReport() {
               className="w-full"
             />
             {filter.description && (
-              <p className="mt-1 text-xs text-slate-500">{filter.description}</p>
+              <p className="mt-1 text-xs text-muted">{filter.description}</p>
             )}
           </div>
         );
@@ -651,7 +651,7 @@ export default function RunReport() {
       case ReportFilterFieldType.TextExact:
         return (
           <div key={filter.name}>
-            <label className="mb-2 block text-sm font-medium text-slate-300">
+            <label className="mb-2 block text-sm font-medium text-muted-foreground">
               {filter.label}
               {filter.required && <span className="text-red-400 ml-1">*</span>}
             </label>
@@ -662,7 +662,7 @@ export default function RunReport() {
               className="w-full"
             />
             {filter.description && (
-              <p className="mt-1 text-xs text-slate-500">{filter.description}</p>
+              <p className="mt-1 text-xs text-muted">{filter.description}</p>
             )}
           </div>
         );
@@ -670,18 +670,18 @@ export default function RunReport() {
       case ReportFilterFieldType.Boolean:
         return (
           <div key={filter.name}>
-            <label className="flex items-center gap-2 text-sm text-slate-300">
+            <label className="flex items-center gap-2 text-sm text-muted-foreground">
               <input
                 type="checkbox"
                 checked={value === true || value === "true"}
                 onChange={(e) => handleDynamicFilterChange(filter.name, e.target.checked)}
-                className="rounded border-white/10 bg-white/5"
+                className="rounded border-border bg-surface-light"
               />
               {filter.label}
               {filter.required && <span className="text-red-400 ml-1">*</span>}
             </label>
             {filter.description && (
-              <p className="mt-1 text-xs text-slate-500">{filter.description}</p>
+              <p className="mt-1 text-xs text-muted">{filter.description}</p>
             )}
           </div>
         );
@@ -696,7 +696,7 @@ export default function RunReport() {
     return (
       <div className="space-y-6">
         <Card>
-          <p className="text-center text-slate-400">Template não encontrado</p>
+          <p className="text-center text-muted">Template não encontrado</p>
         </Card>
       </div>
     );
@@ -731,8 +731,8 @@ export default function RunReport() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white">Executar Relatório</h1>
-          <p className="text-sm text-slate-400">{template.data.name}</p>
+          <h1 className="text-2xl font-bold text-foreground">Executar Relatório</h1>
+          <p className="text-sm text-muted">{template.data.name}</p>
         </div>
         <Button variant="ghost" onClick={() => navigate(-1)}>
           Voltar
@@ -745,8 +745,8 @@ export default function RunReport() {
           <div className="flex gap-3">
             <Info className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
             <div>
-              <h3 className="text-sm font-semibold text-white mb-1">Instruções</h3>
-              <p className="text-sm text-slate-300 whitespace-pre-wrap">
+              <h3 className="text-sm font-semibold text-foreground mb-1">Instruções</h3>
+              <p className="text-sm text-muted-foreground whitespace-pre-wrap">
                 {template.data.instructions}
               </p>
             </div>
@@ -757,7 +757,7 @@ export default function RunReport() {
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-white">
+            <h2 className="text-lg font-semibold text-foreground">
               Configurações
             </h2>
             <Button
@@ -782,7 +782,7 @@ export default function RunReport() {
           <div className="space-y-4">
             {/* Formato */}
             <div>
-              <label className="mb-2 block text-sm font-medium text-slate-300">
+              <label className="mb-2 block text-sm font-medium text-muted-foreground">
                 Formato de Saída
               </label>
               <select
@@ -806,7 +806,7 @@ export default function RunReport() {
             {/* Orientation */}
             {schema.allowedOrientations && schema.allowedOrientations.length > 1 && (
               <div>
-                <label className="mb-2 block text-sm font-medium text-slate-300">
+                <label className="mb-2 block text-sm font-medium text-muted-foreground">
                   Orientação
                 </label>
                 <select
@@ -828,7 +828,7 @@ export default function RunReport() {
             {schema.allowedSortFields && schema.allowedSortFields.length > 0 && (
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="mb-2 block text-sm font-medium text-slate-300">
+                  <label className="mb-2 block text-sm font-medium text-muted-foreground">
                     Ordenar Por
                   </label>
                   <select
@@ -845,7 +845,7 @@ export default function RunReport() {
                   </select>
                 </div>
                 <div>
-                  <label className="mb-2 block text-sm font-medium text-slate-300">
+                  <label className="mb-2 block text-sm font-medium text-muted-foreground">
                     Direção
                   </label>
                   <select
@@ -865,22 +865,22 @@ export default function RunReport() {
             )}
 
             {/* Auto-download */}
-            <label className="flex items-center gap-2 text-sm text-slate-300">
+            <label className="flex items-center gap-2 text-sm text-muted-foreground">
               <input
                 type="checkbox"
                 checked={autoDownload}
                 onChange={(e) => setAutoDownload(e.target.checked)}
-                className="rounded border-white/10 bg-white/5"
+                className="rounded border-border bg-surface-light"
               />
               Baixar automaticamente quando concluir
             </label>
 
-            <hr className="border-white/10" />
+            <hr className="border-border" />
 
             {/* Presets (se disponíveis) */}
             {!advancedMode && enrichedPresets.length > 0 && (
               <div>
-                <label className="mb-2 block text-sm font-medium text-slate-300">
+                <label className="mb-2 block text-sm font-medium text-muted-foreground">
                   Presets Rápidos
                 </label>
                 <div className="flex flex-wrap gap-2">
@@ -902,17 +902,17 @@ export default function RunReport() {
             {/* Filtros Dinâmicos */}
             {advancedMode ? (
               <div>
-                <label className="mb-2 block text-sm font-medium text-slate-300">
+                <label className="mb-2 block text-sm font-medium text-muted-foreground">
                   Filtros (JSON)
                 </label>
                 <textarea
                   value={filtersJson}
                   onChange={(e) => setFiltersJson(e.target.value)}
                   placeholder='{"clientId": "1", "from": "2026-01-01T00:00:00", "to": "2026-03-07T23:59:59"}'
-                  className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 font-mono text-sm text-white focus:border-primary focus:ring-1 focus:ring-primary"
+                  className="w-full rounded-lg border border-border bg-surface-light px-3 py-2 font-mono text-sm text-foreground focus:border-primary focus:ring-1 focus:ring-primary"
                   rows={10}
                 />
-                <p className="mt-1 text-xs text-slate-500">
+                <p className="mt-1 text-xs text-muted">
                   Edite o JSON diretamente. Campos disponíveis: {schema.filters.map(f => f.name).join(", ")}
                 </p>
               </div>
@@ -955,9 +955,9 @@ export default function RunReport() {
         </Card>
 
         <Card>
-          <h2 className="mb-4 text-lg font-semibold text-white">Status da Execução</h2>
+          <h2 className="mb-4 text-lg font-semibold text-foreground">Status da Execução</h2>
           {!executionId ? (
-            <p className="text-center text-slate-400">
+            <p className="text-center text-muted">
               Nenhuma execução iniciada
             </p>
           ) : execution.isLoading ? (
@@ -965,7 +965,7 @@ export default function RunReport() {
           ) : execution.data ? (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <span className="text-sm text-slate-400">Status:</span>
+                <span className="text-sm text-muted">Status:</span>
                 <Badge color={executionStatusConfig?.color ?? "slate"}>
                   {executionStatusConfig?.label ?? "Desconhecido"}
                 </Badge>
@@ -973,8 +973,8 @@ export default function RunReport() {
 
               {execution.data.rowCount != null && (
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-slate-400">Linhas:</span>
-                  <span className="text-white">
+                  <span className="text-sm text-muted">Linhas:</span>
+                  <span className="text-foreground">
                     {execution.data.rowCount.toLocaleString()}
                   </span>
                 </div>
@@ -982,8 +982,8 @@ export default function RunReport() {
 
               {execution.data.resultSizeBytes != null && (
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-slate-400">Tamanho:</span>
-                  <span className="text-white">
+                  <span className="text-sm text-muted">Tamanho:</span>
+                  <span className="text-foreground">
                     {(execution.data.resultSizeBytes / 1024 / 1024).toFixed(2)}{" "}
                     MB
                   </span>
@@ -992,8 +992,8 @@ export default function RunReport() {
 
               {execution.data.executionTimeMs != null && (
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-slate-400">Tempo:</span>
-                  <span className="text-white">
+                  <span className="text-sm text-muted">Tempo:</span>
+                  <span className="text-foreground">
                     {(execution.data.executionTimeMs / 1000).toFixed(2)}s
                   </span>
                 </div>
@@ -1040,8 +1040,8 @@ export default function RunReport() {
 
       {template.data.description && (
         <Card>
-          <h3 className="mb-2 text-sm font-medium text-slate-300">Descrição</h3>
-          <p className="text-sm text-slate-400">{template.data.description}</p>
+          <h3 className="mb-2 text-sm font-medium text-muted-foreground">Descrição</h3>
+          <p className="text-sm text-muted">{template.data.description}</p>
         </Card>
       )}
 
@@ -1049,37 +1049,37 @@ export default function RunReport() {
       {schema && (
         <Card className="border-slate-700">
           <details className="cursor-pointer">
-            <summary className="text-sm font-medium text-slate-400 hover:text-slate-300">
+            <summary className="text-sm font-medium text-muted hover:text-muted-foreground">
               🔧 Informações Técnicas do Schema
             </summary>
             <div className="mt-3 space-y-2 text-xs">
               <div className="grid grid-cols-2 gap-2">
-                <div className="text-slate-500">Scope:</div>
-                <div className="text-slate-300 font-mono">{String(schema.scopeType)}</div>
+                <div className="text-muted">Scope:</div>
+                <div className="text-muted-foreground font-mono">{String(schema.scopeType)}</div>
                 
-                <div className="text-slate-500">Date Mode:</div>
-                <div className="text-slate-300 font-mono">{schema.dateMode || "N/A"}</div>
+                <div className="text-muted">Date Mode:</div>
+                <div className="text-muted-foreground font-mono">{schema.dateMode || "N/A"}</div>
                 
-                <div className="text-slate-500">Filtros Disponíveis:</div>
-                <div className="text-slate-300 font-mono">{schema.filters?.length || 0}</div>
+                <div className="text-muted">Filtros Disponíveis:</div>
+                <div className="text-muted-foreground font-mono">{schema.filters?.length || 0}</div>
                 
-                <div className="text-slate-500">Orientações:</div>
-                <div className="text-slate-300 font-mono">{schema.allowedOrientations?.join(", ") || "N/A"}</div>
+                <div className="text-muted">Orientações:</div>
+                <div className="text-muted-foreground font-mono">{schema.allowedOrientations?.join(", ") || "N/A"}</div>
                 
-                <div className="text-slate-500">Campos Ordenáveis:</div>
-                <div className="text-slate-300 font-mono">{schema.allowedSortFields?.join(", ") || "N/A"}</div>
+                <div className="text-muted">Campos Ordenáveis:</div>
+                <div className="text-muted-foreground font-mono">{schema.allowedSortFields?.join(", ") || "N/A"}</div>
               </div>
               
               {schema.filters && schema.filters.length > 0 && (
                 <div className="mt-3">
-                  <div className="text-slate-500 mb-2">Filtros Configurados:</div>
-                  <div className="bg-slate-900/50 rounded p-2 space-y-1">
+                  <div className="text-muted mb-2">Filtros Configurados:</div>
+                  <div className="bg-surface/50 rounded p-2 space-y-1">
                     {schema.filters.map((f, idx) => (
-                      <div key={idx} className="text-slate-300">
+                      <div key={idx} className="text-muted-foreground">
                         • <span className="text-primary">{f.name}</span>{" "}
-                        <span className="text-slate-500">({f.type})</span>
+                        <span className="text-muted">({f.type})</span>
                         {f.required && <span className="text-red-400 ml-1">*obrigatório</span>}
-                        {f.label && <span className="text-slate-400"> - {f.label}</span>}
+                        {f.label && <span className="text-muted"> - {f.label}</span>}
                       </div>
                     ))}
                   </div>
@@ -1099,8 +1099,8 @@ export default function RunReport() {
                           <span className={hasValue ? "text-green-400" : "text-red-400"}>
                             {hasValue ? "✓" : "✗"}
                           </span>
-                          <span className="text-slate-300 font-mono">{f.name}</span>
-                          <span className="text-slate-500">:</span>
+                          <span className="text-muted-foreground font-mono">{f.name}</span>
+                          <span className="text-muted">:</span>
                           <span className={hasValue ? "text-green-400" : "text-red-400"}>
                             {hasValue ? `"${String(value).slice(0, 30)}${String(value).length > 30 ? "..." : ""}"` : "vazio"}
                           </span>

@@ -187,8 +187,8 @@ export function DepartmentCustomFieldsSection({
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-sm font-semibold text-white">Campos Customizados</h3>
-          <p className="text-xs text-slate-400">
+          <h3 className="text-sm font-semibold text-foreground">Campos Customizados</h3>
+          <p className="text-xs text-muted">
             {fields.length} campo(s) — esses campos aparecerão no formulário de abertura de chamado
           </p>
         </div>
@@ -196,7 +196,7 @@ export function DepartmentCustomFieldsSection({
       </div>
 
       {fields.length === 0 ? (
-        <p className="text-sm text-slate-500 py-4 text-center">
+        <p className="text-sm text-muted py-4 text-center">
           Nenhum campo customizado. Adicione campos para o formulário de chamados.
         </p>
       ) : (
@@ -240,13 +240,13 @@ function FieldRow({
     <>
       <div
         className={`rounded-lg border px-3 py-2.5 ${
-          field.isActive ? "border-white/10 bg-white/5" : "border-white/5 bg-white/[0.02] opacity-60"
+          field.isActive ? "border-border bg-surface-light" : "border-border bg-surface-light opacity-60"
         }`}
       >
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-1.5">
-              <span className="text-sm font-medium text-white">{field.label}</span>
+              <span className="text-sm font-medium text-foreground">{field.label}</span>
               <Badge color="slate">{getCustomFieldDataTypeLabel(field.dataType)}</Badge>
               {field.isRequired && <Badge color="warning">Obrigatório</Badge>}
               {field.isInternal && (
@@ -257,17 +257,17 @@ function FieldRow({
               )}
               {!field.isActive && <Badge color="danger">Inativo</Badge>}
             </div>
-            <p className="mt-0.5 text-xs text-slate-500">
+            <p className="mt-0.5 text-xs text-muted">
               <code className="text-[11px]">{field.name}</code>
               {field.description && ` — ${field.description}`}
             </p>
             {options.length > 0 && (
-              <p className="mt-1 text-xs text-slate-400">
+              <p className="mt-1 text-xs text-muted">
                 Opções: {options.join(", ")}
               </p>
             )}
             {field.validationRegex && (
-              <p className="mt-0.5 text-[11px] text-slate-500">
+              <p className="mt-0.5 text-[11px] text-muted">
                 Regex: <code>{field.validationRegex}</code>
               </p>
             )}
@@ -276,14 +276,14 @@ function FieldRow({
             <button
               onClick={() => setEditOpen(true)}
               aria-label="Editar"
-              className="p-1 text-slate-500 hover:text-white transition-colors"
+              className="p-1 text-muted hover:text-foreground transition-colors"
             >
               <Pencil className="h-4 w-4" />
             </button>
             <button
               onClick={handleDelete}
               aria-label="Remover"
-              className="p-1 text-slate-500 hover:text-danger transition-colors"
+              className="p-1 text-muted hover:text-danger transition-colors"
             >
               <Trash2 className="h-4 w-4" />
             </button>
@@ -547,7 +547,7 @@ function FieldFormModal({
 
         {/* ── Basic Info ── */}
         <div>
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted">
             Informações Básicas
           </p>
           <div className="grid grid-cols-2 gap-3">
@@ -600,35 +600,35 @@ function FieldFormModal({
 
         {/* ── Behaviour ── */}
         <div>
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted">
             Comportamento
           </p>
           <div className="flex flex-wrap gap-4">
-            <label className="flex items-center gap-2 text-sm text-slate-300">
+            <label className="flex items-center gap-2 text-sm text-muted-foreground">
               <input
                 type="checkbox"
                 checked={form.isRequired ?? false}
                 onChange={(e) => setForm((f) => ({ ...f, isRequired: e.target.checked }))}
-                className="rounded bg-white/5 border-white/10"
+                className="rounded bg-surface-light border-border"
               />
               Obrigatório
           </label>
-          <label className="flex items-center gap-2 text-sm text-slate-300">
+          <label className="flex items-center gap-2 text-sm text-muted-foreground">
             <input
               type="checkbox"
               checked={form.isInternal ?? false}
               onChange={(e) => setForm((f) => ({ ...f, isInternal: e.target.checked }))}
-              className="rounded bg-white/5 border-white/10"
+              className="rounded bg-surface-light border-border"
             />
             <Shield className="h-3.5 w-3.5" />
             Campo Interno (visível apenas para atendentes)
           </label>
-          <label className="flex items-center gap-2 text-sm text-slate-300">
+          <label className="flex items-center gap-2 text-sm text-muted-foreground">
             <input
               type="checkbox"
               checked={form.isActive ?? true}
               onChange={(e) => setForm((f) => ({ ...f, isActive: e.target.checked }))}
-              className="rounded bg-white/5 border-white/10"
+              className="rounded bg-surface-light border-border"
             />
             Ativo
           </label>
@@ -638,12 +638,12 @@ function FieldFormModal({
         {/* ── Validation ── */}
         {(showMinMax || showLength || showRegex) && (
           <div>
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted">
               Validação
             </p>
             {showMinMax && (
-              <div className="rounded-lg border border-white/10 bg-white/5 p-3">
-                <p className="text-xs font-medium text-slate-400 mb-2">Faixa de Valor</p>
+              <div className="rounded-lg border border-border bg-surface-light p-3">
+                <p className="text-xs font-medium text-muted mb-2">Faixa de Valor</p>
                 <div className="grid grid-cols-2 gap-3">
                   <Input
                     label="Valor Mínimo"
@@ -672,8 +672,8 @@ function FieldFormModal({
             )}
 
             {showLength && (
-              <div className="rounded-lg border border-white/10 bg-white/5 p-3">
-                <p className="text-xs font-medium text-slate-400 mb-2">Tamanho do Texto</p>
+              <div className="rounded-lg border border-border bg-surface-light p-3">
+                <p className="text-xs font-medium text-muted mb-2">Tamanho do Texto</p>
                 <div className="grid grid-cols-2 gap-3">
                   <Input
                     label="Tamanho Mínimo"
@@ -702,7 +702,7 @@ function FieldFormModal({
             )}
 
             {form.dataType === CustomFieldDataType.Text && form.validationRegex && (
-              <p className="mb-2 text-xs text-slate-500">
+              <p className="mb-2 text-xs text-muted">
                 Regex ativo — os campos de tamanho mínimo/máximo foram ocultados pois o próprio regex já controla o comprimento.
               </p>
             )}
@@ -722,9 +722,9 @@ function FieldFormModal({
                 />
 
                 {form.validationRegex && (
-                  <div className="rounded-lg border border-white/10 bg-slate-950/30 p-3">
-                    <p className="text-xs font-medium text-slate-400">Assistente de Regex</p>
-                    <p className="mt-1 text-xs text-slate-500">
+                  <div className="rounded-lg border border-border bg-background/30 p-3">
+                    <p className="text-xs font-medium text-muted">Assistente de Regex</p>
+                    <p className="mt-1 text-xs text-muted">
                       Escolha um modelo pronto, ajuste se necessario e teste antes de salvar.
                     </p>
 
@@ -766,7 +766,7 @@ function FieldFormModal({
                     </div>
 
                     {selectedPreset && (
-                      <p className="mt-2 text-xs text-slate-400">{selectedPreset.description}</p>
+                      <p className="mt-2 text-xs text-muted">{selectedPreset.description}</p>
                     )}
 
                     <div className="mt-3 grid gap-3 md:grid-cols-2">
@@ -793,7 +793,7 @@ function FieldFormModal({
                     )}
 
                     {!regexEvaluation.error && regexCaseEvaluation.total > 0 && (
-                      <div className="mt-3 space-y-3 rounded-lg border border-white/10 bg-white/5 p-3">
+                      <div className="mt-3 space-y-3 rounded-lg border border-border bg-surface-light p-3">
                         <div className="flex flex-wrap items-center gap-2">
                           <Badge
                             color={
@@ -811,19 +811,19 @@ function FieldFormModal({
 
                         <div className="grid gap-3 md:grid-cols-2">
                           <div>
-                            <p className="mb-2 text-xs font-medium text-slate-400">
+                            <p className="mb-2 text-xs font-medium text-muted">
                               Esperado: passar
                             </p>
                             <div className="space-y-1">
                               {regexCaseEvaluation.valid.length === 0 && (
-                                <p className="text-xs text-slate-500">Sem casos definidos.</p>
+                                <p className="text-xs text-muted">Sem casos definidos.</p>
                               )}
                               {regexCaseEvaluation.valid.map((item) => (
                                 <div
                                   key={`valid-${item.value}`}
-                                  className="flex items-center justify-between gap-2 rounded bg-slate-950/40 px-2 py-1"
+                                  className="flex items-center justify-between gap-2 rounded bg-background/40 px-2 py-1"
                                 >
-                                  <code className="truncate text-xs text-slate-300">{item.value}</code>
+                                  <code className="truncate text-xs text-muted-foreground">{item.value}</code>
                                   <Badge color={item.passed ? "success" : "danger"}>
                                     {item.passed ? "OK" : "Falhou"}
                                   </Badge>
@@ -833,19 +833,19 @@ function FieldFormModal({
                           </div>
 
                           <div>
-                            <p className="mb-2 text-xs font-medium text-slate-400">
+                            <p className="mb-2 text-xs font-medium text-muted">
                               Esperado: falhar
                             </p>
                             <div className="space-y-1">
                               {regexCaseEvaluation.invalid.length === 0 && (
-                                <p className="text-xs text-slate-500">Sem casos definidos.</p>
+                                <p className="text-xs text-muted">Sem casos definidos.</p>
                               )}
                               {regexCaseEvaluation.invalid.map((item) => (
                                 <div
                                   key={`invalid-${item.value}`}
-                                  className="flex items-center justify-between gap-2 rounded bg-slate-950/40 px-2 py-1"
+                                  className="flex items-center justify-between gap-2 rounded bg-background/40 px-2 py-1"
                                 >
-                                  <code className="truncate text-xs text-slate-300">{item.value}</code>
+                                  <code className="truncate text-xs text-muted-foreground">{item.value}</code>
                                   <Badge color={item.passed ? "success" : "danger"}>
                                     {item.passed ? "OK" : "Falhou"}
                                   </Badge>
@@ -858,7 +858,7 @@ function FieldFormModal({
                     )}
 
                     {!regexEvaluation.error && regexCaseEvaluation.total === 0 && (
-                      <p className="mt-2 text-xs text-slate-500">
+                      <p className="mt-2 text-xs text-muted">
                         Adicione casos de teste para validar o comportamento do regex antes de salvar.
                       </p>
                     )}

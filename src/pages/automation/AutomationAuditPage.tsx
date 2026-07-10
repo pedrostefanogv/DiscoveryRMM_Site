@@ -1,4 +1,4 @@
-ï»¿import { useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Badge,
   Card,
@@ -43,8 +43,8 @@ export default function AutomationAuditPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-white">Auditoria de AutomaÃ§Ã£o</h1>
-        <p className="text-sm text-slate-400">
+        <h1 className="text-2xl font-bold text-foreground">Auditoria de Automação</h1>
+        <p className="text-sm text-muted">
           Consulte a trilha funcional de scripts e tarefas com correlation id.
         </p>
       </div>
@@ -85,30 +85,30 @@ export default function AutomationAuditPage() {
 
       <Card>
         <CardHeader title="Eventos" subtitle={entityId ? "Auditoria retornada pela API" : "Selecione uma entidade para consultar"} />
-        {!entityId && <p className="text-sm text-slate-400">Nenhuma entidade selecionada.</p>}
+        {!entityId && <p className="text-sm text-muted">Nenhuma entidade selecionada.</p>}
         {entityId && activeQuery.isLoading && <Loading message="Carregando auditoria..." />}
         {entityId && activeQuery.isError && <ErrorDisplay onRetry={() => activeQuery.refetch()} />}
         {entityId && !activeQuery.isLoading && !activeQuery.isError && (
           <div className="space-y-3">
             {(activeQuery.data ?? []).map((entry) => (
-              <div key={entry.id} className="rounded-lg border border-white/10 bg-white/5 p-3">
+              <div key={entry.id} className="rounded-lg border border-border bg-surface-light p-3">
                 <div className="mb-2 flex items-center justify-between gap-2">
                   <div className="flex gap-2">
                     <Badge color="accent">{String(entry.changeType)}</Badge>
                     <Badge color="slate">{entity === "script" ? "Script" : "Tarefa"}</Badge>
                   </div>
-                  <p className="text-xs text-slate-500">{new Date(entry.changedAt).toLocaleString("pt-BR")}</p>
+                  <p className="text-xs text-muted">{new Date(entry.changedAt).toLocaleString("pt-BR")}</p>
                 </div>
-                <p className="text-sm text-slate-300">Motivo: {entry.reason || "-"}</p>
-                <p className="text-sm text-slate-300">Alterado por: {entry.changedBy || "-"}</p>
-                <p className="text-xs text-slate-500">Correlation: {entry.correlationId || "-"}</p>
-                <details className="mt-2 rounded border border-white/10 bg-slate-950/40 p-2">
-                  <summary className="cursor-pointer text-xs text-slate-400">Snapshot tÃ©cnico</summary>
+                <p className="text-sm text-muted-foreground">Motivo: {entry.reason || "-"}</p>
+                <p className="text-sm text-muted-foreground">Alterado por: {entry.changedBy || "-"}</p>
+                <p className="text-xs text-muted">Correlation: {entry.correlationId || "-"}</p>
+                <details className="mt-2 rounded border border-border bg-background/40 p-2">
+                  <summary className="cursor-pointer text-xs text-muted">Snapshot técnico</summary>
                   <div className="mt-2 grid gap-2 md:grid-cols-2">
-                    <pre className="overflow-auto rounded border border-white/10 bg-slate-900/60 p-2 text-xs text-slate-200">
+                    <pre className="overflow-auto rounded border border-border bg-surface/60 p-2 text-xs text-foreground">
 {entry.oldValueJson || "null"}
                     </pre>
-                    <pre className="overflow-auto rounded border border-white/10 bg-slate-900/60 p-2 text-xs text-slate-200">
+                    <pre className="overflow-auto rounded border border-border bg-surface/60 p-2 text-xs text-foreground">
 {entry.newValueJson || "null"}
                     </pre>
                   </div>
@@ -116,7 +116,7 @@ export default function AutomationAuditPage() {
               </div>
             ))}
             {!activeQuery.data?.length && (
-              <p className="text-sm text-slate-400">Nenhum evento de auditoria encontrado.</p>
+              <p className="text-sm text-muted">Nenhum evento de auditoria encontrado.</p>
             )}
           </div>
         )}

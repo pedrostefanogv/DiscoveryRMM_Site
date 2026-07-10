@@ -1,4 +1,4 @@
-Ôªøimport { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
 import {
   Badge,
@@ -156,8 +156,8 @@ export default function AutomationScriptsPage() {
         header: "Nome",
         render: (item) => (
           <div>
-            <p className="font-medium text-white">{item.name}</p>
-            <p className="text-xs text-slate-500">{item.summary}</p>
+            <p className="font-medium text-foreground">{item.name}</p>
+            <p className="text-xs text-muted">{item.summary}</p>
           </div>
         ),
       },
@@ -193,7 +193,7 @@ export default function AutomationScriptsPage() {
       },
       {
         key: "actions",
-        header: "A√ß√µes",
+        header: "AÁıes",
         render: (item) => (
           <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
             <Button
@@ -280,9 +280,9 @@ export default function AutomationScriptsPage() {
     );
 
     if (!name) return toast.error("Nome obrigatorio");
-    if (name.length > 200) return toast.error("Nome deve ter no m√°ximo 200 caracteres");
+    if (name.length > 200) return toast.error("Nome deve ter no m·ximo 200 caracteres");
     if (!summary) return toast.error("Resumo obrigatorio");
-    if (summary.length > 2000) return toast.error("Resumo deve ter no m√°ximo 2000 caracteres");
+    if (summary.length > 2000) return toast.error("Resumo deve ter no m·ximo 2000 caracteres");
     if (!content) return toast.error("Conteudo obrigatorio");
     if (content.length > 200000) return toast.error("Conteudo acima do limite");
     if (!triggerModes.length) return toast.error("Informe ao menos um trigger mode");
@@ -347,8 +347,8 @@ export default function AutomationScriptsPage() {
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-white">Scripts de Automa√ß√£o</h1>
-          <p className="text-sm text-slate-400">Cat√°logo de scripts reutilizaveis.</p>
+          <h1 className="text-2xl font-bold text-foreground">Scripts de AutomaÁ„o</h1>
+          <p className="text-sm text-muted">Cat·logo de scripts reutilizaveis.</p>
         </div>
         <Button
           onClick={() => {
@@ -539,17 +539,17 @@ export default function AutomationScriptsPage() {
         {!auditQuery.isLoading && !auditQuery.isError && (
           <div className="space-y-3">
             {(auditQuery.data ?? []).map((entry) => (
-              <div key={entry.id} className="rounded-lg border border-white/10 bg-white/5 p-3">
+              <div key={entry.id} className="rounded-lg border border-border bg-surface-light p-3">
                 <div className="mb-2 flex items-center justify-between gap-2">
                   <Badge color="accent">{String(entry.changeType)}</Badge>
-                  <p className="text-xs text-slate-500">{new Date(entry.changedAt).toLocaleString("pt-BR")}</p>
+                  <p className="text-xs text-muted">{new Date(entry.changedAt).toLocaleString("pt-BR")}</p>
                 </div>
-                <p className="text-sm text-slate-300">Motivo: {entry.reason || "-"}</p>
-                <p className="text-xs text-slate-500">Correlation: {entry.correlationId || "-"}</p>
+                <p className="text-sm text-muted-foreground">Motivo: {entry.reason || "-"}</p>
+                <p className="text-xs text-muted">Correlation: {entry.correlationId || "-"}</p>
               </div>
             ))}
             {!auditQuery.data?.length && (
-              <p className="text-sm text-slate-400">Nenhum evento de auditoria encontrado.</p>
+              <p className="text-sm text-muted">Nenhum evento de auditoria encontrado.</p>
             )}
           </div>
         )}

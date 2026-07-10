@@ -69,6 +69,17 @@ export default defineConfig({
         manualChunks: {
           vendor: ["react", "react-dom", "react-router-dom"],
           query: ["@tanstack/react-query"],
+          charts: ["recharts"],
+          particles: [
+            "@tsparticles/engine",
+            "@tsparticles/react",
+            "@tsparticles/slim",
+          ],
+          editor: ["@uiw/react-md-editor"],
+          dnd: ["@dnd-kit/core", "@dnd-kit/sortable", "@dnd-kit/utilities"],
+          nats: ["@nats-io/nats-core", "nats"],
+          markdown: ["react-markdown", "remark-gfm"],
+          forms: ["react-hook-form", "@hookform/resolvers", "zod"],
         },
       },
     },

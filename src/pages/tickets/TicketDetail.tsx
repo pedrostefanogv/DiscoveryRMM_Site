@@ -1,4 +1,4 @@
-ï»¿import { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Send, Lock, Unlock, Clock, Activity, ChevronDown, BookOpen, Paperclip, Upload, File, CheckCircle, XCircle, Loader2, UserPlus, UserMinus, Wrench, Copy } from 'lucide-react';
 import { useAuth } from '@/auth/AuthContext';
@@ -64,15 +64,15 @@ import toast from 'react-hot-toast';
 
 const PRIORITY_META: Record<TicketPriority, { label: string; color: 'slate' | 'success' | 'warning' | 'danger' }> = {
   Low:      { label: 'Baixa',    color: 'slate'   },
-  Medium:   { label: 'MÃ©dia',    color: 'success' },
+  Medium:   { label: 'Média',    color: 'success' },
   High:     { label: 'Alta',     color: 'warning' },
-  Critical: { label: 'CrÃ­tica',  color: 'danger'  },
+  Critical: { label: 'Crítica',  color: 'danger'  },
 };
 
 const ACTIVITY_LABELS: Record<string, string> = {
   Created:           'Criado',
   StateChanged:      'Estado alterado',
-  Assigned:          'AtribuÃ­do',
+  Assigned:          'Atribuído',
   Commented:         'Comentado',
   SlaWarning:        'Aviso SLA',
   SlaBreached:       'SLA violado',
@@ -80,11 +80,11 @@ const ACTIVITY_LABELS: Record<string, string> = {
   Reopened:          'Reaberto',
   DepartmentChanged: 'Depto. alterado',
   PriorityChanged:   'Prioridade alterada',
-  DescriptionUpdated:'DescriÃ§Ã£o atualizada',
+  DescriptionUpdated:'Descrição atualizada',
   CategoryChanged:   'Categoria alterada',
-   AutomationLinked:  'AutomaÃ§Ã£o vinculada',
-   AutomationApproved:'AutomaÃ§Ã£o aprovada',
-   AutomationRejected:'AutomaÃ§Ã£o rejeitada',
+   AutomationLinked:  'Automação vinculada',
+   AutomationApproved:'Automação aprovada',
+   AutomationRejected:'Automação rejeitada',
 };
 
 type Tab = 'comments' | 'timeline' | 'attachments' | 'automation' | 'ai';
@@ -95,7 +95,7 @@ type CommentSeed = {
 };
 
 function resolveUserDisplayName(usersById: Map<string, UserDto>, userId: string | null | undefined) {
-  if (!userId) return 'â€”';
+  if (!userId) return '—';
   const user = usersById.get(userId);
   if (!user) return userId;
   return user.fullName || user.email || user.login || user.id;
@@ -140,15 +140,15 @@ export default function TicketDetail() {
         <button
           onClick={() => navigate('/tickets')}
           aria-label="Voltar"
-          className="mt-1 rounded-lg p-2 text-slate-400 hover:bg-white/5 hover:text-white"
+          className="mt-1 rounded-lg p-2 text-muted hover:bg-surface-light hover:text-foreground"
         >
           <ArrowLeft className="h-5 w-5" />
         </button>
         <div className="flex-1 min-w-0">
-          <h1 className="text-2xl font-bold text-white truncate">{t.title}</h1>
-          <p className="text-sm text-slate-400">
+          <h1 className="text-2xl font-bold text-foreground truncate">{t.title}</h1>
+          <p className="text-sm text-muted">
             Criado em {new Date(t.createdAt).toLocaleDateString('pt-BR')}
-            {t.closedAt && ` â€¢ Encerrado em ${new Date(t.closedAt).toLocaleDateString('pt-BR')}`}
+            {t.closedAt && ` • Encerrado em ${new Date(t.closedAt).toLocaleDateString('pt-BR')}`}
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
@@ -166,7 +166,7 @@ export default function TicketDetail() {
             </Badge>
           )}
           <Button size="sm" variant="ghost" onClick={() => setEditing(e => !e)}>
-            {editing ? 'Cancelar ediÃ§Ã£o' : 'Editar'}
+            {editing ? 'Cancelar edição' : 'Editar'}
           </Button>
           <Button size="sm" variant="ghost" onClick={() => navigate(knowledgeUrl)}>
             <BookOpen className="h-4 w-4" /> Conhecimento
@@ -181,42 +181,42 @@ export default function TicketDetail() {
         <div className="space-y-6 lg:col-span-2">
           {/* Description */}
           <Card>
-            <CardHeader title="DescriÃ§Ã£o" />
-            <p className="text-sm text-slate-300 whitespace-pre-wrap">{t.description}</p>
+            <CardHeader title="Descrição" />
+            <p className="text-sm text-muted-foreground whitespace-pre-wrap">{t.description}</p>
           </Card>
 
           {/* Tabs: Comments / Timeline */}
           <Card padding={false}>
-            <div className="flex border-b border-white/5">
+            <div className="flex border-b border-border">
               <button
-                className={`px-4 py-3 text-sm font-medium transition-colors ${tab === 'comments' ? 'border-b-2 border-primary text-white' : 'text-slate-400 hover:text-white'}`}
+                className={`px-4 py-3 text-sm font-medium transition-colors ${tab === 'comments' ? 'border-b-2 border-primary text-foreground' : 'text-muted hover:text-foreground'}`}
                 onClick={() => setTab('comments')}
               >
-                ComentÃ¡rios ({comments.data?.items?.length ?? 0})
+                Comentários ({comments.data?.items?.length ?? 0})
               </button>
               <button
-                className={`px-4 py-3 text-sm font-medium transition-colors ${tab === 'timeline' ? 'border-b-2 border-primary text-white' : 'text-slate-400 hover:text-white'}`}
+                className={`px-4 py-3 text-sm font-medium transition-colors ${tab === 'timeline' ? 'border-b-2 border-primary text-foreground' : 'text-muted hover:text-foreground'}`}
                 onClick={() => setTab('timeline')}
               >
                 <Activity className="inline h-4 w-4 mr-1" />
                 Timeline
               </button>
               <button
-                className={`px-4 py-3 text-sm font-medium transition-colors ${tab === 'attachments' ? 'border-b-2 border-primary text-white' : 'text-slate-400 hover:text-white'}`}
+                className={`px-4 py-3 text-sm font-medium transition-colors ${tab === 'attachments' ? 'border-b-2 border-primary text-foreground' : 'text-muted hover:text-foreground'}`}
                 onClick={() => setTab('attachments')}
               >
                 <Paperclip className="inline h-4 w-4 mr-1" />
                 Anexos
               </button>
               <button
-                className={`px-4 py-3 text-sm font-medium transition-colors ${tab === 'automation' ? 'border-b-2 border-primary text-white' : 'text-slate-400 hover:text-white'}`}
+                className={`px-4 py-3 text-sm font-medium transition-colors ${tab === 'automation' ? 'border-b-2 border-primary text-foreground' : 'text-muted hover:text-foreground'}`}
                 onClick={() => setTab('automation')}
               >
                 <Wrench className="inline h-4 w-4 mr-1" />
-                AutomaÃ§Ã£o
+                Automação
               </button>
               <button
-                className={`px-4 py-3 text-sm font-medium transition-colors ${tab === 'ai' ? 'border-b-2 border-primary text-white' : 'text-slate-400 hover:text-white'}`}
+                className={`px-4 py-3 text-sm font-medium transition-colors ${tab === 'ai' ? 'border-b-2 border-primary text-foreground' : 'text-muted hover:text-foreground'}`}
                 onClick={() => setTab('ai')}
               >
                 IA
@@ -384,7 +384,7 @@ async function copyTextToClipboard(text: string, successMessage: string) {
     await navigator.clipboard.writeText(text);
     toast.success(successMessage);
   } catch {
-    toast.error('NÃ£o foi possÃ­vel copiar o texto.');
+    toast.error('Não foi possível copiar o texto.');
   }
 }
 
@@ -397,8 +397,8 @@ function TicketAiMetadata({
     | TicketAiSuggestedReplyResponse;
 }) {
   return (
-    <p className="mt-2 text-[11px] text-slate-500">
-      Modelo {data.model ?? 'desconhecido'} â€¢ {data.tokensUsed} tokens
+    <p className="mt-2 text-[11px] text-muted">
+      Modelo {data.model ?? 'desconhecido'} • {data.tokensUsed} tokens
     </p>
   );
 }
@@ -425,7 +425,7 @@ function TicketAiPanel({
     const nextPriority = parsedTriage?.priority ?? ticket.priority;
 
     if (nextCategory === ticket.category && nextPriority === ticket.priority) {
-      toast.error('A triagem nÃ£o trouxe categoria ou prioridade aplicÃ¡veis.');
+      toast.error('A triagem não trouxe categoria ou prioridade aplicáveis.');
       return;
     }
 
@@ -448,7 +448,7 @@ function TicketAiPanel({
           toast.error(
             error instanceof Error
               ? error.message
-              : 'NÃ£o foi possÃ­vel aplicar a triagem ao ticket.',
+              : 'Não foi possível aplicar a triagem ao ticket.',
           );
         },
       },
@@ -457,18 +457,18 @@ function TicketAiPanel({
 
   return (
     <div className="space-y-4">
-      <div className="rounded-xl border border-white/10 bg-white/5 p-4 text-sm text-slate-300">
-        <p className="font-medium text-white">Assistente de IA do ticket</p>
-        <p className="mt-1 text-slate-400">
-           Usa o contrato real do backend para triagem, resumo e prÃ³xima resposta. A triagem pode aplicar apenas categoria e prioridade, porque o update atual do ticket nÃ£o aceita departamento.
+      <div className="rounded-xl border border-border bg-surface-light p-4 text-sm text-muted-foreground">
+        <p className="font-medium text-foreground">Assistente de IA do ticket</p>
+        <p className="mt-1 text-muted">
+           Usa o contrato real do backend para triagem, resumo e próxima resposta. A triagem pode aplicar apenas categoria e prioridade, porque o update atual do ticket não aceita departamento.
         </p>
       </div>
 
-      <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+      <div className="rounded-xl border border-border bg-surface-light p-4">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h3 className="text-sm font-semibold text-white">Triagem automÃ¡tica</h3>
-            <p className="text-xs text-slate-400">
+            <h3 className="text-sm font-semibold text-foreground">Triagem automática</h3>
+            <p className="text-xs text-muted">
               Sugere categoria, prioridade e departamento para o chamado.
             </p>
           </div>
@@ -491,7 +491,7 @@ function TicketAiPanel({
         </div>
 
         {triage.data && (
-          <div className="mt-4 rounded-lg border border-white/5 bg-white/[0.03] p-4">
+          <div className="mt-4 rounded-lg border border-border bg-surface-light p-4">
             {parsedTriage ? (
               <>
                 <div className="flex flex-wrap gap-2">
@@ -509,13 +509,13 @@ function TicketAiPanel({
                 </div>
 
                 {parsedTriage.reasoning && (
-                  <p className="mt-3 whitespace-pre-wrap text-sm text-slate-300">
+                  <p className="mt-3 whitespace-pre-wrap text-sm text-muted-foreground">
                     {parsedTriage.reasoning}
                   </p>
                 )}
 
                 {parsedTriage.department && (
-                  <p className="mt-3 text-xs text-slate-500">
+                  <p className="mt-3 text-xs text-muted">
                     O departamento sugerido ainda depende de ajuste manual fora do endpoint atual de update do ticket.
                   </p>
                 )}
@@ -544,10 +544,10 @@ function TicketAiPanel({
               </>
             ) : (
               <div className="space-y-3">
-                <p className="text-sm text-slate-300">
-                   A IA retornou uma saÃ­da nÃ£o estruturada. O conteÃºdo bruto continua disponÃ­vel abaixo.
+                <p className="text-sm text-muted-foreground">
+                   A IA retornou uma saída não estruturada. O conteúdo bruto continua disponível abaixo.
                 </p>
-                <pre className="overflow-x-auto whitespace-pre-wrap rounded-lg bg-black/20 p-3 text-xs text-slate-300">
+                <pre className="overflow-x-auto whitespace-pre-wrap rounded-lg bg-black/20 p-3 text-xs text-muted-foreground">
                   {triage.data.suggestion}
                 </pre>
                 <Button
@@ -570,12 +570,12 @@ function TicketAiPanel({
         )}
       </div>
 
-      <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+      <div className="rounded-xl border border-border bg-surface-light p-4">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h3 className="text-sm font-semibold text-white">Resumo executivo</h3>
-            <p className="text-xs text-slate-400">
-              Consolida problema, histÃ³rico e status atual em texto curto.
+            <h3 className="text-sm font-semibold text-foreground">Resumo executivo</h3>
+            <p className="text-xs text-muted">
+              Consolida problema, histórico e status atual em texto curto.
             </p>
           </div>
           <Button
@@ -597,8 +597,8 @@ function TicketAiPanel({
         </div>
 
         {summary.data && (
-          <div className="mt-4 rounded-lg border border-white/5 bg-white/[0.03] p-4">
-            <p className="whitespace-pre-wrap text-sm text-slate-300">
+          <div className="mt-4 rounded-lg border border-border bg-surface-light p-4">
+            <p className="whitespace-pre-wrap text-sm text-muted-foreground">
               {summary.data.summary}
             </p>
             <div className="mt-4 flex flex-wrap gap-2">
@@ -620,11 +620,11 @@ function TicketAiPanel({
         )}
       </div>
 
-      <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+      <div className="rounded-xl border border-border bg-surface-light p-4">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h3 className="text-sm font-semibold text-white">Resposta sugerida</h3>
-            <p className="text-xs text-slate-400">
+            <h3 className="text-sm font-semibold text-foreground">Resposta sugerida</h3>
+            <p className="text-xs text-muted">
               Gera a proxima resposta ao usuario com base no ticket e nos comentarios.
             </p>
           </div>
@@ -649,8 +649,8 @@ function TicketAiPanel({
         </div>
 
         {suggestReply.data && (
-          <div className="mt-4 rounded-lg border border-white/5 bg-white/[0.03] p-4">
-            <p className="whitespace-pre-wrap text-sm text-slate-300">
+          <div className="mt-4 rounded-lg border border-border bg-surface-light p-4">
+            <p className="whitespace-pre-wrap text-sm text-muted-foreground">
               {suggestReply.data.suggestedReply}
             </p>
             <div className="mt-4 flex flex-wrap gap-2">
@@ -713,7 +713,7 @@ function getAutomationActionLabel(value: unknown) {
     case AutomationTaskActionType.UpdateOrInstallPackage:
       return 'Atualizar ou instalar';
     default:
-      return 'AutomaÃ§Ã£o';
+      return 'Automação';
   }
 }
 
@@ -836,12 +836,12 @@ function AutomationLinksPanel({
         tasksQuery.isLoading
           ? 'Carregando tarefas...'
           : availableTasks.length === 0
-            ? 'Nenhuma tarefa ativa disponÃ­vel'
+            ? 'Nenhuma tarefa ativa disponível'
             : 'Selecione uma tarefa',
     },
     ...availableTasks.map((task) => ({
       value: task.id,
-      label: `${task.name} â€¢ ${getAutomationScopeLabel(task.scopeType)}`,
+      label: `${task.name} • ${getAutomationScopeLabel(task.scopeType)}`,
     })),
   ];
 
@@ -861,13 +861,13 @@ function AutomationLinksPanel({
         onSuccess: () => {
           setSelectedTaskId('');
           setRequestNote('');
-           toast.success('SolicitaÃ§Ã£o de automaÃ§Ã£o vinculada ao ticket.');
+           toast.success('Solicitação de automação vinculada ao ticket.');
          },
          onError: (error) => {
            toast.error(
              error instanceof Error
                ? error.message
-               : 'NÃ£o foi possÃ­vel vincular a automaÃ§Ã£o.',
+               : 'Não foi possível vincular a automação.',
           );
         },
       },
@@ -894,15 +894,15 @@ function AutomationLinksPanel({
           setReviewNotes((current) => ({ ...current, [link.id]: '' }));
           toast.success(
             action === 'approve'
-              ? 'AutomaÃ§Ã£o aprovada com sucesso.'
-               : 'AutomaÃ§Ã£o rejeitada com sucesso.',
+              ? 'Automação aprovada com sucesso.'
+               : 'Automação rejeitada com sucesso.',
           );
         },
         onError: (error) => {
           toast.error(
             error instanceof Error
               ? error.message
-              : 'NÃ£o foi possÃ­vel revisar a automaÃ§Ã£o.',
+              : 'Não foi possível revisar a automação.',
           );
         },
       },
@@ -911,13 +911,13 @@ function AutomationLinksPanel({
 
   return (
     <div className="space-y-4">
-      <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+      <div className="rounded-xl border border-border bg-surface-light p-4">
         <div className="mb-3 flex items-center gap-2">
-          <Wrench className="h-4 w-4 text-slate-400" />
+          <Wrench className="h-4 w-4 text-muted" />
           <div>
-            <h3 className="text-sm font-semibold text-white">Solicitar automaÃ§Ã£o</h3>
-             <p className="text-xs text-slate-400">
-               Vincule uma tarefa ativa ao ticket e deixe a revisÃ£o pendente quando necessÃ¡rio.
+            <h3 className="text-sm font-semibold text-foreground">Solicitar automação</h3>
+             <p className="text-xs text-muted">
+               Vincule uma tarefa ativa ao ticket e deixe a revisão pendente quando necessário.
             </p>
           </div>
         </div>
@@ -934,19 +934,19 @@ function AutomationLinksPanel({
             label="Nota"
             value={requestNote}
             onChange={(event) => setRequestNote(event.target.value)}
-            placeholder="Opcional: contexto da solicitaÃ§Ã£o"
+            placeholder="Opcional: contexto da solicitação"
           />
         </div>
 
         {usingFallbackTasks && (
-          <p className="mt-3 text-xs text-slate-500">
-            Nenhuma tarefa aderente ao escopo do ticket foi encontrada; exibindo o catÃ¡logo ativo completo.
+          <p className="mt-3 text-xs text-muted">
+            Nenhuma tarefa aderente ao escopo do ticket foi encontrada; exibindo o catálogo ativo completo.
           </p>
         )}
 
         {tasksQuery.isError && (
           <p className="mt-3 text-sm text-danger">
-            NÃ£o foi possÃ­vel carregar as tarefas de automaÃ§Ã£o ativas.
+            Não foi possível carregar as tarefas de automação ativas.
           </p>
         )}
 
@@ -957,7 +957,7 @@ function AutomationLinksPanel({
             loading={createLink.isPending}
             disabled={!selectedTaskId}
           >
-            <Wrench className="h-4 w-4" /> Vincular automaÃ§Ã£o
+            <Wrench className="h-4 w-4" /> Vincular automação
           </Button>
         </div>
       </div>
@@ -966,10 +966,10 @@ function AutomationLinksPanel({
         {linksQuery.isLoading ? (
           <Loading />
         ) : linksQuery.isError ? (
-          <p className="text-sm text-danger">Erro ao carregar vinculaÃ§Ãµes de automaÃ§Ã£o.</p>
+          <p className="text-sm text-danger">Erro ao carregar vinculações de automação.</p>
          ) : linkItems.length === 0 ? (
-           <p className="py-6 text-center text-sm text-slate-500">
-             Nenhuma automaÃ§Ã£o vinculada a este ticket.
+           <p className="py-6 text-center text-sm text-muted">
+             Nenhuma automação vinculada a este ticket.
           </p>
         ) : (
           linkItems.map((link) => {
@@ -977,11 +977,11 @@ function AutomationLinksPanel({
             const isPending = isPendingAutomationLink(link);
 
             return (
-              <div key={link.id} className="rounded-xl border border-white/10 bg-white/5 p-4">
+              <div key={link.id} className="rounded-xl border border-border bg-surface-light p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
-                      <p className="truncate text-sm font-medium text-white">
+                      <p className="truncate text-sm font-medium text-foreground">
                         {task?.name ?? link.automationTaskDefinitionId}
                       </p>
                       <Badge color={getAutomationStatusTone(link.statusLabel)}>
@@ -992,16 +992,16 @@ function AutomationLinksPanel({
                       )}
                       {task && (
                         <Badge color={task.requiresApproval ? 'warning' : 'accent'}>
-                          {task.requiresApproval ? 'Requer aprovaÃ§Ã£o' : 'ExecuÃ§Ã£o direta'}
+                          {task.requiresApproval ? 'Requer aprovação' : 'Execução direta'}
                         </Badge>
                       )}
                     </div>
 
                     {task?.description && (
-                      <p className="mt-1 text-xs text-slate-400">{task.description}</p>
+                      <p className="mt-1 text-xs text-muted">{task.description}</p>
                     )}
 
-                    <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-slate-500">
+                    <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-muted">
                       <span>Escopo: {task ? getAutomationScopeLabel(task.scopeType) : 'Desconhecido'}</span>
                       <span>Solicitado em {new Date(link.requestedAt).toLocaleString('pt-BR')}</span>
                       {link.requestedBy && <span>por {link.requestedBy}</span>}
@@ -1011,13 +1011,13 @@ function AutomationLinksPanel({
                     </div>
 
                     {link.note && (
-                      <p className="mt-2 whitespace-pre-wrap text-sm text-slate-300">
+                      <p className="mt-2 whitespace-pre-wrap text-sm text-muted-foreground">
                         {link.note}
                       </p>
                     )}
 
                     {link.reviewedAt && (
-                      <p className="mt-2 text-[11px] text-slate-500">
+                      <p className="mt-2 text-[11px] text-muted">
                         Revisado em {new Date(link.reviewedAt).toLocaleString('pt-BR')}
                         {link.reviewedBy ? ` por ${link.reviewedBy}` : ''}
                       </p>
@@ -1026,7 +1026,7 @@ function AutomationLinksPanel({
                 </div>
 
                 {isPending && (
-                  <div className="mt-4 space-y-3 border-t border-white/5 pt-3">
+                  <div className="mt-4 space-y-3 border-t border-border pt-3">
                     <Input
                       label="Nota da revisao"
                       value={reviewNotes[link.id] ?? ''}
@@ -1036,7 +1036,7 @@ function AutomationLinksPanel({
                           [link.id]: event.target.value,
                         }))
                       }
-                      placeholder="Opcional: motivo ou instruÃ§Ãµes adicionais"
+                      placeholder="Opcional: motivo ou instruções adicionais"
                     />
                     <div className="flex flex-wrap gap-2">
                       <Button
@@ -1121,7 +1121,7 @@ function TicketCustomFieldsPanel({ ticketId }: { ticketId: string }) {
       toast.error(
         error instanceof Error
           ? error.message
-          : 'NÃ£o foi possÃ­vel salvar o campo customizado.',
+          : 'Não foi possível salvar o campo customizado.',
       );
     } finally {
       setSavingDefinitionId(null);
@@ -1132,7 +1132,7 @@ function TicketCustomFieldsPanel({ ticketId }: { ticketId: string }) {
     <Card>
       <CardHeader
         title="Campos customizados"
-        subtitle="Valores especÃ­ficos deste chamado definidos pela operaÃ§Ã£o."
+        subtitle="Valores específicos deste chamado definidos pela operação."
       />
       <div className="space-y-3">
         {definitionsQuery.isLoading || valuesQuery.isLoading ? (
@@ -1142,7 +1142,7 @@ function TicketCustomFieldsPanel({ ticketId }: { ticketId: string }) {
             Erro ao carregar os campos customizados do ticket.
           </p>
         ) : definitions.length === 0 ? (
-          <p className="text-sm text-slate-500">
+          <p className="text-sm text-muted">
             Nenhum campo customizado ativo para tickets.
           </p>
         ) : (
@@ -1152,12 +1152,12 @@ function TicketCustomFieldsPanel({ ticketId }: { ticketId: string }) {
             return (
               <div
                 key={definition.id}
-                className="rounded-lg border border-white/5 bg-white/[0.03] px-3 py-3"
+                className="rounded-lg border border-border bg-surface-light px-3 py-3"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
-                      <p className="truncate text-sm font-medium text-white">
+                      <p className="truncate text-sm font-medium text-foreground">
                         {definition.label}
                       </p>
                       <Badge color="slate">
@@ -1165,12 +1165,12 @@ function TicketCustomFieldsPanel({ ticketId }: { ticketId: string }) {
                       </Badge>
                     </div>
                     {definition.description && (
-                      <p className="mt-1 text-xs text-slate-400">
+                      <p className="mt-1 text-xs text-muted">
                         {definition.description}
                       </p>
                     )}
                     {valueItem?.updatedAt && (
-                      <p className="mt-2 text-[11px] text-slate-500">
+                      <p className="mt-2 text-[11px] text-muted">
                         Atualizado em{' '}
                         {new Date(valueItem.updatedAt).toLocaleString('pt-BR')}
                       </p>
@@ -1223,7 +1223,7 @@ function TicketCustomFieldInput({
           label="Valor"
           value={value}
           options={[
-            { value: '', label: 'NÃ£o definido' },
+            { value: '', label: 'Não definido' },
             { value: 'true', label: 'Verdadeiro' },
             { value: 'false', label: 'Falso' },
           ]}
@@ -1253,8 +1253,8 @@ function TicketCustomFieldInput({
           value={value}
           hint={
             definition.options.length > 0
-              ? `OpÃ§Ãµes permitidas: ${definition.options.join(', ')}`
-              : 'Separe mÃºltiplos valores por vÃ­rgula.'
+              ? `Opções permitidas: ${definition.options.join(', ')}`
+              : 'Separe múltiplos valores por vírgula.'
           }
           onChange={(event) => onChange(event.target.value)}
         />
@@ -1411,8 +1411,8 @@ function WatchersPanel({
     <Card>
       <div className="mb-3 flex items-center justify-between gap-2">
         <div>
-          <h3 className="text-base font-semibold text-white">Watchers</h3>
-          <p className="text-xs text-slate-500">
+          <h3 className="text-base font-semibold text-foreground">Watchers</h3>
+          <p className="text-xs text-muted">
             {watcherItems.length === 0 ? 'Sem watchers' : `${watcherItems.length} acompanhando`}
           </p>
         </div>
@@ -1442,10 +1442,10 @@ function WatchersPanel({
                 const isAssignedUser = assignedToUserId === watcher.userId;
 
                 return (
-                  <div key={watcher.id} className="rounded-lg border border-white/5 bg-white/[0.03] px-3 py-2">
+                  <div key={watcher.id} className="rounded-lg border border-border bg-surface-light px-3 py-2">
                     <div className="flex items-center justify-between gap-2">
                       <div className="min-w-0">
-                        <p className="truncate text-sm font-medium text-white">{displayName}</p>
+                        <p className="truncate text-sm font-medium text-foreground">{displayName}</p>
                         <div className="mt-1 flex flex-wrap gap-2">
                           {user?.email && user.email !== displayName && <Badge color="slate">{user.email}</Badge>}
                           {isAssignedUser && <Badge color="accent">Responsavel</Badge>}
@@ -1468,7 +1468,7 @@ function WatchersPanel({
             )}
 
             {isAdding && (
-              <div className={`${watcherItems.length > 0 ? 'border-t border-white/5 pt-3' : ''} space-y-3`}>
+              <div className={`${watcherItems.length > 0 ? 'border-t border-border pt-3' : ''} space-y-3`}>
                 <Input
                   label="Pesquisar usuario"
                   value={searchTerm}
@@ -1520,7 +1520,7 @@ function SlaProgressBar({ pct, barColor }: { pct: number; barColor: string }) {
   return (
     <div
       ref={trackRef}
-      className="h-2 w-full rounded-full bg-white/10"
+      className="h-2 w-full rounded-full bg-surface-hover"
       role="progressbar"
       aria-label={`SLA: ${Math.round(pct)}% utilizado`}
     >
@@ -1554,7 +1554,7 @@ function TicketSummaryPanel({
   const renderSlaContent = () => {
     if (sla.isLoading) {
       return (
-        <div className="flex items-center gap-2 text-slate-400">
+        <div className="flex items-center gap-2 text-muted">
           <Clock className="h-4 w-4 animate-pulse" />
           <span className="text-sm">Carregando SLA...</span>
         </div>
@@ -1562,7 +1562,7 @@ function TicketSummaryPanel({
     }
 
     if (sla.isError || !sla.data) {
-      return <p className="text-sm text-slate-400">NÃ£o foi possÃ­vel carregar os dados de SLA.</p>;
+      return <p className="text-sm text-muted">Não foi possível carregar os dados de SLA.</p>;
     }
 
     const d = sla.data;
@@ -1573,9 +1573,9 @@ function TicketSummaryPanel({
     if (d.message && !d.slaExpiresAt) {
       return (
         <div className="space-y-2">
-          <p className="text-sm text-slate-400">{d.message}</p>
-          <p className="text-xs text-slate-500">
-            O SLA depende do perfil de workflow do departamento. Sem perfil definido, o prazo nÃ£o Ã© calculado.
+          <p className="text-sm text-muted">{d.message}</p>
+          <p className="text-xs text-muted">
+            O SLA depende do perfil de workflow do departamento. Sem perfil definido, o prazo não é calculado.
           </p>
         </div>
       );
@@ -1594,13 +1594,13 @@ function TicketSummaryPanel({
           )}
         </div>
         {d.slaExpiresAt && (
-          <p className="text-xs text-slate-400">
+          <p className="text-xs text-muted">
             Expira em {new Date(d.slaExpiresAt).toLocaleString('pt-BR')}
           </p>
         )}
         {d.percentUsed != null && (
           <div>
-            <div className="mb-1 flex justify-between text-xs text-slate-400">
+            <div className="mb-1 flex justify-between text-xs text-muted">
               <span>{pct.toFixed(0)}% utilizado</span>
               {typeof d.hoursRemaining === 'number' && <span>{d.hoursRemaining.toFixed(1)}h restantes</span>}
             </div>
@@ -1624,34 +1624,34 @@ function TicketSummaryPanel({
       />
       <dl className="grid gap-3 text-sm sm:grid-cols-2">
         <div>
-          <dt className="text-slate-400">Categoria</dt>
-          <dd className="text-white">{category ?? 'â€”'}</dd>
+          <dt className="text-muted">Categoria</dt>
+          <dd className="text-foreground">{category ?? '—'}</dd>
         </div>
         <div>
-          <dt className="text-slate-400">Prioridade</dt>
+          <dt className="text-muted">Prioridade</dt>
           <dd><Badge color={priorityColor}>{priorityLabel}</Badge></dd>
         </div>
         <div className="sm:col-span-2">
-          <dt className="text-slate-400">ResponsÃ¡vel</dt>
-          <dd className="text-white">
+          <dt className="text-muted">Responsável</dt>
+          <dd className="text-foreground">
             <p className="break-words">{assignedDisplayName}</p>
-            {assignedEmail && <p className="text-xs text-slate-400">{assignedEmail}</p>}
+            {assignedEmail && <p className="text-xs text-muted">{assignedEmail}</p>}
           </dd>
         </div>
         <div>
-          <dt className="text-slate-400">Atualizado</dt>
-          <dd className="text-white">{new Date(updatedAt).toLocaleString('pt-BR')}</dd>
+          <dt className="text-muted">Atualizado</dt>
+          <dd className="text-foreground">{new Date(updatedAt).toLocaleString('pt-BR')}</dd>
         </div>
         {closedAt && (
           <div>
-            <dt className="text-slate-400">Encerrado em</dt>
-            <dd className="text-white">{new Date(closedAt).toLocaleString('pt-BR')}</dd>
+            <dt className="text-muted">Encerrado em</dt>
+            <dd className="text-foreground">{new Date(closedAt).toLocaleString('pt-BR')}</dd>
           </div>
         )}
       </dl>
 
-      <div className="mt-4 border-t border-white/10 pt-4">
-        <div className="mb-2 flex items-center gap-2 text-slate-300">
+      <div className="mt-4 border-t border-border pt-4">
+        <div className="mb-2 flex items-center gap-2 text-muted-foreground">
           <Clock className="h-4 w-4" />
           <p className="text-sm font-medium">SLA</p>
         </div>
@@ -1673,17 +1673,17 @@ function CommentsPanel({
     <>
       <div className="space-y-3 max-h-80 overflow-y-auto">
         {(comments.data?.items ?? []).map(c => (
-          <div key={c.id} className={`rounded-lg px-4 py-3 ${c.isInternal ? 'bg-warning/10 border border-warning/20' : 'bg-white/5'}`}>
+          <div key={c.id} className={`rounded-lg px-4 py-3 ${c.isInternal ? 'bg-warning/10 border border-warning/20' : 'bg-surface-light'}`}>
             <div className="mb-1 flex items-center gap-2">
-              <span className="text-sm font-medium text-white">{c.author}</span>
-              <span className="text-xs text-slate-500">{new Date(c.createdAt).toLocaleString('pt-BR')}</span>
+              <span className="text-sm font-medium text-foreground">{c.author}</span>
+              <span className="text-xs text-muted">{new Date(c.createdAt).toLocaleString('pt-BR')}</span>
               {c.isInternal && <Badge color="warning"><Lock className="mr-1 h-3 w-3" />Interno</Badge>}
             </div>
-            <p className="text-sm text-slate-300 whitespace-pre-wrap">{c.content}</p>
+            <p className="text-sm text-muted-foreground whitespace-pre-wrap">{c.content}</p>
           </div>
         ))}
         {(comments.data?.items?.length ?? 0) === 0 && (
-          <p className="text-sm text-slate-500 py-4 text-center">Sem comentÃ¡rios ainda</p>
+          <p className="text-sm text-muted py-4 text-center">Sem comentários ainda</p>
         )}
       </div>
       <CommentForm ticketId={ticketId} draftSeed={draftSeed} />
@@ -1702,23 +1702,23 @@ function TimelinePanel({ ticketId }: { ticketId: string }) {
   return (
     <div className="space-y-3 max-h-96 overflow-y-auto">
       {entries.length === 0 ? (
-        <p className="text-sm text-slate-500 py-4 text-center">Nenhum evento registrado</p>
+        <p className="text-sm text-muted py-4 text-center">Nenhum evento registrado</p>
       ) : (
         entries.map(e => (
           <div key={e.id} className="flex gap-3">
-            <div className="mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white/10">
-              <Activity className="h-3 w-3 text-slate-400" />
+            <div className="mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-surface-hover">
+              <Activity className="h-3 w-3 text-muted" />
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-sm font-medium text-white">
+                <span className="text-sm font-medium text-foreground">
                   {ACTIVITY_LABELS[e.activityType] ?? e.activityType}
                 </span>
-                <span className="text-xs text-slate-500">
+                <span className="text-xs text-muted">
                   {new Date(e.createdAt).toLocaleString('pt-BR')}
                 </span>
               </div>
-              <p className="text-xs text-slate-400 mt-0.5">{e.description}</p>
+              <p className="text-xs text-muted mt-0.5">{e.description}</p>
             </div>
           </div>
         ))
@@ -1751,18 +1751,18 @@ function CommentForm({
     addComment.mutate(
       { id: ticketId, data: { author, content, isInternal } },
       {
-        onSuccess: () => { setContent(''); toast.success('ComentÃ¡rio adicionado'); },
+        onSuccess: () => { setContent(''); toast.success('Comentário adicionado'); },
         onError:   () => toast.error('Erro'),
       },
     );
   };
 
   return (
-    <div className="mt-4 space-y-3 border-t border-white/5 pt-4">
-      <TextArea placeholder="Escreva um comentÃ¡rio... (mÃ­n. 3 chars)" value={content} onChange={e => setContent(e.target.value)} />
+    <div className="mt-4 space-y-3 border-t border-border pt-4">
+      <TextArea placeholder="Escreva um comentário... (mín. 3 chars)" value={content} onChange={e => setContent(e.target.value)} />
       <div className="flex items-center justify-between">
-        <label className="flex items-center gap-2 text-sm text-slate-400">
-          <input type="checkbox" checked={isInternal} onChange={e => setIsInternal(e.target.checked)} className="rounded bg-white/5 border-white/10" />
+        <label className="flex items-center gap-2 text-sm text-muted">
+          <input type="checkbox" checked={isInternal} onChange={e => setIsInternal(e.target.checked)} className="rounded bg-surface-light border-border" />
           {isInternal ? <Lock className="h-3.5 w-3.5" /> : <Unlock className="h-3.5 w-3.5" />}
           Nota interna
         </label>
@@ -1790,7 +1790,7 @@ function WorkflowPanel({ ticketId, currentStateId }: { ticketId: string; current
       { id: ticketId, data: { workflowStateId: selected } },
       {
         onSuccess: () => toast.success('Estado atualizado'),
-        onError:   () => toast.error('TransiÃ§Ã£o invÃ¡lida ou erro ao atualizar'),
+        onError:   () => toast.error('Transição inválida ou erro ao atualizar'),
       },
     );
   };
@@ -1844,12 +1844,12 @@ function EditTicketForm({ ticket, onDone }: { ticket: { id: string; title: strin
     <Card>
       <CardHeader title="Editar Chamado" />
       <div className="space-y-4">
-        <Input label="TÃ­tulo *" value={form.title} onChange={e => set('title', e.target.value)} />
+        <Input label="Título *" value={form.title} onChange={e => set('title', e.target.value)} />
         <div>
-          <label className="block text-sm font-medium text-slate-300 mb-1">DescriÃ§Ã£o *</label>
+          <label className="block text-sm font-medium text-muted-foreground mb-1">Descrição *</label>
           <textarea
-            aria-label="DescriÃ§Ã£o do chamado"
-            className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder-slate-500 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary resize-none"
+            aria-label="Descrição do chamado"
+            className="w-full rounded-lg border border-border bg-surface-light px-3 py-2 text-sm text-foreground placeholder-muted focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary resize-none"
             rows={4}
             placeholder="Descreva o chamado..."
             value={form.description}
@@ -1861,9 +1861,9 @@ function EditTicketForm({ ticket, onDone }: { ticket: { id: string; title: strin
             label="Prioridade"
             options={[
               { value: 'Low',      label: 'Baixa'   },
-              { value: 'Medium',   label: 'MÃ©dia'   },
+              { value: 'Medium',   label: 'Média'   },
               { value: 'High',     label: 'Alta'    },
-              { value: 'Critical', label: 'CrÃ­tica' },
+              { value: 'Critical', label: 'Crítica' },
             ]}
             value={form.priority}
             onChange={e => set('priority', e.target.value as TicketPriority)}
@@ -1879,7 +1879,7 @@ function EditTicketForm({ ticket, onDone }: { ticket: { id: string; title: strin
   );
 }
 
-// â”€â”€ Attachments Panel â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// -- Attachments Panel --------------------------------------------------------
 
 type UploadStatus = 'idle' | 'preparing' | 'uploading' | 'confirming' | 'done' | 'error';
 
@@ -1904,7 +1904,7 @@ function AttachmentsPanel({
   siteId: string | null
   clientId: string | null
 }) {
-  // Prioridade de heranÃ§a: Site > Client > Server
+  // Prioridade de herança: Site > Client > Server
   const siteSettings = useSiteTicketAttachmentSettings(siteId);
   const clientSettings = useClientTicketAttachmentSettings(!siteId ? clientId : null);
   const serverSettings = useTicketAttachmentSettings();
@@ -1938,7 +1938,7 @@ function AttachmentsPanel({
         continue;
       }
       if (cfg?.allowedContentTypes && !cfg.allowedContentTypes.includes(file.type)) {
-        entries.push({ file, status: 'error', error: `Tipo nÃ£o permitido: ${file.type}` });
+        entries.push({ file, status: 'error', error: `Tipo não permitido: ${file.type}` });
         continue;
       }
       entries.push({ file, status: 'idle' });
@@ -2010,7 +2010,7 @@ function AttachmentsPanel({
   };
 
   const STATUS_ICON: Record<UploadStatus, React.ReactNode> = {
-    idle: <Upload className="h-4 w-4 text-slate-400" />,
+    idle: <Upload className="h-4 w-4 text-muted" />,
     preparing: <Loader2 className="h-4 w-4 animate-spin text-sky-400" />,
     uploading: <Loader2 className="h-4 w-4 animate-spin text-sky-400" />,
     confirming: <Loader2 className="h-4 w-4 animate-spin text-sky-400" />,
@@ -2020,10 +2020,10 @@ function AttachmentsPanel({
 
   const STATUS_LABEL: Record<UploadStatus, string> = {
     idle: 'Aguardando',
-    preparing: 'Preparandoâ€¦',
-    uploading: 'Enviandoâ€¦',
-    confirming: 'Confirmandoâ€¦',
-    done: 'ConcluÃ­do',
+    preparing: 'Preparando…',
+    uploading: 'Enviando…',
+    confirming: 'Confirmando…',
+    done: 'Concluído',
     error: 'Erro',
   };
 
@@ -2031,25 +2031,25 @@ function AttachmentsPanel({
     <div className="space-y-4">
       {!isEnabled && (
         <div className="rounded-lg border border-warning/20 bg-warning/10 px-4 py-3 text-sm text-warning">
-          Upload de anexos estÃ¡ desabilitado nas configuraÃ§Ãµes do servidor.
+          Upload de anexos está desabilitado nas configurações do servidor.
         </div>
       )}
 
       {isEnabled && (
         <>
           <div
-            className="flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-white/10 py-8 text-center transition-colors hover:border-white/20 cursor-pointer"
+            className="flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border py-8 text-center transition-colors hover:border-border-strong cursor-pointer"
             onClick={() => fileRef.current?.click()}
             onDragOver={(e) => e.preventDefault()}
             onDrop={(e) => { e.preventDefault(); handleFiles(e.dataTransfer.files); }}
           >
-            <Paperclip className="h-6 w-6 text-slate-500" />
-            <p className="text-sm text-slate-400">
+            <Paperclip className="h-6 w-6 text-muted" />
+            <p className="text-sm text-muted">
               Arraste arquivos aqui ou{' '}
               <span className="text-primary underline">clique para selecionar</span>
             </p>
-            <p className="text-xs text-slate-500">
-              MÃ¡x. {formatBytes(maxBytes)} Â· {accept}
+            <p className="text-xs text-muted">
+              Máx. {formatBytes(maxBytes)} · {accept}
             </p>
           </div>
           <input
@@ -2066,14 +2066,14 @@ function AttachmentsPanel({
           {queue.length > 0 && (
             <div className="space-y-2">
               {queue.map((entry, idx) => (
-                <div key={idx} className="flex items-center gap-3 rounded-lg border border-white/5 bg-white/[0.03] px-3 py-2">
-                  <File className="h-4 w-4 shrink-0 text-slate-400" />
+                <div key={idx} className="flex items-center gap-3 rounded-lg border border-border bg-surface-light px-3 py-2">
+                  <File className="h-4 w-4 shrink-0 text-muted" />
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm text-white">{entry.file.name}</p>
-                    <p className="text-xs text-slate-500">{formatBytes(entry.file.size)}</p>
+                    <p className="truncate text-sm text-foreground">{entry.file.name}</p>
+                    <p className="text-xs text-muted">{formatBytes(entry.file.size)}</p>
                     {entry.error && <p className="text-xs text-danger">{entry.error}</p>}
                   </div>
-                  <span className={`text-xs ${entry.status === 'error' ? 'text-danger' : entry.status === 'done' ? 'text-success' : 'text-slate-400'}`}>
+                  <span className={`text-xs ${entry.status === 'error' ? 'text-danger' : entry.status === 'done' ? 'text-success' : 'text-muted'}`}>
                     {STATUS_LABEL[entry.status]}
                   </span>
                   {STATUS_ICON[entry.status]}
@@ -2097,18 +2097,18 @@ function AttachmentsPanel({
 
       {/* Existing attachments list */}
       <div className="space-y-2">
-        <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Arquivos anexados</p>
+        <p className="text-xs font-medium uppercase tracking-wide text-muted">Arquivos anexados</p>
         {attachments.isLoading && <Loading />}
         {(attachments.data ?? []).length === 0 && !attachments.isLoading && (
-          <p className="py-4 text-center text-sm text-slate-500">Nenhum anexo ainda.</p>
+          <p className="py-4 text-center text-sm text-muted">Nenhum anexo ainda.</p>
         )}
         {(attachments.data ?? []).map((a) => (
-          <div key={a.id} className="flex items-center gap-3 rounded-lg border border-white/5 bg-white/[0.03] px-3 py-2">
-            <File className="h-4 w-4 shrink-0 text-slate-400" />
+          <div key={a.id} className="flex items-center gap-3 rounded-lg border border-border bg-surface-light px-3 py-2">
+            <File className="h-4 w-4 shrink-0 text-muted" />
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm text-white">{a.fileName}</p>
-              <p className="text-xs text-slate-500">
-                {formatBytes(a.sizeBytes)} Â· {a.contentType} Â· {new Date(a.createdAt).toLocaleString('pt-BR')}
+              <p className="truncate text-sm text-foreground">{a.fileName}</p>
+              <p className="text-xs text-muted">
+                {formatBytes(a.sizeBytes)} · {a.contentType} · {new Date(a.createdAt).toLocaleString('pt-BR')}
               </p>
             </div>
             <Badge color="slate">{a.uploadedBy}</Badge>

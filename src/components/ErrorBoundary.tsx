@@ -2,6 +2,7 @@ import { Component, type ReactNode, type ErrorInfo } from 'react';
 
 interface Props {
   children: ReactNode;
+  fallback?: ReactNode;
 }
 
 interface State {
@@ -9,6 +10,10 @@ interface State {
   error: Error | null;
 }
 
+/**
+ * Error Boundary genérico. Suporta fallback customizado via props.
+ * Use <ErrorBoundary fallback={<MeuFallback />}> para páginas específicas.
+ */
 export class ErrorBoundary extends Component<Props, State> {
   constructor(props: Props) {
     super(props);
@@ -29,9 +34,12 @@ export class ErrorBoundary extends Component<Props, State> {
 
   render() {
     if (this.state.hasError) {
+      if (this.props.fallback) {
+        return this.props.fallback;
+      }
       return (
-        <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
-          <div className="max-w-md w-full rounded-2xl border border-white/10 bg-slate-900/80 p-8 shadow-2xl backdrop-blur-xl">
+        <div className="min-h-screen bg-background flex items-center justify-center p-4">
+          <div className="max-w-md w-full rounded-2xl border border-border bg-surface/80 p-8 shadow-2xl backdrop-blur-xl">
             <div className="flex justify-center mb-5">
               <div className="w-16 h-16 bg-danger/10 rounded-2xl flex items-center justify-center ring-1 ring-danger/20">
                 <svg
@@ -50,16 +58,16 @@ export class ErrorBoundary extends Component<Props, State> {
               </div>
             </div>
 
-            <h1 className="text-xl font-bold text-white text-center mb-2">
+            <h1 className="text-xl font-bold text-foreground text-center mb-2">
               Erro na Aplicação
             </h1>
 
-            <p className="text-sm text-slate-400 text-center mb-5">
+            <p className="text-sm text-muted text-center mb-5">
               Algo deu errado ao renderizar essa página. Por favor, tente novamente.
             </p>
 
             {this.state.error && (
-              <div className="rounded-xl bg-slate-950/80 border border-white/5 p-3 mb-5 font-mono text-xs text-slate-500 break-words">
+              <div className="rounded-xl bg-background/80 border border-border p-3 mb-5 font-mono text-xs text-muted break-words">
                 {this.state.error.message}
               </div>
             )}
@@ -67,13 +75,13 @@ export class ErrorBoundary extends Component<Props, State> {
             <div className="space-y-2">
               <button
                 onClick={this.handleReset}
-                className="w-full inline-flex items-center justify-center gap-2 rounded-xl border border-primary/50 bg-primary px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-primary/90"
+                className="w-full inline-flex items-center justify-center gap-2 rounded-xl border border-primary/50 bg-primary px-4 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-primary/90"
               >
                 Tentar Novamente
               </button>
               <button
                 onClick={() => (window.location.href = '/')}
-                className="w-full inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-slate-300 transition-colors hover:bg-white/10"
+                className="w-full inline-flex items-center justify-center gap-2 rounded-xl border border-border bg-surface-light px-4 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-surface-hover"
               >
                 Voltar ao Início
               </button>

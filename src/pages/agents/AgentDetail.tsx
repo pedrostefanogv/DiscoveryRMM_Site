@@ -1,4 +1,4 @@
-ï»¿import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Cpu, MemoryStick, Ticket as TicketIcon,
@@ -28,11 +28,11 @@ const levelLabels: Record<number, { label: string; color: 'slate' | 'primary' | 
   [LogLevel.Info]: { label: 'Info', color: 'primary' },
   [LogLevel.Warning]: { label: 'Aviso', color: 'warning' },
   [LogLevel.Error]: { label: 'Erro', color: 'danger' },
-  [LogLevel.Critical]: { label: 'CrÃ­tico', color: 'danger' },
+  [LogLevel.Critical]: { label: 'Crítico', color: 'danger' },
 };
 
 function formatBytes(bytes: number | null): string {
-  if (!bytes) return 'â€”';
+  if (!bytes) return '—';
   const gb = bytes / (1024 ** 3);
   if (gb >= 1) return `${gb.toFixed(1)} GB`;
   const mb = bytes / (1024 ** 2);
@@ -40,12 +40,12 @@ function formatBytes(bytes: number | null): string {
 }
 
 function formatDate(date: string | null): string {
-  if (!date) return 'â€”';
+  if (!date) return '—';
   return new Date(date).toLocaleString('pt-BR');
 }
 
 function formatSocketFamily(family: string | null): string {
-  if (!family) return 'â€”';
+  if (!family) return '—';
   if (family === '2') return 'IPv4';
   if (family === '23') return 'IPv6';
   return family;
@@ -270,11 +270,11 @@ export default function AgentDetail() {
       if (err && typeof err === 'object' && 'status' in err) {
         const apiErr = err as { status?: number; message?: string };
         if (apiErr.status === 409) {
-          toast.error('Este agente jÃ¡ possui essa label.');
+          toast.error('Este agente já possui essa label.');
           return;
         }
         if (apiErr.status === 400) {
-          toast.error(apiErr.message || 'Label invÃ¡lida.');
+          toast.error(apiErr.message || 'Label inválida.');
           return;
         }
       }
@@ -293,11 +293,11 @@ export default function AgentDetail() {
       if (err && typeof err === 'object' && 'status' in err) {
         const apiErr = err as { status?: number; message?: string };
         if (apiErr.status === 400) {
-          toast.error(apiErr.message || 'NÃ£o Ã© possÃ­vel remover label automÃ¡tica por este endpoint.');
+          toast.error(apiErr.message || 'Não é possível remover label automática por este endpoint.');
           return;
         }
         if (apiErr.status === 404) {
-          toast.error('Label nÃ£o encontrada.');
+          toast.error('Label não encontrada.');
           return;
         }
       }
@@ -402,16 +402,16 @@ export default function AgentDetail() {
       : machineScore >= 100
         ? 'Acima da baseline'
         : machineScore >= 60
-          ? 'IntermediÃ¡rio'
+          ? 'Intermediário'
           : 'Entrada';
   const processorModelFull = hw.data?.hardware?.processor ?? null;
   const processorModelDisplay = processorModelFull
     ? processorModelFull.split(' ').slice(0, 4).join(' ')
-    : 'Modelo indisponÃ­vel';
+    : 'Modelo indisponível';
   const processorValue = hw.data?.hardware?.processor
     ? `${hw.data.hardware.processorCores ?? '?'}C / ${hw.data.hardware.processorThreads ?? '?'}T`
-    : 'â€”';
-  const softwareTotalInstalled = softwareSnapshot.isLoading ? 'â€”' : (softwareSnapshot.data?.totalInstalled ?? 0);
+    : '—';
+  const softwareTotalInstalled = softwareSnapshot.isLoading ? '—' : (softwareSnapshot.data?.totalInstalled ?? 0);
   const softwareLastCollectedAt = softwareSnapshot.data?.lastCollectedAt ?? softwareSnapshot.data?.updatedAt ?? null;
   const softwareLastCollectedLabel = softwareLastCollectedAt
     ? new Date(softwareLastCollectedAt).toLocaleString('pt-BR')
@@ -424,14 +424,14 @@ export default function AgentDetail() {
       key: 'protocol',
       header: 'Protocolo',
       className: 'w-24',
-      render: item => <span className="font-mono uppercase text-slate-300">{item.protocol ?? 'â€”'}</span>,
+      render: item => <span className="font-mono uppercase text-muted-foreground">{item.protocol ?? '—'}</span>,
     },
     {
       key: 'address',
-      header: 'EndereÃ§o',
+      header: 'Endereço',
       render: item => (
-        <span className="font-mono text-slate-300">
-          {item.address ?? 'â€”'}:{item.port}
+        <span className="font-mono text-muted-foreground">
+          {item.address ?? '—'}:{item.port}
         </span>
       ),
     },
@@ -440,14 +440,14 @@ export default function AgentDetail() {
       header: 'Processo',
       render: item => (
         <div>
-          <p className="text-sm text-white">{item.processName ?? 'â€”'}</p>
-          <p className="text-xs text-slate-500">PID {item.processId}</p>
+          <p className="text-sm text-foreground">{item.processName ?? '—'}</p>
+          <p className="text-xs text-muted">PID {item.processId}</p>
         </div>
       ),
     },
     {
       key: 'collectedAt',
-      header: 'Ãšltima coleta',
+      header: 'Última coleta',
       render: item => formatDate(item.collectedAt),
     },
   ];
@@ -457,11 +457,11 @@ export default function AgentDetail() {
       key: 'protocol',
       header: 'Protocolo',
       className: 'w-24',
-      render: item => <span className="font-mono uppercase text-slate-300">{item.protocol ?? 'â€”'}</span>,
+      render: item => <span className="font-mono uppercase text-muted-foreground">{item.protocol ?? '—'}</span>,
     },
     {
       key: 'family',
-      header: 'FamÃ­lia',
+      header: 'Família',
       className: 'w-20',
       render: item => <Badge color="slate">{formatSocketFamily(item.family)}</Badge>,
     },
@@ -469,8 +469,8 @@ export default function AgentDetail() {
       key: 'local',
       header: 'Origem',
       render: item => (
-        <span className="font-mono text-slate-300">
-          {item.localAddress ?? 'â€”'}:{item.localPort}
+        <span className="font-mono text-muted-foreground">
+          {item.localAddress ?? '—'}:{item.localPort}
         </span>
       ),
     },
@@ -478,8 +478,8 @@ export default function AgentDetail() {
       key: 'remote',
       header: 'Destino',
       render: item => (
-        <span className="font-mono text-slate-300">
-          {item.remoteAddress ?? 'â€”'}:{item.remotePort}
+        <span className="font-mono text-muted-foreground">
+          {item.remoteAddress ?? '—'}:{item.remotePort}
         </span>
       ),
     },
@@ -488,14 +488,14 @@ export default function AgentDetail() {
       header: 'Processo',
       render: item => (
         <div>
-          <p className="text-sm text-white">{item.processName ?? 'â€”'}</p>
-          <p className="text-xs text-slate-500">PID {item.processId}</p>
+          <p className="text-sm text-foreground">{item.processName ?? '—'}</p>
+          <p className="text-xs text-muted">PID {item.processId}</p>
         </div>
       ),
     },
     {
       key: 'collectedAt',
-      header: 'Ãšltima coleta',
+      header: 'Última coleta',
       render: item => formatDate(item.collectedAt),
     },
   ];
@@ -565,7 +565,7 @@ export default function AgentDetail() {
     if (!id) return;
     try {
       await deleteAgent.mutateAsync(id);
-      toast.success('Agente excluÃ­do com sucesso.');
+      toast.success('Agente excluído com sucesso.');
       setDeleteConfirmOpen(false);
       navigate('/agents', { replace: true });
     } catch (error) {
@@ -579,13 +579,13 @@ export default function AgentDetail() {
     setIsTriggeringAgentUpdate(true);
     try {
       await agentUpdatesApi.forceAgentCheck(id);
-      toast.success('AtualizaÃ§Ã£o do agente disparada com sucesso.');
+      toast.success('Atualização do agente disparada com sucesso.');
     } catch (error) {
       const message = error instanceof ApiError
         ? error.message
         : error instanceof Error
           ? error.message
-          : 'Falha ao disparar atualizaÃ§Ã£o do agente.';
+          : 'Falha ao disparar atualização do agente.';
       toast.error(message);
     } finally {
       setIsTriggeringAgentUpdate(false);
@@ -603,7 +603,7 @@ export default function AgentDetail() {
     setIsApprovingZeroTouch(true);
     try {
       await approveZeroTouch.mutateAsync(id);
-      toast.success('Agente aprovado para comunicaÃ§Ã£o com a API.');
+      toast.success('Agente aprovado para comunicação com a API.');
       await agent.refetch();
     } catch (error) {
       const message = error instanceof ApiError
@@ -641,7 +641,7 @@ export default function AgentDetail() {
 
   const handleWakeOnLanConfirm = async (data: { broadcastAddress?: string }) => {
     if (!id) {
-      throw new Error('Agente invÃ¡lido para Wake-on-LAN.');
+      throw new Error('Agente inválido para Wake-on-LAN.');
     }
 
     const response = await wakeOnLan.mutateAsync({ id, data });
@@ -664,18 +664,18 @@ export default function AgentDetail() {
       const current = report.items.find((item) => item.agentId === a.id);
       if (current) {
         toast.success(
-          `Node link dry-run: ${current.status} Â· sugestÃ£o ${current.suggestedNodeId ?? 'N/A'}`,
+          `Node link dry-run: ${current.status} · sugestão ${current.suggestedNodeId ?? 'N/A'}`,
         );
       } else {
-        toast.success('Dry-run de node links concluÃ­do para o site.');
+        toast.success('Dry-run de node links concluído para o site.');
       }
     } catch (error) {
       if (error instanceof ApiError && error.status === 403) {
-        setNodeLinkPreviewError('Sem permissÃ£o para reconciliar links de node neste escopo.');
-        toast.error('Sem permissÃ£o para reconciliar links de node neste escopo.');
+        setNodeLinkPreviewError('Sem permissão para reconciliar links de node neste escopo.');
+        toast.error('Sem permissão para reconciliar links de node neste escopo.');
       } else if (error instanceof ApiError && error.status === 503) {
-        setNodeLinkPreviewError('Falha operacional/configuraÃ§Ã£o do MeshCentral.');
-        toast.error('Falha operacional/configuraÃ§Ã£o do MeshCentral.');
+        setNodeLinkPreviewError('Falha operacional/configuração do MeshCentral.');
+        toast.error('Falha operacional/configuração do MeshCentral.');
       } else {
         const message = error instanceof Error
           ? error.message
@@ -691,12 +691,12 @@ export default function AgentDetail() {
   const handleNodeLinkApply = async () => {
     if (!a.siteId || isApplyingNodeLink || !nodeLinkPreviewReport) return;
     if (nodeLinkPreviewReport.ambiguousAgents > 0) {
-      toast.error('Existem links ambiguos no site. FaÃ§a tratativa manual antes de aplicar.');
+      toast.error('Existem links ambiguos no site. Faça tratativa manual antes de aplicar.');
       return;
     }
 
     const confirmed = window.confirm(
-      'Aplicar reconcile atualizarÃ¡ vÃ­nculos meshcentral_node_id no site. Deseja continuar?',
+      'Aplicar reconcile atualizará vínculos meshcentral_node_id no site. Deseja continuar?',
     );
     if (!confirmed) return;
 
@@ -711,9 +711,9 @@ export default function AgentDetail() {
       toast.success('Reconcile de node links aplicado com sucesso.');
     } catch (error) {
       if (error instanceof ApiError && error.status === 403) {
-        toast.error('Sem permissÃ£o para aplicar reconcile de node links neste escopo.');
+        toast.error('Sem permissão para aplicar reconcile de node links neste escopo.');
       } else if (error instanceof ApiError && error.status === 503) {
-        toast.error('Falha operacional/configuraÃ§Ã£o do MeshCentral.');
+        toast.error('Falha operacional/configuração do MeshCentral.');
       } else {
         const message = error instanceof Error
           ? error.message
@@ -739,14 +739,14 @@ export default function AgentDetail() {
     setSoftwarePage((p) => Math.max(1, p - 1));
   };
 
-  // â”€â”€ On-demand data refresh handlers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // -- On-demand data refresh handlers ----------------------------------
 
   const handleRefreshPorts = async () => {
     if (!id || isRefreshingPorts) return;
     setIsRefreshingPorts(true);
     try {
       await agentsApi.refreshData(id, { listeningPorts: true });
-      toast.success('SolicitaÃ§Ã£o de coleta de portas enviada ao agente.');
+      toast.success('Solicitação de coleta de portas enviada ao agente.');
       await new Promise(r => setTimeout(r, 2000));
       await hw.refetch();
     } catch (error) {
@@ -762,11 +762,11 @@ export default function AgentDetail() {
     setIsRefreshingConnections(true);
     try {
       await agentsApi.refreshData(id, { openConnections: true });
-      toast.success('SolicitaÃ§Ã£o de coleta de conexÃµes enviada ao agente.');
+      toast.success('Solicitação de coleta de conexões enviada ao agente.');
       await new Promise(r => setTimeout(r, 2000));
       await hw.refetch();
     } catch (error) {
-      const msg = error instanceof ApiError ? error.message : 'Falha ao solicitar refresh de conexÃµes.';
+      const msg = error instanceof ApiError ? error.message : 'Falha ao solicitar refresh de conexões.';
       toast.error(msg);
     } finally {
       setIsRefreshingConnections(false);
@@ -778,7 +778,7 @@ export default function AgentDetail() {
     setIsRefreshingSoftware(true);
     try {
       await agentsApi.refreshData(id, { software: true });
-      toast.success('SolicitaÃ§Ã£o de coleta de software enviada ao agente.');
+      toast.success('Solicitação de coleta de software enviada ao agente.');
       await new Promise(r => setTimeout(r, 3000));
       await software.refetch();
       await softwareSnapshot.refetch();
@@ -795,7 +795,7 @@ export default function AgentDetail() {
     setIsRefreshingPrinters(true);
     try {
       await agentsApi.refreshData(id, { printers: true, hardware: true });
-      toast.success('SolicitaÃ§Ã£o de coleta de impressoras enviada ao agente.');
+      toast.success('Solicitação de coleta de impressoras enviada ao agente.');
       await new Promise(r => setTimeout(r, 2000));
       await hw.refetch();
     } catch (error) {
@@ -807,9 +807,9 @@ export default function AgentDetail() {
   };
 
   const softwareLimitOptions = [
-    { value: '10', label: '10 por pÃ¡gina' },
-    { value: '30', label: '30 por pÃ¡gina' },
-    { value: '50', label: '50 por pÃ¡gina' },
+    { value: '10', label: '10 por página' },
+    { value: '30', label: '30 por página' },
+    { value: '50', label: '50 por página' },
   ];
   const softwareOrderOptions = [
     { value: 'desc', label: 'Mais recente primeiro' },
@@ -821,25 +821,25 @@ export default function AgentDetail() {
       header: 'Aplicativo',
       render: item => (
         <div>
-          <p className="font-medium text-white">{item.name}</p>
-          <p className="text-xs text-slate-500">{item.publisher ?? 'Sem fabricante'}</p>
+          <p className="font-medium text-foreground">{item.name}</p>
+          <p className="text-xs text-muted">{item.publisher ?? 'Sem fabricante'}</p>
         </div>
       ),
     },
     {
       key: 'version',
-      header: 'VersÃ£o',
+      header: 'Versão',
       className: 'font-mono',
-      render: item => item.version ?? 'â€”',
+      render: item => item.version ?? '—',
     },
     {
       key: 'source',
       header: 'Fonte',
-      render: item => item.source ?? 'â€”',
+      render: item => item.source ?? '—',
     },
     {
       key: 'lastSeenAt',
-      header: 'Ãšltima coleta',
+      header: 'Última coleta',
       render: item => formatDate(item.lastSeenAt ?? item.collectedAt),
     },
   ];
@@ -848,12 +848,12 @@ export default function AgentDetail() {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center gap-4">
-        <button onClick={() => navigate(-1)} aria-label="Voltar" className="rounded-lg p-2 text-slate-400 hover:bg-white/5 hover:text-white">
+        <button onClick={() => navigate(-1)} aria-label="Voltar" className="rounded-lg p-2 text-muted hover:bg-surface-light hover:text-foreground">
           <ArrowLeft className="h-5 w-5" />
         </button>
         <div className="flex-1">
-          <h1 className="text-2xl font-bold text-white">{a.displayName ?? a.hostname}</h1>
-          <p className="text-sm text-slate-400">{a.hostname} â€” {a.operatingSystem} {a.osVersion}</p>
+          <h1 className="text-2xl font-bold text-foreground">{a.displayName ?? a.hostname}</h1>
+          <p className="text-sm text-muted">{a.hostname} — {a.operatingSystem} {a.osVersion}</p>
         </div>
         <Badge color={isOnlineNow ? 'success' : 'slate'}>
           <span className="flex items-center gap-1">
@@ -863,7 +863,7 @@ export default function AgentDetail() {
         </Badge>
         {isZeroTouchPending && (
           <>
-            <Badge color="warning">Zero-Touch: aguardando aprovaÃ§Ã£o</Badge>
+            <Badge color="warning">Zero-Touch: aguardando aprovação</Badge>
           </>
         )}
         <div className="relative" ref={powerMenuRef}>
@@ -873,14 +873,14 @@ export default function AgentDetail() {
             onClick={() => setIsPowerMenuOpen((current) => !current)}
           >
             <Power className="h-4 w-4" />
-            AÃ§Ãµes
+            Ações
             <ChevronDown className="h-4 w-4" />
           </Button>
           {isPowerMenuOpen && (
-            <div className="absolute right-0 top-full z-50 mt-2 min-w-[220px] overflow-hidden rounded-lg border border-white/10 bg-slate-900 shadow-xl">
+            <div className="absolute right-0 top-full z-50 mt-2 min-w-[220px] overflow-hidden rounded-lg border border-border bg-surface shadow-xl">
               <button
                 type="button"
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-200 transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60"
                 onClick={() => {
                   setIsPowerMenuOpen(false);
                   void handleOpenRemoteDebug();
@@ -892,7 +892,7 @@ export default function AgentDetail() {
               </button>
               <button
                 type="button"
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-200 transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60"
                 onClick={() => {
                   setIsPowerMenuOpen(false);
                   void handleTriggerAgentUpdate();
@@ -904,17 +904,17 @@ export default function AgentDetail() {
               </button>
               <button
                 type="button"
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-200 transition-colors hover:bg-white/10"
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-surface-hover"
                 onClick={() => {
                   setIsPowerMenuOpen(false);
                   navigate(`/automation/operations?agentId=${a.id}`);
                 }}
               >
                 <AppWindow className="h-4 w-4" />
-                AutomaÃ§Ã£o
+                Automação
               </button>
 
-              <div className="border-t border-white/10" />
+              <div className="border-t border-border" />
 
               {isOnlineNow ? (
                 <>
@@ -952,7 +952,7 @@ export default function AgentDetail() {
               {isZeroTouchPending && canManageAgent && (
                 <button
                   type="button"
-                  className="flex w-full items-center gap-2 border-t border-white/10 px-3 py-2 text-left text-sm text-warning transition-colors hover:bg-warning/10 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="flex w-full items-center gap-2 border-t border-border px-3 py-2 text-left text-sm text-warning transition-colors hover:bg-warning/10 disabled:cursor-not-allowed disabled:opacity-60"
                   onClick={() => {
                     setIsPowerMenuOpen(false);
                     void handleApproveZeroTouch();
@@ -967,7 +967,7 @@ export default function AgentDetail() {
               {canManageAgent && (
                 <button
                   type="button"
-                  className="flex w-full items-center gap-2 border-t border-white/10 px-3 py-2 text-left text-sm text-red-300 transition-colors hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="flex w-full items-center gap-2 border-t border-border px-3 py-2 text-left text-sm text-red-300 transition-colors hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-60"
                   onClick={() => {
                     setIsPowerMenuOpen(false);
                     handleDeleteAgent();
@@ -994,46 +994,46 @@ export default function AgentDetail() {
           className="block h-full"
           variant="hover-card"
           content={(
-            <div className="space-y-2 text-left text-[11px] text-slate-300">
+            <div className="space-y-2 text-left text-[11px] text-muted-foreground">
               <p>
-                <span className="text-slate-400">Modelo completo:</span>{' '}
-                {processorModelFull ?? 'NÃ£o informado'}
+                <span className="text-muted">Modelo completo:</span>{' '}
+                {processorModelFull ?? 'Não informado'}
               </p>
               <p>
-                <span className="text-slate-400">NÃºcleos fÃ­sicos:</span>{' '}
-                {hw.data?.hardware?.processorCores ?? 'â€”'}
+                <span className="text-muted">Núcleos físicos:</span>{' '}
+                {hw.data?.hardware?.processorCores ?? '—'}
               </p>
               <p>
-                <span className="text-slate-400">Threads lÃ³gicas:</span>{' '}
-                {hw.data?.hardware?.processorThreads ?? 'â€”'}
+                <span className="text-muted">Threads lógicas:</span>{' '}
+                {hw.data?.hardware?.processorThreads ?? '—'}
               </p>
               <p>
-                <span className="text-slate-400">Arquitetura:</span>{' '}
-                {hw.data?.hardware?.processorArchitecture ?? 'NÃ£o informada'}
+                <span className="text-muted">Arquitetura:</span>{' '}
+                {hw.data?.hardware?.processorArchitecture ?? 'Não informada'}
               </p>
             </div>
           )}
         >
-          <div className="glass-card flex h-full items-center gap-4 rounded-xl border border-white/5 bg-surface p-5">
+          <div className="glass-card flex h-full items-center gap-4 rounded-xl border border-border bg-surface p-5">
             <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary/15 ring-1 ring-white/5">
               <Cpu className="h-6 w-6 text-primary" />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-xs font-medium text-slate-400" title={processorModelFull ?? undefined}>
+              <p className="truncate text-xs font-medium text-muted" title={processorModelFull ?? undefined}>
                 {processorModelDisplay}
               </p>
-              <p className="text-2xl font-bold text-white tabular-nums">{processorValue}</p>
+              <p className="text-2xl font-bold text-foreground tabular-nums">{processorValue}</p>
             </div>
           </div>
         </Tooltip>
         <div className="h-full [&>div]:h-full">
           <StatCard
             icon={MemoryStick}
-            label="MemÃ³ria RAM"
+            label="Memória RAM"
             value={formatBytes(hw.data?.hardware?.totalMemoryBytes ?? null)}
             tone="accent"
             trend={hw.data?.memoryModules?.length
-              ? <span className="text-xs text-slate-400">{hw.data.memoryModules.length} mÃ³dulo(s)</span>
+              ? <span className="text-xs text-muted">{hw.data.memoryModules.length} módulo(s)</span>
               : undefined}
           />
         </div>
@@ -1044,30 +1044,30 @@ export default function AgentDetail() {
           variant="hover-card"
           content={(
             <div className="space-y-3 text-left">
-              <p className="text-[11px] text-slate-300">
+              <p className="text-[11px] text-muted-foreground">
                 O score combina CPU (50%) e RAM (50%), com baseline em 16c/32t + 64 GB = score 100.
               </p>
 
-              <div className="grid gap-1 text-[11px] text-slate-300">
-                <p><span className="text-slate-400">CPU (50%):</span> nÃºcleos fÃ­sicos valem 1.0 e threads extras valem 0.3 cada.</p>
-                <p><span className="text-slate-400">RAM (50%):</span> progressÃ£o linear pela quantidade de GB.</p>
+              <div className="grid gap-1 text-[11px] text-muted-foreground">
+                <p><span className="text-muted">CPU (50%):</span> núcleos físicos valem 1.0 e threads extras valem 0.3 cada.</p>
+                <p><span className="text-muted">RAM (50%):</span> progressão linear pela quantidade de GB.</p>
               </div>
 
-              <div className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 font-mono text-[11px] text-slate-200">
+              <div className="rounded-lg border border-border bg-surface-light px-3 py-2 font-mono text-[11px] text-foreground">
                 <p>cpuRaw = cores + (threads - cores) * 0.3</p>
                 <p>cpuScore = (cpuRaw / 20.8) * 100</p>
                 <p>ramScore = (ramGB / 64) * 100</p>
                 <p>machineScore = round((cpuScore * 0.5) + (ramScore * 0.5), min=1)</p>
               </div>
 
-              <div className="grid gap-1 text-[11px] text-slate-300">
+              <div className="grid gap-1 text-[11px] text-muted-foreground">
                 <p>2c/2t + 4 GB -&gt; ~8</p>
                 <p>8c/16t + 16 GB -&gt; ~38</p>
                 <p>16c/32t + 64 GB -&gt; 100</p>
                 <p>32c/64t + 128 GB -&gt; acima de 100</p>
               </div>
 
-              <p className="text-[11px] text-slate-400">
+              <p className="text-[11px] text-muted">
                 Sem teto: quanto mais recurso, maior o MachineScore.
               </p>
             </div>
@@ -1077,9 +1077,9 @@ export default function AgentDetail() {
             <StatCard
               icon={Gauge}
               label="MachineScore"
-              value={machineScore === null ? 'â€”' : machineScore}
+              value={machineScore === null ? '—' : machineScore}
               tone={machineScoreTone}
-              trend={machineScoreHint ? <span className="text-xs text-slate-400">{machineScoreHint}</span> : undefined}
+              trend={machineScoreHint ? <span className="text-xs text-muted">{machineScoreHint}</span> : undefined}
             />
           </div>
         </Tooltip>
@@ -1089,18 +1089,18 @@ export default function AgentDetail() {
           className="block h-full"
           variant="hover-card"
           content={(
-            <div className="space-y-2 text-left text-[11px] text-slate-300">
-              <p>Labels do agente: automÃ¡ticas por regras e manuais.</p>
+            <div className="space-y-2 text-left text-[11px] text-muted-foreground">
+              <p>Labels do agente: automáticas por regras e manuais.</p>
               {isLoadingLabels ? (
                 <p>Carregando labels...</p>
               ) : labelsError ? (
                 <p>{labelsError}</p>
               ) : (
                 <>
-                  <p><span className="text-slate-400">Total:</span> {allLabels.length}</p>
-                  <p><span className="text-slate-400">AutomÃ¡ticas:</span> {automaticLabelsCount}</p>
-                  <p><span className="text-slate-400">Manuais:</span> {manualLabelsCount}</p>
-                  <p className="text-slate-400">Use o botÃ£o + para vincular labels manuais existentes.</p>
+                  <p><span className="text-muted">Total:</span> {allLabels.length}</p>
+                  <p><span className="text-muted">Automáticas:</span> {automaticLabelsCount}</p>
+                  <p><span className="text-muted">Manuais:</span> {manualLabelsCount}</p>
+                  <p className="text-muted">Use o botão + para vincular labels manuais existentes.</p>
                 </>
               )}
             </div>
@@ -1123,7 +1123,7 @@ export default function AgentDetail() {
               </Button>
 
               {showLabelPicker ? (
-                <div className="absolute right-0 top-full z-50 mt-1 w-72 rounded-xl border border-white/10 bg-slate-900 p-2 shadow-xl">
+                <div className="absolute right-0 top-full z-50 mt-1 w-72 rounded-xl border border-border bg-surface p-2 shadow-xl">
                   <Input
                     placeholder="Filtrar labels..."
                     value={labelPickerQuery}
@@ -1144,8 +1144,8 @@ export default function AgentDetail() {
                             disabled={alreadyHas || isAddingManualLabel}
                             className={`w-full rounded-lg px-3 py-2 text-left text-sm transition-colors ${
                               alreadyHas
-                                ? 'cursor-not-allowed text-slate-600'
-                                : 'text-slate-200 hover:bg-white/10'
+                                ? 'cursor-not-allowed text-muted'
+                                : 'text-foreground hover:bg-surface-hover'
                             }`}
                             onClick={() => {
                               if (alreadyHas || !id) return;
@@ -1156,18 +1156,18 @@ export default function AgentDetail() {
                           >
                             {l}
                             {alreadyHas ? (
-                              <span className="ml-2 text-xs text-slate-600">(jÃ¡ vinculada)</span>
+                              <span className="ml-2 text-xs text-muted">(já vinculada)</span>
                             ) : null}
                           </button>
                         );
                       })}
                     {distinctLabels.length === 0 ? (
-                      <p className="px-3 py-2 text-xs text-slate-500">
-                        Nenhuma label cadastrada. Crie uma regra com modo Manual em Labels AutomÃ¡ticas.
+                      <p className="px-3 py-2 text-xs text-muted">
+                        Nenhuma label cadastrada. Crie uma regra com modo Manual em Labels Automáticas.
                       </p>
                     ) : null}
                     {distinctLabels.filter(l => l.toLowerCase().includes(labelPickerQuery.toLowerCase())).length === 0 ? (
-                      <p className="px-3 py-2 text-xs text-slate-500">Nenhuma label encontrada.</p>
+                      <p className="px-3 py-2 text-xs text-muted">Nenhuma label encontrada.</p>
                     ) : null}
                   </div>
                 </div>
@@ -1177,7 +1177,7 @@ export default function AgentDetail() {
             {isLoadingLabels ? (
               <div className="flex flex-wrap gap-2">
                 {Array.from({ length: 4 }).map((_, idx) => (
-                  <span key={idx} className="h-6 w-20 animate-pulse rounded-full bg-white/10" />
+                  <span key={idx} className="h-6 w-20 animate-pulse rounded-full bg-surface-hover" />
                 ))}
               </div>
             ) : labelsError ? (
@@ -1194,7 +1194,7 @@ export default function AgentDetail() {
                       <span>{item.label}</span>
                       {item.sourceType === AgentLabelSourceType.Manual ? (
                         <button
-                          className="ml-1.5 inline-flex items-center justify-center rounded-full p-0.5 text-slate-500 transition-colors hover:bg-white/10 hover:text-danger"
+                          className="ml-1.5 inline-flex items-center justify-center rounded-full p-0.5 text-muted transition-colors hover:bg-surface-hover hover:text-danger"
                           title="Remover label manual"
                           onClick={() => void handleRemoveManualLabel(item.id)}
                         >
@@ -1206,7 +1206,7 @@ export default function AgentDetail() {
                 </div>
               </div>
             ) : (
-              <p className="text-sm text-slate-400">Nenhuma label aplicada.</p>
+              <p className="text-sm text-muted">Nenhuma label aplicada.</p>
             )}
           </Card>
         </Tooltip>
@@ -1216,19 +1216,19 @@ export default function AgentDetail() {
           className="block h-full"
           variant="hover-card"
           content={(
-            <div className="space-y-2 text-left text-[11px] text-slate-300">
-              <p>InventÃ¡rio de softwares instalados no agente.</p>
-              <p><span className="text-slate-400">Quantidade total:</span> {softwareTotalInstalled}</p>
-              <p><span className="text-slate-400">Ãšltima coleta:</span> {softwareLastCollectedLabel}</p>
+            <div className="space-y-2 text-left text-[11px] text-muted-foreground">
+              <p>Inventário de softwares instalados no agente.</p>
+              <p><span className="text-muted">Quantidade total:</span> {softwareTotalInstalled}</p>
+              <p><span className="text-muted">Última coleta:</span> {softwareLastCollectedLabel}</p>
             </div>
           )}
         >
-          <div className="glass-card flex h-full items-center gap-4 rounded-xl border border-white/5 bg-surface p-5">
+          <div className="glass-card flex h-full items-center gap-4 rounded-xl border border-border bg-surface p-5">
             <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-success/15 ring-1 ring-white/5">
               <AppWindow className="h-6 w-6 text-success" />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-3xl font-bold text-white tabular-nums">{softwareTotalInstalled}</p>
+              <p className="text-3xl font-bold text-foreground tabular-nums">{softwareTotalInstalled}</p>
             </div>
           </div>
         </Tooltip>
@@ -1243,37 +1243,37 @@ export default function AgentDetail() {
 
         {/* Disk */}
         <Card>
-          <CardHeader title="Disco" subtitle="EspaÃ§o agregado do agente" />
+          <CardHeader title="Disco" subtitle="Espaço agregado do agente" />
 
           {disks.length === 0 ? (
-            <p className="text-sm text-slate-500">Sem dados de disco coletados para este agente.</p>
+            <p className="text-sm text-muted">Sem dados de disco coletados para este agente.</p>
           ) : (
             <div className="space-y-4">
               <div className="grid gap-3 sm:grid-cols-3">
-                <div className="rounded-lg bg-white/5 px-3 py-2">
-                  <p className="text-xs text-slate-500">Usado</p>
-                  <p className="text-sm font-medium text-white">{formatBytes(usedDiskBytes)}</p>
+                <div className="rounded-lg bg-surface-light px-3 py-2">
+                  <p className="text-xs text-muted">Usado</p>
+                  <p className="text-sm font-medium text-foreground">{formatBytes(usedDiskBytes)}</p>
                 </div>
-                <div className="rounded-lg bg-white/5 px-3 py-2">
-                  <p className="text-xs text-slate-500">Livre</p>
-                  <p className="text-sm font-medium text-white">{formatBytes(freeDiskBytes)}</p>
+                <div className="rounded-lg bg-surface-light px-3 py-2">
+                  <p className="text-xs text-muted">Livre</p>
+                  <p className="text-sm font-medium text-foreground">{formatBytes(freeDiskBytes)}</p>
                 </div>
-                <div className="rounded-lg bg-white/5 px-3 py-2">
-                  <p className="text-xs text-slate-500">Total</p>
-                  <p className="text-sm font-medium text-white">{formatBytes(totalDiskBytes)}</p>
+                <div className="rounded-lg bg-surface-light px-3 py-2">
+                  <p className="text-xs text-muted">Total</p>
+                  <p className="text-sm font-medium text-foreground">{formatBytes(totalDiskBytes)}</p>
                 </div>
               </div>
 
               <div>
                 <div className="mb-1 flex items-center justify-between text-xs">
-                  <span className="flex items-center gap-1 text-slate-400">
+                  <span className="flex items-center gap-1 text-muted">
                     <HardDrive className="h-3.5 w-3.5" />
-                    UtilizaÃ§Ã£o
+                    Utilização
                   </span>
-                  <span className="font-medium text-slate-300">{diskUsagePercent ?? 0}%</span>
+                  <span className="font-medium text-muted-foreground">{diskUsagePercent ?? 0}%</span>
                 </div>
                 <progress
-                  className="h-2 w-full overflow-hidden rounded-full [&::-webkit-progress-bar]:bg-white/10 [&::-webkit-progress-value]:bg-cyan-400 [&::-moz-progress-bar]:bg-cyan-400"
+                  className="h-2 w-full overflow-hidden rounded-full [&::-webkit-progress-bar]:bg-surface-hover [&::-webkit-progress-value]:bg-cyan-400 [&::-moz-progress-bar]:bg-cyan-400"
                   value={diskUsagePercent ?? 0}
                   max={100}
                 />
@@ -1287,19 +1287,19 @@ export default function AgentDetail() {
                     : 0;
 
                   return (
-                    <div key={disk.id} className="rounded-lg bg-white/5 px-3 py-2 text-xs">
+                    <div key={disk.id} className="rounded-lg bg-surface-light px-3 py-2 text-xs">
                       <div className="flex items-center justify-between gap-2">
-                        <span className="font-medium text-slate-200">
+                        <span className="font-medium text-foreground">
                           {disk.driveLetter}{disk.label ? ` (${disk.label})` : ''}
                         </span>
-                        <span className="text-slate-400">{diskUsedPercent}% usado</span>
+                        <span className="text-muted">{diskUsedPercent}% usado</span>
                       </div>
                       <progress
-                        className="mt-2 h-1.5 w-full overflow-hidden rounded-full [&::-webkit-progress-bar]:bg-white/10 [&::-webkit-progress-value]:bg-cyan-400 [&::-moz-progress-bar]:bg-cyan-400"
+                        className="mt-2 h-1.5 w-full overflow-hidden rounded-full [&::-webkit-progress-bar]:bg-surface-hover [&::-webkit-progress-value]:bg-cyan-400 [&::-moz-progress-bar]:bg-cyan-400"
                         value={diskUsedPercent}
                         max={100}
                       />
-                      <p className="mt-1 text-slate-500">
+                      <p className="mt-1 text-muted">
                         {formatBytes(diskUsedBytes)} usados de {formatBytes(disk.totalSizeBytes)}
                       </p>
                     </div>
@@ -1315,25 +1315,25 @@ export default function AgentDetail() {
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Info do Agente */}
         <Card>
-          <CardHeader title="InformaÃ§Ãµes" />
+          <CardHeader title="Informações" />
           <dl className="space-y-3 text-sm">
             <div>
-              <dt className="text-slate-400">Hostname</dt>
-              <dd className="mt-0.5 font-mono text-white">{a.hostname}</dd>
+              <dt className="text-muted">Hostname</dt>
+              <dd className="mt-0.5 font-mono text-foreground">{a.hostname}</dd>
             </div>
             <div>
-              <dt className="text-slate-400">Sistema Operacional</dt>
-              <dd className="mt-0.5 text-white">{a.operatingSystem ?? 'â€”'}</dd>
+              <dt className="text-muted">Sistema Operacional</dt>
+              <dd className="mt-0.5 text-foreground">{a.operatingSystem ?? '—'}</dd>
             </div>
             <div>
-              <dt className="text-slate-400">VersÃ£o do SO</dt>
-              <dd className="mt-0.5 font-mono text-white">{a.osVersion ?? 'â€”'}</dd>
+              <dt className="text-muted">Versão do SO</dt>
+              <dd className="mt-0.5 font-mono text-foreground">{a.osVersion ?? '—'}</dd>
             </div>
-            <div className="border-t border-white/5 pt-3">
-              <dt className="text-slate-400">MeshCentral Node ID</dt>
-              <dd className="mt-0.5 text-white">
-                <span className="font-mono">{a.meshCentralNodeId ?? 'â€”'}</span>
-                <p className="mt-1 text-xs text-slate-500">
+            <div className="border-t border-border pt-3">
+              <dt className="text-muted">MeshCentral Node ID</dt>
+              <dd className="mt-0.5 text-foreground">
+                <span className="font-mono">{a.meshCentralNodeId ?? '—'}</span>
+                <p className="mt-1 text-xs text-muted">
                   Valor persistido no agent, utilizado automaticamente no suporte remoto.
                 </p>
                 {canManageAgent && (
@@ -1353,19 +1353,19 @@ export default function AgentDetail() {
             </div>
             {hw.data?.hardware?.osBuild && (
               <div>
-                <dt className="text-slate-400">Build</dt>
-                <dd className="mt-0.5 font-mono text-white">{hw.data.hardware.osBuild}</dd>
+                <dt className="text-muted">Build</dt>
+                <dd className="mt-0.5 font-mono text-foreground">{hw.data.hardware.osBuild}</dd>
               </div>
             )}
-            <div className="border-t border-white/5 pt-3">
-              <dt className="text-slate-400">VersÃ£o do Agente</dt>
-              <dd className="mt-0.5 font-mono text-white">{a.agentVersion ?? 'â€”'}</dd>
+            <div className="border-t border-border pt-3">
+              <dt className="text-muted">Versão do Agente</dt>
+              <dd className="mt-0.5 font-mono text-foreground">{a.agentVersion ?? '—'}</dd>
             </div>
             {isZeroTouchPending && (
               <div>
-                <dt className="text-slate-400">Zero-Touch Config Registration</dt>
+                <dt className="text-muted">Zero-Touch Config Registration</dt>
                 <dd className="mt-1 flex items-center gap-2">
-                  <Badge color="warning">Aguardando aprovaÃ§Ã£o</Badge>
+                  <Badge color="warning">Aguardando aprovação</Badge>
                   {canManageAgent && (
                     <Button
                       size="sm"
@@ -1383,23 +1383,23 @@ export default function AgentDetail() {
               </div>
             )}
             <div>
-              <dt className="text-slate-400">Ãšltimo IP</dt>
-              <dd className="mt-0.5 font-mono text-white">{a.lastIpAddress ?? hw.data?.networkAdapters?.find(n => n.ipAddress && !n.ipAddress.startsWith('169.254'))?.ipAddress ?? 'â€”'}</dd>
+              <dt className="text-muted">Último IP</dt>
+              <dd className="mt-0.5 font-mono text-foreground">{a.lastIpAddress ?? hw.data?.networkAdapters?.find(n => n.ipAddress && !n.ipAddress.startsWith('169.254'))?.ipAddress ?? '—'}</dd>
             </div>
             <div>
-              <dt className="text-slate-400">Ãšltima vez online</dt>
-              <dd className="mt-0.5 text-white">{a.lastSeen ? formatDate(a.lastSeen) : (a.lastSeenAt ? formatDate(a.lastSeenAt) : 'â€”')}</dd>
+              <dt className="text-muted">Última vez online</dt>
+              <dd className="mt-0.5 text-foreground">{a.lastSeen ? formatDate(a.lastSeen) : (a.lastSeenAt ? formatDate(a.lastSeenAt) : '—')}</dd>
             </div>
             {hw.data?.hardware?.manufacturer && (
-              <div className="border-t border-white/5 pt-3">
-                <dt className="text-slate-400">Fabricante / Modelo</dt>
-                <dd className="mt-0.5 text-white">{hw.data.hardware.manufacturer} {hw.data.hardware.model ?? ''}</dd>
+              <div className="border-t border-border pt-3">
+                <dt className="text-muted">Fabricante / Modelo</dt>
+                <dd className="mt-0.5 text-foreground">{hw.data.hardware.manufacturer} {hw.data.hardware.model ?? ''}</dd>
               </div>
             )}
             {hw.data?.hardware?.serialNumber && (
               <div>
-                <dt className="text-slate-400">NÃºmero de sÃ©rie</dt>
-                <dd className="mt-0.5 font-mono text-white">{hw.data.hardware.serialNumber}</dd>
+                <dt className="text-muted">Número de série</dt>
+                <dd className="mt-0.5 font-mono text-foreground">{hw.data.hardware.serialNumber}</dd>
               </div>
             )}
           </dl>
@@ -1411,27 +1411,27 @@ export default function AgentDetail() {
             <CardHeader title="Adaptadores de Rede" subtitle={`${hw.data.networkAdapters.length} adaptador(es)`} />
             <div className="space-y-2">
               {hw.data.networkAdapters.map(n => (
-                <div key={n.id} className="rounded-lg bg-white/5 px-3 py-2.5">
+                <div key={n.id} className="rounded-lg bg-surface-light px-3 py-2.5">
                   <div className="flex items-center justify-between gap-3">
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-white">{n.name}</p>
-                      {n.macAddress && <p className="font-mono text-xs text-slate-500">{n.macAddress}</p>}
+                      <p className="truncate text-sm font-medium text-foreground">{n.name}</p>
+                      {n.macAddress && <p className="font-mono text-xs text-muted">{n.macAddress}</p>}
                     </div>
-                    <Badge color={n.isDhcpEnabled ? 'success' : 'slate'}>{n.isDhcpEnabled ? 'DHCP' : 'EstÃ¡tico'}</Badge>
+                    <Badge color={n.isDhcpEnabled ? 'success' : 'slate'}>{n.isDhcpEnabled ? 'DHCP' : 'Estático'}</Badge>
                   </div>
                   {(n.ipAddress || n.gateway) && (
                     <div className="mt-1.5 grid grid-cols-2 gap-2 text-xs">
                       {n.ipAddress && (
                         <div>
-                          <span className="text-slate-500">IP: </span>
-                          <span className="font-mono text-slate-300">{n.ipAddress}</span>
-                          {n.subnetMask && <span className="text-slate-500"> / {n.subnetMask}</span>}
+                          <span className="text-muted">IP: </span>
+                          <span className="font-mono text-muted-foreground">{n.ipAddress}</span>
+                          {n.subnetMask && <span className="text-muted"> / {n.subnetMask}</span>}
                         </div>
                       )}
                       {n.gateway && (
                         <div>
-                          <span className="text-slate-500">Gateway: </span>
-                          <span className="font-mono text-slate-300">{n.gateway}</span>
+                          <span className="text-muted">Gateway: </span>
+                          <span className="font-mono text-muted-foreground">{n.gateway}</span>
                         </div>
                       )}
                     </div>
@@ -1444,66 +1444,66 @@ export default function AgentDetail() {
       </div>
 
       <Card className="surface-card">
-        <div role="tablist" aria-label="Abas de dados do agente" className="mb-4 flex flex-wrap gap-2 border-b border-white/10 pb-3">
+        <div role="tablist" aria-label="Abas de dados do agente" className="mb-4 flex flex-wrap gap-2 border-b border-border pb-3">
           <button
             type="button"
             role="tab"
             onClick={() => setActiveDataTab('software')}
             aria-selected={activeDataTab === 'software'}
-            className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors ${activeDataTab === 'software' ? 'border-primary/40 bg-primary/15 text-primary' : 'border-white/10 bg-white/5 text-slate-300 hover:text-slate-100'}`}
+            className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors ${activeDataTab === 'software' ? 'border-primary/40 bg-primary/15 text-primary' : 'border-border bg-surface-light text-muted-foreground hover:text-foreground'}`}
           >
-            InventÃ¡rio de Aplicativos
-            <span className="rounded-full bg-black/25 px-2 py-0.5 text-xs text-slate-300">{softwareTotalCount}</span>
+            Inventário de Aplicativos
+            <span className="rounded-full bg-black/25 px-2 py-0.5 text-xs text-muted-foreground">{softwareTotalCount}</span>
           </button>
           <button
             type="button"
             role="tab"
             onClick={() => setActiveDataTab('printers')}
             aria-selected={activeDataTab === 'printers'}
-            className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors ${activeDataTab === 'printers' ? 'border-primary/40 bg-primary/15 text-primary' : 'border-white/10 bg-white/5 text-slate-300 hover:text-slate-100'}`}
+            className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors ${activeDataTab === 'printers' ? 'border-primary/40 bg-primary/15 text-primary' : 'border-border bg-surface-light text-muted-foreground hover:text-foreground'}`}
           >
             Impressoras
-            <span className="rounded-full bg-black/25 px-2 py-0.5 text-xs text-slate-300">{printers.length}</span>
+            <span className="rounded-full bg-black/25 px-2 py-0.5 text-xs text-muted-foreground">{printers.length}</span>
           </button>
           <button
             type="button"
             role="tab"
             onClick={() => setActiveDataTab('tickets')}
             aria-selected={activeDataTab === 'tickets'}
-            className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors ${activeDataTab === 'tickets' ? 'border-primary/40 bg-primary/15 text-primary' : 'border-white/10 bg-white/5 text-slate-300 hover:text-slate-100'}`}
+            className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors ${activeDataTab === 'tickets' ? 'border-primary/40 bg-primary/15 text-primary' : 'border-border bg-surface-light text-muted-foreground hover:text-foreground'}`}
           >
-            Ãšltimos Chamados
-            <span className="rounded-full bg-black/25 px-2 py-0.5 text-xs text-slate-300">{agentTickets.data?.items?.length ?? 0}</span>
+            Últimos Chamados
+            <span className="rounded-full bg-black/25 px-2 py-0.5 text-xs text-muted-foreground">{agentTickets.data?.items?.length ?? 0}</span>
           </button>
           <button
             type="button"
             role="tab"
             onClick={() => setActiveDataTab('listeningPorts')}
             aria-selected={activeDataTab === 'listeningPorts'}
-            className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors ${activeDataTab === 'listeningPorts' ? 'border-primary/40 bg-primary/15 text-primary' : 'border-white/10 bg-white/5 text-slate-300 hover:text-slate-100'}`}
+            className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors ${activeDataTab === 'listeningPorts' ? 'border-primary/40 bg-primary/15 text-primary' : 'border-border bg-surface-light text-muted-foreground hover:text-foreground'}`}
           >
             Portas em Escuta
-            <span className="rounded-full bg-black/25 px-2 py-0.5 text-xs text-slate-300">{listeningPorts.length}</span>
+            <span className="rounded-full bg-black/25 px-2 py-0.5 text-xs text-muted-foreground">{listeningPorts.length}</span>
           </button>
           <button
             type="button"
             role="tab"
             onClick={() => setActiveDataTab('openSockets')}
             aria-selected={activeDataTab === 'openSockets'}
-            className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors ${activeDataTab === 'openSockets' ? 'border-primary/40 bg-primary/15 text-primary' : 'border-white/10 bg-white/5 text-slate-300 hover:text-slate-100'}`}
+            className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors ${activeDataTab === 'openSockets' ? 'border-primary/40 bg-primary/15 text-primary' : 'border-border bg-surface-light text-muted-foreground hover:text-foreground'}`}
           >
-            ConexÃµes Abertas
-            <span className="rounded-full bg-black/25 px-2 py-0.5 text-xs text-slate-300">{openSockets.length}</span>
+            Conexões Abertas
+            <span className="rounded-full bg-black/25 px-2 py-0.5 text-xs text-muted-foreground">{openSockets.length}</span>
           </button>
           <button
             type="button"
             role="tab"
             onClick={() => setActiveDataTab('logs')}
             aria-selected={activeDataTab === 'logs'}
-            className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors ${activeDataTab === 'logs' ? 'border-primary/40 bg-primary/15 text-primary' : 'border-white/10 bg-white/5 text-slate-300 hover:text-slate-100'}`}
+            className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors ${activeDataTab === 'logs' ? 'border-primary/40 bg-primary/15 text-primary' : 'border-border bg-surface-light text-muted-foreground hover:text-foreground'}`}
           >
             Logs Recentes
-            <span className="rounded-full bg-black/25 px-2 py-0.5 text-xs text-slate-300">{agentLogs.data?.length ?? 0}</span>
+            <span className="rounded-full bg-black/25 px-2 py-0.5 text-xs text-muted-foreground">{agentLogs.data?.length ?? 0}</span>
           </button>
         </div>
 
@@ -1511,8 +1511,8 @@ export default function AgentDetail() {
           <>
             <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h3 className="text-lg font-semibold text-white sm:text-xl">InventÃ¡rio de Aplicativos</h3>
-                <p className="text-sm text-slate-400">{softwareTotalCount} aplicativo(s) no inventÃ¡rio</p>
+                <h3 className="text-lg font-semibold text-foreground sm:text-xl">Inventário de Aplicativos</h3>
+                <p className="text-sm text-muted">{softwareTotalCount} aplicativo(s) no inventário</p>
               </div>
               <Button
                 size="sm"
@@ -1520,37 +1520,37 @@ export default function AgentDetail() {
                 onClick={handleRefreshSoftware}
                 loading={isRefreshingSoftware}
                 disabled={!isOnlineNow}
-                title={!isOnlineNow ? 'Agente offline â€” refresh indisponÃ­vel' : 'Solicitar nova coleta de software ao agente'}
+                title={!isOnlineNow ? 'Agente offline — refresh indisponível' : 'Solicitar nova coleta de software ao agente'}
               >
                 <RefreshCw className="h-4 w-4" />
                 Atualizar
               </Button>
             </div>
             {software.isLoading ? (
-              <Loading message="Carregando inventÃ¡rio de aplicativos..." />
+              <Loading message="Carregando inventário de aplicativos..." />
             ) : software.isError ? (
               <ErrorDisplay onRetry={() => software.refetch()} />
             ) : (
               <>
                 {softwareSnapshot.data?.updatedAt && (
-                  <div className="mb-3 flex items-center justify-end gap-2 text-xs text-slate-500">
+                  <div className="mb-3 flex items-center justify-end gap-2 text-xs text-muted">
                     <Clock className="h-3.5 w-3.5" />
-                    <span>Ãšltima coleta: <span className="text-slate-300">{formatDate(softwareSnapshot.data.updatedAt)}</span></span>
+                    <span>Última coleta: <span className="text-muted-foreground">{formatDate(softwareSnapshot.data.updatedAt)}</span></span>
                   </div>
                 )}
 
                 <div className="mb-4 grid gap-3 md:grid-cols-3">
-                  <div className="rounded-lg bg-white/5 px-3 py-2">
-                    <p className="text-xs text-slate-500">Total instalado</p>
-                    <p className="text-sm font-medium text-white">{softwareSnapshot.data?.totalInstalled ?? softwareTotalCount}</p>
+                  <div className="rounded-lg bg-surface-light px-3 py-2">
+                    <p className="text-xs text-muted">Total instalado</p>
+                    <p className="text-sm font-medium text-foreground">{softwareSnapshot.data?.totalInstalled ?? softwareTotalCount}</p>
                   </div>
-                  <div className="rounded-lg bg-white/5 px-3 py-2">
-                    <p className="text-xs text-slate-500">Primeira detecÃ§Ã£o</p>
-                    <p className="text-sm text-slate-300">{formatDate(softwareSnapshot.data?.firstSeenAt ?? null)}</p>
+                  <div className="rounded-lg bg-surface-light px-3 py-2">
+                    <p className="text-xs text-muted">Primeira detecção</p>
+                    <p className="text-sm text-muted-foreground">{formatDate(softwareSnapshot.data?.firstSeenAt ?? null)}</p>
                   </div>
-                  <div className="rounded-lg bg-white/5 px-3 py-2">
-                    <p className="text-xs text-slate-500">Ãšltima coleta</p>
-                    <p className="text-sm text-slate-300">{formatDate(softwareSnapshot.data?.lastCollectedAt ?? null)}</p>
+                  <div className="rounded-lg bg-surface-light px-3 py-2">
+                    <p className="text-xs text-muted">Última coleta</p>
+                    <p className="text-sm text-muted-foreground">{formatDate(softwareSnapshot.data?.lastCollectedAt ?? null)}</p>
                   </div>
                 </div>
 
@@ -1558,7 +1558,7 @@ export default function AgentDetail() {
                   <Input
                     value={softwareSearchInput}
                     onChange={(e) => setSoftwareSearchInput(e.target.value)}
-                    placeholder="Pesquisar por nome, versÃ£o, fabricante, installId, serial ou fonte"
+                    placeholder="Pesquisar por nome, versão, fabricante, installId, serial ou fonte"
                   />
                   <Select
                     value={softwareOrder}
@@ -1581,15 +1581,15 @@ export default function AgentDetail() {
 
                 {softwareItems.length > 0 && (
                   <div className="mb-4 flex items-center justify-between gap-3">
-                    <p className="text-xs text-slate-500">
-                      PÃ¡gina {softwarePage} de {softwareTotalPages} | {softwareItems.length} item(ns) nesta pÃ¡gina
+                    <p className="text-xs text-muted">
+                      Página {softwarePage} de {softwareTotalPages} | {softwareItems.length} item(ns) nesta página
                       {softwareSearchApplied ? ` | filtro: "${softwareSearchApplied}"` : ''}
                     </p>
                     <div className="flex items-center gap-2">
                       <Button variant="secondary" size="sm" onClick={goToPreviousSoftwarePage} disabled={!canGoPrevSoftwarePage}>
                         Voltar
                       </Button>
-                      <div className="rounded-md border border-white/10 px-3 py-1 text-xs text-slate-300">
+                      <div className="rounded-md border border-border px-3 py-1 text-xs text-muted-foreground">
                         {softwarePage}
                       </div>
                       <Button
@@ -1599,7 +1599,7 @@ export default function AgentDetail() {
                         disabled={!canGoNextSoftwarePage}
                         loading={software.isFetching}
                       >
-                        AvanÃ§ar
+                        Avançar
                       </Button>
                     </div>
                   </div>
@@ -1613,15 +1613,15 @@ export default function AgentDetail() {
                   showPagination={false}
                 />
                 <div className="mt-4 flex items-center justify-between gap-3">
-                  <p className="text-xs text-slate-500">
-                    PÃ¡gina {softwarePage} de {softwareTotalPages} | {softwareItems.length} item(ns) nesta pÃ¡gina
+                  <p className="text-xs text-muted">
+                    Página {softwarePage} de {softwareTotalPages} | {softwareItems.length} item(ns) nesta página
                     {softwareSearchApplied ? ` | filtro: "${softwareSearchApplied}"` : ''}
                   </p>
                   <div className="flex items-center gap-2">
                     <Button variant="secondary" size="sm" onClick={goToPreviousSoftwarePage} disabled={!canGoPrevSoftwarePage}>
                       Voltar
                     </Button>
-                    <div className="rounded-md border border-white/10 px-3 py-1 text-xs text-slate-300">
+                    <div className="rounded-md border border-border px-3 py-1 text-xs text-muted-foreground">
                       {softwarePage}
                     </div>
                     <Button
@@ -1631,7 +1631,7 @@ export default function AgentDetail() {
                       disabled={!canGoNextSoftwarePage}
                       loading={software.isFetching}
                     >
-                      AvanÃ§ar
+                      Avançar
                     </Button>
                   </div>
                 </div>
@@ -1642,15 +1642,15 @@ export default function AgentDetail() {
 
         {activeDataTab === 'tickets' && (
           <>
-            <CardHeader title="Ãšltimos Chamados" subtitle={`${agentTickets.data?.items?.length ?? 0} chamado(s) retornado(s)`} />
+            <CardHeader title="Últimos Chamados" subtitle={`${agentTickets.data?.items?.length ?? 0} chamado(s) retornado(s)`} />
             <div className="space-y-2">
               {agentTickets.isLoading && (
-                <div className="py-4 text-center text-sm text-slate-400">
+                <div className="py-4 text-center text-sm text-muted">
                   Carregando chamados...
                 </div>
               )}
               {!agentTickets.isLoading && (!agentTickets.data || agentTickets.data.items.length === 0) && (
-                <div className="py-4 text-center text-sm text-slate-400">
+                <div className="py-4 text-center text-sm text-muted">
                   Nenhum chamado encontrado
                 </div>
               )}
@@ -1665,27 +1665,27 @@ export default function AgentDetail() {
                     };
                     const priorityLabels: Record<string, string> = {
                       Low: 'Baixa',
-                      Medium: 'MÃ©dia',
+                      Medium: 'Média',
                       High: 'Alta',
-                      Critical: 'CrÃ­tica',
+                      Critical: 'Crítica',
                     };
                     return (
                       <button
                         key={ticket.id}
                         onClick={() => navigate(`/tickets/${ticket.id}`)}
-                        className="w-full rounded-lg bg-white/5 px-3 py-2.5 text-left transition-colors hover:bg-white/10"
+                        className="w-full rounded-lg bg-surface-light px-3 py-2.5 text-left transition-colors hover:bg-surface-hover"
                       >
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-2">
-                              <TicketIcon className="h-3.5 w-3.5 shrink-0 text-slate-400" />
-                              <p className="truncate text-sm font-medium text-white">
+                              <TicketIcon className="h-3.5 w-3.5 shrink-0 text-muted" />
+                              <p className="truncate text-sm font-medium text-foreground">
                                 {ticket.title}
                               </p>
                             </div>
-                            <p className="mt-1 text-xs text-slate-400">
+                            <p className="mt-1 text-xs text-muted">
                               {new Date(ticket.createdAt).toLocaleDateString('pt-BR')}
-                              {ticket.closedAt && ' â€¢ Encerrado'}
+                              {ticket.closedAt && ' • Encerrado'}
                             </p>
                           </div>
                           <Badge color={priorityColors[ticket.priority] ?? 'slate'} className="shrink-0">
@@ -1705,8 +1705,8 @@ export default function AgentDetail() {
           <>
             <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h3 className="text-lg font-semibold text-white sm:text-xl">Impressoras</h3>
-                <p className="text-sm text-slate-400">{printers.length} impressora(s) detectada(s)</p>
+                <h3 className="text-lg font-semibold text-foreground sm:text-xl">Impressoras</h3>
+                <p className="text-sm text-muted">{printers.length} impressora(s) detectada(s)</p>
               </div>
               <Button
                 size="sm"
@@ -1714,42 +1714,42 @@ export default function AgentDetail() {
                 onClick={handleRefreshPrinters}
                 loading={isRefreshingPrinters || hw.isFetching}
                 disabled={!isOnlineNow}
-                title={!isOnlineNow ? 'Agente offline â€” refresh indisponÃ­vel' : 'Solicitar nova coleta de impressoras ao agente'}
+                title={!isOnlineNow ? 'Agente offline — refresh indisponível' : 'Solicitar nova coleta de impressoras ao agente'}
               >
                 <RefreshCw className="h-4 w-4" />
                 Atualizar
               </Button>
             </div>
             {printers.length === 0 ? (
-              <p className="text-sm text-slate-500">Nenhuma impressora coletada para este agente.</p>
+              <p className="text-sm text-muted">Nenhuma impressora coletada para este agente.</p>
             ) : (
               <div className="space-y-2">
                 {printers.map((printer, index) => (
-                  <div key={`${printer.name}-${printer.portName ?? index}`} className="rounded-lg bg-white/5 px-3 py-2.5">
+                  <div key={`${printer.name}-${printer.portName ?? index}`} className="rounded-lg bg-surface-light px-3 py-2.5">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium text-white">{printer.name}</p>
+                        <p className="truncate text-sm font-medium text-foreground">{printer.name}</p>
                         {printer.driverName && (
-                          <p className="truncate text-xs text-slate-500">Driver: {printer.driverName}</p>
+                          <p className="truncate text-xs text-muted">Driver: {printer.driverName}</p>
                         )}
                       </div>
                       <div className="flex items-center gap-2">
-                        {printer.isDefault && <Badge color="primary">PadrÃ£o</Badge>}
+                        {printer.isDefault && <Badge color="primary">Padrão</Badge>}
                         <Badge color={printerStatusColor(printer.printerStatus)}>{printer.printerStatus ?? 'Sem status'}</Badge>
                       </div>
                     </div>
 
-                    <div className="mt-2 grid gap-2 text-xs text-slate-400 sm:grid-cols-2">
+                    <div className="mt-2 grid gap-2 text-xs text-muted sm:grid-cols-2">
                       <span className="flex items-center gap-1">
                         <Printer className="h-3.5 w-3.5" />
                         {printer.isNetworkPrinter ? 'Rede' : 'Local'}
                       </span>
-                      <span>{printer.portName ? `Porta: ${printer.portName}` : 'Porta nÃ£o informada'}</span>
-                      <span>{printer.location ? `Local: ${printer.location}` : 'Local nÃ£o informado'}</span>
+                      <span>{printer.portName ? `Porta: ${printer.portName}` : 'Porta não informada'}</span>
+                      <span>{printer.location ? `Local: ${printer.location}` : 'Local não informado'}</span>
                       <span>
                         {printer.shared
                           ? `Compartilhada${printer.shareName ? ` (${printer.shareName})` : ''}`
-                          : 'NÃ£o compartilhada'}
+                          : 'Não compartilhada'}
                       </span>
                     </div>
                   </div>
@@ -1763,8 +1763,8 @@ export default function AgentDetail() {
           <>
             <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h3 className="text-lg font-semibold text-white sm:text-xl">Portas em Escuta</h3>
-                <p className="text-sm text-slate-400">{listeningPorts.length} porta(s) ativa(s)</p>
+                <h3 className="text-lg font-semibold text-foreground sm:text-xl">Portas em Escuta</h3>
+                <p className="text-sm text-muted">{listeningPorts.length} porta(s) ativa(s)</p>
               </div>
               <Button
                 size="sm"
@@ -1772,7 +1772,7 @@ export default function AgentDetail() {
                 onClick={handleRefreshPorts}
                 loading={isRefreshingPorts || hw.isFetching}
                 disabled={!isOnlineNow}
-                title={!isOnlineNow ? 'Agente offline â€” refresh indisponÃ­vel' : 'Solicitar nova coleta de portas ao agente'}
+                title={!isOnlineNow ? 'Agente offline — refresh indisponível' : 'Solicitar nova coleta de portas ao agente'}
               >
                 <RefreshCw className="h-4 w-4" />
                 Atualizar
@@ -1797,8 +1797,8 @@ export default function AgentDetail() {
           <>
             <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h3 className="text-lg font-semibold text-white sm:text-xl">ConexÃµes Abertas</h3>
-                <p className="text-sm text-slate-400">{openSockets.length} conexÃ£o(Ãµes) ativa(s)</p>
+                <h3 className="text-lg font-semibold text-foreground sm:text-xl">Conexões Abertas</h3>
+                <p className="text-sm text-muted">{openSockets.length} conexão(ões) ativa(s)</p>
               </div>
               <Button
                 size="sm"
@@ -1806,7 +1806,7 @@ export default function AgentDetail() {
                 onClick={handleRefreshConnections}
                 loading={isRefreshingConnections || hw.isFetching}
                 disabled={!isOnlineNow}
-                title={!isOnlineNow ? 'Agente offline â€” refresh indisponÃ­vel' : 'Solicitar nova coleta de conexÃµes ao agente'}
+                title={!isOnlineNow ? 'Agente offline — refresh indisponível' : 'Solicitar nova coleta de conexões ao agente'}
               >
                 <RefreshCw className="h-4 w-4" />
                 Atualizar
@@ -1815,14 +1815,14 @@ export default function AgentDetail() {
             {openSockets.length === 500 && (
               <div className="mb-3 flex items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-400">
                 <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-                Lista truncada pelo backend no limite de 500 itens. Podem existir mais conexÃµes abertas.
+                Lista truncada pelo backend no limite de 500 itens. Podem existir mais conexões abertas.
               </div>
             )}
             <DataTable
               columns={openSocketColumns}
               data={openSockets}
               keyExtractor={item => item.id}
-              emptyMessage="Nenhuma conexÃ£o aberta encontrada"
+              emptyMessage="Nenhuma conexão aberta encontrada"
             />
           </>
         )}
@@ -1834,18 +1834,18 @@ export default function AgentDetail() {
               {(agentLogs.data ?? []).map(log => {
                 const l = levelLabels[log.level] ?? { label: '?', color: 'slate' as const };
                 return (
-                  <div key={log.id} className="flex items-start gap-2 rounded-lg bg-white/5 px-3 py-2">
+                  <div key={log.id} className="flex items-start gap-2 rounded-lg bg-surface-light px-3 py-2">
                     <Badge color={l.color} className="mt-0.5 shrink-0">{l.label}</Badge>
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm text-slate-300">{log.message}</p>
-                      <p className="text-xs text-slate-500">{formatDate(log.createdAt)}</p>
+                      <p className="text-sm text-muted-foreground">{log.message}</p>
+                      <p className="text-xs text-muted">{formatDate(log.createdAt)}</p>
                     </div>
                   </div>
                 );
               })}
-              {agentLogs.isLoading && <p className="text-sm text-slate-500">Carregando...</p>}
+              {agentLogs.isLoading && <p className="text-sm text-muted">Carregando...</p>}
               {(agentLogs.data?.length ?? 0) === 0 && !agentLogs.isLoading && (
-                <p className="text-sm text-slate-500">Nenhum log registrado</p>
+                <p className="text-sm text-muted">Nenhum log registrado</p>
               )}
             </div>
           </>
@@ -1855,16 +1855,16 @@ export default function AgentDetail() {
       <Modal
         open={deleteConfirmOpen}
         onClose={closeDeleteAgentModal}
-        title="Confirmar exclusÃ£o de agente"
+        title="Confirmar exclusão de agente"
         maxWidth="max-w-lg"
       >
         <div className="space-y-4">
-          <div className="rounded-lg border border-danger/30 bg-danger/10 p-3 text-sm text-slate-200">
+          <div className="rounded-lg border border-danger/30 bg-danger/10 p-3 text-sm text-foreground">
             <p>
-              VocÃª estÃ¡ prestes a excluir o agente{' '}
-              <span className="font-semibold text-white">{a.displayName ?? a.hostname}</span>.
+              Você está prestes a excluir o agente{' '}
+              <span className="font-semibold text-foreground">{a.displayName ?? a.hostname}</span>.
             </p>
-            <p className="mt-1 text-slate-400">Esta aÃ§Ã£o nÃ£o pode ser desfeita.</p>
+            <p className="mt-1 text-muted">Esta ação não pode ser desfeita.</p>
           </div>
 
           <div className="flex justify-end gap-2">
@@ -1924,15 +1924,15 @@ export default function AgentDetail() {
 
               {nodeLinkPreviewReport.ambiguousAgents > 0 && (
                 <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
-                  Foram encontrados vÃ­nculos ambÃ­guos no site. Trate manualmente antes de aplicar reconcile.
+                  Foram encontrados vínculos ambíguos no site. Trate manualmente antes de aplicar reconcile.
                 </div>
               )}
 
-              <div className="rounded-md border border-white/10 bg-white/5 px-3 py-3">
-                <p className="text-xs uppercase tracking-wide text-slate-400">Agent atual</p>
+              <div className="rounded-md border border-border bg-surface-light px-3 py-3">
+                <p className="text-xs uppercase tracking-wide text-muted">Agent atual</p>
                 {currentNodeLinkItem ? (
                   <div className="mt-2 space-y-1 text-sm">
-                    <p className="text-white">
+                    <p className="text-foreground">
                       {(currentNodeLinkItem.displayName ?? currentNodeLinkItem.hostname)}
                     </p>
                     <div className="flex flex-wrap gap-2">
@@ -1940,17 +1940,17 @@ export default function AgentDetail() {
                         {currentNodeLinkItem.status}
                       </Badge>
                       <Badge color={currentNodeLinkItem.applied ? 'success' : 'slate'}>
-                        {currentNodeLinkItem.applied ? 'Aplicado' : 'NÃ£o aplicado'}
+                        {currentNodeLinkItem.applied ? 'Aplicado' : 'Não aplicado'}
                       </Badge>
                     </div>
-                    <p className="font-mono text-xs text-slate-300">
-                      Atual: {currentNodeLinkItem.currentNodeId ?? 'Sem vÃ­nculo'}
+                    <p className="font-mono text-xs text-muted-foreground">
+                      Atual: {currentNodeLinkItem.currentNodeId ?? 'Sem vínculo'}
                     </p>
-                    <p className="font-mono text-xs text-slate-300">
-                      Sugerido: {currentNodeLinkItem.suggestedNodeId ?? 'Sem sugestÃ£o'}
+                    <p className="font-mono text-xs text-muted-foreground">
+                      Sugerido: {currentNodeLinkItem.suggestedNodeId ?? 'Sem sugestão'}
                     </p>
                     {(currentNodeLinkItem.candidateNodeIds?.length ?? 0) > 0 && (
-                      <p className="font-mono text-xs text-slate-300">
+                      <p className="font-mono text-xs text-muted-foreground">
                         Candidates: {currentNodeLinkItem.candidateNodeIds?.join(', ')}
                       </p>
                     )}
@@ -1959,28 +1959,28 @@ export default function AgentDetail() {
                     )}
                   </div>
                 ) : (
-                  <p className="mt-2 text-sm text-slate-400">
-                    O dry-run nÃ£o retornou este agent no conjunto de itens do site.
+                  <p className="mt-2 text-sm text-muted">
+                    O dry-run não retornou este agent no conjunto de itens do site.
                   </p>
                 )}
               </div>
 
               <div className="max-h-56 space-y-2 overflow-y-auto pr-1">
                 {nodeLinkPreviewReport.items.slice(0, 25).map((item: MeshCentralNodeLinksBackfillItem) => (
-                  <div key={item.agentId} className="rounded-md border border-white/10 bg-black/20 px-3 py-2">
+                  <div key={item.agentId} className="rounded-md border border-border bg-black/20 px-3 py-2">
                     <div className="flex items-center justify-between gap-2">
-                      <p className="truncate text-sm text-white">
+                      <p className="truncate text-sm text-foreground">
                         {item.displayName ?? item.hostname}
                       </p>
                       <Badge color={nodeLinkStatusColor(item.status)}>{item.status}</Badge>
                     </div>
-                    <p className="font-mono text-xs text-slate-400">
-                      Atual: {item.currentNodeId ?? 'Sem vÃ­nculo'} | Sugerido: {item.suggestedNodeId ?? 'Sem sugestÃ£o'}
+                    <p className="font-mono text-xs text-muted">
+                      Atual: {item.currentNodeId ?? 'Sem vínculo'} | Sugerido: {item.suggestedNodeId ?? 'Sem sugestão'}
                     </p>
                   </div>
                 ))}
                 {nodeLinkPreviewReport.items.length > 25 && (
-                  <p className="text-xs text-slate-500">
+                  <p className="text-xs text-muted">
                     Exibindo 25 de {nodeLinkPreviewReport.items.length} itens.
                   </p>
                 )}
@@ -1988,7 +1988,7 @@ export default function AgentDetail() {
             </>
           )}
 
-          <div className="flex flex-wrap justify-end gap-2 border-t border-white/10 pt-3">
+          <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-3">
             <Button
               variant="ghost"
               onClick={() => {

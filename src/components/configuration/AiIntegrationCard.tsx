@@ -158,7 +158,7 @@ export function AiIntegrationCard({ aiSettings, onSave, saving }: Props) {
   }
 
   return (
-    <Card className="space-y-3 rounded-lg border border-white/5 bg-white/5 p-4">
+    <Card className="space-y-3 rounded-lg border border-border bg-surface-light p-4">
       <CardHeader title="Integracao com IA" subtitle="Chave de API, modelo e parametros do provedor." />
 
       <div className="grid gap-3">
@@ -167,7 +167,7 @@ export function AiIntegrationCard({ aiSettings, onSave, saving }: Props) {
         <div className="space-y-3">
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1">
-              <label className="block text-sm font-medium text-slate-300">Provider</label>
+              <label className="block text-sm font-medium text-muted-foreground">Provider</label>
               <Select
                 value={provider}
                 onChange={(e) => setProvider(e.target.value)}
@@ -179,9 +179,9 @@ export function AiIntegrationCard({ aiSettings, onSave, saving }: Props) {
               />
             </div>
             <div className="space-y-1">
-              <label className="block text-sm font-medium text-slate-300">
+              <label className="block text-sm font-medium text-muted-foreground">
                 API Key (Chat + Embeddings){" "}
-                {fetching && <RefreshCw className="inline h-3 w-3 animate-spin text-slate-500" />}
+                {fetching && <RefreshCw className="inline h-3 w-3 animate-spin text-muted" />}
               </label>
               <div className="flex gap-2">
                 <Input type="password" value={apiKey} onChange={(e) => { setApiKey(e.target.value); setKeyValid(null); }} placeholder="sk-or-v1-..." className="flex-1" />
@@ -196,11 +196,11 @@ export function AiIntegrationCard({ aiSettings, onSave, saving }: Props) {
           </div>
 
           {/* ── Chat Model ── */}
-          <div className="rounded-lg border border-white/10 bg-white/[0.02] p-2">
-            <button type="button" className="flex w-full items-center justify-between rounded-md px-2 py-1.5 text-xs font-medium text-slate-300 hover:bg-white/5" onClick={() => setExpandedChat(!expandedChat)}>
+          <div className="rounded-lg border border-border bg-surface-light p-2">
+            <button type="button" className="flex w-full items-center justify-between rounded-md px-2 py-1.5 text-xs font-medium text-muted-foreground hover:bg-surface-light" onClick={() => setExpandedChat(!expandedChat)}>
               <span>
                 Chat Model{" "}
-                {chatModel && <span className="text-slate-400">— {providerFromId(chatModel)}: {allChat.find((m) => m.id === chatModel)?.name ?? chatModel}</span>}
+                {chatModel && <span className="text-muted">— {providerFromId(chatModel)}: {allChat.find((m) => m.id === chatModel)?.name ?? chatModel}</span>}
                 {fetchError && !fetching && <span className="ml-2 text-amber-400">(offline)</span>}
               </span>
               {expandedChat ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
@@ -208,7 +208,7 @@ export function AiIntegrationCard({ aiSettings, onSave, saving }: Props) {
             {expandedChat && (
               <div className="mt-2 space-y-2 p-2">
                 <div className="relative">
-                  <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-500" />
+                  <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted" />
                   <Input
                     value={chatSearch}
                     onChange={(e) => setChatSearch(e.target.value)}
@@ -222,11 +222,11 @@ export function AiIntegrationCard({ aiSettings, onSave, saving }: Props) {
                       key={m.id}
                       type="button"
                       onClick={() => { setChatModel(m.id); setExpandedChat(false); setChatSearch(""); }}
-                      className={`w-full rounded-md px-2 py-1.5 text-left text-xs transition-colors ${chatModel === m.id ? "bg-primary/20 text-white" : "text-slate-300 hover:bg-white/5 hover:text-white"}`}
+                      className={`w-full rounded-md px-2 py-1.5 text-left text-xs transition-colors ${chatModel === m.id ? "bg-primary/20 text-foreground" : "text-muted-foreground hover:bg-surface-light hover:text-foreground"}`}
                     >
                       <div className="flex items-center justify-between gap-2">
                         <span className="truncate font-medium">{providerFromId(m.id)}: {m.name || m.id}</span>
-                        <span className="shrink-0 text-slate-500 text-[10px] whitespace-nowrap">
+                        <span className="shrink-0 text-muted text-[10px] whitespace-nowrap">
                           {fmtCtx(m.contextLength)}{m.contextLength ? " ctx" : ""}
                           {m.pricing ? ` ${fmtPrice(m.pricing.prompt)}` : ""}
                           {m.isFree ? " FREE" : ""}
@@ -234,26 +234,26 @@ export function AiIntegrationCard({ aiSettings, onSave, saving }: Props) {
                       </div>
                     </button>
                   ))}
-                  {filteredChat.length === 0 && <p className="text-xs text-slate-500 px-2 py-1">Nenhum modelo encontrado.</p>}
+                  {filteredChat.length === 0 && <p className="text-xs text-muted px-2 py-1">Nenhum modelo encontrado.</p>}
                 </div>
-                {filteredChat.length > 50 && <p className="text-xs text-slate-500 px-2">Mostrando 50 de {filteredChat.length}. Refine a busca.</p>}
+                {filteredChat.length > 50 && <p className="text-xs text-muted px-2">Mostrando 50 de {filteredChat.length}. Refine a busca.</p>}
               </div>
             )}
           </div>
 
           {/* ── Embedding Model ── */}
-          <div className="rounded-lg border border-white/10 bg-white/[0.02] p-2">
-            <button type="button" className="flex w-full items-center justify-between rounded-md px-2 py-1.5 text-xs font-medium text-slate-300 hover:bg-white/5" onClick={() => setExpandedEmbed(!expandedEmbed)}>
+          <div className="rounded-lg border border-border bg-surface-light p-2">
+            <button type="button" className="flex w-full items-center justify-between rounded-md px-2 py-1.5 text-xs font-medium text-muted-foreground hover:bg-surface-light" onClick={() => setExpandedEmbed(!expandedEmbed)}>
               <span>
                 Embedding Model{" "}
-                {embeddingModel && <span className="text-slate-400">— {providerFromId(embeddingModel)}: {allEmbed.find((m) => m.id === embeddingModel)?.name ?? embeddingModel}</span>}
+                {embeddingModel && <span className="text-muted">— {providerFromId(embeddingModel)}: {allEmbed.find((m) => m.id === embeddingModel)?.name ?? embeddingModel}</span>}
               </span>
               {expandedEmbed ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
             </button>
             {expandedEmbed && (
               <div className="mt-2 space-y-2 p-2">
                 <div className="relative">
-                  <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-500" />
+                  <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted" />
                   <Input
                     value={embedSearch}
                     onChange={(e) => setEmbedSearch(e.target.value)}
@@ -271,18 +271,18 @@ export function AiIntegrationCard({ aiSettings, onSave, saving }: Props) {
                         if (m.embeddingDimensions) setEmbeddingDimensions(m.embeddingDimensions);
                         setExpandedEmbed(false); setEmbedSearch("");
                       }}
-                      className={`w-full rounded-md px-2 py-1.5 text-left text-xs transition-colors ${embeddingModel === m.id ? "bg-primary/20 text-white" : "text-slate-300 hover:bg-white/5 hover:text-white"}`}
+                      className={`w-full rounded-md px-2 py-1.5 text-left text-xs transition-colors ${embeddingModel === m.id ? "bg-primary/20 text-foreground" : "text-muted-foreground hover:bg-surface-light hover:text-foreground"}`}
                     >
                       <div className="flex items-center justify-between gap-2">
                         <span className="truncate font-medium">{providerFromId(m.id)}: {m.name || m.id}</span>
-                        <span className="shrink-0 text-slate-500 text-[10px] whitespace-nowrap">
+                        <span className="shrink-0 text-muted text-[10px] whitespace-nowrap">
                           {m.embeddingDimensions ? `${m.embeddingDimensions}d` : ""}
                           {m.pricing ? ` ${fmtPrice(m.pricing.prompt)}` : ""}
                         </span>
                       </div>
                     </button>
                   ))}
-                  {filteredEmbed.length === 0 && <p className="text-xs text-slate-500 px-2 py-1">Nenhum modelo encontrado.</p>}
+                  {filteredEmbed.length === 0 && <p className="text-xs text-muted px-2 py-1">Nenhum modelo encontrado.</p>}
                 </div>
               </div>
             )}
@@ -290,24 +290,24 @@ export function AiIntegrationCard({ aiSettings, onSave, saving }: Props) {
 
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1">
-              <label className="block text-sm font-medium text-slate-300">Embedding Dimensions</label>
+              <label className="block text-sm font-medium text-muted-foreground">Embedding Dimensions</label>
               <Input type="number" min={1} step={1} value={String(embeddingDimensions)} onChange={(e) => setEmbeddingDimensions(Number(e.target.value) || 0)} placeholder="1536" />
             </div>
           </div>
 
-          <div className="rounded-lg border border-white/10 bg-white/[0.02] p-2">
-            <button type="button" className="flex w-full items-center justify-between rounded-md px-2 py-1.5 text-xs font-medium text-slate-300 hover:bg-white/5" onClick={() => setExpandedAdvanced(!expandedAdvanced)}>
+          <div className="rounded-lg border border-border bg-surface-light p-2">
+            <button type="button" className="flex w-full items-center justify-between rounded-md px-2 py-1.5 text-xs font-medium text-muted-foreground hover:bg-surface-light" onClick={() => setExpandedAdvanced(!expandedAdvanced)}>
               <span>Configuracao Avancada (Parametros)</span>
               {expandedAdvanced ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
             </button>
             {expandedAdvanced && (
               <div className="mt-2 grid gap-3 p-2">
                 <div className="grid gap-3 sm:grid-cols-3">
-                  <div className="space-y-1"><label className="block text-xs text-slate-400">Temperature (0-2)</label><Input type="number" min={0} max={2} step={0.1} value={String(temperature)} onChange={(e) => setTemperature(Number(e.target.value))} /></div>
-                  <div className="space-y-1"><label className="block text-xs text-slate-400">Top P (0-1)</label><Input type="number" min={0} max={1} step={0.05} value={String(topP)} onChange={(e) => setTopP(Number(e.target.value))} /></div>
-                  <div className="space-y-1"><label className="block text-xs text-slate-400">Max Tokens</label><Input type="number" min={1} step={100} value={String(maxTokens)} onChange={(e) => setMaxTokens(Number(e.target.value))} /></div>
-                  <div className="space-y-1"><label className="block text-xs text-slate-400">Freq. Penalty (-2 a 2)</label><Input type="number" min={-2} max={2} step={0.1} value={String(freqPen)} onChange={(e) => setFreqPen(Number(e.target.value))} /></div>
-                  <div className="space-y-1"><label className="block text-xs text-slate-400">Pres. Penalty (-2 a 2)</label><Input type="number" min={-2} max={2} step={0.1} value={String(presPen)} onChange={(e) => setPresPen(Number(e.target.value))} /></div>
+                  <div className="space-y-1"><label className="block text-xs text-muted">Temperature (0-2)</label><Input type="number" min={0} max={2} step={0.1} value={String(temperature)} onChange={(e) => setTemperature(Number(e.target.value))} /></div>
+                  <div className="space-y-1"><label className="block text-xs text-muted">Top P (0-1)</label><Input type="number" min={0} max={1} step={0.05} value={String(topP)} onChange={(e) => setTopP(Number(e.target.value))} /></div>
+                  <div className="space-y-1"><label className="block text-xs text-muted">Max Tokens</label><Input type="number" min={1} step={100} value={String(maxTokens)} onChange={(e) => setMaxTokens(Number(e.target.value))} /></div>
+                  <div className="space-y-1"><label className="block text-xs text-muted">Freq. Penalty (-2 a 2)</label><Input type="number" min={-2} max={2} step={0.1} value={String(freqPen)} onChange={(e) => setFreqPen(Number(e.target.value))} /></div>
+                  <div className="space-y-1"><label className="block text-xs text-muted">Pres. Penalty (-2 a 2)</label><Input type="number" min={-2} max={2} step={0.1} value={String(presPen)} onChange={(e) => setPresPen(Number(e.target.value))} /></div>
                 </div>
               </div>
             )}

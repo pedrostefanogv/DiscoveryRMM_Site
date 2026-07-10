@@ -146,11 +146,11 @@ export default function DepartmentDetailPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+      <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
         <button
           type="button"
           onClick={() => navigate("/tickets")}
-          className="transition-colors hover:text-slate-300"
+          className="transition-colors hover:text-muted-foreground"
         >
           Suporte
         </button>
@@ -158,12 +158,12 @@ export default function DepartmentDetailPage() {
         <button
           type="button"
           onClick={() => navigate("/tickets/departments")}
-          className="transition-colors hover:text-slate-300"
+          className="transition-colors hover:text-muted-foreground"
         >
           Departamentos
         </button>
         <ChevronRight className="h-3.5 w-3.5" />
-        <span className="font-medium text-slate-300">{department.name}</span>
+        <span className="font-medium text-muted-foreground">{department.name}</span>
       </div>
 
       <PageHeader
@@ -207,14 +207,14 @@ export default function DepartmentDetailPage() {
         />
       </div>
 
-      <div className="inline-flex rounded-xl border border-white/10 bg-white/5 p-1">
+      <div className="inline-flex rounded-xl border border-border bg-surface-light p-1">
         <button
           type="button"
           onClick={() => setTab("general")}
           className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
             tab === "general"
-              ? "bg-primary/20 text-white"
-              : "text-slate-400 hover:text-white"
+              ? "bg-primary/20 text-foreground"
+              : "text-muted hover:text-foreground"
           }`}
         >
           <Settings className="mr-1.5 inline h-4 w-4" />
@@ -225,8 +225,8 @@ export default function DepartmentDetailPage() {
           onClick={() => setTab("fields")}
           className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
             tab === "fields"
-              ? "bg-primary/20 text-white"
-              : "text-slate-400 hover:text-white"
+              ? "bg-primary/20 text-foreground"
+              : "text-muted hover:text-foreground"
           }`}
         >
           <ListTodo className="mr-1.5 inline h-4 w-4" />
@@ -290,15 +290,15 @@ export default function DepartmentDetailPage() {
                 }
               />
 
-              <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-300">
-                <p className="text-xs uppercase tracking-wide text-slate-500">Cliente vinculado</p>
-                <p className="mt-1 text-white">{clientName ?? "Global"}</p>
-                <p className="mt-1 text-xs text-slate-500">
+              <div className="rounded-xl border border-border bg-surface-light px-4 py-3 text-sm text-muted-foreground">
+                <p className="text-xs uppercase tracking-wide text-muted">Cliente vinculado</p>
+                <p className="mt-1 text-foreground">{clientName ?? "Global"}</p>
+                <p className="mt-1 text-xs text-muted">
                   O escopo cliente/global nao pode ser alterado por este endpoint.
                 </p>
               </div>
 
-              <label className="flex items-center gap-2 text-sm text-slate-300">
+              <label className="flex items-center gap-2 text-sm text-muted-foreground">
                 <input
                   type="checkbox"
                   checked={form.isActive}
@@ -312,7 +312,7 @@ export default function DepartmentDetailPage() {
                         : current,
                     )
                   }
-                  className="rounded border-white/10 bg-white/5"
+                  className="rounded border-border bg-surface-light"
                 />
                 Ativo
               </label>
@@ -332,9 +332,9 @@ export default function DepartmentDetailPage() {
           <Card>
             <CardHeader title="Zona de risco" subtitle="Ação irreversível." />
             <div className="space-y-4">
-              <div className="rounded-xl border border-danger/30 bg-danger/10 p-4 text-sm text-slate-300">
+              <div className="rounded-xl border border-danger/30 bg-danger/10 p-4 text-sm text-muted-foreground">
                 <p className="font-medium text-danger">Excluir departamento</p>
-                <p className="mt-1 text-slate-400">
+                <p className="mt-1 text-muted">
                   Os valores já preenchidos em chamados permanecem, mas o departamento deixa de
                   existir para novos fluxos.
                 </p>
@@ -362,7 +362,7 @@ export default function DepartmentDetailPage() {
       )}
 
       {!clientsQuery.isLoading && (
-        <div className="flex items-center gap-2 text-xs text-slate-500">
+        <div className="flex items-center gap-2 text-xs text-muted">
           <Badge color="slate">URL direta</Badge>
           <span>{`/tickets/departments/${department.id}`}</span>
         </div>

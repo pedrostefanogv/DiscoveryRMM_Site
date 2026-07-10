@@ -86,10 +86,10 @@ export function StepLayout({ wizard, onBack, onNext }: Props) {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-semibold text-white">
+        <h2 className="text-lg font-semibold text-foreground">
           Organize os dados
         </h2>
-        <p className="text-sm text-slate-400">
+        <p className="text-sm text-muted">
           Defina agrupamentos, colunas principais e sub-tabelas.
         </p>
       </div>
@@ -98,28 +98,28 @@ export function StepLayout({ wizard, onBack, onNext }: Props) {
         {/* Left: Editor */}
         <div className="space-y-6">
           {/* Grouping */}
-          <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-            <h3 className="mb-3 text-sm font-semibold text-slate-200">
+          <div className="rounded-xl border border-border bg-surface-light p-4">
+            <h3 className="mb-3 text-sm font-semibold text-foreground">
               Agrupamento
             </h3>
             <div className="grid gap-3 sm:grid-cols-2">
               <div>
-                <label className="mb-1 block text-xs font-medium text-slate-400">
+                <label className="mb-1 block text-xs font-medium text-muted">
                   Agrupar por
                 </label>
                 <select
                   value={state.groupBy}
                   onChange={(e) => wizard.setField("groupBy", e.target.value)}
-                  className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white"
+                  className="w-full rounded-lg border border-border bg-surface-light px-3 py-2 text-sm text-foreground"
                 >
-                  <option value="" className="bg-slate-900">
+                  <option value="" className="bg-surface">
                     Sem agrupamento
                   </option>
                   {wizard.allFields.map((f) => (
                     <option
                       key={f.reference}
                       value={f.reference}
-                      className="bg-slate-900"
+                      className="bg-surface"
                     >
                       {f.reference} ({f.datasetName})
                     </option>
@@ -128,7 +128,7 @@ export function StepLayout({ wizard, onBack, onNext }: Props) {
               </div>
               {state.groupBy && (
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-slate-400">
+                  <label className="mb-1 block text-xs font-medium text-muted">
                     Título do grupo
                   </label>
                   <input
@@ -138,13 +138,13 @@ export function StepLayout({ wizard, onBack, onNext }: Props) {
                     onChange={(e) =>
                       wizard.setField("groupTitleTemplate", e.target.value)
                     }
-                    className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-100 placeholder-slate-500"
+                    className="w-full rounded-lg border border-border bg-surface-light px-3 py-2 text-sm text-foreground placeholder-muted"
                   />
                 </div>
               )}
             </div>
             {state.groupBy && (
-              <label className="mt-2 flex items-center gap-2 text-sm text-slate-400">
+              <label className="mt-2 flex items-center gap-2 text-sm text-muted">
                 <input
                   type="checkbox"
                   checked={state.hideGroupColumn}
@@ -158,9 +158,9 @@ export function StepLayout({ wizard, onBack, onNext }: Props) {
           </div>
 
           {/* Main columns */}
-          <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+          <div className="rounded-xl border border-border bg-surface-light p-4">
             <div className="mb-3 flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-slate-200">
+              <h3 className="text-sm font-semibold text-foreground">
                 📋 Tabela Principal
               </h3>
               <select
@@ -168,17 +168,17 @@ export function StepLayout({ wizard, onBack, onNext }: Props) {
                   if (e.target.value) wizard.addColumn(e.target.value);
                   e.target.value = "";
                 }}
-                className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-xs text-white"
+                className="rounded-lg border border-border bg-surface-light px-2 py-1 text-xs text-foreground"
                 defaultValue=""
               >
-                <option value="" className="bg-slate-900">
+                <option value="" className="bg-surface">
                   + Adicionar coluna
                 </option>
                 {wizard.allFields.map((f) => (
                   <option
                     key={f.reference}
                     value={f.reference}
-                    className="bg-slate-900"
+                    className="bg-surface"
                   >
                     {f.reference}
                   </option>
@@ -186,7 +186,7 @@ export function StepLayout({ wizard, onBack, onNext }: Props) {
               </select>
             </div>
             {state.columns.length === 0 ? (
-              <p className="text-xs text-slate-500">
+              <p className="text-xs text-muted">
                 Nenhuma coluna. Adicione campos acima.
               </p>
             ) : (
@@ -208,9 +208,9 @@ export function StepLayout({ wizard, onBack, onNext }: Props) {
                 }}
               >
                 <div className="overflow-x-auto">
-                  <table className="min-w-full text-xs text-slate-300">
+                  <table className="min-w-full text-xs text-muted-foreground">
                     <thead>
-                      <tr className="border-b border-white/10 text-slate-400">
+                      <tr className="border-b border-border text-muted">
                         <th className="w-6 px-1 py-1" />
                         <th className="px-2 py-1 text-left">Campo</th>
                         <th className="px-2 py-1 text-left">Label</th>
@@ -226,11 +226,11 @@ export function StepLayout({ wizard, onBack, onNext }: Props) {
                       <tbody>
                         {state.columns.map((col, i) => (
                           <SortableRow key={i} id={`col-${i}`}>
-                            <td className="px-1 py-1 text-center text-slate-600 cursor-grab active:cursor-grabbing">
+                            <td className="px-1 py-1 text-center text-muted cursor-grab active:cursor-grabbing">
                               ⠿
                             </td>
                             <td className="px-2 py-1">
-                              <span className="rounded bg-white/5 px-1.5 py-0.5 text-[11px] text-slate-300">
+                              <span className="rounded bg-surface-light px-1.5 py-0.5 text-[11px] text-muted-foreground">
                                 {col.field}
                               </span>
                             </td>
@@ -240,7 +240,7 @@ export function StepLayout({ wizard, onBack, onNext }: Props) {
                                 onChange={(e) =>
                                   wizard.updateColumn(i, { header: e.target.value })
                                 }
-                                className="w-28 rounded border border-white/10 bg-white/5 px-1.5 py-0.5 text-slate-200"
+                                className="w-28 rounded border border-border bg-surface-light px-1.5 py-0.5 text-foreground"
                               />
                             </td>
                             <td className="px-2 py-1">
@@ -249,12 +249,12 @@ export function StepLayout({ wizard, onBack, onNext }: Props) {
                                 onChange={(e) =>
                                   wizard.updateColumn(i, { format: e.target.value as any })
                                 }
-                                className="rounded border border-white/10 bg-white/5 px-1.5 py-0.5 text-slate-200"
+                                className="rounded border border-border bg-surface-light px-1.5 py-0.5 text-foreground"
                               >
-                                <option value="text" className="bg-slate-900">texto</option>
-                                <option value="number" className="bg-slate-900">número</option>
-                                <option value="date" className="bg-slate-900">data</option>
-                                <option value="datetime" className="bg-slate-900">data/hora</option>
+                                <option value="text" className="bg-surface">texto</option>
+                                <option value="number" className="bg-surface">número</option>
+                                <option value="date" className="bg-surface">data</option>
+                                <option value="datetime" className="bg-surface">data/hora</option>
                               </select>
                             </td>
                             <td className="px-2 py-1">
@@ -263,11 +263,11 @@ export function StepLayout({ wizard, onBack, onNext }: Props) {
                                 onChange={(e) =>
                                   wizard.updateColumn(i, { align: e.target.value as any })
                                 }
-                                className="rounded border border-white/10 bg-white/5 px-1.5 py-0.5 text-slate-200"
+                                className="rounded border border-border bg-surface-light px-1.5 py-0.5 text-foreground"
                               >
-                                <option value="left" className="bg-slate-900">←</option>
-                                <option value="center" className="bg-slate-900">↔</option>
-                                <option value="right" className="bg-slate-900">→</option>
+                                <option value="left" className="bg-surface">←</option>
+                                <option value="center" className="bg-surface">↔</option>
+                                <option value="right" className="bg-surface">→</option>
                               </select>
                             </td>
                             <td className="px-2 py-1">
@@ -290,9 +290,9 @@ export function StepLayout({ wizard, onBack, onNext }: Props) {
           </div>
 
           {/* Sub-tables */}
-          <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+          <div className="rounded-xl border border-border bg-surface-light p-4">
             <div className="mb-3 flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-slate-200">
+              <h3 className="text-sm font-semibold text-foreground">
                 📑 Sub-tabelas
               </h3>
               <Button
@@ -313,7 +313,7 @@ export function StepLayout({ wizard, onBack, onNext }: Props) {
               </Button>
             </div>
             {state.subTables.length === 0 ? (
-              <p className="text-xs text-slate-500">
+              <p className="text-xs text-muted">
                 {state.selectedDatasets.length < 2
                   ? "Adicione mais datasets no passo anterior para criar sub-tabelas."
                   : "Clique em '+ Adicionar' para criar a sub-tabela do dataset secundário."}
@@ -326,7 +326,7 @@ export function StepLayout({ wizard, onBack, onNext }: Props) {
                   return (
                     <div
                       key={st.id}
-                      className="rounded-lg border border-white/5 bg-black/10 p-3"
+                      className="rounded-lg border border-border bg-black/10 p-3"
                     >
                       <div className="mb-2 flex items-center justify-between">
                         <input
@@ -339,7 +339,7 @@ export function StepLayout({ wizard, onBack, onNext }: Props) {
                             );
                             wizard.setField("subTables", updated as any);
                           }}
-                          className="rounded border border-white/10 bg-white/5 px-2 py-1 text-sm font-medium text-slate-200"
+                          className="rounded border border-border bg-surface-light px-2 py-1 text-sm font-medium text-foreground"
                         />
                         <button
                           onClick={() => wizard.removeSubTable(st.id)}
@@ -357,11 +357,11 @@ export function StepLayout({ wizard, onBack, onNext }: Props) {
                             }
                             e.target.value = "";
                           }}
-                          className="w-full rounded border border-white/10 bg-white/5 px-2 py-1 text-xs text-white disabled:opacity-60"
+                          className="w-full rounded border border-border bg-surface-light px-2 py-1 text-xs text-foreground disabled:opacity-60"
                           defaultValue=""
                           disabled={availableFields.length === 0}
                         >
-                          <option value="" className="bg-slate-900">
+                          <option value="" className="bg-surface">
                             {availableFields.length === 0
                               ? "Todos os campos adicionados"
                               : "+ Adicionar campo"}
@@ -370,7 +370,7 @@ export function StepLayout({ wizard, onBack, onNext }: Props) {
                             <option
                               key={field.reference}
                               value={field.name}
-                              className="bg-slate-900"
+                              className="bg-surface"
                             >
                               {field.name}
                             </option>
@@ -379,13 +379,13 @@ export function StepLayout({ wizard, onBack, onNext }: Props) {
                       </div>
 
                       {st.columns.length === 0 ? (
-                        <p className="text-xs text-slate-500">
+                        <p className="text-xs text-muted">
                           Nenhuma coluna nesta sub-tabela.
                         </p>
                       ) : (
-                        <table className="min-w-full text-xs text-slate-300">
+                        <table className="min-w-full text-xs text-muted-foreground">
                           <thead>
-                            <tr className="border-b border-white/10 text-slate-400">
+                            <tr className="border-b border-border text-muted">
                               <th className="px-1 py-1 text-left">Campo</th>
                               <th className="px-1 py-1 text-left">Label</th>
                               <th />
@@ -393,9 +393,9 @@ export function StepLayout({ wizard, onBack, onNext }: Props) {
                           </thead>
                           <tbody>
                             {st.columns.map((col, ci) => (
-                              <tr key={ci} className="border-b border-white/5">
+                              <tr key={ci} className="border-b border-border">
                                 <td className="px-1 py-1">
-                                  <span className="text-[11px] text-slate-400">
+                                  <span className="text-[11px] text-muted">
                                     {normalizeSubTableField(col.field, st.sourceAlias)}
                                   </span>
                                 </td>
@@ -420,7 +420,7 @@ export function StepLayout({ wizard, onBack, onNext }: Props) {
                                       );
                                       wizard.setField("subTables", updated as any);
                                     }}
-                                    className="w-24 rounded border border-white/10 bg-white/5 px-1.5 py-0.5 text-slate-200"
+                                    className="w-24 rounded border border-border bg-surface-light px-1.5 py-0.5 text-foreground"
                                   />
                                 </td>
                                 <td className="px-1 py-1">
@@ -488,7 +488,7 @@ function SortableRow({ id, children }: { id: string; children: React.ReactNode }
     opacity: isDragging ? 0.5 : 1,
   };
   return (
-    <tr ref={setNodeRef} style={style} {...attributes} {...listeners} className="border-b border-white/5">
+    <tr ref={setNodeRef} style={style} {...attributes} {...listeners} className="border-b border-border">
       {children}
     </tr>
   );

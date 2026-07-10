@@ -35,8 +35,8 @@ export function ErrorPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
-      <div className="max-w-md w-full bg-slate-800 rounded-lg border border-slate-700 p-8 shadow-xl">
+    <div className="min-h-screen bg-surface flex items-center justify-center p-4">
+      <div className="max-w-md w-full bg-surface-light rounded-lg border border-slate-700 p-8 shadow-xl">
         <div className="flex justify-center mb-4">
           <div className="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center">
             <svg
@@ -55,27 +55,27 @@ export function ErrorPage() {
           </div>
         </div>
 
-        <h1 className="text-2xl font-bold text-white text-center mb-2">
+        <h1 className="text-2xl font-bold text-foreground text-center mb-2">
           {title}
         </h1>
         
-        <p className="text-slate-300 text-center mb-4">
+        <p className="text-muted-foreground text-center mb-4">
           {message}
         </p>
 
         {details && (
-          <div className="bg-slate-900 rounded p-3 mb-6 border border-slate-700">
-            <p className="text-xs text-slate-400 font-mono break-words">
+          <div className="bg-surface rounded p-3 mb-6 border border-slate-700">
+            <p className="text-xs text-muted font-mono break-words">
               {details}
             </p>
           </div>
         )}
 
         <div className="space-y-3">
-          <p className="text-sm text-slate-400 text-center mb-4">
+          <p className="text-sm text-muted text-center mb-4">
             Possíveis causas:
           </p>
-          <ul className="text-sm text-slate-400 space-y-1 mb-4">
+          <ul className="text-sm text-muted space-y-1 mb-4">
             <li>• API offline ou indisponível</li>
             <li>• Problema na conexão de rede</li>
             <li>• Servidor pode estar reiniciando</li>
@@ -92,7 +92,7 @@ export function ErrorPage() {
           </Button>
           <button
             onClick={() => window.location.reload()}
-            className="w-full px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded transition-colors"
+            className="w-full px-4 py-2 bg-slate-700 hover:bg-slate-600 text-foreground rounded transition-colors"
           >
             Recarregar Página
           </button>

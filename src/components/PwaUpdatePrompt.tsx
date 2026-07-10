@@ -40,13 +40,13 @@ export function PwaUpdatePrompt() {
   if (!needRefresh) return null;
 
   return (
-    <div className="fixed bottom-4 left-1/2 z-[1000] w-[min(92vw,720px)] -translate-x-1/2 rounded-xl border border-sky-500/35 bg-slate-900/95 p-4 shadow-2xl backdrop-blur">
+    <div className="fixed bottom-4 left-1/2 z-[1000] w-[min(92vw,720px)] -translate-x-1/2 rounded-xl border border-sky-500/35 bg-surface/95 p-4 shadow-2xl backdrop-blur">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
-          <p className="text-sm font-semibold text-slate-100">
+          <p className="text-sm font-semibold text-foreground">
             Nova versão da interface disponível
           </p>
-          <p className="text-xs text-slate-300">
+          <p className="text-xs text-muted-foreground">
             Recomendado recarregar agora para aplicar o novo build e limpar recursos em cache.
           </p>
         </div>

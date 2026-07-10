@@ -130,8 +130,8 @@ export default function IamUsersPage() {
         header: "Usuário",
         render: (item) => (
           <div className="space-y-1">
-            <p className="font-medium text-white">{item.fullName}</p>
-            <p className="text-xs text-slate-400">{item.login} · {item.email}</p>
+            <p className="font-medium text-foreground">{item.fullName}</p>
+            <p className="text-xs text-muted">{item.login} · {item.email}</p>
           </div>
         ),
       },
@@ -236,8 +236,8 @@ export default function IamUsersPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-white">Usuários e Acesso</h1>
-        <p className="text-sm text-slate-400">
+        <h1 className="text-2xl font-bold text-foreground">Usuários e Acesso</h1>
+        <p className="text-sm text-muted">
           Cadastre, atualize e desative usuários. Defina se MFA é obrigatório no onboarding.
         </p>
       </div>
@@ -462,12 +462,12 @@ function UserSecurityModal({
   return (
     <Modal open={true} onClose={onClose} title={`Segurança: ${user.fullName}`}>
       <div className="space-y-4">
-        <p className="text-sm text-slate-400">
+        <p className="text-sm text-muted">
           Gerencie as chaves MFA/2FA do usuário e ações de recuperação de acesso.
         </p>
 
-        <div className="space-y-2 rounded-lg border border-white/10 bg-white/5 p-3">
-          <p className="text-xs text-slate-400">
+        <div className="space-y-2 rounded-lg border border-border bg-surface-light p-3">
+          <p className="text-xs text-muted">
             Fluxo de recuperação: após revogar MFA, no próximo login o usuário recebe
             mfaSetupToken e recadastra TOTP ou FIDO2 normalmente.
           </p>
@@ -487,13 +487,13 @@ function UserSecurityModal({
             {keys.map((key) => (
               <div
                 key={key.id}
-                className="rounded-lg border border-white/10 bg-white/5 px-3 py-3"
+                className="rounded-lg border border-border bg-surface-light px-3 py-3"
               >
                 <div className="flex items-center justify-between gap-3">
                   <div>
-                    <p className="font-medium text-white">{key.name}</p>
-                    <p className="text-xs text-slate-400">Criada em: {key.createdAt}</p>
-                    <p className="text-xs text-slate-400">
+                    <p className="font-medium text-foreground">{key.name}</p>
+                    <p className="text-xs text-muted">Criada em: {key.createdAt}</p>
+                    <p className="text-xs text-muted">
                       Último uso: {key.lastUsedAt ?? "Nunca"}
                     </p>
                   </div>
@@ -519,7 +519,7 @@ function UserSecurityModal({
             ))}
 
             {keys.length === 0 && (
-              <div className="rounded-lg border border-dashed border-white/15 p-4 text-sm text-slate-500">
+              <div className="rounded-lg border border-dashed border-border-strong p-4 text-sm text-muted">
                 Nenhuma chave MFA cadastrada para este usuário.
               </div>
             )}
@@ -633,14 +633,14 @@ function BackfillMeshSection({
             Aplicar backfill
           </Button>
           {!canRunBackfill && (
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-muted">
               Sem permissão para executar reconciliação de identidade.
             </p>
           )}
         </div>
 
         {report && (
-          <div className="space-y-3 rounded-lg border border-white/10 bg-white/5 p-3">
+          <div className="space-y-3 rounded-lg border border-border bg-surface-light p-3">
             <div className="flex flex-wrap items-center gap-2">
               <Badge color="accent">Total: {report.totalUsers}</Badge>
               <Badge color="success">Convergidos: {report.syncedUsers}</Badge>
@@ -655,16 +655,16 @@ function BackfillMeshSection({
               {report.items.map((item) => (
                 <div
                   key={item.userId}
-                  className="flex items-center justify-between rounded-md border border-white/10 bg-black/20 px-3 py-2"
+                  className="flex items-center justify-between rounded-md border border-border bg-black/20 px-3 py-2"
                 >
                   <div>
-                    <p className="text-sm font-medium text-white">
+                    <p className="text-sm font-medium text-foreground">
                       {item.login} ({item.meshUsername})
                     </p>
-                    <p className="text-xs text-slate-400">
+                    <p className="text-xs text-muted">
                       Bindings: {item.siteBindingsApplied} | Rights: {item.rightsUpdatesApplied}
                     </p>
-                    <p className="text-xs text-slate-400">
+                    <p className="text-xs text-muted">
                       Device ACL: +{item.deviceBindingsApplied} / -{item.deviceBindingsRevoked}
                     </p>
                     {item.deviceBindingsRevocationCandidates > 0 && (
@@ -687,7 +687,7 @@ function BackfillMeshSection({
                 </div>
               ))}
               {report.items.length === 0 && (
-                <p className="text-sm text-slate-500">
+                <p className="text-sm text-muted">
                   Nenhum usuário retornado para os filtros selecionados.
                 </p>
               )}
@@ -801,43 +801,43 @@ function CreateUserModal({
         <Input label="Nome completo" value={form.fullName} onChange={(e) => setForm((prev) => ({ ...prev, fullName: e.target.value }))} />
         <Input label="E-mail" type="email" value={form.email} onChange={(e) => setForm((prev) => ({ ...prev, email: e.target.value }))} />
         <Input label="Senha inicial" type="password" value={form.password} onChange={(e) => setForm((prev) => ({ ...prev, password: e.target.value }))} />
-        <label className="flex items-center gap-2 text-sm text-slate-300">
+        <label className="flex items-center gap-2 text-sm text-muted-foreground">
           <input
             type="checkbox"
             checked={form.mfaRequired}
             onChange={(e) => setForm((prev) => ({ ...prev, mfaRequired: e.target.checked }))}
-            className="rounded border-white/20 bg-white/5"
+            className="rounded border-border-strong bg-surface-light"
           />
           Exigir MFA no primeiro acesso
         </label>
 
         <div className="space-y-2">
-          <p className="text-sm font-medium text-slate-300">Grupos iniciais (opcional)</p>
-          <div className="max-h-40 space-y-2 overflow-y-auto rounded-lg border border-white/10 bg-white/5 p-3">
+          <p className="text-sm font-medium text-muted-foreground">Grupos iniciais (opcional)</p>
+          <div className="max-h-40 space-y-2 overflow-y-auto rounded-lg border border-border bg-surface-light p-3">
             {groups.map((group) => (
-              <label key={group.id} className="flex items-center gap-2 text-sm text-slate-300">
+              <label key={group.id} className="flex items-center gap-2 text-sm text-muted-foreground">
                 <input
                   type="checkbox"
                   checked={selectedGroupIds.includes(group.id)}
                   onChange={(e) => toggleGroup(group.id, e.target.checked)}
-                  className="rounded border-white/20 bg-white/5"
+                  className="rounded border-border-strong bg-surface-light"
                 />
                 {group.name}
               </label>
             ))}
             {groups.length === 0 && (
-              <p className="text-xs text-slate-500">Nenhum grupo disponível.</p>
+              <p className="text-xs text-muted">Nenhum grupo disponível.</p>
             )}
           </div>
         </div>
 
-        <div className="space-y-2 rounded-lg border border-white/10 bg-white/5 p-3">
-          <label className="flex items-center gap-2 text-sm text-slate-300">
+        <div className="space-y-2 rounded-lg border border-border bg-surface-light p-3">
+          <label className="flex items-center gap-2 text-sm text-muted-foreground">
             <input
               type="checkbox"
               checked={runPostCreateDryRun}
               onChange={(e) => setRunPostCreateDryRun(e.target.checked)}
-              className="rounded border-white/20 bg-white/5"
+              className="rounded border-border-strong bg-surface-light"
             />
             Executar dry-run de convergência MeshCentral após criar
           </label>
@@ -912,22 +912,22 @@ function EditUserModal({
         <Input label="Nome completo" value={form.fullName} onChange={(e) => setForm((prev) => ({ ...prev, fullName: e.target.value }))} />
         <Input label="E-mail" type="email" value={form.email} onChange={(e) => setForm((prev) => ({ ...prev, email: e.target.value }))} />
 
-        <label className="flex items-center gap-2 text-sm text-slate-300">
+        <label className="flex items-center gap-2 text-sm text-muted-foreground">
           <input
             type="checkbox"
             checked={form.mfaRequired}
             onChange={(e) => setForm((prev) => ({ ...prev, mfaRequired: e.target.checked }))}
-            className="rounded border-white/20 bg-white/5"
+            className="rounded border-border-strong bg-surface-light"
           />
           MFA obrigatório
         </label>
 
-        <label className="flex items-center gap-2 text-sm text-slate-300">
+        <label className="flex items-center gap-2 text-sm text-muted-foreground">
           <input
             type="checkbox"
             checked={form.isActive}
             onChange={(e) => setForm((prev) => ({ ...prev, isActive: e.target.checked }))}
-            className="rounded border-white/20 bg-white/5"
+            className="rounded border-border-strong bg-surface-light"
           />
           Usuário ativo
         </label>

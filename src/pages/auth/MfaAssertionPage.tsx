@@ -1,4 +1,4 @@
-Ôªøimport { useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import { Fingerprint, ShieldCheck, ShieldEllipsis, TriangleAlert } from "lucide-react";
@@ -84,7 +84,7 @@ export default function MfaAssertionPage() {
       }
 
       if (!(credential instanceof PublicKeyCredential)) {
-        throw new Error("O navegador n√£o retornou uma credencial v√°lida.");
+        throw new Error("O navegador n„o retornou uma credencial v·lida.");
       }
 
       setTemporaryStage("mfa-assert-complete");
@@ -95,7 +95,7 @@ export default function MfaAssertionPage() {
       });
 
       await completeAuthenticatedSession(tokens);
-      toast.success("Autentica√ß√£o concluida com sucesso.");
+      toast.success("AutenticaÁ„o concluida com sucesso.");
       navigate("/", { replace: true });
     } catch (caught) {
       if (caught instanceof ApiError && caught.status === 403) {
@@ -109,7 +109,7 @@ export default function MfaAssertionPage() {
         clearTemporarySession();
         setTemporaryStage("anonymous");
         toast.error(
-          "Seu token tempor√°rio de MFA n√£o √© mais v√°lido. Fa√ßa login novamente para emitir um novo token.",
+          "Seu token tempor·rio de MFA n„o È mais v·lido. FaÁa login novamente para emitir um novo token.",
          );
          navigate("/auth/login", { replace: true });
          return;
@@ -132,7 +132,7 @@ export default function MfaAssertionPage() {
 
     const code = otpCode.trim();
     if (code.length < 6) {
-      const message = "Informe o c√≥digo OTP com 6 d√≠gitos.";
+      const message = "Informe o cÛdigo OTP com 6 dÌgitos.";
       setError(message);
       toast.error(message);
       return;
@@ -145,11 +145,11 @@ export default function MfaAssertionPage() {
       setTemporaryStage("mfa-assert-complete");
       const tokens = await authApi.completeLoginOtp(token, { code });
        await completeAuthenticatedSession(tokens);
-       toast.success("Autentica√ß√£o conclu√≠da com sucesso.");
+       toast.success("AutenticaÁ„o concluÌda com sucesso.");
        navigate("/", { replace: true });
      } catch (caught) {
        if (caught instanceof ApiError && caught.status === 403) {
-         const message = "Seu perfil exige outro m√©todo de MFA. Inicie novamente o login para seguir o fluxo correto.";
+         const message = "Seu perfil exige outro mÈtodo de MFA. Inicie novamente o login para seguir o fluxo correto.";
         setError(message);
         toast.error(message);
         return;
@@ -159,7 +159,7 @@ export default function MfaAssertionPage() {
         clearTemporarySession();
         setTemporaryStage("anonymous");
         toast.error(
-           "Seu token tempor√°rio de MFA n√£o √© mais v√°lido. Fa√ßa login novamente para emitir um novo token.",
+           "Seu token tempor·rio de MFA n„o È mais v·lido. FaÁa login novamente para emitir um novo token.",
          );
          navigate("/auth/login", { replace: true });
          return;
@@ -168,7 +168,7 @@ export default function MfaAssertionPage() {
        const message =
          caught instanceof ApiError
            ? caught.message
-           : "N√£o foi poss√≠vel validar o c√≥digo OTP.";
+           : "N„o foi possÌvel validar o cÛdigo OTP.";
       setError(message);
       toast.error(message);
       setTemporaryStage("mfa-assert-begin");
@@ -178,18 +178,18 @@ export default function MfaAssertionPage() {
   };
 
   return (
-    <Card className="border-white/10 bg-slate-900/80 shadow-2xl backdrop-blur" padding>
+    <Card className="border-border bg-surface/80 shadow-2xl backdrop-blur" padding>
       <CardHeader
-        title={isTotpFlow ? "Validar OTP" : "Validar chave de seguran√ßa"}
+        title={isTotpFlow ? "Validar OTP" : "Validar chave de seguranÁa"}
         subtitle={
           isTotpFlow
-            ? "Informe o c√≥digo do autenticador para trocar o token tempor√°rio por uma sess√£o autenticada."
-             : "Conclua a asser√ß√£o WebAuthn para trocar o token tempor√°rio por uma sess√£o autenticada."
+            ? "Informe o cÛdigo do autenticador para trocar o token tempor·rio por uma sess„o autenticada."
+             : "Conclua a asserÁ„o WebAuthn para trocar o token tempor·rio por uma sess„o autenticada."
         }
       />
 
       <div className="space-y-4">
-        <div className="rounded-2xl border border-white/10 bg-white/5 p-5 text-sm text-slate-300">
+        <div className="rounded-2xl border border-border bg-surface-light p-5 text-sm text-muted-foreground">
           <div className="flex items-start gap-3">
             {isTotpFlow ? (
               <ShieldEllipsis className="mt-0.5 h-5 w-5 text-primary" />
@@ -197,14 +197,14 @@ export default function MfaAssertionPage() {
               <Fingerprint className="mt-0.5 h-5 w-5 text-primary" />
             )}
             {isTotpFlow
-               ? "Seu perfil exige OTP. Digite o c√≥digo tempor√°rio gerado no autenticador."
-               : "Seu perfil exige FIDO2. Use sua passkey, chave f√≠sica ou autenticador compat√≠vel registrado para concluir o login."}
+               ? "Seu perfil exige OTP. Digite o cÛdigo tempor·rio gerado no autenticador."
+               : "Seu perfil exige FIDO2. Use sua passkey, chave fÌsica ou autenticador compatÌvel registrado para concluir o login."}
           </div>
         </div>
 
         {isTotpFlow && (
           <Input
-            label="C√≥digo OTP"
+            label="CÛdigo OTP"
             inputMode="numeric"
             autoComplete="one-time-code"
             maxLength={8}
@@ -233,7 +233,7 @@ export default function MfaAssertionPage() {
           onClick={isTotpFlow ? handleAuthenticateOtp : handleAuthenticateFido2}
         >
           <ShieldCheck className="h-4 w-4" />
-          {isTotpFlow ? "Validar OTP" : "Iniciar valida√ß√£o FIDO2"}
+          {isTotpFlow ? "Validar OTP" : "Iniciar validaÁ„o FIDO2"}
         </Button>
       </div>
     </Card>

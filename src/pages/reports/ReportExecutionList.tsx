@@ -137,10 +137,10 @@ export default function ReportExecutionList() {
               <FileText className="h-4 w-4 text-primary" />
             </div>
             <div>
-              <p className="font-medium text-white text-sm">
+              <p className="font-medium text-foreground text-sm">
                 {templateName ?? "Template sem nome"}
               </p>
-              <p className="text-xs text-slate-500 font-mono">
+              <p className="text-xs text-muted font-mono">
                 {shortId(e.templateId)}
               </p>
             </div>
@@ -152,19 +152,19 @@ export default function ReportExecutionList() {
       key: "executionDetails",
       header: "Execução",
       render: (e) => (
-        <div className="space-y-1 text-xs text-slate-300">
+        <div className="space-y-1 text-xs text-muted-foreground">
           <p>
-            <span className="text-slate-500">Criado:</span> {formatDate(e.createdAt)}
+            <span className="text-muted">Criado:</span> {formatDate(e.createdAt)}
           </p>
           <p>
-            <span className="text-slate-500">Finalizado:</span> {formatDate(e.finishedAt)}
+            <span className="text-muted">Finalizado:</span> {formatDate(e.finishedAt)}
           </p>
           <p>
-            <span className="text-slate-500">Duração:</span>{" "}
+            <span className="text-muted">Duração:</span>{" "}
             {e.executionTimeMs ? `${(e.executionTimeMs / 1000).toFixed(1)}s` : "—"}
           </p>
           <p className="truncate max-w-48">
-            <span className="text-slate-500">Por:</span> {e.createdBy || "—"}
+            <span className="text-muted">Por:</span> {e.createdBy || "—"}
           </p>
         </div>
       ),
@@ -210,7 +210,7 @@ export default function ReportExecutionList() {
       key: "rowCount",
       header: "Linhas",
       render: (e) => (
-        <span className="text-slate-300">
+        <span className="text-muted-foreground">
           {e.rowCount ? e.rowCount.toLocaleString() : "—"}
         </span>
       ),
@@ -219,7 +219,7 @@ export default function ReportExecutionList() {
       key: "size",
       header: "Tamanho",
       render: (e) => (
-        <span className="text-slate-300">
+        <span className="text-muted-foreground">
           {formatBytes(e.resultSizeBytes)}
         </span>
       ),
@@ -249,10 +249,10 @@ export default function ReportExecutionList() {
                 )}
 
                 {progress.status === "running" && (
-                  <span className="text-slate-300">{progressValue}%</span>
+                  <span className="text-muted-foreground">{progressValue}%</span>
                 )}
                 {progress.status === "running" && (
-                  <span className="truncate text-slate-400">{progress.message}</span>
+                  <span className="truncate text-muted">{progress.message}</span>
                 )}
                 {progress.status === "completed" && (
                   <span className="text-green-400">Download concluído</span>
@@ -290,7 +290,7 @@ export default function ReportExecutionList() {
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold text-white">
+          <h1 className="text-2xl font-bold text-foreground">
             Histórico de Execuções
           </h1>
         </div>
@@ -309,12 +309,12 @@ export default function ReportExecutionList() {
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold text-white">
+          <h1 className="text-2xl font-bold text-foreground">
             Histórico de Execuções
           </h1>
         </div>
         <Card>
-          <p className="text-center text-slate-400">
+          <p className="text-center text-muted">
             Nenhuma execução de relatório encontrada.{!clientId && " Selecione um cliente para ver o histórico."}
           </p>
         </Card>
@@ -326,10 +326,10 @@ export default function ReportExecutionList() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white">
+          <h1 className="text-2xl font-bold text-foreground">
             Histórico de Execuções
           </h1>
-          <p className="text-sm text-slate-400">
+          <p className="text-sm text-muted">
             {executions.data?.length ?? 0} execuções recentes
           </p>
         </div>
@@ -337,7 +337,7 @@ export default function ReportExecutionList() {
           <select
             value={limit}
             onChange={(e) => setLimit(Number(e.target.value))}
-            className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white"
+            className="rounded-lg border border-border bg-surface-light px-3 py-2 text-sm text-foreground"
             aria-label="Limite de itens por página"
           >
             <option value={25}>25 itens</option>

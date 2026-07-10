@@ -1,4 +1,4 @@
-Ôªøimport { useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -44,7 +44,7 @@ const renameSchema = z.object({
     .string()
     .trim()
     .min(2, "Informe um nome com pelo menos 2 caracteres.")
-    .max(80, "Use no m√°ximo 80 caracteres."),
+    .max(80, "Use no m·ximo 80 caracteres."),
 });
 
 type RenameFormValues = z.infer<typeof renameSchema>;
@@ -93,7 +93,7 @@ export default function AuthenticationSettingsPage() {
         header: "Chave",
         render: (item) => (
           <div className="space-y-1">
-            <p className="font-medium text-white">{item.name}</p>
+            <p className="font-medium text-foreground">{item.name}</p>
             <div className="flex items-center gap-2">
               <Badge color={getKeyTypeColor(item.keyType)}>
                 {getKeyTypeLabel(item.keyType)}
@@ -119,7 +119,7 @@ export default function AuthenticationSettingsPage() {
       },
       {
         key: "actions",
-        header: "A√ß√µes",
+        header: "AÁıes",
         className: "w-[160px]",
         render: (item) => (
           <div className="flex items-center justify-end gap-2">
@@ -153,7 +153,7 @@ export default function AuthenticationSettingsPage() {
 
   const handleRegister = async () => {
     if (!session.accessToken) {
-      toast.error("Sessao autenticada ausente. Fa√ßa login novamente.");
+      toast.error("Sessao autenticada ausente. FaÁa login novamente.");
       return;
     }
 
@@ -178,7 +178,7 @@ export default function AuthenticationSettingsPage() {
       });
 
       if (!(credential instanceof PublicKeyCredential)) {
-        throw new Error("O navegador n√£o retornou uma credencial v√°lida.");
+        throw new Error("O navegador n„o retornou uma credencial v·lida.");
       }
 
       const result = await authApi.completeRegistrationFido2(
@@ -206,7 +206,7 @@ export default function AuthenticationSettingsPage() {
 
   const handleDelete = async (item: MfaKey) => {
     const confirmed = window.confirm(
-      `Remover a chave \"${item.name}\"? Esta a√ß√£o n√£o pode ser desfeita.`,
+      `Remover a chave \"${item.name}\"? Esta aÁ„o n„o pode ser desfeita.`,
     );
     if (!confirmed) {
       return;
@@ -219,19 +219,19 @@ export default function AuthenticationSettingsPage() {
       const message =
         error instanceof ApiError
           ? error.message
-          : "N√£o foi poss√≠vel remover a chave de seguran√ßa.";
+          : "N„o foi possÌvel remover a chave de seguranÁa.";
       toast.error(message);
     }
   };
 
   if (keysQuery.isLoading) {
-    return <Loading message="Carregando configura√ß√µes de autentica√ß√£o..." />;
+    return <Loading message="Carregando configuraÁıes de autenticaÁ„o..." />;
   }
 
   if (keysQuery.isError) {
     return (
       <ErrorDisplay
-        message="Falha ao carregar suas chaves de autentica√ß√£o."
+        message="Falha ao carregar suas chaves de autenticaÁ„o."
         onRetry={() => void keysQuery.refetch()}
       />
     );
@@ -247,9 +247,9 @@ export default function AuthenticationSettingsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-white">Autentica√ß√£o</h1>
-        <p className="text-sm text-slate-400">
-          Gerencie suas chaves MFA e acompanhe o estado da sess√£o atual.
+        <h1 className="text-2xl font-bold text-foreground">AutenticaÁ„o</h1>
+        <p className="text-sm text-muted">
+          Gerencie suas chaves MFA e acompanhe o estado da sess„o atual.
         </p>
       </div>
 
@@ -260,16 +260,16 @@ export default function AuthenticationSettingsPage() {
               <ShieldCheck className="h-5 w-5" />
             </div>
             <div>
-              <p className="text-sm text-slate-400">Sessao</p>
-              <p className="mt-1 text-lg font-semibold text-white">
+              <p className="text-sm text-muted">Sessao</p>
+              <p className="mt-1 text-lg font-semibold text-foreground">
                 {session.stage === "authenticated"
                   ? "Autenticada"
-                  : "Sem sess√£o valida"}
+                  : "Sem sess„o valida"}
               </p>
-              <p className="mt-1 text-xs text-slate-500">
+              <p className="mt-1 text-xs text-muted">
                 {expiresInText
                   ? `Expira em ${expiresInText}`
-                  : "Sem expira√ß√£o local registrada"}
+                  : "Sem expiraÁ„o local registrada"}
               </p>
             </div>
           </div>
@@ -281,9 +281,9 @@ export default function AuthenticationSettingsPage() {
               <KeyRound className="h-5 w-5" />
             </div>
             <div>
-              <p className="text-sm text-slate-400">Chaves cadastradas</p>
-              <p className="mt-1 text-lg font-semibold text-white">{keys.length}</p>
-              <p className="mt-1 text-xs text-slate-500">
+              <p className="text-sm text-muted">Chaves cadastradas</p>
+              <p className="mt-1 text-lg font-semibold text-foreground">{keys.length}</p>
+              <p className="mt-1 text-xs text-muted">
                 {activeKeys} ativa(s) vinculada(s) a este usuario
               </p>
             </div>
@@ -296,9 +296,9 @@ export default function AuthenticationSettingsPage() {
               <Fingerprint className="h-5 w-5" />
             </div>
             <div>
-              <p className="text-sm text-slate-400">Metodo principal</p>
-              <p className="mt-1 text-lg font-semibold text-white">FIDO2 / WebAuthn</p>
-              <p className="mt-1 text-xs text-slate-500">
+              <p className="text-sm text-muted">Metodo principal</p>
+              <p className="mt-1 text-lg font-semibold text-foreground">FIDO2 / WebAuthn</p>
+              <p className="mt-1 text-xs text-muted">
                 TOTP segue reservado para futuro no backend atual
               </p>
             </div>
@@ -328,13 +328,13 @@ export default function AuthenticationSettingsPage() {
       <Card>
         <CardHeader
           title="Regras atuais"
-          subtitle="Comportamentos importantes expostos pelo backend para o fluxo de autentica√ß√£o."
+          subtitle="Comportamentos importantes expostos pelo backend para o fluxo de autenticaÁ„o."
         />
         <div className="grid gap-3 md:grid-cols-2">
-          <div className="rounded-xl border border-white/10 bg-white/5 p-4 text-sm text-slate-300">
-            O backend impede remover a √∫ltima chave ativa do usuario. A mensagem retornada pela API e √© exibida como fonte de verdade.
+          <div className="rounded-xl border border-border bg-surface-light p-4 text-sm text-muted-foreground">
+            O backend impede remover a ˙ltima chave ativa do usuario. A mensagem retornada pela API e È exibida como fonte de verdade.
           </div>
-          <div className="rounded-xl border border-white/10 bg-white/5 p-4 text-sm text-slate-300">
+          <div className="rounded-xl border border-border bg-surface-light p-4 text-sm text-muted-foreground">
             Registros novos usam WebAuthn com navigator.credentials.create e sao gravados com o nome amigavel informado na UI.
           </div>
         </div>
@@ -391,7 +391,7 @@ function RenameMfaKeyModal({
       const message =
         error instanceof ApiError
           ? error.message
-          : "N√£o foi poss√≠vel renomear a chave de seguran√ßa.";
+          : "N„o foi possÌvel renomear a chave de seguranÁa.";
       toast.error(message);
     }
   };

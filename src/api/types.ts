@@ -1,12 +1,22 @@
 // ── Enums ──────────────────────────────────────────────
+
+/**
+ * Tipo de log. Valores duplicados são aliases históricos para manter
+ * compatibilidade com versões anteriores da API.
+ *
+ * ATENÇÃO: Em JavaScript, enums numéricos com valores duplicados fazem
+ * reverse-lookup retornar apenas o último nome definido.
+ * Ex: LogType[0] === "Hardware" (não "Inventory").
+ * Use comparação por valor numérico, não por nome string.
+ */
 export enum LogType {
   Inventory = 0,
-  Hardware = 0,
+  Hardware = 0, // alias de Inventory
   Command = 1,
   Auth = 2,
-  Security = 2,
+  Security = 2, // alias de Auth
   System = 3,
-  Application = 3,
+  Application = 3, // alias de System
   Agent = 4,
   Ticket = 5,
   Workflow = 6,
@@ -15,21 +25,29 @@ export enum LogType {
   CustomField = 9,
 }
 
+/**
+ * Nível de log. Valores duplicados são aliases.
+ * ATENÇÃO: LogLevel[3] === "Warning", LogLevel[5] === "Critical".
+ */
 export enum LogLevel {
   Trace = 0,
   Debug = 1,
   Info = 2,
   Warn = 3,
-  Warning = 3,
+  Warning = 3, // alias de Warn
   Error = 4,
   Fatal = 5,
-  Critical = 5,
+  Critical = 5, // alias de Fatal
 }
 
+/**
+ * Origem do log. Valores duplicados são aliases.
+ * ATENÇÃO: LogSource[0] === "Portal" (último alias definido).
+ */
 export enum LogSource {
   Api = 0,
-  Server = 0,
-  Portal = 0,
+  Server = 0, // alias de Api
+  Portal = 0, // alias de Api
   Agent = 1,
   Scheduler = 2,
   Nats = 3,

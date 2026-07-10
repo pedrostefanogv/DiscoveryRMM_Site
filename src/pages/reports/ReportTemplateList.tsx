@@ -362,7 +362,7 @@ export default function ReportTemplateList() {
             e.stopPropagation();
             toggleFavorite(t.id, t.name);
           }}
-          className="text-slate-400 hover:text-yellow-400 transition-colors"
+          className="text-muted hover:text-yellow-400 transition-colors"
           aria-label={isFavorite(t.id) ? "Remover dos favoritos" : "Adicionar aos favoritos"}
         >
           <Star
@@ -382,8 +382,8 @@ export default function ReportTemplateList() {
             <FileText className="h-4 w-4 shrink-0 text-primary" />
           </div>
           <div>
-            <p className="font-medium text-white">{t.name}</p>
-            <p className="text-xs text-slate-500">
+            <p className="font-medium text-foreground">{t.name}</p>
+            <p className="text-xs text-muted">
               {t.description || "Sem descrição"}
             </p>
           </div>
@@ -394,7 +394,7 @@ export default function ReportTemplateList() {
       key: "datasetType",
       header: "Tipo de Dados",
       render: (t) => (
-        <span className="text-slate-300">
+        <span className="text-muted-foreground">
           {getDatasetLabel(t.datasetType)}
         </span>
       ),
@@ -468,8 +468,8 @@ export default function ReportTemplateList() {
     <div ref={pageRef} className="relative space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-white">Central de Relatórios</h1>
-          <p className="text-sm text-slate-400">
+          <h1 className="text-2xl font-bold text-foreground">Central de Relatórios</h1>
+          <p className="text-sm text-muted">
             Gere relatórios diretamente da lista de templates. Dataset inicial fica no fluxo de Novo Template.
           </p>
         </div>
@@ -498,19 +498,19 @@ export default function ReportTemplateList() {
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Card className="p-3">
-          <p className="text-xs uppercase tracking-wide text-slate-400">Templates Visíveis</p>
-          <p className="mt-1 text-xl font-semibold text-white">{filteredTemplates.length}</p>
+          <p className="text-xs uppercase tracking-wide text-muted">Templates Visíveis</p>
+          <p className="mt-1 text-xl font-semibold text-foreground">{filteredTemplates.length}</p>
         </Card>
         <Card className="p-3">
-          <p className="text-xs uppercase tracking-wide text-slate-400">Ativos</p>
+          <p className="text-xs uppercase tracking-wide text-muted">Ativos</p>
           <p className="mt-1 text-xl font-semibold text-emerald-300">{activeCount}</p>
         </Card>
         <Card className="p-3">
-          <p className="text-xs uppercase tracking-wide text-slate-400">Inativos</p>
+          <p className="text-xs uppercase tracking-wide text-muted">Inativos</p>
           <p className="mt-1 text-xl font-semibold text-amber-300">{inactiveCount}</p>
         </Card>
         <Card className="p-3">
-          <p className="text-xs uppercase tracking-wide text-slate-400">Favoritos</p>
+          <p className="text-xs uppercase tracking-wide text-muted">Favoritos</p>
           <p className="mt-1 text-xl font-semibold text-sky-300">
             {templates.data?.filter((t) => isFavorite(t.id)).length ?? 0}
           </p>
@@ -526,21 +526,21 @@ export default function ReportTemplateList() {
             onChange={(e) => setSearch(e.target.value)}
           />
           <div className="flex flex-wrap items-center gap-3">
-          <label className="flex items-center gap-2 text-sm text-slate-400">
+          <label className="flex items-center gap-2 text-sm text-muted">
             <input
               type="checkbox"
               checked={showOnlyFavorites}
               onChange={(e) => setShowOnlyFavorites(e.target.checked)}
-              className="rounded border-white/10 bg-white/5"
+              className="rounded border-border bg-surface-light"
             />
             Apenas favoritos
           </label>
-          <label className="flex items-center gap-2 text-sm text-slate-400">
+          <label className="flex items-center gap-2 text-sm text-muted">
             <input
               type="checkbox"
               checked={showInactive}
               onChange={(e) => setShowInactive(e.target.checked)}
-              className="rounded border-white/10 bg-white/5"
+              className="rounded border-border bg-surface-light"
             />
             Mostrar inativos
           </label>
@@ -551,8 +551,8 @@ export default function ReportTemplateList() {
       {filteredTemplates.length === 0 ? (
         <Card>
           <div className="space-y-3 py-6 text-center">
-            <p className="text-base font-semibold text-white">Nenhum template encontrado</p>
-            <p className="text-sm text-slate-400">
+            <p className="text-base font-semibold text-foreground">Nenhum template encontrado</p>
+            <p className="text-sm text-muted">
               Ajuste os filtros ou crie um novo template para começar a geração de relatórios.
             </p>
             <div className="flex justify-center">
@@ -576,37 +576,37 @@ export default function ReportTemplateList() {
       {templateContextMenu && (
         <div
           ref={contextMenuRef}
-          className="absolute z-[80] w-64 overflow-hidden rounded-xl border border-white/10 bg-slate-900/95 p-1 shadow-2xl backdrop-blur"
+          className="absolute z-[80] w-64 overflow-hidden rounded-xl border border-border bg-surface/95 p-1 shadow-2xl backdrop-blur"
           style={{ top: templateContextMenu.y, left: templateContextMenu.x }}
           role="menu"
           aria-label={`Ações do template ${templateContextMenu.template.name}`}
         >
           <button
             type="button"
-            className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm text-slate-200 transition-colors hover:bg-white/10"
+            className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-surface-hover"
             onClick={handleContextMenuEdit}
             role="menuitem"
           >
             <span>Editar template</span>
-            <Edit2 className="h-4 w-4 text-slate-400" />
+            <Edit2 className="h-4 w-4 text-muted" />
           </button>
           <button
             type="button"
-            className="mt-1 flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm text-slate-200 transition-colors hover:bg-white/10"
+            className="mt-1 flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-surface-hover"
             onClick={handleContextMenuExport}
             role="menuitem"
           >
             <span>Exportar template</span>
-            <Download className="h-4 w-4 text-slate-400" />
+            <Download className="h-4 w-4 text-muted" />
           </button>
           <button
             type="button"
-            className="mt-1 flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm text-slate-200 transition-colors hover:bg-white/10"
+            className="mt-1 flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-surface-hover"
             onClick={handleContextMenuHistory}
             role="menuitem"
           >
             <span>Ver histórico de alterações</span>
-            <History className="h-4 w-4 text-slate-400" />
+            <History className="h-4 w-4 text-muted" />
           </button>
           <button
             type="button"
@@ -626,7 +626,7 @@ export default function ReportTemplateList() {
         title="Excluir Template"
       >
         <div className="space-y-4">
-          <p className="text-slate-300">
+          <p className="text-muted-foreground">
             Tem certeza que deseja excluir este template? Esta ação não pode ser
             desfeita.
           </p>

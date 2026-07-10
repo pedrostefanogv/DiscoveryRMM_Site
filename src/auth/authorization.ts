@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { useAuth } from "@/auth/AuthContext";
+import { decodeBase64Url } from "@/utils/base64";
 
 type JwtPayload = Record<string, unknown>;
 
@@ -18,21 +19,6 @@ const ROLE_KEYS = [
   "role",
   "http://schemas.microsoft.com/ws/2008/06/identity/claims/role",
 ];
-
-function decodeBase64Url(value: string): string {
-  const padded = value.padEnd(Math.ceil(value.length / 4) * 4, "=");
-  const base64 = padded.replace(/-/g, "+").replace(/_/g, "/");
-  try {
-    return decodeURIComponent(
-      atob(base64)
-        .split("")
-        .map((char) => `%${char.charCodeAt(0).toString(16).padStart(2, "0")}`)
-        .join(""),
-    );
-  } catch {
-    return atob(base64);
-  }
-}
 
 function parseJwtPayload(token: string | null): JwtPayload | null {
   if (!token) return null;

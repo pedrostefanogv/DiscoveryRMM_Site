@@ -30,8 +30,8 @@ export default function SoftwareHome() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-white">Softwares</h1>
-        <p className="text-sm text-slate-400">Escolha um módulo para gerenciar aplicativos e distribuição.</p>
+        <h1 className="text-2xl font-bold text-foreground">Softwares</h1>
+        <p className="text-sm text-muted">Escolha um módulo para gerenciar aplicativos e distribuição.</p>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">
@@ -42,7 +42,7 @@ export default function SoftwareHome() {
               <CardHeader
                 title={card.title}
                 subtitle={card.description}
-                action={<Icon className="h-4 w-4 text-slate-400" />}
+                action={<Icon className="h-4 w-4 text-muted" />}
               />
 
               <Link to={card.to}>

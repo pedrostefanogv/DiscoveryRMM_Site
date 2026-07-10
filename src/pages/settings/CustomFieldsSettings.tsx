@@ -286,8 +286,8 @@ export default function CustomFieldsSettings() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-white">Custom Fields</h1>
-        <p className="text-sm text-slate-400">Gerencie definições por escopo e os valores por Servidor, Cliente, Site e Agente. Campos de Ticket sao preenchidos dentro do chamado.</p>
+        <h1 className="text-2xl font-bold text-foreground">Custom Fields</h1>
+        <p className="text-sm text-muted">Gerencie definições por escopo e os valores por Servidor, Cliente, Site e Agente. Campos de Ticket sao preenchidos dentro do chamado.</p>
       </div>
 
       <Card>
@@ -326,19 +326,19 @@ export default function CustomFieldsSettings() {
 
         <div className="mt-4 space-y-3">
           {scopedDefinitions.length === 0 ? (
-            <p className="text-sm text-slate-500">Nenhuma definição encontrada.</p>
+            <p className="text-sm text-muted">Nenhuma definição encontrada.</p>
           ) : (
             scopedDefinitions.map(definition => (
-              <div key={definition.id} className="rounded-lg border border-white/10 bg-white/5 p-4">
+              <div key={definition.id} className="rounded-lg border border-border bg-surface-light p-4">
                 <div className="flex flex-wrap items-center gap-2">
-                  <h3 className="font-medium text-white">{definition.label}</h3>
+                  <h3 className="font-medium text-foreground">{definition.label}</h3>
                   <Badge color={definition.isActive ? 'success' : 'warning'}>{definition.isActive ? 'Ativo' : 'Inativo'}</Badge>
                   <Badge color="accent">{getCustomFieldScopeLabel(definition.scopeType)}</Badge>
                   <Badge color="slate">{getCustomFieldDataTypeLabel(definition.dataType)}</Badge>
                 </div>
-                <p className="mt-2 text-xs text-slate-400">Name: {definition.name}</p>
-                {definition.description ? <p className="mt-2 text-sm text-slate-300">{definition.description}</p> : null}
-                {definition.options.length > 0 ? <p className="mt-2 text-xs text-slate-400">Opções: {definition.options.join(', ')}</p> : null}
+                <p className="mt-2 text-xs text-muted">Name: {definition.name}</p>
+                {definition.description ? <p className="mt-2 text-sm text-muted-foreground">{definition.description}</p> : null}
+                {definition.options.length > 0 ? <p className="mt-2 text-xs text-muted">Opções: {definition.options.join(', ')}</p> : null}
                 <div className="mt-3 flex flex-wrap gap-2">
                   <Button size="sm" variant="secondary" onClick={() => editDefinition(definition)}>Editar</Button>
                   <Button size="sm" variant="danger" onClick={() => void handleDeleteDefinition(definition)}>Desativar</Button>
@@ -369,12 +369,12 @@ export default function CustomFieldsSettings() {
         ) : (
           <div className="mt-4 space-y-3">
             {valueDefinitions.length === 0 ? (
-              <p className="text-sm text-slate-500">Nenhuma definição para este escopo.</p>
+              <p className="text-sm text-muted">Nenhuma definição para este escopo.</p>
             ) : (
               valueDefinitions.map(definition => (
-                <div key={definition.id} className="rounded-lg border border-white/10 bg-white/5 p-4">
+                <div key={definition.id} className="rounded-lg border border-border bg-surface-light p-4">
                   <div className="flex flex-wrap items-center gap-2">
-                    <h3 className="font-medium text-white">{definition.label}</h3>
+                    <h3 className="font-medium text-foreground">{definition.label}</h3>
                     <Badge color="accent">{getCustomFieldDataTypeLabel(definition.dataType)}</Badge>
                     <Badge color="slate">{getCustomFieldScopeLabel(definition.scopeType)}</Badge>
                   </div>

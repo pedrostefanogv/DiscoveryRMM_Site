@@ -5,12 +5,22 @@
     <link rel="icon" type="image/x-icon" href="/icon.ico" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#0b1220" />
-    <meta name="color-scheme" content="dark" />
+    <meta name="color-scheme" content="dark light" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https: wss:; frame-src 'self' blob:;"
+    />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <title>Discovery RMM</title>
     <style>
-      body { margin: 0; background: #020617; }
+      body {
+        margin: 0;
+        background: #f8fafc;
+      }
+      html.dark body {
+        background: #020617;
+      }
       #initial-loader {
         display: flex;
         flex-direction: column;
@@ -18,24 +28,67 @@
         justify-content: center;
         min-height: 100vh;
         gap: 20px;
-        font-family: 'Segoe UI', system-ui, sans-serif;
-        background: radial-gradient(circle at 50% 30%, rgb(14 165 233 / 0.12), transparent 50%), #020617;
+        font-family: "Segoe UI", system-ui, sans-serif;
+        background:
+          radial-gradient(
+            circle at 50% 30%,
+            rgb(14 165 233 / 0.08),
+            transparent 50%
+          ),
+          #f8fafc;
+      }
+      html.dark #initial-loader {
+        background:
+          radial-gradient(
+            circle at 50% 30%,
+            rgb(14 165 233 / 0.12),
+            transparent 50%
+          ),
+          #020617;
       }
       #initial-loader .spinner {
         width: 36px;
         height: 36px;
-        border: 3px solid rgb(255 255 255 / 0.08);
+        border: 3px solid rgb(148 163 184 / 0.2);
         border-top-color: #6366f1;
         border-radius: 50%;
         animation: spin 0.7s linear infinite;
       }
-      @keyframes spin { to { transform: rotate(360deg); } }
+      html.dark #initial-loader .spinner {
+        border-color: rgb(255 255 255 / 0.08);
+        border-top-color: #6366f1;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
       #initial-loader span {
-        color: rgb(148 163 184 / 0.6);
+        color: rgb(100 116 139 / 0.8);
         font-size: 13px;
         letter-spacing: 0.02em;
       }
+      html.dark #initial-loader span {
+        color: rgb(148 163 184 / 0.6);
+      }
     </style>
+    <script>
+      // Aplica tema antes do React carregar para evitar flash (FOUC)
+      (function () {
+        try {
+          var stored = localStorage.getItem("discovery-rmm-theme-mode");
+          var isDark;
+          if (stored === "light" || stored === "dark") {
+            isDark = stored === "dark";
+          } else {
+            isDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+          }
+          if (isDark) document.documentElement.classList.add("dark");
+        } catch (e) {
+          document.documentElement.classList.add("dark");
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root">

@@ -162,17 +162,17 @@ export function LiveMarkdownPreview({ wizard }: Props) {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-2">
-        <div className="flex rounded-lg border border-white/10 bg-white/5 p-0.5">
+        <div className="flex rounded-lg border border-border bg-surface-light p-0.5">
           <button
             onClick={() => setMode("structure")}
             className={`rounded-md px-2 py-1 text-xs font-medium transition-colors ${
-              mode === "structure" ? "bg-primary text-white" : "text-slate-400 hover:text-white"
+              mode === "structure" ? "bg-primary text-foreground" : "text-muted hover:text-foreground"
             }`}
           >📐 Estrutura</button>
           <button
             onClick={() => setMode("data")}
             className={`rounded-md px-2 py-1 text-xs font-medium transition-colors ${
-              mode === "data" ? "bg-primary text-white" : "text-slate-400 hover:text-white"
+              mode === "data" ? "bg-primary text-foreground" : "text-muted hover:text-foreground"
             }`}
             disabled={!hasColumns}
           >📊 Dados</button>
@@ -184,7 +184,7 @@ export function LiveMarkdownPreview({ wizard }: Props) {
             onClick={() => setIsExpandedPreviewOpen(true)}
             disabled={!previewSrcDoc}
             title="Abrir preview ampliado"
-            className="rounded-md border border-white/10 bg-white/5 px-2 py-1 text-xs font-medium text-slate-200 transition-colors hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+            className="rounded-md border border-border bg-surface-light px-2 py-1 text-xs font-medium text-foreground transition-colors hover:bg-surface-hover hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
           >
             ⤢ Ampliar
           </button>
@@ -195,26 +195,26 @@ export function LiveMarkdownPreview({ wizard }: Props) {
         <div className="rounded-lg border border-sky-500/20 bg-sky-500/5 p-2">
           <div className="grid grid-cols-2 gap-2">
             <select value={clientId} onChange={(e) => { setClientId(e.target.value); setSiteId(""); }}
-              className="rounded border border-white/10 bg-white/5 px-2 py-1 text-xs text-slate-200">
+              className="rounded border border-border bg-surface-light px-2 py-1 text-xs text-foreground">
               <option value="">Todos clientes</option>
-              {clients.map((c) => <option key={c.id} value={c.id} className="bg-slate-900">{c.name}</option>)}
+              {clients.map((c) => <option key={c.id} value={c.id} className="bg-surface">{c.name}</option>)}
             </select>
             <select value={siteId} onChange={(e) => setSiteId(e.target.value)} disabled={!clientId}
-              className="rounded border border-white/10 bg-white/5 px-2 py-1 text-xs text-slate-200">
+              className="rounded border border-border bg-surface-light px-2 py-1 text-xs text-foreground">
               <option value="">Todos sites</option>
-              {sites.map((s) => <option key={s.id} value={s.id} className="bg-slate-900">{s.name}</option>)}
+              {sites.map((s) => <option key={s.id} value={s.id} className="bg-surface">{s.name}</option>)}
             </select>
             <select value={dataLimit} onChange={(e) => setDataLimit(e.target.value)}
-              className="rounded border border-white/10 bg-white/5 px-2 py-1 text-xs text-slate-200">
-              <option value="5" className="bg-slate-900">5 linhas</option>
-              <option value="10" className="bg-slate-900">10 linhas</option>
-              <option value="25" className="bg-slate-900">25 linhas</option>
-              <option value="50" className="bg-slate-900">50 linhas</option>
-              <option value="100" className="bg-slate-900">100 linhas</option>
-              <option value="all" className="bg-slate-900">Todos os registros</option>
+              className="rounded border border-border bg-surface-light px-2 py-1 text-xs text-foreground">
+              <option value="5" className="bg-surface">5 linhas</option>
+              <option value="10" className="bg-surface">10 linhas</option>
+              <option value="25" className="bg-surface">25 linhas</option>
+              <option value="50" className="bg-surface">50 linhas</option>
+              <option value="100" className="bg-surface">100 linhas</option>
+              <option value="all" className="bg-surface">Todos os registros</option>
             </select>
             <button onClick={loadDataPreview} disabled={previewMutation.isPending}
-              className="rounded bg-primary/80 px-2 py-1 text-xs font-medium text-white hover:bg-primary disabled:opacity-50">
+              className="rounded bg-primary/80 px-2 py-1 text-xs font-medium text-foreground hover:bg-primary disabled:opacity-50">
               {previewMutation.isPending ? "⏳" : "🔄"} Atualizar
             </button>
           </div>
@@ -222,7 +222,7 @@ export function LiveMarkdownPreview({ wizard }: Props) {
       )}
 
       <div
-        className={`rounded-lg border border-white/10 bg-black/30 ${
+        className={`rounded-lg border border-border bg-black/30 ${
           mode === "data" ? "p-0" : "max-h-[600px] overflow-y-auto p-4"
         }`}
       >
@@ -232,7 +232,7 @@ export function LiveMarkdownPreview({ wizard }: Props) {
           </div>
         )}
         {mode === "data" && previewMutation.isPending && (
-          <div className="flex items-center justify-center gap-2 py-8 text-sm text-slate-400 p-4">
+          <div className="flex items-center justify-center gap-2 py-8 text-sm text-muted p-4">
             <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
             Carregando dados...
           </div>
@@ -247,7 +247,7 @@ export function LiveMarkdownPreview({ wizard }: Props) {
         )}
         {mode === "data" && !previewMutation.isPending && !previewMutation.data?.html && hasColumns && (
           <div className="py-8 text-center p-4">
-            <p className="text-sm text-slate-400">Clique em 'Atualizar' para carregar dados reais.</p>
+            <p className="text-sm text-muted">Clique em 'Atualizar' para carregar dados reais.</p>
           </div>
         )}
         {mode === "data" && previewMutation.isError && (
@@ -258,7 +258,7 @@ export function LiveMarkdownPreview({ wizard }: Props) {
       </div>
 
       {mode === "data" && previewMutation.data?.headers.rowCount != null && (
-        <p className="text-center text-[10px] text-slate-500">
+        <p className="text-center text-[10px] text-muted">
           {previewMutation.data.headers.rowCount} linhas ·{" "}
           {previewMutation.data.headers.format ?? "html"}
         </p>
@@ -275,13 +275,13 @@ export function LiveMarkdownPreview({ wizard }: Props) {
           aria-modal="true"
           aria-label="Preview ampliado"
         >
-          <div className="h-[90vh] w-[min(1200px,96vw)] rounded-xl border border-white/10 bg-slate-950 shadow-2xl">
-            <div className="flex items-center justify-between border-b border-white/10 px-4 py-2">
-              <h4 className="text-sm font-semibold text-slate-100">Preview ampliado</h4>
+          <div className="h-[90vh] w-[min(1200px,96vw)] rounded-xl border border-border bg-background shadow-2xl">
+            <div className="flex items-center justify-between border-b border-border px-4 py-2">
+              <h4 className="text-sm font-semibold text-foreground">Preview ampliado</h4>
               <button
                 type="button"
                 onClick={() => setIsExpandedPreviewOpen(false)}
-                className="rounded-md border border-white/10 bg-white/5 px-2 py-1 text-xs font-medium text-slate-200 transition-colors hover:bg-white/10 hover:text-white"
+                className="rounded-md border border-border bg-surface-light px-2 py-1 text-xs font-medium text-foreground transition-colors hover:bg-surface-hover hover:text-foreground"
               >
                 ✕ Fechar
               </button>

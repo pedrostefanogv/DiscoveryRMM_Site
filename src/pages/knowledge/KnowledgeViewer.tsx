@@ -154,13 +154,13 @@ export default function KnowledgeViewer() {
 
   return (
     <div className="space-y-6">
-      <section className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-slate-900 via-slate-900 to-blue-950/40 p-5 sm:p-6">
+      <section className="relative overflow-hidden rounded-2xl border border-border bg-gradient-to-br from-slate-900 via-slate-900 to-blue-950/40 p-5 sm:p-6">
         <div className="pointer-events-none absolute -right-24 -top-24 h-48 w-48 rounded-full bg-primary/20 blur-3xl" />
         <div className="relative z-10 space-y-4">
           <button
             type="button"
             onClick={() => navigate('/knowledge')}
-            className="inline-flex items-center gap-2 text-sm text-slate-400 transition-colors hover:text-white"
+            className="inline-flex items-center gap-2 text-sm text-muted transition-colors hover:text-foreground"
           >
             <ArrowLeft className="h-4 w-4" /> Voltar para a base
           </button>
@@ -175,11 +175,11 @@ export default function KnowledgeViewer() {
                 <Badge color="slate">v{article.currentVersionNumber}</Badge>
               </div>
 
-              <h1 className="text-2xl font-bold text-white sm:text-3xl">
+              <h1 className="text-2xl font-bold text-foreground sm:text-3xl">
                 {article.title}
               </h1>
 
-              <p className="max-w-3xl text-sm text-slate-300">
+              <p className="max-w-3xl text-sm text-muted-foreground">
                 {article.category
                   ? `Categoria: ${article.category}`
                   : 'Sem categoria definida para este artigo.'}
@@ -200,7 +200,7 @@ export default function KnowledgeViewer() {
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
         <Card padding={false} className="overflow-hidden">
-          <article className="prose prose-invert max-w-none px-5 py-6 prose-headings:text-white prose-p:text-slate-200 prose-li:text-slate-200 prose-strong:text-white prose-code:text-emerald-300 prose-pre:bg-slate-950/70 sm:px-7">
+          <article className="prose prose-invert max-w-none px-5 py-6 prose-headings:text-foreground prose-p:text-foreground prose-li:text-foreground prose-strong:text-foreground prose-code:text-emerald-300 prose-pre:bg-background/70 sm:px-7">
             <ReactMarkdown remarkPlugins={[remarkGfm]}>
               {article.content || '_Conteudo vazio._'}
             </ReactMarkdown>
@@ -209,72 +209,72 @@ export default function KnowledgeViewer() {
 
         <div className="space-y-4">
           <Card>
-            <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-300">
+            <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
               Detalhes
             </h2>
 
-            <div className="space-y-3 text-sm text-slate-300">
+            <div className="space-y-3 text-sm text-muted-foreground">
               <div className="flex items-start gap-2">
-                <UserRound className="mt-0.5 h-4 w-4 text-slate-500" />
+                <UserRound className="mt-0.5 h-4 w-4 text-muted" />
                 <div>
-                  <p className="text-xs uppercase tracking-wide text-slate-500">Autor</p>
-                  <p className="text-slate-200">{article.createdBy ?? 'Nao informado'}</p>
+                  <p className="text-xs uppercase tracking-wide text-muted">Autor</p>
+                  <p className="text-foreground">{article.createdBy ?? 'Nao informado'}</p>
                 </div>
               </div>
 
               <div className="flex items-start gap-2">
-                <FilePenLine className="mt-0.5 h-4 w-4 text-slate-500" />
+                <FilePenLine className="mt-0.5 h-4 w-4 text-muted" />
                 <div>
-                  <p className="text-xs uppercase tracking-wide text-slate-500">Ultima edicao</p>
-                  <p className="text-slate-200">{article.lastEditedBy ?? article.createdBy ?? 'Nao informado'}</p>
-                  <p className="text-xs text-slate-500">{formatDate(article.lastEditedAt ?? article.updatedAt)}</p>
+                  <p className="text-xs uppercase tracking-wide text-muted">Ultima edicao</p>
+                  <p className="text-foreground">{article.lastEditedBy ?? article.createdBy ?? 'Nao informado'}</p>
+                  <p className="text-xs text-muted">{formatDate(article.lastEditedAt ?? article.updatedAt)}</p>
                 </div>
               </div>
 
               <div className="flex items-start gap-2">
-                <Clock3 className="mt-0.5 h-4 w-4 text-slate-500" />
+                <Clock3 className="mt-0.5 h-4 w-4 text-muted" />
                 <div>
-                  <p className="text-xs uppercase tracking-wide text-slate-500">Leitura estimada</p>
-                  <p className="text-slate-200">{metadata.readingMinutes} min</p>
+                  <p className="text-xs uppercase tracking-wide text-muted">Leitura estimada</p>
+                  <p className="text-foreground">{metadata.readingMinutes} min</p>
                 </div>
               </div>
 
               <div className="flex items-start gap-2">
-                <CalendarClock className="mt-0.5 h-4 w-4 text-slate-500" />
+                <CalendarClock className="mt-0.5 h-4 w-4 text-muted" />
                 <div>
-                  <p className="text-xs uppercase tracking-wide text-slate-500">Criado em</p>
-                  <p className="text-slate-200">{formatDate(article.createdAt)}</p>
+                  <p className="text-xs uppercase tracking-wide text-muted">Criado em</p>
+                  <p className="text-foreground">{formatDate(article.createdAt)}</p>
                 </div>
               </div>
 
               <div className="flex items-start gap-2">
-                <Globe2 className="mt-0.5 h-4 w-4 text-slate-500" />
+                <Globe2 className="mt-0.5 h-4 w-4 text-muted" />
                 <div>
-                  <p className="text-xs uppercase tracking-wide text-slate-500">Cliente</p>
-                  <p className="text-slate-200">{metadata.clientName}</p>
+                  <p className="text-xs uppercase tracking-wide text-muted">Cliente</p>
+                  <p className="text-foreground">{metadata.clientName}</p>
                 </div>
               </div>
 
               <div className="flex items-start gap-2">
-                <MapPinned className="mt-0.5 h-4 w-4 text-slate-500" />
+                <MapPinned className="mt-0.5 h-4 w-4 text-muted" />
                 <div>
-                  <p className="text-xs uppercase tracking-wide text-slate-500">Site</p>
-                  <p className="text-slate-200">{metadata.siteName}</p>
+                  <p className="text-xs uppercase tracking-wide text-muted">Site</p>
+                  <p className="text-foreground">{metadata.siteName}</p>
                 </div>
               </div>
 
               <div className="flex items-start gap-2">
-                <Building2 className="mt-0.5 h-4 w-4 text-slate-500" />
+                <Building2 className="mt-0.5 h-4 w-4 text-muted" />
                 <div>
-                  <p className="text-xs uppercase tracking-wide text-slate-500">Departamento</p>
-                  <p className="text-slate-200">{metadata.departmentName}</p>
+                  <p className="text-xs uppercase tracking-wide text-muted">Departamento</p>
+                  <p className="text-foreground">{metadata.departmentName}</p>
                 </div>
               </div>
             </div>
           </Card>
 
           <Card>
-            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-300">
+            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
               Tags e indexacao
             </h2>
             <div className="mb-4 flex flex-wrap gap-2">
@@ -283,22 +283,22 @@ export default function KnowledgeViewer() {
               ))}
             </div>
 
-            <div className="grid grid-cols-2 gap-2 text-xs text-slate-300">
-              <div className="rounded-lg border border-white/10 bg-white/5 p-2">
-                <p className="text-slate-500">Chunks</p>
-                <p className="text-sm font-semibold text-white">{article.chunkCount}</p>
+            <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+              <div className="rounded-lg border border-border bg-surface-light p-2">
+                <p className="text-muted">Chunks</p>
+                <p className="text-sm font-semibold text-foreground">{article.chunkCount}</p>
               </div>
-              <div className="rounded-lg border border-white/10 bg-white/5 p-2">
-                <p className="text-slate-500">Embeddings</p>
-                <p className="text-sm font-semibold text-white">
+              <div className="rounded-lg border border-border bg-surface-light p-2">
+                <p className="text-muted">Embeddings</p>
+                <p className="text-sm font-semibold text-foreground">
                   {article.embeddingsReady ? 'Pronto' : 'Pendente'}
                 </p>
               </div>
-              <div className="col-span-2 rounded-lg border border-white/10 bg-white/5 p-2">
-                <p className="inline-flex items-center gap-1 text-slate-500">
+              <div className="col-span-2 rounded-lg border border-border bg-surface-light p-2">
+                <p className="inline-flex items-center gap-1 text-muted">
                   <Layers className="h-3.5 w-3.5" /> Publicacao
                 </p>
-                <p className="mt-1 text-sm text-white">
+                <p className="mt-1 text-sm text-foreground">
                   {article.publishedAt ? `Ultima publicacao em ${formatDate(article.publishedAt)}` : 'Ainda nao publicado'}
                 </p>
               </div>

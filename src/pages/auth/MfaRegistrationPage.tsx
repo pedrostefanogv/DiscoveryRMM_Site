@@ -1,4 +1,4 @@
-Ôªøimport { useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import { KeyRound, LaptopMinimal, ShieldPlus, ShieldEllipsis } from "lucide-react";
@@ -69,7 +69,7 @@ export default function MfaRegistrationPage() {
 
         const sanitizedCode = verificationCode.replace(/\D/g, "");
         if (sanitizedCode.length < 6) {
-          const message = "Informe o c√≥digo de verifica√ß√£o TOTP com 6 d√≠gitos.";
+          const message = "Informe o cÛdigo de verificaÁ„o TOTP com 6 dÌgitos.";
           setError(message);
           toast.error(message);
           return;
@@ -83,7 +83,7 @@ export default function MfaRegistrationPage() {
         });
 
         if (result.backupCodes.length) {
-          toast.success("OTP registrado. Guarde os c√≥digos de backup em local seguro.");
+          toast.success("OTP registrado. Guarde os cÛdigos de backup em local seguro.");
         } else {
           toast.success(result.message);
         }
@@ -97,7 +97,7 @@ export default function MfaRegistrationPage() {
         });
 
         if (!(credential instanceof PublicKeyCredential)) {
-          throw new Error("O navegador n√£o retornou uma credencial v√°lida.");
+          throw new Error("O navegador n„o retornou uma credencial v·lida.");
         }
 
         setTemporaryStage("mfa-register-complete");
@@ -113,7 +113,7 @@ export default function MfaRegistrationPage() {
 
       if (session.temporaryMfaToken) {
         clearTemporarySession();
-        toast.success("MFA registrado. Fa√ßa login novamente para concluir a autentica√ß√£o.");
+        toast.success("MFA registrado. FaÁa login novamente para concluir a autenticaÁ„o.");
         navigate("/auth/login", { replace: true });
         return;
       }
@@ -124,14 +124,14 @@ export default function MfaRegistrationPage() {
         clearTemporarySession();
         setTemporaryStage("anonymous");
         toast.error(
-          "Seu token tempor√°rio de MFA n√£o √© mais v√°lido. Fa√ßa login novamente para emitir um novo token de configura√ß√£o.",
+          "Seu token tempor·rio de MFA n„o È mais v·lido. FaÁa login novamente para emitir um novo token de configuraÁ„o.",
         );
         navigate("/auth/login", { replace: true });
         return;
       }
 
       if (caught instanceof ApiError && caught.status === 403) {
-        const message = "Seu perfil exige outro metodo de MFA. Fa√ßa login novamente e siga o fluxo correspondente.";
+        const message = "Seu perfil exige outro metodo de MFA. FaÁa login novamente e siga o fluxo correspondente.";
         setError(message);
         toast.error(message);
         return;
@@ -150,7 +150,7 @@ export default function MfaRegistrationPage() {
   };
 
   return (
-    <Card className="border-white/10 bg-slate-900/80 shadow-2xl backdrop-blur" padding>
+    <Card className="border-border bg-surface/80 shadow-2xl backdrop-blur" padding>
       <CardHeader
         title={isTotpFlow ? "Registrar OTP" : "Registrar chave FIDO2"}
         subtitle={
@@ -176,13 +176,13 @@ export default function MfaRegistrationPage() {
 
         {isTotpFlow && totpSetupData && (
           <>
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-slate-200">
-              <p className="font-medium text-white">Use este URI no autenticador:</p>
-              <p className="mt-2 break-all text-xs text-slate-300">{totpSetupData.qrCodeUri}</p>
-              <p className="mt-3 text-xs text-slate-400">{totpSetupData.message}</p>
+            <div className="rounded-2xl border border-border bg-surface-light p-4 text-sm text-foreground">
+              <p className="font-medium text-foreground">Use este URI no autenticador:</p>
+              <p className="mt-2 break-all text-xs text-muted-foreground">{totpSetupData.qrCodeUri}</p>
+              <p className="mt-3 text-xs text-muted">{totpSetupData.message}</p>
             </div>
             <Input
-              label="C√≥digo de verifica√ß√£o"
+              label="CÛdigo de verificaÁ„o"
               inputMode="numeric"
               autoComplete="one-time-code"
               maxLength={8}
@@ -196,7 +196,7 @@ export default function MfaRegistrationPage() {
           </>
         )}
 
-        <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-slate-300">
+        <div className="rounded-2xl border border-border bg-surface-light p-4 text-sm text-muted-foreground">
           <div className="flex items-start gap-3">
             {isTotpFlow ? (
               <ShieldEllipsis className="mt-0.5 h-4 w-4 text-primary" />
@@ -204,7 +204,7 @@ export default function MfaRegistrationPage() {
               <LaptopMinimal className="mt-0.5 h-4 w-4 text-primary" />
             )}
             {isTotpFlow
-              ? "Escaneie o QR code (ou use o URI), gere o c√≥digo e confirme para finalizar o cadastro OTP."
+              ? "Escaneie o QR code (ou use o URI), gere o cÛdigo e confirme para finalizar o cadastro OTP."
               : "Use um nome amigavel para distinguir passkeys, chaves fisicas e autenticadores de plataforma."}
           </div>
           <div className="mt-3 flex items-start gap-3">
@@ -216,7 +216,7 @@ export default function MfaRegistrationPage() {
         <div className={`rounded-2xl border px-4 py-3 text-sm ${environment.isSecureContext ? 'border-accent/30 bg-accent/10 text-cyan-100' : 'border-warning/30 bg-warning/10 text-amber-50'}`}>
           Local atual: <strong>{environment.origin}</strong>. {environment.isSecureContext
             ? "Este contexto e considerado seguro para WebAuthn; se houver 401, o problema e de token/permissao no backend."
-            : "Este contexto n√£o √© seguro para WebAuthn; o navegador pode bloquear a opera√ß√£o."}
+            : "Este contexto n„o È seguro para WebAuthn; o navegador pode bloquear a operaÁ„o."}
         </div>
 
         {error && (
@@ -230,7 +230,7 @@ export default function MfaRegistrationPage() {
           {isTotpFlow
             ? totpSetupData
               ? " Confirmar OTP"
-              : "Iniciar configura√ß√£o OTP"
+              : "Iniciar configuraÁ„o OTP"
             : " Registrar chave"}
         </Button>
       </form>

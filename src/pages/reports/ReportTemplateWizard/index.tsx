@@ -68,19 +68,19 @@ export function ReportTemplateWizard({ initialTemplate }: Props) {
               onClick={() => setStep(i)}
               className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
                 i === step
-                  ? "bg-primary text-white"
+                  ? "bg-primary text-foreground"
                   : i < step
                     ? "bg-primary/20 text-primary"
-                    : "bg-white/5 text-slate-400"
+                    : "bg-surface-light text-muted"
               }`}
             >
               <span
                 className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold ${
                   i === step
-                    ? "bg-white/20 text-white"
+                    ? "bg-white/20 text-foreground"
                     : i < step
-                      ? "bg-primary text-white"
-                      : "bg-white/10 text-slate-500"
+                      ? "bg-primary text-foreground"
+                      : "bg-surface-hover text-muted"
                 }`}
               >
                 {i < step ? "✓" : i + 1}
@@ -92,7 +92,7 @@ export function ReportTemplateWizard({ initialTemplate }: Props) {
             </button>
             {i < steps.length - 1 && (
               <div
-                className={`h-px w-8 ${i < step ? "bg-primary" : "bg-white/10"}`}
+                className={`h-px w-8 ${i < step ? "bg-primary" : "bg-surface-hover"}`}
               />
             )}
           </div>
@@ -100,7 +100,7 @@ export function ReportTemplateWizard({ initialTemplate }: Props) {
       </div>
 
       {/* Step content */}
-      <div className="surface-card glass-card rounded-2xl border border-white/10 bg-surface/90 p-4 sm:p-6">
+      <div className="surface-card glass-card rounded-2xl border border-border bg-surface/90 p-4 sm:p-6">
         {step === 0 && (
           <StepDataSources
             wizard={wizard}

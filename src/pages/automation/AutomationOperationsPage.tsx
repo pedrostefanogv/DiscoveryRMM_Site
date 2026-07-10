@@ -1,4 +1,4 @@
-ï»¿import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import toast from "react-hot-toast";
 import {
@@ -124,8 +124,8 @@ export default function AutomationOperationsPage() {
         header: "Task/Script",
         render: (item) => (
           <div className="text-xs">
-            <p className="font-mono text-slate-300">task: {item.taskId ?? "-"}</p>
-            <p className="font-mono text-slate-500">script: {item.scriptId ?? "-"}</p>
+            <p className="font-mono text-muted-foreground">task: {item.taskId ?? "-"}</p>
+            <p className="font-mono text-muted">script: {item.scriptId ?? "-"}</p>
           </div>
         ),
       },
@@ -133,7 +133,7 @@ export default function AutomationOperationsPage() {
         key: "timestamps",
         header: "Eventos",
         render: (item) => (
-          <div className="text-xs text-slate-400">
+          <div className="text-xs text-muted">
             <p>Criado: {new Date(item.createdAt).toLocaleString("pt-BR")}</p>
             <p>Ack: {item.acknowledgedAt ? new Date(item.acknowledgedAt).toLocaleString("pt-BR") : "-"}</p>
             <p>Resultado: {item.resultReceivedAt ? new Date(item.resultReceivedAt).toLocaleString("pt-BR") : "-"}</p>
@@ -145,8 +145,8 @@ export default function AutomationOperationsPage() {
         header: "Resultado",
         render: (item) => (
           <div className="text-xs">
-            <p className="text-slate-200">ExitCode: {item.exitCode ?? "-"}</p>
-            <p className="text-slate-500">{item.errorMessage || "Sem erro"}</p>
+            <p className="text-foreground">ExitCode: {item.exitCode ?? "-"}</p>
+            <p className="text-muted">{item.errorMessage || "Sem erro"}</p>
           </div>
         ),
       },
@@ -217,14 +217,14 @@ export default function AutomationOperationsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-white">Operacoes de AutomaÃ§Ã£o</h1>
-        <p className="text-sm text-slate-400">
-          Execute tarefas/scripts por agent e acompanhe o histÃ³rico.
+        <h1 className="text-2xl font-bold text-foreground">Operacoes de Automação</h1>
+        <p className="text-sm text-muted">
+          Execute tarefas/scripts por agent e acompanhe o histórico.
         </p>
       </div>
 
       <Card>
-        <CardHeader title="Contexto do Agent" subtitle="Selecione alvo para operaÃ§Ãµes" />
+        <CardHeader title="Contexto do Agent" subtitle="Selecione alvo para operações" />
         <div className="grid gap-3 md:grid-cols-3">
           <Select
             label="Cliente"
@@ -288,7 +288,7 @@ export default function AutomationOperationsPage() {
         </Card>
 
         <Card>
-          <CardHeader title="Force Sync" subtitle="SincronizaÃ§Ã£o tÃ©cnica" />
+          <CardHeader title="Force Sync" subtitle="Sincronização técnica" />
           <div className="space-y-3">
             <Select
               label="Policies"
@@ -322,16 +322,16 @@ export default function AutomationOperationsPage() {
       </div>
 
       <Card>
-        <CardHeader title="HistÃ³rico de execuÃ§Ãµes" subtitle={agentId ? "Eventos recentes do agent" : "Selecione um agent para consultar"} />
-        {!agentId && <p className="text-sm text-slate-400">Nenhum agent selecionado.</p>}
-        {agentId && executions.isLoading && <Loading message="Carregando execuÃ§Ãµes..." />}
+        <CardHeader title="Histórico de execuções" subtitle={agentId ? "Eventos recentes do agent" : "Selecione um agent para consultar"} />
+        {!agentId && <p className="text-sm text-muted">Nenhum agent selecionado.</p>}
+        {agentId && executions.isLoading && <Loading message="Carregando execuções..." />}
         {agentId && executions.isError && <ErrorDisplay onRetry={() => executions.refetch()} />}
         {agentId && !executions.isLoading && !executions.isError && (
           <DataTable
             columns={columns}
             data={executions.data ?? []}
             keyExtractor={(item) => item.id}
-            emptyMessage="Nenhuma execuÃ§Ã£o encontrada."
+            emptyMessage="Nenhuma execução encontrada."
           />
         )}
       </Card>

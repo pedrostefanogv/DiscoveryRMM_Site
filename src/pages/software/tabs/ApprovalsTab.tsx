@@ -74,28 +74,28 @@ export function ApprovalsTab() {
       </Card>
 
       <Card padding={false}>
-        <div className="border-b border-white/5 px-5 py-4">
-          <span className="text-sm font-medium text-white">{query.data ? `${query.data.count} regra(s) — escopo ${scopeLabel(scopeType)}` : 'Regras de aprovação'}</span>
+        <div className="border-b border-border px-5 py-4">
+          <span className="text-sm font-medium text-foreground">{query.data ? `${query.data.count} regra(s) — escopo ${scopeLabel(scopeType)}` : 'Regras de aprovação'}</span>
         </div>
         {query.isLoading && <Loading />}
         {query.isError && <ErrorDisplay message="Erro ao carregar regras." onRetry={() => query.refetch()} />}
         {query.data && query.data.items.length === 0 && (
-          <div className="flex flex-col items-center py-16 text-slate-500"><ShieldCheck className="mb-3 h-10 w-10 opacity-30" /><p className="text-sm">Nenhuma regra encontrada para este escopo.</p></div>
+          <div className="flex flex-col items-center py-16 text-muted"><ShieldCheck className="mb-3 h-10 w-10 opacity-30" /><p className="text-sm">Nenhuma regra encontrada para este escopo.</p></div>
         )}
         {query.data && query.data.items.length > 0 && (
           <div className="divide-y divide-white/5">
             {query.data.items.map((rule) => (
-              <div key={rule.ruleId ?? rule.id} className="flex items-center justify-between px-5 py-3 hover:bg-white/5 transition-colors">
+              <div key={rule.ruleId ?? rule.id} className="flex items-center justify-between px-5 py-3 hover:bg-surface-light transition-colors">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-sm font-medium text-white font-mono">{rule.packageId}</span>
-                    {rule.packageName && <span className="text-xs text-slate-400">{rule.packageName}</span>}
+                    <span className="text-sm font-medium text-foreground font-mono">{rule.packageId}</span>
+                    {rule.packageName && <span className="text-xs text-muted">{rule.packageName}</span>}
                     {rule.action === AppApprovalActionType.Allow ? <Badge color="success">Permitido</Badge> : <Badge color="danger">Negado</Badge>}
                     {rule.autoUpdateEnabled && <Badge color="primary">Auto-update</Badge>}
                     <Badge color="slate">{scopeLabel(rule.scopeType)}</Badge>
                   </div>
-                  {rule.reason && <p className="mt-0.5 text-xs text-slate-500">{rule.reason}</p>}
-                  <p className="mt-0.5 text-xs text-slate-600">Criado em {formatDate(rule.createdAt)}</p>
+                  {rule.reason && <p className="mt-0.5 text-xs text-muted">{rule.reason}</p>}
+                  <p className="mt-0.5 text-xs text-muted">Criado em {formatDate(rule.createdAt)}</p>
                 </div>
                 <Button variant="danger" size="sm" onClick={() => setDeleteTarget(rule)}><Trash2 className="h-4 w-4" /></Button>
               </div>
@@ -109,7 +109,7 @@ export function ApprovalsTab() {
       <Modal open={!!deleteTarget} onClose={() => setDeleteTarget(null)} title="Remover Regra" maxWidth="max-w-sm">
         {deleteTarget && (
           <div className="space-y-4">
-            <p className="text-sm text-slate-300">Tem certeza que deseja remover a regra de <strong className="text-white">{deleteTarget.packageId}</strong>?</p>
+            <p className="text-sm text-muted-foreground">Tem certeza que deseja remover a regra de <strong className="text-foreground">{deleteTarget.packageId}</strong>?</p>
             <div className="flex justify-end gap-2">
               <Button variant="ghost" onClick={() => setDeleteTarget(null)}>Cancelar</Button>
               <Button variant="danger" onClick={() => handleDelete(deleteTarget)} loading={deleteApproval.isPending}>Remover</Button>

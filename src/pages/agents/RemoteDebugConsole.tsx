@@ -417,9 +417,9 @@ export default function RemoteDebugConsole() {
     : "--:--";
 
   return (
-    <div className="flex min-h-screen flex-col bg-slate-950 text-slate-100">
+    <div className="flex min-h-screen flex-col bg-background text-foreground">
       {/* Toolbar */}
-      <header className="flex items-center gap-2 border-b border-white/10 bg-slate-900/80 px-3 py-2 text-xs">
+      <header className="flex items-center gap-2 border-b border-border bg-surface/80 px-3 py-2 text-xs">
         <Badge
           color={
             connectionState === "connected"
@@ -438,15 +438,15 @@ export default function RemoteDebugConsole() {
                 : "FECHADO"}
         </Badge>
 
-        <span className="ml-1 text-slate-400">{agentId.slice(0, 8)}</span>
-        <span className="text-slate-600">·</span>
-        <span className="text-slate-400">{totalLines} linhas</span>
-        <span className="text-slate-600">·</span>
-        <span className="text-slate-400">exp: {expiresLabel}</span>
+        <span className="ml-1 text-muted">{agentId.slice(0, 8)}</span>
+        <span className="text-muted">·</span>
+        <span className="text-muted">{totalLines} linhas</span>
+        <span className="text-muted">·</span>
+        <span className="text-muted">exp: {expiresLabel}</span>
 
         <div className="ml-auto flex items-center gap-2">
           {/* Filtro de nível (display only) */}
-          <span className="text-slate-500">filtro:</span>
+          <span className="text-muted">filtro:</span>
           {LEVELS.map((level) => (
             <button
               key={level}
@@ -460,22 +460,22 @@ export default function RemoteDebugConsole() {
               className={`rounded px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider transition-colors ${
                 levelFilters[level]
                   ? "bg-primary/20 text-primary"
-                  : "text-slate-500 hover:text-slate-300"
+                  : "text-muted hover:text-muted-foreground"
               }`}
             >
               {level}
             </button>
           ))}
 
-          <span className="mx-1 h-4 w-px bg-white/10" />
+          <span className="mx-1 h-4 w-px bg-surface-hover" />
 
           {/* Nível da sessão (restart) */}
-          <span className="text-slate-500">nível:</span>
+          <span className="text-muted">nível:</span>
           <select
             value={currentLevel}
             onChange={(e) => handleRestartWithLevel(e.target.value as RemoteDebugLogLevel)}
             disabled={isRestarting}
-            className="h-6 rounded border border-white/10 bg-slate-800 px-2 text-[10px] font-mono uppercase text-slate-200 outline-none focus:border-primary disabled:opacity-50"
+            className="h-6 rounded border border-border bg-surface-light px-2 text-[10px] font-mono uppercase text-foreground outline-none focus:border-primary disabled:opacity-50"
           >
             {LEVELS.map((level) => (
               <option key={level} value={level}>
@@ -484,7 +484,7 @@ export default function RemoteDebugConsole() {
             ))}
           </select>
 
-          <span className="mx-1 h-4 w-px bg-white/10" />
+          <span className="mx-1 h-4 w-px bg-surface-hover" />
 
           <Button
             size="sm"
@@ -509,17 +509,17 @@ export default function RemoteDebugConsole() {
       </header>
 
       {/* Search bar */}
-      <div className="flex items-center gap-2 border-b border-white/5 bg-slate-900/40 px-3 py-1.5">
+      <div className="flex items-center gap-2 border-b border-border bg-surface/40 px-3 py-1.5">
         <input
           value={messageFilter}
           onChange={(event) => setMessageFilter(event.target.value)}
           placeholder="Filtrar mensagens..."
-          className="h-7 flex-1 rounded border border-white/10 bg-slate-950 px-2 font-mono text-xs text-slate-100 outline-none focus:border-primary"
+          className="h-7 flex-1 rounded border border-border bg-background px-2 font-mono text-xs text-foreground outline-none focus:border-primary"
         />
-        <span className="text-[10px] text-slate-500">
+        <span className="text-[10px] text-muted">
           seq: {lastSequence ?? "--"}
         </span>
-        <span className="text-[10px] text-slate-500">
+        <span className="text-[10px] text-muted">
           scroll: {autoScroll ? "auto" : "manual"}
         </span>
       </div>
@@ -531,7 +531,7 @@ export default function RemoteDebugConsole() {
         className="flex-1 overflow-y-auto px-3 py-2 font-mono text-xs leading-relaxed"
       >
         {displayLogs.length === 0 && (
-          <p className="py-12 text-center text-sm text-slate-600">
+          <p className="py-12 text-center text-sm text-muted">
             {connectionState === "connected"
               ? "Aguardando entradas de log..."
               : "Nenhuma linha para exibir."}
@@ -543,15 +543,15 @@ export default function RemoteDebugConsole() {
           return (
             <div
               key={`${entry.sessionId}-${entry.sequence ?? index}-${entry.timestampUtc}-${index}`}
-              className="flex items-start gap-2 rounded px-1 py-0.5 hover:bg-white/[0.03]"
+              className="flex items-start gap-2 rounded px-1 py-0.5 hover:bg-surface-light"
             >
-              <span className="shrink-0 text-slate-600">
+              <span className="shrink-0 text-muted">
                 {formatTimestamp(entry.timestampUtc)}
               </span>
               <Badge color={levelBadgeColor(level)}>
                 {level.toUpperCase().padEnd(5)}
               </Badge>
-              <span className="break-all text-slate-200">
+              <span className="break-all text-foreground">
                 {entry.message}
               </span>
             </div>
@@ -560,7 +560,7 @@ export default function RemoteDebugConsole() {
       </div>
 
       {/* Footer */}
-      <footer className="border-t border-white/5 bg-slate-900/60 px-3 py-1 text-[10px] text-slate-600">
+      <footer className="border-t border-border bg-surface/60 px-3 py-1 text-[10px] text-muted">
         {connectionState === "connected" ? (
           <span>Recebendo logs via NATS · subject: {subject}</span>
         ) : connectionState === "closed" ? (
@@ -572,7 +572,7 @@ export default function RemoteDebugConsole() {
 
       {/* Error overlay */}
       {errorMessage && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center bg-slate-950/90 p-6">
+        <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/90 p-6">
           <div className="max-w-lg">
             <ErrorDisplay message={errorMessage} />
           </div>

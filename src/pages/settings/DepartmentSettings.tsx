@@ -157,13 +157,13 @@ export default function DepartmentSettings() {
 
         <div className="space-y-2">
           {totalDepartments === 0 && (
-            <p className="rounded-xl border border-white/10 bg-white/5 px-4 py-5 text-center text-sm text-slate-500">
+            <p className="rounded-xl border border-border bg-surface-light px-4 py-5 text-center text-sm text-muted">
               Nenhum departamento encontrado para o filtro atual.
             </p>
           )}
 
           {totalDepartments > 0 && filteredDepartments.length === 0 && (
-            <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-5 text-sm text-slate-400">
+            <div className="rounded-xl border border-border bg-surface-light px-4 py-5 text-sm text-muted">
               <p>Nenhum departamento encontrado para a busca atual.</p>
               <div className="mt-2">
                 <Button size="sm" variant="ghost" onClick={() => setSearchTerm("")}>
@@ -183,9 +183,9 @@ export default function DepartmentSettings() {
                 key={department.id}
                 type="button"
                 onClick={() => navigate(`/tickets/departments/${department.id}`)}
-                className="group flex w-full items-center gap-4 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left transition-colors hover:border-primary/40 hover:bg-white/10"
+                className="group flex w-full items-center gap-4 rounded-xl border border-border bg-surface-light px-4 py-3 text-left transition-colors hover:border-primary/40 hover:bg-surface-hover"
               >
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-900/60 ring-1 ring-white/10">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-surface/60 ring-1 ring-white/10">
                   {department.clientId ? (
                     <Building2 className="h-5 w-5 text-accent" />
                   ) : (
@@ -195,7 +195,7 @@ export default function DepartmentSettings() {
 
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <p className="truncate text-sm font-semibold text-white">{department.name}</p>
+                    <p className="truncate text-sm font-semibold text-foreground">{department.name}</p>
                     <Badge color={department.clientId ? "accent" : "slate"}>
                       {clientName ?? "Global"}
                     </Badge>
@@ -203,17 +203,17 @@ export default function DepartmentSettings() {
                       {department.isActive ? "Ativo" : "Inativo"}
                     </Badge>
                   </div>
-                  <p className="mt-1 truncate text-xs text-slate-400">
+                  <p className="mt-1 truncate text-xs text-muted">
                     {department.description || "Sem descrição"}
                   </p>
                 </div>
 
                 <div className="shrink-0 text-right">
-                  <p className="text-xs text-slate-500">Ordem</p>
-                  <p className="text-sm font-semibold text-slate-200">#{department.sortOrder}</p>
+                  <p className="text-xs text-muted">Ordem</p>
+                  <p className="text-sm font-semibold text-foreground">#{department.sortOrder}</p>
                 </div>
 
-                <ArrowRight className="h-4 w-4 shrink-0 text-slate-500 transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
+                <ArrowRight className="h-4 w-4 shrink-0 text-muted transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
               </button>
             );
           })}

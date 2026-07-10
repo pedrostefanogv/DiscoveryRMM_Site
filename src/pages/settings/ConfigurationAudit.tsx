@@ -81,8 +81,8 @@ export default function ConfigurationAudit() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-white">Auditoria de Configurações</h1>
-        <p className="text-sm text-slate-400">
+        <h1 className="text-2xl font-bold text-foreground">Auditoria de Configurações</h1>
+        <p className="text-sm text-muted">
           Consulte alterações por período, entidade, propriedade e usuário.
         </p>
       </div>
@@ -184,7 +184,7 @@ export default function ConfigurationAudit() {
               ))}
 
               {pageItems.length === 0 && (
-                <p className="text-sm text-slate-400">Nenhum evento encontrado.</p>
+                <p className="text-sm text-muted">Nenhum evento encontrado.</p>
               )}
             </div>
 
@@ -192,7 +192,7 @@ export default function ConfigurationAudit() {
               <div className="mt-4 flex justify-end gap-2">
                 <button
                   type="button"
-                  className="rounded-lg border border-white/10 px-3 py-1.5 text-sm text-slate-300 disabled:opacity-40"
+                  className="rounded-lg border border-border px-3 py-1.5 text-sm text-muted-foreground disabled:opacity-40"
                   onClick={() => setPage((prev) => Math.max(1, prev - 1))}
                   disabled={currentPage === 1}
                 >
@@ -200,7 +200,7 @@ export default function ConfigurationAudit() {
                 </button>
                 <button
                   type="button"
-                  className="rounded-lg border border-white/10 px-3 py-1.5 text-sm text-slate-300 disabled:opacity-40"
+                  className="rounded-lg border border-border px-3 py-1.5 text-sm text-muted-foreground disabled:opacity-40"
                   onClick={() => setPage((prev) => Math.min(pageCount, prev + 1))}
                   disabled={currentPage === pageCount}
                 >
@@ -217,14 +217,14 @@ export default function ConfigurationAudit() {
 
 function AuditRow({ entry }: { entry: ConfigurationAuditEntry }) {
   return (
-    <div className="rounded-lg border border-white/10 bg-white/5 p-3">
+    <div className="rounded-lg border border-border bg-surface-light p-3">
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <Badge color="accent">{entry.entityType}</Badge>
           <Badge color="slate">{entry.entityId}</Badge>
           <Badge color="primary">{entry.fieldName}</Badge>
         </div>
-        <p className="text-xs text-slate-400">{new Date(entry.changedAt).toLocaleString()}</p>
+        <p className="text-xs text-muted">{new Date(entry.changedAt).toLocaleString()}</p>
       </div>
 
       <div className="grid gap-3 lg:grid-cols-2">
@@ -232,7 +232,7 @@ function AuditRow({ entry }: { entry: ConfigurationAuditEntry }) {
         <AuditValue title="Valor novo" value={entry.newValue} />
       </div>
 
-      <p className="mt-2 text-xs text-slate-500">
+      <p className="mt-2 text-xs text-muted">
         Alterado por: {entry.changedBy ?? "desconhecido"} | versão: {entry.entityVersion}
       </p>
     </div>
@@ -242,8 +242,8 @@ function AuditRow({ entry }: { entry: ConfigurationAuditEntry }) {
 function AuditValue({ title, value }: { title: string; value: unknown }) {
   return (
     <div>
-      <p className="mb-1 text-xs text-slate-400">{title}</p>
-      <pre className="min-h-16 rounded border border-white/10 bg-slate-950/40 p-2 text-xs text-slate-200 whitespace-pre-wrap">
+      <p className="mb-1 text-xs text-muted">{title}</p>
+      <pre className="min-h-16 rounded border border-border bg-background/40 p-2 text-xs text-foreground whitespace-pre-wrap">
         {formatAuditValue(value)}
       </pre>
     </div>

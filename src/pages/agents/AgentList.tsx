@@ -1,4 +1,4 @@
-ï»¿import { useState, useMemo, useEffect, useRef } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Monitor, Wifi, WifiOff, Activity, Building2, Clock, LayoutGrid, List, Bug, Trash2, ShieldCheck, ArrowUp, ArrowDown, Radio, RefreshCw, Move, RotateCcw, Power, Zap } from 'lucide-react';
 import { useQueries } from '@tanstack/react-query';
@@ -112,17 +112,17 @@ function formatDateBrazil(value: string): string {
 }
 
 function formatRelative(dateStr: string | null, now: number): { text: string; fullDate: string | null } {
-  if (!dateStr) return { text: 'â€”', fullDate: null };
+  if (!dateStr) return { text: '—', fullDate: null };
   const diff = now - new Date(dateStr).getTime();
   const fullDate = formatDateBrazil(dateStr);
   if (diff < 60_000) return { text: 'agora mesmo', fullDate };
-  if (diff < 3_600_000) return { text: `hÃ¡ ${Math.floor(diff / 60_000)} min`, fullDate };
-  if (diff < 86_400_000) return { text: `hÃ¡ ${Math.floor(diff / 3_600_000)} h`, fullDate };
+  if (diff < 3_600_000) return { text: `há ${Math.floor(diff / 60_000)} min`, fullDate };
+  if (diff < 86_400_000) return { text: `há ${Math.floor(diff / 3_600_000)} h`, fullDate };
   return { text: fullDate, fullDate };
 }
 
 function formatUptimeShort(seconds: number | undefined | null): string {
-  if (seconds == null || !Number.isFinite(seconds)) return 'â€”';
+  if (seconds == null || !Number.isFinite(seconds)) return '—';
   if (seconds < 60) return `${Math.round(seconds)}s`;
   if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
   const hours = Math.floor(seconds / 3600);
@@ -132,12 +132,12 @@ function formatUptimeShort(seconds: number | undefined | null): string {
 }
 
 function getOsIcon(os: string | null): string {
-  if (!os) return 'ðŸ’»';
+  if (!os) return '??';
   const lower = os.toLowerCase();
-  if (lower.includes('windows')) return 'ðŸªŸ';
-  if (lower.includes('linux') || lower.includes('ubuntu') || lower.includes('debian') || lower.includes('centos')) return 'ðŸ§';
+  if (lower.includes('windows')) return '??';
+  if (lower.includes('linux') || lower.includes('ubuntu') || lower.includes('debian') || lower.includes('centos')) return '??';
   if (lower.includes('mac') || lower.includes('darwin')) return '';
-  return 'ðŸ’»';
+  return '??';
 }
 
 export default function AgentList() {
@@ -180,14 +180,15 @@ export default function AgentList() {
     if (!contextMenu) return;
 
     const closeMenu = () => setContextMenu(null);
-    window.addEventListener('click', closeMenu);
+    // BUG-06: removido listener de 'contextmenu' que fechava o menu ao abrir outro.
+    // Em vez disso, usamos stopPropagation no handler que abre o context menu
+    // e mousedown com capture para detectar cliques fora do menu.
+    window.addEventListener('mousedown', closeMenu, true);
     window.addEventListener('scroll', closeMenu, true);
-    window.addEventListener('contextmenu', closeMenu);
 
     return () => {
-      window.removeEventListener('click', closeMenu);
+      window.removeEventListener('mousedown', closeMenu, true);
       window.removeEventListener('scroll', closeMenu, true);
-      window.removeEventListener('contextmenu', closeMenu);
     };
   }, [contextMenu]);
 
@@ -236,9 +237,9 @@ export default function AgentList() {
     } catch (error) {
       if (error instanceof ApiError) {
         if (error.status === 403) {
-          setRemoteError('Suporte remoto desabilitado para este escopo ou sem permissÃ£o de acesso.');
+          setRemoteError('Suporte remoto desabilitado para este escopo ou sem permissão de acesso.');
         } else if (error.status === 503) {
-          setRemoteError('MeshCentral indisponÃ­vel no momento. Verifique a integraÃ§Ã£o operacional.');
+          setRemoteError('MeshCentral indisponível no momento. Verifique a integração operacional.');
         } else {
           setRemoteError(error.message);
         }
@@ -303,7 +304,7 @@ export default function AgentList() {
     setDeletingAgentId(agent.id);
     try {
       await deleteAgent.mutateAsync(agent.id);
-      toast.success(`Agente ${agent.displayName ?? agent.hostname} excluÃ­do com sucesso.`);
+      toast.success(`Agente ${agent.displayName ?? agent.hostname} excluído com sucesso.`);
       setDeleteConfirmAgent(null);
     } catch (error) {
       toast.error(getDeleteAgentErrorMessage(error));
@@ -319,13 +320,13 @@ export default function AgentList() {
     setUpdatingAgentId(agent.id);
     try {
       await agentUpdatesApi.forceAgentCheck(agent.id);
-      toast.success(`VerificaÃ§Ã£o de update disparada para ${agent.displayName ?? agent.hostname}.`);
+      toast.success(`Verificação de update disparada para ${agent.displayName ?? agent.hostname}.`);
     } catch (error) {
       const message = error instanceof ApiError
         ? error.message
         : error instanceof Error
           ? error.message
-          : 'Falha ao disparar atualizaÃ§Ã£o do agente.';
+          : 'Falha ao disparar atualização do agente.';
       toast.error(message);
     } finally {
       setUpdatingAgentId(null);
@@ -344,7 +345,7 @@ export default function AgentList() {
     setApprovingAgentId(agent.id);
     try {
       await approveZeroTouch.mutateAsync(agent.id);
-      toast.success(`Agente ${agent.displayName ?? agent.hostname} aprovado para comunicaÃ§Ã£o com a API.`);
+      toast.success(`Agente ${agent.displayName ?? agent.hostname} aprovado para comunicação com a API.`);
     } catch (error) {
       const message = error instanceof ApiError
         ? error.message
@@ -414,7 +415,7 @@ export default function AgentList() {
     });
   }, [queriedClients, agentQueries]);
 
-  // Merge live heartbeat metrics from the reactive store â€” survives REST polling overwrites
+  // Merge live heartbeat metrics from the reactive store — survives REST polling overwrites
   const allHeartbeats = useAllAgentHeartbeats();
 
   const agentsWithHeartbeat = useMemo<AgentWithClient[]>(() => {
@@ -541,16 +542,16 @@ export default function AgentList() {
   ];
 
   const provisioningOptions = [
-    { value: 'all', label: 'AutorizaÃ§Ã£o: todos' },
-    { value: 'approved', label: 'AutorizaÃ§Ã£o: autorizados' },
-    { value: 'pendingApproval', label: 'AutorizaÃ§Ã£o: aguardando aprovaÃ§Ã£o' },
+    { value: 'all', label: 'Autorização: todos' },
+    { value: 'approved', label: 'Autorização: autorizados' },
+    { value: 'pendingApproval', label: 'Autorização: aguardando aprovação' },
   ];
 
   const sortOptions: Array<{ value: AgentSortField; label: string }> = [
     { value: 'name', label: 'Nome' },
     { value: 'site', label: 'Site' },
     { value: 'client', label: 'Cliente' },
-    { value: 'lastSeen', label: 'Ãšltimo ping' },
+    { value: 'lastSeen', label: 'Último ping' },
     { value: 'status', label: 'Status' },
   ];
 
@@ -608,7 +609,7 @@ export default function AgentList() {
         />
         <StatCard
           icon={ShieldCheck}
-          label="Aguardando autorizaÃ§Ã£o/aprovaÃ§Ã£o"
+          label="Aguardando autorização/aprovação"
           value={totalPendingApproval}
           tone="accent"
           onClick={() => setFilterProvisioning('pendingApproval')}
@@ -623,7 +624,7 @@ export default function AgentList() {
         />
       </div>
 
-      {/* Filtros + toggle de visualizaÃ§Ã£o */}
+      {/* Filtros + toggle de visualização */}
       <div className="flex gap-3">
         <div className="grid flex-1 gap-3 md:grid-cols-2 xl:grid-cols-[minmax(240px,1fr)_220px_180px_260px_180px_48px]">
           <Input
@@ -654,27 +655,27 @@ export default function AgentList() {
           <button
             type="button"
             onClick={() => setSortDirection((current) => (current === 'asc' ? 'desc' : 'asc'))}
-            className="flex h-10 w-12 items-center justify-center self-end rounded-xl border border-white/10 bg-white/5 text-slate-200 transition-colors hover:bg-white/10"
-            title={sortDirection === 'asc' ? 'OrdenaÃ§Ã£o crescente' : 'OrdenaÃ§Ã£o decrescente'}
-            aria-label={sortDirection === 'asc' ? 'OrdenaÃ§Ã£o crescente' : 'OrdenaÃ§Ã£o decrescente'}
+            className="flex h-10 w-12 items-center justify-center self-end rounded-xl border border-border bg-surface-light text-foreground transition-colors hover:bg-surface-hover"
+            title={sortDirection === 'asc' ? 'Ordenação crescente' : 'Ordenação decrescente'}
+            aria-label={sortDirection === 'asc' ? 'Ordenação crescente' : 'Ordenação decrescente'}
           >
             {sortDirection === 'asc' ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />}
           </button>
         </div>
         {/* Toggle card / lista */}
         <div className="flex shrink-0 items-end">
-          <div className="flex overflow-hidden rounded-lg border border-white/10">
+          <div className="flex overflow-hidden rounded-lg border border-border">
             <button
               onClick={() => setViewMode('card')}
-              className={`flex h-9 w-9 items-center justify-center transition-colors ${viewMode === 'card' ? 'bg-primary/20 text-primary' : 'bg-white/5 text-slate-400 hover:text-slate-200'}`}
-              title="VisualizaÃ§Ã£o em cards"
+              className={`flex h-9 w-9 items-center justify-center transition-colors ${viewMode === 'card' ? 'bg-primary/20 text-primary' : 'bg-surface-light text-muted hover:text-foreground'}`}
+              title="Visualização em cards"
             >
               <LayoutGrid className="h-4 w-4" />
             </button>
             <button
               onClick={() => setViewMode('list')}
-              className={`flex h-9 w-9 items-center justify-center transition-colors ${viewMode === 'list' ? 'bg-primary/20 text-primary' : 'bg-white/5 text-slate-400 hover:text-slate-200'}`}
-              title="VisualizaÃ§Ã£o em lista"
+              className={`flex h-9 w-9 items-center justify-center transition-colors ${viewMode === 'list' ? 'bg-primary/20 text-primary' : 'bg-surface-light text-muted hover:text-foreground'}`}
+              title="Visualização em lista"
             >
               <List className="h-4 w-4" />
             </button>
@@ -684,11 +685,11 @@ export default function AgentList() {
 
       {!filterClient && (clients.data?.length ?? 0) > MAX_CLIENTS_IN_OVERVIEW && (
         <div className="rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning">
-          Exibindo agentes dos primeiros {MAX_CLIENTS_IN_OVERVIEW} clientes para reduzir carga. Selecione um cliente no filtro para visualizar dados especÃ­ficos.
+          Exibindo agentes dos primeiros {MAX_CLIENTS_IN_OVERVIEW} clientes para reduzir carga. Selecione um cliente no filtro para visualizar dados específicos.
         </div>
       )}
 
-      {/* ConteÃºdo */}
+      {/* Conteúdo */}
       {isLoadingAgents ? (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} />)}
@@ -710,11 +711,11 @@ export default function AgentList() {
         />
       ) : (
         <>
-          <p className="text-xs text-slate-500">
-            {filtered.length} agente{filtered.length !== 1 ? 's' : ''} exibido{filtered.length !== 1 ? 's' : ''} Â· OrdenaÃ§Ã£o: {activeSortLabel} ({sortDirection === 'asc' ? 'crescente' : 'decrescente'})
+          <p className="text-xs text-muted">
+            {filtered.length} agente{filtered.length !== 1 ? 's' : ''} exibido{filtered.length !== 1 ? 's' : ''} · Ordenação: {activeSortLabel} ({sortDirection === 'asc' ? 'crescente' : 'decrescente'})
           </p>
 
-          {/* â”€â”€ CARD VIEW â”€â”€ */}
+          {/* -- CARD VIEW -- */}
           {viewMode === 'card' && (
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
               {filtered.map(a => {
@@ -740,7 +741,7 @@ export default function AgentList() {
                     }}
                     role="button"
                     tabIndex={0}
-                    className="group relative flex flex-col gap-4 rounded-xl border border-white/5 bg-surface p-5 text-left transition-all hover:border-primary/30 hover:bg-white/5 hover:shadow-lg"
+                    className="group relative flex flex-col gap-4 rounded-xl border border-border bg-surface p-5 text-left transition-all hover:border-primary/30 hover:bg-surface-light hover:shadow-lg"
                   >
                     <span className={`absolute right-4 top-4 h-2.5 w-2.5 rounded-full ${online ? 'bg-success shadow-[0_0_6px_theme(colors.success)]' : 'bg-slate-600'}`} />
                     <div className="flex items-start gap-3 pr-6">
@@ -748,9 +749,9 @@ export default function AgentList() {
                         {getOsIcon(a.operatingSystem)}
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="truncate font-semibold text-white transition-colors group-hover:text-primary">{displayName}</p>
+                        <p className="truncate font-semibold text-foreground transition-colors group-hover:text-primary">{displayName}</p>
                         {a.displayName && a.displayName !== a.hostname && (
-                          <p className="truncate font-mono text-xs text-slate-500">{a.hostname}</p>
+                          <p className="truncate font-mono text-xs text-muted">{a.hostname}</p>
                         )}
                         <div className="mt-1.5 flex flex-wrap gap-1.5">
                           <Badge color={online ? 'success' : 'slate'}>
@@ -760,31 +761,31 @@ export default function AgentList() {
                             </span>
                           </Badge>
                           {isZeroTouchPending && (
-                            <Badge color="warning">Aguardando aprovaÃ§Ã£o</Badge>
+                            <Badge color="warning">Aguardando aprovação</Badge>
                           )}
                         </div>
                       </div>
                     </div>
                     <div className="space-y-1.5 text-xs">
-                      <div className="flex items-center gap-2 text-slate-400">
-                        <Activity className="h-3.5 w-3.5 shrink-0 text-slate-500" />
-                        <span className="truncate">{a.operatingSystem ?? 'â€”'}{a.osVersion ? ` Â· ${a.osVersion}` : ''}</span>
+                      <div className="flex items-center gap-2 text-muted">
+                        <Activity className="h-3.5 w-3.5 shrink-0 text-muted" />
+                        <span className="truncate">{a.operatingSystem ?? '—'}{a.osVersion ? ` · ${a.osVersion}` : ''}</span>
                       </div>
-                      <div className="flex items-center gap-2 text-slate-400">
-                        <span className="h-3.5 w-3.5 shrink-0 pt-px text-center font-mono text-[10px] leading-none text-slate-500">IP</span>
-                        <span className="font-mono">{a.lastIpAddress ?? 'IP indisponÃ­vel'}</span>
+                      <div className="flex items-center gap-2 text-muted">
+                        <span className="h-3.5 w-3.5 shrink-0 pt-px text-center font-mono text-[10px] leading-none text-muted">IP</span>
+                        <span className="font-mono">{a.lastIpAddress ?? 'IP indisponível'}</span>
                       </div>
-                      <div className="flex items-center gap-2 text-slate-400">
-                        <Building2 className="h-3.5 w-3.5 shrink-0 text-slate-500" />
+                      <div className="flex items-center gap-2 text-muted">
+                        <Building2 className="h-3.5 w-3.5 shrink-0 text-muted" />
                         <span className="truncate">{a.clientName}</span>
                       </div>
-                      <div className="flex items-center gap-2 text-slate-400">
-                        <Clock className="h-3.5 w-3.5 shrink-0 text-slate-500" />
+                      <div className="flex items-center gap-2 text-muted">
+                        <Clock className="h-3.5 w-3.5 shrink-0 text-muted" />
                         <span title={relativeTime.fullDate ?? undefined}>{relativeTime.text}</span>
                       </div>
                       {/* Heartbeat metrics */}
                       {a.heartbeatMetrics && (
-                        <div className="border-t border-white/5 pt-2 mt-2 space-y-1.5">
+                        <div className="border-t border-border pt-2 mt-2 space-y-1.5">
                           <MetricBar
                             label="CPU"
                             value={a.heartbeatMetrics.cpuPercent}
@@ -800,7 +801,7 @@ export default function AgentList() {
                             value={a.heartbeatMetrics.diskPercent}
                             compact
                           />
-                          <div className="flex items-center gap-3 text-slate-500 pt-0.5">
+                          <div className="flex items-center gap-3 text-muted pt-0.5">
                             {a.heartbeatMetrics.p2pPeers != null && (
                               <span className="flex items-center gap-1 text-[10px]">
                                 <Radio className="h-3 w-3" />
@@ -840,22 +841,22 @@ export default function AgentList() {
             </div>
           )}
 
-          {/* â”€â”€ LIST VIEW â”€â”€ */}
+          {/* -- LIST VIEW -- */}
           {viewMode === 'list' && (
-            <div className="overflow-hidden rounded-xl border border-white/5 bg-surface">
+            <div className="overflow-hidden rounded-xl border border-border bg-surface">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-white/5 text-left">
-                    <th className="px-4 py-3 text-xs font-medium uppercase tracking-wide text-slate-500">Agente</th>
-                    <th className="hidden px-4 py-3 text-xs font-medium uppercase tracking-wide text-slate-500 md:table-cell">Sistema Operacional</th>
-                    <th className="hidden px-4 py-3 text-xs font-medium uppercase tracking-wide text-slate-500 lg:table-cell">IP</th>
-                    <th className="hidden px-4 py-3 text-xs font-medium uppercase tracking-wide text-slate-500 sm:table-cell">Cliente</th>
-                    <th className="px-4 py-3 text-xs font-medium uppercase tracking-wide text-slate-500">Status</th>
-                    <th className="hidden px-4 py-3 text-xs font-medium uppercase tracking-wide text-slate-500 md:table-cell">Provisionamento</th>
-                    <th className="hidden px-4 py-3 text-xs font-medium uppercase tracking-wide text-slate-500 2xl:table-cell">CPU</th>
-                    <th className="hidden px-4 py-3 text-xs font-medium uppercase tracking-wide text-slate-500 2xl:table-cell">RAM</th>
-                    <th className="hidden px-4 py-3 text-xs font-medium uppercase tracking-wide text-slate-500 2xl:table-cell">Disco</th>
-                    <th className="hidden px-4 py-3 text-xs font-medium uppercase tracking-wide text-slate-500 lg:table-cell">Ãšltimo contato</th>
+                  <tr className="border-b border-border text-left">
+                    <th className="px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted">Agente</th>
+                    <th className="hidden px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted md:table-cell">Sistema Operacional</th>
+                    <th className="hidden px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted lg:table-cell">IP</th>
+                    <th className="hidden px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted sm:table-cell">Cliente</th>
+                    <th className="px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted">Status</th>
+                    <th className="hidden px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted md:table-cell">Provisionamento</th>
+                    <th className="hidden px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted 2xl:table-cell">CPU</th>
+                    <th className="hidden px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted 2xl:table-cell">RAM</th>
+                    <th className="hidden px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted 2xl:table-cell">Disco</th>
+                    <th className="hidden px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted lg:table-cell">Último contato</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
@@ -874,7 +875,7 @@ export default function AgentList() {
                           event.stopPropagation();
                           setContextMenu({ x: event.clientX, y: event.clientY, agent: a });
                         }}
-                        className="cursor-pointer transition-colors hover:bg-white/5"
+                        className="cursor-pointer transition-colors hover:bg-surface-light"
                       >
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-3">
@@ -882,20 +883,20 @@ export default function AgentList() {
                               {getOsIcon(a.operatingSystem)}
                             </div>
                             <div className="min-w-0">
-                              <p className="truncate font-medium text-white">{displayName}</p>
+                              <p className="truncate font-medium text-foreground">{displayName}</p>
                               {a.displayName && a.displayName !== a.hostname && (
-                                <p className="truncate font-mono text-xs text-slate-500">{a.hostname}</p>
+                                <p className="truncate font-mono text-xs text-muted">{a.hostname}</p>
                               )}
                             </div>
                           </div>
                         </td>
-                        <td className="hidden px-4 py-3 text-slate-300 md:table-cell">
-                          {a.operatingSystem ?? 'â€”'}{a.osVersion ? ` Â· ${a.osVersion}` : ''}
+                        <td className="hidden px-4 py-3 text-muted-foreground md:table-cell">
+                          {a.operatingSystem ?? '—'}{a.osVersion ? ` · ${a.osVersion}` : ''}
                         </td>
-                        <td className="hidden px-4 py-3 font-mono text-slate-400 lg:table-cell">
-                          {a.lastIpAddress ?? 'â€”'}
+                        <td className="hidden px-4 py-3 font-mono text-muted lg:table-cell">
+                          {a.lastIpAddress ?? '—'}
                         </td>
-                        <td className="hidden px-4 py-3 text-slate-400 sm:table-cell">
+                        <td className="hidden px-4 py-3 text-muted sm:table-cell">
                           {a.clientName}
                         </td>
                         <td className="px-4 py-3">
@@ -910,7 +911,7 @@ export default function AgentList() {
                           <div className="flex flex-col items-start gap-1.5">
                             {isZeroTouchPending ? (
                               <>
-                                <Badge color="warning">Aguardando aprovaÃ§Ã£o</Badge>
+                                <Badge color="warning">Aguardando aprovação</Badge>
                                 {canManageAgent && (
                                   <button
                                     type="button"
@@ -927,7 +928,7 @@ export default function AgentList() {
                                 )}
                               </>
                             ) : (
-                              <span className="text-xs text-slate-500">â€”</span>
+                              <span className="text-xs text-muted">—</span>
                             )}
                           </div>
                         </td>
@@ -936,24 +937,24 @@ export default function AgentList() {
                           {a.heartbeatMetrics?.cpuPercent != null ? (
                             <MetricBar label="" value={a.heartbeatMetrics.cpuPercent} compact hideValue />
                           ) : (
-                            <span className="text-xs text-slate-600">â€”</span>
+                            <span className="text-xs text-muted">—</span>
                           )}
                         </td>
                         <td className="hidden px-4 py-3 2xl:table-cell">
                           {a.heartbeatMetrics?.memoryPercent != null ? (
                             <MetricBar label="" value={a.heartbeatMetrics.memoryPercent} compact hideValue />
                           ) : (
-                            <span className="text-xs text-slate-600">â€”</span>
+                            <span className="text-xs text-muted">—</span>
                           )}
                         </td>
                         <td className="hidden px-4 py-3 2xl:table-cell">
                           {a.heartbeatMetrics?.diskPercent != null ? (
                             <MetricBar label="" value={a.heartbeatMetrics.diskPercent} compact hideValue />
                           ) : (
-                            <span className="text-xs text-slate-600">â€”</span>
+                            <span className="text-xs text-muted">—</span>
                           )}
                         </td>
-                        <td className="hidden px-4 py-3 text-xs text-slate-500 lg:table-cell" title={relativeTime.fullDate ?? undefined}>
+                        <td className="hidden px-4 py-3 text-xs text-muted lg:table-cell" title={relativeTime.fullDate ?? undefined}>
                           {relativeTime.text}
                         </td>
                       </tr>
@@ -971,10 +972,10 @@ export default function AgentList() {
           <div className="fixed inset-0 z-40" onClick={() => setContextMenu(null)} />
           <div
             ref={contextMenuRef}
-            className="fixed z-50 min-w-[200px] overflow-hidden rounded-lg border border-white/10 bg-slate-900 shadow-xl"
+            className="fixed z-50 min-w-[200px] overflow-hidden rounded-lg border border-border bg-surface shadow-xl"
           >
             <button
-              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-200 transition-colors hover:bg-white/10"
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-surface-hover"
               onClick={() => {
                 void openRemoteControl(contextMenu.agent);
               }}
@@ -983,7 +984,7 @@ export default function AgentList() {
               Controle remoto
             </button>
             <button
-              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-200 transition-colors hover:bg-white/10"
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-surface-hover"
               onClick={() => {
                 void openRemoteDebug(contextMenu.agent);
               }}
@@ -993,7 +994,7 @@ export default function AgentList() {
               {remoteDebugAgentId === contextMenu.agent.id ? 'Abrindo debug...' : 'Ver debug'}
             </button>
             <button
-              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-200 transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60"
               onClick={() => {
                 void handleTriggerAgentUpdate(contextMenu.agent);
               }}
@@ -1044,7 +1045,7 @@ export default function AgentList() {
             )}
             {canManageAgent && (
               <button
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-200 transition-colors hover:bg-white/10"
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-surface-hover"
                 onClick={() => {
                   openTransferAgentModal(contextMenu.agent);
                 }}
@@ -1055,7 +1056,7 @@ export default function AgentList() {
             )}
             {canManageAgent && (
               <button
-                className="flex w-full items-center gap-2 border-t border-white/10 px-3 py-2 text-left text-sm text-red-300 transition-colors hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+                className="flex w-full items-center gap-2 border-t border-border px-3 py-2 text-left text-sm text-red-300 transition-colors hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-60"
                 onClick={() => {
                   openDeleteAgentModal(contextMenu.agent);
                 }}
@@ -1072,27 +1073,27 @@ export default function AgentList() {
       <Modal
         open={!!deleteConfirmAgent}
         onClose={closeDeleteAgentModal}
-        title="Confirmar exclusÃ£o de agente"
+        title="Confirmar exclusão de agente"
       >
         <div className="space-y-4">
-          <div className="rounded-lg border border-danger/30 bg-danger/10 p-3 text-sm text-slate-200">
+          <div className="rounded-lg border border-danger/30 bg-danger/10 p-3 text-sm text-foreground">
             <p>
-              VocÃª estÃ¡ prestes a excluir o agente{' '}
-              <span className="font-semibold text-white">{deleteConfirmAgent?.displayName ?? deleteConfirmAgent?.hostname}</span>.
+              Você está prestes a excluir o agente{' '}
+              <span className="font-semibold text-foreground">{deleteConfirmAgent?.displayName ?? deleteConfirmAgent?.hostname}</span>.
             </p>
-            <p className="mt-1 text-slate-400">Esta aÃ§Ã£o nÃ£o pode ser desfeita.</p>
+            <p className="mt-1 text-muted">Esta ação não pode ser desfeita.</p>
           </div>
 
           <div className="flex justify-end gap-2">
             <button
-              className="rounded-lg border border-white/15 px-3 py-2 text-sm text-slate-200 transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+              className="rounded-lg border border-border-strong px-3 py-2 text-sm text-foreground transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60"
               onClick={closeDeleteAgentModal}
               disabled={deleteAgent.isPending}
             >
               Cancelar
             </button>
             <button
-              className="rounded-lg bg-danger px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-danger/90 disabled:cursor-not-allowed disabled:opacity-60"
+              className="rounded-lg bg-danger px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-danger/90 disabled:cursor-not-allowed disabled:opacity-60"
               onClick={() => {
                 void handleDeleteAgent();
               }}
@@ -1111,7 +1112,7 @@ export default function AgentList() {
         maxWidth="max-w-6xl"
       >
         <div className="space-y-3">
-          {remoteLoading && <Loading message="Gerando sessÃ£o remota..." />}
+          {remoteLoading && <Loading message="Gerando sessão remota..." />}
 
           {!remoteLoading && remoteError && (
             <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-200">
@@ -1123,7 +1124,7 @@ export default function AgentList() {
             <iframe
               title="MeshCentral Remote"
               src={remoteUrl}
-              className="h-[70vh] w-full rounded-lg border border-white/10 bg-white"
+              className="h-[70vh] w-full rounded-lg border border-border bg-white"
               allow="clipboard-read; clipboard-write; fullscreen"
               referrerPolicy="no-referrer"
             />

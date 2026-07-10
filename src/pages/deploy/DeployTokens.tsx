@@ -530,8 +530,8 @@ export default function DeployTokens() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-white">Instalação de Agentes</h1>
-          <p className="text-sm text-slate-400">Console de provisionamento com criação e gestão operacional de deploy tokens.</p>
+          <h1 className="text-2xl font-bold text-foreground">Instalação de Agentes</h1>
+          <p className="text-sm text-muted">Console de provisionamento com criação e gestão operacional de deploy tokens.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Button
@@ -589,18 +589,18 @@ export default function DeployTokens() {
         </div>
       </Card>
 
-      <div className="inline-flex rounded-xl border border-white/10 bg-white/5 p-1">
+      <div className="inline-flex rounded-xl border border-border bg-surface-light p-1">
         <button
           type="button"
           onClick={() => setActiveTab('create')}
-          className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${activeTab === 'create' ? 'bg-primary text-white' : 'text-slate-300 hover:text-white'}`}
+          className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${activeTab === 'create' ? 'bg-primary text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
         >
           Criar token
         </button>
         <button
           type="button"
           onClick={() => setActiveTab('manage')}
-          className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${activeTab === 'manage' ? 'bg-primary text-white' : 'text-slate-300 hover:text-white'}`}
+          className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${activeTab === 'manage' ? 'bg-primary text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
         >
           Gerenciar tokens
         </button>
@@ -614,8 +614,8 @@ export default function DeployTokens() {
               subtitle="Gere token e instalador para onboarding de novos agentes."
             />
             <div className="space-y-4">
-              <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-                <div className="mb-2 text-xs uppercase tracking-wide text-slate-400">Presets rápidos</div>
+              <div className="rounded-xl border border-border bg-surface-light p-3">
+                <div className="mb-2 text-xs uppercase tracking-wide text-muted">Presets rápidos</div>
                 <div className="flex flex-wrap gap-2">
                   <Button
                     variant="ghost"
@@ -683,12 +683,12 @@ export default function DeployTokens() {
                     setForm(current => ({ ...current, expiresInHours: raw === '' ? null : Number(raw) }));
                   }}
                 />
-                <label className="flex items-center gap-2 self-end rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-300">
+                <label className="flex items-center gap-2 self-end rounded-xl border border-border bg-surface-light px-3 py-2 text-sm text-muted-foreground">
                   <input
                     type="checkbox"
                     checked={Boolean(form.multiUse)}
                     onChange={e => setForm(current => ({ ...current, multiUse: e.target.checked }))}
-                    className="rounded border-white/10 bg-white/5"
+                    className="rounded border-border bg-surface-light"
                   />
                   Permitir multiuso
                 </label>
@@ -715,8 +715,8 @@ export default function DeployTokens() {
             <Card>
               <CardHeader title="Token gerado" subtitle="Copie e guarde com segurança." />
               <div className="space-y-4">
-                <div className="rounded-lg border border-white/10 bg-black/20 p-3">
-                  <p className="break-all font-mono text-sm text-slate-200">{generatedToken.token}</p>
+                <div className="rounded-lg border border-border bg-black/20 p-3">
+                  <p className="break-all font-mono text-sm text-foreground">{generatedToken.token}</p>
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
@@ -758,7 +758,7 @@ export default function DeployTokens() {
             />
 
             {tokensFilter === null ? (
-              <div className="rounded-xl border border-dashed border-white/20 bg-white/5 px-4 py-5 text-sm text-slate-400">
+              <div className="rounded-xl border border-dashed border-border-strong bg-surface-light px-4 py-5 text-sm text-muted">
                 Defina cliente e site e clique em Carregar tokens para abrir o painel operacional.
               </div>
             ) : (
@@ -825,8 +825,8 @@ export default function DeployTokens() {
                   />
                 </div>
 
-                <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2">
-                  <div className="text-sm text-slate-400">
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border bg-surface-light px-3 py-2">
+                  <div className="text-sm text-muted">
                     {filteredTokens.length} tokens após filtros
                   </div>
                   <div className="flex items-center gap-2">
@@ -855,7 +855,7 @@ export default function DeployTokens() {
                     </Button>
                   </div>
                 </div>
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-muted">
                   <strong>Instalador mínimo:</strong> ~2 MB, baixa o restante durante a instalação (requer internet).
                   {' '}<strong>Pacote offline:</strong> ~150 MB, instalação completa sem internet.
                 </p>
@@ -866,11 +866,11 @@ export default function DeployTokens() {
           {tokensFilter !== null && (
             <Card>
               {deployTokens.isLoading && listedTokens.length === 0 ? (
-                <p className="text-sm text-slate-400">Carregando tokens...</p>
+                <p className="text-sm text-muted">Carregando tokens...</p>
               ) : deployTokens.isError ? (
                 <p className="text-sm text-rose-300">Não foi possível carregar os deploy tokens.</p>
               ) : filteredTokens.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-white/20 bg-white/5 px-4 py-5 text-sm text-slate-400">
+                <div className="rounded-xl border border-dashed border-border-strong bg-surface-light px-4 py-5 text-sm text-muted">
                   Nenhum token corresponde aos filtros atuais.
                 </div>
               ) : (
@@ -885,7 +885,7 @@ export default function DeployTokens() {
                     return (
                       <div
                         key={token.id}
-                        className="rounded-xl border border-white/10 bg-white/5 p-4"
+                        className="rounded-xl border border-border bg-surface-light p-4"
                       >
                         <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
                           <div className="min-w-0 space-y-2">
@@ -901,13 +901,13 @@ export default function DeployTokens() {
                             </div>
 
                             {token.description ? (
-                              <p className="text-sm text-slate-300">{token.description}</p>
+                              <p className="text-sm text-muted-foreground">{token.description}</p>
                             ) : (
-                              <p className="text-sm text-slate-500">Sem descrição</p>
+                              <p className="text-sm text-muted">Sem descrição</p>
                             )}
 
-                            <div className="rounded-lg border border-white/10 bg-black/20 p-3">
-                              <p className="break-all font-mono text-xs text-slate-200">
+                            <div className="rounded-lg border border-border bg-black/20 p-3">
+                              <p className="break-all font-mono text-xs text-foreground">
                                 {tokenVisible ? token.token : '••••••••••••••••••••••••••••••••'}
                               </p>
                             </div>
@@ -932,13 +932,13 @@ export default function DeployTokens() {
                               </Button>
 
                               {openActionsForTokenId === token.id ? (
-                                <div className="absolute right-0 top-11 z-20 w-48 rounded-xl border border-white/10 bg-slate-950/95 p-1 shadow-2xl">
+                                <div className="absolute right-0 top-11 z-20 w-48 rounded-xl border border-border bg-background/95 p-1 shadow-2xl">
                                   <button
                                     type="button"
                                     onClick={() => {
                                       toggleTokenVisibility(token.id);
                                     }}
-                                    className="w-full rounded-lg px-3 py-2 text-left text-sm text-slate-200 hover:bg-white/10"
+                                    className="w-full rounded-lg px-3 py-2 text-left text-sm text-foreground hover:bg-surface-hover"
                                   >
                                     {tokenVisible ? 'Ocultar token' : 'Ver token'}
                                   </button>
@@ -948,7 +948,7 @@ export default function DeployTokens() {
                                       void handleCopyToken(token.token);
                                       setOpenActionsForTokenId(null);
                                     }}
-                                    className="w-full rounded-lg px-3 py-2 text-left text-sm text-slate-200 hover:bg-white/10"
+                                    className="w-full rounded-lg px-3 py-2 text-left text-sm text-foreground hover:bg-surface-hover"
                                   >
                                     Copiar token
                                   </button>
@@ -969,8 +969,8 @@ export default function DeployTokens() {
                     );
                   })}
 
-                  <div className="flex flex-wrap items-center justify-between gap-2 border-t border-white/10 pt-3">
-                    <div className="text-sm text-slate-400">
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3">
+                    <div className="text-sm text-muted">
                       Página {page} de {totalPages}
                     </div>
                     <div className="flex items-center gap-2">
@@ -1022,7 +1022,7 @@ function MetricCard({
   tone: 'slate' | 'success' | 'warning' | 'danger';
 }) {
   const toneClass: Record<typeof tone, string> = {
-    slate: 'text-slate-200 border-white/10 bg-white/5',
+    slate: 'text-foreground border-border bg-surface-light',
     success: 'text-emerald-200 border-emerald-400/25 bg-emerald-500/10',
     warning: 'text-amber-200 border-amber-400/25 bg-amber-500/10',
     danger: 'text-rose-200 border-rose-400/25 bg-rose-500/10',
@@ -1030,7 +1030,7 @@ function MetricCard({
 
   return (
     <div className={`rounded-xl border px-3 py-2 ${toneClass[tone]}`}>
-      <p className="text-xs uppercase tracking-wide text-slate-400">{label}</p>
+      <p className="text-xs uppercase tracking-wide text-muted">{label}</p>
       <p className="mt-1 text-2xl font-semibold">{value}</p>
     </div>
   );

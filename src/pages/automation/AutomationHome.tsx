@@ -37,8 +37,8 @@ export default function AutomationHome() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-white">Automação</h1>
-         <p className="text-sm text-slate-400">
+        <h1 className="text-2xl font-bold text-foreground">Automação</h1>
+         <p className="text-sm text-muted">
            Gerencie scripts, tarefas e operações de execução no ambiente.
         </p>
       </div>
@@ -51,7 +51,7 @@ export default function AutomationHome() {
               <CardHeader
                 title={card.title}
                 subtitle={card.description}
-                action={<Icon className="h-4 w-4 text-slate-400" />}
+                action={<Icon className="h-4 w-4 text-muted" />}
               />
               <Link to={card.to}>
                 <Button size="sm">{card.cta}</Button>

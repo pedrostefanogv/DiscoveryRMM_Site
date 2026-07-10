@@ -23,8 +23,8 @@ export default function ClientList() {
             <Building2 className="h-4 w-4 text-primary" />
           </div>
           <div>
-            <p className="font-medium text-white">{c.name}</p>
-            <p className="text-xs text-slate-500">{c.notes ?? 'Sem observações'}</p>
+            <p className="font-medium text-foreground">{c.name}</p>
+            <p className="text-xs text-muted">{c.notes ?? 'Sem observações'}</p>
           </div>
         </div>
       ),
@@ -32,7 +32,7 @@ export default function ClientList() {
     {
       key: 'notes',
       header: 'Observações',
-      render: c => <span className="text-slate-400">{c.notes ?? '—'}</span>,
+      render: c => <span className="text-muted">{c.notes ?? '—'}</span>,
     },
     {
       key: 'status',
@@ -52,16 +52,16 @@ export default function ClientList() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white">Clientes</h1>
-          <p className="text-sm text-slate-400">{clients.data?.length ?? 0} clientes</p>
+          <h1 className="text-2xl font-bold text-foreground">Clientes</h1>
+          <p className="text-sm text-muted">{clients.data?.length ?? 0} clientes</p>
         </div>
         <div className="flex items-center gap-3">
-          <label className="flex items-center gap-2 text-sm text-slate-400">
+          <label className="flex items-center gap-2 text-sm text-muted">
             <input
               type="checkbox"
               checked={showInactive}
               onChange={e => setShowInactive(e.target.checked)}
-              className="rounded border-white/10 bg-white/5"
+              className="rounded border-border bg-surface-light"
             />
             Mostrar inativos
           </label>

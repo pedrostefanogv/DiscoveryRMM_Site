@@ -72,8 +72,8 @@ export default function IamGroupsPage() {
         header: "Grupo",
         render: (item) => (
           <div className="space-y-1">
-            <p className="font-medium text-white">{item.name}</p>
-            <p className="text-xs text-slate-400">{item.description ?? "Sem descrição"}</p>
+            <p className="font-medium text-foreground">{item.name}</p>
+            <p className="text-xs text-muted">{item.description ?? "Sem descrição"}</p>
           </div>
         ),
       },
@@ -153,8 +153,8 @@ export default function IamGroupsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-white">Grupos de Usuários</h1>
-        <p className="text-sm text-slate-400">
+        <h1 className="text-2xl font-bold text-foreground">Grupos de Usuários</h1>
+        <p className="text-sm text-muted">
           Organize usuários por grupo e vincule roles por escopo para controlar acesso.
         </p>
       </div>
@@ -295,10 +295,10 @@ function GroupAssignmentsPanel({
         ) : (
           <div className="space-y-2">
             {members.map((member) => (
-              <div key={member.assignmentId} className="flex items-center justify-between rounded-lg border border-white/10 bg-white/5 px-3 py-2">
+              <div key={member.assignmentId} className="flex items-center justify-between rounded-lg border border-border bg-surface-light px-3 py-2">
                 <div>
-                  <p className="font-medium text-white">{member.fullName ?? member.login ?? member.userId}</p>
-                  <p className="text-xs text-slate-400">{member.email ?? member.userId}</p>
+                  <p className="font-medium text-foreground">{member.fullName ?? member.login ?? member.userId}</p>
+                  <p className="text-xs text-muted">{member.email ?? member.userId}</p>
                 </div>
                 <Button
                   variant="ghost"
@@ -314,7 +314,7 @@ function GroupAssignmentsPanel({
                 </Button>
               </div>
             ))}
-            {members.length === 0 && <p className="text-sm text-slate-500">Nenhum membro neste grupo.</p>}
+            {members.length === 0 && <p className="text-sm text-muted">Nenhum membro neste grupo.</p>}
           </div>
         )}
       </Card>
@@ -365,12 +365,12 @@ function GroupAssignmentsPanel({
         ) : (
           <div className="space-y-2">
             {assignments.map((assignment) => (
-              <div key={assignment.assignmentId} className="flex items-center justify-between rounded-lg border border-white/10 bg-white/5 px-3 py-2">
+              <div key={assignment.assignmentId} className="flex items-center justify-between rounded-lg border border-border bg-surface-light px-3 py-2">
                 <div className="space-y-1">
-                  <p className="font-medium text-white">{assignment.roleName ?? assignment.roleId}</p>
+                  <p className="font-medium text-foreground">{assignment.roleName ?? assignment.roleId}</p>
                   <div className="flex items-center gap-2">
                     <Badge color="accent">{assignment.scopeLevel}</Badge>
-                    <span className="text-xs text-slate-400">{assignment.scopeId ?? "Sem scopeId"}</span>
+                    <span className="text-xs text-muted">{assignment.scopeId ?? "Sem scopeId"}</span>
                   </div>
                 </div>
                 <Button
@@ -387,7 +387,7 @@ function GroupAssignmentsPanel({
                 </Button>
               </div>
             ))}
-            {assignments.length === 0 && <p className="text-sm text-slate-500">Nenhuma role vinculada neste grupo.</p>}
+            {assignments.length === 0 && <p className="text-sm text-muted">Nenhuma role vinculada neste grupo.</p>}
           </div>
         )}
       </Card>
@@ -480,12 +480,12 @@ function EditGroupModal({
       <div className="space-y-4">
         <Input label="Nome" value={payload.name} onChange={(e) => setPayload((prev) => ({ ...prev, name: e.target.value }))} />
         <Input label="Descrição" value={payload.description ?? ""} onChange={(e) => setPayload((prev) => ({ ...prev, description: e.target.value }))} />
-        <label className="flex items-center gap-2 text-sm text-slate-300">
+        <label className="flex items-center gap-2 text-sm text-muted-foreground">
           <input
             type="checkbox"
             checked={payload.isActive}
             onChange={(e) => setPayload((prev) => ({ ...prev, isActive: e.target.checked }))}
-            className="rounded border-white/20 bg-white/5"
+            className="rounded border-border-strong bg-surface-light"
           />
           Grupo ativo
         </label>

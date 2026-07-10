@@ -34,7 +34,7 @@ function getEntityIcon(entityType: string) {
 }
 
 function getEntityColor(entityType: string) {
-  return ENTITY_COLORS[entityType] ?? "text-slate-400";
+  return ENTITY_COLORS[entityType] ?? "text-muted";
 }
 
 // ── Props ──────────────────────────────────────────────
@@ -91,12 +91,12 @@ export function SearchPalette({
 
   return (
     <div className="absolute left-0 right-0 top-full z-50 mt-2 w-full">
-      <div className="rounded-xl border border-white/10 bg-slate-900/95 p-2 shadow-2xl backdrop-blur-xl">
+      <div className="rounded-xl border border-border bg-surface/95 p-2 shadow-2xl backdrop-blur-xl">
         {/* Loading */}
         {loading && (
           <div className="flex items-center justify-center gap-2 py-6">
             <Loader2 className="h-5 w-5 animate-spin text-primary" />
-            <span className="text-sm text-slate-400">Buscando...</span>
+            <span className="text-sm text-muted">Buscando...</span>
           </div>
         )}
 
@@ -110,8 +110,8 @@ export function SearchPalette({
         {/* Empty state — query >= 3 chars, loaded, no results */}
         {!loading && !error && query.trim().length >= 3 && !hasResults && (
           <div className="flex flex-col items-center gap-2 py-6">
-            <Search className="h-6 w-6 text-slate-500" strokeWidth={1.5} />
-            <p className="text-sm text-slate-400">
+            <Search className="h-6 w-6 text-muted" strokeWidth={1.5} />
+            <p className="text-sm text-muted">
               Nenhum resultado encontrado para &ldquo;{query.trim()}&rdquo;
             </p>
           </div>
@@ -128,7 +128,7 @@ export function SearchPalette({
                 {/* Group header */}
                 <div className="flex items-center gap-2 px-3 py-1.5">
                   <Icon className={`h-4 w-4 ${color}`} strokeWidth={1.5} />
-                  <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-muted">
                     {group.label}
                   </span>
                 </div>
@@ -139,25 +139,25 @@ export function SearchPalette({
                     key={item.id}
                     type="button"
                     onClick={() => handleItemClick(item.url, item.entityType)}
-                    className="flex w-full items-start gap-3 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-white/5"
+                    className="flex w-full items-start gap-3 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-surface-light"
                   >
                     <div
-                      className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/5 ${color}`}
+                      className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-border bg-surface-light ${color}`}
                     >
                       <Icon className="h-3.5 w-3.5" strokeWidth={1.5} />
                     </div>
 
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-slate-200">
+                      <p className="truncate text-sm font-medium text-foreground">
                         {item.title}
                       </p>
                       {item.subtitle && (
-                        <p className="truncate text-xs text-slate-400">
+                        <p className="truncate text-xs text-muted">
                           {item.subtitle}
                         </p>
                       )}
                       {item.clientName && (
-                        <p className="truncate text-xs text-slate-500">
+                        <p className="truncate text-xs text-muted">
                           {item.clientName}
                           {item.siteName ? ` · ${item.siteName}` : ""}
                         </p>
@@ -171,8 +171,8 @@ export function SearchPalette({
 
         {/* Footer — total de resultados */}
         {hasResults && (
-          <div className="border-t border-white/5 px-3 pt-2">
-            <p className="text-xs text-slate-500">
+          <div className="border-t border-border px-3 pt-2">
+            <p className="text-xs text-muted">
               {results.totalResults}{" "}
               {results.totalResults === 1 ? "resultado" : "resultados"}
             </p>

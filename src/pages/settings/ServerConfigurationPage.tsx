@@ -281,7 +281,7 @@ export default function ServerConfigurationPage() {
       <button
         type="button"
         onClick={() => toggleSection(section)}
-        className="inline-flex items-center gap-1 rounded-md border border-white/10 bg-white/5 px-2.5 py-1 text-xs text-slate-300 transition-colors hover:border-white/20 hover:text-white"
+        className="inline-flex items-center gap-1 rounded-md border border-border bg-surface-light px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:border-border-strong hover:text-foreground"
       >
         {collapsed ? "Expandir" : "Recolher"}
         {collapsed ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronUp className="h-3.5 w-3.5" />}
@@ -461,23 +461,23 @@ export default function ServerConfigurationPage() {
         className={`group relative flex w-full items-start gap-3 rounded-xl border p-4 text-left transition-all ${
           isEnabled
             ? "border-sky-500/30 bg-sky-500/10 hover:border-sky-500/50"
-            : "border-white/5 bg-white/[0.03] hover:border-white/10"
+            : "border-border bg-surface-light hover:border-border"
         }`}
       >
         <div
           className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors ${
-            isEnabled ? "bg-sky-500/20 text-sky-400" : "bg-white/5 text-slate-500"
+            isEnabled ? "bg-sky-500/20 text-sky-400" : "bg-surface-light text-muted"
           }`}
         >
           {featureIcons[field.key] ?? <Zap className="h-4 w-4" />}
         </div>
 
         <div className="min-w-0 flex-1">
-          <p className={`text-sm font-medium ${isEnabled ? "text-white" : "text-slate-400"}`}>
+          <p className={`text-sm font-medium ${isEnabled ? "text-foreground" : "text-muted"}`}>
             {field.label}
           </p>
           {field.description && (
-            <p className="mt-0.5 text-xs text-slate-500">{field.description}</p>
+            <p className="mt-0.5 text-xs text-muted">{field.description}</p>
           )}
         </div>
 
@@ -486,7 +486,7 @@ export default function ServerConfigurationPage() {
         ) : (
           <div
             className={`relative mt-0.5 h-5 w-9 shrink-0 rounded-full transition-colors ${
-              isEnabled ? "bg-sky-500" : "bg-white/10"
+              isEnabled ? "bg-sky-500" : "bg-surface-hover"
             }`}
           >
             <span
@@ -506,8 +506,8 @@ export default function ServerConfigurationPage() {
         {/* Page header */}
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <h2 className="text-xl font-semibold text-white">Configuração Global do Servidor</h2>
-            <p className="mt-1 text-sm text-slate-400">
+            <h2 className="text-xl font-semibold text-foreground">Configuração Global do Servidor</h2>
+            <p className="mt-1 text-sm text-muted">
               Valores base aplicados a todos os clientes e sites via herança.
             </p>
           </div>
@@ -534,31 +534,31 @@ export default function ServerConfigurationPage() {
 
         <Card className="border-cyan-500/20 bg-gradient-to-br from-cyan-500/10 via-transparent to-blue-500/10">
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
-              <p className="text-xs uppercase tracking-wide text-slate-400">Módulos ativos</p>
-              <p className="mt-1 text-lg font-semibold text-white">
+            <div className="rounded-xl border border-border bg-surface-light p-3">
+              <p className="text-xs uppercase tracking-wide text-muted">Módulos ativos</p>
+              <p className="mt-1 text-lg font-semibold text-foreground">
                 {enabledFeatureCount}/{featureFields.length}
               </p>
-              <p className="text-xs text-slate-500">Funcionalidades globais habilitadas</p>
+              <p className="text-xs text-muted">Funcionalidades globais habilitadas</p>
             </div>
-            <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
-              <p className="text-xs uppercase tracking-wide text-slate-400">NATS</p>
+            <div className="rounded-xl border border-border bg-surface-light p-3">
+              <p className="text-xs uppercase tracking-wide text-muted">NATS</p>
               <p className={`mt-1 text-lg font-semibold ${natsEnabled ? "text-emerald-300" : "text-amber-300"}`}>
                 {natsEnabled ? "Habilitado" : "Desabilitado"}
               </p>
-              <p className="text-xs text-slate-500">Canal de realtime e comunicação</p>
+              <p className="text-xs text-muted">Canal de realtime e comunicação</p>
             </div>
-            <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
-              <p className="text-xs uppercase tracking-wide text-slate-400">Object Storage</p>
+            <div className="rounded-xl border border-border bg-surface-light p-3">
+              <p className="text-xs uppercase tracking-wide text-muted">Object Storage</p>
               <p className={`mt-1 text-lg font-semibold ${storageConfigured ? "text-emerald-300" : "text-amber-300"}`}>
                 {storageConfigured ? "Configurado" : "Pendente"}
               </p>
-              <p className="text-xs text-slate-500">Endpoint + bucket para anexos</p>
+              <p className="text-xs text-muted">Endpoint + bucket para anexos</p>
             </div>
-            <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
-              <p className="text-xs uppercase tracking-wide text-slate-400">Campos técnicos</p>
+            <div className="rounded-xl border border-border bg-surface-light p-3">
+              <p className="text-xs uppercase tracking-wide text-muted">Campos técnicos</p>
               <p className="mt-1 text-lg font-semibold text-sky-300">Parcial</p>
-              <p className="text-xs text-slate-500">Branding separado em /settings/branding</p>
+              <p className="text-xs text-muted">Branding separado em /settings/branding</p>
             </div>
           </div>
         </Card>
@@ -636,7 +636,7 @@ export default function ServerConfigurationPage() {
                 </div>
               )}
 
-              <div className="flex flex-wrap items-center justify-end gap-3 border-t border-white/5 pt-4">
+              <div className="flex flex-wrap items-center justify-end gap-3 border-t border-border pt-4">
                 <Button size="sm" onClick={saveStorageFields} loading={savingStorage}>
                   <Save className="h-3.5 w-3.5" />
                   Salvar
@@ -707,7 +707,7 @@ export default function ServerConfigurationPage() {
                 {natsFields.map((field) => renderNatsFieldEditor(field))}
               </div>
 
-              <div className="flex flex-wrap items-center justify-end gap-3 border-t border-white/5 pt-4">
+              <div className="flex flex-wrap items-center justify-end gap-3 border-t border-border pt-4">
                 <Button size="sm" onClick={saveNatsFields} loading={savingNats}>
                   <Save className="h-3.5 w-3.5" />
                   Salvar
@@ -791,7 +791,7 @@ export default function ServerConfigurationPage() {
               </div>
 
               {advancedFields.length === 0 && (
-                <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3 text-sm text-slate-300">
+                <div className="rounded-lg border border-border bg-surface-light p-3 text-sm text-muted-foreground">
                   Nenhum campo adicional de governança disponível neste momento.
                 </div>
               )}
@@ -834,14 +834,14 @@ export default function ServerConfigurationPage() {
                   <div key={field.key} className="flex items-start gap-3">
                     <div
                       className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
-                        colors[field.key] ?? "bg-white/5 text-slate-400"
+                        colors[field.key] ?? "bg-surface-light text-muted"
                       }`}
                     >
                       {icons[field.key] ?? <Layers className="h-4 w-4" />}
                     </div>
                     <div className="min-w-0 flex-1 space-y-1">
                       {field.description && (
-                        <p className="text-xs text-slate-500">{field.description}</p>
+                        <p className="text-xs text-muted">{field.description}</p>
                       )}
                       {renderFieldEditor(field)}
                     </div>
@@ -949,7 +949,7 @@ function TicketAttachmentSettingsCard({
     <button
       type="button"
       onClick={onToggleCollapse}
-      className="inline-flex items-center gap-1 rounded-md border border-white/10 bg-white/5 px-2.5 py-1 text-xs text-slate-300 transition-colors hover:border-white/20 hover:text-white"
+      className="inline-flex items-center gap-1 rounded-md border border-border bg-surface-light px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:border-border-strong hover:text-foreground"
     >
       {collapsed ? "Expandir" : "Recolher"}
       {collapsed ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronUp className="h-3.5 w-3.5" />}
@@ -1043,7 +1043,7 @@ function TicketAttachmentSettingsCard({
           action={collapseButton}
         />
         {!collapsed && (
-          <div className="py-2 text-sm text-slate-400">Carregando configurações de anexos…</div>
+          <div className="py-2 text-sm text-muted">Carregando configurações de anexos…</div>
         )}
       </Card>
     );
@@ -1064,27 +1064,27 @@ function TicketAttachmentSettingsCard({
           className={`group relative flex w-full items-start gap-3 rounded-xl border p-4 text-left transition-all ${
             form.enabled
               ? "border-sky-500/30 bg-sky-500/10 hover:border-sky-500/50"
-              : "border-white/5 bg-white/[0.03] hover:border-white/10"
+              : "border-border bg-surface-light hover:border-border"
           }`}
         >
           <div
             className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors ${
-              form.enabled ? "bg-sky-500/20 text-sky-400" : "bg-white/5 text-slate-500"
+              form.enabled ? "bg-sky-500/20 text-sky-400" : "bg-surface-light text-muted"
             }`}
           >
             <FileStack className="h-4 w-4" />
           </div>
           <div className="min-w-0 flex-1">
-            <p className={`text-sm font-medium ${form.enabled ? "text-white" : "text-slate-400"}`}>
+            <p className={`text-sm font-medium ${form.enabled ? "text-foreground" : "text-muted"}`}>
               Upload de Anexos Habilitado
             </p>
-            <p className="mt-0.5 text-xs text-slate-500">
+            <p className="mt-0.5 text-xs text-muted">
               Permite que usuários anexem arquivos aos tickets via upload direto ao storage.
             </p>
           </div>
           <div
             className={`relative mt-0.5 h-5 w-9 shrink-0 rounded-full transition-colors ${
-              form.enabled ? "bg-sky-500" : "bg-white/10"
+              form.enabled ? "bg-sky-500" : "bg-surface-hover"
             }`}
           >
             <span
@@ -1097,7 +1097,7 @@ function TicketAttachmentSettingsCard({
 
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           <div className="space-y-1">
-            <label htmlFor="max-file-size-mb" className="block text-sm font-medium text-slate-300">
+            <label htmlFor="max-file-size-mb" className="block text-sm font-medium text-muted-foreground">
               Tamanho máximo por arquivo (MB)
             </label>
             <input
@@ -1111,15 +1111,15 @@ function TicketAttachmentSettingsCard({
                 const mb = Number(e.target.value);
                 set("maxFileSizeBytes", Number.isFinite(mb) ? Math.round(mb * BYTES_PER_MB) : 0);
               }}
-              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-200 outline-none transition-colors focus:border-primary/50 focus:ring-1 focus:ring-primary/30"
+              className="w-full rounded-lg border border-border bg-surface-light px-3 py-2 text-sm text-foreground outline-none transition-colors focus:border-primary/50 focus:ring-1 focus:ring-primary/30"
             />
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-muted">
               Valor salvo: {form.maxFileSizeBytes.toLocaleString("pt-BR")} bytes (máx. 1024 MB)
             </p>
           </div>
 
           <div className="space-y-1">
-            <label htmlFor="presigned-ttl-minutes" className="block text-sm font-medium text-slate-300">
+            <label htmlFor="presigned-ttl-minutes" className="block text-sm font-medium text-muted-foreground">
               TTL da URL pré-assinada (minutos)
             </label>
             <input
@@ -1129,18 +1129,18 @@ function TicketAttachmentSettingsCard({
               max={120}
               value={form.presignedUploadUrlTtlMinutes}
               onChange={(e) => set("presignedUploadUrlTtlMinutes", Number(e.target.value))}
-              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-200 outline-none transition-colors focus:border-primary/50 focus:ring-1 focus:ring-primary/30"
+              className="w-full rounded-lg border border-border bg-surface-light px-3 py-2 text-sm text-foreground outline-none transition-colors focus:border-primary/50 focus:ring-1 focus:ring-primary/30"
             />
-            <p className="text-xs text-slate-500">Entre 1 e 120 minutos.</p>
+            <p className="text-xs text-muted">Entre 1 e 120 minutos.</p>
           </div>
         </div>
 
         <div className="space-y-3">
           <div>
-            <label htmlFor="custom-mime-type" className="block text-sm font-medium text-slate-300">
+            <label htmlFor="custom-mime-type" className="block text-sm font-medium text-muted-foreground">
               Tipos de conteúdo permitidos
             </label>
-            <p className="mt-0.5 text-xs text-slate-500">
+            <p className="mt-0.5 text-xs text-muted">
               Clique nos presets para adicionar/remover. Tipos ativos ficam destacados.
             </p>
           </div>
@@ -1158,7 +1158,7 @@ function TicketAttachmentSettingsCard({
                   className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-all ${
                     active
                       ? "border-cyan-500/40 bg-cyan-500/15 text-cyan-300 hover:bg-cyan-500/25"
-                      : "border-white/10 bg-white/[0.04] text-slate-400 hover:border-white/20 hover:text-slate-300"
+                      : "border-border bg-surface-hover text-muted hover:border-border-strong hover:text-muted-foreground"
                   }`}
                 >
                   {active && (
@@ -1209,7 +1209,7 @@ function TicketAttachmentSettingsCard({
 
           {/* Resumo de todos os tipos ativos */}
           {form.allowedContentTypes.length > 0 && (
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-muted">
               Ativos ({form.allowedContentTypes.length}):{" "}
               {form.allowedContentTypes.join(", ")}
             </p>
@@ -1232,10 +1232,10 @@ function TicketAttachmentSettingsCard({
                 }
               }}
               placeholder="Outro MIME type (ex.: image/svg+xml)"
-              className={`flex-1 rounded-lg border bg-white/5 px-3 py-2 text-sm text-slate-200 outline-none transition-colors placeholder:text-slate-500 focus:ring-1 ${
+              className={`flex-1 rounded-lg border bg-surface-light px-3 py-2 text-sm text-foreground outline-none transition-colors placeholder:text-muted focus:ring-1 ${
                 customTypeError
                   ? "border-danger/50 focus:border-danger/70 focus:ring-danger/20"
-                  : "border-white/10 focus:border-primary/50 focus:ring-primary/30"
+                  : "border-border focus:border-primary/50 focus:ring-primary/30"
               }`}
             />
             <Button size="sm" variant="ghost" onClick={addCustomType} type="button">

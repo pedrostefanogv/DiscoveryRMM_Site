@@ -392,8 +392,8 @@ export default function KnowledgeList() {
             <BookOpen className="h-4 w-4 text-primary" />
           </div>
           <div>
-            <p className="font-medium text-white">{article.title}</p>
-            <p className="text-xs text-slate-400">
+            <p className="font-medium text-foreground">{article.title}</p>
+            <p className="text-xs text-muted">
               {normalizeCategory(article.category)} • {Array.isArray(article.tags) && article.tags.length > 0 ? article.tags.join(', ') : 'sem tags'}
             </p>
           </div>
@@ -419,9 +419,9 @@ export default function KnowledgeList() {
       header: 'Autor',
       render: (article) => (
         <div>
-          <span className="text-slate-300">{article.createdBy || '—'}</span>
+          <span className="text-muted-foreground">{article.createdBy || '—'}</span>
           {article.lastEditedBy && article.lastEditedBy !== article.createdBy && (
-            <span className="text-xs text-slate-500 block">
+            <span className="text-xs text-muted block">
               Editado por {article.lastEditedBy}
             </span>
           )}
@@ -432,7 +432,7 @@ export default function KnowledgeList() {
       key: 'updatedAt',
       header: 'Atualizado',
       render: (article) => (
-        <span className="text-xs text-slate-400">
+        <span className="text-xs text-muted">
           {new Date(article.updatedAt).toLocaleDateString('pt-BR')}
         </span>
       ),
@@ -493,8 +493,8 @@ export default function KnowledgeList() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white">Base de Conhecimento</h1>
-          <p className="text-sm text-slate-400">Busque artigos rapidamente e abra filtros avançados só quando precisar.</p>
+          <h1 className="text-2xl font-bold text-foreground">Base de Conhecimento</h1>
+          <p className="text-sm text-muted">Busque artigos rapidamente e abra filtros avançados só quando precisar.</p>
         </div>
         {canCreateArticle && (
           <Button onClick={() => navigate('/knowledge/new')}>
@@ -539,7 +539,7 @@ export default function KnowledgeList() {
             </div>
           </div>
 
-          <p className="text-xs text-slate-400">
+          <p className="text-xs text-muted">
             Use linguagem natural para encontrar artigos mesmo sem palavras exatas.
           </p>
         </form>
@@ -559,7 +559,7 @@ export default function KnowledgeList() {
           </Button>
 
           {advancedFiltersActiveCount > 0 && !advancedFiltersExpanded && (
-            <span className="text-xs text-slate-500">Filtros ativos aplicados à tabela.</span>
+            <span className="text-xs text-muted">Filtros ativos aplicados à tabela.</span>
           )}
 
           {advancedFiltersActiveCount > 0 && (
@@ -570,11 +570,11 @@ export default function KnowledgeList() {
         </div>
 
         {!advancedFiltersExpanded && (
-          <p className="mt-2 text-xs text-slate-500">{listingFiltersSummary}</p>
+          <p className="mt-2 text-xs text-muted">{listingFiltersSummary}</p>
         )}
 
         {advancedFiltersExpanded && (
-          <div className="mt-3 space-y-4 rounded-xl border border-white/10 bg-white/5 p-3 sm:p-4">
+          <div className="mt-3 space-y-4 rounded-xl border border-border bg-surface-light p-3 sm:p-4">
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
               <Select
                 label="Cliente"
@@ -620,7 +620,7 @@ export default function KnowledgeList() {
             </div>
 
             {!clientId && (
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-muted">
                 Modo multi-escopo ativo: exibe todos os artigos globais e de clientes/sites que seu perfil pode acessar.
               </p>
             )}
@@ -656,10 +656,10 @@ export default function KnowledgeList() {
       <Card padding={false}>
         {hasSemanticSearch ? (
           <div>
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
               <div>
-                <p className="text-sm font-semibold text-white">Resultados da busca inteligente</p>
-                <p className="text-xs text-slate-400">
+                <p className="text-sm font-semibold text-foreground">Resultados da busca inteligente</p>
+                <p className="text-xs text-muted">
                   Consulta: "{query}" • modo {searchModeLabel}. Clique em um artigo para abrir em modo leitura.
                 </p>
               </div>
@@ -691,8 +691,8 @@ export default function KnowledgeList() {
                     showPagination={false}
                   />
 
-                  <div className="flex flex-wrap items-center justify-between gap-2 border-t border-white/10 pt-3">
-                    <p className="text-xs text-slate-400">
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3">
+                    <p className="text-xs text-muted">
                       {(searchQuery.data ?? []).length} artigo(s) relevantes para "{query}".
                     </p>
                     <Button type="button" variant="ghost" size="sm" onClick={handleClearSearch}>
@@ -721,8 +721,8 @@ export default function KnowledgeList() {
               emptyMessage="Nenhum artigo encontrado para os filtros selecionados."
               showPagination={false}
             />
-            <div className="flex items-center justify-between border-t border-white/10 px-4 py-3">
-              <p className="text-xs text-slate-400">
+            <div className="flex items-center justify-between border-t border-border px-4 py-3">
+              <p className="text-xs text-muted">
                 {totalItems} artigo(s) • {pageSize} por página • página {currentPage}
                 {isAllVisible && listPage?.hasMore
                   ? ` • mais itens disponíveis`
@@ -779,10 +779,10 @@ export default function KnowledgeList() {
           <div className="fixed inset-0 z-40" onClick={() => setContextMenu(null)} />
           <div
             ref={contextMenuRef}
-            className="fixed z-50 min-w-[220px] overflow-hidden rounded-lg border border-white/10 bg-slate-900 shadow-xl"
+            className="fixed z-50 min-w-[220px] overflow-hidden rounded-lg border border-border bg-surface shadow-xl"
           >
             <button
-              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-200 transition-colors hover:bg-white/10"
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-surface-hover"
               onClick={() => {
                 navigate(`/knowledge/${contextMenu.article.id}`);
                 setContextMenu(null);
@@ -794,7 +794,7 @@ export default function KnowledgeList() {
 
             {canEditArticle && (
               <button
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-200 transition-colors hover:bg-white/10"
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-surface-hover"
                 onClick={() => {
                   navigate(`/knowledge/${contextMenu.article.id}/edit`);
                   setContextMenu(null);
@@ -807,7 +807,7 @@ export default function KnowledgeList() {
 
             {canPublishArticle && (
               <button
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-200 transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60"
                 onClick={() => onTogglePublish(contextMenu.article)}
                 disabled={publishMutation.isPending || unpublishMutation.isPending}
               >
@@ -818,7 +818,7 @@ export default function KnowledgeList() {
 
             {canDeleteArticle && (
               <button
-                className="flex w-full items-center gap-2 border-t border-white/10 px-3 py-2 text-left text-sm text-red-300 transition-colors hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+                className="flex w-full items-center gap-2 border-t border-border px-3 py-2 text-left text-sm text-red-300 transition-colors hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-60"
                 onClick={() => onDelete(contextMenu.article)}
                 disabled={deleteMutation.isPending}
               >

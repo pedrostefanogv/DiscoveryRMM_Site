@@ -1,4 +1,4 @@
-Ôªøimport { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   AlertTriangle,
@@ -150,7 +150,7 @@ function formatSavedViewSummary(
     parts.push(`Busca: ${filter.text}`);
   }
 
-  return parts.length > 0 ? parts.join(' ‚Ä¢ ') : 'Sem filtros adicionais';
+  return parts.length > 0 ? parts.join(' ï ') : 'Sem filtros adicionais';
 }
 
 function suggestSavedViewName(
@@ -164,18 +164,18 @@ function suggestSavedViewName(
     return 'Minha visao';
   }
 
-  return parts.join(' ‚Ä¢ ');
+  return parts.join(' ï ');
 }
 
 function formatTicketPreviewDescription(value: string, maxLength = 180) {
   const normalized = value.trim();
-  if (!normalized) return 'Sem descri√ß√£o.';
+  if (!normalized) return 'Sem descriÁ„o.';
   if (normalized.length <= maxLength) return normalized;
   return `${normalized.slice(0, maxLength).trimEnd()}...`;
 }
 
 function resolveUserDisplayName(usersById: Map<string, UserDto>, userId: string | null | undefined) {
-  if (!userId) return 'N√£o atribu√≠do';
+  if (!userId) return 'N„o atribuÌdo';
   const user = usersById.get(userId);
   if (!user) return userId;
   return user.fullName || user.login || user.email || user.id;
@@ -201,7 +201,7 @@ function KpiTile({
           ? 'text-rose-300'
           : tone === 'primary'
             ? 'text-sky-300'
-            : 'text-white';
+            : 'text-foreground';
 
   return (
     <Tooltip
@@ -213,7 +213,7 @@ function KpiTile({
     >
       <Card>
         <div className="space-y-1">
-          <p className="text-xs uppercase tracking-wide text-slate-500">{label}</p>
+          <p className="text-xs uppercase tracking-wide text-muted">{label}</p>
           <p className={`text-2xl font-semibold ${toneClass}`}>{value}</p>
         </div>
       </Card>
@@ -317,9 +317,15 @@ export default function TicketList() {
   );
   const kpi = kpiQuery.data;
 
+  // BUG-07: resetPagination agora definido como useCallback ANTES do useEffect que o chama
+  const resetPagination = useCallback(() => {
+    setPage(1);
+    setPageCursors([undefined]);
+  }, []);
+
   useEffect(() => {
     resetPagination();
-  }, [filterClient, filterPriority, filterState, filterStatus, filterText, pageSize]);
+  }, [filterClient, filterPriority, filterState, filterStatus, filterText, pageSize, resetPagination]);
 
   useEffect(() => {
     if (activeSavedViewId) {
@@ -390,11 +396,6 @@ export default function TicketList() {
     setPage((p) => Math.max(1, p - 1));
   };
 
-  const resetPagination = () => {
-    setPage(1);
-    setPageCursors([undefined]);
-  };
-
   const advancedFiltersActiveCount = Number(Boolean(filterClient)) + Number(Boolean(filterState));
   const hasActiveFilters =
     Boolean(filterClient) ||
@@ -425,13 +426,13 @@ export default function TicketList() {
   const columns: Column<Ticket>[] = [
     {
       key: 'title',
-      header: 'T√≠tulo',
+      header: 'TÌtulo',
       render: (ticket) => (
         <div className="flex items-center gap-3">
           <TicketIcon className="h-4 w-4 shrink-0 text-primary" />
           <div className="min-w-0">
-            <p className="truncate font-medium text-white">{ticket.title}</p>
-            <p className="truncate text-xs text-slate-500">{ticket.category ?? 'Sem categoria'}</p>
+            <p className="truncate font-medium text-foreground">{ticket.title}</p>
+            <p className="truncate text-xs text-muted">{ticket.category ?? 'Sem categoria'}</p>
           </div>
         </div>
       ),
@@ -461,7 +462,7 @@ export default function TicketList() {
             </span>
           </Badge>
         ) : (
-          <span className="text-slate-600">-</span>
+          <span className="text-muted">-</span>
         );
       },
     },
@@ -469,7 +470,7 @@ export default function TicketList() {
       key: 'client',
       header: 'Cliente',
       render: (ticket) => (
-        <span className="text-sm text-slate-300">
+        <span className="text-sm text-muted-foreground">
           {clientMap.get(ticket.clientId)?.name ?? '-'}
         </span>
       ),
@@ -484,7 +485,7 @@ export default function TicketList() {
       key: 'createdAt',
       header: 'Criado em',
       render: (ticket) => (
-        <span className="text-xs text-slate-400">
+        <span className="text-xs text-muted">
           {new Date(ticket.createdAt).toLocaleDateString('pt-BR')}
         </span>
       ),
@@ -505,14 +506,14 @@ export default function TicketList() {
           ? 'Nenhum watcher.'
           : `${watcherNames.slice(0, 3).join(', ')}${watcherNames.length > 3 ? ` +${watcherNames.length - 3}` : ''}`;
     const linkedMachineLabel = !previewTicket.agentId
-      ? 'Sem m√°quina vinculada'
+      ? 'Sem m·quina vinculada'
       : isPreviewTarget
         ? hoverPreviewAgentQuery.isLoading
-          ? 'Carregando m√°quina...'
+          ? 'Carregando m·quina...'
           : hoverPreviewAgentQuery.data?.displayName || hoverPreviewAgentQuery.data?.hostname || previewTicket.agentId
         : previewTicket.agentId;
     const stateLabel = previewTicket.workflowStateId
-      ? stateMap.get(previewTicket.workflowStateId)?.name ?? 'Estado n√£o mapeado'
+      ? stateMap.get(previewTicket.workflowStateId)?.name ?? 'Estado n„o mapeado'
       : 'Sem estado';
     const clientLabel = clientMap.get(previewTicket.clientId)?.name ?? '-';
     const detailsAreLoading = isPreviewTarget && (hoverPreviewTicketQuery.isLoading || iamUsersQuery.isLoading);
@@ -521,31 +522,31 @@ export default function TicketList() {
       <div className="space-y-3">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="truncate text-sm font-semibold text-white">{previewTicket.title}</p>
-            <p className="mt-1 text-xs leading-relaxed text-slate-400">
+            <p className="truncate text-sm font-semibold text-foreground">{previewTicket.title}</p>
+            <p className="mt-1 text-xs leading-relaxed text-muted">
               {formatTicketPreviewDescription(previewTicket.description)}
             </p>
           </div>
-          {detailsAreLoading && <span className="text-[11px] text-slate-500">Carregando detalhes...</span>}
+          {detailsAreLoading && <span className="text-[11px] text-muted">Carregando detalhes...</span>}
         </div>
 
         <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-          <div className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2">
-            <p className="text-[11px] uppercase tracking-wide text-slate-500">Respons√°vel</p>
-            <p className="mt-1 truncate text-sm text-slate-200">{assigneeLabel}</p>
+          <div className="rounded-lg border border-border bg-surface-light px-3 py-2">
+            <p className="text-[11px] uppercase tracking-wide text-muted">Respons·vel</p>
+            <p className="mt-1 truncate text-sm text-foreground">{assigneeLabel}</p>
           </div>
-          <div className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2">
-            <p className="text-[11px] uppercase tracking-wide text-slate-500">Watchers</p>
-            <p className="mt-1 text-sm text-slate-200">{watcherSummary}</p>
+          <div className="rounded-lg border border-border bg-surface-light px-3 py-2">
+            <p className="text-[11px] uppercase tracking-wide text-muted">Watchers</p>
+            <p className="mt-1 text-sm text-foreground">{watcherSummary}</p>
           </div>
-          <div className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 sm:col-span-2">
-            <p className="text-[11px] uppercase tracking-wide text-slate-500">M√°quina vinculada</p>
-            <p className="mt-1 truncate text-sm text-slate-200">{linkedMachineLabel}</p>
+          <div className="rounded-lg border border-border bg-surface-light px-3 py-2 sm:col-span-2">
+            <p className="text-[11px] uppercase tracking-wide text-muted">M·quina vinculada</p>
+            <p className="mt-1 truncate text-sm text-foreground">{linkedMachineLabel}</p>
           </div>
         </div>
 
-        <div className="text-[11px] text-slate-500">
-          Estado: {stateLabel} ‚Ä¢ Cliente: {clientLabel} ‚Ä¢ Criado em {new Date(previewTicket.createdAt).toLocaleString('pt-BR')}
+        <div className="text-[11px] text-muted">
+          Estado: {stateLabel} ï Cliente: {clientLabel} ï Criado em {new Date(previewTicket.createdAt).toLocaleString('pt-BR')}
         </div>
       </div>
     );
@@ -594,7 +595,7 @@ export default function TicketList() {
     if (!ticketContextMenu) return;
 
     if (!currentUserId) {
-      toast.error('N√£o foi poss√≠vel identificar o usu√°rio autenticado.');
+      toast.error('N„o foi possÌvel identificar o usu·rio autenticado.');
       return;
     }
 
@@ -603,14 +604,14 @@ export default function TicketList() {
         ticketId: ticketContextMenu.ticket.id,
         data: { userId: currentUserId },
       });
-      toast.success('Voc√™ agora acompanha este chamado.');
+      toast.success('VocÍ agora acompanha este chamado.');
       setTicketContextMenu(null);
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'N√£o foi poss√≠vel acompanhar o chamado.';
+      const message = error instanceof Error ? error.message : 'N„o foi possÌvel acompanhar o chamado.';
       const normalized = message.toLowerCase();
 
-      if (normalized.includes('already') || normalized.includes('exists') || normalized.includes('j√°')) {
-        toast('Voc√™ j√° acompanha este chamado.');
+      if (normalized.includes('already') || normalized.includes('exists') || normalized.includes('j·')) {
+        toast('VocÍ j· acompanha este chamado.');
       } else {
         toast.error(message);
       }
@@ -621,12 +622,12 @@ export default function TicketList() {
     if (!ticketContextMenu) return;
 
     if (!currentUserId) {
-      toast.error('N√£o foi poss√≠vel identificar o usu√°rio autenticado.');
+      toast.error('N„o foi possÌvel identificar o usu·rio autenticado.');
       return;
     }
 
     if (ticketContextMenu.ticket.assignedToUserId === currentUserId) {
-      toast('Voc√™ j√° √© o respons√°vel deste chamado.');
+      toast('VocÍ j· È o respons·vel deste chamado.');
       setTicketContextMenu(null);
       return;
     }
@@ -635,7 +636,7 @@ export default function TicketList() {
       await assignTicketToUser(ticketContextMenu.ticket, currentUserId, 'Chamado assumido com sucesso.');
       setTicketContextMenu(null);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'N√£o foi poss√≠vel assumir o chamado.');
+      toast.error(error instanceof Error ? error.message : 'N„o foi possÌvel assumir o chamado.');
     }
   };
 
@@ -652,21 +653,21 @@ export default function TicketList() {
     if (!assignTargetTicket) return;
 
     if (!assignTargetUserId) {
-      toast.error('Selecione um usu√°rio para atribuir o chamado.');
+      toast.error('Selecione um usu·rio para atribuir o chamado.');
       return;
     }
 
     if (assignTargetTicket.assignedToUserId === assignTargetUserId) {
-      toast('Este usu√°rio j√° √© o respons√°vel deste chamado.');
+      toast('Este usu·rio j· È o respons·vel deste chamado.');
       closeAssignModal();
       return;
     }
 
     try {
-      await assignTicketToUser(assignTargetTicket, assignTargetUserId, 'Respons√°vel atualizado com sucesso.');
+      await assignTicketToUser(assignTargetTicket, assignTargetUserId, 'Respons·vel atualizado com sucesso.');
       closeAssignModal();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'N√£o foi poss√≠vel transferir a responsabilidade.');
+      toast.error(error instanceof Error ? error.message : 'N„o foi possÌvel transferir a responsabilidade.');
     }
   };
 
@@ -709,31 +710,31 @@ export default function TicketList() {
 
   const renderPaginationBar = (position: 'top' | 'bottom') => (
     <div
-      className={`flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-xs text-slate-400 ${
-        position === 'top' ? 'border-b border-white/5' : 'border-t border-white/5'
+      className={`flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-xs text-muted ${
+        position === 'top' ? 'border-b border-border' : 'border-t border-border'
       }`}
     >
       <div className="flex items-center gap-3">
         <span>Mostrando ate {pageSize} chamados por pagina</span>
       </div>
       <div className="flex items-center gap-3">
-        <span className="text-slate-500">{pageSize} chamados/pagina</span>
+        <span className="text-muted">{pageSize} chamados/pagina</span>
         <label className="flex items-center gap-2">
-          <span className="text-slate-500">Por pagina</span>
+          <span className="text-muted">Por pagina</span>
           <select
             value={String(pageSize)}
             onChange={(event) => {
               setPageSize(Number(event.target.value));
               setHoverPreviewTicketId(null);
             }}
-            className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-xs text-slate-200 outline-none transition-colors focus-visible:border-primary/60 focus-visible:ring-2 focus-visible:ring-primary/30"
+            className="rounded-lg border border-border bg-surface-light px-2 py-1 text-xs text-foreground outline-none transition-colors focus-visible:border-primary/60 focus-visible:ring-2 focus-visible:ring-primary/30"
             aria-label="Quantidade de chamados por pagina"
           >
             {PAGE_SIZE_OPTIONS.map((value) => (
               <option
                 key={value}
                 value={value}
-                className="bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100"
+                className="bg-white text-slate-900 dark:bg-surface dark:text-foreground"
               >
                 {value}
               </option>
@@ -763,7 +764,7 @@ export default function TicketList() {
 
   const openCreateSavedViewModal = () => {
     if (!currentUserId) {
-      toast.error('N√£o foi poss√≠vel identificar o usu√°rio autenticado.');
+      toast.error('N„o foi possÌvel identificar o usu·rio autenticado.');
       return;
     }
 
@@ -818,12 +819,12 @@ export default function TicketList() {
       setSavedViewModalOpen(false);
       setEditingSavedView(null);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'N√£o foi poss√≠vel salvar a vis√£o.');
+      toast.error(error instanceof Error ? error.message : 'N„o foi possÌvel salvar a vis„o.');
      }
    };
 
    const handleDeleteSavedView = async (view: TicketSavedView) => {
-     if (!window.confirm(`Excluir a vis√£o "${view.name}"?`)) {
+     if (!window.confirm(`Excluir a vis„o "${view.name}"?`)) {
        return;
      }
 
@@ -836,9 +837,9 @@ export default function TicketList() {
          setEditingSavedView(null);
          setSavedViewModalOpen(false);
        }
-       toast.success('Vis√£o removida com sucesso.');
+       toast.success('Vis„o removida com sucesso.');
      } catch (error) {
-       toast.error(error instanceof Error ? error.message : 'N√£o foi poss√≠vel excluir a vis√£o.');
+       toast.error(error instanceof Error ? error.message : 'N„o foi possÌvel excluir a vis„o.');
     }
   };
 
@@ -846,9 +847,9 @@ export default function TicketList() {
     <div ref={pageRef} className="relative space-y-6">
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-white">Chamados</h1>
-          <p className="text-sm text-slate-400">
-            {visibleTickets.length} chamados na p√°gina {page}
+          <h1 className="text-2xl font-bold text-foreground">Chamados</h1>
+          <p className="text-sm text-muted">
+            {visibleTickets.length} chamados na p·gina {page}
           </p>
         </div>
         <Button onClick={() => setModalOpen(true)}>
@@ -898,11 +899,11 @@ export default function TicketList() {
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <div className="flex items-center gap-2">
-              <Filter className="h-4 w-4 text-slate-400" />
-              <h2 className="text-lg font-semibold text-white">Filtros e vis√µes salvas</h2>
+              <Filter className="h-4 w-4 text-muted" />
+              <h2 className="text-lg font-semibold text-foreground">Filtros e visıes salvas</h2>
             </div>
-            <p className="mt-1 text-sm text-slate-400">
-              Ajuste a fila com os filtros abaixo e salve combina√ß√µes para reaplicar em um clique.
+            <p className="mt-1 text-sm text-muted">
+              Ajuste a fila com os filtros abaixo e salve combinaÁıes para reaplicar em um clique.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -932,7 +933,7 @@ export default function TicketList() {
                 setActiveSavedViewId(null);
                 setFilterText(event.target.value);
               }}
-              placeholder="T√≠tulo, descri√ß√£o ou termo livre"
+              placeholder="TÌtulo, descriÁ„o ou termo livre"
             />
           </div>
           <Select
@@ -945,7 +946,7 @@ export default function TicketList() {
             }}
           />
           <Select
-            label="Situa√ß√£o"
+            label="SituaÁ„o"
             options={STATUS_OPTIONS}
             value={filterStatus}
             onChange={(event) => {
@@ -963,12 +964,12 @@ export default function TicketList() {
             aria-expanded={advancedFiltersExpanded}
           >
             <Filter className="h-4 w-4" />
-            Filtros avan√ßados
+            Filtros avanÁados
             {advancedFiltersActiveCount > 0 && <Badge color="accent">{advancedFiltersActiveCount}</Badge>}
             {advancedFiltersExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
           </Button>
           {advancedFiltersActiveCount > 0 && !advancedFiltersExpanded && (
-            <span className="text-xs text-slate-500">Cliente e/ou estado filtrados.</span>
+            <span className="text-xs text-muted">Cliente e/ou estado filtrados.</span>
           )}
         </div>
 
@@ -1003,26 +1004,26 @@ export default function TicketList() {
           )}
 
           {!savedViewsQuery.isLoading && !savedViewsQuery.isError && savedViews.length === 0 && (
-            <p className="text-sm text-slate-500">Nenhuma vis√£o salva dispon√≠vel.</p>
+            <p className="text-sm text-muted">Nenhuma vis„o salva disponÌvel.</p>
           )}
         </div>
 
         {savedViewsQuery.isLoading ? (
           <div className="mt-4"><Loading /></div>
         ) : savedViewsQuery.isError ? (
-          <div className="mt-4 flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3">
+          <div className="mt-4 flex items-center gap-3 rounded-xl border border-border bg-surface-light px-4 py-3">
             <AlertTriangle className="h-4 w-4 text-danger" />
-            <p className="text-sm text-slate-400">N√£o foi poss√≠vel carregar as vis√µes salvas.</p>
+            <p className="text-sm text-muted">N„o foi possÌvel carregar as visıes salvas.</p>
             <Button size="sm" variant="ghost" onClick={() => savedViewsQuery.refetch()}>
               Tentar novamente
             </Button>
           </div>
         ) : savedViewsExpanded && savedViews.length > 0 ? (
-          <div className="mt-4 rounded-xl border border-white/10 bg-white/5 p-3 sm:p-4">
+          <div className="mt-4 rounded-xl border border-border bg-surface-light p-3 sm:p-4">
             <div className="mb-3 flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
-                <Bookmark className="h-4 w-4 text-slate-400" />
-                <h3 className="text-sm font-semibold text-white">Vis√µes salvas</h3>
+                <Bookmark className="h-4 w-4 text-muted" />
+                <h3 className="text-sm font-semibold text-foreground">Visıes salvas</h3>
               </div>
               <Badge color="slate">{savedViews.length}</Badge>
             </div>
@@ -1035,20 +1036,20 @@ export default function TicketList() {
                 return (
                   <div
                     key={view.id}
-                    className={`rounded-xl border px-4 py-3 ${isActive ? 'border-primary/40 bg-primary/10' : 'border-white/10 bg-white/5'}`}
+                    className={`rounded-xl border px-4 py-3 ${isActive ? 'border-primary/40 bg-primary/10' : 'border-border bg-surface-light'}`}
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
-                          <p className="truncate text-sm font-medium text-white">{view.name}</p>
+                          <p className="truncate text-sm font-medium text-foreground">{view.name}</p>
                           <Badge color={view.isShared ? 'accent' : 'slate'}>
                             {view.isShared ? 'Compartilhada' : 'Privada'}
                           </Badge>
                         </div>
-                        <p className="mt-2 text-xs text-slate-400">
+                        <p className="mt-2 text-xs text-muted">
                           {formatSavedViewSummary(view, clientNameMap, stateNameMap)}
                         </p>
-                        <p className="mt-2 text-[11px] text-slate-500">
+                        <p className="mt-2 text-[11px] text-muted">
                           Atualizada em {new Date(view.updatedAt).toLocaleString('pt-BR')}
                         </p>
                       </div>
@@ -1087,15 +1088,15 @@ export default function TicketList() {
         ) : tickets.isError ? (
           <div className="flex flex-col items-center gap-3 py-12">
             <AlertTriangle className="h-8 w-8 text-danger" />
-            <p className="text-sm text-slate-400">Erro ao carregar chamados</p>
+            <p className="text-sm text-muted">Erro ao carregar chamados</p>
             <Button size="sm" variant="ghost" onClick={() => tickets.refetch()}>
               Tentar novamente
             </Button>
           </div>
         ) : visibleTickets.length === 0 ? (
           <div className="py-12 text-center">
-            <TicketIcon className="mx-auto mb-3 h-10 w-10 text-slate-600" />
-            <p className="text-slate-400">Nenhum chamado encontrado</p>
+            <TicketIcon className="mx-auto mb-3 h-10 w-10 text-muted" />
+            <p className="text-muted">Nenhum chamado encontrado</p>
           </div>
         ) : (
           <>
@@ -1119,40 +1120,40 @@ export default function TicketList() {
       {ticketContextMenu && (
         <div
           ref={contextMenuRef}
-          className="absolute z-[80] w-64 overflow-hidden rounded-xl border border-white/10 bg-slate-900/95 p-1 shadow-2xl backdrop-blur"
+          className="absolute z-[80] w-64 overflow-hidden rounded-xl border border-border bg-surface/95 p-1 shadow-2xl backdrop-blur"
           style={{ top: ticketContextMenu.y, left: ticketContextMenu.x }}
           role="menu"
           aria-label={`Acoes do chamado ${ticketContextMenu.ticket.title}`}
         >
           <button
             type="button"
-            className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm text-slate-200 transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-50"
             onClick={() => void handleContextMenuFollow()}
             disabled={addTicketWatcher.isPending || !currentUserId}
             role="menuitem"
           >
             <span>Acompanhar</span>
-            <span className="text-xs text-slate-500">watcher</span>
+            <span className="text-xs text-muted">watcher</span>
           </button>
           <button
             type="button"
-            className="mt-1 flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm text-slate-200 transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+            className="mt-1 flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-50"
             onClick={() => void handleContextMenuTakeOwnership()}
             disabled={updateTicket.isPending || !currentUserId}
             role="menuitem"
           >
             <span>Assumir</span>
-            <span className="text-xs text-slate-500">atribuicao rapida</span>
+            <span className="text-xs text-muted">atribuicao rapida</span>
           </button>
           <button
             type="button"
-            className="mt-1 flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm text-slate-200 transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+            className="mt-1 flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-50"
             onClick={handleContextMenuOpenAssign}
             disabled={updateTicket.isPending || iamUsersQuery.isLoading || (iamUsersQuery.data?.length ?? 0) === 0}
             role="menuitem"
           >
             <span>Transferir / Atribuir</span>
-            <span className="text-xs text-slate-500">selecionar usuario</span>
+            <span className="text-xs text-muted">selecionar usuario</span>
           </button>
         </div>
       )}
@@ -1161,13 +1162,13 @@ export default function TicketList() {
 
       <Modal open={assignModalOpen} onClose={closeAssignModal} title="Transferir / Atribuir chamado">
         <div className="space-y-4">
-          <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
-            <p className="text-[11px] uppercase tracking-wide text-slate-500">Chamado selecionado</p>
-            <p className="mt-1 truncate text-sm text-slate-200">{assignTargetTicket?.title ?? '-'}</p>
+          <div className="rounded-xl border border-border bg-surface-light px-4 py-3">
+            <p className="text-[11px] uppercase tracking-wide text-muted">Chamado selecionado</p>
+            <p className="mt-1 truncate text-sm text-foreground">{assignTargetTicket?.title ?? '-'}</p>
           </div>
 
           <Select
-            label="Novo respons√°vel"
+            label="Novo respons·vel"
             options={assignUserOptions}
             value={assignTargetUserId}
             onChange={(event) => setAssignTargetUserId(event.target.value)}
@@ -1208,7 +1209,7 @@ export default function TicketList() {
             }
             placeholder="Fila do suporte"
           />
-          <label className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-300">
+          <label className="flex items-center gap-3 rounded-xl border border-border bg-surface-light px-4 py-3 text-sm text-muted-foreground">
             <input
               type="checkbox"
               checked={savedViewForm.isShared}
@@ -1218,12 +1219,12 @@ export default function TicketList() {
                   isShared: event.target.checked,
                 }))
               }
-              className="h-4 w-4 rounded border-white/20 bg-transparent"
+              className="h-4 w-4 rounded border-border-strong bg-transparent"
             />
             <span>Compartilhar com outros usuarios</span>
           </label>
-          <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-400">
-            <div className="mb-2 flex items-center gap-2 text-slate-300">
+          <div className="rounded-xl border border-border bg-surface-light px-4 py-3 text-sm text-muted">
+            <div className="mb-2 flex items-center gap-2 text-muted-foreground">
               <BarChart3 className="h-4 w-4" />
               <span className="font-medium">Resumo dos filtros atuais</span>
             </div>
@@ -1402,11 +1403,11 @@ function CreateTicketModal({ open, onClose }: { open: boolean; onClose: () => vo
           <Select label="Departamento" options={deptOpts} value={selectedDept} onChange={(event) => handleDeptChange(event.target.value)} disabled={!selectedClient} />
           <Select label="Perfil de Workflow" options={profileOpts} value={form.workflowProfileId ?? ''} onChange={(event) => set('workflowProfileId', event.target.value || null)} disabled={!selectedDept} />
         </div>
-        <Input label="T√≠tulo *" value={form.title} onChange={(event) => set('title', event.target.value)} placeholder="Min. 3 caracteres" />
+        <Input label="TÌtulo *" value={form.title} onChange={(event) => set('title', event.target.value)} placeholder="Min. 3 caracteres" />
         <div>
-          <label className="mb-1 block text-sm font-medium text-slate-300">Descri√ß√£o *</label>
+          <label className="mb-1 block text-sm font-medium text-muted-foreground">DescriÁ„o *</label>
           <textarea
-            className="w-full resize-none rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder-slate-500 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            className="w-full resize-none rounded-lg border border-border bg-surface-light px-3 py-2 text-sm text-foreground placeholder-muted focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
             rows={4}
             placeholder="Descreva o chamado (min. 3 caracteres)"
             value={form.description}
@@ -1416,8 +1417,8 @@ function CreateTicketModal({ open, onClose }: { open: boolean; onClose: () => vo
 
         {/* Dynamic custom fields from department schema */}
         {schemaFields.length > 0 && (
-          <div className="rounded-lg border border-white/10 bg-white/5 p-4">
-            <p className="text-xs font-medium text-slate-400 mb-3">
+          <div className="rounded-lg border border-border bg-surface-light p-4">
+            <p className="text-xs font-medium text-muted mb-3">
               Campos do Departamento
             </p>
             <div className="space-y-3">
@@ -1470,7 +1471,7 @@ function TicketSchemaFieldInput({
           options={[
             { value: '', label: 'Selecione...' },
             { value: 'true', label: 'Sim' },
-            { value: 'false', label: 'N√£o' },
+            { value: 'false', label: 'N„o' },
           ]}
           onChange={(e) => onChange(e.target.value)}
         />
@@ -1493,7 +1494,7 @@ function TicketSchemaFieldInput({
           label={label}
           rows={2}
           value={value}
-          hint={field.options.length > 0 ? `Op√ß√µes: ${field.options.join(', ')}` : 'Valores separados por v√≠rgula'}
+          hint={field.options.length > 0 ? `OpÁıes: ${field.options.join(', ')}` : 'Valores separados por vÌrgula'}
           onChange={(e) => onChange(e.target.value)}
         />
       );

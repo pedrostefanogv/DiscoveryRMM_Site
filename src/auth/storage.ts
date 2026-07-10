@@ -11,13 +11,24 @@ export const emptyAuthSession: AuthSessionState = {
   loginResponse: null,
 };
 
+/**
+ * Retorna o storage utilizado para sessão de autenticação.
+ * sessionStorage é preferido sobre localStorage pois tokens JWT são sensíveis
+ * e sessionStorage é limpo quando a aba/janela é fechada, reduzindo exposição a XSS.
+ */
+function getAuthStorage(): Storage {
+  return typeof window !== "undefined"
+    ? window.sessionStorage
+    : ({} as Storage);
+}
+
 export function loadAuthSession(): AuthSessionState {
   if (typeof window === "undefined") {
     return emptyAuthSession;
   }
 
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
+    const raw = getAuthStorage().getItem(STORAGE_KEY);
     if (!raw) {
       return emptyAuthSession;
     }
@@ -44,12 +55,13 @@ export function saveAuthSession(state: AuthSessionState) {
   const shouldPersist =
     !!state.refreshToken || !!state.accessToken || !!state.temporaryMfaToken;
 
+  const storage = getAuthStorage();
   if (!shouldPersist) {
-    window.localStorage.removeItem(STORAGE_KEY);
+    storage.removeItem(STORAGE_KEY);
     return;
   }
 
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  storage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
 
 export function clearAuthSession() {
@@ -57,5 +69,5 @@ export function clearAuthSession() {
     return;
   }
 
-  window.localStorage.removeItem(STORAGE_KEY);
+  getAuthStorage().removeItem(STORAGE_KEY);
 }

@@ -26,13 +26,16 @@ function normalizeEffective(payload: unknown): EffectiveConfiguration {
     return { values: {}, origins: {} };
   }
 
+  // BUG-08: Valida explicitamente que candidateValues é um objeto plano antes de usá-lo.
+  // Se candidateValues for null, array, ou não-objeto, usamos {} como fallback seguro.
   const candidateValues =
-    payload.values ?? payload.configuration ?? payload.effective ?? payload;
+    payload.values ?? payload.configuration ?? payload.effective;
   const candidateOrigins = payload.origins ?? payload.source ?? {};
 
-  const values = isRecord(candidateValues)
-    ? (candidateValues as ConfigurationMap)
-    : {};
+  const values =
+    isRecord(candidateValues) && !Array.isArray(candidateValues)
+      ? (candidateValues as ConfigurationMap)
+      : {};
 
   const origins = isRecord(candidateOrigins)
     ? (candidateOrigins as Record<string, ConfigurationOrigin>)
@@ -93,7 +96,11 @@ export const configurationApi = {
       errors: string[];
       latencyMs: number;
     }>(`${BASE}/server/object-storage/test`),
-  testNatsServer: (payload: { url: string; user?: string; password?: string }) =>
+  testNatsServer: (payload: {
+    url: string;
+    user?: string;
+    password?: string;
+  }) =>
     api.post<{ ok: boolean; errors?: string[]; latencyMs?: number }>(
       `${BASE}/server/nats/test`,
       payload,
@@ -142,13 +149,23 @@ export const configurationApi = {
 
   // ── Novos endpoints (Fases 1-4) ──
   listOpenRouterModels: (params?: { modality?: string; refresh?: boolean }) =>
-    api.get<Record<string, unknown>>(`${BASE}/ai/openrouter/models`, params as Record<string, unknown>),
+    api.get<Record<string, unknown>>(
+      `${BASE}/ai/openrouter/models`,
+      params as Record<string, unknown>,
+    ),
 
-  validateApiKey: (data: { apiKey: string; provider?: string; baseUrl?: string }) =>
-    api.post<Record<string, unknown>>(`${BASE}/ai/validate-key`, data),
+  validateApiKey: (data: {
+    apiKey: string;
+    provider?: string;
+    baseUrl?: string;
+  }) => api.post<Record<string, unknown>>(`${BASE}/ai/validate-key`, data),
 
-  rerankDocuments: (data: { query: string; documents: string[]; model?: string; topN?: number }) =>
-    api.post<Record<string, unknown>>(`${BASE}/ai/rerank`, data),
+  rerankDocuments: (data: {
+    query: string;
+    documents: string[];
+    model?: string;
+    topN?: number;
+  }) => api.post<Record<string, unknown>>(`${BASE}/ai/rerank`, data),
 
   getRecommendedModels: () =>
     api.get<Record<string, unknown>>(`${BASE}/ai/recommended-models`),
@@ -217,7 +234,12 @@ export function parseTicketAttachmentSettings(
   return {
     enabled: true,
     maxFileSizeBytes: 10485760, // 10 MB
-    allowedContentTypes: ["image/jpeg", "image/png", "image/webp", "application/pdf"],
+    allowedContentTypes: [
+      "image/jpeg",
+      "image/png",
+      "image/webp",
+      "application/pdf",
+    ],
     presignedUploadUrlTtlMinutes: 15,
   };
 }

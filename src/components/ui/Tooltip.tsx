@@ -14,6 +14,7 @@ export function Tooltip({ children, content, position = 'top', delay = 300, clas
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const show = () => {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
     timeoutRef.current = setTimeout(() => setVisible(true), delay);
   };
 
@@ -34,16 +35,16 @@ export function Tooltip({ children, content, position = 'top', delay = 300, clas
   };
 
   const arrowClasses = {
-    top: 'top-full left-1/2 -translate-x-1/2 border-t-slate-800 border-x-transparent border-b-transparent border-4',
-    bottom: 'bottom-full left-1/2 -translate-x-1/2 border-b-slate-800 border-x-transparent border-t-transparent border-4',
-    left: 'left-full top-1/2 -translate-y-1/2 border-l-slate-800 border-y-transparent border-r-transparent border-4',
-    right: 'right-full top-1/2 -translate-y-1/2 border-r-slate-800 border-y-transparent border-l-transparent border-4',
+    top: 'top-full left-1/2 -translate-x-1/2 border-t-surface border-x-transparent border-b-transparent border-4',
+    bottom: 'bottom-full left-1/2 -translate-x-1/2 border-b-surface border-x-transparent border-t-transparent border-4',
+    left: 'left-full top-1/2 -translate-y-1/2 border-l-surface border-y-transparent border-r-transparent border-4',
+    right: 'right-full top-1/2 -translate-y-1/2 border-r-surface border-y-transparent border-l-transparent border-4',
   };
 
   const contentClassName =
     variant === 'hover-card'
-      ? 'w-[min(460px,calc(100vw-2rem))] whitespace-normal rounded-xl border border-white/15 bg-slate-950/95 px-4 py-3 text-xs text-slate-200 shadow-2xl backdrop-blur-sm'
-      : 'max-w-xs whitespace-normal rounded-lg border border-white/10 bg-slate-800 px-3 py-1.5 text-xs text-justify text-slate-200 shadow-xl backdrop-blur-sm sm:max-w-[40rem]';
+      ? 'w-[min(460px,calc(100vw-2rem))] whitespace-normal rounded-xl border border-border bg-surface px-4 py-3 text-xs text-foreground shadow-2xl backdrop-blur-sm'
+      : 'max-w-xs whitespace-normal rounded-lg border border-border bg-surface-light px-3 py-1.5 text-xs text-justify text-muted-foreground shadow-xl backdrop-blur-sm sm:max-w-[40rem]';
 
   return (
     <div className={`relative ${className}`} onMouseEnter={show} onMouseLeave={hide} onFocus={show} onBlur={hide}>

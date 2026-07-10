@@ -20,7 +20,7 @@ export function Skeleton({ variant = 'text', width, height, className = '' }: Sk
   return (
     <div
       aria-hidden="true"
-      className={`animate-shimmer bg-white/[0.03] bg-gradient-to-r from-transparent via-white/[0.06] to-transparent bg-[length:400%_100%] ${variantClasses[variant]} ${className}`}
+      className={`animate-shimmer bg-surface-light bg-gradient-to-r from-transparent via-surface-hover to-transparent bg-[length:400%_100%] ${variantClasses[variant]} ${className}`}
       style={{ width, height: height ?? (variant === 'text' ? undefined : '100%') }}
     />
   );
@@ -28,7 +28,7 @@ export function Skeleton({ variant = 'text', width, height, className = '' }: Sk
 
 export function SkeletonCard() {
   return (
-    <div className="surface-card rounded-2xl border border-white/10 bg-surface/90 p-5 space-y-4">
+    <div className="surface-card rounded-2xl border border-border bg-surface/90 p-5 space-y-4">
       <div className="flex items-center gap-3">
         <Skeleton variant="circular" width="40px" height="40px" />
         <div className="flex-1 space-y-2">
@@ -47,8 +47,8 @@ export function SkeletonCard() {
 
 export function SkeletonTable({ rows = 5, cols = 4 }: { rows?: number; cols?: number }) {
   return (
-    <div className="overflow-hidden rounded-xl border border-white/10 bg-surface">
-      <div className="border-b border-white/5 bg-white/[0.02] px-4 py-3">
+    <div className="overflow-hidden rounded-xl border border-border bg-surface">
+      <div className="border-b border-border bg-surface-light px-4 py-3">
         <div className="flex gap-6">
           {Array.from({ length: cols }).map((_, i) => (
             <Skeleton key={i} width={`${100 / cols}%`} />
@@ -56,7 +56,7 @@ export function SkeletonTable({ rows = 5, cols = 4 }: { rows?: number; cols?: nu
         </div>
       </div>
       {Array.from({ length: rows }).map((_, i) => (
-        <div key={i} className="flex gap-6 border-b border-white/5 px-4 py-3 last:border-b-0">
+        <div key={i} className="flex gap-6 border-b border-border px-4 py-3 last:border-b-0">
           {Array.from({ length: cols }).map((_, j) => (
             <Skeleton key={j} width={`${100 / cols}%`} />
           ))}
@@ -68,7 +68,7 @@ export function SkeletonTable({ rows = 5, cols = 4 }: { rows?: number; cols?: nu
 
 export function SkeletonStatCard() {
   return (
-    <div className="flex items-center gap-4 rounded-xl border border-white/5 bg-surface p-5">
+    <div className="flex items-center gap-4 rounded-xl border border-border bg-surface p-5">
       <Skeleton variant="circular" width="48px" height="48px" />
       <div className="flex-1 space-y-2">
         <Skeleton width="50%" />
@@ -114,7 +114,7 @@ export function SkeletonList({ title, count = 3 }: SkeletonListProps) {
       {title}
       <div className="space-y-3">
         {Array.from({ length: count }).map((_, i) => (
-          <div key={i} className="flex items-center gap-3 rounded-xl border border-white/5 bg-surface p-4">
+          <div key={i} className="flex items-center gap-3 rounded-xl border border-border bg-surface p-4">
             <Skeleton variant="circular" width="36px" height="36px" />
             <div className="flex-1 space-y-2">
               <Skeleton width="45%" />

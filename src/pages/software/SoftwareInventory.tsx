@@ -148,8 +148,8 @@ export default function SoftwareInventory() {
       header: "Aplicativo",
       render: (item) => (
         <div>
-          <p className="font-medium text-white">{item.name}</p>
-          <p className="text-xs text-slate-500">{item.publisher ?? "Sem fabricante"}</p>
+          <p className="font-medium text-foreground">{item.name}</p>
+          <p className="text-xs text-muted">{item.publisher ?? "Sem fabricante"}</p>
         </div>
       ),
     },
@@ -180,7 +180,7 @@ export default function SoftwareInventory() {
             e.stopPropagation();
             void handleOpenSoftwareDetails(item);
           }}
-          className="rounded-md border border-white/10 p-1.5 text-slate-300 transition-colors hover:border-white/30 hover:bg-white/5 hover:text-white"
+          className="rounded-md border border-border p-1.5 text-muted-foreground transition-colors hover:border-border-strong hover:bg-surface-light hover:text-foreground"
           aria-label={`Ver detalhes de ${item.name}`}
           title="Ver detalhes de instalação"
         >
@@ -354,8 +354,8 @@ export default function SoftwareInventory() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-white">Inventário de Softwares</h1>
-        <p className="text-sm text-slate-400">Consulta global, por cliente e por site</p>
+        <h1 className="text-2xl font-bold text-foreground">Inventário de Softwares</h1>
+        <p className="text-sm text-muted">Consulta global, por cliente e por site</p>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -401,7 +401,7 @@ export default function SoftwareInventory() {
 
       <Card padding={false}>
         {!canQuery ? (
-          <div className="flex h-40 items-center justify-center text-sm text-slate-500">
+          <div className="flex h-40 items-center justify-center text-sm text-muted">
             {scope === "client"
               ? "Selecione um cliente para consultar o inventário"
               : "Selecione cliente e site para consultar o inventário"}
@@ -421,7 +421,7 @@ export default function SoftwareInventory() {
             />
 
             <div className="mt-4 flex items-center justify-between gap-3">
-              <p className="text-xs text-slate-500">
+              <p className="text-xs text-muted">
                 Página {currentPage} de {totalPages} | {items.length} item(ns) nesta página
                 {searchApplied ? ` | filtro: "${searchApplied}"` : ""}
               </p>
@@ -431,7 +431,7 @@ export default function SoftwareInventory() {
                   Voltar
                 </Button>
 
-                <span className="px-2 text-xs tabular-nums text-slate-400">
+                <span className="px-2 text-xs tabular-nums text-muted">
                   {currentPage} / {totalPages}
                 </span>
 
@@ -453,7 +453,7 @@ export default function SoftwareInventory() {
         {detailsLoading ? (
           <div className="space-y-3 py-4">
             <Loading message="Carregando instalações por cliente/site/agente..." />
-            <p className="text-center text-xs text-slate-500">
+            <p className="text-center text-xs text-muted">
               Agentes verificados: {detailsScannedAgents}
             </p>
           </div>
@@ -469,28 +469,28 @@ export default function SoftwareInventory() {
               <Badge color="slate">Versões: {detailsUniqueVersions}</Badge>
             </div>
 
-            <div className="max-h-[420px] overflow-y-auto rounded-lg border border-white/10">
+            <div className="max-h-[420px] overflow-y-auto rounded-lg border border-border">
               <table className="w-full text-left text-sm">
                 <thead>
-                  <tr className="border-b border-white/10 bg-white/5">
-                    <th className="px-3 py-2 text-xs uppercase tracking-wide text-slate-400">Cliente</th>
-                    <th className="px-3 py-2 text-xs uppercase tracking-wide text-slate-400">Site</th>
-                    <th className="px-3 py-2 text-xs uppercase tracking-wide text-slate-400">Agent</th>
-                    <th className="px-3 py-2 text-xs uppercase tracking-wide text-slate-400">Versão</th>
-                    <th className="px-3 py-2 text-xs uppercase tracking-wide text-slate-400">Fonte</th>
-                    <th className="px-3 py-2 text-xs uppercase tracking-wide text-slate-400">Última coleta</th>
-                    <th className="px-3 py-2 text-xs uppercase tracking-wide text-slate-400"></th>
+                  <tr className="border-b border-border bg-surface-light">
+                    <th className="px-3 py-2 text-xs uppercase tracking-wide text-muted">Cliente</th>
+                    <th className="px-3 py-2 text-xs uppercase tracking-wide text-muted">Site</th>
+                    <th className="px-3 py-2 text-xs uppercase tracking-wide text-muted">Agent</th>
+                    <th className="px-3 py-2 text-xs uppercase tracking-wide text-muted">Versão</th>
+                    <th className="px-3 py-2 text-xs uppercase tracking-wide text-muted">Fonte</th>
+                    <th className="px-3 py-2 text-xs uppercase tracking-wide text-muted">Última coleta</th>
+                    <th className="px-3 py-2 text-xs uppercase tracking-wide text-muted"></th>
                   </tr>
                 </thead>
                 <tbody>
                   {detailsRows.map((row) => (
-                    <tr key={`${row.agentId}-${row.version ?? "sem-versao"}-${row.collectedAt}`} className="border-b border-white/5">
-                      <td className="px-3 py-2 text-slate-200">{row.clientName}</td>
-                      <td className="px-3 py-2 text-slate-300">{row.siteName}</td>
-                      <td className="px-3 py-2 text-slate-300">{row.agentName}</td>
-                      <td className="px-3 py-2 font-mono text-slate-300">{row.version ?? "—"}</td>
-                      <td className="px-3 py-2 text-slate-300">{row.source ?? "—"}</td>
-                      <td className="px-3 py-2 text-slate-400">{formatDate(row.lastSeenAt ?? row.collectedAt)}</td>
+                    <tr key={`${row.agentId}-${row.version ?? "sem-versao"}-${row.collectedAt}`} className="border-b border-border">
+                      <td className="px-3 py-2 text-foreground">{row.clientName}</td>
+                      <td className="px-3 py-2 text-muted-foreground">{row.siteName}</td>
+                      <td className="px-3 py-2 text-muted-foreground">{row.agentName}</td>
+                      <td className="px-3 py-2 font-mono text-muted-foreground">{row.version ?? "—"}</td>
+                      <td className="px-3 py-2 text-muted-foreground">{row.source ?? "—"}</td>
+                      <td className="px-3 py-2 text-muted">{formatDate(row.lastSeenAt ?? row.collectedAt)}</td>
                       <td className="px-3 py-2 text-right">
                         <Button
                           size="sm"
@@ -507,7 +507,7 @@ export default function SoftwareInventory() {
               </table>
 
               {detailsRows.length === 0 && (
-                <div className="flex h-28 items-center justify-center text-sm text-slate-500">
+                <div className="flex h-28 items-center justify-center text-sm text-muted">
                   Nenhuma instalação encontrada para este software no escopo atual.
                 </div>
               )}

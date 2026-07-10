@@ -132,7 +132,7 @@ export function CatalogTab() {
     <div className="space-y-4">
       <Modal open={syncConfirmOpen} onClose={() => setSyncConfirmOpen(false)} title="Confirmar sincronização Chocolatey" maxWidth="max-w-xl">
         <div className="space-y-4">
-          <div className="rounded-lg border border-white/10 bg-white/5 p-4 text-sm text-slate-200">
+          <div className="rounded-lg border border-border bg-surface-light p-4 text-sm text-foreground">
             <p>Esta operação consulta a API do Chocolatey. Continue apenas se você tem autorização para acessar e sincronizar dados do catálogo.</p>
             <p className="mt-2">
               Ao confirmar, voce declara que leu e concorda com os Termos de Uso:{' '}
@@ -141,7 +141,7 @@ export function CatalogTab() {
               </a>
             </p>
           </div>
-          <div className="rounded-lg border border-white/10 bg-white/5 p-4 text-sm text-slate-200">
+          <div className="rounded-lg border border-border bg-surface-light p-4 text-sm text-foreground">
             <p>Se não for possível sincronizar todos os dados agora, ao repetir a sincronização o processo continua de onde parou.</p>
             <p className="mt-2">Para evitar incompatibilidades posteriores, confirme conscientemente antes de iniciar o processo.</p>
           </div>
@@ -161,13 +161,13 @@ export function CatalogTab() {
           </div>
           <div className="flex-1 min-w-48">
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-slate-300">Busca</label>
+              <label className="mb-1.5 block text-sm font-medium text-muted-foreground">Busca</label>
               <div className="relative">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
-                <input className="w-full rounded-lg border border-white/10 bg-white/5 py-2 pl-9 pr-8 text-sm text-slate-200 placeholder-slate-500 outline-none transition-colors focus:border-primary/50 focus:ring-1 focus:ring-primary/30"
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+                <input className="w-full rounded-lg border border-border bg-surface-light py-2 pl-9 pr-8 text-sm text-foreground placeholder-muted outline-none transition-colors focus:border-primary/50 focus:ring-1 focus:ring-primary/30"
                   placeholder="Nome ou ID do pacote..." value={searchInput} onChange={(e) => setSearchInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSearchEnter()} />
                 {searchInput && (
-                  <button type="button" onClick={resetFilters} aria-label="Limpar busca" title="Limpar busca" className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-slate-500 hover:text-white">
+                  <button type="button" onClick={resetFilters} aria-label="Limpar busca" title="Limpar busca" className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted hover:text-foreground">
                     <X className="h-3.5 w-3.5" />
                   </button>
                 )}
@@ -179,13 +179,13 @@ export function CatalogTab() {
               onChange={(e) => { setLimit(Number(e.target.value)); resetFilters(); }} />
           </div>
           <div className="flex items-end pb-0.5">
-            <div className="flex overflow-hidden rounded-lg border border-white/10">
+            <div className="flex overflow-hidden rounded-lg border border-border">
               <button type="button" onClick={() => setViewMode('list')} title="Visualização em lista"
-                className={`flex items-center px-3 py-2 transition-colors ${viewMode === 'list' ? 'bg-primary/20 text-primary' : 'text-slate-400 hover:bg-white/5 hover:text-white'}`}>
+                className={`flex items-center px-3 py-2 transition-colors ${viewMode === 'list' ? 'bg-primary/20 text-primary' : 'text-muted hover:bg-surface-light hover:text-foreground'}`}>
                 <LayoutList className="h-4 w-4" />
               </button>
               <button type="button" onClick={() => setViewMode('card')} title="Visualização em cards"
-                className={`flex items-center px-3 py-2 transition-colors ${viewMode === 'card' ? 'bg-primary/20 text-primary' : 'text-slate-400 hover:bg-white/5 hover:text-white'}`}>
+                className={`flex items-center px-3 py-2 transition-colors ${viewMode === 'card' ? 'bg-primary/20 text-primary' : 'text-muted hover:bg-surface-light hover:text-foreground'}`}>
                 <LayoutGrid className="h-4 w-4" />
               </button>
             </div>
@@ -199,9 +199,9 @@ export function CatalogTab() {
         </div>
         {(isChocolatey || isWinget) && (
           <div className="mt-3 space-y-2">
-            <p className="text-xs text-slate-500">A sincronização do catálogo {syncLabel} e idempotente e pode levar alguns minutos.</p>
+            <p className="text-xs text-muted">A sincronização do catálogo {syncLabel} e idempotente e pode levar alguns minutos.</p>
             {lastSyncInfo && (
-              <div className={`rounded-lg border px-3 py-2 text-xs ${lastSyncInfo.success ? 'border-success/30 bg-success/10 text-slate-300' : 'border-danger/30 bg-danger/10 text-slate-200'}`}>
+              <div className={`rounded-lg border px-3 py-2 text-xs ${lastSyncInfo.success ? 'border-success/30 bg-success/10 text-muted-foreground' : 'border-danger/30 bg-danger/10 text-foreground'}`}>
                 <p>Ultima sincronização: {formatDate(lastSyncInfo.syncedAt ?? null)}</p>
                 <p>Pacotes atualizados: {lastSyncInfo.packagesUpserted}{lastSyncInfo.pagesProcessed !== undefined ? ` - Paginas: ${lastSyncInfo.pagesProcessed}` : ''}{lastSyncInfo.duration ? ` - Duração: ${lastSyncInfo.duration}` : ''}</p>
                 {!lastSyncInfo.success && lastSyncInfo.error && <p className="text-danger">Erro: {lastSyncInfo.error}</p>}
@@ -212,13 +212,13 @@ export function CatalogTab() {
       </Card>
 
       <Card padding={false}>
-        <div className="border-b border-white/5 px-5 py-3 flex items-center justify-between">
-          <span className="text-sm font-medium text-white">
+        <div className="border-b border-border px-5 py-3 flex items-center justify-between">
+          <span className="text-sm font-medium text-foreground">
             {query.isFetching && !query.data ? 'Carregando...' : query.data ? query.data.items.length > 0 ? `${query.data.items.length} pacote(s) na página ${page}${searchApplied ? ` — "${searchApplied}"` : ''}` : 'Nenhum pacote encontrado' : 'Catálogo'}
           </span>
           <div className="flex items-center gap-1">
             <Button variant="ghost" size="sm" onClick={handlePrev} disabled={page <= 1}><ChevronLeft className="h-4 w-4" /></Button>
-            <span className="min-w-[3rem] text-center text-xs text-slate-400">Pág. {page}</span>
+            <span className="min-w-[3rem] text-center text-xs text-muted">Pág. {page}</span>
             <Button variant="ghost" size="sm" onClick={handleNext} disabled={!hasMore || query.isFetching}><ChevronRight className="h-4 w-4" /></Button>
           </div>
         </div>
@@ -227,7 +227,7 @@ export function CatalogTab() {
         {query.isError && <ErrorDisplay message="Erro ao carregar catálogo." onRetry={() => query.refetch()} />}
 
         {query.data && query.data.items.length === 0 && (
-          <div className="flex flex-col items-center py-16 text-slate-500">
+          <div className="flex flex-col items-center py-16 text-muted">
             <Package className="mb-3 h-10 w-10 opacity-30" />
             <p className="text-sm">{(isChocolatey || isWinget) && isCatalogEmpty ? `Catálogo ${syncLabel} ainda não sincronizado.` : 'Nenhum pacote encontrado.'}</p>
             {(isChocolatey || isWinget) && isCatalogEmpty && (
@@ -240,21 +240,21 @@ export function CatalogTab() {
         {query.data && query.data.items.length > 0 && viewMode === 'list' && (
           <div className={`divide-y divide-white/5 transition-opacity ${query.isFetching ? 'opacity-60' : ''}`}>
             {query.data.items.map((pkg) => (
-              <div key={pkg.packageId} className="flex items-center gap-4 px-5 py-3 hover:bg-white/5 transition-colors">
+              <div key={pkg.packageId} className="flex items-center gap-4 px-5 py-3 hover:bg-surface-light transition-colors">
                 <PackageIcon url={pkg.icon} homepage={pkg.homepage}
                   downloadUrl={pkg.installerUrlsByArch ? Object.values(pkg.installerUrlsByArch).find((value) => Boolean(value)) ?? null : null}
                   name={pkg.name} />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-sm font-medium text-white"><Highlight text={pkg.name ?? pkg.packageId} query={searchApplied} /></span>
+                    <span className="text-sm font-medium text-foreground"><Highlight text={pkg.name ?? pkg.packageId} query={searchApplied} /></span>
                     {pkg.version && <Badge color="slate">{pkg.version}</Badge>}
                     {pkg.architecture && <Badge color="accent">{pkg.architecture}</Badge>}
                     {pkg.category && <Badge color="primary">{pkg.category}</Badge>}
                   </div>
-                  <div className="mt-0.5 flex items-center gap-3 text-xs text-slate-400">
+                  <div className="mt-0.5 flex items-center gap-3 text-xs text-muted">
                     <span className="font-mono"><Highlight text={pkg.packageId} query={searchApplied} /></span>
                     {pkg.publisher && <span><Highlight text={pkg.publisher} query={searchApplied} /></span>}
-                    {pkg.license && <span className="text-slate-600">{pkg.license}</span>}
+                    {pkg.license && <span className="text-muted">{pkg.license}</span>}
                   </div>
                   {pkg.description && <div className="mt-1"><MarkdownDescription content={pkg.description} variant="preview" /></div>}
                 </div>
@@ -270,14 +270,14 @@ export function CatalogTab() {
         {query.data && query.data.items.length > 0 && viewMode === 'card' && (
           <div className={`grid grid-cols-1 gap-3 p-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 transition-opacity ${query.isFetching ? 'opacity-60' : ''}`}>
             {query.data.items.map((pkg) => (
-              <div key={pkg.packageId} className="flex flex-col gap-3 rounded-xl border border-white/10 bg-white/5 p-4 transition-colors hover:bg-white/[0.08]">
+              <div key={pkg.packageId} className="flex flex-col gap-3 rounded-xl border border-border bg-surface-light p-4 transition-colors hover:bg-white/[0.08]">
                 <div className="flex items-start gap-3">
                   <PackageIcon url={pkg.icon} homepage={pkg.homepage}
                     downloadUrl={pkg.installerUrlsByArch ? Object.values(pkg.installerUrlsByArch).find((value) => Boolean(value)) ?? null : null}
                     name={pkg.name} />
                   <div className="min-w-0 flex-1">
-                    <div className="text-sm font-medium text-white line-clamp-2"><Highlight text={pkg.name ?? pkg.packageId} query={searchApplied} /></div>
-                    <div className="mt-0.5 font-mono text-xs text-slate-500"><Highlight text={pkg.packageId} query={searchApplied} /></div>
+                    <div className="text-sm font-medium text-foreground line-clamp-2"><Highlight text={pkg.name ?? pkg.packageId} query={searchApplied} /></div>
+                    <div className="mt-0.5 font-mono text-xs text-muted"><Highlight text={pkg.packageId} query={searchApplied} /></div>
                   </div>
                 </div>
                 {pkg.description && <div className="flex-1"><MarkdownDescription content={pkg.description} variant="preview" /></div>}

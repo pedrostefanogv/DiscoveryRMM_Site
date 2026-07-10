@@ -26,7 +26,7 @@ export function AgentHeartbeatCard({ metrics, showEmpty = false }: AgentHeartbea
     return (
       <Card>
         <CardHeader title="Métricas Ao Vivo" subtitle="Heartbeat do agente" />
-        <p className="py-4 text-center text-sm text-slate-500">
+        <p className="py-4 text-center text-sm text-muted">
           Nenhuma métrica de heartbeat recebida ainda.
         </p>
       </Card>
@@ -34,14 +34,14 @@ export function AgentHeartbeatCard({ metrics, showEmpty = false }: AgentHeartbea
   }
 
   return (
-    <div className="rounded-xl border border-white/5 bg-gradient-to-br from-emerald-500/5 via-slate-900/30 to-slate-900/20 p-5">
+    <div className="rounded-xl border border-border bg-gradient-to-br from-emerald-500/5 via-slate-900/30 to-slate-900/20 p-5">
       <div className="mb-4 flex items-center gap-2">
         <span className="rounded-md bg-emerald-400/15 p-1.5 text-emerald-300">
           <Activity className="h-4 w-4" />
         </span>
         <div>
-          <p className="text-sm font-medium text-white">Métricas Ao Vivo</p>
-          <p className="text-xs text-slate-400">
+          <p className="text-sm font-medium text-foreground">Métricas Ao Vivo</p>
+          <p className="text-xs text-muted">
             Última atualização
             {metrics.timestampUtc && (
               <span className="ml-1">
@@ -91,31 +91,31 @@ export function AgentHeartbeatCard({ metrics, showEmpty = false }: AgentHeartbea
       </div>
 
       {/* Extra metrics row */}
-      <div className="mt-4 grid grid-cols-3 gap-3 border-t border-white/5 pt-3 text-xs">
+      <div className="mt-4 grid grid-cols-3 gap-3 border-t border-border pt-3 text-xs">
         <div className="text-center">
-          <p className="flex items-center justify-center gap-1 text-slate-500">
+          <p className="flex items-center justify-center gap-1 text-muted">
             <Radio className="h-3 w-3" />
             P2P
           </p>
-          <p className="mt-0.5 font-semibold tabular-nums text-white">
+          <p className="mt-0.5 font-semibold tabular-nums text-foreground">
             {metrics.p2pPeers ?? '—'}
           </p>
         </div>
         <div className="text-center">
-          <p className="flex items-center justify-center gap-1 text-slate-500">
+          <p className="flex items-center justify-center gap-1 text-muted">
             <Clock className="h-3 w-3" />
             Uptime
           </p>
-          <p className="mt-0.5 font-semibold tabular-nums text-white">
+          <p className="mt-0.5 font-semibold tabular-nums text-foreground">
             {formatUptime(metrics.uptimeSeconds)}
           </p>
         </div>
         <div className="text-center">
-          <p className="flex items-center justify-center gap-1 text-slate-500">
+          <p className="flex items-center justify-center gap-1 text-muted">
             <Activity className="h-3 w-3" />
             Processos
           </p>
-          <p className="mt-0.5 font-semibold tabular-nums text-white">
+          <p className="mt-0.5 font-semibold tabular-nums text-foreground">
             {metrics.processCount ?? '—'}
           </p>
         </div>

@@ -142,7 +142,7 @@ export function TransferBeforeDeleteModal({
                   ? `Este site possui ${agentIds.length} agente(s)`
                   : `Este cliente possui ${agentIds.length} agente(s)`}
               </p>
-              <p className="mt-1 text-sm text-slate-300">
+              <p className="mt-1 text-sm text-muted-foreground">
                 {entityType === "site"
                   ? `O site "${entityName}" será excluído após a transferência dos agentes.`
                   : `O cliente "${entityName}" será excluído após a transferência dos agentes.`}
@@ -152,11 +152,11 @@ export function TransferBeforeDeleteModal({
         </div>
 
         {/* Resumo dos agentes */}
-        <div className="rounded-lg border border-white/10 bg-white/5 p-3">
-          <div className="flex items-center gap-2 text-sm text-slate-200">
-            <Monitor className="h-4 w-4 text-slate-400" />
+        <div className="rounded-lg border border-border bg-surface-light p-3">
+          <div className="flex items-center gap-2 text-sm text-foreground">
+            <Monitor className="h-4 w-4 text-muted" />
             <span className="font-medium">{agentIds.length} agente(s)</span>
-            <span className="text-slate-500">serão transferidos</span>
+            <span className="text-muted">serão transferidos</span>
           </div>
         </div>
 
@@ -174,9 +174,9 @@ export function TransferBeforeDeleteModal({
         )}
 
         {entityType === "client" && selectedClient && (
-          <div className="flex items-center gap-2 rounded-lg bg-white/5 px-3 py-2 text-sm text-slate-300">
-            <Building2 className="h-4 w-4 text-slate-400" />
-            Cliente de destino: <span className="font-medium text-white">{selectedClient.name}</span>
+          <div className="flex items-center gap-2 rounded-lg bg-surface-light px-3 py-2 text-sm text-muted-foreground">
+            <Building2 className="h-4 w-4 text-muted" />
+            Cliente de destino: <span className="font-medium text-foreground">{selectedClient.name}</span>
           </div>
         )}
 

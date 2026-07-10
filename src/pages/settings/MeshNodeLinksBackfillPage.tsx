@@ -89,8 +89,8 @@ export default function MeshNodeLinksBackfillPage() {
         header: "Agent",
         render: (item) => (
           <div>
-            <p className="font-medium text-white">{item.displayName ?? item.hostname}</p>
-            <p className="text-xs text-slate-500">{item.hostname}</p>
+            <p className="font-medium text-foreground">{item.displayName ?? item.hostname}</p>
+            <p className="text-xs text-muted">{item.hostname}</p>
           </div>
         ),
       },
@@ -107,14 +107,14 @@ export default function MeshNodeLinksBackfillPage() {
         key: "currentNodeId",
         header: "Node atual",
         render: (item) => (
-          <span className="font-mono text-xs text-slate-300">{toText(item.currentNodeId, "Sem vínculo")}</span>
+          <span className="font-mono text-xs text-muted-foreground">{toText(item.currentNodeId, "Sem vínculo")}</span>
         ),
       },
       {
         key: "suggestedNodeId",
         header: "Node sugerido",
         render: (item) => (
-          <span className="font-mono text-xs text-slate-300">{toText(item.suggestedNodeId, "Sem sugestão")}</span>
+          <span className="font-mono text-xs text-muted-foreground">{toText(item.suggestedNodeId, "Sem sugestão")}</span>
         ),
       },
       {
@@ -123,15 +123,15 @@ export default function MeshNodeLinksBackfillPage() {
         render: (item) => {
           const candidates = item.candidateNodeIds ?? [];
           if (candidates.length === 0) {
-            return <span className="text-xs text-slate-500">Nenhum</span>;
+            return <span className="text-xs text-muted">Nenhum</span>;
           }
           return (
             <div className="space-y-1">
               {candidates.slice(0, 2).map((candidate) => (
-                <p key={candidate} className="font-mono text-xs text-slate-300">{candidate}</p>
+                <p key={candidate} className="font-mono text-xs text-muted-foreground">{candidate}</p>
               ))}
               {candidates.length > 2 && (
-                <p className="text-xs text-slate-500">+{candidates.length - 2} adicionais</p>
+                <p className="text-xs text-muted">+{candidates.length - 2} adicionais</p>
               )}
             </div>
           );
@@ -196,8 +196,8 @@ export default function MeshNodeLinksBackfillPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-white">Node Links Backfill</h1>
-        <p className="text-sm text-slate-400">
+        <h1 className="text-2xl font-bold text-foreground">Node Links Backfill</h1>
+        <p className="text-sm text-muted">
           Reconcilia o vínculo meshcentral_node_id de agents existentes. Trate status ambiguous como ação manual.
         </p>
       </div>
@@ -206,7 +206,7 @@ export default function MeshNodeLinksBackfillPage() {
         <CardHeader
           title="Escopo"
           subtitle="Filtre por cliente/site e execute dry-run antes de aplicar."
-          action={<Link2 className="h-4 w-4 text-slate-400" />}
+          action={<Link2 className="h-4 w-4 text-muted" />}
         />
 
         <div className="grid gap-3 px-5 pb-4 md:grid-cols-2">

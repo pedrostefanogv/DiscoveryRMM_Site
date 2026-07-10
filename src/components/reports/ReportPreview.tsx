@@ -87,7 +87,7 @@ export function ReportPreview({
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-medium text-slate-300">
+        <h3 className="text-sm font-medium text-muted-foreground">
           Prévia dos Dados (10 registros)
         </h3>
         <Button
@@ -114,7 +114,7 @@ export function ReportPreview({
         </Card>
       )}
 
-      <p className="text-xs text-slate-500">
+      <p className="text-xs text-muted">
         Esta e uma previa real gerada pela API com os filtros atuais.
       </p>
     </div>

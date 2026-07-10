@@ -170,7 +170,7 @@ export function ApprovalFormModal({
         />
 
         {isPackageIdLocked && (
-          <p className="-mt-2 text-xs text-slate-500">
+          <p className="-mt-2 text-xs text-muted">
             Este ID foi preenchido a partir do pacote selecionado no catálogo.
           </p>
         )}
@@ -183,10 +183,10 @@ export function ApprovalFormModal({
             onChange={(e) => setAction(Number(e.target.value) as AppApprovalActionType)}
           />
           <div className="flex items-end pb-1">
-            <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-300">
+            <label className="flex cursor-pointer items-center gap-2 text-sm text-muted-foreground">
               <input
                 type="checkbox"
-                className="h-4 w-4 rounded border-white/10 bg-white/5 accent-primary"
+                className="h-4 w-4 rounded border-border bg-surface-light accent-primary"
                 checked={autoUpdate}
                 onChange={(e) => setAutoUpdate(e.target.checked)}
               />

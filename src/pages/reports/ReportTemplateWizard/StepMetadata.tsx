@@ -51,10 +51,10 @@ export function StepMetadata({ wizard, onBack, onCreate, isCreating }: Props) {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-semibold text-white">
+        <h2 className="text-lg font-semibold text-foreground">
           Metadados e aparência
         </h2>
-        <p className="text-sm text-slate-400">
+        <p className="text-sm text-muted">
           Dê um nome ao template, escolha o formato padrão e ajuste a identidade visual do relatório.
         </p>
       </div>
@@ -63,13 +63,13 @@ export function StepMetadata({ wizard, onBack, onCreate, isCreating }: Props) {
         {/* Left: Form */}
         <div className="space-y-6">
           {/* Identification */}
-          <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-            <h3 className="mb-3 text-sm font-semibold text-slate-200">
+          <div className="rounded-xl border border-border bg-surface-light p-4">
+            <h3 className="mb-3 text-sm font-semibold text-foreground">
               Identificação
             </h3>
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
-                <label className="mb-1 block text-xs font-medium text-slate-400">
+                <label className="mb-1 block text-xs font-medium text-muted">
                   Nome do template *
                 </label>
                 <input
@@ -77,11 +77,11 @@ export function StepMetadata({ wizard, onBack, onCreate, isCreating }: Props) {
                   value={state.name}
                   onChange={(e) => setField("name", e.target.value)}
                   placeholder="Ex: Inventário de Dispositivos"
-                  className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-100 placeholder-slate-500"
+                  className="w-full rounded-lg border border-border bg-surface-light px-3 py-2 text-sm text-foreground placeholder-muted"
                 />
               </div>
               <div>
-                <label className="mb-1 block text-xs font-medium text-slate-400">
+                <label className="mb-1 block text-xs font-medium text-muted">
                   Usuário de auditoria
                 </label>
                 <input
@@ -89,12 +89,12 @@ export function StepMetadata({ wizard, onBack, onCreate, isCreating }: Props) {
                   value={state.createdBy}
                   onChange={(e) => setField("createdBy", e.target.value)}
                   placeholder="usuario@empresa.local"
-                  className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-100 placeholder-slate-500"
+                  className="w-full rounded-lg border border-border bg-surface-light px-3 py-2 text-sm text-foreground placeholder-muted"
                 />
               </div>
             </div>
             <div className="mt-3">
-              <label className="mb-1 block text-xs font-medium text-slate-400">
+              <label className="mb-1 block text-xs font-medium text-muted">
                 Descrição
               </label>
               <textarea
@@ -102,71 +102,71 @@ export function StepMetadata({ wizard, onBack, onCreate, isCreating }: Props) {
                 onChange={(e) => setField("description", e.target.value)}
                 rows={2}
                 placeholder="Descrição opcional do template"
-                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-100 placeholder-slate-500"
+                className="w-full rounded-lg border border-border bg-surface-light px-3 py-2 text-sm text-foreground placeholder-muted"
               />
             </div>
           </div>
 
           {/* Format & Scope */}
-          <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-            <h3 className="mb-3 text-sm font-semibold text-slate-200">
+          <div className="rounded-xl border border-border bg-surface-light p-4">
+            <h3 className="mb-3 text-sm font-semibold text-foreground">
               Formato e Escopo
             </h3>
             <div className="grid gap-4 sm:grid-cols-3">
               <div>
-                <label className="mb-1 block text-xs font-medium text-slate-400">
+                <label className="mb-1 block text-xs font-medium text-muted">
                   Formato padrão
                 </label>
                 <select
                   value={state.defaultFormat}
                   onChange={(e) => setField("defaultFormat", e.target.value as any)}
-                  className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white"
+                  className="w-full rounded-lg border border-border bg-surface-light px-3 py-2 text-sm text-foreground"
                 >
-                  <option value="xlsx" className="bg-slate-900">XLSX</option>
-                  <option value="csv" className="bg-slate-900">CSV</option>
-                  <option value="pdf" className="bg-slate-900">PDF</option>
-                  <option value="markdown" className="bg-slate-900">Markdown</option>
+                  <option value="xlsx" className="bg-surface">XLSX</option>
+                  <option value="csv" className="bg-surface">CSV</option>
+                  <option value="pdf" className="bg-surface">PDF</option>
+                  <option value="markdown" className="bg-surface">Markdown</option>
                 </select>
               </div>
               <div>
-                <label className="mb-1 block text-xs font-medium text-slate-400">
+                <label className="mb-1 block text-xs font-medium text-muted">
                   Escopo
                 </label>
                 <select
                   value={state.scopeType}
                   onChange={(e) => setField("scopeType", e.target.value as any)}
-                  className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white"
+                  className="w-full rounded-lg border border-border bg-surface-light px-3 py-2 text-sm text-foreground"
                 >
-                  <option value="global" className="bg-slate-900">Global</option>
-                  <option value="client" className="bg-slate-900">Cliente</option>
-                  <option value="site" className="bg-slate-900">Site</option>
-                  <option value="agent" className="bg-slate-900">Agente</option>
+                  <option value="global" className="bg-surface">Global</option>
+                  <option value="client" className="bg-surface">Cliente</option>
+                  <option value="site" className="bg-surface">Site</option>
+                  <option value="agent" className="bg-surface">Agente</option>
                 </select>
               </div>
               <div>
-                <label className="mb-1 block text-xs font-medium text-slate-400">
+                <label className="mb-1 block text-xs font-medium text-muted">
                   Orientação
                 </label>
                 <select
                   value={state.orientation}
                   onChange={(e) => setField("orientation", e.target.value as any)}
-                  className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white"
+                  className="w-full rounded-lg border border-border bg-surface-light px-3 py-2 text-sm text-foreground"
                 >
-                  <option value="portrait" className="bg-slate-900">Retrato</option>
-                  <option value="landscape" className="bg-slate-900">Paisagem</option>
+                  <option value="portrait" className="bg-surface">Retrato</option>
+                  <option value="landscape" className="bg-surface">Paisagem</option>
                 </select>
               </div>
             </div>
           </div>
 
           {/* Style */}
-          <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-            <h3 className="mb-3 text-sm font-semibold text-slate-200">
+          <div className="rounded-xl border border-border bg-surface-light p-4">
+            <h3 className="mb-3 text-sm font-semibold text-foreground">
               🎨 Aparência
             </h3>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               <div>
-                <label className="mb-1 block text-xs font-medium text-slate-400">
+                <label className="mb-1 block text-xs font-medium text-muted">
                   Cor primária
                 </label>
                 <input
@@ -178,14 +178,14 @@ export function StepMetadata({ wizard, onBack, onCreate, isCreating }: Props) {
                       primaryColor: e.target.value,
                     })
                   }
-                  className="h-10 w-full rounded-lg border border-white/10"
+                  className="h-10 w-full rounded-lg border border-border"
                 />
-                <p className="mt-1 text-[11px] leading-4 text-slate-500">
+                <p className="mt-1 text-[11px] leading-4 text-muted">
                   Usada no título principal, linhas de destaque e separadores do relatório.
                 </p>
               </div>
               <div>
-                <label className="mb-1 block text-xs font-medium text-slate-400">
+                <label className="mb-1 block text-xs font-medium text-muted">
                   Fundo cabeçalho
                 </label>
                 <input
@@ -197,14 +197,14 @@ export function StepMetadata({ wizard, onBack, onCreate, isCreating }: Props) {
                       headerBackgroundColor: e.target.value,
                     })
                   }
-                  className="h-10 w-full rounded-lg border border-white/10"
+                  className="h-10 w-full rounded-lg border border-border"
                 />
-                <p className="mt-1 text-[11px] leading-4 text-slate-500">
+                <p className="mt-1 text-[11px] leading-4 text-muted">
                   Cor de fundo das células de cabeçalho das tabelas.
                 </p>
               </div>
               <div>
-                <label className="mb-1 block text-xs font-medium text-slate-400">
+                <label className="mb-1 block text-xs font-medium text-muted">
                   Texto cabeçalho
                 </label>
                 <input
@@ -216,14 +216,14 @@ export function StepMetadata({ wizard, onBack, onCreate, isCreating }: Props) {
                       headerTextColor: e.target.value,
                     })
                   }
-                  className="h-10 w-full rounded-lg border border-white/10"
+                  className="h-10 w-full rounded-lg border border-border"
                 />
-                <p className="mt-1 text-[11px] leading-4 text-slate-500">
+                <p className="mt-1 text-[11px] leading-4 text-muted">
                   Cor do texto nos cabeçalhos. Prefira alto contraste com o fundo do cabeçalho.
                 </p>
               </div>
               <div>
-                <label className="mb-1 block text-xs font-medium text-slate-400">
+                <label className="mb-1 block text-xs font-medium text-muted">
                   Cor alternada
                 </label>
                 <input
@@ -235,14 +235,14 @@ export function StepMetadata({ wizard, onBack, onCreate, isCreating }: Props) {
                       alternateRowColor: e.target.value,
                     })
                   }
-                  className="h-10 w-full rounded-lg border border-white/10"
+                  className="h-10 w-full rounded-lg border border-border"
                 />
-                <p className="mt-1 text-[11px] leading-4 text-slate-500">
+                <p className="mt-1 text-[11px] leading-4 text-muted">
                   Aplicada nas linhas alternadas quando o modo zebrado estiver ativo.
                 </p>
               </div>
               <div>
-                <label className="mb-1 block text-xs font-medium text-slate-400">
+                <label className="mb-1 block text-xs font-medium text-muted">
                   Fonte
                 </label>
                 <select
@@ -253,20 +253,20 @@ export function StepMetadata({ wizard, onBack, onCreate, isCreating }: Props) {
                       fontFamily: e.target.value,
                     })
                   }
-                  className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white"
+                  className="w-full rounded-lg border border-border bg-surface-light px-3 py-2 text-sm text-foreground"
                 >
                   {fontOptions.map((option) => (
-                    <option key={option.value} value={option.value} className="bg-slate-900">
+                    <option key={option.value} value={option.value} className="bg-surface">
                       {option.label}
                     </option>
                   ))}
                 </select>
-                <p className="mt-1 text-[11px] leading-4 text-slate-500">
+                <p className="mt-1 text-[11px] leading-4 text-muted">
                   Selecione uma fonte validada para evitar erros de preenchimento e renderização.
                 </p>
               </div>
               <div>
-                <label className="mb-1 block text-xs font-medium text-slate-400">
+                <label className="mb-1 block text-xs font-medium text-muted">
                   Logo URL
                 </label>
                 <input
@@ -280,14 +280,14 @@ export function StepMetadata({ wizard, onBack, onCreate, isCreating }: Props) {
                     }
                   }}
                   placeholder="https://..."
-                  className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-100 placeholder-slate-500"
+                  className="w-full rounded-lg border border-border bg-surface-light px-3 py-2 text-sm text-foreground placeholder-muted"
                 />
-                <p className="mt-1 text-[11px] leading-4 text-slate-500">
+                <p className="mt-1 text-[11px] leading-4 text-muted">
                   Endereço da imagem exibida no cabeçalho do relatório.
                 </p>
                 {logoPreviewUrl ? (
-                  <div className="mt-2 rounded-lg border border-white/10 bg-black/20 p-2">
-                    <p className="mb-1 text-[10px] uppercase tracking-wide text-slate-500">
+                  <div className="mt-2 rounded-lg border border-border bg-black/20 p-2">
+                    <p className="mb-1 text-[10px] uppercase tracking-wide text-muted">
                       Pré-visualização do logo
                     </p>
                     <img
@@ -298,7 +298,7 @@ export function StepMetadata({ wizard, onBack, onCreate, isCreating }: Props) {
                   </div>
                 ) : null}
 
-                <label className="mt-3 mb-1 block text-xs font-medium text-slate-400">
+                <label className="mt-3 mb-1 block text-xs font-medium text-muted">
                   URL da marca d'água (opcional)
                 </label>
                 <input
@@ -312,15 +312,15 @@ export function StepMetadata({ wizard, onBack, onCreate, isCreating }: Props) {
                     }
                   }}
                   placeholder="https://cdn.exemplo.com/watermark.png"
-                  className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-100 placeholder-slate-500"
+                  className="w-full rounded-lg border border-border bg-surface-light px-3 py-2 text-sm text-foreground placeholder-muted"
                 />
-                <p className="mt-1 text-[11px] leading-4 text-slate-500">
+                <p className="mt-1 text-[11px] leading-4 text-muted">
                   Se informado, esta URL será usada na marca d'água sem alterar o logo do cabeçalho.
                 </p>
 
                 {watermarkLogoPreviewUrl ? (
-                  <div className="mt-2 rounded-lg border border-white/10 bg-black/20 p-2">
-                    <p className="mb-1 text-[10px] uppercase tracking-wide text-slate-500">
+                  <div className="mt-2 rounded-lg border border-border bg-black/20 p-2">
+                    <p className="mb-1 text-[10px] uppercase tracking-wide text-muted">
                       Pré-visualização da marca d'água
                     </p>
                     <img
@@ -331,7 +331,7 @@ export function StepMetadata({ wizard, onBack, onCreate, isCreating }: Props) {
                   </div>
                 ) : null}
 
-                <label className="mt-3 flex items-center gap-2 text-xs text-slate-300">
+                <label className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
                   <input
                     type="checkbox"
                     checked={state.watermarkEnabled}
@@ -342,29 +342,29 @@ export function StepMetadata({ wizard, onBack, onCreate, isCreating }: Props) {
                 </label>
 
                 {!canEnableWatermark ? (
-                  <p className="mt-1 text-[11px] leading-4 text-slate-500">
+                  <p className="mt-1 text-[11px] leading-4 text-muted">
                     Informe uma Logo URL ou URL da marca d'água para habilitar esta opção.
                   </p>
                 ) : null}
 
                 {watermarkPreviewEnabled ? (
-                  <div className="mt-2 grid gap-3 rounded-lg border border-white/10 bg-black/20 p-2 sm:grid-cols-2">
+                  <div className="mt-2 grid gap-3 rounded-lg border border-border bg-black/20 p-2 sm:grid-cols-2">
                     <div>
-                      <label className="mb-1 block text-[11px] font-medium text-slate-400">
+                      <label className="mb-1 block text-[11px] font-medium text-muted">
                         Ajuste da marca d'água
                       </label>
                       <select
                         value={state.watermarkFit}
                         onChange={(e) => setField("watermarkFit", e.target.value as "contain" | "cover")}
-                        className="w-full rounded border border-white/10 bg-white/5 px-2 py-1 text-xs text-slate-200"
+                        className="w-full rounded border border-border bg-surface-light px-2 py-1 text-xs text-foreground"
                       >
-                        <option value="contain" className="bg-slate-900">Centralizado</option>
-                        <option value="cover" className="bg-slate-900">Ajustar para toda a página</option>
+                        <option value="contain" className="bg-surface">Centralizado</option>
+                        <option value="cover" className="bg-surface">Ajustar para toda a página</option>
                       </select>
                     </div>
 
                     <div>
-                      <label className="mb-1 block text-[11px] font-medium text-slate-400">
+                      <label className="mb-1 block text-[11px] font-medium text-muted">
                         Opacidade (%)
                       </label>
                       <input
@@ -373,14 +373,14 @@ export function StepMetadata({ wizard, onBack, onCreate, isCreating }: Props) {
                         max={40}
                         value={state.watermarkOpacityPercent}
                         onChange={(e) => setField("watermarkOpacityPercent", e.target.value)}
-                        className="w-full rounded border border-white/10 bg-white/5 px-2 py-1 text-xs text-slate-200"
+                        className="w-full rounded border border-border bg-surface-light px-2 py-1 text-xs text-foreground"
                       />
                     </div>
                   </div>
                 ) : null}
               </div>
             </div>
-            <label className="mt-3 flex items-center gap-2 text-sm text-slate-400">
+            <label className="mt-3 flex items-center gap-2 text-sm text-muted">
               <input
                 type="checkbox"
                 checked={state.style.showRowStripes ?? true}

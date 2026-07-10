@@ -174,15 +174,15 @@ export default function SiteDetail() {
           </Button>
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-2xl font-bold text-white">{currentSite.name}</h1>
+              <h1 className="text-2xl font-bold text-foreground">{currentSite.name}</h1>
               <Badge color={currentSite.isActive ? 'success' : 'slate'}>
                 {currentSite.isActive ? 'Ativo' : 'Inativo'}
               </Badge>
             </div>
-            <p className="text-sm text-slate-400">Cliente: {currentClient.name}</p>
+            <p className="text-sm text-muted">Cliente: {currentClient.name}</p>
           </div>
         </div>
-        <div className="inline-flex w-fit rounded-xl border border-white/10 bg-white/5 p-1">
+        <div className="inline-flex w-fit rounded-xl border border-border bg-surface-light p-1">
           {WINDOWS.map((item) => {
             const active = item.value === window;
             return (
@@ -193,8 +193,8 @@ export default function SiteDetail() {
                 className={[
                   'rounded-lg px-3 py-1.5 text-sm transition-colors',
                   active
-                    ? 'bg-primary text-white shadow-sm'
-                    : 'text-slate-400 hover:text-white',
+                    ? 'bg-primary text-foreground shadow-sm'
+                    : 'text-muted hover:text-foreground',
                 ].join(' ')}
               >
                 {item.label}
@@ -211,14 +211,14 @@ export default function SiteDetail() {
         <Card>
           <CardHeader title="Dashboard do Site" subtitle={`Agregado da janela ${window}`} />
           <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
-            <div className="rounded-lg bg-white/5 px-3 py-2">
-              <div className="flex items-center gap-1.5 text-slate-500">
+            <div className="rounded-lg bg-surface-light px-3 py-2">
+              <div className="flex items-center gap-1.5 text-muted">
                 <Monitor className="h-3.5 w-3.5" />
                 <span>Agentes</span>
               </div>
-              <p className="mt-1 text-base font-semibold text-white">
+              <p className="mt-1 text-base font-semibold text-foreground">
                 {dashboard.data.agents.online}
-                <span className="text-xs font-normal text-slate-400">
+                <span className="text-xs font-normal text-muted">
                   /{dashboard.data.agents.total} online
                 </span>
               </p>
@@ -229,14 +229,14 @@ export default function SiteDetail() {
                 </p>
               )}
             </div>
-            <div className="rounded-lg bg-white/5 px-3 py-2">
-              <div className="flex items-center gap-1.5 text-slate-500">
+            <div className="rounded-lg bg-surface-light px-3 py-2">
+              <div className="flex items-center gap-1.5 text-muted">
                 <TicketIcon className="h-3.5 w-3.5" />
                 <span>Chamados</span>
               </div>
-              <p className="mt-1 text-base font-semibold text-white">
+              <p className="mt-1 text-base font-semibold text-foreground">
                 {dashboard.data.tickets.open}
-                <span className="text-xs font-normal text-slate-400"> abertos</span>
+                <span className="text-xs font-normal text-muted"> abertos</span>
               </p>
               {dashboard.data.tickets.slaBreachedOpen > 0 && (
                 <p className="mt-0.5 flex items-center gap-1 text-xs text-danger">
@@ -245,8 +245,8 @@ export default function SiteDetail() {
                 </p>
               )}
             </div>
-            <div className="rounded-lg bg-white/5 px-3 py-2">
-              <div className="flex items-center gap-1.5 text-slate-500">
+            <div className="rounded-lg bg-surface-light px-3 py-2">
+              <div className="flex items-center gap-1.5 text-muted">
                 <Activity className="h-3.5 w-3.5" />
                 <span>Comandos</span>
               </div>
@@ -256,19 +256,19 @@ export default function SiteDetail() {
                     ? 'text-success'
                     : dashboard.data.commands.total > 0
                       ? 'text-danger'
-                      : 'text-white'
+                      : 'text-foreground'
                 }`}
               >
                 {dashboard.data.commands.total > 0
                   ? `${dashboard.data.commands.successRate.toFixed(1)}% sucesso`
                   : '—'}
               </p>
-              <p className="mt-0.5 text-xs text-slate-400">
+              <p className="mt-0.5 text-xs text-muted">
                 {dashboard.data.commands.total} total
               </p>
             </div>
-            <div className="rounded-lg bg-white/5 px-3 py-2">
-              <div className="flex items-center gap-1.5 text-slate-500">
+            <div className="rounded-lg bg-surface-light px-3 py-2">
+              <div className="flex items-center gap-1.5 text-muted">
                 {dashboard.data.automation.failed > 0 ? (
                   <XCircle className="h-3.5 w-3.5 text-danger" />
                 ) : (
@@ -283,14 +283,14 @@ export default function SiteDetail() {
                     ? 'text-success'
                     : dashboard.data.automation.total > 0
                       ? 'text-danger'
-                      : 'text-white'
+                      : 'text-foreground'
                 }`}
               >
                 {dashboard.data.automation.total > 0
                   ? `${dashboard.data.automation.successRate.toFixed(1)}% sucesso`
                   : '—'}
               </p>
-              <p className="mt-0.5 text-xs text-slate-400">
+              <p className="mt-0.5 text-xs text-muted">
                 {dashboard.data.automation.total} execuções
               </p>
             </div>
@@ -306,7 +306,7 @@ export default function SiteDetail() {
           tone="primary"
           trend={
             !agents.isLoading && totalAgents > 0 ? (
-              <span className={`text-xs font-medium ${onlineAgents > 0 ? 'text-success' : 'text-slate-500'}`}>
+              <span className={`text-xs font-medium ${onlineAgents > 0 ? 'text-success' : 'text-muted'}`}>
                 {onlineAgents}/{totalAgents} online
               </span>
             ) : undefined
@@ -344,34 +344,34 @@ export default function SiteDetail() {
           <CardHeader title="Informações do Site" />
           <dl className="space-y-3 text-sm">
             <div>
-              <dt className="text-slate-400">Cliente</dt>
-              <dd className="mt-0.5 text-white">{currentClient.name}</dd>
+              <dt className="text-muted">Cliente</dt>
+              <dd className="mt-0.5 text-foreground">{currentClient.name}</dd>
             </div>
             <div>
-              <dt className="text-slate-400">Observações</dt>
-              <dd className="mt-0.5 text-white">{currentSite.notes ?? '—'}</dd>
+              <dt className="text-muted">Observações</dt>
+              <dd className="mt-0.5 text-foreground">{currentSite.notes ?? '—'}</dd>
             </div>
             <div>
-              <dt className="text-slate-400">Criado em</dt>
-              <dd className="mt-0.5 text-white">
+              <dt className="text-muted">Criado em</dt>
+              <dd className="mt-0.5 text-foreground">
                 {new Date(currentSite.createdAt).toLocaleDateString('pt-BR')}
               </dd>
             </div>
             <div>
-              <dt className="text-slate-400">Atualizado em</dt>
-              <dd className="mt-0.5 text-white">
+              <dt className="text-muted">Atualizado em</dt>
+              <dd className="mt-0.5 text-foreground">
                 {new Date(currentSite.updatedAt).toLocaleDateString('pt-BR')}
               </dd>
             </div>
-            <div className="border-t border-white/5 pt-3">
-              <dt className="text-slate-400">Softwares distintos</dt>
-              <dd className="mt-0.5 text-white">
+            <div className="border-t border-border pt-3">
+              <dt className="text-muted">Softwares distintos</dt>
+              <dd className="mt-0.5 text-foreground">
                 {softwareSnapshot.isLoading ? '—' : softwareSnapshot.data?.distinctSoftware ?? 0}
               </dd>
             </div>
             <div>
-              <dt className="text-slate-400">Agentes com inventário</dt>
-              <dd className="mt-0.5 text-white">
+              <dt className="text-muted">Agentes com inventário</dt>
+              <dd className="mt-0.5 text-foreground">
                 {softwareSnapshot.isLoading ? '—' : softwareSnapshot.data?.distinctAgents ?? 0}
               </dd>
             </div>
@@ -402,20 +402,20 @@ export default function SiteDetail() {
                 <div
                   key={ticket.id}
                   onClick={() => navigate(`/tickets/${ticket.id}`)}
-                  className="flex cursor-pointer items-center gap-3 rounded-lg bg-white/5 px-3 py-2 transition-colors hover:bg-white/10"
+                  className="flex cursor-pointer items-center gap-3 rounded-lg bg-surface-light px-3 py-2 transition-colors hover:bg-surface-hover"
                 >
                   <TicketIcon className="h-4 w-4 shrink-0 text-warning" />
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-white">{ticket.title}</p>
-                    <p className="text-xs text-slate-500">{ticket.category ?? 'Sem categoria'}</p>
+                    <p className="truncate text-sm font-medium text-foreground">{ticket.title}</p>
+                    <p className="text-xs text-muted">{ticket.category ?? 'Sem categoria'}</p>
                   </div>
                   <Badge color={priority.color}>{priority.label}</Badge>
                 </div>
               );
             })}
-            {tickets.isLoading && <p className="text-sm text-slate-500">Carregando...</p>}
+            {tickets.isLoading && <p className="text-sm text-muted">Carregando...</p>}
             {totalTickets === 0 && !tickets.isLoading && (
-              <p className="text-sm text-slate-500">Nenhum chamado neste site</p>
+              <p className="text-sm text-muted">Nenhum chamado neste site</p>
             )}
           </div>
         </Card>
@@ -432,14 +432,14 @@ export default function SiteDetail() {
                   <div
                     key={agent.id}
                     onClick={() => navigate(`/agents/${agent.id}`)}
-                    className="flex cursor-pointer items-center gap-3 rounded-lg bg-white/5 px-3 py-2 transition-colors hover:bg-white/10"
+                    className="flex cursor-pointer items-center gap-3 rounded-lg bg-surface-light px-3 py-2 transition-colors hover:bg-surface-hover"
                   >
                     <Monitor className="h-4 w-4 shrink-0 text-primary" />
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-white">
+                      <p className="truncate text-sm font-medium text-foreground">
                         {agent.displayName ?? agent.hostname}
                       </p>
-                      <p className="text-xs text-slate-500">{agent.operatingSystem ?? 'N/A'}</p>
+                      <p className="text-xs text-muted">{agent.operatingSystem ?? 'N/A'}</p>
                     </div>
                     <span
                       className={`h-2 w-2 shrink-0 rounded-full ${online ? 'bg-success' : 'bg-slate-600'}`}
@@ -447,9 +447,9 @@ export default function SiteDetail() {
                   </div>
                 );
               })}
-              {agents.isLoading && <p className="text-sm text-slate-500">Carregando...</p>}
+              {agents.isLoading && <p className="text-sm text-muted">Carregando...</p>}
               {totalAgents === 0 && !agents.isLoading && (
-                <p className="text-sm text-slate-500">Nenhum agente neste site</p>
+                <p className="text-sm text-muted">Nenhum agente neste site</p>
               )}
             </div>
           </Card>
@@ -472,17 +472,17 @@ export default function SiteDetail() {
                   color: 'slate' as const,
                 };
                 return (
-                  <div key={log.id} className="flex items-start gap-2 rounded-lg bg-white/5 px-3 py-2">
+                  <div key={log.id} className="flex items-start gap-2 rounded-lg bg-surface-light px-3 py-2">
                     <Badge color={level.color} className="mt-0.5 shrink-0">
                       {level.label}
                     </Badge>
-                    <p className="min-w-0 flex-1 truncate text-sm text-slate-300">{log.message}</p>
+                    <p className="min-w-0 flex-1 truncate text-sm text-muted-foreground">{log.message}</p>
                   </div>
                 );
               })}
-              {logs.isLoading && <p className="text-sm text-slate-500">Carregando...</p>}
+              {logs.isLoading && <p className="text-sm text-muted">Carregando...</p>}
               {(logs.data?.length ?? 0) === 0 && !logs.isLoading && (
-                <p className="text-sm text-slate-500">Nenhum log registrado neste site</p>
+                <p className="text-sm text-muted">Nenhum log registrado neste site</p>
               )}
             </div>
           </Card>

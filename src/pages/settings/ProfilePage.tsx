@@ -284,52 +284,52 @@ export default function ProfilePage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-white">Meu perfil</h1>
-        <p className="text-sm text-slate-400">
+        <h1 className="text-2xl font-bold text-foreground">Meu perfil</h1>
+        <p className="text-sm text-muted">
           Atualize seus dados de acesso e acompanhe o status de segurança da sua conta.
         </p>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">
-        <Card className="border-white/10 bg-slate-900/40">
+        <Card className="border-border bg-surface/40">
           <div className="flex items-start gap-3">
             <div className="rounded-xl bg-primary/15 p-3 text-primary">
               <UserCircle2 className="h-5 w-5" />
             </div>
             <div>
-              <p className="text-sm text-slate-400">Conta</p>
-              <p className="mt-1 text-lg font-semibold text-white">{profile.login}</p>
-              <p className="mt-1 text-xs text-slate-500">{profile.email}</p>
+              <p className="text-sm text-muted">Conta</p>
+              <p className="mt-1 text-lg font-semibold text-foreground">{profile.login}</p>
+              <p className="mt-1 text-xs text-muted">{profile.email}</p>
             </div>
           </div>
         </Card>
 
-        <Card className="border-white/10 bg-slate-900/40">
+        <Card className="border-border bg-surface/40">
           <div className="flex items-start gap-3">
             <div className="rounded-xl bg-accent/15 p-3 text-accent">
               <ShieldCheck className="h-5 w-5" />
             </div>
             <div>
-              <p className="text-sm text-slate-400">Sessão</p>
-              <p className="mt-1 text-lg font-semibold text-white">
+              <p className="text-sm text-muted">Sessão</p>
+              <p className="mt-1 text-lg font-semibold text-foreground">
                 {session.stage === "authenticated" ? "Autenticada" : "Sem sessão ativa"}
               </p>
-              <p className="mt-1 text-xs text-slate-500">
+              <p className="mt-1 text-xs text-muted">
                 {expiresInText ? `Expira em ${expiresInText}` : "Sem expiração local registrada"}
               </p>
             </div>
           </div>
         </Card>
 
-        <Card className="border-white/10 bg-slate-900/40">
+        <Card className="border-border bg-surface/40">
           <div className="flex items-start gap-3">
             <div className="rounded-xl bg-success/15 p-3 text-success">
               <KeyRound className="h-5 w-5" />
             </div>
             <div>
-              <p className="text-sm text-slate-400">MFA</p>
-              <p className="mt-1 text-lg font-semibold text-white">{security.keys.length} chave(s)</p>
-              <p className="mt-1 text-xs text-slate-500">
+              <p className="text-sm text-muted">MFA</p>
+              <p className="mt-1 text-lg font-semibold text-foreground">{security.keys.length} chave(s)</p>
+              <p className="mt-1 text-xs text-muted">
                 {security.mfaConfigured ? "Configurado" : "Ainda não configurado"}
               </p>
             </div>
@@ -337,7 +337,7 @@ export default function ProfilePage() {
         </Card>
       </div>
 
-      <Card className="border-white/10 bg-slate-900/40">
+      <Card className="border-border bg-surface/40">
         <CardHeader title="Dados da conta" subtitle="Informações básicas do seu usuário" />
         <div className="grid gap-4 md:grid-cols-2">
           <Input label="Login" value={profile.login} disabled />
@@ -369,7 +369,7 @@ export default function ProfilePage() {
         </div>
       </Card>
 
-      <Card className="border-white/10 bg-slate-900/40">
+      <Card className="border-border bg-surface/40">
         <CardHeader
           title="Segurança"
           subtitle="Regras e chaves vinculadas ao seu usuário"
@@ -426,9 +426,9 @@ export default function ProfilePage() {
         </div>
 
         {activeRegisterMethod === "Totp" && totpSetup && (
-          <div className="mb-4 space-y-3 rounded-lg border border-white/10 bg-white/5 p-3">
-            <p className="text-xs text-slate-300">{totpSetup.message}</p>
-            <p className="break-all text-xs text-slate-400">{totpSetup.qrCodeUri}</p>
+          <div className="mb-4 space-y-3 rounded-lg border border-border bg-surface-light p-3">
+            <p className="text-xs text-muted-foreground">{totpSetup.message}</p>
+            <p className="break-all text-xs text-muted">{totpSetup.qrCodeUri}</p>
             <div className="grid gap-3 md:grid-cols-2">
               <Input
                 label="Nome da chave OTP"
@@ -453,34 +453,34 @@ export default function ProfilePage() {
           {security.keys.map((key) => (
             <div
               key={key.id ?? `${key.name}-${key.createdAt}`}
-              className="rounded-lg border border-white/10 bg-white/5 px-3 py-3"
+              className="rounded-lg border border-border bg-surface-light px-3 py-3"
             >
               <div className="flex items-center justify-between gap-3">
-                <p className="font-medium text-white">{key.name}</p>
+                <p className="font-medium text-foreground">{key.name}</p>
                 <Badge color={key.keyType === 0 ? "accent" : "warning"}>
                   {keyTypeLabel(key.keyType)}
                 </Badge>
               </div>
-              <p className="mt-1 text-xs text-slate-400">
+              <p className="mt-1 text-xs text-muted">
                 Criada em: {formatDate(key.createdAt)}
               </p>
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-muted">
                 Último uso: {formatDate(key.lastUsedAt)}
               </p>
             </div>
           ))}
 
           {security.keys.length === 0 && (
-            <div className="rounded-lg border border-dashed border-white/15 p-4 text-sm text-slate-500">
+            <div className="rounded-lg border border-dashed border-border-strong p-4 text-sm text-muted">
               Nenhuma chave de autenticação cadastrada para este usuário.
             </div>
           )}
         </div>
       </Card>
 
-      <Card className="border-white/10 bg-slate-900/40">
+      <Card className="border-border bg-surface/40">
         <CardHeader title="Alterar senha" subtitle="Use sua senha atual para definir uma nova senha" />
-        <div className="mb-4 rounded-xl border border-white/10 bg-white/5 p-3 text-xs text-slate-400">
+        <div className="mb-4 rounded-xl border border-border bg-surface-light p-3 text-xs text-muted">
           <div className="flex items-start gap-2">
             <LockKeyhole className="mt-0.5 h-4 w-4 text-primary" />
             Para manter sua conta protegida, escolha uma senha forte com letras, números e caracteres especiais.

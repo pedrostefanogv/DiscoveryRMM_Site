@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { memo, type ReactNode } from 'react';
 
 type MetricBarColor = 'success' | 'warning' | 'danger' | 'primary' | 'accent';
 
@@ -44,7 +44,7 @@ function formatMetricValue(value: number | undefined | null): string {
   return String(Math.round(value));
 }
 
-export function MetricBar({
+export const MetricBar = memo(function MetricBar({
   label,
   value,
   suffix = '%',
@@ -63,8 +63,8 @@ export function MetricBar({
   if (compact) {
     return (
       <div className={`flex items-center gap-2 ${className}`} title={`${label}: ${displayValue}${suffix}`}>
-        {icon && <span className="shrink-0 text-slate-500">{icon}</span>}
-        <span className="shrink-0 text-xs text-slate-400 min-w-[2rem]">{label}</span>
+        {icon && <span className="shrink-0 text-muted">{icon}</span>}
+        <span className="shrink-0 text-xs text-muted min-w-[2rem]">{label}</span>
         <div className={`h-1.5 flex-1 overflow-hidden rounded-full ${styles.bg}`}>
           <div
             className={`h-full rounded-full ${styles.bar} transition-all duration-500`}
@@ -84,9 +84,9 @@ export function MetricBar({
     <div className={`space-y-1 ${className}`}>
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1.5">
-          {icon && <span className="text-slate-400">{icon}</span>}
-          <span className="text-xs text-slate-400">{label}</span>
-          {subtitle && <span className="text-[10px] text-slate-600">{subtitle}</span>}
+          {icon && <span className="text-muted">{icon}</span>}
+          <span className="text-xs text-muted">{label}</span>
+          {subtitle && <span className="text-[10px] text-muted">{subtitle}</span>}
         </div>
         {!hideValue && (
           <span className={`text-xs font-semibold tabular-nums ${styles.text}`}>
@@ -102,4 +102,4 @@ export function MetricBar({
       </div>
     </div>
   );
-}
+});

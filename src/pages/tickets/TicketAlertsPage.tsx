@@ -1,4 +1,4 @@
-ï»¿import { useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { AlertTriangle, Bell, Pencil, Plus, Power, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import {
@@ -57,7 +57,7 @@ const DEFAULT_FORM: RuleFormState = {
 
 const ALERT_TYPE_OPTIONS = [
   { value: String(PsadtAlertType.Toast), label: 'Toast (fecha sozinho)' },
-  { value: String(PsadtAlertType.Modal), label: 'Modal (exige interaÃ§Ã£o)' },
+  { value: String(PsadtAlertType.Modal), label: 'Modal (exige interação)' },
 ];
 
 const TIMEOUT_OPTIONS = [
@@ -207,7 +207,7 @@ export default function TicketAlertsPage() {
     }
 
     if (!form.title.trim()) {
-      toast.error('Informe um tÃ­tulo para a regra.');
+      toast.error('Informe um título para a regra.');
       return;
     }
 
@@ -233,7 +233,7 @@ export default function TicketAlertsPage() {
       const message =
         error instanceof Error
           ? error.message
-          : 'NÃ£o foi possÃ­vel salvar a regra.';
+          : 'Não foi possível salvar a regra.';
       toast.error(message);
     }
   }
@@ -256,7 +256,7 @@ export default function TicketAlertsPage() {
       const message =
         error instanceof Error
           ? error.message
-          : 'NÃ£o foi possÃ­vel alterar o status da regra.';
+          : 'Não foi possível alterar o status da regra.';
       toast.error(message);
     }
   }
@@ -276,7 +276,7 @@ export default function TicketAlertsPage() {
       const message =
         error instanceof Error
           ? error.message
-          : 'NÃ£o foi possÃ­vel remover a regra.';
+          : 'Não foi possível remover a regra.';
       toast.error(message);
     }
   }
@@ -285,8 +285,8 @@ export default function TicketAlertsPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white">Regras de alerta de tickets</h1>
-          <p className="text-sm text-slate-400">
+          <h1 className="text-2xl font-bold text-foreground">Regras de alerta de tickets</h1>
+          <p className="text-sm text-muted">
             Configure alertas PSADT que sao disparados automaticamente quando o ticket entra em um workflow state.
           </p>
         </div>
@@ -300,20 +300,20 @@ export default function TicketAlertsPage() {
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <div className="space-y-1">
-            <p className="text-xs uppercase tracking-wide text-slate-500">Regras</p>
-            <p className="text-2xl font-semibold text-white">{rules.length}</p>
+            <p className="text-xs uppercase tracking-wide text-muted">Regras</p>
+            <p className="text-2xl font-semibold text-foreground">{rules.length}</p>
           </div>
         </Card>
         <Card>
           <div className="space-y-1">
-            <p className="text-xs uppercase tracking-wide text-slate-500">Ativas</p>
-            <p className="text-2xl font-semibold text-white">{enabledCount}</p>
+            <p className="text-xs uppercase tracking-wide text-muted">Ativas</p>
+            <p className="text-2xl font-semibold text-foreground">{enabledCount}</p>
           </div>
         </Card>
         <Card>
           <div className="space-y-1">
-            <p className="text-xs uppercase tracking-wide text-slate-500">States em uso</p>
-            <p className="text-2xl font-semibold text-white">{statesInUse}</p>
+            <p className="text-xs uppercase tracking-wide text-muted">States em uso</p>
+            <p className="text-2xl font-semibold text-foreground">{statesInUse}</p>
           </div>
         </Card>
       </div>
@@ -389,7 +389,7 @@ export default function TicketAlertsPage() {
                 }
                 disabled={Number(form.alertType) === PsadtAlertType.Modal}
               />
-              <label className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-300">
+              <label className="flex items-center gap-3 rounded-xl border border-border bg-surface-light px-4 py-3 text-sm text-muted-foreground">
                 <input
                   type="checkbox"
                   checked={form.isEnabled}
@@ -399,11 +399,11 @@ export default function TicketAlertsPage() {
                       isEnabled: event.target.checked,
                     }))
                   }
-                  className="h-4 w-4 rounded border-white/20 bg-transparent"
+                  className="h-4 w-4 rounded border-border-strong bg-transparent"
                 />
                 <span>
                   Regra habilitada
-                  <span className="mt-0.5 block text-xs text-slate-500">
+                  <span className="mt-0.5 block text-xs text-muted">
                     Quando desabilitada, o estado continua funcionando sem disparar alerta.
                   </span>
                 </span>
@@ -412,7 +412,7 @@ export default function TicketAlertsPage() {
 
             <div className="mt-4 grid gap-4 md:grid-cols-2">
               <Input
-                label="TÃ­tulo"
+                label="Título"
                 value={form.title}
                 onChange={(event) =>
                   setForm((current) => ({
@@ -447,7 +447,7 @@ export default function TicketAlertsPage() {
                   }))
                 }
                 rows={5}
-                placeholder="Seu ticket mudou de estado e requer atenÃ§Ã£o do usuario."
+                placeholder="Seu ticket mudou de estado e requer atenção do usuario."
               />
 
               <TextArea
@@ -468,11 +468,11 @@ export default function TicketAlertsPage() {
             <div className="mt-6 flex flex-wrap gap-3">
               <Button onClick={handleSubmit} loading={isSaving}>
                 <Bell className="h-4 w-4" />
-                {editingRuleId ? 'Salvar alteraÃ§Ãµes' : 'Criar regra'}
+                {editingRuleId ? 'Salvar alterações' : 'Criar regra'}
               </Button>
               {editingRuleId && (
                 <Button variant="ghost" onClick={handleResetForm}>
-                  Cancelar ediÃ§Ã£o
+                  Cancelar edição
                 </Button>
               )}
             </div>
@@ -480,27 +480,27 @@ export default function TicketAlertsPage() {
 
           <Card>
             <CardHeader
-              title="ObservaÃ§Ãµes"
+              title="Observações"
               subtitle="Comportamento do backend para estas regras."
             />
 
-            <div className="space-y-3 text-sm text-slate-300">
-              <div className="flex items-start gap-3 rounded-xl border border-white/10 bg-white/5 p-4">
+            <div className="space-y-3 text-sm text-muted-foreground">
+              <div className="flex items-start gap-3 rounded-xl border border-border bg-surface-light p-4">
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
                 <p>
                   O disparo ocorre automaticamente quando o ticket entra no workflow state configurado.
                 </p>
               </div>
-              <div className="flex items-start gap-3 rounded-xl border border-white/10 bg-white/5 p-4">
+              <div className="flex items-start gap-3 rounded-xl border border-border bg-surface-light p-4">
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
                 <p>
                   Para Toast, o backend aceita timeout de 5, 15 ou 30 segundos. Para Modal, o timeout e ignorado.
                 </p>
               </div>
-              <div className="flex items-start gap-3 rounded-xl border border-white/10 bg-white/5 p-4">
+              <div className="flex items-start gap-3 rounded-xl border border-border bg-surface-light p-4">
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
                 <p>
-                  O escopo preferencial usa o contexto do ticket e faz fallback conforme os dados disponÃ­veis no servidor.
+                  O escopo preferencial usa o contexto do ticket e faz fallback conforme os dados disponíveis no servidor.
                 </p>
               </div>
             </div>
@@ -525,7 +525,7 @@ export default function TicketAlertsPage() {
 
             <div className="space-y-3">
               {filteredRules.length === 0 && (
-                <p className="text-sm text-slate-500">Nenhuma regra encontrada para o filtro atual.</p>
+                <p className="text-sm text-muted">Nenhuma regra encontrada para o filtro atual.</p>
               )}
 
               {filteredRules.map((rule) => {
@@ -534,24 +534,24 @@ export default function TicketAlertsPage() {
                 return (
                   <div
                     key={rule.id}
-                    className="rounded-xl border border-white/10 bg-white/5 p-4"
+                    className="rounded-xl border border-border bg-surface-light p-4"
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
-                          <p className="truncate text-sm font-medium text-white">{rule.title}</p>
+                          <p className="truncate text-sm font-medium text-foreground">{rule.title}</p>
                           <Badge color={rule.isEnabled ? 'success' : 'slate'}>
                             {rule.isEnabled ? 'Ativa' : 'Desativada'}
                           </Badge>
                         </div>
-                        <p className="mt-1 text-xs text-slate-400">
+                        <p className="mt-1 text-xs text-muted">
                           {workflowState?.name ?? 'Workflow state removido'}
                         </p>
                       </div>
                       <Badge color="accent">{getAlertTypeLabel(rule.alertType)}</Badge>
                     </div>
 
-                    <p className="mt-3 whitespace-pre-wrap text-sm text-slate-300">{rule.message}</p>
+                    <p className="mt-3 whitespace-pre-wrap text-sm text-muted-foreground">{rule.message}</p>
 
                     <div className="mt-3 flex flex-wrap gap-2">
                       <Badge color="primary">Escopo: {getScopeLabel(rule.scopePreference)}</Badge>
@@ -562,7 +562,7 @@ export default function TicketAlertsPage() {
                       {rule.actionsJson && <Badge color="warning">Com actionsJson</Badge>}
                     </div>
 
-                    <p className="mt-3 text-[11px] text-slate-500">
+                    <p className="mt-3 text-[11px] text-muted">
                       Atualizada em {new Date(rule.updatedAt).toLocaleString('pt-BR')}
                     </p>
 

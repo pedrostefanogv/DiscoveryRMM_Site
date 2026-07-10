@@ -67,8 +67,8 @@ export default function SiteList() {
             <Building2 className="h-4 w-4 text-accent" />
           </div>
           <div>
-            <p className="font-medium text-white">{site.name}</p>
-            <p className="text-xs text-slate-500">{site.notes ?? 'Sem observações'}</p>
+            <p className="font-medium text-foreground">{site.name}</p>
+            <p className="text-xs text-muted">{site.notes ?? 'Sem observações'}</p>
           </div>
         </div>
       ),
@@ -78,8 +78,8 @@ export default function SiteList() {
       header: 'Cliente',
       render: (site) => (
         <div>
-          <p className="text-slate-200">{site.clientName}</p>
-          <p className="text-xs text-slate-500">
+          <p className="text-foreground">{site.clientName}</p>
+          <p className="text-xs text-muted">
             {site.clientActive ? 'Cliente ativo' : 'Cliente inativo'}
           </p>
         </div>
@@ -100,7 +100,7 @@ export default function SiteList() {
       key: 'updatedAt',
       header: 'Atualizado em',
       render: (site) => (
-        <span className="text-slate-400">
+        <span className="text-muted">
           {new Date(site.updatedAt).toLocaleDateString('pt-BR')}
         </span>
       ),
@@ -136,15 +136,15 @@ export default function SiteList() {
     <div className="space-y-6">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white">Sites</h1>
-          <p className="text-sm text-slate-400">Visão global dos sites cadastrados por cliente</p>
+          <h1 className="text-2xl font-bold text-foreground">Sites</h1>
+          <p className="text-sm text-muted">Visão global dos sites cadastrados por cliente</p>
         </div>
-        <label className="flex items-center gap-2 text-sm text-slate-400">
+        <label className="flex items-center gap-2 text-sm text-muted">
           <input
             type="checkbox"
             checked={showInactive}
             onChange={(event) => setShowInactive(event.target.checked)}
-            className="rounded border-white/10 bg-white/5"
+            className="rounded border-border bg-surface-light"
           />
           Mostrar inativos
         </label>

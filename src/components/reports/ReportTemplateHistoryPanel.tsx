@@ -91,13 +91,13 @@ export function ReportTemplateHistoryPanel({ templateId, limit = 50 }: ReportTem
     <Card>
       <div className="mb-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <History className="h-4 w-4 text-slate-300" />
-          <h3 className="text-sm font-semibold text-white">
+          <History className="h-4 w-4 text-muted-foreground" />
+          <h3 className="text-sm font-semibold text-foreground">
             Histórico de Versões
           </h3>
         </div>
         {history && (
-          <span className="text-xs text-slate-400">
+          <span className="text-xs text-muted">
             {history.length} {history.length === 1 ? "versão" : "versões"}
           </span>
         )}
@@ -105,12 +105,12 @@ export function ReportTemplateHistoryPanel({ templateId, limit = 50 }: ReportTem
 
       <div className="max-h-96 space-y-3 overflow-auto pr-1">
         {!history || history.length === 0 ? (
-          <p className="text-sm text-slate-400">Sem histórico disponível.</p>
+          <p className="text-sm text-muted">Sem histórico disponível.</p>
         ) : (
           history.map((entry) => (
             <div
               key={entry.id}
-              className="rounded-lg border border-white/10 bg-white/5 p-3"
+              className="rounded-lg border border-border bg-surface-light p-3"
             >
               <div className="flex items-start justify-between gap-2">
                 <div className="flex-1">
@@ -118,14 +118,14 @@ export function ReportTemplateHistoryPanel({ templateId, limit = 50 }: ReportTem
                     <Badge color={EVENT_COLORS[entry.eventType]}>
                       {EVENT_LABELS[entry.eventType]}
                     </Badge>
-                    <span className="text-xs text-slate-400">
+                    <span className="text-xs text-muted">
                       v{entry.version}
                     </span>
                   </div>
-                  <p className="text-sm font-medium text-white mb-1">
+                  <p className="text-sm font-medium text-foreground mb-1">
                     {entry.name}
                   </p>
-                  <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
                     <span>
                       {getDatasetLabel(entry.datasetType)}
                     </span>
@@ -140,7 +140,7 @@ export function ReportTemplateHistoryPanel({ templateId, limit = 50 }: ReportTem
                   </div>
                 </div>
               </div>
-              <p className="mt-2 text-[11px] text-slate-500">
+              <p className="mt-2 text-[11px] text-muted">
                 {new Date(entry.createdAt).toLocaleString("pt-BR")}
                 {entry.createdBy && ` por ${entry.createdBy}`}
               </p>

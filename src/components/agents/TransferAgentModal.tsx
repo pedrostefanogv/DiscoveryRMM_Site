@@ -96,13 +96,13 @@ export function TransferAgentModal({ open, onClose, agent }: TransferAgentModalP
       <div className="space-y-4">
         {/* Agent info */}
         {agent && (
-          <div className="rounded-lg border border-white/10 bg-white/5 p-3">
-            <p className="flex items-center gap-2 text-sm font-medium text-white">
-              <Building2 className="h-4 w-4 text-slate-400" />
+          <div className="rounded-lg border border-border bg-surface-light p-3">
+            <p className="flex items-center gap-2 text-sm font-medium text-foreground">
+              <Building2 className="h-4 w-4 text-muted" />
               {agent.displayName ?? agent.hostname}
             </p>
-            <p className="mt-1 text-xs text-slate-400">
-              Cliente atual: <span className="text-slate-300">{/* Shown in validation */}</span>
+            <p className="mt-1 text-xs text-muted">
+              Cliente atual: <span className="text-muted-foreground">{/* Shown in validation */}</span>
             </p>
           </div>
         )}
@@ -137,12 +137,12 @@ export function TransferAgentModal({ open, onClose, agent }: TransferAgentModalP
             {validation.isValid ? (
               <div className="space-y-2">
                 <p className="font-medium text-primary">Transferência viável</p>
-                <div className="flex items-center gap-2 text-slate-200">
-                  <span className="text-slate-400">{validation.previousSiteName}</span>
+                <div className="flex items-center gap-2 text-foreground">
+                  <span className="text-muted">{validation.previousSiteName}</span>
                   <ArrowRight className="h-4 w-4 text-primary" />
                   <span className="text-primary">{validation.targetSiteName}</span>
                 </div>
-                <div className="text-xs text-slate-400">
+                <div className="text-xs text-muted">
                   Cliente: {validation.previousClientName}
                   {validation.isCrossClient && (
                     <span className="ml-1">
@@ -161,7 +161,7 @@ export function TransferAgentModal({ open, onClose, agent }: TransferAgentModalP
               <div className="space-y-1">
                 <p className="font-medium text-danger">Transferência não pode ser realizada</p>
                 {validation.messages.map((msg, i) => (
-                  <p key={i} className="text-xs text-slate-300">• {msg}</p>
+                  <p key={i} className="text-xs text-muted-foreground">• {msg}</p>
                 ))}
               </div>
             )}
@@ -170,7 +170,7 @@ export function TransferAgentModal({ open, onClose, agent }: TransferAgentModalP
 
         {/* Loading validation */}
         {validateQuery.isFetching && (
-          <div className="flex items-center gap-2 text-sm text-slate-400">
+          <div className="flex items-center gap-2 text-sm text-muted">
             <Loader2 className="h-4 w-4 animate-spin" />
             Validando transferência...
           </div>

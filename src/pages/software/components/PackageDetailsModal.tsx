@@ -45,7 +45,7 @@ export function PackageDetailsModal({ open, onClose, pkg, installationType }: Pa
 
         {details && (
           <>
-            <div className="flex items-start gap-3 rounded-xl border border-white/10 bg-white/5 p-3">
+            <div className="flex items-start gap-3 rounded-xl border border-border bg-surface-light p-3">
               <PackageIcon
                 url={details.icon}
                 homepage={details.homepage}
@@ -53,8 +53,8 @@ export function PackageDetailsModal({ open, onClose, pkg, installationType }: Pa
                 name={details.name}
               />
               <div className="min-w-0 flex-1">
-                <div className="text-sm font-semibold text-white">{details.name ?? details.packageId}</div>
-                <div className="mt-1 font-mono text-xs text-slate-400">{details.packageId}</div>
+                <div className="text-sm font-semibold text-foreground">{details.name ?? details.packageId}</div>
+                <div className="mt-1 font-mono text-xs text-muted">{details.packageId}</div>
                 <div className="mt-2 flex flex-wrap gap-1">
                   {details.version && <Badge color="slate">{details.version}</Badge>}
                   {details.architecture && <Badge color="accent">{details.architecture}</Badge>}
@@ -65,26 +65,26 @@ export function PackageDetailsModal({ open, onClose, pkg, installationType }: Pa
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2">
-              <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-                <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Publisher</div>
-                <div className="mt-1 text-sm text-slate-200">{details.publisher ?? '—'}</div>
+              <div className="rounded-xl border border-border bg-surface-light p-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-muted">Publisher</div>
+                <div className="mt-1 text-sm text-foreground">{details.publisher ?? '—'}</div>
               </div>
-              <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-                <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Tipo</div>
-                <div className="mt-1 text-sm text-slate-200">{installationLabel}</div>
+              <div className="rounded-xl border border-border bg-surface-light p-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-muted">Tipo</div>
+                <div className="mt-1 text-sm text-foreground">{installationLabel}</div>
               </div>
             </div>
 
-            <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-              <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Descrição</div>
+            <div className="rounded-xl border border-border bg-surface-light p-3">
+              <div className="text-xs font-medium uppercase tracking-wide text-muted">Descrição</div>
               <div className="mt-1">
                 <MarkdownDescription content={details.description} variant="full" emptyText="Sem descrição." />
               </div>
             </div>
 
             {!!details.tags?.length && (
-              <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-                <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Tags</div>
+              <div className="rounded-xl border border-border bg-surface-light p-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-muted">Tags</div>
                 <div className="mt-2 flex flex-wrap gap-1.5">
                   {details.tags.map((tag) => (
                     <Badge key={tag} color="slate">{tag}</Badge>

@@ -1,4 +1,4 @@
-ï»¿import { Link } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { Wrench } from 'lucide-react';
 import { Button, Card, CardHeader } from '@/components/ui';
 
@@ -6,31 +6,31 @@ export default function SoftwareAutomation() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-white">AutomaÃ§Ã£o de Softwares</h1>
-        <p className="text-sm text-slate-400">
-          Esta pÃ¡gina foi mantida por compatibilidade. O novo mÃ³dulo de automaÃ§Ã£o fica em Ã¡rea prÃ³pria.
+        <h1 className="text-2xl font-bold text-foreground">Automação de Softwares</h1>
+        <p className="text-sm text-muted">
+          Esta página foi mantida por compatibilidade. O novo módulo de automação fica em área própria.
         </p>
       </div>
 
       <Card>
         <CardHeader
           title="Modulo migrado"
-          subtitle="Use a nova Ã¡rea para scripts, tarefas e operaÃ§Ãµes por agent."
+          subtitle="Use a nova área para scripts, tarefas e operações por agent."
         />
 
-        <div className="rounded-lg border border-white/10 bg-white/5 p-4">
-          <div className="mb-2 flex items-center gap-2 text-slate-300">
+        <div className="rounded-lg border border-border bg-surface-light p-4">
+          <div className="mb-2 flex items-center gap-2 text-muted-foreground">
             <Wrench className="h-4 w-4" />
-            <span className="text-sm">Status atual: mÃ³dulo de automaÃ§Ã£o ativo em nova navegaÃ§Ã£o</span>
+            <span className="text-sm">Status atual: módulo de automação ativo em nova navegação</span>
           </div>
-          <p className="text-sm text-slate-400">
-            Acesse Scripts, Tarefas e OperaÃ§Ãµes para gerir automaÃ§Ãµes administrativas.
+          <p className="text-sm text-muted">
+            Acesse Scripts, Tarefas e Operações para gerir automações administrativas.
           </p>
         </div>
 
         <div className="mt-4 flex justify-end">
           <Link to="/automation">
-            <Button size="sm">Abrir novo modulo de AutomaÃ§Ã£o</Button>
+            <Button size="sm">Abrir novo modulo de Automação</Button>
           </Link>
         </div>
       </Card>
