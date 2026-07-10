@@ -187,7 +187,7 @@ export const ticketsApi = {
 
   // Attachments
   listAttachments: (ticketId: string) =>
-    api.get<TicketAttachment[]>(`${BASE}/${ticketId}/attachments`),
+    api.get<CursorPageDto<TicketAttachment>>(`${BASE}/${ticketId}/attachments`),
 
   prepareUpload: (ticketId: string, data: PresignedUploadRequest) =>
     api.post<PresignedUploadResponse>(

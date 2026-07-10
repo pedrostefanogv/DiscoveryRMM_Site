@@ -2103,10 +2103,10 @@ function AttachmentsPanel({
       <div className="space-y-2">
         <p className="text-xs font-medium uppercase tracking-wide text-muted">Arquivos anexados</p>
         {attachments.isLoading && <Loading />}
-        {(Array.isArray(attachments.data) ? attachments.data : []).length === 0 && !attachments.isLoading && (
+        {(Array.isArray(attachments.data?.items) ? attachments.data.items : []).length === 0 && !attachments.isLoading && (
           <p className="py-4 text-center text-sm text-muted">Nenhum anexo ainda.</p>
         )}
-        {(Array.isArray(attachments.data) ? attachments.data : []).map((a) => (
+        {(Array.isArray(attachments.data?.items) ? attachments.data.items : []).map((a) => (
           <div key={a.id} className="flex items-center gap-3 rounded-lg border border-border bg-surface-light px-3 py-2">
             <File className="h-4 w-4 shrink-0 text-muted" />
             <div className="min-w-0 flex-1">

@@ -112,7 +112,7 @@ function formatDateBrazil(value: string): string {
 }
 
 function formatRelative(dateStr: string | null, now: number): { text: string; fullDate: string | null } {
-  if (!dateStr) return { text: '', fullDate: null };
+  if (!dateStr) return { text: '\u2014', fullDate: null };
   const diff = now - new Date(dateStr).getTime();
   const fullDate = formatDateBrazil(dateStr);
   if (diff < 60_000) return { text: 'agora mesmo', fullDate };
@@ -122,7 +122,7 @@ function formatRelative(dateStr: string | null, now: number): { text: string; fu
 }
 
 function formatUptimeShort(seconds: number | undefined | null): string {
-  if (seconds == null || !Number.isFinite(seconds)) return '';
+  if (seconds == null || !Number.isFinite(seconds)) return '\u2014';
   if (seconds < 60) return `${Math.round(seconds)}s`;
   if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
   const hours = Math.floor(seconds / 3600);
@@ -415,7 +415,7 @@ export default function AgentList() {
     });
   }, [queriedClients, agentQueries]);
 
-  // Merge live heartbeat metrics from the reactive store  survives REST polling overwrites
+  // Merge live heartbeat metrics from the reactive store \u2014 survives REST polling overwrites
   const allHeartbeats = useAllAgentHeartbeats();
 
   const agentsWithHeartbeat = useMemo<AgentWithClient[]>(() => {
@@ -769,7 +769,7 @@ export default function AgentList() {
                     <div className="space-y-1.5 text-xs">
                       <div className="flex items-center gap-2 text-muted">
                         <Activity className="h-3.5 w-3.5 shrink-0 text-muted" />
-                        <span className="truncate">{a.operatingSystem ?? ''}{a.osVersion ? ` · ${a.osVersion}` : ''}</span>
+                        <span className="truncate">{a.operatingSystem ?? '\u2014'}{a.osVersion ? ` · ${a.osVersion}` : ''}</span>
                       </div>
                       <div className="flex items-center gap-2 text-muted">
                         <span className="h-3.5 w-3.5 shrink-0 pt-px text-center font-mono text-[10px] leading-none text-muted">IP</span>
@@ -891,10 +891,10 @@ export default function AgentList() {
                           </div>
                         </td>
                         <td className="hidden px-4 py-3 text-muted-foreground md:table-cell">
-                          {a.operatingSystem ?? ''}{a.osVersion ? ` · ${a.osVersion}` : ''}
+                          {a.operatingSystem ?? '\u2014'}{a.osVersion ? ` · ${a.osVersion}` : ''}
                         </td>
                         <td className="hidden px-4 py-3 font-mono text-muted lg:table-cell">
-                          {a.lastIpAddress ?? ''}
+                          {a.lastIpAddress ?? '\u2014'}
                         </td>
                         <td className="hidden px-4 py-3 text-muted sm:table-cell">
                           {a.clientName}
@@ -928,7 +928,7 @@ export default function AgentList() {
                                 )}
                               </>
                             ) : (
-                              <span className="text-xs text-muted"></span>
+                              <span className="text-xs text-muted">\u2014</span>
                             )}
                           </div>
                         </td>
@@ -937,21 +937,21 @@ export default function AgentList() {
                           {a.heartbeatMetrics?.cpuPercent != null ? (
                             <MetricBar label="" value={a.heartbeatMetrics.cpuPercent} compact hideValue />
                           ) : (
-                            <span className="text-xs text-muted"></span>
+                            <span className="text-xs text-muted">\u2014</span>
                           )}
                         </td>
                         <td className="hidden px-4 py-3 2xl:table-cell">
                           {a.heartbeatMetrics?.memoryPercent != null ? (
                             <MetricBar label="" value={a.heartbeatMetrics.memoryPercent} compact hideValue />
                           ) : (
-                            <span className="text-xs text-muted"></span>
+                            <span className="text-xs text-muted">\u2014</span>
                           )}
                         </td>
                         <td className="hidden px-4 py-3 2xl:table-cell">
                           {a.heartbeatMetrics?.diskPercent != null ? (
                             <MetricBar label="" value={a.heartbeatMetrics.diskPercent} compact hideValue />
                           ) : (
-                            <span className="text-xs text-muted"></span>
+                            <span className="text-xs text-muted">\u2014</span>
                           )}
                         </td>
                         <td className="hidden px-4 py-3 text-xs text-muted lg:table-cell" title={relativeTime.fullDate ?? undefined}>

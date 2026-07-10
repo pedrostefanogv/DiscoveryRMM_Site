@@ -345,14 +345,18 @@ export default function AgentDetail() {
 
   const isOnlineNow = isAgentOnlineNow(aWithHeartbeat, now);
   const isZeroTouchPending = aWithHeartbeat.zeroTouchPending === true;
-  const softwareAllItems = software.data?.items ?? [];
-  const softwareTotalCount = softwareAllItems.length > 0 ? softwareAllItems.length : (softwareSnapshot.data?.totalInstalled ?? 0);
-  // Client-side pagination: slice based on current page
+  const softwareAllItems = software.data?.pages.flatMap(p => p.items ?? []) ?? [];
+  const softwareTotalCount = softwareSnapshot.data?.totalInstalled ?? softwareAllItems.length;
+  // Cursor pagination: carrega próxima página quando necessário
   const startIdx = (softwarePage - 1) * Number(softwareLimitSelected);
   const softwareItems = softwareAllItems.slice(startIdx, startIdx + Number(softwareLimitSelected));
-  const softwareTotalPages = Math.max(1, Math.ceil(softwareAllItems.length / Math.max(1, Number(softwareLimitSelected))));
+  // Se estamos na última página de itens carregados e há mais no backend, buscar mais
+  const hasMorePages = software.hasNextPage && softwareAllItems.length > 0;
+  const softwareTotalPages = hasMorePages
+    ? softwarePage + 1 // permite avançar para trigger fetch
+    : Math.max(1, Math.ceil(softwareAllItems.length / Math.max(1, Number(softwareLimitSelected))));
   const canGoPrevSoftwarePage = softwarePage > 1 && !software.isFetching;
-  const canGoNextSoftwarePage = softwarePage < softwareTotalPages && !software.isFetching;
+  const canGoNextSoftwarePage = (softwarePage < softwareTotalPages || software.hasNextPage) && !software.isFetching;
   const disks = hw.data?.disks ?? [];
   const totalDiskBytes = disks.reduce((acc, disk) => acc + (disk.totalSizeBytes ?? 0), 0);
   const freeDiskBytes = disks.reduce((acc, disk) => acc + (disk.freeSpaceBytes ?? 0), 0);
@@ -707,9 +711,13 @@ export default function AgentDetail() {
   };
 
   const goToNextSoftwarePage = () => {
-    setSoftwarePage((p) => p + 1);
+    const nextPage = softwarePage + 1;
+    // Se precisarmos de mais dados do backend, busca próxima página
+    if (hasMorePages && nextPage * Number(softwareLimitSelected) > softwareAllItems.length) {
+      software.fetchNextPage();
+    }
+    setSoftwarePage(nextPage);
   };
-
   const goToPreviousSoftwarePage = () => {
     setSoftwarePage((p) => Math.max(1, p - 1));
   };

@@ -207,6 +207,11 @@ export function useTicketAttachments(ticketId: string) {
     queryKey: KEYS.attachments(ticketId),
     queryFn: () => ticketsApi.listAttachments(ticketId),
     enabled: !!ticketId,
+    select: (data) => ({
+      items: Array.isArray(data?.items) ? data.items : [],
+      nextCursor: data?.nextCursor ?? null,
+      hasMore: data?.hasMore ?? false,
+    }),
   });
 }
 

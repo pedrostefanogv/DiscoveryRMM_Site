@@ -1,4 +1,9 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  useQuery,
+  useMutation,
+  useQueryClient,
+  useInfiniteQuery,
+} from "@tanstack/react-query";
 import { ApiError, agentsApi } from "@/api";
 import type {
   AgentSoftwareOrder,
@@ -136,30 +141,28 @@ export function useAgentSoftware(
     order?: AgentSoftwareOrder;
   },
 ) {
-  const safeLimit = Math.min(500, Math.max(1, params?.limit ?? 100));
+  const safeLimit = Math.min(500, Math.max(1, params?.limit ?? 50));
   const safeSearch = params?.search?.trim() ?? "";
   const safeOrder: AgentSoftwareOrder =
     params?.order === "asc" ? "asc" : "desc";
 
-  return useQuery({
+  return useInfiniteQuery({
     queryKey: KEYS.software(id, {
       cursor: undefined,
       limit: safeLimit,
       search: safeSearch,
       order: safeOrder,
     }),
-    queryFn: () =>
+    queryFn: ({ pageParam }) =>
       agentsApi.getSoftware(id, {
+        cursor: typeof pageParam === "string" ? pageParam : undefined,
         limit: safeLimit,
         search: safeSearch,
         order: safeOrder,
       }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
     enabled: !!id,
-    select: (data) => ({
-      items: Array.isArray(data?.items) ? data.items : [],
-      totalInstalled: data?.returnedItems ?? 0,
-      hasMore: data?.hasMore ?? false,
-    }),
   });
 }
 
