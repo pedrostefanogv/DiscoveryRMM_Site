@@ -333,7 +333,7 @@ export default function LogViewer() {
         </Button>
       </PageHeader>
 
-      <Card className="border-primary/30 bg-gradient-to-r from-primary/10 via-surface-light to-surface-light dark:border-primary/30 dark:from-primary/15 dark:via-slate-900/60 dark:to-slate-900/30">
+      <Card>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <p className="text-xs uppercase tracking-wide text-primary/90">Visão atual</p>

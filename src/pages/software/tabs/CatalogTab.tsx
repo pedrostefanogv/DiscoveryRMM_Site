@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import {
   Search, ShieldCheck, ChevronLeft, ChevronRight,
-  Package, RefreshCw, X, LayoutGrid, LayoutList, Info, ExternalLink,
+  Package, RefreshCw, RotateCcw, X, LayoutGrid, LayoutList, Info, ExternalLink,
 } from 'lucide-react';
 import { Badge, Button, Card, ErrorDisplay, Input, Loading, Modal, Select } from '@/components/ui';
 import { useAppStoreCatalog, useSyncCatalog } from '@/hooks/useAppStore';
@@ -190,7 +190,7 @@ export function CatalogTab() {
               </button>
             </div>
           </div>
-          <Button variant="ghost" onClick={resetFilters} title="Limpar filtros"><RefreshCw className="h-4 w-4" /></Button>
+          <Button variant="ghost" onClick={resetFilters} title="Limpar filtros"><RotateCcw className="h-4 w-4" /></Button>
           {(isChocolatey || isWinget) && (
             <Button variant="primary" onClick={handleSyncRequest} loading={syncCatalog.isPending} title={`Sincronizar catálogo ${syncLabel}`}>
               <RefreshCw className="h-4 w-4" /> Sincronizar Catálogo

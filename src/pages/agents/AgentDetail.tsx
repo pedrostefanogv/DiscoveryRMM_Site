@@ -848,7 +848,7 @@ export default function AgentDetail() {
         </button>
         <div className="flex-1">
           <h1 className="text-2xl font-bold text-foreground">{a.displayName ?? a.hostname}</h1>
-          <p className="text-sm text-muted">{a.hostname} \u2014 {a.operatingSystem} {a.osVersion}</p>
+          <p className="text-sm text-muted">{a.hostname} — {a.operatingSystem} {a.osVersion}</p>
         </div>
         <Badge color={isOnlineNow ? 'success' : 'slate'}>
           <span className="flex items-center gap-1">
