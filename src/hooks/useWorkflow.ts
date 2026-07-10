@@ -2,7 +2,10 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { workflowApi } from "@/api";
 import type {
   CreateWorkflowStateRequest,
+  CursorPageDto,
   UpdateStateRequest,
+  WorkflowState,
+  WorkflowTransition,
   CreateWorkflowTransitionRequest,
 } from "@/api";
 
@@ -11,10 +14,17 @@ const KEYS = {
   transitions: ["workflow-transitions"] as const,
 };
 
+function normalizeArray<T>(data: CursorPageDto<T> | T[]): T[] {
+  if (Array.isArray(data)) return data;
+  return (data as CursorPageDto<T>).items ?? [];
+}
+
 export function useWorkflowStates(clientId?: string) {
   return useQuery({
     queryKey: [...KEYS.states, clientId],
     queryFn: () => workflowApi.listStates(clientId),
+    select: (data) =>
+      normalizeArray(data as CursorPageDto<WorkflowState> | WorkflowState[]),
   });
 }
 
@@ -22,6 +32,10 @@ export function useWorkflowTransitions(clientId?: string) {
   return useQuery({
     queryKey: [...KEYS.transitions, clientId],
     queryFn: () => workflowApi.listTransitions(clientId),
+    select: (data) =>
+      normalizeArray(
+        data as CursorPageDto<WorkflowTransition> | WorkflowTransition[],
+      ),
   });
 }
 

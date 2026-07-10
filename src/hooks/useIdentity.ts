@@ -10,16 +10,23 @@ import {
   type CreateUserGroupRequest,
   type CreateUserRequest,
   type CreateUserWithGroupsRequest,
+  type CursorPageDto,
   type MeshCentralBackfillRequest,
   type MeshGroupPolicyReconcileRequest,
   type UpdateMyProfileRequest,
   type UpdateRoleRequest,
   type UpdateUserGroupRequest,
   type UpdateUserRequest,
+  type UserDto,
   type CreateMeshCentralRightsProfileRequest,
   type MeshCentralNodeLinksBackfillRequest,
   type UpdateMeshCentralRightsProfileRequest,
 } from "@/api";
+
+function normalizeArray<T>(data: CursorPageDto<T> | T[]): T[] {
+  if (Array.isArray(data)) return data;
+  return (data as CursorPageDto<T>).items ?? [];
+}
 
 const IAM_KEYS = {
   users: ["iam", "users"] as const,
@@ -28,7 +35,8 @@ const IAM_KEYS = {
   permissionsCatalog: ["iam", "permissions", "catalog"] as const,
   myProfile: ["iam", "me", "profile"] as const,
   mySecurity: ["iam", "me", "security"] as const,
-  userMfaKeys: (userId: string) => ["iam", "users", userId, "mfa", "keys"] as const,
+  userMfaKeys: (userId: string) =>
+    ["iam", "users", userId, "mfa", "keys"] as const,
   groupMembers: (groupId: string) =>
     ["iam", "groups", groupId, "members"] as const,
   groupRoles: (groupId: string) => ["iam", "groups", groupId, "roles"] as const,
@@ -36,7 +44,14 @@ const IAM_KEYS = {
     ["iam", "roles", roleId, "permissions"] as const,
   meshBackfill: ["iam", "mesh", "backfill"] as const,
   meshDiagnosticsHealth: (siteId: string, agentId?: string | null) =>
-    ["iam", "mesh", "diagnostics", "health", siteId, agentId ?? "none"] as const,
+    [
+      "iam",
+      "mesh",
+      "diagnostics",
+      "health",
+      siteId,
+      agentId ?? "none",
+    ] as const,
   meshNodeLinksBackfill: ["iam", "mesh", "node-links", "backfill"] as const,
   meshGroupPolicyStatus: (siteId: string) =>
     ["iam", "mesh", "group-policy", "status", siteId] as const,
@@ -54,6 +69,8 @@ export function useIamUsers() {
   return useQuery({
     queryKey: IAM_KEYS.users,
     queryFn: () => iamApi.listUsers(),
+    select: (data) =>
+      normalizeArray(data as CursorPageDto<UserDto> | UserDto[]),
   });
 }
 

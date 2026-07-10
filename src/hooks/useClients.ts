@@ -1,6 +1,11 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { clientsApi } from "@/api";
-import type { CreateClientRequest, UpdateClientRequest } from "@/api";
+import type {
+  Client,
+  CreateClientRequest,
+  CursorPageDto,
+  UpdateClientRequest,
+} from "@/api";
 
 const KEYS = {
   all: ["clients"] as const,
@@ -9,11 +14,17 @@ const KEYS = {
   detail: (id: string) => [...KEYS.all, "detail", id] as const,
 };
 
+function normalizeArray<T>(data: CursorPageDto<T> | T[]): T[] {
+  if (Array.isArray(data)) return data;
+  return (data as CursorPageDto<T>).items ?? [];
+}
+
 export function useClients(includeInactive = false) {
   return useQuery({
     queryKey: KEYS.list(includeInactive),
     queryFn: () => clientsApi.list(includeInactive),
     staleTime: 60_000,
+    select: (data) => normalizeArray(data as CursorPageDto<Client> | Client[]),
   });
 }
 

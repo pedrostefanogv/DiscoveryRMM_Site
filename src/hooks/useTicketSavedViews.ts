@@ -2,6 +2,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ticketSavedViewsApi } from "@/api/ticket-saved-views";
 import type {
   CreateTicketSavedViewRequest,
+  CursorPageDto,
+  TicketSavedView,
   UpdateTicketSavedViewRequest,
 } from "@/api";
 
@@ -11,11 +13,20 @@ const KEYS = {
     [...KEYS.all, "list", userId ?? "shared"] as const,
 };
 
+function normalizeArray<T>(data: CursorPageDto<T> | T[]): T[] {
+  if (Array.isArray(data)) return data;
+  return (data as CursorPageDto<T>).items ?? [];
+}
+
 export function useTicketSavedViews(userId?: string | null, enabled = true) {
   return useQuery({
     queryKey: KEYS.list(userId),
     queryFn: () => ticketSavedViewsApi.list(userId ?? undefined),
     enabled,
+    select: (data) =>
+      normalizeArray(
+        data as CursorPageDto<TicketSavedView> | TicketSavedView[],
+      ),
   });
 }
 
