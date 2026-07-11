@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Plus, Monitor, Trash2, AppWindow, Building2, Ticket as TicketIcon, Copy, KeyRound, BookOpen, CheckCircle2, XCircle, AlertTriangle, Activity } from 'lucide-react';
 import { useClient, useDeleteClient } from '@/hooks/useClients';
@@ -16,6 +16,7 @@ import { useNowTick } from '@/hooks/useNowTick';
 import { useSoftwareInventorySnapshot } from '@/hooks/useSoftwareInventory';
 import { LogLevel, type TicketPriority, type Site } from '@/api';
 import { TransferBeforeDeleteModal } from '@/components/agents/TransferBeforeDeleteModal';
+import { ensureArray } from '@/utils/ensureArray';
 import toast from 'react-hot-toast';
 
 const priorityLabels: Record<TicketPriority, { label: string; color: 'slate' | 'success' | 'warning' | 'danger' }> = {
@@ -111,15 +112,20 @@ export default function ClientDetail() {
     );
   };
 
-  const totalSites = sites.data?.length ?? 0;
-  const activeSitesList = (sites.data ?? []).filter((s) => s.isActive);
+  const sitesArray = useMemo(() => ensureArray<Site>(sites.data), [sites.data]);
+  const agentsArray = useMemo(() => ensureArray(agents.data), [agents.data]);
+  const ticketsArray = useMemo(() => ensureArray(tickets.data), [tickets.data]);
+  const logsArray = useMemo(() => ensureArray(logs.data), [logs.data]);
+
+  const totalSites = sitesArray.length;
+  const activeSitesList = sitesArray.filter((s) => s.isActive);
   const activeSites = activeSitesList.length;
-  const totalAgents = agents.data?.length ?? 0;
-  const onlineAgents = (agents.data ?? []).filter((a) => isAgentOnlineNow(a, now)).length;
+  const totalAgents = agentsArray.length;
+  const onlineAgents = agentsArray.filter((a) => isAgentOnlineNow(a, now)).length;
   const totalInstalledSoftware = softwareSnapshot.data?.totalInstalled ?? 0;
-  const totalTickets = tickets.data?.length ?? 0;
-  const recentTickets = (tickets.data ?? []).slice(0, 6);
-  const recentLogs = (logs.data ?? []).slice(0, 8);
+  const totalTickets = ticketsArray.length;
+  const recentTickets = ticketsArray.slice(0, 6);
+  const recentLogs = logsArray.slice(0, 8);
   const generatedDeployToken =
     createDeployToken.data && 'token' in createDeployToken.data
       ? createDeployToken.data

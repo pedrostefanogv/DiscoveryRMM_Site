@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -33,6 +33,7 @@ import {
 } from '@/components/ui';
 import { NotesPanel } from '@/components/notes/NotesPanel';
 import { isAgentOnlineNow } from '@/utils/agentStatus';
+import { ensureArray } from '@/utils/ensureArray';
 import { LogLevel, type TicketPriority } from '@/api';
 import toast from 'react-hot-toast';
 import type { DashboardWindow } from '@/api/dashboard';
@@ -113,11 +114,15 @@ export default function SiteDetail() {
 
   const currentClient = client.data;
   const currentSite = site.data;
-  const siteTickets = (tickets.data ?? []).filter((ticket) => ticket.siteId === currentSite.id);
+  const ticketsArray = useMemo(() => ensureArray(tickets.data), [tickets.data]);
+  const logsArray = useMemo(() => ensureArray(logs.data), [logs.data]);
+  const agentsArray = useMemo(() => ensureArray(agents.data), [agents.data]);
+
+  const siteTickets = ticketsArray.filter((ticket: { siteId: string }) => ticket.siteId === currentSite.id);
   const recentTickets = siteTickets.slice(0, 8);
-  const recentLogs = (logs.data ?? []).slice(0, 8);
-  const totalAgents = agents.data?.length ?? 0;
-  const onlineAgents = (agents.data ?? []).filter((agent) => isAgentOnlineNow(agent, now)).length;
+  const recentLogs = logsArray.slice(0, 8);
+  const totalAgents = agentsArray.length;
+  const onlineAgents = agentsArray.filter((agent) => isAgentOnlineNow(agent, now)).length;
   const totalTickets = siteTickets.length;
   const totalInstalledSoftware = softwareSnapshot.data?.totalInstalled ?? 0;
 
