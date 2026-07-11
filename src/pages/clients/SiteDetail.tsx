@@ -34,7 +34,7 @@ import {
 import { NotesPanel } from '@/components/notes/NotesPanel';
 import { isAgentOnlineNow } from '@/utils/agentStatus';
 import { ensureArray } from '@/utils/ensureArray';
-import { LogLevel, type TicketPriority } from '@/api';
+import { LogLevel, type TicketPriority, type Agent, type Ticket, type LogEntry } from '@/api';
 import toast from 'react-hot-toast';
 import type { DashboardWindow } from '@/api/dashboard';
 
@@ -114,11 +114,11 @@ export default function SiteDetail() {
 
   const currentClient = client.data;
   const currentSite = site.data;
-  const ticketsArray = useMemo(() => ensureArray(tickets.data), [tickets.data]);
-  const logsArray = useMemo(() => ensureArray(logs.data), [logs.data]);
-  const agentsArray = useMemo(() => ensureArray(agents.data), [agents.data]);
+  const ticketsArray = useMemo(() => ensureArray<Ticket>(tickets.data), [tickets.data]);
+  const logsArray = useMemo(() => ensureArray<LogEntry>(logs.data), [logs.data]);
+  const agentsArray = useMemo(() => ensureArray<Agent>(agents.data), [agents.data]);
 
-  const siteTickets = ticketsArray.filter((ticket: { siteId: string }) => ticket.siteId === currentSite.id);
+  const siteTickets = ticketsArray.filter((ticket) => ticket.siteId === currentSite.id);
   const recentTickets = siteTickets.slice(0, 8);
   const recentLogs = logsArray.slice(0, 8);
   const totalAgents = agentsArray.length;
@@ -138,8 +138,7 @@ export default function SiteDetail() {
   };
 
   const handleDelete = () => {
-    const agentList = agents.data ?? [];
-    if (agentList.length > 0) {
+    if (agentsArray.length > 0) {
       setTransferModalOpen(true);
     } else {
       if (!confirm(`Tem certeza que deseja excluir o site "${currentSite.name}"?`)) return;
@@ -431,7 +430,7 @@ export default function SiteDetail() {
           <Card>
             <CardHeader title="Agentes do Site" subtitle={`${onlineAgents} online`} />
             <div className="space-y-2">
-              {(agents.data ?? []).map((agent) => {
+              {agentsArray.map((agent) => {
                 const online = isAgentOnlineNow(agent, now);
                 return (
                   <div
@@ -499,7 +498,7 @@ export default function SiteDetail() {
         onClose={() => setTransferModalOpen(false)}
         entityType="site"
         entityName={currentSite.name}
-        agentIds={(agents.data ?? []).map((a) => a.id)}
+        agentIds={agentsArray.map((a) => a.id)}
         sourceClientId={currentClient.id}
         onSuccess={handleTransferAndDelete}
       />

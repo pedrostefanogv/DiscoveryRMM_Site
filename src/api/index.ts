@@ -43,6 +43,7 @@ export type {
   MarkNotificationAsReadParams,
 } from "./notifications";
 export { notesApi } from "./notes";
+export type { NotesPageParams } from "./notes";
 export { knowledgeApi } from "./knowledge";
 export { reportSchedulesApi } from "./report-schedules";
 export { autoTicketRulesApi } from "./auto-ticket-rules";
@@ -59,7 +60,11 @@ export type {
   SearchResultItem,
 } from "./search";
 export { getNatsService, resetNatsService } from "./nats";
-export type { DashboardEvent, NatsConfig, NatsCredentialsResponse } from "./nats";
+export type {
+  DashboardEvent,
+  NatsConfig,
+  NatsCredentialsResponse,
+} from "./nats";
 export {
   sendAgentCommand,
   getRealtimeStatus,

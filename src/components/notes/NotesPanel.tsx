@@ -1,13 +1,13 @@
 import { useMemo, useRef, useState } from "react";
-import { Pin, Trash2, Save, X, Plus, ChevronUp, Settings2, Pencil } from "lucide-react";
+import { Pin, Trash2, Save, X, Plus, ChevronUp, Settings2, Pencil, ChevronDown } from "lucide-react";
 import { Card, CardHeader, Button, Badge, Input, TextArea, Loading, ErrorDisplay } from "@/components/ui";
 import {
-  useAgentNotes,
-  useClientNotes,
-  useSiteNotes,
-  useCreateAgentNote,
+  useClientNotesPage,
+  useSiteNotesPage,
+  useAgentNotesPage,
   useCreateClientNote,
   useCreateSiteNote,
+  useCreateAgentNote,
   useUpdateNote,
   useDeleteNote,
 } from "@/hooks/useNotes";
@@ -30,11 +30,25 @@ function getNoteDate(note: Note): number {
 }
 
 export function NotesPanel({ entityType, entityId, title = "Notas", subtitle }: NotesPanelProps) {
+  const LIMIT = 20;
+
   const notesQuery = entityType === "client"
-    ? useClientNotes(entityId)
+    ? useClientNotesPage(entityId, LIMIT)
     : entityType === "site"
-      ? useSiteNotes(entityId)
-      : useAgentNotes(entityId);
+      ? useSiteNotesPage(entityId, LIMIT)
+      : useAgentNotesPage(entityId, LIMIT);
+
+  // Flatten all pages into a single array
+  const allNotes = useMemo(() => {
+    return notesQuery.data?.pages.flatMap((page) => page.items) ?? [];
+  }, [notesQuery.data]);
+
+  const totalCount = notesQuery.data?.pages[0]?.returnedItems != null
+    ? allNotes.length // approximate; cursor pagination doesn't give total
+    : allNotes.length;
+
+  const hasMore = notesQuery.data?.pages[notesQuery.data.pages.length - 1]?.hasMore ?? false;
+  const isFetchingNextPage = notesQuery.isFetchingNextPage;
 
   const createClientNote = useCreateClientNote();
   const createSiteNote = useCreateSiteNote();
@@ -57,11 +71,11 @@ export function NotesPanel({ entityType, entityId, title = "Notas", subtitle }: 
   const [showCreateForm, setShowCreateForm] = useState(false);
 
   const sortedNotes = useMemo(() => {
-    return [...(notesQuery.data ?? [])].sort((a, b) => {
+    return [...allNotes].sort((a, b) => {
       if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1;
       return getNoteDate(b) - getNoteDate(a);
     });
-  }, [notesQuery.data]);
+  }, [allNotes]);
 
   const handleCreate = () => {
     const content = newContent.trim();
@@ -170,7 +184,7 @@ export function NotesPanel({ entityType, entityId, title = "Notas", subtitle }: 
     <Card>
       <CardHeader
         title={title}
-        subtitle={subtitle ?? `${notesQuery.data?.length ?? 0} nota(s)`}
+        subtitle={subtitle ?? `${totalCount} nota(s)`}
         action={
           hasNotes ? (
             <Button
@@ -293,6 +307,20 @@ export function NotesPanel({ entityType, entityId, title = "Notas", subtitle }: 
 
             {sortedNotes.length === 0 && (
               <p className="text-sm text-muted">Nenhuma nota cadastrada</p>
+            )}
+
+            {hasMore && (
+              <div className="flex justify-center pt-2">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => notesQuery.fetchNextPage()}
+                  loading={isFetchingNextPage}
+                >
+                  <ChevronDown className="h-4 w-4" />
+                  Carregar mais notas
+                </Button>
+              </div>
             )}
           </div>
 

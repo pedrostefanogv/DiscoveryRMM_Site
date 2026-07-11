@@ -14,7 +14,7 @@ import { NotesPanel } from '@/components/notes/NotesPanel';
 import { isAgentOnlineNow } from '@/utils/agentStatus';
 import { useNowTick } from '@/hooks/useNowTick';
 import { useSoftwareInventorySnapshot } from '@/hooks/useSoftwareInventory';
-import { LogLevel, type TicketPriority, type Site } from '@/api';
+import { LogLevel, type TicketPriority, type Site, type Agent, type Ticket, type LogEntry } from '@/api';
 import { TransferBeforeDeleteModal } from '@/components/agents/TransferBeforeDeleteModal';
 import { ensureArray } from '@/utils/ensureArray';
 import toast from 'react-hot-toast';
@@ -72,9 +72,14 @@ export default function ClientDetail() {
 
   const c = client.data;
 
+  // Memoized normalized arrays — safe against paginated responses
+  const sitesArray = useMemo(() => ensureArray<Site>(sites.data), [sites.data]);
+  const agentsArray = useMemo(() => ensureArray<Agent>(agents.data), [agents.data]);
+  const ticketsArray = useMemo(() => ensureArray<Ticket>(tickets.data), [tickets.data]);
+  const logsArray = useMemo(() => ensureArray<LogEntry>(logs.data), [logs.data]);
+
   const handleDelete = () => {
-    const agentList = agents.data ?? [];
-    if (agentList.length > 0) {
+    if (agentsArray.length > 0) {
       setTransferModalOpen(true);
     } else {
       if (!confirm('Tem certeza que deseja excluir este cliente?')) return;
@@ -111,11 +116,6 @@ export default function ClientDetail() {
       },
     );
   };
-
-  const sitesArray = useMemo(() => ensureArray<Site>(sites.data), [sites.data]);
-  const agentsArray = useMemo(() => ensureArray(agents.data), [agents.data]);
-  const ticketsArray = useMemo(() => ensureArray(tickets.data), [tickets.data]);
-  const logsArray = useMemo(() => ensureArray(logs.data), [logs.data]);
 
   const totalSites = sitesArray.length;
   const activeSitesList = sitesArray.filter((s) => s.isActive);
@@ -365,7 +365,7 @@ export default function ClientDetail() {
             )}
           />
           <div className="space-y-2">
-            {(sites.data ?? []).map(site => (
+            {sitesArray.map(site => (
               <div
                 key={site.id}
                 onClick={() => navigate(`/clients/${c.id}/sites/${site.id}`)}
@@ -474,7 +474,7 @@ export default function ClientDetail() {
               )}
             />
             <div className="space-y-2">
-              {(agents.data ?? []).map(agent => {
+              {agentsArray.map(agent => {
                 const online = isAgentOnlineNow(agent, now);
                 return (
                   <div
@@ -641,7 +641,7 @@ export default function ClientDetail() {
         onClose={() => setTransferModalOpen(false)}
         entityType="client"
         entityName={c.name}
-        agentIds={(agents.data ?? []).map((a) => a.id)}
+        agentIds={agentsArray.map((a) => a.id)}
         sourceClientId={c.id}
         onSuccess={handleTransferAndDelete}
       />
