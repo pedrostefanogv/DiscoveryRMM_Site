@@ -256,49 +256,40 @@ export default function SiteDetail() {
                 <Activity className="h-3.5 w-3.5" />
                 <span>Comandos</span>
               </div>
-              <p
-                className={`mt-1 text-base font-semibold ${
-                  dashboard.data.commands.total > 0 && dashboard.data.commands.successRate >= 80
-                    ? 'text-success'
-                    : dashboard.data.commands.total > 0
-                      ? 'text-danger'
-                      : 'text-foreground'
-                }`}
-              >
-                {dashboard.data.commands.total > 0
-                  ? `${dashboard.data.commands.successRate.toFixed(1)}% sucesso`
-                  : '\u2014'}
-              </p>
-              <p className="mt-0.5 text-xs text-muted">
-                {dashboard.data.commands.total} total
-              </p>
+              {dashboard.data.commands.total > 0 ? (
+                <>
+                  <p className={`mt-1 text-base font-semibold ${dashboard.data.commands.successRate >= 80 ? 'text-success' : 'text-danger'}`}>
+                    {dashboard.data.commands.successRate.toFixed(1)}% sucesso
+                  </p>
+                  <p className="mt-0.5 text-xs text-muted">
+                    {dashboard.data.commands.total} total
+                  </p>
+                </>
+              ) : (
+                <p className="mt-1 text-base font-semibold text-muted">Nenhum</p>
+              )}
             </div>
             <div className="rounded-lg bg-surface-light px-3 py-2">
               <div className="flex items-center gap-1.5 text-muted">
-                {dashboard.data.automation.failed > 0 ? (
+                {dashboard.data.automation.total > 0 && dashboard.data.automation.failed > 0 ? (
                   <XCircle className="h-3.5 w-3.5 text-danger" />
                 ) : (
                   <CheckCircle2 className="h-3.5 w-3.5" />
                 )}
                 <span>Automação</span>
               </div>
-              <p
-                className={`mt-1 text-base font-semibold ${
-                  dashboard.data.automation.total > 0 &&
-                  dashboard.data.automation.successRate >= 80
-                    ? 'text-success'
-                    : dashboard.data.automation.total > 0
-                      ? 'text-danger'
-                      : 'text-foreground'
-                }`}
-              >
-                {dashboard.data.automation.total > 0
-                  ? `${dashboard.data.automation.successRate.toFixed(1)}% sucesso`
-                  : '\u2014'}
-              </p>
-              <p className="mt-0.5 text-xs text-muted">
-                {dashboard.data.automation.total} execuções
-              </p>
+              {dashboard.data.automation.total > 0 ? (
+                <>
+                  <p className={`mt-1 text-base font-semibold ${dashboard.data.automation.successRate >= 80 ? 'text-success' : 'text-danger'}`}>
+                    {dashboard.data.automation.successRate.toFixed(1)}% sucesso
+                  </p>
+                  <p className="mt-0.5 text-xs text-muted">
+                    {dashboard.data.automation.total} execuções
+                  </p>
+                </>
+              ) : (
+                <p className="mt-1 text-base font-semibold text-muted">Nenhuma</p>
+              )}
             </div>
           </div>
         </Card>

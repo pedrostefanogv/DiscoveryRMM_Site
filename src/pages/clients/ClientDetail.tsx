@@ -246,27 +246,35 @@ export default function ClientDetail() {
                 <Activity className="h-3.5 w-3.5" />
                 <span>Comandos</span>
               </div>
-              <p className={`mt-1 text-base font-semibold ${clientDashboard.data.commands.total > 0 && clientDashboard.data.commands.successRate >= 80 ? 'text-success' : clientDashboard.data.commands.total > 0 ? 'text-danger' : 'text-foreground'}`}>
-                {clientDashboard.data.commands.total > 0
-                  ? `${clientDashboard.data.commands.successRate.toFixed(1)}% sucesso`
-                  : ''}
-              </p>
-              <p className="mt-0.5 text-xs text-muted">{clientDashboard.data.commands.total} total</p>
+              {clientDashboard.data.commands.total > 0 ? (
+                <>
+                  <p className={`mt-1 text-base font-semibold ${clientDashboard.data.commands.successRate >= 80 ? 'text-success' : 'text-danger'}`}>
+                    {clientDashboard.data.commands.successRate.toFixed(1)}% sucesso
+                  </p>
+                  <p className="mt-0.5 text-xs text-muted">{clientDashboard.data.commands.total} total</p>
+                </>
+              ) : (
+                <p className="mt-1 text-base font-semibold text-muted">Nenhum</p>
+              )}
             </div>
             {/* Automação */}
             <div className="rounded-lg bg-surface-light px-3 py-2">
               <div className="flex items-center gap-1.5 text-muted">
-                {clientDashboard.data.automation.failed > 0
+                {clientDashboard.data.automation.total > 0 && clientDashboard.data.automation.failed > 0
                   ? <XCircle className="h-3.5 w-3.5 text-danger" />
                   : <CheckCircle2 className="h-3.5 w-3.5" />}
                 <span>Automação</span>
               </div>
-              <p className={`mt-1 text-base font-semibold ${clientDashboard.data.automation.total > 0 && clientDashboard.data.automation.successRate >= 80 ? 'text-success' : clientDashboard.data.automation.total > 0 ? 'text-danger' : 'text-foreground'}`}>
-                {clientDashboard.data.automation.total > 0
-                  ? `${clientDashboard.data.automation.successRate.toFixed(1)}% sucesso`
-                  : ''}
-              </p>
-              <p className="mt-0.5 text-xs text-muted">{clientDashboard.data.automation.total} execuções</p>
+              {clientDashboard.data.automation.total > 0 ? (
+                <>
+                  <p className={`mt-1 text-base font-semibold ${clientDashboard.data.automation.successRate >= 80 ? 'text-success' : 'text-danger'}`}>
+                    {clientDashboard.data.automation.successRate.toFixed(1)}% sucesso
+                  </p>
+                  <p className="mt-0.5 text-xs text-muted">{clientDashboard.data.automation.total} execuções</p>
+                </>
+              ) : (
+                <p className="mt-1 text-base font-semibold text-muted">Nenhuma</p>
+              )}
             </div>
           </div>
         </Card>
@@ -277,7 +285,7 @@ export default function ClientDetail() {
         <StatCard
           icon={Monitor}
           label="Agentes"
-          value={agents.isLoading ? '' : totalAgents}
+          value={agents.isLoading ? '—' : totalAgents}
           tone="primary"
           trend={
             !agents.isLoading && totalAgents > 0 ? (
@@ -290,7 +298,7 @@ export default function ClientDetail() {
         <StatCard
           icon={Building2}
           label="Sites"
-          value={sites.isLoading ? '' : totalSites}
+          value={sites.isLoading ? '—' : totalSites}
           tone="accent"
           trend={
             !sites.isLoading && totalSites > 0 ? (
@@ -301,13 +309,13 @@ export default function ClientDetail() {
         <StatCard
           icon={AppWindow}
           label="Softwares instalados"
-          value={softwareSnapshot.isLoading ? '' : totalInstalledSoftware}
+          value={softwareSnapshot.isLoading ? '—' : totalInstalledSoftware}
           tone="success"
         />
         <StatCard
           icon={TicketIcon}
           label="Chamados"
-          value={tickets.isLoading ? '' : totalTickets}
+          value={tickets.isLoading ? '—' : totalTickets}
           tone="warning"
         />
       </div>
@@ -320,7 +328,7 @@ export default function ClientDetail() {
           <dl className="space-y-3 text-sm">
             <div>
               <dt className="text-muted">Observações</dt>
-              <dd className="mt-0.5 text-foreground">{c.notes ?? ''}</dd>
+              <dd className="mt-0.5 text-foreground">{c.notes ?? '—'}</dd>
             </div>
             <div>
               <dt className="text-muted">Criado em</dt>
@@ -333,13 +341,13 @@ export default function ClientDetail() {
             <div className="border-t border-border pt-3">
               <dt className="text-muted">Softwares distintos</dt>
               <dd className="mt-0.5 text-foreground">
-                {softwareSnapshot.isLoading ? '' : (softwareSnapshot.data?.distinctSoftware ?? 0)}
+                {softwareSnapshot.isLoading ? '—' : (softwareSnapshot.data?.distinctSoftware ?? 0)}
               </dd>
             </div>
             <div>
               <dt className="text-muted">Agentes com inventário</dt>
               <dd className="mt-0.5 text-foreground">
-                {softwareSnapshot.isLoading ? '' : (softwareSnapshot.data?.distinctAgents ?? 0)}
+                {softwareSnapshot.isLoading ? '—' : (softwareSnapshot.data?.distinctAgents ?? 0)}
               </dd>
             </div>
           </dl>
