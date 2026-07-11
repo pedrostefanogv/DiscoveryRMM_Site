@@ -100,6 +100,11 @@ export default function SiteDetail() {
     !!clientId && !!siteId,
   );
 
+  // Memoized normalized arrays — MUST be before any early return (Rules of Hooks)
+  const ticketsArray = useMemo(() => ensureArray<Ticket>(tickets.data), [tickets.data]);
+  const logsArray = useMemo(() => ensureArray<LogEntry>(logs.data), [logs.data]);
+  const agentsArray = useMemo(() => ensureArray<Agent>(agents.data), [agents.data]);
+
   if (client.isLoading || site.isLoading) return <Loading />;
   if (client.isError || site.isError || !client.data || !site.data) {
     return (
@@ -114,9 +119,6 @@ export default function SiteDetail() {
 
   const currentClient = client.data;
   const currentSite = site.data;
-  const ticketsArray = useMemo(() => ensureArray<Ticket>(tickets.data), [tickets.data]);
-  const logsArray = useMemo(() => ensureArray<LogEntry>(logs.data), [logs.data]);
-  const agentsArray = useMemo(() => ensureArray<Agent>(agents.data), [agents.data]);
 
   const siteTickets = ticketsArray.filter((ticket) => ticket.siteId === currentSite.id);
   const recentTickets = siteTickets.slice(0, 8);

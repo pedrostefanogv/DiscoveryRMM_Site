@@ -67,16 +67,16 @@ export default function ClientDetail() {
   // Subscribe to client-scoped NATS dashboard events for targeted refetch.
   useDashboardRealtime({ clientId: id! }, '24h', !!id);
 
-  if (client.isLoading) return <Loading />;
-  if (client.isError || !client.data) return <ErrorDisplay onRetry={() => client.refetch()} />;
-
-  const c = client.data;
-
-  // Memoized normalized arrays — safe against paginated responses
+  // Memoized normalized arrays — MUST be before any early return (Rules of Hooks)
   const sitesArray = useMemo(() => ensureArray<Site>(sites.data), [sites.data]);
   const agentsArray = useMemo(() => ensureArray<Agent>(agents.data), [agents.data]);
   const ticketsArray = useMemo(() => ensureArray<Ticket>(tickets.data), [tickets.data]);
   const logsArray = useMemo(() => ensureArray<LogEntry>(logs.data), [logs.data]);
+
+  if (client.isLoading) return <Loading />;
+  if (client.isError || !client.data) return <ErrorDisplay onRetry={() => client.refetch()} />;
+
+  const c = client.data;
 
   const handleDelete = () => {
     if (agentsArray.length > 0) {
