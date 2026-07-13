@@ -63,6 +63,8 @@ export interface RealtimeStatsResponse {
     workingSetMb?: number | null;
     gcManagedMemoryMb?: number | null;
     threadCount?: number | null;
+    uptimeSeconds?: number | null;
+    uptimeFormatted?: string | null;
   };
   threadPool: {
     workerAvailable?: number | null;

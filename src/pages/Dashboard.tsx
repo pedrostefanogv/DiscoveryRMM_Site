@@ -89,7 +89,7 @@ export default function Dashboard() {
   const processMetrics = realtimeStats.data?.processMetrics;
   const threadPool = realtimeStats.data?.threadPool;
   const application = realtimeStats.data?.application;
-  const uptimeValue = application?.uptime ?? application?.uptimeSeconds;
+  const uptimeValue = processMetrics?.uptimeFormatted ?? processMetrics?.uptimeSeconds ?? application?.uptime ?? application?.uptimeSeconds;
   const workingSet = processMetrics?.workingSetBytes
     ? formatBytes(processMetrics.workingSetBytes)
     : formatMegabytes(processMetrics?.workingSetMb);
