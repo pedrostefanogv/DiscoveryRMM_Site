@@ -282,13 +282,6 @@ export default function AgentDetail() {
   // Precisamos buscar mais se o cursor tem next e ainda não carregamos itens para a página atual
   const needsMoreItems = software.hasNextPage && startIdx + limit > softwareAllItems.length;
 
-  // Auto-fetch next pages quando necessário (ex.: paginação avança além do que já carregamos)
-  useEffect(() => {
-    if (needsMoreItems && !software.isFetching && !software.isFetchingNextPage) {
-      software.fetchNextPage();
-    }
-  }, [needsMoreItems, software.isFetching, software.isFetchingNextPage, software.fetchNextPage]);
-
   // Corrige página para o range válido quando o total de itens diminui (ex.: após refetch)
   useEffect(() => {
     if (softwareTotalPages > 0 && softwarePage > softwareTotalPages) {
@@ -301,8 +294,8 @@ export default function AgentDetail() {
 
   const isOnlineNow = isAgentOnlineNow(aWithHeartbeat, now);
   const isZeroTouchPending = aWithHeartbeat.zeroTouchPending === true;
-  const canGoPrevSoftwarePage = softwarePage > 1 && !software.isFetching;
-  const canGoNextSoftwarePage = softwarePage < softwareTotalPages && !software.isFetching;
+  const canGoPrevSoftwarePage = softwarePage > 1 && !software.isFetchingNextPage;
+  const canGoNextSoftwarePage = softwarePage < softwareTotalPages && !software.isFetchingNextPage;
   const disks = hw.data?.disks ?? [];
   const totalDiskBytes = disks.reduce((acc, disk) => acc + (disk.totalSizeBytes ?? 0), 0);
   const freeDiskBytes = disks.reduce((acc, disk) => acc + (disk.freeSpaceBytes ?? 0), 0);
@@ -653,8 +646,21 @@ export default function AgentDetail() {
   };
 
   const goToNextSoftwarePage = () => {
-    setSoftwarePage((p) => p + 1);
-    // O useEffect de auto-fetch cuida de buscar a página se necessário
+    const nextPage = softwarePage + 1;
+    const nextStartIdx = (nextPage - 1) * limit;
+
+    // Já temos itens suficientes no cache — avança direto
+    if (nextStartIdx + limit <= softwareAllItems.length) {
+      setSoftwarePage(nextPage);
+      return;
+    }
+
+    // Precisa buscar mais dados do backend — dispara fetchNextPage e avança ao concluir
+    if (!software.isFetchingNextPage && software.hasNextPage) {
+      software.fetchNextPage().then(() => {
+        setSoftwarePage(nextPage);
+      });
+    }
   };
   const goToPreviousSoftwarePage = () => {
     setSoftwarePage((p) => Math.max(1, p - 1));
