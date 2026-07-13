@@ -279,8 +279,6 @@ export default function AgentDetail() {
   const softwareTotalPages = Math.max(1, Math.ceil(softwareTotalCount / limit));
   const startIdx = (softwarePage - 1) * limit;
   const softwareItems = softwareAllItems.slice(startIdx, startIdx + limit);
-  // Precisamos buscar mais se o cursor tem next e ainda não carregamos itens para a página atual
-  const needsMoreItems = software.hasNextPage && startIdx + limit > softwareAllItems.length;
 
   // Corrige página para o range válido quando o total de itens diminui (ex.: após refetch)
   useEffect(() => {
