@@ -203,7 +203,7 @@ export default function Dashboard() {
           <StatCard
             icon={Users}
             label="Clientes"
-            value={realtimeStats.data?.clients?.total ?? '\u2014'}
+            value={realtimeStats.data?.business?.clients?.total ?? '\u2014'}
             tone="primary"
           />
         </button>
