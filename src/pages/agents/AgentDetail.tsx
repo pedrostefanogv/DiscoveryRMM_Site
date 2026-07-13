@@ -5,7 +5,7 @@ import {
   Wifi, WifiOff, AppWindow, Search, Clock, HardDrive, Printer, Bug, AlertTriangle, Trash2, ShieldCheck, Plus, Gauge, Power, RotateCcw, Zap, ChevronDown, RefreshCw,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { getDeleteAgentErrorMessage, useAgent, useAgentHardware, useAgentSoftware, useAgentSoftwareSnapshot, useApproveZeroTouch, useDeleteAgent, useRestartAgent, useShutdownAgent, useWakeOnLan } from '@/hooks/useAgents';
+import { getDeleteAgentErrorMessage, useAgent, useAgentHardware, useAgentHardwareComponents, useAgentSoftware, useAgentSoftwareSnapshot, useApproveZeroTouch, useDeleteAgent, useRestartAgent, useShutdownAgent, useWakeOnLan } from '@/hooks/useAgents';
 import { formatBytes, formatDate, formatSocketFamily } from './agentDetailUtils';
 import { useTickets } from '@/hooks/useTickets';
 import { useLogs } from '@/hooks/useLogs';
@@ -33,75 +33,6 @@ const levelLabels: Record<number, { label: string; color: 'slate' | 'primary' | 
 };
 
 // formatBytes, formatDate, formatSocketFamily — importadas de ./agentDetailUtils
-
-interface InventoryPrinter {
-  name: string;
-  driverName: string | null;
-  portName: string | null;
-  printerStatus: string | null;
-  isDefault: boolean;
-  isNetworkPrinter: boolean;
-  shared: boolean;
-  shareName: string | null;
-  location: string | null;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
-}
-
-function asNullableString(value: unknown): string | null {
-  return typeof value === 'string' && value.trim() ? value : null;
-}
-
-function asBoolean(value: unknown): boolean {
-  return value === true;
-}
-
-function normalizePrinterEntries(value: unknown): InventoryPrinter[] {
-  if (!Array.isArray(value)) return [];
-
-  return value
-    .filter(isRecord)
-    .map((printer) => ({
-      name: asNullableString(printer.name) ?? 'Impressora sem nome',
-      driverName: asNullableString(printer.driverName),
-      portName: asNullableString(printer.portName),
-      printerStatus: asNullableString(printer.printerStatus),
-      isDefault: asBoolean(printer.isDefault),
-      isNetworkPrinter: asBoolean(printer.isNetworkPrinter),
-      shared: asBoolean(printer.shared),
-      shareName: asNullableString(printer.shareName),
-      location: asNullableString(printer.location),
-    }));
-}
-
-function parseInventoryPrinters(
-  inventoryRaw: string | null,
-  topLevelPrinters?: unknown,
-  topLevelInventoryRaw?: unknown,
-): InventoryPrinter[] {
-  const fromTopLevel = normalizePrinterEntries(topLevelPrinters);
-  if (fromTopLevel.length > 0) return fromTopLevel;
-
-  const rawCandidate = topLevelInventoryRaw ?? inventoryRaw;
-  if (!rawCandidate) return [];
-
-  let parsed: unknown = rawCandidate;
-  if (typeof rawCandidate === 'string') {
-    try {
-      parsed = JSON.parse(rawCandidate);
-    } catch {
-      return [];
-    }
-  }
-
-  if (!isRecord(parsed)) return [];
-  const components = parsed.components;
-  if (!isRecord(components)) return [];
-
-  return normalizePrinterEntries(components.printers);
-}
 
 function printerStatusColor(status: string | null): 'success' | 'warning' | 'danger' | 'slate' {
   if (!status) return 'slate';
@@ -167,6 +98,7 @@ export default function AgentDetail() {
   const agent = useAgent(id!);
   const liveHeartbeat = useAgentHeartbeat(id!);
   const hw = useAgentHardware(id!);
+  const hwComponents = useAgentHardwareComponents(id!);
   const software = useAgentSoftware(id!, {
     limit: Number(softwareLimitSelected),
     search: softwareSearchApplied,
@@ -374,13 +306,9 @@ export default function AgentDetail() {
   const freeDiskBytes = disks.reduce((acc, disk) => acc + (disk.freeSpaceBytes ?? 0), 0);
   const usedDiskBytes = Math.max(0, totalDiskBytes - freeDiskBytes);
   const diskUsagePercent = totalDiskBytes > 0 ? Math.min(100, Math.round((usedDiskBytes / totalDiskBytes) * 100)) : null;
-  const printers = parseInventoryPrinters(
-    hw.data?.hardware?.inventoryRaw ?? null,
-    hw.data?.printers,
-    hw.data?.inventoryRaw,
-  );
-  const listeningPorts: ListeningPortInfo[] = hw.data?.listeningPorts ?? [];
-  const openSockets: OpenSocketInfo[] = hw.data?.openSockets ?? [];
+  const printers = hwComponents.data?.printers ?? [];
+  const listeningPorts: ListeningPortInfo[] = hwComponents.data?.listeningPorts ?? [];
+  const openSockets: OpenSocketInfo[] = hwComponents.data?.openSockets ?? [];
   const currentNodeLinkItem = nodeLinkPreviewReport?.items.find((item) => item.agentId === a.id) ?? null;
   const machineScoreRaw = a.machineScore ?? hw.data?.hardware?.machineScore ?? null;
   const machineScore = typeof machineScoreRaw === 'number' && Number.isFinite(machineScoreRaw)
@@ -739,7 +667,7 @@ export default function AgentDetail() {
       await agentsApi.refreshData(id, { listeningPorts: true });
       toast.success('Solicitação de coleta de portas enviada ao agente.');
       await new Promise(r => setTimeout(r, 2000));
-      await hw.refetch();
+      await hwComponents.refetch();
     } catch (error) {
       const msg = error instanceof ApiError ? error.message : 'Falha ao solicitar refresh de portas.';
       toast.error(msg);
@@ -755,7 +683,7 @@ export default function AgentDetail() {
       await agentsApi.refreshData(id, { openConnections: true });
       toast.success('Solicitação de coleta de conexões enviada ao agente.');
       await new Promise(r => setTimeout(r, 2000));
-      await hw.refetch();
+      await hwComponents.refetch();
     } catch (error) {
       const msg = error instanceof ApiError ? error.message : 'Falha ao solicitar refresh de conexões.';
       toast.error(msg);
@@ -788,7 +716,7 @@ export default function AgentDetail() {
       await agentsApi.refreshData(id, { printers: true, hardware: true });
       toast.success('Solicitação de coleta de impressoras enviada ao agente.');
       await new Promise(r => setTimeout(r, 2000));
-      await hw.refetch();
+      await hwComponents.refetch();
     } catch (error) {
       const msg = error instanceof ApiError ? error.message : 'Falha ao solicitar refresh de impressoras.';
       toast.error(msg);
@@ -1710,7 +1638,7 @@ export default function AgentDetail() {
                 size="sm"
                 variant="ghost"
                 onClick={handleRefreshPrinters}
-                loading={isRefreshingPrinters || hw.isFetching}
+                loading={isRefreshingPrinters || hwComponents.isFetching}
                 disabled={!isOnlineNow}
                 title={!isOnlineNow ? 'Agente offline \u2014 refresh indisponível' : 'Solicitar nova coleta de impressoras ao agente'}
               >
@@ -1768,7 +1696,7 @@ export default function AgentDetail() {
                 size="sm"
                 variant="ghost"
                 onClick={handleRefreshPorts}
-                loading={isRefreshingPorts || hw.isFetching}
+                loading={isRefreshingPorts || hwComponents.isFetching}
                 disabled={!isOnlineNow}
                 title={!isOnlineNow ? 'Agente offline \u2014 refresh indisponível' : 'Solicitar nova coleta de portas ao agente'}
               >
@@ -1802,7 +1730,7 @@ export default function AgentDetail() {
                 size="sm"
                 variant="ghost"
                 onClick={handleRefreshConnections}
-                loading={isRefreshingConnections || hw.isFetching}
+                loading={isRefreshingConnections || hwComponents.isFetching}
                 disabled={!isOnlineNow}
                 title={!isOnlineNow ? 'Agente offline \u2014 refresh indisponível' : 'Solicitar nova coleta de conexões ao agente'}
               >

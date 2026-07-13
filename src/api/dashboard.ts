@@ -57,6 +57,15 @@ export interface DashboardAutomationSummaryDto {
   successRate: number;
 }
 
+export interface DashboardClientsSummaryDto {
+  total: number;
+  active: number;
+}
+
+export interface DashboardSitesSummaryDto {
+  total: number;
+}
+
 export interface DashboardSummaryDto {
   scope: DashboardScopeDto;
   period: DashboardPeriodDto;
@@ -65,6 +74,8 @@ export interface DashboardSummaryDto {
   tickets: DashboardTicketsSummaryDto;
   logs: DashboardLogsSummaryDto;
   automation: DashboardAutomationSummaryDto;
+  clients: DashboardClientsSummaryDto;
+  sites: DashboardSitesSummaryDto;
   generatedAtUtc: string;
 }
 

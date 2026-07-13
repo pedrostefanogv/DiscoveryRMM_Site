@@ -244,6 +244,18 @@ export interface OpenSocketInfo {
   collectedAt: string;
 }
 
+export interface PrinterInfo {
+  name: string;
+  driverName: string | null;
+  portName: string | null;
+  printerStatus: string | null;
+  isDefault: boolean;
+  isNetworkPrinter: boolean;
+  shared: boolean;
+  shareName: string | null;
+  location: string | null;
+}
+
 export interface AgentSoftwareInventoryItem {
   inventoryId: string;
   agentId: string;

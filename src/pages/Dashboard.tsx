@@ -203,8 +203,13 @@ export default function Dashboard() {
           <StatCard
             icon={Users}
             label="Clientes"
-            value={realtimeStats.data?.business?.clients?.total ?? '\u2014'}
+            value={ds?.clients.total ?? '\u2014'}
             tone="primary"
+            trend={
+              ds?.clients.active !== undefined ? (
+                <span className="text-xs text-muted">{ds.clients.active} ativo{ds.clients.active !== 1 ? 's' : ''}</span>
+              ) : undefined
+            }
           />
         </button>
       </div>

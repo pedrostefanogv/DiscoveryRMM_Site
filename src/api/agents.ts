@@ -8,6 +8,7 @@ import type {
   MemoryModuleInfo,
   ListeningPortInfo,
   OpenSocketInfo,
+  PrinterInfo,
   AgentSoftwareInventoryPage,
   AgentSoftwareInventorySnapshot,
   AgentSoftwareOrder,
@@ -36,6 +37,16 @@ import type {
 } from "./types";
 
 const BASE = "/api/v1/agents";
+
+export interface HardwareComponentsResponse {
+  printers: PrinterInfo[];
+  listeningPorts: ListeningPortInfo[];
+  openSockets: OpenSocketInfo[];
+  disks: DiskInfo[];
+  networkAdapters: NetworkAdapterInfo[];
+  memoryModules: MemoryModuleInfo[];
+  collectedAt: string;
+}
 
 export interface HardwareReport {
   hardware: AgentHardwareInfo | null;
@@ -89,6 +100,9 @@ export const agentsApi = {
   // Hardware
   getHardware: (id: string) =>
     api.get<HardwareReport>(`${BASE}/${id}/hardware`),
+
+  getHardwareComponents: (id: string) =>
+    api.get<HardwareComponentsResponse>(`${BASE}/${id}/hardware/components`),
 
   reportHardware: (id: string, data: HardwareReportRequest) =>
     api.post<void>(`${BASE}/${id}/hardware`, data),

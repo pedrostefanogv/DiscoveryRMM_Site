@@ -33,6 +33,8 @@ const KEYS = {
   ) => [...KEYS.all, "software", id, params] as const,
   softwareSnapshot: (id: string) =>
     [...KEYS.all, "softwareSnapshot", id] as const,
+  hardwareComponents: (id: string) =>
+    [...KEYS.all, "hardwareComponents", id] as const,
   commands: (id: string) => [...KEYS.all, "commands", id] as const,
   tokens: (id: string) => [...KEYS.all, "tokens", id] as const,
 };
@@ -174,6 +176,15 @@ export function useAgentSoftwareSnapshot(id: string) {
     queryKey: KEYS.softwareSnapshot(id),
     queryFn: () => agentsApi.getSoftwareSnapshot(id),
     enabled: !!id,
+  });
+}
+
+export function useAgentHardwareComponents(id: string) {
+  return useQuery({
+    queryKey: KEYS.hardwareComponents(id),
+    queryFn: () => agentsApi.getHardwareComponents(id),
+    enabled: !!id,
+    staleTime: 30_000,
   });
 }
 
