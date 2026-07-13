@@ -3,6 +3,7 @@ import {
   useMutation,
   useQueryClient,
   useInfiniteQuery,
+  keepPreviousData,
 } from "@tanstack/react-query";
 import { ApiError, agentsApi } from "@/api";
 import type {
@@ -163,6 +164,8 @@ export function useAgentSoftware(
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
     enabled: !!id,
+    staleTime: 30_000,
+    placeholderData: keepPreviousData,
   });
 }
 

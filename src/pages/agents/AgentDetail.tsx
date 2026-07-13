@@ -340,29 +340,20 @@ export default function AgentDetail() {
     };
   }, [a, liveHeartbeat, now]);
 
-  if (agent.isLoading) return <Loading />;
-  if (agent.isError || !a || !aWithHeartbeat) return <ErrorDisplay onRetry={() => agent.refetch()} />;
-
-  const isOnlineNow = isAgentOnlineNow(aWithHeartbeat, now);
-  const isZeroTouchPending = aWithHeartbeat.zeroTouchPending === true;
-  const softwareAllItems = software.data?.pages.flatMap(p => p.items ?? []) ?? [];
-  const softwareTotalCount = softwareSnapshot.data?.totalInstalled ?? softwareAllItems.length;
+  // ── Software pagination data (computed BEFORE early returns — hooks must be unconditional) ──
+  const softwareTotalCount = softwareSnapshot.data?.totalInstalled ?? 0;
   const limit = Number(softwareLimitSelected);
-  // Cursor pagination: total de páginas baseado no total real (snapshot), estável entre avanços
   const softwareTotalPages = Math.max(1, Math.ceil(softwareTotalCount / limit));
-  const startIdx = (softwarePage - 1) * limit;
-  const softwareItems = softwareAllItems.slice(startIdx, startIdx + limit);
-  // Precisamos buscar mais se o cursor tem next e ainda não carregamos itens para a página atual
-  const needsMoreItems = software.hasNextPage && startIdx + limit > softwareAllItems.length;
-  const canGoPrevSoftwarePage = softwarePage > 1 && !software.isFetching;
-  const canGoNextSoftwarePage = softwarePage < softwareTotalPages && !software.isFetching;
+  // Cada página visual corresponde a uma página de cursor carregada no array `pages`
+  const softwareItems = software.data?.pages[softwarePage - 1]?.items ?? [];
+  const currentPageLoaded = !!(software.data?.pages[softwarePage - 1]);
 
-  // Auto-fetch next pages quando necessário (ex.: após refetch que reseta o cursor)
+  // Auto-fetch da página de cursor atual quando ela ainda não foi carregada
   useEffect(() => {
-    if (needsMoreItems && !software.isFetching && !software.isFetchingNextPage) {
+    if (!currentPageLoaded && software.hasNextPage && !software.isFetching && !software.isFetchingNextPage) {
       software.fetchNextPage();
     }
-  }, [needsMoreItems, software.isFetching, software.isFetchingNextPage, software.fetchNextPage]);
+  }, [currentPageLoaded, software.hasNextPage, software.isFetching, software.isFetchingNextPage, software.fetchNextPage]);
 
   // Corrige página para o range válido quando o total de itens diminui (ex.: após refetch)
   useEffect(() => {
@@ -370,6 +361,14 @@ export default function AgentDetail() {
       setSoftwarePage(softwareTotalPages);
     }
   }, [softwareTotalPages, softwarePage]);
+
+  if (agent.isLoading) return <Loading />;
+  if (agent.isError || !a || !aWithHeartbeat) return <ErrorDisplay onRetry={() => agent.refetch()} />;
+
+  const isOnlineNow = isAgentOnlineNow(aWithHeartbeat, now);
+  const isZeroTouchPending = aWithHeartbeat.zeroTouchPending === true;
+  const canGoPrevSoftwarePage = softwarePage > 1 && !software.isFetching;
+  const canGoNextSoftwarePage = softwarePage < softwareTotalPages && !software.isFetching;
   const disks = hw.data?.disks ?? [];
   const totalDiskBytes = disks.reduce((acc, disk) => acc + (disk.totalSizeBytes ?? 0), 0);
   const freeDiskBytes = disks.reduce((acc, disk) => acc + (disk.freeSpaceBytes ?? 0), 0);
@@ -724,13 +723,8 @@ export default function AgentDetail() {
   };
 
   const goToNextSoftwarePage = () => {
-    const nextPage = softwarePage + 1;
-    const nextStartIdx = (nextPage - 1) * limit;
-    // Verifica se precisa buscar mais itens para a PRÓXIMA página (não a atual)
-    if (software.hasNextPage && nextStartIdx + limit > softwareAllItems.length) {
-      software.fetchNextPage();
-    }
-    setSoftwarePage(nextPage);
+    setSoftwarePage((p) => p + 1);
+    // O useEffect de auto-fetch cuida de buscar a página se necessário
   };
   const goToPreviousSoftwarePage = () => {
     setSoftwarePage((p) => Math.max(1, p - 1));
@@ -1602,13 +1596,20 @@ export default function AgentDetail() {
                   </div>
                 )}
 
-                <DataTable
-                  columns={softwareColumns}
-                  data={softwareItems}
-                  keyExtractor={item => item.inventoryId}
-                  emptyMessage="Nenhum aplicativo encontrado para este agente"
-                  showPagination={false}
-                />
+                <div style={{ minHeight: '400px' }} className="relative">
+                  {software.isFetching && !currentPageLoaded && (
+                    <div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-surface/60 backdrop-blur-sm">
+                      <Loading message="Carregando..." />
+                    </div>
+                  )}
+                  <DataTable
+                    columns={softwareColumns}
+                    data={softwareItems}
+                    keyExtractor={item => item.inventoryId}
+                    emptyMessage="Nenhum aplicativo encontrado para este agente"
+                    showPagination={false}
+                  />
+                </div>
                 <div className="mt-4 flex items-center justify-between gap-3">
                   <p className="text-xs text-muted">
                     Página {softwarePage} de {softwareTotalPages} · {softwareTotalCount} itens no total
