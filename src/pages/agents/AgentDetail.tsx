@@ -273,19 +273,21 @@ export default function AgentDetail() {
   }, [a, liveHeartbeat, now]);
 
   // ── Software pagination data (computed BEFORE early returns — hooks must be unconditional) ──
-  const softwareTotalCount = softwareSnapshot.data?.totalInstalled ?? 0;
+  const softwareAllItems = software.data?.pages.flatMap(p => p.items ?? []) ?? [];
+  const softwareTotalCount = softwareSnapshot.data?.totalInstalled ?? softwareAllItems.length;
   const limit = Number(softwareLimitSelected);
   const softwareTotalPages = Math.max(1, Math.ceil(softwareTotalCount / limit));
-  // Cada página visual corresponde a uma página de cursor carregada no array `pages`
-  const softwareItems = software.data?.pages[softwarePage - 1]?.items ?? [];
-  const currentPageLoaded = !!(software.data?.pages[softwarePage - 1]);
+  const startIdx = (softwarePage - 1) * limit;
+  const softwareItems = softwareAllItems.slice(startIdx, startIdx + limit);
+  // Precisamos buscar mais se o cursor tem next e ainda não carregamos itens para a página atual
+  const needsMoreItems = software.hasNextPage && startIdx + limit > softwareAllItems.length;
 
-  // Auto-fetch da página de cursor atual quando ela ainda não foi carregada
+  // Auto-fetch next pages quando necessário (ex.: paginação avança além do que já carregamos)
   useEffect(() => {
-    if (!currentPageLoaded && software.hasNextPage && !software.isFetching && !software.isFetchingNextPage) {
+    if (needsMoreItems && !software.isFetching && !software.isFetchingNextPage) {
       software.fetchNextPage();
     }
-  }, [currentPageLoaded, software.hasNextPage, software.isFetching, software.isFetchingNextPage, software.fetchNextPage]);
+  }, [needsMoreItems, software.isFetching, software.isFetchingNextPage, software.fetchNextPage]);
 
   // Corrige página para o range válido quando o total de itens diminui (ex.: após refetch)
   useEffect(() => {
@@ -1525,11 +1527,6 @@ export default function AgentDetail() {
                 )}
 
                 <div style={{ minHeight: '400px' }} className="relative">
-                  {software.isFetching && !currentPageLoaded && (
-                    <div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-surface/60 backdrop-blur-sm">
-                      <Loading message="Carregando..." />
-                    </div>
-                  )}
                   <DataTable
                     columns={softwareColumns}
                     data={softwareItems}
