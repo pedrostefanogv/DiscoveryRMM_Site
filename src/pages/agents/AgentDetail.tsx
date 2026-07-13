@@ -99,8 +99,11 @@ export default function AgentDetail() {
   const liveHeartbeat = useAgentHeartbeat(id!);
   const hw = useAgentHardware(id!);
   const hwComponents = useAgentHardwareComponents(id!);
+  // Busca todos os itens de uma vez (limit=500) e faz paginação client-side.
+  // O cursor pagination do backend retorna itens duplicados entre páginas,
+  // então usar fetchNextPage + slice client-side é inviável.
   const software = useAgentSoftware(id!, {
-    limit: Number(softwareLimitSelected),
+    limit: 500,
     search: softwareSearchApplied,
     order: softwareOrder,
   });
@@ -272,15 +275,15 @@ export default function AgentDetail() {
     };
   }, [a, liveHeartbeat, now]);
 
-  // ── Software pagination data (computed BEFORE early returns — hooks must be unconditional) ──
+  // ── Software pagination data (puramente client-side — todos os itens vêm em uma única página da API) ──
   const softwareAllItems = software.data?.pages.flatMap(p => p.items ?? []) ?? [];
-  const softwareTotalCount = softwareSnapshot.data?.totalInstalled ?? softwareAllItems.length;
+  const softwareTotalCount = softwareAllItems.length;
   const limit = Number(softwareLimitSelected);
   const softwareTotalPages = Math.max(1, Math.ceil(softwareTotalCount / limit));
   const startIdx = (softwarePage - 1) * limit;
   const softwareItems = softwareAllItems.slice(startIdx, startIdx + limit);
 
-  // Corrige página para o range válido quando o total de itens diminui (ex.: após refetch)
+  // Corrige página para o range válido quando o total de itens diminui (ex.: após busca/filtro)
   useEffect(() => {
     if (softwareTotalPages > 0 && softwarePage > softwareTotalPages) {
       setSoftwarePage(softwareTotalPages);
@@ -292,8 +295,8 @@ export default function AgentDetail() {
 
   const isOnlineNow = isAgentOnlineNow(aWithHeartbeat, now);
   const isZeroTouchPending = aWithHeartbeat.zeroTouchPending === true;
-  const canGoPrevSoftwarePage = softwarePage > 1 && !software.isFetchingNextPage;
-  const canGoNextSoftwarePage = softwarePage < softwareTotalPages && !software.isFetchingNextPage;
+  const canGoPrevSoftwarePage = softwarePage > 1;
+  const canGoNextSoftwarePage = softwarePage < softwareTotalPages;
   const disks = hw.data?.disks ?? [];
   const totalDiskBytes = disks.reduce((acc, disk) => acc + (disk.totalSizeBytes ?? 0), 0);
   const freeDiskBytes = disks.reduce((acc, disk) => acc + (disk.freeSpaceBytes ?? 0), 0);
@@ -643,26 +646,8 @@ export default function AgentDetail() {
     }
   };
 
-  const goToNextSoftwarePage = () => {
-    const nextPage = softwarePage + 1;
-    const nextStartIdx = (nextPage - 1) * limit;
-
-    // Já temos itens suficientes no cache — avança direto
-    if (nextStartIdx + limit <= softwareAllItems.length) {
-      setSoftwarePage(nextPage);
-      return;
-    }
-
-    // Precisa buscar mais dados do backend — dispara fetchNextPage e avança ao concluir
-    if (!software.isFetchingNextPage && software.hasNextPage) {
-      software.fetchNextPage().then(() => {
-        setSoftwarePage(nextPage);
-      });
-    }
-  };
-  const goToPreviousSoftwarePage = () => {
-    setSoftwarePage((p) => Math.max(1, p - 1));
-  };
+  const goToNextSoftwarePage = () => setSoftwarePage((p) => p + 1);
+  const goToPreviousSoftwarePage = () => setSoftwarePage((p) => Math.max(1, p - 1));
 
   // -- On-demand data refresh handlers ----------------------------------
 
