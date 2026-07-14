@@ -63,10 +63,10 @@ export default function AgentDetail() {
   const [softwareSearchApplied, setSoftwareSearchApplied] = useState('');
   const [softwarePage, setSoftwarePage] = useState(1);
   const [listeningPortsPage, setListeningPortsPage] = useState(1);
-  const [listeningPortsLimit, setListeningPortsLimit] = useState('20');
+  const [listeningPortsLimit, setListeningPortsLimit] = useState('10');
   const [listeningPortsSearch, setListeningPortsSearch] = useState('');
   const [openSocketsPage, setOpenSocketsPage] = useState(1);
-  const [openSocketsLimit, setOpenSocketsLimit] = useState('20');
+  const [openSocketsLimit, setOpenSocketsLimit] = useState('10');
   const [openSocketsSearch, setOpenSocketsSearch] = useState('');
   const [allLabels, setAllLabels] = useState<AgentLabel[]>([]);
   const [isLoadingLabels, setIsLoadingLabels] = useState(true);
@@ -841,7 +841,7 @@ export default function AgentDetail() {
     }
   };
 
-  const softwareLimitOptions = [
+  const pageSizeOptions = [
     { value: '10', label: '10 por página' },
     { value: '30', label: '30 por página' },
     { value: '50', label: '50 por página' },
@@ -851,12 +851,6 @@ export default function AgentDetail() {
   const softwareOrderOptions = [
     { value: 'desc', label: 'Mais recente primeiro' },
     { value: 'asc', label: 'Mais antigo primeiro' },
-  ];
-  const pageSizeOptions = [
-    { value: '20', label: '20 por página' },
-    { value: '50', label: '50 por página' },
-    { value: '100', label: '100 por página' },
-    { value: 'max', label: 'Todos' },
   ];
   const softwareColumns: Column<AgentSoftwareInventoryItem>[] = [
     {
@@ -1614,7 +1608,7 @@ export default function AgentDetail() {
                   />
                   <Select
                     value={softwareLimitSelected}
-                    options={softwareLimitOptions}
+                    options={pageSizeOptions}
                     onChange={(e) => handleSoftwareLimitChange(e.target.value)}
                   />
                   <Button type="submit" variant="secondary" size="sm">
