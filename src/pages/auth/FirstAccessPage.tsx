@@ -156,7 +156,7 @@ export default function FirstAccessPage() {
       />
 
       {statusError && (
-        <div className="mb-4 rounded-xl border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-red-100">
+        <div className="mb-4 rounded-xl border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-red-800 dark:text-red-100">
           {statusError}
         </div>
       )}

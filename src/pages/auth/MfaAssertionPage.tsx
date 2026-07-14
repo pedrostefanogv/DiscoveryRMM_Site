@@ -222,7 +222,7 @@ export default function MfaAssertionPage() {
         )}
 
         {error && (
-          <div className="rounded-2xl border border-danger/30 bg-danger/10 p-4 text-sm text-red-100">
+          <div className="rounded-2xl border border-danger/30 bg-danger/10 p-4 text-sm text-red-800 dark:text-red-100">
             <div className="flex items-start gap-3">
               <TriangleAlert className="mt-0.5 h-4 w-4" />
               {error}

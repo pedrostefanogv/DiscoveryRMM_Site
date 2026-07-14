@@ -221,7 +221,7 @@ export default function MfaRegistrationPage() {
         </div>
 
         {error && (
-          <div className="rounded-2xl border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-red-100">
+          <div className="rounded-2xl border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-red-800 dark:text-red-100">
             {error}
           </div>
         )}
