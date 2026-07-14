@@ -275,28 +275,58 @@ export default function AgentDetail() {
     };
   }, [a, liveHeartbeat, now]);
 
-  // ── Software pagination data (puramente client-side — todos os itens vêm em uma única página da API) ──
-  const softwareAllItems = software.data?.pages.flatMap(p => p.items ?? []) ?? [];
-  const softwareTotalCount = softwareAllItems.length;
-  const limit = Number(softwareLimitSelected);
+  // ── Software pagination data (client-side sobre todos os itens carregados da API) ──
+  // Deduplica por inventoryId (backend pode retornar duplicatas entre páginas de cursor)
+  const softwareAllItems = useMemo(() => {
+    const allPages = software.data?.pages.flatMap(p => p.items ?? []) ?? [];
+    const seen = new Set<string>();
+    return allPages.filter(item => {
+      if (seen.has(item.inventoryId)) return false;
+      seen.add(item.inventoryId);
+      return true;
+    });
+  }, [software.data?.pages]);
+
+  // snapshot.totalInstalled é a fonte de verdade para o total; fallback para itens carregados
+  const softwareTotalCount = softwareSnapshot.data?.totalInstalled ?? softwareAllItems.length;
+  const limit = softwareLimitSelected === 'max' ? Math.max(1, softwareTotalCount) : Number(softwareLimitSelected);
   const softwareTotalPages = Math.max(1, Math.ceil(softwareTotalCount / limit));
-  const startIdx = (softwarePage - 1) * limit;
+  const safeSoftwarePage = Math.min(softwarePage, softwareTotalPages);
+  const startIdx = (safeSoftwarePage - 1) * limit;
   const softwareItems = softwareAllItems.slice(startIdx, startIdx + limit);
 
-  // Corrige página para o range válido quando o total de itens diminui (ex.: após busca/filtro)
+  // Auto-fetch de páginas restantes da API enquanto houver hasMore
   useEffect(() => {
-    if (softwareTotalPages > 0 && softwarePage > softwareTotalPages) {
-      setSoftwarePage(softwareTotalPages);
+    if (
+      software.hasNextPage &&
+      !software.isFetching &&
+      !software.isFetchingNextPage &&
+      software.data
+    ) {
+      software.fetchNextPage();
     }
-  }, [softwareTotalPages, softwarePage]);
+  }, [
+    software.hasNextPage,
+    software.isFetching,
+    software.isFetchingNextPage,
+    software.fetchNextPage,
+    software.data,
+  ]);
+
+  // Corrige estado da página para o range válido quando o total diminui (ex.: busca/filtro)
+  useEffect(() => {
+    if (softwarePage !== safeSoftwarePage) {
+      setSoftwarePage(safeSoftwarePage);
+    }
+  }, [softwarePage, safeSoftwarePage]);
 
   if (agent.isLoading) return <Loading />;
   if (agent.isError || !a || !aWithHeartbeat) return <ErrorDisplay onRetry={() => agent.refetch()} />;
 
   const isOnlineNow = isAgentOnlineNow(aWithHeartbeat, now);
   const isZeroTouchPending = aWithHeartbeat.zeroTouchPending === true;
-  const canGoPrevSoftwarePage = softwarePage > 1;
-  const canGoNextSoftwarePage = softwarePage < softwareTotalPages;
+  const canGoPrevSoftwarePage = safeSoftwarePage > 1;
+  const canGoNextSoftwarePage = safeSoftwarePage < softwareTotalPages;
   const disks = hw.data?.disks ?? [];
   const totalDiskBytes = disks.reduce((acc, disk) => acc + (disk.totalSizeBytes ?? 0), 0);
   const freeDiskBytes = disks.reduce((acc, disk) => acc + (disk.freeSpaceBytes ?? 0), 0);
@@ -333,7 +363,7 @@ export default function AgentDetail() {
   const processorValue = hw.data?.hardware?.processor
     ? `${hw.data.hardware.processorCores ?? '?'}C / ${hw.data.hardware.processorThreads ?? '?'}T`
     : '\u2014';
-  const softwareTotalInstalled = softwareSnapshot.isLoading ? '\u2014' : (softwareSnapshot.data?.totalInstalled ?? 0);
+  const softwareTotalInstalled = softwareSnapshot.isLoading ? '\u2014' : (softwareSnapshot.data?.totalInstalled ?? softwareTotalCount);
   const softwareLastCollectedAt = softwareSnapshot.data?.lastCollectedAt ?? softwareSnapshot.data?.updatedAt ?? null;
   const softwareLastCollectedLabel = softwareLastCollectedAt
     ? new Date(softwareLastCollectedAt).toLocaleString('pt-BR')
@@ -646,7 +676,7 @@ export default function AgentDetail() {
     }
   };
 
-  const goToNextSoftwarePage = () => setSoftwarePage((p) => p + 1);
+  const goToNextSoftwarePage = () => setSoftwarePage((p) => Math.min(p + 1, softwareTotalPages));
   const goToPreviousSoftwarePage = () => setSoftwarePage((p) => Math.max(1, p - 1));
 
   // -- On-demand data refresh handlers ----------------------------------
@@ -689,9 +719,19 @@ export default function AgentDetail() {
     try {
       await agentsApi.refreshData(id, { software: true });
       toast.success('Solicitação de coleta de software enviada ao agente.');
-      await new Promise(r => setTimeout(r, 3000));
+
+      // Polling do snapshot até que updatedAt mude (máx 10 tentativas, 2s cada)
+      const previousUpdatedAt = softwareSnapshot.data?.updatedAt;
+      let attempts = 0;
+      const maxAttempts = 10;
+      while (attempts < maxAttempts) {
+        await new Promise(r => setTimeout(r, 2000));
+        const refreshed = await softwareSnapshot.refetch();
+        if (refreshed.data?.updatedAt && refreshed.data.updatedAt !== previousUpdatedAt) break;
+        attempts++;
+      }
+
       await software.refetch();
-      await softwareSnapshot.refetch();
     } catch (error) {
       const msg = error instanceof ApiError ? error.message : 'Falha ao solicitar refresh de software.';
       toast.error(msg);
@@ -720,6 +760,8 @@ export default function AgentDetail() {
     { value: '10', label: '10 por página' },
     { value: '30', label: '30 por página' },
     { value: '50', label: '50 por página' },
+    { value: '100', label: '100 por página' },
+    { value: 'max', label: 'Todos' },
   ];
   const softwareOrderOptions = [
     { value: 'desc', label: 'Mais recente primeiro' },
@@ -729,6 +771,7 @@ export default function AgentDetail() {
     {
       key: 'name',
       header: 'Aplicativo',
+      sortable: false,
       render: item => (
         <div>
           <p className="font-medium text-foreground">{item.name}</p>
@@ -740,16 +783,19 @@ export default function AgentDetail() {
       key: 'version',
       header: 'Versão',
       className: 'font-mono',
+      sortable: false,
       render: item => item.version ?? '\u2014',
     },
     {
       key: 'source',
       header: 'Fonte',
+      sortable: false,
       render: item => item.source ?? '\u2014',
     },
     {
       key: 'collectedAt',
       header: 'Última coleta',
+      sortable: false,
       render: item => formatDate(item.collectedAt),
     },
   ];
@@ -1452,7 +1498,7 @@ export default function AgentDetail() {
                 <div className="mb-4 grid gap-3 md:grid-cols-3">
                   <div className="rounded-lg bg-surface-light px-3 py-2">
                     <p className="text-xs text-muted">Total instalado</p>
-                    <p className="text-sm font-medium text-foreground">{softwareSnapshot.data?.totalInstalled ?? softwareTotalCount}</p>
+                    <p className="text-sm font-medium text-foreground">{softwareTotalCount}</p>
                   </div>
                   <div className="rounded-lg bg-surface-light px-3 py-2">
                     <p className="text-xs text-muted">Primeira detecção</p>
@@ -1492,7 +1538,7 @@ export default function AgentDetail() {
                 {softwareItems.length > 0 && (
                   <div className="mb-4 flex items-center justify-between gap-3">
                     <p className="text-xs text-muted">
-                      Página {softwarePage} de {softwareTotalPages} · {softwareTotalCount} itens no total
+                      Página {safeSoftwarePage} de {softwareTotalPages} · {softwareTotalCount} itens no total
                       {softwareSearchApplied ? ` | filtro: "${softwareSearchApplied}"` : ''}
                     </p>
                     <div className="flex items-center gap-2">
@@ -1500,7 +1546,7 @@ export default function AgentDetail() {
                         Voltar
                       </Button>
                       <div className="rounded-md border border-border px-3 py-1 text-xs text-muted-foreground">
-                        {softwarePage}
+                        {safeSoftwarePage}
                       </div>
                       <Button
                         variant="secondary"
@@ -1526,7 +1572,7 @@ export default function AgentDetail() {
                 </div>
                 <div className="mt-4 flex items-center justify-between gap-3">
                   <p className="text-xs text-muted">
-                    Página {softwarePage} de {softwareTotalPages} · {softwareTotalCount} itens no total
+                    Página {safeSoftwarePage} de {softwareTotalPages} · {softwareTotalCount} itens no total
                     {softwareSearchApplied ? ` | filtro: "${softwareSearchApplied}"` : ''}
                   </p>
                   <div className="flex items-center gap-2">
@@ -1534,7 +1580,7 @@ export default function AgentDetail() {
                       Voltar
                     </Button>
                     <div className="rounded-md border border-border px-3 py-1 text-xs text-muted-foreground">
-                      {softwarePage}
+                      {safeSoftwarePage}
                     </div>
                     <Button
                       variant="secondary"
