@@ -92,6 +92,16 @@ function normalizeNatsUrl(url: string): string {
     return `wss://${trimmed.slice("tls://".length)}`;
   }
 
+  // Path-only values (e.g. "/nats/") resolve against current origin.
+  if (trimmed.startsWith("/")) {
+    try {
+      const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
+      return `${proto}//${window.location.host}${trimmed}`;
+    } catch {
+      return `wss://${trimmed}`;
+    }
+  }
+
   // Bare host/path values are mapped to secure websocket in browser contexts.
   if (!trimmed.includes("://")) {
     return `wss://${trimmed}`;
