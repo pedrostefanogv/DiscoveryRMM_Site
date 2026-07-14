@@ -326,6 +326,77 @@ export default function AgentDetail() {
     }
   }, [softwarePage, safeSoftwarePage]);
 
+  // ── Listening Ports / Open Sockets — extrair do hwComponents (antes dos early returns) ──
+  const listeningPorts: ListeningPortInfo[] = hwComponents.data?.listeningPorts ?? [];
+  const openSockets: OpenSocketInfo[] = hwComponents.data?.openSockets ?? [];
+
+  // ── Listening Ports pagination data (client-side) ──
+  const portsFiltered = useMemo(() => {
+    const q = listeningPortsSearch.toLowerCase();
+    if (!q) return listeningPorts;
+    return listeningPorts.filter(
+      p =>
+        (p.processName ?? '').toLowerCase().includes(q) ||
+        String(p.processId).includes(q) ||
+        (p.protocol ?? '').toLowerCase().includes(q) ||
+        (p.address ?? '').toLowerCase().includes(q) ||
+        String(p.port).includes(q) ||
+        (p.processPath ?? '').toLowerCase().includes(q),
+    );
+  }, [listeningPorts, listeningPortsSearch]);
+  const portsLimit = Number(listeningPortsLimit);
+  const portsTotalCount = portsFiltered.length;
+  const portsTotalPages = Math.max(1, Math.ceil(portsTotalCount / portsLimit));
+  const safePortsPage = Math.min(listeningPortsPage, portsTotalPages);
+  const portsStartIdx = (safePortsPage - 1) * portsLimit;
+  const portsPageItems = portsFiltered.slice(portsStartIdx, portsStartIdx + portsLimit);
+
+  useEffect(() => {
+    if (listeningPortsPage !== safePortsPage) {
+      setListeningPortsPage(safePortsPage);
+    }
+  }, [listeningPortsPage, safePortsPage]);
+
+  const canGoPrevPortsPage = safePortsPage > 1;
+  const canGoNextPortsPage = safePortsPage < portsTotalPages;
+  const resetPortsPagination = () => setListeningPortsPage(1);
+  const goToNextPortsPage = () => setListeningPortsPage((p) => Math.min(p + 1, portsTotalPages));
+  const goToPreviousPortsPage = () => setListeningPortsPage((p) => Math.max(1, p - 1));
+
+  // ── Open Sockets pagination data (client-side) ──
+  const socketsFiltered = useMemo(() => {
+    const q = openSocketsSearch.toLowerCase();
+    if (!q) return openSockets;
+    return openSockets.filter(
+      s =>
+        (s.processName ?? '').toLowerCase().includes(q) ||
+        String(s.processId).includes(q) ||
+        (s.protocol ?? '').toLowerCase().includes(q) ||
+        (s.localAddress ?? '').toLowerCase().includes(q) ||
+        (s.remoteAddress ?? '').toLowerCase().includes(q) ||
+        String(s.localPort).includes(q) ||
+        String(s.remotePort).includes(q),
+    );
+  }, [openSockets, openSocketsSearch]);
+  const socketsLimit = Number(openSocketsLimit);
+  const socketsTotalCount = socketsFiltered.length;
+  const socketsTotalPages = Math.max(1, Math.ceil(socketsTotalCount / socketsLimit));
+  const safeSocketsPage = Math.min(openSocketsPage, socketsTotalPages);
+  const socketsStartIdx = (safeSocketsPage - 1) * socketsLimit;
+  const socketsPageItems = socketsFiltered.slice(socketsStartIdx, socketsStartIdx + socketsLimit);
+
+  useEffect(() => {
+    if (openSocketsPage !== safeSocketsPage) {
+      setOpenSocketsPage(safeSocketsPage);
+    }
+  }, [openSocketsPage, safeSocketsPage]);
+
+  const canGoPrevSocketsPage = safeSocketsPage > 1;
+  const canGoNextSocketsPage = safeSocketsPage < socketsTotalPages;
+  const resetSocketsPagination = () => setOpenSocketsPage(1);
+  const goToNextSocketsPage = () => setOpenSocketsPage((p) => Math.min(p + 1, socketsTotalPages));
+  const goToPreviousSocketsPage = () => setOpenSocketsPage((p) => Math.max(1, p - 1));
+
   if (agent.isLoading) return <Loading />;
   if (agent.isError || !a || !aWithHeartbeat) return <ErrorDisplay onRetry={() => agent.refetch()} />;
 
@@ -339,8 +410,6 @@ export default function AgentDetail() {
   const usedDiskBytes = Math.max(0, totalDiskBytes - freeDiskBytes);
   const diskUsagePercent = totalDiskBytes > 0 ? Math.min(100, Math.round((usedDiskBytes / totalDiskBytes) * 100)) : null;
   const printers = hwComponents.data?.printers ?? [];
-  const listeningPorts: ListeningPortInfo[] = hwComponents.data?.listeningPorts ?? [];
-  const openSockets: OpenSocketInfo[] = hwComponents.data?.openSockets ?? [];
   const currentNodeLinkItem = nodeLinkPreviewReport?.items.find((item) => item.agentId === a.id) ?? null;
   const machineScoreRaw = a.machineScore ?? hw.data?.hardware?.machineScore ?? null;
   const machineScore = typeof machineScoreRaw === 'number' && Number.isFinite(machineScoreRaw)
@@ -821,73 +890,6 @@ export default function AgentDetail() {
       render: item => formatDate(item.collectedAt),
     },
   ];
-
-  // ── Listening Ports pagination data (client-side) ──
-  const portsFiltered = useMemo(() => {
-    const q = listeningPortsSearch.toLowerCase();
-    if (!q) return listeningPorts;
-    return listeningPorts.filter(
-      p =>
-        (p.processName ?? '').toLowerCase().includes(q) ||
-        String(p.processId).includes(q) ||
-        (p.protocol ?? '').toLowerCase().includes(q) ||
-        (p.address ?? '').toLowerCase().includes(q) ||
-        String(p.port).includes(q) ||
-        (p.processPath ?? '').toLowerCase().includes(q),
-    );
-  }, [listeningPorts, listeningPortsSearch]);
-  const portsLimit = Number(listeningPortsLimit);
-  const portsTotalCount = portsFiltered.length;
-  const portsTotalPages = Math.max(1, Math.ceil(portsTotalCount / portsLimit));
-  const safePortsPage = Math.min(listeningPortsPage, portsTotalPages);
-  const portsStartIdx = (safePortsPage - 1) * portsLimit;
-  const portsPageItems = portsFiltered.slice(portsStartIdx, portsStartIdx + portsLimit);
-
-  useEffect(() => {
-    if (listeningPortsPage !== safePortsPage) {
-      setListeningPortsPage(safePortsPage);
-    }
-  }, [listeningPortsPage, safePortsPage]);
-
-  const resetPortsPagination = () => setListeningPortsPage(1);
-  const canGoPrevPortsPage = safePortsPage > 1;
-  const canGoNextPortsPage = safePortsPage < portsTotalPages;
-  const goToNextPortsPage = () => setListeningPortsPage((p) => Math.min(p + 1, portsTotalPages));
-  const goToPreviousPortsPage = () => setListeningPortsPage((p) => Math.max(1, p - 1));
-
-  // ── Open Sockets pagination data (client-side) ──
-  const socketsFiltered = useMemo(() => {
-    const q = openSocketsSearch.toLowerCase();
-    if (!q) return openSockets;
-    return openSockets.filter(
-      s =>
-        (s.processName ?? '').toLowerCase().includes(q) ||
-        String(s.processId).includes(q) ||
-        (s.protocol ?? '').toLowerCase().includes(q) ||
-        (s.localAddress ?? '').toLowerCase().includes(q) ||
-        (s.remoteAddress ?? '').toLowerCase().includes(q) ||
-        String(s.localPort).includes(q) ||
-        String(s.remotePort).includes(q),
-    );
-  }, [openSockets, openSocketsSearch]);
-  const socketsLimit = Number(openSocketsLimit);
-  const socketsTotalCount = socketsFiltered.length;
-  const socketsTotalPages = Math.max(1, Math.ceil(socketsTotalCount / socketsLimit));
-  const safeSocketsPage = Math.min(openSocketsPage, socketsTotalPages);
-  const socketsStartIdx = (safeSocketsPage - 1) * socketsLimit;
-  const socketsPageItems = socketsFiltered.slice(socketsStartIdx, socketsStartIdx + socketsLimit);
-
-  useEffect(() => {
-    if (openSocketsPage !== safeSocketsPage) {
-      setOpenSocketsPage(safeSocketsPage);
-    }
-  }, [openSocketsPage, safeSocketsPage]);
-
-  const resetSocketsPagination = () => setOpenSocketsPage(1);
-  const canGoPrevSocketsPage = safeSocketsPage > 1;
-  const canGoNextSocketsPage = safeSocketsPage < socketsTotalPages;
-  const goToNextSocketsPage = () => setOpenSocketsPage((p) => Math.min(p + 1, socketsTotalPages));
-  const goToPreviousSocketsPage = () => setOpenSocketsPage((p) => Math.max(1, p - 1));
 
   return (
     <div className="space-y-6">
