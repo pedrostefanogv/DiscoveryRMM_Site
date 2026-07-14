@@ -4,6 +4,7 @@ import { Copy, Download, KeyRound } from 'lucide-react';
 import { Badge, Button, Card, CardHeader, Input, Select, TextArea } from '@/components/ui';
 import {
   useCreateDeployToken,
+  useCreateDeployTokenAndDownload,
   useDeployTokens,
   useDownloadDeployInstaller,
   useRevokeDeployToken,
@@ -12,10 +13,10 @@ import { useClients } from '@/hooks/useClients';
 import { useSites } from '@/hooks/useSites';
 import { agentUpdatesApi, ApiError, deployTokensApi } from '@/api';
 import type {
+  CreateDeployTokenAndDownloadRequest,
   CreateDeployTokenRequest,
   DeployInstallerType,
   DeployToken,
-  DeployTokenDelivery,
   ListDeployTokensParams,
 } from '@/api';
 import toast from 'react-hot-toast';
@@ -24,7 +25,6 @@ interface DeployTokenFormState {
   description: string | null;
   expiresInHours: number | null;
   multiUse: boolean | null;
-  delivery: DeployTokenDelivery;
 }
 
 type DeployTab = 'create' | 'manage';
@@ -133,6 +133,7 @@ function shortenToken(token: string): string {
 
 export default function DeployTokens() {
   const createToken = useCreateDeployToken();
+  const createAndDownload = useCreateDeployTokenAndDownload();
   const revokeToken = useRevokeDeployToken();
   const downloadInstaller = useDownloadDeployInstaller();
 
@@ -145,7 +146,6 @@ export default function DeployTokens() {
     description: null,
     expiresInHours: 24,
     multiUse: false,
-    delivery: 'installer',
   });
 
   const [downloadingTokenId, setDownloadingTokenId] = useState<string | null>(null);
@@ -178,7 +178,7 @@ export default function DeployTokens() {
     [deployTokens.data],
   );
 
-  const generatedToken = createToken.data && 'token' in createToken.data ? createToken.data : null;
+  const generatedToken = createToken.data ?? null;
 
   const tokenStats = useMemo(() => {
     const accumulator = {
@@ -334,37 +334,59 @@ export default function DeployTokens() {
     setForm(current => ({ ...current, ...preset }));
   }
 
-  function handleCreate() {
-    if (!selectedClientId) {
-      toast.error('Selecione o cliente.');
-      return;
-    }
-
-    if (!selectedSiteId) {
-      toast.error('Selecione o site.');
-      return;
-    }
-
-    const payload: CreateDeployTokenRequest = {
+  function buildCreatePayload(): CreateDeployTokenRequest {
+    return {
       clientId: selectedClientId,
       siteId: selectedSiteId,
       description: form.description?.trim() ? form.description.trim() : null,
       expiresInHours: form.expiresInHours,
       multiUse: form.multiUse,
-      delivery: form.delivery,
     };
+  }
 
-    createToken.mutate(payload, {
+  function buildDownloadPayload(): CreateDeployTokenAndDownloadRequest {
+    return {
+      clientId: selectedClientId,
+      siteId: selectedSiteId,
+      description: form.description?.trim() ? form.description.trim() : null,
+      expiresInHours: form.expiresInHours,
+      multiUse: form.multiUse,
+      installerType,
+    };
+  }
+
+  function handleCreateToken() {
+    if (!selectedClientId) {
+      toast.error('Selecione o cliente.');
+      return;
+    }
+    if (!selectedSiteId) {
+      toast.error('Selecione o site.');
+      return;
+    }
+
+    createToken.mutate(buildCreatePayload(), {
+      onSuccess: () => toast.success('Token de deploy criado com sucesso.'),
+      onError: () => toast.error('Erro ao criar token de deploy.'),
+    });
+  }
+
+  function handleCreateAndDownload() {
+    if (!selectedClientId) {
+      toast.error('Selecione o cliente.');
+      return;
+    }
+    if (!selectedSiteId) {
+      toast.error('Selecione o site.');
+      return;
+    }
+
+    createAndDownload.mutate(buildDownloadPayload(), {
       onSuccess: (result) => {
-        if ('token' in result) {
-          toast.success('Token de deploy criado com sucesso.');
-          return;
-        }
-
         triggerInstallerDownload(result.fileName, result.blob);
         toast.success('Instalador gerado com sucesso. Download iniciado.');
       },
-      onError: () => toast.error('Erro ao criar token de deploy.'),
+      onError: () => toast.error('Erro ao gerar instalador.'),
     });
   }
 
@@ -566,7 +588,7 @@ export default function DeployTokens() {
           <Card>
             <CardHeader
               title="Criar agente para instalação"
-              subtitle="Gere token e instalador para onboarding de novos agentes."
+              subtitle="Gere token, baixe instalador mínimo ou pacote completo para onboarding."
             />
             <div className="space-y-4">
               <div className="rounded-xl border border-border bg-surface-light p-3">
@@ -576,7 +598,6 @@ export default function DeployTokens() {
                     variant="ghost"
                     size="sm"
                     onClick={() => applyCreationPreset({
-                      delivery: 'installer',
                       multiUse: false,
                       expiresInHours: 24,
                     })}
@@ -587,7 +608,6 @@ export default function DeployTokens() {
                     variant="ghost"
                     size="sm"
                     onClick={() => applyCreationPreset({
-                      delivery: 'installer',
                       multiUse: true,
                       expiresInHours: 168,
                     })}
@@ -598,7 +618,6 @@ export default function DeployTokens() {
                     variant="ghost"
                     size="sm"
                     onClick={() => applyCreationPreset({
-                      delivery: 'token',
                       multiUse: false,
                       expiresInHours: 24,
                     })}
@@ -617,13 +636,12 @@ export default function DeployTokens() {
               />
 
               <Select
-                label="Entrega"
-                value={form.delivery}
-                onChange={e => setForm(current => ({ ...current, delivery: e.target.value as DeployTokenDelivery }))}
+                label="Tipo de instalador para download"
+                value={installerType}
+                onChange={e => setInstallerType(e.target.value as DeployInstallerType)}
                 options={[
-                  { value: 'token', label: 'Somente token' },
-                  { value: 'installer', label: 'Token + download do instalador mínimo (.exe)' },
-                  { value: 'full-installer', label: 'Token + download do instalador completo (.exe)' },
+                  { value: 'online', label: 'Instalador mínimo (.exe) — ~2 MB, requer internet' },
+                  { value: 'offline', label: 'Pacote offline completo (.zip) — ~150 MB, sem internet' },
                 ]}
               />
 
@@ -649,18 +667,23 @@ export default function DeployTokens() {
                 </label>
               </div>
 
-              <div className="flex justify-end">
+              <div className="flex flex-wrap justify-end gap-2">
                 <Button
-                  onClick={handleCreate}
+                  variant="secondary"
+                  onClick={handleCreateToken}
                   loading={createToken.isPending}
                   disabled={!selectedClientId || !selectedSiteId}
                 >
                   <KeyRound className="h-4 w-4" />
-                  {form.delivery === 'token'
-                    ? 'Gerar token'
-                    : form.delivery === 'full-installer'
-                      ? 'Gerar e baixar instalador completo'
-                      : 'Gerar e baixar instalador mínimo'}
+                  Gerar token
+                </Button>
+                <Button
+                  onClick={handleCreateAndDownload}
+                  loading={createAndDownload.isPending}
+                  disabled={!selectedClientId || !selectedSiteId}
+                >
+                  <Download className="h-4 w-4" />
+                  {installerType === 'offline' ? 'Baixar pacote offline (.zip)' : 'Baixar instalador mínimo (.exe)'}
                 </Button>
               </div>
             </div>

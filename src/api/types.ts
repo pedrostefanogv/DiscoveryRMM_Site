@@ -953,8 +953,6 @@ export interface AdminJobActionResult {
   status?: string | null;
 }
 
-export type DeployTokenDelivery = "token" | "installer" | "full-installer";
-
 export interface DeployInstallerPayload {
   fileName: string;
   blob: Blob;
@@ -1594,7 +1592,15 @@ export interface CreateDeployTokenRequest {
   description: string | null;
   expiresInHours: number | null;
   multiUse: boolean | null;
-  delivery: DeployTokenDelivery;
+}
+
+export interface CreateDeployTokenAndDownloadRequest {
+  clientId: string;
+  siteId: string;
+  description: string | null;
+  expiresInHours: number | null;
+  multiUse: boolean | null;
+  installerType: DeployInstallerType;
 }
 
 export interface CreateApiTokenRequest {

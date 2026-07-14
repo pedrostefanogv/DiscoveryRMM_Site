@@ -1,16 +1,17 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError, deployTokensApi } from "@/api";
 import type {
+  CreateDeployTokenAndDownloadRequest,
   CreateDeployTokenRequest,
   DownloadDeployPackageRequest,
   DeployInstallerOptionsResponse,
+  DeployToken,
   MeshCentralInstallInstructions,
   DeployInstallerPayload,
   DeployInstallerTypeInput,
   ListDeployTokensParams,
   PrebuildAgentRequest,
 } from "@/api";
-import type { CreateDeployTokenResponse } from "@/api/deploy-tokens";
 
 const KEYS = {
   all: ["deploy-tokens"] as const,
@@ -34,13 +35,22 @@ export function useDeployTokens(
 
 export function useCreateDeployToken() {
   const qc = useQueryClient();
-  return useMutation<
-    CreateDeployTokenResponse,
-    ApiError,
-    CreateDeployTokenRequest
-  >({
+  return useMutation<DeployToken, ApiError, CreateDeployTokenRequest>({
     mutationFn: (data: CreateDeployTokenRequest) =>
       deployTokensApi.create(data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: KEYS.all }),
+  });
+}
+
+export function useCreateDeployTokenAndDownload() {
+  const qc = useQueryClient();
+  return useMutation<
+    DeployInstallerPayload,
+    ApiError,
+    CreateDeployTokenAndDownloadRequest
+  >({
+    mutationFn: (data: CreateDeployTokenAndDownloadRequest) =>
+      deployTokensApi.createAndDownload(data),
     onSuccess: () => qc.invalidateQueries({ queryKey: KEYS.all }),
   });
 }

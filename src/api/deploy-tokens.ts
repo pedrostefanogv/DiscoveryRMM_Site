@@ -1,5 +1,6 @@
 ﻿import { ApiError, api, apiFetchResponse, parseErrorMessage } from "./client";
 import type {
+  CreateDeployTokenAndDownloadRequest,
   CreateDeployTokenRequest,
   DownloadDeployPackageRequest,
   DeployInstallerOptionsResponse,
@@ -11,8 +12,6 @@ import type {
   MeshCentralInstallInstructions,
   PrebuildAgentRequest,
 } from "./types";
-
-export type CreateDeployTokenResponse = DeployToken | DeployInstallerPayload;
 const BASE = "/api/v1/deploy-tokens";
 
 function parseContentDispositionFileName(
@@ -58,18 +57,15 @@ export const deployTokensApi = {
   list: (params: ListDeployTokensParams = {}) =>
     api.get<DeployToken[]>(BASE, params as Record<string, unknown>),
 
-  create: async (
-    data: CreateDeployTokenRequest,
-  ): Promise<CreateDeployTokenResponse> => {
-    if (data.delivery === "token") {
-      return api.post<DeployToken>(BASE, data);
-    }
+  create: (data: CreateDeployTokenRequest) =>
+    api.post<DeployToken>(BASE, data),
 
-    const response = await apiFetchResponse(BASE, {
+  createAndDownload: async (
+    data: CreateDeployTokenAndDownloadRequest,
+  ): Promise<DeployInstallerPayload> => {
+    const response = await apiFetchResponse(`${BASE}/create-and-download`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
     });
 
@@ -82,6 +78,9 @@ export const deployTokensApi = {
     return {
       fileName: parseContentDispositionFileName(
         response.headers.get("content-disposition"),
+        data.installerType === "offline"
+          ? "discovery-installer-offline.zip"
+          : "discovery-agent-bootstrap.exe",
       ),
       blob,
     };
