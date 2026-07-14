@@ -32,9 +32,7 @@ export interface NatsCredentialsResponse {
 
 type NatsClientModule = {
   wsconnect: (options: WsConnectionOptions) => Promise<NatsConnection>;
-  credsAuthenticator: (
-    creds: Uint8Array | (() => Uint8Array),
-  ) => Authenticator;
+  credsAuthenticator: (creds: Uint8Array | (() => Uint8Array)) => Authenticator;
   tokenAuthenticator: (token: string | (() => string)) => Authenticator;
 };
 
@@ -303,11 +301,12 @@ class NatsService {
     if (scopeChanged || authModeChanged) {
       this.invalidateCredentials();
       this.emitTelemetry("info", "credentials_invalidated", {
-        reason: scopeChanged && authModeChanged
-          ? "scope_changed_and_auth_mode_changed"
-          : scopeChanged
-            ? "scope_changed"
-            : "auth_mode_changed",
+        reason:
+          scopeChanged && authModeChanged
+            ? "scope_changed_and_auth_mode_changed"
+            : scopeChanged
+              ? "scope_changed"
+              : "auth_mode_changed",
       });
     }
 
@@ -320,7 +319,12 @@ class NatsService {
     if (this.connectionState === state) return;
 
     const previousState = this.connectionState;
-    natsLogger.log("Estado:", { anterior: previousState, novo: state, tentativa: this.reconnectAttempts, subjects: Array.from(this.subscriptions.keys()) });
+    natsLogger.log("Estado:", {
+      anterior: previousState,
+      novo: state,
+      tentativa: this.reconnectAttempts,
+      subjects: Array.from(this.subscriptions.keys()),
+    });
     this.connectionState = state;
     this.emitTelemetry("info", "connection_state_changed", {
       previousState,
@@ -453,7 +457,10 @@ class NatsService {
 
     if (activeConnection && !activeConnection.isClosed()) {
       void activeConnection.close().catch((error) => {
-        natsLogger.warn("Failed to close NATS connection during restart:", error);
+        natsLogger.warn(
+          "Failed to close NATS connection during restart:",
+          error,
+        );
       });
     }
 
@@ -489,11 +496,15 @@ class NatsService {
       return response;
     } catch (error) {
       const errorType = classifyNatsErrorType(error);
-      this.emitTelemetry(errorType === "auth" ? "warn" : "error", "credentials_issue_failure", {
-        errorType,
-        errorMessage: getNatsErrorMessage(error),
-        errorCode: getErrorCode(error),
-      });
+      this.emitTelemetry(
+        errorType === "auth" ? "warn" : "error",
+        "credentials_issue_failure",
+        {
+          errorType,
+          errorMessage: getNatsErrorMessage(error),
+          errorCode: getErrorCode(error),
+        },
+      );
       throw error;
     }
   }
@@ -608,13 +619,20 @@ class NatsService {
           subscribedSubjects: subjects,
         });
 
-        natsLogger.warn("Conexão fechada com erro:", { error, subjects, reconnectAttempts: this.reconnectAttempts });
+        natsLogger.warn("Conexão fechada com erro:", {
+          error,
+          subjects,
+          reconnectAttempts: this.reconnectAttempts,
+        });
       } else {
         this.clearConnectionError();
         this.emitTelemetry("info", "connection_closed_clean", {
           subscribedSubjects: subjects,
         });
-        natsLogger.log("Conexão fechada (sem erro).", { subjects, reconnectAttempts: this.reconnectAttempts });
+        natsLogger.log("Conexão fechada (sem erro).", {
+          subjects,
+          reconnectAttempts: this.reconnectAttempts,
+        });
       }
 
       this.scheduleReconnect();
@@ -646,7 +664,13 @@ class NatsService {
       this.emitTelemetry("info", "subscribe_subject_success", {
         subject,
       });
-      natsLogger.log("Inscrito em:", subject, "(subscriptions ativas:", this.subscriptions.size, ")");
+      natsLogger.log(
+        "Inscrito em:",
+        subject,
+        "(subscriptions ativas:",
+        this.subscriptions.size,
+        ")",
+      );
 
       void (async () => {
         try {
@@ -654,7 +678,14 @@ class NatsService {
             try {
               const raw = new TextDecoder().decode(msg.data);
               const data = JSON.parse(raw);
-              natsLogger.log("Mensagem recebida em", subject, ":", typeof data === "object" ? Object.keys(data).join(", ") : raw.slice(0, 200));
+              natsLogger.log(
+                "Mensagem recebida em",
+                subject,
+                ":",
+                typeof data === "object"
+                  ? Object.keys(data).join(", ")
+                  : raw.slice(0, 200),
+              );
               const listeners = this.listeners.get(subject);
               if (listeners) {
                 listeners.forEach((listener) => {
@@ -671,7 +702,10 @@ class NatsService {
           }
         } catch (error) {
           if (!this.connection?.isClosed()) {
-            natsLogger.error(`Failed to read NATS subscription ${subject}:`, error);
+            natsLogger.error(
+              `Failed to read NATS subscription ${subject}:`,
+              error,
+            );
           }
         } finally {
           if (this.subscriptions.get(subject) === subscription) {
@@ -707,10 +741,14 @@ class NatsService {
     }
 
     if (restoredCount > 0 || failedCount > 0) {
-      this.emitTelemetry(failedCount > 0 ? "warn" : "info", "restore_subscriptions_result", {
-        restoredCount,
-        failedCount,
-      });
+      this.emitTelemetry(
+        failedCount > 0 ? "warn" : "info",
+        "restore_subscriptions_result",
+        {
+          restoredCount,
+          failedCount,
+        },
+      );
     }
   }
 
@@ -786,11 +824,7 @@ class NatsService {
         url: sanitizeNatsUrl(url),
       });
 
-      for (
-        let authAttempt = 0;
-        authAttempt <= maxAuthAttempts;
-        authAttempt++
-      ) {
+      for (let authAttempt = 0; authAttempt <= maxAuthAttempts; authAttempt++) {
         try {
           this.emitTelemetry("info", "connect_auth_attempt_start", {
             connectAttemptId,
@@ -834,15 +868,19 @@ class NatsService {
           this.subscriptions.clear();
           const errorType = this.updateConnectionError(error);
           const nonRetryable = isNonRetryableNatsError(error);
-          this.emitTelemetry(errorType === "auth" ? "warn" : "error", "connect_attempt_failure", {
-            connectAttemptId,
-            authMode,
-            authAttempt,
-            errorType,
-            errorMessage: getNatsErrorMessage(error),
-            errorCode: getErrorCode(error),
-            nonRetryable,
-          });
+          this.emitTelemetry(
+            errorType === "auth" ? "warn" : "error",
+            "connect_attempt_failure",
+            {
+              connectAttemptId,
+              authMode,
+              authAttempt,
+              errorType,
+              errorMessage: getNatsErrorMessage(error),
+              errorCode: getErrorCode(error),
+              nonRetryable,
+            },
+          );
           natsLogger.error("Failed to connect to NATS:", error);
 
           const canRetryWithFreshCredentials =
@@ -919,13 +957,21 @@ class NatsService {
         attempt: this.reconnectAttempts,
         delayMs: cappedDelay,
       });
-      natsLogger.log("Agendando reconexão", { tentativa: this.reconnectAttempts, max: this.maxReconnectAttempts, delay: cappedDelay });
+      natsLogger.log("Agendando reconexão", {
+        tentativa: this.reconnectAttempts,
+        max: this.maxReconnectAttempts,
+        delay: cappedDelay,
+      });
       this.reconnectTimer = setTimeout(() => {
         this.reconnectTimer = null;
         this.emitTelemetry("info", "reconnect_attempt_execute", {
           attempt: this.reconnectAttempts,
         });
-        natsLogger.log("Executando reconexão (tentativa", this.reconnectAttempts, ")");
+        natsLogger.log(
+          "Executando reconexão (tentativa",
+          this.reconnectAttempts,
+          ")",
+        );
         void this.connect();
       }, cappedDelay);
       return;
@@ -934,7 +980,11 @@ class NatsService {
     this.emitTelemetry("error", "reconnect_exhausted", {
       maxReconnectAttempts: this.maxReconnectAttempts,
     });
-    natsLogger.log("Máximo de tentativas de reconexão atingido (", this.maxReconnectAttempts, "). Desconectando.");
+    natsLogger.log(
+      "Máximo de tentativas de reconexão atingido (",
+      this.maxReconnectAttempts,
+      "). Desconectando.",
+    );
     this.setConnectionState("disconnected");
   }
 
@@ -947,7 +997,13 @@ class NatsService {
       this.listeners.set(subject, new Set());
     }
     this.listeners.get(subject)!.add(callback);
-    natsLogger.log("subscribe() chamado para:", subject, "(listeners:", this.listeners.get(subject)?.size, ")");
+    natsLogger.log(
+      "subscribe() chamado para:",
+      subject,
+      "(listeners:",
+      this.listeners.get(subject)?.size,
+      ")",
+    );
 
     const connectIfNeeded = options?.connectIfNeeded ?? true;
     this.emitTelemetry("info", "subscribe_requested", {
@@ -961,7 +1017,10 @@ class NatsService {
         this.emitTelemetry("warn", "subscribe_aborted_no_connection", {
           subject,
         });
-        natsLogger.warn("Cannot subscribe sem conexão ativa para subject:", subject);
+        natsLogger.warn(
+          "Cannot subscribe sem conexão ativa para subject:",
+          subject,
+        );
         return false;
       }
 
@@ -981,7 +1040,10 @@ class NatsService {
       this.emitTelemetry("warn", "subscribe_aborted_not_connected", {
         subject,
       });
-      natsLogger.warn("Cannot subscribe: NATS not connected para subject:", subject);
+      natsLogger.warn(
+        "Cannot subscribe: NATS not connected para subject:",
+        subject,
+      );
       return false;
     }
 
@@ -1012,7 +1074,13 @@ class NatsService {
     const listeners = this.listeners.get(subject);
     if (listeners) {
       listeners.delete(callback);
-      natsLogger.log("unsubscribe() chamado para:", subject, "(listeners restantes:", listeners.size, ")");
+      natsLogger.log(
+        "unsubscribe() chamado para:",
+        subject,
+        "(listeners restantes:",
+        listeners.size,
+        ")",
+      );
       this.emitTelemetry("info", "unsubscribe_requested", {
         subject,
         listenersRemaining: listeners.size,
@@ -1051,7 +1119,10 @@ class NatsService {
       subject,
       payloadKeys: Object.keys(data),
     });
-    this.connection.publish(subject, new TextEncoder().encode(JSON.stringify(data)));
+    this.connection.publish(
+      subject,
+      new TextEncoder().encode(JSON.stringify(data)),
+    );
   }
 
   async disconnect(): Promise<void> {
