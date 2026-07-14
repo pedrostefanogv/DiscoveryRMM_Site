@@ -11,10 +11,11 @@ import { useTickets } from '@/hooks/useTickets';
 import { useLogs } from '@/hooks/useLogs';
 import { useRunMeshCentralNodeLinksBackfill, useRunMeshCentralNodeLinksBackfillDryRun } from '@/hooks';
 import { Button, Card, CardHeader, Badge, Loading, ErrorDisplay, Input, Select, DataTable, Modal, StatCard, AgentHeartbeatCard, Tooltip, type Column } from '@/components/ui';
+import { ensureArray } from '@/utils/ensureArray';
 import PowerActionModal from '@/components/agents/PowerActionModal';
 import WakeOnLanModal from '@/components/agents/WakeOnLanModal';
 import { NotesPanel } from '@/components/notes/NotesPanel';
-import type { AgentSoftwareInventoryItem, ListeningPortInfo, MeshCentralNodeLinksBackfillItem, MeshCentralNodeLinksBackfillReport, OpenSocketInfo } from '@/api';
+import type { AgentSoftwareInventoryItem, ListeningPortInfo, LogEntry, MeshCentralNodeLinksBackfillItem, MeshCentralNodeLinksBackfillReport, OpenSocketInfo } from '@/api';
 import { ApiError, LogLevel, agentUpdatesApi, agentsApi } from '@/api';
 import { isAgentOnlineNow } from '@/utils/agentStatus';
 import { useNowTick } from '@/hooks/useNowTick';
@@ -120,6 +121,9 @@ export default function AgentDetail() {
   const nodeLinkBackfillApply = useRunMeshCentralNodeLinksBackfill();
   const now = useNowTick(5_000);
   const powerMenuRef = useRef<HTMLDivElement>(null);
+
+  // Normaliza logs como array plano (defesa contra API retornar objeto paginado)
+  const logsArray = useMemo(() => ensureArray<LogEntry>(agentLogs.data), [agentLogs.data]);
 
   useEffect(() => {
     let isCancelled = false;
@@ -1544,7 +1548,7 @@ export default function AgentDetail() {
             className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors ${activeDataTab === 'logs' ? 'border-primary/40 bg-primary/15 text-primary' : 'border-border bg-surface-light text-muted-foreground hover:text-foreground'}`}
           >
             Logs Recentes
-            <span className="rounded-full bg-surface-hover/60 px-2 py-0.5 text-xs text-muted-foreground">{agentLogs.data?.length ?? 0}</span>
+            <span className="rounded-full bg-surface-hover/60 px-2 py-0.5 text-xs text-muted-foreground">{logsArray.length}</span>
           </button>
         </div>
 
@@ -1994,7 +1998,7 @@ export default function AgentDetail() {
           <>
             <CardHeader title="Logs Recentes" />
             <div className="max-h-72 space-y-2 overflow-y-auto">
-              {(agentLogs.data ?? []).map(log => {
+              {logsArray.map(log => {
                 const l = levelLabels[log.level] ?? { label: '?', color: 'slate' as const };
                 return (
                   <div key={log.id} className="flex items-start gap-2 rounded-lg bg-surface-light px-3 py-2">
@@ -2007,7 +2011,7 @@ export default function AgentDetail() {
                 );
               })}
               {agentLogs.isLoading && <p className="text-sm text-muted">Carregando...</p>}
-              {(agentLogs.data?.length ?? 0) === 0 && !agentLogs.isLoading && (
+              {(logsArray.length === 0) && !agentLogs.isLoading && (
                 <p className="text-sm text-muted">Nenhum log registrado</p>
               )}
             </div>

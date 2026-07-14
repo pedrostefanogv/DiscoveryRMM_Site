@@ -14,6 +14,7 @@ export function useLogs(params: LogsQuery = {}) {
   return useQuery({
     queryKey: KEYS.list(params),
     queryFn: () => logsApi.list(params),
+    select: (data) => data.items ?? [],
   });
 }
 
@@ -26,7 +27,7 @@ export function useLogsPage(params: LogsQuery = {}) {
         ...params,
         cursor: typeof pageParam === "string" ? pageParam : undefined,
       }),
-    getNextPageParam: lastPage => lastPage.nextCursor ?? undefined,
+    getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
   });
 }
 
