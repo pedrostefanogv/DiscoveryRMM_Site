@@ -1,8 +1,6 @@
 ﻿import { api } from "./client";
 import type {
-  LogEntry,
   LogsQuery,
-  CreateLogRequest,
   LogCursorPage,
   LogSummary,
   LogScopeOptions,
@@ -21,6 +19,4 @@ export const logsApi = {
     api.get<LogSummary>(`${BASE}/summary`, params as Record<string, unknown>),
 
   getScopeOptions: () => api.get<LogScopeOptions>(`${BASE}/scope-options`),
-
-  create: (data: CreateLogRequest) => api.post<LogEntry>(BASE, data),
 };

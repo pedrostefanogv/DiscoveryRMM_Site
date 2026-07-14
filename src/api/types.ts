@@ -1635,16 +1635,8 @@ export interface DownloadPackageRequest {
   artifact: string | null;
 }
 
-export interface CreateLogRequest {
-  clientId: string | null;
-  siteId: string | null;
-  agentId: string | null;
-  type: LogType;
-  level: LogLevel;
-  source: LogSource;
-  message: string;
-  dataJson: unknown;
-}
+// CreateLogRequest removido — logs são gerados automaticamente pela API (LoggingActionFilter).
+// O frontend não deve criar logs diretamente.
 
 export interface HardwareReportRequest {
   hardware: AgentHardwareInfo | null;

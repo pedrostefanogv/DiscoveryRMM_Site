@@ -10,15 +10,7 @@ import {
 } from '@/hooks/useDeployTokens';
 import { useClients } from '@/hooks/useClients';
 import { useSites } from '@/hooks/useSites';
-import {
-  agentUpdatesApi,
-  ApiError,
-  deployTokensApi,
-  LogLevel,
-  LogSource,
-  LogType,
-  logsApi,
-} from '@/api';
+import { agentUpdatesApi, ApiError, deployTokensApi } from '@/api';
 import type {
   CreateDeployTokenRequest,
   DeployInstallerType,
@@ -301,27 +293,6 @@ export default function DeployTokens() {
     },
   });
 
-  const emitInstallerTelemetry = async (
-    eventName: string,
-    level: LogLevel,
-    data: Record<string, unknown>,
-  ) => {
-    try {
-      await logsApi.create({
-        clientId: selectedClientId || null,
-        siteId: selectedSiteId || null,
-        agentId: null,
-        type: LogType.Application,
-        level,
-        source: LogSource.Portal,
-        message: `deploy.installer.${eventName}`,
-        dataJson: data,
-      });
-    } catch {
-      // Telemetria não deve bloquear o fluxo principal.
-    }
-  };
-
   const downloadGenericInstaller = useMutation({
     mutationFn: () => deployTokensApi.downloadGenericInstaller(),
     onSuccess: (result) => {
@@ -337,7 +308,6 @@ export default function DeployTokens() {
   });
 
   function handleDownloadGenericInstaller() {
-    emitInstallerTelemetry('generic_download_started', LogLevel.Info, {});
     downloadGenericInstaller.mutate();
   }
 
@@ -434,10 +404,6 @@ export default function DeployTokens() {
     if (!normalizedToken) return;
 
     setDownloadingTokenId(tokenId);
-    emitInstallerTelemetry('download_started', LogLevel.Info, {
-      tokenId,
-      installerType,
-    });
 
     downloadInstaller.mutate(
       {
@@ -448,20 +414,9 @@ export default function DeployTokens() {
         onSuccess: (result) => {
           triggerInstallerDownload(result.fileName, result.blob);
           toast.success('Download iniciado com sucesso.');
-          emitInstallerTelemetry('download_succeeded', LogLevel.Info, {
-            tokenId,
-            installerType,
-            fileName: result.fileName,
-          });
         },
         onError: (error) => {
           toast.error(mapInstallerFlowError(error, 'baixar instalador'));
-          emitInstallerTelemetry('download_failed', LogLevel.Error, {
-            tokenId,
-            installerType,
-            status: error.status,
-            reason: error.message,
-          });
         },
         onSettled: () => {
           setDownloadingTokenId(null);
