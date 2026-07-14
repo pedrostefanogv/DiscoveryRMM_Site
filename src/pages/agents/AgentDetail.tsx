@@ -62,6 +62,12 @@ export default function AgentDetail() {
   const [softwareSearchInput, setSoftwareSearchInput] = useState('');
   const [softwareSearchApplied, setSoftwareSearchApplied] = useState('');
   const [softwarePage, setSoftwarePage] = useState(1);
+  const [listeningPortsPage, setListeningPortsPage] = useState(1);
+  const [listeningPortsLimit, setListeningPortsLimit] = useState('20');
+  const [listeningPortsSearch, setListeningPortsSearch] = useState('');
+  const [openSocketsPage, setOpenSocketsPage] = useState(1);
+  const [openSocketsLimit, setOpenSocketsLimit] = useState('20');
+  const [openSocketsSearch, setOpenSocketsSearch] = useState('');
   const [allLabels, setAllLabels] = useState<AgentLabel[]>([]);
   const [isLoadingLabels, setIsLoadingLabels] = useState(true);
   const [labelsError, setLabelsError] = useState<string | null>(null);
@@ -376,11 +382,13 @@ export default function AgentDetail() {
       key: 'protocol',
       header: 'Protocolo',
       className: 'w-24',
+      sortable: false,
       render: item => <span className="font-mono uppercase text-muted-foreground">{item.protocol ?? '\u2014'}</span>,
     },
     {
       key: 'address',
       header: 'Endereço',
+      sortable: false,
       render: item => (
         <span className="font-mono text-muted-foreground">
           {item.address ?? '\u2014'}:{item.port}
@@ -390,6 +398,7 @@ export default function AgentDetail() {
     {
       key: 'process',
       header: 'Processo',
+      sortable: false,
       render: item => (
         <div>
           <p className="text-sm text-foreground">{item.processName ?? '\u2014'}</p>
@@ -400,6 +409,7 @@ export default function AgentDetail() {
     {
       key: 'collectedAt',
       header: 'Última coleta',
+      sortable: false,
       render: item => formatDate(item.collectedAt),
     },
   ];
@@ -409,17 +419,20 @@ export default function AgentDetail() {
       key: 'protocol',
       header: 'Protocolo',
       className: 'w-24',
+      sortable: false,
       render: item => <span className="font-mono uppercase text-muted-foreground">{item.protocol ?? '\u2014'}</span>,
     },
     {
       key: 'family',
       header: 'Família',
       className: 'w-20',
+      sortable: false,
       render: item => <Badge color="slate">{formatSocketFamily(item.family)}</Badge>,
     },
     {
       key: 'local',
       header: 'Origem',
+      sortable: false,
       render: item => (
         <span className="font-mono text-muted-foreground">
           {item.localAddress ?? '\u2014'}:{item.localPort}
@@ -429,6 +442,7 @@ export default function AgentDetail() {
     {
       key: 'remote',
       header: 'Destino',
+      sortable: false,
       render: item => (
         <span className="font-mono text-muted-foreground">
           {item.remoteAddress ?? '\u2014'}:{item.remotePort}
@@ -438,6 +452,7 @@ export default function AgentDetail() {
     {
       key: 'process',
       header: 'Processo',
+      sortable: false,
       render: item => (
         <div>
           <p className="text-sm text-foreground">{item.processName ?? '\u2014'}</p>
@@ -448,6 +463,7 @@ export default function AgentDetail() {
     {
       key: 'collectedAt',
       header: 'Última coleta',
+      sortable: false,
       render: item => formatDate(item.collectedAt),
     },
   ];
@@ -767,6 +783,12 @@ export default function AgentDetail() {
     { value: 'desc', label: 'Mais recente primeiro' },
     { value: 'asc', label: 'Mais antigo primeiro' },
   ];
+  const pageSizeOptions = [
+    { value: '20', label: '20 por página' },
+    { value: '50', label: '50 por página' },
+    { value: '100', label: '100 por página' },
+    { value: 'max', label: 'Todos' },
+  ];
   const softwareColumns: Column<AgentSoftwareInventoryItem>[] = [
     {
       key: 'name',
@@ -799,6 +821,73 @@ export default function AgentDetail() {
       render: item => formatDate(item.collectedAt),
     },
   ];
+
+  // ── Listening Ports pagination data (client-side) ──
+  const portsFiltered = useMemo(() => {
+    const q = listeningPortsSearch.toLowerCase();
+    if (!q) return listeningPorts;
+    return listeningPorts.filter(
+      p =>
+        (p.processName ?? '').toLowerCase().includes(q) ||
+        String(p.processId).includes(q) ||
+        (p.protocol ?? '').toLowerCase().includes(q) ||
+        (p.address ?? '').toLowerCase().includes(q) ||
+        String(p.port).includes(q) ||
+        (p.processPath ?? '').toLowerCase().includes(q),
+    );
+  }, [listeningPorts, listeningPortsSearch]);
+  const portsLimit = Number(listeningPortsLimit);
+  const portsTotalCount = portsFiltered.length;
+  const portsTotalPages = Math.max(1, Math.ceil(portsTotalCount / portsLimit));
+  const safePortsPage = Math.min(listeningPortsPage, portsTotalPages);
+  const portsStartIdx = (safePortsPage - 1) * portsLimit;
+  const portsPageItems = portsFiltered.slice(portsStartIdx, portsStartIdx + portsLimit);
+
+  useEffect(() => {
+    if (listeningPortsPage !== safePortsPage) {
+      setListeningPortsPage(safePortsPage);
+    }
+  }, [listeningPortsPage, safePortsPage]);
+
+  const resetPortsPagination = () => setListeningPortsPage(1);
+  const canGoPrevPortsPage = safePortsPage > 1;
+  const canGoNextPortsPage = safePortsPage < portsTotalPages;
+  const goToNextPortsPage = () => setListeningPortsPage((p) => Math.min(p + 1, portsTotalPages));
+  const goToPreviousPortsPage = () => setListeningPortsPage((p) => Math.max(1, p - 1));
+
+  // ── Open Sockets pagination data (client-side) ──
+  const socketsFiltered = useMemo(() => {
+    const q = openSocketsSearch.toLowerCase();
+    if (!q) return openSockets;
+    return openSockets.filter(
+      s =>
+        (s.processName ?? '').toLowerCase().includes(q) ||
+        String(s.processId).includes(q) ||
+        (s.protocol ?? '').toLowerCase().includes(q) ||
+        (s.localAddress ?? '').toLowerCase().includes(q) ||
+        (s.remoteAddress ?? '').toLowerCase().includes(q) ||
+        String(s.localPort).includes(q) ||
+        String(s.remotePort).includes(q),
+    );
+  }, [openSockets, openSocketsSearch]);
+  const socketsLimit = Number(openSocketsLimit);
+  const socketsTotalCount = socketsFiltered.length;
+  const socketsTotalPages = Math.max(1, Math.ceil(socketsTotalCount / socketsLimit));
+  const safeSocketsPage = Math.min(openSocketsPage, socketsTotalPages);
+  const socketsStartIdx = (safeSocketsPage - 1) * socketsLimit;
+  const socketsPageItems = socketsFiltered.slice(socketsStartIdx, socketsStartIdx + socketsLimit);
+
+  useEffect(() => {
+    if (openSocketsPage !== safeSocketsPage) {
+      setOpenSocketsPage(safeSocketsPage);
+    }
+  }, [openSocketsPage, safeSocketsPage]);
+
+  const resetSocketsPagination = () => setOpenSocketsPage(1);
+  const canGoPrevSocketsPage = safeSocketsPage > 1;
+  const canGoNextSocketsPage = safeSocketsPage < socketsTotalPages;
+  const goToNextSocketsPage = () => setOpenSocketsPage((p) => Math.min(p + 1, socketsTotalPages));
+  const goToPreviousSocketsPage = () => setOpenSocketsPage((p) => Math.max(1, p - 1));
 
   return (
     <div className="space-y-6">
@@ -1722,13 +1811,13 @@ export default function AgentDetail() {
             <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h3 className="text-lg font-semibold text-foreground sm:text-xl">Portas em Escuta</h3>
-                <p className="text-sm text-muted">{listeningPorts.length} porta(s) ativa(s)</p>
+                <p className="text-sm text-muted">{portsTotalCount} porta(s) ativa(s)</p>
               </div>
               <Button
                 size="sm"
                 variant="ghost"
                 onClick={handleRefreshPorts}
-                loading={isRefreshingPorts || hwComponents.isFetching}
+                loading={isRefreshingPorts}
                 disabled={!isOnlineNow}
                 title={!isOnlineNow ? 'Agente offline \u2014 refresh indisponível' : 'Solicitar nova coleta de portas ao agente'}
               >
@@ -1742,12 +1831,72 @@ export default function AgentDetail() {
                 Lista truncada pelo backend no limite de 200 itens. Podem existir mais portas em escuta.
               </div>
             )}
-            <DataTable
-              columns={listeningPortColumns}
-              data={listeningPorts}
-              keyExtractor={item => item.id}
-              emptyMessage="Nenhuma porta em escuta encontrada"
-            />
+            <form className="mb-4 grid gap-3 lg:grid-cols-[1fr_160px_auto_auto]" onSubmit={(e) => { e.preventDefault(); }}>
+              <Input
+                value={listeningPortsSearch}
+                onChange={(e) => { setListeningPortsSearch(e.target.value); resetPortsPagination(); }}
+                placeholder="Pesquisar por processo, PID, protocolo, endereço ou porta"
+              />
+              <Select
+                value={listeningPortsLimit}
+                options={pageSizeOptions}
+                onChange={(e) => { setListeningPortsLimit(e.target.value); resetPortsPagination(); }}
+              />
+              <Button type="submit" variant="secondary" size="sm">
+                <Search className="h-4 w-4" />
+                Buscar
+              </Button>
+              <Button type="button" variant="ghost" size="sm" onClick={() => { setListeningPortsSearch(''); resetPortsPagination(); }}>
+                Limpar
+              </Button>
+            </form>
+            {portsPageItems.length > 0 && (
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <p className="text-xs text-muted">
+                  Página {safePortsPage} de {portsTotalPages} · {portsTotalCount} itens no total
+                  {listeningPortsSearch ? ` | filtro: "${listeningPortsSearch}"` : ''}
+                </p>
+                <div className="flex items-center gap-2">
+                  <Button variant="secondary" size="sm" onClick={goToPreviousPortsPage} disabled={!canGoPrevPortsPage}>
+                    Voltar
+                  </Button>
+                  <div className="rounded-md border border-border px-3 py-1 text-xs text-muted-foreground">
+                    {safePortsPage}
+                  </div>
+                  <Button variant="secondary" size="sm" onClick={goToNextPortsPage} disabled={!canGoNextPortsPage}>
+                    Avançar
+                  </Button>
+                </div>
+              </div>
+            )}
+            <div style={{ minHeight: '400px' }} className="relative">
+              <DataTable
+                columns={listeningPortColumns}
+                data={portsPageItems}
+                keyExtractor={item => item.id}
+                emptyMessage="Nenhuma porta em escuta encontrada"
+                showPagination={false}
+              />
+            </div>
+            {portsPageItems.length > 0 && (
+              <div className="mt-4 flex items-center justify-between gap-3">
+                <p className="text-xs text-muted">
+                  Página {safePortsPage} de {portsTotalPages} · {portsTotalCount} itens no total
+                  {listeningPortsSearch ? ` | filtro: "${listeningPortsSearch}"` : ''}
+                </p>
+                <div className="flex items-center gap-2">
+                  <Button variant="secondary" size="sm" onClick={goToPreviousPortsPage} disabled={!canGoPrevPortsPage}>
+                    Voltar
+                  </Button>
+                  <div className="rounded-md border border-border px-3 py-1 text-xs text-muted-foreground">
+                    {safePortsPage}
+                  </div>
+                  <Button variant="secondary" size="sm" onClick={goToNextPortsPage} disabled={!canGoNextPortsPage}>
+                    Avançar
+                  </Button>
+                </div>
+              </div>
+            )}
           </>
         )}
 
@@ -1756,13 +1905,13 @@ export default function AgentDetail() {
             <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h3 className="text-lg font-semibold text-foreground sm:text-xl">Conexões Abertas</h3>
-                <p className="text-sm text-muted">{openSockets.length} conexão(ões) ativa(s)</p>
+                <p className="text-sm text-muted">{socketsTotalCount} conexão(ões) ativa(s)</p>
               </div>
               <Button
                 size="sm"
                 variant="ghost"
                 onClick={handleRefreshConnections}
-                loading={isRefreshingConnections || hwComponents.isFetching}
+                loading={isRefreshingConnections}
                 disabled={!isOnlineNow}
                 title={!isOnlineNow ? 'Agente offline \u2014 refresh indisponível' : 'Solicitar nova coleta de conexões ao agente'}
               >
@@ -1776,12 +1925,72 @@ export default function AgentDetail() {
                 Lista truncada pelo backend no limite de 500 itens. Podem existir mais conexões abertas.
               </div>
             )}
-            <DataTable
-              columns={openSocketColumns}
-              data={openSockets}
-              keyExtractor={item => item.id}
-              emptyMessage="Nenhuma conexão aberta encontrada"
-            />
+            <form className="mb-4 grid gap-3 lg:grid-cols-[1fr_160px_auto_auto]" onSubmit={(e) => { e.preventDefault(); }}>
+              <Input
+                value={openSocketsSearch}
+                onChange={(e) => { setOpenSocketsSearch(e.target.value); resetSocketsPagination(); }}
+                placeholder="Pesquisar por processo, PID, protocolo, endereço ou porta"
+              />
+              <Select
+                value={openSocketsLimit}
+                options={pageSizeOptions}
+                onChange={(e) => { setOpenSocketsLimit(e.target.value); resetSocketsPagination(); }}
+              />
+              <Button type="submit" variant="secondary" size="sm">
+                <Search className="h-4 w-4" />
+                Buscar
+              </Button>
+              <Button type="button" variant="ghost" size="sm" onClick={() => { setOpenSocketsSearch(''); resetSocketsPagination(); }}>
+                Limpar
+              </Button>
+            </form>
+            {socketsPageItems.length > 0 && (
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <p className="text-xs text-muted">
+                  Página {safeSocketsPage} de {socketsTotalPages} · {socketsTotalCount} itens no total
+                  {openSocketsSearch ? ` | filtro: "${openSocketsSearch}"` : ''}
+                </p>
+                <div className="flex items-center gap-2">
+                  <Button variant="secondary" size="sm" onClick={goToPreviousSocketsPage} disabled={!canGoPrevSocketsPage}>
+                    Voltar
+                  </Button>
+                  <div className="rounded-md border border-border px-3 py-1 text-xs text-muted-foreground">
+                    {safeSocketsPage}
+                  </div>
+                  <Button variant="secondary" size="sm" onClick={goToNextSocketsPage} disabled={!canGoNextSocketsPage}>
+                    Avançar
+                  </Button>
+                </div>
+              </div>
+            )}
+            <div style={{ minHeight: '400px' }} className="relative">
+              <DataTable
+                columns={openSocketColumns}
+                data={socketsPageItems}
+                keyExtractor={item => item.id}
+                emptyMessage="Nenhuma conexão aberta encontrada"
+                showPagination={false}
+              />
+            </div>
+            {socketsPageItems.length > 0 && (
+              <div className="mt-4 flex items-center justify-between gap-3">
+                <p className="text-xs text-muted">
+                  Página {safeSocketsPage} de {socketsTotalPages} · {socketsTotalCount} itens no total
+                  {openSocketsSearch ? ` | filtro: "${openSocketsSearch}"` : ''}
+                </p>
+                <div className="flex items-center gap-2">
+                  <Button variant="secondary" size="sm" onClick={goToPreviousSocketsPage} disabled={!canGoPrevSocketsPage}>
+                    Voltar
+                  </Button>
+                  <div className="rounded-md border border-border px-3 py-1 text-xs text-muted-foreground">
+                    {safeSocketsPage}
+                  </div>
+                  <Button variant="secondary" size="sm" onClick={goToNextSocketsPage} disabled={!canGoNextSocketsPage}>
+                    Avançar
+                  </Button>
+                </div>
+              </div>
+            )}
           </>
         )}
 
