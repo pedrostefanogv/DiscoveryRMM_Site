@@ -477,12 +477,11 @@ export default function KnowledgeList() {
     ? (listPage?.hasMore ? knowledgePag.page + 1 : knowledgePag.page || 1)
     : Math.max(1, Math.ceil(totalItems / pageSize));
   const currentPage = isAllVisible ? knowledgePag.page : Math.min(page, totalPages);
-  const pagedArticles = isAllVisible
-    ? listItems
-    : useMemo(() => {
-        const start = (Math.min(page, totalPages) - 1) * pageSize;
-        return sortedArticles.slice(start, start + pageSize);
-      }, [page, pageSize, sortedArticles, totalPages]);
+  const pagedArticles = useMemo(() => {
+    if (isAllVisible) return listItems;
+    const start = (Math.min(page, totalPages) - 1) * pageSize;
+    return sortedArticles.slice(start, start + pageSize);
+  }, [isAllVisible, listItems, page, pageSize, sortedArticles, totalPages]);
 
   useEffect(() => {
     setPage(1);

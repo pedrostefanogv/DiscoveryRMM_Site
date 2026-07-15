@@ -74,7 +74,8 @@ function formatDate(value: string | null): string {
   return new Date(value).toLocaleString('pt-BR');
 }
 
-function estimateReadingMinutes(content: string): number {
+function estimateReadingMinutes(content: string | null | undefined): number {
+  if (!content) return 1;
   const plain = content
     .replace(/```[\s\S]*?```/g, ' ')
     .replace(/`[^`]+`/g, ' ')
@@ -150,7 +151,7 @@ export default function KnowledgeViewer() {
     );
   }
 
-  const tags = article.tags.length > 0 ? article.tags : ['sem tags'];
+  const tags = (article.tags?.length ?? 0) > 0 ? article.tags : ['sem tags'];
 
   return (
     <div className="space-y-6">
