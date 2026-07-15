@@ -59,6 +59,7 @@ export function AiIntegrationCard({ aiSettings, onSave, saving }: Props) {
   const [expandedChat, setExpandedChat] = useState(false);
   const [expandedEmbed, setExpandedEmbed] = useState(false);
 
+  const [enabled, setEnabled] = useState(aiSettings?.enabled ?? false);
   const [provider, setProvider] = useState(aiSettings?.provider ?? "openrouter");
   const [apiKey, setApiKey] = useState("");
   const [chatModel, setChatModel] = useState(aiSettings?.chatModel ?? "");
@@ -145,7 +146,10 @@ export function AiIntegrationCard({ aiSettings, onSave, saving }: Props) {
 
   async function handleSave() {
     const s: Record<string, unknown> = {
-      ...aiSettings, provider,
+      ...aiSettings,
+      enabled,
+      chatAIEnabled: enabled,
+      provider,
       chatModel: chatModel || undefined,
       embeddingModel: embeddingModel || undefined,
       embeddingDimensions, temperature, topP,
@@ -162,6 +166,21 @@ export function AiIntegrationCard({ aiSettings, onSave, saving }: Props) {
 
       <div className="grid gap-3">
         <p className="text-xs text-amber-700 dark:text-amber-300">ApiKey nao e retornada pela API. Preencha apenas para trocar.</p>
+
+        {/* ── Toggle Enabled ── */}
+        <div className="flex items-center justify-between rounded-lg border border-border bg-surface-light p-3">
+          <div>
+            <p className="text-sm font-medium text-foreground">Habilitar IA</p>
+            <p className="text-xs text-muted">Ativa chat, triagem, resumos e embeddings para este escopo.</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setEnabled(!enabled)}
+            className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${enabled ? "bg-sky-500" : "bg-muted"}`}
+          >
+            <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${enabled ? "translate-x-4" : "translate-x-0.5"}`} />
+          </button>
+        </div>
 
         <div className="space-y-3">
           <div className="grid gap-3 sm:grid-cols-2">
