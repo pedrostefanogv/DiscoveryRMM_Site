@@ -155,7 +155,7 @@ export default function KnowledgeViewer() {
 
   return (
     <div className="space-y-6">
-      <section className="relative overflow-hidden rounded-2xl border border-border bg-gradient-to-br from-slate-900 via-slate-900 to-blue-950/40 p-5 sm:p-6">
+      <section className="relative overflow-hidden rounded-2xl border border-border bg-gradient-to-br from-primary/5 via-surface-light to-surface-light dark:from-slate-900 dark:via-slate-900 dark:to-blue-950/40 p-5 sm:p-6">
         <div className="pointer-events-none absolute -right-24 -top-24 h-48 w-48 rounded-full bg-primary/20 blur-3xl" />
         <div className="relative z-10 space-y-4">
           <button
@@ -201,7 +201,7 @@ export default function KnowledgeViewer() {
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
         <Card padding={false} className="overflow-hidden">
-          <article className="prose prose-invert max-w-none px-5 py-6 prose-headings:text-foreground prose-p:text-foreground prose-li:text-foreground prose-strong:text-foreground prose-code:text-emerald-300 prose-pre:bg-background/70 sm:px-7">
+          <article className="prose max-w-none px-5 py-6 dark:prose-invert prose-headings:text-foreground prose-p:text-foreground prose-li:text-foreground prose-strong:text-foreground prose-code:text-emerald-600 dark:prose-code:text-emerald-300 prose-pre:bg-background/70 sm:px-7">
             <ReactMarkdown remarkPlugins={[remarkGfm]}>
               {article.content || '_Conteudo vazio._'}
             </ReactMarkdown>

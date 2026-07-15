@@ -2,7 +2,8 @@ import { useEffect, useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { getNatsService, type DashboardEvent } from "@/api/nats";
 import { realtimeConfig } from "@/config/realtime";
-import type { Agent, AgentHeartbeat } from "@/api";
+import type { Agent, AgentHardwareInfo, AgentHeartbeat } from "@/api";
+import type { HardwareReport } from "@/api/agents";
 import {
   heartbeatStore,
   extractHeartbeatMetrics,
@@ -53,6 +54,10 @@ function isStatusChangedType(normalizedType: string): boolean {
 
 function isCommandCompletedType(normalizedType: string): boolean {
   return normalizedType === "commandcompleted";
+}
+
+function isHardwareReportedType(normalizedType: string): boolean {
+  return normalizedType === "agenthardwarereported";
 }
 
 function isPongType(normalizedType: string): boolean {
@@ -595,6 +600,43 @@ export function useAgentStatusNats(
           const resultAgentId = getStringField(safeData, ["agentId"]);
           if (resultAgentId) {
             invalidateThrottled(["agents", "detail", resultAgentId], 500);
+          }
+        }
+
+        invalidateDashboardQueries(normalizedType, invalidateThrottled);
+        return;
+      }
+
+      if (isHardwareReportedType(normalizedType)) {
+        if (safeData) {
+          const hwAgentId = getStringField(safeData, ["agentId"]);
+          if (hwAgentId) {
+            // Update otimista: injeta os campos de hardware direto do evento NATS
+            // no cache do React Query, sem esperar pelo refetch da API.
+            queryClient.setQueryData<HardwareReport | undefined>(
+              ["agents", "hardware", hwAgentId],
+              (current) => {
+                const existingHw = current?.hardware ?? ({} as AgentHardwareInfo);
+                return {
+                  ...current,
+                  hardware: {
+                    ...existingHw,
+                    processor: getStringField(safeData, ["processor"]) ?? existingHw.processor ?? null,
+                    processorCores: getNumberField(safeData, ["processorCores"]) ?? existingHw.processorCores ?? null,
+                    processorThreads: getNumberField(safeData, ["processorThreads"]) ?? existingHw.processorThreads ?? null,
+                    processorArchitecture: getStringField(safeData, ["processorArchitecture"]) ?? existingHw.processorArchitecture ?? null,
+                    totalMemoryBytes: getNumberField(safeData, ["totalMemoryBytes"]) ?? existingHw.totalMemoryBytes ?? null,
+                    machineScore: getNumberField(safeData, ["machineScore"]) ?? existingHw.machineScore ?? null,
+                    manufacturer: getStringField(safeData, ["manufacturer"]) ?? existingHw.manufacturer ?? null,
+                    model: getStringField(safeData, ["model"]) ?? existingHw.model ?? null,
+                    biosVersion: getStringField(safeData, ["biosVersion"]) ?? existingHw.biosVersion ?? null,
+                    serialNumber: getStringField(safeData, ["serialNumber"]) ?? existingHw.serialNumber ?? null,
+                  } as AgentHardwareInfo,
+                } as HardwareReport;
+              },
+            );
+
+            invalidateThrottled(["agents", "hardware", hwAgentId]);
           }
         }
 

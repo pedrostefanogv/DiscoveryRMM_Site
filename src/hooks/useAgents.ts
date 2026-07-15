@@ -133,6 +133,9 @@ export function useAgentHardware(id: string) {
     queryKey: KEYS.hardware(id),
     queryFn: () => agentsApi.getHardware(id),
     enabled: !!id,
+    refetchInterval: 300_000,
+    refetchIntervalInBackground: true,
+    staleTime: 60_000,
   });
 }
 
