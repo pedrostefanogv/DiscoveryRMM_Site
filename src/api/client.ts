@@ -235,13 +235,16 @@ export async function apiFetchResponse(
 
 async function request<T>(path: string, init?: ApiRequestInit): Promise<T> {
   const headers = new Headers(init?.headers);
+  const method = (init?.method ?? "GET").toUpperCase();
 
-  if (
-    !headers.has("Content-Type") &&
-    init?.body &&
-    !(init.body instanceof FormData)
-  ) {
-    headers.set("Content-Type", "application/json");
+  // Always set Content-Type for methods that typically carry JSON,
+  // even when body is absent, so the server doesn't reject with 415.
+  const jsonMethods = new Set(["POST", "PUT", "PATCH"]);
+  if (jsonMethods.has(method) && !headers.has("Content-Type")) {
+    const hasFormData = init?.body instanceof FormData;
+    if (!hasFormData) {
+      headers.set("Content-Type", "application/json");
+    }
   }
 
   const res = await apiFetchResponse(path, {
@@ -294,7 +297,7 @@ export const api = {
     request<T>(path, {
       ...init,
       method: "POST",
-      body: body ? JSON.stringify(body) : undefined,
+      body: body !== undefined ? JSON.stringify(body) : '{}',
     }),
 
   put: <T>(path: string, body: unknown, init?: ApiRequestInit) =>
