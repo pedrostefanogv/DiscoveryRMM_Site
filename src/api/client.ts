@@ -89,7 +89,15 @@ async function parseErrorMessage(res: Response): Promise<string> {
   if (contentType.includes("application/json")) {
     try {
       const payload = (await res.json()) as
-        | { message?: unknown; error?: unknown; detail?: unknown; details?: unknown; code?: unknown; errors?: unknown; title?: unknown }
+        | {
+            message?: unknown;
+            error?: unknown;
+            detail?: unknown;
+            details?: unknown;
+            code?: unknown;
+            errors?: unknown;
+            title?: unknown;
+          }
         | string;
       if (typeof payload === "string" && payload.trim()) return payload;
       if (payload && typeof payload === "object") {
@@ -97,9 +105,12 @@ async function parseErrorMessage(res: Response): Promise<string> {
 
         // ValidationProblemDetails: extrai erros por campo
         if (payload.errors && typeof payload.errors === "object") {
-          const fieldErrors = Object.entries(payload.errors as Record<string, unknown>)
+          const fieldErrors = Object.entries(
+            payload.errors as Record<string, unknown>,
+          )
             .flatMap(([field, msgs]) => {
-              if (Array.isArray(msgs)) return msgs.map((m: unknown) => `${field}: ${String(m)}`);
+              if (Array.isArray(msgs))
+                return msgs.map((m: unknown) => `${field}: ${String(m)}`);
               return [`${field}: ${String(msgs)}`];
             })
             .join("; ");
@@ -109,17 +120,22 @@ async function parseErrorMessage(res: Response): Promise<string> {
         // { code, message } combo
         if (payload.code && payload.message) {
           const baseMessage = `[${String(payload.code)}] ${String(payload.message)}`;
-          return detailsMessage ? `${baseMessage}. ${detailsMessage}` : baseMessage;
+          return detailsMessage
+            ? `${baseMessage}. ${detailsMessage}`
+            : baseMessage;
         }
 
         const message =
-          payload.message ?? payload.error ?? payload.detail ?? payload.title ?? res.statusText;
+          payload.message ??
+          payload.error ??
+          payload.detail ??
+          payload.title ??
+          res.statusText;
         if (typeof message === "string" && message.trim()) {
           return detailsMessage ? `${message}. ${detailsMessage}` : message;
         }
 
-        if (detailsMessage)
-          return detailsMessage;
+        if (detailsMessage) return detailsMessage;
       }
     } catch {
       // Fallback para parse de texto/status abaixo.
@@ -297,7 +313,7 @@ export const api = {
     request<T>(path, {
       ...init,
       method: "POST",
-      body: body !== undefined ? JSON.stringify(body) : '{}',
+      body: body !== undefined ? JSON.stringify(body) : "{}",
     }),
 
   put: <T>(path: string, body: unknown, init?: ApiRequestInit) =>
