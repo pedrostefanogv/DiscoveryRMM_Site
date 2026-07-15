@@ -132,10 +132,9 @@ export function AiIntegrationCard({ aiSettings, onSave, saving }: Props) {
     if (!apiKey.trim()) return;
     setValidating(true); setKeyValid(null); setKeyError(null);
     try {
-      const res = await configurationApi.validateApiKey({
+      const data = await configurationApi.validateApiKey({
         apiKey: apiKey.trim(), provider, baseUrl: getBaseUrl(),
-      });
-      const data = res.data as unknown as { valid: boolean; error?: string };
+      }) as unknown as { valid: boolean; error?: string };
       setKeyValid(data.valid === true);
       if (!data.valid) setKeyError(data.error ?? "Chave invalida");
     } catch (e: unknown) {
