@@ -855,7 +855,7 @@ export default function AgentList() {
                           />
                           {(a.heartbeatMetrics.diskReadPercent != null || a.heartbeatMetrics.diskWritePercent != null) && (
                             <div className="flex items-stretch gap-2">
-                              <span className="shrink-0 text-xs text-muted min-w-[2.5rem] pt-px">HDD</span>
+                              <span className="shrink-0 text-xs text-muted min-w-[2rem]">HDD</span>
                               {/* Leitura — mini bar ciano */}
                               <div className="flex flex-1 items-center gap-1.5">
                                 <ArrowUp className="h-3 w-3 shrink-0 text-cyan-500" />
