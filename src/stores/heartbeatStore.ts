@@ -41,7 +41,9 @@ export function isHeartbeatTimestampFresh(
 }
 
 /** Extract AgentHeartbeatMetrics from an AgentHeartbeat payload */
-export function extractHeartbeatMetrics(data: AgentHeartbeat): AgentHeartbeatMetrics {
+export function extractHeartbeatMetrics(
+  data: AgentHeartbeat,
+): AgentHeartbeatMetrics {
   return {
     cpuPercent: data.cpuPercent,
     memoryPercent: data.memoryPercent,
@@ -50,6 +52,9 @@ export function extractHeartbeatMetrics(data: AgentHeartbeat): AgentHeartbeatMet
     memoryUsedGb: data.memoryUsedGb,
     diskTotalGb: data.diskTotalGb,
     diskUsedGb: data.diskUsedGb,
+    diskReadPercent: data.diskReadPercent,
+    diskWritePercent: data.diskWritePercent,
+    diskResponseMs: data.diskResponseMs,
     p2pPeers: data.p2pPeers,
     uptimeSeconds: data.uptimeSeconds,
     processCount: data.processCount,
@@ -156,7 +161,9 @@ class HeartbeatStore {
 export const heartbeatStore = new HeartbeatStore();
 
 /** React hook — returns heartbeat data for a specific agent, updated reactively */
-export function useAgentHeartbeat(agentId: string): HeartbeatPayload | undefined {
+export function useAgentHeartbeat(
+  agentId: string,
+): HeartbeatPayload | undefined {
   return useSyncExternalStore(
     (cb) => heartbeatStore.subscribe(cb),
     () => heartbeatStore.getHeartbeat(agentId),

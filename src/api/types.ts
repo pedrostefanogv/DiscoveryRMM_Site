@@ -118,6 +118,9 @@ export interface AgentHeartbeatMetrics {
   memoryUsedGb?: number;
   diskTotalGb?: number;
   diskUsedGb?: number;
+  diskReadPercent?: number;
+  diskWritePercent?: number;
+  diskResponseMs?: number;
   p2pPeers?: number;
   uptimeSeconds?: number;
   processCount?: number;

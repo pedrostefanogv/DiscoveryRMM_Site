@@ -1,4 +1,4 @@
-import { Cpu, MemoryStick, HardDrive, Radio, Clock, Activity } from 'lucide-react';
+import { Cpu, MemoryStick, HardDrive, Radio, Clock, Activity, ArrowDown, ArrowUp } from 'lucide-react';
 import type { AgentHeartbeatMetrics } from '@/api';
 import { MetricBar } from './MetricBar';
 import { Card, CardHeader } from './Card';
@@ -75,23 +75,59 @@ export function AgentHeartbeatCard({ metrics, showEmpty = false }: AgentHeartbea
         />
       </div>
 
-      {/* Disk */}
+      {/* Disk I/O */} 
       <div className="mt-3">
-        <MetricBar
-          icon={<HardDrive className="h-3.5 w-3.5" />}
-          label="Disco"
-          value={metrics.diskPercent}
-          suffix="%"
-          subtitle={
-            metrics.diskUsedGb != null && metrics.diskTotalGb != null
-              ? `${Math.round(metrics.diskUsedGb)} / ${Math.round(metrics.diskTotalGb)} GB`
-              : undefined
-          }
-        />
+        <div className="mb-1.5 flex items-center gap-1.5">
+          <HardDrive className="h-3.5 w-3.5 text-muted" />
+          <span className="text-xs font-medium text-muted">Disco</span>
+          {metrics.diskUsedGb != null && metrics.diskTotalGb != null && (
+            <span className="text-[10px] text-muted">
+              {Math.round(metrics.diskUsedGb)} / {Math.round(metrics.diskTotalGb)} GB
+            </span>
+          )}
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          {/* Leitura */}
+          <div className="space-y-1">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1">
+                <ArrowDown className="h-3 w-3 text-cyan-500" />
+                <span className="text-[11px] text-muted">Leitura</span>
+              </div>
+              <span className="text-xs font-semibold tabular-nums text-cyan-600 dark:text-cyan-400">
+                {metrics.diskReadPercent != null ? `${Math.round(metrics.diskReadPercent)}%` : '\u2014'}
+              </span>
+            </div>
+            <div className="h-1.5 overflow-hidden rounded-full bg-cyan-500/20">
+              <div
+                className="h-full rounded-full bg-cyan-500 transition-all duration-500 ease-out"
+                style={{ width: `${Math.min(100, metrics.diskReadPercent ?? 0)}%` }}
+              />
+            </div>
+          </div>
+          {/* Escrita */}
+          <div className="space-y-1">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1">
+                <ArrowUp className="h-3 w-3 text-amber-500" />
+                <span className="text-[11px] text-muted">Escrita</span>
+              </div>
+              <span className="text-xs font-semibold tabular-nums text-amber-600 dark:text-amber-400">
+                {metrics.diskWritePercent != null ? `${Math.round(metrics.diskWritePercent)}%` : '\u2014'}
+              </span>
+            </div>
+            <div className="h-1.5 overflow-hidden rounded-full bg-amber-500/20">
+              <div
+                className="h-full rounded-full bg-amber-500 transition-all duration-500 ease-out"
+                style={{ width: `${Math.min(100, metrics.diskWritePercent ?? 0)}%` }}
+              />
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Extra metrics row */}
-      <div className="mt-4 grid grid-cols-3 gap-3 border-t border-border pt-3 text-xs">
+      <div className="mt-4 grid grid-cols-4 gap-3 border-t border-border pt-3 text-xs">
         <div className="text-center">
           <p className="flex items-center justify-center gap-1 text-muted">
             <Radio className="h-3 w-3" />
@@ -117,6 +153,15 @@ export function AgentHeartbeatCard({ metrics, showEmpty = false }: AgentHeartbea
           </p>
           <p className="mt-0.5 font-semibold tabular-nums text-foreground">
             {metrics.processCount ?? '\u2014'}
+          </p>
+        </div>
+        <div className="text-center">
+          <p className="flex items-center justify-center gap-1 text-muted">
+            <Clock className="h-3 w-3" />
+            Latência
+          </p>
+          <p className="mt-0.5 font-semibold tabular-nums text-foreground">
+            {metrics.diskResponseMs != null ? `${Math.round(metrics.diskResponseMs)}ms` : '\u2014'}
           </p>
         </div>
       </div>
