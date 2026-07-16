@@ -87,6 +87,7 @@ export default function AgentDetail() {
   const [isRefreshingSoftware, setIsRefreshingSoftware] = useState(false);
   const [isRefreshingPrinters, setIsRefreshingPrinters] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deleteConfirmHostname, setDeleteConfirmHostname] = useState('');
   const [nodeLinkPreviewOpen, setNodeLinkPreviewOpen] = useState(false);
   const [nodeLinkPreviewError, setNodeLinkPreviewError] = useState<string | null>(null);
   const [nodeLinkPreviewReport, setNodeLinkPreviewReport] = useState<MeshCentralNodeLinksBackfillReport | null>(null);
@@ -594,19 +595,29 @@ export default function AgentDetail() {
   const closeDeleteAgentModal = () => {
     if (deleteAgent.isPending) return;
     setDeleteConfirmOpen(false);
+    setDeleteConfirmHostname('');
   };
 
   const handleDeleteAgent = () => {
     if (!id) return;
+    setDeleteConfirmHostname('');
     setDeleteConfirmOpen(true);
   };
 
   const confirmDeleteAgent = async () => {
     if (!id) return;
+    const expectedHostname = (a.displayName ?? a.hostname).trim();
+
+    if (deleteConfirmHostname.trim() !== expectedHostname) {
+      toast.error('O hostname digitado não confere. Verifique e tente novamente.');
+      return;
+    }
+
     try {
       await deleteAgent.mutateAsync(id);
       toast.success('Agente excluído com sucesso.');
       setDeleteConfirmOpen(false);
+      setDeleteConfirmHostname('');
       navigate('/agents', { replace: true });
     } catch (error) {
       toast.error(getDeleteAgentErrorMessage(error));
@@ -2031,7 +2042,21 @@ export default function AgentDetail() {
               Você está prestes a excluir o agente{' '}
               <span className="font-semibold text-foreground">{a.displayName ?? a.hostname}</span>.
             </p>
-            <p className="mt-1 text-muted">Esta ação não pode ser desfeita.</p>
+            <p className="mt-1 text-muted">Esta ação não pode ser desfeita. Todos os dados do agente (hardware, software, comandos, tokens) serão permanentemente removidos.</p>
+          </div>
+
+          <div className="space-y-2">
+            <label htmlFor="delete-confirm-hostname-detail" className="text-sm font-medium text-foreground">
+              Digite <span className="font-semibold text-danger">{a.displayName ?? a.hostname}</span> para confirmar:
+            </label>
+            <Input
+              id="delete-confirm-hostname-detail"
+              value={deleteConfirmHostname}
+              onChange={(e) => setDeleteConfirmHostname(e.target.value)}
+              placeholder={a.displayName ?? a.hostname}
+              disabled={deleteAgent.isPending}
+              autoFocus
+            />
           </div>
 
           <div className="flex justify-end gap-2">
@@ -2048,6 +2073,7 @@ export default function AgentDetail() {
                 void confirmDeleteAgent();
               }}
               loading={deleteAgent.isPending}
+              disabled={deleteConfirmHostname.trim() !== (a.displayName ?? a.hostname).trim() || deleteAgent.isPending}
             >
               Excluir agente
             </Button>

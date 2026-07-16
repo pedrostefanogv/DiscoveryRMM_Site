@@ -6,7 +6,7 @@ import toast from 'react-hot-toast';
 import { useClients } from '@/hooks/useClients';
 import { getDeleteAgentErrorMessage, useApproveZeroTouch, useDeleteAgent, useRestartAgent, useShutdownAgent, useWakeOnLan } from '@/hooks/useAgents';
 import { ApiError, agentUpdatesApi, agentsApi, authApi } from '@/api';
-import { Badge, Loading, ErrorDisplay, Input, Select, StatCard, Modal, PageHeader, SkeletonCard, EmptyState, MetricBar } from '@/components/ui';
+import { Badge, Loading, ErrorDisplay, Input, Select, StatCard, Modal, PageHeader, SkeletonCard, EmptyState, MetricBar, Button } from '@/components/ui';
 import { TransferAgentModal } from '@/components/agents/TransferAgentModal';
 import PowerActionModal from '@/components/agents/PowerActionModal';
 import WakeOnLanModal from '@/components/agents/WakeOnLanModal';
@@ -169,6 +169,7 @@ export default function AgentList() {
   const [approvingAgentId, setApprovingAgentId] = useState<string | null>(null);
   const [deletingAgentId, setDeletingAgentId] = useState<string | null>(null);
   const [deleteConfirmAgent, setDeleteConfirmAgent] = useState<AgentWithClient | null>(null);
+  const [deleteConfirmHostname, setDeleteConfirmHostname] = useState('');
   const [updatingAgentId, setUpdatingAgentId] = useState<string | null>(null);
   const [transferAgent, setTransferAgent] = useState<AgentWithClient | null>(null);
   const [powerActionAgent, setPowerActionAgent] = useState<{ agent: AgentWithClient; action: "restart" | "shutdown" } | null>(null);
@@ -281,11 +282,13 @@ export default function AgentList() {
   const openDeleteAgentModal = (agent: AgentWithClient) => {
     setContextMenu(null);
     setDeleteConfirmAgent(agent);
+    setDeleteConfirmHostname('');
   };
 
   const closeDeleteAgentModal = () => {
     if (deleteAgent.isPending) return;
     setDeleteConfirmAgent(null);
+    setDeleteConfirmHostname('');
   };
 
   const openTransferAgentModal = (agent: AgentWithClient) => {
@@ -300,12 +303,19 @@ export default function AgentList() {
   const handleDeleteAgent = async () => {
     if (!deleteConfirmAgent) return;
     const agent = deleteConfirmAgent;
+    const expectedHostname = (agent.displayName ?? agent.hostname).trim();
+
+    if (deleteConfirmHostname.trim() !== expectedHostname) {
+      toast.error('O hostname digitado não confere. Verifique e tente novamente.');
+      return;
+    }
 
     setDeletingAgentId(agent.id);
     try {
       await deleteAgent.mutateAsync(agent.id);
-      toast.success(`Agente ${agent.displayName ?? agent.hostname} excluído com sucesso.`);
+      toast.success(`Agente ${expectedHostname} excluído com sucesso.`);
       setDeleteConfirmAgent(null);
+      setDeleteConfirmHostname('');
     } catch (error) {
       toast.error(getDeleteAgentErrorMessage(error));
     } finally {
@@ -1074,35 +1084,53 @@ export default function AgentList() {
         open={!!deleteConfirmAgent}
         onClose={closeDeleteAgentModal}
         title="Confirmar exclusão de agente"
+        maxWidth="max-w-lg"
       >
-        <div className="space-y-4">
-          <div className="rounded-lg border border-danger/30 bg-danger/10 p-3 text-sm text-foreground">
-            <p>
-              Você está prestes a excluir o agente{' '}
-              <span className="font-semibold text-foreground">{deleteConfirmAgent?.displayName ?? deleteConfirmAgent?.hostname}</span>.
-            </p>
-            <p className="mt-1 text-muted">Esta ação não pode ser desfeita.</p>
-          </div>
+        {deleteConfirmAgent && (
+          <div className="space-y-4">
+            <div className="rounded-lg border border-danger/30 bg-danger/10 p-3 text-sm text-foreground">
+              <p>
+                Você está prestes a excluir o agente{' '}
+                <span className="font-semibold text-foreground">{deleteConfirmAgent.displayName ?? deleteConfirmAgent.hostname}</span>.
+              </p>
+              <p className="mt-1 text-muted">Esta ação não pode ser desfeita. Todos os dados do agente (hardware, software, comandos, tokens) serão permanentemente removidos.</p>
+            </div>
 
-          <div className="flex justify-end gap-2">
-            <button
-              className="rounded-lg border border-border-strong px-3 py-2 text-sm text-foreground transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60"
-              onClick={closeDeleteAgentModal}
-              disabled={deleteAgent.isPending}
-            >
-              Cancelar
-            </button>
-            <button
-              className="rounded-lg bg-danger px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-danger/90 disabled:cursor-not-allowed disabled:opacity-60"
-              onClick={() => {
-                void handleDeleteAgent();
-              }}
-              disabled={deleteAgent.isPending}
-            >
-              {deleteAgent.isPending ? 'Excluindo...' : 'Excluir agente'}
-            </button>
+            <div className="space-y-2">
+              <label htmlFor="delete-confirm-hostname" className="text-sm font-medium text-foreground">
+                Digite <span className="font-semibold text-danger">{deleteConfirmAgent.displayName ?? deleteConfirmAgent.hostname}</span> para confirmar:
+              </label>
+              <Input
+                id="delete-confirm-hostname"
+                value={deleteConfirmHostname}
+                onChange={(e) => setDeleteConfirmHostname(e.target.value)}
+                placeholder={deleteConfirmAgent.displayName ?? deleteConfirmAgent.hostname}
+                disabled={deleteAgent.isPending}
+                autoFocus
+              />
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="secondary"
+                onClick={closeDeleteAgentModal}
+                disabled={deleteAgent.isPending}
+              >
+                Cancelar
+              </Button>
+              <Button
+                variant="danger"
+                onClick={() => {
+                  void handleDeleteAgent();
+                }}
+                loading={deleteAgent.isPending}
+                disabled={deleteConfirmHostname.trim() !== (deleteConfirmAgent.displayName ?? deleteConfirmAgent.hostname).trim() || deleteAgent.isPending}
+              >
+                Excluir agente
+              </Button>
+            </div>
           </div>
-        </div>
+        )}
       </Modal>
 
       <Modal
