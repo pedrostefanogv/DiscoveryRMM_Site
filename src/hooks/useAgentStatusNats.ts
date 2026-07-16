@@ -45,7 +45,9 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function isHeartbeatType(normalizedType: string): boolean {
-  return normalizedType === "agentheartbeat" || normalizedType === "heartbeatv2";
+  return (
+    normalizedType === "agentheartbeat" || normalizedType === "heartbeatv2"
+  );
 }
 
 function isStatusChangedType(normalizedType: string): boolean {
@@ -74,11 +76,17 @@ function getStringField(
         continue;
       }
 
-      if (typeof candidateValue === "string" && candidateValue.trim().length > 0) {
+      if (
+        typeof candidateValue === "string" &&
+        candidateValue.trim().length > 0
+      ) {
         return candidateValue;
       }
 
-      if (typeof candidateValue === "number" && Number.isFinite(candidateValue)) {
+      if (
+        typeof candidateValue === "number" &&
+        Number.isFinite(candidateValue)
+      ) {
         return String(candidateValue);
       }
     }
@@ -125,9 +133,7 @@ function getRecordField(
   return null;
 }
 
-function parseNullableBoolean(
-  value: unknown,
-): boolean | null | undefined {
+function parseNullableBoolean(value: unknown): boolean | null | undefined {
   if (typeof value === "boolean") return value;
   if (value === null) return null;
 
@@ -219,8 +225,9 @@ function parsePongMessage(message: Record<string, unknown>) {
 const NATS_URL = realtimeConfig.natsUrl;
 const NATS_ENABLED = realtimeConfig.useNats && realtimeConfig.natsEnabled;
 const NATS_AUTH_MODE = realtimeConfig.natsAuthMode;
-const GLOBAL_PONG_SUBJECT =
-  (import.meta.env.VITE_NATS_GLOBAL_PONG_SUBJECT ?? "tenant.global.pong").trim();
+const GLOBAL_PONG_SUBJECT = (
+  import.meta.env.VITE_NATS_GLOBAL_PONG_SUBJECT ?? "tenant.global.pong"
+).trim();
 const INVALIDATE_MIN_INTERVAL_MS = 1_500;
 const DASHBOARD_INVALIDATE_MIN_INTERVAL_MS = 5_000;
 const BOOTSTRAP_DEBOUNCE_MS = 250;
@@ -349,12 +356,24 @@ function toHeartbeatPayload(
       getStringField(data, ["agentVersion", "agent_version", "version"]) ??
       undefined,
     cpuPercent: getMetric(["cpuPercent", "cpu_percent", "cpu"]),
-    memoryPercent: getMetric(["memoryPercent", "memory_percent", "ramPercent", "ram_percent"]),
+    memoryPercent: getMetric([
+      "memoryPercent",
+      "memory_percent",
+      "ramPercent",
+      "ram_percent",
+    ]),
     diskPercent: getMetric(["diskPercent", "disk_percent"]),
-    memoryTotalGb: getMetric(["memoryTotalGb", "memory_total_gb", "totalMemoryGb"]),
+    memoryTotalGb: getMetric([
+      "memoryTotalGb",
+      "memory_total_gb",
+      "totalMemoryGb",
+    ]),
     memoryUsedGb: getMetric(["memoryUsedGb", "memory_used_gb", "usedMemoryGb"]),
     diskTotalGb: getMetric(["diskTotalGb", "disk_total_gb", "totalDiskGb"]),
     diskUsedGb: getMetric(["diskUsedGb", "disk_used_gb", "usedDiskGb"]),
+    diskReadPercent: getMetric(["diskReadPercent", "disk_read_percent"]),
+    diskWritePercent: getMetric(["diskWritePercent", "disk_write_percent"]),
+    diskResponseMs: getMetric(["diskResponseMs", "disk_response_ms"]),
     p2pPeers: getMetric(["p2pPeers", "p2p_peers"]),
     uptimeSeconds: getMetric(["uptimeSeconds", "uptime_seconds"]),
     processCount: getMetric(["processCount", "process_count"]),
@@ -547,10 +566,20 @@ export function useAgentStatusNats(
       });
 
       if (isHeartbeatType(normalizedType)) {
-        const heartbeatEventData = toHeartbeatEventData(eventEnvelope, safeData);
-        const heartbeatData = toHeartbeatPayload(heartbeatEventData, eventEnvelope);
+        const heartbeatEventData = toHeartbeatEventData(
+          eventEnvelope,
+          safeData,
+        );
+        const heartbeatData = toHeartbeatPayload(
+          heartbeatEventData,
+          eventEnvelope,
+        );
         if (!heartbeatData) {
-          logDiscardedHeartbeat(normalizedType, eventEnvelope, heartbeatEventData);
+          logDiscardedHeartbeat(
+            normalizedType,
+            eventEnvelope,
+            heartbeatEventData,
+          );
           return;
         }
         applyHeartbeat(heartbeatData);
@@ -616,21 +645,52 @@ export function useAgentStatusNats(
             queryClient.setQueryData<HardwareReport | undefined>(
               ["agents", "hardware", hwAgentId],
               (current) => {
-                const existingHw = current?.hardware ?? ({} as AgentHardwareInfo);
+                const existingHw =
+                  current?.hardware ?? ({} as AgentHardwareInfo);
                 return {
                   ...current,
                   hardware: {
                     ...existingHw,
-                    processor: getStringField(safeData, ["processor"]) ?? existingHw.processor ?? null,
-                    processorCores: getNumberField(safeData, ["processorCores"]) ?? existingHw.processorCores ?? null,
-                    processorThreads: getNumberField(safeData, ["processorThreads"]) ?? existingHw.processorThreads ?? null,
-                    processorArchitecture: getStringField(safeData, ["processorArchitecture"]) ?? existingHw.processorArchitecture ?? null,
-                    totalMemoryBytes: getNumberField(safeData, ["totalMemoryBytes"]) ?? existingHw.totalMemoryBytes ?? null,
-                    machineScore: getNumberField(safeData, ["machineScore"]) ?? existingHw.machineScore ?? null,
-                    manufacturer: getStringField(safeData, ["manufacturer"]) ?? existingHw.manufacturer ?? null,
-                    model: getStringField(safeData, ["model"]) ?? existingHw.model ?? null,
-                    biosVersion: getStringField(safeData, ["biosVersion"]) ?? existingHw.biosVersion ?? null,
-                    serialNumber: getStringField(safeData, ["serialNumber"]) ?? existingHw.serialNumber ?? null,
+                    processor:
+                      getStringField(safeData, ["processor"]) ??
+                      existingHw.processor ??
+                      null,
+                    processorCores:
+                      getNumberField(safeData, ["processorCores"]) ??
+                      existingHw.processorCores ??
+                      null,
+                    processorThreads:
+                      getNumberField(safeData, ["processorThreads"]) ??
+                      existingHw.processorThreads ??
+                      null,
+                    processorArchitecture:
+                      getStringField(safeData, ["processorArchitecture"]) ??
+                      existingHw.processorArchitecture ??
+                      null,
+                    totalMemoryBytes:
+                      getNumberField(safeData, ["totalMemoryBytes"]) ??
+                      existingHw.totalMemoryBytes ??
+                      null,
+                    machineScore:
+                      getNumberField(safeData, ["machineScore"]) ??
+                      existingHw.machineScore ??
+                      null,
+                    manufacturer:
+                      getStringField(safeData, ["manufacturer"]) ??
+                      existingHw.manufacturer ??
+                      null,
+                    model:
+                      getStringField(safeData, ["model"]) ??
+                      existingHw.model ??
+                      null,
+                    biosVersion:
+                      getStringField(safeData, ["biosVersion"]) ??
+                      existingHw.biosVersion ??
+                      null,
+                    serialNumber:
+                      getStringField(safeData, ["serialNumber"]) ??
+                      existingHw.serialNumber ??
+                      null,
                   } as AgentHardwareInfo,
                 } as HardwareReport;
               },
