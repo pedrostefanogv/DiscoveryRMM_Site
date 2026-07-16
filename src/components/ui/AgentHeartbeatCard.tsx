@@ -91,7 +91,7 @@ export function AgentHeartbeatCard({ metrics, showEmpty = false }: AgentHeartbea
           <div className="space-y-1">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1">
-                <ArrowDown className="h-3 w-3 text-cyan-500" />
+                <ArrowUp className="h-3 w-3 text-cyan-500" />
                 <span className="text-[11px] text-muted">Leitura</span>
               </div>
               <span className="text-xs font-semibold tabular-nums text-cyan-600 dark:text-cyan-400">
@@ -109,7 +109,7 @@ export function AgentHeartbeatCard({ metrics, showEmpty = false }: AgentHeartbea
           <div className="space-y-1">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1">
-                <ArrowUp className="h-3 w-3 text-amber-500" />
+                <ArrowDown className="h-3 w-3 text-amber-500" />
                 <span className="text-[11px] text-muted">Escrita</span>
               </div>
               <span className="text-xs font-semibold tabular-nums text-amber-600 dark:text-amber-400">

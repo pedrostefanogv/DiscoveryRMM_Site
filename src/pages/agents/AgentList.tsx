@@ -818,6 +818,22 @@ export default function AgentList() {
                             value={a.heartbeatMetrics.diskPercent}
                             compact
                           />
+                          {(a.heartbeatMetrics.diskReadPercent != null || a.heartbeatMetrics.diskWritePercent != null) && (
+                            <div className="flex items-center gap-2 text-[10px] text-muted pl-[2.5rem]">
+                              {a.heartbeatMetrics.diskReadPercent != null && (
+                                <span className="flex items-center gap-0.5">
+                                  <ArrowUp className="h-2.5 w-2.5 text-cyan-500" />
+                                  L: {Math.round(a.heartbeatMetrics.diskReadPercent)}%
+                                </span>
+                              )}
+                              {a.heartbeatMetrics.diskWritePercent != null && (
+                                <span className="flex items-center gap-0.5">
+                                  <ArrowDown className="h-2.5 w-2.5 text-amber-500" />
+                                  E: {Math.round(a.heartbeatMetrics.diskWritePercent)}%
+                                </span>
+                              )}
+                            </div>
+                          )}
                           <div className="flex items-center gap-3 text-muted pt-0.5">
                             {a.heartbeatMetrics.p2pPeers != null && (
                               <span className="flex items-center gap-1 text-[10px]">
@@ -869,11 +885,10 @@ export default function AgentList() {
                     <th className="hidden px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted lg:table-cell">IP</th>
                     <th className="hidden px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted sm:table-cell">Cliente</th>
                     <th className="px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted">Status</th>
-                    <th className="hidden px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted md:table-cell">Provisionamento</th>
                     <th className="hidden px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted 2xl:table-cell">CPU</th>
                     <th className="hidden px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted 2xl:table-cell">RAM</th>
-                    <th className="hidden px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted 2xl:table-cell">Disco</th>
-                    <th className="hidden px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted lg:table-cell">Último contato</th>
+                    <th className="hidden px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted 2xl:table-cell">Leitura</th>
+                    <th className="hidden px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted lg:table-cell">Ping</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
@@ -917,37 +932,29 @@ export default function AgentList() {
                           {a.clientName}
                         </td>
                         <td className="px-4 py-3">
-                          <Badge color={online ? 'success' : 'slate'}>
-                            <span className="flex items-center gap-1">
-                              {online ? <Wifi className="h-2.5 w-2.5" /> : <WifiOff className="h-2.5 w-2.5" />}
-                              {online ? 'Online' : 'Offline'}
-                            </span>
-                          </Badge>
-                        </td>
-                        <td className="hidden px-4 py-3 md:table-cell">
-                          <div className="flex flex-col items-start gap-1.5">
-                            {isZeroTouchPending ? (
-                              <>
-                                <Badge color="warning">Aguardando aprovação</Badge>
-                                {canManageAgent && (
-                                  <button
-                                    type="button"
-                                    onClick={(event) => {
-                                      event.stopPropagation();
-                                      void handleApproveZeroTouch(a);
-                                    }}
-                                    disabled={approvingAgentId === a.id}
-                                    className="inline-flex items-center gap-1 rounded-md border border-warning/40 bg-warning/10 px-2 py-1 text-xs font-medium text-warning transition-colors hover:bg-warning/20 disabled:cursor-not-allowed disabled:opacity-60"
-                                  >
-                                    <ShieldCheck className="h-3.5 w-3.5" />
-                                    {approvingAgentId === a.id ? 'Aprovando...' : 'Aprovar'}
-                                  </button>
-                                )}
-                              </>
-                            ) : (
-                              <Badge color="success">Aprovado</Badge>
-                            )}
-                          </div>
+                          {isZeroTouchPending && canManageAgent ? (
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                void handleApproveZeroTouch(a);
+                              }}
+                              disabled={approvingAgentId === a.id}
+                              className="inline-flex items-center gap-1 rounded-md border border-warning/40 bg-warning/10 px-2 py-1 text-xs font-medium text-warning transition-colors hover:bg-warning/20 disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              <ShieldCheck className="h-3.5 w-3.5" />
+                              {approvingAgentId === a.id ? 'Aprovando...' : 'Aprovar'}
+                            </button>
+                          ) : isZeroTouchPending ? (
+                            <Badge color="warning">Aguardando aprovação</Badge>
+                          ) : (
+                            <Badge color={online ? 'success' : 'slate'}>
+                              <span className="flex items-center gap-1">
+                                {online ? <Wifi className="h-2.5 w-2.5" /> : <WifiOff className="h-2.5 w-2.5" />}
+                                {online ? 'Online' : 'Offline'}
+                              </span>
+                            </Badge>
+                          )}
                         </td>
                         {/* Heartbeat metrics columns */}
                         <td className="hidden px-4 py-3 2xl:table-cell">
@@ -965,8 +972,8 @@ export default function AgentList() {
                           )}
                         </td>
                         <td className="hidden px-4 py-3 2xl:table-cell">
-                          {a.heartbeatMetrics?.diskPercent != null ? (
-                            <MetricBar label="" value={a.heartbeatMetrics.diskPercent} compact hideValue />
+                          {a.heartbeatMetrics?.diskReadPercent != null ? (
+                            <MetricBar label="" value={a.heartbeatMetrics.diskReadPercent} compact hideValue color="primary" />
                           ) : (
                             <span className="text-xs text-muted">{'\u2014'}</span>
                           )}
