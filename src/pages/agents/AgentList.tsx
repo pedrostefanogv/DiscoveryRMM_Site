@@ -1,11 +1,11 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Monitor, Wifi, WifiOff, Activity, Building2, Clock, LayoutGrid, List, Bug, Trash2, ShieldCheck, ArrowUp, ArrowDown, Radio, RefreshCw, Move, RotateCcw, Power, Zap, Server, Apple } from 'lucide-react';
+import { Monitor, Wifi, WifiOff, Activity, Building2, Clock, HardDrive, MapPin, LayoutGrid, List, Bug, Trash2, ShieldCheck, ArrowUp, ArrowDown, Radio, RefreshCw, Move, RotateCcw, Power, Zap, Server, Apple } from 'lucide-react';
 import { useQueries } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { useClients } from '@/hooks/useClients';
 import { getDeleteAgentErrorMessage, useApproveZeroTouch, useDeleteAgent, useRestartAgent, useShutdownAgent, useWakeOnLan } from '@/hooks/useAgents';
-import { ApiError, agentUpdatesApi, agentsApi, authApi } from '@/api';
+import { ApiError, agentUpdatesApi, agentsApi, authApi, sitesApi } from '@/api';
 import { Badge, Loading, ErrorDisplay, Input, Select, StatCard, Modal, PageHeader, SkeletonCard, EmptyState, MetricBar, Button } from '@/components/ui';
 import { TransferAgentModal } from '@/components/agents/TransferAgentModal';
 import PowerActionModal from '@/components/agents/PowerActionModal';
@@ -17,7 +17,7 @@ import { isHeartbeatTimestampFresh, useAllAgentHeartbeats } from '@/stores/heart
 import { useAuthorization } from '@/auth/authorization';
 import { openRemoteDebugPopup } from './remoteDebugLauncher';
 
-type AgentWithClient = Agent & { clientName: string; clientId: string };
+type AgentWithClient = Agent & { clientName: string; clientId: string; siteName?: string };
 type ContextMenuState = { x: number; y: number; agent: AgentWithClient } | null;
 type ProvisioningFilter = 'all' | 'pendingApproval' | 'approved';
 type AgentSortField = 'name' | 'site' | 'client' | 'lastSeen' | 'status';
@@ -420,14 +420,38 @@ export default function AgentList() {
     })),
   });
 
+  const sitesQueries = useQueries({
+    queries: queriedClients.map(c => ({
+      queryKey: ['sites', 'byClient', c.id] as const,
+      queryFn: () => sitesApi.list(c.id, true),
+      staleTime: 120_000,
+    })),
+  });
+
+  const siteNameMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const q of sitesQueries) {
+      if (!q?.data) continue;
+      for (const s of q.data) {
+        map.set(s.id, s.name);
+      }
+    }
+    return map;
+  }, [sitesQueries]);
+
   const allAgents = useMemo<AgentWithClient[]>(() => {
     if (!queriedClients.length) return [];
     return queriedClients.flatMap((c, i) => {
       const q = agentQueries[i];
       if (!q?.data) return [];
-      return q.data.map(a => ({ ...a, clientName: c.name, clientId: c.id }));
+      return q.data.map(a => ({
+        ...a,
+        clientName: c.name,
+        clientId: c.id,
+        siteName: siteNameMap.get(a.siteId),
+      }));
     });
-  }, [queriedClients, agentQueries]);
+  }, [queriedClients, agentQueries, siteNameMap]);
 
   // Merge live heartbeat metrics from the reactive store \u2014 survives REST polling overwrites
   const allHeartbeats = useAllAgentHeartbeats();
@@ -795,14 +819,36 @@ export default function AgentList() {
                       <div className="flex items-center gap-2 text-muted">
                         <Building2 className="h-3.5 w-3.5 shrink-0 text-muted" />
                         <span className="truncate">{a.clientName}</span>
+                        {a.siteName && (
+                          <>
+                            <span className="text-muted/50">·</span>
+                            <MapPin className="h-3 w-3 shrink-0 text-muted" />
+                            <span className="truncate">{a.siteName}</span>
+                          </>
+                        )}
                       </div>
-                      <div className="flex items-center gap-2 text-muted">
-                        <Clock className="h-3.5 w-3.5 shrink-0 text-muted" />
-                        <span title={relativeTime.fullDate ?? undefined}>{relativeTime.text}</span>
+                      {/* Footer row: peers, disk%, ping — before the heartbeat separator */}
+                      <div className="flex items-center gap-3 text-muted pt-0.5">
+                        {a.heartbeatMetrics?.p2pPeers != null && (
+                          <span className="flex items-center gap-1 text-[10px]">
+                            <Radio className="h-3 w-3" />
+                            {a.heartbeatMetrics.p2pPeers} peers
+                          </span>
+                        )}
+                        {a.heartbeatMetrics?.diskPercent != null && (
+                          <span className="flex items-center gap-1 text-[10px]">
+                            <HardDrive className="h-3 w-3" />
+                            {Math.round(a.heartbeatMetrics.diskPercent)}%
+                          </span>
+                        )}
+                        <span className="flex items-center gap-1 text-[10px]">
+                          <Clock className="h-3 w-3" />
+                          {relativeTime.text}
+                        </span>
                       </div>
                       {/* Heartbeat metrics */}
                       {a.heartbeatMetrics && (
-                        <div className="border-t border-border pt-2 mt-2 space-y-1.5">
+                        <div className="border-t border-border pt-2 mt-1 space-y-1.5">
                           <MetricBar
                             label="CPU"
                             value={a.heartbeatMetrics.cpuPercent}
@@ -813,41 +859,36 @@ export default function AgentList() {
                             value={a.heartbeatMetrics.memoryPercent}
                             compact
                           />
-                          <MetricBar
-                            label="DISCO"
-                            value={a.heartbeatMetrics.diskPercent}
-                            compact
-                          />
                           {(a.heartbeatMetrics.diskReadPercent != null || a.heartbeatMetrics.diskWritePercent != null) && (
-                            <div className="flex items-center gap-2 text-[10px] text-muted pl-[2.5rem]">
-                              {a.heartbeatMetrics.diskReadPercent != null && (
-                                <span className="flex items-center gap-0.5">
-                                  <ArrowUp className="h-2.5 w-2.5 text-cyan-500" />
-                                  L: {Math.round(a.heartbeatMetrics.diskReadPercent)}%
+                            <div className="flex items-stretch gap-2">
+                              {/* Leitura — mini bar ciano */}
+                              <div className="flex flex-1 items-center gap-1.5">
+                                <ArrowUp className="h-3 w-3 shrink-0 text-cyan-500" />
+                                <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-cyan-500/20">
+                                  <div
+                                    className="h-full rounded-full bg-cyan-500 transition-all duration-500"
+                                    style={{ width: `${Math.min(100, Math.max(0, a.heartbeatMetrics.diskReadPercent ?? 0))}%` }}
+                                  />
+                                </div>
+                                <span className="shrink-0 text-[10px] font-medium tabular-nums text-cyan-600 dark:text-cyan-400">
+                                  {a.heartbeatMetrics.diskReadPercent != null ? `${Math.round(a.heartbeatMetrics.diskReadPercent)}%` : '\u2014'}
                                 </span>
-                              )}
-                              {a.heartbeatMetrics.diskWritePercent != null && (
-                                <span className="flex items-center gap-0.5">
-                                  <ArrowDown className="h-2.5 w-2.5 text-amber-500" />
-                                  E: {Math.round(a.heartbeatMetrics.diskWritePercent)}%
+                              </div>
+                              {/* Escrita — mini bar âmbar */}
+                              <div className="flex flex-1 items-center gap-1.5">
+                                <ArrowDown className="h-3 w-3 shrink-0 text-amber-500" />
+                                <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-amber-500/20">
+                                  <div
+                                    className="h-full rounded-full bg-amber-500 transition-all duration-500"
+                                    style={{ width: `${Math.min(100, Math.max(0, a.heartbeatMetrics.diskWritePercent ?? 0))}%` }}
+                                  />
+                                </div>
+                                <span className="shrink-0 text-[10px] font-medium tabular-nums text-amber-600 dark:text-amber-400">
+                                  {a.heartbeatMetrics.diskWritePercent != null ? `${Math.round(a.heartbeatMetrics.diskWritePercent)}%` : '\u2014'}
                                 </span>
-                              )}
+                              </div>
                             </div>
                           )}
-                          <div className="flex items-center gap-3 text-muted pt-0.5">
-                            {a.heartbeatMetrics.p2pPeers != null && (
-                              <span className="flex items-center gap-1 text-[10px]">
-                                <Radio className="h-3 w-3" />
-                                {a.heartbeatMetrics.p2pPeers} peers
-                              </span>
-                            )}
-                            {a.heartbeatMetrics.uptimeSeconds != null && (
-                              <span className="flex items-center gap-1 text-[10px]">
-                                <Clock className="h-3 w-3" />
-                                {formatUptimeShort(a.heartbeatMetrics.uptimeSeconds)}
-                              </span>
-                            )}
-                          </div>
                         </div>
                       )}
                     </div>
