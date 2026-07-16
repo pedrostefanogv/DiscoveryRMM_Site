@@ -121,16 +121,6 @@ function formatRelative(dateStr: string | null, now: number): { text: string; fu
   return { text: fullDate, fullDate };
 }
 
-function formatUptimeShort(seconds: number | undefined | null): string {
-  if (seconds == null || !Number.isFinite(seconds)) return '\u2014';
-  if (seconds < 60) return `${Math.round(seconds)}s`;
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
-  const hours = Math.floor(seconds / 3600);
-  const days = Math.floor(hours / 24);
-  if (days > 0) return `${days}d ${hours % 24}h`;
-  return `${hours}h`;
-}
-
 function getOsIconComponent(os: string | null) {
   if (!os) return <Monitor className="h-5 w-5 text-primary" />;
   const lower = os.toLowerCase();
