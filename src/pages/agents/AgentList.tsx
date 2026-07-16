@@ -825,12 +825,16 @@ export default function AgentList() {
                             {a.heartbeatMetrics.p2pPeers} peers
                           </span>
                         )}
-                        {a.heartbeatMetrics?.diskPercent != null && (
-                          <span className="flex items-center gap-1 text-[10px]">
-                            <HardDrive className="h-3 w-3" />
-                            {Math.round(a.heartbeatMetrics.diskPercent)}%
-                          </span>
-                        )}
+                        {a.heartbeatMetrics?.diskPercent != null && (() => {
+                          const pct = a.heartbeatMetrics.diskPercent;
+                          const colorClass = pct >= 90 ? 'text-danger' : pct >= 70 ? 'text-warning' : '';
+                          return (
+                            <span className={`flex items-center gap-1 text-[10px] ${colorClass}`}>
+                              <HardDrive className="h-3 w-3" />
+                              {Math.round(pct)}%
+                            </span>
+                          );
+                        })()}
                         <span className="flex items-center gap-1 text-[10px]">
                           <Clock className="h-3 w-3" />
                           {relativeTime.text}
@@ -851,6 +855,7 @@ export default function AgentList() {
                           />
                           {(a.heartbeatMetrics.diskReadPercent != null || a.heartbeatMetrics.diskWritePercent != null) && (
                             <div className="flex items-stretch gap-2">
+                              <span className="shrink-0 text-xs text-muted min-w-[2.5rem] pt-px">HDD</span>
                               {/* Leitura — mini bar ciano */}
                               <div className="flex flex-1 items-center gap-1.5">
                                 <ArrowUp className="h-3 w-3 shrink-0 text-cyan-500" />
