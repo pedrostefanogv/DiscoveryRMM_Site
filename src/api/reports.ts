@@ -84,7 +84,10 @@ function buildPreviewLayoutJson(fields: string[]) {
   });
 }
 
-function parsePreviewHtmlTable(html: string, limit: number): Record<string, string>[] {
+function parsePreviewHtmlTable(
+  html: string,
+  limit: number,
+): Record<string, string>[] {
   if (typeof DOMParser === "undefined") {
     return [];
   }
@@ -108,8 +111,6 @@ function parsePreviewHtmlTable(html: string, limit: number): Record<string, stri
   });
 }
 
-// â”€â”€ Dataset Catalog â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
 export async function getDatasetCatalog(): Promise<DatasetCatalogItem[]> {
   return api.get<DatasetCatalogItem[]>("/api/v1/reports/datasets");
 }
@@ -119,7 +120,9 @@ export async function getReportLayoutSchema(): Promise<LayoutSchemaResponse> {
 }
 
 export async function getJoinCompatibility(): Promise<JoinCompatibilityResponse> {
-  return api.get<JoinCompatibilityResponse>("/api/v1/reports/join-compatibility");
+  return api.get<JoinCompatibilityResponse>(
+    "/api/v1/reports/join-compatibility",
+  );
 }
 
 export async function getReportAutocomplete(params: {
@@ -132,8 +135,6 @@ export async function getReportAutocomplete(params: {
     params,
   );
 }
-
-// â”€â”€ Templates â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export async function createReportTemplate(
   request: CreateReportTemplateRequest,
@@ -178,7 +179,7 @@ export async function getReportTemplateHistory(
   );
 }
 
-// â”€â”€ Library Templates â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â   Library Templates                  ”
 
 export async function getLibraryTemplates(params?: {
   datasetType?: ReportDatasetTypeValue;
@@ -200,7 +201,7 @@ export async function installLibraryTemplate(
   return api.post<ReportTemplate>(path);
 }
 
-// â”€â”€ Executions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â   Executions  ”      ”
 
 export async function runReport(
   request: RunReportRequest,
@@ -305,7 +306,7 @@ function parseContentDispositionFileName(
   return plainMatch?.[1]?.trim() || fallback;
 }
 
-// â”€â”€ Download Helper â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â   Download Helper                    ”
 
 /**
  * Downloads a report file using direct redirect for better browser handling
@@ -343,7 +344,7 @@ export async function downloadReportFile(
   URL.revokeObjectURL(blobUrl);
 }
 
-// â”€â”€ Preview (fallback local) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â   Preview (fallback local)          ”
 
 export async function previewReportData(
   datasetType: ReportDatasetType,
