@@ -15,6 +15,7 @@ export interface AgentHeartbeat {
   ipAddress?: string;
   hostname?: string;
   agentVersion?: string;
+  commitHash?: string;
   timestampUtc?: string;
 
   // Métricas percentuais (0-100)

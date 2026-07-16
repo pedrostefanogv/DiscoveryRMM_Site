@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Cpu, MemoryStick, Ticket as TicketIcon,
-  Wifi, WifiOff, AppWindow, Search, Clock, Printer, Bug, AlertTriangle, Trash2, ShieldCheck, Plus, Gauge, Power, RotateCcw, Zap, ChevronDown, RefreshCw,
+  Wifi, WifiOff, AppWindow, Search, Clock, HardDrive, Printer, Bug, AlertTriangle, Trash2, ShieldCheck, Plus, Gauge, Power, RotateCcw, Zap, ChevronDown, RefreshCw,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getDeleteAgentErrorMessage, useAgent, useAgentHardware, useAgentHardwareComponents, useAgentSoftware, useAgentSoftwareSnapshot, useApproveZeroTouch, useDeleteAgent, useRestartAgent, useShutdownAgent, useWakeOnLan } from '@/hooks/useAgents';
@@ -1302,39 +1302,69 @@ export default function AgentDetail() {
 
         {/* Disk */}
         <Card>
-          <CardHeader
-            title="Disco"
-            subtitle={disks.length > 0
-              ? `${formatBytes(usedDiskBytes)} usados de ${formatBytes(totalDiskBytes)} · ${diskUsagePercent ?? 0}%`
-              : 'Espaço agregado do agente'}
-          />
+          <CardHeader title="Disco" subtitle="Espaço agregado do agente" />
 
           {disks.length === 0 ? (
             <p className="text-sm text-muted">Sem dados de disco coletados para este agente.</p>
           ) : (
-            <div className="space-y-2">
-              {disks.map((disk) => {
-                const diskUsedBytes = Math.max(0, disk.totalSizeBytes - disk.freeSpaceBytes);
-                const diskUsedPercent = disk.totalSizeBytes > 0
-                  ? Math.min(100, Math.round((diskUsedBytes / disk.totalSizeBytes) * 100))
-                  : 0;
+            <div className="space-y-4">
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div className="rounded-lg bg-surface-light px-3 py-2">
+                  <p className="text-xs text-muted">Usado</p>
+                  <p className="text-sm font-medium text-foreground">{formatBytes(usedDiskBytes)}</p>
+                </div>
+                <div className="rounded-lg bg-surface-light px-3 py-2">
+                  <p className="text-xs text-muted">Livre</p>
+                  <p className="text-sm font-medium text-foreground">{formatBytes(freeDiskBytes)}</p>
+                </div>
+                <div className="rounded-lg bg-surface-light px-3 py-2">
+                  <p className="text-xs text-muted">Total</p>
+                  <p className="text-sm font-medium text-foreground">{formatBytes(totalDiskBytes)}</p>
+                </div>
+              </div>
 
-                return (
-                  <div key={disk.id} className="rounded-lg bg-surface-light px-3 py-2 text-xs">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="font-medium text-foreground">
-                        {disk.driveLetter}{disk.label ? ` (${disk.label})` : ''}
-                      </span>
-                      <span className="text-muted">{diskUsedPercent}% · {formatBytes(diskUsedBytes)} / {formatBytes(disk.totalSizeBytes)}</span>
+              <div>
+                <div className="mb-1 flex items-center justify-between text-xs">
+                  <span className="flex items-center gap-1 text-muted">
+                    <HardDrive className="h-3.5 w-3.5" />
+                    Utilização
+                  </span>
+                  <span className="font-medium text-muted-foreground">{diskUsagePercent ?? 0}%</span>
+                </div>
+                <progress
+                  className="h-2 w-full overflow-hidden rounded-full [&::-webkit-progress-bar]:bg-surface-hover [&::-webkit-progress-value]:bg-cyan-400 [&::-moz-progress-bar]:bg-cyan-400"
+                  value={diskUsagePercent ?? 0}
+                  max={100}
+                />
+              </div>
+
+              <div className="max-h-80 space-y-2 overflow-y-auto">
+                {disks.map((disk) => {
+                  const diskUsedBytes = Math.max(0, disk.totalSizeBytes - disk.freeSpaceBytes);
+                  const diskUsedPercent = disk.totalSizeBytes > 0
+                    ? Math.min(100, Math.round((diskUsedBytes / disk.totalSizeBytes) * 100))
+                    : 0;
+
+                  return (
+                    <div key={disk.id} className="rounded-lg bg-surface-light px-3 py-2 text-xs">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-medium text-foreground">
+                          {disk.driveLetter}{disk.label ? ` (${disk.label})` : ''}
+                        </span>
+                        <span className="text-muted">{diskUsedPercent}% usado</span>
+                      </div>
+                      <progress
+                        className="mt-2 h-1.5 w-full overflow-hidden rounded-full [&::-webkit-progress-bar]:bg-surface-hover [&::-webkit-progress-value]:bg-cyan-400 [&::-moz-progress-bar]:bg-cyan-400"
+                        value={diskUsedPercent}
+                        max={100}
+                      />
+                      <p className="mt-1 text-muted">
+                        {formatBytes(diskUsedBytes)} usados de {formatBytes(disk.totalSizeBytes)}
+                      </p>
                     </div>
-                    <progress
-                      className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full [&::-webkit-progress-bar]:bg-surface-hover [&::-webkit-progress-value]:bg-cyan-400 [&::-moz-progress-bar]:bg-cyan-400"
-                      value={diskUsedPercent}
-                      max={100}
-                    />
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
           )}
         </Card>
@@ -1388,7 +1418,14 @@ export default function AgentDetail() {
             )}
             <div className="border-t border-border pt-3">
               <dt className="text-muted">Versão do Agente</dt>
-              <dd className="mt-0.5 font-mono text-foreground">{a.agentVersion ?? '\u2014'}</dd>
+              <dd className="mt-0.5 font-mono text-foreground">
+                {a.agentVersion ?? '\u2014'}
+                {a.heartbeatMetrics?.commitHash && (
+                  <span className="ml-2 font-mono text-xs text-muted">
+                    ({a.heartbeatMetrics.commitHash.slice(0, 7)})
+                  </span>
+                )}
+              </dd>
             </div>
             {isZeroTouchPending && (
               <div>

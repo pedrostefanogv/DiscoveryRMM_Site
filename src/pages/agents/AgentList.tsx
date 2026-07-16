@@ -499,6 +499,7 @@ export default function AgentList() {
           ipAddress: live.ipAddress,
           hostname: live.hostname,
           agentVersion: live.agentVersion,
+          commitHash: live.commitHash,
           timestampUtc: live.timestampUtc,
         },
       };

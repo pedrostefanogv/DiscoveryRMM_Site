@@ -127,6 +127,7 @@ export interface AgentHeartbeatMetrics {
   ipAddress?: string;
   hostname?: string;
   agentVersion?: string;
+  commitHash?: string;
   timestampUtc?: string;
   receivedAtUtc?: string;
 }
