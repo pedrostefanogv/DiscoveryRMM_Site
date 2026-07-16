@@ -180,7 +180,11 @@ export default function AgentList() {
   useEffect(() => {
     if (!contextMenu) return;
 
-    const closeMenu = () => setContextMenu(null);
+    const closeMenu = (event: Event) => {
+      // Não fecha se o clique for DENTRO do context menu
+      if (contextMenuRef.current?.contains(event.target as Node)) return;
+      setContextMenu(null);
+    };
     // BUG-06: removido listener de 'contextmenu' que fechava o menu ao abrir outro.
     // Em vez disso, usamos stopPropagation no handler que abre o context menu
     // e mousedown com capture para detectar cliques fora do menu.
