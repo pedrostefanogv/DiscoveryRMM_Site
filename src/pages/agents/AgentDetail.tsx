@@ -1497,13 +1497,19 @@ export default function AgentDetail() {
                     </div>
                     <Badge color={n.isDhcpEnabled ? 'success' : 'slate'}>{n.isDhcpEnabled ? 'DHCP' : 'Estático'}</Badge>
                   </div>
-                  {(n.ipAddress || n.gateway) && (
+                  {(n.ipAddress || n.ipv6Address || n.gateway) && (
                     <div className="mt-1.5 grid grid-cols-2 gap-2 text-xs">
                       {n.ipAddress && (
                         <div>
                           <span className="text-muted">IP: </span>
                           <span className="font-mono text-muted-foreground">{n.ipAddress}</span>
                           {n.subnetMask && <span className="text-muted"> / {n.subnetMask}</span>}
+                        </div>
+                      )}
+                      {n.ipv6Address && (
+                        <div className="col-span-full">
+                          <span className="text-muted">IPv6: </span>
+                          <span className="font-mono text-xs text-muted-foreground break-all">{n.ipv6Address}</span>
                         </div>
                       )}
                       {n.gateway && (

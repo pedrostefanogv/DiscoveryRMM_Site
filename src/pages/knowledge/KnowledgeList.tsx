@@ -151,12 +151,20 @@ export default function KnowledgeList() {
   const listQueryAllVisible = useKnowledgeAllArticles(allVisibleParams);
 
   const listQuery = isAllVisible ? listQueryAllVisible : listQueryLegacy;
+
+  // O endpoint scopeMode=all-visible pode retornar ArticleListPage { items, count, hasMore, nextCursor }
+  // OU um array KnowledgeArticle[] (formato legado). Normalizamos para extrair items e metadados
+  // independentemente do formato.
+  const allVisibleRaw = listQueryAllVisible.data as ArticleListPage | KnowledgeArticle[] | undefined;
+  const allVisibleIsArray = Array.isArray(allVisibleRaw);
   const listPage: ArticleListPage | undefined =
-    isAllVisible
-      ? (listQueryAllVisible.data as ArticleListPage | undefined)
+    isAllVisible && allVisibleRaw && !allVisibleIsArray
+      ? (allVisibleRaw as ArticleListPage)
       : undefined;
   const listItems: KnowledgeArticle[] = isAllVisible
-    ? (listPage?.items ?? [])
+    ? (allVisibleIsArray
+        ? (allVisibleRaw as KnowledgeArticle[])
+        : ((allVisibleRaw as ArticleListPage | undefined)?.items ?? []))
     : ((listQueryLegacy.data as KnowledgeArticle[]) ?? []);
 
   const searchQuery = useKnowledgeSearch(
@@ -439,10 +447,16 @@ export default function KnowledgeList() {
     },
   ];
 
+  // Quando o endpoint all-visible retorna ArticleListPage, usamos cursor-based;
+  // quando retorna array (fallback), usamos offset-based (mesmo no modo all-visible).
+  const hasArticleListPage = isAllVisible && listPage !== undefined;
+
   const sortedArticles = useMemo(() => {
     const items = [...listItems];
 
-    if (isAllVisible) return items; // Server-side ordering
+    // Só pula ordenação client-side quando o backend retorna ArticleListPage (cursor-based pagination).
+    // Quando retorna array (fallback), ordenamos no client como no modo legado.
+    if (hasArticleListPage) return items;
 
     const compare = (a: KnowledgeArticle, b: KnowledgeArticle) => {
       if (sortBy === 'updatedAt') {
@@ -470,18 +484,20 @@ export default function KnowledgeList() {
     });
 
     return items;
-  }, [listItems, sortBy, sortDirection, isAllVisible]);
+  }, [listItems, sortBy, sortDirection, isAllVisible, hasArticleListPage]);
 
-  const totalItems = isAllVisible ? (listPage?.count ?? listItems.length) : sortedArticles.length;
-  const totalPages = isAllVisible
-    ? (listPage?.hasMore ? knowledgePag.page + 1 : knowledgePag.page || 1)
+  const totalItems = hasArticleListPage
+    ? (listPage!.count ?? listItems.length)
+    : sortedArticles.length;
+  const totalPages = hasArticleListPage
+    ? (listPage!.hasMore ? knowledgePag.page + 1 : knowledgePag.page || 1)
     : Math.max(1, Math.ceil(totalItems / pageSize));
-  const currentPage = isAllVisible ? knowledgePag.page : Math.min(page, totalPages);
+  const currentPage = hasArticleListPage ? knowledgePag.page : Math.min(page, totalPages);
   const pagedArticles = useMemo(() => {
-    if (isAllVisible) return listItems;
+    if (hasArticleListPage) return listItems;
     const start = (Math.min(page, totalPages) - 1) * pageSize;
     return sortedArticles.slice(start, start + pageSize);
-  }, [isAllVisible, listItems, page, pageSize, sortedArticles, totalPages]);
+  }, [hasArticleListPage, listItems, page, pageSize, sortedArticles, totalPages]);
 
   useEffect(() => {
     setPage(1);
@@ -723,9 +739,9 @@ export default function KnowledgeList() {
             <div className="flex items-center justify-between border-t border-border px-4 py-3">
               <p className="text-xs text-muted">
                 {totalItems} artigo(s) • {pageSize} por página • página {currentPage}
-                {isAllVisible && listPage?.hasMore
+                {hasArticleListPage && listPage?.hasMore
                   ? ` • mais itens disponíveis`
-                  : !isAllVisible
+                  : !hasArticleListPage
                     ? ` de ${totalPages}`
                     : ''}
               </p>
@@ -734,14 +750,14 @@ export default function KnowledgeList() {
                   variant="ghost"
                   size="sm"
                   onClick={() => {
-                    if (isAllVisible) {
+                    if (hasArticleListPage) {
                       knowledgePag.goToPrev();
                     } else {
                       setPage((prev) => Math.max(1, prev - 1));
                     }
                   }}
                   disabled={
-                    isAllVisible
+                    hasArticleListPage
                       ? knowledgePag.page <= 1
                       : currentPage === 1
                   }
@@ -752,16 +768,16 @@ export default function KnowledgeList() {
                   variant="ghost"
                   size="sm"
                   onClick={() => {
-                    if (isAllVisible && listPage?.nextCursor) {
+                    if (hasArticleListPage && listPage?.nextCursor) {
                       knowledgePag.goToNext(listPage.nextCursor);
-                    } else if (!isAllVisible) {
+                    } else if (!hasArticleListPage) {
                       setPage((prev) => Math.min(totalPages, prev + 1));
                     }
                   }}
                   disabled={
-                    isAllVisible
+                    hasArticleListPage
                       ? (!listPage?.hasMore || !listPage?.nextCursor || listQueryAllVisible.isFetching)
-                      : (currentPage === totalPages || listQueryLegacy.isFetching)
+                      : (currentPage === totalPages || listQueryAllVisible.isFetching || listQueryLegacy.isFetching)
                   }
                   loading={listQueryAllVisible.isFetching}
                 >

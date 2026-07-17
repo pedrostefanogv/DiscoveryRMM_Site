@@ -199,6 +199,7 @@ export interface NetworkAdapterInfo {
   name: string;
   macAddress: string | null;
   ipAddress: string | null;
+  ipv6Address: string | null;
   subnetMask: string | null;
   gateway: string | null;
   dnsServers: string | null;
