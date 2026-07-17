@@ -417,6 +417,18 @@ export default function AgentDetail() {
   const freeDiskBytes = disks.reduce((acc, disk) => acc + (disk.freeSpaceBytes ?? 0), 0);
   const usedDiskBytes = Math.max(0, totalDiskBytes - freeDiskBytes);
   const diskUsagePercent = totalDiskBytes > 0 ? Math.min(100, Math.round((usedDiskBytes / totalDiskBytes) * 100)) : null;
+  const getDiskStatusClass = (pct: number | null | undefined): string => {
+    if (pct == null) return 'status-bar-success';
+    if (pct >= 90) return 'status-bar-danger';
+    if (pct >= 70) return 'status-bar-warning';
+    return 'status-bar-success';
+  };
+  const getDiskStatusTextClass = (pct: number | null | undefined): string => {
+    if (pct == null) return 'text-success';
+    if (pct >= 90) return 'text-danger';
+    if (pct >= 70) return 'text-warning';
+    return 'text-success';
+  };
   const printers = hwComponents.data?.printers ?? [];
   const currentNodeLinkItem = nodeLinkPreviewReport?.items.find((item) => item.agentId === a.id) ?? null;
   const machineScoreRaw = a.machineScore ?? hw.data?.hardware?.machineScore ?? null;
@@ -1329,10 +1341,10 @@ export default function AgentDetail() {
                     <HardDrive className="h-3.5 w-3.5" />
                     Utilização
                   </span>
-                  <span className="font-medium text-muted-foreground">{diskUsagePercent ?? 0}%</span>
+                  <span className={`font-medium ${getDiskStatusTextClass(diskUsagePercent)}`}>{diskUsagePercent ?? 0}%</span>
                 </div>
                 <progress
-                  className="h-2 w-full overflow-hidden rounded-full [&::-webkit-progress-bar]:bg-surface-hover [&::-webkit-progress-value]:bg-cyan-400 [&::-moz-progress-bar]:bg-cyan-400"
+                  className={`h-2 w-full overflow-hidden rounded-full [&::-webkit-progress-bar]:bg-surface-hover ${getDiskStatusClass(diskUsagePercent)}`}
                   value={diskUsagePercent ?? 0}
                   max={100}
                 />
@@ -1351,10 +1363,10 @@ export default function AgentDetail() {
                         <span className="font-medium text-foreground">
                           {disk.driveLetter}{disk.label ? ` (${disk.label})` : ''}
                         </span>
-                        <span className="text-muted">{diskUsedPercent}% usado</span>
+                        <span className={`${getDiskStatusTextClass(diskUsedPercent)}`}>{diskUsedPercent}% usado</span>
                       </div>
                       <progress
-                        className="mt-2 h-1.5 w-full overflow-hidden rounded-full [&::-webkit-progress-bar]:bg-surface-hover [&::-webkit-progress-value]:bg-cyan-400 [&::-moz-progress-bar]:bg-cyan-400"
+                        className={`mt-2 h-1.5 w-full overflow-hidden rounded-full [&::-webkit-progress-bar]:bg-surface-hover ${getDiskStatusClass(diskUsedPercent)}`}
                         value={diskUsedPercent}
                         max={100}
                       />
