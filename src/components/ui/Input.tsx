@@ -36,9 +36,10 @@ export function Input({ label, error, hint, className = '', id, ...props }: Inpu
 interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
   label?: string;
   options: { value: string; label: string }[];
+  hint?: string;
 }
 
-export function Select({ label, options, className = '', id, ...props }: SelectProps) {
+export function Select({ label, options, className = '', id, hint, ...props }: SelectProps) {
   const generatedId = useId();
   const selectId = id ?? label?.toLowerCase().replace(/\s+/g, '-') ?? generatedId;
   return (
@@ -63,6 +64,7 @@ export function Select({ label, options, className = '', id, ...props }: SelectP
           </option>
         ))}
       </select>
+      {hint && <p className="text-xs text-muted">{hint}</p>}
     </div>
   );
 }

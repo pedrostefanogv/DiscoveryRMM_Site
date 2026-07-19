@@ -1,8 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Eye, History, Save, Send } from 'lucide-react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 import MDEditor from '@uiw/react-md-editor';
 import '@uiw/react-md-editor/markdown-editor.css';
 import {
@@ -318,12 +316,19 @@ export default function KnowledgeEditor() {
               <Select
                 label="Status ao salvar"
                 options={[
-                  { value: 'Draft', label: '💾 Rascunho (não visível para agentes)' },
-                  { value: 'Published', label: '🌐 Publicado (visível para todos)' },
-                  { value: 'Internal', label: '🔒 Interno (restrito ao departamento)' },
+                  { value: 'Draft', label: 'Rascunho — ainda não publicado' },
+                  { value: 'Published', label: 'Publicado — visível para todos os usuários' },
+                  { value: 'Internal', label: 'Interno — restrito ao departamento' },
                 ]}
                 value={form.targetStatus}
                 onChange={(event) => setField('targetStatus', event.target.value as ArticleStatus)}
+                hint={
+                  form.targetStatus === 'Published'
+                    ? 'Visível para todos os usuários. Respeita a herança: Global → Clientes → Sites → Agentes.'
+                    : form.targetStatus === 'Internal'
+                    ? 'Visível apenas para usuários do departamento vinculado. Ainda respeita a herança de escopo.'
+                    : 'Ainda não publicado. Apenas você pode ver este artigo.'
+                }
               />
             </div>
 
@@ -457,11 +462,12 @@ export default function KnowledgeEditor() {
             <Eye className="h-4 w-4" />
             <h2 className="text-sm font-medium uppercase tracking-wide">Preview</h2>
           </div>
-          <article className="prose max-w-none dark:prose-invert prose-headings:text-foreground prose-p:text-foreground prose-li:text-foreground prose-strong:text-foreground prose-code:text-emerald-600 dark:prose-code:text-emerald-300 prose-pre:bg-background/70">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>
-              {form.content || '_Sem conteúdo_'}
-            </ReactMarkdown>
-          </article>
+          <div data-color-mode={mode}>
+            <MDEditor.Markdown
+              source={form.content || '_Sem conteúdo_'}
+              style={{ backgroundColor: 'transparent' }}
+            />
+          </div>
         </Card>
       </div>
     </div>
