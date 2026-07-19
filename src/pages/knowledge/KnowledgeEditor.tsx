@@ -457,7 +457,7 @@ export default function KnowledgeEditor() {
             <Eye className="h-4 w-4" />
             <h2 className="text-sm font-medium uppercase tracking-wide">Preview</h2>
           </div>
-          <article className="prose prose-invert max-w-none prose-headings:text-foreground prose-p:text-foreground prose-li:text-foreground prose-strong:text-foreground prose-code:text-emerald-300 prose-pre:bg-background/70">
+          <article className="prose max-w-none dark:prose-invert prose-headings:text-foreground prose-p:text-foreground prose-li:text-foreground prose-strong:text-foreground prose-code:text-emerald-600 dark:prose-code:text-emerald-300 prose-pre:bg-background/70">
             <ReactMarkdown remarkPlugins={[remarkGfm]}>
               {form.content || '_Sem conteúdo_'}
             </ReactMarkdown>

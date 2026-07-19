@@ -11,11 +11,12 @@ import {
   MapPinned,
   UserRound,
 } from 'lucide-react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
+import MDEditor from '@uiw/react-md-editor';
+import '@uiw/react-md-editor/markdown-editor.css';
 import { Badge, Button, Card, ErrorDisplay, Loading } from '@/components/ui';
 import type { ArticleStatus, KnowledgeArticle } from '@/api';
 import { useAuthorization } from '@/auth/authorization';
+import { useTheme } from '@/theme/ThemeContext';
 import {
   useClients,
   useDepartments,
@@ -99,6 +100,7 @@ export default function KnowledgeViewer() {
   const { id } = useParams<{ id: string }>();
   const articleQuery = useKnowledgeArticle(id ?? '');
   const { hasAnyPermission } = useAuthorization();
+  const { mode } = useTheme();
 
   const article = articleQuery.data;
   const clients = useClients();
@@ -155,57 +157,50 @@ export default function KnowledgeViewer() {
 
   return (
     <div className="space-y-6">
-      <section className="relative overflow-hidden rounded-2xl border border-border bg-gradient-to-br from-primary/5 via-surface-light to-surface-light dark:from-slate-900 dark:via-slate-900 dark:to-blue-950/40 p-5 sm:p-6">
-        <div className="pointer-events-none absolute -right-24 -top-24 h-48 w-48 rounded-full bg-primary/20 blur-3xl" />
-        <div className="relative z-10 space-y-4">
-          <button
-            type="button"
-            onClick={() => navigate('/knowledge')}
-            className="inline-flex items-center gap-2 text-sm text-muted transition-colors hover:text-foreground"
-          >
-            <ArrowLeft className="h-4 w-4" /> Voltar para a base
-          </button>
-
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-            <div className="space-y-3">
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge color={statusColor(article.status)}>
-                  {statusLabel(article.status)}
-                </Badge>
-                <Badge color="accent">{scopeLabel(article)}</Badge>
-                <Badge color="slate">v{article.currentVersionNumber}</Badge>
-              </div>
-
-              <h1 className="text-2xl font-bold text-foreground sm:text-3xl">
-                {article.title}
-              </h1>
-
-              <p className="max-w-3xl text-sm text-muted-foreground">
-                {article.category
-                  ? `Categoria: ${article.category}`
-                  : 'Sem categoria definida para este artigo.'}
-              </p>
-            </div>
-
-            {canEditArticle && (
-              <Button
-                variant="ghost"
-                onClick={() => navigate(`/knowledge/${article.id}/edit`)}
-              >
-                <FilePenLine className="h-4 w-4" /> Editar artigo
-              </Button>
-            )}
-          </div>
+      <div className="flex items-start gap-4">
+        <button
+          onClick={() => navigate('/knowledge')}
+          aria-label="Voltar"
+          className="mt-1 rounded-lg p-2 text-muted hover:bg-surface-light hover:text-foreground"
+        >
+          <ArrowLeft className="h-5 w-5" />
+        </button>
+        <div className="flex-1 min-w-0">
+          <h1 className="text-2xl font-bold text-foreground truncate">
+            {article.title}
+          </h1>
+          <p className="text-sm text-muted">
+            {article.category
+              ? `Categoria: ${article.category}`
+              : 'Sem categoria definida'}
+          </p>
         </div>
-      </section>
+        <div className="flex items-center gap-2 shrink-0">
+          <Badge color={statusColor(article.status)}>
+            {statusLabel(article.status)}
+          </Badge>
+          <Badge color="accent">{scopeLabel(article)}</Badge>
+          <Badge color="slate">v{article.currentVersionNumber}</Badge>
+          {canEditArticle && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => navigate(`/knowledge/${article.id}/edit`)}
+            >
+              <FilePenLine className="h-4 w-4" /> Editar artigo
+            </Button>
+          )}
+        </div>
+      </div>
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
         <Card padding={false} className="overflow-hidden">
-          <article className="prose max-w-none px-5 py-6 dark:prose-invert prose-headings:text-foreground prose-p:text-foreground prose-li:text-foreground prose-strong:text-foreground prose-code:text-emerald-600 dark:prose-code:text-emerald-300 prose-pre:bg-background/70 sm:px-7">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>
-              {article.content || '_Conteudo vazio._'}
-            </ReactMarkdown>
-          </article>
+          <div data-color-mode={mode} className="px-5 py-6 sm:px-7">
+            <MDEditor.Markdown
+              source={article.content || '_Conteudo vazio._'}
+              style={{ backgroundColor: 'transparent' }}
+            />
+          </div>
         </Card>
 
         <div className="space-y-4">
