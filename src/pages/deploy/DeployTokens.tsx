@@ -641,7 +641,7 @@ export default function DeployTokens() {
                 onChange={e => setInstallerType(e.target.value as DeployInstallerType)}
                 options={[
                   { value: 'online', label: 'Instalador mínimo (.exe) — ~2 MB, requer internet' },
-                  { value: 'offline', label: 'Pacote offline completo (.zip) — ~150 MB, sem internet' },
+                  { value: 'offline', label: 'Pacote offline completo (.exe) — ~150 MB, sem internet' },
                 ]}
               />
 
@@ -683,7 +683,7 @@ export default function DeployTokens() {
                   disabled={!selectedClientId || !selectedSiteId}
                 >
                   <Download className="h-4 w-4" />
-                  {installerType === 'offline' ? 'Baixar pacote offline (.zip)' : 'Baixar instalador mínimo (.exe)'}
+                  {installerType === 'offline' ? 'Baixar pacote completo (.exe)' : 'Baixar instalador mínimo (.exe)'}
                 </Button>
               </div>
             </div>
@@ -814,7 +814,7 @@ export default function DeployTokens() {
                       onChange={e => setInstallerType(e.target.value as DeployInstallerType)}
                       options={[
                         { value: 'online', label: 'Instalador mínimo (.exe) — Recomendado' },
-                        { value: 'offline', label: 'Pacote offline completo (.zip)' },
+                        { value: 'offline', label: 'Pacote offline completo (.exe)' },
                       ]}
                     />
                     <Button

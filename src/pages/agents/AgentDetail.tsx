@@ -1432,9 +1432,9 @@ export default function AgentDetail() {
               <dt className="text-muted">Versão do Agente</dt>
               <dd className="mt-0.5 font-mono text-foreground">
                 {a.agentVersion ?? '\u2014'}
-                {a.heartbeatMetrics?.commitHash && (
+                {a.commitHash && (
                   <span className="ml-2 font-mono text-xs text-muted">
-                    ({a.heartbeatMetrics.commitHash.slice(0, 7)})
+                    ({a.commitHash.slice(0, 7)})
                   </span>
                 )}
               </dd>

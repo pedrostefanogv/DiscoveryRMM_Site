@@ -143,6 +143,7 @@ export interface Agent {
   operatingSystem: string | null;
   osVersion: string | null;
   agentVersion: string | null;
+  commitHash?: string | null;
   isOnline: boolean;
   lastSeen: string | null;
   status?: "Online" | "Offline";
