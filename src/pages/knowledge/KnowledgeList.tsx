@@ -13,7 +13,7 @@ import {
 import type { Column } from '@/components/ui';
 import type { ArticleStatus, ArticleListPage, KnowledgeArticle, KnowledgeSearchMode, PublishArticleRequest } from '@/api';
 import { useCursorPagination } from '@/hooks/useCursorPagination';
-import { useClients, useDeleteKnowledgeArticle, useDepartments, useKnowledgeAllArticles, useKnowledgeArticles, useKnowledgeSearch, usePublishKnowledgeArticle, useSites, useUnpublishKnowledgeArticle } from '@/hooks';
+import { useClients, useDeleteKnowledgeArticle, useDepartments, useKnowledgeAllArticles, useKnowledgeSearch, usePublishKnowledgeArticle, useSites, useUnpublishKnowledgeArticle } from '@/hooks';
 import { useAuthorization } from '@/auth/authorization';
 import { BookOpen, ChevronDown, ChevronUp, Eye, Filter, Pencil, Plus, Search, Send, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -128,8 +128,6 @@ export default function KnowledgeList() {
   const contextMenuRef = useRef<HTMLDivElement | null>(null);
   const knowledgePag = useCursorPagination({ initialLimit: DEFAULT_PAGE_SIZE });
 
-  const isAllVisible = !clientId;
-
   const sites = useSites(clientId);
   const departments = useDepartments({ clientId: clientId || undefined, activeOnly: true });
 
@@ -138,34 +136,17 @@ export default function KnowledgeList() {
     limit: pageSize,
     status: statusFilter || undefined,
     category: category || undefined,
-  }), [knowledgePag.cursor, pageSize, statusFilter, category]);
-
-  const listQueryLegacy = useKnowledgeArticles({
     clientId: clientId || undefined,
     siteId: siteId || undefined,
-    category: category || undefined,
-    status: statusFilter || undefined,
     departmentId: departmentId || undefined,
-  });
+  }), [knowledgePag.cursor, pageSize, statusFilter, category, clientId, siteId, departmentId]);
 
-  const listQueryAllVisible = useKnowledgeAllArticles(allVisibleParams);
+  // Listagem unificada via ACL do usuário — funciona com ou sem filtro de cliente
+  const listQuery = useKnowledgeAllArticles(allVisibleParams);
 
-  const listQuery = isAllVisible ? listQueryAllVisible : listQueryLegacy;
-
-  // O endpoint scopeMode=all-visible pode retornar ArticleListPage { items, count, hasMore, nextCursor }
-  // OU um array KnowledgeArticle[] (formato legado). Normalizamos para extrair items e metadados
-  // independentemente do formato.
-  const allVisibleRaw = listQueryAllVisible.data as ArticleListPage | KnowledgeArticle[] | undefined;
-  const allVisibleIsArray = Array.isArray(allVisibleRaw);
-  const listPage: ArticleListPage | undefined =
-    isAllVisible && allVisibleRaw && !allVisibleIsArray
-      ? (allVisibleRaw as ArticleListPage)
-      : undefined;
-  const listItems: KnowledgeArticle[] = isAllVisible
-    ? (allVisibleIsArray
-        ? (allVisibleRaw as KnowledgeArticle[])
-        : ((allVisibleRaw as ArticleListPage | undefined)?.items ?? []))
-    : ((listQueryLegacy.data as KnowledgeArticle[]) ?? []);
+  // Resposta sempre em formato ArticleListPage do backend unificado
+  const listPage = listQuery.data as ArticleListPage | undefined;
+  const listItems: KnowledgeArticle[] = listPage?.items ?? [];
 
   const searchQuery = useKnowledgeSearch(
     {
@@ -175,7 +156,6 @@ export default function KnowledgeList() {
       departmentId: departmentId || undefined,
       mode: searchMode,
       maxResults: DEFAULT_SEARCH_MAX_RESULTS,
-      scopeMode: isAllVisible ? 'all-visible' : undefined,
     },
     query.trim().length > 0,
   );
@@ -447,15 +427,14 @@ export default function KnowledgeList() {
     },
   ];
 
-  // Quando o endpoint all-visible retorna ArticleListPage, usamos cursor-based;
-  // quando retorna array (fallback), usamos offset-based (mesmo no modo all-visible).
-  const hasArticleListPage = isAllVisible && listPage !== undefined;
+  // Quando o endpoint retorna ArticleListPage, usamos cursor-based;
+  // sem ArticleListPage (ou vazio), fazemos client-side.
+  const hasArticleListPage = listPage !== undefined && listPage.items.length > 0;
 
   const sortedArticles = useMemo(() => {
     const items = [...listItems];
 
-    // Só pula ordenação client-side quando o backend retorna ArticleListPage (cursor-based pagination).
-    // Quando retorna array (fallback), ordenamos no client como no modo legado.
+    // Sempre usa servidor quando ArticleListPage — cursor-based pagination.
     if (hasArticleListPage) return items;
 
     const compare = (a: KnowledgeArticle, b: KnowledgeArticle) => {
@@ -484,20 +463,20 @@ export default function KnowledgeList() {
     });
 
     return items;
-  }, [listItems, sortBy, sortDirection, isAllVisible, hasArticleListPage]);
+  }, [listItems, sortBy, sortDirection, hasArticleListPage]);
 
-  const totalItems = hasArticleListPage
-    ? (listPage!.count ?? listItems.length)
+  const totalItems = listPage
+    ? (listPage.count ?? listItems.length)
     : sortedArticles.length;
-  const totalPages = hasArticleListPage
-    ? (listPage!.hasMore ? knowledgePag.page + 1 : knowledgePag.page || 1)
+  const totalPages = listPage
+    ? (listPage.hasMore ? knowledgePag.page + 1 : knowledgePag.page || 1)
     : Math.max(1, Math.ceil(totalItems / pageSize));
-  const currentPage = hasArticleListPage ? knowledgePag.page : Math.min(page, totalPages);
+  const currentPage = listPage ? knowledgePag.page : Math.min(page, totalPages);
   const pagedArticles = useMemo(() => {
-    if (hasArticleListPage) return listItems;
+    if (listPage) return listItems;
     const start = (Math.min(page, totalPages) - 1) * pageSize;
     return sortedArticles.slice(start, start + pageSize);
-  }, [hasArticleListPage, listItems, page, pageSize, sortedArticles, totalPages]);
+  }, [listPage, listItems, page, pageSize, sortedArticles, totalPages]);
 
   useEffect(() => {
     setPage(1);
@@ -718,9 +697,9 @@ export default function KnowledgeList() {
               )}
             </div>
           </div>
-        ) : (listQueryLegacy.isLoading || listQueryAllVisible.isLoading) ? (
+        ) : listQuery.isLoading ? (
           <Loading message="Carregando artigos..." />
-        ) : (listQueryLegacy.isError || listQueryAllVisible.isError) ? (
+        ) : listQuery.isError ? (
           <ErrorDisplay message="Falha ao carregar artigos." onRetry={() => listQuery.refetch()} />
         ) : (
           <div>
@@ -776,10 +755,10 @@ export default function KnowledgeList() {
                   }}
                   disabled={
                     hasArticleListPage
-                      ? (!listPage?.hasMore || !listPage?.nextCursor || listQueryAllVisible.isFetching)
-                      : (currentPage === totalPages || listQueryAllVisible.isFetching || listQueryLegacy.isFetching)
+                      ? (!listPage?.hasMore || !listPage?.nextCursor || listQuery.isFetching)
+                      : (currentPage === totalPages || listQuery.isFetching)
                   }
-                  loading={listQueryAllVisible.isFetching}
+                  loading={listQuery.isFetching}
                 >
                   Próxima
                 </Button>
