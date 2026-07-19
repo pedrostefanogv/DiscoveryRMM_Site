@@ -27,6 +27,7 @@ type FormState = {
   clientId: string;
   siteId: string;
   departmentId: string;
+  targetStatus: ArticleStatus;
 };
 
 function toTagArray(tags: string): string[] {
@@ -68,6 +69,7 @@ export default function KnowledgeEditor() {
     clientId: '',
     siteId: '',
     departmentId: '',
+    targetStatus: 'Draft',
   });
 
   const [showVersions, setShowVersions] = useState(false);
@@ -93,6 +95,7 @@ export default function KnowledgeEditor() {
       clientId: article.clientId ?? '',
       siteId: article.siteId ?? '',
       departmentId: article.departmentId ?? '',
+      targetStatus: article.status,
     });
   }, [detailQuery.data, isEdit]);
 
@@ -152,8 +155,29 @@ export default function KnowledgeEditor() {
 
       updateMutation.mutate({ id, data: payload }, {
         onSuccess: () => {
-          toast.success('Artigo atualizado (rascunho).');
-          navigate(`/knowledge/${id}`);
+          // Se o status alvo for Draft, só salva
+          if (form.targetStatus === 'Draft') {
+            toast.success('Artigo atualizado (rascunho).');
+            navigate(`/knowledge/${id}`);
+            return;
+          }
+
+          // Caso contrário publica/interniza
+          const publishPayload: PublishArticleRequest = {
+            status: form.targetStatus,
+          };
+          publishMutation.mutate({ id, data: publishPayload }, {
+            onSuccess: () => {
+              toast.success(form.targetStatus === 'Published'
+                ? 'Artigo atualizado e publicado!'
+                : 'Artigo atualizado e marcado como Interno!');
+              navigate(`/knowledge/${id}`);
+            },
+            onError: () => {
+              toast.error('Artigo salvo, mas falhou ao publicar.');
+              navigate(`/knowledge/${id}`);
+            },
+          });
         },
         onError: () => toast.error('Não foi possível atualizar o artigo.'),
       });
@@ -284,12 +308,24 @@ export default function KnowledgeEditor() {
               />
             </div>
 
-            <Select
-              label="Departamento (obrigatório para artigos Internos)"
-              options={departmentOptions}
-              value={form.departmentId}
-              onChange={(event) => setField('departmentId', event.target.value)}
-            />
+            <div className="grid gap-4 md:grid-cols-2">
+              <Select
+                label="Departamento (obrigatório para artigos Internos)"
+                options={departmentOptions}
+                value={form.departmentId}
+                onChange={(event) => setField('departmentId', event.target.value)}
+              />
+              <Select
+                label="Status ao salvar"
+                options={[
+                  { value: 'Draft', label: '💾 Rascunho (não visível para agentes)' },
+                  { value: 'Published', label: '🌐 Publicado (visível para todos)' },
+                  { value: 'Internal', label: '🔒 Interno (restrito ao departamento)' },
+                ]}
+                value={form.targetStatus}
+                onChange={(event) => setField('targetStatus', event.target.value as ArticleStatus)}
+              />
+            </div>
 
             {isEdit && detailQuery.data && detailQuery.data.status !== 'Draft' && (
               <div className="rounded-lg border border-border bg-surface-light p-4">
@@ -331,41 +367,10 @@ export default function KnowledgeEditor() {
               </div>
             )}
 
-            {isEdit && detailQuery.data && detailQuery.data.status === 'Draft' && (
-              <div className="flex gap-2">
-                <Button
-                  variant="ghost"
-                  onClick={() => {
-                    const data: PublishArticleRequest = {
-                      status: 'Published',
-                    };
-                    publishMutation.mutate({ id: id!, data }, {
-                      onSuccess: () => toast.success('Artigo publicado!'),
-                      onError: () => toast.error('Falha ao publicar'),
-                    });
-                  }}
-                >
-                  <Send className="h-4 w-4" /> Publicar
-                </Button>
-                <Button
-                  variant="ghost"
-                  onClick={() => {
-                    if (!form.departmentId) {
-                      toast.error('Selecione um departamento para artigo Interno.');
-                      return;
-                    }
-                    const data: PublishArticleRequest = {
-                      status: 'Internal',
-                    };
-                    publishMutation.mutate({ id: id!, data }, {
-                      onSuccess: () => toast.success('Artigo marcado como Interno!'),
-                      onError: () => toast.error('Falha ao internalizar'),
-                    });
-                  }}
-                >
-                  Interno
-                </Button>
-              </div>
+            {isEdit && detailQuery.data && detailQuery.data.status === 'Draft' && form.targetStatus === 'Draft' && (
+              <p className="text-xs text-muted">
+                Selecione <strong>Publicado</strong> ou <strong>Interno</strong> no campo "Status ao salvar" para publicar o artigo.
+              </p>
             )}
 
             {isEdit && (
@@ -431,39 +436,18 @@ export default function KnowledgeEditor() {
               <Button variant="ghost" onClick={() => navigate('/knowledge')}>
                 Cancelar
               </Button>
-              {isEdit ? (
-                <Button
-                  onClick={() => void submit('Draft')}
-                  loading={createMutation.isPending || updateMutation.isPending || publishMutation.isPending}
-                  disabled={!valid}
-                >
-                  <Save className="h-4 w-4" /> Salvar rascunho
-                </Button>
-              ) : (
-                <>
-                  <Button
-                    variant="ghost"
-                    onClick={() => void submit('Internal')}
-                    disabled={!valid || createMutation.isPending || publishMutation.isPending}
-                  >
-                    Salvar como Interno
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    onClick={() => void submit('Published')}
-                    disabled={!valid || createMutation.isPending || publishMutation.isPending}
-                  >
-                    <Send className="h-4 w-4" /> Publicar agora
-                  </Button>
-                  <Button
-                    onClick={() => void submit('Draft')}
-                    loading={createMutation.isPending || publishMutation.isPending}
-                    disabled={!valid}
-                  >
-                    <Save className="h-4 w-4" /> Salvar rascunho
-                  </Button>
-                </>
-              )}
+              <Button
+                onClick={() => void submit(form.targetStatus)}
+                loading={createMutation.isPending || updateMutation.isPending || publishMutation.isPending}
+                disabled={!valid}
+              >
+                {form.targetStatus === 'Published' && <Send className="h-4 w-4" />}
+                {form.targetStatus === 'Draft' && <Save className="h-4 w-4" />}
+                {form.targetStatus === 'Internal' && <Save className="h-4 w-4" />}
+                {form.targetStatus === 'Draft' && 'Salvar rascunho'}
+                {form.targetStatus === 'Published' && 'Salvar e publicar'}
+                {form.targetStatus === 'Internal' && 'Salvar como Interno'}
+              </Button>
             </div>
           </div>
         </Card>
