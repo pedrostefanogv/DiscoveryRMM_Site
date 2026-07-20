@@ -1,6 +1,9 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Send, Lock, Unlock, Clock, Activity, ChevronDown, BookOpen, Paperclip, Upload, File, CheckCircle, XCircle, Loader2, UserPlus, UserMinus, Wrench, Copy } from 'lucide-react';
+import MDEditor from '@uiw/react-md-editor';
+import '@uiw/react-md-editor/markdown-editor.css';
+import { useTheme } from '@/theme/ThemeContext';
 import { useAuth } from '@/auth/AuthContext';
 import { getUserIdFromJwt } from '@/auth/jwt';
 import { AppApprovalScopeType, AutomationTaskActionType } from '@/api';
@@ -418,6 +421,7 @@ function TicketAiPanel({
   const summary = useTicketAiSummary();
   const suggestReply = useTicketAiSuggestReply();
   const updateTicket = useUpdateTicket();
+  const { mode } = useTheme();
 
   const parsedTriage = useMemo(
     () => parseTicketAiTriageSuggestion(triage.data?.suggestion),
@@ -513,9 +517,12 @@ function TicketAiPanel({
                 </div>
 
                 {parsedTriage.reasoning && (
-                  <p className="mt-3 whitespace-pre-wrap text-sm text-muted-foreground">
-                    {parsedTriage.reasoning}
-                  </p>
+                  <div data-color-mode={mode} className="mt-3">
+                    <MDEditor.Markdown
+                      source={parsedTriage.reasoning}
+                      style={{ backgroundColor: 'transparent' }}
+                    />
+                  </div>
                 )}
 
                 {parsedTriage.department && (
@@ -551,9 +558,12 @@ function TicketAiPanel({
                 <p className="text-sm text-muted-foreground">
                    A IA retornou uma saída não estruturada. O conteúdo bruto continua disponível abaixo.
                 </p>
-                <pre className="overflow-x-auto whitespace-pre-wrap rounded-lg bg-black/20 p-3 text-xs text-muted-foreground">
-                  {triage.data.suggestion}
-                </pre>
+                <div data-color-mode={mode} className="rounded-lg bg-black/20 p-3">
+                  <MDEditor.Markdown
+                    source={triage.data.suggestion}
+                    style={{ backgroundColor: 'transparent' }}
+                  />
+                </div>
                 <Button
                   size="sm"
                   variant="ghost"
@@ -602,9 +612,12 @@ function TicketAiPanel({
 
         {summary.data && (
           <div className="mt-4 rounded-lg border border-border bg-surface-light p-4">
-            <p className="whitespace-pre-wrap text-sm text-muted-foreground">
-              {summary.data.summary}
-            </p>
+            <div data-color-mode={mode}>
+              <MDEditor.Markdown
+                source={summary.data.summary}
+                style={{ backgroundColor: 'transparent' }}
+              />
+            </div>
             <div className="mt-4 flex flex-wrap gap-2">
               <Button
                 size="sm"
@@ -654,9 +667,12 @@ function TicketAiPanel({
 
         {suggestReply.data && (
           <div className="mt-4 rounded-lg border border-border bg-surface-light p-4">
-            <p className="whitespace-pre-wrap text-sm text-muted-foreground">
-              {suggestReply.data.suggestedReply}
-            </p>
+            <div data-color-mode={mode}>
+              <MDEditor.Markdown
+                source={suggestReply.data.suggestedReply}
+                style={{ backgroundColor: 'transparent' }}
+              />
+            </div>
             <div className="mt-4 flex flex-wrap gap-2">
               <Button
                 size="sm"
