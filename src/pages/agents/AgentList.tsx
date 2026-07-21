@@ -819,7 +819,7 @@ export default function AgentList() {
                           </>
                         )}
                       </div>
-                      {/* Footer row: peers, disk%, ping — before the heartbeat separator */}
+                      {/* Footer row: peers, ping, temp, disk% — before the heartbeat separator */}
                       <div className="flex items-center gap-3 text-muted pt-0.5">
                         {a.heartbeatMetrics?.p2pPeers != null && (
                           <span className="flex items-center gap-1 text-[10px]">
@@ -827,6 +827,20 @@ export default function AgentList() {
                             {a.heartbeatMetrics.p2pPeers} peers
                           </span>
                         )}
+                        <span className="flex items-center gap-1 text-[10px]">
+                          <Clock className="h-3 w-3" />
+                          {relativeTime.text}
+                        </span>
+                        {a.heartbeatMetrics?.cpuTemperatureCelsius != null && (() => {
+                          const t = a.heartbeatMetrics.cpuTemperatureCelsius;
+                          const tempColor = t > 80 ? 'text-danger' : t > 60 ? 'text-warning' : 'text-success';
+                          return (
+                            <span className={`flex items-center gap-1 text-[10px] ${tempColor}`}>
+                              <Thermometer className="h-3 w-3" />
+                              {Math.round(t)}°C
+                            </span>
+                          );
+                        })()}
                         {a.heartbeatMetrics?.diskPercent != null && (() => {
                           const pct = a.heartbeatMetrics.diskPercent;
                           const colorClass = pct >= 90 ? 'text-danger' : pct >= 70 ? 'text-warning' : '';
@@ -837,10 +851,6 @@ export default function AgentList() {
                             </span>
                           );
                         })()}
-                        <span className="flex items-center gap-1 text-[10px]">
-                          <Clock className="h-3 w-3" />
-                          {relativeTime.text}
-                        </span>
                       </div>
                       {/* Heartbeat metrics */}
                       {a.heartbeatMetrics && (
@@ -886,19 +896,7 @@ export default function AgentList() {
                               </div>
                             </div>
                           )}
-                          {a.heartbeatMetrics?.cpuTemperatureCelsius != null && (() => {
-                            const t = a.heartbeatMetrics.cpuTemperatureCelsius;
-                            const tempColor = t > 80 ? 'text-danger' : t > 60 ? 'text-warning' : 'text-success';
-                            return (
-                              <div className="flex items-center gap-2">
-                                <span className="shrink-0 text-xs text-muted min-w-[2rem]">Temp</span>
-                                <Thermometer className="h-3.5 w-3.5 shrink-0 text-muted" />
-                                <span className={`text-xs font-medium tabular-nums ${tempColor}`}>
-                                  {Math.round(t)}°C
-                                </span>
-                              </div>
-                            );
-                          })()}
+
                         </div>
                       )}
                     </div>
