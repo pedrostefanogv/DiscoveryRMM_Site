@@ -796,7 +796,8 @@ export default function AgentList() {
                         {isZeroTouchPending && (
                           <div className="mt-1.5 flex flex-wrap gap-1.5">
                             <Badge color="warning">Aguardando aprovação</Badge>
-                        </div>
+                          </div>
+                        )}
                       </div>
                     </div>
                     <div className="space-y-1.5 text-xs">
