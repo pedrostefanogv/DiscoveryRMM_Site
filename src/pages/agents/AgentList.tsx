@@ -776,7 +776,14 @@ export default function AgentList() {
                     tabIndex={0}
                     className="group relative flex flex-col gap-4 rounded-xl border border-border bg-surface p-5 text-left transition-all hover:border-primary/30 hover:bg-surface-light hover:shadow-lg"
                   >
-                    <span className={`absolute right-4 top-4 h-2.5 w-2.5 rounded-full ${online ? 'bg-success shadow-[0_0_6px_theme(colors.success)]' : 'bg-slate-600'}`} />
+                    <div className="absolute right-4 top-4">
+                      <Badge color={online ? 'success' : 'slate'}>
+                        <span className="flex items-center gap-1">
+                          {online ? <Wifi className="h-2.5 w-2.5" /> : <WifiOff className="h-2.5 w-2.5" />}
+                          {online ? 'Online' : 'Offline'}
+                        </span>
+                      </Badge>
+                    </div>
                     <div className="flex items-start gap-3 pr-6">
                       <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-primary/15">
                         {getOsIconComponent(a.operatingSystem)}
@@ -786,16 +793,9 @@ export default function AgentList() {
                         {a.displayName && a.displayName !== a.hostname && (
                           <p className="truncate font-mono text-xs text-muted">{a.hostname}</p>
                         )}
-                        <div className="mt-1.5 flex flex-wrap gap-1.5">
-                          <Badge color={online ? 'success' : 'slate'}>
-                            <span className="flex items-center gap-1">
-                              {online ? <Wifi className="h-2.5 w-2.5" /> : <WifiOff className="h-2.5 w-2.5" />}
-                              {online ? 'Online' : 'Offline'}
-                            </span>
-                          </Badge>
-                          {isZeroTouchPending && (
+                        {isZeroTouchPending && (
+                          <div className="mt-1.5 flex flex-wrap gap-1.5">
                             <Badge color="warning">Aguardando aprovação</Badge>
-                          )}
                         </div>
                       </div>
                     </div>
@@ -833,7 +833,7 @@ export default function AgentList() {
                         </span>
                         {a.heartbeatMetrics?.cpuTemperatureCelsius != null && (() => {
                           const t = a.heartbeatMetrics.cpuTemperatureCelsius;
-                          const tempColor = t > 80 ? 'text-danger' : t > 60 ? 'text-warning' : 'text-success';
+                          const tempColor = t > 80 ? 'text-danger' : t > 60 ? 'text-warning' : '';
                           return (
                             <span className={`flex items-center gap-1 text-[10px] ${tempColor}`}>
                               <Thermometer className="h-3 w-3" />
