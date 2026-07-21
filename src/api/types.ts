@@ -124,6 +124,7 @@ export interface AgentHeartbeatMetrics {
   p2pPeers?: number;
   uptimeSeconds?: number;
   processCount?: number;
+  cpuTemperatureCelsius?: number;
   ipAddress?: string;
   hostname?: string;
   agentVersion?: string;

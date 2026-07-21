@@ -1,4 +1,4 @@
-import { Cpu, MemoryStick, HardDrive, Radio, Clock, Activity, ArrowDown, ArrowUp } from 'lucide-react';
+import { Cpu, MemoryStick, HardDrive, Radio, Clock, Activity, ArrowDown, ArrowUp, Thermometer } from 'lucide-react';
 import type { AgentHeartbeatMetrics } from '@/api';
 import { MetricBar } from './MetricBar';
 import { Card, CardHeader } from './Card';
@@ -127,7 +127,7 @@ export function AgentHeartbeatCard({ metrics, showEmpty = false }: AgentHeartbea
       </div>
 
       {/* Extra metrics row */}
-      <div className="mt-4 grid grid-cols-4 gap-3 border-t border-border pt-3 text-xs">
+      <div className="mt-4 grid grid-cols-5 gap-3 border-t border-border pt-3 text-xs">
         <div className="text-center">
           <p className="flex items-center justify-center gap-1 text-muted">
             <Radio className="h-3 w-3" />
@@ -162,6 +162,15 @@ export function AgentHeartbeatCard({ metrics, showEmpty = false }: AgentHeartbea
           </p>
           <p className="mt-0.5 font-semibold tabular-nums text-foreground">
             {metrics.diskResponseMs != null ? `${Math.round(metrics.diskResponseMs)}ms` : '\u2014'}
+          </p>
+        </div>
+        <div className="text-center">
+          <p className="flex items-center justify-center gap-1 text-muted">
+            <Thermometer className="h-3 w-3" />
+            Temp
+          </p>
+          <p className={`mt-0.5 font-semibold tabular-nums ${metrics.cpuTemperatureCelsius != null ? (metrics.cpuTemperatureCelsius > 80 ? 'text-danger' : metrics.cpuTemperatureCelsius > 60 ? 'text-warning' : 'text-success') : 'text-foreground'}`}>
+            {metrics.cpuTemperatureCelsius != null ? `${Math.round(metrics.cpuTemperatureCelsius)}°C` : '\u2014'}
           </p>
         </div>
       </div>

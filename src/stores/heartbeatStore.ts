@@ -58,6 +58,7 @@ export function extractHeartbeatMetrics(
     p2pPeers: data.p2pPeers,
     uptimeSeconds: data.uptimeSeconds,
     processCount: data.processCount,
+    cpuTemperatureCelsius: data.cpuTemperatureCelsius,
     ipAddress: data.ipAddress,
     hostname: data.hostname,
     agentVersion: data.agentVersion,

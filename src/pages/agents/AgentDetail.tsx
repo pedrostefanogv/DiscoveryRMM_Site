@@ -281,6 +281,7 @@ export default function AgentDetail() {
         p2pPeers: liveHeartbeat.p2pPeers,
         uptimeSeconds: liveHeartbeat.uptimeSeconds,
         processCount: liveHeartbeat.processCount,
+        cpuTemperatureCelsius: liveHeartbeat.cpuTemperatureCelsius,
         ipAddress: liveHeartbeat.ipAddress,
         hostname: liveHeartbeat.hostname,
         agentVersion: liveHeartbeat.agentVersion,

@@ -35,6 +35,7 @@ export interface AgentHeartbeat {
   p2pPeers?: number;
   uptimeSeconds?: number;
   processCount?: number;
+  cpuTemperatureCelsius?: number;
 }
 
 export interface RealtimeStatsResponse {

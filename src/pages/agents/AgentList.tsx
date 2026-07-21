@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Monitor, Wifi, WifiOff, Activity, Building2, Clock, HardDrive, MapPin, LayoutGrid, List, Bug, Trash2, ShieldCheck, ArrowUp, ArrowDown, Radio, RefreshCw, Move, RotateCcw, Power, Zap, Server, Apple } from 'lucide-react';
+import { Monitor, Wifi, WifiOff, Activity, Building2, Clock, HardDrive, MapPin, LayoutGrid, List, Bug, Trash2, ShieldCheck, ArrowUp, ArrowDown, Radio, RefreshCw, Move, RotateCcw, Power, Zap, Server, Apple, Thermometer } from 'lucide-react';
 import { useQueries } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { useClients } from '@/hooks/useClients';
@@ -496,6 +496,7 @@ export default function AgentList() {
           p2pPeers: live.p2pPeers,
           uptimeSeconds: live.uptimeSeconds,
           processCount: live.processCount,
+          cpuTemperatureCelsius: live.cpuTemperatureCelsius,
           ipAddress: live.ipAddress,
           hostname: live.hostname,
           agentVersion: live.agentVersion,
@@ -885,6 +886,19 @@ export default function AgentList() {
                               </div>
                             </div>
                           )}
+                          {a.heartbeatMetrics?.cpuTemperatureCelsius != null && (() => {
+                            const t = a.heartbeatMetrics.cpuTemperatureCelsius;
+                            const tempColor = t > 80 ? 'text-danger' : t > 60 ? 'text-warning' : 'text-success';
+                            return (
+                              <div className="flex items-center gap-2">
+                                <span className="shrink-0 text-xs text-muted min-w-[2rem]">Temp</span>
+                                <Thermometer className="h-3.5 w-3.5 shrink-0 text-muted" />
+                                <span className={`text-xs font-medium tabular-nums ${tempColor}`}>
+                                  {Math.round(t)}°C
+                                </span>
+                              </div>
+                            );
+                          })()}
                         </div>
                       )}
                     </div>

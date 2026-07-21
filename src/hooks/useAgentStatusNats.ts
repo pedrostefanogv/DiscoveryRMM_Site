@@ -377,6 +377,7 @@ function toHeartbeatPayload(
     p2pPeers: getMetric(["p2pPeers", "p2p_peers"]),
     uptimeSeconds: getMetric(["uptimeSeconds", "uptime_seconds"]),
     processCount: getMetric(["processCount", "process_count"]),
+    cpuTemperatureCelsius: getMetric(["cpuTemperatureCelsius", "cpu_temperature_celsius", "cpuTemp"]),
     timestampUtc: timestampUtc ?? undefined,
   };
 }
