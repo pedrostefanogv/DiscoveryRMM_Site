@@ -99,7 +99,8 @@ export default function RemoteDebugConsole() {
   const jwtParam = searchParams.get("jwt");
   const nkeySeedParam = searchParams.get("nkeySeed");
 
-  const [connectionState, setConnectionState] = useState<"connecting" | "connected" | "reconnecting" | "closed">("connecting");
+  const [connectionState, setConnectionState] = useState<"connecting" | "connected" | "reconnecting" | "closed">("closed");
+  const [debugState, setDebugState] = useState<"idle" | "running" | "stopped">("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [logs, setLogs] = useState<RemoteDebugLogEvent[]>([]);
   const [lastSequence, setLastSequence] = useState<number | null>(null);
@@ -269,13 +270,16 @@ export default function RemoteDebugConsole() {
     };
   }, [agentId, buildCredentials, natsUrl, session.accessToken, sessionId, subject]);
 
+  // Conecta NATS sempre que debugState transita para "running"
   useEffect(() => {
+    if (debugState !== "running") return;
     connect();
     return () => {
       cleanupRef.current?.();
       cleanupRef.current = null;
     };
-  }, [connect]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debugState]);
 
   useEffect(() => {
     if (!expiresAt) return;
@@ -303,6 +307,21 @@ export default function RemoteDebugConsole() {
     };
   }, [expiresAt]);
 
+  const handleStartDebug = () => {
+    setDebugState("running");
+  };
+
+  const handleStopDebug = () => {
+    cleanupRef.current?.();
+    cleanupRef.current = null;
+    setConnectionState("closed");
+    setDebugState("stopped");
+    setLogs((current) => [
+      ...current,
+      withSystemMessage("Debug pausado pelo usuário."),
+    ]);
+  };
+
   const handleStopSession = async () => {
     cleanupRef.current?.();
     cleanupRef.current = null;
@@ -312,6 +331,7 @@ export default function RemoteDebugConsole() {
       // Silencia erro no stop — já estamos encerrando.
     }
     setConnectionState("closed");
+    setDebugState("idle");
     setLogs((current) => [
       ...current,
       withSystemMessage("Sessão encerrada pelo usuário."),
@@ -422,20 +442,26 @@ export default function RemoteDebugConsole() {
       <header className="flex items-center gap-2 border-b border-border bg-surface/80 px-3 py-2 text-xs">
         <Badge
           color={
-            connectionState === "connected"
+            debugState === "running" && connectionState === "connected"
               ? "success"
-              : connectionState === "reconnecting"
+              : debugState === "running" && connectionState === "reconnecting"
                 ? "warning"
-                : "slate"
+                : debugState === "running" && connectionState === "connecting"
+                  ? "warning"
+                  : debugState === "stopped"
+                    ? "warning"
+                    : "slate"
           }
         >
-          {connectionState === "connected"
+          {debugState === "running" && connectionState === "connected"
             ? "CONECTADO"
-            : connectionState === "reconnecting"
+            : debugState === "running" && connectionState === "reconnecting"
               ? "RECONECTANDO"
-              : connectionState === "connecting"
+              : debugState === "running" && connectionState === "connecting"
                 ? "CONECTANDO"
-                : "FECHADO"}
+                : debugState === "stopped"
+                  ? "PAUSADO"
+                  : "PRONTO"}
         </Badge>
 
         <span className="ml-1 text-muted">{agentId.slice(0, 8)}</span>
@@ -445,62 +471,89 @@ export default function RemoteDebugConsole() {
         <span className="text-muted">exp: {expiresLabel}</span>
 
         <div className="ml-auto flex items-center gap-2">
-          {/* Filtro de nível (display only) */}
-          <span className="text-muted">filtro:</span>
-          {LEVELS.map((level) => (
-            <button
-              key={level}
-              type="button"
-              onClick={() =>
-                setLevelFilters((current) => ({
-                  ...current,
-                  [level]: !current[level],
-                }))
-              }
-              className={`rounded px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider transition-colors ${
-                levelFilters[level]
-                  ? "bg-primary/20 text-primary"
-                  : "text-muted hover:text-muted-foreground"
-              }`}
+          {debugState === "running" && (
+            <>
+              {/* Filtro de nível (display only) */}
+              <span className="text-muted">filtro:</span>
+              {LEVELS.map((level) => (
+                <button
+                  key={level}
+                  type="button"
+                  onClick={() =>
+                    setLevelFilters((current) => ({
+                      ...current,
+                      [level]: !current[level],
+                    }))
+                  }
+                  className={`rounded px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider transition-colors ${
+                    levelFilters[level]
+                      ? "bg-primary/20 text-primary"
+                      : "text-muted hover:text-muted-foreground"
+                  }`}
+                >
+                  {level}
+                </button>
+              ))}
+
+              <span className="mx-1 h-4 w-px bg-surface-hover" />
+
+              {/* Nível da sessão (restart) */}
+              <span className="text-muted">nível:</span>
+              <select
+                value={currentLevel}
+                onChange={(e) => handleRestartWithLevel(e.target.value as RemoteDebugLogLevel)}
+                disabled={isRestarting}
+                className="h-6 rounded border border-border bg-surface-light px-2 text-[10px] font-mono uppercase text-foreground outline-none focus:border-primary disabled:opacity-50"
+              >
+                {LEVELS.map((level) => (
+                  <option key={level} value={level}>
+                    {LEVEL_LABELS[level]}
+                  </option>
+                ))}
+              </select>
+
+              <span className="mx-1 h-4 w-px bg-surface-hover" />
+
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setLogs([])}
+                disabled={totalLines === 0}
+                className="text-[10px]"
+              >
+                limpar
+              </Button>
+
+              <span className="mx-1 h-4 w-px bg-surface-hover" />
+            </>
+          )}
+
+          {(debugState === "idle" || debugState === "stopped") && (
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={handleStartDebug}
+              className="text-[10px]"
             >
-              {level}
-            </button>
-          ))}
+              iniciar debug
+            </Button>
+          )}
 
-          <span className="mx-1 h-4 w-px bg-surface-hover" />
-
-          {/* Nível da sessão (restart) */}
-          <span className="text-muted">nível:</span>
-          <select
-            value={currentLevel}
-            onChange={(e) => handleRestartWithLevel(e.target.value as RemoteDebugLogLevel)}
-            disabled={isRestarting}
-            className="h-6 rounded border border-border bg-surface-light px-2 text-[10px] font-mono uppercase text-foreground outline-none focus:border-primary disabled:opacity-50"
-          >
-            {LEVELS.map((level) => (
-              <option key={level} value={level}>
-                {LEVEL_LABELS[level]}
-              </option>
-            ))}
-          </select>
-
-          <span className="mx-1 h-4 w-px bg-surface-hover" />
-
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => setLogs([])}
-            disabled={totalLines === 0}
-            className="text-[10px]"
-          >
-            limpar
-          </Button>
+          {debugState === "running" && (
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={handleStopDebug}
+              className="text-[10px]"
+            >
+              parar debug
+            </Button>
+          )}
 
           <Button
             size="sm"
             variant="secondary"
             onClick={handleStopSession}
-            disabled={connectionState === "closed"}
             className="text-[10px]"
           >
             encerrar
@@ -509,6 +562,7 @@ export default function RemoteDebugConsole() {
       </header>
 
       {/* Search bar */}
+      {(debugState === "running" || debugState === "stopped") && (
       <div className="flex items-center gap-2 border-b border-border bg-surface/40 px-3 py-1.5">
         <input
           value={messageFilter}
@@ -523,6 +577,7 @@ export default function RemoteDebugConsole() {
           scroll: {autoScroll ? "auto" : "manual"}
         </span>
       </div>
+      )}
 
       {/* Log area */}
       <div
@@ -532,9 +587,13 @@ export default function RemoteDebugConsole() {
       >
         {displayLogs.length === 0 && (
           <p className="py-12 text-center text-sm text-muted">
-            {connectionState === "connected"
-              ? "Aguardando entradas de log..."
-              : "Nenhuma linha para exibir."}
+            {debugState === "idle"
+              ? "Console pronto. Clique em \"iniciar debug\" para começar a receber logs."
+              : debugState === "stopped"
+                ? "Debug pausado. Clique em \"iniciar debug\" para retomar."
+                : connectionState === "connected"
+                  ? "Aguardando entradas de log..."
+                  : "Nenhuma linha para exibir."}
           </p>
         )}
 
@@ -561,7 +620,11 @@ export default function RemoteDebugConsole() {
 
       {/* Footer */}
       <footer className="border-t border-border bg-surface/60 px-3 py-1 text-[10px] text-muted">
-        {connectionState === "connected" ? (
+        {debugState === "idle" ? (
+          <span>Pronto para iniciar · subject: {subject}</span>
+        ) : debugState === "stopped" ? (
+          <span>Debug pausado · {totalLines} linhas retidas</span>
+        ) : connectionState === "connected" ? (
           <span>Recebendo logs via NATS · subject: {subject}</span>
         ) : connectionState === "closed" ? (
           <span>Conexão fechada</span>
