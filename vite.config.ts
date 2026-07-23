@@ -66,20 +66,52 @@ export default defineConfig({
     target: "es2022",
     rollupOptions: {
       output: {
-        manualChunks: {
-          vendor: ["react", "react-dom", "react-router-dom"],
-          query: ["@tanstack/react-query"],
-          charts: ["recharts"],
-          particles: [
-            "@tsparticles/engine",
-            "@tsparticles/react",
-            "@tsparticles/slim",
-          ],
-          editor: ["@uiw/react-md-editor"],
-          dnd: ["@dnd-kit/core", "@dnd-kit/sortable", "@dnd-kit/utilities"],
-          nats: ["@nats-io/nats-core"],
-          markdown: ["react-markdown", "remark-gfm"],
-          forms: ["react-hook-form", "@hookform/resolvers", "zod"],
+        manualChunks(id: string) {
+          if (id.includes("node_modules")) {
+            const pkg = id.split("node_modules/")[1];
+            const pkgName = pkg.startsWith("@")
+              ? pkg.split("/").slice(0, 2).join("/")
+              : pkg.split("/")[0];
+
+            const vendorPackages = ["react", "react-dom", "react-router-dom"];
+            if (vendorPackages.includes(pkgName)) return "vendor";
+
+            const queryPackages = ["@tanstack/react-query"];
+            if (queryPackages.includes(pkgName)) return "query";
+
+            const chartPackages = ["recharts"];
+            if (chartPackages.includes(pkgName)) return "charts";
+
+            const particlePackages = [
+              "@tsparticles/engine",
+              "@tsparticles/react",
+              "@tsparticles/slim",
+            ];
+            if (particlePackages.includes(pkgName)) return "particles";
+
+            const editorPackages = ["@uiw/react-md-editor"];
+            if (editorPackages.includes(pkgName)) return "editor";
+
+            const dndPackages = [
+              "@dnd-kit/core",
+              "@dnd-kit/sortable",
+              "@dnd-kit/utilities",
+            ];
+            if (dndPackages.includes(pkgName)) return "dnd";
+
+            const natsPackages = ["@nats-io/nats-core"];
+            if (natsPackages.includes(pkgName)) return "nats";
+
+            const markdownPackages = ["react-markdown", "remark-gfm"];
+            if (markdownPackages.includes(pkgName)) return "markdown";
+
+            const formPackages = [
+              "react-hook-form",
+              "@hookform/resolvers",
+              "zod",
+            ];
+            if (formPackages.includes(pkgName)) return "forms";
+          }
         },
       },
     },
