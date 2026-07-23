@@ -1,11 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
-import Particles, { initParticlesEngine } from "@tsparticles/react";
+import { useMemo } from "react";
+import Particles, { ParticlesProvider, useParticlesProvider } from "@tsparticles/react";
 import { loadSlim } from "@tsparticles/slim";
 import type { ISourceOptions } from "@tsparticles/engine";
 import { useTheme } from "@/theme/ThemeContext";
 
-export function ParticlesBackground() {
-  const [ready, setReady] = useState(false);
+function ParticlesAnimation() {
   const { mode } = useTheme();
 
   // Cor dinâmica dos particles conforme o tema
@@ -48,21 +47,9 @@ export function ParticlesBackground() {
     detectRetina: true,
   }), [particleColor, linkColor, mode]);
 
-  useEffect(() => {
-    let cancelled = false;
+  const { loaded } = useParticlesProvider();
 
-    initParticlesEngine(async (engine) => {
-      await loadSlim(engine);
-    }).then(() => {
-      if (!cancelled) setReady(true);
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  if (!ready) return null;
+  if (!loaded) return null;
 
   return (
     <Particles
@@ -70,5 +57,15 @@ export function ParticlesBackground() {
       className="absolute inset-0"
       options={options}
     />
+  );
+}
+
+export function ParticlesBackground() {
+  return (
+    <ParticlesProvider init={async (engine) => {
+      await loadSlim(engine);
+    }}>
+      <ParticlesAnimation />
+    </ParticlesProvider>
   );
 }
