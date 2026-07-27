@@ -34,7 +34,7 @@ export default function RemoteScreenViewer({
   natsSubject,
   natsUrl,
   jwt,
-  nkeySeed,
+  nkeySeed: _nkeySeed,
   quality,
   codec,
   onError,

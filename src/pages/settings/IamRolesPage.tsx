@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { KeyRound, Plus, ShieldCheck, Trash2 } from "lucide-react";
+import { KeyRound, Plus, Trash2 } from "lucide-react";
 import toast from "react-hot-toast";
 import {
   Badge,

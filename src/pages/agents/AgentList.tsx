@@ -5,7 +5,7 @@ import { useQueries } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { useClients } from '@/hooks/useClients';
 import { getDeleteAgentErrorMessage, useApproveZeroTouch, useDeleteAgent, useRestartAgent, useShutdownAgent, useWakeOnLan } from '@/hooks/useAgents';
-import { ApiError, agentUpdatesApi, agentsApi, authApi, sitesApi } from '@/api';
+import { ApiError, agentUpdatesApi, agentsApi, sitesApi } from '@/api';
 import { Badge, Loading, ErrorDisplay, Input, Select, StatCard, Modal, PageHeader, SkeletonCard, EmptyState, MetricBar, Button } from '@/components/ui';
 import { TransferAgentModal } from '@/components/agents/TransferAgentModal';
 import PowerActionModal from '@/components/agents/PowerActionModal';

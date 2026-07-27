@@ -11,12 +11,7 @@ import { RecordingControls } from '@/modules/remote-recording/RecordingControls'
 
 type Tab = 'screen' | 'terminal' | 'files' | 'proxy';
 
-function formatTimestamp(ts: string | null): string {
-  if (!ts) return '--:--:--';
-  const value = new Date(ts);
-  if (Number.isNaN(value.getTime())) return '--:--:--';
-  return value.toLocaleTimeString('pt-BR', { hour12: false });
-}
+
 
 function formatRemaining(expiresAtUtc: string | null): string {
   if (!expiresAtUtc) return '--';
@@ -45,7 +40,7 @@ export default function RemoteSession() {
   const [activeTab, setActiveTab] = useState<Tab>(kind as Tab);
   const [natsCredentials, setNatsCredentials] = useState<SessionCredentials | null>(null);
   const [turnCreds, setTurnCreds] = useState<{ username: string; credential: string; urls: string[] } | null>(null);
-  const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
+  const [, setRemoteStream] = useState<MediaStream | null>(null);
   const [rtt, setRtt] = useState<number>(0);
 
   // Timer de expiração

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { remoteSessionsApi } from '@/api/remote-sessions';
 
 interface FileEntry {
@@ -13,6 +13,8 @@ interface RemoteFilesProps {
   sessionId: string;
   agentId: string;
   natsSubject?: string;
+  jwt?: string;
+  nkeySeed?: string;
 }
 
 function formatSize(bytes: number): string {

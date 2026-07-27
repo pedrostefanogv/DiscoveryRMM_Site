@@ -11,7 +11,6 @@ import {
   Input,
   Loading,
   Modal,
-  Select,
   type Column,
 } from "@/components/ui";
 import {

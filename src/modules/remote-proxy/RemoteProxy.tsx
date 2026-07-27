@@ -3,11 +3,14 @@ import { useState, useCallback, useRef } from 'react';
 interface RemoteProxyProps {
   sessionId: string;
   agentId: string;
+  natsSubject?: string;
+  jwt?: string;
+  nkeySeed?: string;
 }
 
 type ProxyStatus = 'idle' | 'loading' | 'loaded' | 'blocked' | 'error';
 
-export default function RemoteProxy({ sessionId, agentId }: RemoteProxyProps) {
+export default function RemoteProxy({ sessionId: _sessionId, agentId: _agentId }: RemoteProxyProps) {
   const [url, setUrl] = useState('');
   const [proxyUrl, setProxyUrl] = useState('');
   const [status, setStatus] = useState<ProxyStatus>('idle');

@@ -19,7 +19,7 @@ export default function RemoteTerminal({
   const [output, setOutput] = useState<string[]>([]);
   const [commandHistory, setCommandHistory] = useState<string[]>([]);
   const [historyIdx, setHistoryIdx] = useState(-1);
-  const [status, setStatus] = useState<'connected' | 'disconnected'>('connected');
+  const [status] = useState<'connected' | 'disconnected'>('connected');
 
   const appendOutput = useCallback((text: string) => {
     setOutput(prev => [...prev.slice(-1000), text]);

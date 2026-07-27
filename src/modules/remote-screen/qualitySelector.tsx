@@ -1,4 +1,3 @@
-import { useState, useCallback } from 'react';
 import type { StartRemoteSessionRequest } from '@/api/remote-sessions';
 
 interface CodecSelectorProps {
