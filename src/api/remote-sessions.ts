@@ -58,6 +58,22 @@ export interface SessionCredentials {
     natsWssUrl?: string;
 }
 
+export interface RecordingResponse {
+    recordingId: string;
+    sessionId: string;
+    status: string;
+    startedAtUtc: string;
+    storageUrl?: string;
+}
+
+export interface RecordingDownload {
+    downloadUrl: string;
+    containerFormat: string;
+    bytes: number;
+    durationSec: number;
+    expiresAt?: string;
+}
+
 // ── API Client ─────────────────────────────────────────────────────────────
 
 const BASE = '/api/v1/remote-sessions';
@@ -82,4 +98,24 @@ export const remoteSessionsApi = {
     /** Obtém credenciais TURN para WebRTC. */
     getTurnCredentials: (agentId: string, sessionId: string): Promise<TurnCredentials> =>
         api.post<TurnCredentials>(`${BASE}/${agentId}/${sessionId}/turn-credentials`),
+
+    /** Obtém credenciais NATS (JWT + NKey) para o viewer se conectar ao stream. */
+    getSessionCredentials: (agentId: string, sessionId: string): Promise<SessionCredentials> =>
+        api.post<SessionCredentials>(`${BASE}/${agentId}/${sessionId}/nats-credentials`),
+
+    /** Inicia a gravação de uma sessão remota. */
+    startRecording: (agentId: string, sessionId: string): Promise<RecordingResponse> =>
+        api.post<RecordingResponse>(`${BASE}/${agentId}/${sessionId}/recording/start`),
+
+    /** Para a gravação de uma sessão remota. */
+    stopRecording: (agentId: string, sessionId: string): Promise<RecordingResponse> =>
+        api.post<RecordingResponse>(`${BASE}/${agentId}/${sessionId}/recording/stop`),
+
+    /** Obtém URL de download da gravação. */
+    getRecordingDownload: (agentId: string, sessionId: string): Promise<RecordingDownload> =>
+        api.get<RecordingDownload>(`${BASE}/${agentId}/${sessionId}/recording/download`),
+
+    /** Exclui a gravação (LGPD Art. 18). */
+    deleteRecording: (agentId: string, sessionId: string): Promise<void> =>
+        api.delete<void>(`${BASE}/${agentId}/${sessionId}/recording`),
 };

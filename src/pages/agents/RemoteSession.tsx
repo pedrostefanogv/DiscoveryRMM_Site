@@ -1,7 +1,15 @@
 import { useSearchParams } from 'react-router-dom';
 import { Button, Card } from '@/components/ui';
-import { useEffect, useState } from 'react';
-import { remoteSessionsApi } from '@/api/remote-sessions';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { remoteSessionsApi, SessionCredentials } from '@/api/remote-sessions';
+import RemoteScreenViewer from '@/modules/remote-screen/RemoteScreenViewer';
+import RemoteTerminal from '@/modules/remote-terminal/RemoteTerminal';
+import RemoteFiles from '@/modules/remote-files/RemoteFiles';
+import RemoteProxy from '@/modules/remote-proxy/RemoteProxy';
+import { useWebrtcSession } from '@/modules/remote-webrtc/useWebrtcSession';
+import RecordingControls from '@/modules/remote-recording/RecordingControls';
+
+type Tab = 'screen' | 'terminal' | 'files' | 'proxy';
 
 function formatTimestamp(ts: string | null): string {
   if (!ts) return '--:--:--';
@@ -30,12 +38,17 @@ export default function RemoteSession() {
   const quality = searchParams.get('quality') ?? 'high';
   const codec = searchParams.get('codec') ?? 'jpeg';
   const expiresAt = searchParams.get('expiresAt') ?? '';
-  const natsUrl = searchParams.get('natsUrl') ?? '';
 
   const [remaining, setRemaining] = useState<string>(formatRemaining(expiresAt));
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isConnected, setIsConnected] = useState(false);
+  const [activeTab, setActiveTab] = useState<Tab>(kind as Tab);
+  const [natsCredentials, setNatsCredentials] = useState<SessionCredentials | null>(null);
+  const [turnCreds, setTurnCreds] = useState<{ username: string; credential: string; urls: string[] } | null>(null);
+  const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
+  const [rtt, setRtt] = useState<number>(0);
 
+  // Timer de expiração
   useEffect(() => {
     const timer = setInterval(() => {
       setRemaining(formatRemaining(expiresAt));
@@ -43,11 +56,54 @@ export default function RemoteSession() {
     return () => clearInterval(timer);
   }, [expiresAt]);
 
-  // Simula conexão NATS para a Fase 1 (placeholder)
+  // Obtém credenciais NATS e TURN ao montar
   useEffect(() => {
-    if (!sessionId || !natsUrl) return;
-    setIsConnected(true);
-  }, [sessionId, natsUrl]);
+    if (!sessionId || !agentId) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const [natsCreds, turnCreds] = await Promise.all([
+          remoteSessionsApi.getSessionCredentials(agentId, sessionId),
+          remoteSessionsApi.getTurnCredentials(agentId, sessionId),
+        ]);
+        if (cancelled) return;
+        setNatsCredentials(natsCreds);
+        setTurnCreds({
+          username: turnCreds.username,
+          credential: turnCreds.credential,
+          urls: turnCreds.urls,
+        });
+        setIsConnected(true);
+      } catch (err) {
+        if (!cancelled) {
+          setErrorMsg(`Credenciais: ${err instanceof Error ? err.message : String(err)}`);
+        }
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [sessionId, agentId]);
+
+  // WebRTC (apenas quando transport=webrtc e screen)
+  const webrtc = useWebrtcSession({
+    stunUrls: ['stun:stun.l.google.com:19302'],
+    turnUrls: turnCreds?.urls ?? [],
+    turnUsername: turnCreds?.username ?? '',
+    turnCredential: turnCreds?.credential ?? '',
+    onRemoteStream: (stream) => setRemoteStream(stream),
+    onError: (err) => setErrorMsg(`WebRTC: ${err}`),
+  });
+
+  // Inicia WebRTC quando credenciais TURN disponíveis
+  useEffect(() => {
+    if (turnCreds && transport === 'webrtc' && activeTab === 'screen') {
+      webrtc.start();
+    }
+    return () => {
+      webrtc.stop();
+    };
+  }, [turnCreds, transport, activeTab]);
 
   const handleRenew = async () => {
     try {
@@ -66,6 +122,13 @@ export default function RemoteSession() {
     }
   };
 
+  const tabs: { key: Tab; label: string }[] = [
+    { key: 'screen', label: 'Tela' },
+    { key: 'terminal', label: 'Terminal' },
+    { key: 'files', label: 'Arquivos' },
+    { key: 'proxy', label: 'Proxy' },
+  ];
+
   if (!sessionId || !agentId) {
     return (
       <div className="flex items-center justify-center h-screen bg-slate-900">
@@ -82,7 +145,7 @@ export default function RemoteSession() {
       <div className="flex items-center justify-between px-4 py-2 bg-slate-800 border-b border-slate-700">
         <div className="flex items-center gap-3">
           <h1 className="text-sm font-semibold">
-            Acesso Remoto — {kind.charAt(0).toUpperCase() + kind.slice(1)}
+            Acesso Remoto — {activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}
           </h1>
           <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${isConnected ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'}`}>
             {isConnected ? 'Conectado' : 'Conectando...'}
@@ -95,27 +158,88 @@ export default function RemoteSession() {
         </div>
       </div>
 
-      {/* Status bar */}
-      <div className="flex items-center gap-4 px-4 py-1.5 bg-slate-850 border-b border-slate-700 text-xs text-slate-500">
-        <span>Session: <span className="text-slate-400 font-mono">{sessionId.slice(0, 8)}...</span></span>
-        <span>Transport: <span className="text-slate-400">{transport.toUpperCase()}</span></span>
-        <span>Quality: <span className="text-slate-400">{quality}</span></span>
-        <span>Codec: <span className="text-slate-400">{codec.toUpperCase()}</span></span>
-        <span>Expires: <span className="text-slate-400">{formatTimestamp(expiresAt)}</span></span>
-      </div>
-
-      {/* Main area — placeholder para Fase 2 (screen capture) */}
-      <div className="flex-1 flex items-center justify-center bg-slate-950">
-        <div className="text-center">
-          <p className="text-slate-500 text-lg mb-2">Acesso Remoto Nativo DiscoveryRMM</p>
-          <p className="text-slate-600 text-sm">Stream de tela será implementado na Fase 2</p>
-          <p className="text-slate-600 text-sm mt-1">Sessão ativa com TTL controlado</p>
+      {/* Tabs */}
+      <div className="flex items-center gap-1 px-4 py-1.5 bg-slate-850 border-b border-slate-700">
+        {tabs.map((tab) => (
+          <button
+            key={tab.key}
+            className={`px-3 py-1 text-xs rounded-t transition-colors ${
+              activeTab === tab.key
+                ? 'bg-slate-700 text-slate-200'
+                : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800'
+            }`}
+            onClick={() => setActiveTab(tab.key)}
+          >
+            {tab.label}
+          </button>
+        ))}
+        {/* Status bar info */}
+        <div className="ml-auto flex items-center gap-3 text-xs text-slate-500">
+          <span>Transport: <span className="text-slate-400">{transport.toUpperCase()}</span></span>
+          <span>Quality: <span className="text-slate-400">{quality}</span></span>
+          <span>Codec: <span className="text-slate-400">{codec.toUpperCase()}</span></span>
         </div>
       </div>
 
+      {/* Main content area */}
+      <div className="flex-1 overflow-hidden">
+        {activeTab === 'screen' && (
+          <div className="h-full flex flex-col">
+            <div className="flex-1">
+              <RemoteScreenViewer
+                natsSubject={natsSubject}
+                natsUrl={natsCredentials?.natsWssUrl}
+                jwt={natsCredentials?.jwt}
+                nkeySeed={natsCredentials?.nkeySeed}
+                quality={quality}
+                codec={codec}
+                onError={(msg) => setErrorMsg(msg)}
+                onLatency={(rttMs) => setRtt(rttMs)}
+              />
+            </div>
+            {transport === 'webrtc' && webrtc.state.status === 'connected' && (
+              <div className="text-xs text-slate-500 px-4 py-1 bg-slate-800">
+                WebRTC P2P — latência: {rtt}ms
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'terminal' && (
+          <RemoteTerminal
+            natsSubject={natsSubject}
+            jwt={natsCredentials?.jwt}
+            nkeySeed={natsCredentials?.nkeySeed}
+          />
+        )}
+
+        {activeTab === 'files' && (
+          <RemoteFiles
+            natsSubject={natsSubject}
+            jwt={natsCredentials?.jwt}
+            nkeySeed={natsCredentials?.nkeySeed}
+          />
+        )}
+
+        {activeTab === 'proxy' && (
+          <RemoteProxy
+            natsSubject={natsSubject}
+            jwt={natsCredentials?.jwt}
+            nkeySeed={natsCredentials?.nkeySeed}
+          />
+        )}
+      </div>
+
+      {/* Recording controls */}
+      <RecordingControls
+        agentId={agentId}
+        sessionId={sessionId}
+        onError={(msg) => setErrorMsg(msg)}
+      />
+
       {/* Error toast */}
       {errorMsg && (
-        <div className="absolute bottom-4 right-4 bg-red-900/80 text-red-200 px-4 py-2 rounded text-sm">
+        <div className="absolute bottom-4 right-4 bg-red-900/80 text-red-200 px-4 py-2 rounded text-sm max-w-sm z-50">
           {errorMsg}
           <button className="ml-2 text-red-400 hover:text-red-200" onClick={() => setErrorMsg(null)}>✕</button>
         </div>

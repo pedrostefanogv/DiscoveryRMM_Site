@@ -32,6 +32,9 @@ function decodeFrameHeader(data: ArrayBuffer): FrameHeader | null {
 
 export default function RemoteScreenViewer({
   natsSubject,
+  natsUrl,
+  jwt,
+  nkeySeed,
   quality,
   codec,
   onError,
@@ -43,10 +46,12 @@ export default function RemoteScreenViewer({
   const [scale, setScale] = useState<'fit' | '100%'>('fit');
   const [rtt, setRtt] = useState<number>(0);
   const [fps, setFps] = useState<number>(0);
+  const [isPaused, setIsPaused] = useState(false);
   const frameCountRef = useRef(0);
   const lastFpsUpdate = useRef(Date.now());
+  const wsRef = useRef<WebSocket | null>(null);
 
-  // Decode JPEG/WebP off-main-thread via Image.decode()
+  // Decode JPEG/WebP off-main-thread via ImageBitmap
   const decodeFrame = useCallback(async (data: ArrayBuffer): Promise<ImageBitmap | null> => {
     const header = decodeFrameHeader(data);
     if (!header) return null;
@@ -66,7 +71,7 @@ export default function RemoteScreenViewer({
     }
   }, [codec, scale]);
 
-  // Placeholder: render frame in canvas
+  // Render frame in canvas
   const renderFrame = useCallback((bitmap: ImageBitmap) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -87,6 +92,112 @@ export default function RemoteScreenViewer({
       frameCountRef.current = 0;
       lastFpsUpdate.current = now;
     }
+  }, []);
+
+  // NATS WebSocket: subscreve frames via subject específico
+  useEffect(() => {
+    if (!natsSubject || !natsUrl || !jwt) return;
+
+    let cancelled = false;
+    const wsUrl = natsUrl.replace(/^http/, 'ws') + '/nats';
+    const ws = new WebSocket(wsUrl);
+    wsRef.current = ws;
+
+    ws.onopen = () => {
+      // Autentica com JWT
+      ws.send(JSON.stringify({ type: 'auth', jwt }));
+      // Subscreve ao stream de frames
+      ws.send(JSON.stringify({ type: 'sub', subject: `${natsSubject}.frame` }));
+    };
+
+    ws.onmessage = (event) => {
+      if (cancelled || isPaused) return;
+
+      // Converte mensagem binária (MessagePack ou raw bytes)
+      if (event.data instanceof Blob) {
+        event.data.arrayBuffer().then((buffer) => {
+          if (cancelled || isPaused) return;
+          decodeFrame(buffer).then((bitmap) => {
+            if (bitmap && !cancelled) {
+              renderFrame(bitmap);
+              // RTT calculation from frame header timestamp
+              const header = decodeFrameHeader(buffer);
+              if (header && onLatency) {
+                const lat = Date.now() - header.ts;
+                setRtt(lat);
+                onLatency(lat);
+              }
+            }
+          });
+        });
+      }
+    };
+
+    ws.onerror = () => {
+      onError?.('NATS WebSocket connection failed');
+    };
+
+    ws.onclose = () => {
+      if (!cancelled) {
+        onError?.('NATS connection closed');
+      }
+    };
+
+    return () => {
+      cancelled = true;
+      ws.close();
+    };
+  }, [natsSubject, natsUrl, jwt, isPaused, decodeFrame, renderFrame, onError, onLatency]);
+
+  // Input capture (mouse/keyboard) — B14 fix
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || !wsRef.current) return;
+
+    const sendInput = (type: string, data: Record<string, unknown>) => {
+      if (wsRef.current?.readyState === WebSocket.OPEN && natsSubject) {
+        wsRef.current.send(JSON.stringify({
+          type: 'pub',
+          subject: `${natsSubject}.input`,
+          data: JSON.stringify({ type, ...data, ts: Date.now() }),
+        }));
+      }
+    };
+
+    const onMouseDown = (e: MouseEvent) => sendInput('mousedown', { x: e.offsetX, y: e.offsetY, button: e.button });
+    const onMouseUp = (e: MouseEvent) => sendInput('mouseup', { x: e.offsetX, y: e.offsetY, button: e.button });
+    const onMouseMove = (e: MouseEvent) => sendInput('mousemove', { x: e.offsetX, y: e.offsetY });
+    const onWheel = (e: WheelEvent) => sendInput('wheel', { deltaX: e.deltaX, deltaY: e.deltaY });
+    const onKeyDown = (e: KeyboardEvent) => sendInput('keydown', { key: e.key, code: e.code, ctrl: e.ctrlKey, shift: e.shiftKey, alt: e.altKey, meta: e.metaKey });
+    const onKeyUp = (e: KeyboardEvent) => sendInput('keyup', { key: e.key, code: e.code });
+    const onContextMenu = (e: MouseEvent) => { e.preventDefault(); };
+
+    canvas.addEventListener('mousedown', onMouseDown);
+    canvas.addEventListener('mouseup', onMouseUp);
+    canvas.addEventListener('mousemove', onMouseMove);
+    canvas.addEventListener('wheel', onWheel);
+    canvas.addEventListener('contextmenu', onContextMenu);
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
+
+    return () => {
+      canvas.removeEventListener('mousedown', onMouseDown);
+      canvas.removeEventListener('mouseup', onMouseUp);
+      canvas.removeEventListener('mousemove', onMouseMove);
+      canvas.removeEventListener('wheel', onWheel);
+      canvas.removeEventListener('contextmenu', onContextMenu);
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keyup', onKeyUp);
+    };
+  }, [natsSubject]);
+
+  // Pause on visibility change (M11)
+  useEffect(() => {
+    const onVisibility = () => {
+      setIsPaused(document.hidden);
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => document.removeEventListener('visibilitychange', onVisibility);
   }, []);
 
   // Toggle fullscreen
@@ -114,36 +225,40 @@ export default function RemoteScreenViewer({
     return () => window.removeEventListener('keydown', handler);
   }, [toggleFullscreen]);
 
-  // Placeholder NATS connection: will receive frames in Fase 5
-  useEffect(() => {
-    if (!natsSubject) return;
-    frameCountRef.current = 0;
-    lastFpsUpdate.current = Date.now();
-  }, [natsSubject]);
-
   return (
-    <div ref={containerRef} className="relative flex items-center justify-center bg-slate-950 rounded-lg overflow-hidden" style={{ height: 'calc(100vh - 120px)' }}>
+    <div ref={containerRef} className="relative flex items-center justify-center bg-slate-950 rounded-lg overflow-hidden h-full">
       <canvas
         ref={canvasRef}
-        className="max-w-full max-h-full object-contain"
+        className="max-w-full max-h-full object-contain cursor-crosshair"
+        tabIndex={0}
       />
 
       {/* Info overlay */}
-      <div className="absolute top-2 right-2 flex items-center gap-3 text-xs bg-slate-900/70 rounded px-2 py-1 backdrop-blur-sm">
+      <div className="absolute top-2 right-2 flex items-center gap-3 text-xs bg-slate-900/70 rounded px-2 py-1 backdrop-blur-sm pointer-events-none">
         <span className="text-emerald-400">{fps} FPS</span>
         <span className="text-slate-400">{rtt}ms</span>
         <span className="text-slate-500">{quality.toUpperCase()}</span>
         <span className="text-slate-500">{codec.toUpperCase()}</span>
+        {isPaused && <span className="text-amber-400">⏸</span>}
       </div>
 
-      {/* Fullscreen button */}
-      <button
-        className="absolute bottom-2 right-2 bg-slate-800/80 hover:bg-slate-700 text-slate-300 rounded px-2 py-1 text-xs backdrop-blur-sm"
-        onClick={toggleFullscreen}
-        title="Fullscreen (Ctrl+F)"
-      >
-        {isFullscreen ? '⛶ Exit' : '⛶ Full'}
-      </button>
+      {/* Controls */}
+      <div className="absolute bottom-2 right-2 flex gap-1">
+        <button
+          className="bg-slate-800/80 hover:bg-slate-700 text-slate-300 rounded px-2 py-1 text-xs backdrop-blur-sm"
+          onClick={() => setScale(scale === 'fit' ? '100%' : 'fit')}
+          title="Toggle scale"
+        >
+          {scale === 'fit' ? '⊡ Fit' : '⊡ 1:1'}
+        </button>
+        <button
+          className="bg-slate-800/80 hover:bg-slate-700 text-slate-300 rounded px-2 py-1 text-xs backdrop-blur-sm"
+          onClick={toggleFullscreen}
+          title="Fullscreen (Ctrl+F)"
+        >
+          {isFullscreen ? '⛶ Exit' : '⛶ Full'}
+        </button>
+      </div>
     </div>
   );
 }
