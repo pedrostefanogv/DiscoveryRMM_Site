@@ -139,7 +139,6 @@ export interface Agent {
   hostname: string;
   displayName: string | null;
   machineScore?: number | null;
-  meshCentralNodeId?: string | null;
   zeroTouchPending?: boolean;
   operatingSystem: string | null;
   osVersion: string | null;
@@ -516,7 +515,7 @@ export interface ReviewTicketAutomationLinkRequest {
   note?: string | null;
 }
 
-export interface TicketSavedViewFilter extends TicketsQuery {}
+export interface TicketSavedViewFilter extends TicketsQuery { }
 
 export interface TicketSavedView {
   id: string;
@@ -1001,19 +1000,6 @@ export interface DownloadDeployPackageRequest {
 
 export interface PrebuildAgentRequest {
   forceRebuild: boolean;
-}
-
-export interface MeshCentralInstallInstructions {
-  groupName: string;
-  meshId: string;
-  installUrl: string;
-  installMode: string;
-  windowsCommandBackground?: string | null;
-  windowsCommandInteractive?: string | null;
-  linuxCommandBackground?: string | null;
-  linuxCommandInteractive?: string | null;
-  windowsCommand?: string | null;
-  linuxCommand?: string | null;
 }
 
 export interface Note {
@@ -3105,7 +3091,6 @@ export interface TransferAgentResponse {
   previousClientId: string;
   targetClientId: string;
   isCrossClient: boolean;
-  meshCentralAclUpdated: boolean;
   reason: string | null;
 }
 

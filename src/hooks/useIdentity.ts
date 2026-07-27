@@ -11,16 +11,11 @@ import {
   type CreateUserRequest,
   type CreateUserWithGroupsRequest,
   type CursorPageDto,
-  type MeshCentralBackfillRequest,
-  type MeshGroupPolicyReconcileRequest,
   type UpdateMyProfileRequest,
   type UpdateRoleRequest,
   type UpdateUserGroupRequest,
   type UpdateUserRequest,
   type UserDto,
-  type CreateMeshCentralRightsProfileRequest,
-  type MeshCentralNodeLinksBackfillRequest,
-  type UpdateMeshCentralRightsProfileRequest,
 } from "@/api";
 
 function normalizeArray<T>(data: CursorPageDto<T> | T[]): T[] {
@@ -49,27 +44,17 @@ const IAM_KEYS = {
   groupRoles: (groupId: string) => ["iam", "groups", groupId, "roles"] as const,
   rolePermissions: (roleId: string) =>
     ["iam", "roles", roleId, "permissions"] as const,
-  meshBackfill: ["iam", "mesh", "backfill"] as const,
-  meshDiagnosticsHealth: (siteId: string, agentId?: string | null) =>
     [
       "iam",
-      "mesh",
       "diagnostics",
       "health",
       siteId,
       agentId ?? "none",
     ] as const,
-  meshNodeLinksBackfill: ["iam", "mesh", "node-links", "backfill"] as const,
-  meshGroupPolicyStatus: (siteId: string) =>
-    ["iam", "mesh", "group-policy", "status", siteId] as const,
-  meshGroupPolicyReconcile: [
     "iam",
-    "mesh",
     "group-policy",
     "reconcile",
   ] as const,
-  meshRightsProfiles: ["iam", "mesh", "rights-profiles"] as const,
-  meshRightsProfileUsage: ["iam", "mesh", "rights-profiles", "usage"] as const,
 };
 
 export function useIamUsers() {
@@ -403,104 +388,68 @@ export function useRemoveIamRolePermission(roleId: string | null) {
   });
 }
 
-export function useRunMeshCentralBackfill() {
   return useMutation({
-    mutationFn: (payload: MeshCentralBackfillRequest) =>
-      iamApi.runMeshCentralBackfill(payload),
   });
 }
 
-export function useRunMeshCentralBackfillDryRun() {
   return useMutation({
     mutationFn: (
-      payload: Omit<MeshCentralBackfillRequest, "applyChanges"> = {},
-    ) => iamApi.runMeshCentralBackfillDryRun(payload),
   });
 }
 
-export function useMeshCentralDiagnosticsHealth(
   siteId: string | null,
   agentId?: string | null,
 ) {
   return useQuery({
     queryKey: siteId
-      ? IAM_KEYS.meshDiagnosticsHealth(siteId, agentId)
-      : ["iam", "mesh", "diagnostics", "health", "disabled"],
     queryFn: () =>
-      iamApi.getMeshCentralDiagnosticsHealth(siteId as string, agentId),
     enabled: !!siteId,
   });
 }
 
-export function useRunMeshCentralNodeLinksBackfill() {
   return useMutation({
-    mutationFn: (payload: MeshCentralNodeLinksBackfillRequest) =>
-      iamApi.runMeshCentralNodeLinksBackfill(payload),
   });
 }
 
-export function useRunMeshCentralNodeLinksBackfillDryRun() {
   return useMutation({
     mutationFn: (
-      payload: Omit<MeshCentralNodeLinksBackfillRequest, "applyChanges"> = {},
-    ) => iamApi.runMeshCentralNodeLinksBackfillDryRun(payload),
   });
 }
 
-export function useMeshGroupPolicyStatus(siteId: string | null) {
   return useQuery({
     queryKey: siteId
-      ? IAM_KEYS.meshGroupPolicyStatus(siteId)
-      : ["iam", "mesh", "group-policy", "status", "disabled"],
-    queryFn: () => iamApi.getMeshGroupPolicyStatus(siteId as string),
     enabled: !!siteId,
   });
 }
 
-export function useMeshGroupPolicyReconcile() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (payload: MeshGroupPolicyReconcileRequest) =>
-      iamApi.reconcileMeshGroupPolicy(payload),
     onSuccess: (_, variables) => {
       if (variables.siteId) {
         queryClient.invalidateQueries({
-          queryKey: IAM_KEYS.meshGroupPolicyStatus(variables.siteId),
         });
       }
       queryClient.invalidateQueries({
-        queryKey: IAM_KEYS.meshGroupPolicyReconcile,
       });
     },
   });
 }
 
-export function useMeshRightsProfiles() {
   return useQuery({
-    queryKey: IAM_KEYS.meshRightsProfiles,
-    queryFn: () => iamApi.listRightsProfiles(),
   });
 }
 
-export function useMeshRightsProfileUsage() {
   return useQuery({
-    queryKey: IAM_KEYS.meshRightsProfileUsage,
-    queryFn: () => iamApi.getRightsProfileUsage(),
   });
 }
 
-export function useCreateMeshRightsProfile() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (payload: CreateMeshCentralRightsProfileRequest) =>
-      iamApi.createRightsProfile(payload),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: IAM_KEYS.meshRightsProfiles });
     },
   });
 }
 
-export function useUpdateMeshRightsProfile() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({
@@ -508,22 +457,15 @@ export function useUpdateMeshRightsProfile() {
       payload,
     }: {
       id: string;
-      payload: UpdateMeshCentralRightsProfileRequest;
-    }) => iamApi.updateRightsProfile(id, payload),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: IAM_KEYS.meshRightsProfiles });
     },
   });
 }
 
-export function useDeleteMeshRightsProfile() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => iamApi.deleteRightsProfile(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: IAM_KEYS.meshRightsProfiles });
       queryClient.invalidateQueries({
-        queryKey: IAM_KEYS.meshRightsProfileUsage,
       });
     },
   });

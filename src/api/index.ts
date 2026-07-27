@@ -77,6 +77,7 @@ export type {
 } from "./realtime";
 export { dashboardApi } from "./dashboard";
 export { p2pApi } from "./p2p";
+export { remoteSessionsApi } from "./remote-sessions";
 export { authApi } from "./auth";
 export { iamApi } from "./iam";
 export { customFieldsApi } from "./custom-fields";
@@ -117,8 +118,6 @@ export type {
   CompleteTotpRegistrationResponse,
   MfaKey,
   RenameMfaKeyRequest,
-  MeshCentralEmbedUrlRequest,
-  MeshCentralEmbedUrlResponse,
   ApiMessageResponse,
 } from "./auth";
 export type {
@@ -128,7 +127,6 @@ export type {
   CreateUserResponse,
   CreateUserWithGroupsRequest,
   CreateUserWithGroupsResponse,
-  MeshCentralSyncSummary,
   UpdateUserRequest,
   ChangePasswordRequest,
   UserMfaKeyType,
@@ -150,24 +148,6 @@ export type {
   UpdateRoleRequest,
   PermissionDto,
   AddRolePermissionRequest,
-  MeshCentralBackfillRequest,
-  MeshCentralBackfillItem,
-  MeshCentralBackfillReport,
-  MeshCentralDiagnosticsHealthDto,
-  MeshCentralDiagnosticsSiteDto,
-  MeshCentralDiagnosticsAgentDto,
-  MeshCentralDiagnosticsResponse,
-  MeshCentralNodeLinksBackfillRequest,
-  MeshCentralNodeLinksBackfillItem,
-  MeshCentralNodeLinksBackfillReport,
-  MeshGroupPolicyStatusDto,
-  MeshGroupPolicyReconcileRequest,
-  MeshGroupPolicyReconcileItem,
-  MeshGroupPolicyReconcileReport,
-  MeshCentralRightsProfileDto,
-  CreateMeshCentralRightsProfileRequest,
-  UpdateMeshCentralRightsProfileRequest,
-  MeshCentralRightsProfileUsageDto,
 } from "./iam";
 export type {
   DashboardWindow,

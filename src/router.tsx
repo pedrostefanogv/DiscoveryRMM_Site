@@ -16,6 +16,7 @@ const SiteDetail = lazy(() => import('@/pages/clients/SiteDetail'));
 const AgentList = lazy(() => import('@/pages/agents/AgentList'));
 const AgentDetail = lazy(() => import('@/pages/agents/AgentDetail'));
 const RemoteDebugConsole = lazy(() => import('@/pages/agents/RemoteDebugConsole'));
+const RemoteSession = lazy(() => import('@/pages/agents/RemoteSession'));
 const TicketList = lazy(() => import('@/pages/tickets/TicketList'));
 const TicketAlertsPage = lazy(() => import('@/pages/tickets/TicketAlertsPage'));
 const AutoTicketRulesPage = lazy(() => import('@/pages/tickets/AutoTicketRulesPage'));
@@ -44,14 +45,10 @@ const ConfigurationAudit = lazy(() => import('@/pages/settings/ConfigurationAudi
 const AgentLabelsSettings = lazy(() => import('@/pages/settings/AgentLabelsSettings'));
 const AgentUpdatesPage = lazy(() => import('@/pages/settings/AgentUpdatesPage'));
 const CustomFieldsSettings = lazy(() => import('@/pages/settings/CustomFieldsSettings'));
-const MeshCentralConfigurationPage = lazy(() => import('@/pages/settings/MeshCentralConfigurationPage'));
-const MeshCentralDiagnosticsPage = lazy(() => import('@/pages/settings/MeshCentralDiagnosticsPage'));
-const MeshNodeLinksBackfillPage = lazy(() => import('@/pages/settings/MeshNodeLinksBackfillPage'));
 const ProfilePage = lazy(() => import('@/pages/settings/ProfilePage'));
 const IamUsersPage = lazy(() => import('@/pages/settings/IamUsersPage'));
 const IamGroupsPage = lazy(() => import('@/pages/settings/IamGroupsPage'));
 const IamRolesPage = lazy(() => import('@/pages/settings/IamRolesPage'));
-const IamMeshProfilesPage = lazy(() => import('@/pages/settings/IamMeshProfilesPage'));
 const ReportTemplateList = lazy(() => import('@/pages/reports/ReportTemplateList'));
 const ReportTemplateForm = lazy(() => import('@/pages/reports/ReportTemplateForm'));
 const ReportTemplateWizard = lazy(() => import('@/pages/reports/ReportTemplateWizard'));
@@ -149,6 +146,10 @@ export const router = createBrowserRouter([
       {
         path: 'agents/remote-debug-console',
         element: <LazyPage><RemoteDebugConsole /></LazyPage>,
+      },
+      {
+        path: 'agents/remote-session',
+        element: <LazyPage><RemoteSession /></LazyPage>,
       },
       {
         element: <MainLayout />,
@@ -402,10 +403,6 @@ export const router = createBrowserRouter([
         ),
       },
       {
-        path: 'settings/mesh-central',
-        element: <Navigate to="/identity/mesh-central" replace />,
-      },
-      {
         path: 'profile',
         element: <Navigate to="/identity/authentication" replace />,
       },
@@ -423,10 +420,6 @@ export const router = createBrowserRouter([
       },
       {
         path: 'settings/iam/roles',
-        element: <Navigate to="/identity/roles" replace />,
-      },
-      {
-        path: 'settings/iam/mesh-permissions',
         element: <Navigate to="/identity/roles" replace />,
       },
       {
@@ -456,42 +449,6 @@ export const router = createBrowserRouter([
             <LazyPage><IamRolesPage /></LazyPage>
           </PermissionGate>
         ),
-      },
-      {
-        path: 'identity/mesh-central',
-        element: (
-          <PermissionGate anyOf={['identity.*', 'settings.*', 'settings.read', 'admin.*']}>
-            <LazyPage><MeshCentralConfigurationPage /></LazyPage>
-          </PermissionGate>
-        ),
-      },
-      {
-        path: 'identity/mesh-diagnostics',
-        element: (
-          <PermissionGate anyOf={['SiteConfig.View', 'siteconfig.view', 'identity.*', 'settings.*', 'settings.read', 'admin.*']}>
-            <LazyPage><MeshCentralDiagnosticsPage /></LazyPage>
-          </PermissionGate>
-        ),
-      },
-      {
-        path: 'identity/mesh-node-links',
-        element: (
-          <PermissionGate anyOf={['Agents.Edit', 'agents.*', 'identity.*', 'admin.*']}>
-            <LazyPage><MeshNodeLinksBackfillPage /></LazyPage>
-          </PermissionGate>
-        ),
-      },
-      {
-        path: 'identity/mesh-profiles',
-        element: (
-          <PermissionGate anyOf={['identity.*', 'Users.View', 'Users.Edit', 'admin.*']}>
-            <LazyPage><IamMeshProfilesPage /></LazyPage>
-          </PermissionGate>
-        ),
-      },
-      {
-        path: 'identity/mesh-permissions',
-        element: <Navigate to="/identity/roles" replace />,
       },
       {
         path: 'reports/schedules',

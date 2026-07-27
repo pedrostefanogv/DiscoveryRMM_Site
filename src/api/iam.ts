@@ -1,4 +1,4 @@
-﻿import { api } from "./client";
+import { api } from "./client";
 import type { MfaRequirement } from "./types";
 
 export type ScopeLevel = "Global" | "Client" | "Site";
@@ -22,16 +22,8 @@ export interface CreateUserRequest {
   mfaRequired: boolean;
 }
 
-export interface MeshCentralSyncSummary {
-  synced: boolean;
-  meshUsername: string;
-  siteBindingsApplied: number;
-  error: string | null;
-}
-
 export interface CreateUserResponse {
   id: string;
-  meshCentralSync: MeshCentralSyncSummary;
 }
 
 export interface CreateUserWithGroupsRequest {
@@ -149,194 +141,11 @@ export interface AssignGroupRoleRequest {
   scopeId: string | null;
 }
 
-export interface MeshCentralBackfillRequest {
-  applyChanges: boolean;
-  clientId?: string | null;
-  siteId?: string | null;
-}
-
-export interface MeshCentralBackfillItem {
-  userId: string;
-  login: string;
-  meshUsername: string;
-  applied: boolean;
-  success: boolean;
-  siteBindingsApplied: number;
-  rightsUpdatesApplied: number;
-  deviceBindingsApplied: number;
-  deviceBindingsRevoked: number;
-  deviceBindingsRevocationCandidates: number;
-  error: string | null;
-}
-
-export interface MeshCentralBackfillReport {
-  applyChanges: boolean;
-  startedAtUtc: string;
-  finishedAtUtc: string;
-  totalUsers: number;
-  syncedUsers: number;
-  failedUsers: number;
-  items: MeshCentralBackfillItem[];
-}
-
-export interface MeshGroupPolicyStatusDto {
-  siteId: string;
-  desiredProfile?: string | null;
-  appliedProfile?: string | null;
-  hasDrift: boolean;
-  driftReasons?: string[];
-  meshId?: string | null;
-  groupName?: string | null;
-  appliedAtUtc?: string | null;
-  [key: string]: unknown;
-}
-
-export interface MeshGroupPolicyReconcileRequest {
-  applyChanges: boolean;
-  clientId?: string | null;
-  siteId?: string | null;
-}
-
-export interface MeshGroupPolicyReconcileItem {
-  siteId?: string | null;
-  siteName?: string | null;
-  meshId?: string | null;
-  meshIdBefore?: string | null;
-  meshIdAfter?: string | null;
-  groupName?: string | null;
-  desiredProfile?: string | null;
-  appliedProfile?: string | null;
-  appliedProfileBefore?: string | null;
-  appliedProfileAfter?: string | null;
-  hasDrift?: boolean;
-  applied?: boolean;
-  success?: boolean;
-  error?: string | null;
-  [key: string]: unknown;
-}
-
-export interface MeshGroupPolicyReconcileReport {
-  applyChanges: boolean;
-  startedAtUtc?: string;
-  finishedAtUtc?: string;
-  totalSites?: number;
-  reconciledSites?: number;
-  failedSites?: number;
-  items?: MeshGroupPolicyReconcileItem[];
-  [key: string]: unknown;
-}
-
-export interface MeshCentralRightsProfileDto {
-  id: string;
-  name: string;
-  description: string | null;
-  rightsMask: number;
-  isSystem: boolean;
-  createdAt?: string;
-  updatedAt?: string;
-}
-
-export interface CreateMeshCentralRightsProfileRequest {
-  name: string;
-  rightsMask: number;
-  description?: string | null;
-}
-
-export interface UpdateMeshCentralRightsProfileRequest {
-  name?: string;
-  rightsMask?: number;
-  description?: string | null;
-}
-
-export interface MeshCentralRightsProfileUsageDto {
-  profileName: string;
-  rolesCount: number;
-  roles: Array<{ id: string; name: string }>;
-}
-
-export interface MeshCentralDiagnosticsHealthDto {
-  controlSocketConnected: boolean;
-  publicBaseUrl?: string | null;
-  administrativeBaseUrl?: string | null;
-  technicalUsername?: string | null;
-  meshCount?: number;
-  userCount?: number;
-}
-
-export interface MeshCentralDiagnosticsSiteDto {
-  clientId: string;
-  siteId: string;
-  clientName?: string | null;
-  siteName?: string | null;
-  supportEnabled?: boolean;
-  desiredProfile?: string | null;
-  appliedProfile?: string | null;
-  meshId?: string | null;
-  groupName?: string | null;
-  appliedAtUtc?: string | null;
-  hasDrift?: boolean;
-  driftReasons?: string[];
-}
-
-export interface MeshCentralDiagnosticsAgentDto {
-  id: string;
-  siteId: string;
-  hostname?: string | null;
-  meshCentralNodeId?: string | null;
-}
-
-export interface MeshCentralDiagnosticsResponse {
-  health: MeshCentralDiagnosticsHealthDto;
-  site?: MeshCentralDiagnosticsSiteDto | null;
-  agent?: MeshCentralDiagnosticsAgentDto | null;
-}
-
-export interface MeshCentralNodeLinksBackfillRequest {
-  applyChanges: boolean;
-  clientId?: string | null;
-  siteId?: string | null;
-}
-
-export interface MeshCentralNodeLinksBackfillItem {
-  agentId: string;
-  siteId: string;
-  hostname: string;
-  displayName?: string | null;
-  currentNodeId?: string | null;
-  suggestedNodeId?: string | null;
-  status:
-    | "verified"
-    | "suggested"
-    | "linked"
-    | "unmatched"
-    | "ambiguous"
-    | "missing-mesh"
-    | "error"
-    | string;
-  applied: boolean;
-  candidateNodeIds?: string[];
-  error?: string | null;
-}
-
-export interface MeshCentralNodeLinksBackfillReport {
-  applyChanges: boolean;
-  startedAtUtc: string;
-  finishedAtUtc: string;
-  totalAgents: number;
-  updatedAgents: number;
-  verifiedAgents: number;
-  missingAgents: number;
-  ambiguousAgents: number;
-  items: MeshCentralNodeLinksBackfillItem[];
-}
-
 export interface RoleDto {
   id: string;
   name: string;
   description: string | null;
   mfaRequirement: MfaRequirement;
-  meshRightsMask?: number | null;
-  meshRightsProfile?: string | null;
   isSystem: boolean;
   isActive: boolean;
   createdAt?: string;
@@ -347,16 +156,12 @@ export interface CreateRoleRequest {
   name: string;
   description?: string | null;
   mfaRequirement: MfaRequirement;
-  meshRightsMask?: number | null;
-  meshRightsProfile?: string | null;
 }
 
 export interface UpdateRoleRequest {
   name: string;
   description?: string | null;
   mfaRequirement: MfaRequirement;
-  meshRightsMask?: number | null;
-  meshRightsProfile?: string | null;
   isActive: boolean;
 }
 
@@ -487,86 +292,4 @@ export const iamApi = {
 
   removeRolePermission: (roleId: string, permissionId: string) =>
     api.del<void>(`${ROLES}/${roleId}/permissions/${permissionId}`),
-
-  runMeshCentralBackfill: (payload: MeshCentralBackfillRequest) =>
-    api.post<MeshCentralBackfillReport>(
-      "/api/v1/meshcentral/identity-sync/backfill",
-      payload,
-    ),
-
-  runMeshCentralBackfillDryRun: (
-    payload: Omit<MeshCentralBackfillRequest, "applyChanges"> = {},
-  ) =>
-    api.post<MeshCentralBackfillReport>(
-      "/api/v1/meshcentral/identity-sync/backfill",
-      {
-        applyChanges: false,
-        ...payload,
-      },
-    ),
-
-  getMeshCentralDiagnosticsHealth: (siteId: string, agentId?: string | null) =>
-    api.get<MeshCentralDiagnosticsResponse>(
-      "/api/v1/meshcentral/diagnostics/health",
-      {
-        siteId,
-        ...(agentId ? { agentId } : {}),
-      },
-    ),
-
-  runMeshCentralNodeLinksBackfill: (
-    payload: MeshCentralNodeLinksBackfillRequest,
-  ) =>
-    api.post<MeshCentralNodeLinksBackfillReport>(
-      "/api/v1/meshcentral/node-links/backfill",
-      payload,
-    ),
-
-  runMeshCentralNodeLinksBackfillDryRun: (
-    payload: Omit<MeshCentralNodeLinksBackfillRequest, "applyChanges"> = {},
-  ) =>
-    api.post<MeshCentralNodeLinksBackfillReport>(
-      "/api/v1/meshcentral/node-links/backfill",
-      {
-        applyChanges: false,
-        ...payload,
-      },
-    ),
-
-  getMeshGroupPolicyStatus: (siteId: string) =>
-    api.get<MeshGroupPolicyStatusDto>(
-      `/api/v1/meshcentral/group-policy/sites/${siteId}/status`,
-    ),
-
-  reconcileMeshGroupPolicy: (payload: MeshGroupPolicyReconcileRequest) =>
-    api.post<MeshGroupPolicyReconcileReport>(
-      "/api/v1/meshcentral/group-policy/reconcile",
-      payload,
-    ),
-
-  listRightsProfiles: () =>
-    api.get<MeshCentralRightsProfileDto[]>("/api/v1/meshcentral/rights-profiles"),
-
-  createRightsProfile: (payload: CreateMeshCentralRightsProfileRequest) =>
-    api.post<MeshCentralRightsProfileDto>(
-      "/api/v1/meshcentral/rights-profiles",
-      payload,
-    ),
-
-  updateRightsProfile: (
-    id: string,
-    payload: UpdateMeshCentralRightsProfileRequest,
-  ) =>
-    api.put<MeshCentralRightsProfileDto>(
-      `/api/v1/meshcentral/rights-profiles/${id}`,
-      payload,
-    ),
-
-  deleteRightsProfile: (id: string) =>
-    api.del<void>(`/api/v1/meshcentral/rights-profiles/${id}`),
-
-  getRightsProfileUsage: () =>
-    api.get<MeshCentralRightsProfileUsageDto[]>(
-      "/api/v1/meshcentral/rights-profiles/usage",
-    ),
 };

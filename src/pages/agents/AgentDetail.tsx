@@ -9,13 +9,12 @@ import { getDeleteAgentErrorMessage, useAgent, useAgentHardware, useAgentHardwar
 import { formatBytes, formatDate, formatSocketFamily } from './agentDetailUtils';
 import { useTickets } from '@/hooks/useTickets';
 import { useLogs } from '@/hooks/useLogs';
-import { useRunMeshCentralNodeLinksBackfill, useRunMeshCentralNodeLinksBackfillDryRun } from '@/hooks';
 import { Button, Card, CardHeader, Badge, Loading, ErrorDisplay, Input, Select, DataTable, Modal, StatCard, AgentHeartbeatCard, Tooltip, type Column } from '@/components/ui';
 import { ensureArray } from '@/utils/ensureArray';
 import PowerActionModal from '@/components/agents/PowerActionModal';
 import WakeOnLanModal from '@/components/agents/WakeOnLanModal';
 import { NotesPanel } from '@/components/notes/NotesPanel';
-import type { AgentSoftwareInventoryItem, ListeningPortInfo, LogEntry, MeshCentralNodeLinksBackfillItem, MeshCentralNodeLinksBackfillReport, OpenSocketInfo } from '@/api';
+import type { AgentSoftwareInventoryItem, ListeningPortInfo, LogEntry, OpenSocketInfo } from '@/api';
 import { ApiError, LogLevel, agentUpdatesApi, agentsApi } from '@/api';
 import { isAgentOnlineNow } from '@/utils/agentStatus';
 import { useNowTick } from '@/hooks/useNowTick';
@@ -44,15 +43,6 @@ function printerStatusColor(status: string | null): 'success' | 'warning' | 'dan
   return 'slate';
 }
 
-function nodeLinkStatusColor(status: string): 'success' | 'warning' | 'danger' | 'accent' | 'slate' {
-  const normalized = status.toLowerCase();
-  if (normalized === 'verified') return 'success';
-  if (normalized === 'linked') return 'accent';
-  if (normalized === 'suggested') return 'warning';
-  if (normalized === 'ambiguous' || normalized === 'error') return 'danger';
-  return 'slate';
-}
-
 type AgentDetailDataTab = 'software' | 'printers' | 'tickets' | 'listeningPorts' | 'openSockets' | 'logs';
 
 export default function AgentDetail() {
@@ -78,8 +68,6 @@ export default function AgentDetail() {
   const [labelPickerQuery, setLabelPickerQuery] = useState('');
   const labelPickerRef = useRef<HTMLDivElement>(null);
   const [isOpeningRemoteDebug, setIsOpeningRemoteDebug] = useState(false);
-  const [isReconcilingNodeLink, setIsReconcilingNodeLink] = useState(false);
-  const [isApplyingNodeLink, setIsApplyingNodeLink] = useState(false);
   const [isTriggeringAgentUpdate, setIsTriggeringAgentUpdate] = useState(false);
   const [isApprovingZeroTouch, setIsApprovingZeroTouch] = useState(false);
   const [isRefreshingPorts, setIsRefreshingPorts] = useState(false);
@@ -88,9 +76,6 @@ export default function AgentDetail() {
   const [isRefreshingPrinters, setIsRefreshingPrinters] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleteConfirmHostname, setDeleteConfirmHostname] = useState('');
-  const [nodeLinkPreviewOpen, setNodeLinkPreviewOpen] = useState(false);
-  const [nodeLinkPreviewError, setNodeLinkPreviewError] = useState<string | null>(null);
-  const [nodeLinkPreviewReport, setNodeLinkPreviewReport] = useState<MeshCentralNodeLinksBackfillReport | null>(null);
   const [activeDataTab, setActiveDataTab] = useState<AgentDetailDataTab>('software');
   const [isPowerMenuOpen, setIsPowerMenuOpen] = useState(false);
   const [powerAction, setPowerAction] = useState<'restart' | 'shutdown' | null>(null);
@@ -118,8 +103,6 @@ export default function AgentDetail() {
   const softwareSnapshot = useAgentSoftwareSnapshot(id!);
   const agentLogs = useLogs({ agentId: id, limit: 10 });
   const agentTickets = useTickets({ agentId: id, limit: 5 });
-  const nodeLinkBackfillDryRun = useRunMeshCentralNodeLinksBackfillDryRun();
-  const nodeLinkBackfillApply = useRunMeshCentralNodeLinksBackfill();
   const now = useNowTick(5_000);
   const powerMenuRef = useRef<HTMLDivElement>(null);
 
@@ -431,7 +414,6 @@ export default function AgentDetail() {
     return 'text-success';
   };
   const printers = hwComponents.data?.printers ?? [];
-  const currentNodeLinkItem = nodeLinkPreviewReport?.items.find((item) => item.agentId === a.id) ?? null;
   const machineScoreRaw = a.machineScore ?? hw.data?.hardware?.machineScore ?? null;
   const machineScore = typeof machineScoreRaw === 'number' && Number.isFinite(machineScoreRaw)
     ? Math.max(1, Math.round(machineScoreRaw))
@@ -714,82 +696,6 @@ export default function AgentDetail() {
     const response = await wakeOnLan.mutateAsync({ id, data });
     await agent.refetch();
     return response;
-  };
-
-  const handleNodeLinkDryRun = async () => {
-    if (!a.siteId || isReconcilingNodeLink) return;
-
-    setNodeLinkPreviewOpen(true);
-    setNodeLinkPreviewError(null);
-    setNodeLinkPreviewReport(null);
-    setIsReconcilingNodeLink(true);
-    try {
-      const report = await nodeLinkBackfillDryRun.mutateAsync({
-        siteId: a.siteId,
-      });
-      setNodeLinkPreviewReport(report);
-      const current = report.items.find((item) => item.agentId === a.id);
-      if (current) {
-        toast.success(
-          `Node link dry-run: ${current.status} · sugestão ${current.suggestedNodeId ?? 'N/A'}`,
-        );
-      } else {
-        toast.success('Dry-run de node links concluído para o site.');
-      }
-    } catch (error) {
-      if (error instanceof ApiError && error.status === 403) {
-        setNodeLinkPreviewError('Sem permissão para reconciliar links de node neste escopo.');
-        toast.error('Sem permissão para reconciliar links de node neste escopo.');
-      } else if (error instanceof ApiError && error.status === 503) {
-        setNodeLinkPreviewError('Falha operacional/configuração do MeshCentral.');
-        toast.error('Falha operacional/configuração do MeshCentral.');
-      } else {
-        const message = error instanceof Error
-          ? error.message
-          : 'Falha ao executar dry-run de node links.';
-        setNodeLinkPreviewError(message);
-        toast.error(message);
-      }
-    } finally {
-      setIsReconcilingNodeLink(false);
-    }
-  };
-
-  const handleNodeLinkApply = async () => {
-    if (!a.siteId || isApplyingNodeLink || !nodeLinkPreviewReport) return;
-    if (nodeLinkPreviewReport.ambiguousAgents > 0) {
-      toast.error('Existem links ambiguos no site. Faça tratativa manual antes de aplicar.');
-      return;
-    }
-
-    const confirmed = window.confirm(
-      'Aplicar reconcile atualizará vínculos meshcentral_node_id no site. Deseja continuar?',
-    );
-    if (!confirmed) return;
-
-    setIsApplyingNodeLink(true);
-    try {
-      const report = await nodeLinkBackfillApply.mutateAsync({
-        applyChanges: true,
-        siteId: a.siteId,
-      });
-      setNodeLinkPreviewReport(report);
-      setNodeLinkPreviewError(null);
-      toast.success('Reconcile de node links aplicado com sucesso.');
-    } catch (error) {
-      if (error instanceof ApiError && error.status === 403) {
-        toast.error('Sem permissão para aplicar reconcile de node links neste escopo.');
-      } else if (error instanceof ApiError && error.status === 503) {
-        toast.error('Falha operacional/configuração do MeshCentral.');
-      } else {
-        const message = error instanceof Error
-          ? error.message
-          : 'Falha ao aplicar reconcile de node links.';
-        toast.error(message);
-      }
-    } finally {
-      setIsApplyingNodeLink(false);
-    }
   };
 
   const goToNextSoftwarePage = () => setSoftwarePage((p) => Math.min(p + 1, softwareTotalPages));
@@ -1401,32 +1307,16 @@ export default function AgentDetail() {
               <dt className="text-muted">Versão do SO</dt>
               <dd className="mt-0.5 font-mono text-foreground">{a.osVersion ?? '\u2014'}</dd>
             </div>
-            <div className="border-t border-border pt-3">
-              <dt className="text-muted">MeshCentral Node ID</dt>
-              <dd className="mt-0.5 text-foreground">
-                <span className="font-mono">{a.meshCentralNodeId ?? '\u2014'}</span>
-                <p className="mt-1 text-xs text-muted">
-                  Valor persistido no agent, utilizado automaticamente no suporte remoto.
-                </p>
-                {canManageAgent && (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="mt-2"
-                    onClick={() => {
-                      void handleNodeLinkDryRun();
-                    }}
-                    loading={isReconcilingNodeLink}
-                  >
-                    Validar Node Link (dry-run)
-                  </Button>
-                )}
-              </dd>
-            </div>
             {hw.data?.hardware?.osBuild && (
               <div>
                 <dt className="text-muted">Build</dt>
                 <dd className="mt-0.5 font-mono text-foreground">{hw.data.hardware.osBuild}</dd>
+              </div>
+            )}
+            {hw.data?.hardware?.serialNumber && (
+              <div>
+                <dt className="text-muted">Número de série</dt>
+                <dd className="mt-0.5 font-mono text-foreground">{hw.data.hardware.serialNumber}</dd>
               </div>
             )}
             <div className="border-t border-border pt-3">
@@ -2105,130 +1995,6 @@ export default function AgentDetail() {
               disabled={deleteConfirmHostname.trim() !== (a.displayName ?? a.hostname).trim() || deleteAgent.isPending}
             >
               Excluir agente
-            </Button>
-          </div>
-        </div>
-      </Modal>
-
-      <Modal
-        open={nodeLinkPreviewOpen}
-        onClose={() => {
-          setNodeLinkPreviewOpen(false);
-        }}
-        title="Preview de Reconcile Mesh Node Link"
-        maxWidth="max-w-3xl"
-      >
-        <div className="space-y-4">
-          {isReconcilingNodeLink && !nodeLinkPreviewReport && (
-            <Loading message="Executando dry-run de node links para este site..." />
-          )}
-
-          {nodeLinkPreviewError && (
-            <div className="rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
-              {nodeLinkPreviewError}
-            </div>
-          )}
-
-          {nodeLinkPreviewReport && (
-            <>
-              <div className="flex flex-wrap gap-2">
-                <Badge color="accent">Total: {nodeLinkPreviewReport.totalAgents}</Badge>
-                <Badge color="success">Verified: {nodeLinkPreviewReport.verifiedAgents}</Badge>
-                <Badge color="accent">Updated: {nodeLinkPreviewReport.updatedAgents}</Badge>
-                <Badge color={nodeLinkPreviewReport.ambiguousAgents > 0 ? 'danger' : 'slate'}>
-                  Ambiguous: {nodeLinkPreviewReport.ambiguousAgents}
-                </Badge>
-                <Badge color={nodeLinkPreviewReport.missingAgents > 0 ? 'warning' : 'slate'}>
-                  Missing: {nodeLinkPreviewReport.missingAgents}
-                </Badge>
-                <Badge color="slate">Modo: {nodeLinkPreviewReport.applyChanges ? 'Apply' : 'Dry-run'}</Badge>
-              </div>
-
-              {nodeLinkPreviewReport.ambiguousAgents > 0 && (
-                <div className="rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning">
-                  Foram encontrados vínculos ambíguos no site. Trate manualmente antes de aplicar reconcile.
-                </div>
-              )}
-
-              <div className="rounded-md border border-border bg-surface-light px-3 py-3">
-                <p className="text-xs uppercase tracking-wide text-muted">Agent atual</p>
-                {currentNodeLinkItem ? (
-                  <div className="mt-2 space-y-1 text-sm">
-                    <p className="text-foreground">
-                      {(currentNodeLinkItem.displayName ?? currentNodeLinkItem.hostname)}
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      <Badge color={nodeLinkStatusColor(currentNodeLinkItem.status)}>
-                        {currentNodeLinkItem.status}
-                      </Badge>
-                      <Badge color={currentNodeLinkItem.applied ? 'success' : 'slate'}>
-                        {currentNodeLinkItem.applied ? 'Aplicado' : 'Não aplicado'}
-                      </Badge>
-                    </div>
-                    <p className="font-mono text-xs text-muted-foreground">
-                      Atual: {currentNodeLinkItem.currentNodeId ?? 'Sem vínculo'}
-                    </p>
-                    <p className="font-mono text-xs text-muted-foreground">
-                      Sugerido: {currentNodeLinkItem.suggestedNodeId ?? 'Sem sugestão'}
-                    </p>
-                    {(currentNodeLinkItem.candidateNodeIds?.length ?? 0) > 0 && (
-                      <p className="font-mono text-xs text-muted-foreground">
-                        Candidates: {currentNodeLinkItem.candidateNodeIds?.join(', ')}
-                      </p>
-                    )}
-                    {currentNodeLinkItem.error && (
-                      <p className="text-xs text-danger">Erro: {currentNodeLinkItem.error}</p>
-                    )}
-                  </div>
-                ) : (
-                  <p className="mt-2 text-sm text-muted">
-                    O dry-run não retornou este agent no conjunto de itens do site.
-                  </p>
-                )}
-              </div>
-
-              <div className="max-h-56 space-y-2 overflow-y-auto pr-1">
-                {nodeLinkPreviewReport.items.slice(0, 25).map((item: MeshCentralNodeLinksBackfillItem) => (
-                  <div key={item.agentId} className="rounded-md border border-border bg-black/20 px-3 py-2">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="truncate text-sm text-foreground">
-                        {item.displayName ?? item.hostname}
-                      </p>
-                      <Badge color={nodeLinkStatusColor(item.status)}>{item.status}</Badge>
-                    </div>
-                    <p className="font-mono text-xs text-muted">
-                      Atual: {item.currentNodeId ?? 'Sem vínculo'} | Sugerido: {item.suggestedNodeId ?? 'Sem sugestão'}
-                    </p>
-                  </div>
-                ))}
-                {nodeLinkPreviewReport.items.length > 25 && (
-                  <p className="text-xs text-muted">
-                    Exibindo 25 de {nodeLinkPreviewReport.items.length} itens.
-                  </p>
-                )}
-              </div>
-            </>
-          )}
-
-          <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-3">
-            <Button
-              variant="ghost"
-              onClick={() => {
-                void handleNodeLinkDryRun();
-              }}
-              loading={isReconcilingNodeLink}
-            >
-              Reexecutar dry-run
-            </Button>
-            <Button
-              variant="danger"
-              onClick={() => {
-                void handleNodeLinkApply();
-              }}
-              loading={isApplyingNodeLink}
-              disabled={!nodeLinkPreviewReport || nodeLinkPreviewReport.ambiguousAgents > 0}
-            >
-              Aplicar reconcile no site
             </Button>
           </div>
         </div>

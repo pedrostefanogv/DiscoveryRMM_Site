@@ -104,29 +104,6 @@ export interface RenameMfaKeyRequest {
   keyName: string;
 }
 
-export interface MeshCentralEmbedUrlRequest {
-  clientId: string;
-  siteId: string;
-  meshUsername?: string;
-  agentId?: string | null;
-  viewMode?: number | null;
-  hideMask?: number | null;
-  meshNodeId?: string | null;
-  gotoDeviceName?: string | null;
-}
-
-export interface MeshCentralEmbedUrlResponse {
-  url: string;
-  expiresAtUtc: string;
-  viewMode: number;
-  hideMask: number;
-  clientId: string;
-  siteId: string;
-  agentId?: string | null;
-  meshNodeId?: string | null;
-  meshUsername: string;
-}
-
 export interface ApiMessageResponse {
   message: string;
 }
@@ -232,10 +209,4 @@ export const authApi = {
     api.patch<void>(`/api/v1/mfa/keys/${keyId}/name`, request),
 
   deleteMfaKey: (keyId: string) => api.del<void>(`/api/v1/mfa/keys/${keyId}`),
-
-  getMeshCentralEmbedUrl: (request: MeshCentralEmbedUrlRequest) =>
-    api.post<MeshCentralEmbedUrlResponse>(
-      "/api/v1/meshcentral/embed-url",
-      request,
-    ),
 };
