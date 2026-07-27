@@ -6,7 +6,6 @@ import type {
   DownloadDeployPackageRequest,
   DeployInstallerOptionsResponse,
   DeployToken,
-  MeshCentralInstallInstructions,
   DeployInstallerPayload,
   DeployInstallerTypeInput,
   ListDeployTokensParams,
@@ -74,16 +73,6 @@ export function useDownloadDeployInstaller() {
   return useMutation<DeployInstallerPayload, ApiError, DeployDownloadParams>({
     mutationFn: ({ rawToken, installerType }) =>
       deployTokensApi.downloadInstaller(rawToken, installerType),
-  });
-}
-
-export function useDeployTokenMeshCentralInstallInstructions() {
-  return useMutation<MeshCentralInstallInstructions, ApiError, DeployPackageParams>({
-    mutationFn: ({ tokenId, rawToken, artifact }) =>
-      deployTokensApi.getMeshCentralInstallInstructions(tokenId, {
-        rawToken,
-        artifact,
-      }),
   });
 }
 

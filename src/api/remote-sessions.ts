@@ -117,5 +117,5 @@ export const remoteSessionsApi = {
 
     /** Exclui a gravação (LGPD Art. 18). */
     deleteRecording: (agentId: string, sessionId: string): Promise<void> =>
-        api.delete<void>(`${BASE}/${agentId}/${sessionId}/recording`),
+        api.post<void>(`${BASE}/${agentId}/${sessionId}/recording/delete`),
 };

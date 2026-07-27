@@ -1,13 +1,13 @@
 import { useSearchParams } from 'react-router-dom';
 import { Button, Card } from '@/components/ui';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { remoteSessionsApi, SessionCredentials } from '@/api/remote-sessions';
 import RemoteScreenViewer from '@/modules/remote-screen/RemoteScreenViewer';
 import RemoteTerminal from '@/modules/remote-terminal/RemoteTerminal';
 import RemoteFiles from '@/modules/remote-files/RemoteFiles';
 import RemoteProxy from '@/modules/remote-proxy/RemoteProxy';
 import { useWebrtcSession } from '@/modules/remote-webrtc/useWebrtcSession';
-import RecordingControls from '@/modules/remote-recording/RecordingControls';
+import { RecordingControls } from '@/modules/remote-recording/RecordingControls';
 
 type Tab = 'screen' | 'terminal' | 'files' | 'proxy';
 
@@ -153,7 +153,7 @@ export default function RemoteSession() {
         </div>
         <div className="flex items-center gap-2 text-xs text-slate-400">
           <span>Tempo restante: <strong className="text-slate-300">{remaining}</strong></span>
-          <Button variant="outline" size="sm" onClick={handleRenew}>Renovar</Button>
+          <Button variant="secondary" size="sm" onClick={handleRenew}>Renovar</Button>
           <Button variant="danger" size="sm" onClick={handleStop}>Encerrar</Button>
         </div>
       </div>
@@ -207,6 +207,8 @@ export default function RemoteSession() {
 
         {activeTab === 'terminal' && (
           <RemoteTerminal
+            sessionId={sessionId}
+            agentId={agentId}
             natsSubject={natsSubject}
             jwt={natsCredentials?.jwt}
             nkeySeed={natsCredentials?.nkeySeed}
@@ -215,6 +217,8 @@ export default function RemoteSession() {
 
         {activeTab === 'files' && (
           <RemoteFiles
+            sessionId={sessionId}
+            agentId={agentId}
             natsSubject={natsSubject}
             jwt={natsCredentials?.jwt}
             nkeySeed={natsCredentials?.nkeySeed}
@@ -223,6 +227,8 @@ export default function RemoteSession() {
 
         {activeTab === 'proxy' && (
           <RemoteProxy
+            sessionId={sessionId}
+            agentId={agentId}
             natsSubject={natsSubject}
             jwt={natsCredentials?.jwt}
             nkeySeed={natsCredentials?.nkeySeed}

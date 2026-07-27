@@ -9,7 +9,6 @@ import type {
   DeployInstallerTypeInput,
   DeployToken,
   ListDeployTokensParams,
-  MeshCentralInstallInstructions,
   PrebuildAgentRequest,
 } from "./types";
 const BASE = "/api/v1/deploy-tokens";
@@ -90,15 +89,6 @@ export const deployTokensApi = {
     api.post<DeployInstallerOptionsResponse>(
       `${BASE}/installer-options`,
       { rawToken },
-    ),
-
-  getMeshCentralInstallInstructions: (
-    id: string,
-    data: DownloadDeployPackageRequest,
-  ) =>
-    api.post<MeshCentralInstallInstructions>(
-      `${BASE}/${id}/meshcentral-install`,
-      data,
     ),
 
   revoke: (id: string) => api.post<void>(`${BASE}/${id}/revoke`),

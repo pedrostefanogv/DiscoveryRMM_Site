@@ -16,6 +16,7 @@ import { useNowTick } from '@/hooks/useNowTick';
 import { isHeartbeatTimestampFresh, useAllAgentHeartbeats } from '@/stores/heartbeatStore';
 import { useAuthorization } from '@/auth/authorization';
 import { openRemoteDebugPopup } from './remoteDebugLauncher';
+import { openRemoteSessionPopup } from './remoteSessionLauncher';
 
 type AgentWithClient = Agent & { clientName: string; clientId: string; siteName?: string };
 type ContextMenuState = { x: number; y: number; agent: AgentWithClient } | null;
@@ -222,19 +223,14 @@ export default function AgentList() {
     setRemoteUrl(null);
 
     try {
-      const response = await authApi.getMeshCentralEmbedUrl({
-        clientId: agent.clientId,
-        siteId: agent.siteId,
-        agentId: agent.id,
-      });
-
-      setRemoteUrl(response.url);
+      // Redireciona para o novo acesso remoto nativo
+      openRemoteSessionPopup({ agentId: agent.id, kind: 'screen', transport: 'webrtc' });
+      setRemoteLoading(false);
+      return;
     } catch (error) {
       if (error instanceof ApiError) {
         if (error.status === 403) {
           setRemoteError('Suporte remoto desabilitado para este escopo ou sem permissão de acesso.');
-        } else if (error.status === 503) {
-          setRemoteError('MeshCentral indisponível no momento. Verifique a integração operacional.');
         } else {
           setRemoteError(error.message);
         }
