@@ -223,8 +223,8 @@ export default function AgentList() {
     setRemoteUrl(null);
 
     try {
-      // Redireciona para o novo acesso remoto nativo
-      openRemoteSessionPopup({ agentId: agent.id, kind: 'screen', transport: 'webrtc' });
+      // Redireciona para o novo acesso remoto nativo (transporte primário: NATS)
+      openRemoteSessionPopup({ agentId: agent.id, kind: 'screen', transport: 'nats' });
       setRemoteLoading(false);
       return;
     } catch (error) {

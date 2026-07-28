@@ -40,6 +40,7 @@ export default function RemoteSession() {
   const quality = searchParams.get('quality') ?? 'high';
   const codec = searchParams.get('codec') ?? 'jpeg';
   const expiresAt = searchParams.get('expiresAt') ?? '';
+  const natsUrlFromQuery = searchParams.get('natsUrl') ?? '';
   const initialAccessToken = searchParams.get('accessToken') ?? '';
 
   // Ref mutável para o accessToken — atualizado via BroadcastChannel quando
@@ -249,7 +250,7 @@ export default function RemoteSession() {
             <div className="flex-1">
               <RemoteScreenViewer
                 natsSubject={natsSubject}
-                natsUrl={natsCredentials?.natsWssUrl}
+                natsUrl={natsCredentials?.natsWssUrl || natsUrlFromQuery || undefined}
                 jwt={natsCredentials?.jwt}
                 nkeySeed={natsCredentials?.nkeySeed}
                 quality={quality}
