@@ -2,6 +2,7 @@ import { useSearchParams } from 'react-router-dom';
 import { Button, Card } from '@/components/ui';
 import { useEffect, useState } from 'react';
 import { remoteSessionsApi, SessionCredentials } from '@/api/remote-sessions';
+import { configureApiClient } from '@/api/client';
 import RemoteScreenViewer from '@/modules/remote-screen/RemoteScreenViewer';
 import RemoteTerminal from '@/modules/remote-terminal/RemoteTerminal';
 import RemoteFiles from '@/modules/remote-files/RemoteFiles';
@@ -33,6 +34,21 @@ export default function RemoteSession() {
   const quality = searchParams.get('quality') ?? 'high';
   const codec = searchParams.get('codec') ?? 'jpeg';
   const expiresAt = searchParams.get('expiresAt') ?? '';
+  const accessToken = searchParams.get('accessToken') ?? '';
+
+  // Configura o apiClient com o token JWT passado pela aba pai via query string.
+  // A popup não compartilha sessionStorage com a aba pai, então sem isso todas
+  // as chamadas autenticadas falham com 401.
+  useEffect(() => {
+    if (!accessToken) return;
+    configureApiClient({
+      getAccessToken: () => accessToken,
+      refreshAccessToken: async () => null, // popup não tem refresh token
+      onAuthFailure: () => {
+        setErrorMsg('Sessão expirada. Feche esta janela e abra o acesso remoto novamente.');
+      },
+    });
+  }, [accessToken]);
 
   const [remaining, setRemaining] = useState<string>(formatRemaining(expiresAt));
   const [errorMsg, setErrorMsg] = useState<string | null>(null);

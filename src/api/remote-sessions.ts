@@ -12,6 +12,8 @@ export interface StartRemoteSessionRequest {
     quality: 'ultra' | 'high' | 'medium' | 'low' | 'ultralow';
     codec: 'jpeg' | 'webp' | 'h264';
     durationMinutes: number;
+    /** Sobrepõe sessões ativas existentes (fecha e cria nova). */
+    force?: boolean;
 }
 
 export interface RemoteSessionResponse {

@@ -3,6 +3,7 @@ import {
   type StartRemoteSessionRequest,
 } from "@/api/remote-sessions";
 import { realtimeConfig } from "@/config/realtime";
+import { getApiAccessToken } from "@/api/client";
 
 export interface OpenRemoteSessionParams {
   agentId: string;
@@ -26,6 +27,9 @@ const DEFAULT_PARAMS: Partial<StartRemoteSessionRequest> = {
   quality: "high",
   codec: "jpeg",
   durationMinutes: 30,
+  // Força a sobreposição de sessões ativas existentes (1 sessão por agente).
+  // O backend fecha as sessões antigas com motivo "overridden-by-new-session".
+  force: true,
 };
 
 interface SessionUrlParams {
@@ -38,6 +42,7 @@ interface SessionUrlParams {
   codec: string;
   natsWssUrl?: string | null;
   expiresAtUtc: string;
+  accessToken?: string | null;
   turnCredentials?: {
     urls: string[];
     username: string;
@@ -62,6 +67,11 @@ function toSessionUrl(params: SessionUrlParams): string {
 
   if (params.natsWssUrl) {
     query.set("natsUrl", params.natsWssUrl);
+  }
+  // Passa o access token JWT da aba pai para a popup, pois sessionStorage
+  // é isolado por janela e a popup não teria acesso aos tokens de autenticação.
+  if (params.accessToken) {
+    query.set("accessToken", params.accessToken);
   }
   if (params.jwt) {
     query.set("jwt", params.jwt);
@@ -150,6 +160,7 @@ export async function openRemoteSessionPopup({
       codec: session.codec,
       natsWssUrl: session.natsWssUrl ?? realtimeConfig.natsUrl,
       expiresAtUtc: session.expiresAtUtc,
+      accessToken: getApiAccessToken(),
       turnCredentials,
       jwt,
       nkeySeed,
