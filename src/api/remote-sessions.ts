@@ -103,7 +103,7 @@ export const remoteSessionsApi = {
 
     /** Obtém credenciais NATS (JWT + NKey) para o viewer se conectar ao stream. */
     getSessionCredentials: (agentId: string, sessionId: string): Promise<SessionCredentials> =>
-        api.post<SessionCredentials>(`${BASE}/${agentId}/${sessionId}/nats-credentials`),
+        api.post<SessionCredentials>(`${BASE}/${agentId}/${sessionId}/nats-credentials`, undefined, { retryOnAuthError: false }),
 
     /** Inicia a gravação de uma sessão remota. */
     startRecording: (agentId: string, sessionId: string): Promise<RecordingResponse> =>

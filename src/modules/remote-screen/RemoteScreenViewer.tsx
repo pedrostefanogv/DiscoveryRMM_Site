@@ -94,41 +94,54 @@ export default function RemoteScreenViewer({
     }
   }, []);
 
-  // NATS WebSocket: subscreve frames via subject específico
+  // NATS WebSocket: conecta ao servidor NATS e subscreve ao stream de frames.
+  // Protocolo NATS WebSocket nativo (nats-server websocket):
+  //   - Auth: access_token como query param na URL
+  //   - Subscribe: SUB <subject> <sid>\r\n
+  //   - Publish (input): PUB <subject> <reply> <len>\r\n<payload>\r\n
+  //   - Frames binários chegam como WebSocket binary frames
   useEffect(() => {
     if (!natsSubject || !natsUrl || !jwt) return;
 
     let cancelled = false;
-    const wsUrl = natsUrl.replace(/^http/, 'ws') + '/nats';
+
+    // Constrói URL com auth token no query param (protocolo NATS WS padrão)
+    const wsUrl = `${natsUrl}?access_token=${encodeURIComponent(jwt)}`;
     const ws = new WebSocket(wsUrl);
+    ws.binaryType = 'arraybuffer';
     wsRef.current = ws;
 
     ws.onopen = () => {
-      // Autentica com JWT
-      ws.send(JSON.stringify({ type: 'auth', jwt }));
-      // Subscreve ao stream de frames
-      ws.send(JSON.stringify({ type: 'sub', subject: `${natsSubject}.frame` }));
+      // Subscreve ao subject de frames (protocolo NATS: SUB <subject> <sid>\r\n)
+      ws.send(`SUB ${natsSubject}.frame 1\r\n`);
     };
 
     ws.onmessage = (event) => {
       if (cancelled || isPaused) return;
 
-      // Converte mensagem binária (MessagePack ou raw bytes)
-      if (event.data instanceof Blob) {
-        event.data.arrayBuffer().then((buffer) => {
-          if (cancelled || isPaused) return;
-          decodeFrame(buffer).then((bitmap) => {
-            if (bitmap && !cancelled) {
-              renderFrame(bitmap);
-              // RTT calculation from frame header timestamp
-              const header = decodeFrameHeader(buffer);
-              if (header && onLatency) {
-                const lat = Date.now() - header.ts;
-                setRtt(lat);
-                onLatency(lat);
-              }
+      // NATS WebSocket: PING/PONG keepalive
+      if (typeof event.data === 'string') {
+        if (event.data.startsWith('PING')) {
+          ws.send('PONG\r\n');
+        }
+        // MSG headers, INFO, +OK, -ERR são ignorados
+        return;
+      }
+
+      // Binary frame — dados brutos da captura de tela (JPEG/WebP/H.264)
+      if (event.data instanceof ArrayBuffer) {
+        const buffer = event.data as ArrayBuffer;
+        decodeFrame(buffer).then((bitmap) => {
+          if (bitmap && !cancelled) {
+            renderFrame(bitmap);
+            // RTT calculation from frame header timestamp
+            const header = decodeFrameHeader(buffer);
+            if (header && onLatency) {
+              const lat = Date.now() - header.ts;
+              setRtt(lat);
+              onLatency(lat);
             }
-          });
+          }
         });
       }
     };
@@ -156,11 +169,8 @@ export default function RemoteScreenViewer({
 
     const sendInput = (type: string, data: Record<string, unknown>) => {
       if (wsRef.current?.readyState === WebSocket.OPEN && natsSubject) {
-        wsRef.current.send(JSON.stringify({
-          type: 'pub',
-          subject: `${natsSubject}.input`,
-          data: JSON.stringify({ type, ...data, ts: Date.now() }),
-        }));
+        const payload = JSON.stringify({ type, ...data, ts: Date.now() });
+        wsRef.current.send(`PUB ${natsSubject}.input ${new TextEncoder().encode(payload).length}\r\n${payload}\r\n`);
       }
     };
 

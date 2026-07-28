@@ -67,28 +67,36 @@ export default function RemoteSession() {
     return () => clearInterval(timer);
   }, [expiresAt]);
 
-  // Obtém credenciais NATS e TURN ao montar
+  // Conexão NATS (primária) — obtém credenciais e conecta imediatamente.
+  // TURN/WebRTC é opcional e buscado em background sem bloquear o fluxo principal.
   useEffect(() => {
     if (!sessionId || !agentId) return;
 
     let cancelled = false;
     (async () => {
       try {
-        const [natsCreds, turnCreds] = await Promise.all([
-          remoteSessionsApi.getSessionCredentials(agentId, sessionId),
-          remoteSessionsApi.getTurnCredentials(agentId, sessionId),
-        ]);
+        // NATS é obrigatório para o transporte primário dos frames
+        const natsCreds = await remoteSessionsApi.getSessionCredentials(agentId, sessionId);
         if (cancelled) return;
         setNatsCredentials(natsCreds);
-        setTurnCreds({
-          username: turnCreds.username,
-          credential: turnCreds.credential,
-          urls: turnCreds.urls,
-        });
         setIsConnected(true);
+
+        // TURN é opcional — busca em background para habilitar WebRTC quando disponível
+        try {
+          const turn = await remoteSessionsApi.getTurnCredentials(agentId, sessionId);
+          if (!cancelled && turn.urls.length > 0) {
+            setTurnCreds({
+              username: turn.username,
+              credential: turn.credential,
+              urls: turn.urls,
+            });
+          }
+        } catch {
+          // TURN não configurado — NATS é o transporte primário, prossegue normalmente
+        }
       } catch (err) {
         if (!cancelled) {
-          setErrorMsg(`Credenciais: ${err instanceof Error ? err.message : String(err)}`);
+          setErrorMsg(`Falha ao obter credenciais NATS: ${err instanceof Error ? err.message : String(err)}`);
         }
       }
     })();
@@ -96,7 +104,7 @@ export default function RemoteSession() {
     return () => { cancelled = true; };
   }, [sessionId, agentId]);
 
-  // WebRTC (apenas quando transport=webrtc e screen)
+  // WebRTC (apenas quando transport=webrtc, screen, e TURN disponível)
   const webrtc = useWebrtcSession({
     stunUrls: ['stun:stun.l.google.com:19302'],
     turnUrls: turnCreds?.urls ?? [],
@@ -108,7 +116,7 @@ export default function RemoteSession() {
 
   // Inicia WebRTC quando credenciais TURN disponíveis
   useEffect(() => {
-    if (turnCreds && transport === 'webrtc' && activeTab === 'screen') {
+    if (turnCreds && turnCreds.urls.length > 0 && transport === 'webrtc' && activeTab === 'screen') {
       webrtc.start();
     }
     return () => {
