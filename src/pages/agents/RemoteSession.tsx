@@ -1,6 +1,6 @@
 import { useSearchParams } from 'react-router-dom';
 import { Button, Card } from '@/components/ui';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { remoteSessionsApi, SessionCredentials } from '@/api/remote-sessions';
 import { configureApiClient } from '@/api/client';
 import RemoteScreenViewer from '@/modules/remote-screen/RemoteScreenViewer';
@@ -9,6 +9,12 @@ import RemoteFiles from '@/modules/remote-files/RemoteFiles';
 import RemoteProxy from '@/modules/remote-proxy/RemoteProxy';
 import { useWebrtcSession } from '@/modules/remote-webrtc/useWebrtcSession';
 import { RecordingControls } from '@/modules/remote-recording/RecordingControls';
+import {
+  onCrossTabMessage,
+  postCrossTabMessage,
+  startActivityPing,
+  type CrossTabMessage,
+} from '@/auth/crossTabSync';
 
 type Tab = 'screen' | 'terminal' | 'files' | 'proxy';
 
@@ -34,21 +40,57 @@ export default function RemoteSession() {
   const quality = searchParams.get('quality') ?? 'high';
   const codec = searchParams.get('codec') ?? 'jpeg';
   const expiresAt = searchParams.get('expiresAt') ?? '';
-  const accessToken = searchParams.get('accessToken') ?? '';
+  const initialAccessToken = searchParams.get('accessToken') ?? '';
 
-  // Configura o apiClient com o token JWT passado pela aba pai via query string.
-  // A popup não compartilha sessionStorage com a aba pai, então sem isso todas
-  // as chamadas autenticadas falham com 401.
+  // Ref mutável para o accessToken — atualizado via BroadcastChannel quando
+  // a aba principal faz refresh. O apiClient lê desta ref via getAccessToken.
+  const accessTokenRef = useRef(initialAccessToken);
+
   useEffect(() => {
-    if (!accessToken) return;
+    accessTokenRef.current = initialAccessToken;
+  }, [initialAccessToken]);
+
+  // Configura o apiClient com o token JWT da query string, atualizável via BroadcastChannel.
+  // A popup não compartilha sessionStorage com a aba pai, então recebe tokens via
+  // BroadcastChannel quando a aba principal faz refresh.
+  useEffect(() => {
     configureApiClient({
-      getAccessToken: () => accessToken,
-      refreshAccessToken: async () => null, // popup não tem refresh token
+      getAccessToken: () => accessTokenRef.current,
+      refreshAccessToken: async () => {
+        // Pede à aba principal o token mais recente
+        postCrossTabMessage({ type: 'TOKEN_REQUEST' });
+        // Aguarda um tick para o listener atualizar accessTokenRef
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        return accessTokenRef.current || null;
+      },
       onAuthFailure: () => {
         setErrorMsg('Sessão expirada. Feche esta janela e abra o acesso remoto novamente.');
       },
     });
-  }, [accessToken]);
+  }, []);
+
+  // ── Cross-tab sync: recebe tokens atualizados e mantém a aba principal viva ──
+  useEffect(() => {
+    // Escuta tokens atualizados da aba principal
+    const cleanup = onCrossTabMessage((message: CrossTabMessage) => {
+      if (message.type === 'TOKEN_REFRESHED' && message.accessToken) {
+        accessTokenRef.current = message.accessToken;
+      }
+    });
+
+    // Envia pings de atividade para manter a aba principal viva enquanto a
+    // popup de acesso remoto estiver aberta
+    const stopPing = startActivityPing(10_000);
+
+    // Pede os tokens atuais ao abrir (caso a aba principal tenha renovado
+    // depois que esta popup foi criada)
+    postCrossTabMessage({ type: 'TOKEN_REQUEST' });
+
+    return () => {
+      cleanup();
+      stopPing();
+    };
+  }, []);
 
   const [remaining, setRemaining] = useState<string>(formatRemaining(expiresAt));
   const [errorMsg, setErrorMsg] = useState<string | null>(null);

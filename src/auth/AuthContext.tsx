@@ -20,6 +20,7 @@ import {
 } from "@/api";
 import { clearAuthSession, emptyAuthSession, loadAuthSession, saveAuthSession } from "./storage";
 import type { AuthSessionState, AuthStage } from "./types";
+import { postCrossTabMessage, onCrossTabMessage, type CrossTabMessage } from "./crossTabSync";
 
 interface AuthContextValue {
   session: AuthSessionState;
@@ -115,6 +116,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const MAX_REFRESH_RETRIES = 3;
   const REFRESH_RETRY_BASE_DELAY_MS = 2_000; // backoff: 2s, 4s, 8s
 
+  // Flag para evitar loop infinito: quando clearSession é chamado por um LOGOUT
+  // cross-tab, NÃO devemos fazer broadcast de LOGOUT de volta.
+  const isCrossTabLogoutRef = useRef(false);
+  // Flag para evitar ping-pong: quando a sessão é atualizada via TOKEN_REFRESHED
+  // cross-tab, NÃO devemos re-emitir o broadcast.
+  const isCrossTabTokenRef = useRef(false);
+
+  // Helper: faz broadcast dos tokens para outras abas (exceto quando acionado por cross-tab)
+  const broadcastTokens = useCallback((tokens: { accessToken: string; refreshToken: string; expiresAt: number }) => {
+    if (!isCrossTabTokenRef.current) {
+      postCrossTabMessage({
+        type: "TOKEN_REFRESHED",
+        ...tokens,
+      });
+    }
+    isCrossTabTokenRef.current = false;
+  }, []);
+
   // Registra atividade do usuário para o mecanismo de inatividade
   const recordActivity = useCallback(() => {
     lastActivityAtRef.current = Date.now();
@@ -125,6 +144,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     refreshTokenRef.current = session.refreshToken;
     sessionRef.current = session;
     saveAuthSession(session);
+    // O broadcast de TOKEN_REFRESHED é feito explicitamente em refreshSession,
+    // login e completeAuthenticatedSession — NÃO aqui — para evitar ping-pong
+    // entre abas quando o listener cross-tab atualiza a sessão.
   }, [session]);
 
   const clearSession = useCallback(() => {
@@ -132,11 +154,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSession(emptyAuthSession);
     queryClient.clear();
     refreshRetryCountRef.current = 0;
+
+    // Notifica outras abas do logout, exceto quando este clearSession
+    // foi disparado por um LOGOUT cross-tab (evita loop infinito).
+    if (!isCrossTabLogoutRef.current) {
+      postCrossTabMessage({ type: "LOGOUT" });
+    }
+    isCrossTabLogoutRef.current = false;
   }, [queryClient]);
 
   const completeAuthenticatedSession = useCallback(async (tokens: TokenPair) => {
-    setSession((previous) => applyTokenPair(tokens, previous));
-  }, []);
+    setSession((previous) => {
+      const next = applyTokenPair(tokens, previous);
+      // Broadcast para outras abas (ex: popup de MFA que não está mais aberta)
+      broadcastTokens({
+        accessToken: tokens.accessToken,
+        refreshToken: tokens.refreshToken,
+        expiresAt: next.expiresAt!,
+      });
+      return next;
+    });
+  }, [broadcastTokens]);
 
   const refreshSession = useCallback(async () => {
     const refreshToken = refreshTokenRef.current;
@@ -149,6 +187,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       refreshRetryCountRef.current = 0; // reset após sucesso
       const nextState = applyTokenPair(tokens, sessionRef.current);
       setSession(nextState);
+      broadcastTokens({
+        accessToken: tokens.accessToken,
+        refreshToken: tokens.refreshToken,
+        expiresAt: nextState.expiresAt!,
+      });
       return tokens.accessToken;
     } catch (error: unknown) {
       // BUG-02: Distinguir erro de rede (fetch falhou) de erro HTTP (401/403).
@@ -191,7 +234,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       clearSession();
       return null;
     }
-  }, [clearSession]);
+  }, [clearSession, broadcastTokens]);
 
   const logout = useCallback(async () => {
     const accessToken = accessTokenRef.current;
@@ -233,10 +276,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const tokens = readSessionTokens(response);
 
     if (nextStage === "authenticated" && tokens) {
-      setSession((previous) => ({
-        ...applyTokenPair(tokens, previous),
-        loginResponse: response,
-      }));
+      setSession((previous) => {
+        const next = applyTokenPair(tokens, previous);
+        broadcastTokens({
+          accessToken: tokens.accessToken,
+          refreshToken: tokens.refreshToken,
+          expiresAt: next.expiresAt!,
+        });
+        return { ...next, loginResponse: response };
+      });
       return nextStage;
     }
 
@@ -250,7 +298,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     return nextStage;
-  }, []);
+  }, [broadcastTokens]);
 
   useEffect(() => {
     configureApiClient({
@@ -282,6 +330,70 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       cancelled = true;
     };
   }, [refreshSession]);
+
+  // ── Cross-tab sync via BroadcastChannel ──────────────────────────────────
+  // Escuta tokens atualizados de outras abas, pings de atividade da popup de
+  // acesso remoto, e pedidos de logout.
+  useEffect(() => {
+    return onCrossTabMessage((message: CrossTabMessage) => {
+      switch (message.type) {
+        case "TOKEN_REFRESHED":
+          // Outra aba fez refresh → adota os novos tokens.
+          // Seta a flag para NÃO re-emitir o broadcast (evita ping-pong).
+          if (message.accessToken && message.refreshToken) {
+            isCrossTabTokenRef.current = true;
+            setSession((prev) => ({
+              ...prev,
+              stage: "authenticated",
+              accessToken: message.accessToken,
+              refreshToken: message.refreshToken,
+              expiresAt: message.expiresAt,
+              temporaryMfaToken: null,
+              loginResponse: null,
+            }));
+          }
+          break;
+
+        case "LOGOUT":
+          // Outra aba fez logout → encerra sessão aqui também,
+          // mas sem re-emitir o broadcast (evita loop infinito).
+          isCrossTabLogoutRef.current = true;
+          clearSession();
+          break;
+
+        case "ACTIVITY_PING":
+          // Popup de acesso remoto está ativa → mantém sessão viva
+          lastActivityAtRef.current = Math.max(lastActivityAtRef.current, message.timestamp);
+          break;
+
+        case "TOKEN_REQUEST":
+          // Outra aba (ex: popup) pede os tokens atuais.
+          // Se o token estiver próximo de expirar (menos de 5 min), faz refresh
+          // proativo antes de responder para a popup receber tokens frescos.
+          {
+            const remaining = (sessionRef.current.expiresAt ?? 0) - Date.now();
+            if (remaining < 5 * 60 * 1000 && refreshTokenRef.current) {
+              // Dispara refresh (não aguarda — o TOKEN_REFRESHED broadcast fará a popup receber)
+              void refreshSession();
+            } else if (
+              sessionRef.current.stage === "authenticated" &&
+              sessionRef.current.accessToken &&
+              sessionRef.current.refreshToken &&
+              sessionRef.current.expiresAt
+            ) {
+              // Token ainda válido por tempo suficiente — envia diretamente
+              postCrossTabMessage({
+                type: "TOKEN_REFRESHED",
+                accessToken: sessionRef.current.accessToken,
+                refreshToken: sessionRef.current.refreshToken,
+                expiresAt: sessionRef.current.expiresAt,
+              });
+            }
+          }
+          break;
+      }
+    });
+  }, [clearSession]);
 
   // BUG-01 corrigido: inatividade/refresh proativo usa refs persistentes em vez de
   // variáveis locais ao effect, que eram reiniciadas a cada mudança de sessão.
