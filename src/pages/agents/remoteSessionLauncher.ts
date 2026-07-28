@@ -3,7 +3,7 @@ import {
   type StartRemoteSessionRequest,
 } from "@/api/remote-sessions";
 import { realtimeConfig } from "@/config/realtime";
-import { getApiAccessToken } from "@/api/client";
+import { getApiAccessToken, ApiError } from "@/api/client";
 
 export interface OpenRemoteSessionParams {
   agentId: string;
@@ -128,10 +128,6 @@ export async function openRemoteSessionPopup({
     );
   }
 
-  // Obtém credenciais NATS (opcional — o fluxo atual usa o JWT emitido pelo servidor)
-  let jwt: string | undefined;
-  let nkeySeed: string | undefined;
-
   // Obtém credenciais TURN
   let turnCredentials: SessionUrlParams["turnCredentials"] = null;
   try {
@@ -145,9 +141,29 @@ export async function openRemoteSessionPopup({
       credential: turn.credential,
       ttlSeconds: turn.ttlSeconds,
     };
-  } catch {
-    // TURN pode não estar configurado — prossegue sem
+  } catch (err) {
+    // 401 indica sessão órfã ou problema de autorização — faz cleanup e reporta
+    if (err instanceof ApiError && err.status === 401) {
+      console.error("[RemoteSession] Erro de autorização ao obter TURN — encerrando sessão", {
+        sessionId: session.sessionId,
+        agentId,
+      });
+      try {
+        await remoteSessionsApi.stopSession(agentId, session.sessionId);
+      } catch {
+        // cleanup best-effort
+      }
+      throw new Error(
+        "Sessão remota inválida (possível bug no servidor). A sessão foi encerrada. Tente novamente.",
+      );
+    }
+    // Outros erros (ex: TURN não configurado, rede) — prossegue sem credenciais
+    console.warn("[RemoteSession] TURN credentials indisponíveis:", err);
   }
+
+  // Credenciais NATS (fluxo futuro — atualmente usa JWT emitido pelo backend)
+  const jwt = undefined;
+  const nkeySeed = undefined;
 
   const popup = window.open(
     toSessionUrl({

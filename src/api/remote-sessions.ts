@@ -87,7 +87,7 @@ export const remoteSessionsApi = {
 
     /** Encerra uma sessão remota ativa. */
     stopSession: (agentId: string, sessionId: string): Promise<void> =>
-        api.post<void>(`${BASE}/${agentId}/${sessionId}/stop`),
+        api.post<void>(`${BASE}/${agentId}/${sessionId}/stop`, undefined, { retryOnAuthError: false }),
 
     /** Renova o TTL de uma sessão remota. */
     renewSession: (agentId: string, sessionId: string): Promise<RemoteSessionResponse> =>
@@ -99,7 +99,7 @@ export const remoteSessionsApi = {
 
     /** Obtém credenciais TURN para WebRTC. */
     getTurnCredentials: (agentId: string, sessionId: string): Promise<TurnCredentials> =>
-        api.post<TurnCredentials>(`${BASE}/${agentId}/${sessionId}/turn-credentials`),
+        api.post<TurnCredentials>(`${BASE}/${agentId}/${sessionId}/turn-credentials`, undefined, { retryOnAuthError: false }),
 
     /** Obtém credenciais NATS (JWT + NKey) para o viewer se conectar ao stream. */
     getSessionCredentials: (agentId: string, sessionId: string): Promise<SessionCredentials> =>
