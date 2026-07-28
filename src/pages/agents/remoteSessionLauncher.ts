@@ -23,7 +23,7 @@ export class PopupBlockedError extends Error {
 
 const DEFAULT_PARAMS: Partial<StartRemoteSessionRequest> = {
   kind: "screen",
-  transport: "webrtc",
+  transport: "nats",
   quality: "high",
   codec: "jpeg",
   durationMinutes: 30,
