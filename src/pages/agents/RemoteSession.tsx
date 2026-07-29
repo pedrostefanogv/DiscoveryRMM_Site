@@ -109,18 +109,20 @@ export default function RemoteSession() {
   const [, setRemoteStream] = useState<MediaStream | null>(null);
   const [rtt, setRtt] = useState<number>(0);
 
-  // ── Controles de qualidade em tempo real ──
+  // ── Controles de qualidade em tempo real (independentes) ──
   const [liveQuality, setLiveQuality] = useState(quality);
   const [liveCodec, setLiveCodec] = useState(codec);
+  const [liveImageQuality, setLiveImageQuality] = useState(75); // compressão JPEG 1-100
+  const [liveMaxFps, setLiveMaxFps] = useState(15);            // FPS máximo
   const [autoMode, setAutoMode] = useState(false);
   const [qualityChanging, setQualityChanging] = useState(false);
 
-  const QUALITIES: { value: ChangeQualityRequest['quality']; label: string; fps: number }[] = [
-    { value: 'ultra', label: 'Ultra', fps: 30 },
-    { value: 'high', label: 'Alta', fps: 15 },
-    { value: 'medium', label: 'Média', fps: 10 },
-    { value: 'low', label: 'Baixa', fps: 5 },
-    { value: 'ultralow', label: 'Mínima', fps: 2 },
+  const QUALITIES: { value: ChangeQualityRequest['quality']; label: string; fps: number; jpegQ: number }[] = [
+    { value: 'ultra', label: 'Ultra', fps: 30, jpegQ: 92 },
+    { value: 'high', label: 'Alta', fps: 15, jpegQ: 75 },
+    { value: 'medium', label: 'Média', fps: 10, jpegQ: 60 },
+    { value: 'low', label: 'Baixa', fps: 5, jpegQ: 40 },
+    { value: 'ultralow', label: 'Mínima', fps: 2, jpegQ: 25 },
   ];
 
   const CODECS: { value: NonNullable<ChangeQualityRequest['codec']>; label: string }[] = [
@@ -129,37 +131,99 @@ export default function RemoteSession() {
     { value: 'h264', label: 'H.264' },
   ];
 
+  const IMAGE_QUALITY_PRESETS = [
+    { value: 90, label: '90%' },
+    { value: 75, label: '75%' },
+    { value: 60, label: '60%' },
+    { value: 40, label: '40%' },
+    { value: 25, label: '25%' },
+  ];
+
+  const FPS_PRESETS = [
+    { value: 30, label: '30' },
+    { value: 15, label: '15' },
+    { value: 10, label: '10' },
+    { value: 5, label: '5' },
+    { value: 2, label: '2' },
+  ];
+
   const handleQualityChange = useCallback(async (newQuality: ChangeQualityRequest['quality']) => {
-    if (qualityChanging || !sessionId || !agentId) return;
-    const previousQuality = liveQuality;
-    setQualityChanging(true);
-    // Optimistic update
+    if (qualityChanging) return;
+    const preset = QUALITIES.find(q => q.value === newQuality);
+    const prevQuality = liveQuality;
     setLiveQuality(newQuality);
     setAutoMode(false);
+    setQualityChanging(true);
     try {
       await remoteSessionsApi.changeQuality(agentId, sessionId, {
         quality: newQuality,
         codec: liveCodec as ChangeQualityRequest['codec'],
+        imageQuality: preset?.jpegQ ?? 75,
+        maxFps: preset?.fps ?? 15,
         auto: false,
       });
     } catch (err) {
-      // Reverte para o valor anterior (capturado antes do optimistic update)
-      setLiveQuality(previousQuality);
+      setLiveQuality(prevQuality);
       console.error('Falha ao alterar qualidade:', err);
     } finally {
       setQualityChanging(false);
     }
   }, [qualityChanging, sessionId, agentId, liveCodec, liveQuality]);
 
+  const handleImageQualityChange = useCallback(async (newImageQ: number) => {
+    if (qualityChanging || !sessionId || !agentId) return;
+    const prevImageQ = liveImageQuality;
+    setQualityChanging(true);
+    setLiveImageQuality(newImageQ);
+    setAutoMode(false);
+    try {
+      await remoteSessionsApi.changeQuality(agentId, sessionId, {
+        quality: liveQuality as ChangeQualityRequest['quality'],
+        imageQuality: newImageQ,
+        maxFps: liveMaxFps,        // preserva FPS atual
+        auto: false,
+      });
+    } catch (err) {
+      setLiveImageQuality(prevImageQ);
+      console.error('Falha ao alterar qualidade da imagem:', err);
+    } finally {
+      setQualityChanging(false);
+    }
+  }, [qualityChanging, sessionId, agentId, liveQuality, liveImageQuality, liveMaxFps]);
+
+  const handleFpsChange = useCallback(async (newFps: number) => {
+    if (qualityChanging || !sessionId || !agentId) return;
+    const prevFps = liveMaxFps;
+    setQualityChanging(true);
+    setLiveMaxFps(newFps);
+    setAutoMode(false);
+    try {
+      await remoteSessionsApi.changeQuality(agentId, sessionId, {
+        quality: liveQuality as ChangeQualityRequest['quality'],
+        imageQuality: liveImageQuality,  // preserva qualidade de imagem atual
+        maxFps: newFps,
+        auto: false,
+      });
+    } catch (err) {
+      setLiveMaxFps(prevFps);
+      console.error('Falha ao alterar FPS:', err);
+    } finally {
+      setQualityChanging(false);
+    }
+  }, [qualityChanging, sessionId, agentId, liveQuality, liveImageQuality, liveMaxFps]);
+
   const handleCodecChange = useCallback(async (newCodec: NonNullable<ChangeQualityRequest['codec']>) => {
     if (qualityChanging || !sessionId || !agentId) return;
     const previousCodec = liveCodec;
     setQualityChanging(true);
     setLiveCodec(newCodec);
+    setAutoMode(false);
     try {
       await remoteSessionsApi.changeQuality(agentId, sessionId, {
         quality: liveQuality as ChangeQualityRequest['quality'],
         codec: newCodec,
+        imageQuality: liveImageQuality,  // preserva
+        maxFps: liveMaxFps,              // preserva
         auto: false,
       });
     } catch (err) {
@@ -168,7 +232,7 @@ export default function RemoteSession() {
     } finally {
       setQualityChanging(false);
     }
-  }, [qualityChanging, sessionId, agentId, liveQuality, liveCodec]);
+  }, [qualityChanging, sessionId, agentId, liveQuality, liveCodec, liveImageQuality, liveMaxFps]);
 
   const handleAutoToggle = useCallback(async () => {
     if (qualityChanging || !sessionId || !agentId) return;
@@ -331,9 +395,9 @@ export default function RemoteSession() {
         <div className="ml-auto flex items-center gap-3 text-xs text-slate-500">
           <span>Transport: <span className="text-slate-400">{transport.toUpperCase()}</span></span>
 
-          {/* Quality selector */}
+          {/* Quality preset selector */}
           <div className="flex items-center gap-0.5">
-            <span className="mr-1">Q:</span>
+            <span className="mr-1 text-slate-600">Q:</span>
             <select
               className="bg-slate-800 border border-slate-700 rounded px-1 py-0.5 text-xs text-slate-300 cursor-pointer hover:border-slate-600 disabled:opacity-50"
               value={liveQuality}
@@ -341,7 +405,39 @@ export default function RemoteSession() {
               onChange={(e) => handleQualityChange(e.target.value as ChangeQualityRequest['quality'])}
             >
               {QUALITIES.map((q) => (
-                <option key={q.value} value={q.value}>{q.label} ({q.fps} FPS)</option>
+                <option key={q.value} value={q.value}>{q.label}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Image quality selector (compressão) */}
+          <div className="flex items-center gap-0.5">
+            <span className="mr-1 text-slate-600">🖼</span>
+            <select
+              className="bg-slate-800 border border-slate-700 rounded px-1 py-0.5 text-xs text-slate-300 cursor-pointer hover:border-slate-600 disabled:opacity-50"
+              value={liveImageQuality}
+              disabled={autoMode || qualityChanging}
+              onChange={(e) => handleImageQualityChange(Number(e.target.value))}
+              title="Qualidade da imagem (compressão JPEG)"
+            >
+              {IMAGE_QUALITY_PRESETS.map((iq) => (
+                <option key={iq.value} value={iq.value}>{iq.label}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* FPS selector */}
+          <div className="flex items-center gap-0.5">
+            <span className="mr-1 text-slate-600">⚡</span>
+            <select
+              className="bg-slate-800 border border-slate-700 rounded px-1 py-0.5 text-xs text-slate-300 cursor-pointer hover:border-slate-600 disabled:opacity-50"
+              value={liveMaxFps}
+              disabled={autoMode || qualityChanging}
+              onChange={(e) => handleFpsChange(Number(e.target.value))}
+              title="Taxa máxima de quadros por segundo"
+            >
+              {FPS_PRESETS.map((f) => (
+                <option key={f.value} value={f.value}>{f.label} FPS</option>
               ))}
             </select>
           </div>

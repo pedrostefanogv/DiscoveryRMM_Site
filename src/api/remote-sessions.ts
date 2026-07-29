@@ -129,6 +129,7 @@ export const remoteSessionsApi = {
 export interface ChangeQualityRequest {
     quality: 'ultra' | 'high' | 'medium' | 'low' | 'ultralow';
     codec?: 'jpeg' | 'webp' | 'h264';
-    fps?: number;
+    imageQuality?: number;
+    maxFps?: number;
     auto?: boolean;
 }
