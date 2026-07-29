@@ -6,7 +6,7 @@ import toast from 'react-hot-toast';
 import { useClients } from '@/hooks/useClients';
 import { getDeleteAgentErrorMessage, useApproveZeroTouch, useDeleteAgent, useRestartAgent, useShutdownAgent, useWakeOnLan } from '@/hooks/useAgents';
 import { ApiError, agentUpdatesApi, agentsApi, sitesApi } from '@/api';
-import { Badge, Loading, ErrorDisplay, Input, Select, StatCard, Modal, PageHeader, SkeletonCard, EmptyState, MetricBar, Button } from '@/components/ui';
+import { Badge, ErrorDisplay, Input, Select, StatCard, Modal, PageHeader, SkeletonCard, EmptyState, MetricBar, Button } from '@/components/ui';
 import { TransferAgentModal } from '@/components/agents/TransferAgentModal';
 import PowerActionModal from '@/components/agents/PowerActionModal';
 import WakeOnLanModal from '@/components/agents/WakeOnLanModal';
@@ -151,11 +151,6 @@ export default function AgentList() {
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
   const [viewMode, setViewMode] = useState<'card' | 'list'>('card');
   const [contextMenu, setContextMenu] = useState<ContextMenuState>(null);
-  const [remoteOpen, setRemoteOpen] = useState(false);
-  const [remoteLoading, setRemoteLoading] = useState(false);
-  const [remoteError, setRemoteError] = useState<string | null>(null);
-  const [remoteUrl, setRemoteUrl] = useState<string | null>(null);
-  const [remoteAgent, setRemoteAgent] = useState<AgentWithClient | null>(null);
   const [remoteDebugAgentId, setRemoteDebugAgentId] = useState<string | null>(null);
   const [approvingAgentId, setApprovingAgentId] = useState<string | null>(null);
   const [deletingAgentId, setDeletingAgentId] = useState<string | null>(null);
@@ -206,41 +201,15 @@ export default function AgentList() {
     contextMenuRef.current.style.top = `${top}px`;
   }, [contextMenu]);
 
-  const closeRemoteModal = () => {
-    setRemoteOpen(false);
-    setRemoteLoading(false);
-    setRemoteError(null);
-    setRemoteUrl(null);
-    setRemoteAgent(null);
-  };
-
   const openRemoteControl = async (agent: AgentWithClient) => {
     setContextMenu(null);
-    setRemoteAgent(agent);
-    setRemoteOpen(true);
-    setRemoteLoading(true);
-    setRemoteError(null);
-    setRemoteUrl(null);
 
     try {
       // Redireciona para o novo acesso remoto nativo (transporte primário: NATS)
       openRemoteSessionPopup({ agentId: agent.id, kind: 'screen', transport: 'nats' });
-      setRemoteLoading(false);
       return;
     } catch (error) {
-      if (error instanceof ApiError) {
-        if (error.status === 403) {
-          setRemoteError('Suporte remoto desabilitado para este escopo ou sem permissão de acesso.');
-        } else {
-          setRemoteError(error.message);
-        }
-      } else if (error instanceof Error) {
-        setRemoteError(error.message);
-      } else {
-        setRemoteError('Falha ao iniciar o controle remoto.');
-      }
-    } finally {
-      setRemoteLoading(false);
+      // Erros são tratados internamente pelo openRemoteSessionPopup (toast/notificação)
     }
   };
 
@@ -1191,33 +1160,6 @@ export default function AgentList() {
             </div>
           </div>
         )}
-      </Modal>
-
-      <Modal
-        open={remoteOpen}
-        onClose={closeRemoteModal}
-        title={`Controle remoto${remoteAgent ? ` - ${remoteAgent.displayName ?? remoteAgent.hostname}` : ''}`}
-        maxWidth="max-w-6xl"
-      >
-        <div className="space-y-3">
-          {remoteLoading && <Loading message="Gerando sessão remota..." />}
-
-          {!remoteLoading && remoteError && (
-            <div className="rounded-lg border border-red-500/30 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-200">
-              {remoteError}
-            </div>
-          )}
-
-          {!remoteLoading && remoteUrl && (
-            <iframe
-              title="MeshCentral Remote"
-              src={remoteUrl}
-              className="h-[70vh] w-full rounded-lg border border-border bg-white"
-              allow="clipboard-read; clipboard-write; fullscreen"
-              referrerPolicy="no-referrer"
-            />
-          )}
-        </div>
       </Modal>
 
       <TransferAgentModal

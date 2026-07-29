@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  ArrowLeft, Cpu, MemoryStick, Ticket as TicketIcon,
-  Wifi, WifiOff, AppWindow, Search, Clock, HardDrive, Printer, Bug, AlertTriangle, Trash2, ShieldCheck, Plus, Gauge, Power, RotateCcw, Zap, ChevronDown, RefreshCw,
+  ArrowLeft, Bell, Cpu, MemoryStick, Ticket as TicketIcon,
+  Monitor, Wifi, WifiOff, AppWindow, Search, Clock, HardDrive, Printer, Bug, AlertTriangle, Trash2, ShieldCheck, Plus, Gauge, Power, RotateCcw, Zap, ChevronDown, RefreshCw,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getDeleteAgentErrorMessage, useAgent, useAgentHardware, useAgentHardwareComponents, useAgentSoftware, useAgentSoftwareSnapshot, useApproveZeroTouch, useDeleteAgent, useRestartAgent, useShutdownAgent, useWakeOnLan } from '@/hooks/useAgents';
@@ -22,6 +22,7 @@ import { isHeartbeatTimestampFresh, useAgentHeartbeat } from '@/stores/heartbeat
 import { agentLabelsApi } from '@/modules/agent-labels/api';
 import { AgentLabelSourceType, type AgentLabel } from '@/modules/agent-labels/types';
 import { openRemoteDebugPopup } from './remoteDebugLauncher';
+import { openRemoteSessionPopup } from './remoteSessionLauncher';
 import { useAuthorization } from '@/auth/authorization';
 
 const levelLabels: Record<number, { label: string; color: 'slate' | 'primary' | 'warning' | 'danger' | 'accent' }> = {
@@ -68,6 +69,7 @@ export default function AgentDetail() {
   const [labelPickerQuery, setLabelPickerQuery] = useState('');
   const labelPickerRef = useRef<HTMLDivElement>(null);
   const [isOpeningRemoteDebug, setIsOpeningRemoteDebug] = useState(false);
+  const [isOpeningRemoteControl, setIsOpeningRemoteControl] = useState(false);
   const [isTriggeringAgentUpdate, setIsTriggeringAgentUpdate] = useState(false);
   const [isApprovingZeroTouch, setIsApprovingZeroTouch] = useState(false);
   const [isRefreshingPorts, setIsRefreshingPorts] = useState(false);
@@ -590,6 +592,17 @@ export default function AgentDetail() {
     }
   };
 
+  const handleOpenRemoteControl = async () => {
+    if (!id || isOpeningRemoteControl) return;
+
+    setIsOpeningRemoteControl(true);
+    try {
+      openRemoteSessionPopup({ agentId: id, kind: 'screen', transport: 'nats' });
+    } finally {
+      setIsOpeningRemoteControl(false);
+    }
+  };
+
   const closeDeleteAgentModal = () => {
     if (deleteAgent.isPending) return;
     setDeleteConfirmOpen(false);
@@ -856,6 +869,32 @@ export default function AgentDetail() {
           </Button>
           {isPowerMenuOpen && (
             <div className="absolute right-0 top-full z-50 mt-2 min-w-[220px] overflow-hidden rounded-lg border border-border bg-surface shadow-xl">
+              <button
+                type="button"
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60"
+                onClick={() => {
+                  setIsPowerMenuOpen(false);
+                  void handleOpenRemoteControl();
+                }}
+                disabled={isOpeningRemoteControl}
+              >
+                <Monitor className="h-4 w-4" />
+                {isOpeningRemoteControl ? 'Abrindo remoto...' : 'Controle remoto'}
+              </button>
+              <button
+                type="button"
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60"
+                onClick={() => {
+                  setIsPowerMenuOpen(false);
+                  toast('Notificações serão implementadas em breve.', { icon: '🔔' });
+                }}
+              >
+                <Bell className="h-4 w-4" />
+                Enviar notificação
+              </button>
+
+              <div className="border-t border-border" />
+
               <button
                 type="button"
                 className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60"
