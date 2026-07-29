@@ -155,7 +155,7 @@ export default function RemoteScreenViewer({
         }
       };
 
-      ws.onerror = (event) => {
+      ws.onerror = () => {
         console.error('[RemoteScreenViewer] NATS WebSocket error', {
           url: natsUrl,
           readyState: ws?.readyState,
