@@ -19,6 +19,22 @@ interface RemoteScreenViewerProps {
   onLatency?: (rttMs: number) => void;
 }
 
+const CRLF = new Uint8Array([13, 10]);
+
+function appendBytes(left: Uint8Array<ArrayBufferLike>, right: Uint8Array<ArrayBufferLike>): Uint8Array<ArrayBufferLike> {
+  const result = new Uint8Array(left.length + right.length);
+  result.set(left);
+  result.set(right, left.length);
+  return result;
+}
+
+function findCrlf(data: Uint8Array<ArrayBufferLike>): number {
+  for (let index = 0; index <= data.length - CRLF.length; index++) {
+    if (data[index] === CRLF[0] && data[index + 1] === CRLF[1]) return index;
+  }
+  return -1;
+}
+
 function decodeFrameHeader(data: ArrayBuffer): FrameHeader | null {
   if (data.byteLength < 12) return null;
   const view = new DataView(data);
@@ -55,8 +71,10 @@ export default function RemoteScreenViewer({
   // recriem o useEffect e resetem reconnectAttempts a cada render.
   const onErrorRef = useRef(onError);
   const onLatencyRef = useRef(onLatency);
+  const isPausedRef = useRef(isPaused);
   onErrorRef.current = onError;
   onLatencyRef.current = onLatency;
+  isPausedRef.current = isPaused;
 
   // Decode JPEG/WebP off-main-thread via ImageBitmap
   const decodeFrame = useCallback(async (data: ArrayBuffer): Promise<ImageBitmap | null> => {
@@ -101,12 +119,7 @@ export default function RemoteScreenViewer({
     }
   }, []);
 
-  // NATS WebSocket: conecta ao servidor NATS e subscreve ao stream de frames.
-  // Protocolo NATS WebSocket nativo (nats-server websocket):
-  //   - Auth: access_token como query param na URL
-  //   - Subscribe: SUB <subject> <sid>\r\n
-  //   - Publish (input): PUB <subject> <reply> <len>\r\n<payload>\r\n
-  //   - Frames binários chegam como WebSocket binary frames
+  // NATS WebSocket: executa o handshake NATS e subscreve ao stream de frames.
   useEffect(() => {
     if (!natsSubject || !natsUrl || !jwt) return;
 
@@ -114,8 +127,98 @@ export default function RemoteScreenViewer({
     let ws: WebSocket | null = null;
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
     reconnectAttemptsRef.current = 0;
+    let protocolBuffer: Uint8Array<ArrayBufferLike> = new Uint8Array();
+    let connectSent = false;
+    let authenticated = false;
     const MAX_RECONNECT_ATTEMPTS = 5;
     const RECONNECT_DELAYS = [1000, 2000, 4000, 8000, 16000];
+
+    const sendProtocol = (command: string) => {
+      ws?.send(new TextEncoder().encode(`${command}\r\n`));
+    };
+
+    const processScreenFrame = (buffer: ArrayBuffer) => {
+      if (isPausedRef.current) return;
+      decodeFrame(buffer).then((bitmap) => {
+        if (!bitmap || cancelled) return;
+        renderFrame(bitmap);
+        const header = decodeFrameHeader(buffer);
+        if (header) {
+          const lat = Date.now() - header.ts;
+          setRtt(lat);
+          onLatencyRef.current?.(lat);
+        }
+      });
+    };
+
+    const processProtocol = () => {
+      const decoder = new TextDecoder();
+      while (!cancelled) {
+        const lineEnd = findCrlf(protocolBuffer);
+        if (lineEnd < 0) return;
+
+        const line = decoder.decode(protocolBuffer.slice(0, lineEnd));
+        const tokens = line.trim().split(/\s+/);
+
+        if (tokens[0] === 'MSG') {
+          const payloadLengthIndex = tokens.length === 5 ? 4 : 3;
+          const payloadLength = Number.parseInt(tokens[payloadLengthIndex] ?? '', 10);
+          if (!Number.isInteger(payloadLength) || payloadLength < 0) {
+            onErrorRef.current?.(`NATS protocolo inválido: ${line}`);
+            ws?.close(1002, 'Invalid MSG');
+            return;
+          }
+
+          const payloadStart = lineEnd + 2;
+          const payloadEnd = payloadStart + payloadLength;
+          if (protocolBuffer.length < payloadEnd + 2) return;
+
+          const payload = protocolBuffer.slice(payloadStart, payloadEnd);
+          protocolBuffer = protocolBuffer.slice(payloadEnd + 2);
+          processScreenFrame(payload.buffer);
+          continue;
+        }
+
+        protocolBuffer = protocolBuffer.slice(lineEnd + 2);
+
+        if (tokens[0] === 'INFO') {
+          const connect = JSON.stringify({
+            lang: 'discovery-web',
+            version: '1.0',
+            protocol: 1,
+            headers: true,
+            verbose: true,
+            auth_token: jwt,
+          });
+          sendProtocol(`CONNECT ${connect}`);
+          connectSent = true;
+          continue;
+        }
+
+        if (tokens[0] === '+OK') {
+          if (connectSent && !authenticated) {
+            authenticated = true;
+            reconnectAttemptsRef.current = 0;
+            sendProtocol(`SUB ${natsSubject}.frame 1`);
+          }
+          continue;
+        }
+
+        if (tokens[0] === 'PING') {
+          sendProtocol('PONG');
+          continue;
+        }
+
+        if (tokens[0] === '-ERR') {
+          const reason = line.replace(/^-ERR\s*/i, '').replace(/^['"]|['"]$/g, '');
+          onErrorRef.current?.(`NATS: ${reason || 'falha de protocolo'}`);
+          ws?.close(1008, reason || 'NATS protocol error');
+          return;
+        }
+
+        if (tokens[0] === 'INFO' || tokens[0] === 'PONG') continue;
+      }
+    };
 
     const connect = () => {
       if (cancelled) return;
@@ -126,39 +229,20 @@ export default function RemoteScreenViewer({
       wsRef.current = ws;
 
       ws.onopen = () => {
-        console.log('[RemoteScreenViewer] NATS WebSocket connected successfully');
-        reconnectAttemptsRef.current = 0;
-        ws!.send(`SUB ${natsSubject}.frame 1\r\n`);
+        console.log('[RemoteScreenViewer] WebSocket aberto; aguardando INFO do NATS');
       };
 
       ws.onmessage = (event) => {
-        if (cancelled || isPaused) return;
+        if (cancelled) return;
+        const bytes: Uint8Array<ArrayBufferLike> = typeof event.data === 'string'
+          ? new Uint8Array(new TextEncoder().encode(event.data))
+          : event.data instanceof ArrayBuffer
+            ? new Uint8Array(event.data)
+            : new Uint8Array();
+        if (!bytes) return;
 
-        // NATS WebSocket: PING/PONG keepalive
-        if (typeof event.data === 'string') {
-          if (event.data.startsWith('PING')) {
-            ws!.send('PONG\r\n');
-          }
-          // MSG headers, INFO, +OK, -ERR são ignorados
-          return;
-        }
-
-        // Binary frame — dados brutos da captura de tela (JPEG/WebP/H.264)
-        if (event.data instanceof ArrayBuffer) {
-          const buffer = event.data as ArrayBuffer;
-          decodeFrame(buffer).then((bitmap) => {
-            if (bitmap && !cancelled) {
-              renderFrame(bitmap);
-              // RTT calculation from frame header timestamp
-              const header = decodeFrameHeader(buffer);
-              if (header) {
-                const lat = Date.now() - header.ts;
-                setRtt(lat);
-                onLatencyRef.current?.(lat);
-              }
-            }
-          });
-        }
+        protocolBuffer = appendBytes(protocolBuffer, bytes);
+        processProtocol();
       };
 
       ws.onerror = () => {
@@ -200,7 +284,7 @@ export default function RemoteScreenViewer({
       if (reconnectTimer) clearTimeout(reconnectTimer);
       if (ws) ws.close();
     };
-  }, [natsSubject, natsUrl, jwt, isPaused, decodeFrame, renderFrame]);
+  }, [natsSubject, natsUrl, jwt, decodeFrame, renderFrame]);
 
   // Input capture (mouse/keyboard) — B14 fix
   useEffect(() => {
