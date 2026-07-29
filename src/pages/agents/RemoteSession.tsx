@@ -42,6 +42,9 @@ export default function RemoteSession() {
   const expiresAt = searchParams.get('expiresAt') ?? '';
   const natsUrlFromQuery = searchParams.get('natsUrl') ?? '';
   const initialAccessToken = searchParams.get('accessToken') ?? '';
+  // Credenciais NATS pré-buscadas pelo launcher (evita chamada extra à API na popup)
+  const preFetchedJwt = searchParams.get('jwt') ?? '';
+  const preFetchedNkeySeed = searchParams.get('nkeySeed') ?? '';
 
   // Ref mutável para o accessToken — atualizado via BroadcastChannel quando
   // a aba principal faz refresh. O apiClient lê desta ref via getAccessToken.
@@ -97,7 +100,11 @@ export default function RemoteSession() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>(kind as Tab);
-  const [natsCredentials, setNatsCredentials] = useState<SessionCredentials | null>(null);
+  const [natsCredentials, setNatsCredentials] = useState<SessionCredentials | null>(
+    preFetchedJwt && preFetchedNkeySeed
+      ? { jwt: preFetchedJwt, nkeySeed: preFetchedNkeySeed, expiresAtUtc: expiresAt || '', natsWssUrl: natsUrlFromQuery || undefined }
+      : null,
+  );
   const [turnCreds, setTurnCreds] = useState<{ username: string; credential: string; urls: string[] } | null>(null);
   const [, setRemoteStream] = useState<MediaStream | null>(null);
   const [rtt, setRtt] = useState<number>(0);
@@ -110,7 +117,8 @@ export default function RemoteSession() {
     return () => clearInterval(timer);
   }, [expiresAt]);
 
-  // Conexão NATS (primária) — obtém credenciais e conecta imediatamente.
+  // Conexão NATS (primária) — usa credenciais pré-buscadas da URL quando disponíveis.
+  // Se não houver credenciais na URL, busca da API (fallback para abas abertas manualmente).
   // TURN/WebRTC é opcional e buscado em background sem bloquear o fluxo principal.
   useEffect(() => {
     if (!sessionId || !agentId) return;
@@ -118,11 +126,16 @@ export default function RemoteSession() {
     let cancelled = false;
     (async () => {
       try {
-        // NATS é obrigatório para o transporte primário dos frames
-        const natsCreds = await remoteSessionsApi.getSessionCredentials(agentId, sessionId);
-        if (cancelled) return;
-        setNatsCredentials(natsCreds);
-        setIsConnected(true);
+        // Se já temos credenciais pré-buscadas da URL, conecta imediatamente
+        if (preFetchedJwt && preFetchedNkeySeed) {
+          setIsConnected(true);
+        } else {
+          // Fallback: busca credenciais da API (para abas abertas manualmente sem launcher)
+          const natsCreds = await remoteSessionsApi.getSessionCredentials(agentId, sessionId);
+          if (cancelled) return;
+          setNatsCredentials(natsCreds);
+          setIsConnected(true);
+        }
 
         // TURN é opcional — busca em background para habilitar WebRTC quando disponível
         try {
@@ -145,7 +158,7 @@ export default function RemoteSession() {
     })();
 
     return () => { cancelled = true; };
-  }, [sessionId, agentId]);
+  }, [sessionId, agentId, preFetchedJwt, preFetchedNkeySeed]);
 
   // WebRTC (apenas quando transport=webrtc, screen, e TURN disponível)
   const webrtc = useWebrtcSession({

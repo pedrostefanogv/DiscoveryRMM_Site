@@ -597,7 +597,13 @@ export default function AgentDetail() {
 
     setIsOpeningRemoteControl(true);
     try {
-      openRemoteSessionPopup({ agentId: id, kind: 'screen', transport: 'nats' });
+      await openRemoteSessionPopup({ agentId: id, kind: 'screen', transport: 'nats' });
+      toast.success('Sessão remota iniciada com sucesso.');
+    } catch (error) {
+      const message = error instanceof Error
+        ? error.message
+        : 'Falha ao iniciar sessão remota.';
+      toast.error(message);
     } finally {
       setIsOpeningRemoteControl(false);
     }

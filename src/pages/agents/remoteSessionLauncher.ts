@@ -161,9 +161,39 @@ export async function openRemoteSessionPopup({
     console.warn("[RemoteSession] TURN credentials indisponíveis:", err);
   }
 
-  // Credenciais NATS (fluxo futuro — atualmente usa JWT emitido pelo backend)
-  const jwt = undefined;
-  const nkeySeed = undefined;
+  // Pré-busca credenciais NATS para a popup iniciar conectada imediatamente.
+  // Sem isso, a popup precisa fazer uma chamada extra à API após abrir,
+  // causando delay e piorando a experiência do usuário.
+  let jwt: string | undefined;
+  let nkeySeed: string | undefined;
+  try {
+    const natsCreds = await remoteSessionsApi.getSessionCredentials(
+      agentId,
+      session.sessionId,
+    );
+    jwt = natsCreds.jwt;
+    nkeySeed = natsCreds.nkeySeed;
+    // Sobrescreve natsWssUrl com o valor retornado pelo backend (mais preciso)
+    if (natsCreds.natsWssUrl) {
+      session.natsWssUrl = natsCreds.natsWssUrl;
+    }
+  } catch (err) {
+    // NATS credentials são obrigatórias para o transporte NATS — se falhar,
+    // encerra a sessão e reporta o erro.
+    console.error("[RemoteSession] Falha ao obter credenciais NATS — encerrando sessão", {
+      sessionId: session.sessionId,
+      agentId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    try {
+      await remoteSessionsApi.stopSession(agentId, session.sessionId);
+    } catch {
+      // cleanup best-effort
+    }
+    throw new Error(
+      "Falha ao obter credenciais de streaming. Verifique a conectividade com o servidor NATS.",
+    );
+  }
 
   const popup = window.open(
     toSessionUrl({

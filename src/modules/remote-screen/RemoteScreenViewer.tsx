@@ -104,61 +104,98 @@ export default function RemoteScreenViewer({
     if (!natsSubject || !natsUrl || !jwt) return;
 
     let cancelled = false;
+    let ws: WebSocket | null = null;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    let reconnectAttempts = 0;
+    const MAX_RECONNECT_ATTEMPTS = 5;
+    const RECONNECT_DELAYS = [1000, 2000, 4000, 8000, 16000]; // exponential backoff
 
-    // Constrói URL com auth token no query param (protocolo NATS WS padrão)
-    const wsUrl = `${natsUrl}?access_token=${encodeURIComponent(jwt)}`;
-    const ws = new WebSocket(wsUrl);
-    ws.binaryType = 'arraybuffer';
-    wsRef.current = ws;
+    const connect = () => {
+      if (cancelled) return;
 
-    ws.onopen = () => {
-      // Subscreve ao subject de frames (protocolo NATS: SUB <subject> <sid>\r\n)
-      ws.send(`SUB ${natsSubject}.frame 1\r\n`);
-    };
+      // Constrói URL com auth token no query param (protocolo NATS WS padrão)
+      const wsUrl = `${natsUrl}?access_token=${encodeURIComponent(jwt)}`;
+      ws = new WebSocket(wsUrl);
+      ws.binaryType = 'arraybuffer';
+      wsRef.current = ws;
 
-    ws.onmessage = (event) => {
-      if (cancelled || isPaused) return;
+      ws.onopen = () => {
+        reconnectAttempts = 0; // reset on success
+        // Subscreve ao subject de frames (protocolo NATS: SUB <subject> <sid>\r\n)
+        ws!.send(`SUB ${natsSubject}.frame 1\r\n`);
+      };
 
-      // NATS WebSocket: PING/PONG keepalive
-      if (typeof event.data === 'string') {
-        if (event.data.startsWith('PING')) {
-          ws.send('PONG\r\n');
-        }
-        // MSG headers, INFO, +OK, -ERR são ignorados
-        return;
-      }
+      ws.onmessage = (event) => {
+        if (cancelled || isPaused) return;
 
-      // Binary frame — dados brutos da captura de tela (JPEG/WebP/H.264)
-      if (event.data instanceof ArrayBuffer) {
-        const buffer = event.data as ArrayBuffer;
-        decodeFrame(buffer).then((bitmap) => {
-          if (bitmap && !cancelled) {
-            renderFrame(bitmap);
-            // RTT calculation from frame header timestamp
-            const header = decodeFrameHeader(buffer);
-            if (header && onLatency) {
-              const lat = Date.now() - header.ts;
-              setRtt(lat);
-              onLatency(lat);
-            }
+        // NATS WebSocket: PING/PONG keepalive
+        if (typeof event.data === 'string') {
+          if (event.data.startsWith('PING')) {
+            ws!.send('PONG\r\n');
           }
+          // MSG headers, INFO, +OK, -ERR são ignorados
+          return;
+        }
+
+        // Binary frame — dados brutos da captura de tela (JPEG/WebP/H.264)
+        if (event.data instanceof ArrayBuffer) {
+          const buffer = event.data as ArrayBuffer;
+          decodeFrame(buffer).then((bitmap) => {
+            if (bitmap && !cancelled) {
+              renderFrame(bitmap);
+              // RTT calculation from frame header timestamp
+              const header = decodeFrameHeader(buffer);
+              if (header && onLatency) {
+                const lat = Date.now() - header.ts;
+                setRtt(lat);
+                onLatency(lat);
+              }
+            }
+          });
+        }
+      };
+
+      ws.onerror = (event) => {
+        console.error('[RemoteScreenViewer] NATS WebSocket error', {
+          url: natsUrl,
+          readyState: ws?.readyState,
+          reconnectAttempts,
         });
-      }
+        // Não chamamos onError aqui — tentamos reconectar automaticamente.
+        // Só reportamos erro se esgotar as tentativas.
+      };
+
+      ws.onclose = (event) => {
+        if (cancelled) return;
+
+        console.warn('[RemoteScreenViewer] NATS WebSocket closed', {
+          code: event.code,
+          reason: event.reason,
+          wasClean: event.wasClean,
+          reconnectAttempts,
+        });
+
+        // Tenta reconectar com backoff exponencial
+        if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+          const delay = RECONNECT_DELAYS[reconnectAttempts];
+          console.log(`[RemoteScreenViewer] Tentativa de reconexão ${reconnectAttempts + 1}/${MAX_RECONNECT_ATTEMPTS} em ${delay}ms...`);
+          reconnectTimer = setTimeout(() => {
+            reconnectAttempts++;
+            connect();
+          }, delay);
+        } else {
+          console.error('[RemoteScreenViewer] Esgotadas tentativas de reconexão');
+          onError?.('NATS connection closed — verifique se o servidor NATS está acessível.');
+        }
+      };
     };
 
-    ws.onerror = () => {
-      onError?.('NATS WebSocket connection failed');
-    };
-
-    ws.onclose = () => {
-      if (!cancelled) {
-        onError?.('NATS connection closed');
-      }
-    };
+    connect();
 
     return () => {
       cancelled = true;
-      ws.close();
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      if (ws) ws.close();
     };
   }, [natsSubject, natsUrl, jwt, isPaused, decodeFrame, renderFrame, onError, onLatency]);
 
