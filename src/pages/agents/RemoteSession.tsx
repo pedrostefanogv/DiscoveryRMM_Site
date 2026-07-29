@@ -1,7 +1,7 @@
 import { useSearchParams } from 'react-router-dom';
 import { Button, Card } from '@/components/ui';
-import { useEffect, useRef, useState } from 'react';
-import { remoteSessionsApi, SessionCredentials } from '@/api/remote-sessions';
+import { useEffect, useRef, useState, useCallback } from 'react';
+import { remoteSessionsApi, SessionCredentials, type ChangeQualityRequest } from '@/api/remote-sessions';
 import { configureApiClient } from '@/api/client';
 import RemoteScreenViewer from '@/modules/remote-screen/RemoteScreenViewer';
 import RemoteTerminal from '@/modules/remote-terminal/RemoteTerminal';
@@ -108,6 +108,85 @@ export default function RemoteSession() {
   const [turnCreds, setTurnCreds] = useState<{ username: string; credential: string; urls: string[] } | null>(null);
   const [, setRemoteStream] = useState<MediaStream | null>(null);
   const [rtt, setRtt] = useState<number>(0);
+
+  // ── Controles de qualidade em tempo real ──
+  const [liveQuality, setLiveQuality] = useState(quality);
+  const [liveCodec, setLiveCodec] = useState(codec);
+  const [autoMode, setAutoMode] = useState(false);
+  const [qualityChanging, setQualityChanging] = useState(false);
+
+  const QUALITIES: { value: ChangeQualityRequest['quality']; label: string; fps: number }[] = [
+    { value: 'ultra', label: 'Ultra', fps: 30 },
+    { value: 'high', label: 'Alta', fps: 15 },
+    { value: 'medium', label: 'Média', fps: 10 },
+    { value: 'low', label: 'Baixa', fps: 5 },
+    { value: 'ultralow', label: 'Mínima', fps: 2 },
+  ];
+
+  const CODECS: { value: NonNullable<ChangeQualityRequest['codec']>; label: string }[] = [
+    { value: 'jpeg', label: 'JPEG' },
+    { value: 'webp', label: 'WebP' },
+    { value: 'h264', label: 'H.264' },
+  ];
+
+  const handleQualityChange = useCallback(async (newQuality: ChangeQualityRequest['quality']) => {
+    if (qualityChanging || !sessionId || !agentId) return;
+    const previousQuality = liveQuality;
+    setQualityChanging(true);
+    // Optimistic update
+    setLiveQuality(newQuality);
+    setAutoMode(false);
+    try {
+      await remoteSessionsApi.changeQuality(agentId, sessionId, {
+        quality: newQuality,
+        codec: liveCodec as ChangeQualityRequest['codec'],
+        auto: false,
+      });
+    } catch (err) {
+      // Reverte para o valor anterior (capturado antes do optimistic update)
+      setLiveQuality(previousQuality);
+      console.error('Falha ao alterar qualidade:', err);
+    } finally {
+      setQualityChanging(false);
+    }
+  }, [qualityChanging, sessionId, agentId, liveCodec, liveQuality]);
+
+  const handleCodecChange = useCallback(async (newCodec: NonNullable<ChangeQualityRequest['codec']>) => {
+    if (qualityChanging || !sessionId || !agentId) return;
+    const previousCodec = liveCodec;
+    setQualityChanging(true);
+    setLiveCodec(newCodec);
+    try {
+      await remoteSessionsApi.changeQuality(agentId, sessionId, {
+        quality: liveQuality as ChangeQualityRequest['quality'],
+        codec: newCodec,
+        auto: false,
+      });
+    } catch (err) {
+      setLiveCodec(previousCodec);
+      console.error('Falha ao alterar codec:', err);
+    } finally {
+      setQualityChanging(false);
+    }
+  }, [qualityChanging, sessionId, agentId, liveQuality, liveCodec]);
+
+  const handleAutoToggle = useCallback(async () => {
+    if (qualityChanging || !sessionId || !agentId) return;
+    const newAuto = !autoMode;
+    setQualityChanging(true);
+    setAutoMode(newAuto);
+    try {
+      await remoteSessionsApi.changeQuality(agentId, sessionId, {
+        quality: liveQuality as ChangeQualityRequest['quality'],
+        auto: newAuto,
+      });
+    } catch (err) {
+      setAutoMode(!newAuto);
+      console.error('Falha ao alternar modo auto:', err);
+    } finally {
+      setQualityChanging(false);
+    }
+  }, [qualityChanging, sessionId, agentId, autoMode, liveQuality]);
 
   // Timer de expiração
   useEffect(() => {
@@ -248,11 +327,52 @@ export default function RemoteSession() {
             {tab.label}
           </button>
         ))}
-        {/* Status bar info */}
+        {/* Status bar info — controles de qualidade em tempo real */}
         <div className="ml-auto flex items-center gap-3 text-xs text-slate-500">
           <span>Transport: <span className="text-slate-400">{transport.toUpperCase()}</span></span>
-          <span>Quality: <span className="text-slate-400">{quality}</span></span>
-          <span>Codec: <span className="text-slate-400">{codec.toUpperCase()}</span></span>
+
+          {/* Quality selector */}
+          <div className="flex items-center gap-0.5">
+            <span className="mr-1">Q:</span>
+            <select
+              className="bg-slate-800 border border-slate-700 rounded px-1 py-0.5 text-xs text-slate-300 cursor-pointer hover:border-slate-600 disabled:opacity-50"
+              value={liveQuality}
+              disabled={autoMode || qualityChanging}
+              onChange={(e) => handleQualityChange(e.target.value as ChangeQualityRequest['quality'])}
+            >
+              {QUALITIES.map((q) => (
+                <option key={q.value} value={q.value}>{q.label} ({q.fps} FPS)</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Codec selector */}
+          <div className="flex items-center gap-0.5">
+            <select
+              className="bg-slate-800 border border-slate-700 rounded px-1 py-0.5 text-xs text-slate-300 cursor-pointer hover:border-slate-600 disabled:opacity-50"
+              value={liveCodec}
+              disabled={autoMode || qualityChanging}
+              onChange={(e) => handleCodecChange(e.target.value as NonNullable<ChangeQualityRequest['codec']>)}
+            >
+              {CODECS.map((c) => (
+                <option key={c.value} value={c.value}>{c.label}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Auto mode toggle */}
+          <button
+            className={`px-2 py-0.5 rounded text-xs font-medium transition-colors ${
+              autoMode
+                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                : 'bg-slate-800 text-slate-500 border border-slate-700 hover:text-slate-300'
+            }`}
+            onClick={handleAutoToggle}
+            disabled={qualityChanging}
+            title={autoMode ? 'Modo automático ativo — qualidade se adapta à rede' : 'Clique para ativar modo automático'}
+          >
+            {autoMode ? '✓ Auto' : 'Auto'}
+          </button>
         </div>
       </div>
 
@@ -266,8 +386,8 @@ export default function RemoteSession() {
                 natsUrl={natsCredentials?.natsWssUrl || natsUrlFromQuery || undefined}
                 jwt={natsCredentials?.jwt}
                 nkeySeed={natsCredentials?.nkeySeed}
-                quality={quality}
-                codec={codec}
+                quality={liveQuality}
+                codec={liveCodec}
                 onError={(msg) => setErrorMsg(msg)}
                 onLatency={(rttMs) => setRtt(rttMs)}
               />

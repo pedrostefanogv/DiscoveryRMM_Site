@@ -120,4 +120,15 @@ export const remoteSessionsApi = {
     /** Exclui a gravação (LGPD Art. 18). */
     deleteRecording: (agentId: string, sessionId: string): Promise<void> =>
         api.post<void>(`${BASE}/${agentId}/${sessionId}/recording/delete`),
+
+    /** Altera qualidade/codec/FPS de uma sessão ativa. */
+    changeQuality: (agentId: string, sessionId: string, request: ChangeQualityRequest): Promise<RemoteSessionResponse> =>
+        api.put<RemoteSessionResponse>(`${BASE}/${agentId}/${sessionId}/quality`, request),
 };
+
+export interface ChangeQualityRequest {
+    quality: 'ultra' | 'high' | 'medium' | 'low' | 'ultralow';
+    codec?: 'jpeg' | 'webp' | 'h264';
+    fps?: number;
+    auto?: boolean;
+}

@@ -42,10 +42,10 @@ interface QualitySelectorProps {
 
 const QUALITIES: { value: StartRemoteSessionRequest['quality']; label: string; fps: number }[] = [
   { value: 'ultra', label: 'Ultra', fps: 30 },
-  { value: 'high', label: 'Alta', fps: 20 },
-  { value: 'medium', label: 'Média', fps: 15 },
-  { value: 'low', label: 'Baixa', fps: 10 },
-  { value: 'ultralow', label: 'Min', fps: 5 },
+  { value: 'high', label: 'Alta', fps: 15 },
+  { value: 'medium', label: 'Média', fps: 10 },
+  { value: 'low', label: 'Baixa', fps: 5 },
+  { value: 'ultralow', label: 'Min', fps: 2 },
 ] as const;
 
 // Map ultralow to correct wire value

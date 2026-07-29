@@ -19,6 +19,17 @@ interface RemoteScreenViewerProps {
   onLatency?: (rttMs: number) => void;
 }
 
+interface AgentMetrics {
+  fps: number;
+  quality: string;
+  resolution: string;
+  compressionRatio: string;
+  avgEncodeMs: string;
+  framesSent5s: number;
+  framesSkipped5s: number;
+  totalFrames: number;
+}
+
 const CRLF = new Uint8Array([13, 10]);
 
 function appendBytes(left: Uint8Array<ArrayBufferLike>, right: Uint8Array<ArrayBufferLike>): Uint8Array<ArrayBufferLike> {
@@ -63,17 +74,22 @@ export default function RemoteScreenViewer({
   const [rtt, setRtt] = useState<number>(0);
   const [fps, setFps] = useState<number>(0);
   const [isPaused, setIsPaused] = useState(false);
+  const [agentMetrics, setAgentMetrics] = useState<AgentMetrics | null>(null);
   const frameCountRef = useRef(0);
   const lastFpsUpdate = useRef(Date.now());
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectAttemptsRef = useRef(0);
-  // Stable refs para callbacks — evita que re-renders do pai (RemoteSession)
+  // Stable refs para callbacks e codec — evita que re-renders do pai (RemoteSession)
   // recriem o useEffect e resetem reconnectAttempts a cada render.
   const onErrorRef = useRef(onError);
   const onLatencyRef = useRef(onLatency);
+  const codecRef = useRef(codec);
+  const scaleRef = useRef(scale);
   const isPausedRef = useRef(isPaused);
   onErrorRef.current = onError;
   onLatencyRef.current = onLatency;
+  codecRef.current = codec;
+  scaleRef.current = scale;
   isPausedRef.current = isPaused;
 
   // Decode JPEG/WebP off-main-thread via ImageBitmap
@@ -81,20 +97,22 @@ export default function RemoteScreenViewer({
     const header = decodeFrameHeader(data);
     if (!header) return null;
 
+    const currentCodec = codecRef.current;
+    const currentScale = scaleRef.current;
     const payload = new Uint8Array(data, 12);
-    const blob = new Blob([payload], { type: codec === 'webp' ? 'image/webp' : 'image/jpeg' });
+    const blob = new Blob([payload], { type: currentCodec === 'webp' ? 'image/webp' : 'image/jpeg' });
 
     try {
       const img = await createImageBitmap(blob, {
-        resizeWidth: scale === '100%' ? header.width : undefined,
-        resizeHeight: scale === '100%' ? header.height : undefined,
+        resizeWidth: currentScale === '100%' ? header.width : undefined,
+        resizeHeight: currentScale === '100%' ? header.height : undefined,
         resizeQuality: 'medium',
       });
       return img;
     } catch {
       return null;
     }
-  }, [codec, scale]);
+  }, []);
 
   // Render frame in canvas
   const renderFrame = useCallback((bitmap: ImageBitmap) => {
@@ -151,6 +169,17 @@ export default function RemoteScreenViewer({
       });
     };
 
+    const processEventMessage = (payloadText: string) => {
+      try {
+        const data = JSON.parse(payloadText);
+        if (data?.eventType === 'metrics' && data?.data) {
+          setAgentMetrics(data.data as AgentMetrics);
+        }
+      } catch {
+        // ignora eventos mal formatados
+      }
+    };
+
     const processProtocol = () => {
       const decoder = new TextDecoder();
       while (!cancelled) {
@@ -161,6 +190,7 @@ export default function RemoteScreenViewer({
         const tokens = line.trim().split(/\s+/);
 
         if (tokens[0] === 'MSG') {
+          const subject = tokens[1] ?? '';
           const payloadLengthIndex = tokens.length === 5 ? 4 : 3;
           const payloadLength = Number.parseInt(tokens[payloadLengthIndex] ?? '', 10);
           if (!Number.isInteger(payloadLength) || payloadLength < 0) {
@@ -175,7 +205,14 @@ export default function RemoteScreenViewer({
 
           const payload = protocolBuffer.slice(payloadStart, payloadEnd);
           protocolBuffer = protocolBuffer.slice(payloadEnd + 2);
-          processScreenFrame(payload.buffer);
+
+          // Roteia por tipo de subject
+          if (subject.endsWith('.event')) {
+            processEventMessage(decoder.decode(payload));
+          } else {
+            // .frame (binário)
+            processScreenFrame(payload.buffer);
+          }
           continue;
         }
 
@@ -200,6 +237,7 @@ export default function RemoteScreenViewer({
             authenticated = true;
             reconnectAttemptsRef.current = 0;
             sendProtocol(`SUB ${natsSubject}.frame 1`);
+            sendProtocol(`SUB ${natsSubject}.event 2`);
           }
           continue;
         }
@@ -367,13 +405,34 @@ export default function RemoteScreenViewer({
         tabIndex={0}
       />
 
-      {/* Info overlay */}
-      <div className="absolute top-2 right-2 flex items-center gap-3 text-xs bg-slate-900/70 rounded px-2 py-1 backdrop-blur-sm pointer-events-none">
-        <span className="text-emerald-400">{fps} FPS</span>
-        <span className="text-slate-400">{rtt}ms</span>
-        <span className="text-slate-500">{quality.toUpperCase()}</span>
-        <span className="text-slate-500">{codec.toUpperCase()}</span>
-        {isPaused && <span className="text-amber-400">⏸</span>}
+      {/* Info overlay — métricas locais + do agent */}
+      <div className="absolute top-2 right-2 flex flex-col gap-1 text-xs bg-slate-900/70 rounded px-2 py-1.5 backdrop-blur-sm pointer-events-none">
+        <div className="flex items-center gap-3">
+          <span className="text-emerald-400 font-medium">{fps} FPS</span>
+          <span className="text-slate-400">{rtt}ms</span>
+          <span className="text-slate-500">{quality.toUpperCase()}</span>
+          <span className="text-slate-500">{codec.toUpperCase()}</span>
+          {isPaused && <span className="text-amber-400">⏸</span>}
+        </div>
+        {agentMetrics && (
+          <div className="flex items-center gap-3 text-[10px] text-slate-600">
+            <span title={`Resolução: ${agentMetrics.resolution}`}>
+              📐 {agentMetrics.resolution}
+            </span>
+            <span title={`Compressão: ${agentMetrics.compressionRatio}`}>
+              🗜 {agentMetrics.compressionRatio}
+            </span>
+            <span title={`Encode: ${agentMetrics.avgEncodeMs}ms`}>
+              ⚡ {agentMetrics.avgEncodeMs}ms
+            </span>
+            <span title={`Frames: ${agentMetrics.framesSent5s} enviados / ${agentMetrics.framesSkipped5s} pulados (5s)`}>
+              📊 {agentMetrics.framesSent5s}/{agentMetrics.framesSkipped5s}
+            </span>
+            <span className="text-slate-500">
+              #{agentMetrics.totalFrames}
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Controls */}
