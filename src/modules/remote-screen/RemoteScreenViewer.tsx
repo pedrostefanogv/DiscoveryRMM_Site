@@ -20,11 +20,14 @@ interface RemoteScreenViewerProps {
 }
 
 interface AgentMetrics {
-  fps: number;
+  effectiveFps: number;
+  profileFps: number;
   quality: string;
+  imageQuality: number;
   resolution: string;
-  compressionRatio: string;
-  avgEncodeMs: string;
+  compressionRatio: number;
+  avgEncodeMs: number;
+  frameBytesAvg: number;
   framesSent5s: number;
   framesSkipped5s: number;
   totalFrames: number;
@@ -324,42 +327,86 @@ export default function RemoteScreenViewer({
     };
   }, [natsSubject, natsUrl, jwt, decodeFrame, renderFrame]);
 
-  // Input capture (mouse/keyboard) — B14 fix
+  // Input capture (mouse/keyboard) — coordenadas corretas C2
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || !wsRef.current) return;
 
+    const getFrameCoords = (clientX: number, clientY: number): { x: number; y: number } | null => {
+      if (!canvas) return null;
+      const rect = canvas.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      // canvas CSS size
+      const cssW = rect.width;
+      const cssH = rect.height;
+      // actual bitmap size rendered
+      const bmpW = canvas.width / dpr;
+      const bmpH = canvas.height / dpr;
+      if (cssW <= 0 || cssH <= 0 || bmpW <= 0 || bmpH <= 0) return null;
+
+      const ratio = Math.min(cssW / bmpW, cssH / bmpH);
+      const letterboxW = bmpW * ratio;
+      const letterboxH = bmpH * ratio;
+      const offsetX = (cssW - letterboxW) / 2;
+      const offsetY = (cssH - letterboxH) / 2;
+
+      const imgX = (clientX - rect.left - offsetX) / ratio;
+      const imgY = (clientY - rect.top - offsetY) / ratio;
+      if (imgX < 0 || imgY < 0 || imgX > bmpW || imgY > bmpH) return null; // bars
+      return { x: Math.round(imgX), y: Math.round(imgY) };
+    };
+
+    let moveThrottle: ReturnType<typeof setTimeout> | null = null;
+    let lastMove: MouseEvent | null = null;
+    const THROTTLE_MS = 16; // ~60 fps
+
     const sendInput = (type: string, data: Record<string, unknown>) => {
       if (wsRef.current?.readyState === WebSocket.OPEN && natsSubject) {
-        const payload = JSON.stringify({ type, ...data, ts: Date.now() });
+        const frameCoords = data.x !== undefined ? getFrameCoords(data.x as number, data.y as number) : null;
+        const payload = JSON.stringify({
+          type,
+          ...data,
+          ...(frameCoords ? { x: frameCoords.x, y: frameCoords.y } : {}),
+          frameWidth: (canvas?.width ?? 1920) / (window.devicePixelRatio || 1),
+          frameHeight: (canvas?.height ?? 1080) / (window.devicePixelRatio || 1),
+          ts: Date.now(),
+        });
         wsRef.current.send(`PUB ${natsSubject}.input ${new TextEncoder().encode(payload).length}\r\n${payload}\r\n`);
       }
     };
 
-    const onMouseDown = (e: MouseEvent) => sendInput('mousedown', { x: e.offsetX, y: e.offsetY, button: e.button });
-    const onMouseUp = (e: MouseEvent) => sendInput('mouseup', { x: e.offsetX, y: e.offsetY, button: e.button });
-    const onMouseMove = (e: MouseEvent) => sendInput('mousemove', { x: e.offsetX, y: e.offsetY });
-    const onWheel = (e: WheelEvent) => sendInput('wheel', { deltaX: e.deltaX, deltaY: e.deltaY });
-    const onKeyDown = (e: KeyboardEvent) => sendInput('keydown', { key: e.key, code: e.code, ctrl: e.ctrlKey, shift: e.shiftKey, alt: e.altKey, meta: e.metaKey });
-    const onKeyUp = (e: KeyboardEvent) => sendInput('keyup', { key: e.key, code: e.code });
+    const onMouseDown = (e: MouseEvent) => { canvas.focus(); sendInput('mousedown', { button: e.button }); };
+    const onMouseUp = (e: MouseEvent) => { canvas.focus(); sendInput('mouseup', { button: e.button }); };
+    const onMouseMove = (e: MouseEvent) => {
+      lastMove = e;
+      if (moveThrottle) return;
+      moveThrottle = setTimeout(() => {
+        if (lastMove) sendInput('mousemove', { x: lastMove.clientX, y: lastMove.clientY });
+        moveThrottle = null;
+      }, THROTTLE_MS);
+    };
+    const onWheel = (e: WheelEvent) => { e.preventDefault(); sendInput('wheel', { deltaX: e.deltaX, deltaY: e.deltaY }); };
+    const onKeyDown = (e: KeyboardEvent) => { if (document.activeElement === canvas) { e.preventDefault(); sendInput('keydown', { key: e.key, code: e.code, ctrl: e.ctrlKey, shift: e.shiftKey, alt: e.altKey, meta: e.metaKey }); } };
+    const onKeyUp = (e: KeyboardEvent) => { if (document.activeElement === canvas) { sendInput('keyup', { key: e.key, code: e.code }); } };
     const onContextMenu = (e: MouseEvent) => { e.preventDefault(); };
 
     canvas.addEventListener('mousedown', onMouseDown);
     canvas.addEventListener('mouseup', onMouseUp);
-    canvas.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mousemove', onMouseMove);
     canvas.addEventListener('wheel', onWheel);
     canvas.addEventListener('contextmenu', onContextMenu);
-    window.addEventListener('keydown', onKeyDown);
-    window.addEventListener('keyup', onKeyUp);
+    document.addEventListener('keydown', onKeyDown);
+    document.addEventListener('keyup', onKeyUp);
 
     return () => {
       canvas.removeEventListener('mousedown', onMouseDown);
       canvas.removeEventListener('mouseup', onMouseUp);
-      canvas.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mousemove', onMouseMove);
       canvas.removeEventListener('wheel', onWheel);
       canvas.removeEventListener('contextmenu', onContextMenu);
-      window.removeEventListener('keydown', onKeyDown);
-      window.removeEventListener('keyup', onKeyUp);
+      document.removeEventListener('keydown', onKeyDown);
+      document.removeEventListener('keyup', onKeyUp);
+      if (moveThrottle) clearTimeout(moveThrottle);
     };
   }, [natsSubject]);
 
@@ -416,21 +463,19 @@ export default function RemoteScreenViewer({
         </div>
         {agentMetrics && (
           <div className="flex items-center gap-3 text-[10px] text-slate-600">
-            <span title={`Resolução: ${agentMetrics.resolution}`}>
-              📐 {agentMetrics.resolution}
+            <span title="Resolução">📐 {agentMetrics.resolution}</span>
+            <span title="FPS do agent (efetivo/perfil)">🎯 {agentMetrics.effectiveFps}/{agentMetrics.profileFps}FPS</span>
+            <span title="Qualidade JPEG">🖼 {agentMetrics.imageQuality}%</span>
+            <span title={`Compressão ${agentMetrics.compressionRatio?.toFixed(1)}:1`}>
+              🗜 {agentMetrics.compressionRatio?.toFixed(1)}:1
             </span>
-            <span title={`Compressão: ${agentMetrics.compressionRatio}`}>
-              🗜 {agentMetrics.compressionRatio}
+            <span title={`Encode médio: ${agentMetrics.avgEncodeMs?.toFixed(1)}ms`}>
+              ⚡ {agentMetrics.avgEncodeMs?.toFixed(1)}ms
             </span>
-            <span title={`Encode: ${agentMetrics.avgEncodeMs}ms`}>
-              ⚡ {agentMetrics.avgEncodeMs}ms
-            </span>
-            <span title={`Frames: ${agentMetrics.framesSent5s} enviados / ${agentMetrics.framesSkipped5s} pulados (5s)`}>
+            <span title={`Frames (5s): ${agentMetrics.framesSent5s} enviados / ${agentMetrics.framesSkipped5s} pulados`}>
               📊 {agentMetrics.framesSent5s}/{agentMetrics.framesSkipped5s}
             </span>
-            <span className="text-slate-500">
-              #{agentMetrics.totalFrames}
-            </span>
+            <span className="text-slate-500">#{agentMetrics.totalFrames}</span>
           </div>
         )}
       </div>

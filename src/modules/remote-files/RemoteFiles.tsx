@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { remoteSessionsApi } from '@/api/remote-sessions';
+import { useFilesStream } from './useFilesStream';
 
 interface FileEntry {
   name: string;
@@ -26,44 +26,44 @@ function formatSize(bytes: number): string {
 }
 
 export default function RemoteFiles({
-  sessionId,
-  agentId,
+  sessionId: _sessionId,
+  agentId: _agentId,
+  natsSubject,
+  jwt,
+  nkeySeed: _nkeySeed,
 }: RemoteFilesProps) {
   const [currentPath, setCurrentPath] = useState('C:\\');
   const [files, setFiles] = useState<FileEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const { isConnected, sendRequest } = useFilesStream({
+    natsSubject: natsSubject || '',
+    natsUrl: '', // será preenchido pelo RemoteSession com credenciais
+    jwt: jwt || '',
+  });
+
   const loadFiles = useCallback(async (path: string) => {
+    if (!isConnected) return;
     setLoading(true);
     setError(null);
     try {
-      // Placeholder: carregaria via NATS (Fase 5)
-      // Por enquanto, simula listagem
-      await new Promise(r => setTimeout(r, 300));
-      setFiles([
-        { name: 'Windows', path: path + 'Windows', isDir: true, size: 0, modTime: '2025-01-01T00:00:00Z' },
-        { name: 'Program Files', path: path + 'Program Files', isDir: true, size: 0, modTime: '2025-01-01T00:00:00Z' },
-        { name: 'Users', path: path + 'Users', isDir: true, size: 0, modTime: '2025-01-01T00:00:00Z' },
-        { name: 'log.txt', path: path + 'log.txt', isDir: false, size: 12400, modTime: '2026-07-01T12:00:00Z' },
-      ]);
+      const resp = await sendRequest('list', path);
+      if (resp.success && resp.entries) {
+        setFiles(resp.entries);
+      } else {
+        setError(resp.error || 'Erro ao listar');
+      }
     } catch (err) {
-      setError(`Erro ao listar: ${err}`);
+      setError(`Erro ao listar: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [sendRequest, isConnected]);
 
   useEffect(() => {
-    loadFiles(currentPath);
-  }, [currentPath, loadFiles]);
-
-  // Stop session on unmount
-  useEffect(() => {
-    return () => {
-      remoteSessionsApi.stopSession(agentId, sessionId).catch(() => {});
-    };
-  }, [agentId, sessionId]);
+    if (isConnected) loadFiles(currentPath);
+  }, [currentPath, isConnected, loadFiles]);
 
   const navigateTo = (dir: string) => {
     if (dir === '..') {

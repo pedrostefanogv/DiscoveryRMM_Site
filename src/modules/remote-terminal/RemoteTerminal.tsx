@@ -75,19 +75,73 @@ export default function RemoteTerminal({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const tabsInitializedRef = useRef(false);
 
-  // Create initial tab
+  // Escuta term.ready do Agent para obter o defaultTab real (UUID) e shells disponíveis
   useEffect(() => {
-    if (tabsInitializedRef.current || !natsSubject || !natsUrl || !jwt) return;
+    if (!natsSubject || !natsUrl || !jwt || tabsInitializedRef.current) return;
     tabsInitializedRef.current = true;
-    const initialTab: TerminalTab = {
-      id: 'default',
-      shell: 'powershell',
-      label: 'PowerShell',
-      natsSubject,
+
+    let ws: WebSocket | null = null;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let protocolBuf = new Uint8Array();
+    let authenticated = false;
+    let connectSent = false;
+    const CR = 13, LF = 10;
+
+    const send = (cmd: string) => ws?.send(new TextEncoder().encode(`${cmd}\r\n`));
+
+    const parseReady = () => {
+      const dec = new TextDecoder();
+      for (;;) {
+        let eol = -1;
+        for (let i = 0; i < protocolBuf.length - 1; i++) { if (protocolBuf[i] === CR && protocolBuf[i+1] === LF) { eol = i; break; } }
+        if (eol < 0) return;
+        const line = dec.decode(protocolBuf.slice(0, eol));
+        const toks = line.trim().split(/\s+/);
+        if (toks[0] === 'MSG') {
+          const plI = toks.length === 5 ? 4 : 3;
+          const plN = Number.parseInt(toks[plI] ?? '0', 10);
+          if (!Number.isInteger(plN) || plN < 0) return;
+          const ps = eol + 2; const pe = ps + plN;
+          if (protocolBuf.length < pe + 2) return;
+          try {
+            const payload = JSON.parse(dec.decode(protocolBuf.slice(ps, pe)));
+            if (payload && typeof payload === 'object' && !payload.eventType) {
+              // É o term.ready publicado pelo Agent
+              const tabId = payload.defaultTab || crypto.randomUUID();
+              const shell = payload.shells?.[0] || 'powershell';
+              const initialTab: TerminalTab = { id: tabId, shell, label: shellLabel(shell), natsSubject };
+              setTabs([initialTab]); setActiveTabId(tabId);
+            }
+          } catch { /* ignora */ }
+          protocolBuf = protocolBuf.slice(pe + 2); break; // processa apenas um term.ready
+        }
+        protocolBuf = protocolBuf.slice(eol + 2);
+        if (toks[0] === 'INFO') { send(`CONNECT ${JSON.stringify({lang:'discovery-web',version:'1.0',protocol:1,headers:true,verbose:true,auth_token:jwt})}`); connectSent = true; continue; }
+        if (toks[0] === '+OK') { if (connectSent && !authenticated) { authenticated = true; send(`SUB ${natsSubject}.term.ready 1`); } continue; }
+        if (toks[0] === 'PING') { send('PONG'); continue; }
+        if (toks[0] === '-ERR') { break; }
+      }
     };
-    setTabs([initialTab]);
-    setActiveTabId('default');
-  }, [natsSubject, natsUrl, jwt]);
+
+    try {
+      ws = new WebSocket(`${natsUrl}?access_token=${encodeURIComponent(jwt)}`);
+      ws.binaryType = 'arraybuffer';
+      ws.onmessage = (ev) => {
+        const b = typeof ev.data === 'string' ? new Uint8Array(new TextEncoder().encode(ev.data)) : ev.data instanceof ArrayBuffer ? new Uint8Array(ev.data) : new Uint8Array();
+        const n = new Uint8Array(protocolBuf.length + b.length); n.set(protocolBuf); n.set(b, protocolBuf.length);
+        protocolBuf = n; parseReady();
+      };
+      ws.onerror = () => {};
+      ws.onclose = () => {
+        if (!authenticated) { timer = setTimeout(() => {
+          if (!tabs.length) { const fallback: TerminalTab = { id: crypto.randomUUID(), shell: 'powershell', label: 'PowerShell', natsSubject }; setTabs([fallback]); setActiveTabId(fallback.id); }
+        }, 5000); }
+      };
+    } catch {
+      const fallback: TerminalTab = { id: crypto.randomUUID(), shell: 'powershell', label: 'PowerShell', natsSubject }; setTabs([fallback]); setActiveTabId(fallback.id);
+    }
+    return () => { if (timer) clearTimeout(timer); ws?.close(); };
+  }, [natsSubject, natsUrl, jwt, tabs.length]);
 
   // Initialize xterm.js for active tab
   useEffect(() => {
