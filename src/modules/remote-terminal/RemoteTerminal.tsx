@@ -219,7 +219,7 @@ export default function RemoteTerminal({
 
   // Wire NATS stream
   const activeTab = tabs.find(t => t.id === activeTabId);
-  const { isConnected, sendData, sendResize, onOutput } = useTerminalStream({
+  const { isConnected, sendData, sendResize, onOutput, onExit } = useTerminalStream({
     natsSubject: activeTab?.natsSubject ?? natsSubject,
     tabId: activeTabId,
     natsUrl,
@@ -279,6 +279,16 @@ export default function RemoteTerminal({
       });
     }
   }, [agentId, sessionId, activeTabId]);
+
+  // Fechar tab automaticamente quando shell remoto encerrar
+  useEffect(() => {
+    const unsubscribe = onExit((reason: string) => {
+      termRef.current?.writeln(`\r\n\x1b[1;33m── Shell encerrado: ${reason} ──\x1b[0m\r\n`);
+      // Fecha a tab apos 3s para o usuario ler a mensagem
+      setTimeout(() => handleCloseTab(activeTabId), 3000);
+    });
+    return unsubscribe;
+  }, [onExit, activeTabId, handleCloseTab]);
 
   useEffect(() => {
     return () => {

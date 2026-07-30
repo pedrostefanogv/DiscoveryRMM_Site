@@ -13,6 +13,7 @@ interface UseTerminalStreamReturn {
     sendData: (data: string) => void;
     sendResize: (cols: number, rows: number) => void;
     onOutput: (callback: (data: string) => void) => () => void;
+    onExit: (callback: (reason: string) => void) => () => void;
     error: string | null;
 }
 
@@ -43,6 +44,7 @@ export function useTerminalStream({
     const [error, setError] = useState<string | null>(null);
     const wsRef = useRef<WebSocket | null>(null);
     const outputCallbacksRef = useRef<Set<(data: string) => void>>(new Set());
+    const exitCallbacksRef = useRef<Set<(reason: string) => void>>(new Set());
     const reconnectAttemptsRef = useRef(0);
     const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const mountedRef = useRef(true);
@@ -91,7 +93,10 @@ export function useTerminalStream({
 
                         try {
                             const parsed = JSON.parse(payload);
-                            if (parsed.data) {
+                            if (parsed.exit) {
+                                // Shell remoto encerrado — notifica callbacks de exit
+                                exitCallbacksRef.current.forEach(cb => cb(parsed.reason || 'shell encerrado'));
+                            } else if (parsed.data) {
                                 try {
                                     const decoded = atob(parsed.data);
                                     outputCallbacksRef.current.forEach(cb => cb(decoded));
@@ -206,5 +211,10 @@ export function useTerminalStream({
         return () => { outputCallbacksRef.current.delete(callback); };
     }, []);
 
-    return { isConnected, sendData, sendResize, onOutput, error };
+    const onExit = useCallback((callback: (reason: string) => void) => {
+        exitCallbacksRef.current.add(callback);
+        return () => { exitCallbacksRef.current.delete(callback); };
+    }, []);
+
+    return { isConnected, sendData, sendResize, onOutput, onExit, error };
 }
