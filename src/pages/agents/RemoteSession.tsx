@@ -501,6 +501,7 @@ export default function RemoteSession() {
             sessionId={sessionId}
             agentId={agentId}
             natsSubject={natsSubject}
+            natsUrl={natsCredentials?.natsWssUrl || natsUrlFromQuery || undefined}
             jwt={natsCredentials?.jwt}
             nkeySeed={natsCredentials?.nkeySeed}
           />

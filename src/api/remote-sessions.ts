@@ -14,6 +14,12 @@ export interface StartRemoteSessionRequest {
     durationMinutes: number;
     /** Sobrepõe sessões ativas existentes (fecha e cria nova). */
     force?: boolean;
+    /** Shell para terminal interativo (powershell, cmd, wsl). Default: powershell. */
+    shell?: string;
+    /** Colunas iniciais do terminal. Default: 120. */
+    termCols?: number;
+    /** Linhas iniciais do terminal. Default: 40. */
+    termRows?: number;
 }
 
 export interface RemoteSessionResponse {
@@ -124,6 +130,20 @@ export const remoteSessionsApi = {
     /** Altera qualidade/codec/FPS de uma sessão ativa. */
     changeQuality: (agentId: string, sessionId: string, request: ChangeQualityRequest): Promise<RemoteSessionResponse> =>
         api.put<RemoteSessionResponse>(`${BASE}/${agentId}/${sessionId}/quality`, request),
+
+    // ── Terminal Multi-Tab ──
+
+    /** Cria uma nova aba de terminal na sessão. */
+    createTerminalTab: (agentId: string, sessionId: string, shell = 'powershell', cols = 120, rows = 40): Promise<{ tabId: string; shell: string; natsSubject: string }> =>
+        api.post(`${BASE}/${agentId}/${sessionId}/terminal/tabs`, { shell, cols, rows }),
+
+    /** Fecha uma aba de terminal. */
+    closeTerminalTab: (agentId: string, sessionId: string, tabId: string): Promise<void> =>
+        api.del(`${BASE}/${agentId}/${sessionId}/terminal/tabs/${tabId}`),
+
+    /** Lista shells disponíveis no agent (inclui WSL). */
+    getAvailableShells: (agentId: string, sessionId: string): Promise<{ shells: string[] }> =>
+        api.get(`${BASE}/${agentId}/${sessionId}/terminal/shells`),
 };
 
 export interface ChangeQualityRequest {
