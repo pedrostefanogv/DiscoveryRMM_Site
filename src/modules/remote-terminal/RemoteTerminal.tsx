@@ -26,6 +26,10 @@ interface RemoteTerminalProps {
   nkeySeed?: string;
 }
 
+function stripHyphens(s: string): string {
+  return s.replace(/-/g, '');
+}
+
 function shellLabel(shell: string): string {
   if (shell === 'powershell') return 'PowerShell';
   if (shell === 'cmd') return 'CMD';
@@ -74,6 +78,7 @@ export default function RemoteTerminal({
   const fitAddonRef = useRef<FitAddon | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const tabsInitializedRef = useRef(false);
+  const tabsCountRef = useRef(0);
 
   // Escuta term.ready do Agent para obter o defaultTab real (UUID) e shells disponíveis
   useEffect(() => {
@@ -86,12 +91,13 @@ export default function RemoteTerminal({
     let authenticated = false;
     let connectSent = false;
     const CR = 13, LF = 10;
+    let readyReceived = false;
 
     const send = (cmd: string) => ws?.send(new TextEncoder().encode(`${cmd}\r\n`));
 
     const parseReady = () => {
       const dec = new TextDecoder();
-      for (;;) {
+      while (!readyReceived) {
         let eol = -1;
         for (let i = 0; i < protocolBuf.length - 1; i++) { if (protocolBuf[i] === CR && protocolBuf[i+1] === LF) { eol = i; break; } }
         if (eol < 0) return;
@@ -100,26 +106,31 @@ export default function RemoteTerminal({
         if (toks[0] === 'MSG') {
           const plI = toks.length === 5 ? 4 : 3;
           const plN = Number.parseInt(toks[plI] ?? '0', 10);
-          if (!Number.isInteger(plN) || plN < 0) return;
+          if (!Number.isInteger(plN) || plN < 0) { protocolBuf = protocolBuf.slice(eol + 2); break; }
           const ps = eol + 2; const pe = ps + plN;
           if (protocolBuf.length < pe + 2) return;
           try {
             const payload = JSON.parse(dec.decode(protocolBuf.slice(ps, pe)));
             if (payload && typeof payload === 'object' && !payload.eventType) {
-              // É o term.ready publicado pelo Agent
+              readyReceived = true;
               const tabId = payload.defaultTab || crypto.randomUUID();
               const shell = payload.shells?.[0] || 'powershell';
               const initialTab: TerminalTab = { id: tabId, shell, label: shellLabel(shell), natsSubject };
-              setTabs([initialTab]); setActiveTabId(tabId);
+              setTabs([initialTab]); setActiveTabId(tabId); tabsCountRef.current = 1;
+              // guarda para fallback
+              protocolBuf = protocolBuf.slice(pe + 2);
+              ws?.close(); // fecha WS temporário — o stream será gerenciado por useTerminalStream
+              return;
             }
           } catch { /* ignora */ }
-          protocolBuf = protocolBuf.slice(pe + 2); break; // processa apenas um term.ready
+          protocolBuf = protocolBuf.slice(pe + 2);
+        } else {
+          protocolBuf = protocolBuf.slice(eol + 2);
+          if (toks[0] === 'INFO') { send(`CONNECT ${JSON.stringify({lang:'discovery-web',version:'1.0',protocol:1,headers:true,verbose:true,auth_token:jwt})}`); connectSent = true; continue; }
+          if (toks[0] === '+OK') { if (connectSent && !authenticated) { authenticated = true; send(`SUB ${stripHyphens(natsSubject)}.term.ready 1`); } continue; }
+          if (toks[0] === 'PING') { send('PONG'); continue; }
+          if (toks[0] === '-ERR') { break; }
         }
-        protocolBuf = protocolBuf.slice(eol + 2);
-        if (toks[0] === 'INFO') { send(`CONNECT ${JSON.stringify({lang:'discovery-web',version:'1.0',protocol:1,headers:true,verbose:true,auth_token:jwt})}`); connectSent = true; continue; }
-        if (toks[0] === '+OK') { if (connectSent && !authenticated) { authenticated = true; send(`SUB ${natsSubject}.term.ready 1`); } continue; }
-        if (toks[0] === 'PING') { send('PONG'); continue; }
-        if (toks[0] === '-ERR') { break; }
       }
     };
 
@@ -133,15 +144,22 @@ export default function RemoteTerminal({
       };
       ws.onerror = () => {};
       ws.onclose = () => {
-        if (!authenticated) { timer = setTimeout(() => {
-          if (!tabs.length) { const fallback: TerminalTab = { id: crypto.randomUUID(), shell: 'powershell', label: 'PowerShell', natsSubject }; setTabs([fallback]); setActiveTabId(fallback.id); }
-        }, 5000); }
+        if (!readyReceived) {
+          timer = setTimeout(() => {
+            if (tabsCountRef.current === 0) {
+              const fallback: TerminalTab = { id: crypto.randomUUID(), shell: 'powershell', label: 'PowerShell', natsSubject };
+              setTabs([fallback]); setActiveTabId(fallback.id); tabsCountRef.current = 1;
+            }
+          }, 5000);
+        }
       };
     } catch {
-      const fallback: TerminalTab = { id: crypto.randomUUID(), shell: 'powershell', label: 'PowerShell', natsSubject }; setTabs([fallback]); setActiveTabId(fallback.id);
+      if (tabsCountRef.current === 0) {
+        const fallback: TerminalTab = { id: crypto.randomUUID(), shell: 'powershell', label: 'PowerShell', natsSubject }; setTabs([fallback]); setActiveTabId(fallback.id);
+      }
     }
     return () => { if (timer) clearTimeout(timer); ws?.close(); };
-  }, [natsSubject, natsUrl, jwt, tabs.length]);
+  }, [natsSubject, natsUrl, jwt]);
 
   // Initialize xterm.js for active tab
   useEffect(() => {

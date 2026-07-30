@@ -50,6 +50,12 @@ export function useTerminalStream({
     const maxReconnect = 5;
     const delays = [1000, 2000, 4000, 8000, 16000];
 
+    // Normaliza UUIDs (remove hífens) para bater com o Agent
+    const subj = natsSubject.replace(/-/g, '');
+    const tid = tabId.replace(/-/g, '');
+    const outSubject = `${subj}.term.${tid}.out`;
+    const inSubject = `${subj}.term.${tid}.in`;
+
     const connect = useCallback(() => {
         if (!mountedRef.current) return;
         try {
@@ -120,7 +126,7 @@ export function useTerminalStream({
                             reconnectAttemptsRef.current = 0;
                             setIsConnected(true);
                             setError(null);
-                            sendProtocol(`SUB ${natsSubject}.term.${tabId}.out 1`);
+                            sendProtocol(`SUB ${outSubject} 1`);
                         }
                         continue;
                     }
@@ -166,7 +172,7 @@ export function useTerminalStream({
             setError(err instanceof Error ? err.message : 'Falha ao conectar');
             reconnectTimerRef.current = setTimeout(() => connect(), 5000);
         }
-    }, [natsUrl, jwt, natsSubject, tabId]);
+    }, [natsUrl, jwt, subj, tid]);
 
     useEffect(() => {
         mountedRef.current = true;
@@ -183,17 +189,17 @@ export function useTerminalStream({
         const ws = wsRef.current;
         if (!ws || ws.readyState !== WebSocket.OPEN) return;
         const payload = JSON.stringify({ data: btoa(data) });
-        const msg = `PUB ${natsSubject}.term.${tabId}.in ${new TextEncoder().encode(payload).length}\r\n${payload}\r\n`;
+        const msg = `PUB ${inSubject} ${new TextEncoder().encode(payload).length}\r\n${payload}\r\n`;
         ws.send(msg);
-    }, [natsSubject, tabId]);
+    }, [inSubject]);
 
     const sendResize = useCallback((cols: number, rows: number) => {
         const ws = wsRef.current;
         if (!ws || ws.readyState !== WebSocket.OPEN) return;
         const payload = JSON.stringify({ cols, rows });
-        const msg = `PUB ${natsSubject}.term.${tabId}.in ${new TextEncoder().encode(payload).length}\r\n${payload}\r\n`;
+        const msg = `PUB ${inSubject} ${new TextEncoder().encode(payload).length}\r\n${payload}\r\n`;
         ws.send(msg);
-    }, [natsSubject, tabId]);
+    }, [inSubject]);
 
     const onOutput = useCallback((callback: (data: string) => void) => {
         outputCallbacksRef.current.add(callback);
