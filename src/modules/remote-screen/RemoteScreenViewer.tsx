@@ -250,6 +250,8 @@ export default function RemoteScreenViewer({
           result.kind === 'tiles' ? result.rects : undefined,
           result.header,
         );
+        // Reaplica o cursor (o novo frame pode ter coberto o anterior)
+        drawCursorOverlay();
         const header = result.header ?? decodeFrameHeader(buffer);
         if (header) {
           const lat = Date.now() - header.ts;
@@ -310,6 +312,52 @@ export default function RemoteScreenViewer({
       }
     };
 
+    // ── Cursor separado (P2): posição/estado do cursor via subject .cursor ──
+    // Formato: 6 bytes [flags(1)][x int16 BE][y int16 BE]. Flags: bit0=visible,
+    // bit1=hand, bit2=ibeam, bit3=crosshair.
+    let cursorPos: { x: number; y: number; visible: boolean } | null = null;
+
+    const drawCursorOverlay = () => {
+      const canvas = canvasRef.current;
+      if (!canvas || !cursorPos || !cursorPos.visible) return;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+      // Seta simples (triângulo + contorno)
+      const x = cursorPos.x;
+      const y = cursorPos.y;
+      ctx.save();
+      ctx.strokeStyle = '#000';
+      ctx.lineWidth = 1;
+      ctx.fillStyle = '#fff';
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x + 12, y + 20);
+      ctx.lineTo(x + 7, y + 21);
+      ctx.lineTo(x + 11, y + 28);
+      ctx.lineTo(x + 8, y + 29);
+      ctx.lineTo(x + 4, y + 22);
+      ctx.lineTo(x, y + 26);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+    };
+
+    const processCursorMessage = (buffer: ArrayBuffer) => {
+      if (buffer.byteLength < 6) return;
+      const view = new DataView(buffer);
+      const flags = view.getUint8(0);
+      const x = view.getInt16(1, false);
+      const y = view.getInt16(3, false);
+      cursorPos = {
+        x: Math.max(0, x),
+        y: Math.max(0, y),
+        visible: (flags & 1) !== 0,
+      };
+      // Desenha o cursor sobre o último frame (canvas preserva o conteúdo)
+      drawCursorOverlay();
+    };
+
     const processProtocol = () => {
       const decoder = new TextDecoder();
       while (!cancelled) {
@@ -341,6 +389,8 @@ export default function RemoteScreenViewer({
             processEventMessage(decoder.decode(payload));
           } else if (subject.endsWith('.frame.frag')) {
             processScreenFrameFrag(payload.buffer);
+          } else if (subject.endsWith('.cursor')) {
+            processCursorMessage(payload.buffer);
           } else {
             // .frame (binário)
             processScreenFrame(payload.buffer);
@@ -370,6 +420,7 @@ export default function RemoteScreenViewer({
             reconnectAttemptsRef.current = 0;
             sendProtocol(`SUB ${natsSubject}.frame 1`);
             sendProtocol(`SUB ${natsSubject}.frame.frag 3`);
+            sendProtocol(`SUB ${natsSubject}.cursor 4`);
             sendProtocol(`SUB ${natsSubject}.event 2`);
           }
           continue;

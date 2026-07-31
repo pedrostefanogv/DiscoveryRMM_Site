@@ -99,7 +99,15 @@ export default function RemoteSession() {
   const [remaining, setRemaining] = useState<string>(formatRemaining(expiresAt));
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isConnected, setIsConnected] = useState(false);
-  const [activeTab, setActiveTab] = useState<Tab>(kind as Tab);
+  // Aba ativa por padrão: 'screen' (Tela). Se o kind da query for uma aba
+  // válida e diferente (terminal/files/proxy), usa-a; caso contrário ('all',
+  // vazio, inválido) cai para 'screen' — evita nenhuma aba ativa ao abrir.
+  const [activeTab, setActiveTab] = useState<Tab>(() => {
+    if (kind === 'terminal' || kind === 'files' || kind === 'proxy' || kind === 'screen') {
+      return kind as Tab;
+    }
+    return 'screen';
+  });
   const [natsCredentials, setNatsCredentials] = useState<SessionCredentials | null>(
     preFetchedJwt && preFetchedNkeySeed
       ? { jwt: preFetchedJwt, nkeySeed: preFetchedNkeySeed, expiresAtUtc: expiresAt || '', natsWssUrl: natsUrlFromQuery || undefined }
