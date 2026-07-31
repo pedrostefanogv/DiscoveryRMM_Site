@@ -265,9 +265,9 @@ export default function RemoteFiles({
                   <td></td><td></td><td></td>
                 </tr>
               )}
-              {files.map((f, i) => (
+              {files.map((f) => (
                 <tr
-                  key={i}
+                  key={f.path || f.name}
                   className={`hover:bg-slate-800 border-b border-slate-800/50 ${f.isDir ? 'cursor-pointer' : ''} ${selected?.path === f.path ? 'bg-slate-800/60' : ''}`}
                   onClick={() => { if (f.isDir) navigateTo(f.path); else setSelected(f); }}
                 >
