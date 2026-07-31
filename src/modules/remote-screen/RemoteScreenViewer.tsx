@@ -95,40 +95,123 @@ export default function RemoteScreenViewer({
   scaleRef.current = scale;
   isPausedRef.current = isPaused;
 
-  // Decode JPEG/WebP off-main-thread via ImageBitmap
-  const decodeFrame = useCallback(async (data: ArrayBuffer): Promise<ImageBitmap | null> => {
-    const header = decodeFrameHeader(data);
-    if (!header) return null;
+  // Decode JPEG/WebP off-main-thread via ImageBitmap.
+  // Suporta dois formatos de payload:
+  //   1. Frame completo (compat): JPEG/WebP único (header 12B + payload).
+  //   2. Tiles (tile-mode): header 12B + [4B numRects+flags] + N×[tileHeader 12B + JPEG].
+  //      O primeiro tile é o "key" (cobre a tela toda); os demais são patches.
+  const decodeFrame = useCallback(
+    async (data: ArrayBuffer): Promise<{ kind: 'full' | 'tiles'; header: FrameHeader; bitmaps: ImageBitmap[]; rects?: { x: number; y: number }[] } | null> => {
+      const header = decodeFrameHeader(data);
+      if (!header) return null;
 
-    const currentCodec = codecRef.current;
-    const currentScale = scaleRef.current;
-    const payload = new Uint8Array(data, 12);
-    const blob = new Blob([payload], { type: currentCodec === 'webp' ? 'image/webp' : 'image/jpeg' });
+      const currentCodec = codecRef.current;
+      const payload = new Uint8Array(data, 12);
+      // BlobPart exige Uint8Array<ArrayBuffer> — copia para um buffer próprio.
+      const blob = (p: Uint8Array<ArrayBufferLike>, type?: string) =>
+        new Blob([p.slice().buffer as ArrayBuffer], { type: type ?? (currentCodec === 'webp' ? 'image/webp' : 'image/jpeg') });
 
-    try {
-      const img = await createImageBitmap(blob, {
-        resizeWidth: currentScale === '100%' ? header.width : undefined,
-        resizeHeight: currentScale === '100%' ? header.height : undefined,
-        resizeQuality: 'medium',
-      });
-      return img;
-    } catch {
-      return null;
-    }
-  }, []);
+      // Detecta formato tile: primeiros 4 bytes do payload, numRects (uint16) seguido de flags (uint16).
+      // Guard: numRects > 0 e < 512, e os 4 bytes não são o start code de um JPEG/WebP válido.
+      const detectTiles = () => {
+        if (payload.length < 4) return false;
+        const numRects = (payload[0] << 8) | payload[1];
+        // JPEG começa com 0xFFD8; WebP começa com 'RIFF'. Tiles não começam assim.
+        const isJpeg = payload[0] === 0xff && payload[1] === 0xd8;
+        const isRiff = payload[0] === 0x52 && payload[1] === 0x49; // 'R','I'
+        if (isJpeg || isRiff) return false;
+        return numRects >= 1 && numRects < 512;
+      };
 
-  // Render frame in canvas
-  const renderFrame = useCallback((bitmap: ImageBitmap) => {
+      try {
+        if (detectTiles()) {
+          // ── Decodifica tiles ──
+          const view = new DataView(payload.buffer, payload.byteOffset);
+          const numRects = payload[0] * 256 + payload[1];
+          // flags no bytes 2-3 (reservado)
+          let offset = 4;
+          const bitmaps: ImageBitmap[] = [];
+          const rects: { x: number; y: number }[] = [];
+          for (let i = 0; i < numRects && offset + 12 <= payload.length; i++) {
+            const x = view.getUint16(offset, false);
+            const y = view.getUint16(offset + 2, false);
+            const size = view.getUint32(offset + 8, false);
+            offset += 12;
+            if (offset + size > payload.length) break;
+            const tileBlob = blob(payload.subarray(offset, offset + size), 'image/jpeg');
+            offset += size;
+            try {
+              const bmp = await createImageBitmap(tileBlob);
+              bitmaps.push(bmp);
+              rects.push({ x, y });
+            } catch {
+              // tile corrompido — ignora
+            }
+          }
+          if (bitmaps.length === 0) return null;
+          return { kind: 'tiles', header, bitmaps, rects };
+        }
+
+        // ── Frame completo ──
+        const currentScale = scaleRef.current;
+        const img = await createImageBitmap(blob(payload), {
+          resizeWidth: currentScale === '100%' ? header.width : undefined,
+          resizeHeight: currentScale === '100%' ? header.height : undefined,
+          resizeQuality: 'medium',
+        });
+        return { kind: 'full', header, bitmaps: [img] };
+      } catch {
+        return null;
+      }
+    },
+    [],
+  );
+
+  // Render frame in canvas.
+  // - 'full': desenha o frame completo (limpa e redimensiona o canvas).
+  // - 'tiles': desenha cada tile no offset (x,y) sobre o canvas existente.
+  //   O canvas mantém o tamanho da tela inteira (dimensionado pelo header do frame);
+  //   cada tile é um patch na posição correspondente.
+  const renderFrame = useCallback((
+    bitmaps: ImageBitmap[],
+    rects?: { x: number; y: number }[],
+    frameHeader?: FrameHeader,
+  ) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    canvas.width = bitmap.width;
-    canvas.height = bitmap.height;
-    ctx.drawImage(bitmap, 0, 0);
-    bitmap.close();
+    if (!rects || rects.length === 0 || bitmaps.length === 0) {
+      // Frame completo — redimensiona e redesenha
+      const bmp = bitmaps[0];
+      if (bmp) {
+        canvas.width = bmp.width;
+        canvas.height = bmp.height;
+        ctx.drawImage(bmp, 0, 0);
+        bmp.close();
+      }
+    } else {
+      // Modo tiles — garante o canvas com as dimensões reais da tela (header)
+      if (frameHeader && (canvas.width !== frameHeader.width || canvas.height !== frameHeader.height)) {
+        canvas.width = frameHeader.width;
+        canvas.height = frameHeader.height;
+        ctx.fillStyle = '#000';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+      }
+      // Desenha os patches
+      for (let i = 0; i < bitmaps.length; i++) {
+        const bmp = bitmaps[i];
+        const r = rects[i];
+        if (r) {
+          ctx.drawImage(bmp, r.x, r.y);
+        } else {
+          ctx.drawImage(bmp, 0, 0);
+        }
+        bmp.close();
+      }
+    }
 
     // FPS counter
     frameCountRef.current++;
@@ -160,16 +243,60 @@ export default function RemoteScreenViewer({
 
     const processScreenFrame = (buffer: ArrayBuffer) => {
       if (isPausedRef.current) return;
-      decodeFrame(buffer).then((bitmap) => {
-        if (!bitmap || cancelled) return;
-        renderFrame(bitmap);
-        const header = decodeFrameHeader(buffer);
+      decodeFrame(buffer).then((result) => {
+        if (!result || cancelled) return;
+        renderFrame(
+          result.bitmaps,
+          result.kind === 'tiles' ? result.rects : undefined,
+          result.header,
+        );
+        const header = result.header ?? decodeFrameHeader(buffer);
         if (header) {
           const lat = Date.now() - header.ts;
           setRtt(lat);
           onLatencyRef.current?.(lat);
         }
       });
+    };
+
+    // ── Fragmentação JUMBO (frames > MaxPayloadBytes) ──
+    // Protocolo: cada fragmento tem header [4B totalLen][4B offset][2B fragIndex][2B fragCount][payload].
+    // Monta os fragmentos na ordem e, quando completos, decodifica o frame.
+    let fragTotalLen = 0;
+    let fragCount = 0;
+    let fragBuffer: Uint8Array | null = null;
+    let fragReceived = 0;
+
+    const processScreenFrameFrag = (frag: ArrayBuffer) => {
+      if (isPausedRef.current || frag.byteLength < 12) return;
+      const view = new DataView(frag);
+      const totalLen = view.getUint32(0, false);
+      const offset = view.getUint32(4, false);
+      const fragIdx = view.getUint16(8, false);
+      const fragCnt = view.getUint16(10, false);
+      const part = new Uint8Array(frag, 12);
+
+      // Novo frame fragmentado (mudou totalLen ou fragCnt): reinicia reassembly
+      if (totalLen !== fragTotalLen || fragCnt !== fragCount || fragReceived === 0) {
+        fragTotalLen = totalLen;
+        fragCount = fragCnt;
+        fragBuffer = new Uint8Array(totalLen);
+        fragReceived = 0;
+      }
+      if (!fragBuffer || fragIdx >= fragCnt) return;
+
+      const end = Math.min(offset + part.length, totalLen);
+      if (offset < totalLen && end > offset) {
+        fragBuffer.set(part.subarray(0, end - offset), offset);
+      }
+      fragReceived++;
+
+      if (fragReceived >= fragCnt) {
+        const assembled = fragBuffer.buffer.slice(0, totalLen) as ArrayBuffer;
+        fragBuffer = null;
+        fragReceived = 0;
+        processScreenFrame(assembled);
+      }
     };
 
     const processEventMessage = (payloadText: string) => {
@@ -212,6 +339,8 @@ export default function RemoteScreenViewer({
           // Roteia por tipo de subject
           if (subject.endsWith('.event')) {
             processEventMessage(decoder.decode(payload));
+          } else if (subject.endsWith('.frame.frag')) {
+            processScreenFrameFrag(payload.buffer);
           } else {
             // .frame (binário)
             processScreenFrame(payload.buffer);
@@ -240,6 +369,7 @@ export default function RemoteScreenViewer({
             authenticated = true;
             reconnectAttemptsRef.current = 0;
             sendProtocol(`SUB ${natsSubject}.frame 1`);
+            sendProtocol(`SUB ${natsSubject}.frame.frag 3`);
             sendProtocol(`SUB ${natsSubject}.event 2`);
           }
           continue;

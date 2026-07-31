@@ -2,7 +2,6 @@ import { useRef, useEffect, useState, useCallback } from 'react';
 
 interface UseTerminalStreamOptions {
     natsSubject: string;
-    tabId: string;
     natsUrl: string;
     jwt: string;
     nkeySeed: string;
@@ -33,9 +32,10 @@ function findCrlf(data: Uint8Array<ArrayBufferLike>): number {
     return -1;
 }
 
+// Console único: usa subjects fixos term.out / term.in (sem tabId),
+// como o MeshCentral (um terminal por sessão).
 export function useTerminalStream({
     natsSubject,
-    tabId,
     natsUrl,
     jwt,
     nkeySeed: _nkeySeed,
@@ -54,9 +54,8 @@ export function useTerminalStream({
 
     // Normaliza UUIDs (remove hífens) para bater com o Agent
     const subj = natsSubject.replace(/-/g, '');
-    const tid = tabId.replace(/-/g, '');
-    const outSubject = `${subj}.term.${tid}.out`;
-    const inSubject = `${subj}.term.${tid}.in`;
+    const outSubject = `${subj}.term.out`;
+    const inSubject = `${subj}.term.in`;
 
     const connect = useCallback(() => {
         if (!mountedRef.current) return;
@@ -70,38 +69,45 @@ export function useTerminalStream({
             let connectSent = false;
             let authenticated = false;
 
-            const sendProtocol = (cmd: string) => ws.send(new TextEncoder().encode(`${cmd}\r\n`));
+            const sendProtocol = (cmd: string) => ws?.send(new TextEncoder().encode(`${cmd}\r\n`));
 
             const processProtocol = () => {
                 const decoder = new TextDecoder();
-                for (; ;) {
+                while (mountedRef.current) {
                     const lineEnd = findCrlf(protocolBuffer);
                     if (lineEnd < 0) return;
+
                     const line = decoder.decode(protocolBuffer.slice(0, lineEnd));
                     const tokens = line.trim().split(/\s+/);
 
                     if (tokens[0] === 'MSG') {
-                        const payloadLengthIndex = tokens.length === 5 ? 4 : 3;
-                        const payloadLength = Number.parseInt(tokens[payloadLengthIndex] ?? '', 10);
-                        if (!Number.isInteger(payloadLength) || payloadLength < 0) return;
-                        const payloadStart = lineEnd + 2;
-                        const payloadEnd = payloadStart + payloadLength;
-                        if (protocolBuffer.length < payloadEnd + 2) return;
+                        const plI = tokens.length === 5 ? 4 : 3;
+                        const plN = Number.parseInt(tokens[plI] ?? '0', 10);
+                        if (!Number.isInteger(plN) || plN < 0) {
+                            setError(`NATS protocolo inválido: ${line}`);
+                            ws?.close(1002, 'Invalid MSG');
+                            return;
+                        }
+                        const ps = lineEnd + 2;
+                        const pe = ps + plN;
+                        if (protocolBuffer.length < pe + 2) return;
 
-                        const payload = decoder.decode(protocolBuffer.slice(payloadStart, payloadEnd));
-                        protocolBuffer = protocolBuffer.slice(payloadEnd + 2);
+                        const payload = decoder.decode(protocolBuffer.slice(ps, pe));
+                        protocolBuffer = protocolBuffer.slice(pe + 2);
 
+                        // term.out — saída do console
                         try {
                             const parsed = JSON.parse(payload);
-                            if (parsed.exit) {
-                                // Shell remoto encerrado — notifica callbacks de exit
-                                exitCallbacksRef.current.forEach(cb => cb(parsed.reason || 'shell encerrado'));
-                            } else if (parsed.data) {
-                                try {
-                                    const decoded = atob(parsed.data);
-                                    outputCallbacksRef.current.forEach(cb => cb(decoded));
-                                } catch {
-                                    outputCallbacksRef.current.forEach(cb => cb(parsed.data));
+                            if (parsed && typeof parsed === 'object') {
+                                if (parsed.exit) {
+                                    exitCallbacksRef.current.forEach(cb => cb(String(parsed.reason ?? 'shell encerrado')));
+                                } else if (typeof parsed.data === 'string') {
+                                    try {
+                                        const decoded = atob(parsed.data);
+                                        outputCallbacksRef.current.forEach(cb => cb(decoded));
+                                    } catch {
+                                        outputCallbacksRef.current.forEach(cb => cb(parsed.data));
+                                    }
                                 }
                             }
                         } catch {
@@ -177,7 +183,7 @@ export function useTerminalStream({
             setError(err instanceof Error ? err.message : 'Falha ao conectar');
             reconnectTimerRef.current = setTimeout(() => connect(), 5000);
         }
-    }, [natsUrl, jwt, subj, tid]);
+    }, [natsUrl, jwt, subj]);
 
     useEffect(() => {
         mountedRef.current = true;
