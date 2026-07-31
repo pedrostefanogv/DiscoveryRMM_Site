@@ -9,7 +9,7 @@ export interface StartRemoteSessionRequest {
     siteId?: string;
     kind: 'screen' | 'terminal' | 'files' | 'proxy' | 'all';
     transport: 'webrtc' | 'nats' | 'http';
-    quality: 'ultra' | 'high' | 'medium' | 'low' | 'ultralow';
+    quality: 'ultra' | 'fast' | 'high' | 'medium' | 'low' | 'ultralow' | 'unlimited';
     codec: 'jpeg' | 'webp' | 'h264';
     durationMinutes: number;
     /** Sobrepõe sessões ativas existentes (fecha e cria nova). */
@@ -149,7 +149,7 @@ export const remoteSessionsApi = {
 };
 
 export interface ChangeQualityRequest {
-    quality: 'ultra' | 'high' | 'medium' | 'low' | 'ultralow';
+    quality: 'ultra' | 'fast' | 'high' | 'medium' | 'low' | 'ultralow' | 'unlimited';
     codec?: 'jpeg' | 'webp' | 'h264';
     imageQuality?: number;
     maxFps?: number;

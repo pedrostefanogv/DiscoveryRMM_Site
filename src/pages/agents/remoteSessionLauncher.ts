@@ -24,8 +24,8 @@ export class PopupBlockedError extends Error {
 const DEFAULT_PARAMS: Partial<StartRemoteSessionRequest> = {
   kind: "screen",
   transport: "nats",
-  quality: "high",
-  codec: "jpeg",
+  quality: "unlimited",
+  codec: "webp",
   durationMinutes: 30,
   // Força a sobreposição de sessões ativas existentes (1 sessão por agente).
   // O backend fecha as sessões antigas com motivo "overridden-by-new-session".

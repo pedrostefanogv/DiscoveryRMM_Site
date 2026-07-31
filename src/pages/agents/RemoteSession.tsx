@@ -118,25 +118,27 @@ export default function RemoteSession() {
   const [rtt, setRtt] = useState<number>(0);
 
   // ── Controles de qualidade em tempo real (independentes) ──
+  // Default: sem limite de FPS (captura o mais rápido possível) + WebP
   const [liveQuality, setLiveQuality] = useState(quality);
   const [liveCodec, setLiveCodec] = useState(codec);
   const [liveImageQuality, setLiveImageQuality] = useState(75); // compressão JPEG 1-100
-  const [liveMaxFps, setLiveMaxFps] = useState(15);            // FPS máximo
+  const [liveMaxFps, setLiveMaxFps] = useState(0);             // 0 = sem limite
   const [autoMode, setAutoMode] = useState(false);
   const [qualityChanging, setQualityChanging] = useState(false);
 
   const QUALITIES: { value: ChangeQualityRequest['quality']; label: string; fps: number; jpegQ: number }[] = [
     { value: 'ultra', label: 'Ultra', fps: 30, jpegQ: 92 },
+    { value: 'fast', label: 'Rápido', fps: 20, jpegQ: 80 },
     { value: 'high', label: 'Alta', fps: 15, jpegQ: 75 },
-    { value: 'medium', label: 'Média', fps: 10, jpegQ: 60 },
+    { value: 'medium', label: 'Média', fps: 12, jpegQ: 60 },
     { value: 'low', label: 'Baixa', fps: 5, jpegQ: 40 },
     { value: 'ultralow', label: 'Mínima', fps: 2, jpegQ: 25 },
+    { value: 'unlimited', label: 'Sem limite', fps: 0, jpegQ: 75 },
   ];
 
   const CODECS: { value: NonNullable<ChangeQualityRequest['codec']>; label: string }[] = [
-    { value: 'jpeg', label: 'JPEG' },
     { value: 'webp', label: 'WebP' },
-    { value: 'h264', label: 'H.264' },
+    { value: 'jpeg', label: 'JPEG' },
   ];
 
   const IMAGE_QUALITY_PRESETS = [
@@ -148,11 +150,12 @@ export default function RemoteSession() {
   ];
 
   const FPS_PRESETS = [
+    { value: 0, label: 'Sem limite' },
     { value: 30, label: '30' },
-    { value: 15, label: '15' },
-    { value: 10, label: '10' },
-    { value: 5, label: '5' },
-    { value: 2, label: '2' },
+    { value: 20, label: '20 (Fast)' },
+    { value: 12, label: '12 (Médio)' },
+    { value: 5, label: '5 (Baixo)' },
+    { value: 2, label: '2 (Mínimo)' },
   ];
 
   const handleQualityChange = useCallback(async (newQuality: ChangeQualityRequest['quality']) => {
@@ -248,8 +251,11 @@ export default function RemoteSession() {
     setQualityChanging(true);
     setAutoMode(newAuto);
     try {
+      // Em Auto: WebP preferido (menos banda) e limpa overrides manuais
+      // (imageQuality/maxFps voltam ao perfil). O backend/agent adapta.
       await remoteSessionsApi.changeQuality(agentId, sessionId, {
         quality: liveQuality as ChangeQualityRequest['quality'],
+        codec: (newAuto ? 'webp' : liveCodec) as NonNullable<ChangeQualityRequest['codec']>,
         auto: newAuto,
       });
     } catch (err) {
@@ -258,7 +264,7 @@ export default function RemoteSession() {
     } finally {
       setQualityChanging(false);
     }
-  }, [qualityChanging, sessionId, agentId, autoMode, liveQuality]);
+  }, [qualityChanging, sessionId, agentId, autoMode, liveQuality, liveCodec]);
 
   // Timer de expiração
   useEffect(() => {
@@ -403,13 +409,44 @@ export default function RemoteSession() {
         <div className="ml-auto flex items-center gap-3 text-xs text-slate-500">
           <span>Transport: <span className="text-slate-400">{transport.toUpperCase()}</span></span>
 
-          {/* Quality preset selector */}
+          {/* Auto/Manual toggle — resolve o conflito perfil vs percentual:
+              Auto = perfil define tudo (webp preferido, adapta por desempenho);
+              Manual = usuário escolhe codec + qualidade + fps. */}
+          <div className="flex items-center gap-1">
+            <button
+              className={`px-2 py-0.5 rounded text-xs font-medium transition-colors ${
+                autoMode
+                  ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                  : 'bg-slate-800 text-slate-500 border border-slate-700 hover:text-slate-300'
+              }`}
+              onClick={handleAutoToggle}
+              disabled={qualityChanging}
+              title={autoMode ? 'Modo automático: perfil define qualidade/codec/FPS e adapta à rede' : 'Clique para ativar modo automático'}
+            >
+              {autoMode ? '✓ Auto' : 'Auto'}
+            </button>
+            <button
+              className={`px-2 py-0.5 rounded text-xs font-medium transition-colors ${
+                !autoMode
+                  ? 'bg-sky-500/20 text-sky-400 border border-sky-500/30'
+                  : 'bg-slate-800 text-slate-500 border border-slate-700 hover:text-slate-300'
+              }`}
+              onClick={() => { if (autoMode) handleAutoToggle(); }}
+              disabled={qualityChanging}
+              title="Modo manual: escolha codec, qualidade e FPS"
+            >
+              Manual
+            </button>
+          </div>
+
+          {/* Quality preset selector (perfil) — visível em ambos os modos,
+              mas em manual define a BASE (fps/qualidade) que o usuário pode ajustar */}
           <div className="flex items-center gap-0.5">
             <span className="mr-1 text-slate-600">Q:</span>
             <select
               className="bg-slate-800 border border-slate-700 rounded px-1 py-0.5 text-xs text-slate-300 cursor-pointer hover:border-slate-600 disabled:opacity-50"
               value={liveQuality}
-              disabled={autoMode || qualityChanging}
+              disabled={qualityChanging}
               onChange={(e) => handleQualityChange(e.target.value as ChangeQualityRequest['quality'])}
             >
               {QUALITIES.map((q) => (
@@ -418,45 +455,15 @@ export default function RemoteSession() {
             </select>
           </div>
 
-          {/* Image quality selector (compressão) */}
+          {/* Codec selector — em Auto: webp preferido (menos banda); em Manual: escolha livre */}
           <div className="flex items-center gap-0.5">
-            <span className="mr-1 text-slate-600">🖼</span>
-            <select
-              className="bg-slate-800 border border-slate-700 rounded px-1 py-0.5 text-xs text-slate-300 cursor-pointer hover:border-slate-600 disabled:opacity-50"
-              value={liveImageQuality}
-              disabled={autoMode || qualityChanging}
-              onChange={(e) => handleImageQualityChange(Number(e.target.value))}
-              title="Qualidade da imagem (compressão JPEG)"
-            >
-              {IMAGE_QUALITY_PRESETS.map((iq) => (
-                <option key={iq.value} value={iq.value}>{iq.label}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* FPS selector */}
-          <div className="flex items-center gap-0.5">
-            <span className="mr-1 text-slate-600">⚡</span>
-            <select
-              className="bg-slate-800 border border-slate-700 rounded px-1 py-0.5 text-xs text-slate-300 cursor-pointer hover:border-slate-600 disabled:opacity-50"
-              value={liveMaxFps}
-              disabled={autoMode || qualityChanging}
-              onChange={(e) => handleFpsChange(Number(e.target.value))}
-              title="Taxa máxima de quadros por segundo"
-            >
-              {FPS_PRESETS.map((f) => (
-                <option key={f.value} value={f.value}>{f.label} FPS</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Codec selector */}
-          <div className="flex items-center gap-0.5">
+            <span className="mr-1 text-slate-600">🎞</span>
             <select
               className="bg-slate-800 border border-slate-700 rounded px-1 py-0.5 text-xs text-slate-300 cursor-pointer hover:border-slate-600 disabled:opacity-50"
               value={liveCodec}
               disabled={autoMode || qualityChanging}
               onChange={(e) => handleCodecChange(e.target.value as NonNullable<ChangeQualityRequest['codec']>)}
+              title={autoMode ? 'Auto: WebP preferido (menos banda), JPEG se o PC for fraco' : 'Escolha o codec'}
             >
               {CODECS.map((c) => (
                 <option key={c.value} value={c.value}>{c.label}</option>
@@ -464,19 +471,41 @@ export default function RemoteSession() {
             </select>
           </div>
 
-          {/* Auto mode toggle */}
-          <button
-            className={`px-2 py-0.5 rounded text-xs font-medium transition-colors ${
-              autoMode
-                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                : 'bg-slate-800 text-slate-500 border border-slate-700 hover:text-slate-300'
-            }`}
-            onClick={handleAutoToggle}
-            disabled={qualityChanging}
-            title={autoMode ? 'Modo automático ativo — qualidade se adapta à rede' : 'Clique para ativar modo automático'}
-          >
-            {autoMode ? '✓ Auto' : 'Auto'}
-          </button>
+          {/* Image quality selector (compressão) — apenas em Manual */}
+          {!autoMode && (
+            <div className="flex items-center gap-0.5">
+              <span className="mr-1 text-slate-600">🖼</span>
+              <select
+                className="bg-slate-800 border border-slate-700 rounded px-1 py-0.5 text-xs text-slate-300 cursor-pointer hover:border-slate-600 disabled:opacity-50"
+                value={liveImageQuality}
+                disabled={qualityChanging}
+                onChange={(e) => handleImageQualityChange(Number(e.target.value))}
+                title="Qualidade da imagem (compressão)"
+              >
+                {IMAGE_QUALITY_PRESETS.map((iq) => (
+                  <option key={iq.value} value={iq.value}>{iq.label}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* FPS selector — apenas em Manual */}
+          {!autoMode && (
+            <div className="flex items-center gap-0.5">
+              <span className="mr-1 text-slate-600">⚡</span>
+              <select
+                className="bg-slate-800 border border-slate-700 rounded px-1 py-0.5 text-xs text-slate-300 cursor-pointer hover:border-slate-600 disabled:opacity-50"
+                value={liveMaxFps}
+                disabled={qualityChanging}
+                onChange={(e) => handleFpsChange(Number(e.target.value))}
+                title="Taxa máxima de quadros por segundo"
+              >
+                {FPS_PRESETS.map((f) => (
+                  <option key={f.value} value={f.value}>{f.label} FPS</option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
       </div>
 

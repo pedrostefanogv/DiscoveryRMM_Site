@@ -153,12 +153,10 @@ export default function RemoteScreenViewer({
         }
 
         // ── Frame completo ──
-        const currentScale = scaleRef.current;
-        const img = await createImageBitmap(blob(payload), {
-          resizeWidth: currentScale === '100%' ? header.width : undefined,
-          resizeHeight: currentScale === '100%' ? header.height : undefined,
-          resizeQuality: 'medium',
-        });
+        // Decodifica SEMPRE na resolução nativa do frame. O scale (fit/1:1)
+        // é aplicado via CSS no canvas (renderFrame/useEffect), nunca via
+        // resize do bitmap — evita perda de qualidade e re-decode.
+        const img = await createImageBitmap(blob(payload));
         return { kind: 'full', header, bitmaps: [img] };
       } catch {
         return null;
@@ -626,10 +624,18 @@ export default function RemoteScreenViewer({
   }, [toggleFullscreen]);
 
   return (
-    <div ref={containerRef} className="relative flex items-center justify-center bg-slate-950 rounded-lg overflow-hidden h-full">
+    <div
+      ref={containerRef}
+      className={`relative flex bg-slate-950 rounded-lg h-full ${
+        scale === 'fit'
+          ? 'items-center justify-center overflow-hidden'
+          : 'items-start justify-start overflow-auto'
+      }`}
+    >
       <canvas
         ref={canvasRef}
-        className="max-w-full max-h-full object-contain cursor-crosshair"
+        className={`cursor-crosshair ${scale === 'fit' ? 'max-w-full max-h-full object-contain' : 'object-contain'}`}
+        style={scale === 'fit' ? { width: '100%', height: '100%' } : undefined}
         tabIndex={0}
       />
 
