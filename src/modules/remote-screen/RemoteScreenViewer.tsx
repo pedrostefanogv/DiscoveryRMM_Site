@@ -373,7 +373,7 @@ export default function RemoteScreenViewer({
           const payloadLength = Number.parseInt(tokens[payloadLengthIndex] ?? '', 10);
           if (!Number.isInteger(payloadLength) || payloadLength < 0) {
             onErrorRef.current?.(`NATS protocolo inválido: ${line}`);
-            ws?.close(1002, 'Invalid MSG');
+            ws?.close(4000, 'Invalid MSG');
             return;
           }
 
@@ -434,7 +434,7 @@ export default function RemoteScreenViewer({
         if (tokens[0] === '-ERR') {
           const reason = line.replace(/^-ERR\s*/i, '').replace(/^['"]|['"]$/g, '');
           onErrorRef.current?.(`NATS: ${reason || 'falha de protocolo'}`);
-          ws?.close(1008, reason || 'NATS protocol error');
+          ws?.close(4000, reason || 'NATS protocol error');
           return;
         }
 

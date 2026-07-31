@@ -20,6 +20,8 @@ export interface StartRemoteSessionRequest {
     termCols?: number;
     /** Linhas iniciais do terminal. Default: 40. */
     termRows?: number;
+    /** Raiz do explorador de arquivos no agent. Default: C:\\. */
+    rootPath?: string;
 }
 
 export interface RemoteSessionResponse {

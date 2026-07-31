@@ -85,7 +85,7 @@ export function useTerminalStream({
                         const plN = Number.parseInt(tokens[plI] ?? '0', 10);
                         if (!Number.isInteger(plN) || plN < 0) {
                             setError(`NATS protocolo inválido: ${line}`);
-                            ws?.close(1002, 'Invalid MSG');
+                            ws?.close(4000, 'Invalid MSG');
                             return;
                         }
                         const ps = lineEnd + 2;
@@ -145,7 +145,7 @@ export function useTerminalStream({
                     if (tokens[0] === 'PING') { sendProtocol('PONG'); continue; }
                     if (tokens[0] === '-ERR') {
                         setError(`NATS: ${line.replace(/^-ERR\s*/i, '').replace(/^['"]|['"]$/g, '')}`);
-                        ws?.close(1008, 'NATS protocol error');
+                        ws?.close(4000, 'NATS protocol error');
                         return;
                     }
                 }
