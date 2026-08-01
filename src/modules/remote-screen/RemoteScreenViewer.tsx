@@ -644,8 +644,6 @@ export default function RemoteScreenViewer({
         <div className="flex items-center gap-3">
           <span className="text-emerald-400 font-medium">{fps} FPS</span>
           <span className="text-slate-400">{rtt}ms</span>
-          <span className="text-slate-500">{quality.toUpperCase()}</span>
-          <span className="text-slate-500">{codec.toUpperCase()}</span>
           {isPaused && <span className="text-amber-400">⏸</span>}
         </div>
         {agentMetrics && (

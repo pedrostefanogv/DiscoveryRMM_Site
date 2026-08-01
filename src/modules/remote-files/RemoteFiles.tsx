@@ -47,6 +47,36 @@ export default function RemoteFiles({
   const [selected, setSelected] = useState<FileEntry | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
+  // ── Modal inline (substitui window.prompt/confirm, bloqueados em popups) ──
+  const [modal, setModal] = useState<{
+    title: string;
+    message?: string;
+    inputLabel?: string;
+    inputValue?: string;
+    confirmLabel?: string;
+    danger?: boolean;
+    onConfirm: (value?: string) => void;
+  } | null>(null);
+  const [modalInput, setModalInput] = useState('');
+
+  const openPrompt = (title: string, inputLabel: string, initial: string, onConfirm: (value: string) => void) => {
+    setModalInput(initial);
+    setModal({ title, inputLabel, inputValue: initial, confirmLabel: 'OK', onConfirm });
+  };
+
+  const openConfirm = (title: string, message: string, onConfirm: () => void) => {
+    setModal({ title, message, confirmLabel: 'Confirmar', danger: true, onConfirm });
+  };
+
+  const closeModal = () => setModal(null);
+
+  const submitModal = () => {
+    if (!modal) return;
+    const value = modal.inputLabel !== undefined ? modalInput : undefined;
+    closeModal();
+    modal.onConfirm(value);
+  };
+
   const { isConnected, sendRequest } = useFilesStream({
     natsSubject: natsSubject || '',
     natsUrl: natsUrl || '',
@@ -165,24 +195,36 @@ export default function RemoteFiles({
   };
 
   const handleRename = async (entry: FileEntry) => {
-    const newName = window.prompt(`Renomear "${entry.name}" para:`, entry.name);
-    if (!newName || newName === entry.name) return;
-    const newPath = (entry.path.includes('\\') ? entry.path.slice(0, entry.path.lastIndexOf('\\') + 1) : '') + newName;
-    const ok = await runAction(`Renomear ${entry.name}`, () => sendRequest('rename', entry.path, undefined, { newPath }));
-    if (ok) loadFiles(currentPath);
+    openPrompt(
+      `Renomear "${entry.name}"`,
+      'Novo nome',
+      entry.name,
+      async (newName) => {
+        if (!newName || newName === entry.name) return;
+        const newPath = (entry.path.includes('\\') ? entry.path.slice(0, entry.path.lastIndexOf('\\') + 1) : '') + newName;
+        const ok = await runAction(`Renomear ${entry.name}`, () => sendRequest('rename', entry.path, undefined, { newPath }));
+        if (ok) loadFiles(currentPath);
+      },
+    );
   };
 
   const handleDelete = async (entry: FileEntry) => {
-    if (!window.confirm(`Apagar "${entry.name}"?${entry.isDir ? ' (recursivo)' : ''}`)) return;
-    const ok = await runAction(`Apagar ${entry.name}`, () => sendRequest('delete', entry.path));
-    if (ok) loadFiles(currentPath);
+    openConfirm(
+      `Apagar "${entry.name}"?`,
+      entry.isDir ? 'Esta ação apagará a pasta e todo o seu conteúdo (recursivo).' : 'Esta ação apagará o arquivo permanentemente.',
+      async () => {
+        const ok = await runAction(`Apagar ${entry.name}`, () => sendRequest('delete', entry.path));
+        if (ok) loadFiles(currentPath);
+      },
+    );
   };
 
   const handleMkdir = async () => {
-    const name = window.prompt('Nome da nova pasta:');
-    if (!name) return;
-    const ok = await runAction(`Criar pasta ${name}`, () => sendRequest('mkdir', currentPath + name));
-    if (ok) loadFiles(currentPath);
+    openPrompt('Nova pasta', 'Nome da nova pasta', '', async (name) => {
+      if (!name) return;
+      const ok = await runAction(`Criar pasta ${name}`, () => sendRequest('mkdir', currentPath + name));
+      if (ok) loadFiles(currentPath);
+    });
   };
 
   const handleRefresh = () => loadFiles(currentPath);
@@ -309,6 +351,45 @@ export default function RemoteFiles({
           </table>
         )}
       </div>
+
+      {/* Modal inline (prompt/confirm) */}
+      {modal && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60" onClick={closeModal}>
+          <div
+            className="bg-slate-800 border border-slate-700 rounded-lg shadow-xl w-96 max-w-[90%] p-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-sm font-semibold text-slate-200 mb-2">{modal.title}</h3>
+            {modal.message && <p className="text-xs text-slate-400 mb-3">{modal.message}</p>}
+            {modal.inputLabel !== undefined && (
+              <label className="block text-xs text-slate-400 mb-1">{modal.inputLabel}</label>
+            )}
+            {modal.inputLabel !== undefined && (
+              <input
+                autoFocus
+                value={modalInput}
+                onChange={(e) => setModalInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') submitModal(); if (e.key === 'Escape') closeModal(); }}
+                className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-sm text-slate-200 mb-3 focus:outline-none focus:border-sky-500"
+              />
+            )}
+            <div className="flex justify-end gap-2">
+              <button
+                className="px-3 py-1.5 rounded text-xs bg-slate-700 text-slate-300 hover:bg-slate-600"
+                onClick={closeModal}
+              >
+                Cancelar
+              </button>
+              <button
+                className={`px-3 py-1.5 rounded text-xs font-medium ${modal.danger ? 'bg-red-600 text-white hover:bg-red-500' : 'bg-sky-600 text-white hover:bg-sky-500'}`}
+                onClick={submitModal}
+              >
+                {modal.confirmLabel ?? 'OK'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
