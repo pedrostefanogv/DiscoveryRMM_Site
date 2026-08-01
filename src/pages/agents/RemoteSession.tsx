@@ -498,23 +498,10 @@ export default function RemoteSession() {
             </button>
           </div>
 
-          {/* Em Auto: apenas o perfil de qualidade (define tudo: codec/fps/qualidade).
+          {/* Em Auto: nenhum ajuste de qualidade/FPS é exibido — o perfil define
+              tudo (codec/fps/qualidade) e adapta à rede automaticamente.
               Em Manual: controles finos (codec + imagem + fps) substituem o perfil. */}
-          {autoMode ? (
-            <div className="flex items-center gap-0.5">
-              <span className="mr-1 text-slate-600">Q:</span>
-              <select
-                className="bg-slate-800 border border-slate-700 rounded px-1 py-0.5 text-xs text-slate-300 cursor-pointer hover:border-slate-600 disabled:opacity-50"
-                value={liveQuality}
-                disabled={qualityChanging}
-                onChange={(e) => handleQualityChange(e.target.value as ChangeQualityRequest['quality'])}
-              >
-                {QUALITIES.map((q) => (
-                  <option key={q.value} value={q.value}>{q.label}</option>
-                ))}
-              </select>
-            </div>
-          ) : (
+          {!autoMode && (
             <>
               {/* Codec selector — Manual */}
               <div className="flex items-center gap-0.5">
@@ -583,12 +570,9 @@ export default function RemoteSession() {
                   </option>
                 ))
               ) : (
-                <>
-                  <option value={0}>Monitor 1 (primário)</option>
-                  <option value={1}>Monitor 2</option>
-                  <option value={2}>Monitor 3</option>
-                  <option value={3}>Monitor 4</option>
-                </>
+                // Sem lista dinâmica do agent: mostra apenas o monitor primário (0).
+                // Não inventa monitores que não existem no PC do agent.
+                <option value={0}>Monitor 1 (primário)</option>
               )}
             </select>
           </div>
