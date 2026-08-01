@@ -125,7 +125,8 @@ export default function RemoteSession() {
   const [liveCodec, setLiveCodec] = useState(codec);
   const [liveImageQuality, setLiveImageQuality] = useState(75); // compressão JPEG 1-100
   const [liveMaxFps, setLiveMaxFps] = useState(0);             // 0 = sem limite
-  const [autoMode, setAutoMode] = useState(false);
+  // Abre sempre em modo Auto (perfil define qualidade/codec/FPS e adapta à rede).
+  const [autoMode, setAutoMode] = useState(true);
   const [qualityChanging, setQualityChanging] = useState(false);
   // Monitor ativo para captura de tela (0 = primário). Trocar reinicia a sessão.
   const [monitorIndex, setMonitorIndex] = useState(initialMonitorIndex);
