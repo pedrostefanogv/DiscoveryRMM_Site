@@ -627,8 +627,8 @@ export default function RemoteScreenViewer({
       }
     };
 
-    const onMouseDown = (e: MouseEvent) => { canvas.focus(); sendInput('mousedown', { button: e.button }); };
-    const onMouseUp = (e: MouseEvent) => { canvas.focus(); sendInput('mouseup', { button: e.button }); };
+    const onMouseDown = (e: MouseEvent) => { canvas.focus(); sendInput('mousedown', { button: e.button, x: e.clientX, y: e.clientY }); };
+    const onMouseUp = (e: MouseEvent) => { canvas.focus(); sendInput('mouseup', { button: e.button, x: e.clientX, y: e.clientY }); };
     const onMouseMove = (e: MouseEvent) => {
       lastMove = e;
       if (moveThrottle) return;

@@ -461,13 +461,15 @@ export default function RemoteSession() {
             {tab.label}
           </button>
         ))}
-        {/* Status bar info — controles de qualidade em tempo real */}
+        {/* Status bar info — controles de qualidade em tempo real.
+            Só aparecem na aba Tela (screen), pois só fazem sentido lá. */}
+        {activeTab === 'screen' && (
         <div className="ml-auto flex items-center gap-3 text-xs text-slate-500">
           <span>Transport: <span className="text-slate-400">{transport.toUpperCase()}</span></span>
 
           {/* Auto/Manual toggle — resolve o conflito perfil vs percentual:
               Auto = perfil define tudo (webp preferido, adapta por desempenho);
-              Manual = usuário escolhe codec + qualidade + fps. */}
+              Manual = usuário escolhe codec + qualidade de imagem + fps. */}
           <div className="flex items-center gap-1">
             <button
               className={`px-2 py-0.5 rounded text-xs font-medium transition-colors ${
@@ -495,72 +497,72 @@ export default function RemoteSession() {
             </button>
           </div>
 
-          {/* Quality preset selector (perfil) — visível em ambos os modos,
-              mas em manual define a BASE (fps/qualidade) que o usuário pode ajustar */}
-          <div className="flex items-center gap-0.5">
-            <span className="mr-1 text-slate-600">Q:</span>
-            <select
-              className="bg-slate-800 border border-slate-700 rounded px-1 py-0.5 text-xs text-slate-300 cursor-pointer hover:border-slate-600 disabled:opacity-50"
-              value={liveQuality}
-              disabled={qualityChanging}
-              onChange={(e) => handleQualityChange(e.target.value as ChangeQualityRequest['quality'])}
-            >
-              {QUALITIES.map((q) => (
-                <option key={q.value} value={q.value}>{q.label}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Codec selector — em Auto: webp preferido (menos banda); em Manual: escolha livre */}
-          <div className="flex items-center gap-0.5">
-            <span className="mr-1 text-slate-600">🎞</span>
-            <select
-              className="bg-slate-800 border border-slate-700 rounded px-1 py-0.5 text-xs text-slate-300 cursor-pointer hover:border-slate-600 disabled:opacity-50"
-              value={liveCodec}
-              disabled={autoMode || qualityChanging}
-              onChange={(e) => handleCodecChange(e.target.value as NonNullable<ChangeQualityRequest['codec']>)}
-              title={autoMode ? 'Auto: WebP preferido (menos banda), JPEG se o PC for fraco' : 'Escolha o codec'}
-            >
-              {CODECS.map((c) => (
-                <option key={c.value} value={c.value}>{c.label}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Image quality selector (compressão) — apenas em Manual */}
-          {!autoMode && (
+          {/* Em Auto: apenas o perfil de qualidade (define tudo: codec/fps/qualidade).
+              Em Manual: controles finos (codec + imagem + fps) substituem o perfil. */}
+          {autoMode ? (
             <div className="flex items-center gap-0.5">
-              <span className="mr-1 text-slate-600">🖼</span>
+              <span className="mr-1 text-slate-600">Q:</span>
               <select
                 className="bg-slate-800 border border-slate-700 rounded px-1 py-0.5 text-xs text-slate-300 cursor-pointer hover:border-slate-600 disabled:opacity-50"
-                value={liveImageQuality}
+                value={liveQuality}
                 disabled={qualityChanging}
-                onChange={(e) => handleImageQualityChange(Number(e.target.value))}
-                title="Qualidade da imagem (compressão)"
+                onChange={(e) => handleQualityChange(e.target.value as ChangeQualityRequest['quality'])}
               >
-                {IMAGE_QUALITY_PRESETS.map((iq) => (
-                  <option key={iq.value} value={iq.value}>{iq.label}</option>
+                {QUALITIES.map((q) => (
+                  <option key={q.value} value={q.value}>{q.label}</option>
                 ))}
               </select>
             </div>
-          )}
+          ) : (
+            <>
+              {/* Codec selector — Manual */}
+              <div className="flex items-center gap-0.5">
+                <span className="mr-1 text-slate-600">🎞</span>
+                <select
+                  className="bg-slate-800 border border-slate-700 rounded px-1 py-0.5 text-xs text-slate-300 cursor-pointer hover:border-slate-600 disabled:opacity-50"
+                  value={liveCodec}
+                  disabled={qualityChanging}
+                  onChange={(e) => handleCodecChange(e.target.value as NonNullable<ChangeQualityRequest['codec']>)}
+                  title="Escolha o codec"
+                >
+                  {CODECS.map((c) => (
+                    <option key={c.value} value={c.value}>{c.label}</option>
+                  ))}
+                </select>
+              </div>
 
-          {/* FPS selector — apenas em Manual */}
-          {!autoMode && (
-            <div className="flex items-center gap-0.5">
-              <span className="mr-1 text-slate-600">⚡</span>
-              <select
-                className="bg-slate-800 border border-slate-700 rounded px-1 py-0.5 text-xs text-slate-300 cursor-pointer hover:border-slate-600 disabled:opacity-50"
-                value={liveMaxFps}
-                disabled={qualityChanging}
-                onChange={(e) => handleFpsChange(Number(e.target.value))}
-                title="Taxa máxima de quadros por segundo"
-              >
-                {FPS_PRESETS.map((f) => (
-                  <option key={f.value} value={f.value}>{f.label} FPS</option>
-                ))}
-              </select>
-            </div>
+              {/* Image quality selector (compressão) — Manual */}
+              <div className="flex items-center gap-0.5">
+                <span className="mr-1 text-slate-600">🖼</span>
+                <select
+                  className="bg-slate-800 border border-slate-700 rounded px-1 py-0.5 text-xs text-slate-300 cursor-pointer hover:border-slate-600 disabled:opacity-50"
+                  value={liveImageQuality}
+                  disabled={qualityChanging}
+                  onChange={(e) => handleImageQualityChange(Number(e.target.value))}
+                  title="Qualidade da imagem (compressão)"
+                >
+                  {IMAGE_QUALITY_PRESETS.map((iq) => (
+                    <option key={iq.value} value={iq.value}>{iq.label}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* FPS selector — Manual */}
+              <div className="flex items-center gap-0.5">
+                <span className="mr-1 text-slate-600">⚡</span>
+                <select
+                  className="bg-slate-800 border border-slate-700 rounded px-1 py-0.5 text-xs text-slate-300 cursor-pointer hover:border-slate-600 disabled:opacity-50"
+                  value={liveMaxFps}
+                  disabled={qualityChanging}
+                  onChange={(e) => handleFpsChange(Number(e.target.value))}
+                  title="Taxa máxima de quadros por segundo"
+                >
+                  {FPS_PRESETS.map((f) => (
+                    <option key={f.value} value={f.value}>{f.label} FPS</option>
+                  ))}
+                </select>
+              </div>
+            </>
           )}
 
           {/* Monitor selector — troca o monitor capturado (reinicia a sessão de tela) */}
@@ -569,7 +571,7 @@ export default function RemoteSession() {
             <select
               className="bg-slate-800 border border-slate-700 rounded px-1 py-0.5 text-xs text-slate-300 cursor-pointer hover:border-slate-600 disabled:opacity-50"
               value={monitorIndex}
-              disabled={monitorChanging || activeTab !== 'screen'}
+              disabled={monitorChanging}
               onChange={(e) => handleMonitorChange(Number(e.target.value))}
               title="Monitor capturado (0 = primário). Trocar reinicia a sessão de tela."
             >
@@ -590,6 +592,7 @@ export default function RemoteSession() {
             </select>
           </div>
         </div>
+        )}
       </div>
 
       {/* Main content area */}
