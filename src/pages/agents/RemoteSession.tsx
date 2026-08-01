@@ -3,8 +3,7 @@ import { Button, Card } from '@/components/ui';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { remoteSessionsApi, SessionCredentials, type ChangeQualityRequest, type StartRemoteSessionRequest } from '@/api/remote-sessions';
 import { configureApiClient } from '@/api/client';
-import { openRemoteSessionPopup } from './remoteSessionLauncher';
-import RemoteScreenViewer from '@/modules/remote-screen/RemoteScreenViewer';
+import RemoteScreenViewer, { type MonitorInfo } from '@/modules/remote-screen/RemoteScreenViewer';
 import RemoteTerminal from '@/modules/remote-terminal/RemoteTerminal';
 import RemoteFiles from '@/modules/remote-files/RemoteFiles';
 import RemoteProxy from '@/modules/remote-proxy/RemoteProxy';
@@ -131,6 +130,8 @@ export default function RemoteSession() {
   // Monitor ativo para captura de tela (0 = primário). Trocar reinicia a sessão.
   const [monitorIndex, setMonitorIndex] = useState(initialMonitorIndex);
   const [monitorChanging, setMonitorChanging] = useState(false);
+  // Lista dinâmica de monitores do agent (recebida via subject .monitors).
+  const [monitors, setMonitors] = useState<MonitorInfo[]>([]);
 
   const QUALITIES: { value: ChangeQualityRequest['quality']; label: string; fps: number; jpegQ: number }[] = [
     { value: 'ultra', label: 'Ultra', fps: 30, jpegQ: 92 },
@@ -272,24 +273,46 @@ export default function RemoteSession() {
     }
   }, [qualityChanging, sessionId, agentId, autoMode, liveQuality, liveCodec]);
 
-  // Troca de monitor — reinicia a sessão de tela com o monitor selecionado.
-  // Como o monitor é definido no start da sessão (agent captura o monitor
-  // escolhido), a troca encerra a atual e abre uma nova com o monitorIndex.
+  // Troca de monitor — reinicia a sessão de tela com o monitor selecionado
+  // NA MESMA JANELA (sem abrir nova popup). Para a sessão atual, inicia uma
+  // nova com o monitorIndex e redireciona a janela atual para a nova URL.
   const handleMonitorChange = useCallback(async (newMonitor: number) => {
     if (monitorChanging || !agentId) return;
     setMonitorChanging(true);
     setMonitorIndex(newMonitor);
     try {
-      // Reinicia a sessão de tela com o novo monitor (mesma qualidade/codec).
-      await openRemoteSessionPopup({
+      // 1. Encerra a sessão atual (best-effort)
+      if (sessionId) {
+        try { await remoteSessionsApi.stopSession(agentId, sessionId); } catch { /* best-effort */ }
+      }
+
+      // 2. Inicia nova sessão de tela com o novo monitor
+      const session = await remoteSessionsApi.startSession(agentId, {
         agentId,
         kind: 'screen',
         transport: 'nats',
         quality: liveQuality as StartRemoteSessionRequest['quality'],
         codec: liveCodec as StartRemoteSessionRequest['codec'],
         durationMinutes: 30,
+        force: true,
         monitorIndex: newMonitor,
       });
+
+      // 3. Redireciona a MESMA janela para a nova sessão (reconecta o viewer)
+      const query = new URLSearchParams({
+        sessionId: session.sessionId,
+        agentId: session.agentId,
+        natsSubject: session.natsSubject,
+        kind: session.kind,
+        transport: session.transport,
+        quality: session.qualityProfile,
+        codec: session.codec,
+        expiresAt: session.expiresAtUtc,
+        monitorIndex: String(newMonitor),
+      });
+      if (session.natsWssUrl) query.set('natsUrl', session.natsWssUrl);
+      if (initialAccessToken) query.set('accessToken', initialAccessToken);
+      window.location.href = `/agents/remote-session?${query.toString()}`;
     } catch (err) {
       console.error('Falha ao trocar de monitor:', err);
       setErrorMsg(err instanceof Error ? err.message : 'Falha ao trocar de monitor.');
@@ -297,7 +320,7 @@ export default function RemoteSession() {
     } finally {
       setMonitorChanging(false);
     }
-  }, [monitorChanging, agentId, liveQuality, liveCodec, initialMonitorIndex]);
+  }, [monitorChanging, agentId, sessionId, liveQuality, liveCodec, initialMonitorIndex, initialAccessToken]);
 
   // Timer de expiração
   useEffect(() => {
@@ -550,10 +573,20 @@ export default function RemoteSession() {
               onChange={(e) => handleMonitorChange(Number(e.target.value))}
               title="Monitor capturado (0 = primário). Trocar reinicia a sessão de tela."
             >
-              <option value={0}>Monitor 1 (primário)</option>
-              <option value={1}>Monitor 2</option>
-              <option value={2}>Monitor 3</option>
-              <option value={3}>Monitor 4</option>
+              {monitors.length > 0 ? (
+                monitors.map((m) => (
+                  <option key={m.index} value={m.index}>
+                    {m.isPrimary ? 'Monitor 1 (primário)' : `Monitor ${m.index + 1}`} — {m.width}x{m.height}
+                  </option>
+                ))
+              ) : (
+                <>
+                  <option value={0}>Monitor 1 (primário)</option>
+                  <option value={1}>Monitor 2</option>
+                  <option value={2}>Monitor 3</option>
+                  <option value={3}>Monitor 4</option>
+                </>
+              )}
             </select>
           </div>
         </div>
@@ -573,6 +606,7 @@ export default function RemoteSession() {
                 codec={liveCodec}
                 onError={(msg) => setErrorMsg(msg)}
                 onLatency={(rttMs) => setRtt(rttMs)}
+                onMonitors={(mons) => setMonitors(mons)}
               />
             </div>
             {transport === 'webrtc' && webrtc.state.status === 'connected' && (

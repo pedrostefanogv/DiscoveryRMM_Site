@@ -17,6 +17,17 @@ interface RemoteScreenViewerProps {
   codec: string;
   onError?: (msg: string) => void;
   onLatency?: (rttMs: number) => void;
+  onMonitors?: (monitors: MonitorInfo[]) => void;
+}
+
+export interface MonitorInfo {
+  index: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  name: string;
+  isPrimary: boolean;
 }
 
 interface AgentMetrics {
@@ -68,6 +79,7 @@ export default function RemoteScreenViewer({
   codec,
   onError,
   onLatency,
+  onMonitors,
 }: RemoteScreenViewerProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -77,6 +89,9 @@ export default function RemoteScreenViewer({
   const [fps, setFps] = useState<number>(0);
   const [isPaused, setIsPaused] = useState(false);
   const [agentMetrics, setAgentMetrics] = useState<AgentMetrics | null>(null);
+  // Estado da conexão para UI (conectando/conectado/erro) + botão de reconexão.
+  const [connectionState, setConnectionState] = useState<'connecting' | 'connected' | 'error'>('connecting');
+  const [reconnectKey, setReconnectKey] = useState(0);
   const frameCountRef = useRef(0);
   const lastFpsUpdate = useRef(Date.now());
   const wsRef = useRef<WebSocket | null>(null);
@@ -85,11 +100,13 @@ export default function RemoteScreenViewer({
   // recriem o useEffect e resetem reconnectAttempts a cada render.
   const onErrorRef = useRef(onError);
   const onLatencyRef = useRef(onLatency);
+  const onMonitorsRef = useRef(onMonitors);
   const codecRef = useRef(codec);
   const scaleRef = useRef(scale);
   const isPausedRef = useRef(isPaused);
   onErrorRef.current = onError;
   onLatencyRef.current = onLatency;
+  onMonitorsRef.current = onMonitors;
   codecRef.current = codec;
   scaleRef.current = scale;
   isPausedRef.current = isPaused;
@@ -228,6 +245,7 @@ export default function RemoteScreenViewer({
     let ws: WebSocket | null = null;
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
     reconnectAttemptsRef.current = 0;
+    setConnectionState('connecting');
     let protocolBuffer: Uint8Array<ArrayBufferLike> = new Uint8Array();
     let connectSent = false;
     let authenticated = false;
@@ -388,6 +406,18 @@ export default function RemoteScreenViewer({
       });
     };
 
+    // ── Lista de monitores via subject .monitors (seletor dinâmico) ──
+    const processMonitorsMessage = (payloadText: string) => {
+      try {
+        const monitors = JSON.parse(payloadText) as MonitorInfo[];
+        if (Array.isArray(monitors) && monitors.length > 0) {
+          onMonitorsRef.current?.(monitors);
+        }
+      } catch {
+        // JSON inválido — ignora
+      }
+    };
+
     const processProtocol = () => {
       const decoder = new TextDecoder();
       while (!cancelled) {
@@ -423,6 +453,8 @@ export default function RemoteScreenViewer({
             processCursorImageMessage(payload.buffer);
           } else if (subject.endsWith('.cursor')) {
             processCursorMessage(payload.buffer);
+          } else if (subject.endsWith('.monitors')) {
+            processMonitorsMessage(decoder.decode(payload));
           } else {
             // .frame (binário)
             processScreenFrame(payload.buffer);
@@ -450,10 +482,12 @@ export default function RemoteScreenViewer({
           if (connectSent && !authenticated) {
             authenticated = true;
             reconnectAttemptsRef.current = 0;
+            setConnectionState('connected');
             sendProtocol(`SUB ${natsSubject}.frame 1`);
             sendProtocol(`SUB ${natsSubject}.frame.frag 3`);
             sendProtocol(`SUB ${natsSubject}.cursor 4`);
             sendProtocol(`SUB ${natsSubject}.cursor.img 5`);
+            sendProtocol(`SUB ${natsSubject}.monitors 6`);
             sendProtocol(`SUB ${natsSubject}.event 2`);
           }
           continue;
@@ -527,6 +561,7 @@ export default function RemoteScreenViewer({
           }, delay);
         } else {
           console.error('[RemoteScreenViewer] Esgotadas tentativas de reconexão');
+          setConnectionState('error');
           onErrorRef.current?.('NATS connection closed — verifique se o servidor NATS está acessível.');
         }
       };
@@ -539,7 +574,7 @@ export default function RemoteScreenViewer({
       if (reconnectTimer) clearTimeout(reconnectTimer);
       if (ws) ws.close();
     };
-  }, [natsSubject, natsUrl, jwt, decodeFrame, renderFrame]);
+  }, [natsSubject, natsUrl, jwt, decodeFrame, renderFrame, reconnectKey]);
 
   // Input capture (mouse/keyboard) — coordenadas corretas C2
   useEffect(() => {
@@ -649,6 +684,12 @@ export default function RemoteScreenViewer({
     setIsFullscreen(!isFullscreen);
   }, [isFullscreen]);
 
+  // Reconexão manual — força o useEffect de conexão a rodar de novo.
+  const handleReconnect = useCallback(() => {
+    setConnectionState('connecting');
+    setReconnectKey((k) => k + 1);
+  }, []);
+
   // Keyboard shortcuts
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -682,6 +723,8 @@ export default function RemoteScreenViewer({
         <div className="flex items-center gap-3">
           <span className="text-emerald-400 font-medium">{fps} FPS</span>
           <span className="text-slate-400">{rtt}ms</span>
+          {connectionState === 'connecting' && <span className="text-amber-400 animate-pulse">conectando…</span>}
+          {connectionState === 'error' && <span className="text-rose-400">desconectado</span>}
           {isPaused && <span className="text-amber-400">⏸</span>}
         </div>
         {agentMetrics && (
@@ -705,6 +748,15 @@ export default function RemoteScreenViewer({
 
       {/* Controls */}
       <div className="absolute bottom-2 right-2 flex gap-1">
+        {connectionState === 'error' && (
+          <button
+            className="bg-rose-600/90 hover:bg-rose-500 text-white rounded px-2 py-1 text-xs backdrop-blur-sm font-medium"
+            onClick={handleReconnect}
+            title="Reconectar ao servidor NATS"
+          >
+            ⟳ Reconectar
+          </button>
+        )}
         <button
           className="bg-slate-800/80 hover:bg-slate-700 text-slate-300 rounded px-2 py-1 text-xs backdrop-blur-sm"
           onClick={() => setScale(scale === 'fit' ? '100%' : 'fit')}
