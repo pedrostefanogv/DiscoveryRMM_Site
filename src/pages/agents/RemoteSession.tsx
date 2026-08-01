@@ -121,7 +121,7 @@ export default function RemoteSession() {
 
   // ── Controles de qualidade em tempo real (independentes) ──
   // Default: sem limite de FPS (captura o mais rápido possível) + WebP
-  const [liveQuality, setLiveQuality] = useState(quality);
+  const [liveQuality, _setLiveQuality] = useState(quality);
   const [liveCodec, setLiveCodec] = useState(codec);
   const [liveImageQuality, setLiveImageQuality] = useState(75); // compressão JPEG 1-100
   const [liveMaxFps, setLiveMaxFps] = useState(0);             // 0 = sem limite
@@ -133,16 +133,6 @@ export default function RemoteSession() {
   const [monitorChanging, setMonitorChanging] = useState(false);
   // Lista dinâmica de monitores do agent (recebida via subject .monitors).
   const [monitors, setMonitors] = useState<MonitorInfo[]>([]);
-
-  const QUALITIES: { value: ChangeQualityRequest['quality']; label: string; fps: number; jpegQ: number }[] = [
-    { value: 'ultra', label: 'Ultra', fps: 30, jpegQ: 92 },
-    { value: 'fast', label: 'Rápido', fps: 20, jpegQ: 80 },
-    { value: 'high', label: 'Alta', fps: 15, jpegQ: 75 },
-    { value: 'medium', label: 'Média', fps: 12, jpegQ: 60 },
-    { value: 'low', label: 'Baixa', fps: 5, jpegQ: 40 },
-    { value: 'ultralow', label: 'Mínima', fps: 2, jpegQ: 25 },
-    { value: 'unlimited', label: 'Sem limite', fps: 0, jpegQ: 75 },
-  ];
 
   const CODECS: { value: NonNullable<ChangeQualityRequest['codec']>; label: string }[] = [
     { value: 'webp', label: 'WebP' },
@@ -165,29 +155,6 @@ export default function RemoteSession() {
     { value: 5, label: '5 (Baixo)' },
     { value: 2, label: '2 (Mínimo)' },
   ];
-
-  const handleQualityChange = useCallback(async (newQuality: ChangeQualityRequest['quality']) => {
-    if (qualityChanging) return;
-    const preset = QUALITIES.find(q => q.value === newQuality);
-    const prevQuality = liveQuality;
-    setLiveQuality(newQuality);
-    setAutoMode(false);
-    setQualityChanging(true);
-    try {
-      await remoteSessionsApi.changeQuality(agentId, sessionId, {
-        quality: newQuality,
-        codec: liveCodec as ChangeQualityRequest['codec'],
-        imageQuality: preset?.jpegQ ?? 75,
-        maxFps: preset?.fps ?? 15,
-        auto: false,
-      });
-    } catch (err) {
-      setLiveQuality(prevQuality);
-      console.error('Falha ao alterar qualidade:', err);
-    } finally {
-      setQualityChanging(false);
-    }
-  }, [qualityChanging, sessionId, agentId, liveCodec, liveQuality]);
 
   const handleImageQualityChange = useCallback(async (newImageQ: number) => {
     if (qualityChanging || !sessionId || !agentId) return;
