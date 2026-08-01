@@ -59,7 +59,7 @@ export default function RemoteFiles({
   } | null>(null);
   const [modalInput, setModalInput] = useState('');
 
-  const openPrompt = (title: string, inputLabel: string, initial: string, onConfirm: (value: string) => void) => {
+  const openPrompt = (title: string, inputLabel: string, initial: string, onConfirm: (value?: string) => void) => {
     setModalInput(initial);
     setModal({ title, inputLabel, inputValue: initial, confirmLabel: 'OK', onConfirm });
   };
