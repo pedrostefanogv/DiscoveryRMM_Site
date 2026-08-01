@@ -1,8 +1,9 @@
 import { useSearchParams } from 'react-router-dom';
 import { Button, Card } from '@/components/ui';
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { remoteSessionsApi, SessionCredentials, type ChangeQualityRequest } from '@/api/remote-sessions';
+import { remoteSessionsApi, SessionCredentials, type ChangeQualityRequest, type StartRemoteSessionRequest } from '@/api/remote-sessions';
 import { configureApiClient } from '@/api/client';
+import { openRemoteSessionPopup } from './remoteSessionLauncher';
 import RemoteScreenViewer from '@/modules/remote-screen/RemoteScreenViewer';
 import RemoteTerminal from '@/modules/remote-terminal/RemoteTerminal';
 import RemoteFiles from '@/modules/remote-files/RemoteFiles';
@@ -45,6 +46,8 @@ export default function RemoteSession() {
   // Credenciais NATS pré-buscadas pelo launcher (evita chamada extra à API na popup)
   const preFetchedJwt = searchParams.get('jwt') ?? '';
   const preFetchedNkeySeed = searchParams.get('nkeySeed') ?? '';
+  // Monitor para captura de tela (0 = primário). Vem do launcher via query string.
+  const initialMonitorIndex = Number(searchParams.get('monitorIndex') ?? '0') || 0;
 
   // Ref mutável para o accessToken — atualizado via BroadcastChannel quando
   // a aba principal faz refresh. O apiClient lê desta ref via getAccessToken.
@@ -125,6 +128,9 @@ export default function RemoteSession() {
   const [liveMaxFps, setLiveMaxFps] = useState(0);             // 0 = sem limite
   const [autoMode, setAutoMode] = useState(false);
   const [qualityChanging, setQualityChanging] = useState(false);
+  // Monitor ativo para captura de tela (0 = primário). Trocar reinicia a sessão.
+  const [monitorIndex, setMonitorIndex] = useState(initialMonitorIndex);
+  const [monitorChanging, setMonitorChanging] = useState(false);
 
   const QUALITIES: { value: ChangeQualityRequest['quality']; label: string; fps: number; jpegQ: number }[] = [
     { value: 'ultra', label: 'Ultra', fps: 30, jpegQ: 92 },
@@ -265,6 +271,33 @@ export default function RemoteSession() {
       setQualityChanging(false);
     }
   }, [qualityChanging, sessionId, agentId, autoMode, liveQuality, liveCodec]);
+
+  // Troca de monitor — reinicia a sessão de tela com o monitor selecionado.
+  // Como o monitor é definido no start da sessão (agent captura o monitor
+  // escolhido), a troca encerra a atual e abre uma nova com o monitorIndex.
+  const handleMonitorChange = useCallback(async (newMonitor: number) => {
+    if (monitorChanging || !agentId) return;
+    setMonitorChanging(true);
+    setMonitorIndex(newMonitor);
+    try {
+      // Reinicia a sessão de tela com o novo monitor (mesma qualidade/codec).
+      await openRemoteSessionPopup({
+        agentId,
+        kind: 'screen',
+        transport: 'nats',
+        quality: liveQuality as StartRemoteSessionRequest['quality'],
+        codec: liveCodec as StartRemoteSessionRequest['codec'],
+        durationMinutes: 30,
+        monitorIndex: newMonitor,
+      });
+    } catch (err) {
+      console.error('Falha ao trocar de monitor:', err);
+      setErrorMsg(err instanceof Error ? err.message : 'Falha ao trocar de monitor.');
+      setMonitorIndex(initialMonitorIndex);
+    } finally {
+      setMonitorChanging(false);
+    }
+  }, [monitorChanging, agentId, liveQuality, liveCodec, initialMonitorIndex]);
 
   // Timer de expiração
   useEffect(() => {
@@ -506,6 +539,23 @@ export default function RemoteSession() {
               </select>
             </div>
           )}
+
+          {/* Monitor selector — troca o monitor capturado (reinicia a sessão de tela) */}
+          <div className="flex items-center gap-0.5">
+            <span className="mr-1 text-slate-600">🖥</span>
+            <select
+              className="bg-slate-800 border border-slate-700 rounded px-1 py-0.5 text-xs text-slate-300 cursor-pointer hover:border-slate-600 disabled:opacity-50"
+              value={monitorIndex}
+              disabled={monitorChanging || activeTab !== 'screen'}
+              onChange={(e) => handleMonitorChange(Number(e.target.value))}
+              title="Monitor capturado (0 = primário). Trocar reinicia a sessão de tela."
+            >
+              <option value={0}>Monitor 1 (primário)</option>
+              <option value={1}>Monitor 2</option>
+              <option value={2}>Monitor 3</option>
+              <option value={3}>Monitor 4</option>
+            </select>
+          </div>
         </div>
       </div>
 

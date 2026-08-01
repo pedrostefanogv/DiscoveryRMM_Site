@@ -313,15 +313,27 @@ export default function RemoteScreenViewer({
     // Formato: 6 bytes [flags(1)][x int16 BE][y int16 BE]. Flags: bit0=visible,
     // bit1=hand, bit2=ibeam, bit3=crosshair.
     let cursorPos: { x: number; y: number; visible: boolean } | null = null;
+    // Cursor real (bitmap PNG) via subject .cursor.img — desenhado em vez da seta genérica.
+    let cursorImage: { bitmap: ImageBitmap; hotX: number; hotY: number } | null = null;
 
     const drawCursorOverlay = () => {
       const canvas = canvasRef.current;
       if (!canvas || !cursorPos || !cursorPos.visible) return;
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
-      // Seta simples (triângulo + contorno)
+
       const x = cursorPos.x;
       const y = cursorPos.y;
+
+      // Se temos o bitmap real do cursor, desenha-o (respeitando o hotspot).
+      if (cursorImage) {
+        ctx.save();
+        ctx.drawImage(cursorImage.bitmap, x - cursorImage.hotX, y - cursorImage.hotY);
+        ctx.restore();
+        return;
+      }
+
+      // Fallback: seta simples (triângulo + contorno)
       ctx.save();
       ctx.strokeStyle = '#000';
       ctx.lineWidth = 1;
@@ -355,6 +367,27 @@ export default function RemoteScreenViewer({
       drawCursorOverlay();
     };
 
+    // ── Cursor real (bitmap PNG) via subject .cursor.img ──
+    // Formato: [4B width][4B height][4B hotX][4B hotY][PNG bytes].
+    const processCursorImageMessage = (buffer: ArrayBuffer) => {
+      if (buffer.byteLength < 16) return;
+      const view = new DataView(buffer);
+      const hotX = view.getUint32(8, false);
+      const hotY = view.getUint32(12, false);
+      const pngBytes = new Uint8Array(buffer, 16);
+      if (pngBytes.length === 0) return;
+
+      const blob = new Blob([pngBytes.slice().buffer as ArrayBuffer], { type: 'image/png' });
+      createImageBitmap(blob).then((bitmap) => {
+        // Fecha o bitmap anterior para liberar memória
+        if (cursorImage?.bitmap) cursorImage.bitmap.close();
+        cursorImage = { bitmap, hotX, hotY };
+        drawCursorOverlay();
+      }).catch(() => {
+        // PNG inválido — mantém o fallback
+      });
+    };
+
     const processProtocol = () => {
       const decoder = new TextDecoder();
       while (!cancelled) {
@@ -386,6 +419,8 @@ export default function RemoteScreenViewer({
             processEventMessage(decoder.decode(payload));
           } else if (subject.endsWith('.frame.frag')) {
             processScreenFrameFrag(payload.buffer);
+          } else if (subject.endsWith('.cursor.img')) {
+            processCursorImageMessage(payload.buffer);
           } else if (subject.endsWith('.cursor')) {
             processCursorMessage(payload.buffer);
           } else {
@@ -418,6 +453,7 @@ export default function RemoteScreenViewer({
             sendProtocol(`SUB ${natsSubject}.frame 1`);
             sendProtocol(`SUB ${natsSubject}.frame.frag 3`);
             sendProtocol(`SUB ${natsSubject}.cursor 4`);
+            sendProtocol(`SUB ${natsSubject}.cursor.img 5`);
             sendProtocol(`SUB ${natsSubject}.event 2`);
           }
           continue;
@@ -509,6 +545,9 @@ export default function RemoteScreenViewer({
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || !wsRef.current) return;
+
+    // Foca o canvas no mount para capturar teclado imediatamente
+    canvas.focus();
 
     const getFrameCoords = (clientX: number, clientY: number): { x: number; y: number } | null => {
       if (!canvas) return null;

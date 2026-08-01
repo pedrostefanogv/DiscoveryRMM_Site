@@ -22,6 +22,8 @@ export interface StartRemoteSessionRequest {
     termRows?: number;
     /** Raiz do explorador de arquivos no agent. Default: C:\\. */
     rootPath?: string;
+    /** Índice do monitor para captura de tela (0 = primário). Default: 0. */
+    monitorIndex?: number;
 }
 
 export interface RemoteSessionResponse {

@@ -12,6 +12,7 @@ export interface OpenRemoteSessionParams {
   quality?: StartRemoteSessionRequest["quality"];
   codec?: StartRemoteSessionRequest["codec"];
   durationMinutes?: number;
+  monitorIndex?: number;
 }
 
 export class PopupBlockedError extends Error {
@@ -43,6 +44,7 @@ interface SessionUrlParams {
   natsWssUrl?: string | null;
   expiresAtUtc: string;
   accessToken?: string | null;
+  monitorIndex?: number;
   turnCredentials?: {
     urls: string[];
     username: string;
@@ -79,6 +81,9 @@ function toSessionUrl(params: SessionUrlParams): string {
   if (params.nkeySeed) {
     query.set("nkeySeed", params.nkeySeed);
   }
+  if (params.monitorIndex !== undefined) {
+    query.set("monitorIndex", String(params.monitorIndex));
+  }
   if (params.turnCredentials) {
     query.set("turnUrls", params.turnCredentials.urls.join(","));
     query.set("turnUsername", params.turnCredentials.username);
@@ -96,6 +101,7 @@ export async function openRemoteSessionPopup({
   quality,
   codec,
   durationMinutes,
+  monitorIndex,
 }: OpenRemoteSessionParams) {
   const request = {
     ...DEFAULT_PARAMS,
@@ -104,6 +110,7 @@ export async function openRemoteSessionPopup({
     ...(quality ? { quality } : {}),
     ...(codec ? { codec } : {}),
     ...(durationMinutes ? { durationMinutes } : {}),
+    ...(monitorIndex !== undefined ? { monitorIndex } : {}),
     agentId,
   } as StartRemoteSessionRequest;
 
@@ -207,6 +214,7 @@ export async function openRemoteSessionPopup({
       natsWssUrl: session.natsWssUrl ?? realtimeConfig.natsUrl,
       expiresAtUtc: session.expiresAtUtc,
       accessToken: getApiAccessToken(),
+      monitorIndex,
       turnCredentials,
       jwt,
       nkeySeed,
