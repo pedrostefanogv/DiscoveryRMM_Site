@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
@@ -15,6 +15,12 @@ interface RemoteTerminalProps {
   natsUrl?: string;
   jwt?: string;
   nkeySeed?: string;
+  /** Shell ativo (powershell | cmd). */
+  shell?: string;
+  /** Chamado quando o usuário troca o shell — o pai reinicia a sessão com o novo shell. */
+  onSwitchShell?: (newShell: string) => void;
+  /** Indica que a troca de shell está em andamento (feedback). */
+  switching?: boolean;
 }
 
 const TERM_THEME = {
@@ -49,10 +55,11 @@ export default function RemoteTerminal({
   natsUrl = '',
   jwt = '',
   nkeySeed = '',
+  shell = 'powershell',
+  onSwitchShell,
+  switching = false,
 }: RemoteTerminalProps) {
   const [status, setStatus] = useState<'connected' | 'disconnected'>('disconnected');
-  const [shell, setShell] = useState<string>('powershell');
-  const [switching, setSwitching] = useState(false);
 
   const termRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
@@ -156,31 +163,6 @@ export default function RemoteTerminal({
     return unsubscribe;
   }, [onExit]);
 
-  // Troca de shell: reinicia a sessão com o shell escolhido (console único)
-  const handleSwitchShell = useCallback(async (newShell: string) => {
-    if (newShell === shell) return;
-    setSwitching(true);
-    try {
-      await remoteSessionsApi.startSession(agentId, {
-        agentId,
-        kind: 'terminal',
-        transport: 'nats',
-        quality: 'high',
-        codec: 'jpeg',
-        durationMinutes: 30,
-        force: true,
-        shell: newShell,
-      });
-      setShell(newShell);
-      termRef.current?.reset();
-      termRef.current?.writeln(`\x1b[1;36m── Novo shell: ${newShell} ──\x1b[0m\r\n`);
-    } catch {
-      // shell trocado via backend; o reconnect do stream assume
-    } finally {
-      setSwitching(false);
-    }
-  }, [agentId, shell]);
-
   // Para a sessão ao desmontar
   useEffect(() => {
     return () => {
@@ -197,7 +179,7 @@ export default function RemoteTerminal({
           <select
             value={shell}
             disabled={switching}
-            onChange={e => handleSwitchShell(e.target.value)}
+            onChange={e => onSwitchShell?.(e.target.value)}
             className="bg-slate-800 border border-slate-700 rounded px-1 py-0.5 text-slate-300 text-xs disabled:opacity-50"
           >
             <option value="powershell">PowerShell</option>

@@ -1,13 +1,12 @@
 import { useSearchParams } from 'react-router-dom';
 import { Button, Card } from '@/components/ui';
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { remoteSessionsApi, SessionCredentials, type ChangeQualityRequest, type StartRemoteSessionRequest } from '@/api/remote-sessions';
+import { remoteSessionsApi, type ChangeQualityRequest, type StartRemoteSessionRequest } from '@/api/remote-sessions';
 import { configureApiClient } from '@/api/client';
 import RemoteScreenViewer, { type MonitorInfo } from '@/modules/remote-screen/RemoteScreenViewer';
 import RemoteTerminal from '@/modules/remote-terminal/RemoteTerminal';
 import RemoteFiles from '@/modules/remote-files/RemoteFiles';
 import RemoteProxy from '@/modules/remote-proxy/RemoteProxy';
-import { useWebrtcSession } from '@/modules/remote-webrtc/useWebrtcSession';
 import { RecordingControls } from '@/modules/remote-recording/RecordingControls';
 import {
   onCrossTabMessage,
@@ -18,7 +17,19 @@ import {
 
 type Tab = 'screen' | 'terminal' | 'files' | 'proxy';
 
-
+// Sessão ativa de uma aba específica. Cada aba inicia sua própria sessão
+// sob demanda (botão "Conectar") — nada é iniciado automaticamente ao abrir.
+interface TabSession {
+  sessionId: string;
+  natsSubject: string;
+  natsUrl?: string;
+  jwt?: string;
+  nkeySeed?: string;
+  expiresAtUtc: string;
+  kind: string;
+  qualityProfile: string;
+  codec: string;
+}
 
 function formatRemaining(expiresAtUtc: string | null): string {
   if (!expiresAtUtc) return '--';
@@ -32,21 +43,11 @@ function formatRemaining(expiresAtUtc: string | null): string {
 export default function RemoteSession() {
   const [searchParams] = useSearchParams();
 
-  const sessionId = searchParams.get('sessionId') ?? '';
   const agentId = searchParams.get('agentId') ?? '';
-  const natsSubject = searchParams.get('natsSubject') ?? '';
-  const kind = searchParams.get('kind') ?? 'screen';
   const transport = searchParams.get('transport') ?? 'nats';
-  const quality = searchParams.get('quality') ?? 'high';
-  const codec = searchParams.get('codec') ?? 'jpeg';
-  const expiresAt = searchParams.get('expiresAt') ?? '';
-  const natsUrlFromQuery = searchParams.get('natsUrl') ?? '';
+  const quality = searchParams.get('quality') ?? 'unlimited';
+  const codec = searchParams.get('codec') ?? 'webp';
   const initialAccessToken = searchParams.get('accessToken') ?? '';
-  // Credenciais NATS pré-buscadas pelo launcher (evita chamada extra à API na popup)
-  const preFetchedJwt = searchParams.get('jwt') ?? '';
-  const preFetchedNkeySeed = searchParams.get('nkeySeed') ?? '';
-  // Monitor para captura de tela (0 = primário). Vem do launcher via query string.
-  const initialMonitorIndex = Number(searchParams.get('monitorIndex') ?? '0') || 0;
 
   // Ref mutável para o accessToken — atualizado via BroadcastChannel quando
   // a aba principal faz refresh. O apiClient lê desta ref via getAccessToken.
@@ -57,15 +58,11 @@ export default function RemoteSession() {
   }, [initialAccessToken]);
 
   // Configura o apiClient com o token JWT da query string, atualizável via BroadcastChannel.
-  // A popup não compartilha sessionStorage com a aba pai, então recebe tokens via
-  // BroadcastChannel quando a aba principal faz refresh.
   useEffect(() => {
     configureApiClient({
       getAccessToken: () => accessTokenRef.current,
       refreshAccessToken: async () => {
-        // Pede à aba principal o token mais recente
         postCrossTabMessage({ type: 'TOKEN_REQUEST' });
-        // Aguarda um tick para o listener atualizar accessTokenRef
         await new Promise((resolve) => setTimeout(resolve, 100));
         return accessTokenRef.current || null;
       },
@@ -75,64 +72,48 @@ export default function RemoteSession() {
     });
   }, []);
 
-  // ── Cross-tab sync: recebe tokens atualizados e mantém a aba principal viva ──
+  // ── Cross-tab sync ──
   useEffect(() => {
-    // Escuta tokens atualizados da aba principal
     const cleanup = onCrossTabMessage((message: CrossTabMessage) => {
       if (message.type === 'TOKEN_REFRESHED' && message.accessToken) {
         accessTokenRef.current = message.accessToken;
       }
     });
-
-    // Envia pings de atividade para manter a aba principal viva enquanto a
-    // popup de acesso remoto estiver aberta
     const stopPing = startActivityPing(10_000);
-
-    // Pede os tokens atuais ao abrir (caso a aba principal tenha renovado
-    // depois que esta popup foi criada)
     postCrossTabMessage({ type: 'TOKEN_REQUEST' });
-
     return () => {
       cleanup();
       stopPing();
     };
   }, []);
 
-  const [remaining, setRemaining] = useState<string>(formatRemaining(expiresAt));
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [isConnected, setIsConnected] = useState(false);
-  // Aba ativa por padrão: 'screen' (Tela). Se o kind da query for uma aba
-  // válida e diferente (terminal/files/proxy), usa-a; caso contrário ('all',
-  // vazio, inválido) cai para 'screen' — evita nenhuma aba ativa ao abrir.
-  const [activeTab, setActiveTab] = useState<Tab>(() => {
-    if (kind === 'terminal' || kind === 'files' || kind === 'proxy' || kind === 'screen') {
-      return kind as Tab;
-    }
-    return 'screen';
-  });
-  const [natsCredentials, setNatsCredentials] = useState<SessionCredentials | null>(
-    preFetchedJwt && preFetchedNkeySeed
-      ? { jwt: preFetchedJwt, nkeySeed: preFetchedNkeySeed, expiresAtUtc: expiresAt || '', natsWssUrl: natsUrlFromQuery || undefined }
-      : null,
-  );
-  const [turnCreds, setTurnCreds] = useState<{ username: string; credential: string; urls: string[] } | null>(null);
-  const [, setRemoteStream] = useState<MediaStream | null>(null);
-  const [rtt, setRtt] = useState<number>(0);
+  const [activeTab, setActiveTab] = useState<Tab>('screen');
 
-  // ── Controles de qualidade em tempo real (independentes) ──
-  // Default: sem limite de FPS (captura o mais rápido possível) + WebP
-  const [liveQuality, _setLiveQuality] = useState(quality);
+  // Sessões por aba — cada aba inicia a própria sessão sob demanda.
+  const [sessions, setSessions] = useState<Partial<Record<Tab, TabSession>>>({});
+  // Aba que está conectando (feedback no botão).
+  const [connectingTab, setConnectingTab] = useState<Tab | null>(null);
+  // Chave de reconexão por aba — incrementa para forçar o viewer a reconectar.
+  const [reconnectKeys, setReconnectKeys] = useState<Partial<Record<Tab, number>>>({});
+  // Tempo restante da sessão ativa (para exibir no header).
+  const [remaining, setRemaining] = useState<string>('--');
+
+  // ── Controles de qualidade em tempo real (apenas aba Tela) ──
+  const [liveQuality] = useState(quality);
   const [liveCodec, setLiveCodec] = useState(codec);
-  const [liveImageQuality, setLiveImageQuality] = useState(75); // compressão JPEG 1-100
-  const [liveMaxFps, setLiveMaxFps] = useState(0);             // 0 = sem limite
-  // Abre sempre em modo Auto (perfil define qualidade/codec/FPS e adapta à rede).
+  const [liveImageQuality, setLiveImageQuality] = useState(75);
+  const [liveMaxFps, setLiveMaxFps] = useState(0);
   const [autoMode, setAutoMode] = useState(true);
   const [qualityChanging, setQualityChanging] = useState(false);
-  // Monitor ativo para captura de tela (0 = primário). Trocar reinicia a sessão.
-  const [monitorIndex, setMonitorIndex] = useState(initialMonitorIndex);
+  const [monitorIndex, setMonitorIndex] = useState(0);
   const [monitorChanging, setMonitorChanging] = useState(false);
-  // Lista dinâmica de monitores do agent (recebida via subject .monitors).
   const [monitors, setMonitors] = useState<MonitorInfo[]>([]);
+  // Shell ativo do terminal (powershell | cmd). Trocar reinicia a sessão de terminal.
+  const [shell, setShell] = useState('powershell');
+  const [shellSwitching, setShellSwitching] = useState(false);
+
+  const screenSession = sessions.screen;
 
   const CODECS: { value: NonNullable<ChangeQualityRequest['codec']>; label: string }[] = [
     { value: 'webp', label: 'WebP' },
@@ -156,17 +137,151 @@ export default function RemoteSession() {
     { value: 2, label: '2 (Mínimo)' },
   ];
 
+  // ── Inicia a sessão de uma aba sob demanda ──
+  const startTabSession = useCallback(async (tab: Tab) => {
+    if (!agentId || connectingTab) return;
+    setConnectingTab(tab);
+    setErrorMsg(null);
+    try {
+      const kind = tab === 'screen' ? 'screen' : tab; // screen | terminal | files | proxy
+      const session = await remoteSessionsApi.startSession(agentId, {
+        agentId,
+        kind: kind as StartRemoteSessionRequest['kind'],
+        transport: transport as StartRemoteSessionRequest['transport'],
+        quality: liveQuality as StartRemoteSessionRequest['quality'],
+        codec: liveCodec as StartRemoteSessionRequest['codec'],
+        durationMinutes: 30,
+        force: true,
+        ...(tab === 'screen' ? { monitorIndex } : {}),
+      });
+
+      if (!session.natsSubject) {
+        throw new Error('Sessão criada sem subject NATS.');
+      }
+
+      // Obtém credenciais NATS para o viewer conectar.
+      let jwt: string | undefined;
+      let nkeySeed: string | undefined;
+      let natsUrl: string | undefined;
+      try {
+        const creds = await remoteSessionsApi.getSessionCredentials(agentId, session.sessionId);
+        jwt = creds.jwt;
+        nkeySeed = creds.nkeySeed;
+        natsUrl = creds.natsWssUrl;
+      } catch {
+        throw new Error('Falha ao obter credenciais de streaming.');
+      }
+
+      setSessions((prev) => ({
+        ...prev,
+        [tab]: {
+          sessionId: session.sessionId,
+          natsSubject: session.natsSubject,
+          natsUrl,
+          jwt,
+          nkeySeed,
+          expiresAtUtc: session.expiresAtUtc,
+          kind: session.kind,
+          qualityProfile: session.qualityProfile,
+          codec: session.codec,
+        },
+      }));
+      setRemaining(formatRemaining(session.expiresAtUtc));
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : 'Falha ao iniciar sessão.');
+    } finally {
+      setConnectingTab(null);
+    }
+  }, [agentId, connectingTab, transport, liveQuality, liveCodec, monitorIndex]);
+
+  // ── Reconexão manual de uma aba ──
+  const handleReconnect = useCallback((tab: Tab) => {
+    setReconnectKeys((prev) => ({ ...prev, [tab]: (prev[tab] ?? 0) + 1 }));
+  }, []);
+
+  // ── Encerra a sessão de uma aba ──
+  const stopTabSession = useCallback(async (tab: Tab) => {
+    const s = sessions[tab];
+    if (!s) return;
+    try {
+      await remoteSessionsApi.stopSession(agentId, s.sessionId);
+    } catch {
+      // best-effort
+    }
+    setSessions((prev) => ({ ...prev, [tab]: undefined }));
+  }, [agentId, sessions]);
+
+  // ── Troca de shell do terminal: reinicia a sessão de terminal com o novo shell ──
+  const handleSwitchShell = useCallback(async (newShell: string) => {
+    if (newShell === shell || shellSwitching || !agentId) return;
+    setShellSwitching(true);
+    setErrorMsg(null);
+    try {
+      // Encerra a sessão de terminal atual (se houver)
+      const current = sessions.terminal;
+      if (current) {
+        try { await remoteSessionsApi.stopSession(agentId, current.sessionId); } catch { /* best-effort */ }
+      }
+      // Inicia nova sessão de terminal com o novo shell
+      const session = await remoteSessionsApi.startSession(agentId, {
+        agentId,
+        kind: 'terminal',
+        transport: transport as StartRemoteSessionRequest['transport'],
+        quality: liveQuality as StartRemoteSessionRequest['quality'],
+        codec: liveCodec as StartRemoteSessionRequest['codec'],
+        durationMinutes: 30,
+        force: true,
+        shell: newShell,
+      });
+      if (!session.natsSubject) {
+        throw new Error('Sessão criada sem subject NATS.');
+      }
+      let jwt: string | undefined;
+      let nkeySeed: string | undefined;
+      let natsUrl: string | undefined;
+      try {
+        const creds = await remoteSessionsApi.getSessionCredentials(agentId, session.sessionId);
+        jwt = creds.jwt;
+        nkeySeed = creds.nkeySeed;
+        natsUrl = creds.natsWssUrl;
+      } catch {
+        throw new Error('Falha ao obter credenciais de streaming.');
+      }
+      setShell(newShell);
+      setSessions((prev) => ({
+        ...prev,
+        terminal: {
+          sessionId: session.sessionId,
+          natsSubject: session.natsSubject,
+          natsUrl,
+          jwt,
+          nkeySeed,
+          expiresAtUtc: session.expiresAtUtc,
+          kind: session.kind,
+          qualityProfile: session.qualityProfile,
+          codec: session.codec,
+        },
+      }));
+      setRemaining(formatRemaining(session.expiresAtUtc));
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : 'Falha ao trocar de shell.');
+    } finally {
+      setShellSwitching(false);
+    }
+  }, [agentId, shell, shellSwitching, sessions.terminal, transport, liveQuality, liveCodec]);
+
+  // ── Controles de qualidade (screen) ──
   const handleImageQualityChange = useCallback(async (newImageQ: number) => {
-    if (qualityChanging || !sessionId || !agentId) return;
+    if (qualityChanging || !screenSession) return;
     const prevImageQ = liveImageQuality;
     setQualityChanging(true);
     setLiveImageQuality(newImageQ);
     setAutoMode(false);
     try {
-      await remoteSessionsApi.changeQuality(agentId, sessionId, {
+      await remoteSessionsApi.changeQuality(agentId, screenSession.sessionId, {
         quality: liveQuality as ChangeQualityRequest['quality'],
         imageQuality: newImageQ,
-        maxFps: liveMaxFps,        // preserva FPS atual
+        maxFps: liveMaxFps,
         auto: false,
       });
     } catch (err) {
@@ -175,18 +290,18 @@ export default function RemoteSession() {
     } finally {
       setQualityChanging(false);
     }
-  }, [qualityChanging, sessionId, agentId, liveQuality, liveImageQuality, liveMaxFps]);
+  }, [qualityChanging, screenSession, agentId, liveQuality, liveImageQuality, liveMaxFps]);
 
   const handleFpsChange = useCallback(async (newFps: number) => {
-    if (qualityChanging || !sessionId || !agentId) return;
+    if (qualityChanging || !screenSession) return;
     const prevFps = liveMaxFps;
     setQualityChanging(true);
     setLiveMaxFps(newFps);
     setAutoMode(false);
     try {
-      await remoteSessionsApi.changeQuality(agentId, sessionId, {
+      await remoteSessionsApi.changeQuality(agentId, screenSession.sessionId, {
         quality: liveQuality as ChangeQualityRequest['quality'],
-        imageQuality: liveImageQuality,  // preserva qualidade de imagem atual
+        imageQuality: liveImageQuality,
         maxFps: newFps,
         auto: false,
       });
@@ -196,20 +311,20 @@ export default function RemoteSession() {
     } finally {
       setQualityChanging(false);
     }
-  }, [qualityChanging, sessionId, agentId, liveQuality, liveImageQuality, liveMaxFps]);
+  }, [qualityChanging, screenSession, agentId, liveQuality, liveImageQuality, liveMaxFps]);
 
   const handleCodecChange = useCallback(async (newCodec: NonNullable<ChangeQualityRequest['codec']>) => {
-    if (qualityChanging || !sessionId || !agentId) return;
+    if (qualityChanging || !screenSession) return;
     const previousCodec = liveCodec;
     setQualityChanging(true);
     setLiveCodec(newCodec);
     setAutoMode(false);
     try {
-      await remoteSessionsApi.changeQuality(agentId, sessionId, {
+      await remoteSessionsApi.changeQuality(agentId, screenSession.sessionId, {
         quality: liveQuality as ChangeQualityRequest['quality'],
         codec: newCodec,
-        imageQuality: liveImageQuality,  // preserva
-        maxFps: liveMaxFps,              // preserva
+        imageQuality: liveImageQuality,
+        maxFps: liveMaxFps,
         auto: false,
       });
     } catch (err) {
@@ -218,17 +333,15 @@ export default function RemoteSession() {
     } finally {
       setQualityChanging(false);
     }
-  }, [qualityChanging, sessionId, agentId, liveQuality, liveCodec, liveImageQuality, liveMaxFps]);
+  }, [qualityChanging, screenSession, agentId, liveQuality, liveCodec, liveImageQuality, liveMaxFps]);
 
   const handleAutoToggle = useCallback(async () => {
-    if (qualityChanging || !sessionId || !agentId) return;
+    if (qualityChanging || !screenSession) return;
     const newAuto = !autoMode;
     setQualityChanging(true);
     setAutoMode(newAuto);
     try {
-      // Em Auto: WebP preferido (menos banda) e limpa overrides manuais
-      // (imageQuality/maxFps voltam ao perfil). O backend/agent adapta.
-      await remoteSessionsApi.changeQuality(agentId, sessionId, {
+      await remoteSessionsApi.changeQuality(agentId, screenSession.sessionId, {
         quality: liveQuality as ChangeQualityRequest['quality'],
         codec: (newAuto ? 'webp' : liveCodec) as NonNullable<ChangeQualityRequest['codec']>,
         auto: newAuto,
@@ -239,143 +352,90 @@ export default function RemoteSession() {
     } finally {
       setQualityChanging(false);
     }
-  }, [qualityChanging, sessionId, agentId, autoMode, liveQuality, liveCodec]);
+  }, [qualityChanging, screenSession, agentId, autoMode, liveQuality, liveCodec]);
 
-  // Troca de monitor — reinicia a sessão de tela com o monitor selecionado
-  // NA MESMA JANELA (sem abrir nova popup). Para a sessão atual, inicia uma
-  // nova com o monitorIndex e redireciona a janela atual para a nova URL.
+  // Troca de monitor — reinicia a sessão de tela com o monitor selecionado.
   const handleMonitorChange = useCallback(async (newMonitor: number) => {
     if (monitorChanging || !agentId) return;
     setMonitorChanging(true);
     setMonitorIndex(newMonitor);
     try {
-      // 1. Encerra a sessão atual (best-effort)
-      if (sessionId) {
-        try { await remoteSessionsApi.stopSession(agentId, sessionId); } catch { /* best-effort */ }
+      if (screenSession) {
+        try { await remoteSessionsApi.stopSession(agentId, screenSession.sessionId); } catch { /* best-effort */ }
       }
-
-      // 2. Inicia nova sessão de tela com o novo monitor
       const session = await remoteSessionsApi.startSession(agentId, {
         agentId,
         kind: 'screen',
-        transport: 'nats',
+        transport: transport as StartRemoteSessionRequest['transport'],
         quality: liveQuality as StartRemoteSessionRequest['quality'],
         codec: liveCodec as StartRemoteSessionRequest['codec'],
         durationMinutes: 30,
         force: true,
         monitorIndex: newMonitor,
       });
-
-      // 3. Redireciona a MESMA janela para a nova sessão (reconecta o viewer)
-      const query = new URLSearchParams({
-        sessionId: session.sessionId,
-        agentId: session.agentId,
-        natsSubject: session.natsSubject,
-        kind: session.kind,
-        transport: session.transport,
-        quality: session.qualityProfile,
-        codec: session.codec,
-        expiresAt: session.expiresAtUtc,
-        monitorIndex: String(newMonitor),
-      });
-      if (session.natsWssUrl) query.set('natsUrl', session.natsWssUrl);
-      if (initialAccessToken) query.set('accessToken', initialAccessToken);
-      window.location.href = `/agents/remote-session?${query.toString()}`;
+      let jwt: string | undefined;
+      let nkeySeed: string | undefined;
+      let natsUrl: string | undefined;
+      try {
+        const creds = await remoteSessionsApi.getSessionCredentials(agentId, session.sessionId);
+        jwt = creds.jwt;
+        nkeySeed = creds.nkeySeed;
+        natsUrl = creds.natsWssUrl;
+      } catch { /* sem credenciais */ }
+      setSessions((prev) => ({
+        ...prev,
+        screen: {
+          sessionId: session.sessionId,
+          natsSubject: session.natsSubject,
+          natsUrl,
+          jwt,
+          nkeySeed,
+          expiresAtUtc: session.expiresAtUtc,
+          kind: session.kind,
+          qualityProfile: session.qualityProfile,
+          codec: session.codec,
+        },
+      }));
+      setRemaining(formatRemaining(session.expiresAtUtc));
     } catch (err) {
       console.error('Falha ao trocar de monitor:', err);
       setErrorMsg(err instanceof Error ? err.message : 'Falha ao trocar de monitor.');
-      setMonitorIndex(initialMonitorIndex);
     } finally {
       setMonitorChanging(false);
     }
-  }, [monitorChanging, agentId, sessionId, liveQuality, liveCodec, initialMonitorIndex, initialAccessToken]);
+  }, [monitorChanging, agentId, screenSession, transport, liveQuality, liveCodec]);
 
-  // Timer de expiração
+  // Timer de expiração da sessão ativa
   useEffect(() => {
+    const active = sessions[activeTab];
+    if (!active) return;
     const timer = setInterval(() => {
-      setRemaining(formatRemaining(expiresAt));
+      setRemaining(formatRemaining(active.expiresAtUtc));
     }, 1000);
     return () => clearInterval(timer);
-  }, [expiresAt]);
-
-  // Conexão NATS (primária) — usa credenciais pré-buscadas da URL quando disponíveis.
-  // Se não houver credenciais na URL, busca da API (fallback para abas abertas manualmente).
-  // TURN/WebRTC é opcional e buscado em background sem bloquear o fluxo principal.
-  useEffect(() => {
-    if (!sessionId || !agentId) return;
-
-    let cancelled = false;
-    (async () => {
-      try {
-        // Se já temos credenciais pré-buscadas da URL, conecta imediatamente
-        if (preFetchedJwt && preFetchedNkeySeed) {
-          setIsConnected(true);
-        } else {
-          // Fallback: busca credenciais da API (para abas abertas manualmente sem launcher)
-          const natsCreds = await remoteSessionsApi.getSessionCredentials(agentId, sessionId);
-          if (cancelled) return;
-          setNatsCredentials(natsCreds);
-          setIsConnected(true);
-        }
-
-        // TURN é opcional — busca em background para habilitar WebRTC quando disponível
-        try {
-          const turn = await remoteSessionsApi.getTurnCredentials(agentId, sessionId);
-          if (!cancelled && turn.urls.length > 0) {
-            setTurnCreds({
-              username: turn.username,
-              credential: turn.credential,
-              urls: turn.urls,
-            });
-          }
-        } catch {
-          // TURN não configurado — NATS é o transporte primário, prossegue normalmente
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setErrorMsg(`Falha ao obter credenciais NATS: ${err instanceof Error ? err.message : String(err)}`);
-        }
-      }
-    })();
-
-    return () => { cancelled = true; };
-  }, [sessionId, agentId, preFetchedJwt, preFetchedNkeySeed]);
-
-  // WebRTC (apenas quando transport=webrtc, screen, e TURN disponível)
-  const webrtc = useWebrtcSession({
-    stunUrls: ['stun:stun.l.google.com:19302'],
-    turnUrls: turnCreds?.urls ?? [],
-    turnUsername: turnCreds?.username ?? '',
-    turnCredential: turnCreds?.credential ?? '',
-    onRemoteStream: (stream) => setRemoteStream(stream),
-    onError: (err) => setErrorMsg(`WebRTC: ${err}`),
-  });
-
-  // Inicia WebRTC quando credenciais TURN disponíveis
-  useEffect(() => {
-    if (turnCreds && turnCreds.urls.length > 0 && transport === 'webrtc' && activeTab === 'screen') {
-      webrtc.start();
-    }
-    return () => {
-      webrtc.stop();
-    };
-  }, [turnCreds, transport, activeTab]);
+  }, [sessions, activeTab]);
 
   const handleRenew = async () => {
+    const active = sessions[activeTab];
+    if (!active) return;
     try {
-      await remoteSessionsApi.renewSession(agentId, sessionId);
+      const renewed = await remoteSessionsApi.renewSession(agentId, active.sessionId);
+      setSessions((prev) => ({
+        ...prev,
+        [activeTab]: { ...prev[activeTab]!, expiresAtUtc: renewed.expiresAtUtc },
+      }));
+      setRemaining(formatRemaining(renewed.expiresAtUtc));
     } catch (err) {
       setErrorMsg(`Falha ao renovar: ${err instanceof Error ? err.message : String(err)}`);
     }
   };
 
   const handleStop = async () => {
-    try {
-      await remoteSessionsApi.stopSession(agentId, sessionId);
-      window.close();
-    } catch (err) {
-      setErrorMsg(`Falha ao encerrar: ${err instanceof Error ? err.message : String(err)}`);
+    const active = sessions[activeTab];
+    if (active) {
+      try { await remoteSessionsApi.stopSession(agentId, active.sessionId); } catch { /* best-effort */ }
     }
+    window.close();
   };
 
   const tabs: { key: Tab; label: string }[] = [
@@ -385,7 +445,7 @@ export default function RemoteSession() {
     { key: 'proxy', label: 'Proxy' },
   ];
 
-  if (!sessionId || !agentId) {
+  if (!agentId) {
     return (
       <div className="flex items-center justify-center h-screen bg-slate-900">
         <Card className="p-6 text-center">
@@ -395,6 +455,9 @@ export default function RemoteSession() {
     );
   }
 
+  const activeSession = sessions[activeTab];
+  const isActiveConnected = !!activeSession;
+
   return (
     <div className="flex flex-col h-screen bg-slate-900 text-slate-100">
       {/* Header */}
@@ -403,13 +466,13 @@ export default function RemoteSession() {
           <h1 className="text-sm font-semibold">
             Acesso Remoto — {activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}
           </h1>
-          <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${isConnected ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'}`}>
-            {isConnected ? 'Conectado' : 'Conectando...'}
+          <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${isActiveConnected ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'}`}>
+            {isActiveConnected ? 'Conectado' : 'Não conectado'}
           </span>
         </div>
         <div className="flex items-center gap-2 text-xs text-slate-400">
           <span>Tempo restante: <strong className="text-slate-300">{remaining}</strong></span>
-          <Button variant="secondary" size="sm" onClick={handleRenew}>Renovar</Button>
+          <Button variant="secondary" size="sm" onClick={handleRenew} disabled={!isActiveConnected}>Renovar</Button>
           <Button variant="danger" size="sm" onClick={handleStop}>Encerrar</Button>
         </div>
       </div>
@@ -427,17 +490,17 @@ export default function RemoteSession() {
             onClick={() => setActiveTab(tab.key)}
           >
             {tab.label}
+            {sessions[tab.key] && (
+              <span className="ml-1.5 inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 align-middle" title="Sessão ativa" />
+            )}
           </button>
         ))}
-        {/* Status bar info — controles de qualidade em tempo real.
-            Só aparecem na aba Tela (screen), pois só fazem sentido lá. */}
-        {activeTab === 'screen' && (
+        {/* Status bar info — controles de qualidade em tempo real (aba Tela) */}
+        {activeTab === 'screen' && screenSession && (
         <div className="ml-auto flex items-center gap-3 text-xs text-slate-500">
           <span>Transport: <span className="text-slate-400">{transport.toUpperCase()}</span></span>
 
-          {/* Auto/Manual toggle — resolve o conflito perfil vs percentual:
-              Auto = perfil define tudo (webp preferido, adapta por desempenho);
-              Manual = usuário escolhe codec + qualidade de imagem + fps. */}
+          {/* Auto/Manual toggle */}
           <div className="flex items-center gap-1">
             <button
               className={`px-2 py-0.5 rounded text-xs font-medium transition-colors ${
@@ -465,9 +528,7 @@ export default function RemoteSession() {
             </button>
           </div>
 
-          {/* Em Auto: nenhum ajuste de qualidade/FPS é exibido — o perfil define
-              tudo (codec/fps/qualidade) e adapta à rede automaticamente.
-              Em Manual: controles finos (codec + imagem + fps) substituem o perfil. */}
+          {/* Em Auto: nenhum ajuste de qualidade/FPS é exibido. Em Manual: controles finos. */}
           {!autoMode && (
             <>
               {/* Codec selector — Manual */}
@@ -537,8 +598,6 @@ export default function RemoteSession() {
                   </option>
                 ))
               ) : (
-                // Sem lista dinâmica do agent: mostra apenas o monitor primário (0).
-                // Não inventa monitores que não existem no PC do agent.
                 <option value={0}>Monitor 1 (primário)</option>
               )}
             </select>
@@ -550,67 +609,153 @@ export default function RemoteSession() {
       {/* Main content area */}
       <div className="flex-1 overflow-hidden">
         {activeTab === 'screen' && (
-          <div className="h-full flex flex-col">
-            <div className="flex-1">
-              <RemoteScreenViewer
-                natsSubject={natsSubject}
-                natsUrl={natsCredentials?.natsWssUrl || natsUrlFromQuery || undefined}
-                jwt={natsCredentials?.jwt}
-                nkeySeed={natsCredentials?.nkeySeed}
-                quality={liveQuality}
-                codec={liveCodec}
-                onError={(msg) => setErrorMsg(msg)}
-                onLatency={(rttMs) => setRtt(rttMs)}
-                onMonitors={(mons) => setMonitors(mons)}
-              />
-            </div>
-            {transport === 'webrtc' && webrtc.state.status === 'connected' && (
-              <div className="text-xs text-slate-500 px-4 py-1 bg-slate-800">
-                WebRTC P2P — latência: {rtt}ms
+          screenSession ? (
+            <div className="h-full flex flex-col">
+              <div className="flex-1">
+                <RemoteScreenViewer
+                  key={`screen-${screenSession.sessionId}-${reconnectKeys.screen ?? 0}`}
+                  natsSubject={screenSession.natsSubject}
+                  natsUrl={screenSession.natsUrl}
+                  jwt={screenSession.jwt}
+                  nkeySeed={screenSession.nkeySeed}
+                  quality={liveQuality}
+                  codec={liveCodec}
+                  onError={(msg) => setErrorMsg(msg)}
+                  onLatency={() => {}}
+                  onMonitors={(mons) => setMonitors(mons)}
+                />
               </div>
-            )}
-          </div>
+              <div className="flex items-center gap-2 px-3 py-1 bg-slate-800 border-t border-slate-700 text-xs">
+                <button
+                  className="px-2 py-1 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded"
+                  onClick={() => handleReconnect('screen')}
+                  title="Reconectar a sessão de tela"
+                >
+                  ⟳ Reconectar
+                </button>
+                <button
+                  className="px-2 py-1 bg-rose-700/70 hover:bg-rose-600 text-white rounded"
+                  onClick={() => stopTabSession('screen')}
+                  title="Encerrar a sessão de tela"
+                >
+                  ⏹ Encerrar
+                </button>
+              </div>
+            </div>
+          ) : (
+            <ConnectPlaceholder
+              label="Tela"
+              icon="🖥"
+              connecting={connectingTab === 'screen'}
+              onConnect={() => startTabSession('screen')}
+            />
+          )
         )}
 
         {activeTab === 'terminal' && (
-          <RemoteTerminal
-            sessionId={sessionId}
-            agentId={agentId}
-            natsSubject={natsSubject}
-            natsUrl={natsCredentials?.natsWssUrl || natsUrlFromQuery || undefined}
-            jwt={natsCredentials?.jwt}
-            nkeySeed={natsCredentials?.nkeySeed}
-          />
+          sessions.terminal ? (
+            <div className="h-full flex flex-col">
+              <div className="flex-1">
+                <RemoteTerminal
+                  key={`terminal-${sessions.terminal.sessionId}-${reconnectKeys.terminal ?? 0}`}
+                  sessionId={sessions.terminal.sessionId}
+                  agentId={agentId}
+                  natsSubject={sessions.terminal.natsSubject}
+                  natsUrl={sessions.terminal.natsUrl}
+                  jwt={sessions.terminal.jwt}
+                  nkeySeed={sessions.terminal.nkeySeed}
+                  shell={shell}
+                  switching={shellSwitching}
+                  onSwitchShell={handleSwitchShell}
+                />
+              </div>
+              <div className="flex items-center gap-2 px-3 py-1 bg-slate-800 border-t border-slate-700 text-xs">
+                <button
+                  className="px-2 py-1 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded"
+                  onClick={() => handleReconnect('terminal')}
+                  title="Reconectar a sessão de terminal"
+                >
+                  ⟳ Reconectar
+                </button>
+                <button
+                  className="px-2 py-1 bg-rose-700/70 hover:bg-rose-600 text-white rounded"
+                  onClick={() => stopTabSession('terminal')}
+                  title="Encerrar a sessão de terminal"
+                >
+                  ⏹ Encerrar
+                </button>
+              </div>
+            </div>
+          ) : (
+            <ConnectPlaceholder
+              label="Terminal"
+              icon="⌨️"
+              connecting={connectingTab === 'terminal'}
+              onConnect={() => startTabSession('terminal')}
+            />
+          )
         )}
 
         {activeTab === 'files' && (
-          <RemoteFiles
-            sessionId={sessionId}
-            agentId={agentId}
-            natsSubject={natsSubject}
-            natsUrl={natsCredentials?.natsWssUrl || natsUrlFromQuery || undefined}
-            jwt={natsCredentials?.jwt}
-            nkeySeed={natsCredentials?.nkeySeed}
-          />
+          sessions.files ? (
+            <div className="h-full flex flex-col">
+              <div className="flex-1">
+                <RemoteFiles
+                  key={`files-${sessions.files.sessionId}-${reconnectKeys.files ?? 0}`}
+                  sessionId={sessions.files.sessionId}
+                  agentId={agentId}
+                  natsSubject={sessions.files.natsSubject}
+                  natsUrl={sessions.files.natsUrl}
+                  jwt={sessions.files.jwt}
+                  nkeySeed={sessions.files.nkeySeed}
+                />
+              </div>
+              <div className="flex items-center gap-2 px-3 py-1 bg-slate-800 border-t border-slate-700 text-xs">
+                <button
+                  className="px-2 py-1 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded"
+                  onClick={() => handleReconnect('files')}
+                  title="Reconectar a sessão de arquivos"
+                >
+                  ⟳ Reconectar
+                </button>
+                <button
+                  className="px-2 py-1 bg-rose-700/70 hover:bg-rose-600 text-white rounded"
+                  onClick={() => stopTabSession('files')}
+                  title="Encerrar a sessão de arquivos"
+                >
+                  ⏹ Encerrar
+                </button>
+              </div>
+            </div>
+          ) : (
+            <ConnectPlaceholder
+              label="Arquivos"
+              icon="📁"
+              connecting={connectingTab === 'files'}
+              onConnect={() => startTabSession('files')}
+            />
+          )
         )}
 
         {activeTab === 'proxy' && (
           <RemoteProxy
-            sessionId={sessionId}
+            sessionId={sessions.proxy?.sessionId ?? ''}
             agentId={agentId}
-            natsSubject={natsSubject}
-            jwt={natsCredentials?.jwt}
-            nkeySeed={natsCredentials?.nkeySeed}
+            natsSubject={sessions.proxy?.natsSubject}
+            jwt={sessions.proxy?.jwt}
+            nkeySeed={sessions.proxy?.nkeySeed}
           />
         )}
       </div>
 
       {/* Recording controls */}
-      <RecordingControls
-        agentId={agentId}
-        sessionId={sessionId}
-        onError={(msg) => setErrorMsg(msg)}
-      />
+      {screenSession && (
+        <RecordingControls
+          agentId={agentId}
+          sessionId={screenSession.sessionId}
+          onError={(msg) => setErrorMsg(msg)}
+        />
+      )}
 
       {/* Error toast */}
       {errorMsg && (
@@ -619,6 +764,36 @@ export default function RemoteSession() {
           <button className="ml-2 text-red-400 hover:text-red-200" onClick={() => setErrorMsg(null)}>✕</button>
         </div>
       )}
+    </div>
+  );
+}
+
+// Placeholder exibido quando a aba ainda não tem sessão iniciada.
+function ConnectPlaceholder({
+  label,
+  icon,
+  connecting,
+  onConnect,
+}: {
+  label: string;
+  icon: string;
+  connecting: boolean;
+  onConnect: () => void;
+}) {
+  return (
+    <div className="flex flex-col items-center justify-center h-full bg-slate-950 text-slate-500">
+      <div className="text-5xl mb-4">{icon}</div>
+      <p className="text-sm mb-1">Sessão de {label} não iniciada</p>
+      <p className="text-xs text-slate-600 mb-5">
+        Clique em Conectar para iniciar a sessão sob demanda (não consome recursos do agent até iniciar).
+      </p>
+      <button
+        className="px-4 py-2 bg-primary/20 text-primary text-sm rounded hover:bg-primary/30 transition-colors disabled:opacity-50"
+        onClick={onConnect}
+        disabled={connecting}
+      >
+        {connecting ? 'Conectando…' : `▶ Conectar ${label}`}
+      </button>
     </div>
   );
 }
