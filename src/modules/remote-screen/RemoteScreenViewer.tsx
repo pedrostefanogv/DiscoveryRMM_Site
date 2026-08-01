@@ -18,6 +18,14 @@ interface RemoteScreenViewerProps {
   onError?: (msg: string) => void;
   onLatency?: (rttMs: number) => void;
   onMonitors?: (monitors: MonitorInfo[]) => void;
+  /** Escala controlada externamente ('fit' | '100%'). Se omitido, gerencia internamente. */
+  scale?: 'fit' | '100%';
+  /** Callback quando o usuário alterna a escala. */
+  onScaleChange?: (scale: 'fit' | '100%') => void;
+  /** Callback para alternar fullscreen (o pai controla o estado). */
+  onToggleFullscreen?: () => void;
+  /** Indica se está em fullscreen (para o rótulo do botão). */
+  isFullscreen?: boolean;
 }
 
 export interface MonitorInfo {
@@ -80,11 +88,15 @@ export default function RemoteScreenViewer({
   onError,
   onLatency,
   onMonitors,
+  scale: controlledScale,
+  onScaleChange,
+  onToggleFullscreen,
+  isFullscreen: controlledFullscreen,
 }: RemoteScreenViewerProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const [isFullscreen, setIsFullscreen] = useState(false);
-  const [scale, setScale] = useState<'fit' | '100%'>('fit');
+  const [internalFullscreen, setInternalFullscreen] = useState(false);
+  const [internalScale, setInternalScale] = useState<'fit' | '100%'>('fit');
   const [rtt, setRtt] = useState<number>(0);
   const [fps, setFps] = useState<number>(0);
   const [isPaused, setIsPaused] = useState(false);
@@ -102,14 +114,18 @@ export default function RemoteScreenViewer({
   const onLatencyRef = useRef(onLatency);
   const onMonitorsRef = useRef(onMonitors);
   const codecRef = useRef(codec);
-  const scaleRef = useRef(scale);
   const isPausedRef = useRef(isPaused);
   onErrorRef.current = onError;
   onLatencyRef.current = onLatency;
   onMonitorsRef.current = onMonitors;
   codecRef.current = codec;
-  scaleRef.current = scale;
   isPausedRef.current = isPaused;
+
+  // Escala e fullscreen efetivos — controlados externamente (pai) ou internamente.
+  const scale = controlledScale ?? internalScale;
+  const isFullscreen = controlledFullscreen ?? internalFullscreen;
+  const scaleRef = useRef(scale);
+  scaleRef.current = scale;
 
   // Decode JPEG/WebP off-main-thread via ImageBitmap.
   // Suporta dois formatos de payload:
@@ -681,8 +697,13 @@ export default function RemoteScreenViewer({
     } else {
       await fullscreenApi.request(el);
     }
-    setIsFullscreen(!isFullscreen);
-  }, [isFullscreen]);
+    // Se o pai controla o fullscreen, delega; senão, gerencia internamente.
+    if (onToggleFullscreen) {
+      onToggleFullscreen();
+    } else {
+      setInternalFullscreen(!isFullscreen);
+    }
+  }, [isFullscreen, onToggleFullscreen]);
 
   // Reconexão manual — força o useEffect de conexão a rodar de novo.
   const handleReconnect = useCallback(() => {
@@ -759,7 +780,14 @@ export default function RemoteScreenViewer({
         )}
         <button
           className="bg-slate-800/80 hover:bg-slate-700 text-slate-300 rounded px-2 py-1 text-xs backdrop-blur-sm"
-          onClick={() => setScale(scale === 'fit' ? '100%' : 'fit')}
+          onClick={() => {
+            const next = scale === 'fit' ? '100%' : 'fit';
+            if (onScaleChange) {
+              onScaleChange(next);
+            } else {
+              setInternalScale(next);
+            }
+          }}
           title="Toggle scale"
         >
           {scale === 'fit' ? '⊡ Fit' : '⊡ 1:1'}

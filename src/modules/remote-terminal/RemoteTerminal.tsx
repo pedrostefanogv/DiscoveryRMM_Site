@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
@@ -15,12 +15,8 @@ interface RemoteTerminalProps {
   natsUrl?: string;
   jwt?: string;
   nkeySeed?: string;
-  /** Shell ativo (powershell | cmd). */
-  shell?: string;
-  /** Chamado quando o usuário troca o shell — o pai reinicia a sessão com o novo shell. */
-  onSwitchShell?: (newShell: string) => void;
-  /** Indica que a troca de shell está em andamento (feedback). */
-  switching?: boolean;
+  /** Reporta o status de conexão ao pai (para exibir na barra de rodapé unificada). */
+  onConnectionChange?: (connected: boolean) => void;
 }
 
 const TERM_THEME = {
@@ -55,12 +51,8 @@ export default function RemoteTerminal({
   natsUrl = '',
   jwt = '',
   nkeySeed = '',
-  shell = 'powershell',
-  onSwitchShell,
-  switching = false,
+  onConnectionChange,
 }: RemoteTerminalProps) {
-  const [status, setStatus] = useState<'connected' | 'disconnected'>('disconnected');
-
   const termRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -152,8 +144,8 @@ export default function RemoteTerminal({
   }, [sendResize]);
 
   useEffect(() => {
-    setStatus(isConnected ? 'connected' : 'disconnected');
-  }, [isConnected]);
+    onConnectionChange?.(isConnected);
+  }, [isConnected, onConnectionChange]);
 
   // Mostra aviso de shell encerrado
   useEffect(() => {
@@ -172,26 +164,6 @@ export default function RemoteTerminal({
 
   return (
     <div className="flex flex-col h-full bg-slate-950">
-      {/* Barra de status (sem abas) */}
-      <div className="flex items-center justify-between px-3 py-1 bg-slate-900 border-b border-slate-800 text-xs">
-        <div className="flex items-center gap-2">
-          <span className="text-slate-400">Console</span>
-          <select
-            value={shell}
-            disabled={switching}
-            onChange={e => onSwitchShell?.(e.target.value)}
-            className="bg-slate-800 border border-slate-700 rounded px-1 py-0.5 text-slate-300 text-xs disabled:opacity-50"
-          >
-            <option value="powershell">PowerShell</option>
-            <option value="cmd">CMD</option>
-          </select>
-          {switching && <span className="text-slate-500">trocar shell…</span>}
-        </div>
-        <span className={`inline-flex items-center gap-1 ${status === 'connected' ? 'text-emerald-400' : 'text-red-400'}`}>
-          <span className={`w-1.5 h-1.5 rounded-full ${status === 'connected' ? 'bg-emerald-400' : 'bg-red-400'}`} />
-          {status === 'connected' ? 'Conectado' : 'Desconectado'}
-        </span>
-      </div>
       {/* xterm.js container */}
       <div ref={containerRef} className="flex-1" style={{ minHeight: 0 }} />
     </div>

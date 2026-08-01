@@ -112,6 +112,8 @@ export default function RemoteSession() {
   // Shell ativo do terminal (powershell | cmd). Trocar reinicia a sessão de terminal.
   const [shell, setShell] = useState('powershell');
   const [shellSwitching, setShellSwitching] = useState(false);
+  // Status de conexão do terminal (reportado pelo RemoteTerminal).
+  const [terminalConnected, setTerminalConnected] = useState(false);
 
   const screenSession = sessions.screen;
 
@@ -625,22 +627,6 @@ export default function RemoteSession() {
                   onMonitors={(mons) => setMonitors(mons)}
                 />
               </div>
-              <div className="flex items-center gap-2 px-3 py-1 bg-slate-800 border-t border-slate-700 text-xs">
-                <button
-                  className="px-2 py-1 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded"
-                  onClick={() => handleReconnect('screen')}
-                  title="Reconectar a sessão de tela"
-                >
-                  ⟳ Reconectar
-                </button>
-                <button
-                  className="px-2 py-1 bg-rose-700/70 hover:bg-rose-600 text-white rounded"
-                  onClick={() => stopTabSession('screen')}
-                  title="Encerrar a sessão de tela"
-                >
-                  ⏹ Encerrar
-                </button>
-              </div>
             </div>
           ) : (
             <ConnectPlaceholder
@@ -664,26 +650,8 @@ export default function RemoteSession() {
                   natsUrl={sessions.terminal.natsUrl}
                   jwt={sessions.terminal.jwt}
                   nkeySeed={sessions.terminal.nkeySeed}
-                  shell={shell}
-                  switching={shellSwitching}
-                  onSwitchShell={handleSwitchShell}
+                  onConnectionChange={setTerminalConnected}
                 />
-              </div>
-              <div className="flex items-center gap-2 px-3 py-1 bg-slate-800 border-t border-slate-700 text-xs">
-                <button
-                  className="px-2 py-1 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded"
-                  onClick={() => handleReconnect('terminal')}
-                  title="Reconectar a sessão de terminal"
-                >
-                  ⟳ Reconectar
-                </button>
-                <button
-                  className="px-2 py-1 bg-rose-700/70 hover:bg-rose-600 text-white rounded"
-                  onClick={() => stopTabSession('terminal')}
-                  title="Encerrar a sessão de terminal"
-                >
-                  ⏹ Encerrar
-                </button>
               </div>
             </div>
           ) : (
@@ -710,22 +678,6 @@ export default function RemoteSession() {
                   nkeySeed={sessions.files.nkeySeed}
                 />
               </div>
-              <div className="flex items-center gap-2 px-3 py-1 bg-slate-800 border-t border-slate-700 text-xs">
-                <button
-                  className="px-2 py-1 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded"
-                  onClick={() => handleReconnect('files')}
-                  title="Reconectar a sessão de arquivos"
-                >
-                  ⟳ Reconectar
-                </button>
-                <button
-                  className="px-2 py-1 bg-rose-700/70 hover:bg-rose-600 text-white rounded"
-                  onClick={() => stopTabSession('files')}
-                  title="Encerrar a sessão de arquivos"
-                >
-                  ⏹ Encerrar
-                </button>
-              </div>
             </div>
           ) : (
             <ConnectPlaceholder
@@ -748,14 +700,56 @@ export default function RemoteSession() {
         )}
       </div>
 
-      {/* Recording controls */}
-      {screenSession && (
-        <RecordingControls
-          agentId={agentId}
-          sessionId={screenSession.sessionId}
-          onError={(msg) => setErrorMsg(msg)}
-        />
-      )}
+      {/* Barra de rodapé unificada — Reconectar/Encerrar da aba ativa + gravação */}
+      <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-800 border-t border-slate-700 text-xs">
+        {activeSession && (
+          <>
+            <button
+              className="px-2 py-1 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded"
+              onClick={() => handleReconnect(activeTab)}
+              title={`Reconectar a sessão de ${activeTab}`}
+            >
+              ⟳ Reconectar
+            </button>
+            <button
+              className="px-2 py-1 bg-rose-700/70 hover:bg-rose-600 text-white rounded"
+              onClick={() => stopTabSession(activeTab)}
+              title={`Encerrar a sessão de ${activeTab}`}
+            >
+              ⏹ Encerrar
+            </button>
+            <span className="mx-1 h-4 w-px bg-slate-700" />
+          </>
+        )}
+        {/* Controles específicos da aba Terminal: select de shell + status */}
+        {activeTab === 'terminal' && sessions.terminal && (
+          <>
+            <span className="text-slate-400">Console</span>
+            <select
+              value={shell}
+              disabled={shellSwitching}
+              onChange={e => handleSwitchShell(e.target.value)}
+              className="bg-slate-800 border border-slate-700 rounded px-1 py-0.5 text-slate-300 text-xs disabled:opacity-50"
+            >
+              <option value="powershell">PowerShell</option>
+              <option value="cmd">CMD</option>
+            </select>
+            {shellSwitching && <span className="text-slate-500">trocar shell…</span>}
+            <span className={`inline-flex items-center gap-1 ${terminalConnected ? 'text-emerald-400' : 'text-red-400'}`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${terminalConnected ? 'bg-emerald-400' : 'bg-red-400'}`} />
+              {terminalConnected ? 'Conectado' : 'Desconectado'}
+            </span>
+            <span className="mx-1 h-4 w-px bg-slate-700" />
+          </>
+        )}
+        {screenSession && (
+          <RecordingControls
+            agentId={agentId}
+            sessionId={screenSession.sessionId}
+            onError={(msg) => setErrorMsg(msg)}
+          />
+        )}
+      </div>
 
       {/* Error toast */}
       {errorMsg && (
