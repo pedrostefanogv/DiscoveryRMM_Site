@@ -1,6 +1,7 @@
 import { memo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { useTheme } from '@/theme/ThemeContext';
 
 interface MarkdownViewerProps {
   source: string;
@@ -11,11 +12,14 @@ interface MarkdownViewerProps {
  * Renderizador de Markdown leve (apenas visualização).
  * Substitui `MDEditor.Markdown`/`@uiw/react-markdown-preview` — o pacote
  * @uiw/react-md-editor (1.2 MB) só é carregado sob demanda no editor.
+ * Segue o tema claro/escuro do projeto (como o editor).
  */
 export const MarkdownViewer = memo(function MarkdownViewer({ source, className }: MarkdownViewerProps) {
+  const { mode } = useTheme();
+
   return (
     <div
-      data-color-mode="dark"
+      data-color-mode={mode}
       className={
         'wmde-markdown wmde-markdown-color prose max-w-none text-sm leading-relaxed '
         + '[&_a]:text-primary [&_a]:underline [&_a]:underline-offset-2 '

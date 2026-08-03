@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronDown, ChevronRight, FileText, Folder, FolderOpen, Home, Plus, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, FileStack, FileText, Home, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui';
 import type { ArticlePageTreeNode } from '@/api';
 import { useArticlePages, useDeleteArticlePage } from '@/hooks';
@@ -100,11 +100,7 @@ export default function ArticlePagesManager({
           )}
 
           {hasChildren ? (
-            isCollapsed ? (
-              <Folder className="h-4 w-4 shrink-0 text-amber-500" />
-            ) : (
-              <FolderOpen className="h-4 w-4 shrink-0 text-amber-500" />
-            )
+            <FileStack className="h-4 w-4 shrink-0 text-primary" />
           ) : (
             <FileText className="h-4 w-4 shrink-0 text-muted" />
           )}

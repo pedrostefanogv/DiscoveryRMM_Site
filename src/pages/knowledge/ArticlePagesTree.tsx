@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronDown, ChevronRight, FileText, FolderOpen, Folder, Home } from 'lucide-react';
+import { ChevronDown, ChevronRight, FileStack, FileText, Home } from 'lucide-react';
 import type { ArticlePageTreeNode } from '@/api';
 
 interface ArticlePagesTreeProps {
@@ -80,11 +80,7 @@ export default function ArticlePagesTree({
           )}
 
           {isFolder ? (
-            isCollapsed ? (
-              <Folder className="h-4 w-4 shrink-0 text-amber-500" />
-            ) : (
-              <FolderOpen className="h-4 w-4 shrink-0 text-amber-500" />
-            )
+            <FileStack className="h-4 w-4 shrink-0 text-primary" />
           ) : (
             <FileText className="h-4 w-4 shrink-0 text-muted" />
           )}

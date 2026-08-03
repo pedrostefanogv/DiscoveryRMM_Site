@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, FileText, History, Home, Save, Send } from 'lucide-react';
 import {
@@ -77,6 +77,7 @@ export default function KnowledgeEditor() {
   const [pageTitle, setPageTitle] = useState('');
   const [pageContent, setPageContent] = useState('');
   const [pageParentId, setPageParentId] = useState('');
+  const pageEditorRef = useRef<HTMLDivElement>(null);
   const pagesQuery = useArticlePages(id ?? '');
   const createPageMutation = useCreateArticlePage(id ?? '');
   const updatePageMutation = useUpdateArticlePage(id ?? '');
@@ -135,6 +136,10 @@ export default function KnowledgeEditor() {
     setPageTitle(node.title);
     setPageContent(node.content ?? '');
     setPageParentId(node.parentPageId ?? '');
+    // Rola até o editor único para o usuário ver a página selecionada.
+    requestAnimationFrame(() => {
+      pageEditorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
   };
 
   // Volta para a "home" (artigo principal).
@@ -151,6 +156,10 @@ export default function KnowledgeEditor() {
     setPageTitle('');
     setPageContent('');
     setPageParentId('');
+    // Rola até o editor único para o usuário ver o formulário de criação.
+    requestAnimationFrame(() => {
+      pageEditorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
   };
 
   // Salva a sub-página ativa (cria ou atualiza).
@@ -200,9 +209,23 @@ export default function KnowledgeEditor() {
     }
   };
 
-  // Quando uma página é excluída, limpa a seleção se for a ativa.
+  // Quando uma página é excluída, limpa a seleção se for a ativa ou um ancestral dela.
   const handleDeletePage = (pageId: string) => {
+    if (!activePageId || activePageId === '__new__') return;
     if (activePageId === pageId) {
+      handleSelectHome();
+      return;
+    }
+    // Se a página excluída é ancestral da ativa, a ativa também foi removida.
+    const contains = (nodes: ArticlePageTreeNode[], target: string): boolean => {
+      for (const node of nodes) {
+        if (node.id === target) return true;
+        if (contains(node.children, target)) return true;
+      }
+      return false;
+    };
+    const deletedNode = findPage(pagesQuery.data ?? [], pageId);
+    if (deletedNode && contains([deletedNode], activePageId)) {
       handleSelectHome();
     }
   };
@@ -572,7 +595,10 @@ export default function KnowledgeEditor() {
             )}
 
             {/* Editor único: home do artigo ou sub-página selecionada */}
-            <div className="rounded-xl border border-border bg-surface-light p-4">
+            <div
+              ref={pageEditorRef}
+              className="rounded-xl border border-border bg-surface-light p-4"
+            >
               <div className="mb-3 flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
                   {isEditingPage ? (
