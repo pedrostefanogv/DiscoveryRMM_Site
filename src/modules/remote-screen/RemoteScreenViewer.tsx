@@ -20,8 +20,6 @@ interface RemoteScreenViewerProps {
   onMonitors?: (monitors: MonitorInfo[]) => void;
   /** Escala controlada externamente ('fit' | '100%'). Se omitido, gerencia internamente. */
   scale?: 'fit' | '100%';
-  /** Callback quando o usuário alterna a escala. */
-  onScaleChange?: (scale: 'fit' | '100%') => void;
   /** Callback para alternar fullscreen (o pai controla o estado). */
   onToggleFullscreen?: () => void;
   /** Indica se está em fullscreen (para o rótulo do botão). */
@@ -89,14 +87,12 @@ export default function RemoteScreenViewer({
   onLatency,
   onMonitors,
   scale: controlledScale,
-  onScaleChange,
   onToggleFullscreen,
   isFullscreen: controlledFullscreen,
 }: RemoteScreenViewerProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [internalFullscreen, setInternalFullscreen] = useState(false);
-  const [internalScale, setInternalScale] = useState<'fit' | '100%'>('fit');
   const [rtt, setRtt] = useState<number>(0);
   const [fps, setFps] = useState<number>(0);
   const [isPaused, setIsPaused] = useState(false);
@@ -122,7 +118,7 @@ export default function RemoteScreenViewer({
   isPausedRef.current = isPaused;
 
   // Escala e fullscreen efetivos — controlados externamente (pai) ou internamente.
-  const scale = controlledScale ?? internalScale;
+  const scale = controlledScale ?? 'fit';
   const isFullscreen = controlledFullscreen ?? internalFullscreen;
   const scaleRef = useRef(scale);
   scaleRef.current = scale;
@@ -595,7 +591,13 @@ export default function RemoteScreenViewer({
   // Input capture (mouse/keyboard) — coordenadas corretas C2
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas || !wsRef.current) return;
+    // NOTA: NÃO checar wsRef.current aqui. Os listeners devem ser sempre
+    // anexados, independente do estado da conexão. O sendInput já verifica
+    // wsRef.current?.readyState === WebSocket.OPEN no momento do envio.
+    // Se retornássemos cedo quando wsRef.current é null (ex: reconexão ou
+    // conexão ainda não estabelecida), os listeners nunca seriam adicionados,
+    // pois a dependência é apenas [natsSubject] e o efeito não re-roda.
+    if (!canvas) return;
 
     // Foca o canvas no mount para capturar teclado imediatamente
     canvas.focus();
@@ -729,12 +731,12 @@ export default function RemoteScreenViewer({
       className={`relative flex bg-slate-950 rounded-lg h-full ${
         scale === 'fit'
           ? 'items-center justify-center overflow-hidden'
-          : 'items-start justify-start overflow-auto'
+          : 'items-center justify-center overflow-auto'
       }`}
     >
       <canvas
         ref={canvasRef}
-        className={`cursor-crosshair ${scale === 'fit' ? 'max-w-full max-h-full object-contain' : 'object-contain'}`}
+        className={`cursor-crosshair ${scale === 'fit' ? 'max-w-full max-h-full object-contain' : 'object-contain m-auto'}`}
         style={scale === 'fit' ? { width: '100%', height: '100%' } : undefined}
         tabIndex={0}
       />
@@ -767,7 +769,7 @@ export default function RemoteScreenViewer({
         )}
       </div>
 
-      {/* Controls */}
+      {/* Controls — apenas reconexão em caso de erro (Fit/1:1 e Full ficam na barra do pai) */}
       <div className="absolute bottom-2 right-2 flex gap-1">
         {connectionState === 'error' && (
           <button
@@ -778,27 +780,6 @@ export default function RemoteScreenViewer({
             ⟳ Reconectar
           </button>
         )}
-        <button
-          className="bg-slate-800/80 hover:bg-slate-700 text-slate-300 rounded px-2 py-1 text-xs backdrop-blur-sm"
-          onClick={() => {
-            const next = scale === 'fit' ? '100%' : 'fit';
-            if (onScaleChange) {
-              onScaleChange(next);
-            } else {
-              setInternalScale(next);
-            }
-          }}
-          title="Toggle scale"
-        >
-          {scale === 'fit' ? '⊡ Fit' : '⊡ 1:1'}
-        </button>
-        <button
-          className="bg-slate-800/80 hover:bg-slate-700 text-slate-300 rounded px-2 py-1 text-xs backdrop-blur-sm"
-          onClick={toggleFullscreen}
-          title="Fullscreen (Ctrl+F)"
-        >
-          {isFullscreen ? '⛶ Exit' : '⛶ Full'}
-        </button>
       </div>
     </div>
   );

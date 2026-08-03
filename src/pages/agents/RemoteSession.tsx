@@ -109,6 +109,9 @@ export default function RemoteSession() {
   const [monitorIndex, setMonitorIndex] = useState(0);
   const [monitorChanging, setMonitorChanging] = useState(false);
   const [monitors, setMonitors] = useState<MonitorInfo[]>([]);
+  // Escala e fullscreen da tela (controlados na barra de rodapé unificada).
+  const [screenScale, setScreenScale] = useState<'fit' | '100%'>('fit');
+  const [screenFullscreen, setScreenFullscreen] = useState(false);
   // Shell ativo do terminal (powershell | cmd). Trocar reinicia a sessão de terminal.
   const [shell, setShell] = useState('powershell');
   const [shellSwitching, setShellSwitching] = useState(false);
@@ -197,9 +200,26 @@ export default function RemoteSession() {
   }, [agentId, connectingTab, transport, liveQuality, liveCodec, monitorIndex]);
 
   // ── Reconexão manual de uma aba ──
-  const handleReconnect = useCallback((tab: Tab) => {
-    setReconnectKeys((prev) => ({ ...prev, [tab]: (prev[tab] ?? 0) + 1 }));
-  }, []);
+  // Se a sessão ainda estiver ativa no agent, apenas remonta o viewer (nova key).
+  // Se não estiver mais ativa (expirou/caiu), reinicia a sessão sob demanda.
+  const handleReconnect = useCallback(async (tab: Tab) => {
+    const s = sessions[tab];
+    if (!s) return;
+    try {
+      const active = await remoteSessionsApi.getActiveSessions(agentId);
+      const stillActive = active.some((a) => a.sessionId === s.sessionId);
+      if (stillActive) {
+        // Sessão viva — apenas remonta o viewer.
+        setReconnectKeys((prev) => ({ ...prev, [tab]: (prev[tab] ?? 0) + 1 }));
+      } else {
+        // Sessão morta — reinicia sob demanda.
+        await startTabSession(tab);
+      }
+    } catch {
+      // Falha ao consultar — tenta remontar mesmo assim.
+      setReconnectKeys((prev) => ({ ...prev, [tab]: (prev[tab] ?? 0) + 1 }));
+    }
+  }, [sessions, agentId, startTabSession]);
 
   // ── Encerra a sessão de uma aba ──
   const stopTabSession = useCallback(async (tab: Tab) => {
@@ -211,6 +231,8 @@ export default function RemoteSession() {
       // best-effort
     }
     setSessions((prev) => ({ ...prev, [tab]: undefined }));
+    // Reseta o status de conexão do terminal ao encerrar a sessão.
+    if (tab === 'terminal') setTerminalConnected(false);
   }, [agentId, sessions]);
 
   // ── Troca de shell do terminal: reinicia a sessão de terminal com o novo shell ──
@@ -433,10 +455,12 @@ export default function RemoteSession() {
   };
 
   const handleStop = async () => {
-    const active = sessions[activeTab];
-    if (active) {
-      try { await remoteSessionsApi.stopSession(agentId, active.sessionId); } catch { /* best-effort */ }
-    }
+    // Encerra TODAS as sessões ativas (não só a da aba atual), para não
+    // deixar sessões órfãs consumindo recursos do agent.
+    const active = Object.values(sessions).filter(Boolean) as TabSession[];
+    await Promise.allSettled(
+      active.map((s) => remoteSessionsApi.stopSession(agentId, s.sessionId)),
+    );
     window.close();
   };
 
@@ -625,6 +649,9 @@ export default function RemoteSession() {
                   onError={(msg) => setErrorMsg(msg)}
                   onLatency={() => {}}
                   onMonitors={(mons) => setMonitors(mons)}
+                  scale={screenScale}
+                  isFullscreen={screenFullscreen}
+                  onToggleFullscreen={() => setScreenFullscreen((v) => !v)}
                 />
               </div>
             </div>
@@ -748,6 +775,26 @@ export default function RemoteSession() {
             sessionId={screenSession.sessionId}
             onError={(msg) => setErrorMsg(msg)}
           />
+        )}
+        {/* Controles de escala/fullscreen da tela (aba Tela) */}
+        {activeTab === 'screen' && screenSession && (
+          <>
+            <span className="mx-1 h-4 w-px bg-slate-700" />
+            <button
+              className="px-2 py-1 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded"
+              onClick={() => setScreenScale((s) => (s === 'fit' ? '100%' : 'fit'))}
+              title="Alternar escala (Fit / 1:1)"
+            >
+              {screenScale === 'fit' ? '⊡ Fit' : '⊡ 1:1'}
+            </button>
+            <button
+              className="px-2 py-1 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded"
+              onClick={() => setScreenFullscreen((v) => !v)}
+              title="Fullscreen (Ctrl+F)"
+            >
+              {screenFullscreen ? '⛶ Exit' : '⛶ Full'}
+            </button>
+          </>
         )}
       </div>
 

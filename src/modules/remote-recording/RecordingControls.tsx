@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { remoteSessionsApi } from '@/api/remote-sessions';
 
 interface RecordingControlsProps {
   sessionId?: string;
@@ -8,8 +9,8 @@ interface RecordingControlsProps {
 }
 
 export function RecordingControls({
-  sessionId: _sessionId,
-  agentId: _agentId,
+  sessionId,
+  agentId,
   onError,
   isRecording: initialRecording = false,
 }: RecordingControlsProps) {
@@ -18,32 +19,37 @@ export function RecordingControls({
   const [error, setError] = useState<string | null>(null);
 
   const toggleRecording = useCallback(async () => {
+    if (!sessionId || !agentId) return;
     setLoading(true);
     setError(null);
 
     try {
-      await new Promise(r => setTimeout(r, 300));
-      const newState = !isRecording;
-      setIsRecording(newState);
+      if (isRecording) {
+        await remoteSessionsApi.stopRecording(agentId, sessionId);
+        setIsRecording(false);
+      } else {
+        await remoteSessionsApi.startRecording(agentId, sessionId);
+        setIsRecording(true);
+      }
     } catch (err) {
-      const msg = String(err);
+      const msg = err instanceof Error ? err.message : String(err);
       setError(msg);
       onError?.(msg);
     } finally {
       setLoading(false);
     }
-  }, [isRecording, onError]);
+  }, [isRecording, sessionId, agentId, onError]);
 
   return (
-    <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-800 border-t border-slate-700 text-xs">
+    <>
       {error && <span className="text-red-400">{error}</span>}
       <button
         className={`px-2 py-0.5 rounded ${isRecording ? 'bg-red-600 text-white animate-pulse' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}
         onClick={toggleRecording}
-        disabled={loading}
+        disabled={loading || !sessionId || !agentId}
       >
         {isRecording ? '⏹ STOP REC' : '⏺ REC'}
       </button>
-    </div>
+    </>
   );
 }
