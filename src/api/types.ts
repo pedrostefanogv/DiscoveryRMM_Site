@@ -1685,6 +1685,27 @@ export interface KnowledgeArticle {
   embeddingsReady: boolean;
   createdAt: string;
   updatedAt: string;
+  parentId?: string | null;
+  sortOrder?: number;
+  isPage?: boolean;
+  children?: KnowledgeArticle[];
+}
+
+export interface KnowledgeTreeNode {
+  id: string;
+  title: string;
+  category: string | null;
+  status: ArticleStatus;
+  scope: string;
+  scopeOrigin?: string | null;
+  clientId: string | null;
+  siteId: string | null;
+  departmentId: string | null;
+  parentId: string | null;
+  sortOrder: number;
+  isPage: boolean;
+  childCount: number;
+  children: KnowledgeTreeNode[];
 }
 
 export interface ArticleListPage {
@@ -1719,6 +1740,9 @@ export interface CreateKnowledgeArticleRequest {
   clientId: string | null;
   siteId: string | null;
   departmentId?: string | null;
+  parentId?: string | null;
+  sortOrder?: number;
+  isPage?: boolean;
 }
 
 export interface UpdateKnowledgeArticleRequest {
@@ -1727,6 +1751,9 @@ export interface UpdateKnowledgeArticleRequest {
   category: string | null;
   tags: string[];
   lastEditedBy?: string | null;
+  parentId?: string | null;
+  sortOrder?: number;
+  isPage?: boolean;
 }
 
 export interface PublishArticleRequest {

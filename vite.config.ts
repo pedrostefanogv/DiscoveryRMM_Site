@@ -64,54 +64,69 @@ export default defineConfig({
   },
   build: {
     target: "es2022",
-    rollupOptions: {
+    rolldownOptions: {
       output: {
-        manualChunks(id: string) {
-          if (id.includes("node_modules")) {
-            const pkg = id.split("node_modules/")[1];
-            const pkgName = pkg.startsWith("@")
-              ? pkg.split("/").slice(0, 2).join("/")
-              : pkg.split("/")[0];
-
-            const vendorPackages = ["react", "react-dom", "react-router-dom"];
-            if (vendorPackages.includes(pkgName)) return "vendor";
-
-            const queryPackages = ["@tanstack/react-query"];
-            if (queryPackages.includes(pkgName)) return "query";
-
-            const chartPackages = ["recharts"];
-            if (chartPackages.includes(pkgName)) return "charts";
-
-            const particlePackages = [
-              "@tsparticles/engine",
-              "@tsparticles/react",
-              "@tsparticles/slim",
-            ];
-            if (particlePackages.includes(pkgName)) return "particles";
-
-            const editorPackages = ["@uiw/react-md-editor"];
-            if (editorPackages.includes(pkgName)) return "editor";
-
-            const dndPackages = [
-              "@dnd-kit/core",
-              "@dnd-kit/sortable",
-              "@dnd-kit/utilities",
-            ];
-            if (dndPackages.includes(pkgName)) return "dnd";
-
-            const natsPackages = ["@nats-io/nats-core"];
-            if (natsPackages.includes(pkgName)) return "nats";
-
-            const markdownPackages = ["react-markdown", "remark-gfm"];
-            if (markdownPackages.includes(pkgName)) return "markdown";
-
-            const formPackages = [
-              "react-hook-form",
-              "@hookform/resolvers",
-              "zod",
-            ];
-            if (formPackages.includes(pkgName)) return "forms";
-          }
+        // Rolldown-native chunking (substitui o manualChunks legado do Rollup).
+        // Cada grupo usa `test` (regex sobre o caminho do módulo) e `priority`.
+        advancedChunks: {
+          groups: [
+            {
+              name: "vendor",
+              test: /node_modules[\\/](react|react-dom|react-router-dom|scheduler|react-is)[\\/]/,
+              priority: 60,
+            },
+            {
+              name: "editor",
+              test: /node_modules[\\/]@uiw[\\/]react-md-editor[\\/]/,
+              priority: 55,
+            },
+            {
+              name: "markdown",
+              test: /node_modules[\\/](react-markdown|remark-gfm|remark-parse|remark-rehype|remark-stringify|unified|vfile|vfile-message|decode-named-character-reference|property-information|space-separated-tokens|comma-separated-tokens|character-entities|character-entities-html4|character-entities-legacy|character-reference-invalid|stringify-entities|parse-entities|longest-streak|markdown-table|escape-string-regexp|extend|is-plain-obj|is-alphabetical|is-alphanumerical|is-decimal|is-hexadecimal|zwitch|ccount|trim-lines|ms|debug|bail|trough|devlop|dequal|inline-style-parser|style-to-js|style-to-object|estree-util-is-identifier-name|html-url-attributes|@ungap[\\/]structured-clone)[\\/]|node_modules[\\/](micromark|mdast-util-|hast-util-|unist-util-|remark-|rehype-)/,
+              priority: 58,
+              minShareCount: 1,
+            },
+            {
+              name: "xterm",
+              test: /node_modules[\\/]@xterm[\\/]/,
+              priority: 45,
+            },
+            {
+              name: "query",
+              test: /node_modules[\\/]@tanstack[\\/]/,
+              priority: 40,
+            },
+            {
+              name: "charts",
+              test: /node_modules[\\/]recharts[\\/]/,
+              priority: 35,
+            },
+            {
+              name: "particles",
+              test: /node_modules[\\/]@tsparticles[\\/]/,
+              priority: 30,
+            },
+            {
+              name: "dnd",
+              test: /node_modules[\\/]@dnd-kit[\\/]/,
+              priority: 25,
+            },
+            {
+              name: "nats",
+              test: /node_modules[\\/]@nats-io[\\/]/,
+              priority: 20,
+            },
+            {
+              name: "forms",
+              test: /node_modules[\\/](react-hook-form|@hookform[\\/]resolvers|zod)[\\/]/,
+              priority: 15,
+            },
+            {
+              name: "markdown",
+              test: /node_modules[\\/](react-markdown|remark-gfm)[\\/]/,
+              priority: 10,
+            },
+          ],
         },
       },
     },

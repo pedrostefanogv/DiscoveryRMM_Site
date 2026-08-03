@@ -1,9 +1,7 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Send, Lock, Unlock, Clock, Activity, ChevronDown, BookOpen, Paperclip, Upload, File, CheckCircle, XCircle, Loader2, UserPlus, UserMinus, Wrench, Copy } from 'lucide-react';
-import MDEditor from '@uiw/react-md-editor';
-import '@uiw/react-md-editor/markdown-editor.css';
-import { useTheme } from '@/theme/ThemeContext';
+import { MarkdownViewer } from '@/components/ui/MarkdownViewer';
 import { useAuth } from '@/auth/AuthContext';
 import { getUserIdFromJwt } from '@/auth/jwt';
 import { AppApprovalScopeType, AutomationTaskActionType } from '@/api';
@@ -421,7 +419,6 @@ function TicketAiPanel({
   const summary = useTicketAiSummary();
   const suggestReply = useTicketAiSuggestReply();
   const updateTicket = useUpdateTicket();
-  const { mode } = useTheme();
 
   const parsedTriage = useMemo(
     () => parseTicketAiTriageSuggestion(triage.data?.suggestion),
@@ -517,11 +514,8 @@ function TicketAiPanel({
                 </div>
 
                 {parsedTriage.reasoning && (
-                  <div data-color-mode={mode} className="mt-3">
-                    <MDEditor.Markdown
-                      source={parsedTriage.reasoning}
-                      style={{ backgroundColor: 'transparent' }}
-                    />
+                  <div className="mt-3">
+                    <MarkdownViewer source={parsedTriage.reasoning} />
                   </div>
                 )}
 
@@ -558,11 +552,8 @@ function TicketAiPanel({
                 <p className="text-sm text-muted-foreground">
                    A IA retornou uma saída não estruturada. O conteúdo bruto continua disponível abaixo.
                 </p>
-                <div data-color-mode={mode} className="rounded-lg bg-black/20 p-3">
-                  <MDEditor.Markdown
-                    source={triage.data.suggestion}
-                    style={{ backgroundColor: 'transparent' }}
-                  />
+                <div className="rounded-lg bg-black/20 p-3">
+                  <MarkdownViewer source={triage.data.suggestion} />
                 </div>
                 <Button
                   size="sm"
@@ -612,12 +603,7 @@ function TicketAiPanel({
 
         {summary.data && (
           <div className="mt-4 rounded-lg border border-border bg-surface-light p-4">
-            <div data-color-mode={mode}>
-              <MDEditor.Markdown
-                source={summary.data.summary}
-                style={{ backgroundColor: 'transparent' }}
-              />
-            </div>
+            <MarkdownViewer source={summary.data.summary} />
             <div className="mt-4 flex flex-wrap gap-2">
               <Button
                 size="sm"
@@ -667,12 +653,7 @@ function TicketAiPanel({
 
         {suggestReply.data && (
           <div className="mt-4 rounded-lg border border-border bg-surface-light p-4">
-            <div data-color-mode={mode}>
-              <MDEditor.Markdown
-                source={suggestReply.data.suggestedReply}
-                style={{ backgroundColor: 'transparent' }}
-              />
-            </div>
+            <MarkdownViewer source={suggestReply.data.suggestedReply} />
             <div className="mt-4 flex flex-wrap gap-2">
               <Button
                 size="sm"
@@ -1915,11 +1896,11 @@ function formatBytes(bytes: number) {
   return `${(bytes / 1048576).toFixed(1)} MB`;
 }
 
-function AttachmentsPanel({ 
-  ticketId, 
-  siteId, 
+function AttachmentsPanel({
+  ticketId,
+  siteId,
   clientId,
-}: { 
+}: {
   ticketId: string
   siteId: string | null
   clientId: string | null
@@ -1935,7 +1916,7 @@ function AttachmentsPanel({
     if (clientId && clientSettings.data) return { data: clientSettings.data, isLoading: false };
     return serverSettings;
   })();
-  
+
   const attachments = useTicketAttachments(ticketId);
   const prepare = usePrepareTicketUpload();
   const complete = useCompleteTicketUpload();

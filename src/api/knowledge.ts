@@ -9,6 +9,7 @@ import type {
   KnowledgeArticle,
   KnowledgeListQuery,
   KnowledgeSearchQuery,
+  KnowledgeTreeNode,
   LinkTicketKnowledgeRequest,
   PublishArticleRequest,
   TicketKnowledgeSuggestQuery,
@@ -27,6 +28,12 @@ export const knowledgeApi = {
   listAllVisible: (params?: KnowledgeListQuery) =>
     api.get<ArticleListPage>(
       BASE,
+      (params ?? {}) as unknown as Record<string, unknown>,
+    ),
+
+  tree: (params?: KnowledgeListQuery) =>
+    api.get<KnowledgeTreeNode[]>(
+      `${BASE}/tree`,
       (params ?? {}) as unknown as Record<string, unknown>,
     ),
 

@@ -4,23 +4,24 @@ import {
   ArrowLeft,
   Building2,
   CalendarClock,
+  ChevronRight,
   Clock3,
   FilePenLine,
+  FileText,
   Globe2,
   Layers,
   MapPinned,
   UserRound,
 } from 'lucide-react';
-import MDEditor from '@uiw/react-md-editor';
-import '@uiw/react-md-editor/markdown-editor.css';
+import { MarkdownViewer } from '@/components/ui/MarkdownViewer';
 import { Badge, Button, Card, ErrorDisplay, Loading } from '@/components/ui';
-import type { ArticleStatus, KnowledgeArticle } from '@/api';
+import type { ArticleStatus, KnowledgeArticle, KnowledgeTreeNode } from '@/api';
 import { useAuthorization } from '@/auth/authorization';
-import { useTheme } from '@/theme/ThemeContext';
 import {
   useClients,
   useDepartments,
   useKnowledgeArticle,
+  useKnowledgeTree,
   useSites,
 } from '@/hooks';
 
@@ -100,7 +101,6 @@ export default function KnowledgeViewer() {
   const { id } = useParams<{ id: string }>();
   const articleQuery = useKnowledgeArticle(id ?? '');
   const { hasAnyPermission } = useAuthorization();
-  const { mode } = useTheme();
 
   const article = articleQuery.data;
   const clients = useClients();
@@ -110,7 +110,43 @@ export default function KnowledgeViewer() {
     activeOnly: true,
   });
 
+  // Árvore de páginas para breadcrumb e subpáginas
+  const treeQuery = useKnowledgeTree({
+    status: article?.status === 'Draft' ? undefined : article?.status,
+    clientId: article?.clientId ?? undefined,
+    siteId: article?.siteId ?? undefined,
+    departmentId: article?.departmentId ?? undefined,
+  });
+
   const canEditArticle = hasAnyPermission(KNOWLEDGE_EDIT_PERMISSIONS);
+
+  // Resolve o caminho (breadcrumb) e as subpáginas a partir da árvore
+  const { breadcrumb, subpages } = useMemo(() => {
+    if (!article || !treeQuery.data) {
+      return { breadcrumb: [] as KnowledgeTreeNode[], subpages: [] as KnowledgeTreeNode[] };
+    }
+
+    const findPath = (
+      nodes: KnowledgeTreeNode[],
+      targetId: string,
+      path: KnowledgeTreeNode[] = [],
+    ): KnowledgeTreeNode[] | null => {
+      for (const node of nodes) {
+        const next = [...path, node];
+        if (node.id === targetId) return next;
+        const found = findPath(node.children, targetId, next);
+        if (found) return found;
+      }
+      return null;
+    };
+
+    const path = findPath(treeQuery.data, article.id) ?? [];
+    const current = path[path.length - 1];
+    return {
+      breadcrumb: path,
+      subpages: current?.children ?? [],
+    };
+  }, [article, treeQuery.data]);
 
   const metadata = useMemo(() => {
     if (!article) return null;
@@ -166,6 +202,26 @@ export default function KnowledgeViewer() {
           <ArrowLeft className="h-5 w-5" />
         </button>
         <div className="flex-1 min-w-0">
+          {breadcrumb.length > 1 && (
+            <nav className="mb-1 flex flex-wrap items-center gap-1 text-xs text-muted">
+              {breadcrumb.map((node, index) => (
+                <span key={node.id} className="inline-flex items-center gap-1">
+                  {index > 0 && <ChevronRight className="h-3 w-3" />}
+                  {index === breadcrumb.length - 1 ? (
+                    <span className="font-medium text-foreground">{node.title}</span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/knowledge/${node.id}`)}
+                      className="transition-colors hover:text-foreground"
+                    >
+                      {node.title}
+                    </button>
+                  )}
+                </span>
+              ))}
+            </nav>
+          )}
           <h1 className="text-2xl font-bold text-foreground truncate">
             {article.title}
           </h1>
@@ -194,14 +250,37 @@ export default function KnowledgeViewer() {
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
-        <Card padding={false} className="overflow-hidden">
-          <div data-color-mode={mode} className="px-5 py-6 sm:px-7">
-            <MDEditor.Markdown
-              source={article.content || '_Conteudo vazio._'}
-              style={{ backgroundColor: 'transparent' }}
-            />
-          </div>
-        </Card>
+        <div className="min-w-0 space-y-6">
+          <Card padding={false} className="overflow-hidden">
+            <div className="px-5 py-6 sm:px-7">
+              <MarkdownViewer source={article.content || '_Conteudo vazio._'} />
+            </div>
+          </Card>
+
+          {subpages.length > 0 && (
+            <Card>
+              <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                Subpáginas ({subpages.length})
+              </h2>
+              <div className="space-y-1">
+                {subpages.map((sub) => (
+                  <button
+                    key={sub.id}
+                    type="button"
+                    onClick={() => navigate(`/knowledge/${sub.id}`)}
+                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-surface-hover"
+                  >
+                    <FileText className="h-4 w-4 shrink-0 text-muted" />
+                    <span className="min-w-0 flex-1 truncate">{sub.title}</span>
+                    {sub.childCount > 0 && (
+                      <span className="shrink-0 text-xs text-muted">{sub.childCount}</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </Card>
+          )}
+        </div>
 
         <div className="space-y-4">
           <Card>
