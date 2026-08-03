@@ -110,9 +110,10 @@ export default function KnowledgeViewer() {
     activeOnly: true,
   });
 
-  // Árvore de páginas para breadcrumb e subpáginas
+  // Árvore de páginas para breadcrumb e subpáginas.
+  // Não filtra por status para garantir que o breadcrumb e as subpáginas
+  // sempre incluam a página atual (mesmo Draft) e seus ancestrais.
   const treeQuery = useKnowledgeTree({
-    status: article?.status === 'Draft' ? undefined : article?.status,
     clientId: article?.clientId ?? undefined,
     siteId: article?.siteId ?? undefined,
     departmentId: article?.departmentId ?? undefined,

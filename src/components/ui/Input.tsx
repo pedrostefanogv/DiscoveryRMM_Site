@@ -35,7 +35,7 @@ export function Input({ label, error, hint, className = '', id, ...props }: Inpu
 
 interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
   label?: string;
-  options: { value: string; label: string }[];
+  options: { value: string; label: string; disabled?: boolean }[];
   hint?: string;
 }
 
@@ -58,6 +58,7 @@ export function Select({ label, options, className = '', id, hint, ...props }: S
           <option
             key={opt.value}
             value={opt.value}
+            disabled={opt.disabled}
             className="bg-white text-slate-900 dark:bg-surface dark:text-foreground"
           >
             {opt.label}

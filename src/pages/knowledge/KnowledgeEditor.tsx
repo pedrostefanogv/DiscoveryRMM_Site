@@ -134,18 +134,23 @@ export default function KnowledgeEditor() {
     [departments.data],
   );
 
-  // Achata a árvore de páginas em opções de "página pai" (exclui a própria página em edição)
+  // Achata a árvore de páginas em opções de "página pai" (exclui a própria página em edição).
+  // Calcula a profundidade de cada nó para desabilitar opções que excederiam o limite de 3 níveis.
   const parentOptions = useMemo(() => {
-    const options: Array<{ value: string; label: string }> = [
+    const options: Array<{ value: string; label: string; disabled?: boolean }> = [
       { value: '', label: 'Nenhuma (página raiz)' },
     ];
 
     const flatten = (nodes: KnowledgeTreeNode[], depth: number) => {
       for (const node of nodes) {
         if (node.id !== id) {
+          // Um nó no nível `depth` (0-based) tem profundidade depth+1.
+          // Só pode ser pai se depth+1 < 3 (o filho ficaria no nível depth+2 <= 3).
+          const disabled = depth + 1 >= 3;
           options.push({
             value: node.id,
-            label: `${'  '.repeat(depth)}${node.title}`,
+            label: `${'  '.repeat(depth)}${node.title}${disabled ? ' (limite de níveis)' : ''}`,
+            disabled,
           });
         }
         flatten(node.children, depth + 1);
@@ -155,6 +160,28 @@ export default function KnowledgeEditor() {
     flatten(treeQuery.data ?? [], 0);
     return options;
   }, [treeQuery.data, id]);
+
+  // Ao selecionar uma página pai, herda o escopo (cliente/site) dela.
+  const handleParentChange = (parentId: string) => {
+    setField('parentId', parentId);
+    if (!parentId) return;
+
+    const findNode = (nodes: KnowledgeTreeNode[], targetId: string): KnowledgeTreeNode | null => {
+      for (const node of nodes) {
+        if (node.id === targetId) return node;
+        const found = findNode(node.children, targetId);
+        if (found) return found;
+      }
+      return null;
+    };
+
+    const parent = findNode(treeQuery.data ?? [], parentId);
+    if (parent) {
+      setField('clientId', parent.clientId ?? '');
+      setField('siteId', parent.siteId ?? '');
+      setField('departmentId', parent.departmentId ?? '');
+    }
+  };
 
   const setField = <K extends keyof FormState>(field: K, value: FormState[K]) => {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -320,8 +347,8 @@ export default function KnowledgeEditor() {
               label="Página pai (opcional)"
               options={parentOptions}
               value={form.parentId}
-              onChange={(event) => setField('parentId', event.target.value)}
-              hint="Crie subpáginas aninhadas (até 3 níveis). A subpágina herda escopo e status da página raiz."
+              onChange={(event) => handleParentChange(event.target.value)}
+              hint="Crie subpáginas aninhadas (até 3 níveis). A subpágina herda escopo e status da página raiz. Ao escolher uma página pai, o escopo é herdado automaticamente."
             />
 
             <Input
