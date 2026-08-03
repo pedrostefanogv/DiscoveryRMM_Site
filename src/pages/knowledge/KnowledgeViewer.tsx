@@ -178,7 +178,6 @@ export default function KnowledgeViewer() {
   }
 
   const tags = (article.tags?.length ?? 0) > 0 ? article.tags : ['sem tags'];
-  const pageCount = pagesQuery.data?.length ?? 0;
 
   return (
     <div className="space-y-6">
@@ -224,7 +223,7 @@ export default function KnowledgeViewer() {
           <Card>
             <div className="mb-3 flex items-center justify-between">
               <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-                Páginas do artigo ({pageCount})
+                Páginas do artigo
               </h2>
             </div>
             {pagesQuery.isLoading ? (

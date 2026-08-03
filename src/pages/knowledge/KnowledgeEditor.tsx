@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, History, Save, Send } from 'lucide-react';
+import { ArrowLeft, FileText, History, Home, Save, Send } from 'lucide-react';
 import {
   Badge,
   Button,
@@ -11,8 +11,8 @@ import {
   MarkdownEditor,
   Select,
 } from '@/components/ui';
-import { useClients, useCreateKnowledgeArticle, useDepartments, useKnowledgeArticle, useKnowledgeArticleVersions, usePublishKnowledgeArticle, useSites, useUpdateKnowledgeArticle } from '@/hooks';
-import type { ArticleStatus, ArticleVersion, CreateKnowledgeArticleRequest, PublishArticleRequest, UpdateKnowledgeArticleRequest } from '@/api';
+import { useArticlePages, useClients, useCreateKnowledgeArticle, useCreateArticlePage, useDepartments, useKnowledgeArticle, useKnowledgeArticleVersions, usePublishKnowledgeArticle, useSites, useUpdateArticlePage, useUpdateKnowledgeArticle } from '@/hooks';
+import type { ArticlePageTreeNode, ArticleStatus, ArticleVersion, CreateKnowledgeArticleRequest, PublishArticleRequest, UpdateKnowledgeArticleRequest } from '@/api';
 import toast from 'react-hot-toast';
 import ArticlePagesManager from './ArticlePagesManager';
 
@@ -70,6 +70,17 @@ export default function KnowledgeEditor() {
 
   const [showVersions, setShowVersions] = useState(false);
 
+  // ── Editor único de sub-páginas (estilo Notion) ──────────────
+  // activePageId === null → editando a "home" (artigo principal)
+  // activePageId === '__new__' → criando uma nova sub-página
+  const [activePageId, setActivePageId] = useState<string | null>(null);
+  const [pageTitle, setPageTitle] = useState('');
+  const [pageContent, setPageContent] = useState('');
+  const [pageParentId, setPageParentId] = useState('');
+  const pagesQuery = useArticlePages(id ?? '');
+  const createPageMutation = useCreateArticlePage(id ?? '');
+  const updatePageMutation = useUpdateArticlePage(id ?? '');
+
   const clients = useClients();
   const sites = useSites(form.clientId);
   const departments = useDepartments({ clientId: form.clientId || undefined, activeOnly: true });
@@ -94,6 +105,132 @@ export default function KnowledgeEditor() {
       targetStatus: article.status,
     });
   }, [detailQuery.data, isEdit]);
+
+  // Ao trocar de artigo, volta para a "home" e limpa o editor de página.
+  useEffect(() => {
+    setActivePageId(null);
+    setPageTitle('');
+    setPageContent('');
+    setPageParentId('');
+  }, [id]);
+
+  // Busca recursiva de um nó na árvore de sub-páginas.
+  const findPage = (
+    nodes: ArticlePageTreeNode[],
+    pageId: string,
+  ): ArticlePageTreeNode | null => {
+    for (const node of nodes) {
+      if (node.id === pageId) return node;
+      const found = findPage(node.children, pageId);
+      if (found) return found;
+    }
+    return null;
+  };
+
+  // Seleciona uma sub-página para edição no editor único.
+  const handleSelectPage = (pageId: string) => {
+    const node = findPage(pagesQuery.data ?? [], pageId);
+    if (!node) return;
+    setActivePageId(pageId);
+    setPageTitle(node.title);
+    setPageContent(node.content ?? '');
+    setPageParentId(node.parentPageId ?? '');
+  };
+
+  // Volta para a "home" (artigo principal).
+  const handleSelectHome = () => {
+    setActivePageId(null);
+    setPageTitle('');
+    setPageContent('');
+    setPageParentId('');
+  };
+
+  // Abre o editor único em modo de criação de nova sub-página.
+  const handleCreatePage = () => {
+    setActivePageId('__new__');
+    setPageTitle('');
+    setPageContent('');
+    setPageParentId('');
+  };
+
+  // Salva a sub-página ativa (cria ou atualiza).
+  const handleSavePage = () => {
+    if (!id) return;
+    if (!pageTitle.trim()) {
+      toast.error('Informe o título da página.');
+      return;
+    }
+
+    if (activePageId === '__new__') {
+      createPageMutation.mutate(
+        {
+          title: pageTitle.trim(),
+          content: pageContent,
+          parentPageId: pageParentId || null,
+        },
+        {
+          onSuccess: () => {
+            toast.success('Página criada.');
+            handleSelectHome();
+          },
+          onError: () => toast.error('Falha ao criar página.'),
+        },
+      );
+      return;
+    }
+
+    if (activePageId) {
+      updatePageMutation.mutate(
+        {
+          pageId: activePageId,
+          data: {
+            title: pageTitle.trim(),
+            content: pageContent,
+            parentPageId: pageParentId || null,
+          },
+        },
+        {
+          onSuccess: () => {
+            toast.success('Página atualizada.');
+            handleSelectHome();
+          },
+          onError: () => toast.error('Falha ao atualizar página.'),
+        },
+      );
+    }
+  };
+
+  // Quando uma página é excluída, limpa a seleção se for a ativa.
+  const handleDeletePage = (pageId: string) => {
+    if (activePageId === pageId) {
+      handleSelectHome();
+    }
+  };
+
+  // Opções de "página pai" para criar/mover sub-página (limite de 3 níveis).
+  const pageParentOptions = useMemo(() => {
+    const options: Array<{ value: string; label: string; disabled?: boolean }> = [
+      { value: '', label: 'Nenhuma (nível 1)' },
+    ];
+    const flatten = (list: ArticlePageTreeNode[], depth: number) => {
+      for (const node of list) {
+        if (node.id !== activePageId) {
+          const disabled = depth + 1 >= 3;
+          options.push({
+            value: node.id,
+            label: `${'  '.repeat(depth)}${node.title}${disabled ? ' (limite de níveis)' : ''}`,
+            disabled,
+          });
+        }
+        flatten(node.children, depth + 1);
+      }
+    };
+    flatten(pagesQuery.data ?? [], 0);
+    return options;
+  }, [pagesQuery.data, activePageId]);
+
+  const isEditingPage = activePageId !== null;
+  const isCreatingPage = activePageId === '__new__';
 
   const clientOptions = useMemo(
     () => [
@@ -128,6 +265,12 @@ export default function KnowledgeEditor() {
   const submit = async (targetStatus: ArticleStatus = 'Draft') => {
     if (!valid) {
       toast.error('Preencha título e conteúdo do artigo.');
+      return;
+    }
+
+    // Se há uma sub-página em edição não salva, avisa antes de salvar o artigo.
+    if (isEditingPage) {
+      toast.error('Salve ou cancele a sub-página em edição antes de salvar o artigo.');
       return;
     }
 
@@ -415,17 +558,90 @@ export default function KnowledgeEditor() {
 
             {isEdit && id && (
               <div className="rounded-xl border border-border bg-surface-light p-4">
-                <ArticlePagesManager articleId={id} />
+                <ArticlePagesManager
+                  articleId={id}
+                  homeLabel={detailQuery.data?.title ?? 'Home'}
+                  activePageId={isCreatingPage ? null : activePageId}
+                  homeActive={!isEditingPage}
+                  onSelectHome={handleSelectHome}
+                  onSelectPage={handleSelectPage}
+                  onCreatePage={handleCreatePage}
+                  onDeletePage={handleDeletePage}
+                />
               </div>
             )}
 
-            <MarkdownEditor
-              label="Markdown"
-              value={form.content}
-              onChange={(value) => setField('content', value)}
-              height={460}
-              hint="Editor avançado com atalhos e toolbar para títulos, listas, links, tabelas e blocos de código."
-            />
+            {/* Editor único: home do artigo ou sub-página selecionada */}
+            <div className="rounded-xl border border-border bg-surface-light p-4">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  {isEditingPage ? (
+                    <FileText className="h-4 w-4 text-muted" />
+                  ) : (
+                    <Home className="h-4 w-4 text-primary" />
+                  )}
+                  <h3 className="text-sm font-semibold text-foreground">
+                    {isCreatingPage
+                      ? 'Nova página'
+                      : isEditingPage
+                      ? 'Editar página'
+                      : 'Página principal (Home)'}
+                  </h3>
+                </div>
+                {isEditingPage && (
+                  <Button size="sm" variant="ghost" onClick={handleSelectHome}>
+                    Voltar para Home
+                  </Button>
+                )}
+              </div>
+
+              {isEditingPage ? (
+                <div className="space-y-3">
+                  <Input
+                    label="Título da página"
+                    value={pageTitle}
+                    onChange={(e) => setPageTitle(e.target.value)}
+                    placeholder="Ex.: Hardware"
+                  />
+                  <Select
+                    label="Página pai (opcional)"
+                    options={pageParentOptions}
+                    value={pageParentId}
+                    onChange={(e) => setPageParentId(e.target.value)}
+                  />
+                  <MarkdownEditor
+                    label="Conteúdo (Markdown)"
+                    value={pageContent}
+                    onChange={setPageContent}
+                    height={360}
+                  />
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={handleSelectHome}
+                    >
+                      Cancelar
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={handleSavePage}
+                      loading={createPageMutation.isPending || updatePageMutation.isPending}
+                    >
+                      {isCreatingPage ? 'Criar página' : 'Salvar página'}
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <MarkdownEditor
+                  label="Markdown"
+                  value={form.content}
+                  onChange={(value) => setField('content', value)}
+                  height={460}
+                  hint="Editor avançado com atalhos e toolbar para títulos, listas, links, tabelas e blocos de código."
+                />
+              )}
+            </div>
 
             <div className="flex justify-end gap-3">
               <Button variant="ghost" onClick={() => navigate('/knowledge')}>
