@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { MarkdownViewer } from '@/components/ui/MarkdownViewer';
 import { Badge, Button, Card, ErrorDisplay, Loading } from '@/components/ui';
-import type { ArticleStatus, KnowledgeArticle } from '@/api';
+import type { ArticlePageTreeNode, ArticleStatus, KnowledgeArticle } from '@/api';
 import { useAuthorization } from '@/auth/authorization';
 import {
   useArticlePages,
@@ -115,6 +115,20 @@ export default function KnowledgeViewer() {
   const [activePageId, setActivePageId] = useState<string | null>(null);
 
   const canEditArticle = hasAnyPermission(KNOWLEDGE_EDIT_PERMISSIONS);
+
+  // Resolve a sub-página ativa (para exibir seu conteúdo)
+  const activePage = useMemo(() => {
+    if (!activePageId || !pagesQuery.data) return null;
+    const find = (nodes: ArticlePageTreeNode[]): ArticlePageTreeNode | null => {
+      for (const node of nodes) {
+        if (node.id === activePageId) return node;
+        const found = find(node.children);
+        if (found) return found;
+      }
+      return null;
+    };
+    return find(pagesQuery.data);
+  }, [activePageId, pagesQuery.data]);
 
   const metadata = useMemo(() => {
     if (!article) return null;
@@ -227,11 +241,21 @@ export default function KnowledgeViewer() {
             ) : pagesQuery.isError ? (
               <p className="text-sm text-muted">Falha ao carregar as páginas do artigo.</p>
             ) : (
-              <ArticlePagesTree
-                nodes={pagesQuery.data ?? []}
-                activePageId={activePageId}
-                onSelect={setActivePageId}
-              />
+              <>
+                <ArticlePagesTree
+                  nodes={pagesQuery.data ?? []}
+                  activePageId={activePageId}
+                  onSelect={setActivePageId}
+                />
+                {activePage && (
+                  <div className="mt-4 border-t border-border pt-4">
+                    <h3 className="mb-2 text-sm font-semibold text-foreground">
+                      {activePage.title}
+                    </h3>
+                    <MarkdownViewer source={activePage.content || '_Conteudo vazio._'} />
+                  </div>
+                )}
+              </>
             )}
           </Card>
         </div>

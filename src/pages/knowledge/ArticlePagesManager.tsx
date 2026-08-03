@@ -29,6 +29,7 @@ export default function ArticlePagesManager({ articleId }: ArticlePagesManagerPr
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState('');
   const [editContent, setEditContent] = useState('');
+  const [editParentId, setEditParentId] = useState('');
   const [newTitle, setNewTitle] = useState('');
   const [newContent, setNewContent] = useState('');
   const [newParentId, setNewParentId] = useState('');
@@ -43,8 +44,10 @@ export default function ArticlePagesManager({ articleId }: ArticlePagesManagerPr
     });
   };
 
-  // Achata a árvore em opções de "página pai" (para criar sub-página)
+  // Achata a árvore em opções de "página pai" (para criar/mover sub-página).
+  // Desabilita opções que excederiam o limite de 3 níveis.
   const parentOptions = useFlattenOptions(pagesQuery.data ?? [], null);
+  const editParentOptions = useFlattenOptions(pagesQuery.data ?? [], editingId);
 
   const handleCreate = () => {
     if (!newTitle.trim()) {
@@ -76,7 +79,14 @@ export default function ArticlePagesManager({ articleId }: ArticlePagesManagerPr
       return;
     }
     updateMutation.mutate(
-      { pageId, data: { title: editTitle.trim(), content: editContent } },
+      {
+        pageId,
+        data: {
+          title: editTitle.trim(),
+          content: editContent,
+          parentPageId: editParentId || null,
+        },
+      },
       {
         onSuccess: () => {
           toast.success('Página atualizada.');
@@ -136,10 +146,18 @@ export default function ArticlePagesManager({ articleId }: ArticlePagesManagerPr
                 onChange={(e) => setEditTitle(e.target.value)}
                 placeholder="Título da página"
               />
-              <Input
+              <textarea
                 value={editContent}
                 onChange={(e) => setEditContent(e.target.value)}
                 placeholder="Conteúdo (Markdown)"
+                rows={3}
+                className="w-full rounded-xl border border-input-border bg-input px-3 py-2 text-sm text-foreground outline-none transition-colors focus-visible:border-primary/60 focus-visible:ring-2 focus-visible:ring-primary/30"
+              />
+              <Select
+                label="Mover para (página pai)"
+                options={editParentOptions}
+                value={editParentId}
+                onChange={(e) => setEditParentId(e.target.value)}
               />
               <div className="flex gap-2">
                 <Button size="sm" onClick={() => handleSaveEdit(node.id)}>Salvar</Button>
@@ -156,7 +174,8 @@ export default function ArticlePagesManager({ articleId }: ArticlePagesManagerPr
                   onClick={() => {
                     setEditingId(node.id);
                     setEditTitle(node.title);
-                    setEditContent('');
+                    setEditContent(node.content ?? '');
+                    setEditParentId(node.parentPageId ?? '');
                   }}
                   aria-label="Editar página"
                 >
@@ -201,12 +220,16 @@ export default function ArticlePagesManager({ articleId }: ArticlePagesManagerPr
             onChange={(e) => setNewTitle(e.target.value)}
             placeholder="Ex.: Hardware"
           />
-          <Input
-            label="Conteúdo (Markdown)"
-            value={newContent}
-            onChange={(e) => setNewContent(e.target.value)}
-            placeholder="Conteúdo da página..."
-          />
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-muted-foreground">Conteúdo (Markdown)</label>
+            <textarea
+              value={newContent}
+              onChange={(e) => setNewContent(e.target.value)}
+              placeholder="Conteúdo da página..."
+              rows={3}
+              className="w-full rounded-xl border border-input-border bg-input px-3 py-2 text-sm text-foreground outline-none transition-colors focus-visible:border-primary/60 focus-visible:ring-2 focus-visible:ring-primary/30"
+            />
+          </div>
           <Select
             label="Página pai (opcional)"
             options={parentOptions}
@@ -235,21 +258,26 @@ export default function ArticlePagesManager({ articleId }: ArticlePagesManagerPr
   );
 }
 
-// Helper: achata a árvore em opções de "página pai"
+// Helper: achata a árvore em opções de "página pai".
+// Desabilita opções que, se escolhidas como pai, excederiam o limite de 3 níveis.
 function useFlattenOptions(
   nodes: ArticlePageTreeNode[],
   excludeId: string | null,
-): Array<{ value: string; label: string }> {
-  const options: Array<{ value: string; label: string }> = [
+): Array<{ value: string; label: string; disabled?: boolean }> {
+  const options: Array<{ value: string; label: string; disabled?: boolean }> = [
     { value: '', label: 'Nenhuma (nível 1)' },
   ];
 
   const flatten = (list: ArticlePageTreeNode[], depth: number) => {
     for (const node of list) {
       if (node.id !== excludeId) {
+        // Um nó no nível `depth` (0-based) tem profundidade depth+1.
+        // Só pode ser pai se depth+1 < 3 (o filho ficaria no nível depth+2 <= 3).
+        const disabled = depth + 1 >= 3;
         options.push({
           value: node.id,
-          label: `${'  '.repeat(depth)}${node.title}`,
+          label: `${'  '.repeat(depth)}${node.title}${disabled ? ' (limite de níveis)' : ''}`,
+          disabled,
         });
       }
       flatten(node.children, depth + 1);

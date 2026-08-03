@@ -1694,6 +1694,7 @@ export interface ArticlePageTreeNode {
   articleId: string;
   parentPageId: string | null;
   title: string;
+  content: string;
   sortOrder: number;
   childCount: number;
   children: ArticlePageTreeNode[];
