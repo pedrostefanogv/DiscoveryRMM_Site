@@ -1,25 +1,25 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { ChevronDown, ChevronRight, FileText, FolderOpen, Folder } from 'lucide-react';
-import type { KnowledgeTreeNode } from '@/api';
+import type { ArticlePageTreeNode } from '@/api';
 
-interface KnowledgeTreeProps {
-  nodes: KnowledgeTreeNode[];
-  activeId?: string | null;
+interface ArticlePagesTreeProps {
+  nodes: ArticlePageTreeNode[];
+  activePageId?: string | null;
+  onSelect: (pageId: string) => void;
   maxDepth?: number;
 }
 
 /**
- * Árvore de páginas da base de conhecimento (estilo Notion).
- * Exibe páginas e subpáginas aninhadas com expandir/recolher e indentação.
- * Suporta até `maxDepth` níveis (padrão 3).
+ * Árvore de sub-páginas internas de um artigo (estilo Notion).
+ * Exibe as "partes/páginas" DENTRO de um único artigo, com expandir/recolher
+ * e indentação. Suporta até `maxDepth` níveis (padrão 3).
  */
-export default function KnowledgeTree({
+export default function ArticlePagesTree({
   nodes,
-  activeId,
+  activePageId,
+  onSelect,
   maxDepth = 3,
-}: KnowledgeTreeProps) {
-  const navigate = useNavigate();
+}: ArticlePagesTreeProps) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 
   const toggle = (id: string) => {
@@ -31,11 +31,11 @@ export default function KnowledgeTree({
     });
   };
 
-  const renderNode = (node: KnowledgeTreeNode, depth: number) => {
+  const renderNode = (node: ArticlePageTreeNode, depth: number) => {
     const hasChildren = node.children.length > 0;
     const isCollapsed = collapsed.has(node.id);
-    const isActive = node.id === activeId;
-    const isFolder = node.isPage || hasChildren;
+    const isActive = node.id === activePageId;
+    const isFolder = hasChildren;
 
     return (
       <div key={node.id}>
@@ -46,7 +46,7 @@ export default function KnowledgeTree({
               : 'text-foreground hover:bg-surface-hover'
           }`}
           style={{ paddingLeft: `${8 + depth * 16}px` }}
-          onClick={() => navigate(`/knowledge/${node.id}`)}
+          onClick={() => onSelect(node.id)}
         >
           {hasChildren ? (
             <button
@@ -95,7 +95,7 @@ export default function KnowledgeTree({
   if (!nodes.length) {
     return (
       <p className="px-2 py-3 text-sm text-muted">
-        Nenhuma página na base de conhecimento.
+        Este artigo ainda não possui sub-páginas.
       </p>
     );
   }

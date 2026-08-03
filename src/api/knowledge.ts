@@ -1,7 +1,10 @@
 ﻿import { api } from "./client";
 import type {
   ArticleListPage,
+  ArticlePage,
+  ArticlePageTreeNode,
   ArticleVersion,
+  CreateArticlePageRequest,
   CreateKnowledgeArticleRequest,
   KbLinkFeedbackRequest,
   KbSearchRequest,
@@ -9,10 +12,10 @@ import type {
   KnowledgeArticle,
   KnowledgeListQuery,
   KnowledgeSearchQuery,
-  KnowledgeTreeNode,
   LinkTicketKnowledgeRequest,
   PublishArticleRequest,
   TicketKnowledgeSuggestQuery,
+  UpdateArticlePageRequest,
   UpdateKnowledgeArticleRequest,
 } from "./types";
 
@@ -31,11 +34,21 @@ export const knowledgeApi = {
       (params ?? {}) as unknown as Record<string, unknown>,
     ),
 
-  tree: (params?: KnowledgeListQuery) =>
-    api.get<KnowledgeTreeNode[]>(
-      `${BASE}/tree`,
-      (params ?? {}) as unknown as Record<string, unknown>,
-    ),
+  // ── Sub-páginas internas do artigo ────────────────────────────
+  getPages: (articleId: string) =>
+    api.get<ArticlePageTreeNode[]>(`${BASE}/${articleId}/pages`),
+
+  getPage: (articleId: string, pageId: string) =>
+    api.get<ArticlePage>(`${BASE}/${articleId}/pages/${pageId}`),
+
+  createPage: (articleId: string, data: CreateArticlePageRequest) =>
+    api.post<ArticlePage>(`${BASE}/${articleId}/pages`, data),
+
+  updatePage: (articleId: string, pageId: string, data: UpdateArticlePageRequest) =>
+    api.put<ArticlePage>(`${BASE}/${articleId}/pages/${pageId}`, data),
+
+  deletePage: (articleId: string, pageId: string) =>
+    api.del<void>(`${BASE}/${articleId}/pages/${pageId}`),
 
   search: (params: KnowledgeSearchQuery) =>
     api.get<KnowledgeArticle[]>(

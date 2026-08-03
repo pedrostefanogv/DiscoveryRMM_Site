@@ -1,29 +1,29 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
   Building2,
   CalendarClock,
-  ChevronRight,
   Clock3,
   FilePenLine,
-  FileText,
   Globe2,
   Layers,
   MapPinned,
+  Plus,
   UserRound,
 } from 'lucide-react';
 import { MarkdownViewer } from '@/components/ui/MarkdownViewer';
 import { Badge, Button, Card, ErrorDisplay, Loading } from '@/components/ui';
-import type { ArticleStatus, KnowledgeArticle, KnowledgeTreeNode } from '@/api';
+import type { ArticleStatus, KnowledgeArticle } from '@/api';
 import { useAuthorization } from '@/auth/authorization';
 import {
+  useArticlePages,
   useClients,
   useDepartments,
   useKnowledgeArticle,
-  useKnowledgeTree,
   useSites,
 } from '@/hooks';
+import ArticlePagesTree from './ArticlePagesTree';
 
 const KNOWLEDGE_EDIT_PERMISSIONS = [
   'KnowledgeBase.Edit',
@@ -110,44 +110,11 @@ export default function KnowledgeViewer() {
     activeOnly: true,
   });
 
-  // Árvore de páginas para breadcrumb e subpáginas.
-  // Não filtra por status para garantir que o breadcrumb e as subpáginas
-  // sempre incluam a página atual (mesmo Draft) e seus ancestrais.
-  const treeQuery = useKnowledgeTree({
-    clientId: article?.clientId ?? undefined,
-    siteId: article?.siteId ?? undefined,
-    departmentId: article?.departmentId ?? undefined,
-  });
+  // Sub-páginas internas do artigo (estilo Notion)
+  const pagesQuery = useArticlePages(id ?? '');
+  const [activePageId, setActivePageId] = useState<string | null>(null);
 
   const canEditArticle = hasAnyPermission(KNOWLEDGE_EDIT_PERMISSIONS);
-
-  // Resolve o caminho (breadcrumb) e as subpáginas a partir da árvore
-  const { breadcrumb, subpages } = useMemo(() => {
-    if (!article || !treeQuery.data) {
-      return { breadcrumb: [] as KnowledgeTreeNode[], subpages: [] as KnowledgeTreeNode[] };
-    }
-
-    const findPath = (
-      nodes: KnowledgeTreeNode[],
-      targetId: string,
-      path: KnowledgeTreeNode[] = [],
-    ): KnowledgeTreeNode[] | null => {
-      for (const node of nodes) {
-        const next = [...path, node];
-        if (node.id === targetId) return next;
-        const found = findPath(node.children, targetId, next);
-        if (found) return found;
-      }
-      return null;
-    };
-
-    const path = findPath(treeQuery.data, article.id) ?? [];
-    const current = path[path.length - 1];
-    return {
-      breadcrumb: path,
-      subpages: current?.children ?? [],
-    };
-  }, [article, treeQuery.data]);
 
   const metadata = useMemo(() => {
     if (!article) return null;
@@ -191,6 +158,7 @@ export default function KnowledgeViewer() {
   }
 
   const tags = (article.tags?.length ?? 0) > 0 ? article.tags : ['sem tags'];
+  const pageCount = pagesQuery.data?.length ?? 0;
 
   return (
     <div className="space-y-6">
@@ -203,26 +171,6 @@ export default function KnowledgeViewer() {
           <ArrowLeft className="h-5 w-5" />
         </button>
         <div className="flex-1 min-w-0">
-          {breadcrumb.length > 1 && (
-            <nav className="mb-1 flex flex-wrap items-center gap-1 text-xs text-muted">
-              {breadcrumb.map((node, index) => (
-                <span key={node.id} className="inline-flex items-center gap-1">
-                  {index > 0 && <ChevronRight className="h-3 w-3" />}
-                  {index === breadcrumb.length - 1 ? (
-                    <span className="font-medium text-foreground">{node.title}</span>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => navigate(`/knowledge/${node.id}`)}
-                      className="transition-colors hover:text-foreground"
-                    >
-                      {node.title}
-                    </button>
-                  )}
-                </span>
-              ))}
-            </nav>
-          )}
           <h1 className="text-2xl font-bold text-foreground truncate">
             {article.title}
           </h1>
@@ -258,29 +206,34 @@ export default function KnowledgeViewer() {
             </div>
           </Card>
 
-          {subpages.length > 0 && (
-            <Card>
-              <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-                Subpáginas ({subpages.length})
+          {/* Menu de sub-páginas internas do artigo (estilo Notion) */}
+          <Card>
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                Páginas do artigo ({pageCount})
               </h2>
-              <div className="space-y-1">
-                {subpages.map((sub) => (
-                  <button
-                    key={sub.id}
-                    type="button"
-                    onClick={() => navigate(`/knowledge/${sub.id}`)}
-                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-surface-hover"
-                  >
-                    <FileText className="h-4 w-4 shrink-0 text-muted" />
-                    <span className="min-w-0 flex-1 truncate">{sub.title}</span>
-                    {sub.childCount > 0 && (
-                      <span className="shrink-0 text-xs text-muted">{sub.childCount}</span>
-                    )}
-                  </button>
-                ))}
-              </div>
-            </Card>
-          )}
+              {canEditArticle && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => navigate(`/knowledge/${article.id}/edit?newPage=1`)}
+                >
+                  <Plus className="h-4 w-4" /> Nova página
+                </Button>
+              )}
+            </div>
+            {pagesQuery.isLoading ? (
+              <Loading message="Carregando páginas..." />
+            ) : pagesQuery.isError ? (
+              <p className="text-sm text-muted">Falha ao carregar as páginas do artigo.</p>
+            ) : (
+              <ArticlePagesTree
+                nodes={pagesQuery.data ?? []}
+                activePageId={activePageId}
+                onSelect={setActivePageId}
+              />
+            )}
+          </Card>
         </div>
 
         <div className="space-y-4">

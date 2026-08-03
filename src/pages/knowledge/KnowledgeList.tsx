@@ -13,11 +13,10 @@ import {
 import type { Column } from '@/components/ui';
 import type { ArticleStatus, ArticleListPage, KnowledgeArticle, KnowledgeSearchMode, PublishArticleRequest } from '@/api';
 import { useCursorPagination } from '@/hooks/useCursorPagination';
-import { useClients, useDeleteKnowledgeArticle, useDepartments, useKnowledgeAllArticles, useKnowledgeSearch, useKnowledgeTree, usePublishKnowledgeArticle, useSites, useUnpublishKnowledgeArticle } from '@/hooks';
+import { useClients, useDeleteKnowledgeArticle, useDepartments, useKnowledgeAllArticles, useKnowledgeSearch, usePublishKnowledgeArticle, useSites, useUnpublishKnowledgeArticle } from '@/hooks';
 import { useAuthorization } from '@/auth/authorization';
 import { BookOpen, ChevronDown, ChevronUp, Eye, Filter, Pencil, Plus, Search, Send, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import KnowledgeTree from './KnowledgeTree';
 
 const SEARCH_MODE_OPTIONS: Array<{ value: KnowledgeSearchMode; label: string }> = [
   { value: 'hybrid', label: 'Híbrido' },
@@ -144,15 +143,6 @@ export default function KnowledgeList() {
 
   // Listagem unificada via ACL do usuário — funciona com ou sem filtro de cliente
   const listQuery = useKnowledgeAllArticles(allVisibleParams);
-
-  // Árvore de páginas (estilo Notion) — mesma ACL/filtros da listagem
-  const treeQuery = useKnowledgeTree({
-    status: statusFilter || undefined,
-    category: category || undefined,
-    clientId: clientId || undefined,
-    siteId: siteId || undefined,
-    departmentId: departmentId || undefined,
-  });
 
   // Resposta sempre em formato ArticleListPage do backend unificado
   const listPage = listQuery.data as ArticleListPage | undefined;
@@ -507,28 +497,6 @@ export default function KnowledgeList() {
         )}
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[260px_minmax(0,1fr)]">
-        {/* Painel lateral: árvore de páginas (estilo Notion) */}
-        <aside className="hidden xl:block">
-          <Card padding={false} className="overflow-hidden">
-            <div className="border-b border-border px-4 py-3">
-              <p className="text-sm font-semibold text-foreground">Páginas</p>
-              <p className="text-xs text-muted">Navegue pela hierarquia</p>
-            </div>
-            <div className="max-h-[70vh] overflow-y-auto p-2">
-              {treeQuery.isLoading ? (
-                <p className="px-2 py-3 text-sm text-muted">Carregando páginas...</p>
-              ) : treeQuery.isError ? (
-                <p className="px-2 py-3 text-sm text-muted">Falha ao carregar páginas.</p>
-              ) : (
-                <KnowledgeTree nodes={treeQuery.data ?? []} />
-              )}
-            </div>
-          </Card>
-        </aside>
-
-        {/* Conteúdo principal */}
-        <div className="min-w-0 space-y-6">
       <Card>
         <form className="space-y-3" onSubmit={handleSearchSubmit}>
           <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_11rem_auto] lg:items-end">
@@ -855,8 +823,6 @@ export default function KnowledgeList() {
           </div>
         </>
       )}
-        </div>
-      </div>
     </div>
   );
 }

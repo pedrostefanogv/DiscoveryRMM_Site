@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { knowledgeApi } from "@/api";
 import type {
+  CreateArticlePageRequest,
   CreateKnowledgeArticleRequest,
   KbSearchRequest,
   KnowledgeListQuery,
@@ -8,6 +9,7 @@ import type {
   LinkTicketKnowledgeRequest,
   PublishArticleRequest,
   TicketKnowledgeSuggestQuery,
+  UpdateArticlePageRequest,
   UpdateKnowledgeArticleRequest,
 } from "@/api";
 
@@ -15,11 +17,12 @@ const KEYS = {
   all: ["knowledge"] as const,
   list: (params?: KnowledgeListQuery) => [...KEYS.all, "list", params] as const,
   allVisible: (params?: { cursor?: string; limit?: number; status?: string; category?: string; clientId?: string; siteId?: string; departmentId?: string }) => [...KEYS.all, "all-visible", params] as const,
-  tree: (params?: { status?: string; category?: string; clientId?: string; siteId?: string; departmentId?: string }) => [...KEYS.all, "tree", params] as const,
   detail: (id: string) => [...KEYS.all, "detail", id] as const,
   versions: (id: string) => [...KEYS.all, "versions", id] as const,
   version: (id: string, versionNumber: number) =>
     [...KEYS.all, "version", id, versionNumber] as const,
+  pages: (articleId: string) => [...KEYS.all, "pages", articleId] as const,
+  page: (articleId: string, pageId: string) => [...KEYS.all, "page", articleId, pageId] as const,
   search: (params: KnowledgeSearchQuery) =>
     [...KEYS.all, "search", params] as const,
   chatSearch: (params: KbSearchRequest) =>
@@ -69,37 +72,62 @@ export function useKnowledgeAllArticles(params?: {
   });
 }
 
-export function useKnowledgeTree(params?: {
-  status?: string;
-  category?: string;
-  clientId?: string;
-  siteId?: string;
-  departmentId?: string;
-}) {
-  return useQuery({
-    queryKey: KEYS.tree({
-      status: params?.status,
-      category: params?.category,
-      clientId: params?.clientId,
-      siteId: params?.siteId,
-      departmentId: params?.departmentId,
-    }),
-    queryFn: () =>
-      knowledgeApi.tree({
-        status: params?.status as import('@/api').ArticleStatus | undefined,
-        category: params?.category,
-        clientId: params?.clientId,
-        siteId: params?.siteId,
-        departmentId: params?.departmentId,
-      }),
-  });
-}
-
 export function useKnowledgeArticle(id: string) {
   return useQuery({
     queryKey: KEYS.detail(id),
     queryFn: () => knowledgeApi.get(id),
     enabled: !!id,
+  });
+}
+
+// ── Sub-páginas internas do artigo ──────────────────────────────
+
+export function useArticlePages(articleId: string) {
+  return useQuery({
+    queryKey: KEYS.pages(articleId),
+    queryFn: () => knowledgeApi.getPages(articleId),
+    enabled: !!articleId,
+  });
+}
+
+export function useArticlePage(articleId: string, pageId: string) {
+  return useQuery({
+    queryKey: KEYS.page(articleId, pageId),
+    queryFn: () => knowledgeApi.getPage(articleId, pageId),
+    enabled: !!articleId && !!pageId,
+  });
+}
+
+export function useCreateArticlePage(articleId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: CreateArticlePageRequest) =>
+      knowledgeApi.createPage(articleId, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: KEYS.pages(articleId) });
+    },
+  });
+}
+
+export function useUpdateArticlePage(articleId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ pageId, data }: { pageId: string; data: UpdateArticlePageRequest }) =>
+      knowledgeApi.updatePage(articleId, pageId, data),
+    onSuccess: (_, vars) => {
+      qc.invalidateQueries({ queryKey: KEYS.pages(articleId) });
+      qc.invalidateQueries({ queryKey: KEYS.page(articleId, vars.pageId) });
+    },
+  });
+}
+
+export function useDeleteArticlePage(articleId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (pageId: string) => knowledgeApi.deletePage(articleId, pageId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: KEYS.pages(articleId) });
+    },
   });
 }
 
