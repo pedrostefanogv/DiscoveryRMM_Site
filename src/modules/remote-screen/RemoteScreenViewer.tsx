@@ -657,7 +657,7 @@ export default function RemoteScreenViewer({
     };
     const onWheel = (e: WheelEvent) => { e.preventDefault(); sendInput('wheel', { deltaX: e.deltaX, deltaY: e.deltaY }); };
     const onKeyDown = (e: KeyboardEvent) => { if (document.activeElement === canvas) { e.preventDefault(); sendInput('keydown', { key: e.key, code: e.code, ctrl: e.ctrlKey, shift: e.shiftKey, alt: e.altKey, meta: e.metaKey }); } };
-    const onKeyUp = (e: KeyboardEvent) => { if (document.activeElement === canvas) { sendInput('keyup', { key: e.key, code: e.code }); } };
+    const onKeyUp = (e: KeyboardEvent) => { if (document.activeElement === canvas) { sendInput('keyup', { key: e.key, code: e.code, ctrl: e.ctrlKey, shift: e.shiftKey, alt: e.altKey, meta: e.metaKey }); } };
     const onContextMenu = (e: MouseEvent) => { e.preventDefault(); };
 
     canvas.addEventListener('mousedown', onMouseDown);
