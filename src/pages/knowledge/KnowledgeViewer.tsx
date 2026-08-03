@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -9,7 +9,6 @@ import {
   Globe2,
   Layers,
   MapPinned,
-  Plus,
   UserRound,
 } from 'lucide-react';
 import { MarkdownViewer } from '@/components/ui/MarkdownViewer';
@@ -113,6 +112,13 @@ export default function KnowledgeViewer() {
   // Sub-páginas internas do artigo (estilo Notion)
   const pagesQuery = useArticlePages(id ?? '');
   const [activePageId, setActivePageId] = useState<string | null>(null);
+  const [showHome, setShowHome] = useState(true);
+
+  // Ao trocar de artigo, volta para a "home" e limpa a sub-página ativa.
+  useEffect(() => {
+    setActivePageId(null);
+    setShowHome(true);
+  }, [id]);
 
   const canEditArticle = hasAnyPermission(KNOWLEDGE_EDIT_PERMISSIONS);
 
@@ -214,49 +220,49 @@ export default function KnowledgeViewer() {
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
         <div className="min-w-0 space-y-6">
-          <Card padding={false} className="overflow-hidden">
-            <div className="px-5 py-6 sm:px-7">
-              <MarkdownViewer source={article.content || '_Conteudo vazio._'} />
-            </div>
-          </Card>
-
           {/* Menu de sub-páginas internas do artigo (estilo Notion) */}
           <Card>
             <div className="mb-3 flex items-center justify-between">
               <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
                 Páginas do artigo ({pageCount})
               </h2>
-              {canEditArticle && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => navigate(`/knowledge/${article.id}/edit?newPage=1`)}
-                >
-                  <Plus className="h-4 w-4" /> Nova página
-                </Button>
-              )}
             </div>
             {pagesQuery.isLoading ? (
               <Loading message="Carregando páginas..." />
             ) : pagesQuery.isError ? (
               <p className="text-sm text-muted">Falha ao carregar as páginas do artigo.</p>
             ) : (
-              <>
-                <ArticlePagesTree
-                  nodes={pagesQuery.data ?? []}
-                  activePageId={activePageId}
-                  onSelect={setActivePageId}
-                />
-                {activePage && (
-                  <div className="mt-4 border-t border-border pt-4">
-                    <h3 className="mb-2 text-sm font-semibold text-foreground">
-                      {activePage.title}
-                    </h3>
-                    <MarkdownViewer source={activePage.content || '_Conteudo vazio._'} />
-                  </div>
-                )}
-              </>
+              <ArticlePagesTree
+                nodes={pagesQuery.data ?? []}
+                activePageId={activePageId}
+                onSelect={(pageId) => {
+                  setActivePageId(pageId);
+                  setShowHome(false);
+                }}
+                homeLabel={article.title}
+                homeActive={showHome}
+                onSelectHome={() => {
+                  setShowHome(true);
+                  setActivePageId(null);
+                }}
+              />
             )}
+          </Card>
+
+          {/* Conteúdo ativo: home do artigo ou sub-página selecionada */}
+          <Card padding={false} className="overflow-hidden">
+            <div className="px-5 py-6 sm:px-7">
+              {showHome || !activePage ? (
+                <MarkdownViewer source={article.content || '_Conteudo vazio._'} />
+              ) : (
+                <>
+                  <h3 className="mb-3 text-lg font-bold text-foreground">
+                    {activePage.title}
+                  </h3>
+                  <MarkdownViewer source={activePage.content || '_Conteudo vazio._'} />
+                </>
+              )}
+            </div>
           </Card>
         </div>
 

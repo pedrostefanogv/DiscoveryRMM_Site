@@ -1,7 +1,6 @@
-import { useEffect, useMemo, useState, lazy, Suspense } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Eye, History, Save, Send } from 'lucide-react';
-import { MarkdownViewer } from '@/components/ui/MarkdownViewer';
+import { ArrowLeft, History, Save, Send } from 'lucide-react';
 import {
   Badge,
   Button,
@@ -9,11 +8,11 @@ import {
   ErrorDisplay,
   Input,
   Loading,
+  MarkdownEditor,
   Select,
 } from '@/components/ui';
 import { useClients, useCreateKnowledgeArticle, useDepartments, useKnowledgeArticle, useKnowledgeArticleVersions, usePublishKnowledgeArticle, useSites, useUpdateKnowledgeArticle } from '@/hooks';
 import type { ArticleStatus, ArticleVersion, CreateKnowledgeArticleRequest, PublishArticleRequest, UpdateKnowledgeArticleRequest } from '@/api';
-import { useTheme } from '@/theme/ThemeContext';
 import toast from 'react-hot-toast';
 import ArticlePagesManager from './ArticlePagesManager';
 
@@ -27,11 +26,6 @@ type FormState = {
   departmentId: string;
   targetStatus: ArticleStatus;
 };
-
-// Editor Markdown (pacote @uiw/react-md-editor ~1.2 MB) carregado sob demanda.
-const MarkdownEditorLazy = lazy(() =>
-  import('@uiw/react-md-editor').then((m) => ({ default: m.default })),
-);
 
 function toTagArray(tags: string): string[] {
   return tags
@@ -62,7 +56,6 @@ export default function KnowledgeEditor() {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const isEdit = !!id;
-  const { mode } = useTheme();
 
   const [form, setForm] = useState<FormState>({
     title: '',
@@ -265,7 +258,7 @@ export default function KnowledgeEditor() {
         )}
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-2">
+      <div className="grid gap-6">
         <Card>
           <div className="space-y-4">
             <Input
@@ -426,23 +419,13 @@ export default function KnowledgeEditor() {
               </div>
             )}
 
-            <div>
-              <label className="mb-1.5 block text-sm font-medium text-muted-foreground">Markdown</label>
-              <div
-                data-color-mode={mode}
-                className="overflow-hidden rounded-xl border border-border bg-background"
-              >
-                <Suspense fallback={<MarkdownEditorSkeleton />}>
-                  <MarkdownEditorLazy
-                    value={form.content}
-                    onChange={(value) => setField('content', value ?? '')}
-                  />
-                </Suspense>
-              </div>
-              <p className="mt-2 text-xs text-muted">
-                Editor avançado com atalhos e toolbar para títulos, listas, links, tabelas e blocos de código.
-              </p>
-            </div>
+            <MarkdownEditor
+              label="Markdown"
+              value={form.content}
+              onChange={(value) => setField('content', value)}
+              height={460}
+              hint="Editor avançado com atalhos e toolbar para títulos, listas, links, tabelas e blocos de código."
+            />
 
             <div className="flex justify-end gap-3">
               <Button variant="ghost" onClick={() => navigate('/knowledge')}>
@@ -463,38 +446,6 @@ export default function KnowledgeEditor() {
             </div>
           </div>
         </Card>
-
-        <Card>
-          <div className="mb-3 flex items-center gap-2 text-muted-foreground">
-            <Eye className="h-4 w-4" />
-            <h2 className="text-sm font-medium uppercase tracking-wide">Preview</h2>
-          </div>
-          <MarkdownViewer source={form.content || '_Sem conteúdo_'} />
-        </Card>
-      </div>
-    </div>
-  );
-}
-
-// Fallback enquanto o editor Markdown pesado é carregado (evita flash).
-function MarkdownEditorSkeleton() {
-  return (
-    <div className="flex h-[460px] flex-col">
-      <div className="flex flex-wrap items-center gap-0.5 border-b border-border bg-surface-light px-1 py-1">
-        {Array.from({ length: 14 }).map((_, i) => (
-          <span key={i} className="h-6 w-6 animate-pulse rounded bg-surface-hover" />
-        ))}
-      </div>
-      <div className="flex flex-1 gap-px bg-border">
-        <div className="flex-1 animate-pulse bg-background p-3">
-          <div className="h-4 w-2/3 rounded bg-surface-hover" />
-          <div className="mt-2 h-4 w-1/2 rounded bg-surface-hover" />
-          <div className="mt-2 h-4 w-3/4 rounded bg-surface-hover" />
-        </div>
-        <div className="hidden w-1/2 animate-pulse bg-surface-light p-3 md:block">
-          <div className="h-4 w-1/2 rounded bg-surface-hover" />
-          <div className="mt-2 h-4 w-2/3 rounded bg-surface-hover" />
-        </div>
       </div>
     </div>
   );

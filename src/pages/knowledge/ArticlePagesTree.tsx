@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronDown, ChevronRight, FileText, FolderOpen, Folder } from 'lucide-react';
+import { ChevronDown, ChevronRight, FileText, FolderOpen, Folder, Home } from 'lucide-react';
 import type { ArticlePageTreeNode } from '@/api';
 
 interface ArticlePagesTreeProps {
@@ -7,18 +7,29 @@ interface ArticlePagesTreeProps {
   activePageId?: string | null;
   onSelect: (pageId: string) => void;
   maxDepth?: number;
+  /** Rótulo do item "Home" (artigo principal). Quando definido, exibe a home no topo da árvore. */
+  homeLabel?: string;
+  /** Se a home está ativa (artigo principal selecionado). */
+  homeActive?: boolean;
+  /** Callback ao selecionar a home. */
+  onSelectHome?: () => void;
 }
 
 /**
  * Árvore de sub-páginas internas de um artigo (estilo Notion).
  * Exibe as "partes/páginas" DENTRO de um único artigo, com expandir/recolher
  * e indentação. Suporta até `maxDepth` níveis (padrão 3).
+ * Quando `homeLabel` é informado, a "home" (artigo principal) aparece no topo
+ * e as sub-páginas ficam aninhadas dentro dela.
  */
 export default function ArticlePagesTree({
   nodes,
   activePageId,
   onSelect,
   maxDepth = 3,
+  homeLabel,
+  homeActive = false,
+  onSelectHome,
 }: ArticlePagesTreeProps) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 
@@ -92,13 +103,35 @@ export default function ArticlePagesTree({
     );
   };
 
-  if (!nodes.length) {
-    return (
-      <p className="px-2 py-3 text-sm text-muted">
-        Este artigo ainda não possui sub-páginas.
-      </p>
-    );
-  }
+  return (
+    <div className="space-y-0.5">
+      {homeLabel && (
+        <div
+          className={`group flex cursor-pointer items-center gap-1.5 rounded-md px-2 py-1.5 text-sm transition-colors ${
+            homeActive
+              ? 'bg-primary/15 text-primary'
+              : 'text-foreground hover:bg-surface-hover'
+          }`}
+          style={{ paddingLeft: '8px' }}
+          onClick={onSelectHome}
+        >
+          <span className="w-4 shrink-0" />
+          <Home className="h-4 w-4 shrink-0 text-primary" />
+          <span className="min-w-0 flex-1 truncate font-medium">{homeLabel}</span>
+        </div>
+      )}
 
-  return <div className="space-y-0.5">{nodes.map((node) => renderNode(node, 0))}</div>;
+      {nodes.length > 0 && (
+        <div className={homeLabel ? 'ml-3 border-l border-border pl-1' : ''}>
+          {nodes.map((node) => renderNode(node, 0))}
+        </div>
+      )}
+
+      {!homeLabel && nodes.length === 0 && (
+        <p className="px-2 py-3 text-sm text-muted">
+          Este artigo ainda não possui sub-páginas.
+        </p>
+      )}
+    </div>
+  );
 }

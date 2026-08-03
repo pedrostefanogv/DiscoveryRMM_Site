@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ChevronDown, ChevronRight, FileText, Folder, Pencil, Plus, Trash2 } from 'lucide-react';
-import { Button, Input, Select } from '@/components/ui';
+import { Button, Input, MarkdownEditor, Select } from '@/components/ui';
 import type { ArticlePageTreeNode } from '@/api';
 import {
   useArticlePages,
@@ -146,12 +146,10 @@ export default function ArticlePagesManager({ articleId }: ArticlePagesManagerPr
                 onChange={(e) => setEditTitle(e.target.value)}
                 placeholder="Título da página"
               />
-              <textarea
+              <MarkdownEditor
+                label="Conteúdo (Markdown)"
                 value={editContent}
-                onChange={(e) => setEditContent(e.target.value)}
-                placeholder="Conteúdo (Markdown)"
-                rows={3}
-                className="w-full rounded-xl border border-input-border bg-input px-3 py-2 text-sm text-foreground outline-none transition-colors focus-visible:border-primary/60 focus-visible:ring-2 focus-visible:ring-primary/30"
+                onChange={setEditContent}
               />
               <Select
                 label="Mover para (página pai)"
@@ -220,16 +218,11 @@ export default function ArticlePagesManager({ articleId }: ArticlePagesManagerPr
             onChange={(e) => setNewTitle(e.target.value)}
             placeholder="Ex.: Hardware"
           />
-          <div>
-            <label className="mb-1.5 block text-sm font-medium text-muted-foreground">Conteúdo (Markdown)</label>
-            <textarea
-              value={newContent}
-              onChange={(e) => setNewContent(e.target.value)}
-              placeholder="Conteúdo da página..."
-              rows={3}
-              className="w-full rounded-xl border border-input-border bg-input px-3 py-2 text-sm text-foreground outline-none transition-colors focus-visible:border-primary/60 focus-visible:ring-2 focus-visible:ring-primary/30"
-            />
-          </div>
+          <MarkdownEditor
+            label="Conteúdo (Markdown)"
+            value={newContent}
+            onChange={setNewContent}
+          />
           <Select
             label="Página pai (opcional)"
             options={parentOptions}

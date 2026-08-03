@@ -12,5 +12,6 @@ export { EmptyState } from "./EmptyState";
 export { PageHeader } from "./PageHeader";
 export { MetricBar } from "./MetricBar";
 export { AgentHeartbeatCard } from "./AgentHeartbeatCard";
+export { MarkdownEditor } from "./MarkdownEditor";
 export { ErrorBoundary } from "../ErrorBoundary";
 export { ErrorPage } from "../ErrorPage";

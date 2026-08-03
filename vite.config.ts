@@ -66,9 +66,9 @@ export default defineConfig({
     target: "es2022",
     rolldownOptions: {
       output: {
-        // Rolldown-native chunking (substitui o manualChunks legado do Rollup).
+        // Rolldown-native chunking (substitui o advancedChunks/manualChunks legado).
         // Cada grupo usa `test` (regex sobre o caminho do módulo) e `priority`.
-        advancedChunks: {
+        codeSplitting: {
           groups: [
             {
               name: "vendor",
