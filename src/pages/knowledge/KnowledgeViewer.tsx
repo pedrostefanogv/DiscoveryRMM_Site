@@ -217,10 +217,27 @@ export default function KnowledgeViewer() {
         </div>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[260px_minmax(0,1fr)_320px]">
-        {/* Índice de páginas do artigo (estilo Notion) — coluna lateral em telas grandes */}
-        <div className="hidden xl:block">
-          <Card className="sticky top-4">
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="min-w-0 space-y-6">
+          {/* Conteúdo ativo: home do artigo ou sub-página selecionada */}
+          <Card padding={false} className="overflow-hidden">
+            <div className="px-5 py-6 sm:px-7">
+              {showHome || !activePage ? (
+                <MarkdownViewer source={article.content || '_Conteudo vazio._'} />
+              ) : (
+                <>
+                  <h3 className="mb-3 text-lg font-bold text-foreground">
+                    {activePage.title}
+                  </h3>
+                  <MarkdownViewer source={activePage.content || '_Conteudo vazio._'} />
+                </>
+              )}
+            </div>
+          </Card>
+        </div>
+
+        <div className="space-y-4">
+          <Card>
             <div className="mb-3 flex items-center justify-between">
               <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
                 Páginas do artigo
@@ -247,58 +264,7 @@ export default function KnowledgeViewer() {
               />
             )}
           </Card>
-        </div>
 
-        <div className="min-w-0 space-y-6">
-          {/* Índice de páginas — card acima do conteúdo em telas menores que xl */}
-          <div className="xl:hidden">
-            <Card>
-              <div className="mb-3 flex items-center justify-between">
-                <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-                  Páginas do artigo
-                </h2>
-              </div>
-              {pagesQuery.isLoading ? (
-                <Loading message="Carregando páginas..." />
-              ) : pagesQuery.isError ? (
-                <p className="text-sm text-muted">Falha ao carregar as páginas do artigo.</p>
-              ) : (
-                <ArticlePagesTree
-                  nodes={pagesQuery.data ?? []}
-                  activePageId={activePageId}
-                  onSelect={(pageId) => {
-                    setActivePageId(pageId);
-                    setShowHome(false);
-                  }}
-                  homeLabel={article.title}
-                  homeActive={showHome}
-                  onSelectHome={() => {
-                    setShowHome(true);
-                    setActivePageId(null);
-                  }}
-                />
-              )}
-            </Card>
-          </div>
-
-          {/* Conteúdo ativo: home do artigo ou sub-página selecionada */}
-          <Card padding={false} className="overflow-hidden">
-            <div className="px-5 py-6 sm:px-7">
-              {showHome || !activePage ? (
-                <MarkdownViewer source={article.content || '_Conteudo vazio._'} />
-              ) : (
-                <>
-                  <h3 className="mb-3 text-lg font-bold text-foreground">
-                    {activePage.title}
-                  </h3>
-                  <MarkdownViewer source={activePage.content || '_Conteudo vazio._'} />
-                </>
-              )}
-            </div>
-          </Card>
-        </div>
-
-        <div className="space-y-4">
           <Card>
             <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
               Detalhes
