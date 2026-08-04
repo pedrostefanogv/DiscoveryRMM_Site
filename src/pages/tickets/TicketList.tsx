@@ -167,8 +167,8 @@ function suggestSavedViewName(
   return parts.join(' · ');
 }
 
-function formatTicketPreviewDescription(value: string, maxLength = 180) {
-  const normalized = value.trim();
+function formatTicketPreviewDescription(value: string | null | undefined, maxLength = 180) {
+  const normalized = (value ?? '').trim();
   if (!normalized) return 'Sem descrição.';
   if (normalized.length <= maxLength) return normalized;
   return `${normalized.slice(0, maxLength).trimEnd()}...`;
