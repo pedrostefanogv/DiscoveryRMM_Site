@@ -656,8 +656,25 @@ export default function RemoteScreenViewer({
       }, THROTTLE_MS);
     };
     const onWheel = (e: WheelEvent) => { e.preventDefault(); sendInput('wheel', { deltaX: e.deltaX, deltaY: e.deltaY }); };
-    const onKeyDown = (e: KeyboardEvent) => { if (document.activeElement === canvas) { e.preventDefault(); sendInput('keydown', { key: e.key, code: e.code, ctrl: e.ctrlKey, shift: e.shiftKey, alt: e.altKey, meta: e.metaKey }); } };
-    const onKeyUp = (e: KeyboardEvent) => { if (document.activeElement === canvas) { sendInput('keyup', { key: e.key, code: e.code, ctrl: e.ctrlKey, shift: e.shiftKey, alt: e.altKey, meta: e.metaKey }); } };
+    // K3: captura o teclado quando o foco está no canvas OU em qualquer
+    // elemento dentro do container do viewer (ex: após clicar em controles
+    // sobrepostos). Antes, clicar fora do canvas perdia o input de teclado
+    // até clicar de volta no canvas.
+    const isKeyboardTarget = () => {
+      const active = document.activeElement;
+      return active === canvas || containerRef.current?.contains(active);
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      // Ignora se o foco está em um input/textarea/select (não rouba o teclado)
+      const active = document.activeElement;
+      if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.tagName === 'SELECT')) return;
+      if (isKeyboardTarget()) { e.preventDefault(); sendInput('keydown', { key: e.key, code: e.code, ctrl: e.ctrlKey, shift: e.shiftKey, alt: e.altKey, meta: e.metaKey }); }
+    };
+    const onKeyUp = (e: KeyboardEvent) => {
+      const active = document.activeElement;
+      if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.tagName === 'SELECT')) return;
+      if (isKeyboardTarget()) { sendInput('keyup', { key: e.key, code: e.code, ctrl: e.ctrlKey, shift: e.shiftKey, alt: e.altKey, meta: e.metaKey }); }
+    };
     const onContextMenu = (e: MouseEvent) => { e.preventDefault(); };
 
     canvas.addEventListener('mousedown', onMouseDown);
