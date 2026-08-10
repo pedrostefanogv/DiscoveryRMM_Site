@@ -1528,7 +1528,8 @@ export default function AgentDetail() {
         </div>
 
         {activeDataTab === 'software' && (
-          <>
+          <div style={{ height: 'min(860px, 75vh)' }} className="overflow-y-auto overscroll-contain">
+            <>
             <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h3 className="text-lg font-semibold text-foreground sm:text-xl">Inventário de Aplicativos</h3>
@@ -1659,11 +1660,13 @@ export default function AgentDetail() {
                 </div>
               </>
             )}
-          </>
+            </>
+          </div>
         )}
 
         {activeDataTab === 'tickets' && (
-          <>
+          <div style={{ height: 'min(860px, 75vh)' }} className="overflow-y-auto overscroll-contain">
+            <>
             <CardHeader title="Últimos Chamados" subtitle={`${agentTickets.data?.items?.length ?? 0} chamado(s) retornado(s)`} />
             <div className="space-y-2">
               {agentTickets.isLoading && (
@@ -1720,11 +1723,13 @@ export default function AgentDetail() {
                 </div>
               )}
             </div>
-          </>
+            </>
+          </div>
         )}
 
         {activeDataTab === 'printers' && (
-          <>
+          <div style={{ height: 'min(860px, 75vh)' }} className="overflow-y-auto overscroll-contain">
+            <>
             <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h3 className="text-lg font-semibold text-foreground sm:text-xl">Impressoras</h3>
@@ -1778,11 +1783,13 @@ export default function AgentDetail() {
                 ))}
               </div>
             )}
-          </>
+            </>
+          </div>
         )}
 
         {activeDataTab === 'listeningPorts' && (
-          <>
+          <div style={{ height: 'min(860px, 75vh)' }} className="overflow-y-auto overscroll-contain">
+            <>
             <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h3 className="text-lg font-semibold text-foreground sm:text-xl">Portas em Escuta</h3>
@@ -1872,11 +1879,13 @@ export default function AgentDetail() {
                 </div>
               </div>
             )}
-          </>
+            </>
+          </div>
         )}
 
         {activeDataTab === 'openSockets' && (
-          <>
+          <div style={{ height: 'min(860px, 75vh)' }} className="overflow-y-auto overscroll-contain">
+            <>
             <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h3 className="text-lg font-semibold text-foreground sm:text-xl">Conexões Abertas</h3>
@@ -1966,13 +1975,15 @@ export default function AgentDetail() {
                 </div>
               </div>
             )}
-          </>
+            </>
+          </div>
         )}
 
         {activeDataTab === 'logs' && (
-          <>
+          <div style={{ height: 'min(860px, 75vh)' }} className="overflow-y-auto overscroll-contain">
+            <>
             <CardHeader title="Logs Recentes" />
-            <div className="max-h-72 space-y-2 overflow-y-auto">
+            <div className="space-y-2">
               {logsArray.map(log => {
                 const l = levelLabels[log.level] ?? { label: '?', color: 'slate' as const };
                 return (
@@ -1990,7 +2001,8 @@ export default function AgentDetail() {
                 <p className="text-sm text-muted">Nenhum log registrado</p>
               )}
             </div>
-          </>
+            </>
+          </div>
         )}
       </Card>
 
