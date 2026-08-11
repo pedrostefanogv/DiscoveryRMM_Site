@@ -4,6 +4,7 @@ import { LogLevel, LogSource, LogType } from '@/api';
 import type { LogEntry, LogsQuery } from '@/api';
 import { useLogScopeOptions, useLogSummary, useLogsPage } from '@/hooks/useLogs';
 import { Badge, Button, Card, CardHeader, ErrorDisplay, Input, Loading, PageHeader, Select } from '@/components/ui';
+import { P2PMetricsCard } from '@/components/agents/P2PMetricsCard';
 
 const initialFilters: LogsQuery = {
   limit: 50,
@@ -332,6 +333,8 @@ export default function LogViewer() {
           Atualizar
         </Button>
       </PageHeader>
+
+      <P2PMetricsCard />
 
       <Card>
         <div className="flex flex-wrap items-start justify-between gap-3">

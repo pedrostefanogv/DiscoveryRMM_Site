@@ -415,6 +415,36 @@ export default function AgentDetail() {
     if (pct >= 70) return 'text-warning';
     return 'text-success';
   };
+  const getSmartStatusClass = (status: string | null | undefined): string => {
+    switch (status) {
+      case 'OK': return 'text-success';
+      case 'Atenção': return 'text-warning';
+      case 'Falha prevista': return 'text-danger';
+      default: return 'text-muted';
+    }
+  };
+  const getSmartBadgeClass = (status: string | null | undefined): string => {
+    switch (status) {
+      case 'OK': return 'bg-success/15 text-success';
+      case 'Atenção': return 'bg-warning/15 text-warning';
+      case 'Falha prevista': return 'bg-danger/15 text-danger';
+      default: return 'bg-surface-hover text-muted';
+    }
+  };
+  const getTempClass = (temp: number | null | undefined): string => {
+    if (temp == null) return 'text-muted';
+    if (temp >= 55) return 'text-danger';
+    if (temp >= 45) return 'text-warning';
+    return 'text-success';
+  };
+  const formatHours = (hours: number | null | undefined): string => {
+    if (hours == null) return '\u2014';
+    if (hours < 24) return `${hours}h`;
+    const days = Math.floor(hours / 24);
+    if (days < 365) return `${days}d`;
+    const years = (hours / 8760).toFixed(1);
+    return `${years} anos`;
+  };
   const printers = hwComponents.data?.printers ?? [];
   const machineScoreRaw = a.machineScore ?? hw.data?.hardware?.machineScore ?? null;
   const machineScore = typeof machineScoreRaw === 'number' && Number.isFinite(machineScoreRaw)
@@ -1308,24 +1338,86 @@ export default function AgentDetail() {
                   const diskUsedPercent = disk.totalSizeBytes > 0
                     ? Math.min(100, Math.round((diskUsedBytes / disk.totalSizeBytes) * 100))
                     : 0;
+                  const smartStatus = disk.smartStatus ?? null;
+                  const hasSmart = smartStatus != null && smartStatus !== 'Indisponível';
 
                   return (
-                    <div key={disk.id} className="rounded-lg bg-surface-light px-3 py-2 text-xs">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="font-medium text-foreground">
-                          {disk.driveLetter}{disk.label ? ` (${disk.label})` : ''}
-                        </span>
-                        <span className={`${getDiskStatusTextClass(diskUsedPercent)}`}>{diskUsedPercent}% usado</span>
+                    <Tooltip
+                      key={disk.id}
+                      position="top"
+                      delay={250}
+                      className="block"
+                      variant="hover-card"
+                      content={(
+                        <div className="w-64 space-y-2 text-left text-[11px] text-muted-foreground">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-medium text-foreground">
+                              {disk.driveLetter}{disk.label ? ` (${disk.label})` : ''}
+                            </span>
+                            <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${getSmartBadgeClass(smartStatus)}`}>
+                              {hasSmart ? smartStatus : 'Sem dados'}
+                            </span>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
+                            <div>
+                              <p className="text-muted">Saúde</p>
+                              <p className={`font-medium ${getSmartStatusClass(smartStatus)}`}>
+                                {hasSmart ? smartStatus : 'Indisponível'}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-muted">Temperatura</p>
+                              <p className={`font-medium ${getTempClass(disk.temperatureC)}`}>
+                                {disk.temperatureC != null ? `${disk.temperatureC}°C` : '\u2014'}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-muted">Horas ligadas</p>
+                              <p className="font-medium text-foreground">{formatHours(disk.powerOnHours)}</p>
+                            </div>
+                            <div>
+                              <p className="text-muted">Tipo</p>
+                              <p className="font-medium text-foreground">{disk.mediaType || '\u2014'}</p>
+                            </div>
+                            <div>
+                              <p className="text-muted">Sistema de arquivos</p>
+                              <p className="font-medium text-foreground">{disk.fileSystem || '\u2014'}</p>
+                            </div>
+                            <div>
+                              <p className="text-muted">Erros acumulados</p>
+                              <p className={`font-medium ${(disk.reallocatedSectors ?? 0) > 0 ? 'text-warning' : 'text-success'}`}>
+                                {disk.reallocatedSectors ?? 0}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="border-t border-border pt-1.5 text-muted">
+                            {formatBytes(diskUsedBytes)} usados de {formatBytes(disk.totalSizeBytes)}
+                          </div>
+                        </div>
+                      )}
+                    >
+                      <div className="rounded-lg bg-surface-light px-3 py-2 text-xs">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="flex items-center gap-1.5 font-medium text-foreground">
+                            {hasSmart && (
+                              <span className={`inline-block h-1.5 w-1.5 rounded-full ${smartStatus === 'OK' ? 'bg-success' : smartStatus === 'Atenção' ? 'bg-warning' : 'bg-danger'}`} />
+                            )}
+                            {disk.driveLetter}{disk.label ? ` (${disk.label})` : ''}
+                          </span>
+                          <span className={`${getDiskStatusTextClass(diskUsedPercent)}`}>{diskUsedPercent}% usado</span>
+                        </div>
+                        <progress
+                          className={`mt-2 h-1.5 w-full overflow-hidden rounded-full [&::-webkit-progress-bar]:bg-surface-hover ${getDiskStatusClass(diskUsedPercent)}`}
+                          value={diskUsedPercent}
+                          max={100}
+                        />
+                        <p className="mt-1 text-muted">
+                          {formatBytes(diskUsedBytes)} usados de {formatBytes(disk.totalSizeBytes)}
+                        </p>
                       </div>
-                      <progress
-                        className={`mt-2 h-1.5 w-full overflow-hidden rounded-full [&::-webkit-progress-bar]:bg-surface-hover ${getDiskStatusClass(diskUsedPercent)}`}
-                        value={diskUsedPercent}
-                        max={100}
-                      />
-                      <p className="mt-1 text-muted">
-                        {formatBytes(diskUsedBytes)} usados de {formatBytes(disk.totalSizeBytes)}
-                      </p>
-                    </div>
+                    </Tooltip>
                   );
                 })}
               </div>

@@ -192,6 +192,10 @@ export interface DiskInfo {
   freeSpaceBytes: number;
   mediaType: string | null;
   collectedAt: string;
+  smartStatus?: string | null;
+  temperatureC?: number | null;
+  powerOnHours?: number | null;
+  reallocatedSectors?: number | null;
 }
 
 export interface NetworkAdapterInfo {
