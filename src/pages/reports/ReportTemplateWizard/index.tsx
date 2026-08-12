@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Loading } from "@/components/ui";
+import { Loading, ErrorDisplay, EmptyState } from "@/components/ui";
 import { useReportDatasets } from "@/hooks/useReportDatasets";
 import { useCreateReportTemplate } from "@/hooks/useReportTemplates";
 import { useWizardState, WizardState } from "./hooks/useWizardState";
@@ -22,7 +22,12 @@ export function ReportTemplateWizard({ initialTemplate }: Props) {
       ? clientIdParam
       : undefined;
   const [step, setStep] = useState(0);
-  const { data: datasets = [], isLoading } = useReportDatasets();
+  const {
+    data: datasets = [],
+    isLoading,
+    isError,
+    refetch,
+  } = useReportDatasets();
   const createMutation = useCreateReportTemplate();
   const legacyBuiltInTemplateId = resolveBuiltInTemplateId(searchParams.get("template"));
 
@@ -51,6 +56,28 @@ export function ReportTemplateWizard({ initialTemplate }: Props) {
   }, [wizard, createMutation, navigate, clientId]);
 
   if (isLoading || legacyBuiltInTemplateId) return <Loading />;
+
+  if (isError) {
+    return (
+      <div className="surface-card glass-card rounded-2xl border border-border bg-surface/90 p-6">
+        <ErrorDisplay
+          message="Não foi possível carregar os datasets disponíveis. Verifique se o serviço de relatórios está ativo e tente novamente."
+          onRetry={() => refetch()}
+        />
+      </div>
+    );
+  }
+
+  if (datasets.length === 0) {
+    return (
+      <div className="surface-card glass-card rounded-2xl border border-border bg-surface/90 p-6">
+        <EmptyState
+          title="Nenhum dataset disponível"
+          description="O catálogo de datasets está vazio. Entre em contato com o administrador."
+        />
+      </div>
+    );
+  }
 
   const steps = [
     { title: "Fontes de Dados", subtitle: "Escolha os datasets e combine-os" },

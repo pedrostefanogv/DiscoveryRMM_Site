@@ -75,7 +75,7 @@ export function StepDataSources({ wizard, datasets, onNext }: Props) {
                 {i > 0 && (
                   <div className="flex items-center gap-1 text-xs text-muted">
                     <div className="h-px w-6 bg-sky-500/50" />
-                    <span className="rounded bg-sky-500/10 px-1.5 py-0.5 text-sky-300">
+                    <span className="rounded bg-sky-100 px-1.5 py-0.5 font-medium text-sky-700 dark:bg-sky-500/10 dark:text-sky-300">
                       ON {ds.joinSourceKey}
                     </span>
                     <div className="h-px w-6 bg-sky-500/50" />
@@ -118,8 +118,8 @@ export function StepDataSources({ wizard, datasets, onNext }: Props) {
 
       {/* Join suggestions */}
       {suggestions.length > 0 && (
-        <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4">
-          <h3 className="mb-2 text-sm font-medium text-amber-300">
+        <div className="rounded-xl border border-amber-500/30 bg-amber-50 p-4 dark:border-amber-500/20 dark:bg-amber-500/5">
+          <h3 className="mb-2 text-sm font-medium text-amber-800 dark:text-amber-300">
             💡 Sugestões de combinação
           </h3>
           <div className="flex flex-wrap gap-2">
@@ -132,11 +132,11 @@ export function StepDataSources({ wizard, datasets, onNext }: Props) {
                 <button
                   key={s.targetKey}
                   onClick={() => wizard.addDataset(ds)}
-                  className="flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-200 transition-colors hover:bg-amber-500/20"
+                  className="flex items-center gap-2 rounded-lg border border-amber-500/40 bg-amber-100 px-3 py-2 text-sm text-amber-900 transition-colors hover:bg-amber-200 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200 dark:hover:bg-amber-500/20"
                 >
                   <span>{DATASET_ICONS[s.targetKey] ?? "📄"}</span>
                   <span>{s.targetDatasetName}</span>
-                  <span className="text-[10px] text-amber-400/70">
+                  <span className="text-[10px] text-amber-700 dark:text-amber-400/70">
                     via {s.preferredKey}
                   </span>
                   <span className="text-xs">+</span>
@@ -149,13 +149,13 @@ export function StepDataSources({ wizard, datasets, onNext }: Props) {
 
       {/* Validation warnings */}
       {warnings.length > 0 && (
-        <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-4">
-          <h3 className="mb-2 text-sm font-medium text-red-300">
+        <div className="rounded-xl border border-red-500/30 bg-red-50 p-4 dark:border-red-500/20 dark:bg-red-500/5">
+          <h3 className="mb-2 text-sm font-medium text-red-800 dark:text-red-300">
             ⚠️ Problemas detectados
           </h3>
           <ul className="space-y-1">
             {warnings.map((w, i) => (
-              <li key={i} className="text-xs text-red-200/80">
+              <li key={i} className="text-xs text-red-700 dark:text-red-200/80">
                 • {w}
               </li>
             ))}
