@@ -2084,7 +2084,20 @@ export enum ReportDatasetType {
   AgentLabels = 6,
   AutomaticLabelRules = 7,
   AutomationExecutions = 8,
-  KnowledgeBase = 9,
+  AgentMonitoringEvents = 9,
+  AgentAlerts = 10,
+  P2pTelemetry = 11,
+  AgentDisks = 12,
+  NetworkAdapters = 13,
+  ListeningPorts = 14,
+  Printers = 15,
+  SoftwareCatalog = 16,
+  AutomationScripts = 17,
+  AppPackages = 18,
+  TicketActivity = 19,
+  TicketEscalations = 20,
+  CustomFields = 21,
+  KnowledgeBase = 22,
 }
 
 export enum ReportFormat {

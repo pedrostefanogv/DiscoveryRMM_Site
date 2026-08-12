@@ -13,6 +13,20 @@ const DATASET_ICONS: Record<string, string> = {
   configurationAudit: "🔍",
   automationExecutions: "⚡",
   agentInventoryComposite: "📊",
+  agentMonitoringEvents: "📈",
+  agentAlerts: "🚨",
+  p2pTelemetry: "🔄",
+  agentDisks: "💾",
+  networkAdapters: "🌐",
+  listeningPorts: "🔌",
+  printers: "🖨️",
+  softwareCatalog: "📚",
+  automationScripts: "🧩",
+  appPackages: "📦",
+  ticketActivity: "📝",
+  ticketEscalations: "⏫",
+  customFields: "🏷️",
+  knowledgeBase: "📖",
 };
 
 const BUILT_IN_TEMPLATES = [

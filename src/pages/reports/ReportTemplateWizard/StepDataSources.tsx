@@ -19,6 +19,20 @@ const DATASET_ICONS: Record<string, string> = {
   configurationAudit: "🔍",
   automationExecutions: "⚡",
   agentInventoryComposite: "📊",
+  agentMonitoringEvents: "📈",
+  agentAlerts: "🚨",
+  p2pTelemetry: "🔄",
+  agentDisks: "💾",
+  networkAdapters: "🌐",
+  listeningPorts: "🔌",
+  printers: "🖨️",
+  softwareCatalog: "📚",
+  automationScripts: "🧩",
+  appPackages: "📦",
+  ticketActivity: "📝",
+  ticketEscalations: "⏫",
+  customFields: "🏷️",
+  knowledgeBase: "📖",
 };
 
 export function StepDataSources({ wizard, datasets, onNext }: Props) {
@@ -154,7 +168,7 @@ export function StepDataSources({ wizard, datasets, onNext }: Props) {
         <div className="mb-3">
           <input
             type="text"
-            placeholder="🔍 Buscar datasets..."
+            placeholder="Buscar datasets..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-full rounded-xl border border-border bg-surface-light px-3 py-2 text-sm text-foreground placeholder-muted outline-none transition-colors focus-visible:border-primary/60 focus-visible:ring-2 focus-visible:ring-primary/30"

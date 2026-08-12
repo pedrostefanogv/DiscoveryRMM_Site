@@ -26,6 +26,20 @@ const JOIN_KEYS: Record<string, string[]> = {
   configurationAudit: ["agentId", "clientId", "siteId"],
   automationExecutions: ["agentId"],
   agentInventoryComposite: ["agentId", "clientId", "siteId"],
+  agentMonitoringEvents: ["agentId", "clientId", "siteId"],
+  agentAlerts: ["clientId"],
+  p2pTelemetry: ["agentId", "clientId", "siteId"],
+  agentDisks: ["agentId", "clientId", "siteId"],
+  networkAdapters: ["agentId", "clientId", "siteId"],
+  listeningPorts: ["agentId", "clientId", "siteId"],
+  printers: ["agentId", "clientId", "siteId"],
+  softwareCatalog: ["clientId"],
+  automationScripts: ["clientId"],
+  appPackages: ["clientId"],
+  ticketActivity: ["clientId"],
+  ticketEscalations: ["clientId"],
+  customFields: ["clientId"],
+  knowledgeBase: ["clientId"],
 };
 
 export function useJoinSuggestions(

@@ -275,9 +275,9 @@ function normalizeJoinCapabilities(
         targetKey,
         joinTypes: Array.isArray(capability.joinTypes)
           ? capability.joinTypes.filter(
-              (joinType): joinType is string =>
-                typeof joinType === "string" && joinType.trim().length > 0,
-            )
+            (joinType): joinType is string =>
+              typeof joinType === "string" && joinType.trim().length > 0,
+          )
           : undefined,
       });
 
@@ -310,11 +310,11 @@ export function normalizeDataset(item: DatasetCatalogItem): NormalizedDataset {
   const fields =
     fieldMetadata.length > 0
       ? fieldMetadata
-          .map((field) => field.reference ?? field.field)
-          .filter(
-            (field): field is string =>
-              typeof field === "string" && field.trim().length > 0,
-          )
+        .map((field) => field.reference ?? field.field)
+        .filter(
+          (field): field is string =>
+            typeof field === "string" && field.trim().length > 0,
+        )
       : (item.executionSchema?.filters?.map((filter) => filter.name) ?? []);
 
   const supportedFormats =
@@ -354,6 +354,65 @@ export function normalizeDataset(item: DatasetCatalogItem): NormalizedDataset {
       agent_labels: ReportDatasetType.AgentLabels,
       agentlabels: ReportDatasetType.AgentLabels,
       labels: ReportDatasetType.AgentLabels,
+      "agent-inventory-composite": ReportDatasetType.AgentInventoryComposite,
+      agent_inventory_composite: ReportDatasetType.AgentInventoryComposite,
+      agentinventorycomposite: ReportDatasetType.AgentInventoryComposite,
+      composite: ReportDatasetType.AgentInventoryComposite,
+      "automatic-label-rules": ReportDatasetType.AutomaticLabelRules,
+      automatic_label_rules: ReportDatasetType.AutomaticLabelRules,
+      automaticlabelrules: ReportDatasetType.AutomaticLabelRules,
+      labelrules: ReportDatasetType.AutomaticLabelRules,
+      "automation-executions": ReportDatasetType.AutomationExecutions,
+      automation_executions: ReportDatasetType.AutomationExecutions,
+      automationexecutions: ReportDatasetType.AutomationExecutions,
+      "agent-monitoring-events": ReportDatasetType.AgentMonitoringEvents,
+      agent_monitoring_events: ReportDatasetType.AgentMonitoringEvents,
+      agentmonitoringevents: ReportDatasetType.AgentMonitoringEvents,
+      monitoring: ReportDatasetType.AgentMonitoringEvents,
+      "agent-alerts": ReportDatasetType.AgentAlerts,
+      agent_alerts: ReportDatasetType.AgentAlerts,
+      agentalerts: ReportDatasetType.AgentAlerts,
+      alerts: ReportDatasetType.AgentAlerts,
+      "p2p-telemetry": ReportDatasetType.P2pTelemetry,
+      p2p_telemetry: ReportDatasetType.P2pTelemetry,
+      p2ptelemetry: ReportDatasetType.P2pTelemetry,
+      p2p: ReportDatasetType.P2pTelemetry,
+      "agent-disks": ReportDatasetType.AgentDisks,
+      agent_disks: ReportDatasetType.AgentDisks,
+      agentdisks: ReportDatasetType.AgentDisks,
+      disks: ReportDatasetType.AgentDisks,
+      "network-adapters": ReportDatasetType.NetworkAdapters,
+      network_adapters: ReportDatasetType.NetworkAdapters,
+      networkadapters: ReportDatasetType.NetworkAdapters,
+      network: ReportDatasetType.NetworkAdapters,
+      "listening-ports": ReportDatasetType.ListeningPorts,
+      listening_ports: ReportDatasetType.ListeningPorts,
+      listeningports: ReportDatasetType.ListeningPorts,
+      ports: ReportDatasetType.ListeningPorts,
+      printers: ReportDatasetType.Printers,
+      "software-catalog": ReportDatasetType.SoftwareCatalog,
+      software_catalog: ReportDatasetType.SoftwareCatalog,
+      softwarecatalog: ReportDatasetType.SoftwareCatalog,
+      catalog: ReportDatasetType.SoftwareCatalog,
+      "automation-scripts": ReportDatasetType.AutomationScripts,
+      automation_scripts: ReportDatasetType.AutomationScripts,
+      automationscripts: ReportDatasetType.AutomationScripts,
+      scripts: ReportDatasetType.AutomationScripts,
+      "app-packages": ReportDatasetType.AppPackages,
+      app_packages: ReportDatasetType.AppPackages,
+      apppackages: ReportDatasetType.AppPackages,
+      packages: ReportDatasetType.AppPackages,
+      "ticket-activity": ReportDatasetType.TicketActivity,
+      ticket_activity: ReportDatasetType.TicketActivity,
+      ticketactivity: ReportDatasetType.TicketActivity,
+      "ticket-escalations": ReportDatasetType.TicketEscalations,
+      ticket_escalations: ReportDatasetType.TicketEscalations,
+      ticketescalations: ReportDatasetType.TicketEscalations,
+      escalations: ReportDatasetType.TicketEscalations,
+      "custom-fields": ReportDatasetType.CustomFields,
+      custom_fields: ReportDatasetType.CustomFields,
+      customfields: ReportDatasetType.CustomFields,
+      custom: ReportDatasetType.CustomFields,
       "knowledge-base": ReportDatasetType.KnowledgeBase,
       knowledge_base: ReportDatasetType.KnowledgeBase,
       knowledgebase: ReportDatasetType.KnowledgeBase,
@@ -769,14 +828,14 @@ export function buildLayoutJson(state: LayoutEditorState): {
     columns: hasSections
       ? undefined
       : state.columns
-          .filter((col) => col.field.trim() && col.label.trim())
-          .map((col) => ({
-            field: normalizeSingleSourceField(col.field),
-            header: col.label,
-            format: col.format,
-            width: col.width,
-            align: col.align,
-          })),
+        .filter((col) => col.field.trim() && col.label.trim())
+        .map((col) => ({
+          field: normalizeSingleSourceField(col.field),
+          header: col.label,
+          format: col.format,
+          width: col.width,
+          align: col.align,
+        })),
     groupDetails: state.groupDetails
       .filter((detail) => detail.field.trim() && detail.label.trim())
       .map((detail) => ({
@@ -826,18 +885,18 @@ export function buildLayoutJson(state: LayoutEditorState): {
     },
     sections: hasSections
       ? state.sections.map((section) => ({
-          title: section.title,
-          source: section.source,
-          columns: section.columns
-            .filter((column) => column.field.trim() && column.label.trim())
-            .map((column) => ({
-              field: normalizeSingleSourceField(column.field),
-              header: column.label,
-              format: column.format,
-              width: column.width,
-              align: column.align,
-            })),
-        }))
+        title: section.title,
+        source: section.source,
+        columns: section.columns
+          .filter((column) => column.field.trim() && column.label.trim())
+          .map((column) => ({
+            field: normalizeSingleSourceField(column.field),
+            header: column.label,
+            format: column.format,
+            width: column.width,
+            align: column.align,
+          })),
+      }))
       : undefined,
   };
 

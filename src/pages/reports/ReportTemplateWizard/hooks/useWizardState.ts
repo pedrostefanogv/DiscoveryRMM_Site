@@ -78,6 +78,20 @@ const JOIN_KEYS: Record<string, string[]> = {
   configurationAudit: ["agentId", "clientId", "siteId"],
   automationExecutions: ["agentId"],
   agentInventoryComposite: ["agentId", "clientId", "siteId"],
+  agentMonitoringEvents: ["agentId", "clientId", "siteId"],
+  agentAlerts: ["clientId"],
+  p2pTelemetry: ["agentId", "clientId", "siteId"],
+  agentDisks: ["agentId", "clientId", "siteId"],
+  networkAdapters: ["agentId", "clientId", "siteId"],
+  listeningPorts: ["agentId", "clientId", "siteId"],
+  printers: ["agentId", "clientId", "siteId"],
+  softwareCatalog: ["clientId"],
+  automationScripts: ["clientId"],
+  appPackages: ["clientId"],
+  ticketActivity: ["clientId"],
+  ticketEscalations: ["clientId"],
+  customFields: ["clientId"],
+  knowledgeBase: ["clientId"],
 };
 
 const DATASET_ALIASES: Record<string, string> = {
@@ -90,6 +104,20 @@ const DATASET_ALIASES: Record<string, string> = {
   configurationAudit: "audit",
   automationExecutions: "auto",
   agentInventoryComposite: "inv",
+  agentMonitoringEvents: "mon",
+  agentAlerts: "alrt",
+  p2pTelemetry: "p2p",
+  agentDisks: "dsk",
+  networkAdapters: "net",
+  listeningPorts: "prt",
+  printers: "prn",
+  softwareCatalog: "swc",
+  automationScripts: "scr",
+  appPackages: "app",
+  ticketActivity: "tka",
+  ticketEscalations: "esc",
+  customFields: "cf",
+  knowledgeBase: "kb",
 };
 
 // ── Helpers ───────────────────────────────────────────────
@@ -189,6 +217,76 @@ const DEFAULT_COLUMNS: Record<string, LayoutColumn[]> = {
     { field: "agentHostname", header: "Hostname", format: "text", align: "left" },
     { field: "softwareName", header: "Software", format: "text", align: "left" },
     { field: "osName", header: "SO", format: "text", align: "left" },
+  ],
+  agentMonitoringEvents: [
+    { field: "severity", header: "Severidade", format: "text", align: "center" },
+    { field: "title", header: "Título", format: "text", align: "left" },
+    { field: "occurredAt", header: "Ocorrido em", format: "datetime", align: "left" },
+  ],
+  agentAlerts: [
+    { field: "name", header: "Nome", format: "text", align: "left" },
+    { field: "severity", header: "Severidade", format: "text", align: "center" },
+    { field: "threshold", header: "Limiar", format: "number", align: "right" },
+  ],
+  p2pTelemetry: [
+    { field: "agentHostname", header: "Hostname", format: "text", align: "left" },
+    { field: "bytesServed", header: "Bytes servidos", format: "number", align: "right" },
+    { field: "connectedPeers", header: "Peers", format: "number", align: "right" },
+  ],
+  agentDisks: [
+    { field: "agentHostname", header: "Hostname", format: "text", align: "left" },
+    { field: "diskName", header: "Disco", format: "text", align: "left" },
+    { field: "healthStatus", header: "Saúde", format: "text", align: "center" },
+  ],
+  networkAdapters: [
+    { field: "agentHostname", header: "Hostname", format: "text", align: "left" },
+    { field: "adapterName", header: "Adaptador", format: "text", align: "left" },
+    { field: "speedMbps", header: "Velocidade", format: "number", align: "right" },
+  ],
+  listeningPorts: [
+    { field: "agentHostname", header: "Hostname", format: "text", align: "left" },
+    { field: "port", header: "Porta", format: "number", align: "right" },
+    { field: "processName", header: "Processo", format: "text", align: "left" },
+  ],
+  printers: [
+    { field: "agentHostname", header: "Hostname", format: "text", align: "left" },
+    { field: "printerName", header: "Impressora", format: "text", align: "left" },
+    { field: "driverName", header: "Driver", format: "text", align: "left" },
+  ],
+  softwareCatalog: [
+    { field: "name", header: "Nome", format: "text", align: "left" },
+    { field: "publisher", header: "Fabricante", format: "text", align: "left" },
+    { field: "latestVersion", header: "Versão", format: "text", align: "left" },
+  ],
+  automationScripts: [
+    { field: "name", header: "Nome", format: "text", align: "left" },
+    { field: "language", header: "Linguagem", format: "text", align: "center" },
+    { field: "isActive", header: "Ativo", format: "text", align: "center" },
+  ],
+  appPackages: [
+    { field: "name", header: "Nome", format: "text", align: "left" },
+    { field: "publisher", header: "Fabricante", format: "text", align: "left" },
+    { field: "version", header: "Versão", format: "text", align: "left" },
+  ],
+  ticketActivity: [
+    { field: "ticketId", header: "Ticket", format: "text", align: "left" },
+    { field: "action", header: "Ação", format: "text", align: "left" },
+    { field: "createdAt", header: "Data", format: "datetime", align: "left" },
+  ],
+  ticketEscalations: [
+    { field: "name", header: "Nome", format: "text", align: "left" },
+    { field: "escalationLevel", header: "Nível", format: "number", align: "right" },
+    { field: "isActive", header: "Ativo", format: "text", align: "center" },
+  ],
+  customFields: [
+    { field: "entityName", header: "Entidade", format: "text", align: "left" },
+    { field: "fieldName", header: "Campo", format: "text", align: "left" },
+    { field: "valueType", header: "Tipo", format: "text", align: "center" },
+  ],
+  knowledgeBase: [
+    { field: "title", header: "Título", format: "text", align: "left" },
+    { field: "category", header: "Categoria", format: "text", align: "left" },
+    { field: "updatedAt", header: "Atualizado em", format: "datetime", align: "left" },
   ],
 };
 
@@ -447,9 +545,9 @@ export function useWizardState(initialState?: Partial<WizardState>) {
       ? undefined
       : !useAliases && primaryAlias
         ? state.groupTitleTemplate.replace(
-            new RegExp(`\\{\\{\\s*${escapeRegExp(primaryAlias)}\\.`, "g"),
-            "{{",
-          )
+          new RegExp(`\\{\\{\\s*${escapeRegExp(primaryAlias)}\\.`, "g"),
+          "{{",
+        )
         : state.groupTitleTemplate;
 
     const dataSources: ReportLayoutDataSourceDefinition[] =
