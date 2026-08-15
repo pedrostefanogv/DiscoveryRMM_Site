@@ -69,8 +69,6 @@ export function useTerminalStream({
     const mountedRef = useRef(true);
     // Fila de mensagens a enviar quando a conexão abrir (resize inicial, etc.)
     const pendingQueueRef = useRef<string[]>([]);
-    // Callback chamado após autenticação NATS (para reenviar resize etc.)
-    const onWebSocketOpenRef = useRef<() => void>(() => { });
 
     const maxReconnect = 5;
     const delays = [1000, 2000, 4000, 8000, 16000];
@@ -172,8 +170,6 @@ export function useTerminalStream({
                             for (const msg of pending) {
                                 ws?.send(msg);
                             }
-                            // Re-envia o resize atual para o agent (garante dimensões corretas)
-                            onWebSocketOpenRef.current?.();
                         }
                         continue;
                     }
