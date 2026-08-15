@@ -17,6 +17,16 @@ interface RemoteTerminalProps {
   nkeySeed?: string;
   /** Reporta o status de conexão ao pai (para exibir na barra de rodapé unificada). */
   onConnectionChange?: (connected: boolean) => void;
+  /** Reporta os shells disponíveis ao pai (para popular o seletor de shell). */
+  onShells?: (shells: string[]) => void;
+}
+
+// TermReadyInfo compatível com o hook (avoid import cycle)
+interface TermReadyPayload {
+  shells?: string[];
+  consoleId?: string;
+  termCols?: number;
+  termRows?: number;
 }
 
 const TERM_THEME = {
@@ -52,6 +62,7 @@ export default function RemoteTerminal({
   jwt = '',
   nkeySeed = '',
   onConnectionChange,
+  onShells,
 }: RemoteTerminalProps) {
   const termRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
@@ -113,12 +124,36 @@ export default function RemoteTerminal({
   }, []);
 
   // Wire NATS stream — console único (subjects fixos term.out / term.in)
-  const { isConnected, sendData, sendResize, onOutput, onExit } = useTerminalStream({
+  const { isConnected, sendData, sendResize, onOutput, onExit, onReady } = useTerminalStream({
     natsSubject,
     natsUrl,
     jwt,
     nkeySeed,
   });
+
+  // Re-aplica o fit quando a conexão abre (garante resize correto para o agent).
+  useEffect(() => {
+    if (!isConnected) return;
+    // Pequeno delay para o layout estabilizar
+    const t = setTimeout(() => {
+      try { fitAddonRef.current?.fit(); } catch { /* ignore */ }
+    }, 50);
+    return () => clearTimeout(t);
+  }, [isConnected]);
+
+  // term.ready — reporta shells disponíveis ao pai
+  useEffect(() => {
+    const unsubscribe = onReady((info: TermReadyPayload) => {
+      if (Array.isArray(info.shells) && info.shells.length > 0) {
+        onShells?.(info.shells);
+      }
+      // Se o agente informou dimensões, ajusta o terminal local
+      if (info.termCols && info.termRows && termRef.current) {
+        termRef.current.resize(info.termCols, info.termRows);
+      }
+    });
+    return unsubscribe;
+  }, [onReady, onShells]);
 
   useEffect(() => {
     const unsubscribe = onOutput((data: string) => {

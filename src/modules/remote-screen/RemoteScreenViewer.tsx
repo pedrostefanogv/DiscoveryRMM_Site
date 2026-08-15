@@ -18,6 +18,8 @@ interface RemoteScreenViewerProps {
   onError?: (msg: string) => void;
   onLatency?: (rttMs: number) => void;
   onMonitors?: (monitors: MonitorInfo[]) => void;
+  /** Notifica que a sessão foi encerrada/erro no agent (para o pai exibir aviso/reconectar). */
+  onSessionEnded?: (reason: string) => void;
   /** Escala controlada externamente ('fit' | '100%'). Se omitido, gerencia internamente. */
   scale?: 'fit' | '100%';
   /** Callback para alternar fullscreen (o pai controla o estado). */
@@ -86,6 +88,7 @@ export default function RemoteScreenViewer({
   onError,
   onLatency,
   onMonitors,
+  onSessionEnded,
   scale: controlledScale,
   onToggleFullscreen,
   isFullscreen: controlledFullscreen,
@@ -97,6 +100,7 @@ export default function RemoteScreenViewer({
   const [fps, setFps] = useState<number>(0);
   const [isPaused, setIsPaused] = useState(false);
   const [agentMetrics, setAgentMetrics] = useState<AgentMetrics | null>(null);
+  const [sessionEnded, setSessionEnded] = useState<string | null>(null);
   // Estado da conexão para UI (conectando/conectado/erro) + botão de reconexão.
   const [connectionState, setConnectionState] = useState<'connecting' | 'connected' | 'error'>('connecting');
   const [reconnectKey, setReconnectKey] = useState(0);
@@ -109,11 +113,13 @@ export default function RemoteScreenViewer({
   const onErrorRef = useRef(onError);
   const onLatencyRef = useRef(onLatency);
   const onMonitorsRef = useRef(onMonitors);
+  const onSessionEndedRef = useRef(onSessionEnded);
   const codecRef = useRef(codec);
   const isPausedRef = useRef(isPaused);
   onErrorRef.current = onError;
   onLatencyRef.current = onLatency;
   onMonitorsRef.current = onMonitors;
+  onSessionEndedRef.current = onSessionEnded;
   codecRef.current = codec;
   isPausedRef.current = isPaused;
 
@@ -333,6 +339,17 @@ export default function RemoteScreenViewer({
         const data = JSON.parse(payloadText);
         if (data?.eventType === 'metrics' && data?.data) {
           setAgentMetrics(data.data as AgentMetrics);
+        } else if (
+          // Sessão encerrada no agent (expirou/erro/shell morreu) — não deixar
+          // a UI "presa" na última tela congelada como se ainda estivesse ativa.
+          data?.eventType === 'screen_stopped' ||
+          data?.eventType === 'closed' ||
+          data?.eventType === 'error'
+        ) {
+          const reason = data?.data?.reason ?? data?.data?.error ?? data?.eventType ?? 'sessão encerrada';
+          setSessionEnded(String(reason));
+          setConnectionState('error');
+          onSessionEndedRef.current?.(String(reason));
         }
       } catch {
         // ignora eventos mal formatados
@@ -605,13 +622,15 @@ export default function RemoteScreenViewer({
     const getFrameCoords = (clientX: number, clientY: number): { x: number; y: number } | null => {
       if (!canvas) return null;
       const rect = canvas.getBoundingClientRect();
-      const dpr = window.devicePixelRatio || 1;
       // canvas CSS size
       const cssW = rect.width;
       const cssH = rect.height;
-      // actual bitmap size rendered
-      const bmpW = canvas.width / dpr;
-      const bmpH = canvas.height / dpr;
+      // actual bitmap size rendered. NOTA: canvas.width/height são as dimensões
+      // do BITMAP (definidas por renderFrame = resolução nativa do frame), NÃO
+      // as CSS. Não dividir por devicePixelRatio — o DPR já é absorvido pela
+      // diferença entre cssW/cssH (getBoundingClientRect) e canvas.width/height.
+      const bmpW = canvas.width;
+      const bmpH = canvas.height;
       if (cssW <= 0 || cssH <= 0 || bmpW <= 0 || bmpH <= 0) return null;
 
       const ratio = Math.min(cssW / bmpW, cssH / bmpH);
@@ -637,8 +656,8 @@ export default function RemoteScreenViewer({
           type,
           ...data,
           ...(frameCoords ? { x: frameCoords.x, y: frameCoords.y } : {}),
-          frameWidth: (canvas?.width ?? 1920) / (window.devicePixelRatio || 1),
-          frameHeight: (canvas?.height ?? 1080) / (window.devicePixelRatio || 1),
+          frameWidth: canvas?.width ?? 1920,
+          frameHeight: canvas?.height ?? 1080,
           ts: Date.now(),
         });
         wsRef.current.send(`PUB ${natsSubject}.input ${new TextEncoder().encode(payload).length}\r\n${payload}\r\n`);
@@ -786,9 +805,28 @@ export default function RemoteScreenViewer({
         )}
       </div>
 
+      {/* Overlay de sessão encerrada (evita tela congelada sem explicação) */}
+      {sessionEnded && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-slate-950/80 backdrop-blur-sm z-10">
+          <div className="text-3xl">⏹</div>
+          <div className="text-slate-200 font-medium">Sessão encerrada</div>
+          <div className="text-xs text-slate-400 max-w-xs text-center break-words px-4">{sessionEnded}</div>
+          <button
+            className="mt-1 bg-slate-700 hover:bg-slate-600 text-white rounded px-3 py-1.5 text-xs font-medium"
+            onClick={() => {
+              setSessionEnded(null);
+              handleReconnect();
+            }}
+            title="Reiniciar a sessão remota"
+          >
+            ⟳ Reconectar
+          </button>
+        </div>
+      )}
+
       {/* Controls — apenas reconexão em caso de erro (Fit/1:1 e Full ficam na barra do pai) */}
       <div className="absolute bottom-2 right-2 flex gap-1">
-        {connectionState === 'error' && (
+        {connectionState === 'error' && !sessionEnded && (
           <button
             className="bg-rose-600/90 hover:bg-rose-500 text-white rounded px-2 py-1 text-xs backdrop-blur-sm font-medium"
             onClick={handleReconnect}

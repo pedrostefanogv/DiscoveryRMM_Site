@@ -115,6 +115,8 @@ export default function RemoteSession() {
   // Shell ativo do terminal (powershell | cmd). Trocar reinicia a sessão de terminal.
   const [shell, setShell] = useState('powershell');
   const [shellSwitching, setShellSwitching] = useState(false);
+  // Shells disponíveis reportados pelo agent via term.ready (populará o seletor).
+  const [availableShells, setAvailableShells] = useState<string[]>([]);
   // Status de conexão do terminal (reportado pelo RemoteTerminal).
   const [terminalConnected, setTerminalConnected] = useState(false);
 
@@ -649,6 +651,7 @@ export default function RemoteSession() {
                   onError={(msg) => setErrorMsg(msg)}
                   onLatency={() => {}}
                   onMonitors={(mons) => setMonitors(mons)}
+                  onSessionEnded={(reason) => setErrorMsg(`Sessão encerrada: ${reason}`)}
                   scale={screenScale}
                   isFullscreen={screenFullscreen}
                   onToggleFullscreen={() => setScreenFullscreen((v) => !v)}
@@ -678,6 +681,7 @@ export default function RemoteSession() {
                   jwt={sessions.terminal.jwt}
                   nkeySeed={sessions.terminal.nkeySeed}
                   onConnectionChange={setTerminalConnected}
+                  onShells={(shells) => setAvailableShells(shells)}
                 />
               </div>
             </div>
@@ -758,8 +762,12 @@ export default function RemoteSession() {
               onChange={e => handleSwitchShell(e.target.value)}
               className="bg-slate-800 border border-slate-700 rounded px-1 py-0.5 text-slate-300 text-xs disabled:opacity-50"
             >
-              <option value="powershell">PowerShell</option>
-              <option value="cmd">CMD</option>
+              {/* Shells reportados pelo agent via term.ready; fallback estático */}
+              {(availableShells.length > 0 ? availableShells : ['powershell', 'cmd']).map((s) => (
+                <option key={s} value={s}>
+                  {s.startsWith('wsl:') ? s.replace('wsl:', 'WSL: ') : s === 'powershell' ? 'PowerShell' : s === 'cmd' ? 'CMD' : s}
+                </option>
+              ))}
             </select>
             {shellSwitching && <span className="text-slate-500">trocar shell…</span>}
             <span className={`inline-flex items-center gap-1 ${terminalConnected ? 'text-emerald-400' : 'text-red-400'}`}>

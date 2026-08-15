@@ -7,12 +7,20 @@ interface UseTerminalStreamOptions {
     nkeySeed: string;
 }
 
+export interface TerminalReadyInfo {
+    shells: string[];
+    consoleId?: string;
+    termCols?: number;
+    termRows?: number;
+}
+
 interface UseTerminalStreamReturn {
     isConnected: boolean;
     sendData: (data: string) => void;
     sendResize: (cols: number, rows: number) => void;
     onOutput: (callback: (data: string) => void) => () => void;
     onExit: (callback: (reason: string) => void) => () => void;
+    onReady: (callback: (info: TerminalReadyInfo) => void) => () => void;
     error: string | null;
 }
 
@@ -32,6 +40,16 @@ function findCrlf(data: Uint8Array<ArrayBufferLike>): number {
     return -1;
 }
 
+// Codifica string UTF-8 → base64. btoa() puro falha com caracteres fora do
+// Latin-1 (acentos, emoji, símbolos) com InvalidCharacterError, o que quebrava
+// o envio de input do terminal remoto silenciosamente.
+function toBase64(input: string): string {
+    const bytes = new TextEncoder().encode(input);
+    let binary = '';
+    for (const byte of bytes) binary += String.fromCharCode(byte);
+    return btoa(binary);
+}
+
 // Console único: usa subjects fixos term.out / term.in (sem tabId),
 // como o MeshCentral (um terminal por sessão).
 export function useTerminalStream({
@@ -45,9 +63,14 @@ export function useTerminalStream({
     const wsRef = useRef<WebSocket | null>(null);
     const outputCallbacksRef = useRef<Set<(data: string) => void>>(new Set());
     const exitCallbacksRef = useRef<Set<(reason: string) => void>>(new Set());
+    const readyCallbacksRef = useRef<Set<(info: TerminalReadyInfo) => void>>(new Set());
     const reconnectAttemptsRef = useRef(0);
     const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const mountedRef = useRef(true);
+    // Fila de mensagens a enviar quando a conexão abrir (resize inicial, etc.)
+    const pendingQueueRef = useRef<string[]>([]);
+    // Callback chamado após autenticação NATS (para reenviar resize etc.)
+    const onWebSocketOpenRef = useRef<() => void>(() => { });
 
     const maxReconnect = 5;
     const delays = [1000, 2000, 4000, 8000, 16000];
@@ -56,6 +79,7 @@ export function useTerminalStream({
     const subj = natsSubject.replace(/-/g, '');
     const outSubject = `${subj}.term.out`;
     const inSubject = `${subj}.term.in`;
+    const readySubject = `${subj}.term.ready`;
 
     const connect = useCallback(() => {
         if (!mountedRef.current) return;
@@ -108,6 +132,9 @@ export function useTerminalStream({
                                     } catch {
                                         outputCallbacksRef.current.forEach(cb => cb(parsed.data));
                                     }
+                                } else if (parsed.shells && Array.isArray(parsed.shells)) {
+                                    // term.ready — shells disponíveis + console pronto
+                                    readyCallbacksRef.current.forEach(cb => cb(parsed as TerminalReadyInfo));
                                 }
                             }
                         } catch {
@@ -138,6 +165,15 @@ export function useTerminalStream({
                             setIsConnected(true);
                             setError(null);
                             sendProtocol(`SUB ${outSubject} 1`);
+                            sendProtocol(`SUB ${readySubject} 2`);
+                            // Drena a fila de mensagens pendentes (ex.: resize inicial)
+                            const pending = pendingQueueRef.current;
+                            pendingQueueRef.current = [];
+                            for (const msg of pending) {
+                                ws?.send(msg);
+                            }
+                            // Re-envia o resize atual para o agent (garante dimensões corretas)
+                            onWebSocketOpenRef.current?.();
                         }
                         continue;
                     }
@@ -199,17 +235,23 @@ export function useTerminalStream({
     const sendData = useCallback((data: string) => {
         const ws = wsRef.current;
         if (!ws || ws.readyState !== WebSocket.OPEN) return;
-        const payload = JSON.stringify({ data: btoa(data) });
+        const payload = JSON.stringify({ data: toBase64(data) });
         const msg = `PUB ${inSubject} ${new TextEncoder().encode(payload).length}\r\n${payload}\r\n`;
         ws.send(msg);
     }, [inSubject]);
 
+    // Envia com fila: se a conexão ainda não abriu (reconexão), enfileira a
+    // mensagem para ser drenada quando autenticar — evita perder resize inicial.
     const sendResize = useCallback((cols: number, rows: number) => {
-        const ws = wsRef.current;
-        if (!ws || ws.readyState !== WebSocket.OPEN) return;
         const payload = JSON.stringify({ cols, rows });
         const msg = `PUB ${inSubject} ${new TextEncoder().encode(payload).length}\r\n${payload}\r\n`;
-        ws.send(msg);
+        const ws = wsRef.current;
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(msg);
+        } else {
+            // Mantém apenas o último resize pendente (não acumula)
+            pendingQueueRef.current = [msg];
+        }
     }, [inSubject]);
 
     const onOutput = useCallback((callback: (data: string) => void) => {
@@ -222,5 +264,10 @@ export function useTerminalStream({
         return () => { exitCallbacksRef.current.delete(callback); };
     }, []);
 
-    return { isConnected, sendData, sendResize, onOutput, onExit, error };
+    const onReady = useCallback((callback: (info: TerminalReadyInfo) => void) => {
+        readyCallbacksRef.current.add(callback);
+        return () => { readyCallbacksRef.current.delete(callback); };
+    }, []);
+
+    return { isConnected, sendData, sendResize, onOutput, onExit, onReady, error };
 }
