@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useFilesStream, decodeFileData, type FilesResponse } from './useFilesStream';
+import { useFilesStream, decodeFileData, type FilesResponse, type FilesReadyInfo } from './useFilesStream';
 
 interface FileEntry {
   name: string;
@@ -46,8 +46,6 @@ export default function RemoteFiles({
   const [busy, setBusy] = useState<string | null>(null); // ação em andamento (feedback)
   const [selected, setSelected] = useState<FileEntry | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-
-  // ── Modal inline (substitui window.prompt/confirm, bloqueados em popups) ──
   const [modal, setModal] = useState<{
     title: string;
     message?: string;
@@ -77,45 +75,94 @@ export default function RemoteFiles({
     modal.onConfirm(value);
   };
 
-  const { isConnected, sendRequest } = useFilesStream({
+  const { isConnected, isReady, sendRequest, onReady } = useFilesStream({
     natsSubject: natsSubject || '',
     natsUrl: natsUrl || '',
     jwt: jwt || '',
   });
 
-  const loadFiles = useCallback(async (path: string) => {
+  const loadFiles = useCallback(async (path: string, attempt = 1) => {
+    // Requer conexão; NÃO exige isReady aqui (o timeout de segurança e as
+    // ações manuais precisam funcionar mesmo se o files.ready foi perdido).
     if (!isConnected) return;
     setLoading(true);
     setError(null);
+    let retrying = false;
     try {
       const resp = await sendRequest('list', path);
-      if (resp.success && resp.entries) {
-        setFiles(resp.entries);
+      if (resp.success) {
+        setFiles(resp.entries ?? []);
       } else {
         setError(resp.error || 'Erro ao listar');
       }
     } catch (err) {
-      setError(`Erro ao listar: ${err instanceof Error ? err.message : String(err)}`);
+      // Retry com backoff (evita perder o primeiro list por race de subscribe)
+      if (attempt < 3) {
+        retrying = true;
+        setTimeout(() => loadFiles(path, attempt + 1), 400 * attempt);
+      } else {
+        setError(`Erro ao listar: ${err instanceof Error ? err.message : String(err)}`);
+      }
     } finally {
-      setLoading(false);
+      if (!retrying) setLoading(false);
     }
   }, [sendRequest, isConnected]);
 
   useEffect(() => {
-    if (isConnected) loadFiles(currentPath);
-  }, [currentPath, isConnected, loadFiles]);
+    if (isConnected && isReady) loadFiles(currentPath);
+  }, [currentPath, isConnected, isReady, loadFiles]);
+
+  // Fallback: se o agente já publicou files.ready antes do mount (reconexão),
+  // o onReady garante o load mesmo sem o isReady ter sido observado.
+  // Também usa o rootPath informado pelo agent como caminho inicial (em vez de
+  // assumir C:\ fixo — o rootPath pode ser customizado no start da sessão).
+  useEffect(() => {
+    const off = onReady((info: FilesReadyInfo) => {
+      // Ajusta o caminho inicial para o rootPath real do agent (uma vez).
+      if (info?.rootPath) {
+        isRootPath.current = info.rootPath.replace(/[\\/]+$/, '') + '\\';
+        if (currentPath === 'C:\\') {
+          setCurrentPath(isRootPath.current); // o efeito de currentPath dispara o load
+          return;
+        }
+      }
+      loadFiles(currentPath);
+    });
+    return off;
+  }, [onReady, loadFiles, currentPath]);
+
+  // Timeout de segurança: se o agent não publicar files.ready em até 10s após
+  // conectar, tenta o list mesmo assim (o subscribe pode ter ocorrido sem o
+  // ready ser entregue). Evita ficar preso em "Aguardando..." para sempre.
+  useEffect(() => {
+    if (!isConnected || isReady) return;
+    const timer = setTimeout(() => {
+      loadFiles(currentPath);
+    }, 10_000);
+    return () => clearTimeout(timer);
+  }, [isConnected, isReady, loadFiles, currentPath]);
 
   const navigateTo = (dir: string) => {
     if (dir === '..') {
-      const parts = currentPath.replace(/\\+$/, '').split('\\');
+      const parts = currentPath.replace(/[\\/]+$/, '').split(/[\\/]/);
       parts.pop();
+      // Na raiz (ex: 'C:', 'D:', ou rootPath custom) não sobe além dela.
+      if (parts.length === 0 || (parts.length === 1 && /^[A-Za-z]:$/.test(parts[0]))) {
+        setCurrentPath(currentPath); // mantém a raiz
+        return;
+      }
       setCurrentPath(parts.join('\\') + '\\');
     } else {
-      setCurrentPath(dir.endsWith('\\') ? dir : dir + '\\');
+      setCurrentPath(dir.endsWith('\\') || dir.endsWith('/') ? dir : dir + '\\');
     }
   };
 
-  const isRoot = currentPath === 'C:\\' || currentPath.match(/^[A-Z]:\\$/) !== null;
+  // Raiz = final de volume Windows (C:\, D:\\)) OU o rootPath informado pelo agent
+  // (que pode ser customizado, ex.: C:\Users\Admin\Documents).
+  const isRootPath = useRef<string | null>(null);
+  const isRoot = isRootPath.current
+    ? currentPath.replace(/[\\/]+$/, '').toLowerCase() === isRootPath.current.replace(/[\\/]+$/, '').toLowerCase()
+    : currentPath === 'C:\\' || currentPath.match(/^[A-Za-z]:\\$/) !== null;
 
   // ── Ações ──
 
@@ -281,6 +328,11 @@ export default function RemoteFiles({
       {!isConnected && (
         <div className="px-3 py-1.5 bg-amber-900/40 text-amber-300 text-xs">
           Conectando ao agent... (aguardando NATS)
+        </div>
+      )}
+      {isConnected && !isReady && (
+        <div className="px-3 py-1.5 bg-amber-900/40 text-amber-300 text-xs">
+          Aguardando sessão de arquivos do agent...
         </div>
       )}
 

@@ -150,6 +150,28 @@ export default function RemoteSession() {
     setConnectingTab(tab);
     setErrorMsg(null);
     try {
+      // Com MaxConcurrentSessionsPerAgent=1, abrir uma nova aba substitui a
+      // sessão ativa de OUTRA aba: encerra a anterior explicitamente (stop no
+      // agent + limpa estado) antes de iniciar a nova — comportamento "a aba
+      // ativa substitui", sem orfãs e sem force silencioso no backend.
+      const others = (Object.entries(sessions) as [Tab, TabSession | undefined][])
+        .filter(([k]) => k !== tab)
+        .map(([, s]) => s)
+        .filter((s): s is TabSession => !!s);
+      for (const other of others) {
+        try { await remoteSessionsApi.stopSession(agentId, other.sessionId); } catch { /* best-effort */ }
+      }
+      if (others.length > 0) {
+        setSessions((prev) => {
+          const next = { ...prev };
+          for (const other of others) {
+            const key = (Object.entries(prev) as [Tab, TabSession | undefined][]).find(([, s]) => s?.sessionId === other.sessionId)?.[0];
+            if (key) next[key] = undefined;
+          }
+          return next;
+        });
+      }
+
       const kind = tab === 'screen' ? 'screen' : tab; // screen | terminal | files | proxy
       const session = await remoteSessionsApi.startSession(agentId, {
         agentId,
@@ -158,7 +180,9 @@ export default function RemoteSession() {
         quality: liveQuality as StartRemoteSessionRequest['quality'],
         codec: liveCodec as StartRemoteSessionRequest['codec'],
         durationMinutes: 30,
-        force: true,
+        // force=false (default): não mata outras sessões silenciosamente. As
+        // sessões concorrentes já foram encerradas acima com stop explícito.
+        force: false,
         ...(tab === 'screen' ? { monitorIndex } : {}),
       });
 
@@ -199,7 +223,8 @@ export default function RemoteSession() {
     } finally {
       setConnectingTab(null);
     }
-  }, [agentId, connectingTab, transport, liveQuality, liveCodec, monitorIndex]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [agentId, connectingTab, transport, liveQuality, liveCodec, monitorIndex, sessions]);
 
   // ── Reconexão manual de uma aba ──
   // Se a sessão ainda estiver ativa no agent, apenas remonta o viewer (nova key).
@@ -256,7 +281,8 @@ export default function RemoteSession() {
         quality: liveQuality as StartRemoteSessionRequest['quality'],
         codec: liveCodec as StartRemoteSessionRequest['codec'],
         durationMinutes: 30,
-        force: true,
+        // A sessão de terminal anterior já foi encerrada acima; não precisa force.
+        force: false,
         shell: newShell,
       });
       if (!session.natsSubject) {
@@ -396,7 +422,8 @@ export default function RemoteSession() {
         quality: liveQuality as StartRemoteSessionRequest['quality'],
         codec: liveCodec as StartRemoteSessionRequest['codec'],
         durationMinutes: 30,
-        force: true,
+        // A sessão de tela atual já foi encerrada acima; stop precisa força.
+        force: false,
         monitorIndex: newMonitor,
       });
       let jwt: string | undefined;
