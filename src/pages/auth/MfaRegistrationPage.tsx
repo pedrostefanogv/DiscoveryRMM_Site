@@ -7,7 +7,6 @@ import { useAuth } from "@/auth/AuthContext";
 import {
   describeWebAuthnError,
   ensureWebAuthnSupport,
-  getWebAuthnEnvironmentInfo,
   parseRegistrationOptions,
   serializeRegistrationCredential,
 } from "@/auth/webauthn";
@@ -31,7 +30,6 @@ export default function MfaRegistrationPage() {
     message: string;
   } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const environment = getWebAuthnEnvironmentInfo();
 
   const token = session.temporaryMfaToken ?? session.accessToken;
   const roleMfaRequirement = resolveRoleMfaRequirement(
@@ -210,14 +208,8 @@ export default function MfaRegistrationPage() {
           </div>
           <div className="mt-3 flex items-start gap-3">
             <KeyRound className="mt-0.5 h-4 w-4 text-accent" />
-            O backend aceita nome vazio, mas a UI exige entre 2 e 80 caracteres para manter a gestao das chaves legivel.
+            Informe um nome amigavel para a chave, que será exibido no painel de gerenciamento de MFA.
           </div>
-        </div>
-
-        <div className={`rounded-2xl border px-4 py-3 text-sm ${environment.isSecureContext ? 'border-accent/30 bg-accent/10 text-cyan-100' : 'border-warning/30 bg-warning/10 text-amber-50'}`}>
-          Local atual: <strong>{environment.origin}</strong>. {environment.isSecureContext
-            ? "Este contexto e considerado seguro para WebAuthn; se houver 401, o problema e de token/permissao no backend."
-            : "Este contexto não é seguro para WebAuthn; o navegador pode bloquear a operação."}
         </div>
 
         {error && (
