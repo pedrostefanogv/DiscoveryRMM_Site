@@ -11,12 +11,20 @@ interface UseFilesStreamReturn {
     sendRequest: (action: string, path: string, data?: Uint8Array, extra?: Record<string, unknown>) => Promise<FilesResponse>;
     /** Callback disparado quando o agente publica files.ready (ex.: rootPath efetivo). */
     onReady: (callback: (info: FilesReadyInfo) => void) => () => void;
+    /** Callback disparado quando o agente publica files.progress (copy/move/zip/unzip). */
+    onProgress: (callback: (info: FilesProgressInfo) => void) => () => void;
     error: string | null;
 }
 
 export interface FilesReadyInfo {
     rootPath?: string;
     status?: string;
+}
+
+export interface FilesProgressInfo {
+    requestId?: string;
+    loaded?: number;
+    total?: number;
 }
 
 export interface FilesResponse {
@@ -86,6 +94,7 @@ export function useFilesStream({ natsSubject, natsUrl, jwt }: UseFilesStreamOpti
     const wsRef = useRef<WebSocket | null>(null);
     const pendingRef = useRef<Map<string, { resolve: (r: FilesResponse) => void; reject: (e: Error) => void }>>(new Map());
     const readyCallbacksRef = useRef<Set<(info: FilesReadyInfo) => void>>(new Set());
+    const progressCallbacksRef = useRef<Set<(info: FilesProgressInfo) => void>>(new Set());
     const reconnectAttemptsRef = useRef(0);
     const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const mountedRef = useRef(true);
@@ -95,6 +104,7 @@ export function useFilesStream({ natsSubject, natsUrl, jwt }: UseFilesStreamOpti
     const reqSubject = `${subj}.files.req`;
     const respSubject = `${subj}.files.resp`;
     const readySubject = `${subj}.files.ready`;
+    const progressSubject = `${subj}.files.progress`;
 
     const connect = useCallback(() => {
         if (!mountedRef.current || !subj || !natsUrl || !jwt) return;
@@ -141,6 +151,11 @@ export function useFilesStream({ natsSubject, natsUrl, jwt }: UseFilesStreamOpti
                                 readyCallbacksRef.current.forEach(cb => cb(parsed as unknown as FilesReadyInfo));
                                 continue;
                             }
+                            // files.progress — progresso de copy/move/zip/unzip.
+                            if (parsed && typeof parsed === 'object' && 'loaded' in parsed && 'total' in parsed && 'requestId' in parsed) {
+                                progressCallbacksRef.current.forEach(cb => cb(parsed as unknown as FilesProgressInfo));
+                                continue;
+                            }
                             const r = parsed as unknown as FilesResponse;
                             // O requestId está no PAYLOAD JSON (não no header MSG).
                             const rid = r.requestId;
@@ -169,6 +184,7 @@ export function useFilesStream({ natsSubject, natsUrl, jwt }: UseFilesStreamOpti
                             setError(null);
                             sendProtocol(`SUB ${respSubject} 1`);
                             sendProtocol(`SUB ${readySubject} 2`);
+                            sendProtocol(`SUB ${progressSubject} 3`);
                         }
                         continue;
                     }
@@ -267,5 +283,10 @@ export function useFilesStream({ natsSubject, natsUrl, jwt }: UseFilesStreamOpti
         return () => { readyCallbacksRef.current.delete(callback); };
     }, []);
 
-    return { isConnected, sendRequest, onReady, error };
+    const onProgress = useCallback((callback: (info: FilesProgressInfo) => void) => {
+        progressCallbacksRef.current.add(callback);
+        return () => { progressCallbacksRef.current.delete(callback); };
+    }, []);
+
+    return { isConnected, sendRequest, onReady, onProgress, error };
 }

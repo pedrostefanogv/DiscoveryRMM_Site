@@ -80,6 +80,7 @@ export default function RemoteFiles({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null); // ação em andamento (feedback)
+  const busyRef = useRef(false); // espelho síncrono de `busy` para o callback de progresso
   const [transfer, setTransfer] = useState<TransferState | null>(null); // progresso de up/down
   const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set()); // múltipla seleção (paths)
   const [pathInput, setPathInput] = useState('C:\\'); // valor do input editável de caminho
@@ -115,11 +116,28 @@ export default function RemoteFiles({
     modal.onConfirm(value);
   };
 
-  const { isConnected, sendRequest, onReady } = useFilesStream({
+  const { isConnected, sendRequest, onReady, onProgress } = useFilesStream({
     natsSubject: natsSubject || '',
     natsUrl: natsUrl || '',
     jwt: jwt || '',
   });
+
+  // Progresso de operações longas (copy/move/zip/unzip) via files.progress.
+  // O agent publica {requestId, loaded, total}; correlacionamos com a ação
+  // em andamento (busy) e atualizamos a barra de transferência.
+  const [opProgress, setOpProgress] = useState<{ loaded: number; total: number } | null>(null);
+
+  useEffect(() => {
+    const off = onProgress((info) => {
+      // Usa busyRef (síncrono) em vez do estado busy para não perder os
+      // primeiros eventos de progresso (race de render do React).
+      if (!busyRef.current) return;
+      const loaded = info.loaded ?? 0;
+      const total = info.total ?? 0;
+      if (total > 0) setOpProgress({ loaded, total });
+    });
+    return off;
+  }, [onProgress]);
 
   // Marca o componente como desmontado no cleanup (evita warnings de setState).
   useEffect(() => {
@@ -234,7 +252,9 @@ export default function RemoteFiles({
 
   const runAction = async (label: string, fn: () => Promise<FilesResponse>) => {
     setBusy(label);
+    busyRef.current = true;
     setError(null);
+    setOpProgress(null);
     try {
       const resp = await fn();
       if (!resp.success) {
@@ -246,7 +266,9 @@ export default function RemoteFiles({
       setError(`${label}: ${err instanceof Error ? err.message : String(err)}`);
       return false;
     } finally {
+      busyRef.current = false;
       setBusy(null);
+      setOpProgress(null);
     }
   };
 
@@ -468,9 +490,25 @@ export default function RemoteFiles({
   const handleZip = async (entry: FileEntry) => {
     const name = entry.name + '.zip';
     const ok = await runAction(`Compactar ${entry.name}`, () =>
-      sendRequest('zip', entry.path, undefined, { newPath: currentPath + name }),
+      sendRequest('zip', entry.path, undefined, { newPath: currentPath + name, paths: [entry.path] }),
     );
     if (ok) loadFiles(currentPath);
+  };
+
+  // Compacta múltiplos itens selecionados em um único .zip.
+  const handleZipSelection = async () => {
+    if (selectedPaths.size === 0) return;
+    const list = [...selectedPaths];
+    // Nome do zip: usa o primeiro item ou "selecao".
+    const first = list[0].split(/[\\/]/).pop() || 'selecao';
+    const zipName = first.replace(/\.[^.]+$/, '') + '.zip';
+    const ok = await runAction(`Compactar ${list.length} item(ns)`, () =>
+      sendRequest('zip', list[0], undefined, { newPath: currentPath + zipName, paths: list }),
+    );
+    if (ok) {
+      clearSelection();
+      loadFiles(currentPath);
+    }
   };
 
   const handleUnzip = async (entry: FileEntry) => {
@@ -553,6 +591,11 @@ export default function RemoteFiles({
   const openContextMenu = (e: React.MouseEvent, entry: FileEntry | null) => {
     e.preventDefault();
     e.stopPropagation();
+    // Clique direito em um item não selecionado: seleciona só ele (contexto
+    // natural). Se já está na seleção múltipla, preserva a seleção.
+    if (entry && !selectedPaths.has(entry.path)) {
+      setSelectedPaths(new Set([entry.path]));
+    }
     setCtxMenu({ x: e.clientX, y: e.clientY, entry });
     setCtxPos({ left: e.clientX, top: e.clientY });
   };
@@ -660,10 +703,13 @@ export default function RemoteFiles({
       </div>
 
       {/* Status / error banner */}
-      {busy && !transfer && (
+      {busy && !transfer && !opProgress && (
         <div className="px-3 py-1.5 bg-blue-900/40 text-blue-300 text-xs">{busy}...</div>
       )}
       {transfer && <TransferProgressBar transfer={transfer} />}
+      {opProgress && !transfer && (
+        <OperationProgressBar label={busy ?? 'Operação'} progress={opProgress} />
+      )}
       {error && (
         <div className="px-3 py-1.5 bg-red-900/40 text-red-300 text-xs">{error}</div>
       )}
@@ -705,8 +751,8 @@ export default function RemoteFiles({
               {files.map((f) => (
                 <tr
                   key={f.path || f.name}
-                  className={`hover:bg-slate-800 border-b border-slate-800/50 ${f.isDir ? 'cursor-pointer' : ''} ${selected?.path === f.path ? 'bg-slate-800/60' : ''}`}
-                  onClick={() => { if (f.isDir) navigateTo(f.path); else setSelected(f); }}
+                  className={`hover:bg-slate-800 border-b border-slate-800/50 ${f.isDir ? 'cursor-pointer' : 'cursor-default'} ${isSelected(f.path) ? 'bg-slate-700/60' : ''}`}
+                  onClick={(e) => handleRowClick(f, e)}
                   onContextMenu={(e) => openContextMenu(e, f)}
                 >
                   <td className="px-3 py-2">{f.isDir ? '📁' : '📄'}</td>
@@ -730,7 +776,7 @@ export default function RemoteFiles({
         >
           {ctxMenu.entry && (
             <>
-              {!ctxMenu.entry.isDir && (
+              {selectedPaths.size <= 1 && !ctxMenu.entry.isDir && (
                 <button
                   className="w-full text-left px-3 py-1.5 text-slate-200 hover:bg-slate-700"
                   onClick={() => runCtx(() => handleDownload(ctxMenu.entry!))}
@@ -740,42 +786,46 @@ export default function RemoteFiles({
               )}
               <button
                 className="w-full text-left px-3 py-1.5 text-slate-200 hover:bg-slate-700"
-                onClick={() => runCtx(() => handleCopy(ctxMenu.entry!))}
+                onClick={() => runCtx(() => { selectedPaths.size > 1 ? handleCopySelection() : handleCopy(ctxMenu.entry!); })}
               >
-                📄 Copiar
+                📄 {selectedPaths.size > 1 ? `Copiar (${selectedPaths.size})` : 'Copiar'}
               </button>
               <button
                 className="w-full text-left px-3 py-1.5 text-slate-200 hover:bg-slate-700"
-                onClick={() => runCtx(() => handleCut(ctxMenu.entry!))}
+                onClick={() => runCtx(() => { selectedPaths.size > 1 ? handleCutSelection() : handleCut(ctxMenu.entry!); })}
               >
-                ✂ Recortar
+                ✂ {selectedPaths.size > 1 ? `Recortar (${selectedPaths.size})` : 'Recortar'}
               </button>
-              <button
-                className="w-full text-left px-3 py-1.5 text-slate-200 hover:bg-slate-700"
-                onClick={() => runCtx(() => handleRename(ctxMenu.entry!))}
-              >
-                ✎ Renomear
-              </button>
-              <button
-                className="w-full text-left px-3 py-1.5 text-slate-200 hover:bg-slate-700"
-                onClick={() => runCtx(() => handleZip(ctxMenu.entry!))}
-              >
-                🗜 Compactar (.zip)
-              </button>
-              {!ctxMenu.entry.isDir && ctxMenu.entry.name.toLowerCase().endsWith('.zip') && (
-                <button
-                  className="w-full text-left px-3 py-1.5 text-slate-200 hover:bg-slate-700"
-                  onClick={() => runCtx(() => handleUnzip(ctxMenu.entry!))}
-                >
-                  📂 Descompactar
-                </button>
+              {selectedPaths.size <= 1 && (
+                <>
+                  <button
+                    className="w-full text-left px-3 py-1.5 text-slate-200 hover:bg-slate-700"
+                    onClick={() => runCtx(() => handleRename(ctxMenu.entry!))}
+                  >
+                    ✎ Renomear
+                  </button>
+                  {!ctxMenu.entry.isDir && ctxMenu.entry.name.toLowerCase().endsWith('.zip') && (
+                    <button
+                      className="w-full text-left px-3 py-1.5 text-slate-200 hover:bg-slate-700"
+                      onClick={() => runCtx(() => handleUnzip(ctxMenu.entry!))}
+                    >
+                      📂 Descompactar
+                    </button>
+                  )}
+                </>
               )}
+              <button
+                className="w-full text-left px-3 py-1.5 text-slate-200 hover:bg-slate-700"
+                onClick={() => runCtx(() => { selectedPaths.size > 1 ? handleZipSelection() : handleZip(ctxMenu.entry!); })}
+              >
+                🗜 {selectedPaths.size > 1 ? `Compactar (${selectedPaths.size})` : 'Compactar (.zip)'}
+              </button>
               <div className="my-1 border-t border-slate-700" />
               <button
                 className="w-full text-left px-3 py-1.5 text-red-300 hover:bg-red-900/40"
-                onClick={() => runCtx(() => handleDelete(ctxMenu.entry!))}
+                onClick={() => runCtx(() => { selectedPaths.size > 1 ? handleDeleteSelection() : handleDelete(ctxMenu.entry!); })}
               >
-                🗑 Apagar
+                🗑 {selectedPaths.size > 1 ? `Apagar (${selectedPaths.size})` : 'Apagar'}
               </button>
             </>
           )}
@@ -880,6 +930,30 @@ function TransferProgressBar({ transfer }: { transfer: TransferState }) {
       <div className="flex items-center justify-between mt-1 text-slate-500">
         <span>{formatSpeed(transfer.speedBps)}</span>
         <span>Restante: {formatEta(transfer.etaSeconds)}</span>
+      </div>
+    </div>
+  );
+}
+
+// Barra de progresso de operações longas no agent (copy/move/zip/unzip),
+// alimentada pelos eventos files.progress.
+function OperationProgressBar({ label, progress }: { label: string; progress: { loaded: number; total: number } }) {
+  const pct = progress.total > 0
+    ? Math.min(100, (progress.loaded / progress.total) * 100)
+    : 0;
+  return (
+    <div className="px-3 py-2 bg-slate-900 border-b border-slate-800 text-xs">
+      <div className="flex items-center justify-between gap-2 mb-1">
+        <span className="text-slate-300 truncate">{label}</span>
+        <span className="text-slate-400 whitespace-nowrap">
+          {formatSize(progress.loaded)} / {formatSize(progress.total)} ({pct.toFixed(0)}%)
+        </span>
+      </div>
+      <div className="w-full h-2 bg-slate-800 rounded overflow-hidden">
+        <div
+          className="h-full transition-[width] duration-150 ease-linear bg-violet-500"
+          style={{ width: `${pct}%` }}
+        />
       </div>
     </div>
   );
