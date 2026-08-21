@@ -1020,7 +1020,7 @@ export default function AgentList() {
               }}
             >
               <Monitor className="h-4 w-4" />
-              Controle remoto
+              Acesso remoto
             </button>
             <button
               className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-surface-hover"

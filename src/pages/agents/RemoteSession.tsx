@@ -2,6 +2,9 @@ import { useSearchParams } from 'react-router-dom';
 import { Button, Card } from '@/components/ui';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { remoteSessionsApi, type ChangeQualityRequest, type StartRemoteSessionRequest } from '@/api/remote-sessions';
+import { agentsApi } from '@/api/agents';
+import { sitesApi } from '@/api/sites';
+import { clientsApi } from '@/api/clients';
 import { configureApiClient } from '@/api/client';
 import RemoteScreenViewer, { type MonitorInfo } from '@/modules/remote-screen/RemoteScreenViewer';
 import RemoteTerminal from '@/modules/remote-terminal/RemoteTerminal';
@@ -98,6 +101,64 @@ export default function RemoteSession() {
   const [reconnectKeys, setReconnectKeys] = useState<Partial<Record<Tab, number>>>({});
   // Tempo restante da sessão ativa (para exibir no header).
   const [remaining, setRemaining] = useState<string>('--');
+
+  // Identidade do agente (Cliente → Site → Hostname) exibida no header para
+  // evitar operar em máquinas indevidas.
+  const [agentIdentity, setAgentIdentity] = useState<{ client: string; site: string; hostname: string } | null>(null);
+
+  // Carrega a cadeia de identidade do agente (client → site → hostname).
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!agentId) return;
+      try {
+        const agent = await agentsApi.get(agentId);
+        if (cancelled) return;
+        // O backend serializa Guid.Empty como string de zeros — normaliza
+        // para '' para tratá-lo como "ausente" (fallback abaixo).
+        const rawClientId = agent.clientId ?? '';
+        let clientId = !/^0{8}-0{4}-0{4}-0{4}-0{12}$/i.test(rawClientId) ? rawClientId : '';
+        let clientName = '';
+        let siteName = '';
+        try {
+          // Similar ao AgentDetail: usa clientId do dto (agora populado pelo
+          // backend) quando disponível; senão, descobre via siteId.
+          if (!clientId) {
+            // Fallback: resolve o site que pertence ao client buscando em todos.
+            const clients = await clientsApi.list(false);
+            for (const c of clients) {
+              const sites = await sitesApi.list(c.id, true);
+              const match = sites.find((s) => s.id === agent.siteId);
+              if (match) {
+                clientId = c.id;
+                clientName = c.name;
+                siteName = match.name;
+                break;
+              }
+            }
+          } else {
+            const [site, client] = await Promise.all([
+              sitesApi.get(clientId, agent.siteId),
+              clientsApi.get(clientId),
+            ]);
+            siteName = site.name;
+            clientName = client.name;
+          }
+        } catch {
+          // Falha parcial ao resolver site/cliente — mostra apenas hostname.
+        }
+        if (cancelled) return;
+        setAgentIdentity({
+          client: clientName,
+          site: siteName,
+          hostname: agent.hostname || agent.displayName || agentId,
+        });
+      } catch {
+        // Sem permissão ou falha de rede — header fica sem identidade.
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [agentId]);
 
   // ── Controles de qualidade em tempo real (apenas aba Tela) ──
   const [liveQuality] = useState(quality);
@@ -518,9 +579,22 @@ export default function RemoteSession() {
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-2 bg-slate-800 border-b border-slate-700">
         <div className="flex items-center gap-3">
-          <h1 className="text-sm font-semibold">
+          <h1 className="text-sm font-semibold flex items-center gap-2">
             Acesso Remoto — {activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}
           </h1>
+          {agentIdentity && (
+            <span
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-slate-700/60 text-slate-200 text-xs font-medium"
+              title={`${agentIdentity.hostname} — ${agentIdentity.site}`}
+            >
+              <span className="text-slate-400">🖥</span>
+              <span className="text-slate-400">{agentIdentity.client || '—'}</span>
+              <span className="text-slate-500">→</span>
+              <span className="text-slate-400">{agentIdentity.site || '—'}</span>
+              <span className="text-slate-500">→</span>
+              <strong className="text-slate-100">{agentIdentity.hostname}</strong>
+            </span>
+          )}
           <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${isActiveConnected ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'}`}>
             {isActiveConnected ? 'Conectado' : 'Não conectado'}
           </span>
@@ -724,8 +798,8 @@ export default function RemoteSession() {
 
         {activeTab === 'files' && (
           sessions.files ? (
-            <div className="h-full flex flex-col">
-              <div className="flex-1">
+            <div className="h-full flex flex-col min-h-0">
+              <div className="flex-1 min-h-0">
                 <RemoteFiles
                   key={`files-${sessions.files.sessionId}-${reconnectKeys.files ?? 0}`}
                   sessionId={sessions.files.sessionId}

@@ -8,8 +8,6 @@ interface UseFilesStreamOptions {
 
 interface UseFilesStreamReturn {
     isConnected: boolean;
-    /** true quando o agente publicou files.ready (subscribe files.req ativo). */
-    isReady: boolean;
     sendRequest: (action: string, path: string, data?: Uint8Array, extra?: Record<string, unknown>) => Promise<FilesResponse>;
     /** Callback disparado quando o agente publica files.ready (ex.: rootPath efetivo). */
     onReady: (callback: (info: FilesReadyInfo) => void) => () => void;
@@ -84,7 +82,6 @@ const RECONNECT_DELAYS = [1000, 2000, 4000, 8000, 16000];
 
 export function useFilesStream({ natsSubject, natsUrl, jwt }: UseFilesStreamOptions): UseFilesStreamReturn {
     const [isConnected, setIsConnected] = useState(false);
-    const [isReady, setIsReady] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const wsRef = useRef<WebSocket | null>(null);
     const pendingRef = useRef<Map<string, { resolve: (r: FilesResponse) => void; reject: (e: Error) => void }>>(new Map());
@@ -141,7 +138,6 @@ export function useFilesStream({ natsSubject, natsUrl, jwt }: UseFilesStreamOpti
                             // files.ready — o agente notifica que o subscribe em files.req
                             // está ativo (evita a race em que o primeiro list chega antes).
                             if (parsed && typeof parsed === 'object' && 'status' in parsed && !('requestId' in parsed)) {
-                                setIsReady(true);
                                 readyCallbacksRef.current.forEach(cb => cb(parsed as unknown as FilesReadyInfo));
                                 continue;
                             }
@@ -205,7 +201,6 @@ export function useFilesStream({ natsSubject, natsUrl, jwt }: UseFilesStreamOpti
             ws.onclose = () => {
                 if (!mountedRef.current) return;
                 setIsConnected(false);
-                setIsReady(false);
                 // Rejeita pendentes para não deixar promises presas
                 pendingRef.current.forEach((pend) => pend.reject(new Error('Conexão NATS perdida')));
                 pendingRef.current.clear();
@@ -240,7 +235,18 @@ export function useFilesStream({ natsSubject, natsUrl, jwt }: UseFilesStreamOpti
         return new Promise((resolve, reject) => {
             if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) { reject(new Error('WebSocket offline')); return; }
             const rid = nextReqId();
-            pendingRef.current.set(rid, { resolve, reject });
+            // Timeout por request: o timer é limpo ao resolver/rejeitar, evitando
+            // acúmulo de timers órfãos em transferências com milhares de chunks.
+            const timer = setTimeout(() => {
+                if (pendingRef.current.has(rid)) {
+                    pendingRef.current.delete(rid);
+                    reject(new Error('Timeout'));
+                }
+            }, 60000);
+            pendingRef.current.set(rid, {
+                resolve: (r) => { clearTimeout(timer); resolve(r); },
+                reject: (e) => { clearTimeout(timer); reject(e); },
+            });
             const pl = JSON.stringify({
                 version: 1,
                 requestId: rid,
@@ -253,12 +259,6 @@ export function useFilesStream({ natsSubject, natsUrl, jwt }: UseFilesStreamOpti
             });
             const bytes = new TextEncoder().encode(pl);
             wsRef.current.send(`PUB ${reqSubject} ${bytes.length}\r\n${pl}\r\n`);
-            setTimeout(() => {
-                if (pendingRef.current.has(rid)) {
-                    pendingRef.current.delete(rid);
-                    reject(new Error('Timeout'));
-                }
-            }, 60000);
         });
     }, [reqSubject]);
 
@@ -267,5 +267,5 @@ export function useFilesStream({ natsSubject, natsUrl, jwt }: UseFilesStreamOpti
         return () => { readyCallbacksRef.current.delete(callback); };
     }, []);
 
-    return { isConnected, isReady, sendRequest, onReady, error };
+    return { isConnected, sendRequest, onReady, error };
 }

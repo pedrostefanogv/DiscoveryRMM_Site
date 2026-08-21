@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useFilesStream, decodeFileData, type FilesResponse, type FilesReadyInfo } from './useFilesStream';
 
 interface FileEntry {
@@ -28,8 +28,44 @@ function formatSize(bytes: number): string {
 
 // Chunk size para upload/download (256KB — alinhado ao agent Transfer)
 const CHUNK_SIZE = 256 * 1024;
-// Limite de download em memória: 512MB — acima disso, cancela com aviso
-const MAX_DOWNLOAD_MEMORY = 512 * 1024 * 1024;
+
+function formatSpeed(bps: number): string {
+  if (!isFinite(bps) || bps <= 0) return '—';
+  if (bps >= 1024 * 1024) return `${(bps / (1024 * 1024)).toFixed(1)} MB/s`;
+  if (bps >= 1024) return `${(bps / 1024).toFixed(1)} KB/s`;
+  return `${bps.toFixed(0)} B/s`;
+}
+
+function formatEta(seconds: number | null): string {
+  if (seconds == null || !isFinite(seconds) || seconds < 0) return '—';
+  const s = Math.max(0, Math.round(seconds));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  if (h > 0) return `${h}h ${m}m ${sec}s`;
+  if (m > 0) return `${m}m ${sec}s`;
+  return `${sec}s`;
+}
+
+interface TransferState {
+  kind: 'upload' | 'download';
+  name: string;
+  loadedBytes: number;
+  totalBytes: number;
+  speedBps: number;
+  etaSeconds: number | null;
+}
+
+// Abstrações mínimas da File System Access API (showSaveFilePicker) para
+// download em streaming — evita depender dos tipos globais do lib.dom.
+interface FsWriter {
+  write(chunk: Uint8Array): Promise<void>;
+  close(): Promise<void>;
+  abort(): Promise<void>;
+}
+interface FsFileHandle {
+  createWritable(): Promise<{ getWriter(): FsWriter }>;
+}
 
 export default function RemoteFiles({
   sessionId: _sessionId,
@@ -44,8 +80,12 @@ export default function RemoteFiles({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null); // ação em andamento (feedback)
-  const [selected, setSelected] = useState<FileEntry | null>(null);
+  const [transfer, setTransfer] = useState<TransferState | null>(null); // progresso de up/down
+  const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set()); // múltipla seleção (paths)
+  const [pathInput, setPathInput] = useState('C:\\'); // valor do input editável de caminho
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const isRootPath = useRef<string | null>(null); // rootPath efetivo informado pelo agent
+  const mountedRef = useRef(true); // evita setState após desmontar (timers de pós-transferência)
   const [modal, setModal] = useState<{
     title: string;
     message?: string;
@@ -75,94 +115,120 @@ export default function RemoteFiles({
     modal.onConfirm(value);
   };
 
-  const { isConnected, isReady, sendRequest, onReady } = useFilesStream({
+  const { isConnected, sendRequest, onReady } = useFilesStream({
     natsSubject: natsSubject || '',
     natsUrl: natsUrl || '',
     jwt: jwt || '',
   });
 
-  const loadFiles = useCallback(async (path: string, attempt = 1) => {
-    // Requer conexão; NÃO exige isReady aqui (o timeout de segurança e as
-    // ações manuais precisam funcionar mesmo se o files.ready foi perdido).
+  // Marca o componente como desmontado no cleanup (evita warnings de setState).
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
+  // Monotonic counter para ignorar respostas de listagem desatualizadas
+  // (navegação rápida entre pastas poderia sobrescrever a lista mais recente).
+  const loadSeqRef = useRef(0);
+
+  const loadFiles = useCallback(async (path: string, attempt = 1, seq?: number) => {
+    // Requer conexão; NÃO exige isReady aqui (o files.ready pode ser perdido).
     if (!isConnected) return;
+    // Reaproveita o seq no retry (mesma requisição) para que a resposta antiga
+    // não sobrescreva a navegação mais recente.
+    const mySeq = seq ?? ++loadSeqRef.current;
     setLoading(true);
     setError(null);
-    let retrying = false;
     try {
       const resp = await sendRequest('list', path);
+      if (mySeq !== loadSeqRef.current) return; // resposta desatualizada — ignora
       if (resp.success) {
         setFiles(resp.entries ?? []);
       } else {
         setError(resp.error || 'Erro ao listar');
       }
+      setLoading(false);
     } catch (err) {
-      // Retry com backoff (evita perder o primeiro list por race de subscribe)
+      if (mySeq !== loadSeqRef.current) return; // desatualizada — ignora
+      // Retry com backoff (evita perder o primeiro list por race de subscribe) —
+      // mantém o loading ativo entre tentativas e aborta se o usuário já navegou.
       if (attempt < 3) {
-        retrying = true;
-        setTimeout(() => loadFiles(path, attempt + 1), 400 * attempt);
+        setTimeout(() => { if (mountedRef.current) loadFiles(path, attempt + 1, mySeq); }, 400 * attempt);
       } else {
         setError(`Erro ao listar: ${err instanceof Error ? err.message : String(err)}`);
+        setLoading(false);
       }
-    } finally {
-      if (!retrying) setLoading(false);
     }
   }, [sendRequest, isConnected]);
 
   useEffect(() => {
-    if (isConnected && isReady) loadFiles(currentPath);
-  }, [currentPath, isConnected, isReady, loadFiles]);
+    // Carrega assim que conecta (sem gate de isReady): o files.ready pode ser
+    // perdido (NATS fire-and-forget), e o retry do loadFiles cobre a race de
+    // subscribe. Isso torna a navegação imediata em vez de esperar 10s.
+    if (isConnected) loadFiles(currentPath);
+  }, [currentPath, isConnected, loadFiles]);
 
   // Fallback: se o agente já publicou files.ready antes do mount (reconexão),
   // o onReady garante o load mesmo sem o isReady ter sido observado.
   // Também usa o rootPath informado pelo agent como caminho inicial (em vez de
   // assumir C:\ fixo — o rootPath pode ser customizado no start da sessão).
+  // O load em si é disparado pelo useEffect [currentPath, isConnected] acima.
   useEffect(() => {
     const off = onReady((info: FilesReadyInfo) => {
       // Ajusta o caminho inicial para o rootPath real do agent (uma vez).
       if (info?.rootPath) {
         isRootPath.current = info.rootPath.replace(/[\\/]+$/, '') + '\\';
         if (currentPath === 'C:\\') {
-          setCurrentPath(isRootPath.current); // o efeito de currentPath dispara o load
-          return;
+          setCurrentPath(isRootPath.current); // dispara o load do caminho correto
         }
       }
-      loadFiles(currentPath);
     });
     return off;
-  }, [onReady, loadFiles, currentPath]);
+  }, [onReady, currentPath]);
 
-  // Timeout de segurança: se o agent não publicar files.ready em até 10s após
-  // conectar, tenta o list mesmo assim (o subscribe pode ter ocorrido sem o
-  // ready ser entregue). Evita ficar preso em "Aguardando..." para sempre.
-  useEffect(() => {
-    if (!isConnected || isReady) return;
-    const timer = setTimeout(() => {
-      loadFiles(currentPath);
-    }, 10_000);
-    return () => clearTimeout(timer);
-  }, [isConnected, isReady, loadFiles, currentPath]);
+  const normalizePath = (p: string) => p.replace(/[\\/]+$/, '').toLowerCase();
 
-  const navigateTo = (dir: string) => {
-    if (dir === '..') {
-      const parts = currentPath.replace(/[\\/]+$/, '').split(/[\\/]/);
-      parts.pop();
-      // Na raiz (ex: 'C:', 'D:', ou rootPath custom) não sobe além dela.
-      if (parts.length === 0 || (parts.length === 1 && /^[A-Za-z]:$/.test(parts[0]))) {
-        setCurrentPath(currentPath); // mantém a raiz
-        return;
-      }
-      setCurrentPath(parts.join('\\') + '\\');
-    } else {
-      setCurrentPath(dir.endsWith('\\') || dir.endsWith('/') ? dir : dir + '\\');
-    }
+  // Raiz = final de volume Windows (C:\, D:\) OU o rootPath informado pelo agent
+  // (que pode ser customizado, ex.: C:\Users\Admin\Documents).
+  const isRoot = isRootPath.current
+    ? normalizePath(currentPath) === normalizePath(isRootPath.current)
+    : /^[A-Za-z]:\\$/.test(currentPath);
+
+  const goTo = (path: string) => {
+    setCurrentPath(path.endsWith('\\') || path.endsWith('/') ? path : path + '\\');
   };
 
-  // Raiz = final de volume Windows (C:\, D:\\)) OU o rootPath informado pelo agent
-  // (que pode ser customizado, ex.: C:\Users\Admin\Documents).
-  const isRootPath = useRef<string | null>(null);
-  const isRoot = isRootPath.current
-    ? currentPath.replace(/[\\/]+$/, '').toLowerCase() === isRootPath.current.replace(/[\\/]+$/, '').toLowerCase()
-    : currentPath === 'C:\\' || currentPath.match(/^[A-Za-z]:\\$/) !== null;
+  const goUp = () => {
+    // Já na raiz (volume ou rootPath custom) — não sobe.
+    if (isRoot) return;
+    const trimmed = currentPath.replace(/[\\/]+$/, '');
+    const parts = trimmed.split(/[\\/]/);
+    parts.pop();
+    if (parts.length === 0) return; // 'C:' — defensivo
+    const parent = parts.length === 1 && /^[A-Za-z]:$/.test(parts[0])
+      ? parts[0] + '\\' // 'C:' → 'C:\'
+      : parts.join('\\') + '\\';
+    setCurrentPath(parent);
+  };
+
+  const navigateTo = (dir: string) => {
+    if (dir === '..') goUp();
+    else goTo(dir);
+  };
+
+  // Sincroniza o input de caminho com o caminho efetivo.
+  useEffect(() => {
+    setPathInput(currentPath);
+  }, [currentPath]);
+
+  const submitPath = () => {
+    const trimmed = pathInput.trim();
+    if (!trimmed || trimmed === currentPath) {
+      setPathInput(currentPath);
+      return;
+    }
+    goTo(trimmed);
+  };
 
   // ── Ações ──
 
@@ -186,59 +252,142 @@ export default function RemoteFiles({
 
   const handleDownload = async (entry: FileEntry) => {
     if (entry.isDir) return;
-    await runAction(`Download ${entry.name}`, async () => {
-      // Chunked download: pede chunk por chunk até totalChunks
-      const chunks: Uint8Array[] = [];
+    setError(null);
+    setBusy(`Download ${entry.name}`);
+
+    const startedAt = performance.now();
+    let loadedBytes = 0;
+    let totalBytes = 0;
+    let lastEmit = 0;
+    let writer: FsWriter | null = null;
+    let closed = false;
+    const memoryChunks: Uint8Array[] = [];
+
+    // Atualiza a barra de progresso com throttle (~150ms) — suficiente para
+    // indicar o andamento sem custo de re-render por chunk.
+    const emitProgress = (force = false) => {
+      const now = performance.now();
+      if (!force && now - lastEmit < 150) return;
+      lastEmit = now;
+      const elapsed = (now - startedAt) / 1000;
+      const speedBps = elapsed > 0 ? loadedBytes / elapsed : 0;
+      const etaSeconds = speedBps > 0 && totalBytes > 0 ? (totalBytes - loadedBytes) / speedBps : null;
+      setTransfer({ kind: 'download', name: entry.name, loadedBytes, totalBytes, speedBps, etaSeconds });
+    };
+
+    try {
+      // File System Access API: grava direto em disco (sem limite de memória),
+      // permitindo baixar arquivos grandes (1GB+) sem truncar em ~500MB.
+      const picker = (window as unknown as { showSaveFilePicker?: (opts?: { suggestedName?: string }) => Promise<FsFileHandle> }).showSaveFilePicker;
+      if (typeof picker === 'function') {
+        try {
+          const handle = await picker({ suggestedName: entry.name });
+          writer = (await handle.createWritable()).getWriter();
+        } catch (e) {
+          if ((e as DOMException)?.name === 'AbortError') {
+            setBusy(null); // usuário cancelou o diálogo de salvar
+            return;
+          }
+          writer = null; // não suportado → fallback para blob em memória
+        }
+      }
+
       let totalChunks = 1;
-      let totalSize = 0;
       let chunkIndex = 0;
       do {
         const resp = await sendRequest('get', entry.path, undefined, { chunkIndex, chunkSize: CHUNK_SIZE });
-        if (!resp.success) return resp;
-        const bytes = decodeFileData(resp.data);
-        if (bytes.length > 0) {
-          totalSize += bytes.length;
-          if (totalSize > MAX_DOWNLOAD_MEMORY) {
-            return { success: false, error: `Arquivo muito grande para download em memória (limite ${MAX_DOWNLOAD_MEMORY / 1024 / 1024}MB).` };
-          }
-          chunks.push(bytes);
+        if (!resp.success) {
+          setError(`Download ${entry.name}: ${resp.error || 'falha'}`);
+          return;
         }
+        const bytes = decodeFileData(resp.data);
+        if (totalBytes === 0) totalBytes = resp.size ?? 0;
         totalChunks = resp.totalChunks ?? 1;
+
+        if (bytes.length > 0) {
+          loadedBytes += bytes.length;
+          if (writer) {
+            await writer.write(bytes);
+          } else {
+            memoryChunks.push(bytes);
+          }
+          emitProgress();
+        }
         chunkIndex++;
       } while (chunkIndex < totalChunks);
 
-      if (chunks.length === 0) {
-        return { success: false, error: 'Arquivo vazio ou falha ao ler.' };
+      emitProgress(true);
+
+      if (writer) {
+        await writer.close();
+        closed = true;
+      } else {
+        const blob = new Blob(memoryChunks.map((c) => c.slice().buffer as ArrayBuffer), { type: 'application/octet-stream' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = entry.name;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 5000);
       }
 
-      // Monta Blob e dispara download
-      const blob = new Blob(chunks.map(c => c.slice().buffer as ArrayBuffer), { type: 'application/octet-stream' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = entry.name;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 5000);
-      return { success: true, size: totalSize };
-    });
+      // Mantém a barra em 100% por um instante antes de limpar.
+      setTimeout(() => { if (mountedRef.current) setTransfer(null); }, 800);
+    } catch (err) {
+      setError(`Download ${entry.name}: ${err instanceof Error ? err.message : String(err)}`);
+      if (mountedRef.current) setTransfer(null);
+    } finally {
+      if (writer && !closed) {
+        try { await writer.abort(); } catch { /* noop */ }
+      }
+      setBusy(null);
+    }
   };
 
   const handleUpload = async (file: File) => {
     const targetPath = currentPath + file.name;
-    await runAction(`Upload ${file.name}`, async () => {
-      const totalChunks = Math.max(1, Math.ceil(file.size / CHUNK_SIZE));
+    setError(null);
+    setBusy(`Upload ${file.name}`);
+
+    const totalChunks = Math.max(1, Math.ceil(file.size / CHUNK_SIZE));
+    const startedAt = performance.now();
+    let loadedBytes = 0;
+    let lastEmit = 0;
+
+    const emitProgress = (force = false) => {
+      const now = performance.now();
+      if (!force && now - lastEmit < 150) return;
+      lastEmit = now;
+      const elapsed = (now - startedAt) / 1000;
+      const speedBps = elapsed > 0 ? loadedBytes / elapsed : 0;
+      const etaSeconds = speedBps > 0 ? (file.size - loadedBytes) / speedBps : null;
+      setTransfer({ kind: 'upload', name: file.name, loadedBytes, totalBytes: file.size, speedBps, etaSeconds });
+    };
+
+    try {
       for (let i = 0; i < totalChunks; i++) {
         const start = i * CHUNK_SIZE;
         const end = Math.min(start + CHUNK_SIZE, file.size);
         const chunk = new Uint8Array(await file.slice(start, end).arrayBuffer());
         const resp = await sendRequest('put', targetPath, chunk, { chunkIndex: i, chunkSize: CHUNK_SIZE, totalChunks });
-        if (!resp.success) return resp;
+        if (!resp.success) {
+          setError(`Upload ${file.name}: ${resp.error || 'falha'}`);
+          return;
+        }
+        loadedBytes += chunk.length;
+        emitProgress();
       }
-      return { success: true };
-    });
-    if (isConnected) loadFiles(currentPath);
+      emitProgress(true);
+      setTimeout(() => { if (mountedRef.current) setTransfer(null); }, 800);
+      if (isConnected) loadFiles(currentPath);
+    } catch (err) {
+      setError(`Upload ${file.name}: ${err instanceof Error ? err.message : String(err)}`);
+      if (mountedRef.current) setTransfer(null);
+    } finally {
+      setBusy(null);
+    }
   };
 
   const handleRename = async (entry: FileEntry) => {
@@ -276,12 +425,194 @@ export default function RemoteFiles({
 
   const handleRefresh = () => loadFiles(currentPath);
 
+  // ── Clipboard (copiar/recortar/colar) ──
+  const [clipboard, setClipboard] = useState<{ path: string; cut: boolean; paths?: string[] } | null>(null);
+
+  const handleCopy = (entry: FileEntry) => {
+    setClipboard({ path: entry.path, cut: false, paths: [entry.path] });
+    setError(null);
+  };
+
+  const handleCut = (entry: FileEntry) => {
+    setClipboard({ path: entry.path, cut: true, paths: [entry.path] });
+    setError(null);
+  };
+
+  const handlePaste = async () => {
+    if (!clipboard) return;
+    const paths = clipboard.paths ?? [clipboard.path];
+    if (paths.some((src) => {
+      const name = src.split(/[\\/]/).pop() || '';
+      return src === currentPath + name;
+    })) {
+      setError('Origem e destino são o mesmo caminho.');
+      return;
+    }
+    const results = await Promise.allSettled(
+      paths.map((src) => {
+        const name = src.split(/[\\/]/).pop() || '';
+        const dest = currentPath + name;
+        return runAction(
+          `${clipboard.cut ? 'Mover' : 'Copiar'} ${name}`,
+          () => sendRequest(clipboard.cut ? 'move' : 'copy', src, undefined, { newPath: dest }),
+        );
+      }),
+    );
+    const anyOk = results.some((r) => r.status === 'fulfilled' && r.value === true);
+    if (anyOk) {
+      setClipboard(null);
+      loadFiles(currentPath);
+    }
+  };
+
+  const handleZip = async (entry: FileEntry) => {
+    const name = entry.name + '.zip';
+    const ok = await runAction(`Compactar ${entry.name}`, () =>
+      sendRequest('zip', entry.path, undefined, { newPath: currentPath + name }),
+    );
+    if (ok) loadFiles(currentPath);
+  };
+
+  const handleUnzip = async (entry: FileEntry) => {
+    if (entry.isDir) return;
+    const base = entry.name.replace(/\.zip$/i, '') || 'extraido';
+    const dest = currentPath + base;
+    const ok = await runAction(`Descompactar ${entry.name}`, () =>
+      sendRequest('unzip', entry.path, undefined, { newPath: dest }),
+    );
+    if (ok) loadFiles(currentPath);
+  };
+
+  // ── Múltipla seleção ──
+  const isSelected = (path: string) => selectedPaths.has(path);
+
+  const toggleSelect = (entry: FileEntry, additive: boolean) => {
+    setSelectedPaths((prev) => {
+      const next = additive ? new Set(prev) : new Set<string>();
+      if (next.has(entry.path)) next.delete(entry.path);
+      else next.add(entry.path);
+      return next;
+    });
+  };
+
+  const handleRowClick = (f: FileEntry, e: React.MouseEvent) => {
+    if (f.isDir) {
+      // Clique simples em pasta sempre navega (com Ctrl/Shift ainda seleciona,
+      // mas navegação é a ação natural — mantém UX de explorador simples).
+      if (e.ctrlKey || e.metaKey || e.shiftKey) {
+        toggleSelect(f, true);
+      } else {
+        setSelectedPaths(new Set());
+        navigateTo(f.path);
+      }
+      return;
+    }
+    // Arquivo: Ctrl/⌘ alterna; Shift adiciona; clique simples seleciona só este.
+    toggleSelect(f, e.ctrlKey || e.metaKey || e.shiftKey);
+  };
+
+  const clearSelection = () => setSelectedPaths(new Set());
+
+  const handleCopySelection = () => {
+    if (selectedPaths.size === 0) return;
+    // Clipboard multi-item: guarda a lista de paths.
+    setClipboard({ path: [...selectedPaths][0], cut: false, paths: [...selectedPaths] });
+    setError(null);
+  };
+
+  const handleCutSelection = () => {
+    if (selectedPaths.size === 0) return;
+    setClipboard({ path: [...selectedPaths][0], cut: true, paths: [...selectedPaths] });
+    setError(null);
+  };
+
+  const handleDeleteSelection = () => {
+    if (selectedPaths.size === 0) return;
+    const list = [...selectedPaths];
+    openConfirm(
+      `Apagar ${list.length} item(ns)?`,
+      'Estes itens serão apagados permanentemente.',
+      async () => {
+        let ok = false;
+        for (const p of list) {
+          ok = await runAction(`Apagar`, () => sendRequest('delete', p)) || ok;
+        }
+        if (ok) {
+          clearSelection();
+          loadFiles(currentPath);
+        }
+      },
+    );
+  };
+
+  // ── Menu de contexto (clique direito) ──
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; entry: FileEntry | null } | null>(null);
+  const [ctxPos, setCtxPos] = useState<{ left: number; top: number }>({ left: 0, top: 0 });
+  const ctxMenuRef = useRef<HTMLDivElement | null>(null);
+
+  const openContextMenu = (e: React.MouseEvent, entry: FileEntry | null) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setCtxMenu({ x: e.clientX, y: e.clientY, entry });
+    setCtxPos({ left: e.clientX, top: e.clientY });
+  };
+
+  // Reposiciona o menu se ele estourar os limites da viewport.
+  useLayoutEffect(() => {
+    if (!ctxMenu) return;
+    const el = ctxMenuRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const margin = 8;
+    let left = ctxMenu.x;
+    let top = ctxMenu.y;
+    if (left + rect.width + margin > window.innerWidth) {
+      left = Math.max(margin, window.innerWidth - rect.width - margin);
+    }
+    if (top + rect.height + margin > window.innerHeight) {
+      top = Math.max(margin, window.innerHeight - rect.height - margin);
+    }
+    if (left !== ctxPos.left || top !== ctxPos.top) setCtxPos({ left, top });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ctxMenu, ctxPos.left, ctxPos.top]);
+
+  // Fecha o menu ao clicar fora ou pressionar Esc.
+  useEffect(() => {
+    if (!ctxMenu) return;
+    const close = () => setCtxMenu(null);
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setCtxMenu(null); };
+    window.addEventListener('click', close);
+    window.addEventListener('contextmenu', close);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('click', close);
+      window.removeEventListener('contextmenu', close);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [ctxMenu]);
+
+  const runCtx = (fn: () => void) => {
+    setCtxMenu(null);
+    fn();
+  };
+
   return (
     <div className="flex flex-col h-full bg-slate-950 text-slate-300">
       {/* Toolbar */}
       <div className="flex items-center gap-1 px-3 py-1.5 bg-slate-900 border-b border-slate-800 text-xs">
         <span className="text-slate-500">📁</span>
-        <span className="font-mono text-slate-400 flex-1 truncate">{currentPath}</span>
+        <input
+          value={pathInput}
+          onChange={(e) => setPathInput(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') submitPath();
+            if (e.key === 'Escape') setPathInput(currentPath);
+          }}
+          onBlur={() => setPathInput(currentPath)}
+          spellCheck={false}
+          className="flex-1 min-w-0 bg-transparent font-mono text-slate-300 text-xs px-1 py-0.5 rounded border border-transparent focus:border-sky-500 focus:outline-none"
+          title="Caminho atual — pressione Enter para navegar"
+        />
         <button
           className="px-2 py-0.5 bg-slate-800 text-slate-400 rounded hover:bg-slate-700 hover:text-slate-200 disabled:opacity-50"
           onClick={handleRefresh}
@@ -316,12 +647,23 @@ export default function RemoteFiles({
             e.target.value = '';
           }}
         />
+        {clipboard && (
+          <button
+            className="px-2 py-0.5 bg-sky-800/60 text-sky-200 rounded hover:bg-sky-700 disabled:opacity-50"
+            onClick={handlePaste}
+            disabled={busy !== null || !isConnected}
+            title={`Colar ${clipboard.cut ? '(recortado)' : '(copiado)'}: ${clipboard.path}`}
+          >
+            📋 Colar {clipboard.cut ? '(mover)' : ''}
+          </button>
+        )}
       </div>
 
       {/* Status / error banner */}
-      {busy && (
+      {busy && !transfer && (
         <div className="px-3 py-1.5 bg-blue-900/40 text-blue-300 text-xs">{busy}...</div>
       )}
+      {transfer && <TransferProgressBar transfer={transfer} />}
       {error && (
         <div className="px-3 py-1.5 bg-red-900/40 text-red-300 text-xs">{error}</div>
       )}
@@ -330,14 +672,12 @@ export default function RemoteFiles({
           Conectando ao agent... (aguardando NATS)
         </div>
       )}
-      {isConnected && !isReady && (
-        <div className="px-3 py-1.5 bg-amber-900/40 text-amber-300 text-xs">
-          Aguardando sessão de arquivos do agent...
-        </div>
-      )}
 
       {/* File list */}
-      <div className="flex-1 overflow-auto">
+      <div
+        className="flex-1 min-h-0 overflow-auto"
+        onContextMenu={(e) => openContextMenu(e, null)}
+      >
         {loading ? (
           <div className="flex items-center justify-center h-full text-slate-500 text-sm">Carregando...</div>
         ) : (
@@ -348,15 +688,18 @@ export default function RemoteFiles({
                 <th className="text-left px-3 py-1.5">Nome</th>
                 <th className="text-right px-3 py-1.5 w-24">Tamanho</th>
                 <th className="text-right px-3 py-1.5 w-40">Modificado</th>
-                <th className="text-right px-3 py-1.5 w-32">Ações</th>
               </tr>
             </thead>
             <tbody>
               {!isRoot && (
-                <tr className="hover:bg-slate-800 cursor-pointer border-b border-slate-800/50" onClick={() => navigateTo('..')}>
+                <tr
+                  className="hover:bg-slate-800 cursor-pointer border-b border-slate-800/50"
+                  onClick={() => navigateTo('..')}
+                  onContextMenu={(e) => openContextMenu(e, null)}
+                >
                   <td className="px-3 py-2">📁</td>
                   <td className="px-3 py-2 text-slate-400">..</td>
-                  <td></td><td></td><td></td>
+                  <td></td><td></td>
                 </tr>
               )}
               {files.map((f) => (
@@ -364,45 +707,110 @@ export default function RemoteFiles({
                   key={f.path || f.name}
                   className={`hover:bg-slate-800 border-b border-slate-800/50 ${f.isDir ? 'cursor-pointer' : ''} ${selected?.path === f.path ? 'bg-slate-800/60' : ''}`}
                   onClick={() => { if (f.isDir) navigateTo(f.path); else setSelected(f); }}
+                  onContextMenu={(e) => openContextMenu(e, f)}
                 >
                   <td className="px-3 py-2">{f.isDir ? '📁' : '📄'}</td>
                   <td className="px-3 py-2 font-mono">{f.name}</td>
                   <td className="px-3 py-2 text-right text-slate-500 font-mono text-xs">{f.isDir ? '—' : formatSize(f.size)}</td>
                   <td className="px-3 py-2 text-right text-slate-500 text-xs">{f.modTime.slice(0, 10)}</td>
-                  <td className="px-3 py-2 text-right whitespace-nowrap">
-                    {!f.isDir && (
-                      <button
-                        className="px-1.5 py-0.5 text-xs text-slate-400 hover:text-sky-300 disabled:opacity-40"
-                        title="Baixar"
-                        disabled={busy !== null}
-                        onClick={(e) => { e.stopPropagation(); handleDownload(f); }}
-                      >
-                        ↓
-                      </button>
-                    )}
-                    <button
-                      className="px-1.5 py-0.5 text-xs text-slate-400 hover:text-amber-300 disabled:opacity-40"
-                      title="Renomear"
-                      disabled={busy !== null}
-                      onClick={(e) => { e.stopPropagation(); handleRename(f); }}
-                    >
-                      ✎
-                    </button>
-                    <button
-                      className="px-1.5 py-0.5 text-xs text-slate-400 hover:text-red-300 disabled:opacity-40"
-                      title="Apagar"
-                      disabled={busy !== null}
-                      onClick={(e) => { e.stopPropagation(); handleDelete(f); }}
-                    >
-                      🗑
-                    </button>
-                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         )}
       </div>
+
+      {/* Menu de contexto (clique direito) */}
+      {ctxMenu && (
+        <div
+          ref={ctxMenuRef}
+          className="fixed z-50 min-w-[180px] max-w-[280px] bg-slate-800 border border-slate-700 rounded-lg shadow-xl py-1 text-xs overflow-y-auto"
+          style={{ left: ctxPos.left, top: ctxPos.top, maxHeight: '90vh' }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {ctxMenu.entry && (
+            <>
+              {!ctxMenu.entry.isDir && (
+                <button
+                  className="w-full text-left px-3 py-1.5 text-slate-200 hover:bg-slate-700"
+                  onClick={() => runCtx(() => handleDownload(ctxMenu.entry!))}
+                >
+                  ⬇ Baixar
+                </button>
+              )}
+              <button
+                className="w-full text-left px-3 py-1.5 text-slate-200 hover:bg-slate-700"
+                onClick={() => runCtx(() => handleCopy(ctxMenu.entry!))}
+              >
+                📄 Copiar
+              </button>
+              <button
+                className="w-full text-left px-3 py-1.5 text-slate-200 hover:bg-slate-700"
+                onClick={() => runCtx(() => handleCut(ctxMenu.entry!))}
+              >
+                ✂ Recortar
+              </button>
+              <button
+                className="w-full text-left px-3 py-1.5 text-slate-200 hover:bg-slate-700"
+                onClick={() => runCtx(() => handleRename(ctxMenu.entry!))}
+              >
+                ✎ Renomear
+              </button>
+              <button
+                className="w-full text-left px-3 py-1.5 text-slate-200 hover:bg-slate-700"
+                onClick={() => runCtx(() => handleZip(ctxMenu.entry!))}
+              >
+                🗜 Compactar (.zip)
+              </button>
+              {!ctxMenu.entry.isDir && ctxMenu.entry.name.toLowerCase().endsWith('.zip') && (
+                <button
+                  className="w-full text-left px-3 py-1.5 text-slate-200 hover:bg-slate-700"
+                  onClick={() => runCtx(() => handleUnzip(ctxMenu.entry!))}
+                >
+                  📂 Descompactar
+                </button>
+              )}
+              <div className="my-1 border-t border-slate-700" />
+              <button
+                className="w-full text-left px-3 py-1.5 text-red-300 hover:bg-red-900/40"
+                onClick={() => runCtx(() => handleDelete(ctxMenu.entry!))}
+              >
+                🗑 Apagar
+              </button>
+            </>
+          )}
+          {!ctxMenu.entry && (
+            <>
+              <button
+                className="w-full text-left px-3 py-1.5 text-slate-200 hover:bg-slate-700"
+                onClick={() => runCtx(handleMkdir)}
+              >
+                + Nova pasta
+              </button>
+              <button
+                className="w-full text-left px-3 py-1.5 text-slate-200 hover:bg-slate-700"
+                onClick={() => runCtx(() => fileInputRef.current?.click())}
+              >
+                ↑ Upload
+              </button>
+              <button
+                className="w-full text-left px-3 py-1.5 text-slate-200 hover:bg-slate-700"
+                onClick={() => runCtx(handleRefresh)}
+              >
+                ↻ Atualizar
+              </button>
+              {clipboard && (
+                <button
+                  className="w-full text-left px-3 py-1.5 text-sky-200 hover:bg-slate-700"
+                  onClick={() => runCtx(handlePaste)}
+                >
+                  📋 Colar {clipboard.cut ? '(mover)' : ''}
+                </button>
+              )}
+            </>
+          )}
+        </div>
+      )}
 
       {/* Modal inline (prompt/confirm) */}
       {modal && (
@@ -442,6 +850,37 @@ export default function RemoteFiles({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// Barra de progresso de transferência (upload/download) com percentual,
+// velocidade média e tempo estimado de conclusão.
+function TransferProgressBar({ transfer }: { transfer: TransferState }) {
+  const pct = transfer.totalBytes > 0
+    ? Math.min(100, (transfer.loadedBytes / transfer.totalBytes) * 100)
+    : 0;
+  const isUpload = transfer.kind === 'upload';
+  return (
+    <div className="px-3 py-2 bg-slate-900 border-b border-slate-800 text-xs">
+      <div className="flex items-center justify-between gap-2 mb-1">
+        <span className="text-slate-300 truncate">
+          {isUpload ? '⬆' : '⬇'} {transfer.name}
+        </span>
+        <span className="text-slate-400 whitespace-nowrap">
+          {formatSize(transfer.loadedBytes)} / {formatSize(transfer.totalBytes)} ({pct.toFixed(0)}%)
+        </span>
+      </div>
+      <div className="w-full h-2 bg-slate-800 rounded overflow-hidden">
+        <div
+          className={`h-full transition-[width] duration-150 ease-linear ${isUpload ? 'bg-sky-500' : 'bg-emerald-500'}`}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      <div className="flex items-center justify-between mt-1 text-slate-500">
+        <span>{formatSpeed(transfer.speedBps)}</span>
+        <span>Restante: {formatEta(transfer.etaSeconds)}</span>
+      </div>
     </div>
   );
 }

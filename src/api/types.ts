@@ -135,6 +135,7 @@ export interface AgentHeartbeatMetrics {
 
 export interface Agent {
   id: string;
+  clientId?: string;
   siteId: string;
   hostname: string;
   displayName: string | null;
