@@ -50,6 +50,15 @@ function toBase64(input: string): string {
     return btoa(binary);
 }
 
+// Decodifica base64 → string UTF-8. atob() puro produz string Latin-1 (1 char =
+// 1 byte), quebrando acentos/emoji/símbolos (mojibake). TextDecoder corrige.
+function fromBase64Utf8(b64: string): string {
+    const binary = atob(b64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return new TextDecoder('utf-8').decode(bytes);
+}
+
 // Console único: usa subjects fixos term.out / term.in (sem tabId),
 // como o MeshCentral (um terminal por sessão).
 export function useTerminalStream({
@@ -125,7 +134,7 @@ export function useTerminalStream({
                                     exitCallbacksRef.current.forEach(cb => cb(String(parsed.reason ?? 'shell encerrado')));
                                 } else if (typeof parsed.data === 'string') {
                                     try {
-                                        const decoded = atob(parsed.data);
+                                        const decoded = fromBase64Utf8(parsed.data);
                                         outputCallbacksRef.current.forEach(cb => cb(decoded));
                                     } catch {
                                         outputCallbacksRef.current.forEach(cb => cb(parsed.data));
