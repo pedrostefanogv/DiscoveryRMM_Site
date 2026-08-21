@@ -47,7 +47,11 @@ function formatEta(seconds: number | null): string {
   return `${sec}s`;
 }
 
+let _transferSeq = 0;
+function nextTransferId() { return `t${++_transferSeq}`; }
+
 interface TransferState {
+  id: string;
   kind: 'upload' | 'download';
   name: string;
   loadedBytes: number;
@@ -81,7 +85,9 @@ export default function RemoteFiles({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null); // ação em andamento (feedback)
   const busyRef = useRef(false); // espelho síncrono de `busy` para o callback de progresso
-  const [transfer, setTransfer] = useState<TransferState | null>(null); // progresso de up/down
+  // Múltiplas transferências simultâneas (upload/download), cada uma com barra própria.
+  const [transfers, setTransfers] = useState<Map<string, TransferState>>(new Map());
+  const cancelTransfersRef = useRef<Set<string>>(new Set()); // ids cancelados em andamento
   const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set()); // múltipla seleção (paths)
   const [pathInput, setPathInput] = useState('C:\\'); // valor do input editável de caminho
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -274,6 +280,7 @@ export default function RemoteFiles({
 
   const handleDownload = async (entry: FileEntry) => {
     if (entry.isDir) return;
+    const tid = nextTransferId();
     setError(null);
     setBusy(`Download ${entry.name}`);
 
@@ -294,7 +301,11 @@ export default function RemoteFiles({
       const elapsed = (now - startedAt) / 1000;
       const speedBps = elapsed > 0 ? loadedBytes / elapsed : 0;
       const etaSeconds = speedBps > 0 && totalBytes > 0 ? (totalBytes - loadedBytes) / speedBps : null;
-      setTransfer({ kind: 'download', name: entry.name, loadedBytes, totalBytes, speedBps, etaSeconds });
+      setTransfers((prev) => {
+        const next = new Map(prev);
+        next.set(tid, { id: tid, kind: 'download', name: entry.name, loadedBytes, totalBytes, speedBps, etaSeconds });
+        return next;
+      });
     };
 
     try {
@@ -317,6 +328,9 @@ export default function RemoteFiles({
       let totalChunks = 1;
       let chunkIndex = 0;
       do {
+        if (cancelTransfersRef.current.has(tid)) {
+          throw new Error('Download cancelado');
+        }
         const resp = await sendRequest('get', entry.path, undefined, { chunkIndex, chunkSize: CHUNK_SIZE });
         if (!resp.success) {
           setError(`Download ${entry.name}: ${resp.error || 'falha'}`);
@@ -356,10 +370,16 @@ export default function RemoteFiles({
       }
 
       // Mantém a barra em 100% por um instante antes de limpar.
-      setTimeout(() => { if (mountedRef.current) setTransfer(null); }, 800);
+      setTimeout(() => {
+        if (!mountedRef.current) return;
+        setTransfers((prev) => { const next = new Map(prev); next.delete(tid); return next; });
+      }, 800);
     } catch (err) {
-      setError(`Download ${entry.name}: ${err instanceof Error ? err.message : String(err)}`);
-      if (mountedRef.current) setTransfer(null);
+      // Remove a barra da transferência cancelada/com erro.
+      setTransfers((prev) => { const next = new Map(prev); next.delete(tid); return next; });
+      if (!cancelTransfersRef.current.has(tid)) {
+        setError(`Download ${entry.name}: ${err instanceof Error ? err.message : String(err)}`);
+      }
     } finally {
       if (writer && !closed) {
         try { await writer.abort(); } catch { /* noop */ }
@@ -370,6 +390,7 @@ export default function RemoteFiles({
 
   const handleUpload = async (file: File) => {
     const targetPath = currentPath + file.name;
+    const tid = nextTransferId();
     setError(null);
     setBusy(`Upload ${file.name}`);
 
@@ -385,28 +406,41 @@ export default function RemoteFiles({
       const elapsed = (now - startedAt) / 1000;
       const speedBps = elapsed > 0 ? loadedBytes / elapsed : 0;
       const etaSeconds = speedBps > 0 ? (file.size - loadedBytes) / speedBps : null;
-      setTransfer({ kind: 'upload', name: file.name, loadedBytes, totalBytes: file.size, speedBps, etaSeconds });
+      setTransfers((prev) => {
+        const next = new Map(prev);
+        next.set(tid, { id: tid, kind: 'upload', name: file.name, loadedBytes, totalBytes: file.size, speedBps, etaSeconds });
+        return next;
+      });
     };
 
     try {
       for (let i = 0; i < totalChunks; i++) {
+        if (cancelTransfersRef.current.has(tid)) {
+          throw new Error('Upload cancelado');
+        }
         const start = i * CHUNK_SIZE;
         const end = Math.min(start + CHUNK_SIZE, file.size);
         const chunk = new Uint8Array(await file.slice(start, end).arrayBuffer());
         const resp = await sendRequest('put', targetPath, chunk, { chunkIndex: i, chunkSize: CHUNK_SIZE, totalChunks });
         if (!resp.success) {
           setError(`Upload ${file.name}: ${resp.error || 'falha'}`);
+          setTransfers((prev) => { const next = new Map(prev); next.delete(tid); return next; });
           return;
         }
         loadedBytes += chunk.length;
         emitProgress();
       }
       emitProgress(true);
-      setTimeout(() => { if (mountedRef.current) setTransfer(null); }, 800);
+      setTimeout(() => {
+        if (!mountedRef.current) return;
+        setTransfers((prev) => { const next = new Map(prev); next.delete(tid); return next; });
+      }, 800);
       if (isConnected) loadFiles(currentPath);
     } catch (err) {
-      setError(`Upload ${file.name}: ${err instanceof Error ? err.message : String(err)}`);
-      if (mountedRef.current) setTransfer(null);
+      setTransfers((prev) => { const next = new Map(prev); next.delete(tid); return next; });
+      if (!cancelTransfersRef.current.has(tid)) {
+        setError(`Upload ${file.name}: ${err instanceof Error ? err.message : String(err)}`);
+      }
     } finally {
       setBusy(null);
     }
@@ -703,11 +737,21 @@ export default function RemoteFiles({
       </div>
 
       {/* Status / error banner */}
-      {busy && !transfer && !opProgress && (
+      {busy && transfers.size === 0 && !opProgress && (
         <div className="px-3 py-1.5 bg-blue-900/40 text-blue-300 text-xs">{busy}...</div>
       )}
-      {transfer && <TransferProgressBar transfer={transfer} />}
-      {opProgress && !transfer && (
+      {transfers.size > 0 && (
+        <div className="border-b border-slate-800">
+          {[...transfers.values()].map((t) => (
+            <TransferProgressBar
+              key={t.id}
+              transfer={t}
+              onCancel={() => { cancelTransfersRef.current.add(t.id); }}
+            />
+          ))}
+        </div>
+      )}
+      {opProgress && transfers.size === 0 && (
         <OperationProgressBar label={busy ?? 'Operação'} progress={opProgress} />
       )}
       {error && (
@@ -906,7 +950,7 @@ export default function RemoteFiles({
 
 // Barra de progresso de transferência (upload/download) com percentual,
 // velocidade média e tempo estimado de conclusão.
-function TransferProgressBar({ transfer }: { transfer: TransferState }) {
+function TransferProgressBar({ transfer, onCancel }: { transfer: TransferState; onCancel: () => void }) {
   const pct = transfer.totalBytes > 0
     ? Math.min(100, (transfer.loadedBytes / transfer.totalBytes) * 100)
     : 0;
@@ -920,6 +964,13 @@ function TransferProgressBar({ transfer }: { transfer: TransferState }) {
         <span className="text-slate-400 whitespace-nowrap">
           {formatSize(transfer.loadedBytes)} / {formatSize(transfer.totalBytes)} ({pct.toFixed(0)}%)
         </span>
+        <button
+          className="px-2 py-0.5 rounded bg-rose-700/70 hover:bg-rose-600 text-white disabled:opacity-50"
+          onClick={onCancel}
+          title={`Cancelar ${isUpload ? 'upload' : 'download'}`}
+        >
+          ✕ Cancelar
+        </button>
       </div>
       <div className="w-full h-2 bg-slate-800 rounded overflow-hidden">
         <div
