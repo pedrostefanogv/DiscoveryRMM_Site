@@ -11,6 +11,7 @@ import RemoteTerminal from '@/modules/remote-terminal/RemoteTerminal';
 import RemoteFiles from '@/modules/remote-files/RemoteFiles';
 import RemoteProxy from '@/modules/remote-proxy/RemoteProxy';
 import { RemoteProcesses } from '@/modules/remote-processes/RemoteProcesses';
+import { RemoteServices } from '@/modules/remote-processes/RemoteServices';
 import { RecordingControls } from '@/modules/remote-recording/RecordingControls';
 import {
   onCrossTabMessage,
@@ -19,7 +20,7 @@ import {
   type CrossTabMessage,
 } from '@/auth/crossTabSync';
 
-type Tab = 'screen' | 'terminal' | 'files' | 'proxy' | 'processes';
+type Tab = 'screen' | 'terminal' | 'files' | 'proxy' | 'processes' | 'services';
 
 // Sessão ativa de uma aba específica. Cada aba inicia sua própria sessão
 // sob demanda (botão "Conectar") — nada é iniciado automaticamente ao abrir.
@@ -42,6 +43,14 @@ function formatRemaining(expiresAtUtc: string | null): string {
   const min = Math.floor(remaining / 60000);
   const sec = Math.floor((remaining % 60000) / 1000);
   return `${min}:${String(sec).padStart(2, '0')}`;
+}
+
+// Detecta o erro específico do backend quando já existe uma sessão ativa no agent
+// ("Agent already has N active session(s) (max M). Use force=true to override.").
+// Usado para acionar o fluxo de sobreposição (force=true) apenas nesse caso.
+function isSessionConflictError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  return /already have/i.test(msg) && /active session/i.test(msg);
 }
 
 export default function RemoteSession() {
@@ -184,6 +193,12 @@ export default function RemoteSession() {
 
   const screenSession = sessions.screen;
 
+  // Processos e Serviços compartilham o MESMO subject/sessão (kind 'processes'
+  // no backend — não existe RemoteSessionKind.Services). Uma sessão ativa de
+  // processos pode ser reutilizada pela aba serviços (e vice-versa), evitando
+  // stop+start desnecessário a cada troca de aba.
+  const processSession = sessions.processes ?? sessions.services;
+
   const CODECS: { value: NonNullable<ChangeQualityRequest['codec']>; label: string }[] = [
     { value: 'webp', label: 'WebP' },
     { value: 'jpeg', label: 'JPEG' },
@@ -207,17 +222,37 @@ export default function RemoteSession() {
   ];
 
   // ── Inicia a sessão de uma aba sob demanda ──
-  const startTabSession = useCallback(async (tab: Tab) => {
+  // `force` permite sobrepor uma sessão ativa existente do mesmo agent (o
+  // backend encerra a anterior e cria a nova). Usado pelo botão "Forçar
+  // conexão" e no retry automático após conflito.
+  const startTabSession = useCallback(async (tab: Tab, force = false) => {
     if (!agentId || connectingTab) return;
     setConnectingTab(tab);
     setErrorMsg(null);
-    try {
+
+    // Processos e Serviços compartilham a MESMA sessão (kind 'processes').
+    // Se a aba "irmã" já está conectada, reutiliza a sessão em vez de criar
+    // nova (evita stop+start desnecessário). Sem `force`.
+    if (!force && (tab === 'processes' || tab === 'services')) {
+      const shared = tab === 'processes' ? sessions.services : sessions.processes;
+      if (shared) {
+        setSessions((prev) => ({ ...prev, [tab]: shared }));
+        setRemaining(formatRemaining(shared.expiresAtUtc));
+        setConnectingTab(null);
+        return;
+      }
+    }
+
+    const run = async (useForce: boolean) => {
       // Com MaxConcurrentSessionsPerAgent=1, abrir uma nova aba substitui a
       // sessão ativa de OUTRA aba: encerra a anterior explicitamente (stop no
       // agent + limpa estado) antes de iniciar a nova — comportamento "a aba
       // ativa substitui", sem orfãs e sem force silencioso no backend.
+      // Processos/Serviços compartilham sessão: a aba irmã não é encerrada
+      // (será sobrescrita com a nova sessão do mesmo kind abaixo).
+      const sibling = tab === 'processes' ? 'services' : tab === 'services' ? 'processes' : null;
       const others = (Object.entries(sessions) as [Tab, TabSession | undefined][])
-        .filter(([k]) => k !== tab)
+        .filter(([k]) => k !== tab && k !== sibling)
         .map(([, s]) => s)
         .filter((s): s is TabSession => !!s);
       for (const other of others) {
@@ -234,7 +269,9 @@ export default function RemoteSession() {
         });
       }
 
-      const kind = tab === 'screen' ? 'screen' : tab; // screen | terminal | files | proxy
+      // 'services' comparte a mesma sessão/subject de 'processes' (backend
+      // RemoteSessionKind.Processes). Enviamos o kind 'processes' no request.
+      const kind = tab === 'screen' ? 'screen' : tab === 'services' ? 'processes' : tab; // screen | terminal | files | processes | proxy
       const session = await remoteSessionsApi.startSession(agentId, {
         agentId,
         kind: kind as StartRemoteSessionRequest['kind'],
@@ -244,7 +281,8 @@ export default function RemoteSession() {
         durationMinutes: 30,
         // force=false (default): não mata outras sessões silenciosamente. As
         // sessões concorrentes já foram encerradas acima com stop explícito.
-        force: false,
+        // force=true: sobrepõe uma sessão ativa existente do mesmo agent.
+        force: useForce,
         ...(tab === 'screen' ? { monitorIndex } : {}),
       });
 
@@ -265,22 +303,60 @@ export default function RemoteSession() {
         throw new Error('Falha ao obter credenciais de streaming.');
       }
 
-      setSessions((prev) => ({
-        ...prev,
-        [tab]: {
-          sessionId: session.sessionId,
-          natsSubject: session.natsSubject,
-          natsUrl,
-          jwt,
-          nkeySeed,
-          expiresAtUtc: session.expiresAtUtc,
-          kind: session.kind,
-          qualityProfile: session.qualityProfile,
-          codec: session.codec,
-        },
-      }));
+      setSessions((prev) => {
+        // Processos/Serviços compartilham a sessão: sobrescreve AMBAS as chaves
+        // com a nova sessão, mantendo consistência (evita que a aba "irmã"
+        // guarde uma sessão antiga/dead com subject diferente).
+        if (tab === 'processes' || tab === 'services') {
+          const shared: TabSession = {
+            sessionId: session.sessionId,
+            natsSubject: session.natsSubject,
+            natsUrl,
+            jwt,
+            nkeySeed,
+            expiresAtUtc: session.expiresAtUtc,
+            kind: session.kind,
+            qualityProfile: session.qualityProfile,
+            codec: session.codec,
+          };
+          return { ...prev, processes: shared, services: shared };
+        }
+        return {
+          ...prev,
+          [tab]: {
+            sessionId: session.sessionId,
+            natsSubject: session.natsSubject,
+            natsUrl,
+            jwt,
+            nkeySeed,
+            expiresAtUtc: session.expiresAtUtc,
+            kind: session.kind,
+            qualityProfile: session.qualityProfile,
+            codec: session.codec,
+          },
+        };
+      });
       setRemaining(formatRemaining(session.expiresAtUtc));
+    };
+
+    try {
+      await run(force);
     } catch (err) {
+      // Se a sessão ativa no agent pertence a outro fluxo/usuário e o servidor
+      // rejeita, tenta UMA vez com force=true (encerra e cria nova). Só aciona
+      // no erro específico de conflito de sessão.
+      if (!force && isSessionConflictError(err)) {
+        try {
+          await run(true);
+          setErrorMsg('Sessão anterior encerrada e nova conexão iniciada.');
+          return;
+        } catch (forceErr) {
+          // Se o retry com force também falhou, reporta o erro do retry (mais
+          // diagnóstico — a própria sobreposição falhou) em vez do original.
+          setErrorMsg(forceErr instanceof Error ? forceErr.message : 'Falha ao iniciar sessão ao sobrepor.');
+          return;
+        }
+      }
       setErrorMsg(err instanceof Error ? err.message : 'Falha ao iniciar sessão.');
     } finally {
       setConnectingTab(null);
@@ -319,7 +395,13 @@ export default function RemoteSession() {
     } catch {
       // best-effort
     }
-    setSessions((prev) => ({ ...prev, [tab]: undefined }));
+    // Processos e Serviços compartilham a mesma sessão: encerrar uma aba do
+    // par limpa as duas, evitando que a sessão permaneça "ativa" na irmã.
+    if (tab === 'processes' || tab === 'services') {
+      setSessions((prev) => ({ ...prev, processes: undefined, services: undefined }));
+    } else {
+      setSessions((prev) => ({ ...prev, [tab]: undefined }));
+    }
     // Reseta o status de conexão do terminal ao encerrar a sessão.
     if (tab === 'terminal') setTerminalConnected(false);
   }, [agentId, sessions]);
@@ -329,13 +411,15 @@ export default function RemoteSession() {
     if (newShell === shell || shellSwitching || !agentId) return;
     setShellSwitching(true);
     setErrorMsg(null);
-    try {
-      // Encerra a sessão de terminal atual (se houver)
-      const current = sessions.terminal;
-      if (current) {
-        try { await remoteSessionsApi.stopSession(agentId, current.sessionId); } catch { /* best-effort */ }
-      }
-      // Inicia nova sessão de terminal com o novo shell
+
+    // Encerra a sessão de terminal atual (se houver) — ambos os caminhos (normal
+    // e force) dependem de uma shell válida; encerra antes de tentar.
+    const current = sessions.terminal;
+    if (current) {
+      try { await remoteSessionsApi.stopSession(agentId, current.sessionId); } catch { /* best-effort */ }
+    }
+
+    const startNew = async (useForce: boolean) => {
       const session = await remoteSessionsApi.startSession(agentId, {
         agentId,
         kind: 'terminal',
@@ -343,8 +427,7 @@ export default function RemoteSession() {
         quality: liveQuality as StartRemoteSessionRequest['quality'],
         codec: liveCodec as StartRemoteSessionRequest['codec'],
         durationMinutes: 30,
-        // A sessão de terminal anterior já foi encerrada acima; não precisa force.
-        force: false,
+        force: useForce,
         shell: newShell,
       });
       if (!session.natsSubject) {
@@ -377,8 +460,18 @@ export default function RemoteSession() {
         },
       }));
       setRemaining(formatRemaining(session.expiresAtUtc));
+    };
+
+    try {
+      await startNew(false);
     } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : 'Falha ao trocar de shell.');
+      // Sessão órfã no agent → refaz UMA vez com force=true (encerra e cria nova).
+      if (isSessionConflictError(err)) {
+        try { await startNew(true); }
+        catch { /* reporta o erro original abaixo */ }
+      } else {
+        setErrorMsg(err instanceof Error ? err.message : 'Falha ao trocar de shell.');
+      }
     } finally {
       setShellSwitching(false);
     }
@@ -473,10 +566,13 @@ export default function RemoteSession() {
     if (monitorChanging || !agentId) return;
     setMonitorChanging(true);
     setMonitorIndex(newMonitor);
-    try {
-      if (screenSession) {
-        try { await remoteSessionsApi.stopSession(agentId, screenSession.sessionId); } catch { /* best-effort */ }
-      }
+
+    // Encerra a sessão de tela atual (se houver) antes de iniciar a nova.
+    if (screenSession) {
+      try { await remoteSessionsApi.stopSession(agentId, screenSession.sessionId); } catch { /* best-effort */ }
+    }
+
+    const startNew = async (useForce: boolean) => {
       const session = await remoteSessionsApi.startSession(agentId, {
         agentId,
         kind: 'screen',
@@ -484,10 +580,12 @@ export default function RemoteSession() {
         quality: liveQuality as StartRemoteSessionRequest['quality'],
         codec: liveCodec as StartRemoteSessionRequest['codec'],
         durationMinutes: 30,
-        // A sessão de tela atual já foi encerrada acima; stop precisa força.
-        force: false,
+        force: useForce,
         monitorIndex: newMonitor,
       });
+      if (!session.natsSubject) {
+        throw new Error('Sessão criada sem subject NATS.');
+      }
       let jwt: string | undefined;
       let nkeySeed: string | undefined;
       let natsUrl: string | undefined;
@@ -512,9 +610,21 @@ export default function RemoteSession() {
         },
       }));
       setRemaining(formatRemaining(session.expiresAtUtc));
+    };
+
+    try {
+      await startNew(false);
     } catch (err) {
-      console.error('Falha ao trocar de monitor:', err);
-      setErrorMsg(err instanceof Error ? err.message : 'Falha ao trocar de monitor.');
+      // Sessão órfã no agent → refaz UMA vez com force=true (encerra e cria nova).
+      if (isSessionConflictError(err)) {
+        try {
+          await startNew(true);
+          setErrorMsg('Sessão anterior encerrada e nova conexão iniciada.');
+        } catch { /* reporta o erro original abaixo */ }
+      } else {
+        console.error('Falha ao trocar de monitor:', err);
+        setErrorMsg(err instanceof Error ? err.message : 'Falha ao trocar de monitor.');
+      }
     } finally {
       setMonitorChanging(false);
     }
@@ -547,10 +657,13 @@ export default function RemoteSession() {
 
   const handleStop = async () => {
     // Encerra TODAS as sessões ativas (não só a da aba atual), para não
-    // deixar sessões órfãs consumindo recursos do agent.
-    const active = Object.values(sessions).filter(Boolean) as TabSession[];
+    // deixar sessões órfãs consumindo recursos do agent. Deduplica por
+    // sessionId (Processos e Serviços podem apontar para a MESMA sessão).
+    const active = (Object.values(sessions).filter(Boolean) as TabSession[]);
+    const seen = new Set<string>();
+    const unique = active.filter((s) => (seen.has(s.sessionId) ? false : (seen.add(s.sessionId), true)));
     await Promise.allSettled(
-      active.map((s) => remoteSessionsApi.stopSession(agentId, s.sessionId)),
+      unique.map((s) => remoteSessionsApi.stopSession(agentId, s.sessionId)),
     );
     window.close();
   };
@@ -560,6 +673,7 @@ export default function RemoteSession() {
     { key: 'terminal', label: 'Terminal' },
     { key: 'files', label: 'Arquivos' },
     { key: 'processes', label: 'Processos' },
+    { key: 'services', label: 'Serviços' },
     { key: 'proxy', label: 'Proxy' },
   ];
 
@@ -621,9 +735,13 @@ export default function RemoteSession() {
             onClick={() => setActiveTab(tab.key)}
           >
             {tab.label}
-            {sessions[tab.key] && (
-              <span className="ml-1.5 inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 align-middle" title="Sessão ativa" />
-            )}
+            {(tab.key === 'processes' || tab.key === 'services')
+              ? processSession && (
+                <span className="ml-1.5 inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 align-middle" title="Sessão ativa" />
+              )
+              : sessions[tab.key] && (
+                <span className="ml-1.5 inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 align-middle" title="Sessão ativa" />
+              )}
           </button>
         ))}
         {/* Status bar info — controles de qualidade em tempo real (aba Tela) */}
@@ -824,17 +942,17 @@ export default function RemoteSession() {
         )}
 
         {activeTab === 'processes' && (
-          sessions.processes ? (
+          processSession ? (
             <div className="h-full flex flex-col min-h-0">
               <div className="flex-1 min-h-0">
                 <RemoteProcesses
-                  key={`processes-${sessions.processes.sessionId}-${reconnectKeys.processes ?? 0}`}
-                  sessionId={sessions.processes.sessionId}
+                  key={`processes-${processSession.sessionId}-${reconnectKeys.processes ?? 0}`}
+                  sessionId={processSession.sessionId}
                   agentId={agentId}
-                  natsSubject={sessions.processes.natsSubject}
-                  natsUrl={sessions.processes.natsUrl}
-                  jwt={sessions.processes.jwt}
-                  nkeySeed={sessions.processes.nkeySeed}
+                  natsSubject={processSession.natsSubject}
+                  natsUrl={processSession.natsUrl}
+                  jwt={processSession.jwt}
+                  nkeySeed={processSession.nkeySeed}
                 />
               </div>
             </div>
@@ -844,6 +962,31 @@ export default function RemoteSession() {
               icon="🗔"
               connecting={connectingTab === 'processes'}
               onConnect={() => startTabSession('processes')}
+            />
+          )
+        )}
+
+        {activeTab === 'services' && (
+          processSession ? (
+            <div className="h-full flex flex-col min-h-0">
+              <div className="flex-1 min-h-0">
+                <RemoteServices
+                  key={`services-${processSession.sessionId}-${reconnectKeys.services ?? 0}`}
+                  sessionId={processSession.sessionId}
+                  agentId={agentId}
+                  natsSubject={processSession.natsSubject}
+                  natsUrl={processSession.natsUrl}
+                  jwt={processSession.jwt}
+                  nkeySeed={processSession.nkeySeed}
+                />
+              </div>
+            </div>
+          ) : (
+            <ConnectPlaceholder
+              label="Serviços"
+              icon="⚙"
+              connecting={connectingTab === 'services'}
+              onConnect={() => startTabSession('services')}
             />
           )
         )}
@@ -869,6 +1012,14 @@ export default function RemoteSession() {
               title={`Reconectar a sessão de ${activeTab}`}
             >
               ⟳ Reconectar
+            </button>
+            <button
+              className="px-2 py-1 bg-orange-700/70 hover:bg-orange-600 text-white rounded"
+              onClick={() => startTabSession(activeTab, true)}
+              disabled={connectingTab === activeTab}
+              title={`Encerra a sessão remota existente do agente e inicia uma nova conexão (sobrepor). Use se a sessão anterior estiver presa/órfã.`}
+            >
+              ⚡ Forçar conexão
             </button>
             <button
               className="px-2 py-1 bg-rose-700/70 hover:bg-rose-600 text-white rounded"

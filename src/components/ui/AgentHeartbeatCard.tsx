@@ -157,7 +157,7 @@ export function AgentHeartbeatCard({ metrics, showEmpty = false }: AgentHeartbea
         </div>
         <div className="text-center">
           <p className="flex items-center justify-center gap-1 text-muted">
-            <Clock className="h-3 w-3" />
+            <HardDrive className="h-3 w-3" />
             Latência
           </p>
           <p className="mt-0.5 font-semibold tabular-nums text-foreground">
