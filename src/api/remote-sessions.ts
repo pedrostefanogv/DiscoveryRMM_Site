@@ -7,7 +7,7 @@ export interface StartRemoteSessionRequest {
     userId?: string;
     tenantId?: string;
     siteId?: string;
-    kind: 'screen' | 'terminal' | 'files' | 'proxy' | 'all';
+    kind: 'screen' | 'terminal' | 'files' | 'proxy' | 'processes' | 'all';
     transport: 'webrtc' | 'nats' | 'http';
     quality: 'ultra' | 'fast' | 'high' | 'medium' | 'low' | 'ultralow' | 'unlimited';
     codec: 'jpeg' | 'webp' | 'h264';

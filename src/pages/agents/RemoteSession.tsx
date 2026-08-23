@@ -10,6 +10,7 @@ import RemoteScreenViewer, { type MonitorInfo } from '@/modules/remote-screen/Re
 import RemoteTerminal from '@/modules/remote-terminal/RemoteTerminal';
 import RemoteFiles from '@/modules/remote-files/RemoteFiles';
 import RemoteProxy from '@/modules/remote-proxy/RemoteProxy';
+import { RemoteProcesses } from '@/modules/remote-processes/RemoteProcesses';
 import { RecordingControls } from '@/modules/remote-recording/RecordingControls';
 import {
   onCrossTabMessage,
@@ -18,7 +19,7 @@ import {
   type CrossTabMessage,
 } from '@/auth/crossTabSync';
 
-type Tab = 'screen' | 'terminal' | 'files' | 'proxy';
+type Tab = 'screen' | 'terminal' | 'files' | 'proxy' | 'processes';
 
 // Sessão ativa de uma aba específica. Cada aba inicia sua própria sessão
 // sob demanda (botão "Conectar") — nada é iniciado automaticamente ao abrir.
@@ -558,6 +559,7 @@ export default function RemoteSession() {
     { key: 'screen', label: 'Tela' },
     { key: 'terminal', label: 'Terminal' },
     { key: 'files', label: 'Arquivos' },
+    { key: 'processes', label: 'Processos' },
     { key: 'proxy', label: 'Proxy' },
   ];
 
@@ -817,6 +819,31 @@ export default function RemoteSession() {
               icon="📁"
               connecting={connectingTab === 'files'}
               onConnect={() => startTabSession('files')}
+            />
+          )
+        )}
+
+        {activeTab === 'processes' && (
+          sessions.processes ? (
+            <div className="h-full flex flex-col min-h-0">
+              <div className="flex-1 min-h-0">
+                <RemoteProcesses
+                  key={`processes-${sessions.processes.sessionId}-${reconnectKeys.processes ?? 0}`}
+                  sessionId={sessions.processes.sessionId}
+                  agentId={agentId}
+                  natsSubject={sessions.processes.natsSubject}
+                  natsUrl={sessions.processes.natsUrl}
+                  jwt={sessions.processes.jwt}
+                  nkeySeed={sessions.processes.nkeySeed}
+                />
+              </div>
+            </div>
+          ) : (
+            <ConnectPlaceholder
+              label="Processos"
+              icon="🗔"
+              connecting={connectingTab === 'processes'}
+              onConnect={() => startTabSession('processes')}
             />
           )
         )}
