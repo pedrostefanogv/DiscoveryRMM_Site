@@ -27,8 +27,8 @@ interface RemoteScreenViewerProps {
   /** Indica se está em fullscreen (para o rótulo do botão). */
   isFullscreen?: boolean;
   /**
-   * Modo do cursor: 'remote' (padrão) mostra só o cursor da máquina remota;
-   * 'local' mostra só o cursor do navegador; 'both' mostra os dois.
+   * Modo do cursor: 'local' (padrão) mostra só o cursor do navegador;
+   * 'remote' mostra só o cursor da máquina remota; 'both' mostra os dois.
    */
   cursorMode?: 'remote' | 'local' | 'both';
 }
@@ -97,7 +97,7 @@ export default function RemoteScreenViewer({
   scale: controlledScale,
   onToggleFullscreen,
   isFullscreen,
-  cursorMode = 'remote',
+  cursorMode = 'local',
 }: RemoteScreenViewerProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const bgSnapshotRef = useRef<HTMLCanvasElement | null>(null);
@@ -312,7 +312,10 @@ export default function RemoteScreenViewer({
           result.header,
         );
         // Captura o snapshot do frame limpo (sem cursor) para restaurar a área
-        // do cursor anterior antes de redesenhar.
+        // do cursor anterior antes de redesenhar. No modo 'local' o cursor
+        // remoto nunca é desenhado, então snapshot/overlay são pulados —
+        // evita drawImage extra e alocação de canvas a cada frame (default).
+        if (cursorModeRef.current === 'local') return;
         captureBackgroundSnapshot();
         // Reaplica o cursor (o novo frame pode ter coberto o anterior)
         drawCursorOverlay();
@@ -414,6 +417,11 @@ export default function RemoteScreenViewer({
       if (!canvas) return;
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
+
+      // No modo 'local' o cursor remoto nunca é desenhado — nada a restaurar.
+      // (lido em variável local para evitar narrowing do TS no escopo)
+      const mode = cursorModeRef.current;
+      if (mode === 'local') return;
 
       // Restaura a área do cursor anterior (remove o cursor antigo).
       restoreCursorArea(ctx);

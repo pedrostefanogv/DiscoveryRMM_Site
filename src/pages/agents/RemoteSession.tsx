@@ -184,8 +184,8 @@ export default function RemoteSession() {
   // Escala e fullscreen da tela (controlados na barra de rodapé unificada).
   const [screenScale, setScreenScale] = useState<'fit' | '100%'>('fit');
   const [screenFullscreen, setScreenFullscreen] = useState(false);
-  // Modo do cursor na tela (padrão: somente o cursor remoto).
-  const [cursorMode, setCursorMode] = useState<'remote' | 'local' | 'both'>('remote');
+  // Modo do cursor na tela (padrão: somente o cursor local do navegador).
+  const [cursorMode, setCursorMode] = useState<'remote' | 'local' | 'both'>('local');
   const screenContainerRef = useRef<HTMLDivElement | null>(null);
   // Shell ativo do terminal (powershell | cmd). Trocar reinicia a sessão de terminal.
   const [shell, setShell] = useState('powershell');
@@ -1094,10 +1094,10 @@ export default function RemoteSession() {
                 value={cursorMode}
                 onChange={(e) => setCursorMode(e.target.value as 'remote' | 'local' | 'both')}
                 className="bg-slate-800 border border-slate-700 rounded px-1 py-0.5 text-slate-300 text-xs"
-                title="Modo do cursor (Remoto = o cursor da máquina remota)"
+                title="Modo do cursor (Local = cursor do navegador; Remoto = cursor da máquina remota)"
               >
-                <option value="remote">Remoto</option>
                 <option value="local">Local</option>
+                <option value="remote">Remoto</option>
                 <option value="both">Ambos</option>
               </select>
             </label>
