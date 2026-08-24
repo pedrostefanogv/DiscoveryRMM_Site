@@ -94,7 +94,7 @@ export default function RemoteScreenViewer({
   isFullscreen,
 }: RemoteScreenViewerProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const cursorCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const bgSnapshotRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [rtt, setRtt] = useState<number>(0);
   const [fps, setFps] = useState<number>(0);
@@ -361,29 +361,49 @@ export default function RemoteScreenViewer({
     let cursorPos: { x: number; y: number; visible: boolean } | null = null;
     // Cursor real (bitmap PNG) via subject .cursor.img — desenhado em vez da seta genérica.
     let cursorImage: { bitmap: ImageBitmap; hotX: number; hotY: number } | null = null;
+    // Bounding box do cursor anterior (para restaurar o fundo antes de redesenhar).
+    let lastCursorBox: { x: number; y: number; w: number; h: number } | null = null;
+
+    // Restaura a região do cursor anterior a partir do snapshot do frame limpo
+    // (evita "rastro" quando o frame subjacente não é redesenhado por completo
+    // em modo tiles/dirty-rects).
+    const restoreCursorArea = (ctx: CanvasRenderingContext2D) => {
+      const snapshot = bgSnapshotRef.current;
+      if (!snapshot || !lastCursorBox) return;
+      const b = lastCursorBox;
+      ctx.drawImage(snapshot, b.x, b.y, b.w, b.h, b.x, b.y, b.w, b.h);
+      lastCursorBox = null;
+    };
+
+    // Calcula o bounding box de um cursor (fallback seta ou bitmap real).
+    const cursorBounds = (x: number, y: number): { x: number; y: number; w: number; h: number } => {
+      if (cursorImage) {
+        return {
+          x: x - cursorImage.hotX,
+          y: y - cursorImage.hotY,
+          w: cursorImage.bitmap.width,
+          h: cursorImage.bitmap.height,
+        };
+      }
+      return { x: x, y: y, w: 12, h: 30 }; // fallback seta
+    };
 
     const drawCursorOverlay = () => {
-      const canvas = cursorCanvasRef.current;
+      const canvas = canvasRef.current;
       if (!canvas) return;
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
 
-      // Sincroniza o canvas do cursor com o canvas principal (mesmo tamanho/posição).
-      const main = canvasRef.current;
-      if (main && (canvas.width !== main.width || canvas.height !== main.height)) {
-        canvas.width = main.width;
-        canvas.height = main.height;
-      }
-
-      // LIMPA o overlay inteiro antes de desenhar — evita "rastro" do cursor
-      // em posições anteriores quando o frame subjacente não é redesenhado por
-      // completo (modo tiles/dirty rects preserva o conteúdo antigo).
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      // Restaura o fundo na região do cursor anterior (remove o cursor antigo).
+      restoreCursorArea(ctx);
 
       if (!cursorPos || !cursorPos.visible) return;
 
       const x = cursorPos.x;
       const y = cursorPos.y;
+
+      // Guarda o bounding box do cursor atual para restaurar no próximo redraw.
+      lastCursorBox = cursorBounds(x, y);
 
       // Se temos o bitmap real do cursor, desenha-o (respeitando o hotspot).
       if (cursorImage) {
