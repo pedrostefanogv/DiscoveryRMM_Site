@@ -14,8 +14,8 @@ export interface ProcessInfo {
     priorityBase: number;
     cpuPercent: number;
     memoryBytes: number;
-    ioReadBytes: number;
-    ioWriteBytes: number;
+    ioReadBps: number;   // taxa de leitura (bytes/s)
+    ioWriteBps: number;  // taxa de escrita (bytes/s)
     connections: number;
 }
 
@@ -28,8 +28,8 @@ export interface ServiceInfo {
     pid?: number;
     cpuPercent?: number;
     memoryBytes?: number;
-    ioReadBytes?: number;
-    ioWriteBytes?: number;
+    ioReadBps?: number;   // taxa de leitura (bytes/s)
+    ioWriteBps?: number;
     connections?: number;
 }
 

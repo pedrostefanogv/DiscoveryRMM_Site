@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useProcessesStream, type ProcessInfo, type SystemInfo } from './useProcessStream';
-import { formatBytes, formatConnections, formatCpuPercent } from './format';
+import { formatBytes, formatBytesPerSec, formatConnections, formatCpuPercent } from './format';
 
 interface RemoteProcessesProps {
     sessionId: string;
@@ -11,7 +11,7 @@ interface RemoteProcessesProps {
     nkeySeed?: string;
 }
 
-type SortKey = 'pid' | 'name' | 'threads' | 'priorityBase' | 'cpuPercent' | 'memoryBytes' | 'ioReadBytes' | 'ioWriteBytes' | 'connections';
+type SortKey = 'pid' | 'name' | 'threads' | 'priorityBase' | 'cpuPercent' | 'memoryBytes' | 'ioReadBps' | 'ioWriteBps' | 'connections';
 
 export function RemoteProcesses({ natsSubject, natsUrl, jwt }: RemoteProcessesProps) {
     const [processes, setProcesses] = useState<ProcessInfo[]>([]);
@@ -156,8 +156,8 @@ export function RemoteProcesses({ natsSubject, natsUrl, jwt }: RemoteProcessesPr
     }, [sortKey]);
 
     const sortHeader = (key: SortKey, label: string, align: 'left' | 'right' = 'right') => (
-        <th className={`px-3 py-1.5 ${align === 'right' ? 'text-right' : ''} cursor-pointer select-none hover:text-slate-200`} onClick={() => toggleSort(key)}>
-            <span className="inline-flex items-center gap-1 justify-end">
+        <th className={`px-3 py-1.5 ${align === 'right' ? 'text-right' : 'text-left'} cursor-pointer select-none hover:text-slate-200`} onClick={() => toggleSort(key)}>
+            <span className={`inline-flex items-center gap-1 ${align === 'right' ? 'justify-end' : ''}`}>
                 {label}
                 {sortKey === key && <span>{sortDir === 'asc' ? '▲' : '▼'}</span>}
             </span>
@@ -211,8 +211,8 @@ export function RemoteProcesses({ natsSubject, natsUrl, jwt }: RemoteProcessesPr
                                 {sortHeader('name', 'Nome', 'left')}
                                 {sortHeader('cpuPercent', 'CPU')}
                                 {sortHeader('memoryBytes', 'RAM')}
-                                {sortHeader('ioReadBytes', 'Disco L')}
-                                {sortHeader('ioWriteBytes', 'Disco E')}
+                                {sortHeader('ioReadBps', 'Leitura/s')}
+                                {sortHeader('ioWriteBps', 'Escrita/s')}
                                 {sortHeader('connections', 'Rede')}
                                 {sortHeader('threads', 'Threads')}
                                 {sortHeader('priorityBase', 'Prio')}
@@ -229,8 +229,8 @@ export function RemoteProcesses({ natsSubject, natsUrl, jwt }: RemoteProcessesPr
                                     <td className="px-3 py-1 text-slate-200 font-mono max-w-[16rem] truncate" title={p.name}>{p.name}</td>
                                     <td className="px-3 py-1 text-right text-amber-300">{formatCpuPercent(p.cpuPercent)}</td>
                                     <td className="px-3 py-1 text-right text-sky-300">{formatBytes(p.memoryBytes)}</td>
-                                    <td className="px-3 py-1 text-right text-slate-400">{formatBytes(p.ioReadBytes)}</td>
-                                    <td className="px-3 py-1 text-right text-slate-400">{formatBytes(p.ioWriteBytes)}</td>
+                                    <td className="px-3 py-1 text-right text-slate-400">{formatBytesPerSec(p.ioReadBps)}</td>
+                                    <td className="px-3 py-1 text-right text-slate-400">{formatBytesPerSec(p.ioWriteBps)}</td>
                                     <td className="px-3 py-1 text-right text-slate-400">{formatConnections(p.connections)}</td>
                                     <td className="px-3 py-1 text-right text-slate-400">{p.threads}</td>
                                     <td className="px-3 py-1 text-right text-slate-400">{p.priorityBase}</td>

@@ -15,11 +15,18 @@ export function formatBytes(bytes: number | undefined | null): string {
     return `${value.toFixed(digits)} ${units[i]}`;
 }
 
-/** Formata percentual de CPU (0 → "0.0%"; valores > 99.9 limitados). */
+/** Formata percentual de CPU (0 → "0.0%"). */
 export function formatCpuPercent(value: number | undefined | null): string {
     if (value === undefined || value === null || Number.isNaN(value)) return '—';
     if (value <= 0) return '0.0%';
     return `${value.toFixed(1)}%`;
+}
+
+/** Formata taxa de bytes/s (B/s, KB/s, MB/s, GB/s). */
+export function formatBytesPerSec(value: number | undefined | null): string {
+    if (value === undefined || value === null || Number.isNaN(value)) return '—';
+    if (value <= 0) return '0 B/s';
+    return `${formatBytes(value)}/s`;
 }
 
 /** Formata nº de conexões. */
