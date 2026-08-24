@@ -17,7 +17,7 @@ export function RecordingPlayer({
 
   if (!downloadUrl) {
     return (
-      <div className="flex items-center justify-center h-40 bg-slate-900 rounded text-slate-500 text-sm">
+      <div className="flex items-center justify-center h-40 bg-surface rounded text-muted text-sm">
         Nenhuma gravação disponível
       </div>
     );
@@ -26,18 +26,18 @@ export function RecordingPlayer({
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-medium text-slate-300">{title}</h3>
+        <h3 className="text-sm font-medium text-foreground">{title}</h3>
         <a
           href={downloadUrl}
           download
-          className="px-2 py-1 text-xs bg-slate-800 text-slate-400 rounded hover:bg-slate-700 transition-colors"
+          className="px-2 py-1 text-xs bg-surface-hover text-muted-foreground rounded hover:bg-border transition-colors"
         >
           ⬇ Download
         </a>
       </div>
 
       {error ? (
-        <div className="flex items-center justify-center h-40 bg-slate-900 rounded text-red-400 text-sm">
+        <div className="flex items-center justify-center h-40 bg-surface rounded text-danger text-sm">
           {error}
         </div>
       ) : (

@@ -13,13 +13,13 @@ interface RemoteServicesProps {
 
 const serviceStateColor = (state: string) => {
     switch (state) {
-        case 'running': return 'text-emerald-400';
+        case 'running': return 'text-success';
         case 'start_pending':
         case 'stop_pending':
         case 'continue_pending':
-        case 'pause_pending': return 'text-amber-400';
-        case 'paused': return 'text-sky-400';
-        default: return 'text-slate-400';
+        case 'pause_pending': return 'text-warning';
+        case 'paused': return 'text-accent';
+        default: return 'text-muted-foreground';
     }
 };
 
@@ -145,21 +145,21 @@ export function RemoteServices({ natsSubject, natsUrl, jwt }: RemoteServicesProp
     }, [services, search]);
 
     return (
-        <div className="h-full flex flex-col min-h-0 bg-slate-950" onContextMenu={(e) => e.preventDefault()}>
+        <div className="h-full flex flex-col min-h-0 bg-background" onContextMenu={(e) => e.preventDefault()}>
             {/* Barra de ações: busca + atualizar */}
-            <div className="flex items-center gap-1 px-3 py-2 border-b border-slate-800">
-                <span className="text-sm text-slate-400">⚙ Serviços ({services.length})</span>
+            <div className="flex items-center gap-1 px-3 py-2 border-b border-border">
+                <span className="text-sm text-muted-foreground">⚙ Serviços ({services.length})</span>
                 <div className="flex-1" />
                 <input
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     placeholder="Filtrar..."
-                    className="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-slate-300 placeholder-slate-500 w-56"
+                    className="bg-surface border border-border rounded px-2 py-1 text-xs text-foreground placeholder-muted w-56"
                 />
                 <button
                     onClick={loadServices}
                     disabled={!connected || loading}
-                    className="px-2 py-1 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded text-xs disabled:opacity-50"
+                    className="px-2 py-1 bg-surface-hover hover:bg-border text-foreground rounded text-xs disabled:opacity-50"
                 >
                     ⟳ Atualizar
                 </button>
@@ -168,18 +168,18 @@ export function RemoteServices({ natsSubject, natsUrl, jwt }: RemoteServicesProp
             {/* Corpo */}
             <div className="flex-1 overflow-auto min-h-0 relative">
                 {!connected && (
-                    <div className="p-6 text-center text-slate-500 text-sm">
+                    <div className="p-6 text-center text-muted text-sm">
                         Aguardando conexão com o agente...
                     </div>
                 )}
                 {connected && loading && (
-                    <div className="sticky top-0 z-10 px-3 py-1 text-xs text-slate-400 bg-slate-900/90 border-b border-slate-800">
+                    <div className="sticky top-0 z-10 px-3 py-1 text-xs text-muted-foreground bg-surface/90 border-b border-border">
                         Carregando...
                     </div>
                 )}
                 {connected && (
                     <table className="w-full text-left text-xs">
-                        <thead className="sticky top-0 bg-slate-900 text-slate-400">
+                        <thead className="sticky top-0 bg-surface text-muted-foreground">
                             <tr>
                                 <th className="px-3 py-1.5">Nome</th>
                                 <th className="px-3 py-1.5">Estado</th>
@@ -194,25 +194,25 @@ export function RemoteServices({ natsSubject, natsUrl, jwt }: RemoteServicesProp
                             {filteredServices.map((s) => (
                                 <tr
                                     key={s.name}
-                                    className="border-t border-slate-800/50 hover:bg-slate-800/50 cursor-context-menu"
+                                    className="border-t border-border hover:bg-surface-hover cursor-context-menu"
                                     onContextMenu={(e) => openServiceMenu(e, s)}
                                 >
-                                    <td className="px-3 py-1 text-slate-200 font-mono max-w-[24rem] truncate" title={s.displayName}>{s.displayName}</td>
+                                    <td className="px-3 py-1 text-foreground font-mono max-w-[24rem] truncate" title={s.displayName}>{s.displayName}</td>
                                     <td className="px-3 py-1">
                                         <span className={`inline-flex items-center gap-1 ${serviceStateColor(s.state)}`}>
-                                            <span className={`w-1.5 h-1.5 rounded-full ${s.state === 'running' ? 'bg-emerald-400' : s.state === 'stopped' ? 'bg-slate-500' : 'bg-amber-400'}`} />
+                                            <span className={`w-1.5 h-1.5 rounded-full ${s.state === 'running' ? 'bg-success' : s.state === 'stopped' ? 'bg-muted' : 'bg-warning'}`} />
                                             {stateLabel(s.state)}
                                         </span>
                                     </td>
-                                    <td className="px-3 py-1 text-slate-400">{startTypeLabel(s.startType)}</td>
-                                    <td className="px-3 py-1 text-slate-400">{s.pid ?? '—'}</td>
-                                    <td className="px-3 py-1 text-right text-amber-300">{formatCpuPercent(s.cpuPercent)}</td>
-                                    <td className="px-3 py-1 text-right text-sky-300">{formatBytes(s.memoryBytes)}</td>
-                                    <td className="px-3 py-1 text-right text-slate-400">{formatConnections(s.connections)}</td>
+                                    <td className="px-3 py-1 text-muted-foreground">{startTypeLabel(s.startType)}</td>
+                                    <td className="px-3 py-1 text-muted-foreground">{s.pid ?? '—'}</td>
+                                    <td className="px-3 py-1 text-right text-warning">{formatCpuPercent(s.cpuPercent)}</td>
+                                    <td className="px-3 py-1 text-right text-accent">{formatBytes(s.memoryBytes)}</td>
+                                    <td className="px-3 py-1 text-right text-muted-foreground">{formatConnections(s.connections)}</td>
                                 </tr>
                             ))}
                             {filteredServices.length === 0 && !loading && (
-                                <tr><td colSpan={7} className="px-3 py-6 text-center text-slate-500">Nenhum serviço encontrado</td></tr>
+                                <tr><td colSpan={7} className="px-3 py-6 text-center text-muted">Nenhum serviço encontrado</td></tr>
                             )}
                         </tbody>
                     </table>
@@ -222,29 +222,29 @@ export function RemoteServices({ natsSubject, natsUrl, jwt }: RemoteServicesProp
             {/* Menu de contexto */}
             {menu?.service && (
                 <div
-                    className="fixed z-50 bg-slate-800 border border-slate-600 rounded shadow-lg py-1 text-xs"
+                    className="fixed z-50 bg-surface border border-border-strong rounded shadow-lg py-1 text-xs"
                     style={{ left: menu.x, top: menu.y, minWidth: 180 }}
                     onClick={(e) => e.stopPropagation()}
                 >
-                    <div className="px-3 py-1 text-slate-400 border-b border-slate-700 truncate max-w-[16rem]" title={menu.service.name}>
+                    <div className="px-3 py-1 text-muted-foreground border-b border-border truncate max-w-[16rem]" title={menu.service.name}>
                         {menu.service.displayName}
                     </div>
                     <button
-                        className="w-full text-left px-3 py-1.5 text-emerald-300 hover:bg-slate-700 disabled:opacity-50"
+                        className="w-full text-left px-3 py-1.5 text-success hover:bg-surface-hover disabled:opacity-50"
                         disabled={busy || menu.service.state === 'running' || menu.service.state === 'start_pending'}
                         onClick={() => runAction('startService', { name: menu.service!.name }, 'Serviço iniciado')}
                     >
                         ▶ Iniciar
                     </button>
                     <button
-                        className="w-full text-left px-3 py-1.5 text-amber-300 hover:bg-slate-700 disabled:opacity-50"
+                        className="w-full text-left px-3 py-1.5 text-warning hover:bg-surface-hover disabled:opacity-50"
                         disabled={busy || menu.service.state !== 'running'}
                         onClick={() => runAction('stopService', { name: menu.service!.name }, 'Serviço parado')}
                     >
                         ⏸ Parar
                     </button>
                     <button
-                        className="w-full text-left px-3 py-1.5 text-sky-300 hover:bg-slate-700 disabled:opacity-50"
+                        className="w-full text-left px-3 py-1.5 text-accent hover:bg-surface-hover disabled:opacity-50"
                         disabled={busy || menu.service.state !== 'running'}
                         onClick={() => runAction('restartService', { name: menu.service!.name }, 'Serviço reiniciado')}
                     >
@@ -255,7 +255,7 @@ export function RemoteServices({ natsSubject, natsUrl, jwt }: RemoteServicesProp
 
             {/* Toast de feedback */}
             {toast && (
-                <div className="fixed bottom-12 left-1/2 -translate-x-1/2 z-50 bg-slate-800 border border-slate-600 rounded px-4 py-2 text-xs text-slate-100 shadow-lg">
+                <div className="fixed bottom-12 left-1/2 -translate-x-1/2 z-50 bg-surface border border-border-strong rounded px-4 py-2 text-xs text-foreground shadow-lg">
                     {toast}
                 </div>
             )}

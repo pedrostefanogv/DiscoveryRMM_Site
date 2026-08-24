@@ -904,16 +904,16 @@ export default function RemoteScreenViewer({
       />
 
       {/* Info overlay — métricas locais + do agent */}
-      <div className="absolute top-2 right-2 flex flex-col gap-1 text-xs bg-slate-900/70 rounded px-2 py-1.5 backdrop-blur-sm pointer-events-none">
+      <div className="absolute top-2 right-2 flex flex-col gap-1 text-xs bg-surface/70 rounded px-2 py-1.5 backdrop-blur-sm pointer-events-none">
         <div className="flex items-center gap-3">
-          <span className="text-emerald-400 font-medium">{fps} FPS</span>
-          <span className="text-slate-400">{rtt}ms</span>
-          {connectionState === 'connecting' && <span className="text-amber-400 animate-pulse">conectando…</span>}
-          {connectionState === 'error' && <span className="text-rose-400">desconectado</span>}
-          {isPaused && <span className="text-amber-400">⏸</span>}
+          <span className="text-success font-medium">{fps} FPS</span>
+          <span className="text-muted-foreground">{rtt}ms</span>
+          {connectionState === 'connecting' && <span className="text-warning animate-pulse">conectando…</span>}
+          {connectionState === 'error' && <span className="text-danger">desconectado</span>}
+          {isPaused && <span className="text-warning">⏸</span>}
         </div>
         {agentMetrics && (
-          <div className="flex items-center gap-3 text-[10px] text-slate-600">
+          <div className="flex items-center gap-3 text-[10px] text-muted">
             <span title="Resolução">📐 {agentMetrics.resolution}</span>
             <span title="FPS do agent (efetivo/perfil)">🎯 {agentMetrics.effectiveFps}/{agentMetrics.profileFps}FPS</span>
             <span title="Qualidade JPEG">🖼 {agentMetrics.imageQuality}%</span>
@@ -926,7 +926,7 @@ export default function RemoteScreenViewer({
             <span title={`Frames (5s): ${agentMetrics.framesSent5s} enviados / ${agentMetrics.framesSkipped5s} pulados`}>
               📊 {agentMetrics.framesSent5s}/{agentMetrics.framesSkipped5s}
             </span>
-            <span className="text-slate-500">#{agentMetrics.totalFrames}</span>
+            <span className="text-muted-foreground">#{agentMetrics.totalFrames}</span>
           </div>
         )}
       </div>
@@ -954,7 +954,7 @@ export default function RemoteScreenViewer({
       <div className="absolute bottom-2 right-2 flex gap-1">
         {connectionState === 'error' && !sessionEnded && (
           <button
-            className="bg-rose-600/90 hover:bg-rose-500 text-white rounded px-2 py-1 text-xs backdrop-blur-sm font-medium"
+            className="bg-danger/90 hover:bg-danger text-white rounded px-2 py-1 text-xs backdrop-blur-sm font-medium"
             onClick={handleReconnect}
             title="Reconectar ao servidor NATS"
           >

@@ -1,5 +1,6 @@
 import { useSearchParams } from 'react-router-dom';
 import { Button, Card } from '@/components/ui';
+import { ThemeToggle } from '@/components/auth/ThemeToggle';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { remoteSessionsApi, type ChangeQualityRequest, type StartRemoteSessionRequest } from '@/api/remote-sessions';
 import { agentsApi } from '@/api/agents';
@@ -699,9 +700,9 @@ export default function RemoteSession() {
 
   if (!agentId) {
     return (
-      <div className="flex items-center justify-center h-screen bg-slate-900">
+      <div className="flex items-center justify-center h-screen bg-background">
         <Card className="p-6 text-center">
-          <p className="text-red-400">Parâmetros inválidos. Feche esta janela e tente novamente.</p>
+          <p className="text-danger">Parâmetros inválidos. Feche esta janela e tente novamente.</p>
         </Card>
       </div>
     );
@@ -711,71 +712,72 @@ export default function RemoteSession() {
   const isActiveConnected = !!activeSession;
 
   return (
-    <div className="flex flex-col h-screen bg-slate-900 text-slate-100">
+    <div className="flex flex-col h-screen bg-background text-foreground">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-2 bg-slate-800 border-b border-slate-700">
-        <div className="flex items-center gap-3">
-          <h1 className="text-sm font-semibold flex items-center gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-2 bg-surface border-b border-border">
+        <div className="flex items-center gap-3 min-w-0">
+          <h1 className="text-sm font-semibold flex items-center gap-2 whitespace-nowrap">
             Acesso Remoto — {activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}
           </h1>
           {agentIdentity && (
             <span
-              className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-slate-700/60 text-slate-200 text-xs font-medium"
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-surface-hover text-foreground/80 text-xs font-medium truncate max-w-[40vw]"
               title={`${agentIdentity.hostname} — ${agentIdentity.site}`}
             >
-              <span className="text-slate-400">🖥</span>
-              <span className="text-slate-400">{agentIdentity.client || '—'}</span>
-              <span className="text-slate-500">→</span>
-              <span className="text-slate-400">{agentIdentity.site || '—'}</span>
-              <span className="text-slate-500">→</span>
-              <strong className="text-slate-100">{agentIdentity.hostname}</strong>
+              <span className="text-muted">🖥</span>
+              <span className="text-muted">{agentIdentity.client || '—'}</span>
+              <span className="text-muted-foreground">→</span>
+              <span className="text-muted">{agentIdentity.site || '—'}</span>
+              <span className="text-muted-foreground">→</span>
+              <strong className="text-foreground">{agentIdentity.hostname}</strong>
             </span>
           )}
-          <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${isActiveConnected ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'}`}>
+          <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium whitespace-nowrap ${isActiveConnected ? 'bg-success/20 text-success' : 'bg-warning/20 text-warning'}`}>
             {isActiveConnected ? 'Conectado' : 'Não conectado'}
           </span>
         </div>
-        <div className="flex items-center gap-2 text-xs text-slate-400">
-          <span>Tempo restante: <strong className="text-slate-300">{remaining}</strong></span>
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <span className="whitespace-nowrap">Tempo restante: <strong className="text-foreground">{remaining}</strong></span>
           <Button variant="secondary" size="sm" onClick={handleRenew} disabled={!isActiveConnected}>Renovar</Button>
           <Button variant="danger" size="sm" onClick={handleStop}>Encerrar</Button>
+          <ThemeToggle />
         </div>
       </div>
 
       {/* Tabs */}
-      <div className="flex items-center gap-1 px-4 py-1.5 bg-slate-850 border-b border-slate-700">
+      <div className="flex items-center gap-1 px-4 py-1.5 bg-surface-light border-b border-border">
         {tabs.map((tab) => (
           <button
             key={tab.key}
             className={`px-3 py-1 text-xs rounded-t transition-colors ${
               activeTab === tab.key
-                ? 'bg-slate-700 text-slate-200'
-                : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800'
+                ? 'bg-surface-hover text-foreground'
+                : 'text-muted-foreground hover:text-foreground hover:bg-surface'
             }`}
             onClick={() => setActiveTab(tab.key)}
           >
             {tab.label}
             {(tab.key === 'processes' || tab.key === 'services')
               ? processSession && (
-                <span className="ml-1.5 inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 align-middle" title="Sessão ativa" />
+                <span className="ml-1.5 inline-block w-1.5 h-1.5 rounded-full bg-success align-middle" title="Sessão ativa" />
               )
               : sessions[tab.key] && (
-                <span className="ml-1.5 inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 align-middle" title="Sessão ativa" />
+                <span className="ml-1.5 inline-block w-1.5 h-1.5 rounded-full bg-success align-middle" title="Sessão ativa" />
               )}
           </button>
         ))}
         {/* Status bar info — controles de qualidade em tempo real (aba Tela) */}
         {activeTab === 'screen' && screenSession && (
-        <div className="ml-auto flex items-center gap-3 text-xs text-slate-500">
-          <span>Transport: <span className="text-slate-400">{transport.toUpperCase()}</span></span>
+        <div className="ml-auto flex items-center gap-3 text-xs text-muted-foreground">
+          <span>Transport: <span className="text-foreground">{transport.toUpperCase()}</span></span>
 
           {/* Auto/Manual toggle */}
           <div className="flex items-center gap-1">
             <button
               className={`px-2 py-0.5 rounded text-xs font-medium transition-colors ${
                 autoMode
-                  ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                  : 'bg-slate-800 text-slate-500 border border-slate-700 hover:text-slate-300'
+                  ? 'bg-success/20 text-success border border-success/30'
+                  : 'bg-surface text-muted-foreground border border-border hover:text-foreground'
               }`}
               onClick={handleAutoToggle}
               disabled={qualityChanging}
@@ -786,8 +788,8 @@ export default function RemoteSession() {
             <button
               className={`px-2 py-0.5 rounded text-xs font-medium transition-colors ${
                 !autoMode
-                  ? 'bg-sky-500/20 text-sky-400 border border-sky-500/30'
-                  : 'bg-slate-800 text-slate-500 border border-slate-700 hover:text-slate-300'
+                  ? 'bg-accent/20 text-accent border border-accent/30'
+                  : 'bg-surface text-muted-foreground border border-border hover:text-foreground'
               }`}
               onClick={() => { if (autoMode) handleAutoToggle(); }}
               disabled={qualityChanging}
@@ -802,9 +804,9 @@ export default function RemoteSession() {
             <>
               {/* Codec selector — Manual */}
               <div className="flex items-center gap-0.5">
-                <span className="mr-1 text-slate-600">🎞</span>
+                <span className="mr-1 text-muted">🎞</span>
                 <select
-                  className="bg-slate-800 border border-slate-700 rounded px-1 py-0.5 text-xs text-slate-300 cursor-pointer hover:border-slate-600 disabled:opacity-50"
+                  className="bg-surface border border-border rounded px-1 py-0.5 text-xs text-foreground cursor-pointer hover:border-border-strong disabled:opacity-50"
                   value={liveCodec}
                   disabled={qualityChanging}
                   onChange={(e) => handleCodecChange(e.target.value as NonNullable<ChangeQualityRequest['codec']>)}
@@ -818,9 +820,9 @@ export default function RemoteSession() {
 
               {/* Image quality selector (compressão) — Manual */}
               <div className="flex items-center gap-0.5">
-                <span className="mr-1 text-slate-600">🖼</span>
+                <span className="mr-1 text-muted">🖼</span>
                 <select
-                  className="bg-slate-800 border border-slate-700 rounded px-1 py-0.5 text-xs text-slate-300 cursor-pointer hover:border-slate-600 disabled:opacity-50"
+                  className="bg-surface border border-border rounded px-1 py-0.5 text-xs text-foreground cursor-pointer hover:border-border-strong disabled:opacity-50"
                   value={liveImageQuality}
                   disabled={qualityChanging}
                   onChange={(e) => handleImageQualityChange(Number(e.target.value))}
@@ -834,9 +836,9 @@ export default function RemoteSession() {
 
               {/* FPS selector — Manual */}
               <div className="flex items-center gap-0.5">
-                <span className="mr-1 text-slate-600">⚡</span>
+                <span className="mr-1 text-muted">⚡</span>
                 <select
-                  className="bg-slate-800 border border-slate-700 rounded px-1 py-0.5 text-xs text-slate-300 cursor-pointer hover:border-slate-600 disabled:opacity-50"
+                  className="bg-surface border border-border rounded px-1 py-0.5 text-xs text-foreground cursor-pointer hover:border-border-strong disabled:opacity-50"
                   value={liveMaxFps}
                   disabled={qualityChanging}
                   onChange={(e) => handleFpsChange(Number(e.target.value))}
@@ -852,9 +854,9 @@ export default function RemoteSession() {
 
           {/* Monitor selector — troca o monitor capturado (reinicia a sessão de tela) */}
           <div className="flex items-center gap-0.5">
-            <span className="mr-1 text-slate-600">🖥</span>
+            <span className="mr-1 text-muted">🖥</span>
             <select
-              className="bg-slate-800 border border-slate-700 rounded px-1 py-0.5 text-xs text-slate-300 cursor-pointer hover:border-slate-600 disabled:opacity-50"
+              className="bg-surface border border-border rounded px-1 py-0.5 text-xs text-foreground cursor-pointer hover:border-border-strong disabled:opacity-50"
               value={monitorIndex}
               disabled={monitorChanging}
               onChange={(e) => handleMonitorChange(Number(e.target.value))}
@@ -1024,18 +1026,18 @@ export default function RemoteSession() {
       </div>
 
       {/* Barra de rodapé unificada — Reconectar/Encerrar da aba ativa + gravação */}
-      <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-800 border-t border-slate-700 text-xs">
+      <div className="flex items-center gap-2 px-3 py-1.5 bg-surface border-t border-border text-xs">
         {activeSession && (
           <>
             <button
-              className="px-2 py-1 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded"
+              className="px-2 py-1 bg-surface-hover hover:bg-border text-foreground rounded"
               onClick={() => handleReconnect(activeTab)}
               title={`Reconectar a sessão de ${activeTab}`}
             >
               ⟳ Reconectar
             </button>
             <button
-              className="px-2 py-1 bg-orange-700/70 hover:bg-orange-600 text-white rounded"
+              className="px-2 py-1 bg-warning/70 hover:bg-warning text-white rounded"
               onClick={() => startTabSession(activeTab, true)}
               disabled={connectingTab === activeTab}
               title={`Encerra a sessão remota existente do agente e inicia uma nova conexão (sobrepor). Use se a sessão anterior estiver presa/órfã.`}
@@ -1043,24 +1045,24 @@ export default function RemoteSession() {
               ⚡ Forçar conexão
             </button>
             <button
-              className="px-2 py-1 bg-rose-700/70 hover:bg-rose-600 text-white rounded"
+              className="px-2 py-1 bg-danger/70 hover:bg-danger text-white rounded"
               onClick={() => stopTabSession(activeTab)}
               title={`Encerrar a sessão de ${activeTab}`}
             >
               ⏹ Encerrar
             </button>
-            <span className="mx-1 h-4 w-px bg-slate-700" />
+            <span className="mx-1 h-4 w-px bg-border" />
           </>
         )}
         {/* Controles específicos da aba Terminal: select de shell + status */}
         {activeTab === 'terminal' && sessions.terminal && (
           <>
-            <span className="text-slate-400">Console</span>
+            <span className="text-muted-foreground">Console</span>
             <select
               value={shell}
               disabled={shellSwitching}
               onChange={e => handleSwitchShell(e.target.value)}
-              className="bg-slate-800 border border-slate-700 rounded px-1 py-0.5 text-slate-300 text-xs disabled:opacity-50"
+              className="bg-surface border border-border rounded px-1 py-0.5 text-foreground text-xs disabled:opacity-50"
             >
               {/* Shells reportados pelo agent via term.ready; fallback estático */}
               {(availableShells.length > 0 ? availableShells : ['powershell', 'cmd']).map((s) => (
@@ -1069,12 +1071,12 @@ export default function RemoteSession() {
                 </option>
               ))}
             </select>
-            {shellSwitching && <span className="text-slate-500">trocar shell…</span>}
-            <span className={`inline-flex items-center gap-1 ${terminalConnected ? 'text-emerald-400' : 'text-red-400'}`}>
-              <span className={`w-1.5 h-1.5 rounded-full ${terminalConnected ? 'bg-emerald-400' : 'bg-red-400'}`} />
+            {shellSwitching && <span className="text-muted">trocar shell…</span>}
+            <span className={`inline-flex items-center gap-1 ${terminalConnected ? 'text-success' : 'text-danger'}`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${terminalConnected ? 'bg-success' : 'bg-danger'}`} />
               {terminalConnected ? 'Conectado' : 'Desconectado'}
             </span>
-            <span className="mx-1 h-4 w-px bg-slate-700" />
+            <span className="mx-1 h-4 w-px bg-border" />
           </>
         )}
         {screenSession && (
@@ -1087,13 +1089,13 @@ export default function RemoteSession() {
         {/* Controles de escala/fullscreen da tela (aba Tela) */}
         {activeTab === 'screen' && screenSession && (
           <>
-            <span className="mx-1 h-4 w-px bg-slate-700" />
-            <label className="inline-flex items-center gap-1 text-slate-400">
+            <span className="mx-1 h-4 w-px bg-border" />
+            <label className="inline-flex items-center gap-1 text-muted-foreground">
               <span title="Modo do cursor na tela">🖱</span>
               <select
                 value={cursorMode}
                 onChange={(e) => setCursorMode(e.target.value as 'remote' | 'local' | 'both')}
-                className="bg-slate-800 border border-slate-700 rounded px-1 py-0.5 text-slate-300 text-xs"
+                className="bg-surface border border-border rounded px-1 py-0.5 text-foreground text-xs"
                 title="Modo do cursor (Local = cursor do navegador; Remoto = cursor da máquina remota)"
               >
                 <option value="local">Local</option>
@@ -1102,14 +1104,14 @@ export default function RemoteSession() {
               </select>
             </label>
             <button
-              className="px-2 py-1 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded"
+              className="px-2 py-1 bg-surface-hover hover:bg-border text-foreground rounded"
               onClick={() => setScreenScale((s) => (s === 'fit' ? '100%' : 'fit'))}
               title="Alternar escala (Fit / 1:1)"
             >
               {screenScale === 'fit' ? '⊡ Fit' : '⊡ 1:1'}
             </button>
             <button
-              className="px-2 py-1 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded"
+              className="px-2 py-1 bg-surface-hover hover:bg-border text-foreground rounded"
               onClick={toggleScreenFullscreen}
               title="Fullscreen (Ctrl+F)"
             >
@@ -1121,9 +1123,9 @@ export default function RemoteSession() {
 
       {/* Error toast */}
       {errorMsg && (
-        <div className="absolute bottom-4 right-4 bg-red-900/80 text-red-200 px-4 py-2 rounded text-sm max-w-sm z-50">
+        <div className="absolute bottom-4 right-4 bg-danger/80 text-white px-4 py-2 rounded text-sm max-w-sm z-50">
           {errorMsg}
-          <button className="ml-2 text-red-400 hover:text-red-200" onClick={() => setErrorMsg(null)}>✕</button>
+          <button className="ml-2 text-white/70 hover:text-white" onClick={() => setErrorMsg(null)}>✕</button>
         </div>
       )}
     </div>
@@ -1143,10 +1145,10 @@ function ConnectPlaceholder({
   onConnect: () => void;
 }) {
   return (
-    <div className="flex flex-col items-center justify-center h-full bg-slate-950 text-slate-500">
+    <div className="flex flex-col items-center justify-center h-full bg-background text-muted-foreground">
       <div className="text-5xl mb-4">{icon}</div>
       <p className="text-sm mb-1">Sessão de {label} não iniciada</p>
-      <p className="text-xs text-slate-600 mb-5">
+      <p className="text-xs text-muted mb-5">
         Clique em Conectar para iniciar a sessão sob demanda (não consome recursos do agent até iniciar).
       </p>
       <button

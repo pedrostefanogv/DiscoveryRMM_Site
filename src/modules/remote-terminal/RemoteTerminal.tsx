@@ -6,6 +6,7 @@ import { SearchAddon } from '@xterm/addon-search';
 import { ClipboardAddon } from '@xterm/addon-clipboard';
 import { useTerminalStream } from './useTerminalStream';
 import { remoteSessionsApi } from '@/api/remote-sessions';
+import { useTheme } from '@/theme/ThemeContext';
 import '@xterm/xterm/css/xterm.css';
 
 interface RemoteTerminalProps {
@@ -29,7 +30,7 @@ interface TermReadyPayload {
   termRows?: number;
 }
 
-const TERM_THEME = {
+const TERM_THEME_DARK = {
   background: '#0f172a',
   foreground: '#e2e8f0',
   cursor: '#38bdf8',
@@ -53,6 +54,30 @@ const TERM_THEME = {
   brightWhite: '#f8fafc',
 };
 
+const TERM_THEME_LIGHT = {
+  background: '#ffffff',
+  foreground: '#0f172a',
+  cursor: '#2563eb',
+  cursorAccent: '#ffffff',
+  selectionBackground: '#bfdbfe',
+  black: '#1e293b',
+  red: '#dc2626',
+  green: '#16a34a',
+  yellow: '#ca8a04',
+  blue: '#2563eb',
+  magenta: '#9333ea',
+  cyan: '#0891b2',
+  white: '#e2e8f0',
+  brightBlack: '#475569',
+  brightRed: '#ef4444',
+  brightGreen: '#22c55e',
+  brightYellow: '#eab308',
+  brightBlue: '#3b82f6',
+  brightMagenta: '#a855f7',
+  brightCyan: '#06b6d4',
+  brightWhite: '#f8fafc',
+};
+
 // Console único — um único terminal por sessão (como o MeshCentral).
 export default function RemoteTerminal({
   sessionId,
@@ -67,6 +92,7 @@ export default function RemoteTerminal({
   const termRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const { mode } = useTheme();
 
   // Initialize xterm.js (uma única instância)
   useEffect(() => {
@@ -76,7 +102,7 @@ export default function RemoteTerminal({
       cursorBlink: true,
       fontSize: 14,
       fontFamily: '"Cascadia Code", "Fira Code", "JetBrains Mono", monospace',
-      theme: TERM_THEME,
+      theme: mode === 'dark' ? TERM_THEME_DARK : TERM_THEME_LIGHT,
       allowProposedApi: true,
       scrollback: 5000,
     });
@@ -122,6 +148,13 @@ export default function RemoteTerminal({
       fitAddonRef.current = null;
     };
   }, []);
+
+  // Atualiza o tema do terminal ao alternar claro/escuro SEM recriar a
+  // instância (preserva o buffer/histórico da sessão ativa).
+  useEffect(() => {
+    if (!termRef.current) return;
+    termRef.current.options.theme = mode === 'dark' ? TERM_THEME_DARK : TERM_THEME_LIGHT;
+  }, [mode]);
 
   // Wire NATS stream — console único (subjects fixos term.out / term.in)
   const { isConnected, sendData, sendResize, onOutput, onExit, onReady } = useTerminalStream({
@@ -198,7 +231,7 @@ export default function RemoteTerminal({
   }, [agentId, sessionId]);
 
   return (
-    <div className="flex flex-col h-full bg-slate-950">
+    <div className="flex flex-col h-full bg-background">
       {/* xterm.js container */}
       <div ref={containerRef} className="flex-1" style={{ minHeight: 0 }} />
     </div>

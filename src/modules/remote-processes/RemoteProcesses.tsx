@@ -156,7 +156,7 @@ export function RemoteProcesses({ natsSubject, natsUrl, jwt }: RemoteProcessesPr
     }, [sortKey]);
 
     const sortHeader = (key: SortKey, label: string, align: 'left' | 'right' = 'right') => (
-        <th className={`px-3 py-1.5 ${align === 'right' ? 'text-right' : 'text-left'} cursor-pointer select-none hover:text-slate-200`} onClick={() => toggleSort(key)}>
+        <th className={`px-3 py-1.5 ${align === 'right' ? 'text-right' : 'text-left'} cursor-pointer select-none hover:text-foreground`} onClick={() => toggleSort(key)}>
             <span className={`inline-flex items-center gap-1 ${align === 'right' ? 'justify-end' : ''}`}>
                 {label}
                 {sortKey === key && <span>{sortDir === 'asc' ? '▲' : '▼'}</span>}
@@ -165,13 +165,13 @@ export function RemoteProcesses({ natsSubject, natsUrl, jwt }: RemoteProcessesPr
     );
 
     return (
-        <div className="h-full flex flex-col min-h-0 bg-slate-950" onContextMenu={(e) => e.preventDefault()}>
+        <div className="h-full flex flex-col min-h-0 bg-background" onContextMenu={(e) => e.preventDefault()}>
             {/* Barra de ações */}
-            <div className="flex items-center gap-1 px-3 py-2 border-b border-slate-800">
-                <span className="text-sm text-slate-400">🗔 Processos ({processes.length})</span>
+            <div className="flex items-center gap-1 px-3 py-2 border-b border-border">
+                <span className="text-sm text-muted-foreground">🗔 Processos ({processes.length})</span>
                 <div className="flex-1" />
                 {sysInfo && (
-                    <span className="hidden md:inline-flex items-center gap-3 text-[11px] text-slate-500">
+                    <span className="hidden md:inline-flex items-center gap-3 text-[11px] text-muted">
                         <span>CPU {formatCpuPercent(sysInfo.cpuPercent)}</span>
                         <span>RAM {formatBytes(sysInfo.usedMemoryBytes)} / {formatBytes(sysInfo.totalMemoryBytes)}</span>
                     </span>
@@ -180,12 +180,12 @@ export function RemoteProcesses({ natsSubject, natsUrl, jwt }: RemoteProcessesPr
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     placeholder="Filtrar..."
-                    className="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-slate-300 placeholder-slate-500 w-56"
+                    className="bg-surface border border-border rounded px-2 py-1 text-xs text-foreground placeholder-muted w-56"
                 />
                 <button
                     onClick={() => { loadProcesses(); loadSystemInfo(); }}
                     disabled={!connected || loading}
-                    className="px-2 py-1 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded text-xs disabled:opacity-50"
+                    className="px-2 py-1 bg-surface-hover hover:bg-border text-foreground rounded text-xs disabled:opacity-50"
                 >
                     ⟳ Atualizar
                 </button>
@@ -194,18 +194,18 @@ export function RemoteProcesses({ natsSubject, natsUrl, jwt }: RemoteProcessesPr
             {/* Corpo */}
             <div className="flex-1 overflow-auto min-h-0 relative">
                 {!connected && (
-                    <div className="p-6 text-center text-slate-500 text-sm">
+                    <div className="p-6 text-center text-muted text-sm">
                         Aguardando conexão com o agente...
                     </div>
                 )}
                 {connected && loading && (
-                    <div className="sticky top-0 z-10 px-3 py-1 text-xs text-slate-400 bg-slate-900/90 border-b border-slate-800">
+                    <div className="sticky top-0 z-10 px-3 py-1 text-xs text-muted-foreground bg-surface/90 border-b border-border">
                         Carregando...
                     </div>
                 )}
                 {connected && (
                     <table className="w-full text-left text-xs">
-                        <thead className="sticky top-0 bg-slate-900 text-slate-400">
+                        <thead className="sticky top-0 bg-surface text-muted-foreground">
                             <tr>
                                 {sortHeader('pid', 'PID', 'left')}
                                 {sortHeader('name', 'Nome', 'left')}
@@ -222,22 +222,22 @@ export function RemoteProcesses({ natsSubject, natsUrl, jwt }: RemoteProcessesPr
                             {filteredProcesses.map((p) => (
                                 <tr
                                     key={p.pid}
-                                    className="border-t border-slate-800/50 hover:bg-slate-800/40 cursor-context-menu"
+                                    className="border-t border-border hover:bg-surface-hover cursor-context-menu"
                                     onContextMenu={(e) => openProcessMenu(e, p)}
                                 >
-                                    <td className="px-3 py-1 text-slate-300">{p.pid}</td>
-                                    <td className="px-3 py-1 text-slate-200 font-mono max-w-[16rem] truncate" title={p.name}>{p.name}</td>
-                                    <td className="px-3 py-1 text-right text-amber-300">{formatCpuPercent(p.cpuPercent)}</td>
-                                    <td className="px-3 py-1 text-right text-sky-300">{formatBytes(p.memoryBytes)}</td>
-                                    <td className="px-3 py-1 text-right text-slate-400">{formatBytesPerSec(p.ioReadBps)}</td>
-                                    <td className="px-3 py-1 text-right text-slate-400">{formatBytesPerSec(p.ioWriteBps)}</td>
-                                    <td className="px-3 py-1 text-right text-slate-400">{formatConnections(p.connections)}</td>
-                                    <td className="px-3 py-1 text-right text-slate-400">{p.threads}</td>
-                                    <td className="px-3 py-1 text-right text-slate-400">{p.priorityBase}</td>
+                                    <td className="px-3 py-1 text-muted-foreground">{p.pid}</td>
+                                    <td className="px-3 py-1 text-foreground font-mono max-w-[16rem] truncate" title={p.name}>{p.name}</td>
+                                    <td className="px-3 py-1 text-right text-warning">{formatCpuPercent(p.cpuPercent)}</td>
+                                    <td className="px-3 py-1 text-right text-accent">{formatBytes(p.memoryBytes)}</td>
+                                    <td className="px-3 py-1 text-right text-muted-foreground">{formatBytesPerSec(p.ioReadBps)}</td>
+                                    <td className="px-3 py-1 text-right text-muted-foreground">{formatBytesPerSec(p.ioWriteBps)}</td>
+                                    <td className="px-3 py-1 text-right text-muted-foreground">{formatConnections(p.connections)}</td>
+                                    <td className="px-3 py-1 text-right text-muted-foreground">{p.threads}</td>
+                                    <td className="px-3 py-1 text-right text-muted-foreground">{p.priorityBase}</td>
                                 </tr>
                             ))}
                             {filteredProcesses.length === 0 && !loading && (
-                                <tr><td colSpan={9} className="px-3 py-6 text-center text-slate-500">Nenhum processo encontrado</td></tr>
+                                <tr><td colSpan={9} className="px-3 py-6 text-center text-muted">Nenhum processo encontrado</td></tr>
                             )}
                         </tbody>
                     </table>
@@ -247,17 +247,17 @@ export function RemoteProcesses({ natsSubject, natsUrl, jwt }: RemoteProcessesPr
             {/* Menu de contexto */}
             {menu && (
                 <div
-                    className="fixed z-50 bg-slate-800 border border-slate-600 rounded shadow-lg py-1 text-xs"
+                    className="fixed z-50 bg-surface border border-border-strong rounded shadow-lg py-1 text-xs"
                     style={{ left: menu.x, top: menu.y, minWidth: 180 }}
                     onClick={(e) => e.stopPropagation()}
                 >
                     {menu.process && (
                         <>
-                            <div className="px-3 py-1 text-slate-400 border-b border-slate-700 truncate max-w-[16rem]" title={menu.process.name}>
+                            <div className="px-3 py-1 text-muted-foreground border-b border-border truncate max-w-[16rem]" title={menu.process.name}>
                                 {menu.process.name} ({menu.process.pid})
                             </div>
                             <button
-                                className="w-full text-left px-3 py-1.5 text-rose-300 hover:bg-slate-700 disabled:opacity-50"
+                                className="w-full text-left px-3 py-1.5 text-danger hover:bg-surface-hover disabled:opacity-50"
                                 disabled={busy}
                                 onClick={() => runAction('killProcess', { pid: menu.process!.pid }, `Processo ${menu.process!.pid} encerrado`)}
                             >
@@ -270,7 +270,7 @@ export function RemoteProcesses({ natsSubject, natsUrl, jwt }: RemoteProcessesPr
 
             {/* Toast de feedback */}
             {toast && (
-                <div className="fixed bottom-12 left-1/2 -translate-x-1/2 z-50 bg-slate-800 border border-slate-600 rounded px-4 py-2 text-xs text-slate-100 shadow-lg">
+                <div className="fixed bottom-12 left-1/2 -translate-x-1/2 z-50 bg-surface border border-border-strong rounded px-4 py-2 text-xs text-foreground shadow-lg">
                     {toast}
                 </div>
             )}

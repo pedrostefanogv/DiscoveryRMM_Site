@@ -22,7 +22,7 @@ export function CodecSelector({ value, onChange, disabled }: CodecSelectorProps)
           className={`px-2 py-1 text-xs rounded transition-colors ${
             value === c.value
               ? 'bg-primary/20 text-primary border border-primary/30'
-              : 'bg-slate-800 text-slate-400 hover:text-slate-300 border border-slate-700'
+              : 'bg-surface text-muted-foreground hover:text-foreground border border-border'
           } disabled:opacity-50`}
           onClick={() => onChange(c.value)}
           title={c.desc}
@@ -65,7 +65,7 @@ export function QualitySelector({ value, onChange, disabled }: QualitySelectorPr
           className={`px-2 py-1 text-xs rounded transition-colors ${
             wireValue === q.value
               ? 'bg-primary/20 text-primary border border-primary/30'
-              : 'bg-slate-800 text-slate-400 hover:text-slate-300 border border-slate-700'
+              : 'bg-surface text-muted-foreground hover:text-foreground border border-border'
           } disabled:opacity-50`}
           onClick={() => onChange(toWireQuality(q.value))}
           title={`${q.fps} FPS`}

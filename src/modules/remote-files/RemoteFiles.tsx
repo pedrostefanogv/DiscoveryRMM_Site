@@ -677,10 +677,10 @@ export default function RemoteFiles({
   };
 
   return (
-    <div className="flex flex-col h-full bg-slate-950 text-slate-300">
+    <div className="flex flex-col h-full bg-background text-foreground">
       {/* Toolbar */}
-      <div className="flex items-center gap-1 px-3 py-1.5 bg-slate-900 border-b border-slate-800 text-xs">
-        <span className="text-slate-500">📁</span>
+      <div className="flex items-center gap-1 px-3 py-1.5 bg-surface border-b border-border text-xs">
+        <span className="text-muted">📁</span>
         <input
           value={pathInput}
           onChange={(e) => setPathInput(e.target.value)}
@@ -690,11 +690,11 @@ export default function RemoteFiles({
           }}
           onBlur={() => setPathInput(currentPath)}
           spellCheck={false}
-          className="flex-1 min-w-0 bg-transparent font-mono text-slate-300 text-xs px-1 py-0.5 rounded border border-transparent focus:border-sky-500 focus:outline-none"
+          className="flex-1 min-w-0 bg-transparent font-mono text-foreground text-xs px-1 py-0.5 rounded border border-transparent focus:border-accent focus:outline-none"
           title="Caminho atual — pressione Enter para navegar"
         />
         <button
-          className="px-2 py-0.5 bg-slate-800 text-slate-400 rounded hover:bg-slate-700 hover:text-slate-200 disabled:opacity-50"
+          className="px-2 py-0.5 bg-surface-hover text-muted-foreground rounded hover:bg-border hover:text-foreground disabled:opacity-50"
           onClick={handleRefresh}
           disabled={loading || !isConnected}
           title="Atualizar"
@@ -702,7 +702,7 @@ export default function RemoteFiles({
           ↻
         </button>
         <button
-          className="px-2 py-0.5 bg-slate-800 text-slate-400 rounded hover:bg-slate-700 hover:text-slate-200 disabled:opacity-50"
+          className="px-2 py-0.5 bg-surface-hover text-muted-foreground rounded hover:bg-border hover:text-foreground disabled:opacity-50"
           onClick={handleMkdir}
           disabled={busy !== null || !isConnected}
           title="Nova pasta"
@@ -710,7 +710,7 @@ export default function RemoteFiles({
           + Pasta
         </button>
         <button
-          className="px-2 py-0.5 bg-slate-800 text-slate-400 rounded hover:bg-slate-700 hover:text-slate-200 disabled:opacity-50"
+          className="px-2 py-0.5 bg-surface-hover text-muted-foreground rounded hover:bg-border hover:text-foreground disabled:opacity-50"
           onClick={() => fileInputRef.current?.click()}
           disabled={busy !== null || !isConnected}
           title="Enviar arquivo para o PC remoto"
@@ -729,7 +729,7 @@ export default function RemoteFiles({
         />
         {clipboard && (
           <button
-            className="px-2 py-0.5 bg-sky-800/60 text-sky-200 rounded hover:bg-sky-700 disabled:opacity-50"
+            className="px-2 py-0.5 bg-accent/20 text-accent rounded hover:bg-accent/30 disabled:opacity-50"
             onClick={handlePaste}
             disabled={busy !== null || !isConnected}
             title={`Colar ${clipboard.cut ? '(recortado)' : '(copiado)'}: ${clipboard.path}`}
@@ -741,10 +741,10 @@ export default function RemoteFiles({
 
       {/* Status / error banner */}
       {busy && transfers.size === 0 && !opProgress && (
-        <div className="px-3 py-1.5 bg-blue-900/40 text-blue-300 text-xs">{busy}...</div>
+        <div className="px-3 py-1.5 bg-accent/20 text-accent text-xs">{busy}...</div>
       )}
       {transfers.size > 0 && (
-        <div className="border-b border-slate-800">
+        <div className="border-b border-border">
           {[...transfers.values()].map((t) => (
             <TransferProgressBar
               key={t.id}
@@ -758,10 +758,10 @@ export default function RemoteFiles({
         <OperationProgressBar label={busy ?? 'Operação'} progress={opProgress} />
       )}
       {error && (
-        <div className="px-3 py-1.5 bg-red-900/40 text-red-300 text-xs">{error}</div>
+        <div className="px-3 py-1.5 bg-danger/20 text-danger text-xs">{error}</div>
       )}
       {!isConnected && (
-        <div className="px-3 py-1.5 bg-amber-900/40 text-amber-300 text-xs">
+        <div className="px-3 py-1.5 bg-warning/20 text-warning text-xs">
           Conectando ao agent... (aguardando NATS)
         </div>
       )}
@@ -772,10 +772,10 @@ export default function RemoteFiles({
         onContextMenu={(e) => openContextMenu(e, null)}
       >
         {loading ? (
-          <div className="flex items-center justify-center h-full text-slate-500 text-sm">Carregando...</div>
+          <div className="flex items-center justify-center h-full text-muted text-sm">Carregando...</div>
         ) : (
           <table className="w-full text-sm">
-            <thead className="sticky top-0 bg-slate-900 text-slate-500 text-xs uppercase">
+            <thead className="sticky top-0 bg-surface text-muted text-xs uppercase">
               <tr>
                 <th className="text-left px-3 py-1.5 w-8"></th>
                 <th className="text-left px-3 py-1.5">Nome</th>
@@ -786,26 +786,26 @@ export default function RemoteFiles({
             <tbody>
               {!isRoot && (
                 <tr
-                  className="hover:bg-slate-800 cursor-pointer border-b border-slate-800/50"
+                  className="hover:bg-surface-hover cursor-pointer border-b border-border"
                   onClick={() => navigateTo('..')}
                   onContextMenu={(e) => openContextMenu(e, null)}
                 >
                   <td className="px-3 py-2">📁</td>
-                  <td className="px-3 py-2 text-slate-400">..</td>
+                  <td className="px-3 py-2 text-muted-foreground">..</td>
                   <td></td><td></td>
                 </tr>
               )}
               {files.map((f) => (
                 <tr
                   key={f.path || f.name}
-                  className={`hover:bg-slate-800 border-b border-slate-800/50 ${f.isDir ? 'cursor-pointer' : 'cursor-default'} ${isSelected(f.path) ? 'bg-slate-700/60' : ''}`}
+                  className={`hover:bg-surface-hover border-b border-border ${f.isDir ? 'cursor-pointer' : 'cursor-default'} ${isSelected(f.path) ? 'bg-surface-hover' : ''}`}
                   onClick={(e) => handleRowClick(f, e)}
                   onContextMenu={(e) => openContextMenu(e, f)}
                 >
                   <td className="px-3 py-2">{f.isDir ? '📁' : '📄'}</td>
                   <td className="px-3 py-2 font-mono">{f.name}</td>
-                  <td className="px-3 py-2 text-right text-slate-500 font-mono text-xs">{f.isDir ? '—' : formatSize(f.size)}</td>
-                  <td className="px-3 py-2 text-right text-slate-500 text-xs">{f.modTime.slice(0, 10)}</td>
+                  <td className="px-3 py-2 text-right text-muted font-mono text-xs">{f.isDir ? '—' : formatSize(f.size)}</td>
+                  <td className="px-3 py-2 text-right text-muted text-xs">{f.modTime.slice(0, 10)}</td>
                 </tr>
               ))}
             </tbody>
@@ -817,7 +817,7 @@ export default function RemoteFiles({
       {ctxMenu && (
         <div
           ref={ctxMenuRef}
-          className="fixed z-50 min-w-[180px] max-w-[280px] bg-slate-800 border border-slate-700 rounded-lg shadow-xl py-1 text-xs overflow-y-auto"
+          className="fixed z-50 min-w-[180px] max-w-[280px] bg-surface border border-border rounded-lg shadow-xl py-1 text-xs overflow-y-auto"
           style={{ left: ctxPos.left, top: ctxPos.top, maxHeight: '90vh' }}
           onClick={(e) => e.stopPropagation()}
         >
@@ -825,20 +825,20 @@ export default function RemoteFiles({
             <>
               {selectedPaths.size <= 1 && !ctxMenu.entry.isDir && (
                 <button
-                  className="w-full text-left px-3 py-1.5 text-slate-200 hover:bg-slate-700"
+                  className="w-full text-left px-3 py-1.5 text-foreground hover:bg-surface-hover"
                   onClick={() => runCtx(() => handleDownload(ctxMenu.entry!))}
                 >
                   ⬇ Baixar
                 </button>
               )}
               <button
-                className="w-full text-left px-3 py-1.5 text-slate-200 hover:bg-slate-700"
+                className="w-full text-left px-3 py-1.5 text-foreground hover:bg-surface-hover"
                 onClick={() => runCtx(() => { selectedPaths.size > 1 ? handleCopySelection() : handleCopy(ctxMenu.entry!); })}
               >
                 📄 {selectedPaths.size > 1 ? `Copiar (${selectedPaths.size})` : 'Copiar'}
               </button>
               <button
-                className="w-full text-left px-3 py-1.5 text-slate-200 hover:bg-slate-700"
+                className="w-full text-left px-3 py-1.5 text-foreground hover:bg-surface-hover"
                 onClick={() => runCtx(() => { selectedPaths.size > 1 ? handleCutSelection() : handleCut(ctxMenu.entry!); })}
               >
                 ✂ {selectedPaths.size > 1 ? `Recortar (${selectedPaths.size})` : 'Recortar'}
@@ -846,14 +846,14 @@ export default function RemoteFiles({
               {selectedPaths.size <= 1 && (
                 <>
                   <button
-                    className="w-full text-left px-3 py-1.5 text-slate-200 hover:bg-slate-700"
+                    className="w-full text-left px-3 py-1.5 text-foreground hover:bg-surface-hover"
                     onClick={() => runCtx(() => handleRename(ctxMenu.entry!))}
                   >
                     ✎ Renomear
                   </button>
                   {!ctxMenu.entry.isDir && ctxMenu.entry.name.toLowerCase().endsWith('.zip') && (
                     <button
-                      className="w-full text-left px-3 py-1.5 text-slate-200 hover:bg-slate-700"
+                      className="w-full text-left px-3 py-1.5 text-foreground hover:bg-surface-hover"
                       onClick={() => runCtx(() => handleUnzip(ctxMenu.entry!))}
                     >
                       📂 Descompactar
@@ -862,14 +862,14 @@ export default function RemoteFiles({
                 </>
               )}
               <button
-                className="w-full text-left px-3 py-1.5 text-slate-200 hover:bg-slate-700"
+                className="w-full text-left px-3 py-1.5 text-foreground hover:bg-surface-hover"
                 onClick={() => runCtx(() => { selectedPaths.size > 1 ? handleZipSelection() : handleZip(ctxMenu.entry!); })}
               >
                 🗜 {selectedPaths.size > 1 ? `Compactar (${selectedPaths.size})` : 'Compactar (.zip)'}
               </button>
-              <div className="my-1 border-t border-slate-700" />
+              <div className="my-1 border-t border-border" />
               <button
-                className="w-full text-left px-3 py-1.5 text-red-300 hover:bg-red-900/40"
+                className="w-full text-left px-3 py-1.5 text-danger hover:bg-danger/20"
                 onClick={() => runCtx(() => { selectedPaths.size > 1 ? handleDeleteSelection() : handleDelete(ctxMenu.entry!); })}
               >
                 🗑 {selectedPaths.size > 1 ? `Apagar (${selectedPaths.size})` : 'Apagar'}
@@ -879,26 +879,26 @@ export default function RemoteFiles({
           {!ctxMenu.entry && (
             <>
               <button
-                className="w-full text-left px-3 py-1.5 text-slate-200 hover:bg-slate-700"
+                className="w-full text-left px-3 py-1.5 text-foreground hover:bg-surface-hover"
                 onClick={() => runCtx(handleMkdir)}
               >
                 + Nova pasta
               </button>
               <button
-                className="w-full text-left px-3 py-1.5 text-slate-200 hover:bg-slate-700"
+                className="w-full text-left px-3 py-1.5 text-foreground hover:bg-surface-hover"
                 onClick={() => runCtx(() => fileInputRef.current?.click())}
               >
                 ↑ Upload
               </button>
               <button
-                className="w-full text-left px-3 py-1.5 text-slate-200 hover:bg-slate-700"
+                className="w-full text-left px-3 py-1.5 text-foreground hover:bg-surface-hover"
                 onClick={() => runCtx(handleRefresh)}
               >
                 ↻ Atualizar
               </button>
               {clipboard && (
                 <button
-                  className="w-full text-left px-3 py-1.5 text-sky-200 hover:bg-slate-700"
+                  className="w-full text-left px-3 py-1.5 text-accent hover:bg-surface-hover"
                   onClick={() => runCtx(handlePaste)}
                 >
                   📋 Colar {clipboard.cut ? '(mover)' : ''}
@@ -911,15 +911,15 @@ export default function RemoteFiles({
 
       {/* Modal inline (prompt/confirm) */}
       {modal && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60" onClick={closeModal}>
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-overlay" onClick={closeModal}>
           <div
-            className="bg-slate-800 border border-slate-700 rounded-lg shadow-xl w-96 max-w-[90%] p-4"
+            className="bg-surface border border-border rounded-lg shadow-xl w-96 max-w-[90%] p-4"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="text-sm font-semibold text-slate-200 mb-2">{modal.title}</h3>
-            {modal.message && <p className="text-xs text-slate-400 mb-3">{modal.message}</p>}
+            <h3 className="text-sm font-semibold text-foreground mb-2">{modal.title}</h3>
+            {modal.message && <p className="text-xs text-muted-foreground mb-3">{modal.message}</p>}
             {modal.inputLabel !== undefined && (
-              <label className="block text-xs text-slate-400 mb-1">{modal.inputLabel}</label>
+              <label className="block text-xs text-muted-foreground mb-1">{modal.inputLabel}</label>
             )}
             {modal.inputLabel !== undefined && (
               <input
@@ -927,18 +927,18 @@ export default function RemoteFiles({
                 value={modalInput}
                 onChange={(e) => setModalInput(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') submitModal(); if (e.key === 'Escape') closeModal(); }}
-                className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-sm text-slate-200 mb-3 focus:outline-none focus:border-sky-500"
+                className="w-full bg-surface border border-border rounded px-2 py-1.5 text-sm text-foreground mb-3 focus:outline-none focus:border-accent"
               />
             )}
             <div className="flex justify-end gap-2">
               <button
-                className="px-3 py-1.5 rounded text-xs bg-slate-700 text-slate-300 hover:bg-slate-600"
+                className="px-3 py-1.5 rounded text-xs bg-surface-hover text-foreground hover:bg-border"
                 onClick={closeModal}
               >
                 Cancelar
               </button>
               <button
-                className={`px-3 py-1.5 rounded text-xs font-medium ${modal.danger ? 'bg-red-600 text-white hover:bg-red-500' : 'bg-sky-600 text-white hover:bg-sky-500'}`}
+                className={`px-3 py-1.5 rounded text-xs font-medium ${modal.danger ? 'bg-danger text-white hover:bg-danger/80' : 'bg-accent text-white hover:bg-accent/80'}`}
                 onClick={submitModal}
               >
                 {modal.confirmLabel ?? 'OK'}
@@ -959,29 +959,29 @@ function TransferProgressBar({ transfer, onCancel }: { transfer: TransferState; 
     : 0;
   const isUpload = transfer.kind === 'upload';
   return (
-    <div className="px-3 py-2 bg-slate-900 border-b border-slate-800 text-xs">
+    <div className="px-3 py-2 bg-surface border-b border-border text-xs">
       <div className="flex items-center justify-between gap-2 mb-1">
-        <span className="text-slate-300 truncate">
+        <span className="text-foreground truncate">
           {isUpload ? '⬆' : '⬇'} {transfer.name}
         </span>
-        <span className="text-slate-400 whitespace-nowrap">
+        <span className="text-muted-foreground whitespace-nowrap">
           {formatSize(transfer.loadedBytes)} / {formatSize(transfer.totalBytes)} ({pct.toFixed(0)}%)
         </span>
         <button
-          className="px-2 py-0.5 rounded bg-rose-700/70 hover:bg-rose-600 text-white disabled:opacity-50"
+          className="px-2 py-0.5 rounded bg-danger/70 hover:bg-danger text-white disabled:opacity-50"
           onClick={onCancel}
           title={`Cancelar ${isUpload ? 'upload' : 'download'}`}
         >
           ✕ Cancelar
         </button>
       </div>
-      <div className="w-full h-2 bg-slate-800 rounded overflow-hidden">
+      <div className="w-full h-2 bg-surface-hover rounded overflow-hidden">
         <div
-          className={`h-full transition-[width] duration-150 ease-linear ${isUpload ? 'bg-sky-500' : 'bg-emerald-500'}`}
+          className={`h-full transition-[width] duration-150 ease-linear ${isUpload ? 'bg-accent' : 'bg-success'}`}
           style={{ width: `${pct}%` }}
         />
       </div>
-      <div className="flex items-center justify-between mt-1 text-slate-500">
+      <div className="flex items-center justify-between mt-1 text-muted">
         <span>{formatSpeed(transfer.speedBps)}</span>
         <span>Restante: {formatEta(transfer.etaSeconds)}</span>
       </div>
@@ -996,16 +996,16 @@ function OperationProgressBar({ label, progress }: { label: string; progress: { 
     ? Math.min(100, (progress.loaded / progress.total) * 100)
     : 0;
   return (
-    <div className="px-3 py-2 bg-slate-900 border-b border-slate-800 text-xs">
+    <div className="px-3 py-2 bg-surface border-b border-border text-xs">
       <div className="flex items-center justify-between gap-2 mb-1">
-        <span className="text-slate-300 truncate">{label}</span>
-        <span className="text-slate-400 whitespace-nowrap">
+        <span className="text-foreground truncate">{label}</span>
+        <span className="text-muted-foreground whitespace-nowrap">
           {formatSize(progress.loaded)} / {formatSize(progress.total)} ({pct.toFixed(0)}%)
         </span>
       </div>
-      <div className="w-full h-2 bg-slate-800 rounded overflow-hidden">
+      <div className="w-full h-2 bg-surface-hover rounded overflow-hidden">
         <div
-          className="h-full transition-[width] duration-150 ease-linear bg-violet-500"
+          className="h-full transition-[width] duration-150 ease-linear bg-primary"
           style={{ width: `${pct}%` }}
         />
       </div>

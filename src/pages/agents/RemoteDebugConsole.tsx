@@ -10,6 +10,7 @@ import { getNatsService, resetNatsService, type DashboardEvent, type NatsCredent
 import { realtimeConfig } from "@/config/realtime";
 import { useAuth } from "@/auth/AuthContext";
 import { Badge, Button, ErrorDisplay } from "@/components/ui";
+import { ThemeToggle } from "@/components/auth/ThemeToggle";
 
 const MAX_LOG_LINES = 2000;
 
@@ -558,6 +559,8 @@ export default function RemoteDebugConsole() {
           >
             encerrar
           </Button>
+
+          <ThemeToggle />
         </div>
       </header>
 

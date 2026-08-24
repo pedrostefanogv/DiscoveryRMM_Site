@@ -42,9 +42,9 @@ export function RecordingControls({
 
   return (
     <>
-      {error && <span className="text-red-400">{error}</span>}
+      {error && <span className="text-danger">{error}</span>}
       <button
-        className={`px-2 py-0.5 rounded ${isRecording ? 'bg-red-600 text-white animate-pulse' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'}`}
+        className={`px-2 py-0.5 rounded ${isRecording ? 'bg-danger text-white animate-pulse' : 'bg-surface-hover text-foreground hover:bg-border'}`}
         onClick={toggleRecording}
         disabled={loading || !sessionId || !agentId}
       >

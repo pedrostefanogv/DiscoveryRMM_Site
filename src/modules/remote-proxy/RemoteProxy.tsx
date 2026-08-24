@@ -39,14 +39,14 @@ export default function RemoteProxy({ sessionId: _sessionId, agentId: _agentId }
   }, [url, navigate]);
 
   return (
-    <div className="flex flex-col h-full bg-slate-950 text-slate-300">
+    <div className="flex flex-col h-full bg-background text-foreground">
       {/* URL bar */}
-      <div className="flex items-center gap-2 px-3 py-2 bg-slate-900 border-b border-slate-800">
+      <div className="flex items-center gap-2 px-3 py-2 bg-surface border-b border-border">
         <form onSubmit={handleSubmit} className="flex flex-1 items-center gap-2">
-          <span className="text-slate-500 text-sm">🔗</span>
+          <span className="text-muted text-sm">🔗</span>
           <input
             type="text"
-            className="flex-1 bg-slate-800 border border-slate-700 rounded px-3 py-1.5 text-sm text-slate-300 font-mono outline-none focus:border-primary/50"
+            className="flex-1 bg-surface border border-border rounded px-3 py-1.5 text-sm text-foreground font-mono outline-none focus:border-primary/50"
             placeholder="http://192.168.1.1/ ou http://roteador/"
             value={url}
             onChange={e => setUrl(e.target.value)}
@@ -61,8 +61,8 @@ export default function RemoteProxy({ sessionId: _sessionId, agentId: _agentId }
       </div>
 
       {/* Quick links */}
-      <div className="flex gap-1 px-3 py-2 bg-slate-900/50 border-b border-slate-800/50 text-xs">
-        <span className="text-slate-600 mr-2">Acessos rápidos:</span>
+      <div className="flex gap-1 px-3 py-2 bg-surface-light border-b border-border text-xs">
+        <span className="text-muted mr-2">Acessos rápidos:</span>
         {[
           { label: 'Roteador', url: 'http://192.168.1.1/' },
           { label: 'Router Alt', url: 'http://192.168.0.1/' },
@@ -70,7 +70,7 @@ export default function RemoteProxy({ sessionId: _sessionId, agentId: _agentId }
         ].map(q => (
           <button
             key={q.url}
-            className="px-2 py-0.5 bg-slate-800 text-slate-400 rounded hover:bg-slate-700 hover:text-slate-300 transition-colors"
+            className="px-2 py-0.5 bg-surface text-muted-foreground rounded hover:bg-surface-hover hover:text-foreground transition-colors"
             onClick={() => { setUrl(q.url); navigate(q.url); }}
           >
             {q.label}
@@ -80,15 +80,15 @@ export default function RemoteProxy({ sessionId: _sessionId, agentId: _agentId }
 
       {/* Status */}
       {status === 'loading' && (
-        <div className="px-3 py-1 bg-amber-900/30 text-amber-400 text-xs">Carregando...</div>
+        <div className="px-3 py-1 bg-warning/30 text-warning text-xs">Carregando...</div>
       )}
       {status === 'blocked' && (
-        <div className="px-3 py-1 bg-red-900/30 text-red-400 text-xs">
+        <div className="px-3 py-1 bg-danger/30 text-danger text-xs">
           ⛔ Acesso bloqueado — allowlist não configurada. Solicite ao administrador.
         </div>
       )}
       {error && (
-        <div className="px-3 py-1 bg-red-900/30 text-red-400 text-xs">Erro: {error}</div>
+        <div className="px-3 py-1 bg-danger/30 text-danger text-xs">Erro: {error}</div>
       )}
 
       {/* Iframe */}
@@ -106,10 +106,10 @@ export default function RemoteProxy({ sessionId: _sessionId, agentId: _agentId }
             }}
           />
         ) : (
-          <div className="flex flex-col items-center justify-center h-full text-slate-600">
+          <div className="flex flex-col items-center justify-center h-full text-muted">
             <div className="text-4xl mb-3">🔗</div>
             <p className="text-sm mb-1">Proxy de Rede — Bloqueio Total Inicial</p>
-            <p className="text-xs text-slate-700">
+            <p className="text-xs text-muted">
               A allowlist está vazia por padrão. Configure os IPs permitidos para acessar dispositivos na rede do agent.
             </p>
           </div>
