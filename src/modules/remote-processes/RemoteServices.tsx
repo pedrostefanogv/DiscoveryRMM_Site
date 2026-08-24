@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useProcessesStream, type ServiceInfo } from './useProcessStream';
+import { formatBytes, formatConnections, formatCpuPercent } from './format';
 
 interface RemoteServicesProps {
     sessionId: string;
@@ -93,6 +94,14 @@ export function RemoteServices({ natsSubject, natsUrl, jwt }: RemoteServicesProp
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [connected]);
 
+    // Auto-refresh: mantém CPU/RAM dos serviços em execução atualizados.
+    useEffect(() => {
+        if (!connected) return;
+        const timer = setTimeout(loadServices, 1500);
+        return () => clearTimeout(timer);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [connected, services]);
+
     const runAction = useCallback(async (action: string, body: Record<string, unknown>, successMsg: string) => {
         if (!stream.send) return;
         setBusy(true);
@@ -176,6 +185,9 @@ export function RemoteServices({ natsSubject, natsUrl, jwt }: RemoteServicesProp
                                 <th className="px-3 py-1.5">Estado</th>
                                 <th className="px-3 py-1.5">Inicialização</th>
                                 <th className="px-3 py-1.5">PID</th>
+                                <th className="px-3 py-1.5 text-right">CPU</th>
+                                <th className="px-3 py-1.5 text-right">RAM</th>
+                                <th className="px-3 py-1.5 text-right">Rede</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -194,10 +206,13 @@ export function RemoteServices({ natsSubject, natsUrl, jwt }: RemoteServicesProp
                                     </td>
                                     <td className="px-3 py-1 text-slate-400">{startTypeLabel(s.startType)}</td>
                                     <td className="px-3 py-1 text-slate-400">{s.pid ?? '—'}</td>
+                                    <td className="px-3 py-1 text-right text-amber-300">{formatCpuPercent(s.cpuPercent)}</td>
+                                    <td className="px-3 py-1 text-right text-sky-300">{formatBytes(s.memoryBytes)}</td>
+                                    <td className="px-3 py-1 text-right text-slate-400">{formatConnections(s.connections)}</td>
                                 </tr>
                             ))}
                             {filteredServices.length === 0 && !loading && (
-                                <tr><td colSpan={4} className="px-3 py-6 text-center text-slate-500">Nenhum serviço encontrado</td></tr>
+                                <tr><td colSpan={7} className="px-3 py-6 text-center text-slate-500">Nenhum serviço encontrado</td></tr>
                             )}
                         </tbody>
                     </table>

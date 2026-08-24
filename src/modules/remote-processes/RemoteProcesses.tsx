@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useProcessesStream, type ProcessInfo } from './useProcessStream';
+import { useProcessesStream, type ProcessInfo, type SystemInfo } from './useProcessStream';
+import { formatBytes, formatConnections, formatCpuPercent } from './format';
 
 interface RemoteProcessesProps {
     sessionId: string;
@@ -10,11 +11,16 @@ interface RemoteProcessesProps {
     nkeySeed?: string;
 }
 
+type SortKey = 'pid' | 'name' | 'threads' | 'priorityBase' | 'cpuPercent' | 'memoryBytes' | 'ioReadBytes' | 'ioWriteBytes' | 'connections';
+
 export function RemoteProcesses({ natsSubject, natsUrl, jwt }: RemoteProcessesProps) {
     const [processes, setProcesses] = useState<ProcessInfo[]>([]);
     const [loading, setLoading] = useState(false);
     const [busy, setBusy] = useState(false);
     const [search, setSearch] = useState('');
+    const [sysInfo, setSysInfo] = useState<SystemInfo | null>(null);
+    const [sortKey, setSortKey] = useState<SortKey>('cpuPercent');
+    const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
     const [menu, setMenu] = useState<{ x: number; y: number; process?: ProcessInfo } | null>(null);
     const [toast, setToast] = useState<string | null>(null);
     const errorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -47,6 +53,17 @@ export function RemoteProcesses({ natsSubject, natsUrl, jwt }: RemoteProcessesPr
         }
     }, [stream.send, notify]);
 
+    const loadSystemInfo = useCallback(async () => {
+        if (!stream.send) return;
+        try {
+            const res = await stream.send('getSystemInfo');
+            if (res.success && res.system) setSysInfo(res.system);
+            // Falha silenciosa: o resumo é informativo, não bloqueia a listagem.
+        } catch {
+            /* informativo */
+        }
+    }, [stream.send]);
+
     // Carrega a lista ao conectar (aguarda proc.ready para evitar race)
     useEffect(() => {
         if (!connected) return;
@@ -55,6 +72,7 @@ export function RemoteProcesses({ natsSubject, natsUrl, jwt }: RemoteProcessesPr
             if (fired) return;
             fired = true;
             loadProcesses();
+            loadSystemInfo();
         };
         const off = stream.onReady(() => load());
         // Fallback: se proc.ready não chegar, tenta mesmo assim (retry único).
@@ -63,6 +81,18 @@ export function RemoteProcesses({ natsSubject, natsUrl, jwt }: RemoteProcessesPr
         return () => { off(); clearTimeout(fallback); };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [connected]);
+
+    // Auto-refresh: atualiza métricas (a CPU% usa janela deslizante no agente;
+    // o refresh regular é necessário para popular valores reais e acompanhar).
+    useEffect(() => {
+        if (!connected) return;
+        const timer = setTimeout(() => {
+            loadProcesses();
+            loadSystemInfo();
+        }, 1500);
+        return () => clearTimeout(timer);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [connected, processes]);
 
     const runAction = useCallback(async (action: string, body: Record<string, unknown>, successMsg: string) => {
         if (!stream.send) return;
@@ -102,9 +132,37 @@ export function RemoteProcesses({ natsSubject, natsUrl, jwt }: RemoteProcessesPr
 
     const filteredProcesses = useMemo(() => {
         const q = search.toLowerCase();
-        if (!q) return processes;
-        return processes.filter(p => p.name.toLowerCase().includes(q));
-    }, [processes, search]);
+        const base = q ? processes.filter(p => p.name.toLowerCase().includes(q)) : processes;
+        const sorted = [...base].sort((a, b) => {
+            const av = a[sortKey];
+            const bv = b[sortKey];
+            if (typeof av === 'string' && typeof bv === 'string') {
+                return sortDir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av);
+            }
+            const an = Number(av) || 0;
+            const bn = Number(bv) || 0;
+            return sortDir === 'asc' ? an - bn : bn - an;
+        });
+        return sorted;
+    }, [processes, search, sortKey, sortDir]);
+
+    const toggleSort = useCallback((key: SortKey) => {
+        if (key === sortKey) {
+            setSortDir(d => (d === 'asc' ? 'desc' : 'asc'));
+        } else {
+            setSortKey(key);
+            setSortDir('desc');
+        }
+    }, [sortKey]);
+
+    const sortHeader = (key: SortKey, label: string, align: 'left' | 'right' = 'right') => (
+        <th className={`px-3 py-1.5 ${align === 'right' ? 'text-right' : ''} cursor-pointer select-none hover:text-slate-200`} onClick={() => toggleSort(key)}>
+            <span className="inline-flex items-center gap-1 justify-end">
+                {label}
+                {sortKey === key && <span>{sortDir === 'asc' ? '▲' : '▼'}</span>}
+            </span>
+        </th>
+    );
 
     return (
         <div className="h-full flex flex-col min-h-0 bg-slate-950" onContextMenu={(e) => e.preventDefault()}>
@@ -112,6 +170,12 @@ export function RemoteProcesses({ natsSubject, natsUrl, jwt }: RemoteProcessesPr
             <div className="flex items-center gap-1 px-3 py-2 border-b border-slate-800">
                 <span className="text-sm text-slate-400">🗔 Processos ({processes.length})</span>
                 <div className="flex-1" />
+                {sysInfo && (
+                    <span className="hidden md:inline-flex items-center gap-3 text-[11px] text-slate-500">
+                        <span>CPU {formatCpuPercent(sysInfo.cpuPercent)}</span>
+                        <span>RAM {formatBytes(sysInfo.usedMemoryBytes)} / {formatBytes(sysInfo.totalMemoryBytes)}</span>
+                    </span>
+                )}
                 <input
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
@@ -119,7 +183,7 @@ export function RemoteProcesses({ natsSubject, natsUrl, jwt }: RemoteProcessesPr
                     className="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-slate-300 placeholder-slate-500 w-56"
                 />
                 <button
-                    onClick={loadProcesses}
+                    onClick={() => { loadProcesses(); loadSystemInfo(); }}
                     disabled={!connected || loading}
                     className="px-2 py-1 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded text-xs disabled:opacity-50"
                 >
@@ -143,10 +207,15 @@ export function RemoteProcesses({ natsSubject, natsUrl, jwt }: RemoteProcessesPr
                     <table className="w-full text-left text-xs">
                         <thead className="sticky top-0 bg-slate-900 text-slate-400">
                             <tr>
-                                <th className="px-3 py-1.5">PID</th>
-                                <th className="px-3 py-1.5">Nome</th>
-                                <th className="px-3 py-1.5 text-right">Threads</th>
-                                <th className="px-3 py-1.5 text-right">Prioridade</th>
+                                {sortHeader('pid', 'PID', 'left')}
+                                {sortHeader('name', 'Nome', 'left')}
+                                {sortHeader('cpuPercent', 'CPU')}
+                                {sortHeader('memoryBytes', 'RAM')}
+                                {sortHeader('ioReadBytes', 'Disco L')}
+                                {sortHeader('ioWriteBytes', 'Disco E')}
+                                {sortHeader('connections', 'Rede')}
+                                {sortHeader('threads', 'Threads')}
+                                {sortHeader('priorityBase', 'Prio')}
                             </tr>
                         </thead>
                         <tbody>
@@ -157,13 +226,18 @@ export function RemoteProcesses({ natsSubject, natsUrl, jwt }: RemoteProcessesPr
                                     onContextMenu={(e) => openProcessMenu(e, p)}
                                 >
                                     <td className="px-3 py-1 text-slate-300">{p.pid}</td>
-                                    <td className="px-3 py-1 text-slate-200 font-mono">{p.name}</td>
+                                    <td className="px-3 py-1 text-slate-200 font-mono max-w-[16rem] truncate" title={p.name}>{p.name}</td>
+                                    <td className="px-3 py-1 text-right text-amber-300">{formatCpuPercent(p.cpuPercent)}</td>
+                                    <td className="px-3 py-1 text-right text-sky-300">{formatBytes(p.memoryBytes)}</td>
+                                    <td className="px-3 py-1 text-right text-slate-400">{formatBytes(p.ioReadBytes)}</td>
+                                    <td className="px-3 py-1 text-right text-slate-400">{formatBytes(p.ioWriteBytes)}</td>
+                                    <td className="px-3 py-1 text-right text-slate-400">{formatConnections(p.connections)}</td>
                                     <td className="px-3 py-1 text-right text-slate-400">{p.threads}</td>
                                     <td className="px-3 py-1 text-right text-slate-400">{p.priorityBase}</td>
                                 </tr>
                             ))}
                             {filteredProcesses.length === 0 && !loading && (
-                                <tr><td colSpan={4} className="px-3 py-6 text-center text-slate-500">Nenhum processo encontrado</td></tr>
+                                <tr><td colSpan={9} className="px-3 py-6 text-center text-slate-500">Nenhum processo encontrado</td></tr>
                             )}
                         </tbody>
                     </table>

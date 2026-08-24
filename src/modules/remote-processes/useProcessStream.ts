@@ -12,6 +12,11 @@ export interface ProcessInfo {
     name: string;
     threads: number;
     priorityBase: number;
+    cpuPercent: number;
+    memoryBytes: number;
+    ioReadBytes: number;
+    ioWriteBytes: number;
+    connections: number;
 }
 
 export interface ServiceInfo {
@@ -21,6 +26,18 @@ export interface ServiceInfo {
     startType?: string; // auto, demand, disabled, ...
     binaryPath?: string;
     pid?: number;
+    cpuPercent?: number;
+    memoryBytes?: number;
+    ioReadBytes?: number;
+    ioWriteBytes?: number;
+    connections?: number;
+}
+
+export interface SystemInfo {
+    totalMemoryBytes: number;
+    usedMemoryBytes: number;
+    memoryPercent: number;
+    cpuPercent: number;
 }
 
 export interface ProcResponse {
@@ -30,6 +47,7 @@ export interface ProcResponse {
     status?: string;
     processes?: ProcessInfo[];
     services?: ServiceInfo[];
+    system?: SystemInfo;
 }
 
 export interface UseProcessesStreamReturn {
