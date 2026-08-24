@@ -94,6 +94,7 @@ export default function RemoteScreenViewer({
   isFullscreen,
 }: RemoteScreenViewerProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const cursorCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [rtt, setRtt] = useState<number>(0);
   const [fps, setFps] = useState<number>(0);
@@ -362,10 +363,24 @@ export default function RemoteScreenViewer({
     let cursorImage: { bitmap: ImageBitmap; hotX: number; hotY: number } | null = null;
 
     const drawCursorOverlay = () => {
-      const canvas = canvasRef.current;
-      if (!canvas || !cursorPos || !cursorPos.visible) return;
+      const canvas = cursorCanvasRef.current;
+      if (!canvas) return;
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
+
+      // Sincroniza o canvas do cursor com o canvas principal (mesmo tamanho/posição).
+      const main = canvasRef.current;
+      if (main && (canvas.width !== main.width || canvas.height !== main.height)) {
+        canvas.width = main.width;
+        canvas.height = main.height;
+      }
+
+      // LIMPA o overlay inteiro antes de desenhar — evita "rastro" do cursor
+      // em posições anteriores quando o frame subjacente não é redesenhado por
+      // completo (modo tiles/dirty rects preserva o conteúdo antigo).
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      if (!cursorPos || !cursorPos.visible) return;
 
       const x = cursorPos.x;
       const y = cursorPos.y;
@@ -445,6 +460,22 @@ export default function RemoteScreenViewer({
       }
     };
 
+    // ── Clipboard remoto (agent→viewer) via subject .clipboard ──
+    // O agente publica { text } quando o clipboard da máquina remota muda.
+    // O viewer escreve no clipboard local do navegador (navigator.clipboard).
+    const processClipboardMessage = (payloadText: string) => {
+      try {
+        const data = JSON.parse(payloadText) as { text?: string };
+        if (typeof data?.text === 'string' && data.text.length > 0) {
+          navigator.clipboard?.writeText(data.text).catch(() => {
+            // Clipboard API pode exigir permissão/foco — falha silenciosa.
+          });
+        }
+      } catch {
+        // JSON inválido — ignora
+      }
+    };
+
     const processProtocol = () => {
       const decoder = new TextDecoder();
       while (!cancelled) {
@@ -482,6 +513,8 @@ export default function RemoteScreenViewer({
             processCursorMessage(payload.buffer);
           } else if (subject.endsWith('.monitors')) {
             processMonitorsMessage(decoder.decode(payload));
+          } else if (subject.endsWith('.clipboard')) {
+            processClipboardMessage(decoder.decode(payload));
           } else {
             // .frame (binário)
             processScreenFrame(payload.buffer);
@@ -516,6 +549,7 @@ export default function RemoteScreenViewer({
             sendProtocol(`SUB ${natsSubject}.cursor.img 5`);
             sendProtocol(`SUB ${natsSubject}.monitors 6`);
             sendProtocol(`SUB ${natsSubject}.event 2`);
+            sendProtocol(`SUB ${natsSubject}.clipboard 7`);
           }
           continue;
         }
@@ -687,6 +721,22 @@ export default function RemoteScreenViewer({
       }, THROTTLE_MS);
     };
     const onWheel = (e: WheelEvent) => { e.preventDefault(); sendInput('wheel', { deltaX: e.deltaX, deltaY: e.deltaY }); };
+
+    // ── Clipboard local→remoto (front→agent) ──
+    // Ao pressionar Ctrl+V no viewer, lê o clipboard local do navegador e
+    // publica o texto em .clipboard.req. O agente aplica no clipboard do
+    // Windows e injeta Ctrl+V no app remoto focado.
+    const sendClipboard = async () => {
+      if (wsRef.current?.readyState !== WebSocket.OPEN || !natsSubject) return;
+      try {
+        const text = await navigator.clipboard?.readText?.();
+        if (!text) return;
+        const payload = JSON.stringify({ text });
+        wsRef.current.send(`PUB ${natsSubject}.clipboard.req ${new TextEncoder().encode(payload).length}\r\n${payload}\r\n`);
+      } catch {
+        // Clipboard API pode exigir permissão/foco — falha silenciosa.
+      }
+    };
     // K3: captura o teclado quando o foco está no canvas OU em qualquer
     // elemento dentro do container do viewer (ex: após clicar em controles
     // sobrepostos). Antes, clicar fora do canvas perdia o input de teclado
@@ -699,7 +749,21 @@ export default function RemoteScreenViewer({
       // Ignora se o foco está em um input/textarea/select (não rouba o teclado)
       const active = document.activeElement;
       if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.tagName === 'SELECT')) return;
-      if (isKeyboardTarget()) { e.preventDefault(); sendInput('keydown', { key: e.key, code: e.code, ctrl: e.ctrlKey, shift: e.shiftKey, alt: e.altKey, meta: e.metaKey }); }
+      if (!isKeyboardTarget()) return;
+
+      // Clipboard: Ctrl+V → envia o clipboard local para o remoto (via .clipboard.req).
+      // O agente aplica o texto no clipboard do Windows e injeta Ctrl+V no app remoto.
+      if (e.ctrlKey && e.key === 'v') {
+        e.preventDefault();
+        sendClipboard();
+        return;
+      }
+      // Ctrl+C → copia do remoto para o local (o agente publica em .clipboard
+      // quando detecta mudança; o viewer já subscreve .clipboard).
+      // As teclas são enviadas normalmente para o agente (Ctrl+C no remoto).
+
+      e.preventDefault();
+      sendInput('keydown', { key: e.key, code: e.code, ctrl: e.ctrlKey, shift: e.shiftKey, alt: e.altKey, meta: e.metaKey });
     };
     const onKeyUp = (e: KeyboardEvent) => {
       const active = document.activeElement;
@@ -786,9 +850,14 @@ export default function RemoteScreenViewer({
     >
       <canvas
         ref={canvasRef}
-        className={`cursor-crosshair ${scale === 'fit' ? 'max-w-full max-h-full object-contain' : 'object-contain m-auto'}`}
+        className={`cursor-none ${scale === 'fit' ? 'max-w-full max-h-full object-contain' : 'object-contain m-auto'}`}
         style={scale === 'fit' ? { width: '100%', height: '100%' } : undefined}
         tabIndex={0}
+      />
+      <canvas
+        ref={cursorCanvasRef}
+        className={`pointer-events-none absolute ${scale === 'fit' ? 'max-w-full max-h-full object-contain' : 'object-contain m-auto'}`}
+        style={scale === 'fit' ? { width: '100%', height: '100%' } : undefined}
       />
 
       {/* Info overlay — métricas locais + do agent */}
