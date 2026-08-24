@@ -91,11 +91,10 @@ export default function RemoteScreenViewer({
   onSessionEnded,
   scale: controlledScale,
   onToggleFullscreen,
-  isFullscreen: controlledFullscreen,
+  isFullscreen,
 }: RemoteScreenViewerProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const [internalFullscreen, setInternalFullscreen] = useState(false);
   const [rtt, setRtt] = useState<number>(0);
   const [fps, setFps] = useState<number>(0);
   const [isPaused, setIsPaused] = useState(false);
@@ -123,9 +122,8 @@ export default function RemoteScreenViewer({
   codecRef.current = codec;
   isPausedRef.current = isPaused;
 
-  // Escala e fullscreen efetivos — controlados externamente (pai) ou internamente.
+  // Escala efetiva — controlada externamente (pai) ou com fallback 'fit'.
   const scale = controlledScale ?? 'fit';
-  const isFullscreen = controlledFullscreen ?? internalFullscreen;
   const scaleRef = useRef(scale);
   scaleRef.current = scale;
 
@@ -725,23 +723,23 @@ export default function RemoteScreenViewer({
     return () => document.removeEventListener('visibilitychange', onVisibility);
   }, []);
 
-  // Toggle fullscreen
-  const toggleFullscreen = useCallback(async () => {
-    const el = containerRef.current;
-    if (!el) return;
-
-    if (isFullscreen) {
-      await fullscreenApi.exit();
-    } else {
-      await fullscreenApi.request(el);
-    }
-    // Se o pai controla o fullscreen, delega; senão, gerencia internamente.
+  // Toggle fullscreen — o pai (RemoteSession) controla o fullscreen: delega a
+  // alternância para ele, que chama fullscreenApi no container correto e
+  // sincroniza o estado via fullscreenchange. Sem pai, gerencia o próprio
+  // container (fallback para uso isolado do viewer).
+  const toggleFullscreen = useCallback(() => {
     if (onToggleFullscreen) {
       onToggleFullscreen();
-    } else {
-      setInternalFullscreen(!isFullscreen);
+      return;
     }
-  }, [isFullscreen, onToggleFullscreen]);
+    const el = containerRef.current;
+    if (!el) return;
+    if (isFullscreen) {
+      void fullscreenApi.exit();
+    } else {
+      void fullscreenApi.request(el);
+    }
+  }, [onToggleFullscreen, isFullscreen]);
 
   // Reconexão manual — força o useEffect de conexão a rodar de novo.
   const handleReconnect = useCallback(() => {

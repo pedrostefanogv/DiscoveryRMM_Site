@@ -7,6 +7,7 @@ import { sitesApi } from '@/api/sites';
 import { clientsApi } from '@/api/clients';
 import { configureApiClient } from '@/api/client';
 import RemoteScreenViewer, { type MonitorInfo } from '@/modules/remote-screen/RemoteScreenViewer';
+import { fullscreenApi } from '@/utils/fullscreen';
 import RemoteTerminal from '@/modules/remote-terminal/RemoteTerminal';
 import RemoteFiles from '@/modules/remote-files/RemoteFiles';
 import RemoteProxy from '@/modules/remote-proxy/RemoteProxy';
@@ -183,6 +184,7 @@ export default function RemoteSession() {
   // Escala e fullscreen da tela (controlados na barra de rodapé unificada).
   const [screenScale, setScreenScale] = useState<'fit' | '100%'>('fit');
   const [screenFullscreen, setScreenFullscreen] = useState(false);
+  const screenContainerRef = useRef<HTMLDivElement | null>(null);
   // Shell ativo do terminal (powershell | cmd). Trocar reinicia a sessão de terminal.
   const [shell, setShell] = useState('powershell');
   const [shellSwitching, setShellSwitching] = useState(false);
@@ -668,6 +670,22 @@ export default function RemoteSession() {
     window.close();
   };
 
+  // Alterna o fullscreen da tela (barra de rodapé + Ctrl+F no viewer).
+  // O estado é sincronizado pelo listener `fullscreenchange` (cobre Esc/API).
+  const toggleScreenFullscreen = useCallback(async () => {
+    const target = screenContainerRef.current ?? document.documentElement;
+    const ok = fullscreenApi.isFullscreen()
+      ? await fullscreenApi.exit()
+      : await fullscreenApi.request(target);
+    if (!ok) setErrorMsg('Não foi possível alternar o modo tela cheia.');
+  }, []);
+
+  // Mantém o estado de fullscreen em sincronia com o estado real do browser
+  // (Esc, mudanças externas, etc.).
+  useEffect(() => {
+    return fullscreenApi.onChange((fs) => setScreenFullscreen(fs));
+  }, []);
+
   const tabs: { key: Tab; label: string }[] = [
     { key: 'screen', label: 'Tela' },
     { key: 'terminal', label: 'Terminal' },
@@ -859,7 +877,7 @@ export default function RemoteSession() {
       <div className="flex-1 overflow-hidden">
         {activeTab === 'screen' && (
           screenSession ? (
-            <div className="h-full flex flex-col">
+            <div ref={screenContainerRef} className="h-full flex flex-col">
               <div className="flex-1">
                 <RemoteScreenViewer
                   key={`screen-${screenSession.sessionId}-${reconnectKeys.screen ?? 0}`}
@@ -875,7 +893,7 @@ export default function RemoteSession() {
                   onSessionEnded={(reason) => setErrorMsg(`Sessão encerrada: ${reason}`)}
                   scale={screenScale}
                   isFullscreen={screenFullscreen}
-                  onToggleFullscreen={() => setScreenFullscreen((v) => !v)}
+                  onToggleFullscreen={toggleScreenFullscreen}
                 />
               </div>
             </div>
@@ -1076,7 +1094,7 @@ export default function RemoteSession() {
             </button>
             <button
               className="px-2 py-1 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded"
-              onClick={() => setScreenFullscreen((v) => !v)}
+              onClick={toggleScreenFullscreen}
               title="Fullscreen (Ctrl+F)"
             >
               {screenFullscreen ? '⛶ Exit' : '⛶ Full'}
