@@ -423,9 +423,7 @@ export default function RemoteFiles({
         const chunk = new Uint8Array(await file.slice(start, end).arrayBuffer());
         const resp = await sendRequest('put', targetPath, chunk, { chunkIndex: i, chunkSize: CHUNK_SIZE, totalChunks });
         if (!resp.success) {
-          setError(`Upload ${file.name}: ${resp.error || 'falha'}`);
-          setTransfers((prev) => { const next = new Map(prev); next.delete(tid); return next; });
-          return;
+          throw new Error(resp.error || 'falha no upload');
         }
         loadedBytes += chunk.length;
         emitProgress();
@@ -438,6 +436,11 @@ export default function RemoteFiles({
       if (isConnected) loadFiles(currentPath);
     } catch (err) {
       setTransfers((prev) => { const next = new Map(prev); next.delete(tid); return next; });
+      // Em QUALQUER interrupção (cancelamento explícito, falha de rede/timeout,
+      // ou erro do agente via resp.success=false), notifica o agente para apagar
+      // o .tmp parcial que ficou no destino remoto. Fire-and-forget: não bloqueia
+      // e ignora erro (o agente pode já ter limpado em outra via).
+      sendRequest('delete', targetPath).catch(() => {});
       if (!cancelTransfersRef.current.has(tid)) {
         setError(`Upload ${file.name}: ${err instanceof Error ? err.message : String(err)}`);
       }
