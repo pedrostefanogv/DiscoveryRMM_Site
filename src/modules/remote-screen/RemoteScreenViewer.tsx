@@ -22,10 +22,15 @@ interface RemoteScreenViewerProps {
   onSessionEnded?: (reason: string) => void;
   /** Escala controlada externamente ('fit' | '100%'). Se omitido, gerencia internamente. */
   scale?: 'fit' | '100%';
-  /** Callback para alternar fullscreen (o pai controla o estado). */
+  /** Callback para alternar o fullscreen (o pai controla o estado). */
   onToggleFullscreen?: () => void;
   /** Indica se está em fullscreen (para o rótulo do botão). */
   isFullscreen?: boolean;
+  /**
+   * Modo do cursor: 'remote' (padrão) mostra só o cursor da máquina remota;
+   * 'local' mostra só o cursor do navegador; 'both' mostra os dois.
+   */
+  cursorMode?: 'remote' | 'local' | 'both';
 }
 
 export interface MonitorInfo {
@@ -92,10 +97,15 @@ export default function RemoteScreenViewer({
   scale: controlledScale,
   onToggleFullscreen,
   isFullscreen,
+  cursorMode = 'remote',
 }: RemoteScreenViewerProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const bgSnapshotRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const cursorModeRef = useRef(cursorMode);
+  cursorModeRef.current = cursorMode;
+  // Bounding box do cursor desenhado (para restaurar a região ao mover/limpar).
+  const cursorBoxRef = useRef<{ x: number; y: number; w: number; h: number } | null>(null);
   const [rtt, setRtt] = useState<number>(0);
   const [fps, setFps] = useState<number>(0);
   const [isPaused, setIsPaused] = useState(false);
@@ -122,6 +132,25 @@ export default function RemoteScreenViewer({
   onSessionEndedRef.current = onSessionEnded;
   codecRef.current = codec;
   isPausedRef.current = isPaused;
+
+  // Restaura a região do cursor anterior a partir do snapshot do frame limpo,
+  // removendo o cursor remoto antigo (evita rastro em modo tiles/dirty-rects).
+  const restoreCursorArea = (ctx: CanvasRenderingContext2D) => {
+    const snapshot = bgSnapshotRef.current;
+    const box = cursorBoxRef.current;
+    if (!snapshot || !box) return;
+    ctx.drawImage(snapshot, box.x, box.y, box.w, box.h, box.x, box.y, box.w, box.h);
+    cursorBoxRef.current = null;
+  };
+
+  // Ao trocar o modo do cursor, remove o cursor remoto desenhado no canvas
+  // (relevante ao sair de 'remote'/'both' para 'local').
+  useEffect(() => {
+    const c = canvasRef.current;
+    const ctx = c?.getContext('2d');
+    if (ctx) restoreCursorArea(ctx);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cursorMode]);
 
   // Escala efetiva — controlada externamente (pai) ou com fallback 'fit'.
   const scale = controlledScale ?? 'fit';
@@ -282,6 +311,9 @@ export default function RemoteScreenViewer({
           result.kind === 'tiles' ? result.rects : undefined,
           result.header,
         );
+        // Captura o snapshot do frame limpo (sem cursor) para restaurar a área
+        // do cursor anterior antes de redesenhar.
+        captureBackgroundSnapshot();
         // Reaplica o cursor (o novo frame pode ter coberto o anterior)
         drawCursorOverlay();
         const header = result.header ?? decodeFrameHeader(buffer);
@@ -361,31 +393,20 @@ export default function RemoteScreenViewer({
     let cursorPos: { x: number; y: number; visible: boolean } | null = null;
     // Cursor real (bitmap PNG) via subject .cursor.img — desenhado em vez da seta genérica.
     let cursorImage: { bitmap: ImageBitmap; hotX: number; hotY: number } | null = null;
-    // Bounding box do cursor anterior (para restaurar o fundo antes de redesenhar).
-    let lastCursorBox: { x: number; y: number; w: number; h: number } | null = null;
 
-    // Restaura a região do cursor anterior a partir do snapshot do frame limpo
-    // (evita "rastro" quando o frame subjacente não é redesenhado por completo
-    // em modo tiles/dirty-rects).
-    const restoreCursorArea = (ctx: CanvasRenderingContext2D) => {
-      const snapshot = bgSnapshotRef.current;
-      if (!snapshot || !lastCursorBox) return;
-      const b = lastCursorBox;
-      ctx.drawImage(snapshot, b.x, b.y, b.w, b.h, b.x, b.y, b.w, b.h);
-      lastCursorBox = null;
-    };
-
-    // Calcula o bounding box de um cursor (fallback seta ou bitmap real).
-    const cursorBounds = (x: number, y: number): { x: number; y: number; w: number; h: number } => {
-      if (cursorImage) {
-        return {
-          x: x - cursorImage.hotX,
-          y: y - cursorImage.hotY,
-          w: cursorImage.bitmap.width,
-          h: cursorImage.bitmap.height,
-        };
+    // Sobe o snapshot do frame limpo (sem cursor) para bgSnapshotRef, para que
+    // restoreCursorArea possa restaurar a área onde o cursor foi desenhado.
+    const captureBackgroundSnapshot = () => {
+      const canvas = canvasRef.current;
+      const ctx = canvas?.getContext('2d');
+      if (!canvas || !ctx) return;
+      if (!bgSnapshotRef.current) bgSnapshotRef.current = document.createElement('canvas');
+      const snap = bgSnapshotRef.current;
+      if (snap.width !== canvas.width || snap.height !== canvas.height) {
+        snap.width = canvas.width;
+        snap.height = canvas.height;
       }
-      return { x: x, y: y, w: 12, h: 30 }; // fallback seta
+      snap.getContext('2d')?.drawImage(canvas, 0, 0);
     };
 
     const drawCursorOverlay = () => {
@@ -394,42 +415,41 @@ export default function RemoteScreenViewer({
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
 
-      // Restaura o fundo na região do cursor anterior (remove o cursor antigo).
+      // Restaura a área do cursor anterior (remove o cursor antigo).
       restoreCursorArea(ctx);
+      cursorBoxRef.current = null;
 
+      // 'local' não desenha o cursor remoto.
+      if (cursorModeRef.current === 'local') return;
       if (!cursorPos || !cursorPos.visible) return;
 
       const x = cursorPos.x;
       const y = cursorPos.y;
 
-      // Guarda o bounding box do cursor atual para restaurar no próximo redraw.
-      lastCursorBox = cursorBounds(x, y);
-
-      // Se temos o bitmap real do cursor, desenha-o (respeitando o hotspot).
       if (cursorImage) {
-        ctx.save();
+        // Bitmap real — desenha respeitando o hotspot.
         ctx.drawImage(cursorImage.bitmap, x - cursorImage.hotX, y - cursorImage.hotY);
+        cursorBoxRef.current = { x: x - cursorImage.hotX, y: y - cursorImage.hotY, w: cursorImage.bitmap.width, h: cursorImage.bitmap.height };
+      } else {
+        // Fallback: seta simples.
+        ctx.save();
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = 1;
+        ctx.fillStyle = '#fff';
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(x + 12, y + 20);
+        ctx.lineTo(x + 7, y + 21);
+        ctx.lineTo(x + 11, y + 28);
+        ctx.lineTo(x + 8, y + 29);
+        ctx.lineTo(x + 4, y + 22);
+        ctx.lineTo(x, y + 26);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
         ctx.restore();
-        return;
+        cursorBoxRef.current = { x, y, w: 12, h: 30 };
       }
-
-      // Fallback: seta simples (triângulo + contorno)
-      ctx.save();
-      ctx.strokeStyle = '#000';
-      ctx.lineWidth = 1;
-      ctx.fillStyle = '#fff';
-      ctx.beginPath();
-      ctx.moveTo(x, y);
-      ctx.lineTo(x + 12, y + 20);
-      ctx.lineTo(x + 7, y + 21);
-      ctx.lineTo(x + 11, y + 28);
-      ctx.lineTo(x + 8, y + 29);
-      ctx.lineTo(x + 4, y + 22);
-      ctx.lineTo(x, y + 26);
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-      ctx.restore();
     };
 
     const processCursorMessage = (buffer: ArrayBuffer) => {
@@ -870,14 +890,9 @@ export default function RemoteScreenViewer({
     >
       <canvas
         ref={canvasRef}
-        className={`cursor-none ${scale === 'fit' ? 'max-w-full max-h-full object-contain' : 'object-contain m-auto'}`}
+        className={`${cursorMode === 'remote' ? 'cursor-none' : 'cursor-default'} ${scale === 'fit' ? 'max-w-full max-h-full object-contain' : 'object-contain m-auto'}`}
         style={scale === 'fit' ? { width: '100%', height: '100%' } : undefined}
         tabIndex={0}
-      />
-      <canvas
-        ref={cursorCanvasRef}
-        className={`pointer-events-none absolute ${scale === 'fit' ? 'max-w-full max-h-full object-contain' : 'object-contain m-auto'}`}
-        style={scale === 'fit' ? { width: '100%', height: '100%' } : undefined}
       />
 
       {/* Info overlay — métricas locais + do agent */}

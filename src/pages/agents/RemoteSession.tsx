@@ -184,6 +184,8 @@ export default function RemoteSession() {
   // Escala e fullscreen da tela (controlados na barra de rodapé unificada).
   const [screenScale, setScreenScale] = useState<'fit' | '100%'>('fit');
   const [screenFullscreen, setScreenFullscreen] = useState(false);
+  // Modo do cursor na tela (padrão: somente o cursor remoto).
+  const [cursorMode, setCursorMode] = useState<'remote' | 'local' | 'both'>('remote');
   const screenContainerRef = useRef<HTMLDivElement | null>(null);
   // Shell ativo do terminal (powershell | cmd). Trocar reinicia a sessão de terminal.
   const [shell, setShell] = useState('powershell');
@@ -894,6 +896,7 @@ export default function RemoteSession() {
                   scale={screenScale}
                   isFullscreen={screenFullscreen}
                   onToggleFullscreen={toggleScreenFullscreen}
+                  cursorMode={cursorMode}
                 />
               </div>
             </div>
@@ -1085,6 +1088,19 @@ export default function RemoteSession() {
         {activeTab === 'screen' && screenSession && (
           <>
             <span className="mx-1 h-4 w-px bg-slate-700" />
+            <label className="inline-flex items-center gap-1 text-slate-400">
+              <span title="Modo do cursor na tela">🖱</span>
+              <select
+                value={cursorMode}
+                onChange={(e) => setCursorMode(e.target.value as 'remote' | 'local' | 'both')}
+                className="bg-slate-800 border border-slate-700 rounded px-1 py-0.5 text-slate-300 text-xs"
+                title="Modo do cursor (Remoto = o cursor da máquina remota)"
+              >
+                <option value="remote">Remoto</option>
+                <option value="local">Local</option>
+                <option value="both">Ambos</option>
+              </select>
+            </label>
             <button
               className="px-2 py-1 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded"
               onClick={() => setScreenScale((s) => (s === 'fit' ? '100%' : 'fit'))}
