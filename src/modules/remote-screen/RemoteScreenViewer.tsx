@@ -647,28 +647,42 @@ export default function RemoteScreenViewer({
     let lastMove: MouseEvent | null = null;
     const THROTTLE_MS = 16; // ~60 fps
 
-    const sendInput = (type: string, data: Record<string, unknown>) => {
-      if (wsRef.current?.readyState === WebSocket.OPEN && natsSubject) {
-        const frameCoords = data.x !== undefined ? getFrameCoords(data.x as number, data.y as number) : null;
-        const payload = JSON.stringify({
-          type,
-          ...data,
-          ...(frameCoords ? { x: frameCoords.x, y: frameCoords.y } : {}),
-          frameWidth: canvas?.width ?? 1920,
-          frameHeight: canvas?.height ?? 1080,
-          ts: Date.now(),
-        });
-        wsRef.current.send(`PUB ${natsSubject}.input ${new TextEncoder().encode(payload).length}\r\n${payload}\r\n`);
-      }
+    const sendInput = (type: string, data: Record<string, unknown>, opts?: { requireCoords?: boolean }) => {
+      if (wsRef.current?.readyState !== WebSocket.OPEN || !natsSubject) return;
+
+      const hasCoords = data.x !== undefined;
+      const frameCoords = hasCoords ? getFrameCoords(data.x as number, data.y as number) : null;
+
+      // Eventos que EXIGEM posição (mousemove, mousedown) são descartados quando
+      // o cursor está fora da área útil do frame (abas/header/letterbox/vazio),
+      // evitando que o agente normalize coordenadas de viewport contra o frame.
+      // Eventos SEM exigência de posição (mouseup, wheel, keydown/keyup) NUNCA
+      // são bloqueados — senão o botão do mouse remoto ficaria "preso" ao soltar
+      // fora do canvas, e o scroll/botões parariam de funcionar no remoto.
+      if (opts?.requireCoords && hasCoords && !frameCoords) return;
+
+      const payload = JSON.stringify({
+        type,
+        ...data,
+        ...(frameCoords ? { x: frameCoords.x, y: frameCoords.y } : {}),
+        frameWidth: canvas?.width ?? 1920,
+        frameHeight: canvas?.height ?? 1080,
+        ts: Date.now(),
+      });
+      wsRef.current.send(`PUB ${natsSubject}.input ${new TextEncoder().encode(payload).length}\r\n${payload}\r\n`);
     };
 
-    const onMouseDown = (e: MouseEvent) => { canvas.focus(); sendInput('mousedown', { button: e.button, x: e.clientX, y: e.clientY }); };
-    const onMouseUp = (e: MouseEvent) => { canvas.focus(); sendInput('mouseup', { button: e.button, x: e.clientX, y: e.clientY }); };
+    const onMouseDown = (e: MouseEvent) => { canvas.focus(); sendInput('mousedown', { button: e.button, x: e.clientX, y: e.clientY }, { requireCoords: true }); };
+    // mouseup é registrado no DOCUMENT (não no canvas) e enviado SEM coordenadas:
+    // ele libera o botão pressionado onde quer que o cursor termine (mesmo se o
+    // usuário soltar fora da área útil do frame após arrastar). O agente ignora
+    // x/y no mouseup — só precisa do `button` para liberar.
+    const onMouseUp = (e: MouseEvent) => { sendInput('mouseup', { button: e.button }); };
     const onMouseMove = (e: MouseEvent) => {
       lastMove = e;
       if (moveThrottle) return;
       moveThrottle = setTimeout(() => {
-        if (lastMove) sendInput('mousemove', { x: lastMove.clientX, y: lastMove.clientY });
+        if (lastMove) sendInput('mousemove', { x: lastMove.clientX, y: lastMove.clientY }, { requireCoords: true });
         moveThrottle = null;
       }, THROTTLE_MS);
     };
@@ -695,7 +709,9 @@ export default function RemoteScreenViewer({
     const onContextMenu = (e: MouseEvent) => { e.preventDefault(); };
 
     canvas.addEventListener('mousedown', onMouseDown);
-    canvas.addEventListener('mouseup', onMouseUp);
+    // mouseup é no DOCUMENT (não no canvas) — libera o botão mesmo se o cursor
+    // terminar fora da área útil do frame após um arrasto (evita botão "preso").
+    document.addEventListener('mouseup', onMouseUp);
     document.addEventListener('mousemove', onMouseMove);
     canvas.addEventListener('wheel', onWheel);
     canvas.addEventListener('contextmenu', onContextMenu);
@@ -704,7 +720,7 @@ export default function RemoteScreenViewer({
 
     return () => {
       canvas.removeEventListener('mousedown', onMouseDown);
-      canvas.removeEventListener('mouseup', onMouseUp);
+      document.removeEventListener('mouseup', onMouseUp);
       document.removeEventListener('mousemove', onMouseMove);
       canvas.removeEventListener('wheel', onWheel);
       canvas.removeEventListener('contextmenu', onContextMenu);
