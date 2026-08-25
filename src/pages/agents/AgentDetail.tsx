@@ -1593,7 +1593,7 @@ export default function AgentDetail() {
             aria-selected={activeDataTab === 'software'}
             className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors ${activeDataTab === 'software' ? 'border-primary/40 bg-primary/15 text-primary' : 'border-border bg-surface-light text-muted-foreground hover:text-foreground'}`}
           >
-            Inventário de Aplicativos
+            Aplicativos
             <span className="rounded-full bg-surface-hover/60 px-2 py-0.5 text-xs text-muted-foreground">{softwareTotalCount}</span>
           </button>
           <button
@@ -1653,7 +1653,7 @@ export default function AgentDetail() {
             <>
             <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h3 className="text-lg font-semibold text-foreground sm:text-xl">Inventário de Aplicativos</h3>
+                <h3 className="text-lg font-semibold text-foreground sm:text-xl">Aplicativos</h3>
                 <p className="text-sm text-muted">{softwareTotalCount} aplicativo(s) no inventário</p>
               </div>
               <Button
