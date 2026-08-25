@@ -1013,7 +1013,7 @@ export default function AgentList() {
           <div className="fixed inset-0 z-40" onClick={() => setContextMenu(null)} />
           <div
             ref={contextMenuRef}
-            className="fixed z-50 min-w-[200px] overflow-hidden rounded-lg border border-border bg-surface shadow-xl"
+            className="fixed z-50 min-w-[200px] rounded-lg border border-border bg-surface shadow-xl"
           >
             <button
               className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-surface-hover"

@@ -906,7 +906,7 @@ export default function AgentDetail() {
             <ChevronDown className="h-4 w-4" />
           </Button>
           {isPowerMenuOpen && (
-            <div className="absolute right-0 top-full z-50 mt-2 min-w-[220px] overflow-hidden rounded-lg border border-border bg-surface shadow-xl">
+            <div className="absolute right-0 top-full z-50 mt-2 min-w-[220px] rounded-lg border border-border bg-surface shadow-xl">
               <button
                 type="button"
                 className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60"
@@ -987,7 +987,7 @@ export default function AgentDetail() {
                     <ChevronRight className="ml-auto h-4 w-4" />
                   </button>
                   {powerSubmenuOpen && (
-                    <div className="absolute left-full top-0 z-50 min-w-[180px] overflow-hidden rounded-lg border border-border bg-surface shadow-xl">
+                    <div className="absolute right-full top-0 z-50 min-w-[180px] overflow-hidden rounded-lg border border-border bg-surface shadow-xl">
                       <button
                         type="button"
                         className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60"
