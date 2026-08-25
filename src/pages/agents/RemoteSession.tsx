@@ -195,6 +195,11 @@ export default function RemoteSession() {
   const [availableShells, setAvailableShells] = useState<string[]>([]);
   // Status de conexão do terminal (reportado pelo RemoteTerminal).
   const [terminalConnected, setTerminalConnected] = useState(false);
+  // Sinaliza que o backend rejeitou a criação de sessão por já existir uma
+  // ativa no agent (conflito). Mantém visível a ação "Forçar conexão" mesmo
+  // sem uma sessão no estado local — caso comum quando outra janela/fluxo
+  // deixou uma sessão presa/órfã no agent.
+  const [sessionConflict, setSessionConflict] = useState(false);
 
   const screenSession = sessions.screen;
 
@@ -234,6 +239,7 @@ export default function RemoteSession() {
     if (!agentId || connectingTab) return;
     setConnectingTab(tab);
     setErrorMsg(null);
+    setSessionConflict(false);
 
     // Processos e Serviços compartilham a MESMA sessão (kind 'processes').
     // Se a aba "irmã" já está conectada, reutiliza a sessão em vez de criar
@@ -353,15 +359,21 @@ export default function RemoteSession() {
       if (!force && isSessionConflictError(err)) {
         try {
           await run(true);
+          setSessionConflict(false);
           setErrorMsg('Sessão anterior encerrada e nova conexão iniciada.');
           return;
         } catch (forceErr) {
           // Se o retry com force também falhou, reporta o erro do retry (mais
           // diagnóstico — a própria sobreposição falhou) em vez do original.
+          // Mantém sessionConflict=true para expor o botão "Forçar conexão"
+          // na barra/placeholder, permitindo nova tentativa manual de sobrepor.
+          setSessionConflict(true);
           setErrorMsg(forceErr instanceof Error ? forceErr.message : 'Falha ao iniciar sessão ao sobrepor.');
           return;
         }
       }
+      // Qualquer outro erro de conflito não resolvido também habilita o botão.
+      if (isSessionConflictError(err)) setSessionConflict(true);
       setErrorMsg(err instanceof Error ? err.message : 'Falha ao iniciar sessão.');
     } finally {
       setConnectingTab(null);
@@ -409,6 +421,8 @@ export default function RemoteSession() {
     }
     // Reseta o status de conexão do terminal ao encerrar a sessão.
     if (tab === 'terminal') setTerminalConnected(false);
+    // Ao encerrar explicitamente, não há mais sessão presa — limpa o conflito.
+    setSessionConflict(false);
   }, [agentId, sessions]);
 
   // ── Troca de shell do terminal: reinicia a sessão de terminal com o novo shell ──
@@ -908,6 +922,8 @@ export default function RemoteSession() {
               icon="🖥"
               connecting={connectingTab === 'screen'}
               onConnect={() => startTabSession('screen')}
+              conflict={sessionConflict}
+              onForce={() => startTabSession('screen', true)}
             />
           )
         )}
@@ -935,6 +951,8 @@ export default function RemoteSession() {
               icon="⌨️"
               connecting={connectingTab === 'terminal'}
               onConnect={() => startTabSession('terminal')}
+              conflict={sessionConflict}
+              onForce={() => startTabSession('terminal', true)}
             />
           )
         )}
@@ -960,6 +978,8 @@ export default function RemoteSession() {
               icon="📁"
               connecting={connectingTab === 'files'}
               onConnect={() => startTabSession('files')}
+              conflict={sessionConflict}
+              onForce={() => startTabSession('files', true)}
             />
           )
         )}
@@ -985,6 +1005,8 @@ export default function RemoteSession() {
               icon="🗔"
               connecting={connectingTab === 'processes'}
               onConnect={() => startTabSession('processes')}
+              conflict={sessionConflict}
+              onForce={() => startTabSession('processes', true)}
             />
           )
         )}
@@ -1010,6 +1032,8 @@ export default function RemoteSession() {
               icon="⚙"
               connecting={connectingTab === 'services'}
               onConnect={() => startTabSession('services')}
+              conflict={sessionConflict}
+              onForce={() => startTabSession('services', true)}
             />
           )
         )}
@@ -1027,6 +1051,18 @@ export default function RemoteSession() {
 
       {/* Barra de rodapé unificada — Reconectar/Encerrar da aba ativa + gravação */}
       <div className="flex items-center gap-2 px-3 py-1.5 bg-surface border-t border-border text-xs">
+        {/* Mesmo sem sessão ativa, se houver conflito (sessão presa no agent) o
+            botão "Forçar conexão" permanece acessível para sobrepor. */}
+        {sessionConflict && !activeSession && (
+          <button
+            className="px-2 py-1 bg-warning/70 hover:bg-warning text-white rounded"
+            onClick={() => startTabSession(activeTab, true)}
+            disabled={connectingTab === activeTab}
+            title={`Encerra a sessão remota existente do agente e inicia uma nova conexão de ${activeTab} (sobrepor). Use se a sessão anterior estiver presa/órfã.`}
+          >
+            {connectingTab === activeTab ? 'Forçando…' : '⚡ Forçar conexão'}
+          </button>
+        )}
         {activeSession && (
           <>
             <button
@@ -1138,11 +1174,19 @@ function ConnectPlaceholder({
   icon,
   connecting,
   onConnect,
+  conflict = false,
+  onForce,
+  forcing = false,
 }: {
   label: string;
   icon: string;
   connecting: boolean;
   onConnect: () => void;
+  /** Existe sessão ativa no agent que impede a conexão (mesmo sem sessão local). */
+  conflict?: boolean;
+  /** Ação "Forçar conexão" — sobrepõe a sessão ativa existente do agent. */
+  onForce?: () => void;
+  forcing?: boolean;
 }) {
   return (
     <div className="flex flex-col items-center justify-center h-full bg-background text-muted-foreground">
@@ -1151,13 +1195,25 @@ function ConnectPlaceholder({
       <p className="text-xs text-muted mb-5">
         Clique em Conectar para iniciar a sessão sob demanda (não consome recursos do agent até iniciar).
       </p>
-      <button
-        className="px-4 py-2 bg-primary/20 text-primary text-sm rounded hover:bg-primary/30 transition-colors disabled:opacity-50"
-        onClick={onConnect}
-        disabled={connecting}
-      >
-        {connecting ? 'Conectando…' : `▶ Conectar ${label}`}
-      </button>
+      <div className="flex items-center gap-2">
+        <button
+          className="px-4 py-2 bg-primary/20 text-primary text-sm rounded hover:bg-primary/30 transition-colors disabled:opacity-50"
+          onClick={onConnect}
+          disabled={connecting || forcing}
+        >
+          {connecting ? 'Conectando…' : `▶ Conectar ${label}`}
+        </button>
+        {conflict && onForce && (
+          <button
+            className="px-4 py-2 bg-warning/70 hover:bg-warning text-white text-sm rounded disabled:opacity-50"
+            onClick={onForce}
+            disabled={connecting || forcing}
+            title="Encerra a sessão remota existente do agente e inicia uma nova conexão. Use se a sessão anterior estiver presa/órfã em outra janela."
+          >
+            {forcing ? 'Forçando…' : '⚡ Forçar conexão'}
+          </button>
+        )}
+      </div>
     </div>
   );
 }
