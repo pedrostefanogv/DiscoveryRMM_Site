@@ -94,6 +94,11 @@ export default function RemoteTerminal({
   const termRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  // Backend em uso no agente ('conpty' | 'legacy' | 'none'). Inicia como null
+  // ("ainda não sabemos") — as conversões de input do modo legacy NUNCA devem
+  // ser aplicadas antes do term.ready reportar, para não corromper o fluxo
+  // normal do ConPTY (onde `\x7f` é o backspace correto).
+  const backendRef = useRef<string | null>(null);
   const { mode } = useTheme();
 
   // Initialize xterm.js (uma única instância)
@@ -192,6 +197,7 @@ export default function RemoteTerminal({
       // adicionaria um \r extra e causaria linha em branco duplicada.
       // O que corrige a formatação é o resize real + ANSI que agora são
       // aplicados no lado do agente.
+      if (info.backend) backendRef.current = info.backend;
       if (info.backend === 'legacy' || info.backend === 'none') {
         const t = termRef.current;
         t?.writeln('\x1b[1;33m── Modo compatibilidade (ConPTY indisponível) ──\x1b[0m');
@@ -210,6 +216,28 @@ export default function RemoteTerminal({
   useEffect(() => {
     if (!termRef.current) return;
     const dispose = termRef.current.onData((data) => {
+      // No modo legacy (pipe de stdin), o shell não processa o teclado como
+      // console: o \x7f (Backspace do xterm) não apaga. Fazemos mitigação
+      // mínima SOMENTE depois que o term.ready reportar backend legacy/none.
+      const backend = backendRef.current;
+      if (backend !== null && (backend === 'legacy' || backend === 'none')) {
+        // Intercepta clear/cls/Ctrl+L → limpa a visualização local do xterm
+        // (o processo interno é limpo no console oculto; o viewer não vê a
+        // sequência ANSI vinda da pipe, então simulamos o clear do lado do
+        // usuário — efeito percebido idêntico).
+        if (data === '\x0c' /* Ctrl+L */ || data === 'clear\r' || data === 'cls\r') {
+          termRef.current?.clear();
+          if (data === 'clear\r' || data === 'cls\r') {
+            // Ainda precisa executar o comando no shell
+            sendData(data);
+          }
+          return;
+        }
+        if (data === '\x7f') {
+          sendData('\x08');
+          return;
+        }
+      }
       sendData(data);
     });
     return () => dispose.dispose();
