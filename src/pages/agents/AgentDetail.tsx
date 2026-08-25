@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Bell, Cpu, MemoryStick, Ticket as TicketIcon,
-  Monitor, Wifi, WifiOff, AppWindow, Search, Clock, HardDrive, Printer, Bug, AlertTriangle, Trash2, ShieldCheck, Plus, Gauge, Power, RotateCcw, Zap, ChevronDown, RefreshCw,
+  Monitor, Wifi, WifiOff, AppWindow, Search, Clock, HardDrive, Printer, Bug, AlertTriangle, Trash2, ShieldCheck, Plus, Gauge, Power, RotateCcw, Zap, ChevronDown, ChevronRight, RefreshCw,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getDeleteAgentErrorMessage, useAgent, useAgentHardware, useAgentHardwareComponents, useAgentSoftware, useAgentSoftwareSnapshot, useApproveZeroTouch, useDeleteAgent, useRestartAgent, useShutdownAgent, useWakeOnLan } from '@/hooks/useAgents';
@@ -80,6 +80,8 @@ export default function AgentDetail() {
   const [deleteConfirmHostname, setDeleteConfirmHostname] = useState('');
   const [activeDataTab, setActiveDataTab] = useState<AgentDetailDataTab>('software');
   const [isPowerMenuOpen, setIsPowerMenuOpen] = useState(false);
+  // Submenu de energia ("Ligar / Reiniciar / Desligar") aberto ao lado via hover.
+  const [powerSubmenuOpen, setPowerSubmenuOpen] = useState(false);
   const [powerAction, setPowerAction] = useState<'restart' | 'shutdown' | null>(null);
   const [wakeOnLanModalOpen, setWakeOnLanModalOpen] = useState(false);
 
@@ -970,26 +972,53 @@ export default function AgentDetail() {
               <div className="border-t border-border" />
 
               {isOnlineNow ? (
-                <>
+                <div
+                  className="relative flex w-full"
+                  onMouseEnter={() => setPowerSubmenuOpen(true)}
+                  onMouseLeave={() => setPowerSubmenuOpen(false)}
+                >
                   <button
                     type="button"
-                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-warning transition-colors hover:bg-warning/10 disabled:cursor-not-allowed disabled:opacity-60"
-                    onClick={() => handleOpenPowerAction('restart')}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-warning transition-colors hover:bg-warning/10 dark:text-amber-300 dark:hover:bg-amber-500/10"
                     disabled={restartAgent.isPending || shutdownAgent.isPending}
                   >
-                    <RotateCcw className="h-4 w-4" />
-                    Reiniciar
+                    <Zap className="h-4 w-4" />
+                    Energia
+                    <ChevronRight className="ml-auto h-4 w-4" />
                   </button>
-                  <button
-                    type="button"
-                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-danger transition-colors hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-60"
-                    onClick={() => handleOpenPowerAction('shutdown')}
-                    disabled={restartAgent.isPending || shutdownAgent.isPending}
-                  >
-                    <Power className="h-4 w-4" />
-                    Desligar
-                  </button>
-                </>
+                  {powerSubmenuOpen && (
+                    <div className="absolute left-full top-0 z-50 min-w-[180px] overflow-hidden rounded-lg border border-border bg-surface shadow-xl">
+                      <button
+                        type="button"
+                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60"
+                        onClick={() => handleOpenPowerAction('restart')}
+                        disabled={restartAgent.isPending || shutdownAgent.isPending}
+                      >
+                        <RotateCcw className="h-4 w-4" />
+                        Reiniciar
+                      </button>
+                      <button
+                        type="button"
+                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-danger transition-colors hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-60"
+                        onClick={() => handleOpenPowerAction('shutdown')}
+                        disabled={restartAgent.isPending || shutdownAgent.isPending}
+                      >
+                        <Power className="h-4 w-4" />
+                        Desligar
+                      </button>
+                      <button
+                        type="button"
+                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-success transition-colors hover:bg-success/10 disabled:cursor-not-allowed disabled:opacity-40"
+                        disabled
+                        title="Disponível em breve"
+                      >
+                        <Zap className="h-4 w-4" />
+                        Ligar
+                        <span className="ml-auto rounded bg-surface-hover px-1.5 py-0.5 text-[10px] text-muted-foreground">em breve</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
               ) : (
                 <button
                   type="button"

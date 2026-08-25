@@ -1654,13 +1654,20 @@ export interface HardwareReportRequest {
 
 export interface CreateNoteRequest {
   content: string;
-  author: string | null;
+  /**
+   * Ignorado pelo backend: o autor é sempre resolvido do usuário autenticado
+   * (HttpContext.Items["Username"]) a partir do token JWT.
+   */
+  author?: string | null;
   isPinned?: boolean;
 }
 
 export interface UpdateNoteRequest {
   content: string;
-  author: string | null;
+  /**
+   * Ignorado pelo backend: o autor é sempre resolvido do usuário autenticado.
+   */
+  author?: string | null;
   isPinned?: boolean;
 }
 

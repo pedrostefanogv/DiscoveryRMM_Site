@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Monitor, Wifi, WifiOff, Activity, Building2, Clock, HardDrive, MapPin, LayoutGrid, List, Bug, Trash2, ShieldCheck, ArrowUp, ArrowDown, Radio, RefreshCw, Move, RotateCcw, Power, Zap, Server, Apple, Thermometer } from 'lucide-react';
+import { Monitor, Wifi, WifiOff, Activity, Building2, Clock, HardDrive, MapPin, LayoutGrid, List, Bug, Trash2, ShieldCheck, ArrowUp, ArrowDown, Radio, RefreshCw, Move, RotateCcw, Power, Zap, Server, Apple, Thermometer, ChevronRight } from 'lucide-react';
 import { useQueries } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { useClients } from '@/hooks/useClients';
@@ -161,6 +161,8 @@ export default function AgentList() {
   const [powerActionAgent, setPowerActionAgent] = useState<{ agent: AgentWithClient; action: "restart" | "shutdown" } | null>(null);
   const [wolAgent, setWolAgent] = useState<AgentWithClient | null>(null);
   const contextMenuRef = useRef<HTMLDivElement | null>(null);
+  // Submenu de energia ("Ligar / Reiniciar / Desligar") aberto ao lado via hover.
+  const [powerSubmenuOpen, setPowerSubmenuOpen] = useState(false);
   const lastKnownIpByAgentRef = useRef<Map<string, string>>(new Map());
 
   useEffect(() => {
@@ -1043,22 +1045,46 @@ export default function AgentList() {
               {updatingAgentId === contextMenu.agent.id ? 'Disparando update...' : 'Atualizar agente'}
             </button>
             {isAgentOnlineNow(contextMenu.agent, now) && (
-              <>
+              <div
+                className="relative flex w-full"
+                onMouseEnter={() => setPowerSubmenuOpen(true)}
+                onMouseLeave={() => setPowerSubmenuOpen(false)}
+              >
                 <button
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-amber-700 transition-colors hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-60 dark:text-amber-300 dark:hover:bg-amber-500/10"
-                  onClick={() => handleRestartAgent(contextMenu.agent)}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-amber-700 transition-colors hover:bg-amber-50 dark:text-amber-300 dark:hover:bg-amber-500/10"
                 >
-                  <RotateCcw className="h-4 w-4" />
-                  Reiniciar
+                  <Zap className="h-4 w-4" />
+                  Energia
+                  <ChevronRight className="ml-auto h-4 w-4" />
                 </button>
-                <button
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-600 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60 dark:text-red-300 dark:hover:bg-red-500/10"
-                  onClick={() => handleShutdownAgent(contextMenu.agent)}
-                >
-                  <Power className="h-4 w-4" />
-                  Desligar
-                </button>
-              </>
+                {powerSubmenuOpen && (
+                  <div className="absolute left-full top-0 z-50 min-w-[180px] overflow-hidden rounded-lg border border-border bg-surface shadow-xl">
+                    <button
+                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60"
+                      onClick={() => handleRestartAgent(contextMenu.agent)}
+                    >
+                      <RotateCcw className="h-4 w-4" />
+                      Reiniciar
+                    </button>
+                    <button
+                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-600 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60 dark:text-red-300 dark:hover:bg-red-500/10"
+                      onClick={() => handleShutdownAgent(contextMenu.agent)}
+                    >
+                      <Power className="h-4 w-4" />
+                      Desligar
+                    </button>
+                    <button
+                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-success transition-colors hover:bg-success/10 disabled:cursor-not-allowed disabled:opacity-40"
+                      disabled
+                      title="Disponível em breve"
+                    >
+                      <Zap className="h-4 w-4" />
+                      Ligar
+                      <Badge>em breve</Badge>
+                    </button>
+                  </div>
+                )}
+              </div>
             )}
             {!isAgentOnlineNow(contextMenu.agent, now) && (
               <button

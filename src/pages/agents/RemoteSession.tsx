@@ -203,6 +203,10 @@ export default function RemoteSession() {
   // sem uma sessão no estado local — caso comum quando outra janela/fluxo
   // deixou uma sessão presa/órfã no agent.
   const [sessionConflict, setSessionConflict] = useState(false);
+  // Aba com conflito de sessão pendente de decisão do usuário (forçar ou não).
+  // Quando definida, exibe o aviso com botões "Forçar reconexão" / "Cancelar".
+  const [forcePromptTab, setForcePromptTab] = useState<Tab | null>(null);
+  const [forcePromptConnecting, setForcePromptConnecting] = useState(false);
 
   const screenSession = sessions.screen;
 
@@ -234,15 +238,30 @@ export default function RemoteSession() {
     { value: 2, label: '2 (Mínimo)' },
   ];
 
+  // ── Aviso de conflito de sessão ──
+  // Quando já existe uma sessão ativa no agent, não encerramos a anterior
+  // silenciosamente: exibimos um aviso com a opção de forçar a reconexão
+  // (força=true encerra a anterior e cria a nova).
+  const openForcePrompt = useCallback((tab: Tab) => {
+    setForcePromptTab(tab);
+  }, []);
+
+  const closeForcePrompt = useCallback(() => {
+    setForcePromptTab(null);
+    setForcePromptConnecting(false);
+  }, []);
+
   // ── Inicia a sessão de uma aba sob demanda ──
   // `force` permite sobrepor uma sessão ativa existente do mesmo agent (o
-  // backend encerra a anterior e cria a nova). Usado pelo botão "Forçar
-  // conexão" e no retry automático após conflito.
+  // backend encerra a anterior e cria a nova). No fluxo normal (force=false)
+  // um conflito NÃO é resolvido automaticamente: o usuário é avisado e decide
+  // se quer forçar.
   const startTabSession = useCallback(async (tab: Tab, force = false) => {
     if (!agentId || connectingTab) return;
     setConnectingTab(tab);
     setErrorMsg(null);
     setSessionConflict(false);
+    setForcePromptTab(null);
 
     // Processos e Serviços compartilham a MESMA sessão (kind 'processes').
     // Se a aba "irmã" já está conectada, reutiliza a sessão em vez de criar
@@ -356,24 +375,14 @@ export default function RemoteSession() {
     try {
       await run(force);
     } catch (err) {
-      // Se a sessão ativa no agent pertence a outro fluxo/usuário e o servidor
-      // rejeita, tenta UMA vez com force=true (encerra e cria nova). Só aciona
-      // no erro específico de conflito de sessão.
+      // Conflito de sessão: já existe uma sessão ativa no agent (de outra
+      // janela/fluxo). NÃO encerramos a sessão anterior silenciosamente —
+      // apenas avisamos e damos ao usuário a opção de forçar a reconexão
+      // (força=true encerra a anterior e cria a nova).
       if (!force && isSessionConflictError(err)) {
-        try {
-          await run(true);
-          setSessionConflict(false);
-          setErrorMsg('Sessão anterior encerrada e nova conexão iniciada.');
-          return;
-        } catch (forceErr) {
-          // Se o retry com force também falhou, reporta o erro do retry (mais
-          // diagnóstico — a própria sobreposição falhou) em vez do original.
-          // Mantém sessionConflict=true para expor o botão "Forçar conexão"
-          // na barra/placeholder, permitindo nova tentativa manual de sobrepor.
-          setSessionConflict(true);
-          setErrorMsg(forceErr instanceof Error ? forceErr.message : 'Falha ao iniciar sessão ao sobrepor.');
-          return;
-        }
+        setSessionConflict(true);
+        openForcePrompt(tab);
+        return;
       }
       // Qualquer outro erro de conflito não resolvido também habilita o botão.
       if (isSessionConflictError(err)) setSessionConflict(true);
@@ -383,6 +392,22 @@ export default function RemoteSession() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [agentId, connectingTab, transport, liveQuality, liveCodec, monitorIndex, sessions]);
+
+  // Inicia a sessão da aba com força (vinda do aviso de conflito de sessão).
+  const confirmForce = useCallback(async (tab: Tab) => {
+    if (forcePromptConnecting) return;
+    setForcePromptConnecting(true);
+    setErrorMsg(null);
+    try {
+      await startTabSession(tab, true);
+      // Sucesso: fecha o aviso e limpa o conflito. (startTabSession já seta
+      // setForcePromptTab(null)/setSessionConflict(false) no início.)
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : 'Falha ao forçar a reconexão.');
+    } finally {
+      setForcePromptConnecting(false);
+    }
+  }, [startTabSession, forcePromptConnecting]);
 
   // ── Reconexão manual de uma aba ──
   // Se a sessão ainda estiver ativa no agent, apenas remonta o viewer (nova key).
@@ -1159,6 +1184,38 @@ export default function RemoteSession() {
           </>
         )}
       </div>
+
+      {/* Aviso de conflito de sessão — já existe conexão ativa no agent */}
+      {forcePromptTab && (
+        <div className="absolute inset-0 z-40 flex items-center justify-center bg-background/60 backdrop-blur-[2px]">
+          <div className="bg-surface border border-border rounded-lg shadow-lg p-6 max-w-md mx-4 text-center">
+            <div className="text-4xl mb-3">🔌</div>
+            <h2 className="text-base font-semibold text-foreground mb-2">
+              Já existe uma conexão aberta
+            </h2>
+            <p className="text-sm text-muted-foreground mb-5">
+              Há uma sessão remota ativa neste agente. Para conectar, é necessário
+              encerrar a sessão existente. Deseja <strong className="text-foreground">forçar a reconexão</strong>?
+            </p>
+            <div className="flex items-center justify-center gap-2">
+              <button
+                className="px-4 py-2 bg-warning/70 hover:bg-warning text-white text-sm rounded disabled:opacity-50"
+                onClick={() => confirmForce(forcePromptTab)}
+                disabled={forcePromptConnecting}
+              >
+                {forcePromptConnecting ? 'Forçando…' : '⚡ Forçar reconexão'}
+              </button>
+              <button
+                className="px-4 py-2 bg-surface-hover hover:bg-border text-foreground text-sm rounded disabled:opacity-50"
+                onClick={closeForcePrompt}
+                disabled={forcePromptConnecting}
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Error toast */}
       {errorMsg && (

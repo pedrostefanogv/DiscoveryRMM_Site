@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import { Pin, Trash2, Save, X, Plus, ChevronUp, Settings2, Pencil, ChevronDown } from "lucide-react";
-import { Card, CardHeader, Button, Badge, Input, TextArea, Loading, ErrorDisplay } from "@/components/ui";
+import { Card, CardHeader, Button, Badge, TextArea, Loading, ErrorDisplay } from "@/components/ui";
 import {
   useClientNotesPage,
   useSiteNotesPage,
@@ -57,12 +57,10 @@ export function NotesPanel({ entityType, entityId, title = "Notas", subtitle }: 
   const deleteNote = useDeleteNote();
 
   const [newContent, setNewContent] = useState("");
-  const [newAuthor, setNewAuthor] = useState("Admin");
   const [newPinned, setNewPinned] = useState(false);
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingContent, setEditingContent] = useState("");
-  const [editingAuthor, setEditingAuthor] = useState("Admin");
   const [editingPinned, setEditingPinned] = useState(false);
 
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
@@ -86,7 +84,6 @@ export function NotesPanel({ entityType, entityId, title = "Notas", subtitle }: 
 
     const payload = {
       content,
-      author: newAuthor.trim() || null,
       isPinned: newPinned,
     };
 
@@ -114,14 +111,12 @@ export function NotesPanel({ entityType, entityId, title = "Notas", subtitle }: 
   const startEdit = (note: Note) => {
     setEditingId(note.id);
     setEditingContent(note.content);
-    setEditingAuthor(note.author ?? "Admin");
     setEditingPinned(note.isPinned);
   };
 
   const cancelEdit = () => {
     setEditingId(null);
     setEditingContent("");
-    setEditingAuthor("Admin");
     setEditingPinned(false);
   };
 
@@ -138,7 +133,6 @@ export function NotesPanel({ entityType, entityId, title = "Notas", subtitle }: 
         id: editingId,
         data: {
           content,
-          author: editingAuthor.trim() || null,
           isPinned: editingPinned,
         },
       },
@@ -212,12 +206,6 @@ export function NotesPanel({ entityType, entityId, title = "Notas", subtitle }: 
                 <div key={note.id} className="rounded-lg border border-border bg-surface-light p-3">
                   {isCurrentEdit ? (
                     <div className="space-y-3">
-                      <Input
-                        label="Autor"
-                        value={editingAuthor}
-                        onChange={(e) => setEditingAuthor(e.target.value)}
-                        placeholder="Autor da nota"
-                      />
                       <TextArea
                         label="Conteúdo"
                         value={editingContent}
@@ -326,12 +314,6 @@ export function NotesPanel({ entityType, entityId, title = "Notas", subtitle }: 
 
           {createFormVisible && <div className="mt-4 space-y-3 border-t border-border pt-4">
             <p className="text-sm font-medium text-foreground">Nova nota</p>
-            <Input
-              label="Autor"
-              value={newAuthor}
-              onChange={(e) => setNewAuthor(e.target.value)}
-              placeholder="Autor da nota"
-            />
             <TextArea
               label="Conteúdo"
               value={newContent}
