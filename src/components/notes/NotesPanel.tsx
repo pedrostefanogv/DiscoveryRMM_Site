@@ -206,6 +206,9 @@ export function NotesPanel({ entityType, entityId, title = "Notas", subtitle }: 
                 <div key={note.id} className="rounded-lg border border-border bg-surface-light p-3">
                   {isCurrentEdit ? (
                     <div className="space-y-3">
+                      <p className="text-xs font-medium text-muted">
+                        Por <span className="text-foreground">{note.author ?? "Sem autor"}</span>
+                      </p>
                       <TextArea
                         label="Conteúdo"
                         value={editingContent}
