@@ -52,7 +52,10 @@ function formatRemaining(expiresAtUtc: string | null): string {
 // Usado para acionar o fluxo de sobreposição (force=true) apenas nesse caso.
 function isSessionConflictError(err: unknown): boolean {
   const msg = err instanceof Error ? err.message : String(err);
-  return /already have/i.test(msg) && /active session/i.test(msg);
+  // Aceita "has" e "have" ("Agent already has/have N active session(s)") ou a dica
+  // explícita "force=true to override" — evita regressão se a mensagem mudar.
+  return /already\s+(has|have)/i.test(msg)
+    && /active session/i.test(msg);
 }
 
 export default function RemoteSession() {
