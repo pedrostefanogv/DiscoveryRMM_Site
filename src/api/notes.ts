@@ -13,60 +13,38 @@ export interface NotesPageParams {
   limit?: number;
 }
 
+export interface NoteTarget {
+  clientId?: string;
+  siteId?: string;
+  agentId?: string;
+}
+
+/**
+ * O endpoint genérico `/api/v1/notes` resolve o alvo (client/site/agent)
+ * pelos IDs passados na query (GET) ou no corpo (POST). A API valida a
+ * permissão do alvo. Para agent também existem endpoints nested, mas aqui
+ * usamos o genérico em todos para consistência.
+ */
 export const notesApi = {
-  // ── Legacy (sem paginação) ──────────────────────────────
-
-  listByClient: (clientId: string) =>
-    api.get<Note[]>(`/api/v1/clients/${clientId}/notes`),
-
-  listBySite: (siteId: string) =>
-    api.get<Note[]>(`/api/v1/sites/${siteId}/notes`),
-
-  listByAgent: (agentId: string) =>
-    api.get<Note[]>(`/api/v1/agents/${agentId}/notes`),
-
-  // ── Cursor pagination (NOVO) ─────────────────────────────
-
-  listClientNotesPage: (clientId: string, params?: NotesPageParams) =>
-    api.get<CursorPageDto<Note>>(
-      `/api/v1/clients/${clientId}/notes/page`,
-      params as Record<string, unknown>,
-    ),
-
-  listSiteNotesPage: (siteId: string, params?: NotesPageParams) =>
-    api.get<CursorPageDto<Note>>(
-      `/api/v1/sites/${siteId}/notes/page`,
-      params as Record<string, unknown>,
-    ),
-
-  listAgentNotesPage: (agentId: string, params?: NotesPageParams) =>
-    api.get<CursorPageDto<Note>>(
-      `/api/v1/agents/${agentId}/notes/page`,
-      params as Record<string, unknown>,
-    ),
+  // ── Cursor pagination ─────────────────────────────────────
 
   listNotesPage: (
-    params: NotesPageParams & {
-      clientId?: string;
-      siteId?: string;
-      agentId?: string;
-    },
+    target: NoteTarget &
+      NotesPageParams & {
+        clientId?: string;
+        siteId?: string;
+        agentId?: string;
+      },
   ) =>
     api.get<CursorPageDto<Note>>(
-      `${BASE}/page`,
-      params as Record<string, unknown>,
+      `${BASE}`,
+      target as Record<string, unknown>,
     ),
 
   // ── CRUD ──────────────────────────────────────────────────
 
-  createForClient: (clientId: string, data: CreateNoteRequest) =>
-    api.post<Note>(`/api/v1/clients/${clientId}/notes`, data),
-
-  createForSite: (siteId: string, data: CreateNoteRequest) =>
-    api.post<Note>(`/api/v1/sites/${siteId}/notes`, data),
-
-  createForAgent: (agentId: string, data: CreateNoteRequest) =>
-    api.post<Note>(`/api/v1/agents/${agentId}/notes`, data),
+  create: (target: NoteTarget, data: CreateNoteRequest) =>
+    api.post<Note>(BASE, { ...target, ...data }),
 
   get: (id: string) => api.get<Note>(`${BASE}/${id}`),
 

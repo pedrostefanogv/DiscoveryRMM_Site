@@ -10,50 +10,22 @@ import type { Note, CursorPageDto } from "@/api/types";
 
 const KEYS = {
   all: ["notes"] as const,
-  byClient: (clientId: string) => [...KEYS.all, "byClient", clientId] as const,
   byClientPage: (clientId: string) =>
     [...KEYS.all, "byClientPage", clientId] as const,
-  bySite: (siteId: string) => [...KEYS.all, "bySite", siteId] as const,
   bySitePage: (siteId: string) => [...KEYS.all, "bySitePage", siteId] as const,
-  byAgent: (agentId: string) => [...KEYS.all, "byAgent", agentId] as const,
   byAgentPage: (agentId: string) =>
     [...KEYS.all, "byAgentPage", agentId] as const,
   detail: (id: string) => [...KEYS.all, "detail", id] as const,
 };
 
-// ── Legacy hooks (sem paginação) ───────────────────────────
-
-export function useClientNotes(clientId: string) {
-  return useQuery({
-    queryKey: KEYS.byClient(clientId),
-    queryFn: () => notesApi.listByClient(clientId),
-    enabled: !!clientId,
-  });
-}
-
-export function useSiteNotes(siteId: string) {
-  return useQuery({
-    queryKey: KEYS.bySite(siteId),
-    queryFn: () => notesApi.listBySite(siteId),
-    enabled: !!siteId,
-  });
-}
-
-export function useAgentNotes(agentId: string) {
-  return useQuery({
-    queryKey: KEYS.byAgent(agentId),
-    queryFn: () => notesApi.listByAgent(agentId),
-    enabled: !!agentId,
-  });
-}
-
-// ── Cursor pagination hooks (NOVO) ─────────────────────────
+// ── Cursor pagination hooks ──────────────────────────────
 
 export function useClientNotesPage(clientId: string, limit = 20) {
   return useInfiniteQuery<CursorPageDto<Note>>({
     queryKey: KEYS.byClientPage(clientId),
     queryFn: ({ pageParam }) =>
-      notesApi.listClientNotesPage(clientId, {
+      notesApi.listNotesPage({
+        clientId,
         cursor: typeof pageParam === "string" ? pageParam : undefined,
         limit,
       }),
@@ -67,7 +39,8 @@ export function useSiteNotesPage(siteId: string, limit = 20) {
   return useInfiniteQuery<CursorPageDto<Note>>({
     queryKey: KEYS.bySitePage(siteId),
     queryFn: ({ pageParam }) =>
-      notesApi.listSiteNotesPage(siteId, {
+      notesApi.listNotesPage({
+        siteId,
         cursor: typeof pageParam === "string" ? pageParam : undefined,
         limit,
       }),
@@ -81,7 +54,8 @@ export function useAgentNotesPage(agentId: string, limit = 20) {
   return useInfiniteQuery<CursorPageDto<Note>>({
     queryKey: KEYS.byAgentPage(agentId),
     queryFn: ({ pageParam }) =>
-      notesApi.listAgentNotesPage(agentId, {
+      notesApi.listNotesPage({
+        agentId,
         cursor: typeof pageParam === "string" ? pageParam : undefined,
         limit,
       }),
@@ -112,9 +86,8 @@ export function useCreateClientNote() {
     }: {
       clientId: string;
       data: CreateNoteRequest;
-    }) => notesApi.createForClient(clientId, data),
+    }) => notesApi.create({ clientId }, data),
     onSuccess: (_d, vars) => {
-      qc.invalidateQueries({ queryKey: KEYS.byClient(vars.clientId) });
       qc.invalidateQueries({ queryKey: KEYS.byClientPage(vars.clientId) });
     },
   });
@@ -129,9 +102,8 @@ export function useCreateSiteNote() {
     }: {
       siteId: string;
       data: CreateNoteRequest;
-    }) => notesApi.createForSite(siteId, data),
+    }) => notesApi.create({ siteId }, data),
     onSuccess: (_d, vars) => {
-      qc.invalidateQueries({ queryKey: KEYS.bySite(vars.siteId) });
       qc.invalidateQueries({ queryKey: KEYS.bySitePage(vars.siteId) });
     },
   });
@@ -146,9 +118,8 @@ export function useCreateAgentNote() {
     }: {
       agentId: string;
       data: CreateNoteRequest;
-    }) => notesApi.createForAgent(agentId, data),
+    }) => notesApi.create({ agentId }, data),
     onSuccess: (_d, vars) => {
-      qc.invalidateQueries({ queryKey: KEYS.byAgent(vars.agentId) });
       qc.invalidateQueries({ queryKey: KEYS.byAgentPage(vars.agentId) });
     },
   });
