@@ -64,9 +64,11 @@ export function RemoteServices({ natsSubject, natsUrl, jwt }: RemoteServicesProp
         errorTimerRef.current = setTimeout(() => setToast(null), 4000);
     }, []);
 
-    const loadServices = useCallback(async () => {
+    // `silent=true` é usado no auto-refresh: não toca em `loading` para
+    // evitar a barra "Carregando..." (que desloca o cabeçalho) a cada ciclo.
+    const loadServices = useCallback(async (silent = false) => {
         if (!stream.send) return;
-        setLoading(true);
+        if (!silent) setLoading(true);
         try {
             const res = await stream.send('listServices');
             if (res.success) setServices(res.services ?? []);
@@ -74,7 +76,7 @@ export function RemoteServices({ natsSubject, natsUrl, jwt }: RemoteServicesProp
         } catch (e) {
             notify(`Falha ao listar serviços: ${e instanceof Error ? e.message : String(e)}`);
         } finally {
-            setLoading(false);
+            if (!silent) setLoading(false);
         }
     }, [stream.send, notify]);
 
@@ -97,7 +99,7 @@ export function RemoteServices({ natsSubject, natsUrl, jwt }: RemoteServicesProp
     // Auto-refresh: mantém CPU/RAM dos serviços em execução atualizados.
     useEffect(() => {
         if (!connected) return;
-        const timer = setTimeout(loadServices, 1500);
+        const timer = setTimeout(() => loadServices(true), 1500);
         return () => clearTimeout(timer);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [connected, services]);
@@ -109,7 +111,7 @@ export function RemoteServices({ natsSubject, natsUrl, jwt }: RemoteServicesProp
             const res = await stream.send(action, body);
             if (res.success) {
                 notify(successMsg);
-                await loadServices();
+                await loadServices(true);
             } else {
                 notify(`Erro: ${res.error ?? 'desconhecido'}`);
             }
@@ -157,7 +159,7 @@ export function RemoteServices({ natsSubject, natsUrl, jwt }: RemoteServicesProp
                     className="bg-surface border border-border rounded px-2 py-1 text-xs text-foreground placeholder-muted w-56"
                 />
                 <button
-                    onClick={loadServices}
+                    onClick={() => loadServices()}
                     disabled={!connected || loading}
                     className="px-2 py-1 bg-surface-hover hover:bg-border text-foreground rounded text-xs disabled:opacity-50"
                 >
@@ -173,21 +175,21 @@ export function RemoteServices({ natsSubject, natsUrl, jwt }: RemoteServicesProp
                     </div>
                 )}
                 {connected && loading && (
-                    <div className="sticky top-0 z-10 px-3 py-1 text-xs text-muted-foreground bg-surface/90 border-b border-border">
+                    <div className="absolute top-0 left-0 right-0 z-10 px-3 py-1 text-xs text-muted-foreground bg-surface/90 border-b border-border pointer-events-none">
                         Carregando...
                     </div>
                 )}
                 {connected && (
-                    <table className="w-full text-left text-xs">
+                    <table className="w-full text-left text-xs table-fixed">
                         <thead className="sticky top-0 bg-surface text-muted-foreground">
                             <tr>
                                 <th className="px-3 py-1.5">Nome</th>
-                                <th className="px-3 py-1.5">Estado</th>
-                                <th className="px-3 py-1.5">Inicialização</th>
-                                <th className="px-3 py-1.5">PID</th>
-                                <th className="px-3 py-1.5 text-right">CPU</th>
-                                <th className="px-3 py-1.5 text-right">RAM</th>
-                                <th className="px-3 py-1.5 text-right">Rede</th>
+                                <th className="px-3 py-1.5 w-32 whitespace-nowrap">Estado</th>
+                                <th className="px-3 py-1.5 w-32 whitespace-nowrap">Inicialização</th>
+                                <th className="px-3 py-1.5 w-16 tabular-nums whitespace-nowrap">PID</th>
+                                <th className="px-3 py-1.5 text-right w-16 tabular-nums whitespace-nowrap">CPU</th>
+                                <th className="px-3 py-1.5 text-right w-24 tabular-nums whitespace-nowrap">RAM</th>
+                                <th className="px-3 py-1.5 text-right w-20 tabular-nums whitespace-nowrap">Rede</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -197,7 +199,7 @@ export function RemoteServices({ natsSubject, natsUrl, jwt }: RemoteServicesProp
                                     className="border-t border-border hover:bg-surface-hover cursor-context-menu"
                                     onContextMenu={(e) => openServiceMenu(e, s)}
                                 >
-                                    <td className="px-3 py-1 text-foreground font-mono max-w-[24rem] truncate" title={s.displayName}>{s.displayName}</td>
+                                    <td className="px-3 py-1 text-foreground font-mono min-w-0 truncate" title={s.displayName}>{s.displayName}</td>
                                     <td className="px-3 py-1">
                                         <span className={`inline-flex items-center gap-1 ${serviceStateColor(s.state)}`}>
                                             <span className={`w-1.5 h-1.5 rounded-full ${s.state === 'running' ? 'bg-success' : s.state === 'stopped' ? 'bg-muted' : 'bg-warning'}`} />
@@ -205,10 +207,10 @@ export function RemoteServices({ natsSubject, natsUrl, jwt }: RemoteServicesProp
                                         </span>
                                     </td>
                                     <td className="px-3 py-1 text-muted-foreground">{startTypeLabel(s.startType)}</td>
-                                    <td className="px-3 py-1 text-muted-foreground">{s.pid ?? '—'}</td>
-                                    <td className="px-3 py-1 text-right text-warning">{formatCpuPercent(s.cpuPercent)}</td>
-                                    <td className="px-3 py-1 text-right text-accent">{formatBytes(s.memoryBytes)}</td>
-                                    <td className="px-3 py-1 text-right text-muted-foreground">{formatConnections(s.connections)}</td>
+                                    <td className="px-3 py-1 text-muted-foreground tabular-nums">{s.pid ?? '—'}</td>
+                                    <td className="px-3 py-1 text-right text-warning tabular-nums">{formatCpuPercent(s.cpuPercent)}</td>
+                                    <td className="px-3 py-1 text-right text-accent tabular-nums">{formatBytes(s.memoryBytes)}</td>
+                                    <td className="px-3 py-1 text-right text-muted-foreground tabular-nums">{formatConnections(s.connections)}</td>
                                 </tr>
                             ))}
                             {filteredServices.length === 0 && !loading && (

@@ -28,6 +28,8 @@ interface TermReadyPayload {
   consoleId?: string;
   termCols?: number;
   termRows?: number;
+  /** Backend em uso no agente (conpty/legacy) para ajustes visuais. */
+  backend?: string;
 }
 
 const TERM_THEME_DARK = {
@@ -183,6 +185,16 @@ export default function RemoteTerminal({
       // Se o agente informou dimensões, ajusta o terminal local
       if (info.termCols && info.termRows && termRef.current) {
         termRef.current.resize(info.termCols, info.termRows);
+      }
+      // Backend legacy (ConPTY indisponível/instável): informa o usuário com
+      // um aviso discreto. NOTA: NÃO ativamos convertEol/windowsMode aqui —
+      // o console real (cmd/powershell via pipe) já emite \r\n; convertEol
+      // adicionaria um \r extra e causaria linha em branco duplicada.
+      // O que corrige a formatação é o resize real + ANSI que agora são
+      // aplicados no lado do agente.
+      if (info.backend === 'legacy' || info.backend === 'none') {
+        const t = termRef.current;
+        t?.writeln('\x1b[1;33m── Modo compatibilidade (ConPTY indisponível) ──\x1b[0m');
       }
     });
     return unsubscribe;

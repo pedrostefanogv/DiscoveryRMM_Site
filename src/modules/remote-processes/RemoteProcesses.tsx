@@ -39,9 +39,11 @@ export function RemoteProcesses({ natsSubject, natsUrl, jwt }: RemoteProcessesPr
         errorTimerRef.current = setTimeout(() => setToast(null), 4000);
     }, []);
 
-    const loadProcesses = useCallback(async () => {
+    // `silent=true` é usado no auto-refresh: não toca em `loading` para
+    // evitar a barra "Carregando..." (que desloca o cabeçalho) a cada ciclo.
+    const loadProcesses = useCallback(async (silent = false) => {
         if (!stream.send) return;
-        setLoading(true);
+        if (!silent) setLoading(true);
         try {
             const res = await stream.send('listProcesses');
             if (res.success) setProcesses(res.processes ?? []);
@@ -49,7 +51,7 @@ export function RemoteProcesses({ natsSubject, natsUrl, jwt }: RemoteProcessesPr
         } catch (e) {
             notify(`Falha ao listar processos: ${e instanceof Error ? e.message : String(e)}`);
         } finally {
-            setLoading(false);
+            if (!silent) setLoading(false);
         }
     }, [stream.send, notify]);
 
@@ -87,7 +89,7 @@ export function RemoteProcesses({ natsSubject, natsUrl, jwt }: RemoteProcessesPr
     useEffect(() => {
         if (!connected) return;
         const timer = setTimeout(() => {
-            loadProcesses();
+            loadProcesses(true);
             loadSystemInfo();
         }, 1500);
         return () => clearTimeout(timer);
@@ -101,7 +103,7 @@ export function RemoteProcesses({ natsSubject, natsUrl, jwt }: RemoteProcessesPr
             const res = await stream.send(action, body);
             if (res.success) {
                 notify(successMsg);
-                await loadProcesses();
+                await loadProcesses(true);
             } else {
                 notify(`Erro: ${res.error ?? 'desconhecido'}`);
             }
@@ -155,8 +157,10 @@ export function RemoteProcesses({ natsSubject, natsUrl, jwt }: RemoteProcessesPr
         }
     }, [sortKey]);
 
-    const sortHeader = (key: SortKey, label: string, align: 'left' | 'right' = 'right') => (
-        <th className={`px-3 py-1.5 ${align === 'right' ? 'text-right' : 'text-left'} cursor-pointer select-none hover:text-foreground`} onClick={() => toggleSort(key)}>
+    // `widthClass` fixa a coluna (table-fixed); `tabular` deixa dígitos de largura
+    // constante, evitando micro-oscilação do texto a cada refresh.
+    const sortHeader = (key: SortKey, label: string, align: 'left' | 'right' = 'right', widthClass = '', tabular = false) => (
+        <th className={`px-3 py-1.5 ${align === 'right' ? 'text-right' : 'text-left'} cursor-pointer select-none hover:text-foreground whitespace-nowrap ${widthClass} ${tabular ? 'tabular-nums' : ''}`} onClick={() => toggleSort(key)}>
             <span className={`inline-flex items-center gap-1 ${align === 'right' ? 'justify-end' : ''}`}>
                 {label}
                 {sortKey === key && <span>{sortDir === 'asc' ? '▲' : '▼'}</span>}
@@ -199,23 +203,23 @@ export function RemoteProcesses({ natsSubject, natsUrl, jwt }: RemoteProcessesPr
                     </div>
                 )}
                 {connected && loading && (
-                    <div className="sticky top-0 z-10 px-3 py-1 text-xs text-muted-foreground bg-surface/90 border-b border-border">
+                    <div className="absolute top-0 left-0 right-0 z-10 px-3 py-1 text-xs text-muted-foreground bg-surface/90 border-b border-border pointer-events-none">
                         Carregando...
                     </div>
                 )}
                 {connected && (
-                    <table className="w-full text-left text-xs">
+                    <table className="w-full text-left text-xs table-fixed">
                         <thead className="sticky top-0 bg-surface text-muted-foreground">
                             <tr>
-                                {sortHeader('pid', 'PID', 'left')}
+                                {sortHeader('pid', 'PID', 'left', 'w-16')}
                                 {sortHeader('name', 'Nome', 'left')}
-                                {sortHeader('cpuPercent', 'CPU')}
-                                {sortHeader('memoryBytes', 'RAM')}
-                                {sortHeader('ioReadBps', 'Leitura/s')}
-                                {sortHeader('ioWriteBps', 'Escrita/s')}
-                                {sortHeader('connections', 'Rede')}
-                                {sortHeader('threads', 'Threads')}
-                                {sortHeader('priorityBase', 'Prio')}
+                                {sortHeader('cpuPercent', 'CPU', 'right', 'w-16', true)}
+                                {sortHeader('memoryBytes', 'RAM', 'right', 'w-24', true)}
+                                {sortHeader('ioReadBps', 'Leitura/s', 'right', 'w-28', true)}
+                                {sortHeader('ioWriteBps', 'Escrita/s', 'right', 'w-28', true)}
+                                {sortHeader('connections', 'Rede', 'right', 'w-20', true)}
+                                {sortHeader('threads', 'Threads', 'right', 'w-20', true)}
+                                {sortHeader('priorityBase', 'Prio', 'right', 'w-14', true)}
                             </tr>
                         </thead>
                         <tbody>
@@ -225,15 +229,15 @@ export function RemoteProcesses({ natsSubject, natsUrl, jwt }: RemoteProcessesPr
                                     className="border-t border-border hover:bg-surface-hover cursor-context-menu"
                                     onContextMenu={(e) => openProcessMenu(e, p)}
                                 >
-                                    <td className="px-3 py-1 text-muted-foreground">{p.pid}</td>
-                                    <td className="px-3 py-1 text-foreground font-mono max-w-[16rem] truncate" title={p.name}>{p.name}</td>
-                                    <td className="px-3 py-1 text-right text-warning">{formatCpuPercent(p.cpuPercent)}</td>
-                                    <td className="px-3 py-1 text-right text-accent">{formatBytes(p.memoryBytes)}</td>
-                                    <td className="px-3 py-1 text-right text-muted-foreground">{formatBytesPerSec(p.ioReadBps)}</td>
-                                    <td className="px-3 py-1 text-right text-muted-foreground">{formatBytesPerSec(p.ioWriteBps)}</td>
-                                    <td className="px-3 py-1 text-right text-muted-foreground">{formatConnections(p.connections)}</td>
-                                    <td className="px-3 py-1 text-right text-muted-foreground">{p.threads}</td>
-                                    <td className="px-3 py-1 text-right text-muted-foreground">{p.priorityBase}</td>
+                                    <td className="px-3 py-1 text-muted-foreground tabular-nums">{p.pid}</td>
+                                    <td className="px-3 py-1 text-foreground font-mono min-w-0 truncate" title={p.name}>{p.name}</td>
+                                    <td className="px-3 py-1 text-right text-warning tabular-nums">{formatCpuPercent(p.cpuPercent)}</td>
+                                    <td className="px-3 py-1 text-right text-accent tabular-nums">{formatBytes(p.memoryBytes)}</td>
+                                    <td className="px-3 py-1 text-right text-muted-foreground tabular-nums">{formatBytesPerSec(p.ioReadBps)}</td>
+                                    <td className="px-3 py-1 text-right text-muted-foreground tabular-nums">{formatBytesPerSec(p.ioWriteBps)}</td>
+                                    <td className="px-3 py-1 text-right text-muted-foreground tabular-nums">{formatConnections(p.connections)}</td>
+                                    <td className="px-3 py-1 text-right text-muted-foreground tabular-nums">{p.threads}</td>
+                                    <td className="px-3 py-1 text-right text-muted-foreground tabular-nums">{p.priorityBase}</td>
                                 </tr>
                             ))}
                             {filteredProcesses.length === 0 && !loading && (

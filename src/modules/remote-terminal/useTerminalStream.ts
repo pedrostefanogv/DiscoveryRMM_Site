@@ -12,6 +12,8 @@ export interface TerminalReadyInfo {
     consoleId?: string;
     termCols?: number;
     termRows?: number;
+    /** Backend de shell em uso no agente: 'conpty' | 'legacy' | 'none'. */
+    backend?: string;
 }
 
 interface UseTerminalStreamReturn {
