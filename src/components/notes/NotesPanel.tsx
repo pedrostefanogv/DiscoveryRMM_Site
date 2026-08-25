@@ -29,6 +29,15 @@ function getNoteDate(note: Note): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+/** Extrai mensagem útil do erro (ApError/Error genérico) para exibir ao usuário. */
+function errorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error && error.message && error.message.trim().length > 0) {
+    // Evita mostrar placeholder genérico de status quando há detalhe real.
+    return error.message;
+  }
+  return fallback;
+}
+
 export function NotesPanel({ entityType, entityId, title = "Notas", subtitle }: NotesPanelProps) {
   const LIMIT = 20;
 
@@ -77,8 +86,8 @@ export function NotesPanel({ entityType, entityId, title = "Notas", subtitle }: 
 
   const handleCreate = () => {
     const content = newContent.trim();
-    if (!content) {
-      toast.error("Informe o conteúdo da nota");
+    if (content.length < 3) {
+      toast.error("O conteúdo da nota deve ter ao menos 3 caracteres");
       return;
     }
 
@@ -93,7 +102,8 @@ export function NotesPanel({ entityType, entityId, title = "Notas", subtitle }: 
       setNewPinned(false);
     };
 
-    const onError = () => toast.error("Erro ao criar nota");
+    const onError = (error: unknown) =>
+      toast.error(errorMessage(error, "Erro ao criar nota"));
 
     if (entityType === "client") {
       createClientNote.mutate({ clientId: entityId, data: payload }, { onSuccess, onError });
@@ -123,8 +133,8 @@ export function NotesPanel({ entityType, entityId, title = "Notas", subtitle }: 
   const submitEdit = () => {
     if (!editingId) return;
     const content = editingContent.trim();
-    if (!content) {
-      toast.error("Informe o conteúdo da nota");
+    if (content.length < 3) {
+      toast.error("O conteúdo da nota deve ter ao menos 3 caracteres");
       return;
     }
 
@@ -141,7 +151,8 @@ export function NotesPanel({ entityType, entityId, title = "Notas", subtitle }: 
           toast.success("Nota atualizada");
           cancelEdit();
         },
-        onError: () => toast.error("Erro ao atualizar nota"),
+        onError: (error: unknown) =>
+          toast.error(errorMessage(error, "Erro ao atualizar nota")),
       },
     );
   };
@@ -150,7 +161,8 @@ export function NotesPanel({ entityType, entityId, title = "Notas", subtitle }: 
     if (!confirm("Deseja excluir esta nota?")) return;
     deleteNote.mutate(noteId, {
       onSuccess: () => toast.success("Nota excluída"),
-      onError: () => toast.error("Erro ao excluir nota"),
+      onError: (error: unknown) =>
+        toast.error(errorMessage(error, "Erro ao excluir nota")),
     });
   };
 
