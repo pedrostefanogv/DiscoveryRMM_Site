@@ -106,6 +106,8 @@ export default function RemoteScreenViewer({
   cursorModeRef.current = cursorMode;
   // Bounding box do cursor desenhado (para restaurar a região ao mover/limpar).
   const cursorBoxRef = useRef<{ x: number; y: number; w: number; h: number } | null>(null);
+  const infoOverlayRef = useRef<HTMLDivElement | null>(null);
+  const [infoHovered, setInfoHovered] = useState(false);
   const [rtt, setRtt] = useState<number>(0);
   const [fps, setFps] = useState<number>(0);
   const [isPaused, setIsPaused] = useState(false);
@@ -788,6 +790,12 @@ export default function RemoteScreenViewer({
     // x/y no mouseup — só precisa do `button` para liberar.
     const onMouseUp = (e: MouseEvent) => { sendInput('mouseup', { button: e.button }); };
     const onMouseMove = (e: MouseEvent) => {
+      // Info overlay hover detection — sem pointer-events, detecta via coordenadas
+      const overlay = infoOverlayRef.current;
+      if (overlay) {
+        const r = overlay.getBoundingClientRect();
+        setInfoHovered(e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom);
+      }
       lastMove = e;
       if (moveThrottle) return;
       moveThrottle = setTimeout(() => {
@@ -957,9 +965,13 @@ export default function RemoteScreenViewer({
       />
 
       {/* Info overlay — métricas locais + do agent.
-           Fica quase transparente ao passar o mouse sobre a região para não
-           obstruir a visualização da tela remota no canto superior direito. */}
-      <div className="absolute top-2 right-2 flex flex-col gap-1 text-xs bg-surface/70 rounded px-2 py-1.5 backdrop-blur-sm transition-all duration-300 hover:opacity-[0.12] hover:bg-transparent hover:backdrop-blur-none">
+           Fica quase transparente quando o mouse passa sobre a região,
+           sem bloquear cliques (pointer-events-none). O hover é detectado
+           via coordenadas do mousemove já capturado pelo componente. */}
+      <div
+        ref={infoOverlayRef}
+        className={`absolute top-2 right-2 flex flex-col gap-1 text-xs bg-surface/70 rounded px-2 py-1.5 backdrop-blur-sm pointer-events-none transition-all duration-300 ${infoHovered ? '!opacity-[0.12] !bg-transparent !backdrop-blur-none' : ''}`}
+      >
         <div className="flex items-center gap-3">
           <span className="text-success font-medium">{fps} FPS</span>
           <span className="text-muted-foreground">{rtt}ms</span>
