@@ -157,6 +157,29 @@ export default function RemoteScreenViewer({
   const scaleRef = useRef(scale);
   scaleRef.current = scale;
 
+  // Aplica o scale 'fit' definindo as dimensões CSS do canvas para que ele
+  // caiba DENTRO do container (respeita largura E altura), mantendo o aspect
+  // ratio. object-fit:contain em <canvas> não é confiável cross-browser.
+  // Usada tanto pelo renderFrame (a cada frame novo) quanto pelo ResizeObserver
+  // (quando o container redimensiona sem chegada de frame).
+  const applyFitScale = useCallback(() => {
+    const container = containerRef.current;
+    const canvas = canvasRef.current;
+    if (!container || !canvas || canvas.width <= 0 || canvas.height <= 0) return;
+    const cssW = container.clientWidth;
+    const cssH = container.clientHeight;
+    if (cssW <= 0 || cssH <= 0) return;
+    const ratio = Math.min(cssW / canvas.width, cssH / canvas.height);
+    const w = `${Math.round(canvas.width * ratio)}px`;
+    const h = `${Math.round(canvas.height * ratio)}px`;
+    // Guarda contra style write redundante — ler/write em .style dispara
+    // layout no browser; só escreve se o valor realmente mudou.
+    if (canvas.style.width !== w || canvas.style.height !== h) {
+      canvas.style.width = w;
+      canvas.style.height = h;
+    }
+  }, []);
+
   // Decode JPEG/WebP off-main-thread via ImageBitmap.
   // Suporta dois formatos de payload:
   //   1. Frame completo (compat): JPEG/WebP único (header 12B + payload).
@@ -281,7 +304,11 @@ export default function RemoteScreenViewer({
       frameCountRef.current = 0;
       lastFpsUpdate.current = now;
     }
-  }, []);
+
+    // Aplica o scale 'fit' via cálculo explícito de dimensões CSS.
+    // object-fit:contain em <canvas> não é confiável cross-browser.
+    if (scaleRef.current === 'fit') applyFitScale();
+  }, [applyFitScale]);
 
   // NATS WebSocket: executa o handshake NATS e subscreve ao stream de frames.
   useEffect(() => {
@@ -851,6 +878,33 @@ export default function RemoteScreenViewer({
     return () => document.removeEventListener('visibilitychange', onVisibility);
   }, []);
 
+  // Fit scale: recalcula as dimensões CSS do canvas quando o container redimensiona
+  // (ex.: resize da janela do navegador, toggle de painéis laterais). O cálculo
+  // principal ocorre em renderFrame a cada novo frame; este observer cobre os
+  // casos em que o container muda de tamanho sem que um novo frame chegue.
+  useEffect(() => {
+    if (scale !== 'fit') return;
+    const container = containerRef.current;
+    if (!container) return;
+
+    const recalc = () => applyFitScale();
+
+    const observer = new ResizeObserver(recalc);
+    observer.observe(container);
+    recalc();
+
+    return () => {
+      observer.disconnect();
+      // Ao sair do modo fit, limpa os estilos inline para que o CSS (1:1)
+      // reassuma o controle das dimensões do canvas.
+      const canvas = canvasRef.current;
+      if (canvas) {
+        canvas.style.width = '';
+        canvas.style.height = '';
+      }
+    };
+  }, [scale, applyFitScale]);
+
   // Toggle fullscreen — o pai (RemoteSession) controla o fullscreen: delega a
   // alternância para ele, que chama fullscreenApi no container correto e
   // sincroniza o estado via fullscreenchange. Sem pai, gerencia o próprio
@@ -898,13 +952,14 @@ export default function RemoteScreenViewer({
     >
       <canvas
         ref={canvasRef}
-        className={`${cursorMode === 'remote' ? 'cursor-none' : 'cursor-default'} ${scale === 'fit' ? 'max-w-full max-h-full object-contain' : 'object-contain m-auto'}`}
-        style={scale === 'fit' ? { width: '100%', height: '100%' } : undefined}
+        className={`${cursorMode === 'remote' ? 'cursor-none' : 'cursor-default'} ${scale === 'fit' ? 'max-w-full max-h-full' : 'object-contain m-auto'}`}
         tabIndex={0}
       />
 
-      {/* Info overlay — métricas locais + do agent */}
-      <div className="absolute top-2 right-2 flex flex-col gap-1 text-xs bg-surface/70 rounded px-2 py-1.5 backdrop-blur-sm pointer-events-none">
+      {/* Info overlay — métricas locais + do agent.
+           Fica quase transparente ao passar o mouse sobre a região para não
+           obstruir a visualização da tela remota no canto superior direito. */}
+      <div className="absolute top-2 right-2 flex flex-col gap-1 text-xs bg-surface/70 rounded px-2 py-1.5 backdrop-blur-sm transition-all duration-300 hover:opacity-[0.12] hover:bg-transparent hover:backdrop-blur-none">
         <div className="flex items-center gap-3">
           <span className="text-success font-medium">{fps} FPS</span>
           <span className="text-muted-foreground">{rtt}ms</span>
