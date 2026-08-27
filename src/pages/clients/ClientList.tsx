@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Building2 } from 'lucide-react';
 import { useClients, useCreateClient } from '@/hooks/useClients';
-import { Button, Card, DataTable, Badge, Loading, ErrorDisplay, Modal, Input, TextArea } from '@/components/ui';
+import { Button, Card, DataTable, Badge, Loading, ErrorDisplay, Modal, Input, TextArea, StatCard } from '@/components/ui';
 import type { Client, CreateClientRequest } from '@/api';
 import type { Column } from '@/components/ui';
 import toast from 'react-hot-toast';
@@ -10,7 +10,8 @@ import toast from 'react-hot-toast';
 export default function ClientList() {
   const [showInactive, setShowInactive] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
-  const clients = useClients(showInactive);
+  // Always fetch all clients for stat cards; filter table client-side
+  const allClients = useClients(true);
   const navigate = useNavigate();
 
   const columns: Column<Client>[] = [
@@ -45,15 +46,20 @@ export default function ClientList() {
     },
   ];
 
-  if (clients.isLoading) return <Loading />;
-  if (clients.isError) return <ErrorDisplay onRetry={() => clients.refetch()} />;
+  if (allClients.isLoading) return <Loading />;
+  if (allClients.isError) return <ErrorDisplay onRetry={() => allClients.refetch()} />;
+
+  const allData = allClients.data ?? [];
+  const displayedClients = showInactive ? allData : allData.filter(c => c.isActive);
+  const activeClients = allData.filter(c => c.isActive).length;
+  const inactiveClients = allData.filter(c => !c.isActive).length;
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Clientes</h1>
-          <p className="text-sm text-muted">{clients.data?.length ?? 0} clientes</p>
+          <p className="text-sm text-muted">{allData.length} clientes</p>
         </div>
         <div className="flex items-center gap-3">
           <label className="flex items-center gap-2 text-sm text-muted">
@@ -71,10 +77,16 @@ export default function ClientList() {
         </div>
       </div>
 
+      <div className="grid gap-4 sm:grid-cols-3">
+        <StatCard icon={Building2} label="Total de clientes" value={allData.length} tone="accent" />
+        <StatCard icon={Building2} label="Clientes ativos" value={activeClients} tone="success" />
+        <StatCard icon={Building2} label="Clientes inativos" value={inactiveClients} tone="warning" />
+      </div>
+
       <Card padding={false}>
         <DataTable
           columns={columns}
-          data={clients.data ?? []}
+          data={displayedClients}
           keyExtractor={c => c.id}
           onRowClick={c => navigate(`/clients/${c.id}`)}
         />
@@ -91,6 +103,15 @@ function CreateClientModal({ open, onClose }: { open: boolean; onClose: () => vo
     name: '',
     notes: null,
   });
+
+  // Reset form when modal opens
+  const prevOpen = useRef(open);
+  useEffect(() => {
+    if (open && !prevOpen.current) {
+      setForm({ name: '', notes: null });
+    }
+    prevOpen.current = open;
+  }, [open]);
 
   const handleSubmit = () => {
     if (!form.name.trim()) return;
