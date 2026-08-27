@@ -3,11 +3,17 @@ import { useNavigate } from 'react-router-dom';
 import { useQueries } from '@tanstack/react-query';
 import { Building2, Plus } from 'lucide-react';
 import { useClients } from '@/hooks/useClients';
-import { useCreateSite } from '@/hooks/useSites';
+import { useCreateSite, useDeleteSite, useRestartSite, useShutdownSite, useWakeOnLanSite } from '@/hooks/useSites';
+import { useAgentsBySite } from '@/hooks/useAgents';
 import { Badge, Button, Card, DataTable, ErrorDisplay, Input, Loading, Modal, Select, StatCard, TextArea } from '@/components/ui';
-import { sitesApi, type Site, type CreateSiteRequest } from '@/api';
+import { sitesApi, type Site, type SiteWakeOnLanResponse, type CreateSiteRequest } from '@/api';
 import type { Column } from '@/components/ui';
 import toast from 'react-hot-toast';
+import SiteContextMenu, { type SiteContextAction } from '@/components/sites/SiteContextMenu';
+import SiteTransferAgentsModal from '@/components/sites/SiteTransferAgentsModal';
+import SitePowerConfirmationModal, { type SitePowerAction } from '@/components/sites/SitePowerConfirmationModal';
+import SiteWakeOnLanModal from '@/components/sites/SiteWakeOnLanModal';
+import { TransferBeforeDeleteModal } from '@/components/agents/TransferBeforeDeleteModal';
 
 type SiteWithClient = Site & {
   clientName: string;
@@ -20,6 +26,15 @@ export default function SiteList() {
   const [search, setSearch] = useState('');
   const [filterClient, setFilterClient] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
+  const [contextMenuSite, setContextMenuSite] = useState<SiteWithClient | null>(null);
+  const [contextPosition, setContextPosition] = useState<{ x: number; y: number } | null>(null);
+
+  // Power modals state
+  const [transferSite, setTransferSite] = useState<SiteWithClient | null>(null);
+  const [powerSite, setPowerSite] = useState<SiteWithClient | null>(null);
+  const [powerAction, setPowerAction] = useState<SitePowerAction>('restart');
+  const [wakeSite, setWakeSite] = useState<SiteWithClient | null>(null);
+  const [deleteSiteModal, setDeleteSiteModal] = useState<SiteWithClient | null>(null);
 
   const clients = useClients(showInactive);
   const visibleClients = useMemo(() => {
@@ -59,6 +74,10 @@ export default function SiteList() {
       );
     });
   }, [search, sites]);
+
+  // Agents of the currently selected power/transfer/delete site, for counts & agentIds.
+  const activeSite = transferSite ?? powerSite ?? wakeSite ?? deleteSiteModal ?? null;
+  const { data: activeSiteAgents, isLoading: activeSiteAgentsLoading } = useAgentsBySite(activeSite?.id ?? '');
 
   const columns: Column<SiteWithClient>[] = [
     {
@@ -135,6 +154,129 @@ export default function SiteList() {
     );
   }
 
+  // ── Context menu actions ─────────────────────────────
+  const handleRowContext = (event: React.MouseEvent<HTMLTableRowElement>, site: SiteWithClient) => {
+    event.preventDefault();
+    setContextMenuSite(site);
+    setContextPosition({ x: event.clientX, y: event.clientY });
+  };
+
+  const closeContextMenu = () => {
+    setContextMenuSite(null);
+    setContextPosition(null);
+  };
+
+  const handleAction = (action: SiteContextAction) => {
+    const site = contextMenuSite;
+    if (!site) return;
+    closeContextMenu();
+    switch (action) {
+      case 'wake-on-lan':
+        setWakeSite(site);
+        break;
+      case 'shutdown':
+        setPowerSite(site);
+        setPowerAction('shutdown');
+        break;
+      case 'restart':
+        setPowerSite(site);
+        setPowerAction('restart');
+        break;
+      case 'transfer-agents':
+        setTransferSite(site);
+        break;
+      case 'delete':
+        setDeleteSiteModal(site);
+        break;
+    }
+  };
+  const restartSite = useRestartSite();
+  const shutdownSite = useShutdownSite();
+  const wakeOnLanSite = useWakeOnLanSite();
+  const deleteSiteMutation = useDeleteSite();
+
+  const onlineCount = (activeSiteAgents ?? []).filter((a) => a.isOnline).length;
+  const totalCount = (activeSiteAgents ?? []).length;
+  const offlineCount = totalCount - onlineCount;
+
+  const handleDeleteSiteNoAgents = (site: SiteWithClient) => {
+    if (!window.confirm(`Tem certeza que deseja excluir o site "${site.name}"?`)) {
+      setDeleteSiteModal(null);
+      return;
+    }
+    deleteSiteMutation.mutate(
+      { clientId: site.clientId, id: site.id },
+      {
+        onSuccess: () => {
+          toast.success('Site excluído com sucesso');
+          setDeleteSiteModal(null);
+          void clients.refetch();
+        },
+        onError: () => toast.error('Erro ao excluir site'),
+      },
+    );
+  };
+
+  const handleTransferAndDelete = () => {
+    const site = deleteSiteModal;
+    if (!site) return;
+    setDeleteSiteModal(null);
+    deleteSiteMutation.mutate(
+      { clientId: site.clientId, id: site.id },
+      {
+        onSuccess: () => {
+          toast.success('Site excluído com sucesso');
+          void clients.refetch();
+        },
+        onError: () => toast.error('Erro ao excluir site após transferência'),
+      },
+    );
+  };
+
+  // Quando o usuário clicar em "Apagar" e o site NÃO tiver agentes,
+  // exibe um confirm e exclui direto (sem modal de transferência).
+  useEffect(() => {
+    if (!deleteSiteModal || activeSiteAgentsLoading) return;
+    const hasAgents = (activeSiteAgents ?? []).length > 0;
+    if (!hasAgents) {
+      handleDeleteSiteNoAgents(deleteSiteModal);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deleteSiteModal, activeSiteAgentsLoading]);
+
+  const handlePowerConfirm = async (data: { delaySeconds: number; force: boolean; message: string }) => {
+    const site = powerSite;
+    const action = powerAction;
+    if (!site) return;
+    const mutation = action === 'shutdown' ? shutdownSite : restartSite;
+    await mutation.mutateAsync(
+      { clientId: site.clientId, siteId: site.id, data },
+      {
+        onSuccess: () => {
+          toast.success(
+            `Comando de ${action === 'shutdown' ? 'desligamento' : 'reinicialização'} enviado para ${onlineCount} agente(s) online do site "${site.name}".`,
+          );
+        },
+        onError: (error) => {
+          toast.error(error instanceof Error ? error.message : 'Falha ao enviar comando de energia.');
+        },
+      },
+    );
+  };
+
+  const handleWakeOnLan = async (): Promise<SiteWakeOnLanResponse> => {
+    const site = wakeSite;
+    if (!site) throw new Error("Site não selecionado.");
+    return wakeOnLanSite.mutateAsync(
+      { clientId: site.clientId, siteId: site.id },
+      {
+        onError: (error) => {
+          toast.error(error instanceof Error ? error.message : 'Falha ao enviar Wake-on-LAN.');
+        },
+      },
+    );
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -191,6 +333,7 @@ export default function SiteList() {
             keyExtractor={(site) => site.id}
             emptyMessage="Nenhum site encontrado"
             onRowClick={(site) => navigate(`/clients/${site.clientId}/sites/${site.id}`)}
+            onRowContextMenu={handleRowContext}
           />
         )}
       </Card>
@@ -200,6 +343,59 @@ export default function SiteList() {
         onClose={() => setModalOpen(false)}
         clients={clients.data ?? []}
       />
+
+      {contextMenuSite && contextPosition && (
+        <SiteContextMenu
+          position={contextPosition}
+          onAction={handleAction}
+          onClose={closeContextMenu}
+        />
+      )}
+
+      {transferSite && (
+        <SiteTransferAgentsModal
+          open
+          onClose={() => setTransferSite(null)}
+          sourceSiteName={transferSite.name}
+          agentIds={(activeSiteAgents ?? []).map((a) => a.id)}
+          onSuccess={() => {}}
+        />
+      )}
+
+      {powerSite && (
+        <SitePowerConfirmationModal
+          open
+          onClose={() => setPowerSite(null)}
+          siteName={powerSite.name}
+          action={powerAction}
+          onlineCount={onlineCount}
+          offlineCount={offlineCount}
+          totalCount={totalCount}
+          onConfirm={handlePowerConfirm}
+          isLoading={restartSite.isPending || shutdownSite.isPending}
+        />
+      )}
+
+      {wakeSite && (
+        <SiteWakeOnLanModal
+          open
+          onClose={() => setWakeSite(null)}
+          siteName={wakeSite.name}
+          onConfirm={handleWakeOnLan}
+        />
+      )}
+
+      {deleteSiteModal && (activeSiteAgents ?? []).length > 0 && (
+        <TransferBeforeDeleteModal
+          open
+          onClose={() => setDeleteSiteModal(null)}
+          entityType="site"
+          entityName={deleteSiteModal.name}
+          agentIds={(activeSiteAgents ?? []).map((a) => a.id)}
+          sourceClientId={deleteSiteModal.clientId}
+          onSuccess={handleTransferAndDelete}
+        />
+      )}
     </div>
   );
 }

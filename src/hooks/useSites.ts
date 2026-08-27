@@ -1,6 +1,11 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { sitesApi } from "@/api";
-import type { CreateSiteRequest, UpdateSiteRequest } from "@/api";
+import type {
+  CreateSiteRequest,
+  UpdateSiteRequest,
+  SiteRestartRequest,
+  SiteShutdownRequest,
+} from "@/api";
 
 const KEYS = {
   all: ["sites"] as const,
@@ -71,6 +76,53 @@ export function useDeleteSite() {
       sitesApi.delete(clientId, id),
     onSuccess: (_d, vars) => {
       qc.invalidateQueries({ queryKey: KEYS.byClient(vars.clientId, false) });
+      qc.invalidateQueries({ queryKey: KEYS.byClient(vars.clientId, true) });
+    },
+  });
+}
+
+export function useRestartSite() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      clientId,
+      siteId,
+      data,
+    }: {
+      clientId: string;
+      siteId: string;
+      data?: SiteRestartRequest;
+    }) => sitesApi.restartSite(clientId, siteId, data ?? {}),
+    onSuccess: (_d, vars) => {
+      qc.invalidateQueries({ queryKey: KEYS.byClient(vars.clientId, true) });
+    },
+  });
+}
+
+export function useShutdownSite() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      clientId,
+      siteId,
+      data,
+    }: {
+      clientId: string;
+      siteId: string;
+      data?: SiteShutdownRequest;
+    }) => sitesApi.shutdownSite(clientId, siteId, data ?? {}),
+    onSuccess: (_d, vars) => {
+      qc.invalidateQueries({ queryKey: KEYS.byClient(vars.clientId, true) });
+    },
+  });
+}
+
+export function useWakeOnLanSite() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ clientId, siteId }: { clientId: string; siteId: string }) =>
+      sitesApi.wakeOnLanSite(clientId, siteId),
+    onSuccess: (_d, vars) => {
       qc.invalidateQueries({ queryKey: KEYS.byClient(vars.clientId, true) });
     },
   });

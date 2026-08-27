@@ -11,6 +11,26 @@ interface RemoteServicesProps {
     nkeySeed?: string;
 }
 
+type ServiceSortKey = 'name' | 'state' | 'startType' | 'pid' | 'cpuPercent' | 'memoryBytes' | 'connections';
+
+// Ordem semântica de estados para agrupar "em execução" primeiro, etc.
+const stateOrder: Record<string, number> = {
+    running: 0,
+    start_pending: 1,
+    continue_pending: 1,
+    pause_pending: 2,
+    paused: 3,
+    stop_pending: 4,
+    stopped: 5,
+};
+
+// Ordem semântica de tipo de inicialização.
+const startTypeOrder: Record<string, number> = {
+    auto: 0,
+    demand: 1,
+    disabled: 2,
+};
+
 const serviceStateColor = (state: string) => {
     switch (state) {
         case 'running': return 'text-success';
@@ -46,6 +66,8 @@ export function RemoteServices({ natsSubject, natsUrl, jwt }: RemoteServicesProp
     const [loading, setLoading] = useState(false);
     const [busy, setBusy] = useState(false);
     const [search, setSearch] = useState('');
+    const [sortKey, setSortKey] = useState<ServiceSortKey>('name');
+    const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
     const [menu, setMenu] = useState<{ x: number; y: number; service?: ServiceInfo } | null>(null);
     const [toast, setToast] = useState<string | null>(null);
     const errorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -142,9 +164,60 @@ export function RemoteServices({ natsSubject, natsUrl, jwt }: RemoteServicesProp
 
     const filteredServices = useMemo(() => {
         const q = search.toLowerCase();
-        if (!q) return services;
-        return services.filter(s => s.name.toLowerCase().includes(q) || s.displayName.toLowerCase().includes(q));
-    }, [services, search]);
+        const base = q
+            ? services.filter(s => s.name.toLowerCase().includes(q) || s.displayName.toLowerCase().includes(q))
+            : services;
+        const sorted = [...base].sort((a, b) => {
+            let cmp = 0;
+            if (sortKey === 'name') {
+                // Ordena pelo que é exibido na coluna (displayName).
+                cmp = (a.displayName || a.name).localeCompare(b.displayName || b.name, 'pt-BR', { sensitivity: 'base' });
+            } else if (sortKey === 'state') {
+                const ao = stateOrder[a.state] ?? 99;
+                const bo = stateOrder[b.state] ?? 99;
+                if (ao !== bo) {
+                    cmp = ao - bo;
+                } else {
+                    // Dentro do mesmo grupo semântico, ordena por rótulo (lexical estável).
+                    cmp = a.state.localeCompare(b.state);
+                }
+            } else if (sortKey === 'startType') {
+                const ao = startTypeOrder[(a.startType ?? '').toLowerCase()] ?? 99;
+                const bo = startTypeOrder[(b.startType ?? '').toLowerCase()] ?? 99;
+                if (ao !== bo) {
+                    cmp = ao - bo;
+                } else {
+                    cmp = (a.startType ?? '').localeCompare(b.startType ?? '');
+                }
+            } else {
+                // Campos numéricos: name/state/startType já tratados acima.
+                const an = Number(a[sortKey]) || 0;
+                const bn = Number(b[sortKey]) || 0;
+                cmp = an - bn;
+            }
+            return sortDir === 'asc' ? cmp : -cmp;
+        });
+        return sorted;
+    }, [services, search, sortKey, sortDir]);
+
+    const toggleSort = useCallback((key: ServiceSortKey) => {
+        if (key === sortKey) {
+            setSortDir(d => (d === 'asc' ? 'desc' : 'asc'));
+        } else {
+            setSortKey(key);
+            setSortDir('asc');
+        }
+    }, [sortKey]);
+
+    // `widthClass` fixa a coluna (table-fixed); `tabular` evita micro-oscilação dos dígitos.
+    const sortHeader = (key: ServiceSortKey, label: string, align: 'left' | 'right' = 'right', widthClass = '', tabular = false) => (
+        <th className={`px-3 py-1.5 ${align === 'right' ? 'text-right' : 'text-left'} cursor-pointer select-none hover:text-foreground whitespace-nowrap ${widthClass} ${tabular ? 'tabular-nums' : ''}`} onClick={() => toggleSort(key)}>
+            <span className={`inline-flex items-center gap-1 ${align === 'right' ? 'justify-end' : ''}`}>
+                {label}
+                {sortKey === key && <span>{sortDir === 'asc' ? '▲' : '▼'}</span>}
+            </span>
+        </th>
+    );
 
     return (
         <div className="h-full flex flex-col min-h-0 bg-background" onContextMenu={(e) => e.preventDefault()}>
@@ -183,13 +256,13 @@ export function RemoteServices({ natsSubject, natsUrl, jwt }: RemoteServicesProp
                     <table className="w-full text-left text-xs table-fixed">
                         <thead className="sticky top-0 bg-surface text-muted-foreground">
                             <tr>
-                                <th className="px-3 py-1.5">Nome</th>
-                                <th className="px-3 py-1.5 w-32 whitespace-nowrap">Estado</th>
-                                <th className="px-3 py-1.5 w-32 whitespace-nowrap">Inicialização</th>
-                                <th className="px-3 py-1.5 w-16 tabular-nums whitespace-nowrap">PID</th>
-                                <th className="px-3 py-1.5 text-right w-16 tabular-nums whitespace-nowrap">CPU</th>
-                                <th className="px-3 py-1.5 text-right w-24 tabular-nums whitespace-nowrap">RAM</th>
-                                <th className="px-3 py-1.5 text-right w-20 tabular-nums whitespace-nowrap">Rede</th>
+                                {sortHeader('name', 'Nome', 'left')}
+                                {sortHeader('state', 'Estado', 'left', 'w-32')}
+                                {sortHeader('startType', 'Inicialização', 'left', 'w-32')}
+                                {sortHeader('pid', 'PID', 'left', 'w-16', true)}
+                                {sortHeader('cpuPercent', 'CPU', 'right', 'w-16', true)}
+                                {sortHeader('memoryBytes', 'RAM', 'right', 'w-24', true)}
+                                {sortHeader('connections', 'Rede', 'right', 'w-20', true)}
                             </tr>
                         </thead>
                         <tbody>

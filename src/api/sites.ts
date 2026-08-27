@@ -1,5 +1,13 @@
 ﻿import { api } from "./client";
-import type { Site, CreateSiteRequest, UpdateSiteRequest } from "./types";
+import type {
+  Site,
+  CreateSiteRequest,
+  UpdateSiteRequest,
+  SiteRestartRequest,
+  SiteShutdownRequest,
+  SiteFanoutResponseDto,
+  SiteWakeOnLanResponse,
+} from "./types";
 
 export const sitesApi = {
   list: (clientId: string, includeInactive = false) =>
@@ -16,4 +24,14 @@ export const sitesApi = {
 
   delete: (clientId: string, id: string) =>
     api.del<void>(`/api/v1/clients/${clientId}/sites/${id}`),
+
+  // ── Power management (todos os agentes do site) ─────
+  restartSite: (clientId: string, siteId: string, data: SiteRestartRequest) =>
+    api.post<SiteFanoutResponseDto>(`/api/v1/clients/${clientId}/sites/${siteId}/power/restart`, data),
+
+  shutdownSite: (clientId: string, siteId: string, data: SiteShutdownRequest) =>
+    api.post<SiteFanoutResponseDto>(`/api/v1/clients/${clientId}/sites/${siteId}/power/shutdown`, data),
+
+  wakeOnLanSite: (clientId: string, siteId: string) =>
+    api.post<SiteWakeOnLanResponse>(`/api/v1/clients/${clientId}/sites/${siteId}/power/wake-on-lan`),
 };

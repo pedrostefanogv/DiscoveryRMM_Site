@@ -1489,6 +1489,37 @@ export interface PowerCommandResponse {
   status: string;
 }
 
+// ── Site Power Management DTOs ─────────────────────────
+
+export interface SiteRestartRequest {
+  delaySeconds?: number;
+  force?: boolean;
+  message?: string;
+}
+
+export interface SiteShutdownRequest {
+  delaySeconds?: number;
+  force?: boolean;
+  message?: string;
+}
+
+export interface SiteFanoutResponseDto {
+  dispatchId: string;
+  subject: string;
+  targetScope: string;
+  idempotencyKey: string | null;
+  onlineAgents: number;
+}
+
+export interface SiteWakeOnLanResponse {
+  dispatchId: string;
+  targetCount: number;
+  onlineRelayCount: number;
+  targetAgentNames: string[];
+  macAddresses: string[];
+  expiresAtUtc: string;
+}
+
 export interface CreateTokenRequest {
   description: string | null;
   expirationDays: number | null;
