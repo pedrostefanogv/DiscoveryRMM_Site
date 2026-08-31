@@ -1,23 +1,12 @@
-import { useState } from "react";
+﻿import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { AppWindow, Eye, Search } from "lucide-react";
 import { Card, CardHeader, DataTable, ErrorDisplay, Input, Loading, Select, StatCard, Button, Modal, Badge, type Column } from "@/components/ui";
 import { useClients } from "@/hooks/useClients";
 import { useSites } from "@/hooks/useSites";
-import { useSoftwareInventoryList, useSoftwareInventorySnapshot, type SoftwareInventoryScope } from "@/hooks/useSoftwareInventory";
+import { useSoftwareInventoryList, useSoftwareInventorySnapshot, useSoftwareInstallations, type SoftwareInventoryScope } from "@/hooks/useSoftwareInventory";
 import { useCursorPagination } from "@/hooks/useCursorPagination";
-import { agentsApi, clientsApi, sitesApi, type Agent, type SoftwareInventoryCatalogItem } from "@/api";
-import { useNavigate } from "react-router-dom";
-
-interface SoftwareInstallationRow {
-  agentId: string;
-  agentName: string;
-  siteName: string;
-  clientName: string;
-  version: string | null;
-  source: string | null;
-  collectedAt: string;
-  lastSeenAt: string | null;
-}
+import type { SoftwareInventoryCatalogItem } from "@/api";
 
 function formatDate(date: string | null): string {
   if (!date) return "\u2014";
@@ -29,16 +18,13 @@ export default function SoftwareInventory() {
   const [scope, setScope] = useState<SoftwareInventoryScope>("global");
   const [selectedClientId, setSelectedClientId] = useState("");
   const [selectedSiteId, setSelectedSiteId] = useState("");
-  const [order, setOrder] = useState<"asc" | "desc">("desc");
+  const [order, setOrder] = useState<"asc" | "desc">("asc");
   const [searchInput, setSearchInput] = useState("");
   const [searchApplied, setSearchApplied] = useState("");
   const pag = useCursorPagination({ initialLimit: 10 });
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [detailsSoftware, setDetailsSoftware] = useState<SoftwareInventoryCatalogItem | null>(null);
-  const [detailsRows, setDetailsRows] = useState<SoftwareInstallationRow[]>([]);
-  const [detailsLoading, setDetailsLoading] = useState(false);
-  const [detailsError, setDetailsError] = useState<string | null>(null);
-  const [detailsScannedAgents, setDetailsScannedAgents] = useState(0);
+  const detailsPag = useCursorPagination({ initialLimit: 50 });
 
   const clients = useClients();
   const sites = useSites(selectedClientId);
@@ -102,7 +88,7 @@ export default function SoftwareInventory() {
   const totalSoftware = snapshot.data?.distinctSoftware ?? 0;
   const totalAgents = snapshot.data?.distinctAgents ?? 0;
   const resolvedLimit = pag.limit;
-  // Quando há busca ativa, o snapshot reflete o total sem filtro — não tentamos estimar páginas
+  // Quando há busca ativa, o snapshot reflete o total sem filtro �?" não tentamos estimar páginas
   const hasActiveSearch = searchApplied.length > 0;
   const estimatedTotalPages = totalSoftware > 0
     ? Math.max(1, Math.ceil(totalSoftware / resolvedLimit))
@@ -123,8 +109,8 @@ export default function SoftwareInventory() {
   ];
 
   const orderOptions = [
-    { value: "desc", label: "Mais recente primeiro" },
-    { value: "asc", label: "Mais antigo primeiro" },
+    { value: "asc", label: "Nome (A–Z)" },
+    { value: "desc", label: "Nome (Z–A)" },
   ];
 
   const limitOptions = [
@@ -155,19 +141,8 @@ export default function SoftwareInventory() {
       ),
     },
     {
-      key: "installedCount",
-      header: "Instalado em",
-      className: "font-mono",
-      render: (item) => item.installedCount != null ? `${item.installedCount} agent(s)` : "\u2014",
-    },
-    {
-      key: "source",
-      header: "Fonte",
-      render: (item) => item.source ?? "\u2014",
-    },
-    {
       key: "lastSeen",
-      header: "Última coleta",
+      header: "�sltima coleta",
       render: (item) => formatDate(item.lastCollectedAt ?? item.lastSeenAt),
     },
     {
@@ -179,7 +154,7 @@ export default function SoftwareInventory() {
           type="button"
           onClick={(e) => {
             e.stopPropagation();
-            void handleOpenSoftwareDetails(item);
+            handleOpenSoftwareDetails(item);
           }}
           className="rounded-md border border-border p-1.5 text-muted-foreground transition-colors hover:border-border-strong hover:bg-surface-light hover:text-foreground"
           aria-label={`Ver detalhes de ${item.name}`}
@@ -191,158 +166,34 @@ export default function SoftwareInventory() {
     },
   ];
 
-  const buildSoftwareRowsForAgent = async (
-    software: SoftwareInventoryCatalogItem,
-    agent: Agent,
-    siteLookup: Map<string, { siteName: string; clientName: string }>,
-  ) => {
-    const collectedRows: SoftwareInstallationRow[] = [];
-
-    const rawResult = await agentsApi.getSoftware(agent.id, {
-        limit: 200,
-        order: "desc",
-      });
-
-      // API now returns paginated object with items array
-      const pageItems = rawResult.items ?? [];
-
-      const matched = pageItems.filter(
-        (row) => row.softwareId === software.softwareId,
-      );
-
-      if (matched.length > 0) {
-        const siteInfo = siteLookup.get(agent.siteId);
-        const agentName = agent.displayName?.trim() || agent.hostname;
-        matched.forEach((row) => {
-          collectedRows.push({
-            agentId: agent.id,
-            agentName,
-            siteName: siteInfo?.siteName ?? "Site desconhecido",
-            clientName: siteInfo?.clientName ?? "Cliente desconhecido",
-            version: row.version,
-            source: row.source,
-            collectedAt: row.collectedAt,
-            lastSeenAt: row.lastSeenAt,
-          });
-        });
-      }
-
-      // No more pages since API returns all data at once
-
-    return collectedRows;
-  };
-
-  const handleOpenSoftwareDetails = async (software: SoftwareInventoryCatalogItem) => {
-    setDetailsOpen(true);
+  const handleOpenSoftwareDetails = (software: SoftwareInventoryCatalogItem) => {
     setDetailsSoftware(software);
-    setDetailsRows([]);
-    setDetailsError(null);
-    setDetailsLoading(true);
-    setDetailsScannedAgents(0);
-
-    try {
-      let scopedClients = clients.data ?? [];
-      let scopedAgents: Agent[] = [];
-      const siteLookup = new Map<string, { siteName: string; clientName: string }>();
-
-      if (scope === "global") {
-        scopedClients = await clientsApi.list(true);
-        const agentsByClient = await Promise.all(
-          scopedClients.map((clientRow) => agentsApi.listByClient(clientRow.id)),
-        );
-        scopedAgents = agentsByClient.flat();
-
-        const sitesByClient = await Promise.all(
-          scopedClients.map(async (clientRow) => ({
-            clientName: clientRow.name,
-            sites: await sitesApi.list(clientRow.id, true),
-          })),
-        );
-
-        sitesByClient.forEach(({ clientName, sites: clientSites }) => {
-          clientSites.forEach((siteRow) => {
-            siteLookup.set(siteRow.id, { siteName: siteRow.name, clientName });
-          });
-        });
-      }
-
-      if (scope === "client") {
-        if (!selectedClientId) throw new Error("Cliente não selecionado.");
-
-        const selectedClientName =
-          scopedClients.find((c) => c.id === selectedClientId)?.name ?? "Cliente";
-
-        const [clientAgents, clientSites] = await Promise.all([
-          agentsApi.listByClient(selectedClientId),
-          sitesApi.list(selectedClientId, true),
-        ]);
-
-        scopedAgents = clientAgents;
-        clientSites.forEach((siteRow) => {
-          siteLookup.set(siteRow.id, {
-            siteName: siteRow.name,
-            clientName: selectedClientName,
-          });
-        });
-      }
-
-      if (scope === "site") {
-        if (!selectedSiteId || !selectedClientId) {
-          throw new Error("Cliente/Site não selecionado.");
-        }
-
-        const selectedClientName =
-          scopedClients.find((c) => c.id === selectedClientId)?.name ?? "Cliente";
-
-        const [siteAgents, clientSites] = await Promise.all([
-          agentsApi.listBySite(selectedSiteId),
-          sitesApi.list(selectedClientId, true),
-        ]);
-
-        scopedAgents = siteAgents;
-        clientSites.forEach((siteRow) => {
-          siteLookup.set(siteRow.id, {
-            siteName: siteRow.name,
-            clientName: selectedClientName,
-          });
-        });
-      }
-
-      const detailedRows: SoftwareInstallationRow[] = [];
-      setDetailsScannedAgents(0);
-      for (const agentRow of scopedAgents) {
-        const rowsForAgent = await buildSoftwareRowsForAgent(software, agentRow, siteLookup);
-        detailedRows.push(...rowsForAgent);
-        setDetailsScannedAgents((prev) => prev + 1);
-      }
-
-      detailedRows.sort((a, b) => {
-        if (a.clientName !== b.clientName) return a.clientName.localeCompare(b.clientName, "pt-BR");
-        if (a.siteName !== b.siteName) return a.siteName.localeCompare(b.siteName, "pt-BR");
-        return a.agentName.localeCompare(b.agentName, "pt-BR");
-      });
-
-      setDetailsRows(detailedRows);
-    } catch {
-      setDetailsError("Não foi possível carregar os detalhes deste software.");
-    } finally {
-      setDetailsLoading(false);
-    }
+    setDetailsOpen(true);
+    detailsPag.reset();
   };
 
   const closeDetails = () => {
     setDetailsOpen(false);
     setDetailsSoftware(null);
-    setDetailsRows([]);
-    setDetailsError(null);
-    setDetailsLoading(false);
-    setDetailsScannedAgents(0);
+    detailsPag.reset();
   };
 
+  const installations = useSoftwareInstallations({
+    softwareId: detailsSoftware?.softwareId ?? "",
+    scope,
+    clientId: scope === "client" ? selectedClientId || undefined : undefined,
+    siteId: scope === "site" ? selectedSiteId || undefined : undefined,
+    cursor: detailsPag.cursor,
+    limit: detailsPag.limit,
+  });
+
+  const detailsRows = installations.data?.items ?? [];
   const detailsUniqueClients = new Set(detailsRows.map((row) => row.clientName)).size;
   const detailsUniqueSites = new Set(detailsRows.map((row) => row.siteName)).size;
   const detailsUniqueAgents = new Set(detailsRows.map((row) => row.agentId)).size;
   const detailsUniqueVersions = new Set(detailsRows.map((row) => row.version ?? "\u2014")).size;
+  const detailsCanNext = installations.data?.hasMore ?? false;
+  const detailsCanPrev = detailsPag.page > 1 && !installations.isFetching;
 
   if (clients.isLoading) return <Loading />;
   if (clients.isError) return <ErrorDisplay onRetry={() => clients.refetch()} />;
@@ -358,7 +209,7 @@ export default function SoftwareInventory() {
         <StatCard icon={AppWindow} label="Instalados" value={totalInstalled} tone="primary" />
         <StatCard icon={AppWindow} label="Softwares distintos" value={totalSoftware} tone="accent" />
         <StatCard icon={AppWindow} label="Agents distintos" value={totalAgents} tone="success" />
-        <StatCard icon={AppWindow} label="Última coleta" value={snapshot.data?.lastCollectedAt ? new Date(snapshot.data.lastCollectedAt).toLocaleDateString("pt-BR") : "\u2014"} tone="warning" />
+        <StatCard icon={AppWindow} label="�sltima coleta" value={snapshot.data?.lastCollectedAt ? new Date(snapshot.data.lastCollectedAt).toLocaleDateString("pt-BR") : "\u2014"} tone="warning" />
       </div>
 
       <Card>
@@ -465,19 +316,16 @@ export default function SoftwareInventory() {
         title={detailsSoftware ? `Detalhes - ${detailsSoftware.name}` : "Detalhes do software"}
         maxWidth="max-w-5xl"
       >
-        {detailsLoading ? (
-          <div className="space-y-3 py-4">
+        {installations.isLoading ? (
+          <div className="py-4">
             <Loading message="Carregando instalações por cliente/site/agente..." />
-            <p className="text-center text-xs text-muted">
-              Agentes verificados: {detailsScannedAgents}
-            </p>
           </div>
-        ) : detailsError ? (
-          <ErrorDisplay message={detailsError} onRetry={() => detailsSoftware && void handleOpenSoftwareDetails(detailsSoftware)} />
+        ) : installations.isError ? (
+          <ErrorDisplay onRetry={() => installations.refetch()} />
         ) : (
           <div className="space-y-4">
             <div className="flex flex-wrap items-center gap-2">
-              <Badge color="primary">Instalações: {detailsRows.length}</Badge>
+              <Badge color="primary">Instalações: {detailsRows.length}{detailsCanNext ? "+" : ""}</Badge>
               <Badge color="accent">Clientes: {detailsUniqueClients}</Badge>
               <Badge color="warning">Sites: {detailsUniqueSites}</Badge>
               <Badge color="success">Agents: {detailsUniqueAgents}</Badge>
@@ -492,19 +340,17 @@ export default function SoftwareInventory() {
                     <th className="px-3 py-2 text-xs uppercase tracking-wide text-muted">Site</th>
                     <th className="px-3 py-2 text-xs uppercase tracking-wide text-muted">Agent</th>
                     <th className="px-3 py-2 text-xs uppercase tracking-wide text-muted">Versão</th>
-                    <th className="px-3 py-2 text-xs uppercase tracking-wide text-muted">Fonte</th>
                     <th className="px-3 py-2 text-xs uppercase tracking-wide text-muted">Última coleta</th>
                     <th className="px-3 py-2 text-xs uppercase tracking-wide text-muted"></th>
                   </tr>
                 </thead>
                 <tbody>
                   {detailsRows.map((row) => (
-                    <tr key={`${row.agentId}-${row.version ?? "sem-versao"}-${row.collectedAt}`} className="border-b border-border">
+                    <tr key={`${row.agentId}-${row.version ?? "sem-versao"}`} className="border-b border-border">
                       <td className="px-3 py-2 text-foreground">{row.clientName}</td>
                       <td className="px-3 py-2 text-muted-foreground">{row.siteName}</td>
-                      <td className="px-3 py-2 text-muted-foreground">{row.agentName}</td>
+                      <td className="px-3 py-2 text-muted-foreground">{row.agentDisplayName?.trim() || row.hostname}</td>
                       <td className="px-3 py-2 font-mono text-muted-foreground">{row.version ?? "\u2014"}</td>
-                      <td className="px-3 py-2 text-muted-foreground">{row.source ?? "\u2014"}</td>
                       <td className="px-3 py-2 text-muted">{formatDate(row.lastSeenAt ?? row.collectedAt)}</td>
                       <td className="px-3 py-2 text-right">
                         <Button
@@ -526,6 +372,27 @@ export default function SoftwareInventory() {
                   Nenhuma instalação encontrada para este software no escopo atual.
                 </div>
               )}
+            </div>
+
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-xs text-muted">
+                {detailsRows.length} instalação(ões) nesta página
+              </p>
+              <div className="flex items-center gap-2">
+                <Button variant="secondary" size="sm" onClick={detailsPag.goToPrev} disabled={!detailsCanPrev}>
+                  Voltar
+                </Button>
+                <span className="px-2 text-xs tabular-nums text-muted">Página {detailsPag.page}</span>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => detailsPag.goToNext(installations.data?.nextCursor)}
+                  disabled={!detailsCanNext}
+                  loading={installations.isFetching}
+                >
+                  Avançar
+                </Button>
+              </div>
             </div>
           </div>
         )}

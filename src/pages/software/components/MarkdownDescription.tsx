@@ -27,7 +27,8 @@ export function MarkdownDescription({
     + '[&_code]:rounded [&_code]:bg-surface-hover [&_code]:px-1 [&_code]:py-0.5 [&_pre]:overflow-x-auto [&_pre]:rounded-lg [&_pre]:bg-black/30 [&_pre]:p-2 '
     + '[&_p]:m-0 [&_p+_p]:mt-1 [&_ul]:my-1 [&_ul]:list-disc [&_ul]:pl-4 [&_ol]:my-1 [&_ol]:list-decimal [&_ol]:pl-4 [&_li]:my-0.5 '
     + '[&_h1]:m-0 [&_h1]:text-sm [&_h1]:font-semibold [&_h1]:text-foreground [&_h2]:m-0 [&_h2]:text-sm [&_h2]:font-semibold [&_h2]:text-foreground '
-    + '[&_h3]:m-0 [&_h3]:text-xs [&_h3]:font-semibold [&_h3]:text-foreground [&_hr]:my-2 [&_hr]:border-border [&_img]:hidden';
+    + '[&_h3]:m-0 [&_h3]:text-xs [&_h3]:font-semibold [&_h3]:text-foreground [&_hr]:my-2 [&_hr]:border-border [&_img]:hidden '
+    + 'min-w-0 max-w-full overflow-x-hidden break-words [&_p]:break-words [&_*]:break-words [&_*]:overflow-wrap-anywhere';
 
   const variantClass =
     variant === 'full'

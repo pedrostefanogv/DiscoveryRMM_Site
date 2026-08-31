@@ -311,6 +311,27 @@ export interface SoftwareInventoryCatalogPage {
   hasMore: boolean;
 }
 
+export interface SoftwareInstallationItem {
+  agentId: string;
+  hostname: string;
+  agentDisplayName: string | null;
+  siteId: string;
+  siteName: string;
+  clientId: string;
+  clientName: string;
+  version: string | null;
+  source: string | null;
+  collectedAt: string;
+  firstSeenAt: string;
+  lastSeenAt: string;
+}
+
+export interface SoftwareInstallationsPage {
+  items: SoftwareInstallationItem[];
+  nextCursor: string | null;
+  hasMore: boolean;
+}
+
 export interface AgentSoftwareInventorySnapshot {
   agentId: string;
   totalInstalled: number;

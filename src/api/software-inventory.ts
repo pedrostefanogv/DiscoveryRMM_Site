@@ -4,6 +4,7 @@ import type {
   AgentSoftwareOrder,
   SoftwareInventorySnapshot,
   SoftwareInventoryTopResponse,
+  SoftwareInstallationsPage,
 } from "./types";
 
 const BASE = "/api/v1/software-inventory";
@@ -47,5 +48,24 @@ export const softwareInventoryApi = {
       scope: params?.scope,
       scopeId: params?.scopeId,
       limit: params?.limit,
+    }),
+
+  /** Instalações de um software específico, com escopo opcional (modal de detalhes). */
+  installations: (
+    softwareId: string,
+    params?: {
+      scope?: SoftwareInventoryScope;
+      scopeId?: string;
+      cursor?: string;
+      limit?: number;
+      order?: AgentSoftwareOrder;
+    },
+  ) =>
+    api.get<SoftwareInstallationsPage>(`${BASE}/${softwareId}/installations`, {
+      scope: params?.scope,
+      scopeId: params?.scopeId,
+      cursor: params?.cursor,
+      limit: params?.limit,
+      order: params?.order,
     }),
 };

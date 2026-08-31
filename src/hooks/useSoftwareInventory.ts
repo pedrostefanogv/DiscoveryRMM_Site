@@ -14,6 +14,16 @@ interface SoftwareInventoryListParams {
   order?: AgentSoftwareOrder;
 }
 
+interface SoftwareInstallationsParams {
+  softwareId: string;
+  scope: SoftwareInventoryScope;
+  clientId?: string;
+  siteId?: string;
+  cursor?: string;
+  limit?: number;
+  order?: AgentSoftwareOrder;
+}
+
 const KEYS = {
   all: ["softwareInventory"] as const,
   list: (params: {
@@ -92,6 +102,40 @@ export function useSoftwareInventorySnapshot(
       return softwareInventoryApi.snapshot({ scope, scopeId });
     },
     enabled: hasScopeTarget,
+  });
+}
+
+export function useSoftwareInstallations(params: SoftwareInstallationsParams) {
+  const safeLimit = Math.min(500, Math.max(1, params.limit ?? 50));
+  const safeOrder: AgentSoftwareOrder = params.order === "desc" ? "desc" : "asc";
+
+  return useQuery({
+    queryKey: [
+      ...KEYS.all,
+      "installations",
+      params.softwareId,
+      params.scope,
+      params.clientId ?? null,
+      params.siteId ?? null,
+      params.cursor ?? null,
+      safeLimit,
+      safeOrder,
+    ],
+    queryFn: () => {
+      let scopeId: string | undefined;
+      if (params.scope === "client") scopeId = params.clientId;
+      else if (params.scope === "site") scopeId = params.siteId;
+
+      return softwareInventoryApi.installations(params.softwareId, {
+        scope: params.scope,
+        scopeId,
+        cursor: params.cursor,
+        limit: safeLimit,
+        order: safeOrder,
+      });
+    },
+    enabled: !!params.softwareId,
+    placeholderData: keepPreviousData,
   });
 }
 

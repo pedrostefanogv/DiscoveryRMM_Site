@@ -293,17 +293,17 @@ export function CatalogTab() {
                 <PackageIcon url={pkg.icon} homepage={pkg.homepage}
                   downloadUrl={pkg.installerUrlsByArch ? Object.values(pkg.installerUrlsByArch).find((value) => Boolean(value)) ?? null : null}
                   name={pkg.name} />
-                <div className="flex-1 min-w-0">
+                <div className="flex-1 min-w-0 max-w-full overflow-hidden">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-sm font-medium text-foreground"><Highlight text={pkg.name ?? pkg.packageId} query={searchApplied} /></span>
+                    <span className="text-sm font-medium text-foreground break-words"><Highlight text={pkg.name ?? pkg.packageId} query={searchApplied} /></span>
                     {pkg.version && <Badge color="slate">{pkg.version}</Badge>}
                     {pkg.architecture && <Badge color="accent">{pkg.architecture}</Badge>}
                     {pkg.category && <Badge color="primary">{pkg.category}</Badge>}
                   </div>
-                  <div className="mt-0.5 flex items-center gap-3 text-xs text-muted">
-                    <span className="font-mono"><Highlight text={pkg.packageId} query={searchApplied} /></span>
-                    {pkg.publisher && <span><Highlight text={pkg.publisher} query={searchApplied} /></span>}
-                    {pkg.license && <span className="text-muted">{pkg.license}</span>}
+                  <div className="mt-0.5 flex items-center gap-3 text-xs text-muted flex-wrap">
+                    <span className="font-mono break-all"><Highlight text={pkg.packageId} query={searchApplied} /></span>
+                    {pkg.publisher && <span className="break-words"><Highlight text={pkg.publisher} query={searchApplied} /></span>}
+                    {pkg.license && <span className="text-muted break-all max-w-full">{pkg.license}</span>}
                   </div>
                   {pkg.description && <div className="mt-1"><MarkdownDescription content={pkg.description} variant="preview" /></div>}
                 </div>
