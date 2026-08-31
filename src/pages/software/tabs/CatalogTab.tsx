@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { Badge, Button, Card, ErrorDisplay, Input, Loading, Modal, Select } from '@/components/ui';
 import { useAppStoreCatalog, useSyncCatalog } from '@/hooks/useAppStore';
+import { appStoreApi } from '@/api/app-store';
 import {
   AppInstallationType,
   type AppStoreCatalogPackage,
@@ -51,6 +52,32 @@ export function CatalogTab() {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const syncCatalog = useSyncCatalog();
   const [syncingType, setSyncingType] = useState<AppInstallationType | null>(null);
+  const syncPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Polling do status do job em background enquanto houver sync em andamento.
+  useEffect(() => {
+    if (syncingType === null) {
+      if (syncPollRef.current) { clearInterval(syncPollRef.current); syncPollRef.current = null; }
+      return;
+    }
+    const type = syncingType;
+    const poll = async () => {
+      try {
+        const status = await appStoreApi.getSyncStatus(type);
+        if (!status.running && status.lastResult) {
+          setLastSyncByType((prev) => ({ ...prev, [type]: status.lastResult! }));
+          setSyncingType(null);
+          void query.refetch();
+          if (status.lastResult.success) toast.success(`Sincronização ${type === AppInstallationType.Chocolatey ? 'do Chocolatey' : 'do Winget'} concluída.`);
+          else toast.error(status.lastResult.error ?? 'Sincronização falhou.');
+        }
+      } catch { /* status indisponível — tenta no próximo ciclo */ }
+    };
+    void poll();
+    syncPollRef.current = setInterval(poll, 5000);
+    return () => { if (syncPollRef.current) { clearInterval(syncPollRef.current); syncPollRef.current = null; } };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [syncingType]);
 
   const cursor = cursors[page - 1];
 
@@ -114,9 +141,9 @@ export function CatalogTab() {
     if (syncingType !== null) return;
     setSyncingType(installationType);
     try {
-      const syncResult = await syncCatalog.mutateAsync(installationType);
-      setLastSyncByType((prev) => ({ ...prev, [installationType]: syncResult }));
-      await query.refetch();
+      // 202: job disparado em background. O resumo será atualizado pelo
+      // polling de sync/status no useEffect acima quando o job concluir.
+      await syncCatalog.mutateAsync(installationType);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Falha ao sincronizar catálogo.';
       toast.error(message);
@@ -131,7 +158,6 @@ export function CatalogTab() {
           error: message,
         },
       }));
-    } finally {
       setSyncingType(null);
     }
   }

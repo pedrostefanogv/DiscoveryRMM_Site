@@ -186,6 +186,24 @@ function normalizeSyncResponse(
   };
 }
 
+export interface AppStoreSyncStatus {
+  running: boolean;
+  lastResult: SyncChocolateyCatalogResponse | null;
+}
+
+function normalizeSyncStatus(
+  raw: Partial<AppStoreSyncStatus> & Record<string, unknown>,
+): AppStoreSyncStatus {
+  const running = raw.running ?? raw.Running ?? false;
+  const lastRaw = raw.lastResult ?? raw.LastResult;
+  return {
+    running: Boolean(running),
+    lastResult: lastRaw
+      ? normalizeSyncResponse(lastRaw as Record<string, unknown>)
+      : null,
+  };
+}
+
 export interface CatalogParams {
   installationType?: AppInstallationType;
   search?: string;
@@ -224,10 +242,24 @@ export interface EffectiveParams {
 
 export const appStoreApi = {
   syncCatalog: async (installationType: AppInstallationType) => {
-    const response = await api.post<
-      Partial<SyncChocolateyCatalogResponse> & Record<string, unknown>
-    >(`${BASE}/sync?installationType=${installationType}`);
-    return normalizeSyncResponse(response ?? {});
+    // Dispara o job em background (202). O resultado é obtido via polling
+    // de getSyncStatus feito pelo componente (useSyncCatalog + CatalogTab).
+    await api.post<unknown>(
+      `${BASE}/sync?installationType=${installationType}`,
+    );
+    return {
+      installationType,
+      success: true,
+      packagesUpserted: 0,
+      syncedAt: new Date().toISOString(),
+    } satisfies SyncChocolateyCatalogResponse;
+  },
+
+  getSyncStatus: async (installationType: AppInstallationType) => {
+    const response = await api.get<
+      Partial<AppStoreSyncStatus> & Record<string, unknown>
+    >(`${BASE}/sync/status`, { installationType });
+    return normalizeSyncStatus(response ?? {});
   },
 
   getCatalog: async (params: CatalogParams = {}) => {
