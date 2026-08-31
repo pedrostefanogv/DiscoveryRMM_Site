@@ -88,7 +88,7 @@ export default function SoftwareInventory() {
   const totalSoftware = snapshot.data?.distinctSoftware ?? 0;
   const totalAgents = snapshot.data?.distinctAgents ?? 0;
   const resolvedLimit = pag.limit;
-  // Quando há busca ativa, o snapshot reflete o total sem filtro �?" não tentamos estimar páginas
+  // Quando há busca ativa, o snapshot reflete o total sem filtro — não tentamos estimar páginas
   const hasActiveSearch = searchApplied.length > 0;
   const estimatedTotalPages = totalSoftware > 0
     ? Math.max(1, Math.ceil(totalSoftware / resolvedLimit))
@@ -142,7 +142,7 @@ export default function SoftwareInventory() {
     },
     {
       key: "lastSeen",
-      header: "�sltima coleta",
+      header: "Última coleta",
       render: (item) => formatDate(item.lastCollectedAt ?? item.lastSeenAt),
     },
     {
@@ -209,7 +209,7 @@ export default function SoftwareInventory() {
         <StatCard icon={AppWindow} label="Instalados" value={totalInstalled} tone="primary" />
         <StatCard icon={AppWindow} label="Softwares distintos" value={totalSoftware} tone="accent" />
         <StatCard icon={AppWindow} label="Agents distintos" value={totalAgents} tone="success" />
-        <StatCard icon={AppWindow} label="�sltima coleta" value={snapshot.data?.lastCollectedAt ? new Date(snapshot.data.lastCollectedAt).toLocaleDateString("pt-BR") : "\u2014"} tone="warning" />
+        <StatCard icon={AppWindow} label="Última coleta" value={snapshot.data?.lastCollectedAt ? new Date(snapshot.data.lastCollectedAt).toLocaleDateString("pt-BR") : "\u2014"} tone="warning" />
       </div>
 
       <Card>
