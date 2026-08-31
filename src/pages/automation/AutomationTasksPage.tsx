@@ -720,6 +720,27 @@ export default function AutomationTasksPage() {
     }));
   };
 
+  // Valida cron de 5 campos (dialeto do agent: robfig/cron padrão).
+  const isValidCron = (expr: string): boolean => {
+    const fields = expr.trim().split(/\\s+/);
+    if (fields.length !== 5) return false;
+    const ranges: Array<[number, number]> = [[0, 59], [0, 23], [1, 31], [1, 12], [0, 7]];
+    return fields.every((field, i) =>
+      field.split(",").every((part) => {
+        const rangePart = part.split("/")[0];
+        if (rangePart === "*" || rangePart === "?") return true;
+        const step = part.split("/")[1];
+        if (step !== undefined && (!/^\\d+$/.test(step) || parseInt(step, 10) < 1)) return false;
+        const m = rangePart.match(/^(\\d+)(-(\\d+))?$/);
+        if (!m) return false;
+        const start = parseInt(m[1], 10);
+        const end = m[3] ? parseInt(m[3], 10) : start;
+        const max = i === 4 ? 7 : ranges[i][1];
+        return start >= ranges[i][0] && end <= max && start <= end;
+      })
+    );
+  };
+
   const handleSubmit = () => {
     const name = form.name.trim();
     if (!name) return toast.error("Nome obrigatorio");
@@ -739,6 +760,9 @@ export default function AutomationTasksPage() {
 
     if (form.triggerRecurring && !form.scheduleCron.trim()) {
       return toast.error("ScheduleCron obrigatorio quando trigger recorrente esta ativo");
+    }
+    if (form.triggerRecurring && form.scheduleCron.trim() && !isValidCron(form.scheduleCron)) {
+      return toast.error("ScheduleCron invalida — use 5 campos: minuto hora dia mes dia-semana (ex.: 0 8 * * 1)");
     }
 
     if (scopeType !== AppApprovalScopeType.Global && !form.scopeId.trim()) {
@@ -833,7 +857,11 @@ export default function AutomationTasksPage() {
       },
       {
         onSuccess: () => {
-          toast.success("Tarefa criada");
+          toast.success(
+            payload.triggerImmediate
+              ? "Tarefa criada — execução imediata será disparada nos agents do escopo em segundos"
+              : "Tarefa criada",
+          );
           setFormOpen(false);
           setEditingId("");
           setScopeClientId("");
@@ -1388,39 +1416,47 @@ export default function AutomationTasksPage() {
               </div>
             )}
           </div>
-          <Input
-            label="ScheduleCron"
-            value={form.scheduleCron}
-            onChange={(e) => setForm((p) => ({ ...p, scheduleCron: e.target.value }))}
-            disabled={!form.triggerRecurring}
-          />
+          <div className="space-y-1">
+            <Input
+              label="ScheduleCron (5 campos: min hora dia mes dia-semana)"
+              value={form.scheduleCron}
+              onChange={(e) => setForm((p) => ({ ...p, scheduleCron: e.target.value }))}
+              disabled={!form.triggerRecurring}
+              placeholder="Ex.: 0 8 * * 1 (toda segunda 08:00)"
+            />
+            {form.triggerRecurring && form.scheduleCron.trim() && !isValidCron(form.scheduleCron) && (
+              <p className="text-xs text-red-500">Cron inválida — use 5 campos: minuto (0-59) hora (0-23) dia (1-31) mês (1-12) dia-semana (0-6). Suporta * , - /</p>
+            )}
+            {form.triggerRecurring && <p className="text-xs text-muted">Executada no fuso horário local do agent.</p>}
+          </div>
+        </div>
+
+        <div className="mt-3 space-y-1">
+          <p className="text-sm font-medium text-muted-foreground">Triggers (selecione pelo menos um)</p>
+          <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+            {([
+              { key: "triggerImmediate", label: "Imediato", hint: "Executa ao aplicar a policy" },
+              { key: "triggerRecurring", label: "Recorrente", hint: "Agendada por cron" },
+              { key: "triggerOnUserLogin", label: "Login do usuário", hint: "Por logon no Windows" },
+              { key: "triggerOnAgentCheckIn", label: "Check-in do agent", hint: "Ao aplicar nova policy" },
+            ] as const).map((t) => (
+              <label key={t.key} className="flex cursor-pointer items-start gap-2 rounded-xl border border-border bg-surface-light px-3 py-2 text-sm transition-colors hover:bg-surface-hover">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 h-4 w-4 accent-[var(--primary)]"
+                  checked={form[t.key]}
+                  onChange={(e) => setForm((p) => ({ ...p, [t.key]: e.target.checked }))}
+                />
+                <span>
+                  <span className="block font-medium text-foreground">{t.label}</span>
+                  <span className="block text-xs text-muted">{t.hint}</span>
+                </span>
+              </label>
+            ))}
+          </div>
         </div>
 
         <div className="mt-3 grid gap-3 md:grid-cols-3">
-          <Select
-            label="TriggerImmediate"
-            options={[{ value: "true", label: "Sim" }, { value: "false", label: "Nao" }]}
-            value={String(form.triggerImmediate)}
-            onChange={(e) => setForm((p) => ({ ...p, triggerImmediate: e.target.value === "true" }))}
-          />
-          <Select
-            label="TriggerRecurring"
-            options={[{ value: "true", label: "Sim" }, { value: "false", label: "Nao" }]}
-            value={String(form.triggerRecurring)}
-            onChange={(e) => setForm((p) => ({ ...p, triggerRecurring: e.target.value === "true" }))}
-          />
-          <Select
-            label="TriggerOnUserLogin"
-            options={[{ value: "true", label: "Sim" }, { value: "false", label: "Nao" }]}
-            value={String(form.triggerOnUserLogin)}
-            onChange={(e) => setForm((p) => ({ ...p, triggerOnUserLogin: e.target.value === "true" }))}
-          />
-          <Select
-            label="TriggerOnAgentCheckIn"
-            options={[{ value: "true", label: "Sim" }, { value: "false", label: "Nao" }]}
-            value={String(form.triggerOnAgentCheckIn)}
-            onChange={(e) => setForm((p) => ({ ...p, triggerOnAgentCheckIn: e.target.value === "true" }))}
-          />
           <Select
             label="RequiresApproval"
             options={[{ value: "true", label: "Sim" }, { value: "false", label: "Nao" }]}

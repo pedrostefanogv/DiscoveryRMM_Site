@@ -35,7 +35,7 @@ export const StatCard = memo(function StatCard({ icon: Icon, label, value, trend
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-xs font-medium uppercase tracking-wider text-muted">{label}</p>
-          <p className="text-2xl font-bold text-foreground tabular-nums">{value}</p>
+          <p className="text-xl font-bold text-foreground tabular-nums [overflow-wrap:anywhere] sm:text-2xl">{value}</p>
         </div>
         {trend && <div className="text-sm">{trend}</div>}
       </button>
@@ -49,7 +49,7 @@ export const StatCard = memo(function StatCard({ icon: Icon, label, value, trend
       </div>
       <div className="min-w-0 flex-1">
         <p className="text-xs font-medium uppercase tracking-wider text-muted">{label}</p>
-        <p className="text-2xl font-bold text-foreground tabular-nums">{value}</p>
+        <p className="text-xl font-bold text-foreground tabular-nums [overflow-wrap:anywhere] sm:text-2xl">{value}</p>
       </div>
       {trend && <div className="text-sm">{trend}</div>}
     </div>
