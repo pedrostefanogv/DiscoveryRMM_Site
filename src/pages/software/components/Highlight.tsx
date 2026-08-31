@@ -12,7 +12,7 @@ export function Highlight({ text, query }: HighlightProps) {
     <>
       {parts.map((part, i) =>
         part.toLowerCase() === query.toLowerCase() ? (
-          <mark key={i} className="rounded bg-amber-400/30 px-0.5 text-amber-200">
+          <mark key={i} className="rounded bg-amber-300/60 px-0.5 text-amber-900 dark:bg-amber-400/30 dark:text-amber-200">
             {part}
           </mark>
         ) : (

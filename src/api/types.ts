@@ -1586,7 +1586,6 @@ export interface UpdateWorkflowStateRequest {
 }
 
 export interface AddCommentRequest {
-  author: string;
   content: string;
   isInternal?: boolean;
 }

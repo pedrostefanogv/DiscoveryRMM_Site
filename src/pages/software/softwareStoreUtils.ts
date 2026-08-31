@@ -103,7 +103,9 @@ export function scopeLabel(s: AppApprovalScopeType) {
 
 export function formatDate(d: string | null) {
   if (!d) return "\u2014";
-  return new Date(d).toLocaleString("pt-BR");
+  const date = new Date(d);
+  if (Number.isNaN(date.getTime())) return "\u2014";
+  return date.toLocaleString("pt-BR");
 }
 
 export function normalizeInstallationType(value: unknown): AppInstallationType {

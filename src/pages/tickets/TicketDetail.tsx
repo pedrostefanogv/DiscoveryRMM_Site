@@ -1737,7 +1737,6 @@ function CommentForm({
 }) {
   const addComment = useAddComment();
   const [content, setContent] = useState('');
-  const [author] = useState('Admin');
   const [isInternal, setIsInternal] = useState(false);
 
   useEffect(() => {
@@ -1748,12 +1747,14 @@ function CommentForm({
   }, [draftSeed?.nonce]);
 
   const handleSubmit = () => {
-    if (!content.trim() || content.trim().length < 3) return;
+    const trimmed = content.trim();
+    if (trimmed.length < 3) return;
     addComment.mutate(
-      { id: ticketId, data: { author, content, isInternal } },
+      // Autoria é derivada do token no backend — não enviar author.
+      { id: ticketId, data: { content: trimmed, isInternal } },
       {
-        onSuccess: () => { setContent(''); toast.success('Comentário adicionado'); },
-        onError:   () => toast.error('Erro'),
+        onSuccess: () => { setContent(''); setIsInternal(false); toast.success('Comentário adicionado'); },
+        onError:   (err) => toast.error(err instanceof Error && err.message ? err.message : 'Erro ao adicionar comentário'),
       },
     );
   };

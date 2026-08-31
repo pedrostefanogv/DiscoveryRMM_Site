@@ -50,6 +50,7 @@ export function CatalogTab() {
   });
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const syncCatalog = useSyncCatalog();
+  const [syncingType, setSyncingType] = useState<AppInstallationType | null>(null);
 
   const cursor = cursors[page - 1];
 
@@ -106,18 +107,37 @@ export function CatalogTab() {
   const syncLabel = isChocolatey ? 'Chocolatey' : 'Winget';
   const lastSyncInfo = lastSyncByType[installationType];
   const syncConfirmOk = syncConfirmValue.trim().toLowerCase() === 'yes';
+  const isSyncingThis = syncingType === installationType;
+  const catalogTotal = query.data?.totalPackagesInSource;
 
   async function handleSyncCatalog() {
+    if (syncingType !== null) return;
+    setSyncingType(installationType);
     try {
       const syncResult = await syncCatalog.mutateAsync(installationType);
       setLastSyncByType((prev) => ({ ...prev, [installationType]: syncResult }));
       await query.refetch();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Falha ao sincronizar catálogo.');
+      const message = err instanceof Error ? err.message : 'Falha ao sincronizar catálogo.';
+      toast.error(message);
+      // Registra a falha no resumo para que a estatística da última tentativa fique visível.
+      setLastSyncByType((prev) => ({
+        ...prev,
+        [installationType]: {
+          installationType,
+          success: false,
+          packagesUpserted: 0,
+          syncedAt: new Date().toISOString(),
+          error: message,
+        },
+      }));
+    } finally {
+      setSyncingType(null);
     }
   }
 
   function handleSyncRequest() {
+    if (syncingType !== null) return;
     if (isChocolatey) { setSyncConfirmOpen(true); setSyncConfirmValue(''); setSyncConfirmTouched(false); return; }
     void handleSyncCatalog();
   }
@@ -192,21 +212,24 @@ export function CatalogTab() {
           </div>
           <Button variant="ghost" onClick={resetFilters} title="Limpar filtros"><RotateCcw className="h-4 w-4" /></Button>
           {(isChocolatey || isWinget) && (
-            <Button variant="primary" onClick={handleSyncRequest} loading={syncCatalog.isPending} title={`Sincronizar catálogo ${syncLabel}`}>
-              <RefreshCw className="h-4 w-4" /> Sincronizar Catálogo
+            <Button variant="primary" onClick={handleSyncRequest} loading={isSyncingThis} disabled={syncingType !== null && !isSyncingThis} title={`Sincronizar catálogo ${syncLabel}`}>
+              <RefreshCw className="h-4 w-4" /> {isSyncingThis ? 'Sincronizando...' : 'Sincronizar Catálogo'}
             </Button>
           )}
         </div>
         {(isChocolatey || isWinget) && (
           <div className="mt-3 space-y-2">
             <p className="text-xs text-muted">A sincronização do catálogo {syncLabel} e idempotente e pode levar alguns minutos.</p>
-            {lastSyncInfo && (
-              <div className={`rounded-lg border px-3 py-2 text-xs ${lastSyncInfo.success ? 'border-success/30 bg-success/10 text-muted-foreground' : 'border-danger/30 bg-danger/10 text-foreground'}`}>
-                <p>Ultima sincronização: {formatDate(lastSyncInfo.syncedAt ?? null)}</p>
-                <p>Pacotes atualizados: {lastSyncInfo.packagesUpserted}{lastSyncInfo.pagesProcessed !== undefined ? ` - Paginas: ${lastSyncInfo.pagesProcessed}` : ''}{lastSyncInfo.duration ? ` - Duração: ${lastSyncInfo.duration}` : ''}</p>
-                {!lastSyncInfo.success && lastSyncInfo.error && <p className="text-danger">Erro: {lastSyncInfo.error}</p>}
-              </div>
-            )}
+            <div className={`rounded-lg border px-3 py-2 text-xs ${lastSyncInfo && !lastSyncInfo.success ? 'border-danger/30 bg-danger/10 text-foreground' : 'border-success/30 bg-success/10 text-muted-foreground'}`}>
+              <p>Ultima sincronização: {formatDate(lastSyncInfo?.syncedAt ?? null)}</p>
+              <p>
+                Pacotes atualizados: {lastSyncInfo?.packagesUpserted ?? 0}
+                {typeof catalogTotal === 'number' ? ` - Total no catálogo: ${catalogTotal}` : ''}
+                {lastSyncInfo?.pagesProcessed !== undefined ? ` - Paginas: ${lastSyncInfo.pagesProcessed}` : ''}
+                {lastSyncInfo?.duration ? ` - Duração: ${lastSyncInfo.duration}` : ''}
+              </p>
+              {lastSyncInfo && !lastSyncInfo.success && lastSyncInfo.error && <p className="text-danger">Erro: {lastSyncInfo.error}</p>}
+            </div>
           </div>
         )}
       </Card>

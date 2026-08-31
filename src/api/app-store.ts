@@ -163,6 +163,29 @@ function normalizeApprovalsResponse(
   };
 }
 
+function normalizeSyncResponse(
+  raw: Partial<SyncChocolateyCatalogResponse> & Record<string, unknown>,
+): SyncChocolateyCatalogResponse {
+  const pick = <T>(camel: string, pascal: string): T | undefined => {
+    const value = raw[camel] ?? raw[pascal];
+    return value === undefined ? undefined : (value as T);
+  };
+  const installationType = normalizeInstallationType(
+    pick<unknown>("installationType", "InstallationType"),
+  );
+  return {
+    installationType,
+    success: Boolean(pick<boolean>("success", "Success") ?? true),
+    packagesUpserted: pick<number>("packagesUpserted", "PackagesUpserted") ?? 0,
+    pagesProcessed: pick<number>("pagesProcessed", "PagesProcessed"),
+    syncedAt: pick<string>("syncedAt", "SyncedAt") ?? null,
+    sourceGeneratedAt:
+      pick<string>("sourceGeneratedAt", "SourceGeneratedAt") ?? null,
+    duration: pick<string>("duration", "Duration") ?? null,
+    error: pick<string>("error", "Error") ?? null,
+  };
+}
+
 export interface CatalogParams {
   installationType?: AppInstallationType;
   search?: string;
@@ -200,10 +223,13 @@ export interface EffectiveParams {
 }
 
 export const appStoreApi = {
-  syncCatalog: (installationType: AppInstallationType) =>
-    api.post<SyncChocolateyCatalogResponse>(
-      `${BASE}/sync?installationType=${installationType}`,
-    ),
+  syncCatalog: async (installationType: AppInstallationType) => {
+    const response = await api.post<
+      Partial<SyncChocolateyCatalogResponse> & Record<string, unknown>
+    >(`${BASE}/sync?installationType=${installationType}`);
+    return normalizeSyncResponse(response ?? {});
+  },
+
   getCatalog: async (params: CatalogParams = {}) => {
     const queryParams: Record<string, unknown> = { ...params };
 
