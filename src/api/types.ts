@@ -3088,6 +3088,10 @@ export interface AutomationTaskSummary {
   actionType: AutomationTaskActionType | string | number;
   scopeType: AppApprovalScopeType | string | number;
   scopeId: string | null;
+  scopeName?: string | null;
+  clientName?: string | null;
+  siteName?: string | null;
+  agentName?: string | null;
   deletedAt?: string | null;
   isDeleted?: boolean;
   isActive: boolean;

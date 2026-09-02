@@ -13,6 +13,8 @@ import {
   Modal,
   Select,
   TextArea,
+  ContextMenu,
+  type ContextMenuItem,
 } from "@/components/ui";
 import {
   AppApprovalScopeType,
@@ -37,7 +39,7 @@ import { useClients } from "@/hooks/useClients";
 import { useSites } from "@/hooks/useSites";
 import { useAgentsBySite } from "@/hooks/useAgents";
 import { useAppStoreCatalog } from "@/hooks/useAppStore";
-import { Search, LayoutGrid, List, Eye } from "lucide-react";
+import { Search, LayoutGrid, List, Eye, Pencil, ScrollText, Trash2, RotateCcw, Info } from "lucide-react";
 
 function buildCorrelationId(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
@@ -71,6 +73,12 @@ function actionLabel(value: unknown): string {
   if (value === AutomationTaskActionType.RemovePackage || value === "RemovePackage") return "RemovePackage";
   if (value === AutomationTaskActionType.UpdateOrInstallPackage || value === "UpdateOrInstallPackage") return "UpdateOrInstallPackage";
   return String(value ?? "-");
+}
+
+function scopeDisplayName(item: Pick<AutomationTaskSummary, "scopeType" | "scopeId" | "scopeName" | "clientName" | "siteName" | "agentName">): string {
+  const scope = normalizeScopeType(item.scopeType);
+  if (scope === AppApprovalScopeType.Global) return "Global";
+  return item.scopeName || item.clientName || item.siteName || item.agentName || item.scopeId || "-";
 }
 
 function scopeLabel(value: unknown): string {
@@ -199,6 +207,8 @@ export default function AutomationTasksPage() {
   const [packagePickerView, setPackagePickerView] = useState<"list" | "card">("list");
   const [tagPickerOpen, setTagPickerOpen] = useState(false);
   const [tagSearch, setTagSearch] = useState("");
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; item: AutomationTaskSummary } | null>(null);
+  const [triggersHelpOpen, setTriggersHelpOpen] = useState(false);
 
   useEffect(() => {
     const timer = setTimeout(() => setPackageSearchDebounced(packageSearch), 400);
@@ -468,6 +478,90 @@ export default function AutomationTasksPage() {
     setFilterLabels((prev) => prev.filter((item) => item.toLowerCase() !== tag.toLowerCase()));
   };
 
+  const openEditFor = (item: AutomationTaskSummary) => {
+    const normalizedActionType = normalizeActionType(item.actionType);
+    const normalizedScopeType = normalizeScopeType(item.scopeType);
+    setEditing(item);
+    setEditingId(item.id);
+    setForm({
+      ...defaultForm,
+      name: item.name,
+      description: item.description || "",
+      actionType: String(normalizedActionType),
+      scopeType: String(normalizedScopeType),
+      scopeId: item.scopeId || "",
+      requiresApproval: item.requiresApproval,
+      isActive: item.isActive,
+    });
+    if (normalizedScopeType === AppApprovalScopeType.Client) {
+      setScopeClientId(item.scopeId || "");
+      setScopeSiteId("");
+      setScopeAgentId("");
+    } else if (normalizedScopeType === AppApprovalScopeType.Site) {
+      setScopeClientId("");
+      setScopeSiteId(item.scopeId || "");
+      setScopeAgentId("");
+    } else if (normalizedScopeType === AppApprovalScopeType.Agent) {
+      setScopeClientId("");
+      setScopeSiteId("");
+      setScopeAgentId(item.scopeId || "");
+    } else {
+      setScopeClientId("");
+      setScopeSiteId("");
+      setScopeAgentId("");
+    }
+    setFormOpen(true);
+  };
+
+  const buildRowContextMenuItems = (item: AutomationTaskSummary): ContextMenuItem[] => {
+    const deleted = isTaskDeleted(item);
+    const items: ContextMenuItem[] = [
+      {
+        key: "details",
+        label: "Ver detalhes",
+        icon: <Eye className="h-4 w-4" />,
+        onClick: () => setDetailTaskId(item.id),
+      },
+      {
+        key: "edit",
+        label: "Editar",
+        icon: <Pencil className="h-4 w-4" />,
+        disabled: deleted,
+        onClick: () => openEditFor(item),
+      },
+      {
+        key: "audit",
+        label: "Auditoria",
+        icon: <ScrollText className="h-4 w-4" />,
+        onClick: () => setAuditTaskId(item.id),
+      },
+    ];
+    if (deleted) {
+      items.push({
+        key: "restore",
+        label: "Reativar",
+        icon: <RotateCcw className="h-4 w-4" />,
+        onClick: () => {
+          setRestoreTask(item);
+          setRestoreConfirmationText("");
+        },
+      });
+    } else {
+      items.push({
+        key: "delete",
+        label: "Excluir",
+        icon: <Trash2 className="h-4 w-4" />,
+        danger: true,
+        separatorBefore: true,
+        onClick: () => {
+          setDeleteTask(item);
+          setDeleteConfirmationText("");
+        },
+      });
+    }
+    return items;
+  };
+
   const columns = useMemo<Column<AutomationTaskSummary>[]>(
     () => [
       {
@@ -491,7 +585,9 @@ export default function AutomationTasksPage() {
         render: (item) => (
           <div>
             <p className="text-sm text-foreground">{scopeLabel(item.scopeType)}</p>
-            <p className="text-xs text-muted font-mono">{item.scopeId || "-"}</p>
+            <p className="text-xs text-muted" title={item.scopeId || undefined}>
+              {scopeDisplayName(item)}
+            </p>
           </div>
         ),
       },
@@ -520,95 +616,6 @@ export default function AutomationTasksPage() {
         key: "updated",
         header: "Atualizado",
         render: (item) => new Date(item.lastUpdatedAt).toLocaleString("pt-BR"),
-      },
-      {
-        key: "actions",
-        header: "Ações",
-        render: (item) => {
-          const deleted = isTaskDeleted(item);
-          return (
-            <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
-            <Button
-              size="sm"
-              variant="ghost"
-              title="Ver detalhes"
-              onClick={() => {
-                setDetailTaskId(item.id);
-              }}
-            >
-              <Eye className="h-4 w-4" />
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              disabled={deleted}
-              onClick={() => {
-                const normalizedActionType = normalizeActionType(item.actionType);
-                const normalizedScopeType = normalizeScopeType(item.scopeType);
-                setEditing(item);
-                setEditingId(item.id);
-                setForm({
-                  ...defaultForm,
-                  name: item.name,
-                  description: item.description || "",
-                  actionType: String(normalizedActionType),
-                  scopeType: String(normalizedScopeType),
-                  scopeId: item.scopeId || "",
-                  requiresApproval: item.requiresApproval,
-                  isActive: item.isActive,
-                });
-                if (normalizedScopeType === AppApprovalScopeType.Client) {
-                  setScopeClientId(item.scopeId || "");
-                  setScopeSiteId("");
-                  setScopeAgentId("");
-                } else if (normalizedScopeType === AppApprovalScopeType.Site) {
-                  setScopeClientId("");
-                  setScopeSiteId(item.scopeId || "");
-                  setScopeAgentId("");
-                } else if (normalizedScopeType === AppApprovalScopeType.Agent) {
-                  setScopeClientId("");
-                  setScopeSiteId("");
-                  setScopeAgentId(item.scopeId || "");
-                } else {
-                  setScopeClientId("");
-                  setScopeSiteId("");
-                  setScopeAgentId("");
-                }
-                setFormOpen(true);
-              }}
-            >
-              Editar
-            </Button>
-            <Button size="sm" variant="ghost" onClick={() => setAuditTaskId(item.id)}>
-              Auditoria
-            </Button>
-            {deleted && (
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={() => {
-                  setRestoreTask(item);
-                  setRestoreConfirmationText("");
-                }}
-              >
-                Reativar
-              </Button>
-            )}
-            {!deleted && (
-              <Button
-                size="sm"
-                variant="danger"
-                onClick={() => {
-                  setDeleteTask(item);
-                  setDeleteConfirmationText("");
-                }}
-              >
-                Excluir
-              </Button>
-            )}
-          </div>
-          );
-        },
       },
     ],
     [listMode],
@@ -1186,6 +1193,10 @@ export default function AutomationTasksPage() {
               data={list.data?.items ?? []}
               keyExtractor={(item) => item.id}
               showPagination={false}
+              onRowContextMenu={(event, item) => {
+                event.preventDefault();
+                setContextMenu({ x: event.clientX, y: event.clientY, item });
+              }}
             />
             <div className="mt-4 flex justify-end gap-2">
               <Button size="sm" variant="secondary" disabled={!canPrev} onClick={goToPrevPage}>
@@ -1198,6 +1209,62 @@ export default function AutomationTasksPage() {
           </>
         )}
       </Card>
+
+      {contextMenu && (
+        <ContextMenu
+          position={{ x: contextMenu.x, y: contextMenu.y }}
+          items={buildRowContextMenuItems(contextMenu.item)}
+          onClose={() => setContextMenu(null)}
+        />
+      )}
+
+      <Modal
+        open={triggersHelpOpen}
+        onClose={() => setTriggersHelpOpen(false)}
+        title="Como funcionam os triggers"
+        maxWidth="max-w-2xl"
+      >
+        <div className="space-y-3 text-sm">
+          <p className="text-muted">
+            Os triggers definem <span className="text-foreground font-medium">quando</span> a tarefa é entregue/executada nos agents do escopo. Você pode combinar mais de um — a tarefa roda em qualquer evento ativado.
+          </p>
+          <div className="space-y-2">
+            <div className="rounded-lg border border-border bg-surface-light p-3">
+              <p className="font-medium text-foreground">Imediato</p>
+              <p className="mt-1 text-muted">Dispara assim que a tarefa é criada/alterada e os agents do escopo sincronizam a policy (em segundos). Use para instalações pontuais ou correções que devem valer para todos já.</p>
+              <p className="mt-1 text-xs text-muted">Quando usar: rollout único — ex. instalar o Chrome agora em todos os agents do escopo.</p>
+            </div>
+            <div className="rounded-lg border border-border bg-surface-light p-3">
+              <p className="font-medium text-foreground">Recorrente</p>
+              <p className="mt-1 text-muted">Executa repetidamente conforme a expressão cron (5 campos: min hora dia mês dia-semana), no fuso horário local do agent. Exige preencher o ScheduleCron.</p>
+              <p className="mt-1 text-xs text-muted">Quando usar: manutenção periódica — ex. atualizar pacotes toda segunda 08:00 (<span className="font-mono">0 8 * * 1</span>).</p>
+            </div>
+            <div className="rounded-lg border border-border bg-surface-light p-3">
+              <p className="font-medium text-foreground">Login do usuário</p>
+              <p className="mt-1 text-muted">Dispara a cada logon de usuário no Windows. Só faz sentido para ações por usuário/sessão interativa.</p>
+              <p className="mt-1 text-xs text-muted">Quando usar: configurar algo que depende de perfil do usuário — ex. mapear drives, atalhos, scripts de boas-vindas.</p>
+            </div>
+            <div className="rounded-lg border border-border bg-surface-light p-3">
+              <p className="font-medium text-foreground">Check-in do agent</p>
+              <p className="mt-1 text-muted">Executa quando o agent faz check-in/aplica nova policy (ex. após ligar a máquina). Garante que o estado desejado seja reaplicado sempre que o agent volta a se comunicar.</p>
+              <p className="mt-1 text-xs text-muted">Quando usar: garantir conformidade contínua — ex. garantir que um pacote esteja instalado mesmo se desinstalado.</p>
+            </div>
+            <div className="rounded-lg border border-primary/30 bg-primary/10 p-3">
+              <p className="font-medium text-foreground">Combinações comuns</p>
+              <ul className="mt-1 list-disc space-y-1 pl-5 text-muted">
+                <li><span className="text-foreground">Imediato + Check-in:</span> instala agora e mantém garantido em novos agents/reinstalações.</li>
+                <li><span className="text-foreground">Imediato + Recorrente:</span> aplica já e mantém atualizado em horário fixo (ex. atualizações de segurança).</li>
+                <li><span className="text-foreground">Recorrente + Check-in:</span> janela programada + reaplicação ao ligar — bom para scripts de limpeza/conformidade.</li>
+                <li><span className="text-foreground">Login do usuário</span> sozinho: apenas ações por usuário; combine com Imediato se também precisar valer para sessões já abertas.</li>
+              </ul>
+              <p className="mt-2 text-xs text-muted">Nota: o agent deduplica execuções — combinar triggers não causa execução duplicada no mesmo evento.</p>
+            </div>
+          </div>
+          <div className="flex justify-end pt-1">
+            <Button variant="secondary" onClick={() => setTriggersHelpOpen(false)}>Entendi</Button>
+          </div>
+        </div>
+      </Modal>
 
       <Modal
         open={formOpen}
@@ -1432,7 +1499,18 @@ export default function AutomationTasksPage() {
         </div>
 
         <div className="mt-3 space-y-1">
-          <p className="text-sm font-medium text-muted-foreground">Triggers (selecione pelo menos um)</p>
+          <div className="flex items-center gap-2">
+            <p className="text-sm font-medium text-muted-foreground">Triggers (selecione pelo menos um)</p>
+            <button
+              type="button"
+              className="inline-flex items-center gap-1 rounded-full border border-border bg-surface-light px-2 py-0.5 text-xs text-muted transition-colors hover:bg-surface-hover hover:text-foreground"
+              onClick={() => setTriggersHelpOpen(true)}
+              title="Como funcionam os triggers?"
+            >
+              <Info className="h-3.5 w-3.5" />
+              Como funcionam?
+            </button>
+          </div>
           <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
             {([
               { key: "triggerImmediate", label: "Imediato", hint: "Executa ao aplicar a policy" },
@@ -1744,7 +1822,15 @@ export default function AutomationTasksPage() {
                 <div className="rounded-lg bg-surface-light border border-border p-3">
                   <p className="text-xs text-muted mb-1">Escopo</p>
                   <p className="text-sm text-foreground">{scopeLabel(d.scopeType)}</p>
-                  {d.scopeId && <p className="font-mono text-xs text-muted truncate">{d.scopeId}</p>}
+                  <p className="text-xs text-muted truncate" title={d.scopeId || undefined}>
+                    {scopeDisplayName(d)}
+                  </p>
+                  {d.clientName && d.clientName !== scopeDisplayName(d) && (
+                    <p className="text-xs text-muted truncate">Cliente: {d.clientName}</p>
+                  )}
+                  {d.siteName && d.siteName !== scopeDisplayName(d) && (
+                    <p className="text-xs text-muted truncate">Site: {d.siteName}</p>
+                  )}
                 </div>
 
                 {/* Triggers */}
@@ -1793,7 +1879,7 @@ export default function AutomationTasksPage() {
                     variant="primary"
                     onClick={() => {
                       setDetailTaskId(null);
-                      
+
                       const item = list.data?.items.find((i) => i.id === d.id);
                       setRestoreTask(
                         item ?? {
@@ -1822,23 +1908,9 @@ export default function AutomationTasksPage() {
                   disabled={detailIsDeleted}
                   onClick={() => {
                     setDetailTaskId(null);
-                    
+
                     const item = list.data?.items.find((i) => i.id === detailTaskId);
-                    if (item) {
-                      setEditing(item);
-                      setEditingId(item.id);
-                      setForm((f) => ({
-                        ...f,
-                        name: item.name,
-                        description: item.description || "",
-                        actionType: String(item.actionType),
-                        scopeType: String(item.scopeType),
-                        scopeId: item.scopeId || "",
-                        requiresApproval: item.requiresApproval,
-                        isActive: item.isActive,
-                      }));
-                      setFormOpen(true);
-                    }
+                    openEditFor(item ?? d);
                   }}
                 >
                   Editar
