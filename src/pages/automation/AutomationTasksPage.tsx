@@ -318,20 +318,7 @@ export default function AutomationTasksPage() {
       isActive: detail.isActive,
     });
 
-    if (normalizedScopeType === AppApprovalScopeType.Client) {
-      setScopeClientId(detail.scopeId || "");
-      setScopeSiteId("");
-      setScopeAgentId("");
-    } else if (normalizedScopeType === AppApprovalScopeType.Site) {
-      setScopeSiteId(detail.scopeId || "");
-      setScopeAgentId("");
-    } else if (normalizedScopeType === AppApprovalScopeType.Agent) {
-      setScopeAgentId(detail.scopeId || "");
-    } else {
-      setScopeClientId("");
-      setScopeSiteId("");
-      setScopeAgentId("");
-    }
+    applyScopeCascade(normalizedScopeType, detail);
   }, [editingId, taskDetail.data]);
 
   useEffect(() => {
@@ -478,8 +465,41 @@ export default function AutomationTasksPage() {
     setFilterLabels((prev) => prev.filter((item) => item.toLowerCase() !== tag.toLowerCase()));
   };
 
+  /**
+   * Preenche a cascata de selects de escopo (Cliente → Site → Agent) ao abrir a edição,
+   * usando os IDs resolvidos pelo backend (scopeClientId/scopeSiteId).
+   */
+  const applyScopeCascade = (
+    scopeType: AppApprovalScopeType,
+    item: Pick<AutomationTaskSummary, "scopeId" | "scopeClientId" | "scopeSiteId">,
+  ) => {
+    const clientId = item.scopeClientId || "";
+    const siteId = item.scopeSiteId || "";
+    const scopeId = item.scopeId || "";
+    switch (scopeType) {
+      case AppApprovalScopeType.Client:
+        setScopeClientId(scopeId || clientId);
+        setScopeSiteId("");
+        setScopeAgentId("");
+        break;
+      case AppApprovalScopeType.Site:
+        setScopeClientId(clientId);
+        setScopeSiteId(scopeId || siteId);
+        setScopeAgentId("");
+        break;
+      case AppApprovalScopeType.Agent:
+        setScopeClientId(clientId);
+        setScopeSiteId(siteId);
+        setScopeAgentId(scopeId);
+        break;
+      default:
+        setScopeClientId("");
+        setScopeSiteId("");
+        setScopeAgentId("");
+    }
+  };
+
   const openEditFor = (item: AutomationTaskSummary) => {
-    const normalizedActionType = normalizeActionType(item.actionType);
     const normalizedScopeType = normalizeScopeType(item.scopeType);
     setEditing(item);
     setEditingId(item.id);
@@ -487,29 +507,13 @@ export default function AutomationTasksPage() {
       ...defaultForm,
       name: item.name,
       description: item.description || "",
-      actionType: String(normalizedActionType),
+      actionType: String(normalizeActionType(item.actionType)),
       scopeType: String(normalizedScopeType),
       scopeId: item.scopeId || "",
       requiresApproval: item.requiresApproval,
       isActive: item.isActive,
     });
-    if (normalizedScopeType === AppApprovalScopeType.Client) {
-      setScopeClientId(item.scopeId || "");
-      setScopeSiteId("");
-      setScopeAgentId("");
-    } else if (normalizedScopeType === AppApprovalScopeType.Site) {
-      setScopeClientId("");
-      setScopeSiteId(item.scopeId || "");
-      setScopeAgentId("");
-    } else if (normalizedScopeType === AppApprovalScopeType.Agent) {
-      setScopeClientId("");
-      setScopeSiteId("");
-      setScopeAgentId(item.scopeId || "");
-    } else {
-      setScopeClientId("");
-      setScopeSiteId("");
-      setScopeAgentId("");
-    }
+    applyScopeCascade(normalizedScopeType, item);
     setFormOpen(true);
   };
 

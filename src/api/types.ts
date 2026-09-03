@@ -3092,6 +3092,10 @@ export interface AutomationTaskSummary {
   clientName?: string | null;
   siteName?: string | null;
   agentName?: string | null;
+  /** ClientId resolvido do escopo (para popular cascata de selects na edição). */
+  scopeClientId?: string | null;
+  /** SiteId resolvido do escopo (para popular cascata de selects na edição). */
+  scopeSiteId?: string | null;
   deletedAt?: string | null;
   isDeleted?: boolean;
   isActive: boolean;
