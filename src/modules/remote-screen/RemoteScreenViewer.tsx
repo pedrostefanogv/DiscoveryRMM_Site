@@ -886,14 +886,50 @@ export default function RemoteScreenViewer({
     };
   }, [natsSubject]);
 
-  // Pause on visibility change (M11)
+  // Pause on visibility change (M11) + request keyframe ao voltar.
+  // Quando a aba do navegador fica oculta o browser pode descartar o canvas
+  // (ou limpar o backing store); ao voltar, a tela fica PRETA até o próximo
+  // dirty rect chegar. Fix: ao ficar visível de novo, publica {action:"keyframe"}
+  // no subject .control — o agent força o próximo frame COMPLETO (sem tiles/
+  // dirty rects) e a tela inteira é redesenhada imediatamente.
   useEffect(() => {
+    const requestKeyframe = () => {
+      const ws = wsRef.current;
+      if (!ws || ws.readyState !== WebSocket.OPEN || !natsSubject) return;
+      const payload = JSON.stringify({ action: 'keyframe' });
+      ws.send(`PUB ${natsSubject}.control ${new TextEncoder().encode(payload).length}\r\n${payload}\r\n`);
+    };
     const onVisibility = () => {
       setIsPaused(document.hidden);
+      if (!document.hidden) {
+        // Pequeno delay: garante que o WebSocket já reabriu caso a conexão
+        // tenha caído durante a ocultação, e que o loop de render retomou.
+        setTimeout(requestKeyframe, 100);
+      }
     };
     document.addEventListener('visibilitychange', onVisibility);
-    return () => document.removeEventListener('visibilitychange', onVisibility);
-  }, []);
+    // Canvas removido/reinserido no DOM (troca de aba do app, não do navegador):
+    // o ResizeObserver do container cobre o re-fit, e o keyframe cobre o
+    // conteúdo. Também observa o container: se ele foi reanexado (display
+    // mudou de none para block), pede keyframe.
+    const container = containerRef.current;
+    let resizeObs: ResizeObserver | null = null;
+    let firstResize = true;
+    if (container) {
+      resizeObs = new ResizeObserver(() => {
+        // Container voltou a ter tamanho (display:none → visível): keyframe.
+        if (container.clientWidth > 0 && container.clientHeight > 0 && !firstResize) {
+          setTimeout(requestKeyframe, 100);
+        }
+        firstResize = false;
+      });
+      resizeObs.observe(container);
+    }
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility);
+      resizeObs?.disconnect();
+    };
+  }, [natsSubject]);
 
   // Fit scale: recalcula as dimensões CSS do canvas quando o container redimensiona
   // (ex.: resize da janela do navegador, toggle de painéis laterais). O cálculo
@@ -961,7 +997,7 @@ export default function RemoteScreenViewer({
   return (
     <div
       ref={containerRef}
-      className={`relative flex bg-slate-950 rounded-lg h-full ${
+      className={`relative flex bg-slate-950 rounded-lg h-full min-h-0 ${
         scale === 'fit'
           ? 'items-center justify-center overflow-hidden'
           : 'items-center justify-center overflow-auto'

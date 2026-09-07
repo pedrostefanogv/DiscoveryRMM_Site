@@ -1,6 +1,7 @@
 import { useSearchParams } from 'react-router-dom';
 import { Button, Card } from '@/components/ui';
 import { ThemeToggle } from '@/components/auth/ThemeToggle';
+import { Film, Image, Gauge, Monitor } from 'lucide-react';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { remoteSessionsApi, type ChangeQualityRequest, type StartRemoteSessionRequest } from '@/api/remote-sessions';
 import { agentsApi } from '@/api/agents';
@@ -666,9 +667,6 @@ export default function RemoteSession() {
     }
   }, [monitorChanging, agentId, screenSession, transport, liveQuality, liveCodec]);
 
-  // Qualidade de imagem reportada pelo agent via metrics (fonte da verdade no modo Auto).
-  const [agentImageQuality, setAgentImageQuality] = useState<number | null>(null);
-
   // Timer de expiração removido — a sessão gerencia a própria expiração e o
   // backend encerra quando necessário (viewer recebe onSessionEnded).
 
@@ -779,8 +777,6 @@ export default function RemoteSession() {
         {/* Status bar info — controles de qualidade em tempo real (aba Tela) */}
         {activeTab === 'screen' && screenSession && (
         <div className="ml-auto flex items-center gap-3 text-xs text-muted-foreground">
-          <span>Transport: <span className="text-foreground">{transport.toUpperCase()}</span></span>
-
           {/* Auto/Manual toggle */}
           <div className="flex items-center gap-1">
             <button
@@ -809,23 +805,13 @@ export default function RemoteSession() {
             </button>
           </div>
 
-          {/* Em Auto: mostra a qualidade adaptada pelo agent (leitura). Em Manual: controles finos. */}
-          {autoMode && (
-            <div className="flex items-center gap-0.5">
-              <span className="mr-1 text-muted">🖼</span>
-              <span
-                className="px-1.5 py-0.5 rounded bg-surface border border-border text-foreground"
-                title="Qualidade adaptada automaticamente pelo agent conforme máquina/rede. Mude para Manual para ajustar."
-              >
-                {agentImageQuality != null ? `${agentImageQuality}% (auto)` : 'auto'}
-              </span>
-            </div>
-          )}
+          {/* Em Auto: nenhum controle/badge de qualidade (o agent adapta sozinho).
+              Em Manual: controles finos. */}
           {!autoMode && (
             <>
               {/* Codec selector — Manual */}
               <div className="flex items-center gap-0.5">
-                <span className="mr-1 text-muted">🎞</span>
+                <Film className="mr-1 h-3.5 w-3.5 text-muted" aria-hidden />
                 <select
                   className="bg-surface border border-border rounded px-1 py-0.5 text-xs text-foreground cursor-pointer hover:border-border-strong disabled:opacity-50"
                   value={liveCodec}
@@ -841,7 +827,7 @@ export default function RemoteSession() {
 
               {/* Image quality selector (compressão) — Manual */}
               <div className="flex items-center gap-0.5">
-                <span className="mr-1 text-muted">🖼</span>
+                <Image className="mr-1 h-3.5 w-3.5 text-muted" aria-hidden />
                 <select
                   className="bg-surface border border-border rounded px-1 py-0.5 text-xs text-foreground cursor-pointer hover:border-border-strong disabled:opacity-50"
                   value={liveImageQuality}
@@ -857,7 +843,7 @@ export default function RemoteSession() {
 
               {/* FPS selector — Manual */}
               <div className="flex items-center gap-0.5">
-                <span className="mr-1 text-muted">⚡</span>
+                <Gauge className="mr-1 h-3.5 w-3.5 text-muted" aria-hidden />
                 <select
                   className="bg-surface border border-border rounded px-1 py-0.5 text-xs text-foreground cursor-pointer hover:border-border-strong disabled:opacity-50"
                   value={liveMaxFps}
@@ -875,7 +861,7 @@ export default function RemoteSession() {
 
           {/* Monitor selector — troca o monitor capturado (reinicia a sessão de tela) */}
           <div className="flex items-center gap-0.5">
-            <span className="mr-1 text-muted">🖥</span>
+            <Monitor className="mr-1 h-3.5 w-3.5 text-muted" aria-hidden />
             <select
               className="bg-surface border border-border rounded px-1 py-0.5 text-xs text-foreground cursor-pointer hover:border-border-strong disabled:opacity-50"
               value={monitorIndex}
@@ -899,11 +885,14 @@ export default function RemoteSession() {
       </div>
 
       {/* Main content area */}
-      <div className="flex-1 overflow-hidden">
+      {/* min-h-0: sem ele, o flex-1 não encolhe abaixo do conteúdo (canvas) e o
+          viewer calcula o fit com uma altura maior que a viewport — ao reduzir a
+          ALTURA da janela a tela remota não redimensionava. */}
+      <div className="flex-1 min-h-0 overflow-hidden">
         {activeTab === 'screen' && (
           screenSession ? (
-            <div ref={screenContainerRef} className="h-full flex flex-col">
-              <div className="flex-1">
+            <div ref={screenContainerRef} className="h-full min-h-0 flex flex-col">
+              <div className="flex-1 min-h-0">
                 <RemoteScreenViewer
                   key={`screen-${screenSession.sessionId}-${reconnectKeys.screen ?? 0}`}
                   natsSubject={screenSession.natsSubject}
@@ -915,7 +904,6 @@ export default function RemoteSession() {
                   onError={(msg) => setErrorMsg(msg)}
                   onLatency={() => {}}
                   onMonitors={(mons) => setMonitors(mons)}
-                  onMetrics={(m) => setAgentImageQuality(m?.imageQuality ?? null)}
                   onSessionEnded={(reason) => setErrorMsg(`Sessão encerrada: ${reason}`)}
                   scale={screenScale}
                   isFullscreen={screenFullscreen}
