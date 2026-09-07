@@ -749,7 +749,7 @@ export default function RemoteSession() {
           </span>
         </div>
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <Button variant="danger" size="sm" onClick={handleStop}>Encerrar</Button>
+          <Button variant="danger" size="sm" onClick={handleStop} title="Encerra todas as sessões ativas e fecha esta janela">Fechar</Button>
           <ThemeToggle />
         </div>
       </div>

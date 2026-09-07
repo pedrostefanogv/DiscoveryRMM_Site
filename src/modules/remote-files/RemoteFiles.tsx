@@ -824,8 +824,18 @@ export default function RemoteFiles({
                   onClick={(e) => handleRowClick(f, e)}
                   onContextMenu={(e) => openContextMenu(e, f)}
                 >
-                  <td className="px-3 py-2">{f.isDir ? (f.isLink ? '📁↗' : '📁') : (f.isLink ? '🔗' : '📄')}</td>
-                  <td className="px-3 py-2 font-mono" title={f.isLink && f.linkTarget ? `${f.name} → ${f.linkTarget}` : undefined}>{f.name}{f.isLink && f.linkTarget ? <span className="ml-2 text-muted text-xs">→ {f.linkTarget}</span> : null}</td>
+                  <td className="px-3 py-2 whitespace-nowrap">{f.isDir ? (f.isLink ? '📁↗' : '📁') : (f.isLink ? '🔗' : '📄')}</td>
+                  <td className="px-3 py-2 font-mono whitespace-nowrap" title={f.isLink && f.linkTarget ? `${f.name} → ${f.linkTarget}` : f.name}>
+                    {f.name}
+                    {f.isLink && f.linkTarget && (
+                      <span
+                        className="ml-2 px-1.5 py-0.5 rounded bg-surface-hover text-muted-foreground text-[11px] align-middle inline-block max-w-[40ch] overflow-hidden text-ellipsis whitespace-nowrap"
+                        title={`Atalho para: ${f.linkTarget}`}
+                      >
+                        ↗ {f.linkTarget}
+                      </span>
+                    )}
+                  </td>
                   <td className="px-3 py-2 text-right text-muted font-mono text-xs">{f.isDir ? '—' : formatSize(f.size)}</td>
                   <td className="px-3 py-2 text-right text-muted text-xs">{f.modTime.slice(0, 10)}</td>
                 </tr>
