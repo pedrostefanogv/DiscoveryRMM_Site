@@ -329,6 +329,9 @@ export default function RemoteScreenViewer({
     let protocolBuffer: Uint8Array<ArrayBufferLike> = new Uint8Array();
     let connectSent = false;
     let authenticated = false;
+    // True após a 1ª autenticação bem-sucedida — em reconexões pedimos keyframe
+    // (o agent está em dirty-rect mode e o canvas local está vazio).
+    let hadPreviousConnection = false;
     const MAX_RECONNECT_ATTEMPTS = 5;
     const RECONNECT_DELAYS = [1000, 2000, 4000, 8000, 16000];
 
@@ -636,6 +639,18 @@ export default function RemoteScreenViewer({
             sendProtocol(`SUB ${natsSubject}.monitors 6`);
             sendProtocol(`SUB ${natsSubject}.event 2`);
             sendProtocol(`SUB ${natsSubject}.clipboard 7`);
+            // Reconexão: o agent já está com dirty-rect ativo (frames parciais)
+            // e o canvas local está vazio — pede keyframe para redesenhar tudo.
+            // Apenas em reconexões: na 1ª conexão o agent já envia key frame.
+            if (reconnectAttemptsRef.current > 0 || hadPreviousConnection) {
+              const kf = JSON.stringify({ action: 'keyframe' });
+              setTimeout(() => {
+                if (wsRef.current?.readyState === WebSocket.OPEN) {
+                  wsRef.current.send(`PUB ${natsSubject}.control ${new TextEncoder().encode(kf).length}\r\n${kf}\r\n`);
+                }
+              }, 150);
+            }
+            hadPreviousConnection = true;
           }
           continue;
         }
