@@ -38,15 +38,6 @@ interface TabSession {
   codec: string;
 }
 
-function formatRemaining(expiresAtUtc: string | null): string {
-  if (!expiresAtUtc) return '--';
-  const remaining = new Date(expiresAtUtc).getTime() - Date.now();
-  if (remaining <= 0) return 'Expirada';
-  const min = Math.floor(remaining / 60000);
-  const sec = Math.floor((remaining % 60000) / 1000);
-  return `${min}:${String(sec).padStart(2, '0')}`;
-}
-
 // Detecta o erro específico do backend quando já existe uma sessão ativa no agent
 // ("Agent already has N active session(s) (max M). Use force=true to override.").
 // Usado para acionar o fluxo de sobreposição (force=true) apenas nesse caso.
@@ -114,9 +105,6 @@ export default function RemoteSession() {
   const [connectingTab, setConnectingTab] = useState<Tab | null>(null);
   // Chave de reconexão por aba — incrementa para forçar o viewer a reconectar.
   const [reconnectKeys, setReconnectKeys] = useState<Partial<Record<Tab, number>>>({});
-  // Tempo restante da sessão ativa (para exibir no header).
-  const [remaining, setRemaining] = useState<string>('--');
-
   // Identidade do agente (Cliente → Site → Hostname) exibida no header para
   // evitar operar em máquinas indevidas.
   const [agentIdentity, setAgentIdentity] = useState<{ client: string; site: string; hostname: string } | null>(null);
@@ -221,12 +209,17 @@ export default function RemoteSession() {
     { value: 'jpeg', label: 'JPEG' },
   ];
 
+  // Range aceito pelo agent para override manual (quality.go: imageQualityMin/Max 10-90).
   const IMAGE_QUALITY_PRESETS = [
     { value: 90, label: '90%' },
-    { value: 75, label: '75%' },
+    { value: 80, label: '80%' },
+    { value: 70, label: '70%' },
     { value: 60, label: '60%' },
+    { value: 50, label: '50%' },
     { value: 40, label: '40%' },
-    { value: 25, label: '25%' },
+    { value: 30, label: '30%' },
+    { value: 20, label: '20%' },
+    { value: 10, label: '10%' },
   ];
 
   const FPS_PRESETS = [
@@ -270,7 +263,6 @@ export default function RemoteSession() {
       const shared = tab === 'processes' ? sessions.services : sessions.processes;
       if (shared) {
         setSessions((prev) => ({ ...prev, [tab]: shared }));
-        setRemaining(formatRemaining(shared.expiresAtUtc));
         setConnectingTab(null);
         return;
       }
@@ -369,7 +361,6 @@ export default function RemoteSession() {
           },
         };
       });
-      setRemaining(formatRemaining(session.expiresAtUtc));
     };
 
     try {
@@ -506,7 +497,6 @@ export default function RemoteSession() {
           codec: session.codec,
         },
       }));
-      setRemaining(formatRemaining(session.expiresAtUtc));
     };
 
     try {
@@ -656,7 +646,6 @@ export default function RemoteSession() {
           codec: session.codec,
         },
       }));
-      setRemaining(formatRemaining(session.expiresAtUtc));
     };
 
     try {
@@ -677,30 +666,11 @@ export default function RemoteSession() {
     }
   }, [monitorChanging, agentId, screenSession, transport, liveQuality, liveCodec]);
 
-  // Timer de expiração da sessão ativa
-  useEffect(() => {
-    const active = sessions[activeTab];
-    if (!active) return;
-    const timer = setInterval(() => {
-      setRemaining(formatRemaining(active.expiresAtUtc));
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [sessions, activeTab]);
+  // Qualidade de imagem reportada pelo agent via metrics (fonte da verdade no modo Auto).
+  const [agentImageQuality, setAgentImageQuality] = useState<number | null>(null);
 
-  const handleRenew = async () => {
-    const active = sessions[activeTab];
-    if (!active) return;
-    try {
-      const renewed = await remoteSessionsApi.renewSession(agentId, active.sessionId);
-      setSessions((prev) => ({
-        ...prev,
-        [activeTab]: { ...prev[activeTab]!, expiresAtUtc: renewed.expiresAtUtc },
-      }));
-      setRemaining(formatRemaining(renewed.expiresAtUtc));
-    } catch (err) {
-      setErrorMsg(`Falha ao renovar: ${err instanceof Error ? err.message : String(err)}`);
-    }
-  };
+  // Timer de expiração removido — a sessão gerencia a própria expiração e o
+  // backend encerra quando necessário (viewer recebe onSessionEnded).
 
   const handleStop = async () => {
     // Encerra TODAS as sessões ativas (não só a da aba atual), para não
@@ -779,8 +749,6 @@ export default function RemoteSession() {
           </span>
         </div>
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <span className="whitespace-nowrap">Tempo restante: <strong className="text-foreground">{remaining}</strong></span>
-          <Button variant="secondary" size="sm" onClick={handleRenew} disabled={!isActiveConnected}>Renovar</Button>
           <Button variant="danger" size="sm" onClick={handleStop}>Encerrar</Button>
           <ThemeToggle />
         </div>
@@ -841,7 +809,18 @@ export default function RemoteSession() {
             </button>
           </div>
 
-          {/* Em Auto: nenhum ajuste de qualidade/FPS é exibido. Em Manual: controles finos. */}
+          {/* Em Auto: mostra a qualidade adaptada pelo agent (leitura). Em Manual: controles finos. */}
+          {autoMode && (
+            <div className="flex items-center gap-0.5">
+              <span className="mr-1 text-muted">🖼</span>
+              <span
+                className="px-1.5 py-0.5 rounded bg-surface border border-border text-foreground"
+                title="Qualidade adaptada automaticamente pelo agent conforme máquina/rede. Mude para Manual para ajustar."
+              >
+                {agentImageQuality != null ? `${agentImageQuality}% (auto)` : 'auto'}
+              </span>
+            </div>
+          )}
           {!autoMode && (
             <>
               {/* Codec selector — Manual */}
@@ -936,6 +915,7 @@ export default function RemoteSession() {
                   onError={(msg) => setErrorMsg(msg)}
                   onLatency={() => {}}
                   onMonitors={(mons) => setMonitors(mons)}
+                  onMetrics={(m) => setAgentImageQuality(m?.imageQuality ?? null)}
                   onSessionEnded={(reason) => setErrorMsg(`Sessão encerrada: ${reason}`)}
                   scale={screenScale}
                   isFullscreen={screenFullscreen}
@@ -1081,16 +1061,6 @@ export default function RemoteSession() {
       <div className="flex items-center gap-2 px-3 py-1.5 bg-surface border-t border-border text-xs">
         {/* Mesmo sem sessão ativa, se houver conflito (sessão presa no agent) o
             botão "Forçar conexão" permanece acessível para sobrepor. */}
-        {sessionConflict && !activeSession && (
-          <button
-            className="px-2 py-1 bg-warning/70 hover:bg-warning text-white rounded"
-            onClick={() => startTabSession(activeTab, true)}
-            disabled={connectingTab === activeTab}
-            title={`Encerra a sessão remota existente do agente e inicia uma nova conexão de ${activeTab} (sobrepor). Use se a sessão anterior estiver presa/órfã.`}
-          >
-            {connectingTab === activeTab ? 'Forçando…' : '⚡ Forçar conexão'}
-          </button>
-        )}
         {activeSession && (
           <>
             <button
@@ -1099,14 +1069,6 @@ export default function RemoteSession() {
               title={`Reconectar a sessão de ${activeTab}`}
             >
               ⟳ Reconectar
-            </button>
-            <button
-              className="px-2 py-1 bg-warning/70 hover:bg-warning text-white rounded"
-              onClick={() => startTabSession(activeTab, true)}
-              disabled={connectingTab === activeTab}
-              title={`Encerra a sessão remota existente do agente e inicia uma nova conexão (sobrepor). Use se a sessão anterior estiver presa/órfã.`}
-            >
-              ⚡ Forçar conexão
             </button>
             <button
               className="px-2 py-1 bg-danger/70 hover:bg-danger text-white rounded"

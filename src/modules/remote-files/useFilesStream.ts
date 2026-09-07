@@ -30,7 +30,7 @@ export interface FilesProgressInfo {
 export interface FilesResponse {
     success: boolean;
     error?: string;
-    entries?: { name: string; path: string; isDir: boolean; size: number; modTime: string }[];
+    entries?: { name: string; path: string; isDir: boolean; size: number; modTime: string; isLink?: boolean; linkTarget?: string }[];
     /** Dados binários do chunk. O agent Go serializa []byte como base64 string;
      *  mantém number[] como fallback para compatibilidade legada. */
     data?: string | number[];

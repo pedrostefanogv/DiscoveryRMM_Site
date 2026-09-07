@@ -18,6 +18,8 @@ interface RemoteScreenViewerProps {
   onError?: (msg: string) => void;
   onLatency?: (rttMs: number) => void;
   onMonitors?: (monitors: MonitorInfo[]) => void;
+  /** Métricas periódicas do agent (fps, qualidade efetiva etc.) — para exibição no pai. */
+  onMetrics?: (metrics: AgentMetrics | null) => void;
   /** Notifica que a sessão foi encerrada/erro no agent (para o pai exibir aviso/reconectar). */
   onSessionEnded?: (reason: string) => void;
   /** Escala controlada externamente ('fit' | '100%'). Se omitido, gerencia internamente. */
@@ -93,6 +95,7 @@ export default function RemoteScreenViewer({
   onError,
   onLatency,
   onMonitors,
+  onMetrics,
   onSessionEnded,
   scale: controlledScale,
   onToggleFullscreen,
@@ -126,12 +129,14 @@ export default function RemoteScreenViewer({
   const onLatencyRef = useRef(onLatency);
   const onMonitorsRef = useRef(onMonitors);
   const onSessionEndedRef = useRef(onSessionEnded);
+  const onMetricsRef = useRef(onMetrics);
   const codecRef = useRef(codec);
   const isPausedRef = useRef(isPaused);
   onErrorRef.current = onError;
   onLatencyRef.current = onLatency;
   onMonitorsRef.current = onMonitors;
   onSessionEndedRef.current = onSessionEnded;
+  onMetricsRef.current = onMetrics;
   codecRef.current = codec;
   isPausedRef.current = isPaused;
 
@@ -401,7 +406,9 @@ export default function RemoteScreenViewer({
       try {
         const data = JSON.parse(payloadText);
         if (data?.eventType === 'metrics' && data?.data) {
-          setAgentMetrics(data.data as AgentMetrics);
+          const m = data.data as AgentMetrics;
+          setAgentMetrics(m);
+          onMetricsRef.current?.(m);
         } else if (
           // Sessão encerrada no agent (expirou/erro/shell morreu) — não deixar
           // a UI "presa" na última tela congelada como se ainda estivesse ativa.
@@ -412,6 +419,8 @@ export default function RemoteScreenViewer({
           const reason = data?.data?.reason ?? data?.data?.error ?? data?.eventType ?? 'sessão encerrada';
           setSessionEnded(String(reason));
           setConnectionState('error');
+          setAgentMetrics(null);
+          onMetricsRef.current?.(null);
           onSessionEndedRef.current?.(String(reason));
         }
       } catch {

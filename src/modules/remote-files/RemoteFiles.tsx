@@ -7,6 +7,10 @@ interface FileEntry {
   isDir: boolean;
   size: number;
   modTime: string;
+  /** True se a entrada é um symlink/junction (atalho). O agent resolve o alvo no list. */
+  isLink?: boolean;
+  /** Alvo do link quando legível. */
+  linkTarget?: string;
 }
 
 interface RemoteFilesProps {
@@ -571,6 +575,24 @@ export default function RemoteFiles({
   };
 
   const handleRowClick = (f: FileEntry, e: React.MouseEvent) => {
+    // Atalho (junction/symlink): o agent já resolveu o alvo no list — isDir
+    // reflete o tipo real. Diretório navega; arquivo de link navega para a
+    // pasta contida no alvo (comportamento do Explorer ao "abrir" o atalho).
+    if (f.isLink && !f.isDir) {
+      const target = f.linkTarget?.trim();
+      if (target) {
+        // Se o alvo aponta para um arquivo (tem extensão), navega para a pasta pai.
+        const looksLikeFile = /\.[A-Za-z0-9]+$/.test(target);
+        const dir = looksLikeFile
+          ? target.replace(/[\\/][^\\/]+$/, '')
+          : target;
+        if (dir && /^[A-Za-z]:[\\/]/.test(dir)) {
+          setSelectedPaths(new Set());
+          goTo(dir);
+          return;
+        }
+      }
+    }
     if (f.isDir) {
       // Clique simples em pasta sempre navega (com Ctrl/Shift ainda seleciona,
       // mas navegação é a ação natural — mantém UX de explorador simples).
@@ -802,8 +824,8 @@ export default function RemoteFiles({
                   onClick={(e) => handleRowClick(f, e)}
                   onContextMenu={(e) => openContextMenu(e, f)}
                 >
-                  <td className="px-3 py-2">{f.isDir ? '📁' : '📄'}</td>
-                  <td className="px-3 py-2 font-mono">{f.name}</td>
+                  <td className="px-3 py-2">{f.isDir ? (f.isLink ? '📁↗' : '📁') : (f.isLink ? '🔗' : '📄')}</td>
+                  <td className="px-3 py-2 font-mono" title={f.isLink && f.linkTarget ? `${f.name} → ${f.linkTarget}` : undefined}>{f.name}{f.isLink && f.linkTarget ? <span className="ml-2 text-muted text-xs">→ {f.linkTarget}</span> : null}</td>
                   <td className="px-3 py-2 text-right text-muted font-mono text-xs">{f.isDir ? '—' : formatSize(f.size)}</td>
                   <td className="px-3 py-2 text-right text-muted text-xs">{f.modTime.slice(0, 10)}</td>
                 </tr>
