@@ -1445,6 +1445,11 @@ export default function AgentDetail() {
                         <p className="mt-1 text-muted">
                           {formatBytes(diskUsedBytes)} usados de {formatBytes(disk.totalSizeBytes)}
                         </p>
+                        {disk.powerOnHours != null && (
+                          <p className="mt-0.5 text-muted">
+                            Horas ligadas: <span className="text-muted-foreground">{formatHours(disk.powerOnHours)}</span>
+                          </p>
+                        )}
                       </div>
                     </Tooltip>
                   );
@@ -1649,7 +1654,7 @@ export default function AgentDetail() {
         </div>
 
         {activeDataTab === 'software' && (
-          <div style={{ height: 'min(860px, 75vh)' }} className="overflow-y-auto overscroll-contain">
+          <div style={{ height: 'min(860px, 75vh)' }} className="overflow-y-auto overscroll-auto">
             <>
             <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
@@ -1681,14 +1686,10 @@ export default function AgentDetail() {
                   </div>
                 )}
 
-                <div className="mb-4 grid gap-3 md:grid-cols-3">
+                <div className="mb-4 grid gap-3 md:grid-cols-2">
                   <div className="rounded-lg bg-surface-light px-3 py-2">
                     <p className="text-xs text-muted">Total instalado</p>
                     <p className="text-sm font-medium text-foreground">{softwareTotalCount}</p>
-                  </div>
-                  <div className="rounded-lg bg-surface-light px-3 py-2">
-                    <p className="text-xs text-muted">Primeira detecção</p>
-                    <p className="text-sm text-muted-foreground">{formatDate(softwareSnapshot.data?.firstSeenAt ?? null)}</p>
                   </div>
                   <div className="rounded-lg bg-surface-light px-3 py-2">
                     <p className="text-xs text-muted">Última coleta</p>

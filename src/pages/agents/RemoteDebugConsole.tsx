@@ -308,6 +308,8 @@ export default function RemoteDebugConsole() {
     };
   }, [expiresAt]);
 
+  // Botão único: iniciar quando parado, parar (pausa local, mantendo a sessão
+  // viva até o TTL) quando em execução.
   const handleStartDebug = () => {
     setDebugState("running");
   };
@@ -320,22 +322,6 @@ export default function RemoteDebugConsole() {
     setLogs((current) => [
       ...current,
       withSystemMessage("Debug pausado pelo usuário."),
-    ]);
-  };
-
-  const handleStopSession = async () => {
-    cleanupRef.current?.();
-    cleanupRef.current = null;
-    try {
-      await agentsApi.stopRemoteDebugSession(agentId, sessionId);
-    } catch {
-      // Silencia erro no stop — já estamos encerrando.
-    }
-    setConnectionState("closed");
-    setDebugState("idle");
-    setLogs((current) => [
-      ...current,
-      withSystemMessage("Sessão encerrada pelo usuário."),
     ]);
   };
 
@@ -472,29 +458,51 @@ export default function RemoteDebugConsole() {
         <span className="text-muted">exp: {expiresLabel}</span>
 
         <div className="ml-auto flex items-center gap-2">
-          {debugState === "running" && (
+          {(debugState === "running" || debugState === "stopped") && (
             <>
               {/* Filtro de nível (display only) */}
               <span className="text-muted">filtro:</span>
-              {LEVELS.map((level) => (
-                <button
-                  key={level}
-                  type="button"
-                  onClick={() =>
-                    setLevelFilters((current) => ({
-                      ...current,
-                      [level]: !current[level],
-                    }))
-                  }
-                  className={`rounded px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider transition-colors ${
-                    levelFilters[level]
-                      ? "bg-primary/20 text-primary"
-                      : "text-muted hover:text-muted-foreground"
-                  }`}
-                >
-                  {level}
-                </button>
-              ))}
+              {LEVELS.map((level) => {
+                const count = logs.filter((entry) => normalizeLevel(entry.level) === level).length;
+                return (
+                  <button
+                    key={level}
+                    type="button"
+                    title={`${count} linha(s) no nível ${LEVEL_LABELS[level]}`}
+                    onClick={() =>
+                      setLevelFilters((current) => ({
+                        ...current,
+                        [level]: !current[level],
+                      }))
+                    }
+                    className={`rounded px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider transition-colors ${
+                      levelFilters[level]
+                        ? "bg-primary/20 text-primary"
+                        : "text-muted line-through opacity-60 hover:text-muted-foreground"
+                    }`}
+                  >
+                    {level}
+                  </button>
+                );
+              })}
+              <button
+                type="button"
+                onClick={() =>
+                  setLevelFilters({ trace: true, debug: true, info: true, warn: true, error: true })
+                }
+                className="rounded px-1.5 py-0.5 text-[10px] text-muted underline-offset-2 hover:text-foreground hover:underline"
+              >
+                todos
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  setLevelFilters({ trace: false, debug: false, info: false, warn: false, error: false })
+                }
+                className="rounded px-1.5 py-0.5 text-[10px] text-muted underline-offset-2 hover:text-foreground hover:underline"
+              >
+                nenhum
+              </button>
 
               <span className="mx-1 h-4 w-px bg-surface-hover" />
 
@@ -514,51 +522,29 @@ export default function RemoteDebugConsole() {
               </select>
 
               <span className="mx-1 h-4 w-px bg-surface-hover" />
-
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => setLogs([])}
-                disabled={totalLines === 0}
-                className="text-[10px]"
-              >
-                limpar
-              </Button>
-
-              <span className="mx-1 h-4 w-px bg-surface-hover" />
             </>
-          )}
-
-          {(debugState === "idle" || debugState === "stopped") && (
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={handleStartDebug}
-              className="text-[10px]"
-            >
-              iniciar debug
-            </Button>
-          )}
-
-          {debugState === "running" && (
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={handleStopDebug}
-              className="text-[10px]"
-            >
-              parar debug
-            </Button>
           )}
 
           <Button
             size="sm"
-            variant="secondary"
-            onClick={handleStopSession}
+            variant="ghost"
+            onClick={() => setLogs([])}
+            disabled={totalLines === 0}
             className="text-[10px]"
           >
-            encerrar
+            limpar
           </Button>
+
+          {/* Botão único: iniciar quando parado, parar quando em execução */}
+          {debugState === "running" ? (
+            <Button size="sm" variant="secondary" onClick={handleStopDebug} className="text-[10px]">
+              parar
+            </Button>
+          ) : (
+            <Button size="sm" variant="primary" onClick={handleStartDebug} className="text-[10px]">
+              iniciar debug
+            </Button>
+          )}
 
           <ThemeToggle />
         </div>
@@ -620,21 +606,6 @@ export default function RemoteDebugConsole() {
           );
         })}
       </div>
-
-      {/* Footer */}
-      <footer className="border-t border-border bg-surface/60 px-3 py-1 text-[10px] text-muted">
-        {debugState === "idle" ? (
-          <span>Pronto para iniciar · subject: {subject}</span>
-        ) : debugState === "stopped" ? (
-          <span>Debug pausado · {totalLines} linhas retidas</span>
-        ) : connectionState === "connected" ? (
-          <span>Recebendo logs via NATS · subject: {subject}</span>
-        ) : connectionState === "closed" ? (
-          <span>Conexão fechada</span>
-        ) : (
-          <span>{connectionState}...</span>
-        )}
-      </footer>
 
       {/* Error overlay */}
       {errorMessage && (
