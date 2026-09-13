@@ -10,7 +10,7 @@ import { clientsApi } from '@/api/clients';
 import { configureApiClient } from '@/api/client';
 import RemoteScreenViewer, { type MonitorInfo } from '@/modules/remote-screen/RemoteScreenViewer';
 import { fullscreenApi } from '@/utils/fullscreen';
-import RemoteTerminal from '@/modules/remote-terminal/RemoteTerminal';
+import RemoteTerminal, { getLastFittedTermDims } from '@/modules/remote-terminal/RemoteTerminal';
 import RemoteFiles from '@/modules/remote-files/RemoteFiles';
 import RemoteProxy from '@/modules/remote-proxy/RemoteProxy';
 import { RemoteProcesses } from '@/modules/remote-processes/RemoteProcesses';
@@ -310,6 +310,12 @@ export default function RemoteSession() {
         // force=true: sobrepõe uma sessão ativa existente do mesmo agent.
         force: useForce,
         ...(tab === 'screen' ? { monitorIndex } : {}),
+        // Terminal nasce do tamanho certo: usa as dims do último fit do
+        // terminal (0,0 na primeira abertura → agent usa o default 120×40 e o
+        // fit do viewer corrige em seguida via term.in resize).
+        ...(tab === 'terminal'
+          ? (() => { const d = getLastFittedTermDims(); return d.cols > 0 && d.rows > 0 ? { termCols: d.cols, termRows: d.rows } : {}; })()
+          : {}),
       });
 
       if (!session.natsSubject) {
@@ -411,7 +417,23 @@ export default function RemoteSession() {
       const active = await remoteSessionsApi.getActiveSessions(agentId);
       const stillActive = active.some((a) => a.sessionId === s.sessionId);
       if (stillActive) {
-        // Sessão viva — apenas remonta o viewer.
+        // Sessão viva — refetch das credenciais NATS antes de remontar: o JWT
+        // do viewer tem TTL próprio; reutilizar um jwt expirado colocava o
+        // reconnect em loop de auth (-ERR) até esgotar as tentativas. A API
+        // emite TTL = restante da sessão + margem, então uma nova emissão
+        // sempre cobre o que falta da sessão.
+        try {
+          const creds = await remoteSessionsApi.getSessionCredentials(agentId, s.sessionId);
+          setSessions((prev) => {
+            const cur = prev[tab];
+            if (!cur || cur.sessionId !== s.sessionId) return prev;
+            return {
+              ...prev,
+              [tab]: { ...cur, jwt: creds.jwt, nkeySeed: creds.nkeySeed, natsUrl: creds.natsWssUrl ?? cur.natsUrl },
+            };
+          });
+        } catch { /* melhor esforço: segue com as credenciais atuais */ }
+        // Remonta o viewer (nova key) já com o jwt atualizado.
         setReconnectKeys((prev) => ({ ...prev, [tab]: (prev[tab] ?? 0) + 1 }));
       } else {
         // Sessão morta — reinicia sob demanda.
@@ -468,6 +490,8 @@ export default function RemoteSession() {
         durationMinutes: 30,
         force: useForce,
         shell: newShell,
+        // Mesma lógica do startTabSession: console já nasce no tamanho do fit.
+        ...(() => { const d = getLastFittedTermDims(); return d.cols > 0 && d.rows > 0 ? { termCols: d.cols, termRows: d.rows } : {}; })(),
       });
       if (!session.natsSubject) {
         throw new Error('Sessão criada sem subject NATS.');

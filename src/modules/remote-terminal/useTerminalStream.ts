@@ -52,13 +52,14 @@ function toBase64(input: string): string {
     return btoa(binary);
 }
 
-// Decodifica base64 → string UTF-8. atob() puro produz string Latin-1 (1 char =
-// 1 byte), quebrando acentos/emoji/símbolos (mojibake). TextDecoder corrige.
-function fromBase64Utf8(b64: string): string {
+// Decodifica base64 → bytes. A decodificação UTF-8 usa um TextDecoder
+// PERSISTENTE com { stream: true } (ver connect) — um decoder novo por
+// mensagem quebraria um caractere multi-byte dividido entre mensagens (U+FFFD).
+function base64ToBytes(b64: string): Uint8Array<ArrayBufferLike> {
     const binary = atob(b64);
     const bytes = new Uint8Array(binary.length);
     for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-    return new TextDecoder('utf-8').decode(bytes);
+    return bytes;
 }
 
 // Console único: usa subjects fixos term.out / term.in (sem tabId),
@@ -102,6 +103,13 @@ export function useTerminalStream({
             let connectSent = false;
             let authenticated = false;
 
+            // Decoder UTF-8 PERSISTENTE por conexão ({ stream: true }): o
+            // term.out pode dividir um caractere multi-byte entre mensagens
+            // (o agent já retém runas incompletas como 1ª defesa; aqui qualquer
+            // runa que ainda atravesse uma mensagem é concluída na próxima,
+            // sem U+FFFD). Reconexão cria novo decoder (estado limpo).
+            const utf8Stream = new TextDecoder('utf-8');
+
             const sendProtocol = (cmd: string) => ws?.send(new TextEncoder().encode(`${cmd}\r\n`));
 
             const processProtocol = () => {
@@ -136,7 +144,7 @@ export function useTerminalStream({
                                     exitCallbacksRef.current.forEach(cb => cb(String(parsed.reason ?? 'shell encerrado')));
                                 } else if (typeof parsed.data === 'string') {
                                     try {
-                                        const decoded = fromBase64Utf8(parsed.data);
+                                        const decoded = utf8Stream.decode(base64ToBytes(parsed.data), { stream: true });
                                         outputCallbacksRef.current.forEach(cb => cb(decoded));
                                     } catch {
                                         outputCallbacksRef.current.forEach(cb => cb(parsed.data));

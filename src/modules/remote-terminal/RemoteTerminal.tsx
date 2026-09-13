@@ -32,6 +32,16 @@ interface TermReadyPayload {
   backend?: string;
 }
 
+// Últimas dimensões fitadas do terminal, persistem entre sessões da página:
+// o próximo startSession (terminal) já nasce com termCols/termRows corretos
+// (a API/agent suportam — evita console 120×40 + corrida de resize no boot).
+let lastFittedCols = 0;
+let lastFittedRows = 0;
+/** Dimensões do último fit do terminal remoto (0,0 se nunca fitado). */
+export function getLastFittedTermDims(): { cols: number; rows: number } {
+  return { cols: lastFittedCols, rows: lastFittedRows };
+}
+
 const TERM_THEME_DARK = {
   background: '#0f172a',
   foreground: '#e2e8f0',
@@ -126,6 +136,8 @@ export default function RemoteTerminal({
 
     term.open(containerRef.current);
     fitAddon.fit();
+    lastFittedCols = term.cols;
+    lastFittedRows = term.rows;
 
     termRef.current = term;
     fitAddonRef.current = fitAddon;
@@ -176,7 +188,11 @@ export default function RemoteTerminal({
     if (!isConnected) return;
     // Pequeno delay para o layout estabilizar
     const t = setTimeout(() => {
-      try { fitAddonRef.current?.fit(); } catch { /* ignore */ }
+      try {
+        fitAddonRef.current?.fit();
+        const t2 = termRef.current;
+        if (t2) { lastFittedCols = t2.cols; lastFittedRows = t2.rows; }
+      } catch { /* ignore */ }
     }, 50);
     return () => clearTimeout(t);
   }, [isConnected]);
@@ -187,10 +203,10 @@ export default function RemoteTerminal({
       if (Array.isArray(info.shells) && info.shells.length > 0) {
         onShells?.(info.shells);
       }
-      // Se o agente informou dimensões, ajusta o terminal local
-      if (info.termCols && info.termRows && termRef.current) {
-        termRef.current.resize(info.termCols, info.termRows);
-      }
+      // NÃO forçar resize para as dims do agent (120×40 default do payload):
+      // sobrescrevia o fit real do container e o terminal ficava desalinhado
+      // até o usuário redimensionar a janela. Fazemos fit LOCAL abaixo e o
+      // onResize envia as dimensões reais ao agent (que redimensiona o ConPTY).
       // Backend legacy (ConPTY indisponível/instável): informa o usuário com
       // um aviso discreto. NOTA: NÃO ativamos convertEol/windowsMode aqui —
       // o console real (cmd/powershell via pipe) já emite \r\n; convertEol
@@ -200,7 +216,13 @@ export default function RemoteTerminal({
       if (info.backend) backendRef.current = info.backend;
       if (info.backend === 'legacy' || info.backend === 'none') {
         const t = termRef.current;
-        t?.writeln('\x1b[1;33m── Modo compatibilidade (ConPTY indisponível) ──\x1b[0m');
+        // Modo legacy = stdin em PIPE (sem ConPTY): sequências VT não são
+        // processadas — setas/história do PSReadLine, Home/End/Delete e
+        // TAB-completação NÃO funcionam (só texto cru). Aviso explícito,
+        // pois o usuário tende a culpar o terminal web e não o backend.
+        t?.writeln('\x1b[1;33m── Modo compatibilidade (ConPTY indisponível neste agente) ──\x1b[0m');
+        t?.writeln('\x1b[33m   Teclas de edição desabilitadas: ↑/↓ (histórico), Home/End/Delete, TAB\x1b[0m');
+        t?.writeln('\x1b[33m   Causa comum: antivírus/EDR encerra o ConPTY (0xC0000142). Exclua o agente no AV ou atualize o agente (dispatcher habilitado).\x1b[0m');
       }
     });
     return unsubscribe;
