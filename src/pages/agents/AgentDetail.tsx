@@ -1787,7 +1787,7 @@ export default function AgentDetail() {
         )}
 
         {activeDataTab === 'tickets' && (
-          <div style={{ height: 'min(860px, 75vh)' }} className="overflow-y-auto overscroll-contain">
+          <div style={{ height: 'min(860px, 75vh)' }} className="overflow-y-auto overscroll-auto">
             <>
             <CardHeader title="Últimos Chamados" subtitle={`${agentTickets.data?.items?.length ?? 0} chamado(s) retornado(s)`} />
             <div className="space-y-2">
@@ -1850,7 +1850,7 @@ export default function AgentDetail() {
         )}
 
         {activeDataTab === 'printers' && (
-          <div style={{ height: 'min(860px, 75vh)' }} className="overflow-y-auto overscroll-contain">
+          <div style={{ height: 'min(860px, 75vh)' }} className="overflow-y-auto overscroll-auto">
             <>
             <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
@@ -1910,7 +1910,7 @@ export default function AgentDetail() {
         )}
 
         {activeDataTab === 'listeningPorts' && (
-          <div style={{ height: 'min(860px, 75vh)' }} className="overflow-y-auto overscroll-contain">
+          <div style={{ height: 'min(860px, 75vh)' }} className="overflow-y-auto overscroll-auto">
             <>
             <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
@@ -2006,7 +2006,7 @@ export default function AgentDetail() {
         )}
 
         {activeDataTab === 'openSockets' && (
-          <div style={{ height: 'min(860px, 75vh)' }} className="overflow-y-auto overscroll-contain">
+          <div style={{ height: 'min(860px, 75vh)' }} className="overflow-y-auto overscroll-auto">
             <>
             <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
@@ -2102,7 +2102,7 @@ export default function AgentDetail() {
         )}
 
         {activeDataTab === 'logs' && (
-          <div style={{ height: 'min(860px, 75vh)' }} className="overflow-y-auto overscroll-contain">
+          <div style={{ height: 'min(860px, 75vh)' }} className="overflow-y-auto overscroll-auto">
             <>
             <CardHeader title="Logs Recentes" />
             <div className="space-y-2">

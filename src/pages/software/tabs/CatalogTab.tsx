@@ -103,6 +103,33 @@ export function CatalogTab() {
     try { window.localStorage.setItem(APP_STORE_LAST_SYNC_STORAGE_KEY, JSON.stringify(lastSyncByType)); } catch { /* storage indisponível */ }
   }, [lastSyncByType]);
 
+  // Busca o status persistido no servidor: reflete também as execuções
+  // automáticas (job Quartz de manifests), que não passam pelo fluxo manual
+  // desta aba e não atualizavam o painel. O servidor vence apenas quando o
+  // resultado é mais recente que o cache local (localStorage).
+  useEffect(() => {
+    let cancelled = false;
+    appStoreApi
+      .getSyncStatus(installationType)
+      .then((status) => {
+        if (cancelled || !status.lastResult) return;
+        const serverResult = status.lastResult;
+        setLastSyncByType((prev) => {
+          const local = prev[installationType];
+          if (
+            local?.syncedAt &&
+            serverResult.syncedAt &&
+            new Date(local.syncedAt).getTime() >= new Date(serverResult.syncedAt).getTime()
+          ) {
+            return prev;
+          }
+          return { ...prev, [installationType]: serverResult };
+        });
+      })
+      .catch(() => { /* status indisponível — mantém o cache local */ });
+    return () => { cancelled = true; };
+  }, [installationType]);
+
   function handleSearchEnter() {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     setSearchApplied(searchInput);
