@@ -1,4 +1,4 @@
-﻿import { api } from "./client";
+import { api, type ApiRequestInit } from "./client";
 import type { AgentHeartbeat } from "./realtime";
 import type {
   Agent,
@@ -83,12 +83,14 @@ function normalizeStartRemoteDebugSessionResponse(
 }
 
 export const agentsApi = {
-  listBySite: (siteId: string) => api.get<Agent[]>(`${BASE}/by-site/${siteId}`),
+  listBySite: (siteId: string, init?: ApiRequestInit) =>
+    api.get<Agent[]>(`${BASE}/by-site/${siteId}`, {}, init),
 
-  listByClient: (clientId: string) =>
-    api.get<Agent[]>(`${BASE}/by-client/${clientId}`),
+  listByClient: (clientId: string, init?: ApiRequestInit) =>
+    api.get<Agent[]>(`${BASE}/by-client/${clientId}`, {}, init),
 
-  get: (id: string) => api.get<Agent>(`${BASE}/${id}`),
+  get: (id: string, init?: ApiRequestInit) =>
+    api.get<Agent>(`${BASE}/${id}`, {}, init),
 
   create: (data: CreateAgentRequest) => api.post<Agent>(BASE, data),
 
@@ -98,8 +100,8 @@ export const agentsApi = {
   delete: (id: string) => api.del<void>(`${BASE}/${id}`),
 
   // Hardware
-  getHardware: (id: string) =>
-    api.get<HardwareReport>(`${BASE}/${id}/hardware`),
+  getHardware: (id: string, init?: ApiRequestInit) =>
+    api.get<HardwareReport>(`${BASE}/${id}/hardware`, {}, init),
 
   getHardwareComponents: (id: string) =>
     api.get<HardwareComponentsResponse>(`${BASE}/${id}/hardware/components`),

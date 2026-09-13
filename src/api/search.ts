@@ -1,4 +1,4 @@
-import { api } from "./client";
+import { api, type ApiRequestInit } from "./client";
 
 // ── Types ──────────────────────────────────────────────
 
@@ -33,9 +33,13 @@ export interface SearchResultItem {
 const BASE = "/api/v1/search";
 
 export const searchApi = {
-  search: (q: string, maxResults = 10) =>
-    api.get<UniversalSearchResult>(BASE, {
-      q: q.trim(),
-      maxResults: Math.min(Math.max(maxResults, 1), 25),
-    }),
+  search: (q: string, maxResults = 10, init?: ApiRequestInit) =>
+    api.get<UniversalSearchResult>(
+      BASE,
+      {
+        q: q.trim(),
+        maxResults: Math.min(Math.max(maxResults, 1), 25),
+      },
+      init,
+    ),
 };

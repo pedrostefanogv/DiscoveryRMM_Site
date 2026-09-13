@@ -60,6 +60,13 @@ export default defineConfig({
         target: "http://localhost:5288",
         changeOrigin: true,
       },
+      // WebSocket do NATS em dev (VITE_NATS_URL=/nats resolve contra a origem
+      // do dev server). Ajuste o target conforme o listener WS do seu NATS.
+      "/nats": {
+        target: "http://localhost:4222",
+        changeOrigin: true,
+        ws: true,
+      },
     },
   },
   build: {
@@ -120,11 +127,6 @@ export default defineConfig({
               name: "forms",
               test: /node_modules[\\/](react-hook-form|@hookform[\\/]resolvers|zod)[\\/]/,
               priority: 15,
-            },
-            {
-              name: "markdown",
-              test: /node_modules[\\/](react-markdown|remark-gfm)[\\/]/,
-              priority: 10,
             },
           ],
         },

@@ -371,9 +371,10 @@ export default function AgentList() {
   const agentQueries = useQueries({
     queries: queriedClients.map(c => ({
       queryKey: ['agents', 'byClient', c.id] as const,
-      queryFn: () => agentsApi.listByClient(c.id),
+      queryFn: ({ signal }: { signal: AbortSignal }) =>
+        agentsApi.listByClient(c.id, { signal }),
       refetchInterval: 300_000,
-      refetchIntervalInBackground: true,
+      refetchIntervalInBackground: false,
     })),
   });
 

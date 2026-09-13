@@ -9,10 +9,10 @@ const P2P_KEYS = {
 export function useP2POverview(params: P2POverviewParams, enabled = true) {
   return useQuery({
     queryKey: P2P_KEYS.overview(params),
-    queryFn: () => p2pApi.getOverview(params),
+    queryFn: ({ signal }) => p2pApi.getOverview(params, { signal }),
     enabled,
     staleTime: 30_000,
     refetchInterval: 300_000,
-    refetchIntervalInBackground: true,
+    refetchIntervalInBackground: false,
   });
 }

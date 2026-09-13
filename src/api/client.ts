@@ -1,9 +1,15 @@
-﻿export const API_BASE_URL = import.meta.env.VITE_API_URL ?? "";
+export const API_BASE_URL = import.meta.env.VITE_API_URL ?? "";
 export const API_VERSION_PREFIX = "/api/v1";
 
 export interface ApiRequestInit extends RequestInit {
   auth?: boolean;
   retryOnAuthError?: boolean;
+  /**
+   * Timeout da requisição em ms (o fetch é abortado ao expirar).
+   * Use 0 para desativar em operações de longa duração.
+   * Default: 60s — evita UI presa em loading quando o backend não responde.
+   */
+  timeoutMs?: number;
 }
 
 interface ApiClientConfig {
@@ -86,9 +92,18 @@ function normalizeErrorDetails(details: unknown): string | null {
 async function parseErrorMessage(res: Response): Promise<string> {
   const contentType = res.headers.get("content-type")?.toLowerCase() ?? "";
 
-  if (contentType.includes("application/json")) {
+  // Lê o corpo uma única vez: tentar res.json() e depois res.text() falha
+  // porque o stream já teria sido consumido pela primeira leitura.
+  let rawBody: string | null = null;
+  try {
+    rawBody = await res.text();
+  } catch {
+    rawBody = null;
+  }
+
+  if (contentType.includes("application/json") && rawBody !== null) {
     try {
-      const payload = (await res.json()) as
+      const payload = JSON.parse(rawBody) as
         | {
             message?: unknown;
             error?: unknown;
@@ -142,11 +157,9 @@ async function parseErrorMessage(res: Response): Promise<string> {
     }
   }
 
-  try {
-    const text = await res.text();
-    if (text.trim() && !text.trim().startsWith("<")) return text;
-  } catch {
-    // Fallback para status message abaixo.
+  if (rawBody !== null) {
+    const text = rawBody.trim();
+    if (text && !text.startsWith("<")) return rawBody;
   }
 
   return (
@@ -180,6 +193,37 @@ export function configureApiClient(config: Partial<ApiClientConfig>) {
 
 export function getApiAccessToken(): string | null {
   return apiClientConfig.getAccessToken();
+}
+
+const DEFAULT_REQUEST_TIMEOUT_MS = 60_000;
+
+/**
+ * Combina o signal externo (ex.: AbortSignal do TanStack Query) com um timeout.
+ * Sem AbortSignal.any no runtime, prioriza o signal externo (cancelamento).
+ */
+function buildRequestSignal(init: ApiRequestInit): AbortSignal | undefined {
+  const signals: AbortSignal[] = [];
+
+  if (init.signal) {
+    signals.push(init.signal);
+  }
+
+  const timeoutMs = init.timeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
+  if (
+    timeoutMs > 0 &&
+    typeof AbortSignal !== "undefined" &&
+    typeof AbortSignal.timeout === "function"
+  ) {
+    signals.push(AbortSignal.timeout(timeoutMs));
+  }
+
+  if (signals.length === 0) return undefined;
+  if (signals.length === 1) return signals[0];
+
+  const anyFn = (
+    AbortSignal as unknown as { any?: (signals: AbortSignal[]) => AbortSignal }
+  ).any;
+  return anyFn ? anyFn(signals) : signals[0];
 }
 
 function normalizeApiPath(path: string): string {
@@ -219,9 +263,12 @@ export async function apiFetchResponse(
     }
   }
 
+  const signal = buildRequestSignal(init);
+
   const response = await fetch(url, {
     ...init,
     headers,
+    signal,
   });
 
   if (response.status === 401 && useAuth && init.retryOnAuthError !== false) {
@@ -237,6 +284,7 @@ export async function apiFetchResponse(
     const retriedResponse = await fetch(url, {
       ...init,
       headers: retryHeaders,
+      signal,
     });
 
     if (retriedResponse.status === 401) {
@@ -257,8 +305,13 @@ async function request<T>(path: string, init?: ApiRequestInit): Promise<T> {
   // even when body is absent, so the server doesn't reject with 415.
   const jsonMethods = new Set(["POST", "PUT", "PATCH"]);
   if (jsonMethods.has(method) && !headers.has("Content-Type")) {
-    const hasFormData = init?.body instanceof FormData;
-    if (!hasFormData) {
+    // Corpos crus definem seu próprio Content-Type (boundary/urlencoded);
+    // sobrescrevê-lo quebraria multipart upload.
+    const hasRawBody =
+      init?.body instanceof FormData ||
+      init?.body instanceof URLSearchParams ||
+      init?.body instanceof Blob;
+    if (!hasRawBody) {
       headers.set("Content-Type", "application/json");
     }
   }
@@ -296,6 +349,11 @@ function qs(params: Record<string, unknown>): string {
       continue;
     }
 
+    // Objetos não são representáveis em query string — evita "[object Object]".
+    if (typeof v === "object") {
+      continue;
+    }
+
     sp.set(k, String(v));
   }
   const s = sp.toString();
@@ -309,12 +367,26 @@ export const api = {
     init?: ApiRequestInit,
   ) => request<T>(`${path}${qs(params)}`, init),
 
-  post: <T>(path: string, body?: unknown, init?: ApiRequestInit) =>
-    request<T>(path, {
+  post: <T>(path: string, body?: unknown, init?: ApiRequestInit) => {
+    // Corpos binários/form devem ir crus: JSON.stringify(FormData) === "{}"
+    // e o Content-Type (boundary etc.) é derivado do próprio body.
+    const isRawBody =
+      body instanceof FormData ||
+      body instanceof URLSearchParams ||
+      body instanceof Blob ||
+      body instanceof ArrayBuffer ||
+      ArrayBuffer.isView(body);
+
+    return request<T>(path, {
       ...init,
       method: "POST",
-      body: body !== undefined ? JSON.stringify(body) : "{}",
-    }),
+      body: isRawBody
+        ? (body as BodyInit)
+        : body !== undefined
+          ? JSON.stringify(body)
+          : "{}",
+    });
+  },
 
   put: <T>(path: string, body: unknown, init?: ApiRequestInit) =>
     request<T>(path, {

@@ -1,4 +1,4 @@
-﻿import { api } from "./client";
+import { api, type ApiRequestInit } from "./client";
 
 export type P2PScope = "global" | "tenant" | "site" | "agent";
 
@@ -114,10 +114,11 @@ function withoutAgentId<T extends { agentId?: unknown }>(
 const BASE = "/api/v1/ops/p2p";
 
 export const p2pApi = {
-  getOverview: (params: P2POverviewParams) =>
+  getOverview: (params: P2POverviewParams, init?: ApiRequestInit) =>
     api.get<P2POverviewResponse>(
       `${BASE}/overview`,
       params as unknown as Record<string, unknown>,
+      init,
     ),
 
   getTimeseries: (params: P2PTimeseriesParams) =>

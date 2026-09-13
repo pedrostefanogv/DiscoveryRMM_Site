@@ -1,4 +1,4 @@
-﻿import { api } from "./client";
+import { api, type ApiRequestInit } from "./client";
 
 export type AppNotificationSeverity =
   | "Informational"
@@ -57,9 +57,11 @@ function buildQueryString(params: Record<string, unknown>) {
 }
 
 export const notificationsApi = {
-  list: (params: ListNotificationsParams = {}) =>
+  list: (params: ListNotificationsParams = {}, init?: ApiRequestInit) =>
     api.get<AppNotification[]>(
       `/api/v1/notifications${buildQueryString(params as Record<string, unknown>)}`,
+      {},
+      init,
     ),
 
   markAsRead: (id: string, params: MarkNotificationAsReadParams = {}) =>

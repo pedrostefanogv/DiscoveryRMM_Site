@@ -101,40 +101,40 @@ export function getDeleteAgentErrorMessage(error: unknown): string {
 export function useAgentsByClient(clientId: string) {
   return useQuery({
     queryKey: KEYS.byClient(clientId),
-    queryFn: () => agentsApi.listByClient(clientId),
+    queryFn: ({ signal }) => agentsApi.listByClient(clientId, { signal }),
     enabled: !!clientId,
     refetchInterval: 300_000,
-    refetchIntervalInBackground: true,
+    refetchIntervalInBackground: false,
   });
 }
 
 export function useAgentsBySite(siteId: string) {
   return useQuery({
     queryKey: KEYS.bySite(siteId),
-    queryFn: () => agentsApi.listBySite(siteId),
+    queryFn: ({ signal }) => agentsApi.listBySite(siteId, { signal }),
     enabled: !!siteId,
     refetchInterval: 300_000,
-    refetchIntervalInBackground: true,
+    refetchIntervalInBackground: false,
   });
 }
 
 export function useAgent(id: string | undefined) {
   return useQuery({
     queryKey: KEYS.detail(id ?? ""),
-    queryFn: () => agentsApi.get(id!),
+    queryFn: ({ signal }) => agentsApi.get(id!, { signal }),
     enabled: !!id,
     refetchInterval: 300_000,
-    refetchIntervalInBackground: true,
+    refetchIntervalInBackground: false,
   });
 }
 
 export function useAgentHardware(id: string) {
   return useQuery({
     queryKey: KEYS.hardware(id),
-    queryFn: () => agentsApi.getHardware(id),
+    queryFn: ({ signal }) => agentsApi.getHardware(id, { signal }),
     enabled: !!id,
     refetchInterval: 300_000,
-    refetchIntervalInBackground: true,
+    refetchIntervalInBackground: false,
     staleTime: 60_000,
   });
 }

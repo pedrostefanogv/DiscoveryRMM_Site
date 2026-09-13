@@ -1,4 +1,4 @@
-﻿import { api, ApiError, getApiAccessToken } from "./client";
+import { api, ApiError, getApiAccessToken } from "./client";
 import type {
   Authenticator,
   NatsConnection as CoreNatsConnection,
@@ -225,6 +225,10 @@ class NatsService {
   private config: NatsConfig;
   private connection: NatsConnection | null = null;
   private subscriptions: Map<string, Subscription> = new Map();
+  // Promises de subscrição em voo, por subject: duas chamadas concorrentes de
+  // subscribe() para o mesmo subject compartilham a MESMA subscrição NATS.
+  // Sem isso, criam-se duas subscriptions e cada evento é entregue em dobro.
+  private subscriptionInFlight: Map<string, Promise<boolean>> = new Map();
   private listeners: Map<string, Set<(event: DashboardEvent) => void>> =
     new Map();
   private credentials: NatsCredentialsResponse | null = null;
@@ -252,6 +256,44 @@ class NatsService {
       ...config,
       authMode: config.authMode ?? "auth_token",
     };
+
+    if (typeof window !== "undefined") {
+      window.addEventListener("online", this.handleConnectivityRestored);
+      document.addEventListener(
+        "visibilitychange",
+        this.handleVisibilityChanged,
+      );
+    }
+  }
+
+  /**
+   * O6: após reconnect_exhausted, a conexão só seria reestabelecida por um novo
+   * subscribe() ou mudança de config. Estes gatilhos externos reiniciam as
+   * tentativas quando a aba volta a ficar visível ou a rede retorna.
+   */
+  private handleConnectivityRestored = (): void => {
+    this.tryExternalReconnect("online");
+  };
+
+  private handleVisibilityChanged = (): void => {
+    if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+      return;
+    }
+    this.tryExternalReconnect("visibility");
+  };
+
+  private tryExternalReconnect(reason: string): void {
+    if (this.manualDisconnect) return;
+    if (!this.config.enabled) return;
+    if (this.listeners.size === 0) return;
+    if (this.connection?.isClosed() === false) return;
+    if (this.connectInFlight || this.reconnectTimer) return;
+    // auth_error é terminal — não fica girando em background
+    if (this.connectionState === "auth_error") return;
+
+    this.reconnectAttempts = 0;
+    this.emitTelemetry("info", "reconnect_external_trigger", { reason });
+    void this.connect();
   }
 
   updateConfig(config: NatsConfig) {
@@ -450,6 +492,7 @@ class NatsService {
     );
     this.connection = null;
     this.subscriptions.clear();
+    this.subscriptionInFlight.clear();
 
     this.emitTelemetry("info", "restart_connection", {
       hadActiveConnection,
@@ -583,6 +626,7 @@ class NatsService {
       this.connection = null;
       const subjects = Array.from(this.subscriptions.keys());
       this.subscriptions.clear();
+      this.subscriptionInFlight.clear();
 
       if (this.manualDisconnect) {
         this.manualDisconnect = false;
@@ -640,7 +684,8 @@ class NatsService {
   }
 
   private async ensureSubjectSubscription(subject: string): Promise<boolean> {
-    if (!this.connection) {
+    const connection = this.connection;
+    if (!connection) {
       this.emitTelemetry("warn", "subscribe_subject_skipped_no_connection", {
         subject,
       });
@@ -654,12 +699,45 @@ class NatsService {
       return true;
     }
 
+    const inFlight = this.subscriptionInFlight.get(subject);
+    if (inFlight) {
+      this.emitTelemetry("info", "subscribe_subject_inflight_joined", {
+        subject,
+      });
+      return inFlight;
+    }
+
+    const promise = this.subscribeSubjectOnce(subject, connection);
+    this.subscriptionInFlight.set(subject, promise);
+    return promise.finally(() => {
+      if (this.subscriptionInFlight.get(subject) === promise) {
+        this.subscriptionInFlight.delete(subject);
+      }
+    });
+  }
+
+  /** Executa a subscrição NATS propriamente dita (sem dedupe de chamadas). */
+  private async subscribeSubjectOnce(
+    subject: string,
+    connection: NatsConnection,
+  ): Promise<boolean> {
     try {
       this.emitTelemetry("info", "subscribe_subject_start", {
         subject,
       });
       natsLogger.log("Inscrevendo em subject:", subject);
-      const subscription = this.connection.subscribe(subject) as Subscription;
+      const subscription = connection.subscribe(subject) as Subscription;
+
+      // A conexão pode ter sido reiniciada enquanto subscribe() aguardava.
+      if (this.connection !== connection) {
+        try {
+          subscription.unsubscribe();
+        } catch {
+          // conexão antiga já encerrada
+        }
+        return false;
+      }
+
       this.subscriptions.set(subject, subscription);
       this.emitTelemetry("info", "subscribe_subject_success", {
         subject,
@@ -760,6 +838,7 @@ class NatsService {
     if (this.connection?.isClosed()) {
       this.connection = null;
       this.subscriptions.clear();
+      this.subscriptionInFlight.clear();
       this.setConnectionState("disconnected");
     }
 
@@ -866,6 +945,7 @@ class NatsService {
         } catch (error) {
           this.connection = null;
           this.subscriptions.clear();
+          this.subscriptionInFlight.clear();
           const errorType = this.updateConnectionError(error);
           const nonRetryable = isNonRetryableNatsError(error);
           this.emitTelemetry(
@@ -1217,5 +1297,15 @@ export function getNatsService(config?: NatsConfig): NatsService {
 }
 
 export function resetNatsService(): void {
+  const previous = natsService;
   natsService = null;
+
+  // Descarta a instância anterior fechando a conexão WebSocket — sem isso,
+  // o socket antigo permanecia aberto para sempre (leak) e os listeners
+  // registrados nele ficavam órfãos.
+  if (previous) {
+    void previous.disconnect().catch(() => {
+      // serviço substituído: erros de teardown não devem propagar
+    });
+  }
 }

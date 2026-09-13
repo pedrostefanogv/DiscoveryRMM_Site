@@ -192,16 +192,19 @@ export function useNotifications(options?: {
 
   const query = useQuery({
     queryKey,
-    queryFn: () =>
-      notificationsApi.list({
-        recipientUserId: recipientUserId ?? undefined,
-        topic,
-        limit,
-      }),
+    queryFn: ({ signal }) =>
+      notificationsApi.list(
+        {
+          recipientUserId: recipientUserId ?? undefined,
+          topic,
+          limit,
+        },
+        { signal },
+      ),
     enabled: canQuery,
     staleTime: 15_000,
     refetchInterval: 300_000,
-    refetchIntervalInBackground: true,
+    refetchIntervalInBackground: false,
   });
 
   useEffect(() => {

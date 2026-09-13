@@ -23,11 +23,17 @@ function buildQueryKey(scope: DashboardScope, window: DashboardWindow) {
 }
 
 function buildQueryFn(scope: DashboardScope, window: DashboardWindow) {
-  return (): Promise<DashboardSummaryDto> => {
-    if (scope === "global") return dashboardApi.getGlobalSummary(window);
-    if ("siteId" in scope)
-      return dashboardApi.getSiteSummary(scope.clientId, scope.siteId, window);
-    return dashboardApi.getClientSummary(scope.clientId, window);
+  // Propaga o signal do TanStack Query: navegar para fora cancela a request.
+  return ({ signal }: { signal: AbortSignal }): Promise<DashboardSummaryDto> => {
+    if (scope === "global") {
+      return dashboardApi.getGlobalSummary(window, { signal });
+    }
+    if ("siteId" in scope) {
+      return dashboardApi.getSiteSummary(scope.clientId, scope.siteId, window, {
+        signal,
+      });
+    }
+    return dashboardApi.getClientSummary(scope.clientId, window, { signal });
   };
 }
 
@@ -44,6 +50,6 @@ export function useDashboardSummary(
     enabled,
     staleTime: 30_000,
     refetchInterval,
-    refetchIntervalInBackground: true,
+    refetchIntervalInBackground: false,
   });
 }

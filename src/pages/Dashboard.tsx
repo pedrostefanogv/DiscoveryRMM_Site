@@ -66,9 +66,9 @@ export default function Dashboard() {
   const softwareSnapshot = useSoftwareInventorySnapshot('global');
   const realtimeStats = useQuery({
     queryKey: ['realtime', 'stats'],
-    queryFn: getRealtimeStats,
+    queryFn: ({ signal }) => getRealtimeStats({ signal }),
     refetchInterval: 300_000,
-    refetchIntervalInBackground: true,
+    refetchIntervalInBackground: false,
   });
   const p2pOverview = useP2POverview({ scope: 'global', window });
 

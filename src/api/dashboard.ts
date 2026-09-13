@@ -1,4 +1,4 @@
-﻿import { api } from "./client";
+import { api, type ApiRequestInit } from "./client";
 
 export type DashboardWindow = "24h" | "7d" | "30d";
 
@@ -80,24 +80,30 @@ export interface DashboardSummaryDto {
 }
 
 export const dashboardApi = {
-  getGlobalSummary(window?: DashboardWindow): Promise<DashboardSummaryDto> {
+  getGlobalSummary(
+    window?: DashboardWindow,
+    init?: ApiRequestInit,
+  ): Promise<DashboardSummaryDto> {
     const params: Record<string, unknown> = {};
     if (window) params["window"] = window;
     return api.get<DashboardSummaryDto>(
       "/api/v1/dashboard/global/summary",
       params,
+      init,
     );
   },
 
   getClientSummary(
     clientId: string,
     window?: DashboardWindow,
+    init?: ApiRequestInit,
   ): Promise<DashboardSummaryDto> {
     const params: Record<string, unknown> = {};
     if (window) params["window"] = window;
     return api.get<DashboardSummaryDto>(
       `/api/v1/clients/${clientId}/dashboard/summary`,
       params,
+      init,
     );
   },
 
@@ -105,12 +111,14 @@ export const dashboardApi = {
     clientId: string,
     siteId: string,
     window?: DashboardWindow,
+    init?: ApiRequestInit,
   ): Promise<DashboardSummaryDto> {
     const params: Record<string, unknown> = {};
     if (window) params["window"] = window;
     return api.get<DashboardSummaryDto>(
       `/api/v1/clients/${clientId}/sites/${siteId}/dashboard/summary`,
       params,
+      init,
     );
   },
 };

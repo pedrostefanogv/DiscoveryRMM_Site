@@ -230,10 +230,22 @@ const GLOBAL_PONG_SUBJECT = (
 ).trim();
 const INVALIDATE_MIN_INTERVAL_MS = 1_500;
 const DASHBOARD_INVALIDATE_MIN_INTERVAL_MS = 5_000;
+// /realtime/stats é telemetria pesada (threadpool, GC, business): invalidar a
+// cada evento gerava até ~0,7 req/s por aba. 15s é suficiente para agregados.
+const REALTIME_STATS_INVALIDATE_MIN_INTERVAL_MS = 15_000;
 const BOOTSTRAP_DEBOUNCE_MS = 250;
 
 function isIncompleteAgentScope(scope: AgentRealtimeScope): boolean {
   return scope.level === "agent" && (!scope.clientId || !scope.siteId);
+}
+
+let activeRealtimeStatusConsumers = 0;
+
+function resetRealtimeUiStateIfIdle() {
+  if (activeRealtimeStatusConsumers > 0) return;
+  setNatsConnectionState("disconnected");
+  setNatsConnectionDiagnostics(null, null, null);
+  setServerPongState(null, null);
 }
 
 function createInvalidateThrottler(
@@ -262,14 +274,20 @@ function invalidateDashboardQueries(
 
   if (isHeartbeatLike) {
     invalidateThrottled(["dashboard"], DASHBOARD_INVALIDATE_MIN_INTERVAL_MS);
-    invalidateThrottled(["realtime", "stats"]);
+    invalidateThrottled(
+      ["realtime", "stats"],
+      REALTIME_STATS_INVALIDATE_MIN_INTERVAL_MS,
+    );
     return;
   }
 
   if (normalizedType === "commandcompleted") {
     invalidateThrottled(["agents"]);
     invalidateThrottled(["logs"]);
-    invalidateThrottled(["realtime", "stats"]);
+    invalidateThrottled(
+      ["realtime", "stats"],
+      REALTIME_STATS_INVALIDATE_MIN_INTERVAL_MS,
+    );
     return;
   }
 
@@ -279,7 +297,10 @@ function invalidateDashboardQueries(
     normalizedType === "agentdisconnected"
   ) {
     invalidateThrottled(["dashboard"], DASHBOARD_INVALIDATE_MIN_INTERVAL_MS);
-    invalidateThrottled(["realtime", "stats"]);
+    invalidateThrottled(
+      ["realtime", "stats"],
+      REALTIME_STATS_INVALIDATE_MIN_INTERVAL_MS,
+    );
     return;
   }
 
@@ -475,12 +496,11 @@ export function useAgentStatusNats(
 
   useEffect(() => {
     if (!enabled || !NATS_ENABLED) {
-      setNatsConnectionState("disconnected");
-      setNatsConnectionDiagnostics(null, null, null);
-      setServerPongState(null, null);
+      resetRealtimeUiStateIfIdle();
       return;
     }
 
+    activeRealtimeStatusConsumers += 1;
     let disposed = false;
     const invalidateThrottled = createInvalidateThrottler(queryClient);
 
@@ -818,6 +838,9 @@ export function useAgentStatusNats(
         const blockedSubjects: string[] = [];
         const failedSubjects: string[] = [];
         for (const [subject, handler] of subscriptions) {
+          // B5: o cleanup pode ter rodado durante os awaits anteriores —
+          // sem este guard, listeners órfãos ficavam registrados no serviço.
+          if (disposed) break;
           if (!natsService.canSubscribeToSubject(subject)) {
             natsLogger.debug(
               "Subject fora da allow-list do token, ignorando:",
@@ -860,9 +883,8 @@ export function useAgentStatusNats(
       subscriptions.forEach((handler, subject) => {
         natsService.unsubscribe(subject, handler);
       });
-      setNatsConnectionState("disconnected");
-      setNatsConnectionDiagnostics(null, null, null);
-      setServerPongState(null, null);
+      activeRealtimeStatusConsumers -= 1;
+      resetRealtimeUiStateIfIdle();
       if (bootstrapStarted) {
         natsTelemetryLogger.info({
           event: "bootstrap_cleanup",

@@ -1,5 +1,5 @@
-﻿import { getNatsService } from "./nats";
-import { api } from "./client";
+import { getNatsService } from "./nats";
+import { api, type ApiRequestInit } from "./client";
 
 export interface AgentCommand {
   commandId: string;
@@ -153,6 +153,6 @@ export async function getRealtimeStatus() {
 /**
  * Get full realtime/infra/business telemetry for the dashboard.
  */
-export async function getRealtimeStats() {
-  return api.get<RealtimeStatsResponse>("/api/v1/realtime/stats");
+export async function getRealtimeStats(init?: ApiRequestInit) {
+  return api.get<RealtimeStatsResponse>("/api/v1/realtime/stats", {}, init);
 }

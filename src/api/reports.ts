@@ -1,4 +1,4 @@
-﻿import { api } from "./client";
+import { api } from "./client";
 import { ReportDatasetType } from "./types";
 import type {
   ReportTemplate,
@@ -239,7 +239,10 @@ export async function installLibraryTemplate(
 export async function runReport(
   request: RunReportRequest,
 ): Promise<RunReportResponse> {
-  return api.post<RunReportResponse>("/api/v1/reports/run", request);
+  // Geração (PDF/XLSX via Playwright) pode exceder o timeout default.
+  return api.post<RunReportResponse>("/api/v1/reports/run", request, {
+    timeoutMs: 0,
+  });
 }
 
 export async function getReportExecution(
@@ -269,6 +272,7 @@ export async function previewReport(
       "Content-Type": "application/json",
     },
     body: JSON.stringify(request),
+    timeoutMs: 0,
   });
 
   if (!res.ok) {
@@ -353,6 +357,7 @@ export async function downloadReportFile(
     getReportDownloadPath(executionId, clientId),
     {
       method: "GET",
+      timeoutMs: 0,
     },
   );
 

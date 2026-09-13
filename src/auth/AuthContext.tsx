@@ -1,4 +1,4 @@
-﻿import {
+import {
   createContext,
   useCallback,
   useContext,
@@ -147,6 +147,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // O broadcast de TOKEN_REFRESHED é feito explicitamente em refreshSession,
     // login e completeAuthenticatedSession — NÃO aqui — para evitar ping-pong
     // entre abas quando o listener cross-tab atualiza a sessão.
+    //
+    // B6: a janela de supressão (isCrossTabTokenRef) vale apenas para a
+    // atualização originada cross-tab. Limpar aqui garante que o PRÓXIMO
+    // refresh local volte a propagar os tokens novos às outras abas.
+    isCrossTabTokenRef.current = false;
   }, [session]);
 
   const clearSession = useCallback(() => {
@@ -164,15 +169,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [queryClient]);
 
   const completeAuthenticatedSession = useCallback(async (tokens: TokenPair) => {
-    setSession((previous) => {
-      const next = applyTokenPair(tokens, previous);
-      // Broadcast para outras abas (ex: popup de MFA que não está mais aberta)
-      broadcastTokens({
-        accessToken: tokens.accessToken,
-        refreshToken: tokens.refreshToken,
-        expiresAt: next.expiresAt!,
-      });
-      return next;
+    // B7: side effects (broadcast) fora do updater — em StrictMode o updater
+    // roda duas vezes e o broadcast seria duplicado.
+    const next = applyTokenPair(tokens, sessionRef.current);
+    setSession(next);
+    // Broadcast para outras abas (ex: popup de MFA que não está mais aberta)
+    broadcastTokens({
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+      expiresAt: next.expiresAt!,
     });
   }, [broadcastTokens]);
 
@@ -221,12 +226,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             `Nova tentativa em ${delay}ms.`,
         );
         await new Promise((resolve) => setTimeout(resolve, delay));
-        // Retorna o token atual se ainda válido, para não quebrar requests em andamento
+
+        // B9: o retry anterior apenas aguardava e devolvia o token atual —
+        // ninguém reemitia a chamada de refresh. Se o access token ainda é
+        // válido, devolve-o (o timer de manutenção renovará depois); senão,
+        // re-tenta o refresh de verdade. Requests em 401 continuam aguardando
+        // o mesmo refreshInFlight, sem logout prematuro.
         const currentAccessToken = accessTokenRef.current;
-        if (currentAccessToken && (sessionRef.current.expiresAt ?? 0) > Date.now()) {
+        if (
+          currentAccessToken &&
+          (sessionRef.current.expiresAt ?? 0) > Date.now()
+        ) {
           return currentAccessToken;
         }
-        return null;
+        return refreshSession();
       }
 
       // Esgotou tentativas → logout
@@ -276,14 +289,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const tokens = readSessionTokens(response);
 
     if (nextStage === "authenticated" && tokens) {
-      setSession((previous) => {
-        const next = applyTokenPair(tokens, previous);
-        broadcastTokens({
-          accessToken: tokens.accessToken,
-          refreshToken: tokens.refreshToken,
-          expiresAt: next.expiresAt!,
-        });
-        return { ...next, loginResponse: response };
+      const next = applyTokenPair(tokens, sessionRef.current);
+      setSession({ ...next, loginResponse: response });
+      broadcastTokens({
+        accessToken: tokens.accessToken,
+        refreshToken: tokens.refreshToken,
+        expiresAt: next.expiresAt!,
       });
       return nextStage;
     }

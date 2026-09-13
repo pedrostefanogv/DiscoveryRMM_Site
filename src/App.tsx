@@ -1,6 +1,7 @@
 import { RouterProvider } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'react-hot-toast';
+import { ApiError } from '@/api';
 import { ThemeProvider, useTheme } from '@/theme/ThemeContext';
 import { router } from '@/router';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
@@ -12,13 +13,24 @@ const queryClient = new QueryClient({
     queries: {
       staleTime: 60_000,        // 1 min — dados considerados frescos
       gcTime: 10 * 60_000,      // 10 min — cache mantido mesmo sem observers
-      retry: 2,
+      // 4xx não são transitórios (404/403/400) — repetir só desperdiça chamadas.
+      // Erros de rede/5xx/408/429 podem ser transitórios → até 2 tentativas.
+      retry: (failureCount, error) => {
+        if (error instanceof ApiError) {
+          const retryable = error.status >= 500 || error.status === 408 || error.status === 429;
+          return retryable && failureCount < 2;
+        }
+        return failureCount < 2;
+      },
       retryDelay: (attemptIndex) => Math.min(1_000 * 2 ** attemptIndex, 8_000),
       refetchOnWindowFocus: false,
       refetchOnReconnect: true,
     },
+    // Mutations não são idempotentes (ex.: comandos restart/shutdown a agentes):
+    // retry automático pode duplicar a operação quando a rede falha após o
+    // servidor já ter processado a requisição.
     mutations: {
-      retry: 1,
+      retry: false,
     },
   },
 });

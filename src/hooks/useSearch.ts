@@ -61,7 +61,9 @@ export function useSearch(): UseSearchReturn {
       abortRef.current = controller;
 
       try {
-        const data = await searchApi.search(trimmed, DEFAULT_MAX_RESULTS);
+        const data = await searchApi.search(trimmed, DEFAULT_MAX_RESULTS, {
+          signal: controller.signal,
+        });
 
         // Se o componente foi desmontado ou a query mudou, ignora
         if (controller.signal.aborted) return;
