@@ -94,7 +94,10 @@ export function useTerminalStream({
     const connect = useCallback(() => {
         if (!mountedRef.current) return;
         try {
-            const wsUrl = `${natsUrl}?access_token=${encodeURIComponent(jwt)}`;
+            // FIX 2026-09-17: barra final no path (nginx 308 "/nats" -> "/nats/" e o
+            // browser nao segue redirect em WebSocket -> CloseEvent 1006).
+            const normalizedUrl = natsUrl && !natsUrl.endsWith('/') ? natsUrl + '/' : natsUrl;
+            const wsUrl = `${normalizedUrl}?access_token=${encodeURIComponent(jwt)}`;
             const ws = new WebSocket(wsUrl);
             ws.binaryType = 'arraybuffer';
             wsRef.current = ws;

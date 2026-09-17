@@ -674,7 +674,14 @@ export default function RemoteScreenViewer({
     const connect = () => {
       if (cancelled) return;
 
-      const wsUrl = `${natsUrl}?access_token=${encodeURIComponent(jwt)}`;
+      // FIX 2026-09-17 (viewer 1006): navegadores NAO seguem redirects HTTP no
+      // handshake de WebSocket. Se a URL configurada vier sem a barra final
+      // (ex.: "wss://host/nats"), o nginx responde 308 -> "/nats/" e a conexão
+      // morre com CloseEvent 1006. Garante a barra final no path.
+      const normalizedNatsUrl = typeof natsUrl === 'string' && natsUrl && !natsUrl.endsWith('/')
+        ? natsUrl + '/'
+        : natsUrl;
+      const wsUrl = `${normalizedNatsUrl}?access_token=${encodeURIComponent(jwt)}`;
       ws = new WebSocket(wsUrl);
       ws.binaryType = 'arraybuffer';
       wsRef.current = ws;

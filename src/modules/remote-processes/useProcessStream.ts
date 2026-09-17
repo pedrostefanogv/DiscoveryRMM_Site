@@ -99,7 +99,10 @@ export function useProcessesStream({ natsSubject, natsUrl, jwt }: UseProcessesSt
     const connect = useCallback(() => {
         if (!mountedRef.current || !subj || !natsUrl || !jwt) return;
         try {
-            const ws = new WebSocket(`${natsUrl}?access_token=${encodeURIComponent(jwt)}`);
+            // FIX 2026-09-17: barra final no path (nginx 308 "/nats" -> "/nats/" e o
+            // browser nao segue redirect em WebSocket -> CloseEvent 1006).
+            const normalizedUrl = natsUrl && !natsUrl.endsWith('/') ? natsUrl + '/' : natsUrl;
+            const ws = new WebSocket(`${normalizedUrl}?access_token=${encodeURIComponent(jwt)}`);
             ws.binaryType = 'arraybuffer';
             wsRef.current = ws;
 
