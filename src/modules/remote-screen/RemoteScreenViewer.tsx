@@ -121,6 +121,11 @@ export default function RemoteScreenViewer({
   const [reconnectKey, setReconnectKey] = useState(0);
   const frameCountRef = useRef(0);
   const lastFpsUpdate = useRef(Date.now());
+  // Telemetria de rede para a adaptação automática do agent (netstats):
+  // bytes/frames recebidos na janela de 2s + última latência medida por frame.
+  const netBytesRef = useRef(0);
+  const netFramesRef = useRef(0);
+  const lastLatMsRef = useRef(0);
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectAttemptsRef = useRef(0);
   // Stable refs para callbacks e codec — evita que re-renders do pai (RemoteSession)
@@ -341,6 +346,10 @@ export default function RemoteScreenViewer({
 
     const processScreenFrame = (buffer: ArrayBuffer) => {
       if (isPausedRef.current) return;
+      // Telemetria para o netstats (a cada 2s): bytes/frames efetivamente
+      // recebidos fim-a-fim — a fonte de verdade da escada adaptativa.
+      netBytesRef.current += buffer.byteLength;
+      netFramesRef.current++;
       decodeFrame(buffer).then((result) => {
         if (!result || cancelled) return;
         renderFrame(
@@ -359,6 +368,7 @@ export default function RemoteScreenViewer({
         const header = result.header ?? decodeFrameHeader(buffer);
         if (header) {
           const lat = Date.now() - header.ts;
+          lastLatMsRef.current = lat;
           setRtt(lat);
           onLatencyRef.current?.(lat);
         }
@@ -896,6 +906,21 @@ export default function RemoteScreenViewer({
     document.addEventListener('keydown', onKeyDown);
     document.addEventListener('keyup', onKeyUp);
 
+    // ── netstats (2s): alimenta a escada adaptativa de qualidade no agent ──
+    // recvKbps = bitrate recebido fim-a-fim (fonte de verdade da adaptação);
+    // recvFrames = quadros na janela (0 = tela ociosa → não é congestionamento);
+    // rttMs = latência heurística por frame (contém skew de relógio entre
+    // máquinas — o agent só a usa para extremos).
+    const netstatsTimer = setInterval(() => {
+      if (wsRef.current?.readyState !== WebSocket.OPEN || !natsSubject) return;
+      const bytes = netBytesRef.current;
+      const frames = netFramesRef.current;
+      netBytesRef.current = 0;
+      netFramesRef.current = 0;
+      const recvKbps = Math.round((bytes * 8) / 2 / 1000); // média na janela de 2s
+      sendInput('netstats', { rttMs: lastLatMsRef.current, recvKbps, recvFrames: frames });
+    }, 2000);
+
     return () => {
       canvas.removeEventListener('mousedown', onMouseDown);
       document.removeEventListener('mouseup', onMouseUp);
@@ -905,6 +930,7 @@ export default function RemoteScreenViewer({
       document.removeEventListener('keydown', onKeyDown);
       document.removeEventListener('keyup', onKeyUp);
       if (moveThrottle) clearTimeout(moveThrottle);
+      clearInterval(netstatsTimer);
     };
   }, [natsSubject]);
 

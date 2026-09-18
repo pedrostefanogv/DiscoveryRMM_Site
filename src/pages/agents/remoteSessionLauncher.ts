@@ -20,13 +20,6 @@ export class PopupBlockedError extends Error {
   }
 }
 
-const DEFAULT_PARAMS: Partial<StartRemoteSessionRequest> = {
-  transport: "nats",
-  quality: "unlimited",
-  codec: "webp",
-  durationMinutes: 30,
-};
-
 /**
  * Abre a janela de acesso remoto SEM iniciar nenhuma sessão automaticamente.
  * Cada aba (Tela, Terminal, Arquivos) tem seu próprio botão "Conectar" que
@@ -34,15 +27,15 @@ const DEFAULT_PARAMS: Partial<StartRemoteSessionRequest> = {
  */
 export async function openRemoteSessionPopup({
   agentId,
-  transport,
-  quality,
-  codec,
 }: OpenRemoteSessionParams) {
+  // URL enxuta (fix 17/09): a popup inicia a sessão sob DEMANDA (botão
+  // "Conectar" de cada aba) — transport/quality/codec da URL eram legado do
+  // fluxo antigo (o transport webrtc nem existe mais: o agent só suporta
+  // nats) e o modo auto ajusta qualidade/codec em runtime, tornando os
+  // defaults da URL irrelevantes. A página usa seus próprios defaults
+  // ('nats'/'unlimited'/'webp'). Mantém apenas a identidade + token.
   const query = new URLSearchParams({
     agentId,
-    transport: transport ?? DEFAULT_PARAMS.transport ?? "nats",
-    quality: quality ?? DEFAULT_PARAMS.quality ?? "unlimited",
-    codec: codec ?? DEFAULT_PARAMS.codec ?? "webp",
   });
 
   const accessToken = getApiAccessToken();
