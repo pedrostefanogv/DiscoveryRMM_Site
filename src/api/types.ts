@@ -293,6 +293,19 @@ export interface AgentSoftwareInventoryPage {
   limit: number;
 }
 
+/**
+ * Página por offset (GET /agents/{id}/software/page) com total filtrado —
+ * fonte de verdade para a paginação server-side no detalhe do agente.
+ */
+export interface AgentSoftwarePage {
+  items: AgentSoftwareInventoryItem[];
+  /** Total de itens APÓS o filtro de busca ativo. */
+  totalCount: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
 export interface SoftwareInventoryCatalogItem {
   softwareId: string;
   name: string;

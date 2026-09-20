@@ -7,6 +7,7 @@ import {
 } from "@tanstack/react-query";
 import { ApiError, agentsApi } from "@/api";
 import type {
+  AgentSoftwareInventoryPage,
   AgentSoftwareOrder,
   UpdateAgentRequest,
   SendCommandRequest,
@@ -31,6 +32,10 @@ const KEYS = {
       order: AgentSoftwareOrder;
     },
   ) => [...KEYS.all, "software", id, params] as const,
+  softwarePage: (
+    id: string,
+    params: { page: number; pageSize: number; search: string; order: AgentSoftwareOrder },
+  ) => [...KEYS.all, "softwarePage", id, params] as const,
   softwareSnapshot: (id: string) =>
     [...KEYS.all, "softwareSnapshot", id] as const,
   hardwareComponents: (id: string) =>
@@ -38,6 +43,19 @@ const KEYS = {
   commands: (id: string) => [...KEYS.all, "commands", id] as const,
   tokens: (id: string) => [...KEYS.all, "tokens", id] as const,
 };
+
+/**
+ * Guard contra loop infinito de paginação por cursor: recusa um nextCursor
+ * igual ao cursor de entrada. Se o backend repetir o cursor (ex.: decode
+ * falhando e ignorando o cursor), a infinite query buscaria a mesma página
+ * para sempre — este guard encerra a iteração. Regression: detalhe do agente.
+ */
+export function agentSoftwareNextCursorGuard(
+  lastPage: Pick<AgentSoftwareInventoryPage, "nextCursor" | "cursor">,
+): string | undefined {
+  const { nextCursor, cursor } = lastPage;
+  return nextCursor && nextCursor !== cursor ? nextCursor : undefined;
+}
 
 const DELETE_AGENT_DEPENDENCY_ERROR_TOKENS = [
   "foreign key",
@@ -167,7 +185,54 @@ export function useAgentSoftware(
         order: safeOrder,
       }),
     initialPageParam: undefined as string | undefined,
-    getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
+    // Guard + maxPages: encerra a iteração se o backend repetir o cursor
+    // (defesa em profundidade contra regressão do loop infinito).
+    getNextPageParam: agentSoftwareNextCursorGuard,
+    maxPages: 20,
+    enabled: !!id,
+    staleTime: 30_000,
+    placeholderData: keepPreviousData,
+  });
+}
+
+/**
+ * Paginação server-side por offset (GET /agents/{id}/software/page) —
+ * busca apenas a página visível com total filtrado. Preferir este hook ao
+ * fetch-all por cursor no detalhe do agente.
+ */
+export function useAgentSoftwarePage(
+  id: string,
+  params?: {
+    page?: number;
+    pageSize?: number;
+    search?: string;
+    order?: AgentSoftwareOrder;
+  },
+) {
+  const safePage = Math.max(1, params?.page ?? 1);
+  const safePageSize = Math.min(2000, Math.max(1, params?.pageSize ?? 50));
+  const safeSearch = params?.search?.trim() ?? "";
+  const safeOrder: AgentSoftwareOrder =
+    params?.order === "asc" ? "asc" : "desc";
+
+  return useQuery({
+    queryKey: KEYS.softwarePage(id, {
+      page: safePage,
+      pageSize: safePageSize,
+      search: safeSearch,
+      order: safeOrder,
+    }),
+    queryFn: ({ signal }) =>
+      agentsApi.getSoftwarePage(
+        id,
+        {
+          page: safePage,
+          pageSize: safePageSize,
+          search: safeSearch,
+          order: safeOrder,
+        },
+        { signal },
+      ),
     enabled: !!id,
     staleTime: 30_000,
     placeholderData: keepPreviousData,
@@ -182,11 +247,16 @@ export function useAgentSoftwareSnapshot(id: string) {
   });
 }
 
-export function useAgentHardwareComponents(id: string) {
+export function useAgentHardwareComponents(
+  id: string,
+  options?: { enabled?: boolean },
+) {
   return useQuery({
     queryKey: KEYS.hardwareComponents(id),
     queryFn: () => agentsApi.getHardwareComponents(id),
-    enabled: !!id,
+    // Payload pesado (portas/sockets/impressoras/discos) — carregar sob
+    // demanda quando a aba correspondente estiver ativa.
+    enabled: !!id && (options?.enabled ?? true),
     staleTime: 30_000,
   });
 }

@@ -5,7 +5,7 @@ import {
   Monitor, Wifi, WifiOff, AppWindow, Search, Clock, HardDrive, Printer, Bug, AlertTriangle, Trash2, ShieldCheck, Plus, Gauge, Power, RotateCcw, Zap, ChevronDown, ChevronRight, RefreshCw,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { getDeleteAgentErrorMessage, useAgent, useAgentHardware, useAgentHardwareComponents, useAgentSoftware, useAgentSoftwareSnapshot, useApproveZeroTouch, useDeleteAgent, useRestartAgent, useShutdownAgent, useWakeOnLan } from '@/hooks/useAgents';
+import { getDeleteAgentErrorMessage, useAgent, useAgentHardware, useAgentHardwareComponents, useAgentSoftwarePage, useAgentSoftwareSnapshot, useApproveZeroTouch, useDeleteAgent, useRestartAgent, useShutdownAgent, useWakeOnLan } from '@/hooks/useAgents';
 import { formatBytes, formatDate, formatSocketFamily } from './agentDetailUtils';
 import { useTickets } from '@/hooks/useTickets';
 import { useLogs } from '@/hooks/useLogs';
@@ -44,7 +44,21 @@ function printerStatusColor(status: string | null): 'success' | 'warning' | 'dan
   return 'slate';
 }
 
+// Commit do agente para exibição — ignora placeholders de builds locais sem
+// injeção de ldflags ("unknown"/"dev"/vazio), que não identificam um build.
+function agentCommitHash(commitHash: string | null | undefined): string | null {
+  if (!commitHash) return null;
+  const trimmed = commitHash.trim();
+  const normalized = trimmed.toLowerCase();
+  if (!normalized || normalized === 'unknown' || normalized === 'dev') return null;
+  return trimmed;
+}
+
 type AgentDetailDataTab = 'software' | 'printers' | 'tickets' | 'listeningPorts' | 'openSockets' | 'logs';
+
+// Espelha o clamp de pageSize do backend (GetAgentSoftwarePageQueryHandler).
+// A opção "Todos" usa este tamanho em uma única requisição.
+const SOFTWARE_MAX_PAGE_SIZE = 2000;
 
 export default function AgentDetail() {
   const { id } = useParams<{ id: string }>();
@@ -95,19 +109,30 @@ export default function AgentDetail() {
   const agent = useAgent(id!);
   const liveHeartbeat = useAgentHeartbeat(id!);
   const hw = useAgentHardware(id!);
-  const hwComponents = useAgentHardwareComponents(id!);
-  // Busca todos os itens de uma vez (limit=500) e faz paginação client-side.
-  // O cursor pagination do backend retorna itens duplicados entre páginas,
-  // então usar fetchNextPage + slice client-side é inviável.
-  const software = useAgentSoftware(id!, {
-    limit: 500,
+  // Payload pesado (impressoras/portas/conexões/discos) carregado apenas
+  // quando uma aba que o consome está ativa (P1.2 — abas sob demanda).
+  const dataTabNeedsComponents =
+    activeDataTab === 'printers' ||
+    activeDataTab === 'listeningPorts' ||
+    activeDataTab === 'openSockets';
+  const hwComponents = useAgentHardwareComponents(id!, { enabled: dataTabNeedsComponents });
+  // Paginação server-side por offset (P1.1): busca apenas a página visível com
+  // total FILTRADO. Substitui o fetch-all por cursor (limit=500 + auto-fetch),
+  // que com o cursor quebrado do backend causava o loop contínuo de requests.
+  const softwarePageSize =
+    softwareLimitSelected === 'max' ? SOFTWARE_MAX_PAGE_SIZE : Number(softwareLimitSelected);
+  const software = useAgentSoftwarePage(id!, {
+    page: softwarePage,
+    pageSize: softwarePageSize,
     search: softwareSearchApplied,
     order: softwareOrder,
   });
   const softwareSnapshot = useAgentSoftwareSnapshot(id!);
-  const agentLogs = useLogs({ agentId: id, limit: 10 });
-  const agentTickets = useTickets({ agentId: id, limit: 5 });
-  const now = useNowTick(5_000);
+  const agentLogs = useLogs({ agentId: id, limit: 10 }, { enabled: activeDataTab === 'logs' });
+  const agentTickets = useTickets({ agentId: id, limit: 5 }, { enabled: activeDataTab === 'tickets' });
+  // Tick de 15s (antes 5s): re-renderizava a página inteira a cada 5s só para
+  // o freshness do heartbeat (P1.4).
+  const now = useNowTick(15_000);
   const powerMenuRef = useRef<HTMLDivElement>(null);
 
   // Normaliza logs como array plano (defesa contra API retornar objeto paginado)
@@ -277,43 +302,16 @@ export default function AgentDetail() {
     };
   }, [a, liveHeartbeat, now]);
 
-  // ── Software pagination data (client-side sobre todos os itens carregados da API) ──
-  // Deduplica por inventoryId (backend pode retornar duplicatas entre páginas de cursor)
-  const softwareAllItems = useMemo(() => {
-    const allPages = software.data?.pages.flatMap(p => p.items ?? []) ?? [];
-    const seen = new Set<string>();
-    return allPages.filter(item => {
-      if (seen.has(item.inventoryId)) return false;
-      seen.add(item.inventoryId);
-      return true;
-    });
-  }, [software.data?.pages]);
-
-  // snapshot.totalInstalled é a fonte de verdade para o total; fallback para itens carregados
-  const softwareTotalCount = softwareSnapshot.data?.totalInstalled ?? softwareAllItems.length;
-  const limit = softwareLimitSelected === 'max' ? Math.max(1, softwareTotalCount) : Number(softwareLimitSelected);
-  const softwareTotalPages = Math.max(1, Math.ceil(softwareTotalCount / limit));
+  // ── Software: paginação server-side — itens e totais vêm do endpoint (P1.1) ──
+  // O totalCount do endpoint reflete o filtro de busca ativo (P1.3): o número
+  // de páginas fica correto sob pesquisa. Enquanto a página não chega, usa o
+  // total do snapshot como fallback (não filtrado).
+  const softwareTotalCount =
+    software.data?.totalCount ?? softwareSnapshot.data?.totalInstalled ?? 0;
+  const softwareTotalPages =
+    software.data?.totalPages ?? Math.max(1, Math.ceil(softwareTotalCount / softwarePageSize));
   const safeSoftwarePage = Math.min(softwarePage, softwareTotalPages);
-  const startIdx = (safeSoftwarePage - 1) * limit;
-  const softwareItems = softwareAllItems.slice(startIdx, startIdx + limit);
-
-  // Auto-fetch de páginas restantes da API enquanto houver hasMore
-  useEffect(() => {
-    if (
-      software.hasNextPage &&
-      !software.isFetching &&
-      !software.isFetchingNextPage &&
-      software.data
-    ) {
-      software.fetchNextPage();
-    }
-  }, [
-    software.hasNextPage,
-    software.isFetching,
-    software.isFetchingNextPage,
-    software.fetchNextPage,
-    software.data,
-  ]);
+  const softwareItems = software.data?.items ?? [];
 
   // Corrige estado da página para o range válido quando o total diminui (ex.: busca/filtro)
   useEffect(() => {
@@ -1492,12 +1490,17 @@ export default function AgentDetail() {
             )}
             <div className="border-t border-border pt-3">
               <dt className="text-muted">Versão do Agente</dt>
+              <dd className="mt-0.5 font-mono text-foreground">{a.agentVersion ?? '\u2014'}</dd>
+            </div>
+            <div>
+              <dt className="text-muted">Commit</dt>
               <dd className="mt-0.5 font-mono text-foreground">
-                {a.agentVersion ?? '\u2014'}
-                {a.commitHash && (
-                  <span className="ml-2 font-mono text-xs text-muted">
-                    ({a.commitHash.slice(0, 7)})
-                  </span>
+                {agentCommitHash(a.commitHash) ? (
+                  <Tooltip content={agentCommitHash(a.commitHash)!} className="inline-flex">
+                    <span className="cursor-default">{agentCommitHash(a.commitHash)!.slice(0, 7)}</span>
+                  </Tooltip>
+                ) : (
+                  '\u2014'
                 )}
               </dd>
             </div>
@@ -1609,7 +1612,9 @@ export default function AgentDetail() {
             className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors ${activeDataTab === 'printers' ? 'border-primary/40 bg-primary/15 text-primary' : 'border-border bg-surface-light text-muted-foreground hover:text-foreground'}`}
           >
             Impressoras
-            <span className="rounded-full bg-surface-hover/60 px-2 py-0.5 text-xs text-muted-foreground">{printers.length}</span>
+            {hwComponents.data && (
+              <span className="rounded-full bg-surface-hover/60 px-2 py-0.5 text-xs text-muted-foreground">{printers.length}</span>
+            )}
           </button>
           <button
             type="button"
@@ -1619,7 +1624,9 @@ export default function AgentDetail() {
             className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors ${activeDataTab === 'tickets' ? 'border-primary/40 bg-primary/15 text-primary' : 'border-border bg-surface-light text-muted-foreground hover:text-foreground'}`}
           >
             Últimos Chamados
-            <span className="rounded-full bg-surface-hover/60 px-2 py-0.5 text-xs text-muted-foreground">{agentTickets.data?.items?.length ?? 0}</span>
+            {agentTickets.data && (
+              <span className="rounded-full bg-surface-hover/60 px-2 py-0.5 text-xs text-muted-foreground">{agentTickets.data?.items?.length ?? 0}</span>
+            )}
           </button>
           <button
             type="button"
@@ -1629,7 +1636,9 @@ export default function AgentDetail() {
             className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors ${activeDataTab === 'listeningPorts' ? 'border-primary/40 bg-primary/15 text-primary' : 'border-border bg-surface-light text-muted-foreground hover:text-foreground'}`}
           >
             Portas em Escuta
-            <span className="rounded-full bg-surface-hover/60 px-2 py-0.5 text-xs text-muted-foreground">{listeningPorts.length}</span>
+            {hwComponents.data && (
+              <span className="rounded-full bg-surface-hover/60 px-2 py-0.5 text-xs text-muted-foreground">{listeningPorts.length}</span>
+            )}
           </button>
           <button
             type="button"
@@ -1639,7 +1648,9 @@ export default function AgentDetail() {
             className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors ${activeDataTab === 'openSockets' ? 'border-primary/40 bg-primary/15 text-primary' : 'border-border bg-surface-light text-muted-foreground hover:text-foreground'}`}
           >
             Conexões Abertas
-            <span className="rounded-full bg-surface-hover/60 px-2 py-0.5 text-xs text-muted-foreground">{openSockets.length}</span>
+            {hwComponents.data && (
+              <span className="rounded-full bg-surface-hover/60 px-2 py-0.5 text-xs text-muted-foreground">{openSockets.length}</span>
+            )}
           </button>
           <button
             type="button"
@@ -1649,7 +1660,9 @@ export default function AgentDetail() {
             className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors ${activeDataTab === 'logs' ? 'border-primary/40 bg-primary/15 text-primary' : 'border-border bg-surface-light text-muted-foreground hover:text-foreground'}`}
           >
             Logs Recentes
-            <span className="rounded-full bg-surface-hover/60 px-2 py-0.5 text-xs text-muted-foreground">{logsArray.length}</span>
+            {agentLogs.data && (
+              <span className="rounded-full bg-surface-hover/60 px-2 py-0.5 text-xs text-muted-foreground">{logsArray.length}</span>
+            )}
           </button>
         </div>
 

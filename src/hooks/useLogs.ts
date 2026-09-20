@@ -10,11 +10,12 @@ const KEYS = {
   scopeOptions: () => [...KEYS.all, "scope-options"] as const,
 };
 
-export function useLogs(params: LogsQuery = {}) {
+export function useLogs(params: LogsQuery = {}, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: KEYS.list(params),
     queryFn: () => logsApi.list(params),
     select: (data) => data.items ?? [],
+    enabled: options?.enabled ?? true,
   });
 }
 

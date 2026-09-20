@@ -11,6 +11,7 @@ import type {
   PrinterInfo,
   AgentSoftwareInventoryPage,
   AgentSoftwareInventorySnapshot,
+  AgentSoftwarePage,
   AgentSoftwareOrder,
   AgentCommand,
   AgentToken,
@@ -128,6 +129,28 @@ export const agentsApi = {
 
   getSoftwareSnapshot: (id: string) =>
     api.get<AgentSoftwareInventorySnapshot>(`${BASE}/${id}/software/snapshot`),
+
+  // Software inventory — paginação por offset com total filtrado (detalhe do agente)
+  getSoftwarePage: (
+    id: string,
+    params?: {
+      page?: number;
+      pageSize?: number;
+      search?: string;
+      order?: AgentSoftwareOrder;
+    },
+    init?: ApiRequestInit,
+  ) =>
+    api.get<AgentSoftwarePage>(
+      `${BASE}/${id}/software/page`,
+      {
+        page: params?.page,
+        pageSize: params?.pageSize,
+        search: params?.search,
+        order: params?.order,
+      },
+      init,
+    ),
 
   // Commands
   listCommands: (id: string, limit = 50) =>

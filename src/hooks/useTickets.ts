@@ -27,11 +27,12 @@ const KEYS = {
   slaDetails: (id: string) => [...KEYS.all, "sla-details", id] as const,
 };
 
-export function useTickets(params: TicketsQuery = {}) {
+export function useTickets(params: TicketsQuery = {}, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: KEYS.list(params),
     queryFn: () => ticketsApi.list(params),
     placeholderData: (prev) => prev,
+    enabled: options?.enabled ?? true,
   });
 }
 
