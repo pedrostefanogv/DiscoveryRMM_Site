@@ -167,7 +167,9 @@ export default function RemoteSession() {
   // ── Controles de qualidade em tempo real (apenas aba Tela) ──
   const [liveQuality] = useState(quality);
   const [liveCodec, setLiveCodec] = useState(codec);
-  const [liveImageQuality, setLiveImageQuality] = useState(75);
+  // null = modo AUTO (a escada do agent define 10-90 de 10 em 10 pela máquina).
+  // Só assume valor quando o usuário entra em MANUAL e escolhe uma opção.
+  const [liveImageQuality, setLiveImageQuality] = useState<number | null>(null);
   const [liveMaxFps, setLiveMaxFps] = useState(0);
   const [autoMode, setAutoMode] = useState(true);
   const [qualityChanging, setQualityChanging] = useState(false);
@@ -570,7 +572,7 @@ export default function RemoteSession() {
     try {
       await remoteSessionsApi.changeQuality(agentId, screenSession.sessionId, {
         quality: liveQuality as ChangeQualityRequest['quality'],
-        imageQuality: liveImageQuality,
+        imageQuality: liveImageQuality ?? undefined,
         maxFps: newFps,
         auto: false,
       });
@@ -592,7 +594,7 @@ export default function RemoteSession() {
       await remoteSessionsApi.changeQuality(agentId, screenSession.sessionId, {
         quality: liveQuality as ChangeQualityRequest['quality'],
         codec: newCodec,
-        imageQuality: liveImageQuality,
+        imageQuality: liveImageQuality ?? undefined,
         maxFps: liveMaxFps,
         auto: false,
       });
@@ -854,11 +856,14 @@ export default function RemoteSession() {
                 <Image className="mr-1 h-3.5 w-3.5 text-muted" aria-hidden />
                 <select
                   className="bg-surface border border-border rounded px-1 py-0.5 text-xs text-foreground cursor-pointer hover:border-border-strong disabled:opacity-50"
-                  value={liveImageQuality}
+                  value={liveImageQuality ?? ''}
                   disabled={qualityChanging}
                   onChange={(e) => handleImageQualityChange(Number(e.target.value))}
                   title="Qualidade da imagem (compressão)"
                 >
+                  {liveImageQuality === null && (
+                    <option value="" disabled>Auto</option>
+                  )}
                   {IMAGE_QUALITY_PRESETS.map((iq) => (
                     <option key={iq.value} value={iq.value}>{iq.label}</option>
                   ))}
