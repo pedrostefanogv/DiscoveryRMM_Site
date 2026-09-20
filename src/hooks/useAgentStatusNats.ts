@@ -558,7 +558,13 @@ export function useAgentStatusNats(
         (current) => current?.map(applyToCollection),
       );
 
-      invalidateThrottled(["agents"]);
+      // IMPORTANTE: NÃO invalidar o prefixo ["agents"] a cada heartbeat!
+      // O prefixo casa detail + hardware + softwarePage + softwareSnapshot —
+      // com heartbeat a cada ~30s isso refetchava o lote completo da página
+      // do agente de forma intermitente (incluindo a aba Aplicativos).
+      // O heartbeat já é aplicado otimisticamente acima; aqui só reconciliamos
+      // o detail do agente com o servidor, no máximo 1x por minuto.
+      invalidateThrottled(["agents", "detail", heartbeatAgentId], 60_000);
       invalidateDashboardQueries("agentheartbeat", invalidateThrottled);
     };
 
@@ -640,7 +646,9 @@ export function useAgentStatusNats(
           );
         }
 
-        invalidateThrottled(["agents"]);
+        // Status change é raro (online↔offline): reconcilia só o detail do
+        // agente afetado — nunca o prefixo ["agents"] inteiro.
+        invalidateThrottled(["agents", "detail", agentId], 5_000);
         invalidateDashboardQueries(normalizedType, invalidateThrottled);
         return;
       }
