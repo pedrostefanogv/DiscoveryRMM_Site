@@ -16,7 +16,7 @@ import type {
 const KEYS = {
   all: ["knowledge"] as const,
   list: (params?: KnowledgeListQuery) => [...KEYS.all, "list", params] as const,
-  allVisible: (params?: { cursor?: string; limit?: number; status?: string; category?: string; clientId?: string; siteId?: string; departmentId?: string }) => [...KEYS.all, "all-visible", params] as const,
+  allVisible: (params?: { cursor?: string; limit?: number; status?: string; category?: string; clientId?: string; siteId?: string; departmentId?: string; sortBy?: string; sortDirection?: string }) => [...KEYS.all, "all-visible", params] as const,
   detail: (id: string) => [...KEYS.all, "detail", id] as const,
   versions: (id: string) => [...KEYS.all, "versions", id] as const,
   version: (id: string, versionNumber: number) =>
@@ -33,13 +33,6 @@ const KEYS = {
     [...KEYS.all, "ticket-suggest", ticketId, params] as const,
 };
 
-export function useKnowledgeArticles(params?: KnowledgeListQuery) {
-  return useQuery({
-    queryKey: KEYS.list(params),
-    queryFn: () => knowledgeApi.list(params),
-  });
-}
-
 export function useKnowledgeAllArticles(params?: {
   cursor?: string;
   limit?: number;
@@ -48,6 +41,8 @@ export function useKnowledgeAllArticles(params?: {
   clientId?: string;
   siteId?: string;
   departmentId?: string;
+  sortBy?: string;
+  sortDirection?: string;
 }) {
   return useQuery({
     queryKey: KEYS.allVisible({
@@ -58,6 +53,8 @@ export function useKnowledgeAllArticles(params?: {
       clientId: params?.clientId,
       siteId: params?.siteId,
       departmentId: params?.departmentId,
+      sortBy: params?.sortBy,
+      sortDirection: params?.sortDirection,
     }),
     queryFn: () =>
       knowledgeApi.listAllVisible({
@@ -68,6 +65,8 @@ export function useKnowledgeAllArticles(params?: {
         clientId: params?.clientId,
         siteId: params?.siteId,
         departmentId: params?.departmentId,
+        sortBy: params?.sortBy,
+        sortDirection: params?.sortDirection,
       }),
   });
 }

@@ -1,4 +1,4 @@
-﻿import { api } from "./client";
+import { api } from "./client";
 import type {
   ArticleListPage,
   ArticlePage,
@@ -22,12 +22,8 @@ import type {
 const BASE = "/api/v1/knowledge";
 
 export const knowledgeApi = {
-  list: (params?: KnowledgeListQuery) =>
-    api.get<KnowledgeArticle[]>(
-      BASE,
-      (params ?? {}) as unknown as Record<string, unknown>,
-    ),
-
+  // GET /knowledge sempre devolve ArticleListPage (listagem unificada,
+  // cursor-based, ordenável via sortBy/sortDirection).
   listAllVisible: (params?: KnowledgeListQuery) =>
     api.get<ArticleListPage>(
       BASE,

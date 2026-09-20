@@ -139,7 +139,9 @@ export default function KnowledgeList() {
     clientId: clientId || undefined,
     siteId: siteId || undefined,
     departmentId: departmentId || undefined,
-  }), [knowledgePag.cursor, pageSize, statusFilter, category, clientId, siteId, departmentId]);
+    sortBy,
+    sortDirection,
+  }), [knowledgePag.cursor, pageSize, statusFilter, category, clientId, siteId, departmentId, sortBy, sortDirection]);
 
   // Listagem unificada via ACL do usuário — funciona com ou sem filtro de cliente
   const listQuery = useKnowledgeAllArticles(allVisibleParams);
@@ -227,9 +229,12 @@ export default function KnowledgeList() {
     const source = listItems;
     const unique = Array.from(new Set(source.map((item) => normalizeCategory(item.category))));
     unique.sort((a, b) => a.localeCompare(b));
+    // mantém a categoria selecionada nas opções mesmo se não houver
+    // nenhum artigo dela na página atual (senão o Select "perde" o valor)
+    if (category && !unique.includes(category)) unique.push(category);
 
     return [{ value: '', label: 'Todas categorias' }, ...unique.map((name) => ({ value: name, label: name }))];
-  }, [listItems]);
+  }, [listItems, category]);
 
   const clientOptions = [
     { value: '', label: 'Todos os artigos que posso acessar (multi-escopo)' },
@@ -383,6 +388,7 @@ export default function KnowledgeList() {
             <p className="font-medium text-foreground">{article.title}</p>
             <p className="text-xs text-muted">
               {normalizeCategory(article.category)} • {Array.isArray(article.tags) && article.tags.length > 0 ? article.tags.join(', ') : 'sem tags'}
+              {article.currentVersionNumber > 0 ? ` • v${article.currentVersionNumber}` : ''}
             </p>
           </div>
         </div>
@@ -481,7 +487,7 @@ export default function KnowledgeList() {
   useEffect(() => {
     setPage(1);
     knowledgePag.reset();
-  }, [clientId, siteId, category, statusFilter, departmentId, pageSize]);
+  }, [clientId, siteId, category, statusFilter, departmentId, pageSize, sortBy, sortDirection]);
 
   return (
     <div className="space-y-6">

@@ -1869,6 +1869,10 @@ export interface KnowledgeListQuery {
   scopeMode?: "all-visible";
   cursor?: string;
   limit?: number;
+  /** "title" (legacy) | "updatedAt" */
+  sortBy?: string;
+  /** asc | desc */
+  sortDirection?: string;
 }
 
 export interface KnowledgeSearchQuery {
