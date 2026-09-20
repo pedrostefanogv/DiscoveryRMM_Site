@@ -877,9 +877,13 @@ export default function RemoteScreenViewer({
 
       // Clipboard: Ctrl+V → envia o clipboard local para o remoto (via .clipboard.req).
       // O agente aplica o texto no clipboard do Windows e injeta Ctrl+V no app remoto.
+      // e.repeat: Ctrl+V segurado dispara keydown repetido (~30/s) — sem o guard,
+      // cada repeat colaria o clipboard de novo no remoto.
       if (e.ctrlKey && e.key === 'v') {
-        e.preventDefault();
-        sendClipboard();
+        if (!e.repeat) {
+          e.preventDefault();
+          sendClipboard();
+        }
         return;
       }
       // Ctrl+C → copia do remoto para o local (o agente publica em .clipboard
@@ -890,9 +894,12 @@ export default function RemoteScreenViewer({
       sendInput('keydown', { key: e.key, code: e.code, ctrl: e.ctrlKey, shift: e.shiftKey, alt: e.altKey, meta: e.metaKey });
     };
     const onKeyUp = (e: KeyboardEvent) => {
-      const active = document.activeElement;
-      if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.tagName === 'SELECT')) return;
-      if (isKeyboardTarget()) { sendInput('keyup', { key: e.key, code: e.code, ctrl: e.ctrlKey, shift: e.shiftKey, alt: e.altKey, meta: e.metaKey }); }
+      // keyup é SEMPRE enviado, mesmo se o foco migrou para um input/textarea
+      // local durante o hold (ex.: usuário segurou backspace no canvas e clicou
+      // numa busca local antes de soltar). Sem isso o keyup se perde e a tecla
+      // fica "presa" (logicamente down) no remoto até o watchdog do agent agir.
+      // O guard de INPUT/TEXTAREA/SELECT continua apenas no keydown.
+      sendInput('keyup', { key: e.key, code: e.code, ctrl: e.ctrlKey, shift: e.shiftKey, alt: e.altKey, meta: e.metaKey });
     };
     const onContextMenu = (e: MouseEvent) => { e.preventDefault(); };
 
