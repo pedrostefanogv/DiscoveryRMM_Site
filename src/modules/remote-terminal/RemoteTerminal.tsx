@@ -9,6 +9,26 @@ import { remoteSessionsApi } from '@/api/remote-sessions';
 import { useTheme } from '@/theme/ThemeContext';
 import '@xterm/xterm/css/xterm.css';
 
+// Controles/teclas construídos em runtime (estáveis contra escapes no fonte).
+const ESC = String.fromCharCode(27);
+const CSI = ESC + '[';
+const CR = String.fromCharCode(13);
+const LF = String.fromCharCode(10);
+const TAB = String.fromCharCode(9);
+const BS = String.fromCharCode(8); // backspace VT (0x08)
+const DEL = String.fromCharCode(127); // backspace do xterm (0x7f)
+
+// Sequências de teclas emitidas pelo xterm.
+const KEY_UP = CSI + 'A';
+const KEY_DOWN = CSI + 'B';
+const KEY_RIGHT = CSI + 'C';
+const KEY_LEFT = CSI + 'D';
+const KEY_HOME = CSI + 'H';
+const KEY_HOME_ALT = CSI + '1~';
+const KEY_END = CSI + 'F';
+const KEY_END_ALT = CSI + '4~';
+const KEY_DELETE = CSI + '3~';
+
 interface RemoteTerminalProps {
   sessionId: string;
   agentId: string;
@@ -40,6 +60,284 @@ let lastFittedRows = 0;
 /** Dimensões do último fit do terminal remoto (0,0 se nunca fitado). */
 export function getLastFittedTermDims(): { cols: number; rows: number } {
   return { cols: lastFittedCols, rows: lastFittedRows };
+}
+
+
+// ── Editor de linha local do modo compatibilidade (legacy) ──────────────────
+// No legacy o stdin do shell é uma PIPE: o child não processa VT (setas,
+// histórico, Home/End/Delete são impossíveis lá) e AINDA ECOA o que recebe
+// (provado em harness 20/09: "e","cho T"... + "\r" literal; 0x7f/0x08 voltam
+// literais — nada é editado). O editor segura a linha no front (buffer
+// local), envia linha+CR no Enter e SUPRIME o eco do child para não duplicar.
+type LegacyLineStart = { x: number; y: number };
+
+interface LegacyEditor {
+  /** Trata a tecla; true = consumida localmente (não vai ao shell). */
+  handleKey(data: string): boolean;
+  /** Remove o eco do child da saída (retorna o restante). */
+  filterEcho(data: string): string;
+  /** Invalida a âncora da linha (resize reflowa o buffer do xterm). */
+  onResize(): void;
+}
+
+function createLegacyEditor(term: Terminal, getSend: () => (data: string) => void): LegacyEditor {
+  const state = {
+    line: '',
+    cursor: 0,
+    history: [] as string[],
+    histIdx: -1,
+    draft: '',
+    start: null as LegacyLineStart | null,
+    suppress: null as { expected: string; timer: number } | null,
+  };
+
+  const clearSuppress = () => {
+    if (state.suppress !== null) {
+      if (state.suppress.timer) window.clearTimeout(state.suppress.timer);
+      state.suppress = null;
+    }
+  };
+
+  // Âncora = coluna/linha onde a NOSSA linha começa (logo após o prompt do
+  // child). Registrada na primeira tecla da linha; o child ecoa o prompt pela
+  // pipe, então nunca o reescrevemos — só editamos da âncora em diante.
+  const anchorLine = () => {
+    if (state.start === null) {
+      const b = term.buffer.active;
+      state.start = { x: b.cursorX, y: b.cursorY };
+    }
+  };
+
+  // Posiciona o cursor do xterm na posição lógica do cursor da linha
+  // (trata wrap: cursor no fim de uma linha cheia fica na última coluna).
+  const placeCursor = () => {
+    if (state.start === null) return;
+    const cols = term.cols || 80;
+    const total = (state.start.x - 1) + state.cursor;
+    if (total <= 0) {
+      term.write(CSI + String(state.start.y + 1) + ';' + String(state.start.x) + 'H');
+      return;
+    }
+    const row = state.start.y + Math.floor((total - 1) / cols);
+    const col = ((total - 1) % cols) + 1;
+    term.write(CSI + String(row + 1) + ';' + String(col) + 'H');
+  };
+
+  // Redesenha a linha da âncora até o fim da tela (preserva o prompt).
+  const redraw = () => {
+    if (state.start === null) return;
+    const cols = term.cols || 80;
+    const off = state.start.x - 1;
+    const row = state.start.y + Math.floor(off / cols);
+    const col = (off % cols) + 1;
+    term.write(CSI + String(row + 1) + ';' + String(col) + 'H' + CSI + 'J');
+    term.write(state.line.slice(0, state.cursor) + state.line.slice(state.cursor));
+    placeCursor();
+  };
+
+  // Submete a linha: histórico + limpeza + envio "linha\r" em UMA escrita.
+  const submit = (line: string) => {
+    const trimmed = line.trim();
+    if (trimmed !== '') {
+      const hist = state.history;
+      if (hist.length === 0 || hist[hist.length - 1] !== line) {
+        hist.push(line);
+        if (hist.length > 200) hist.shift();
+      }
+    }
+    state.histIdx = -1;
+    state.draft = '';
+    state.line = '';
+    state.cursor = 0;
+    state.start = null;
+    term.write(CR + LF);
+    const low = trimmed.toLowerCase();
+    if (low === 'clear' || low === 'cls') {
+      // cls no child limpa o console OCULTO (nada chega na pipe): limpamos
+      // a visualização local — o novo prompt do child reconstrói a tela.
+      term.clear();
+    }
+    if (line.length > 0) {
+      clearSuppress();
+      state.suppress = {
+        expected: line,
+        timer: window.setTimeout(clearSuppress, 5000),
+      };
+    }
+    getSend()(line + CR);
+  };
+
+  const filterEcho = (data: string): string => {
+    if (state.suppress === null) return data;
+    const exp = state.suppress.expected;
+    let i = 0;
+    while (i < data.length && i < exp.length && data[i] === exp[i]) i++;
+    if (i === 0) {
+      // o eco não bateu com o esperado — desiste (mostra como vier)
+      clearSuppress();
+      return data;
+    }
+    const rest = data.slice(i);
+    if (i >= exp.length) {
+      clearSuppress();
+    } else {
+      state.suppress = { expected: exp.slice(i), timer: 0 };
+    }
+    return rest;
+  };
+
+  const handleKey = (data: string): boolean => {
+    // Colar com múltiplas linhas: submete as linhas completas, buffer o resto.
+    if (data.length > 1 && (data.includes(CR) || data.includes(LF))) {
+      const normalized = data.split(CR + LF).join(CR).split(LF).join(CR);
+      const parts = normalized.split(CR);
+      for (let i = 0; i < parts.length - 1; i++) {
+        submit(state.line + parts[i]);
+      }
+      state.line = parts[parts.length - 1];
+      state.cursor = state.line.length;
+      if (state.line.length > 0) {
+        anchorLine();
+        redraw();
+      }
+      return true;
+    }
+    // Colar texto multi-char (sem newline): insere como bloco.
+    if (data.length > 1 && !data.startsWith(ESC)) {
+      anchorLine();
+      state.line = state.line.slice(0, state.cursor) + data + state.line.slice(state.cursor);
+      state.cursor += data.length;
+      redraw();
+      return true;
+    }
+    switch (data) {
+      case CR: {
+        anchorLine();
+        submit(state.line);
+        return true;
+      }
+      case DEL:
+      case BS: {
+        if (state.cursor === 0) return true;
+        anchorLine();
+        if (state.cursor === state.line.length) {
+          // fast path: apaga o último char visível
+          state.line = state.line.slice(0, -1);
+          state.cursor--;
+          term.write(BS + ' ' + BS);
+        } else {
+          state.line = state.line.slice(0, state.cursor - 1) + state.line.slice(state.cursor);
+          state.cursor--;
+          redraw();
+        }
+        return true;
+      }
+      case KEY_DELETE: {
+        if (state.cursor < state.line.length) {
+          anchorLine();
+          state.line = state.line.slice(0, state.cursor) + state.line.slice(state.cursor + 1);
+          redraw();
+        }
+        return true;
+      }
+      case KEY_LEFT: {
+        if (state.cursor > 0) { state.cursor--; placeCursor(); }
+        return true;
+      }
+      case KEY_RIGHT: {
+        if (state.cursor < state.line.length) { state.cursor++; placeCursor(); }
+        return true;
+      }
+      case KEY_HOME:
+      case KEY_HOME_ALT:
+      case String.fromCharCode(1): { // Ctrl+A
+        state.cursor = 0;
+        placeCursor();
+        return true;
+      }
+      case KEY_END:
+      case KEY_END_ALT:
+      case String.fromCharCode(5): { // Ctrl+E
+        state.cursor = state.line.length;
+        placeCursor();
+        return true;
+      }
+      case KEY_UP:
+      case KEY_DOWN: {
+        const hist = state.history;
+        if (hist.length === 0) return true;
+        if (data === KEY_UP) {
+          if (state.histIdx === -1) {
+            state.draft = state.line;
+            state.histIdx = hist.length - 1;
+          } else if (state.histIdx > 0) {
+            state.histIdx--;
+          }
+          state.line = hist[state.histIdx];
+        } else {
+          if (state.histIdx === -1) return true;
+          if (state.histIdx >= hist.length - 1) {
+            state.histIdx = -1;
+            state.line = state.draft;
+          } else {
+            state.histIdx++;
+            state.line = hist[state.histIdx];
+          }
+        }
+        anchorLine();
+        state.cursor = state.line.length;
+        redraw();
+        return true;
+      }
+      case TAB:
+        return true; // sem completação no legacy (pipe não suporta)
+      case String.fromCharCode(12): { // Ctrl+L
+        term.clear();
+        anchorLine();
+        redraw();
+        return true;
+      }
+      case String.fromCharCode(21): { // Ctrl+U — limpa a linha
+        anchorLine();
+        state.line = '';
+        state.cursor = 0;
+        redraw();
+        return true;
+      }
+      case String.fromCharCode(3): { // Ctrl+C — não interrompe (pipe); limpa a linha
+        anchorLine();
+        state.line = '';
+        state.cursor = 0;
+        state.histIdx = -1;
+        redraw();
+        return true;
+      }
+      default:
+        break;
+    }
+    // Caracteres imprimíveis (1 ou mais).
+    if (data >= ' ' && !data.startsWith(ESC)) {
+      anchorLine();
+      if (state.cursor === state.line.length) {
+        // fast path: append no fim (sem redraw)
+        state.line += data;
+        state.cursor += data.length;
+        term.write(data);
+      } else {
+        state.line = state.line.slice(0, state.cursor) + data + state.line.slice(state.cursor);
+        state.cursor += data.length;
+        redraw();
+      }
+      return true;
+    }
+    return false; // tecla desconhecida → repassa (comportamento antigo)
+  };
+
+  return {
+    handleKey,
+    filterEcho,
+    onResize: () => { state.start = null; },
+  };
 }
 
 const TERM_THEME_DARK = {
@@ -109,6 +407,14 @@ export default function RemoteTerminal({
   // ser aplicadas antes do term.ready reportar, para não corromper o fluxo
   // normal do ConPTY (onde `\x7f` é o backspace correto).
   const backendRef = useRef<string | null>(null);
+  // Editor de linha local do modo legacy (histórico/setas/clear — ver createLegacyEditor).
+  const legacyEditorRef = useRef<LegacyEditor | null>(null);
+  // sendData mais recente (o editor envia a linha submetida pelo caminho atual).
+  const sendDataRef = useRef<(data: string) => void>(() => {});
+  // Backend já anunciado no banner: o agent REPUBLICA o term.ready no 1º
+  // term.in e em CADA resize (handshake/reconexão) — sem dedup, o banner
+  // aparecia duplicado (bug visto em 20/09: resize do fit → ready → banner 2×).
+  const backendAnnouncedRef = useRef<string | null>(null);
   const { mode } = useTheme();
 
   // Initialize xterm.js (uma única instância)
@@ -141,6 +447,7 @@ export default function RemoteTerminal({
 
     termRef.current = term;
     fitAddonRef.current = fitAddon;
+    legacyEditorRef.current = createLegacyEditor(term, () => sendDataRef.current);
 
     term.writeln('\x1b[1;36m── DiscoveryRMM Terminal ──\x1b[0m');
     term.writeln('');
@@ -213,16 +520,23 @@ export default function RemoteTerminal({
       // adicionaria um \r extra e causaria linha em branco duplicada.
       // O que corrige a formatação é o resize real + ANSI que agora são
       // aplicados no lado do agente.
-      if (info.backend) backendRef.current = info.backend;
-      if (info.backend === 'legacy' || info.backend === 'none') {
-        const t = termRef.current;
-        // Modo legacy = stdin em PIPE (sem ConPTY): sequências VT não são
-        // processadas — setas/história do PSReadLine, Home/End/Delete e
-        // TAB-completação NÃO funcionam (só texto cru). Aviso explícito,
-        // pois o usuário tende a culpar o terminal web e não o backend.
-        t?.writeln('\x1b[1;33m── Modo compatibilidade (ConPTY indisponível neste agente) ──\x1b[0m');
-        t?.writeln('\x1b[33m   Teclas de edição desabilitadas: ↑/↓ (histórico), Home/End/Delete, TAB\x1b[0m');
-        t?.writeln('\x1b[33m   Causa comum: antivírus/EDR encerra o ConPTY (0xC0000142). Exclua o agente no AV ou atualize o agente (dispatcher habilitado).\x1b[0m');
+      if (info.backend) {
+        backendRef.current = info.backend;
+        // Banner APENAS na primeira vez que este backend é anunciado — o
+        // agent republica o term.ready no 1º term.in e em cada resize;
+        // sem dedup o banner aparecia duplicado (bug 20/09).
+        if (
+          (info.backend === 'legacy' || info.backend === 'none') &&
+          backendAnnouncedRef.current !== info.backend
+        ) {
+          backendAnnouncedRef.current = info.backend;
+          const t = termRef.current;
+          // Modo legacy = stdin em PIPE (sem ConPTY): VT não é processado no
+          // child. O editor local (createLegacyEditor) cobre edição/histórico.
+          t?.writeln(ESC + '[1;33m── Modo compatibilidade (ConPTY indisponível neste agente) ──' + ESC + '[0m');
+          t?.writeln(ESC + '[33m   Edição local ativa: ↑/↓ histórico, Backspace/Home/End/Delete, clear/cls, Ctrl+L' + ESC + '[0m');
+          t?.writeln(ESC + '[33m   TAB e Ctrl+C (interromper) não funcionam — causa comum: AV/EDR encerra o ConPTY (0xC0000142)' + ESC + '[0m');
+        }
       }
     });
     return unsubscribe;
@@ -230,35 +544,31 @@ export default function RemoteTerminal({
 
   useEffect(() => {
     const unsubscribe = onOutput((data: string) => {
-      termRef.current?.write(data);
+      // No legacy, o eco do child sobre a última linha enviada é removido
+      // (o editor já mostrou a linha localmente) — evita texto duplicado.
+      const editor = legacyEditorRef.current;
+      const filtered = editor ? editor.filterEcho(data) : data;
+      if (filtered) termRef.current?.write(filtered);
     });
     return unsubscribe;
   }, [onOutput]);
 
   useEffect(() => {
+    sendDataRef.current = sendData;
+  }, [sendData]);
+
+  useEffect(() => {
     if (!termRef.current) return;
     const dispose = termRef.current.onData((data) => {
-      // No modo legacy (pipe de stdin), o shell não processa o teclado como
-      // console: o \x7f (Backspace do xterm) não apaga. Fazemos mitigação
-      // mínima SOMENTE depois que o term.ready reportar backend legacy/none.
+      // Modo legacy (stdin em PIPE): edição de linha LOCAL via editor — o
+      // child em pipe não processa VT (setas/histórico/impossíveis) e ainda
+      // ecoa o input. O editor segura a linha no front e só envia no Enter.
+      // Ativa SOMENTE depois do term.ready (backend legacy/none) para não
+      // interferir no fluxo normal do ConPTY.
       const backend = backendRef.current;
       if (backend !== null && (backend === 'legacy' || backend === 'none')) {
-        // Intercepta clear/cls/Ctrl+L → limpa a visualização local do xterm
-        // (o processo interno é limpo no console oculto; o viewer não vê a
-        // sequência ANSI vinda da pipe, então simulamos o clear do lado do
-        // usuário — efeito percebido idêntico).
-        if (data === '\x0c' /* Ctrl+L */ || data === 'clear\r' || data === 'cls\r') {
-          termRef.current?.clear();
-          if (data === 'clear\r' || data === 'cls\r') {
-            // Ainda precisa executar o comando no shell
-            sendData(data);
-          }
-          return;
-        }
-        if (data === '\x7f') {
-          sendData('\x08');
-          return;
-        }
+        const editor = legacyEditorRef.current;
+        if (editor && editor.handleKey(data)) return;
       }
       sendData(data);
     });
@@ -268,6 +578,7 @@ export default function RemoteTerminal({
   useEffect(() => {
     if (!termRef.current) return;
     const dispose = termRef.current.onResize(({ cols, rows }) => {
+      legacyEditorRef.current?.onResize();
       sendResize(cols, rows);
     });
     return () => dispose.dispose();
