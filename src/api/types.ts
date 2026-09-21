@@ -1803,13 +1803,27 @@ export interface UpdateArticlePageRequest {
   sortOrder?: number;
 }
 
+// Alinhado ao CursorPageDto<ArticleListItem> do backend (camelCase):
+// "count" não existe no payload — era sempre undefined.
 export interface ArticleListPage {
   items: KnowledgeArticle[];
-  count: number;
+  returnedItems: number;
   cursor: string | null;
   nextCursor: string | null;
   hasMore: boolean;
   limit: number;
+}
+
+// Espelha TicketKnowledgeLinkResponse da API (vínculo ticket ↔ artigo KB).
+export interface TicketKnowledgeLinkResponse {
+  linkId: string;
+  ticketId: string;
+  articleId: string;
+  articleTitle: string;
+  category: string | null;
+  linkedBy: string | null;
+  note: string | null;
+  linkedAt: string;
 }
 
 export interface ArticleVersion {

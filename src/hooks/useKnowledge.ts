@@ -4,7 +4,6 @@ import type {
   CreateArticlePageRequest,
   CreateKnowledgeArticleRequest,
   KbSearchRequest,
-  KnowledgeListQuery,
   KnowledgeSearchQuery,
   LinkTicketKnowledgeRequest,
   PublishArticleRequest,
@@ -15,7 +14,6 @@ import type {
 
 const KEYS = {
   all: ["knowledge"] as const,
-  list: (params?: KnowledgeListQuery) => [...KEYS.all, "list", params] as const,
   allVisible: (params?: { cursor?: string; limit?: number; status?: string; category?: string; clientId?: string; siteId?: string; departmentId?: string; sortBy?: string; sortDirection?: string }) => [...KEYS.all, "all-visible", params] as const,
   detail: (id: string) => [...KEYS.all, "detail", id] as const,
   versions: (id: string) => [...KEYS.all, "versions", id] as const,
@@ -234,6 +232,8 @@ export function useTicketKnowledgeLinks(ticketId: string) {
     enabled: !!ticketId,
   });
 }
+// listTicketKnowledge agora devolve TicketKnowledgeLinkResponse[] (endpoint
+// real /knowledge-links); useTicketKnowledgeSuggestions segue igual.
 
 export function useTicketKnowledgeSuggestions(
   ticketId: string,
@@ -268,11 +268,11 @@ export function useUnlinkTicketKnowledge() {
   return useMutation({
     mutationFn: ({
       ticketId,
-      articleId,
+      linkId,
     }: {
       ticketId: string;
-      articleId: string;
-    }) => knowledgeApi.unlinkTicketKnowledge(ticketId, articleId),
+      linkId: string;
+    }) => knowledgeApi.unlinkTicketKnowledge(ticketId, linkId),
     onSuccess: (_, vars) => {
       qc.invalidateQueries({ queryKey: KEYS.ticketLinks(vars.ticketId) });
       qc.invalidateQueries({ queryKey: KEYS.ticketSuggest(vars.ticketId) });

@@ -472,7 +472,7 @@ export default function KnowledgeList() {
   }, [listItems, sortBy, sortDirection, hasArticleListPage]);
 
   const totalItems = listPage
-    ? (listPage.count ?? listItems.length)
+    ? (listPage.returnedItems ?? listItems.length)
     : sortedArticles.length;
   const totalPages = listPage
     ? (listPage.hasMore ? knowledgePag.page + 1 : knowledgePag.page || 1)

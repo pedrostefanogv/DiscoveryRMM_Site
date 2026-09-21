@@ -14,6 +14,7 @@ import type {
   KnowledgeSearchQuery,
   LinkTicketKnowledgeRequest,
   PublishArticleRequest,
+  TicketKnowledgeLinkResponse,
   TicketKnowledgeSuggestQuery,
   UpdateArticlePageRequest,
   UpdateKnowledgeArticleRequest,
@@ -79,14 +80,15 @@ export const knowledgeApi = {
   chatSearch: (data: KbSearchRequest) =>
     api.post<KbSuggestResult>(`${BASE}/chat-search`, data),
 
+  // Endpoints reais do backend: /tickets/{id}/knowledge-links (DELETE por linkId).
   listTicketKnowledge: (ticketId: string) =>
-    api.get<KnowledgeArticle[]>(`/api/v1/tickets/${ticketId}/knowledge`),
+    api.get<TicketKnowledgeLinkResponse[]>(`/api/v1/tickets/${ticketId}/knowledge-links`),
 
   linkTicketKnowledge: (ticketId: string, data: LinkTicketKnowledgeRequest) =>
-    api.post<void>(`/api/v1/tickets/${ticketId}/knowledge`, data),
+    api.post<TicketKnowledgeLinkResponse>(`/api/v1/tickets/${ticketId}/knowledge-links`, data),
 
-  unlinkTicketKnowledge: (ticketId: string, articleId: string) =>
-    api.del<void>(`/api/v1/tickets/${ticketId}/knowledge/${articleId}`),
+  unlinkTicketKnowledge: (ticketId: string, linkId: string) =>
+    api.del<void>(`/api/v1/tickets/${ticketId}/knowledge-links/${linkId}`),
 
   suggestTicketKnowledge: (
     ticketId: string,
