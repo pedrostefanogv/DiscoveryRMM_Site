@@ -5,7 +5,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import { CheckCircle2, KeyRound, UserRoundPen } from "lucide-react";
-import { authApi } from "@/api";
+import { ApiError, authApi } from "@/api";
 import { useAuth } from "@/auth/AuthContext";
 import { Button, Card, CardHeader, Input, Loading } from "@/components/ui";
 
@@ -121,27 +121,46 @@ export default function FirstAccessPage() {
       return;
     }
 
-    const result = await authApi.completeFirstAccess(token, {
-      newLogin: values.newLogin.trim(),
-      newEmail: values.newEmail.trim(),
-      newFullName: values.newFullName.trim(),
-      currentPassword: values.currentPassword,
-      newPassword: values.newPassword,
-    });
-
-    toast.success(result.message);
-
-    const status = await authApi.getFirstAccessStatus(token);
-    if (status.mfaRequired) {
-      setTemporaryStage(status.mfaConfigured ? "mfa-assert-begin" : "mfa-register-begin");
-      navigate(status.mfaConfigured ? "/auth/mfa" : "/auth/mfa/register", {
-        replace: true,
+    try {
+      const result = await authApi.completeFirstAccess(token, {
+        newLogin: values.newLogin.trim(),
+        newEmail: values.newEmail.trim(),
+        newFullName: values.newFullName.trim(),
+        currentPassword: values.currentPassword,
+        newPassword: values.newPassword,
       });
-      return;
-    }
 
-    toast.error("Fluxo de onboarding retornou um estado inesperado. Faça login novamente.");
-    navigate("/auth/login", { replace: true });
+      toast.success(result.message);
+
+      const status = await authApi.getFirstAccessStatus(token);
+      if (status.mfaRequired) {
+        setTemporaryStage(status.mfaConfigured ? "mfa-assert-begin" : "mfa-register-begin");
+        navigate(status.mfaConfigured ? "/auth/mfa" : "/auth/mfa/register", {
+          replace: true,
+        });
+        return;
+      }
+
+      toast.error("Fluxo de onboarding retornou um estado inesperado. Faça login novamente.");
+      navigate("/auth/login", { replace: true });
+    } catch (caught) {
+      // Token de setup expirado (10 min) → reinicia o fluxo de login.
+      if (caught instanceof ApiError && caught.status === 401) {
+        toast.error(
+          "Sua sessão temporária expirou. Faça login novamente para continuar o primeiro acesso.",
+        );
+        navigate("/auth/login", { replace: true });
+        return;
+      }
+
+      // Conflitos (login/e-mail em uso, política de senha) voltam como 400.
+      const message =
+        caught instanceof Error && caught.message?.trim()
+          ? caught.message
+          : "Não foi possível concluir o primeiro acesso. Revise os dados e tente novamente.";
+      setStatusError(message);
+      toast.error(message);
+    }
   };
 
   if (loadingStatus) {

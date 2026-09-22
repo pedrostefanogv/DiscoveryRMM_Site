@@ -15,7 +15,6 @@ import {
   configureApiClient,
   type LoginRequest,
   type LoginResponse,
-  type MfaRequirement,
   type TokenPair,
 } from "@/api";
 import { clearAuthSession, emptyAuthSession, loadAuthSession, saveAuthSession } from "./storage";
@@ -35,10 +34,6 @@ interface AuthContextValue {
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
-
-function readRoleMfaRequirement(response: LoginResponse): MfaRequirement {
-  return response.roleMfaRequirement ?? response.RoleMfaRequirement ?? "None";
-}
 
 function readSessionTokens(response: LoginResponse): TokenPair | null {
   const accessToken = response.accessToken ?? response.AccessToken;
@@ -76,9 +71,11 @@ function resolveLoginStage(response: LoginResponse): AuthStage {
   }
 
   const mfaConfigured = response.mfaConfigured ?? true;
-  const roleMfaRequirement = readRoleMfaRequirement(response);
 
-  if (!mfaConfigured && roleMfaRequirement !== "None") {
+  // mfaConfigured=false ⇒ o backend emitiu um mfaSetupToken (não mfaPending):
+  // o próximo passo é REGISTRAR o método, independente de haver exigência por role.
+  // Enviar esse token para a tela de asserção resulta em 401 ("token mfa_pending necessário").
+  if (!mfaConfigured) {
     return "mfa-register-begin";
   }
 
@@ -284,7 +281,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(async (request: LoginRequest) => {
     setSession((previous) => ({ ...previous, stage: "login-submitting" }));
-    const response = await authApi.login(request);
+    let response: LoginResponse;
+    try {
+      response = await authApi.login(request);
+    } catch (error) {
+      // Em caso de falha, restaura o stage — sem isso a sessão fica presa
+      // em "login-submitting" (persistida no storage junto de tokens antigos).
+      setSession((previous) => ({
+        ...previous,
+        stage: previous.accessToken ? "authenticated" : "anonymous",
+      }));
+      throw error;
+    }
     const nextStage = resolveLoginStage(response);
     const tokens = readSessionTokens(response);
 

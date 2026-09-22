@@ -70,10 +70,14 @@ export default function LoginPage() {
       }
       navigate(target, { replace: true });
     } catch (error) {
-      const message =
-        error instanceof ApiError
-          ? "Não foi possível autenticar sua sessão. Verifique suas credenciais e tente novamente."
-          : "Não foi possível autenticar sua sessão.";
+      // Mostra a mensagem do servidor quando disponível (ex.: credenciais
+      // inválidas, conta desativada ou bloqueio temporário com contagem).
+      const fallback = "Não foi possível autenticar sua sessão. Verifique suas credenciais e tente novamente.";
+      const serverMessage =
+        error instanceof ApiError && error.message?.trim()
+          ? error.message
+          : null;
+      const message = serverMessage ?? fallback;
       setSubmitError(message);
       toast.error(message);
     }

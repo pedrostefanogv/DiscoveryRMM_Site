@@ -1,4 +1,4 @@
-﻿import { api } from "./client";
+import { api } from "./client";
 import type { MfaRequirement } from "./types";
 
 export interface LoginRequest {
@@ -131,7 +131,12 @@ export const authApi = {
     api.post<void>(
       "/api/v1/auth/logout",
       { refreshToken },
-      withBearer(accessToken),
+      {
+        ...withBearer(accessToken),
+        // Sem retry: se o access token expirou, um refresh aqui criaria uma
+        // sessão nova no servidor pouco antes de o logout limpar a sessão local.
+        retryOnAuthError: false,
+      },
     ),
 
   getFirstAccessStatus: (token: string) =>

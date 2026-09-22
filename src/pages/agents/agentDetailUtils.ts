@@ -107,6 +107,105 @@ export function printerStatusColor(
   return "slate";
 }
 
+
+// ── Inicialização do Windows / Tarefas agendadas ────────
+
+export function startupItemStatusColor(
+  status: string | null,
+): "success" | "danger" | "slate" {
+  if (!status) return "slate";
+  return status.toLowerCase() === "disabled" ? "danger" : "success";
+}
+
+export function startupItemStatusLabel(status: string | null): string {
+  if (!status) return "Desconhecido";
+  return status.toLowerCase() === "disabled" ? "Desabilitado" : "Habilitado";
+}
+
+export function scheduledTaskTriggerLabel(triggerType: string | null): string {
+  switch ((triggerType ?? "").toLowerCase()) {
+    case "boot":
+      return "Na inicialização";
+    case "logon":
+      return "No logon";
+    case "daily":
+      return "Diário";
+    case "weekly":
+      return "Semanal";
+    case "once":
+      return "Uma vez";
+    case "idle":
+      return "Quando ocioso";
+    case "event":
+      return "Por evento";
+    default:
+      return triggerType || "Outro";
+  }
+}
+
+export function scheduledTaskStateColor(
+  state: string | null,
+): "success" | "danger" | "slate" {
+  if (!state) return "slate";
+  return state.toLowerCase() === "disabled" ? "danger" : "success";
+}
+
+
+export interface AgentCommandOutcome {
+  ok: boolean;
+  message: string;
+}
+
+/**
+ * Aguarda o resultado de um comando despachado ao agent (StartupItem/
+ * ScheduledTask): faz polling do histórico de comandos até que o comando
+ * mais recente do tipo informado saia de Pending/Sent/Running ou até
+ * esgotar o timeout (~20s). O DTO de comandos não expõe result, então a
+ * mensagem é derivada do status final.
+ */
+export async function awaitAgentCommandResult(
+  agentId: string,
+  commandType: "StartupItem" | "ScheduledTask",
+  dispatchedAt: Date,
+  maxAttempts = 10,
+): Promise<AgentCommandOutcome> {
+  const { agentsApi } = await import("@/api");
+  const startedMs = dispatchedAt.getTime() - 2000;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+    try {
+      const commands = await agentsApi.listCommands(agentId, 30);
+      const candidates = commands.filter((cmd) => {
+        const createdAt = new Date(cmd.createdAt).getTime();
+        const typeMatches = String(cmd.commandType ?? "")
+          .toLowerCase()
+          .includes(commandType.toLowerCase());
+        return createdAt >= startedMs && typeMatches;
+      });
+      if (candidates.length === 0) continue;
+      const latest = candidates[0];
+      const status = String(latest.status ?? "").toLowerCase();
+      if (status === "completed") {
+        return { ok: true, message: "Ação executada com sucesso no agent." };
+      }
+      if (status === "failed" || status === "cancelled" || status === "timeout") {
+        return {
+          ok: false,
+          message:
+            "O agent não conseguiu concluir a ação. Verifique os logs do agent ou tente novamente (algumas ações exigem privilégio administrativo).",
+        };
+      }
+      // Pending/Sent/Running — continua aguardando
+    } catch {
+      // Falha transitória de rede — tenta novamente
+    }
+  }
+  return {
+    ok: true,
+    message: "Comando enviado ao agent — o resultado aparece quando o agent responder.",
+  };
+}
+
 export function nodeLinkStatusColor(
   status: string,
 ): "success" | "warning" | "danger" | "accent" | "slate" {

@@ -4,6 +4,10 @@ import type {
   Agent,
   AgentHardwareInfo,
   DiskInfo,
+  StartupItemInfo,
+  ScheduledTaskInfo,
+  StartupItemActionRequest,
+  ScheduledTaskActionRequest,
   NetworkAdapterInfo,
   MemoryModuleInfo,
   ListeningPortInfo,
@@ -46,6 +50,8 @@ export interface HardwareComponentsResponse {
   disks: DiskInfo[];
   networkAdapters: NetworkAdapterInfo[];
   memoryModules: MemoryModuleInfo[];
+  startupItems: StartupItemInfo[];
+  scheduledTasks: ScheduledTaskInfo[];
   collectedAt: string;
 }
 
@@ -270,6 +276,8 @@ export const agentsApi = {
       software?: boolean;
       printers?: boolean;
       hardware?: boolean;
+      startupItems?: boolean;
+      scheduledTasks?: boolean;
     },
   ) =>
     api.post<{
@@ -278,4 +286,18 @@ export const agentsApi = {
       status: string;
       flags: Record<string, boolean>;
     }>(`${BASE}/${id}/refresh-data`, flags),
+
+  // Inicialização do Windows — habilitar/desabilitar item
+  startupItemAction: (id: string, data: StartupItemActionRequest) =>
+    api.post<{ success: boolean; dispatched: boolean }>(
+      `${BASE}/${id}/startup-items/action`,
+      data,
+    ),
+
+  // Tarefas agendadas — habilitar/desabilitar/executar/excluir/editar
+  scheduledTaskAction: (id: string, data: ScheduledTaskActionRequest) =>
+    api.post<{ success: boolean; dispatched: boolean }>(
+      `${BASE}/${id}/scheduled-tasks/action`,
+      data,
+    ),
 };

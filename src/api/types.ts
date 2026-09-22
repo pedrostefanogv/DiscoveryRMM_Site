@@ -66,6 +66,8 @@ export enum CommandType {
   ShowPsadtAlert = 9,
   Notification = 10,
   WakeOnLan = 11,
+  StartupItem = 18,
+  ScheduledTask = 19,
 }
 
 export type TicketPriority = "Low" | "Medium" | "High" | "Critical";
@@ -265,6 +267,66 @@ export interface PrinterInfo {
   shared: boolean;
   shareName: string | null;
   location: string | null;
+}
+
+// ── Inicialização do Windows (agent) ───────────────────
+
+export interface StartupItemInfo {
+  name: string;
+  path: string;
+  args: string;
+  /** registry | folder | service */
+  type: string;
+  /** ex.: "HKLM Run", "HKCU RunOnce", "Pasta Startup (Usuário)", "Serviço" */
+  source: string;
+  /** enabled | disabled */
+  status: string;
+  username: string;
+  /** detalhe de exibição (ex.: serviços: "Automático (Atrasado)") */
+  detail: string;
+}
+
+export interface ScheduledTaskInfo {
+  taskPath: string;
+  taskName: string;
+  /** enabled | disabled */
+  state: string;
+  /** Ready | Running | Queued | ... */
+  status: string;
+  author: string;
+  actionPath: string;
+  actionArgs: string;
+  /** boot | logon | daily | weekly | once | idle | event | other */
+  triggerType: string;
+  /** descrição amigável ("Diário às 03:00") */
+  triggerDesc: string;
+  nextRunTime: string;
+  lastRunTime: string;
+  lastResult: number;
+}
+export interface StartupItemActionRequest {
+  action: "enable" | "disable";
+  type: string;
+  name: string;
+  source?: string | null;
+}
+
+export interface ScheduledTaskEditRequest {
+  triggerType: "daily" | "weekly" | "once" | "logon" | "boot";
+  /** HH:mm (daily/weekly) ou yyyy-MM-dd HH:mm (once) */
+  time?: string | null;
+  /** 0=Dom..6=Sáb (weekly) */
+  daysOfWeek?: number[] | null;
+  daysInterval?: number | null;
+  actionPath?: string | null;
+  actionArgs?: string | null;
+}
+
+export interface ScheduledTaskActionRequest {
+  action: "enable" | "disable" | "run" | "delete" | "edit";
+  taskName: string;
+  taskPath?: string | null;
+  edit?: ScheduledTaskEditRequest | null;
 }
 
 export interface AgentSoftwareInventoryItem {

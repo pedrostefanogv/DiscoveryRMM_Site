@@ -15,6 +15,8 @@ import type {
   RestartRequest,
   ShutdownRequest,
   WakeOnLanRequest,
+  StartupItemActionRequest,
+  ScheduledTaskActionRequest,
 } from "@/api";
 
 const KEYS = {
@@ -266,6 +268,41 @@ export function useAgentCommands(id: string, limit = 50) {
     queryKey: KEYS.commands(id),
     queryFn: () => agentsApi.listCommands(id, limit),
     enabled: !!id,
+  });
+}
+
+/**
+ * Habilita/desabilita um item de inicialização do Windows no agent.
+ * Invalida os componentes de hardware (startupItems) e o histórico de
+ * comandos após o dispatch — o resultado final chega pela re-coleta que o
+ * agent faz automaticamente após executar a ação.
+ */
+export function useAgentStartupItemAction(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: StartupItemActionRequest) =>
+      agentsApi.startupItemAction(id, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: KEYS.hardwareComponents(id) });
+      qc.invalidateQueries({ queryKey: KEYS.commands(id) });
+    },
+  });
+}
+
+/**
+ * Executa uma ação sobre uma tarefa agendada (habilitar, desabilitar,
+ * executar agora, excluir ou editar gatilho/ação) e invalida os caches
+ * relacionados (tarefas agendadas + comandos).
+ */
+export function useAgentScheduledTaskAction(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: ScheduledTaskActionRequest) =>
+      agentsApi.scheduledTaskAction(id, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: KEYS.hardwareComponents(id) });
+      qc.invalidateQueries({ queryKey: KEYS.commands(id) });
+    },
   });
 }
 

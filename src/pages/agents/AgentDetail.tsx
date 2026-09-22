@@ -12,9 +12,11 @@ import { useLogs } from '@/hooks/useLogs';
 import { Button, Card, CardHeader, Badge, Loading, ErrorDisplay, Input, Select, DataTable, Modal, StatCard, AgentHeartbeatCard, Tooltip, type Column } from '@/components/ui';
 import { ensureArray } from '@/utils/ensureArray';
 import PowerActionModal from '@/components/agents/PowerActionModal';
+import AgentStartupItemsPanel from '@/components/agents/AgentStartupItemsPanel';
+import AgentScheduledTasksPanel from '@/components/agents/AgentScheduledTasksPanel';
 import WakeOnLanModal from '@/components/agents/WakeOnLanModal';
 import { NotesPanel } from '@/components/notes/NotesPanel';
-import type { AgentSoftwareInventoryItem, ListeningPortInfo, LogEntry, OpenSocketInfo } from '@/api';
+import type { AgentSoftwareInventoryItem, ListeningPortInfo, LogEntry, OpenSocketInfo, ScheduledTaskInfo, StartupItemInfo } from '@/api';
 import { ApiError, LogLevel, agentUpdatesApi, agentsApi } from '@/api';
 import { isAgentOnlineNow } from '@/utils/agentStatus';
 import { useNowTick } from '@/hooks/useNowTick';
@@ -54,7 +56,7 @@ function agentCommitHash(commitHash: string | null | undefined): string | null {
   return trimmed;
 }
 
-type AgentDetailDataTab = 'software' | 'printers' | 'tickets' | 'listeningPorts' | 'openSockets' | 'logs';
+type AgentDetailDataTab = 'software' | 'printers' | 'tickets' | 'listeningPorts' | 'openSockets' | 'startupItems' | 'scheduledTasks' | 'logs';
 
 // Espelha o clamp de pageSize do backend (GetAgentSoftwarePageQueryHandler).
 // A opção "Todos" usa este tamanho em uma única requisição.
@@ -90,6 +92,8 @@ export default function AgentDetail() {
   const [isRefreshingConnections, setIsRefreshingConnections] = useState(false);
   const [isRefreshingSoftware, setIsRefreshingSoftware] = useState(false);
   const [isRefreshingPrinters, setIsRefreshingPrinters] = useState(false);
+  const [isRefreshingStartup, setIsRefreshingStartup] = useState(false);
+  const [isRefreshingScheduledTasks, setIsRefreshingScheduledTasks] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleteConfirmHostname, setDeleteConfirmHostname] = useState('');
   const [activeDataTab, setActiveDataTab] = useState<AgentDetailDataTab>('software');
@@ -114,7 +118,9 @@ export default function AgentDetail() {
   const dataTabNeedsComponents =
     activeDataTab === 'printers' ||
     activeDataTab === 'listeningPorts' ||
-    activeDataTab === 'openSockets';
+    activeDataTab === 'openSockets' ||
+    activeDataTab === 'startupItems' ||
+    activeDataTab === 'scheduledTasks';
   const hwComponents = useAgentHardwareComponents(id!, { enabled: dataTabNeedsComponents });
   // Paginação server-side por offset (P1.1): busca apenas a página visível com
   // total FILTRADO. Substitui o fetch-all por cursor (limit=500 + auto-fetch),
@@ -323,6 +329,8 @@ export default function AgentDetail() {
   // ── Listening Ports / Open Sockets — extrair do hwComponents (antes dos early returns) ──
   const listeningPorts: ListeningPortInfo[] = hwComponents.data?.listeningPorts ?? [];
   const openSockets: OpenSocketInfo[] = hwComponents.data?.openSockets ?? [];
+  const startupItems: StartupItemInfo[] = hwComponents.data?.startupItems ?? [];
+  const scheduledTasks: ScheduledTaskInfo[] = hwComponents.data?.scheduledTasks ?? [];
 
   // ── Listening Ports pagination data (client-side) ──
   const portsFiltered = useMemo(() => {
@@ -824,6 +832,38 @@ export default function AgentDetail() {
       toast.error(msg);
     } finally {
       setIsRefreshingPrinters(false);
+    }
+  };
+
+  const handleRefreshStartup = async () => {
+    if (!id || isRefreshingStartup) return;
+    setIsRefreshingStartup(true);
+    try {
+      await agentsApi.refreshData(id, { startupItems: true });
+      toast.success('Solicitação de coleta de inicialização enviada ao agente.');
+      await new Promise(r => setTimeout(r, 2000));
+      await hwComponents.refetch();
+    } catch (error) {
+      const msg = error instanceof ApiError ? error.message : 'Falha ao solicitar refresh de inicialização.';
+      toast.error(msg);
+    } finally {
+      setIsRefreshingStartup(false);
+    }
+  };
+
+  const handleRefreshScheduledTasks = async () => {
+    if (!id || isRefreshingScheduledTasks) return;
+    setIsRefreshingScheduledTasks(true);
+    try {
+      await agentsApi.refreshData(id, { scheduledTasks: true });
+      toast.success('Solicitação de coleta de tarefas agendadas enviada ao agente.');
+      await new Promise(r => setTimeout(r, 2500));
+      await hwComponents.refetch();
+    } catch (error) {
+      const msg = error instanceof ApiError ? error.message : 'Falha ao solicitar refresh de tarefas agendadas.';
+      toast.error(msg);
+    } finally {
+      setIsRefreshingScheduledTasks(false);
     }
   };
 
@@ -1655,6 +1695,30 @@ export default function AgentDetail() {
           <button
             type="button"
             role="tab"
+            onClick={() => setActiveDataTab('startupItems')}
+            aria-selected={activeDataTab === 'startupItems'}
+            className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors ${activeDataTab === 'startupItems' ? 'border-primary/40 bg-primary/15 text-primary' : 'border-border bg-surface-light text-muted-foreground hover:text-foreground'}`}
+          >
+            Inicialização
+            {hwComponents.data && (
+              <span className="rounded-full bg-surface-hover/60 px-2 py-0.5 text-xs text-muted-foreground">{startupItems.length}</span>
+            )}
+          </button>
+          <button
+            type="button"
+            role="tab"
+            onClick={() => setActiveDataTab('scheduledTasks')}
+            aria-selected={activeDataTab === 'scheduledTasks'}
+            className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors ${activeDataTab === 'scheduledTasks' ? 'border-primary/40 bg-primary/15 text-primary' : 'border-border bg-surface-light text-muted-foreground hover:text-foreground'}`}
+          >
+            Tarefas Agendadas
+            {hwComponents.data && (
+              <span className="rounded-full bg-surface-hover/60 px-2 py-0.5 text-xs text-muted-foreground">{scheduledTasks.length}</span>
+            )}
+          </button>
+          <button
+            type="button"
+            role="tab"
             onClick={() => setActiveDataTab('logs')}
             aria-selected={activeDataTab === 'logs'}
             className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors ${activeDataTab === 'logs' ? 'border-primary/40 bg-primary/15 text-primary' : 'border-border bg-surface-light text-muted-foreground hover:text-foreground'}`}
@@ -2111,6 +2175,38 @@ export default function AgentDetail() {
               </div>
             )}
             </>
+          </div>
+        )}
+
+        {activeDataTab === 'startupItems' && (
+          <div style={{ height: 'min(860px, 75vh)' }} className='overflow-y-auto overscroll-auto'>
+            <AgentStartupItemsPanel
+              agentId={id!}
+              items={startupItems}
+              canManage={canManageAgent}
+              isOnline={isOnlineNow}
+              isLoading={hwComponents.isLoading}
+              isError={Boolean(hwComponents.isError)}
+              onRetry={() => void hwComponents.refetch()}
+              isRefreshing={isRefreshingStartup || hwComponents.isFetching}
+              onRefresh={handleRefreshStartup}
+            />
+          </div>
+        )}
+
+        {activeDataTab === 'scheduledTasks' && (
+          <div style={{ height: 'min(860px, 75vh)' }} className='overflow-y-auto overscroll-auto'>
+            <AgentScheduledTasksPanel
+              agentId={id!}
+              tasks={scheduledTasks}
+              canManage={canManageAgent}
+              isOnline={isOnlineNow}
+              isLoading={hwComponents.isLoading}
+              isError={Boolean(hwComponents.isError)}
+              onRetry={() => void hwComponents.refetch()}
+              isRefreshing={isRefreshingScheduledTasks || hwComponents.isFetching}
+              onRefresh={handleRefreshScheduledTasks}
+            />
           </div>
         )}
 
