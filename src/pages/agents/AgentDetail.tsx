@@ -2190,6 +2190,7 @@ export default function AgentDetail() {
               onRetry={() => void hwComponents.refetch()}
               isRefreshing={isRefreshingStartup || hwComponents.isFetching}
               onRefresh={handleRefreshStartup}
+              onDataRefetch={() => void hwComponents.refetch()}
             />
           </div>
         )}
@@ -2206,6 +2207,7 @@ export default function AgentDetail() {
               onRetry={() => void hwComponents.refetch()}
               isRefreshing={isRefreshingScheduledTasks || hwComponents.isFetching}
               onRefresh={handleRefreshScheduledTasks}
+              onDataRefetch={() => void hwComponents.refetch()}
             />
           </div>
         )}

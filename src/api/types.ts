@@ -284,6 +284,8 @@ export interface StartupItemInfo {
   username: string;
   /** detalhe de exibição (ex.: serviços: "Automático (Atrasado)") */
   detail: string;
+  /** HKLM | HKCU | HKU:<SID> — conta/hive do item */
+  hive?: string | null;
 }
 
 export interface ScheduledTaskInfo {
@@ -309,6 +311,8 @@ export interface StartupItemActionRequest {
   type: string;
   name: string;
   source?: string | null;
+  /** HKLM | HKCU | HKU:<SID> — necessário para itens de outros usuários */
+  hive?: string | null;
 }
 
 export interface ScheduledTaskEditRequest {

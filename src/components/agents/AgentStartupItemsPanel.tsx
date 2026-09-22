@@ -17,6 +17,7 @@ import {
   awaitAgentCommandResult,
   startupItemStatusColor,
   startupItemStatusLabel,
+  startupItemUserLabel,
 } from '@/pages/agents/agentDetailUtils';
 
 const typeLabels: Record<string, string> = {
@@ -43,6 +44,8 @@ interface AgentStartupItemsPanelProps {
   onRetry: () => void;
   isRefreshing: boolean;
   onRefresh: () => void;
+  /** Recarrega os componentes após o agent concluir a ação (evita estado defasado). */
+  onDataRefetch?: () => void;
 }
 
 interface MenuState {
@@ -66,6 +69,7 @@ export default function AgentStartupItemsPanel({
   onRetry,
   isRefreshing,
   onRefresh,
+  onDataRefetch,
 }: AgentStartupItemsPanelProps) {
   const [search, setSearch] = useState('');
   const [sourceFilter, setSourceFilter] = useState('all');
@@ -121,6 +125,7 @@ export default function AgentStartupItemsPanel({
         type: item.type,
         name: item.name,
         source: item.source,
+        hive: item.hive ?? null,
       };
       await startupAction.mutateAsync(request);
       toast.success(
@@ -135,6 +140,8 @@ export default function AgentStartupItemsPanel({
       } else {
         toast.error(outcome.message);
       }
+      // O agent já re-sincronizou — recarrega para refletir o novo estado.
+      onDataRefetch?.();
     } catch (error) {
       const message =
         error instanceof ApiError ? error.message : 'Falha ao enviar ação ao agent.';
@@ -142,7 +149,7 @@ export default function AgentStartupItemsPanel({
     } finally {
       setIsConfirmWorking(false);
     }
-  }, [agentId, confirmState, startupAction]);
+  }, [agentId, confirmState, startupAction, onDataRefetch]);
 
   const copyPath = useCallback(
     (item: StartupItemInfo) => {
@@ -209,9 +216,19 @@ export default function AgentStartupItemsPanel({
       render: (item) => item.source || '—',
     },
     {
+      key: 'username',
+      header: 'Usuário',
+      className: 'hidden whitespace-nowrap lg:table-cell',
+      render: (item) => (
+        <span className='text-xs text-muted-foreground' title={item.hive ?? undefined}>
+          {startupItemUserLabel(item)}
+        </span>
+      ),
+    },
+    {
       key: 'detail',
       header: 'Detalhe',
-      className: 'hidden whitespace-nowrap lg:table-cell',
+      className: 'hidden whitespace-nowrap xl:table-cell',
       render: (item) => item.detail || '—',
     },
     {

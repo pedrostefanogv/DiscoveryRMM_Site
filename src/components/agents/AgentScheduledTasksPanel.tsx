@@ -30,6 +30,7 @@ import { ApiError } from '@/api';
 import { useAgentScheduledTaskAction } from '@/hooks/useAgents';
 import {
   awaitAgentCommandResult,
+  normalizeScheduledTaskTriggerDesc,
   scheduledTaskStateColor,
   scheduledTaskTriggerLabel,
 } from '@/pages/agents/agentDetailUtils';
@@ -72,6 +73,8 @@ interface AgentScheduledTasksPanelProps {
   onRetry: () => void;
   isRefreshing: boolean;
   onRefresh: () => void;
+  /** Recarrega os componentes após o agent concluir a ação (evita estado defasado). */
+  onDataRefetch?: () => void;
 }
 
 interface MenuState {
@@ -99,6 +102,7 @@ export default function AgentScheduledTasksPanel({
   onRetry,
   isRefreshing,
   onRefresh,
+  onDataRefetch,
 }: AgentScheduledTasksPanelProps) {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -160,8 +164,10 @@ export default function AgentScheduledTasksPanel({
       } else {
         toast.error(outcome.message);
       }
+      // O agent já re-sincronizou — recarrega para refletir o novo estado.
+      onDataRefetch?.();
     },
-    [agentId, taskAction],
+    [agentId, taskAction, onDataRefetch],
   );
 
   const confirmAction = useCallback(async () => {
@@ -247,6 +253,13 @@ export default function AgentScheduledTasksPanel({
         time = editTime;
       }
 
+      // A ação só é reenviada se o usuário realmente alterou o valor — o
+      // caminho coletado costuma vir com aspas e não deve ser reescrito à toa.
+      const originalPath = (task.actionPath ?? '').trim();
+      const originalArgs = (task.actionArgs ?? '').trim();
+      const nextPath = editActionPath.trim();
+      const nextArgs = editActionArgs.trim();
+
       const request: ScheduledTaskActionRequest = {
         action: 'edit',
         taskName: task.taskName,
@@ -256,8 +269,8 @@ export default function AgentScheduledTasksPanel({
           time,
           daysOfWeek: editTriggerType === 'weekly' ? editDays : null,
           daysInterval: editTriggerType === 'daily' ? editDaysInterval : null,
-          actionPath: editActionPath.trim() ? editActionPath.trim() : null,
-          actionArgs: editActionArgs.trim() ? editActionArgs.trim() : null,
+          actionPath: nextPath && nextPath !== originalPath ? nextPath : null,
+          actionArgs: nextArgs && nextArgs !== originalArgs ? nextArgs : null,
         },
       };
       await dispatchAndAwait(
@@ -380,7 +393,9 @@ export default function AgentScheduledTasksPanel({
       key: 'trigger',
       header: 'Gatilho',
       className: 'whitespace-nowrap',
-      render: (task) => task.triggerDesc || scheduledTaskTriggerLabel(task.triggerType),
+      render: (task) =>
+        normalizeScheduledTaskTriggerDesc(task.triggerDesc) ||
+        scheduledTaskTriggerLabel(task.triggerType),
     },
     {
       key: 'nextRunTime',
@@ -550,7 +565,9 @@ export default function AgentScheduledTasksPanel({
             <div className='rounded-lg bg-surface-light px-3 py-2 text-sm'>
               <p className='font-medium text-foreground'>{editState.task.taskName}</p>
               <p className='mt-1 text-xs text-muted'>
-                Gatilho atual: {editState.task.triggerDesc || scheduledTaskTriggerLabel(editState.task.triggerType)}
+                Gatilho atual:{' '}
+                {normalizeScheduledTaskTriggerDesc(editState.task.triggerDesc) ||
+                  scheduledTaskTriggerLabel(editState.task.triggerType)}
               </p>
             </div>
 

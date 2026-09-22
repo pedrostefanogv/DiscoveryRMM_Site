@@ -122,6 +122,29 @@ export function startupItemStatusLabel(status: string | null): string {
   return status.toLowerCase() === "disabled" ? "Desabilitado" : "Habilitado";
 }
 
+/**
+ * Rótulo da conta dona do item de inicialização. O agent preenche Username
+ * para itens de outros usuários (HKU\<SID>); quando vazio, derivamos do
+ * escopo da origem.
+ */
+export function startupItemUserLabel(item: {
+  username?: string | null;
+  source?: string | null;
+  type?: string | null;
+}): string {
+  const username = (item.username ?? "").trim();
+  if (username) return username;
+
+  const source = (item.source ?? "").toLowerCase();
+  if (item.type === "service" || source.startsWith("hklm") || source.includes("todos os usuários")) {
+    return "Todos os usuários";
+  }
+  if (source.startsWith("hkcu") || source.includes("pasta startup (usuário)")) {
+    return "Usuário atual";
+  }
+  return "—";
+}
+
 export function scheduledTaskTriggerLabel(triggerType: string | null): string {
   switch ((triggerType ?? "").toLowerCase()) {
     case "boot":
@@ -138,9 +161,57 @@ export function scheduledTaskTriggerLabel(triggerType: string | null): string {
       return "Quando ocioso";
     case "event":
       return "Por evento";
-    default:
-      return triggerType || "Outro";
+    case "monthly":
+      return "Mensal";
+    case "calendar":
+      return "Calendário";
+    case "registration":
+      return "No registro da tarefa";
+    case "session":
+      return "Mudança de estado da sessão";
+    case "wnf":
+      return "Mudança de estado do sistema (WNF)";
+    case "custom":
+      return "Gatilho personalizado";
+    case "none":
+      return "Sem gatilho (execução sob demanda)";
+    default: {
+      const raw = (triggerType ?? "").trim();
+      if (!raw || raw.toLowerCase() === "other") return "Outro";
+      const cleaned = raw
+        .replace(/^MSFT_Task/i, "")
+        .replace(/Trigger$/i, "")
+        .replace(/([a-z])([A-Z])/g, "$1 $2");
+      return cleaned || "Outro";
+    }
   }
+}
+
+/**
+ * O agent emite as descrições de gatilho em ASCII — a saída do PowerShell
+ * passa pelo code page OEM do serviço, então acentos podem corromper no
+ * caminho. Esta normalização devolve o texto acentuado para a UI.
+ */
+export function normalizeScheduledTaskTriggerDesc(
+  desc: string | null | undefined,
+): string {
+  if (!desc) return "";
+
+  // Agentes antigos emitiam a classe CIM crua (ex.: "MSFT_TaskTrigger",
+  // "MSFT_TaskDailyTrigger") como descrição — traduz para o rótulo legível.
+  const rawClass = /^MSFT_Task([A-Za-z]*)Trigger$/.exec(desc.trim());
+  if (rawClass) {
+    return scheduledTaskTriggerLabel(rawClass[1].toLowerCase());
+  }
+
+  return desc
+    .replace(/\bDiario\b/gi, "Diário")
+    .replace(/\bCalendario\b/gi, "Calendário")
+    .replace(/\bMudanca\b/gi, "Mudança")
+    .replace(/\bsessao\b/gi, "sessão")
+    .replace(/\binicializacao\b/gi, "inicialização")
+    .replace(/\bexecucao\b/gi, "execução")
+    .replace(/\b as (\d{2}:\d{2})\b/gi, " às $1");
 }
 
 export function scheduledTaskStateColor(
