@@ -627,7 +627,7 @@ export default function AgentList() {
 
       {/* Filtros + toggle de visualização */}
       <div className="flex gap-3">
-        <div className="grid flex-1 gap-3 md:grid-cols-2 xl:grid-cols-[minmax(240px,1fr)_220px_180px_260px_180px_48px]">
+        <div className="grid flex-1 gap-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-[minmax(200px,1fr)_minmax(150px,1fr)_minmax(130px,1fr)_minmax(170px,1fr)_minmax(140px,1fr)_48px]">
           <Input
             placeholder="Buscar por nome, hostname, OS, IP ou cliente..."
             value={search}
@@ -692,8 +692,8 @@ export default function AgentList() {
 
       {/* Conteúdo */}
       {isLoadingAgents ? (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} />)}
+        <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 3xl:grid-cols-5">
+          {Array.from({ length: 10 }).map((_, i) => <SkeletonCard key={i} />)}
         </div>
       ) : filtered.length === 0 ? (
         <EmptyState
@@ -718,7 +718,7 @@ export default function AgentList() {
 
           {/* -- CARD VIEW -- */}
           {viewMode === 'card' && (
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 3xl:grid-cols-5">
               {filtered.map(a => {
                 const online = isAgentOnlineNow(a, now);
                 const lastSeen = getAgentLastSeen(a);

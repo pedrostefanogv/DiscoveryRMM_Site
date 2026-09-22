@@ -4,6 +4,9 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
+  /* Breakpoint extra-largo — grids adaptativos aproveitam telas muito grandes */
+  --breakpoint-3xl: 112rem;
+
   /* Brand (controlado por branding) */
   --color-primary: #3b82f6;
   --color-accent: #0ea5e9;
