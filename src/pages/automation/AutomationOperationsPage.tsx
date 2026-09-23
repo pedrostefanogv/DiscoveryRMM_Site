@@ -47,6 +47,8 @@ function executionSourceLabel(source: unknown): string {
   if (source === AutomationExecutionSourceType.Scheduled || source === "Scheduled") return "Scheduled";
   if (source === AutomationExecutionSourceType.ForceSync || source === "ForceSync") return "ForceSync";
   if (source === AutomationExecutionSourceType.AgentManual || source === "AgentManual") return "AgentManual";
+  if (source === AutomationExecutionSourceType.SoftwareUpdate || source === "SoftwareUpdate") return "SoftwareUpdate";
+  if (source === AutomationExecutionSourceType.SoftwareUninstall || source === "SoftwareUninstall") return "SoftwareUninstall";
   return String(source ?? "Unknown");
 }
 

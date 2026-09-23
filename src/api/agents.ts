@@ -317,10 +317,19 @@ export const agentsApi = {
       flags: Record<string, boolean>;
     }>(`${BASE}/${id}/refresh-data`, flags),
 
-  // Software — dispara a atualização de um app instalado (winget/choco)
-  updateSoftware: (id: string, inventoryId: string) =>
+  // Software — dispara a atualização de um app instalado (winget/choco).
+  // confirmUnapproved = true quando o app não é aprovado na loja e o operador
+  // confirmou explicitamente (o servidor responde 409 sem essa confirmação).
+  updateSoftware: (id: string, inventoryId: string, confirmUnapproved = false) =>
     api.post<{ success: boolean; dispatched: boolean }>(
       `${BASE}/${id}/software/${inventoryId}/update`,
+      { confirmUnapproved },
+    ),
+
+  // Software — desinstala um app instalado (gerenciador → MSI → UninstallString).
+  uninstallSoftware: (id: string, inventoryId: string) =>
+    api.post<{ success: boolean; dispatched: boolean }>(
+      `${BASE}/${id}/software/${inventoryId}/uninstall`,
       {},
     ),
 

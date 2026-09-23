@@ -112,6 +112,17 @@ export default function AgentDetail() {
   const [isRefreshingSoftware, setIsRefreshingSoftware] = useState(false);
   // InventoryId do app cuja atualização está sendo disparada (spinner por linha).
   const [updatingSoftwareId, setUpdatingSoftwareId] = useState<string | null>(null);
+  // App bloqueado pela loja aguardando confirmação do operador.
+  const [pendingUnapprovedUpdate, setPendingUnapprovedUpdate] = useState<AgentSoftwareInventoryItem | null>(null);
+  // App aguardando confirmação de desinstalação.
+  const [pendingUninstall, setPendingUninstall] = useState<AgentSoftwareInventoryItem | null>(null);
+  // Timers de refetch agendado após update/uninstall (o agent reenvia o
+  // inventário ~2 min depois da alteração).
+  const softwareRefetchTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
+  useEffect(() => () => {
+    softwareRefetchTimers.current.forEach(clearTimeout);
+    softwareRefetchTimers.current = [];
+  }, []);
   const [isRefreshingPrinters, setIsRefreshingPrinters] = useState(false);
   const [isRefreshingStartup, setIsRefreshingStartup] = useState(false);
   const [isRefreshingScheduledTasks, setIsRefreshingScheduledTasks] = useState(false);
@@ -159,6 +170,8 @@ export default function AgentDetail() {
 
   const { hasAnyPermission } = useAuthorization();
   const canManageAgent = hasAnyPermission(['Agents.Edit', 'agents.*', 'admin.*']);
+  // Ações de execução no agente (refresh/atualização) exigem Agents.Execute.
+  const canExecuteAgent = hasAnyPermission(['Agents.Execute', 'Agents.Edit', 'agents.*', 'admin.*']);
   const deleteAgent = useDeleteAgent();
   const approveZeroTouch = useApproveZeroTouch();
   const restartAgent = useRestartAgent();
@@ -390,6 +403,8 @@ export default function AgentDetail() {
   const safeSoftwarePage = Math.min(softwarePage, softwareTotalPages);
   const softwareItems = software.data?.items ?? [];
   const softwareUpdatesCount = softwareItems.filter((item) => item.updateAvailable).length;
+  // Total do agente (não só a página) vem do snapshot; fallback para a página.
+  const softwareUpdatesTotal = softwareSnapshot.data?.updateAvailableCount ?? softwareUpdatesCount;
 
   // Corrige estado da página para o range válido quando o total diminui (ex.: busca/filtro)
   useEffect(() => {
@@ -908,14 +923,49 @@ export default function AgentDetail() {
     }
   };
 
-  const handleUpdateSoftware = async (item: AgentSoftwareInventoryItem) => {
+  const scheduleSoftwareRefetch = () => {
+    softwareRefetchTimers.current.forEach(clearTimeout);
+    softwareRefetchTimers.current = [];
+    [45_000, 110_000, 170_000].forEach((delay) => {
+      const timer = setTimeout(() => {
+        void software.refetch();
+        void softwareSnapshot.refetch();
+      }, delay);
+      softwareRefetchTimers.current.push(timer);
+    });
+  };
+
+  const handleUpdateSoftware = async (item: AgentSoftwareInventoryItem, confirmUnapproved = false) => {
     if (!id || updatingSoftwareId) return;
     setUpdatingSoftwareId(item.inventoryId);
     try {
-      await agentsApi.updateSoftware(id, item.inventoryId);
+      await agentsApi.updateSoftware(id, item.inventoryId, confirmUnapproved);
+      setPendingUnapprovedUpdate(null);
       toast.success(`Atualização de "${item.name}" enviada ao agente.`);
+      scheduleSoftwareRefetch();
     } catch (error) {
+      // 409 = app não aprovado na loja: pede confirmação explícita e reenvia.
+      if (!confirmUnapproved && error instanceof ApiError && error.status === 409) {
+        setPendingUnapprovedUpdate(item);
+        return;
+      }
       const msg = error instanceof ApiError ? error.message : 'Falha ao solicitar atualização do aplicativo.';
+      toast.error(msg);
+    } finally {
+      setUpdatingSoftwareId(null);
+    }
+  };
+
+  const handleUninstallSoftware = async (item: AgentSoftwareInventoryItem) => {
+    if (!id || updatingSoftwareId) return;
+    setUpdatingSoftwareId(item.inventoryId);
+    try {
+      await agentsApi.uninstallSoftware(id, item.inventoryId);
+      setPendingUninstall(null);
+      toast.success('Desinstalação de "' + item.name + '" enviada ao agente.');
+      scheduleSoftwareRefetch();
+    } catch (error) {
+      const msg = error instanceof ApiError ? error.message : 'Falha ao solicitar desinstalação do aplicativo.';
       toast.error(msg);
     } finally {
       setUpdatingSoftwareId(null);
@@ -1034,13 +1084,44 @@ export default function AgentDetail() {
             variant="secondary"
             onClick={() => void handleUpdateSoftware(item)}
             loading={updatingSoftwareId === item.inventoryId}
-            disabled={!isOnlineNow || updatingSoftwareId !== null}
-            title={!isOnlineNow ? 'Agente offline \u2014 atualização indisponível' : `Atualizar ${item.name}`}
+            disabled={!isOnlineNow || updatingSoftwareId !== null || !canExecuteAgent}
+            title={
+              !canExecuteAgent
+                ? 'Sem permissão para executar ações no agente'
+                : !isOnlineNow
+                  ? 'Agente offline \u2014 atualização indisponível'
+                  : `Atualizar ${item.name}`
+            }
           >
             <ArrowUpCircle className="h-3.5 w-3.5" />
             Atualizar
           </Button>
         </div>
+      ) : (
+        <span className="text-xs text-muted">\u2014</span>
+      ),
+    },
+    {
+      key: 'actions',
+      header: 'Ações',
+      sortable: false,
+      render: item => item.uninstallAvailable ? (
+        <Button
+          size="sm"
+          variant="danger"
+          onClick={() => setPendingUninstall(item)}
+          disabled={!isOnlineNow || !canExecuteAgent || updatingSoftwareId !== null}
+          title={
+            !canExecuteAgent
+              ? 'Sem permissão para executar ações no agente'
+              : !isOnlineNow
+                ? 'Agente offline — desinstalação indisponível'
+                : 'Desinstalar ' + item.name
+          }
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+          Desinstalar
+        </Button>
       ) : (
         <span className="text-xs text-muted">\u2014</span>
       ),
@@ -1880,8 +1961,8 @@ export default function AgentDetail() {
                 <h3 className="text-lg font-semibold text-foreground sm:text-xl">Aplicativos</h3>
                 <p className="text-sm text-muted">
                   {softwareTotalCount} aplicativo(s) no inventário
-                  {softwareUpdatesCount > 0 && (
-                    <span className="ml-2 font-medium text-warning">· {softwareUpdatesCount} com atualização disponível</span>
+                  {softwareUpdatesTotal > 0 && (
+                    <span className="ml-2 font-medium text-warning">· {softwareUpdatesTotal} com atualização disponível</span>
                   )}
                 </p>
               </div>
@@ -2471,6 +2552,88 @@ export default function AgentDetail() {
           isLoading={wakeOnLan.isPending}
         />
       )}
+
+      <Modal
+        open={!!pendingUnapprovedUpdate}
+        onClose={() => setPendingUnapprovedUpdate(null)}
+        title="Atualização não aprovada na loja"
+        maxWidth="max-w-lg"
+      >
+        <div className="space-y-4">
+          <div className="rounded-lg border border-warning/30 bg-warning/10 p-3 text-sm text-foreground">
+            <p>
+              O aplicativo{' '}
+              <span className="font-semibold text-foreground">{pendingUnapprovedUpdate?.name}</span>{' '}
+              não está aprovado na política da loja para este agente.
+            </p>
+            <p className="mt-1 text-muted">
+              Deseja executar a atualização mesmo assim? A ação será registrada no histórico de comandos do agente.
+            </p>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="secondary"
+              onClick={() => setPendingUnapprovedUpdate(null)}
+              disabled={updatingSoftwareId !== null}
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={() => {
+                if (pendingUnapprovedUpdate) {
+                  void handleUpdateSoftware(pendingUnapprovedUpdate, true);
+                }
+              }}
+              loading={updatingSoftwareId !== null && updatingSoftwareId === pendingUnapprovedUpdate?.inventoryId}
+            >
+              <ArrowUpCircle className="h-4 w-4" />
+              Atualizar mesmo assim
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        open={!!pendingUninstall}
+        onClose={() => setPendingUninstall(null)}
+        title="Desinstalar aplicativo"
+        maxWidth="max-w-lg"
+      >
+        <div className="space-y-4">
+          <div className="rounded-lg border border-danger/30 bg-danger/10 p-3 text-sm text-foreground">
+            <p>
+              Deseja desinstalar{' '}
+              <span className="font-semibold text-foreground">{pendingUninstall?.name}</span>
+              {pendingUninstall?.version ? ' (v' + pendingUninstall.version + ')' : ''} deste agente?
+            </p>
+            <p className="mt-1 text-muted">
+              O agent tentará pelo gerenciador de pacotes (winget/choco), pelo MSI (ProductCode) ou pelo
+              desinstalador do registro. A ação não pode ser desfeita.
+            </p>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="secondary"
+              onClick={() => setPendingUninstall(null)}
+              disabled={updatingSoftwareId !== null}
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="danger"
+              onClick={() => {
+                if (pendingUninstall) {
+                  void handleUninstallSoftware(pendingUninstall);
+                }
+              }}
+              loading={updatingSoftwareId !== null && updatingSoftwareId === pendingUninstall?.inventoryId}
+            >
+              <Trash2 className="h-4 w-4" />
+              Desinstalar
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

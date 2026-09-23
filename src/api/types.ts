@@ -370,6 +370,10 @@ export interface AgentSoftwareInventoryItem {
   updateAvailable: boolean;
   /** Gerenciador de pacotes do update: "winget" | "chocolatey". */
   updateSource: string | null;
+  /** Origem/UninstallString do registro (auxilia a desinstalação). */
+  installSource: string | null;
+  /** Indica se a desinstalação remota é viável com os dados do inventário. */
+  uninstallAvailable: boolean;
 }
 
 export type AgentSoftwareOrder = "asc" | "desc";
@@ -438,6 +442,8 @@ export interface SoftwareInstallationsPage {
 export interface AgentSoftwareInventorySnapshot {
   agentId: string;
   totalInstalled: number;
+  /** Total de apps com atualização pendente (todo o inventário do agente). */
+  updateAvailableCount: number;
   firstSeenAt: string | null;
   lastCollectedAt: string | null;
   lastSeenAt: string | null;
@@ -3118,6 +3124,8 @@ export enum AutomationExecutionSourceType {
   Scheduled = 1,
   ForceSync = 2,
   AgentManual = 3,
+  SoftwareUpdate = 4,
+  SoftwareUninstall = 5,
 }
 
 export enum AutomationExecutionStatus {
