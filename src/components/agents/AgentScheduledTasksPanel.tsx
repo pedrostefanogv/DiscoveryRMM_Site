@@ -433,13 +433,13 @@ export default function AgentScheduledTasksPanel({
     );
   };
 
-  // Lista simplificada: nome/estado. O restante (gatilho, execuções, ação)
-  // aparece no card ao passar o mouse ou em "Ver detalhes" no botão direito.
+  // Lista simplificada: nome/estado/gatilho. O restante (execuções, ação,
+  // resultado) aparece no card ao passar o mouse ou em "Ver detalhes" no botão direito.
   const columns: Column<ScheduledTaskInfo>[] = [
     {
       key: 'taskName',
       header: 'Tarefa',
-      width: '70%',
+      width: '50%',
       render: (task) => (
         <div className='min-w-0'>
           <p className='truncate font-medium text-foreground' title={task.taskName}>
@@ -454,13 +454,28 @@ export default function AgentScheduledTasksPanel({
     {
       key: 'state',
       header: 'Estado',
-      width: '30%',
+      width: '20%',
       className: 'whitespace-nowrap',
       render: (task) => (
         <Badge color={scheduledTaskStateColor(task.state)}>
           {task.state?.toLowerCase() === 'disabled' ? 'Desabilitada' : 'Habilitada'}
         </Badge>
       ),
+    },
+    {
+      key: 'trigger',
+      header: 'Gatilho',
+      width: '30%',
+      render: (task) => {
+        const label =
+          normalizeScheduledTaskTriggerDesc(task.triggerDesc) ||
+          scheduledTaskTriggerLabel(task.triggerType);
+        return (
+          <span className='block truncate' title={label}>
+            {label}
+          </span>
+        );
+      },
     },
   ];
 

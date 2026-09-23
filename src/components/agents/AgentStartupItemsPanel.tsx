@@ -1,7 +1,8 @@
-import { useCallback, useMemo, useState, type MouseEvent } from 'react';
+import { useCallback, useMemo, useState, type MouseEvent, type ReactNode } from 'react';
 import {
   Ban,
   Copy,
+  Info,
   Play,
   RefreshCw,
   Search,
@@ -59,6 +60,21 @@ interface ConfirmState {
   enable: boolean;
 }
 
+/** Linha rótulo/valor usada no card de detalhes do item de inicialização. */
+function DetailItem({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div className='min-w-0 rounded-lg border border-border bg-surface-light px-3 py-2'>
+      <p className='text-[11px] uppercase tracking-wide text-muted'>{label}</p>
+      <p
+        className='mt-0.5 truncate text-sm text-foreground'
+        title={typeof value === 'string' ? value : undefined}
+      >
+        {value}
+      </p>
+    </div>
+  );
+}
+
 export default function AgentStartupItemsPanel({
   agentId,
   items,
@@ -75,6 +91,7 @@ export default function AgentStartupItemsPanel({
   const [sourceFilter, setSourceFilter] = useState('all');
   const [menu, setMenu] = useState<MenuState | null>(null);
   const [confirmState, setConfirmState] = useState<ConfirmState | null>(null);
+  const [detailsState, setDetailsState] = useState<StartupItemInfo | null>(null);
   const [isConfirmWorking, setIsConfirmWorking] = useState(false);
 
   const startupAction = useAgentStartupItemAction(agentId);
@@ -163,6 +180,16 @@ export default function AgentStartupItemsPanel({
   const menuItems: ContextMenuItem[] = menu
     ? [
         {
+          key: 'details',
+          label: 'Ver detalhes',
+          icon: <Info className='h-4 w-4' />,
+          onClick: () => {
+            const item = menu.item;
+            setMenu(null);
+            setDetailsState(item);
+          },
+        },
+        {
           key: 'toggle',
           label:
             menu.item.status?.toLowerCase() === 'disabled'
@@ -188,11 +215,43 @@ export default function AgentStartupItemsPanel({
       ]
     : [];
 
+  const renderItemDetails = (item: StartupItemInfo) => (
+    <div className='space-y-3'>
+      <div className='flex items-start justify-between gap-3'>
+        <div className='min-w-0'>
+          <p className='truncate text-sm font-semibold text-foreground'>{item.name}</p>
+          <p className='mt-0.5 break-all font-mono text-[11px] text-muted'>
+            {item.path || '—'}
+          </p>
+        </div>
+        <Badge color={startupItemStatusColor(item.status)}>
+          {startupItemStatusLabel(item.status)}
+        </Badge>
+      </div>
+
+      <div className='grid gap-2 sm:grid-cols-2'>
+        <DetailItem label='Tipo' value={typeLabels[item.type] ?? item.type} />
+        <DetailItem label='Origem' value={item.source || '—'} />
+        <DetailItem label='Usuário' value={startupItemUserLabel(item)} />
+        <DetailItem label='Detalhe' value={item.detail || '—'} />
+      </div>
+
+      {item.args ? (
+        <div className='min-w-0 rounded-lg border border-border bg-surface-light px-3 py-2'>
+          <p className='text-[11px] uppercase tracking-wide text-muted'>Argumentos</p>
+          <p className='mt-0.5 break-all font-mono text-xs text-muted-foreground'>{item.args}</p>
+        </div>
+      ) : null}
+    </div>
+  );
+
+  // Lista simplificada: item/estado/origem. O restante (tipo, usuário,
+  // argumentos, detalhe) aparece no card ao passar o mouse ou em "Ver detalhes".
   const columns: Column<StartupItemInfo>[] = [
     {
       key: 'name',
       header: 'Item',
-      width: '30%',
+      width: '50%',
       render: (item) => (
         <div className='min-w-0'>
           <p className='truncate font-medium text-foreground' title={item.name}>
@@ -205,53 +264,24 @@ export default function AgentStartupItemsPanel({
       ),
     },
     {
-      key: 'type',
-      header: 'Tipo',
-      width: '11%',
-      className: 'whitespace-nowrap',
-      render: (item) => typeLabels[item.type] ?? item.type,
-    },
-    {
-      key: 'source',
-      header: 'Origem',
-      width: '22%',
-      render: (item) => (
-        <span className='block truncate' title={item.source || undefined}>
-          {item.source || '—'}
-        </span>
-      ),
-    },
-    {
-      key: 'username',
-      header: 'Usuário',
-      width: '13%',
-      className: 'hidden whitespace-nowrap lg:table-cell',
-      render: (item) => (
-        <span className='text-xs text-muted-foreground' title={item.hive ?? undefined}>
-          {startupItemUserLabel(item)}
-        </span>
-      ),
-    },
-    {
-      key: 'detail',
-      header: 'Detalhe',
-      width: '12%',
-      className: 'hidden xl:table-cell',
-      render: (item) => (
-        <span className='block truncate' title={item.detail || undefined}>
-          {item.detail || '—'}
-        </span>
-      ),
-    },
-    {
       key: 'status',
       header: 'Estado',
-      width: '12%',
+      width: '20%',
       className: 'whitespace-nowrap',
       render: (item) => (
         <Badge color={startupItemStatusColor(item.status)}>
           {startupItemStatusLabel(item.status)}
         </Badge>
+      ),
+    },
+    {
+      key: 'source',
+      header: 'Origem',
+      width: '30%',
+      render: (item) => (
+        <span className='block truncate' title={item.source || undefined}>
+          {item.source || '—'}
+        </span>
       ),
     },
   ];
@@ -329,6 +359,8 @@ export default function AgentStartupItemsPanel({
             [item.type, item.source, item.name, item.username ?? ''].join('|')
           }
           onRowContextMenu={openMenu}
+          rowHoverCard={renderItemDetails}
+          rowHoverDelayMs={1500}
           showPagination={false}
           emptyMessage='Nenhum item de inicialização encontrado'
           maxHeight='min(560px, 52vh)'
@@ -339,6 +371,25 @@ export default function AgentStartupItemsPanel({
       {menu && (
         <ContextMenu position={{ x: menu.x, y: menu.y }} items={menuItems} onClose={() => setMenu(null)} />
       )}
+
+      {/* Detalhes do item — aberto pelo botão direito ("Ver detalhes") */}
+      <Modal
+        open={detailsState !== null}
+        onClose={() => setDetailsState(null)}
+        title='Detalhes do item de inicialização'
+        maxWidth='max-w-xl'
+      >
+        {detailsState && (
+          <div className='space-y-4'>
+            {renderItemDetails(detailsState)}
+            <div className='flex justify-end'>
+              <Button variant='ghost' size='sm' onClick={() => setDetailsState(null)}>
+                Fechar
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
 
       <Modal
         open={confirmState !== null}
@@ -382,6 +433,12 @@ export default function AgentStartupItemsPanel({
           </div>
         )}
       </Modal>
+
+      <p className='mt-3 flex items-center gap-2 text-xs text-muted'>
+        <Info className='h-3.5 w-3.5' />
+        Passe o mouse sobre um item para ver os detalhes ou clique com o botão direito para ver
+        detalhes, habilitar/desabilitar ou copiar o caminho.
+      </p>
     </div>
   );
 }
