@@ -287,3 +287,51 @@ export function nodeLinkStatusColor(
   if (normalized === "ambiguous" || normalized === "error") return "danger";
   return "slate";
 }
+
+// ── Navegação entre abas de dados do agente (deep link via ?tab=) ────────
+
+export type AgentDetailDataTab =
+  | "software"
+  | "printers"
+  | "tickets"
+  | "listeningPorts"
+  | "openSockets"
+  | "startupItems"
+  | "scheduledTasks"
+  | "logs";
+
+export const AGENT_DETAIL_DEFAULT_TAB: AgentDetailDataTab = "software";
+
+/**
+ * Slugs legíveis usados na querystring (?tab=aplicativos, ?tab=tarefas-agendadas...).
+ * Mantê-los estáveis preserva links compartilhados e o histórico do navegador.
+ */
+export const AGENT_DETAIL_TAB_SLUGS: Record<AgentDetailDataTab, string> = {
+  software: "aplicativos",
+  printers: "impressoras",
+  tickets: "ultimos-chamados",
+  listeningPorts: "portas-em-escuta",
+  openSockets: "conexoes-abertas",
+  startupItems: "inicializacao",
+  scheduledTasks: "tarefas-agendadas",
+  logs: "logs",
+};
+
+const AGENT_DETAIL_TAB_BY_SLUG = new Map<string, AgentDetailDataTab>(
+  (Object.entries(AGENT_DETAIL_TAB_SLUGS) as [AgentDetailDataTab, string][]).map(
+    ([tab, slug]) => [slug, tab],
+  ),
+);
+
+/** Resolve o slug da URL para uma aba válida; cai no padrão quando desconhecido. */
+export function agentDetailTabFromSlug(
+  slug: string | null | undefined,
+): AgentDetailDataTab {
+  if (!slug) return AGENT_DETAIL_DEFAULT_TAB;
+  return AGENT_DETAIL_TAB_BY_SLUG.get(slug.trim().toLowerCase()) ?? AGENT_DETAIL_DEFAULT_TAB;
+}
+
+/** Slug canônico de uma aba — usado ao montar a URL. */
+export function agentDetailTabSlug(tab: AgentDetailDataTab): string {
+  return AGENT_DETAIL_TAB_SLUGS[tab];
+}

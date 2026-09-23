@@ -499,16 +499,15 @@ export default function AgentScheduledTasksPanel({
           description='Nenhuma tarefa agendada coletada para este agent com os filtros atuais.'
         />
       ) : (
-        <div style={{ maxHeight: 'min(640px, 55vh)' }} className='overflow-y-auto overscroll-auto'>
-          <DataTable
-            columns={columns}
-            data={filtered}
-            keyExtractor={(task) => (task.taskPath || '') + task.taskName}
-            onRowContextMenu={openMenu}
-            showPagination={false}
-            emptyMessage='Nenhuma tarefa agendada encontrada'
-          />
-        </div>
+        <DataTable
+          columns={columns}
+          data={filtered}
+          keyExtractor={(task) => (task.taskPath || '') + task.taskName}
+          onRowContextMenu={openMenu}
+          showPagination={false}
+          emptyMessage='Nenhuma tarefa agendada encontrada'
+          maxHeight='min(640px, 55vh)'
+        />
       )}
 
       {menu && (

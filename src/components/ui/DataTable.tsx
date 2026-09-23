@@ -24,6 +24,12 @@ interface DataTableProps<T> {
   emptyIcon?: string;
   pageSize?: number;
   showPagination?: boolean;
+  /**
+   * Altura máxima da área de rolagem da tabela. Quando informada, a própria
+   * tabela passa a rolar nos dois eixos (a barra horizontal fica fixa no
+   * rodapé da área), impedindo que a página cresça para exibir o conteúdo.
+   */
+  maxHeight?: string;
 }
 
 type SortDirection = 'asc' | 'desc' | null;
@@ -45,6 +51,7 @@ export function DataTable<T>({
   emptyMessage = 'Nenhum registro encontrado',
   pageSize = 20,
   showPagination = true,
+  maxHeight,
 }: DataTableProps<T>) {
   const [sort, setSort] = useState<SortState | null>(null);
   const [page, setPage] = useState(1);
@@ -219,8 +226,11 @@ export function DataTable<T>({
   return (
     <div ref={containerRef} className="relative space-y-3">
       <div className="overflow-hidden rounded-xl border border-border bg-surface">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm" role="grid">
+        <div
+          className="w-full max-w-full overflow-auto overscroll-auto"
+          style={maxHeight ? { maxHeight } : undefined}
+        >
+          <table className="w-full min-w-full text-left text-sm" role="grid">
             <caption className="sr-only">Tabela de dados</caption>
             <thead>
               <tr className="border-b border-border bg-surface-light">

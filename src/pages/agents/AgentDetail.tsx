@@ -1,12 +1,19 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft, Bell, Cpu, MemoryStick, Ticket as TicketIcon,
   Monitor, Wifi, WifiOff, AppWindow, Search, Clock, HardDrive, Printer, Bug, AlertTriangle, Trash2, ShieldCheck, Plus, Gauge, Power, RotateCcw, Zap, ChevronDown, ChevronRight, RefreshCw,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getDeleteAgentErrorMessage, useAgent, useAgentHardware, useAgentHardwareComponents, useAgentSoftwarePage, useAgentSoftwareSnapshot, useApproveZeroTouch, useDeleteAgent, useRestartAgent, useShutdownAgent, useWakeOnLan } from '@/hooks/useAgents';
-import { formatBytes, formatDate, formatSocketFamily } from './agentDetailUtils';
+import {
+  agentDetailTabFromSlug,
+  agentDetailTabSlug,
+  formatBytes,
+  formatDate,
+  formatSocketFamily,
+  type AgentDetailDataTab,
+} from './agentDetailUtils';
 import { useTickets } from '@/hooks/useTickets';
 import { useLogs } from '@/hooks/useLogs';
 import { Button, Card, CardHeader, Badge, Loading, ErrorDisplay, Input, Select, DataTable, Modal, StatCard, AgentHeartbeatCard, Tooltip, type Column } from '@/components/ui';
@@ -56,8 +63,6 @@ function agentCommitHash(commitHash: string | null | undefined): string | null {
   return trimmed;
 }
 
-type AgentDetailDataTab = 'software' | 'printers' | 'tickets' | 'listeningPorts' | 'openSockets' | 'startupItems' | 'scheduledTasks' | 'logs';
-
 // Espelha o clamp de pageSize do backend (GetAgentSoftwarePageQueryHandler).
 // A opção "Todos" usa este tamanho em uma única requisição.
 const SOFTWARE_MAX_PAGE_SIZE = 2000;
@@ -96,7 +101,24 @@ export default function AgentDetail() {
   const [isRefreshingScheduledTasks, setIsRefreshingScheduledTasks] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleteConfirmHostname, setDeleteConfirmHostname] = useState('');
-  const [activeDataTab, setActiveDataTab] = useState<AgentDetailDataTab>('software');
+  // A aba ativa é lida da querystring (?tab=aplicativos, ?tab=tarefas-agendadas...).
+  // Trocar de aba empilha uma entrada no histórico, então voltar/avançar do
+  // navegador percorre as abas visitadas e a URL fica compartilhável.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeDataTab = useMemo(
+    () => agentDetailTabFromSlug(searchParams.get('tab')),
+    [searchParams],
+  );
+  const handleSelectDataTab = useCallback(
+    (tab: AgentDetailDataTab) => {
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        next.set('tab', agentDetailTabSlug(tab));
+        return next;
+      });
+    },
+    [setSearchParams],
+  );
   const [isPowerMenuOpen, setIsPowerMenuOpen] = useState(false);
   // Submenu de energia ("Ligar / Reiniciar / Desligar") aberto ao lado via hover.
   const [powerSubmenuOpen, setPowerSubmenuOpen] = useState(false);
@@ -1637,7 +1659,7 @@ export default function AgentDetail() {
           <button
             type="button"
             role="tab"
-            onClick={() => setActiveDataTab('software')}
+            onClick={() => handleSelectDataTab('software')}
             aria-selected={activeDataTab === 'software'}
             className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors ${activeDataTab === 'software' ? 'border-primary/40 bg-primary/15 text-primary' : 'border-border bg-surface-light text-muted-foreground hover:text-foreground'}`}
           >
@@ -1647,7 +1669,7 @@ export default function AgentDetail() {
           <button
             type="button"
             role="tab"
-            onClick={() => setActiveDataTab('printers')}
+            onClick={() => handleSelectDataTab('printers')}
             aria-selected={activeDataTab === 'printers'}
             className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors ${activeDataTab === 'printers' ? 'border-primary/40 bg-primary/15 text-primary' : 'border-border bg-surface-light text-muted-foreground hover:text-foreground'}`}
           >
@@ -1659,7 +1681,7 @@ export default function AgentDetail() {
           <button
             type="button"
             role="tab"
-            onClick={() => setActiveDataTab('tickets')}
+            onClick={() => handleSelectDataTab('tickets')}
             aria-selected={activeDataTab === 'tickets'}
             className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors ${activeDataTab === 'tickets' ? 'border-primary/40 bg-primary/15 text-primary' : 'border-border bg-surface-light text-muted-foreground hover:text-foreground'}`}
           >
@@ -1671,7 +1693,7 @@ export default function AgentDetail() {
           <button
             type="button"
             role="tab"
-            onClick={() => setActiveDataTab('listeningPorts')}
+            onClick={() => handleSelectDataTab('listeningPorts')}
             aria-selected={activeDataTab === 'listeningPorts'}
             className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors ${activeDataTab === 'listeningPorts' ? 'border-primary/40 bg-primary/15 text-primary' : 'border-border bg-surface-light text-muted-foreground hover:text-foreground'}`}
           >
@@ -1683,7 +1705,7 @@ export default function AgentDetail() {
           <button
             type="button"
             role="tab"
-            onClick={() => setActiveDataTab('openSockets')}
+            onClick={() => handleSelectDataTab('openSockets')}
             aria-selected={activeDataTab === 'openSockets'}
             className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors ${activeDataTab === 'openSockets' ? 'border-primary/40 bg-primary/15 text-primary' : 'border-border bg-surface-light text-muted-foreground hover:text-foreground'}`}
           >
@@ -1695,7 +1717,7 @@ export default function AgentDetail() {
           <button
             type="button"
             role="tab"
-            onClick={() => setActiveDataTab('startupItems')}
+            onClick={() => handleSelectDataTab('startupItems')}
             aria-selected={activeDataTab === 'startupItems'}
             className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors ${activeDataTab === 'startupItems' ? 'border-primary/40 bg-primary/15 text-primary' : 'border-border bg-surface-light text-muted-foreground hover:text-foreground'}`}
           >
@@ -1707,7 +1729,7 @@ export default function AgentDetail() {
           <button
             type="button"
             role="tab"
-            onClick={() => setActiveDataTab('scheduledTasks')}
+            onClick={() => handleSelectDataTab('scheduledTasks')}
             aria-selected={activeDataTab === 'scheduledTasks'}
             className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors ${activeDataTab === 'scheduledTasks' ? 'border-primary/40 bg-primary/15 text-primary' : 'border-border bg-surface-light text-muted-foreground hover:text-foreground'}`}
           >
@@ -1719,7 +1741,7 @@ export default function AgentDetail() {
           <button
             type="button"
             role="tab"
-            onClick={() => setActiveDataTab('logs')}
+            onClick={() => handleSelectDataTab('logs')}
             aria-selected={activeDataTab === 'logs'}
             className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors ${activeDataTab === 'logs' ? 'border-primary/40 bg-primary/15 text-primary' : 'border-border bg-surface-light text-muted-foreground hover:text-foreground'}`}
           >
@@ -1731,7 +1753,7 @@ export default function AgentDetail() {
         </div>
 
         {activeDataTab === 'software' && (
-          <div style={{ height: 'min(860px, 75vh)' }} className="overflow-y-auto overscroll-auto">
+          <div style={{ maxHeight: 'min(860px, 75vh)' }} className="w-full min-w-0 max-w-full overflow-x-hidden overflow-y-auto overscroll-auto">
             <>
             <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
@@ -1832,6 +1854,7 @@ export default function AgentDetail() {
                     keyExtractor={item => item.inventoryId}
                     emptyMessage="Nenhum aplicativo encontrado para este agente"
                     showPagination={false}
+                    maxHeight="min(640px, 55vh)"
                   />
                 </div>
                 <div className="mt-4 flex items-center justify-between gap-3">
@@ -1864,7 +1887,7 @@ export default function AgentDetail() {
         )}
 
         {activeDataTab === 'tickets' && (
-          <div style={{ height: 'min(860px, 75vh)' }} className="overflow-y-auto overscroll-auto">
+          <div style={{ maxHeight: 'min(860px, 75vh)' }} className="w-full min-w-0 max-w-full overflow-x-hidden overflow-y-auto overscroll-auto">
             <>
             <CardHeader title="Últimos Chamados" subtitle={`${agentTickets.data?.items?.length ?? 0} chamado(s) retornado(s)`} />
             <div className="space-y-2">
@@ -1927,7 +1950,7 @@ export default function AgentDetail() {
         )}
 
         {activeDataTab === 'printers' && (
-          <div style={{ height: 'min(860px, 75vh)' }} className="overflow-y-auto overscroll-auto">
+          <div style={{ maxHeight: 'min(860px, 75vh)' }} className="w-full min-w-0 max-w-full overflow-x-hidden overflow-y-auto overscroll-auto">
             <>
             <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
@@ -1987,7 +2010,7 @@ export default function AgentDetail() {
         )}
 
         {activeDataTab === 'listeningPorts' && (
-          <div style={{ height: 'min(860px, 75vh)' }} className="overflow-y-auto overscroll-auto">
+          <div style={{ maxHeight: 'min(860px, 75vh)' }} className="w-full min-w-0 max-w-full overflow-x-hidden overflow-y-auto overscroll-auto">
             <>
             <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
@@ -2057,6 +2080,7 @@ export default function AgentDetail() {
                 keyExtractor={item => item.id}
                 emptyMessage="Nenhuma porta em escuta encontrada"
                 showPagination={false}
+                maxHeight="min(640px, 55vh)"
               />
             </div>
             {portsPageItems.length > 0 && (
@@ -2083,7 +2107,7 @@ export default function AgentDetail() {
         )}
 
         {activeDataTab === 'openSockets' && (
-          <div style={{ height: 'min(860px, 75vh)' }} className="overflow-y-auto overscroll-auto">
+          <div style={{ maxHeight: 'min(860px, 75vh)' }} className="w-full min-w-0 max-w-full overflow-x-hidden overflow-y-auto overscroll-auto">
             <>
             <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
@@ -2153,6 +2177,7 @@ export default function AgentDetail() {
                 keyExtractor={item => item.id}
                 emptyMessage="Nenhuma conexão aberta encontrada"
                 showPagination={false}
+                maxHeight="min(640px, 55vh)"
               />
             </div>
             {socketsPageItems.length > 0 && (
@@ -2179,7 +2204,7 @@ export default function AgentDetail() {
         )}
 
         {activeDataTab === 'startupItems' && (
-          <div style={{ height: 'min(860px, 75vh)' }} className='overflow-y-auto overscroll-auto'>
+          <div style={{ maxHeight: 'min(860px, 75vh)' }} className='w-full min-w-0 max-w-full overflow-x-hidden overflow-y-auto overscroll-auto'>
             <AgentStartupItemsPanel
               agentId={id!}
               items={startupItems}
@@ -2196,7 +2221,7 @@ export default function AgentDetail() {
         )}
 
         {activeDataTab === 'scheduledTasks' && (
-          <div style={{ height: 'min(860px, 75vh)' }} className='overflow-y-auto overscroll-auto'>
+          <div style={{ maxHeight: 'min(860px, 75vh)' }} className='w-full min-w-0 max-w-full overflow-x-hidden overflow-y-auto overscroll-auto'>
             <AgentScheduledTasksPanel
               agentId={id!}
               tasks={scheduledTasks}
@@ -2213,7 +2238,7 @@ export default function AgentDetail() {
         )}
 
         {activeDataTab === 'logs' && (
-          <div style={{ height: 'min(860px, 75vh)' }} className="overflow-y-auto overscroll-auto">
+          <div style={{ maxHeight: 'min(860px, 75vh)' }} className="w-full min-w-0 max-w-full overflow-x-hidden overflow-y-auto overscroll-auto">
             <>
             <CardHeader title="Logs Recentes" />
             <div className="space-y-2">

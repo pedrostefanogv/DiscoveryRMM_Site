@@ -309,18 +309,17 @@ export default function AgentStartupItemsPanel({
           description='Nenhum item de inicialização coletado para este agent com os filtros atuais.'
         />
       ) : (
-        <div style={{ maxHeight: 'min(640px, 55vh)' }} className='overflow-y-auto overscroll-auto'>
-          <DataTable
-            columns={columns}
-            data={filtered}
-            keyExtractor={(item) =>
-              [item.type, item.source, item.name, item.username ?? ''].join('|')
-            }
-            onRowContextMenu={openMenu}
-            showPagination={false}
-            emptyMessage='Nenhum item de inicialização encontrado'
-          />
-        </div>
+        <DataTable
+          columns={columns}
+          data={filtered}
+          keyExtractor={(item) =>
+            [item.type, item.source, item.name, item.username ?? ''].join('|')
+          }
+          onRowContextMenu={openMenu}
+          showPagination={false}
+          emptyMessage='Nenhum item de inicialização encontrado'
+          maxHeight='min(640px, 55vh)'
+        />
       )}
 
       {menu && (
