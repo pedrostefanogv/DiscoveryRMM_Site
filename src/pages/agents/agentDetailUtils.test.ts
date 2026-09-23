@@ -6,6 +6,7 @@ import {
   agentDetailBackTarget,
   agentDetailTabFromSlug,
   agentDetailTabSlug,
+  scheduledTaskLastResultLabel,
   type AgentDetailDataTab,
 } from "./agentDetailUtils";
 
@@ -69,5 +70,22 @@ describe("agentDetailBackTarget", () => {
   it("volta para a listagem quando o índice de histórico é ausente/inválido", () => {
     expect(agentDetailBackTarget(null)).toBe(AGENT_DETAIL_FALLBACK_ROUTE);
     expect(agentDetailBackTarget(undefined)).toBe(AGENT_DETAIL_FALLBACK_ROUTE);
+  });
+});
+
+describe("scheduledTaskLastResultLabel", () => {
+  it("trata 0 como sucesso", () => {
+    expect(scheduledTaskLastResultLabel(0)).toBe("Sucesso (0)");
+  });
+
+  it("exibe o código para os demais HRESULTs", () => {
+    expect(scheduledTaskLastResultLabel(1)).toBe("Código 1");
+    expect(scheduledTaskLastResultLabel(-2147024891)).toBe("Código -2147024891");
+  });
+
+  it("cai no traço quando o resultado é ausente", () => {
+    expect(scheduledTaskLastResultLabel(null)).toBe("—");
+    expect(scheduledTaskLastResultLabel(undefined)).toBe("—");
+    expect(scheduledTaskLastResultLabel(Number.NaN)).toBe("—");
   });
 });

@@ -221,6 +221,18 @@ export function scheduledTaskStateColor(
   return state.toLowerCase() === "disabled" ? "danger" : "success";
 }
 
+/**
+ * Rótulo do último resultado (HRESULT) de uma tarefa agendada.
+ * 0 é sucesso; os demais valores são exibidos como código numérico.
+ */
+export function scheduledTaskLastResultLabel(
+  result: number | null | undefined,
+): string {
+  if (result === null || result === undefined || Number.isNaN(result)) return "—";
+  if (result === 0) return "Sucesso (0)";
+  return `Código ${result}`;
+}
+
 
 export interface AgentCommandOutcome {
   ok: boolean;

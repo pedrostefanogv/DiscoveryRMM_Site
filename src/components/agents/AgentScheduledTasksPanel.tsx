@@ -1,9 +1,10 @@
-import { useCallback, useMemo, useState, type MouseEvent } from 'react';
+import { useCallback, useMemo, useState, type MouseEvent, type ReactNode } from 'react';
 import {
   Ban,
   CalendarClock,
   Clock,
   Copy,
+  Info,
   Pencil,
   Play,
   RefreshCw,
@@ -31,6 +32,7 @@ import { useAgentScheduledTaskAction } from '@/hooks/useAgents';
 import {
   awaitAgentCommandResult,
   normalizeScheduledTaskTriggerDesc,
+  scheduledTaskLastResultLabel,
   scheduledTaskStateColor,
   scheduledTaskTriggerLabel,
 } from '@/pages/agents/agentDetailUtils';
@@ -92,6 +94,21 @@ interface ConfirmState {
   action: 'enable' | 'disable' | 'delete';
 }
 
+/** Linha rótulo/valor usada no card de detalhes da tarefa. */
+function DetailItem({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div className='min-w-0 rounded-lg border border-border bg-surface-light px-3 py-2'>
+      <p className='text-[11px] uppercase tracking-wide text-muted'>{label}</p>
+      <p
+        className='mt-0.5 truncate text-sm text-foreground'
+        title={typeof value === 'string' ? value : undefined}
+      >
+        {value}
+      </p>
+    </div>
+  );
+}
+
 export default function AgentScheduledTasksPanel({
   agentId,
   tasks,
@@ -109,6 +126,7 @@ export default function AgentScheduledTasksPanel({
   const [menu, setMenu] = useState<MenuState | null>(null);
   const [confirmState, setConfirmState] = useState<ConfirmState | null>(null);
   const [editState, setEditState] = useState<EditState | null>(null);
+  const [detailsState, setDetailsState] = useState<ScheduledTaskInfo | null>(null);
   const [isConfirmWorking, setIsConfirmWorking] = useState(false);
 
   // ── Campos do modal de edição ──
@@ -309,6 +327,16 @@ export default function AgentScheduledTasksPanel({
   const menuItems: ContextMenuItem[] = menu
     ? [
         {
+          key: 'details',
+          label: 'Ver detalhes',
+          icon: <Info className='h-4 w-4' />,
+          onClick: () => {
+            const task = menu.task;
+            setMenu(null);
+            setDetailsState(task);
+          },
+        },
+        {
           key: 'toggle',
           label:
             menu.task.state?.toLowerCase() === 'disabled'
@@ -364,11 +392,54 @@ export default function AgentScheduledTasksPanel({
       ]
     : [];
 
+  const renderTaskDetails = (task: ScheduledTaskInfo) => {
+    const triggerLabel =
+      normalizeScheduledTaskTriggerDesc(task.triggerDesc) ||
+      scheduledTaskTriggerLabel(task.triggerType);
+    const nextRun = task.nextRunTime ? new Date(task.nextRunTime).toLocaleString('pt-BR') : '—';
+    const lastRun = task.lastRunTime ? new Date(task.lastRunTime).toLocaleString('pt-BR') : '—';
+    const action = task.actionPath
+      ? `${task.actionPath}${task.actionArgs ? ` ${task.actionArgs}` : ''}`
+      : '—';
+
+    return (
+      <div className='space-y-3'>
+        <div className='flex items-start justify-between gap-3'>
+          <div className='min-w-0'>
+            <p className='truncate text-sm font-semibold text-foreground'>{task.taskName}</p>
+            <p className='mt-0.5 break-all font-mono text-[11px] text-muted'>
+              {(task.taskPath || '\\') + task.taskName}
+            </p>
+          </div>
+          <Badge color={scheduledTaskStateColor(task.state)}>
+            {task.state?.toLowerCase() === 'disabled' ? 'Desabilitada' : 'Habilitada'}
+          </Badge>
+        </div>
+
+        <div className='grid gap-2 sm:grid-cols-2'>
+          <DetailItem label='Gatilho' value={triggerLabel} />
+          <DetailItem label='Próxima execução' value={nextRun} />
+          <DetailItem label='Última execução' value={lastRun} />
+          <DetailItem label='Último resultado' value={scheduledTaskLastResultLabel(task.lastResult)} />
+          <DetailItem label='Status' value={task.status || '—'} />
+          <DetailItem label='Autor' value={task.author || '—'} />
+        </div>
+
+        <div className='min-w-0 rounded-lg border border-border bg-surface-light px-3 py-2'>
+          <p className='text-[11px] uppercase tracking-wide text-muted'>Executa</p>
+          <p className='mt-0.5 break-all font-mono text-xs text-muted-foreground'>{action}</p>
+        </div>
+      </div>
+    );
+  };
+
+  // Lista simplificada: nome/estado. O restante (gatilho, execuções, ação)
+  // aparece no card ao passar o mouse ou em "Ver detalhes" no botão direito.
   const columns: Column<ScheduledTaskInfo>[] = [
     {
       key: 'taskName',
       header: 'Tarefa',
-      width: '24%',
+      width: '70%',
       render: (task) => (
         <div className='min-w-0'>
           <p className='truncate font-medium text-foreground' title={task.taskName}>
@@ -383,52 +454,12 @@ export default function AgentScheduledTasksPanel({
     {
       key: 'state',
       header: 'Estado',
-      width: '12%',
+      width: '30%',
       className: 'whitespace-nowrap',
       render: (task) => (
         <Badge color={scheduledTaskStateColor(task.state)}>
           {task.state?.toLowerCase() === 'disabled' ? 'Desabilitada' : 'Habilitada'}
         </Badge>
-      ),
-    },
-    {
-      key: 'trigger',
-      header: 'Gatilho',
-      width: '22%',
-      render: (task) => {
-        const label =
-          normalizeScheduledTaskTriggerDesc(task.triggerDesc) ||
-          scheduledTaskTriggerLabel(task.triggerType);
-        return (
-          <span className='block truncate' title={label}>
-            {label}
-          </span>
-        );
-      },
-    },
-    {
-      key: 'nextRunTime',
-      header: 'Próxima execução',
-      width: '16%',
-      className: 'hidden whitespace-nowrap lg:table-cell',
-      render: (task) => (task.nextRunTime ? new Date(task.nextRunTime).toLocaleString('pt-BR') : '—'),
-    },
-    {
-      key: 'lastRunTime',
-      header: 'Última execução',
-      width: '12%',
-      className: 'hidden whitespace-nowrap xl:table-cell',
-      render: (task) => (task.lastRunTime ? new Date(task.lastRunTime).toLocaleString('pt-BR') : '—'),
-    },
-    {
-      key: 'actionPath',
-      header: 'Executa',
-      width: '14%',
-      className: 'hidden xl:table-cell',
-      render: (task) => (
-        <span className='block truncate font-mono text-xs text-muted-foreground' title={(task.actionPath || '') + ' ' + (task.actionArgs || '')}>
-          {task.actionPath || '—'}
-        </span>
       ),
     },
   ];
@@ -516,6 +547,8 @@ export default function AgentScheduledTasksPanel({
           data={filtered}
           keyExtractor={(task) => (task.taskPath || '') + task.taskName}
           onRowContextMenu={openMenu}
+          rowHoverCard={renderTaskDetails}
+          rowHoverDelayMs={1500}
           showPagination={false}
           emptyMessage='Nenhuma tarefa agendada encontrada'
           maxHeight='min(560px, 52vh)'
@@ -526,6 +559,25 @@ export default function AgentScheduledTasksPanel({
       {menu && (
         <ContextMenu position={{ x: menu.x, y: menu.y }} items={menuItems} onClose={() => setMenu(null)} />
       )}
+
+      {/* Detalhes da tarefa — aberto pelo botão direito ("Ver detalhes") */}
+      <Modal
+        open={detailsState !== null}
+        onClose={() => setDetailsState(null)}
+        title='Detalhes da tarefa'
+        maxWidth='max-w-xl'
+      >
+        {detailsState && (
+          <div className='space-y-4'>
+            {renderTaskDetails(detailsState)}
+            <div className='flex justify-end'>
+              <Button variant='ghost' size='sm' onClick={() => setDetailsState(null)}>
+                Fechar
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
 
       {/* Confirmação de habilitar/desabilitar/excluir */}
       <Modal
@@ -686,7 +738,8 @@ export default function AgentScheduledTasksPanel({
 
       <p className='mt-3 flex items-center gap-2 text-xs text-muted'>
         <Clock className='h-3.5 w-3.5' />
-        Clique com o botão direito em uma tarefa para habilitar, desabilitar, executar, editar ou excluir.
+        Passe o mouse sobre uma tarefa para ver os detalhes ou clique com o botão direito para ver
+        detalhes, habilitar, desabilitar, executar, editar ou excluir.
       </p>
     </div>
   );
