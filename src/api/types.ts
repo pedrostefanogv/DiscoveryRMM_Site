@@ -254,8 +254,23 @@ export interface OpenSocketInfo {
   remotePort: number;
   protocol: string | null;
   family: string | null;
+  /** Estado TCP (MIB_TCP_STATE) no momento da coleta: ESTABLISHED, TIME_WAIT, CLOSE_WAIT... */
+  state: string | null;
   collectedAt: string;
 }
+
+/** Página por cursor (ponteiro) sobre listas do snapshot de componentes. */
+export interface AgentNetworkCursorPage<T> {
+  items: T[];
+  totalCount: number;
+  cursor: string | null;
+  nextCursor: string | null;
+  hasMore: boolean;
+  limit: number;
+}
+
+export type AgentListeningPortsPage = AgentNetworkCursorPage<ListeningPortInfo>;
+export type AgentOpenSocketsPage = AgentNetworkCursorPage<OpenSocketInfo>;
 
 export interface PrinterInfo {
   name: string;

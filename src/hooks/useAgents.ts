@@ -6,6 +6,7 @@ import {
   keepPreviousData,
 } from "@tanstack/react-query";
 import { ApiError, agentsApi } from "@/api";
+import { LISTENING_PORTS_BACKEND_LIMIT, OPEN_SOCKETS_BACKEND_LIMIT } from "@/api/backendLimits";
 import type {
   AgentSoftwareInventoryPage,
   AgentSoftwareOrder,
@@ -42,6 +43,14 @@ const KEYS = {
     [...KEYS.all, "softwareSnapshot", id] as const,
   hardwareComponents: (id: string) =>
     [...KEYS.all, "hardwareComponents", id] as const,
+  listeningPortsPage: (
+    id: string,
+    params: { cursor?: string; limit: number; search: string },
+  ) => [...KEYS.all, "listeningPortsPage", id, params] as const,
+  openSocketsPage: (
+    id: string,
+    params: { cursor?: string; limit: number; search: string },
+  ) => [...KEYS.all, "openSocketsPage", id, params] as const,
   commands: (id: string) => [...KEYS.all, "commands", id] as const,
   tokens: (id: string) => [...KEYS.all, "tokens", id] as const,
 };
@@ -256,10 +265,70 @@ export function useAgentHardwareComponents(
   return useQuery({
     queryKey: KEYS.hardwareComponents(id),
     queryFn: () => agentsApi.getHardwareComponents(id),
-    // Payload pesado (portas/sockets/impressoras/discos) — carregar sob
-    // demanda quando a aba correspondente estiver ativa.
+    // Payload pesado (impressoras/discos/startup/tarefas) — carregar sob
+    // demanda quando a aba correspondente estiver ativa. Portas e conexões
+    // têm endpoints próprios paginados por cursor (abaixo) e não passam por aqui.
     enabled: !!id && (options?.enabled ?? true),
     staleTime: 30_000,
+  });
+}
+
+/**
+ * Paginação por cursor (ponteiro) das portas em escuta do agente.
+ * O chamador gerencia o cursor (pilha de navegação) e o limite; o backend
+ * devolve a página, o total filtrado e o próximo ponteiro.
+ */
+export function useAgentListeningPortsPage(
+  id: string,
+  params?: { cursor?: string; limit?: number; search?: string },
+) {
+  const safeLimit = Math.min(LISTENING_PORTS_BACKEND_LIMIT, Math.max(1, params?.limit ?? 50));
+  const safeSearch = params?.search?.trim() ?? "";
+
+  return useQuery({
+    queryKey: KEYS.listeningPortsPage(id, {
+      cursor: params?.cursor,
+      limit: safeLimit,
+      search: safeSearch,
+    }),
+    queryFn: ({ signal }) =>
+      agentsApi.getListeningPortsPage(
+        id,
+        { cursor: params?.cursor, limit: safeLimit, search: safeSearch },
+        { signal },
+      ),
+    enabled: !!id,
+    staleTime: 30_000,
+    placeholderData: keepPreviousData,
+  });
+}
+
+/**
+ * Paginação por cursor (ponteiro) das conexões abertas do agente, incluindo o
+ * estado TCP de cada conexão. O chamador gerencia o cursor e o limite.
+ */
+export function useAgentOpenSocketsPage(
+  id: string,
+  params?: { cursor?: string; limit?: number; search?: string },
+) {
+  const safeLimit = Math.min(OPEN_SOCKETS_BACKEND_LIMIT, Math.max(1, params?.limit ?? 50));
+  const safeSearch = params?.search?.trim() ?? "";
+
+  return useQuery({
+    queryKey: KEYS.openSocketsPage(id, {
+      cursor: params?.cursor,
+      limit: safeLimit,
+      search: safeSearch,
+    }),
+    queryFn: ({ signal }) =>
+      agentsApi.getOpenSocketsPage(
+        id,
+        { cursor: params?.cursor, limit: safeLimit, search: safeSearch },
+        { signal },
+      ),
+    enabled: !!id,
+    staleTime: 30_000,
+    placeholderData: keepPreviousData,
   });
 }
 

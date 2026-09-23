@@ -12,6 +12,8 @@ import type {
   MemoryModuleInfo,
   ListeningPortInfo,
   OpenSocketInfo,
+  AgentListeningPortsPage,
+  AgentOpenSocketsPage,
   PrinterInfo,
   AgentSoftwareInventoryPage,
   AgentSoftwareInventorySnapshot,
@@ -112,6 +114,31 @@ export const agentsApi = {
 
   getHardwareComponents: (id: string) =>
     api.get<HardwareComponentsResponse>(`${BASE}/${id}/hardware/components`),
+
+  // Portas em escuta — paginação por cursor (ponteiro) sobre o snapshot de
+  // componentes; o browser carrega uma página por vez em vez da lista inteira.
+  getListeningPortsPage: (
+    id: string,
+    params?: { cursor?: string; limit?: number; search?: string },
+    init?: ApiRequestInit,
+  ) =>
+    api.get<AgentListeningPortsPage>(`${BASE}/${id}/hardware/network/ports`, {
+      cursor: params?.cursor,
+      limit: params?.limit,
+      search: params?.search,
+    }, init),
+
+  // Conexões abertas — paginação por cursor (ponteiro) com estado TCP.
+  getOpenSocketsPage: (
+    id: string,
+    params?: { cursor?: string; limit?: number; search?: string },
+    init?: ApiRequestInit,
+  ) =>
+    api.get<AgentOpenSocketsPage>(`${BASE}/${id}/hardware/network/sockets`, {
+      cursor: params?.cursor,
+      limit: params?.limit,
+      search: params?.search,
+    }, init),
 
   reportHardware: (id: string, data: HardwareReportRequest) =>
     api.post<void>(`${BASE}/${id}/hardware`, data),
