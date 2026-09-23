@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft, Bell, Cpu, MemoryStick, Ticket as TicketIcon,
-  Monitor, Wifi, WifiOff, AppWindow, Search, Clock, HardDrive, Printer, Bug, AlertTriangle, Trash2, ShieldCheck, Plus, Gauge, Power, RotateCcw, Zap, ChevronDown, ChevronRight, RefreshCw,
+  Monitor, Wifi, WifiOff, AppWindow, Search, Clock, HardDrive, Printer, Bug, AlertTriangle, Trash2, ShieldCheck, Plus, Gauge, Power, RotateCcw, Zap, ChevronDown, ChevronRight, RefreshCw, ArrowUpCircle,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getDeleteAgentErrorMessage, useAgent, useAgentHardware, useAgentHardwareComponents, useAgentListeningPortsPage, useAgentOpenSocketsPage, useAgentSoftwarePage, useAgentSoftwareSnapshot, useApproveZeroTouch, useDeleteAgent, useRestartAgent, useShutdownAgent, useWakeOnLan } from '@/hooks/useAgents';
@@ -110,6 +110,8 @@ export default function AgentDetail() {
   const [isRefreshingPorts, setIsRefreshingPorts] = useState(false);
   const [isRefreshingConnections, setIsRefreshingConnections] = useState(false);
   const [isRefreshingSoftware, setIsRefreshingSoftware] = useState(false);
+  // InventoryId do app cuja atualização está sendo disparada (spinner por linha).
+  const [updatingSoftwareId, setUpdatingSoftwareId] = useState<string | null>(null);
   const [isRefreshingPrinters, setIsRefreshingPrinters] = useState(false);
   const [isRefreshingStartup, setIsRefreshingStartup] = useState(false);
   const [isRefreshingScheduledTasks, setIsRefreshingScheduledTasks] = useState(false);
@@ -387,6 +389,7 @@ export default function AgentDetail() {
     software.data?.totalPages ?? Math.max(1, Math.ceil(softwareTotalCount / softwarePageSize));
   const safeSoftwarePage = Math.min(softwarePage, softwareTotalPages);
   const softwareItems = software.data?.items ?? [];
+  const softwareUpdatesCount = softwareItems.filter((item) => item.updateAvailable).length;
 
   // Corrige estado da página para o range válido quando o total diminui (ex.: busca/filtro)
   useEffect(() => {
@@ -905,6 +908,20 @@ export default function AgentDetail() {
     }
   };
 
+  const handleUpdateSoftware = async (item: AgentSoftwareInventoryItem) => {
+    if (!id || updatingSoftwareId) return;
+    setUpdatingSoftwareId(item.inventoryId);
+    try {
+      await agentsApi.updateSoftware(id, item.inventoryId);
+      toast.success(`Atualização de "${item.name}" enviada ao agente.`);
+    } catch (error) {
+      const msg = error instanceof ApiError ? error.message : 'Falha ao solicitar atualização do aplicativo.';
+      toast.error(msg);
+    } finally {
+      setUpdatingSoftwareId(null);
+    }
+  };
+
   const handleRefreshPrinters = async () => {
     if (!id || isRefreshingPrinters) return;
     setIsRefreshingPrinters(true);
@@ -990,13 +1007,43 @@ export default function AgentDetail() {
       header: 'Versão',
       className: 'font-mono',
       sortable: false,
-      render: item => item.version ?? '\u2014',
+      render: item => (
+        <div className="flex flex-wrap items-center gap-2">
+          <span>{item.version ?? '\u2014'}</span>
+          {item.updateAvailable && item.availableVersion && (
+            <Badge color="warning">&rarr; {item.availableVersion}</Badge>
+          )}
+        </div>
+      ),
     },
     {
       key: 'source',
       header: 'Fonte',
       sortable: false,
       render: item => item.source ?? '\u2014',
+    },
+    {
+      key: 'update',
+      header: 'Atualização',
+      sortable: false,
+      render: item => item.updateAvailable ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge color="warning">Disponível</Badge>
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => void handleUpdateSoftware(item)}
+            loading={updatingSoftwareId === item.inventoryId}
+            disabled={!isOnlineNow || updatingSoftwareId !== null}
+            title={!isOnlineNow ? 'Agente offline \u2014 atualização indisponível' : `Atualizar ${item.name}`}
+          >
+            <ArrowUpCircle className="h-3.5 w-3.5" />
+            Atualizar
+          </Button>
+        </div>
+      ) : (
+        <span className="text-xs text-muted">\u2014</span>
+      ),
     },
     {
       key: 'collectedAt',
@@ -1831,7 +1878,12 @@ export default function AgentDetail() {
             <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h3 className="text-lg font-semibold text-foreground sm:text-xl">Aplicativos</h3>
-                <p className="text-sm text-muted">{softwareTotalCount} aplicativo(s) no inventário</p>
+                <p className="text-sm text-muted">
+                  {softwareTotalCount} aplicativo(s) no inventário
+                  {softwareUpdatesCount > 0 && (
+                    <span className="ml-2 font-medium text-warning">· {softwareUpdatesCount} com atualização disponível</span>
+                  )}
+                </p>
               </div>
               <Button
                 size="sm"

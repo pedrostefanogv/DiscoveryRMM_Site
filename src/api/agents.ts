@@ -317,6 +317,13 @@ export const agentsApi = {
       flags: Record<string, boolean>;
     }>(`${BASE}/${id}/refresh-data`, flags),
 
+  // Software — dispara a atualização de um app instalado (winget/choco)
+  updateSoftware: (id: string, inventoryId: string) =>
+    api.post<{ success: boolean; dispatched: boolean }>(
+      `${BASE}/${id}/software/${inventoryId}/update`,
+      {},
+    ),
+
   // Inicialização do Windows — habilitar/desabilitar item
   startupItemAction: (id: string, data: StartupItemActionRequest) =>
     api.post<{ success: boolean; dispatched: boolean }>(

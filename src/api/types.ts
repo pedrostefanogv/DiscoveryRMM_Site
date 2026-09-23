@@ -365,6 +365,11 @@ export interface AgentSoftwareInventoryItem {
   collectedAt: string;
   firstSeenAt: string | null;
   lastSeenAt: string | null;
+  /** Versão disponível quando há atualização pendente (winget/chocolatey). */
+  availableVersion: string | null;
+  updateAvailable: boolean;
+  /** Gerenciador de pacotes do update: "winget" | "chocolatey". */
+  updateSource: string | null;
 }
 
 export type AgentSoftwareOrder = "asc" | "desc";
