@@ -231,8 +231,10 @@ export interface MemoryModuleInfo {
 }
 
 export interface ListeningPortInfo {
-  id: string;
-  agentId: string;
+  // Os DTOs da API (/hardware/components e /hardware/network/ports) não expõem
+  // o Id/AgentId do registro — não usar como chave de lista (usar chave composta).
+  id?: string;
+  agentId?: string;
   processName: string | null;
   processId: number;
   processPath: string | null;
@@ -243,8 +245,10 @@ export interface ListeningPortInfo {
 }
 
 export interface OpenSocketInfo {
-  id: string;
-  agentId: string;
+  // Os DTOs da API não expõem o Id/AgentId do registro — não usar como chave de
+  // lista (usar chave composta).
+  id?: string;
+  agentId?: string;
   processName: string | null;
   processId: number;
   processPath: string | null;

@@ -112,8 +112,10 @@ export const agentsApi = {
   getHardware: (id: string, init?: ApiRequestInit) =>
     api.get<HardwareReport>(`${BASE}/${id}/hardware`, {}, init),
 
-  getHardwareComponents: (id: string) =>
-    api.get<HardwareComponentsResponse>(`${BASE}/${id}/hardware/components`),
+  getHardwareComponents: (id: string, params?: { includeNetwork?: boolean }) =>
+    api.get<HardwareComponentsResponse>(`${BASE}/${id}/hardware/components`, {
+      includeNetwork: params?.includeNetwork,
+    }),
 
   // Portas em escuta — paginação por cursor (ponteiro) sobre o snapshot de
   // componentes; o browser carrega uma página por vez em vez da lista inteira.

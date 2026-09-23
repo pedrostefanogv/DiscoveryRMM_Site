@@ -41,8 +41,10 @@ const KEYS = {
   ) => [...KEYS.all, "softwarePage", id, params] as const,
   softwareSnapshot: (id: string) =>
     [...KEYS.all, "softwareSnapshot", id] as const,
-  hardwareComponents: (id: string) =>
-    [...KEYS.all, "hardwareComponents", id] as const,
+  // Sem includeNetwork, devolve só o prefixo — usado para invalidar todas as
+  // variantes do cache (invalidateQueries casa por prefixo).
+  hardwareComponents: (id: string, includeNetwork?: boolean) =>
+    [...KEYS.all, "hardwareComponents", id, ...(includeNetwork === undefined ? [] : [includeNetwork])] as const,
   listeningPortsPage: (
     id: string,
     params: { cursor?: string; limit: number; search: string },
@@ -260,11 +262,11 @@ export function useAgentSoftwareSnapshot(id: string) {
 
 export function useAgentHardwareComponents(
   id: string,
-  options?: { enabled?: boolean },
+  options?: { enabled?: boolean; includeNetwork?: boolean },
 ) {
   return useQuery({
-    queryKey: KEYS.hardwareComponents(id),
-    queryFn: () => agentsApi.getHardwareComponents(id),
+    queryKey: KEYS.hardwareComponents(id, options?.includeNetwork ?? true),
+    queryFn: () => agentsApi.getHardwareComponents(id, { includeNetwork: options?.includeNetwork }),
     // Payload pesado (impressoras/discos/startup/tarefas) — carregar sob
     // demanda quando a aba correspondente estiver ativa. Portas e conexões
     // têm endpoints próprios paginados por cursor (abaixo) e não passam por aqui.

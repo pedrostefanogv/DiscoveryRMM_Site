@@ -152,7 +152,12 @@ export default function AgentDetail() {
     activeDataTab === 'printers' ||
     activeDataTab === 'startupItems' ||
     activeDataTab === 'scheduledTasks';
-  const hwComponents = useAgentHardwareComponents(id!, { enabled: dataTabNeedsComponents });
+  // Portas e conexões têm endpoints próprios paginados por cursor; o payload
+  // pesado do /hardware/components é buscado sem as listas de rede.
+  const hwComponents = useAgentHardwareComponents(id!, {
+    enabled: dataTabNeedsComponents,
+    includeNetwork: false,
+  });
   // Paginação por cursor (ponteiro) das abas de rede: busca apenas a página
   // visível com total filtrado e o próximo ponteiro — substitui o fetch-all de
   // portas/sockets que vinha do /hardware/components.
