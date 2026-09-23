@@ -11,6 +11,9 @@ import type {
   PresignedUploadRequest,
   CompleteUploadRequest,
   StartTicketRemoteSessionRequest,
+  ReopenTicketRequest,
+  RateTicketRequest,
+  CreateTicketRelationRequest,
 } from "@/api";
 
 const KEYS = {
@@ -23,8 +26,8 @@ const KEYS = {
   remoteSessions: (id: string) => [...KEYS.all, "remote-sessions", id] as const,
   timeline: (id: string) => [...KEYS.all, "timeline", id] as const,
   attachments: (id: string) => [...KEYS.all, "attachments", id] as const,
-  slaStatus: (id: string) => [...KEYS.all, "sla-status", id] as const,
   slaDetails: (id: string) => [...KEYS.all, "sla-details", id] as const,
+  relations: (id: string) => [...KEYS.all, "relations", id] as const,
 };
 
 export function useTickets(params: TicketsQuery = {}, options?: { enabled?: boolean }) {
@@ -84,15 +87,6 @@ export function useTicketTimeline(id: string) {
     queryKey: KEYS.timeline(id),
     queryFn: () => ticketsApi.getTimeline(id),
     enabled: !!id,
-  });
-}
-
-export function useSlaStatus(id: string) {
-  return useQuery({
-    queryKey: KEYS.slaStatus(id),
-    queryFn: () => ticketsApi.getSlaStatus(id),
-    enabled: !!id,
-    refetchInterval: 300_000,
   });
 }
 
@@ -242,3 +236,56 @@ export function useCompleteTicketUpload() {
       qc.invalidateQueries({ queryKey: KEYS.attachments(vars.ticketId) }),
   });
 }
+
+export function useReopenTicket() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: ReopenTicketRequest }) =>
+      ticketsApi.reopen(id, data),
+    onSuccess: (_result, vars) => {
+      qc.invalidateQueries({ queryKey: KEYS.detail(vars.id) });
+      qc.invalidateQueries({ queryKey: KEYS.all });
+    },
+  });
+}
+
+export function useRateTicket() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: RateTicketRequest }) =>
+      ticketsApi.rate(id, data),
+    onSuccess: (_result, vars) => {
+      qc.invalidateQueries({ queryKey: KEYS.detail(vars.id) });
+      qc.invalidateQueries({ queryKey: KEYS.all });
+    },
+  });
+}
+
+export function useTicketRelations(id: string) {
+  return useQuery({
+    queryKey: KEYS.relations(id),
+    queryFn: () => ticketsApi.listRelations(id),
+    enabled: !!id,
+  });
+}
+
+export function useCreateTicketRelation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: CreateTicketRelationRequest }) =>
+      ticketsApi.createRelation(id, data),
+    onSuccess: (_result, vars) =>
+      qc.invalidateQueries({ queryKey: KEYS.relations(vars.id) }),
+  });
+}
+
+export function useDeleteTicketRelation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, relationId }: { id: string; relationId: string }) =>
+      ticketsApi.removeRelation(id, relationId),
+    onSuccess: (_result, vars) =>
+      qc.invalidateQueries({ queryKey: KEYS.relations(vars.id) }),
+  });
+}
+

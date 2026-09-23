@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Send, Lock, Unlock, Clock, Activity, ChevronDown, BookOpen, Paperclip, Upload, File, CheckCircle, XCircle, Loader2, UserPlus, UserMinus, Wrench, Copy } from 'lucide-react';
+import { ArrowLeft, Send, Lock, Unlock, Clock, Activity, ChevronDown, BookOpen, Paperclip, Upload, File, CheckCircle, XCircle, Loader2, UserPlus, UserMinus, Wrench, Copy, RotateCcw, Star, Trash2, Link2 } from 'lucide-react';
 import { MarkdownViewer } from '@/components/ui/MarkdownViewer';
 import { useAuth } from '@/auth/AuthContext';
 import { getUserIdFromJwt } from '@/auth/jwt';
@@ -19,7 +19,13 @@ import {
   useTicketAttachments,
   usePrepareTicketUpload,
   useCompleteTicketUpload,
+  useReopenTicket,
+  useRateTicket,
+  useTicketRelations,
+  useCreateTicketRelation,
+  useDeleteTicketRelation,
 } from '@/hooks/useTickets';
+import { useTicketMacros } from '@/hooks/useSupportProductivity';
 import { useAutomationTasks } from '@/hooks/useAutomation';
 import { useTicketAttachmentSettings } from '@/hooks/useConfigurationApi';
 import { useSiteTicketAttachmentSettings, useClientTicketAttachmentSettings } from '@/hooks/useConfigurationApi';
@@ -59,6 +65,7 @@ import type {
   TicketAiSummaryResponse,
   TicketAiTriageResponse,
   TicketPriority,
+  TicketRelationKind,
   UpdateTicketRequest,
   UserDto,
 } from '@/api';
@@ -66,21 +73,31 @@ import toast from 'react-hot-toast';
 import { getTicketPriorityMeta } from '@/utils/labels';
 
 const ACTIVITY_LABELS: Record<string, string> = {
-  Created:           'Criado',
-  StateChanged:      'Estado alterado',
-  Assigned:          'Atribuído',
-  Commented:         'Comentado',
-  SlaWarning:        'Aviso SLA',
-  SlaBreached:       'SLA violado',
-  Escalated:         'Escalado',
-  Reopened:          'Reaberto',
-  DepartmentChanged: 'Depto. alterado',
-  PriorityChanged:   'Prioridade alterada',
-  DescriptionUpdated:'Descrição atualizada',
-  CategoryChanged:   'Categoria alterada',
-   AutomationLinked:  'Automação vinculada',
-   AutomationApproved:'Automação aprovada',
-   AutomationRejected:'Automação rejeitada',
+  Created:              'Criado',
+  StateChanged:         'Estado alterado',
+  Assigned:             'Atribuído',
+  Commented:            'Comentado',
+  SlaWarning:           'Aviso de SLA',
+  SlaBreached:          'SLA violado',
+  Escalated:            'Escalado',
+  Reopened:             'Reaberto',
+  DepartmentChanged:    'Departamento alterado',
+  PriorityChanged:      'Prioridade alterada',
+  DescriptionUpdated:   'Descrição atualizada',
+  CategoryChanged:      'Categoria alterada',
+  Deleted:              'Excluído',
+  RemoteSessionStarted: 'Sessão remota iniciada',
+  RemoteSessionEnded:   'Sessão remota encerrada',
+  AutomationLinked:     'Automação vinculada',
+  AutomationApproved:   'Automação aprovada',
+  AutomationRejected:   'Automação rejeitada',
+  AutoCreatedFromAlert: 'Criado automaticamente por alerta',
+  TicketMerged:         'Chamados mesclados',
+  TicketRelationAdded:  'Relacionamento adicionado',
+  TicketRelationRemoved:'Relacionamento removido',
+  KnowledgeLinked:      'Artigo vinculado',
+  KnowledgeUnlinked:    'Artigo desvinculado',
+  Rated:                'Avaliado',
 };
 
 type Tab = 'comments' | 'timeline' | 'attachments' | 'automation' | 'ai';
@@ -140,13 +157,12 @@ export default function TicketDetail() {
     ticket.data?.clientId ?? null,
   );
 
-  if (ticket.isLoading) return <Loading />;
-  if (ticket.isError || !ticket.data) return <ErrorDisplay onRetry={() => ticket.refetch()} />;
-
-  const t = ticket.data;
-  const p = getTicketPriorityMeta(t.priority);
   const attachmentsEnabled = attachmentSettings.data?.enabled !== false;
 
+  // Effect registrado ANTES dos returns condicionais: chamá-lo depois do
+  // "if (ticket.isLoading) return" mudava a ORDEM de hooks entre o render de
+  // loading e o render com dados, disparando
+  // "Rendered more hooks than during the previous render".
   // Se os anexos forem desabilitados com a aba aberta, volta para comentários
   // (senão o conteúdo mostra CommentsPanel sem nenhuma aba ativa).
   useEffect(() => {
@@ -154,6 +170,12 @@ export default function TicketDetail() {
       setTab('comments');
     }
   }, [attachmentsEnabled, tab]);
+
+  if (ticket.isLoading) return <Loading />;
+  if (ticket.isError || !ticket.data) return <ErrorDisplay onRetry={() => ticket.refetch()} />;
+
+  const t = ticket.data;
+  const p = getTicketPriorityMeta(t.priority);
   const currentUserName = currentUserId
     ? resolveUserDisplayName(iamUsersById, currentUserId)
     : 'Portal';
@@ -201,6 +223,7 @@ export default function TicketDetail() {
               </span>
             </Badge>
           )}
+          <ReopenButton ticketId={t.id} isClosed={Boolean(t.closedAt) || currentState?.isFinal === true} />
           <Button size="sm" variant="ghost" onClick={() => setEditing(e => !e)}>
             {editing ? 'Cancelar edição' : 'Editar'}
           </Button>
@@ -312,6 +335,8 @@ export default function TicketDetail() {
           />
           <TicketCustomFieldsPanel ticketId={id!} />
           <WorkflowPanel ticketId={id!} currentStateId={t.workflowStateId} />
+          <TicketRatingPanel ticket={t} />
+          <RelationsPanel ticketId={id!} />
           <WatchersPanel ticketId={id!} assignedToUserId={t.assignedToUserId} />
         </div>
       </div>
@@ -1599,6 +1624,181 @@ function SlaProgressBar({ pct, barColor }: { pct: number; barColor: string }) {
   );
 }
 
+function ReopenButton({ ticketId, isClosed }: { ticketId: string; isClosed: boolean }) {
+  const reopen = useReopenTicket();
+
+  if (!isClosed) return null;
+
+  const handleReopen = () => {
+    const reason = window.prompt('Motivo da reabertura (opcional):') ?? undefined;
+    reopen.mutate(
+      { id: ticketId, data: { reason: reason?.trim() || null } },
+      {
+        onSuccess: () => toast.success('Chamado reaberto'),
+        onError: (err) => toast.error(err instanceof Error ? err.message : 'Erro ao reabrir o chamado'),
+      },
+    );
+  };
+
+  return (
+    <Button size="sm" variant="secondary" onClick={handleReopen} loading={reopen.isPending}>
+      <RotateCcw className="h-4 w-4" /> Reabrir
+    </Button>
+  );
+}
+
+function TicketRatingPanel({ ticket }: { ticket: Ticket }) {
+  const rate = useRateTicket();
+  const [value, setValue] = useState(ticket.rating ?? 0);
+  const [feedback, setFeedback] = useState(ticket.ratingFeedback ?? '');
+  const isClosed = Boolean(ticket.closedAt) || ticket.rating != null;
+
+  useEffect(() => {
+    setValue(ticket.rating ?? 0);
+    setFeedback(ticket.ratingFeedback ?? '');
+  }, [ticket.id, ticket.rating, ticket.ratingFeedback]);
+
+  const submit = (rating: number) => {
+    if (rating < 1) return;
+    rate.mutate(
+      { id: ticket.id, data: { rating, feedback: feedback.trim() || null } },
+      {
+        onSuccess: () => toast.success('Avaliação registrada'),
+        onError: (err) => toast.error(err instanceof Error ? err.message : 'Erro ao avaliar o chamado'),
+      },
+    );
+  };
+
+  return (
+    <Card>
+      <CardHeader title="Avaliação (CSAT)" />
+      {!isClosed ? (
+        <p className="text-sm text-muted">Disponível após o encerramento do chamado.</p>
+      ) : (
+        <div className="space-y-3">
+          <div className="flex items-center gap-1" role="radiogroup" aria-label="Nota da avaliação">
+            {[1, 2, 3, 4, 5].map((star) => (
+              <button
+                key={star}
+                type="button"
+                aria-label={star + ' estrela(s)'}
+                onClick={() => setValue(star)}
+                className="p-0.5"
+              >
+                <Star className={star <= value ? 'h-5 w-5 fill-amber-400 text-amber-400' : 'h-5 w-5 text-muted'} />
+              </button>
+            ))}
+          </div>
+          <TextArea
+            placeholder="Feedback (opcional)"
+            value={feedback}
+            onChange={(e) => setFeedback(e.target.value)}
+          />
+          <Button size="sm" onClick={() => submit(value)} loading={rate.isPending} disabled={value < 1}>
+            Salvar avaliação
+          </Button>
+          {ticket.ratedAt && ticket.rating ? (
+            <p className="text-xs text-muted">
+              Avaliado em {new Date(ticket.ratedAt).toLocaleString('pt-BR')}
+              {ticket.ratedBy ? ' por ' + ticket.ratedBy : ''}
+            </p>
+          ) : null}
+        </div>
+      )}
+    </Card>
+  );
+}
+
+const RELATION_TYPE_OPTIONS: { value: TicketRelationKind; label: string }[] = [
+  { value: 'Duplicate', label: 'Duplicado de' },
+  { value: 'Blocks', label: 'Bloqueia' },
+  { value: 'RelatesTo', label: 'Relacionado a' },
+  { value: 'ParentOf', label: 'Pai de' },
+  { value: 'ChildOf', label: 'Filho de' },
+];
+
+function RelationsPanel({ ticketId }: { ticketId: string }) {
+  const relations = useTicketRelations(ticketId);
+  const create = useCreateTicketRelation();
+  const remove = useDeleteTicketRelation();
+  const [targetId, setTargetId] = useState('');
+  const [relationType, setRelationType] = useState<TicketRelationKind>('RelatesTo');
+
+  const items = Array.isArray(relations.data) ? relations.data : [];
+
+  const add = () => {
+    if (!targetId.trim()) return;
+    create.mutate(
+      { id: ticketId, data: { targetTicketId: targetId.trim(), relationType } },
+      {
+        onSuccess: () => {
+          toast.success('Relação criada');
+          setTargetId('');
+        },
+        onError: (err) => toast.error(err instanceof Error ? err.message : 'Erro ao criar relação'),
+      },
+    );
+  };
+
+  return (
+    <Card>
+      <CardHeader title="Relações" subtitle={items.length + ' vínculo(s)'} />
+      <div className="space-y-3">
+        {relations.isLoading && <Loading />}
+        {items.map((rel) => {
+          const other = rel.sourceTicketId === ticketId ? rel.targetTicketId : rel.sourceTicketId;
+          return (
+            <div key={rel.id} className="flex items-center justify-between gap-2 rounded-lg bg-surface-light px-3 py-2">
+              <div className="min-w-0">
+                <p className="truncate text-xs font-medium text-foreground">{rel.relationType}</p>
+                <p className="truncate text-xs text-muted">{other}</p>
+              </div>
+              <button
+                type="button"
+                aria-label="Remover relação"
+                onClick={() =>
+                  remove.mutate(
+                    { id: ticketId, relationId: rel.id },
+                    { onError: () => toast.error('Erro ao remover relação') },
+                  )
+                }
+                className="p-1 text-muted transition-colors hover:text-danger"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </div>
+          );
+        })}
+        {!relations.isLoading && items.length === 0 && (
+          <p className="text-sm text-muted">Nenhuma relação.</p>
+        )}
+        <div className="space-y-2 border-t border-border pt-3">
+          <Input
+            label="ID do chamado relacionado"
+            value={targetId}
+            onChange={(e) => setTargetId(e.target.value)}
+            placeholder="GUID do chamado"
+          />
+          <Select
+            options={RELATION_TYPE_OPTIONS}
+            value={relationType}
+            onChange={(e) => setRelationType(e.target.value as TicketRelationKind)}
+          />
+          <Button
+            size="sm"
+            className="w-full"
+            onClick={add}
+            loading={create.isPending}
+            disabled={!targetId.trim()}
+          >
+            <Link2 className="h-4 w-4" /> Adicionar relação
+          </Button>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
 function TicketSummaryPanel({
   ticketId,
   category,
@@ -1850,8 +2050,25 @@ function CommentForm({
   draftSeed?: CommentSeed | null;
 }) {
   const addComment = useAddComment();
+  const macrosQuery = useTicketMacros({ includeGlobal: true });
   const [content, setContent] = useState('');
   const [isInternal, setIsInternal] = useState(false);
+
+  const macroOptions = [
+    { value: '', label: 'Inserir macro...' },
+    ...(macrosQuery.data ?? []).map((m) => ({ value: m.id, label: m.name })),
+  ];
+  const applyMacro = (id: string) => {
+    if (!id) return;
+    const macro = (macrosQuery.data ?? []).find((m) => m.id === id);
+    if (!macro) return;
+    setContent(
+      macro.content
+        .split('{ticket_id}').join(ticketId)
+        .split('{cliente}').join('')
+        .split('{tecnico}').join(''),
+    );
+  };
 
   useEffect(() => {
     if (!draftSeed?.content) return;
@@ -1875,6 +2092,14 @@ function CommentForm({
 
   return (
     <div className="mt-4 space-y-3 border-t border-border pt-4">
+      {(macrosQuery.data?.length ?? 0) > 0 && (
+        <Select
+          aria-label="Inserir macro de resposta"
+          options={macroOptions}
+          value=""
+          onChange={(event) => applyMacro(event.target.value)}
+        />
+      )}
       <TextArea placeholder="Escreva um comentário... (mín. 3 chars)" value={content} onChange={e => setContent(e.target.value)} />
       <div className="flex items-center justify-between">
         <label className="flex items-center gap-2 text-sm text-muted">

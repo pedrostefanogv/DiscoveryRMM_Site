@@ -21,6 +21,32 @@ import type {
 
 const BASE = "/api/v1/tickets";
 
+export interface ReopenTicketRequest {
+  reason?: string | null;
+}
+
+export interface RateTicketRequest {
+  rating: number;
+  feedback?: string | null;
+}
+
+export type TicketRelationKind = "Duplicate" | "Blocks" | "RelatesTo" | "ParentOf" | "ChildOf";
+
+export interface CreateTicketRelationRequest {
+  targetTicketId: string;
+  relationType: TicketRelationKind;
+}
+
+export interface TicketRelationDto {
+  id: string;
+  sourceTicketId: string;
+  targetTicketId: string;
+  relationType: string;
+  createdBy: string | null;
+  createdAt: string;
+  direction?: string | null;
+}
+
 function normalizeNullableString(value: unknown): string | null {
   if (value === null || value === undefined) return null;
   const normalized = String(value).trim();
@@ -147,41 +173,7 @@ export const ticketsApi = {
       `${BASE}/${ticketId}/audit/timeline`,
     ),
 
-  getUnifiedTimeline: (ticketId: string) =>
-    api.get<import("./types").TicketTimelineEntry[]>(
-      `${BASE}/${ticketId}/audit/timeline/unified`,
-    ),
-
-  getTimelineByActivityType: (ticketId: string, activityType: string) =>
-    api.get<import("./types").TicketTimelineEntry[]>(
-      `${BASE}/${ticketId}/audit/timeline/activity-type/${activityType}`,
-    ),
-
-  getTimelineByUser: (ticketId: string, userId: string) =>
-    api.get<import("./types").TicketTimelineEntry[]>(
-      `${BASE}/${ticketId}/audit/timeline/user/${userId}`,
-    ),
-
-  getTimelineDateRange: (ticketId: string, from: string, to: string) =>
-    api.get<import("./types").TicketTimelineEntry[]>(
-      `${BASE}/${ticketId}/audit/timeline/date-range`,
-      { from, to },
-    ),
-
-  getLastTimeline: (ticketId: string) =>
-    api.get<import("./types").TicketTimelineEntry>(
-      `${BASE}/${ticketId}/audit/timeline/last`,
-    ),
-
-  getStatistics: (ticketId: string) =>
-    api.get<import("./types").TicketStatistics>(
-      `${BASE}/${ticketId}/audit/statistics`,
-    ),
-
   // SLA
-  getSlaStatus: (ticketId: string) =>
-    api.get<import("./types").SlaStatus>(`${BASE}/${ticketId}/sla/status`),
-
   getSlaDetails: (ticketId: string) =>
     api.get<import("./types").SlaDetails>(`${BASE}/${ticketId}/sla/details`),
 
@@ -236,4 +228,21 @@ export const ticketsApi = {
 
     return { blob, fileName };
   },
+
+  // Lifecycle: reopen / rating (CSAT)
+  reopen: (id: string, data: ReopenTicketRequest) =>
+    api.post<Ticket>(`${BASE}/${id}/reopen`, data),
+
+  rate: (id: string, data: RateTicketRequest) =>
+    api.post<Ticket>(`${BASE}/${id}/rating`, data),
+
+  // Relations
+  listRelations: (id: string) =>
+    api.get<TicketRelationDto[]>(`${BASE}/${id}/relations`),
+
+  createRelation: (id: string, data: CreateTicketRelationRequest) =>
+    api.post<TicketRelationDto>(`${BASE}/${id}/relations`, data),
+
+  removeRelation: (id: string, relationId: string) =>
+    api.del<void>(`${BASE}/${id}/relations/${relationId}`),
 };

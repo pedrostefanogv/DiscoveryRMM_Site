@@ -565,6 +565,11 @@ export interface Ticket {
   createdAt: string;
   updatedAt: string;
   closedAt: string | null;
+  // Avaliação CSAT (1..5) e feedback textual (preenchidos após o fechamento).
+  rating?: number | null;
+  ratingFeedback?: string | null;
+  ratedAt?: string | null;
+  ratedBy?: string | null;
 }
 
 export interface Department {
@@ -575,6 +580,7 @@ export interface Department {
   inheritFromGlobalId: string | null;
   sortOrder: number;
   isActive: boolean;
+  assignmentStrategy?: number;
 }
 
 export interface WorkflowProfile {
@@ -1700,6 +1706,7 @@ export interface CreateDepartmentRequest {
   description: string | null;
   inheritFromGlobalId: string | null;
   sortOrder: number;
+  assignmentStrategy?: number;
 }
 
 export interface UpdateDepartmentRequest {
@@ -1708,6 +1715,7 @@ export interface UpdateDepartmentRequest {
   inheritFromGlobalId: string | null;
   sortOrder: number;
   isActive: boolean;
+  assignmentStrategy?: number;
 }
 
 export interface CreateWorkflowProfileRequest {

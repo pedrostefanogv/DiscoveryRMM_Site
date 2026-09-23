@@ -30,6 +30,7 @@ import { useWorkflowStates } from '@/hooks/useWorkflow';
 import { useDepartments } from '@/hooks/useDepartments';
 import { useWorkflowProfilesByDepartment } from '@/hooks/useWorkflowProfiles';
 import { useTicketKpi } from '@/hooks/useTicketKpi';
+import { useTicketTemplates } from '@/hooks/useSupportProductivity';
 import { useDepartmentTicketSchema } from '@/hooks/useDepartmentCustomFields';
 import { useIamUsers } from '@/hooks/useIdentity';
 import {
@@ -1355,6 +1356,7 @@ function CreateTicketModal({ open, onClose }: { open: boolean; onClose: () => vo
     [schemaFields, customFieldDrafts],
   );
 
+  const templatesQuery = useTicketTemplates({ clientId: selectedClient || undefined, includeGlobal: true });
   const [form, setForm] = useState<CreateTicketRequest>({
     clientId: '',
     siteId: null,
@@ -1367,6 +1369,19 @@ function CreateTicketModal({ open, onClose }: { open: boolean; onClose: () => vo
     category: null,
     assignedToUserId: null,
   });
+
+  const applyTemplate = (id: string) => {
+    if (!id) return;
+    const template = (templatesQuery.data ?? []).find((t) => t.id === id);
+    if (!template) return;
+    setForm((current) => ({
+      ...current,
+      title: template.title || current.title,
+      description: template.description || current.description,
+      priority: (template.priority as TicketPriority) || current.priority,
+      category: template.category ?? current.category,
+    }));
+  };
 
   const set = <K extends keyof CreateTicketRequest>(key: K, value: CreateTicketRequest[K]) =>
     setForm((current) => ({ ...current, [key]: value }));
@@ -1504,6 +1519,17 @@ function CreateTicketModal({ open, onClose }: { open: boolean; onClose: () => vo
           </div>
         )}
 
+        {(templatesQuery.data?.length ?? 0) > 0 && (
+          <Select
+            label="Usar template"
+            options={[
+              { value: '', label: 'Selecione um template...' },
+              ...(templatesQuery.data ?? []).map((t) => ({ value: t.id, label: t.name })),
+            ]}
+            value=""
+            onChange={(event) => applyTemplate(event.target.value)}
+          />
+        )}
         <div className="grid grid-cols-2 gap-4">
           <Select label="Prioridade" options={priorityOpts} value={form.priority} onChange={(event) => set('priority', event.target.value as TicketPriority)} />
           <Input label="Categoria" value={form.category ?? ''} onChange={(event) => set('category', event.target.value || null)} placeholder="Opcional, ate 100 chars" />

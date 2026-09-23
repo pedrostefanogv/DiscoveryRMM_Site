@@ -22,6 +22,10 @@ const TicketAlertsPage = lazy(() => import('@/pages/tickets/TicketAlertsPage'));
 const AutoTicketRulesPage = lazy(() => import('@/pages/tickets/AutoTicketRulesPage'));
 const TicketSlaPage = lazy(() => import('@/pages/tickets/TicketSlaPage'));
 const TicketDetail = lazy(() => import('@/pages/tickets/TicketDetail'));
+const TicketCsatPage = lazy(() => import('@/pages/tickets/TicketCsatPage'));
+const TicketMacrosPage = lazy(() => import('@/pages/tickets/TicketMacrosPage'));
+const TicketTemplatesPage = lazy(() => import('@/pages/tickets/TicketTemplatesPage'));
+const NotificationChannelsPage = lazy(() => import('@/pages/settings/NotificationChannelsPage'));
 const LogViewer = lazy(() => import('@/pages/logs/LogViewer'));
 const DeployTokens = lazy(() => import('@/pages/deploy/DeployTokens'));
 const SoftwareHome = lazy(() => import('@/pages/software/SoftwareHome'));
@@ -211,6 +215,30 @@ export const router = createBrowserRouter([
         element: <LazyPage><TicketSlaPage /></LazyPage>,
       },
       {
+        path: 'tickets/csat',
+        element: (
+          <PermissionGate anyOf={['tickets.*', 'tickets.view', 'reports.*', 'settings.*', 'admin.*']}>
+            <LazyPage><TicketCsatPage /></LazyPage>
+          </PermissionGate>
+        ),
+      },
+      {
+        path: 'tickets/macros',
+        element: (
+          <PermissionGate anyOf={['tickets.*', 'tickets.edit', 'admin.*']}>
+            <LazyPage><TicketMacrosPage /></LazyPage>
+          </PermissionGate>
+        ),
+      },
+      {
+        path: 'tickets/templates',
+        element: (
+          <PermissionGate anyOf={['tickets.*', 'tickets.edit', 'admin.*']}>
+            <LazyPage><TicketTemplatesPage /></LazyPage>
+          </PermissionGate>
+        ),
+      },
+      {
         path: 'tickets/departments',
         element: (
           <PermissionGate anyOf={['settings.*', 'settings.read', 'departments.*', 'admin.*']}>
@@ -383,6 +411,14 @@ export const router = createBrowserRouter([
         element: (
           <PermissionGate anyOf={['settings.*', 'settings.read', 'workflow.*', 'admin.*']}>
             <LazyPage><WorkflowProfileSettings /></LazyPage>
+          </PermissionGate>
+        ),
+      },
+      {
+        path: 'settings/notifications',
+        element: (
+          <PermissionGate anyOf={['settings.*', 'settings.read', 'admin.*']}>
+            <LazyPage><NotificationChannelsPage /></LazyPage>
           </PermissionGate>
         ),
       },

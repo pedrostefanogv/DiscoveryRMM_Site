@@ -55,6 +55,9 @@ const reportsLinks = [
 
 const ticketsLinks = [
   { to: '/tickets', label: 'Chamados' },
+  { to: '/tickets/csat', label: 'Satisfação (CSAT)' },
+  { to: '/tickets/templates', label: 'Templates' },
+  { to: '/tickets/macros', label: 'Macros' },
   { to: '/knowledge', label: 'Conhecimento' },
   { to: '/tickets/alerts', label: 'Alertas' },
   { to: '/tickets/sla', label: 'SLA, Calendários e Perfis' },
@@ -64,6 +67,7 @@ const ticketsLinks = [
 
 const settingsLinks = [
   { to: '/settings', label: 'Geral' },
+  { to: '/settings/notifications', label: 'Notificações' },
   { to: '/settings/workflow', label: 'Workflow' },
   { to: '/settings/audit', label: 'Auditoria Config' },
   { to: '/settings/custom-fields', label: 'Campos Personalizados' },

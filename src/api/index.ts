@@ -13,6 +13,31 @@ export { ticketAutomationLinksApi } from "./ticket-automation-links";
 export { ticketCustomFieldsApi } from "./ticket-custom-fields";
 export { ticketAiApi } from "./ticket-ai";
 export { ticketsApi } from "./tickets";
+export {
+  ticketMacrosApi,
+  ticketTemplatesApi,
+  notificationChannelsApi,
+  departmentMembersApi,
+  ticketCsatApi,
+} from "./support-productivity";
+export type {
+  TicketMacroDto,
+  UpsertTicketMacroRequest,
+  TicketTemplateDto,
+  UpsertTicketTemplateRequest,
+  NotificationChannelDto,
+  UpsertNotificationChannelRequest,
+  DepartmentMemberDto,
+  TicketCsatGroupDto,
+  TicketCsatSummaryDto,
+} from "./support-productivity";
+export type {
+  ReopenTicketRequest,
+  RateTicketRequest,
+  TicketRelationKind,
+  CreateTicketRelationRequest,
+  TicketRelationDto,
+} from "./tickets";
 export { logsApi } from "./logs";
 export { workflowApi } from "./workflow";
 export { departmentsApi } from "./departments";

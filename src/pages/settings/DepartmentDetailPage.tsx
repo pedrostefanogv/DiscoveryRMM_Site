@@ -7,6 +7,7 @@ import {
   ListTodo,
   Settings,
   Trash2,
+  Users,
 } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import toast from "react-hot-toast";
@@ -21,9 +22,16 @@ import {
   Input,
   Loading,
   PageHeader,
+  Select,
   StatCard,
 } from "@/components/ui";
 import { useClients } from "@/hooks/useClients";
+import { useIamUsers } from "@/hooks/useIdentity";
+import {
+  useAddDepartmentMember,
+  useDepartmentMembers,
+  useRemoveDepartmentMember,
+} from "@/hooks/useSupportProductivity";
 import {
   useDeleteDepartment,
   useDepartment,
@@ -31,7 +39,83 @@ import {
 } from "@/hooks/useDepartments";
 import type { UpdateDepartmentRequest } from "@/api";
 
-type DepartmentTab = "general" | "fields";
+type DepartmentTab = "general" | "fields" | "team";
+
+const ASSIGNMENT_OPTIONS = [
+  { value: "0", label: "Manual (sem auto-atribuição)" },
+  { value: "1", label: "Round-robin" },
+  { value: "2", label: "Menos chamados abertos" },
+];
+
+function DepartmentMembersCard({ departmentId }: { departmentId: string }) {
+  const members = useDepartmentMembers(departmentId);
+  const add = useAddDepartmentMember();
+  const remove = useRemoveDepartmentMember();
+  const users = useIamUsers();
+  const [userId, setUserId] = useState("");
+
+  const memberIds = new Set((members.data ?? []).map((m) => m.userId));
+  const options = [
+    { value: "", label: "Selecione um usuário..." },
+    ...(users.data ?? [])
+      .filter((u) => !memberIds.has(u.id))
+      .map((u) => ({ value: u.id, label: u.fullName || u.login || u.email })),
+  ];
+
+  return (
+    <Card>
+      <CardHeader
+        title="Equipe do departamento"
+        subtitle="Usuários elegíveis para auto-atribuição (round-robin / menos chamados)."
+      />
+      <div className="space-y-3">
+        {members.isLoading && <Loading />}
+        {(members.data ?? []).map((m) => (
+          <div key={m.id} className="flex items-center justify-between rounded-lg bg-surface-light px-3 py-2">
+            <span className="text-sm text-foreground">{m.userName ?? m.userId}</span>
+            <button
+              type="button"
+              aria-label="Remover membro"
+              className="p-1 text-muted hover:text-danger"
+              onClick={() =>
+                remove.mutate(
+                  { departmentId, userId: m.userId },
+                  { onError: () => toast.error("Erro ao remover membro") },
+                )
+              }
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          </div>
+        ))}
+        {(members.data?.length ?? 0) === 0 && !members.isLoading && (
+          <p className="text-sm text-muted">Nenhum membro cadastrado.</p>
+        )}
+        <div className="flex flex-wrap items-end gap-2 border-t border-border pt-3">
+          <div className="min-w-[220px] flex-1">
+            <Select label="Adicionar usuário" options={options} value={userId} onChange={(e) => setUserId(e.target.value)} />
+          </div>
+          <Button
+            size="sm"
+            disabled={!userId}
+            loading={add.isPending}
+            onClick={() =>
+              add.mutate(
+                { departmentId, userId },
+                {
+                  onSuccess: () => setUserId(""),
+                  onError: () => toast.error("Erro ao adicionar membro"),
+                },
+              )
+            }
+          >
+            Adicionar
+          </Button>
+        </div>
+      </div>
+    </Card>
+  );
+}
 
 export default function DepartmentDetailPage() {
   const navigate = useNavigate();
@@ -71,6 +155,7 @@ export default function DepartmentDetailPage() {
       inheritFromGlobalId: departmentQuery.data.inheritFromGlobalId,
       sortOrder: departmentQuery.data.sortOrder,
       isActive: departmentQuery.data.isActive,
+      assignmentStrategy: departmentQuery.data.assignmentStrategy ?? 0,
     });
     seededDepartmentIdRef.current = departmentQuery.data.id;
     if (entityChanged) dirtyRef.current = false;
@@ -134,6 +219,7 @@ export default function DepartmentDetailPage() {
           inheritFromGlobalId: currentForm.inheritFromGlobalId ?? null,
           sortOrder: Math.max(0, Number(currentForm.sortOrder || 0)),
           isActive: currentForm.isActive ?? true,
+          assignmentStrategy: currentForm.assignmentStrategy ?? 0,
         },
       });
       dirtyRef.current = false;
@@ -226,6 +312,18 @@ function handleDelete() {
           <ListTodo className="mr-1.5 inline h-4 w-4" />
           Campos customizados
         </button>
+        <button
+          type="button"
+          onClick={() => setTab("team")}
+          className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+            tab === "team"
+              ? "bg-primary/20 text-foreground"
+              : "text-muted hover:text-foreground"
+          }`}
+        >
+          <Users className="mr-1.5 inline h-4 w-4" />
+          Equipe
+        </button>
       </div>
 
       {tab === "general" ? (
@@ -270,6 +368,18 @@ function handleDelete() {
                     current
                       ? { ...current, sortOrder: Math.max(0, Number(event.target.value || 0)) }
                       : current,
+                  );
+                }}
+              />
+
+              <Select
+                label="Auto-atribuição de chamados"
+                options={ASSIGNMENT_OPTIONS}
+                value={String(form.assignmentStrategy ?? 0)}
+                onChange={(event) => {
+                  markDirty();
+                  setForm((current) =>
+                    current ? { ...current, assignmentStrategy: Number(event.target.value) } : current,
                   );
                 }}
               />
@@ -331,7 +441,7 @@ function handleDelete() {
             </div>
           </Card>
         </div>
-      ) : (
+      ) : tab === "fields" ? (
         <Card>
           <CardHeader
             title="Campos customizados"
@@ -339,6 +449,8 @@ function handleDelete() {
           />
           <DepartmentCustomFieldsSection departmentId={department.id} />
         </Card>
+      ) : (
+        <DepartmentMembersCard departmentId={department.id} />
       )}
 
       {!clientsQuery.isLoading && (
