@@ -92,6 +92,8 @@ export default function AgentDetail() {
   const [openSocketsLimit, setOpenSocketsLimit] = useState('10');
   const [openSocketsSearchInput, setOpenSocketsSearchInput] = useState('');
   const [openSocketsSearchApplied, setOpenSocketsSearchApplied] = useState('');
+  // Filtro de estado TCP (server-side): 'all' | 'open' | estado exato.
+  const [openSocketsStateFilter, setOpenSocketsStateFilter] = useState('all');
   const [allLabels, setAllLabels] = useState<AgentLabel[]>([]);
   const [isLoadingLabels, setIsLoadingLabels] = useState(true);
   const [labelsError, setLabelsError] = useState<string | null>(null);
@@ -170,6 +172,7 @@ export default function AgentDetail() {
     cursor: socketsCursors[socketsCursors.length - 1],
     limit: openSocketsLimit === 'max' ? OPEN_SOCKETS_MAX_PAGE_SIZE : Number(openSocketsLimit),
     search: openSocketsSearchApplied,
+    state: openSocketsStateFilter,
   });
   // Paginação server-side por offset (P1.1): busca apenas a página visível com
   // total FILTRADO. Substitui o fetch-all por cursor (limit=500 + auto-fetch),
@@ -436,6 +439,10 @@ export default function AgentDetail() {
   };
   const handleSocketsLimitChange = (value: string) => {
     setOpenSocketsLimit(value);
+    resetSocketsPagination();
+  };
+  const handleSocketsStateChange = (value: string) => {
+    setOpenSocketsStateFilter(value);
     resetSocketsPagination();
   };
 
@@ -935,6 +942,15 @@ export default function AgentDetail() {
     { value: '50', label: '50 por página' },
     { value: '100', label: '100 por página' },
     { value: 'max', label: 'Todos' },
+  ];
+  // Filtro de estado TCP. "open" exclui conexões já encerradas — tira o ruído
+  // de TIME_WAIT que faz o próprio discovery-service.exe dominar a lista.
+  const socketStateOptions = [
+    { value: 'all', label: 'Todos os estados' },
+    { value: 'open', label: 'Somente abertas (sem TIME_WAIT)' },
+    { value: 'ESTABLISHED', label: 'ESTABLISHED' },
+    { value: 'TIME_WAIT', label: 'TIME_WAIT' },
+    { value: 'CLOSE_WAIT', label: 'CLOSE_WAIT' },
   ];
   const softwareOrderOptions = [
     { value: 'desc', label: 'Mais recente primeiro' },
@@ -2172,11 +2188,16 @@ export default function AgentDetail() {
                 Lista truncada pelo backend no limite de {OPEN_SOCKETS_BACKEND_LIMIT} itens. Podem existir mais conexões abertas.
               </div>
             )}
-            <form className="mb-4 grid gap-3 lg:grid-cols-[1fr_160px_auto_auto]" onSubmit={handleApplySocketsSearch}>
+            <form className="mb-4 grid gap-3 lg:grid-cols-[1fr_170px_220px_auto_auto]" onSubmit={handleApplySocketsSearch}>
               <Input
                 value={openSocketsSearchInput}
                 onChange={(e) => setOpenSocketsSearchInput(e.target.value)}
                 placeholder="Pesquisar por processo, PID, protocolo, endereço, porta ou estado"
+              />
+              <Select
+                value={openSocketsStateFilter}
+                options={socketStateOptions}
+                onChange={(e) => handleSocketsStateChange(e.target.value)}
               />
               <Select
                 value={openSocketsLimit}

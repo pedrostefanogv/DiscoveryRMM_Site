@@ -51,7 +51,7 @@ const KEYS = {
   ) => [...KEYS.all, "listeningPortsPage", id, params] as const,
   openSocketsPage: (
     id: string,
-    params: { cursor?: string; limit: number; search: string },
+    params: { cursor?: string; limit: number; search: string; state: string },
   ) => [...KEYS.all, "openSocketsPage", id, params] as const,
   commands: (id: string) => [...KEYS.all, "commands", id] as const,
   tokens: (id: string) => [...KEYS.all, "tokens", id] as const,
@@ -311,21 +311,23 @@ export function useAgentListeningPortsPage(
  */
 export function useAgentOpenSocketsPage(
   id: string,
-  params?: { cursor?: string; limit?: number; search?: string },
+  params?: { cursor?: string; limit?: number; search?: string; state?: string },
 ) {
   const safeLimit = Math.min(OPEN_SOCKETS_BACKEND_LIMIT, Math.max(1, params?.limit ?? 50));
   const safeSearch = params?.search?.trim() ?? "";
+  const safeState = params?.state?.trim() ?? "";
 
   return useQuery({
     queryKey: KEYS.openSocketsPage(id, {
       cursor: params?.cursor,
       limit: safeLimit,
       search: safeSearch,
+      state: safeState,
     }),
     queryFn: ({ signal }) =>
       agentsApi.getOpenSocketsPage(
         id,
-        { cursor: params?.cursor, limit: safeLimit, search: safeSearch },
+        { cursor: params?.cursor, limit: safeLimit, search: safeSearch, state: safeState },
         { signal },
       ),
     enabled: !!id,

@@ -133,13 +133,14 @@ export const agentsApi = {
   // Conexões abertas — paginação por cursor (ponteiro) com estado TCP.
   getOpenSocketsPage: (
     id: string,
-    params?: { cursor?: string; limit?: number; search?: string },
+    params?: { cursor?: string; limit?: number; search?: string; state?: string },
     init?: ApiRequestInit,
   ) =>
     api.get<AgentOpenSocketsPage>(`${BASE}/${id}/hardware/network/sockets`, {
       cursor: params?.cursor,
       limit: params?.limit,
       search: params?.search,
+      state: params?.state,
     }, init),
 
   reportHardware: (id: string, data: HardwareReportRequest) =>
