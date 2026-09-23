@@ -1,39 +1,50 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Building2 } from 'lucide-react';
 import { useClients, useCreateClient } from '@/hooks/useClients';
-import { Button, Card, DataTable, Badge, Loading, ErrorDisplay, Modal, Input, TextArea, StatCard } from '@/components/ui';
+import { useAuthorization } from '@/auth/authorization';
+import { Button, Card, DataTable, Badge, Loading, ErrorDisplay, Modal, Input, TextArea, StatCard, PageHeader } from '@/components/ui';
 import type { Client, CreateClientRequest } from '@/api';
 import type { Column } from '@/components/ui';
 import toast from 'react-hot-toast';
 
 export default function ClientList() {
   const [showInactive, setShowInactive] = useState(false);
+  const [search, setSearch] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
-  // Always fetch all clients for stat cards; filter table client-side
+  // Busca todos (inclusive inativos) para os cards; a tabela filtra no cliente.
   const allClients = useClients(true);
   const navigate = useNavigate();
+  const { hasAnyPermission } = useAuthorization();
+  const canCreate = hasAnyPermission(['Clients.Create', 'clients.*', 'admin.*']);
+
+  const allData = allClients.data ?? [];
+
+  const displayedClients = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    return allData
+      .filter(c => showInactive || c.isActive)
+      .filter(c => !term || c.name.toLowerCase().includes(term) || (c.notes ?? '').toLowerCase().includes(term));
+  }, [allData, showInactive, search]);
+
+  const activeClients = allData.filter(c => c.isActive).length;
+  const inactiveClients = allData.filter(c => !c.isActive).length;
 
   const columns: Column<Client>[] = [
     {
       key: 'name',
-      header: 'Nome',
+      header: 'Cliente',
       render: c => (
         <div className="flex items-center gap-3">
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/20">
             <Building2 className="h-4 w-4 text-primary" />
           </div>
-          <div>
+          <div className="min-w-0">
             <p className="font-medium text-foreground">{c.name}</p>
-            <p className="text-xs text-muted">{c.notes ?? 'Sem observações'}</p>
+            <p className="truncate text-xs text-muted">{c.notes?.trim() ? c.notes : 'Sem observações'}</p>
           </div>
         </div>
       ),
-    },
-    {
-      key: 'notes',
-      header: 'Observações',
-      render: c => <span className="text-muted">{c.notes ?? '\u2014'}</span>,
     },
     {
       key: 'status',
@@ -46,36 +57,30 @@ export default function ClientList() {
     },
   ];
 
-  if (allClients.isLoading) return <Loading />;
+  if (allClients.isLoading && !allClients.data) return <Loading />;
   if (allClients.isError) return <ErrorDisplay onRetry={() => allClients.refetch()} />;
-
-  const allData = allClients.data ?? [];
-  const displayedClients = showInactive ? allData : allData.filter(c => c.isActive);
-  const activeClients = allData.filter(c => c.isActive).length;
-  const inactiveClients = allData.filter(c => !c.isActive).length;
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Clientes</h1>
-          <p className="text-sm text-muted">{allData.length} clientes</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <label className="flex items-center gap-2 text-sm text-muted">
-            <input
-              type="checkbox"
-              checked={showInactive}
-              onChange={e => setShowInactive(e.target.checked)}
-              className="rounded border-border bg-surface-light"
-            />
-            Mostrar inativos
-          </label>
+      <PageHeader
+        title="Clientes"
+        description={`${displayedClients.length} de ${allData.length} cliente(s)`}
+      >
+        <label className="flex items-center gap-2 text-sm text-muted">
+          <input
+            type="checkbox"
+            checked={showInactive}
+            onChange={e => setShowInactive(e.target.checked)}
+            className="rounded border-border bg-surface-light"
+          />
+          Mostrar inativos
+        </label>
+        {canCreate && (
           <Button onClick={() => setModalOpen(true)}>
             <Plus className="h-4 w-4" /> Novo Cliente
           </Button>
-        </div>
-      </div>
+        )}
+      </PageHeader>
 
       <div className="grid gap-4 sm:grid-cols-3">
         <StatCard icon={Building2} label="Total de clientes" value={allData.length} tone="accent" />
@@ -83,11 +88,21 @@ export default function ClientList() {
         <StatCard icon={Building2} label="Clientes inativos" value={inactiveClients} tone="warning" />
       </div>
 
+      <Card>
+        <Input
+          label="Buscar"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="Nome ou observação"
+        />
+      </Card>
+
       <Card padding={false}>
         <DataTable
           columns={columns}
           data={displayedClients}
           keyExtractor={c => c.id}
+          emptyMessage="Nenhum cliente encontrado"
           onRowClick={c => navigate(`/clients/${c.id}`)}
         />
       </Card>

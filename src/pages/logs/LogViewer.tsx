@@ -97,6 +97,27 @@ const filterPresets: Array<{ id: string; label: string; filters: LogsQuery; tone
   },
 ];
 
+// datetime-local vem sem timezone; convertemos para ISO UTC (o backend usa
+// timestamptz) sem alterar o valor exibido no input.
+function toUtcIso(value?: string): string | undefined {
+  if (!value) return undefined;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return undefined;
+  return date.toISOString();
+}
+
+function formatShare(count: number, total: number): string {
+  if (!total || total <= 0) return '0%';
+  return Math.round((count / total) * 100) + '%';
+}
+
+function formatDateTime(value?: string | null): string {
+  if (!value) return '\u2014';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString('pt-BR');
+}
+
 function normalizeFilters(filters: LogsQuery): LogsQuery {
   return {
     clientId: filters.clientId || undefined,
@@ -111,8 +132,8 @@ function normalizeFilters(filters: LogsQuery): LogsQuery {
     requestPath: filters.requestPath?.trim() || undefined,
     statusCode: Number.isFinite(filters.statusCode) ? filters.statusCode : undefined,
     period: filters.period || undefined,
-    from: filters.from || undefined,
-    to: filters.to || undefined,
+    from: toUtcIso(filters.from),
+    to: toUtcIso(filters.to),
     limit: filters.limit && filters.limit > 0 ? Math.min(filters.limit, 200) : 50,
   };
 }
@@ -238,8 +259,8 @@ export default function LogViewer() {
     if (appliedFilters.requestPath) chips.push({ key: 'requestPath', label: `Path: ${appliedFilters.requestPath}` });
     if (appliedFilters.statusCode !== undefined) chips.push({ key: 'statusCode', label: `HTTP: ${appliedFilters.statusCode}` });
     if (appliedFilters.limit && appliedFilters.limit !== 50) chips.push({ key: 'limit', label: `Limite: ${appliedFilters.limit}` });
-    if (appliedFilters.from) chips.push({ key: 'from', label: `De: ${appliedFilters.from}` });
-    if (appliedFilters.to) chips.push({ key: 'to', label: `Até: ${appliedFilters.to}` });
+    if (appliedFilters.from) chips.push({ key: 'from', label: `De: ${formatDateTime(appliedFilters.from)}` });
+    if (appliedFilters.to) chips.push({ key: 'to', label: `Até: ${formatDateTime(appliedFilters.to)}` });
 
     return chips;
   }, [appliedFilters, clientMap, siteMap, agentMap]);
@@ -282,8 +303,11 @@ export default function LogViewer() {
   }
 
   function refreshData() {
-    logs.refetch();
-    summary.refetch();
+    void logs.refetch();
+    void summary.refetch();
+    // Também atualiza as opções de escopo (clientes/sites/agentes) — antes
+    // ficavam com o valor do primeiro carregamento.
+    void scopeOptions.refetch();
   }
 
   function applyPreset(preset: LogsQuery) {
@@ -328,7 +352,7 @@ export default function LogViewer() {
         title="Logs"
         description="Monitoramento operacional com foco em triagem rápida e investigação progressiva"
       >
-        <Button variant="ghost" onClick={refreshData}>
+        <Button variant="ghost" onClick={refreshData} loading={logs.isFetching || summary.isFetching}>
           <RefreshCw className="h-4 w-4" />
           Atualizar
         </Button>
@@ -369,12 +393,16 @@ export default function LogViewer() {
           <StatCard
             title="Fontes ativas"
             value={String(summary.data.sources.length)}
-            hint={summary.data.sources[0] ? `Líder: ${summary.data.sources[0].key}` : 'Sem fonte predominante'}
+            hint={summary.data.sources[0]
+              ? 'Líder: ' + summary.data.sources[0].key + ' (' + summary.data.sources[0].count + ' · ' + formatShare(summary.data.sources[0].count, summary.data.total) + ')'
+              : 'Sem fonte predominante'}
           />
           <StatCard
             title="Tipos ativos"
             value={String(summary.data.types.length)}
-            hint={summary.data.types[0] ? `Líder: ${summary.data.types[0].key}` : 'Sem tipo predominante'}
+            hint={summary.data.types[0]
+              ? 'Líder: ' + summary.data.types[0].key + ' (' + summary.data.types[0].count + ' · ' + formatShare(summary.data.types[0].count, summary.data.total) + ')'
+              : 'Sem tipo predominante'}
           />
         </div>
       ) : null}
@@ -581,9 +609,9 @@ export default function LogViewer() {
                 <FacetCard title="Tipos" items={summary.data.types} />
               </div>
               <div className="grid gap-4 xl:grid-cols-3">
-                <FacetCard title="Clientes (top)" items={summary.data.clients.map(item => ({ key: item.name ?? 'Desconhecido', count: item.count }))} />
-                <FacetCard title="Sites (top)" items={summary.data.sites.map(item => ({ key: item.name ?? 'Desconhecido', count: item.count }))} />
-                <FacetCard title="Agentes (top)" items={summary.data.agents.map(item => ({ key: item.name ?? 'Desconhecido', count: item.count }))} />
+                <FacetCard title="Clientes (top 10)" items={summary.data.clients.map(item => ({ key: item.name ?? 'Desconhecido', count: item.count }))} />
+                <FacetCard title="Sites (top 10)" items={summary.data.sites.map(item => ({ key: item.name ?? 'Desconhecido', count: item.count }))} />
+                <FacetCard title="Agentes (top 10)" items={summary.data.agents.map(item => ({ key: item.name ?? 'Desconhecido', count: item.count }))} />
               </div>
             </div>
           ) : (
@@ -715,9 +743,7 @@ function LogRow({
           <Badge color={lvl.color}>{lvl.label}</Badge>
           <Badge color="slate">{sourceLabels[log.source] ?? 'N/A'}</Badge>
           <Badge color="slate">{typeLabels[log.type] ?? 'N/A'}</Badge>
-          <span className="text-xs text-muted">
-            {new Date(log.createdAt).toLocaleString('pt-BR')}
-          </span>
+          <span className="text-xs text-muted">{formatDateTime(log.createdAt)}</span>
         </div>
         <p className={`${compact ? 'mt-0.5' : 'mt-1'} text-sm font-medium text-foreground`}>{log.message}</p>
         {scopeLabel && !compact ? <p className="mt-1 text-xs text-muted">{scopeLabel}</p> : null}

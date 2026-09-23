@@ -9,7 +9,7 @@ import { useLogs } from '@/hooks/useLogs';
 import { useCreateDeployToken } from '@/hooks/useDeployTokens';
 import { useDashboardSummary } from '@/hooks/useDashboardSummary';
 import { useDashboardRealtime } from '@/hooks/useDashboardRealtime';
-import { Button, Card, CardHeader, Badge, Loading, ErrorDisplay, Modal, Input, TextArea, StatCard, Select } from '@/components/ui';
+import { Button, Card, CardHeader, Badge, Loading, ErrorDisplay, Modal, Input, TextArea, StatCard, Select, PageHeader } from '@/components/ui';
 import { NotesPanel } from '@/components/notes/NotesPanel';
 import { isAgentOnlineNow } from '@/utils/agentStatus';
 import { useNowTick } from '@/hooks/useNowTick';
@@ -175,25 +175,31 @@ export default function ClientDetail() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center gap-4">
-        <button onClick={() => navigate('/clients')} aria-label="Voltar" className="rounded-lg p-2 text-muted hover:bg-surface-light hover:text-foreground">
-          <ArrowLeft className="h-5 w-5" />
-        </button>
-        <div className="flex-1">
-          <h1 className="text-2xl font-bold text-foreground">{c.name}</h1>
-          <p className="text-sm text-muted">Detalhes do Cliente</p>
-        </div>
-        <Badge color={c.isActive ? 'success' : 'slate'}>{c.isActive ? 'Ativo' : 'Inativo'}</Badge>
+      <div className="flex items-start gap-3">
         <Button
-          size="sm"
           variant="ghost"
-          onClick={() => navigate(`/knowledge?clientId=${c.id}`)}
+          size="sm"
+          onClick={() => navigate('/clients')}
+          aria-label="Voltar"
+          className="mt-0.5"
         >
-          <BookOpen className="h-4 w-4" /> Conhecimento
+          <ArrowLeft className="h-4 w-4" />
         </Button>
-        <Button variant="danger" size="sm" onClick={handleDelete}>
-          <Trash2 className="h-4 w-4" /> Excluir
-        </Button>
+        <div className="flex-1">
+          <PageHeader title={c.name} description="Detalhes do Cliente">
+            <Badge color={c.isActive ? 'success' : 'slate'}>{c.isActive ? 'Ativo' : 'Inativo'}</Badge>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => navigate(`/knowledge?clientId=${c.id}`)}
+            >
+              <BookOpen className="h-4 w-4" /> Conhecimento
+            </Button>
+            <Button variant="danger" size="sm" onClick={handleDelete}>
+              <Trash2 className="h-4 w-4" /> Excluir
+            </Button>
+          </PageHeader>
+        </div>
       </div>
 
       {/* Mini-dashboard do cliente (últimas 24h) */}

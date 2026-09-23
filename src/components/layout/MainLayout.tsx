@@ -93,12 +93,31 @@ function findClientIdBySiteId(
 }
 
 export function MainLayout() {
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    try {
+      return window.localStorage.getItem('discovery.sidebar.collapsed') === '1';
+    } catch {
+      return false;
+    }
+  });
   const [isDesktop, setIsDesktop] = useState(() =>
     typeof window !== 'undefined' ? window.matchMedia('(min-width: 1024px)').matches : true,
   );
   const [mobileOpen, setMobileOpen] = useState(false);
   const closeMobileMenu = useCallback(() => setMobileOpen(false), []);
+  // Persiste o estado recolhido para sobreviver a reloads.
+  const toggleCollapsed = useCallback(() => {
+    setCollapsed((current) => {
+      const next = !current;
+      try {
+        window.localStorage.setItem('discovery.sidebar.collapsed', next ? '1' : '0');
+      } catch {
+        /* storage indisponível */
+      }
+      return next;
+    });
+  }, []);
   const { isAuthenticated } = useAuth();
   const location = useLocation();
   const queryClient = useQueryClient();
@@ -202,7 +221,7 @@ export function MainLayout() {
 
       <Sidebar
         collapsed={collapsed}
-        onToggle={() => setCollapsed(c => !c)}
+        onToggle={toggleCollapsed}
         isDesktop={isDesktop}
         mobileOpen={mobileOpen}
         onCloseMobile={closeMobileMenu}

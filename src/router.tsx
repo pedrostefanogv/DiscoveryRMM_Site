@@ -160,19 +160,35 @@ export const router = createBrowserRouter([
       },
       {
         path: 'clients',
-        element: <LazyPage><ClientList /></LazyPage>,
+        element: (
+          <PermissionGate anyOf={['Clients.View', 'clients.*', 'admin.*']}>
+            <LazyPage><ClientList /></LazyPage>
+          </PermissionGate>
+        ),
       },
       {
         path: 'sites',
-        element: <LazyPage><SiteList /></LazyPage>,
+        element: (
+          <PermissionGate anyOf={['Sites.View', 'sites.*', 'admin.*']}>
+            <LazyPage><SiteList /></LazyPage>
+          </PermissionGate>
+        ),
       },
       {
         path: 'clients/:id',
-        element: <LazyPage><ClientDetail /></LazyPage>,
+        element: (
+          <PermissionGate anyOf={['Clients.View', 'clients.*', 'admin.*']}>
+            <LazyPage><ClientDetail /></LazyPage>
+          </PermissionGate>
+        ),
       },
       {
         path: 'clients/:id/sites/:siteId',
-        element: <LazyPage><SiteDetail /></LazyPage>,
+        element: (
+          <PermissionGate anyOf={['Sites.View', 'sites.*', 'admin.*']}>
+            <LazyPage><SiteDetail /></LazyPage>
+          </PermissionGate>
+        ),
       },
       {
         path: 'agents',

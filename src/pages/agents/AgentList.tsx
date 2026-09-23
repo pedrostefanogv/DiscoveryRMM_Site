@@ -4,8 +4,9 @@ import { Monitor, Wifi, WifiOff, Activity, Building2, Clock, HardDrive, MapPin, 
 import { useQueries } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { useClients } from '@/hooks/useClients';
+import { useAllSites } from '@/hooks/useSites';
 import { getDeleteAgentErrorMessage, useApproveZeroTouch, useDeleteAgent, useRestartAgent, useShutdownAgent, useWakeOnLan } from '@/hooks/useAgents';
-import { ApiError, agentUpdatesApi, agentsApi, sitesApi } from '@/api';
+import { ApiError, agentUpdatesApi, agentsApi } from '@/api';
 import { Badge, ErrorDisplay, Input, Select, StatCard, Modal, PageHeader, SkeletonCard, EmptyState, MetricBar, Button } from '@/components/ui';
 import { TransferAgentModal } from '@/components/agents/TransferAgentModal';
 import PowerActionModal from '@/components/agents/PowerActionModal';
@@ -378,24 +379,17 @@ export default function AgentList() {
     })),
   });
 
-  const sitesQueries = useQueries({
-    queries: queriedClients.map(c => ({
-      queryKey: ['sites', 'byClient', c.id] as const,
-      queryFn: () => sitesApi.list(c.id, true),
-      staleTime: 120_000,
-    })),
-  });
+  // Uma única requisição global de sites (antes era 1 por cliente) para o
+  // nome do site exibido em cada agente.
+  const allSitesQuery = useAllSites(true);
 
   const siteNameMap = useMemo(() => {
     const map = new Map<string, string>();
-    for (const q of sitesQueries) {
-      if (!q?.data) continue;
-      for (const s of q.data) {
-        map.set(s.id, s.name);
-      }
+    for (const s of allSitesQuery.data ?? []) {
+      map.set(s.id, s.name);
     }
     return map;
-  }, [sitesQueries]);
+  }, [allSitesQuery.data]);
 
   const allAgents = useMemo<AgentWithClient[]>(() => {
     if (!queriedClients.length) return [];

@@ -29,6 +29,7 @@ import {
   CardHeader,
   ErrorDisplay,
   Loading,
+  PageHeader,
   StatCard,
 } from '@/components/ui';
 import { NotesPanel } from '@/components/notes/NotesPanel';
@@ -74,7 +75,8 @@ export default function SiteDetail() {
   const { id: clientId, siteId } = useParams<{ id: string; siteId: string }>();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [window, setWindow] = useState<DashboardWindow>(() =>
+  // "range" (não "window") para não sombrear o objeto global window.
+  const [range, setRange] = useState<DashboardWindow>(() =>
     normalizeWindow(searchParams.get('window')),
   );
 
@@ -89,14 +91,14 @@ export default function SiteDetail() {
   const softwareSnapshot = useSoftwareInventorySnapshot('site', undefined, siteId);
   const dashboard = useDashboardSummary(
     { clientId: clientId!, siteId: siteId! },
-    window,
+    range,
     { enabled: !!clientId && !!siteId },
   );
   const now = useNowTick(5_000);
 
   useDashboardRealtime(
     { clientId: clientId!, siteId: siteId! },
-    window,
+    range,
     !!clientId && !!siteId,
   );
 
@@ -129,7 +131,7 @@ export default function SiteDetail() {
   const totalInstalledSoftware = softwareSnapshot.data?.totalInstalled ?? 0;
 
   const handleWindowChange = (value: DashboardWindow) => {
-    setWindow(value);
+    setRange(value);
     const next = new URLSearchParams(searchParams);
     if (value === '24h') {
       next.delete('window');
@@ -173,49 +175,51 @@ export default function SiteDetail() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" onClick={() => navigate(`/clients/${currentClient.id}`)}>
-            <ArrowLeft className="h-4 w-4" /> Voltar
-          </Button>
-          <div>
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-2xl font-bold text-foreground">{currentSite.name}</h1>
-              <Badge color={currentSite.isActive ? 'success' : 'slate'}>
-                {currentSite.isActive ? 'Ativo' : 'Inativo'}
-              </Badge>
-            </div>
-            <p className="text-sm text-muted">Cliente: {currentClient.name}</p>
-          </div>
-        </div>
-        <div className="inline-flex w-fit rounded-xl border border-border bg-surface-light p-1">
-          {WINDOWS.map((item) => {
-            const active = item.value === window;
-            return (
-              <button
-                key={item.value}
-                type="button"
-                onClick={() => handleWindowChange(item.value)}
-                className={[
-                  'rounded-lg px-3 py-1.5 text-sm transition-colors',
-                  active
-                    ? 'bg-primary text-white shadow-sm'
-                    : 'text-muted hover:text-foreground',
-                ].join(' ')}
-              >
-                {item.label}
-              </button>
-            );
-          })}
-        </div>
-        <Button variant="danger" size="sm" onClick={handleDelete}>
-          <Trash2 className="h-4 w-4" /> Excluir
+      <div className="flex items-start gap-3">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => navigate(`/clients/${currentClient.id}`)}
+          aria-label="Voltar"
+          className="mt-0.5"
+        >
+          <ArrowLeft className="h-4 w-4" />
         </Button>
+        <div className="flex-1">
+          <PageHeader title={currentSite.name} description={`Cliente: ${currentClient.name}`}>
+            <Badge color={currentSite.isActive ? 'success' : 'slate'}>
+              {currentSite.isActive ? 'Ativo' : 'Inativo'}
+            </Badge>
+            <div className="inline-flex w-fit rounded-xl border border-border bg-surface-light p-1">
+              {WINDOWS.map((item) => {
+                const active = item.value === range;
+                return (
+                  <button
+                    key={item.value}
+                    type="button"
+                    onClick={() => handleWindowChange(item.value)}
+                    className={[
+                      'rounded-lg px-3 py-1.5 text-sm transition-colors',
+                      active
+                        ? 'bg-primary text-white shadow-sm'
+                        : 'text-muted hover:text-foreground',
+                    ].join(' ')}
+                  >
+                    {item.label}
+                  </button>
+                );
+              })}
+            </div>
+            <Button variant="danger" size="sm" onClick={handleDelete}>
+              <Trash2 className="h-4 w-4" /> Excluir
+            </Button>
+          </PageHeader>
+        </div>
       </div>
 
       {dashboard.data && (
         <Card>
-          <CardHeader title="Dashboard do Site" subtitle={`Agregado da janela ${window}`} />
+          <CardHeader title="Dashboard do Site" subtitle={`Agregado da janela ${range}`} />
           <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
             <div className="rounded-lg bg-surface-light px-3 py-2">
               <div className="flex items-center gap-1.5 text-muted">
@@ -330,7 +334,7 @@ export default function SiteDetail() {
         />
         <StatCard
           icon={Building2}
-          label={`Logs ${window}`}
+          label={`Logs ${range}`}
           value={dashboard.isLoading ? '\u2014' : dashboard.data?.logs.total ?? recentLogs.length}
           tone="accent"
         />

@@ -1,4 +1,4 @@
-﻿import { api } from "./client";
+import { api } from "./client";
 import type {
   Site,
   CreateSiteRequest,
@@ -12,6 +12,10 @@ import type {
 export const sitesApi = {
   list: (clientId: string, includeInactive = false) =>
     api.get<Site[]>(`/api/v1/clients/${clientId}/sites`, { includeInactive }),
+
+  /** Lista global (escopada pelas permissões do usuário) — evita N+1 por cliente. */
+  listAll: (includeInactive = false) =>
+    api.get<Site[]>("/api/v1/sites", { includeInactive }),
 
   get: (clientId: string, id: string) =>
     api.get<Site>(`/api/v1/clients/${clientId}/sites/${id}`),

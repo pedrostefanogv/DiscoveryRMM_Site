@@ -13,7 +13,16 @@ const KEYS = {
     [...KEYS.all, "byClient", clientId, inactive] as const,
   detail: (clientId: string, id: string) =>
     [...KEYS.all, "detail", clientId, id] as const,
+  allList: (inactive: boolean) => [...KEYS.all, "all", inactive] as const,
 };
+
+export function useAllSites(includeInactive = false) {
+  return useQuery({
+    queryKey: KEYS.allList(includeInactive),
+    queryFn: () => sitesApi.listAll(includeInactive),
+    staleTime: 60_000,
+  });
+}
 
 export function useSites(clientId?: string, includeInactive = false) {
   return useQuery({
@@ -42,9 +51,8 @@ export function useCreateSite() {
       clientId: string;
       data: CreateSiteRequest;
     }) => sitesApi.create(clientId, data),
-    onSuccess: (_d, vars) => {
-      qc.invalidateQueries({ queryKey: KEYS.byClient(vars.clientId, false) });
-      qc.invalidateQueries({ queryKey: KEYS.byClient(vars.clientId, true) });
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: KEYS.all });
     },
   });
 }
@@ -61,10 +69,8 @@ export function useUpdateSite() {
       id: string;
       data: UpdateSiteRequest;
     }) => sitesApi.update(clientId, id, data),
-    onSuccess: (_d, vars) => {
-      qc.invalidateQueries({ queryKey: KEYS.detail(vars.clientId, vars.id) });
-      qc.invalidateQueries({ queryKey: KEYS.byClient(vars.clientId, false) });
-      qc.invalidateQueries({ queryKey: KEYS.byClient(vars.clientId, true) });
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: KEYS.all });
     },
   });
 }
@@ -74,9 +80,8 @@ export function useDeleteSite() {
   return useMutation({
     mutationFn: ({ clientId, id }: { clientId: string; id: string }) =>
       sitesApi.delete(clientId, id),
-    onSuccess: (_d, vars) => {
-      qc.invalidateQueries({ queryKey: KEYS.byClient(vars.clientId, false) });
-      qc.invalidateQueries({ queryKey: KEYS.byClient(vars.clientId, true) });
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: KEYS.all });
     },
   });
 }
@@ -93,8 +98,8 @@ export function useRestartSite() {
       siteId: string;
       data?: SiteRestartRequest;
     }) => sitesApi.restartSite(clientId, siteId, data ?? {}),
-    onSuccess: (_d, vars) => {
-      qc.invalidateQueries({ queryKey: KEYS.byClient(vars.clientId, true) });
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: KEYS.all });
     },
   });
 }
@@ -111,8 +116,8 @@ export function useShutdownSite() {
       siteId: string;
       data?: SiteShutdownRequest;
     }) => sitesApi.shutdownSite(clientId, siteId, data ?? {}),
-    onSuccess: (_d, vars) => {
-      qc.invalidateQueries({ queryKey: KEYS.byClient(vars.clientId, true) });
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: KEYS.all });
     },
   });
 }
@@ -122,8 +127,8 @@ export function useWakeOnLanSite() {
   return useMutation({
     mutationFn: ({ clientId, siteId }: { clientId: string; siteId: string }) =>
       sitesApi.wakeOnLanSite(clientId, siteId),
-    onSuccess: (_d, vars) => {
-      qc.invalidateQueries({ queryKey: KEYS.byClient(vars.clientId, true) });
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: KEYS.all });
     },
   });
 }

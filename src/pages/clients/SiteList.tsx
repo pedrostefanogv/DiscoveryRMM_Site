@@ -1,12 +1,12 @@
 import { useMemo, useRef, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQueries } from '@tanstack/react-query';
 import { Building2, Plus } from 'lucide-react';
 import { useClients } from '@/hooks/useClients';
-import { useCreateSite, useDeleteSite, useRestartSite, useShutdownSite, useWakeOnLanSite } from '@/hooks/useSites';
+import { useAllSites, useCreateSite, useDeleteSite, useRestartSite, useShutdownSite, useWakeOnLanSite } from '@/hooks/useSites';
 import { useAgentsBySite } from '@/hooks/useAgents';
-import { Badge, Button, Card, DataTable, ErrorDisplay, Input, Loading, Modal, Select, StatCard, TextArea } from '@/components/ui';
-import { sitesApi, type Site, type SiteWakeOnLanResponse, type CreateSiteRequest } from '@/api';
+import { Badge, Button, Card, DataTable, ErrorDisplay, Input, Loading, Modal, PageHeader, Select, StatCard, TextArea } from '@/components/ui';
+import { type Site, type SiteWakeOnLanResponse, type CreateSiteRequest } from '@/api';
+import { useAuthorization } from '@/auth/authorization';
 import type { Column } from '@/components/ui';
 import toast from 'react-hot-toast';
 import SiteContextMenu, { type SiteContextAction } from '@/components/sites/SiteContextMenu';
@@ -22,6 +22,9 @@ type SiteWithClient = Site & {
 
 export default function SiteList() {
   const navigate = useNavigate();
+  const { hasAnyPermission } = useAuthorization();
+  // Sites são gerenciados sob o recurso Clients (não há SitesController próprio).
+  const canCreate = hasAnyPermission(['Clients.Create', 'clients.*', 'admin.*']);
   const [showInactive, setShowInactive] = useState(false);
   const [search, setSearch] = useState('');
   const [filterClient, setFilterClient] = useState('');
@@ -36,32 +39,27 @@ export default function SiteList() {
   const [wakeSite, setWakeSite] = useState<SiteWithClient | null>(null);
   const [deleteSiteModal, setDeleteSiteModal] = useState<SiteWithClient | null>(null);
 
-  const clients = useClients(showInactive);
-  const visibleClients = useMemo(() => {
-    const all = clients.data ?? [];
-    if (filterClient) return all.filter((client) => client.id === filterClient);
-    return all;
-  }, [clients.data, filterClient]);
+  // Clientes sempre completos (nome/ativo + opções de filtro/criação); os sites
+  // vêm de uma única requisição global (sem N+1 por cliente).
+  const clients = useClients(true);
+  const allSitesQuery = useAllSites(showInactive);
 
-  const siteQueries = useQueries({
-    queries: visibleClients.map((client) => ({
-      queryKey: ['sites', 'byClient', client.id, showInactive] as const,
-      queryFn: () => sitesApi.list(client.id, showInactive),
-      enabled: !!client.id,
-    })),
-  });
+  const clientsById = useMemo(
+    () => new Map((clients.data ?? []).map((client) => [client.id, client])),
+    [clients.data],
+  );
 
   const sites = useMemo<SiteWithClient[]>(() => {
-    return visibleClients.flatMap((client, index) => {
-      const query = siteQueries[index];
-      if (!query?.data) return [];
-      return query.data.map((site) => ({
+    const list = (allSitesQuery.data ?? []).map((site) => {
+      const client = clientsById.get(site.clientId);
+      return {
         ...site,
-        clientName: client.name,
-        clientActive: client.isActive,
-      }));
+        clientName: client?.name ?? 'Cliente desconhecido',
+        clientActive: client?.isActive ?? true,
+      };
     });
-  }, [visibleClients, siteQueries]);
+    return filterClient ? list.filter((site) => site.clientId === filterClient) : list;
+  }, [allSitesQuery.data, clientsById, filterClient]);
 
   const filteredSites = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -129,10 +127,10 @@ export default function SiteList() {
     },
   ];
 
-  const isLoading = clients.isLoading || siteQueries.some((query) => query.isLoading && !query.data);
-  const hasQueryError = siteQueries.some((query) => query.isError);
-  const activeSites = filteredSites.filter((site) => site.isActive).length;
-  const representedClients = new Set(filteredSites.map((site) => site.clientId)).size;
+  const isLoading = (clients.isLoading && !clients.data) || allSitesQuery.isLoading;
+  const hasQueryError = clients.isError || allSitesQuery.isError;
+  const activeSites = sites.filter((site) => site.isActive).length;
+  const inactiveSites = sites.length - activeSites;
   const clientOptions = [
     { value: '', label: 'Todos os clientes' },
     ...(clients.data ?? []).map((client) => ({ value: client.id, label: client.name })),
@@ -146,9 +144,7 @@ export default function SiteList() {
         message="Não foi possível carregar os sites."
         onRetry={() => {
           void clients.refetch();
-          siteQueries.forEach((query) => {
-            void query.refetch();
-          });
+          void allSitesQuery.refetch();
         }}
       />
     );
@@ -199,18 +195,15 @@ export default function SiteList() {
   const totalCount = (activeSiteAgents ?? []).length;
   const offlineCount = totalCount - onlineCount;
 
-  const handleDeleteSiteNoAgents = (site: SiteWithClient) => {
-    if (!window.confirm(`Tem certeza que deseja excluir o site "${site.name}"?`)) {
-      setDeleteSiteModal(null);
-      return;
-    }
+  const handleConfirmDeleteNoAgents = () => {
+    const site = deleteSiteModal;
+    if (!site) return;
     deleteSiteMutation.mutate(
       { clientId: site.clientId, id: site.id },
       {
         onSuccess: () => {
           toast.success('Site excluído com sucesso');
           setDeleteSiteModal(null);
-          void clients.refetch();
         },
         onError: () => toast.error('Erro ao excluir site'),
       },
@@ -232,17 +225,6 @@ export default function SiteList() {
       },
     );
   };
-
-  // Quando o usuário clicar em "Apagar" e o site NÃO tiver agentes,
-  // exibe um confirm e exclui direto (sem modal de transferência).
-  useEffect(() => {
-    if (!deleteSiteModal || activeSiteAgentsLoading) return;
-    const hasAgents = (activeSiteAgents ?? []).length > 0;
-    if (!hasAgents) {
-      handleDeleteSiteNoAgents(deleteSiteModal);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [deleteSiteModal, activeSiteAgentsLoading]);
 
   const handlePowerConfirm = async (data: { delaySeconds: number; force: boolean; message: string }) => {
     const site = powerSite;
@@ -279,31 +261,30 @@ export default function SiteList() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Sites</h1>
-          <p className="text-sm text-muted">Visão global dos sites cadastrados por cliente</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <label className="flex items-center gap-2 text-sm text-muted">
-            <input
-              type="checkbox"
-              checked={showInactive}
-              onChange={(event) => setShowInactive(event.target.checked)}
-              className="rounded border-border bg-surface-light"
-            />
-            Mostrar inativos
-          </label>
+      <PageHeader
+        title="Sites"
+        description={filteredSites.length + ' de ' + sites.length + ' site(s) · visão global por cliente'}
+      >
+        <label className="flex items-center gap-2 text-sm text-muted">
+          <input
+            type="checkbox"
+            checked={showInactive}
+            onChange={(event) => setShowInactive(event.target.checked)}
+            className="rounded border-border bg-surface-light"
+          />
+          Mostrar inativos
+        </label>
+        {canCreate && (
           <Button onClick={() => setModalOpen(true)}>
             <Plus className="h-4 w-4" /> Novo Site
           </Button>
-        </div>
-      </div>
+        )}
+      </PageHeader>
 
       <div className="grid gap-4 sm:grid-cols-3">
-        <StatCard icon={Building2} label="Total de sites" value={filteredSites.length} tone="accent" />
+        <StatCard icon={Building2} label="Total de sites" value={sites.length} tone="accent" />
         <StatCard icon={Building2} label="Sites ativos" value={activeSites} tone="success" />
-        <StatCard icon={Building2} label="Clientes representados" value={representedClients} tone="primary" />
+        <StatCard icon={Building2} label="Sites inativos" value={inactiveSites} tone="warning" />
       </div>
 
       <Card>
@@ -385,7 +366,7 @@ export default function SiteList() {
         />
       )}
 
-      {deleteSiteModal && (activeSiteAgents ?? []).length > 0 && (
+      {deleteSiteModal && !activeSiteAgentsLoading && (activeSiteAgents ?? []).length > 0 && (
         <TransferBeforeDeleteModal
           open
           onClose={() => setDeleteSiteModal(null)}
@@ -394,6 +375,16 @@ export default function SiteList() {
           agentIds={(activeSiteAgents ?? []).map((a) => a.id)}
           sourceClientId={deleteSiteModal.clientId}
           onSuccess={handleTransferAndDelete}
+        />
+      )}
+
+      {deleteSiteModal && !activeSiteAgentsLoading && (activeSiteAgents ?? []).length === 0 && (
+        <SiteDeleteConfirmModal
+          open
+          siteName={deleteSiteModal.name}
+          onClose={() => setDeleteSiteModal(null)}
+          onConfirm={handleConfirmDeleteNoAgents}
+          isLoading={deleteSiteMutation.isPending}
         />
       )}
     </div>
@@ -471,6 +462,42 @@ function CreateSiteModal({
           </Button>
           <Button onClick={handleSubmit} loading={create.isPending}>
             Salvar
+          </Button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+function SiteDeleteConfirmModal({
+  open,
+  siteName,
+  onClose,
+  onConfirm,
+  isLoading,
+}: {
+  open: boolean;
+  siteName: string;
+  onClose: () => void;
+  onConfirm: () => void;
+  isLoading: boolean;
+}) {
+  return (
+    <Modal open={open} onClose={onClose} title="Excluir site">
+      <div className="space-y-4">
+        <div className="rounded-lg border border-danger/30 bg-danger/10 p-3 text-sm text-foreground">
+          <p>
+            Tem certeza que deseja excluir o site{' '}
+            <span className="font-semibold text-foreground">{siteName}</span>?
+          </p>
+          <p className="mt-1 text-muted">Esta ação não pode ser desfeita.</p>
+        </div>
+        <div className="flex justify-end gap-2">
+          <Button variant="secondary" onClick={onClose} disabled={isLoading}>
+            Cancelar
+          </Button>
+          <Button variant="danger" onClick={onConfirm} loading={isLoading}>
+            Excluir
           </Button>
         </div>
       </div>

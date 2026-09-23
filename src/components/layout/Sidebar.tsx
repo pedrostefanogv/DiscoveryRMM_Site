@@ -34,7 +34,7 @@ const clientLinks = [
 
 const softwareLinks = [
   { to: '/software/inventory', label: 'Inventário Detalhado' },
-  { to: '/automation', label: 'Automação' },
+  { to: '/software/automation', label: 'Automação de software' },
   { to: '/software/store', label: 'Loja de aplicativos' },
 ];
 
@@ -50,6 +50,7 @@ const automationLinks = [
 const reportsLinks = [
   { to: '/reports/templates', label: 'Templates' },
   { to: '/reports/executions', label: 'Execuções' },
+  { to: '/reports/schedules', label: 'Agendamentos' },
 ];
 
 const ticketsLinks = [
@@ -170,9 +171,15 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
   visibleTicketsLinks = canViewWorkflowProfiles
     ? visibleTicketsLinks
     : visibleTicketsLinks.filter(({ to }) => to !== '/settings/workflow-profiles');
+  const canViewLogs = hasAnyPermission(['logs.*', 'logs.read', 'admin.*']);
   const visibleMainLinks = mainLinks
     .slice(1)
-    .filter(({ to }) => (to === '/deploy' ? canViewDeploy : to !== '/tickets'));
+    .filter(({ to }) => {
+      if (to === '/tickets') return false;
+      if (to === '/deploy') return canViewDeploy;
+      if (to === '/logs') return canViewLogs;
+      return true;
+    });
 
   useEffect(() => {
     if (!isDesktop) onCloseMobile();
@@ -249,6 +256,7 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
               : 'text-muted hover:bg-surface-light hover:text-foreground'
           }`}
           aria-label="Abrir submenu de clientes"
+          aria-expanded={clientsOpen}
         >
           <Users className="h-5 w-5 shrink-0" />
           {!effectiveCollapsed && (
@@ -262,7 +270,7 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
         </button>
 
         {!effectiveCollapsed && (
-          <div className={submenuAnimationClass(clientsOpen)} aria-hidden={!clientsOpen}>
+          <div className={submenuAnimationClass(clientsOpen)} aria-hidden={!clientsOpen} inert={!clientsOpen}>
             <div className="ml-8 space-y-1 border-l border-border pl-3 pb-1">
               {clientLinks.map(({ to, label }) => (
                 <NavLink
@@ -317,6 +325,7 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
               : 'text-muted hover:bg-surface-light hover:text-foreground'
           }`}
           aria-label="Abrir submenu de suporte"
+          aria-expanded={ticketsOpen}
         >
           <Ticket className="h-5 w-5 shrink-0" />
           {!effectiveCollapsed && (
@@ -330,7 +339,7 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
         </button>
 
         {!effectiveCollapsed && (
-          <div className={submenuAnimationClass(ticketsOpen)} aria-hidden={!ticketsOpen}>
+          <div className={submenuAnimationClass(ticketsOpen)} aria-hidden={!ticketsOpen} inert={!ticketsOpen}>
             <div className="ml-8 space-y-1 border-l border-border pl-3 pb-1">
               {visibleTicketsLinks.map(({ to, label }) => (
                 <NavLink
@@ -369,6 +378,7 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
                   : 'text-muted hover:bg-surface-light hover:text-foreground'
               }`}
               aria-label="Abrir submenu de softwares"
+          aria-expanded={softwareOpen}
             >
               <AppWindow className="h-5 w-5 shrink-0" />
               {!effectiveCollapsed && (
@@ -382,7 +392,7 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
             </button>
 
             {!effectiveCollapsed && (
-              <div className={submenuAnimationClass(softwareOpen)} aria-hidden={!softwareOpen}>
+              <div className={submenuAnimationClass(softwareOpen)} aria-hidden={!softwareOpen} inert={!softwareOpen}>
                 <div className="ml-8 space-y-1 border-l border-border pl-3 pb-1">
                   {softwareLinks.map(({ to, label }) => (
                     <NavLink
@@ -422,6 +432,7 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
                   : 'text-muted hover:bg-surface-light hover:text-foreground'
               }`}
               aria-label="Abrir submenu de automação"
+          aria-expanded={automationOpen}
             >
               <Wrench className="h-5 w-5 shrink-0" />
               {!effectiveCollapsed && (
@@ -435,7 +446,7 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
             </button>
 
             {!effectiveCollapsed && (
-              <div className={submenuAnimationClass(automationOpen)} aria-hidden={!automationOpen}>
+              <div className={submenuAnimationClass(automationOpen)} aria-hidden={!automationOpen} inert={!automationOpen}>
                 <div className="ml-8 space-y-1 border-l border-border pl-3 pb-1">
                   {visibleAutomationLinks.map(({ to, label }) => (
                     <NavLink
@@ -476,6 +487,7 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
                   : 'text-muted hover:bg-surface-light hover:text-foreground'
               }`}
               aria-label="Abrir submenu de relatórios"
+          aria-expanded={reportsOpen}
             >
               <FileBarChart className="h-5 w-5 shrink-0" />
               {!effectiveCollapsed && (
@@ -489,7 +501,7 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
             </button>
 
             {!effectiveCollapsed && (
-              <div className={submenuAnimationClass(reportsOpen)} aria-hidden={!reportsOpen}>
+              <div className={submenuAnimationClass(reportsOpen)} aria-hidden={!reportsOpen} inert={!reportsOpen}>
                 <div className="ml-8 space-y-1 border-l border-border pl-3 pb-1">
                   {reportsLinks.map(({ to, label }) => (
                     <NavLink
@@ -527,6 +539,7 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
               : 'text-muted hover:bg-surface-light hover:text-foreground'
           }`}
           aria-label="Abrir submenu de identidade"
+          aria-expanded={identityOpen}
         >
           <ShieldCheck className="h-5 w-5 shrink-0" />
           {!effectiveCollapsed && (
@@ -540,7 +553,7 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
         </button>
 
         {!effectiveCollapsed && (
-          <div className={submenuAnimationClass(identityOpen)} aria-hidden={!identityOpen}>
+          <div className={submenuAnimationClass(identityOpen)} aria-hidden={!identityOpen} inert={!identityOpen}>
             <div className="ml-8 space-y-1 border-l border-border pl-3 pb-1">
               {visibleIdentityLinks.map(({ to, label }) => (
                 <NavLink
@@ -578,6 +591,7 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
                   : 'text-muted hover:bg-surface-light hover:text-foreground'
               }`}
               aria-label="Abrir submenu de configurações"
+          aria-expanded={settingsOpen}
             >
               <Settings className="h-5 w-5 shrink-0" />
               {!effectiveCollapsed && (
@@ -591,7 +605,7 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
             </button>
 
             {!effectiveCollapsed && (
-              <div className={submenuAnimationClass(settingsOpen)} aria-hidden={!settingsOpen}>
+              <div className={submenuAnimationClass(settingsOpen)} aria-hidden={!settingsOpen} inert={!settingsOpen}>
                 <div className="ml-8 space-y-1 border-l border-border pl-3 pb-1">
                   {settingsLinks.map(({ to, label }) => (
                     <NavLink
