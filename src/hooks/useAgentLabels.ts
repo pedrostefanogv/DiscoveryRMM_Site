@@ -1,41 +1,58 @@
+import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { agentLabelsApi } from '@/modules/agent-labels/api';
 import type { AgentLabel } from '@/modules/agent-labels/types';
 
+/** Limite alinhado ao backend (ListAgentLabelsBatchQueryHandler). */
+const MAX_AGENTS_PER_REQUEST = 500;
+
 /**
- * Carrega as labels de vários agentes em uma única chamada por agente, com cache
- * compartilhado por id. As labels antes só existiam na página de detalhe, o que
- * tornava impossível filtrar a lista — e fazer uma requisição por agente criaria
- * um N+1 na interface.
+ * Carrega as labels de vários agentes em UMA requisição (endpoint /agent-labels/batch).
+ * Antes as labels só existiam na página de detalhe, o que impedia filtrar a lista de
+ * agentes; fazer uma requisição por agente criaria um N+1 na interface.
  */
 export function useAgentLabels(agentIds: readonly string[]) {
-  const sortedIds = [...new Set(agentIds)].sort();
+  // Chave estável e curta: derivada do conteúdo, não do array de entrada (que muda de
+  // identidade a cada render da lista).
+  const ids = useMemo(
+    () => [...new Set(agentIds)].filter(Boolean).sort().slice(0, MAX_AGENTS_PER_REQUEST),
+    [agentIds],
+  );
+  const cacheKey = useMemo(() => ids.join(','), [ids]);
 
-  const query = useQuery({
-    queryKey: ['agentLabels', 'byAgentIds', sortedIds],
+  return useQuery({
+    queryKey: ['agentLabels', 'batch', cacheKey],
     queryFn: async () => {
-      const entries = await Promise.all(
-        sortedIds.map(async agentId => [agentId, await agentLabelsApi.getAgentLabels(agentId).catch(() => [])] as const),
-      );
-      return Object.fromEntries(entries) as Record<string, AgentLabel[]>;
+      const labels = await agentLabelsApi.getAgentLabelsBatch(ids);
+
+      const byAgent: Record<string, AgentLabel[]> = {};
+      for (const label of labels) {
+        (byAgent[label.agentId] ??= []).push(label);
+      }
+      return byAgent;
     },
-    enabled: sortedIds.length > 0,
+    enabled: ids.length > 0,
     staleTime: 60_000,
   });
-
-  return query;
 }
 
-/** Índice agentId -> nomes de labels, pronto para filtro/busca. */
+/**
+ * Índice agentId -> nomes de labels, pronto para filtro/busca.
+ *
+ * O Map é memoizado por dados+ids: sem isso, um novo Map era criado a cada render e
+ * invalidava o useMemo do consumidor (o filtro recalculava a lista inteira sempre).
+ */
 export function useAgentLabelsByAgentIds(agentIds: readonly string[]): Map<string, string[]> {
   const { data } = useAgentLabels(agentIds);
 
-  const map = new Map<string, string[]>();
-  if (!data) return map;
+  return useMemo(() => {
+    const map = new Map<string, string[]>();
+    if (!data) return map;
 
-  for (const [agentId, labels] of Object.entries(data)) {
-    map.set(agentId, labels.map(label => label.label));
-  }
+    for (const [agentId, labels] of Object.entries(data)) {
+      map.set(agentId, labels.map(label => label.label));
+    }
 
-  return map;
+    return map;
+  }, [data]);
 }

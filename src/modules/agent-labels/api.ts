@@ -60,6 +60,24 @@ export const agentLabelsApi = {
     }));
   },
 
+  /** Labels de vários agentes em uma única chamada. */
+  async getAgentLabelsBatch(agentIds: readonly string[]): Promise<AgentLabel[]> {
+    if (agentIds.length === 0) return [];
+
+    const raw = await api.post<Array<Record<string, unknown>>>(`${BASE}/batch`, {
+      agentIds,
+    });
+
+    return (raw ?? []).map((item) => ({
+      id: String(item.id ?? ""),
+      agentId: String(item.agentId ?? ""),
+      label: String(item.label ?? ""),
+      sourceType: normalizeAgentLabelSourceType(item.sourceType),
+      createdAt: String(item.createdAt ?? ""),
+      updatedAt: String(item.updatedAt ?? ""),
+    }));
+  },
+
   async getDistinctLabels(): Promise<string[]> {
     return api.get<string[]>(`${BASE}/distinct`);
   },
