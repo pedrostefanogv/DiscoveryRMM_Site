@@ -12,6 +12,7 @@ import {
   XCircle,
   Clock,
   Zap,
+  RefreshCw,
 } from 'lucide-react';
 import type { ComponentType } from 'react';
 import { memo, useState } from 'react';
@@ -19,7 +20,7 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useDashboardSummary } from '@/hooks/useDashboardSummary';
 import { useP2POverview } from '@/hooks/useP2POverview';
-import { StatCard, Card, CardHeader, Badge, SkeletonDashboard, ErrorDisplay } from '@/components/ui';
+import { StatCard, Card, CardHeader, Badge, Button, SkeletonDashboard, ErrorDisplay } from '@/components/ui';
 import { getRealtimeStats } from '@/api';
 import { useSoftwareInventorySnapshot } from '@/hooks/useSoftwareInventory';
 import type { DashboardWindow } from '@/api/dashboard';
@@ -52,6 +53,25 @@ function formatMegabytes(value?: number | null): string {
   return `${value.toFixed(2)} MB`;
 }
 
+function formatDateTime(value?: string | null): string {
+  if (!value) return '\u2014';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '\u2014';
+  return date.toLocaleString('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+// successRate pode vir ausente/NaN se o backend omitir o campo: nunca quebrar o
+// render com toFixed em undefined.
+function formatPercent(value?: number | null): string {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return '\u2014';
+  return value.toFixed(1) + '%';
+}
+
 const WINDOWS: { value: DashboardWindow; label: string }[] = [
   { value: '24h', label: 'Últimas 24h' },
   { value: '7d', label: 'Últimos 7 dias' },
@@ -60,17 +80,21 @@ const WINDOWS: { value: DashboardWindow; label: string }[] = [
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const [window, setWindow] = useState<DashboardWindow>('24h');
+  // "range" (e não "window") para não sombrear o objeto global window.
+  const [range, setRange] = useState<DashboardWindow>('24h');
+  const [isManualRefreshing, setIsManualRefreshing] = useState(false);
 
-  const dashboard = useDashboardSummary('global', window);
-  const softwareSnapshot = useSoftwareInventorySnapshot('global');
+  const dashboard = useDashboardSummary('global', range);
+  const softwareSnapshot = useSoftwareInventorySnapshot('global', undefined, undefined, {
+    refetchInterval: 300_000,
+  });
   const realtimeStats = useQuery({
     queryKey: ['realtime', 'stats'],
     queryFn: ({ signal }) => getRealtimeStats({ signal }),
     refetchInterval: 300_000,
     refetchIntervalInBackground: false,
   });
-  const p2pOverview = useP2POverview({ scope: 'global', window });
+  const p2pOverview = useP2POverview({ scope: 'global', window: range });
 
   const ds = dashboard.data;
 
@@ -114,6 +138,64 @@ export default function Dashboard() {
   const auto = ds?.automation;
   const logs = ds?.logs;
   const p2pKpis = p2pOverview.data?.kpis;
+  const rangeLabel = WINDOWS.find((w) => w.value === range)?.label ?? range;
+  const isAnyFetching =
+    dashboard.isFetching ||
+    realtimeStats.isFetching ||
+    softwareSnapshot.isFetching ||
+    p2pOverview.isFetching;
+
+  const handleRefresh = async () => {
+    setIsManualRefreshing(true);
+    try {
+      await Promise.allSettled([
+        dashboard.refetch(),
+        realtimeStats.refetch(),
+        softwareSnapshot.refetch(),
+        p2pOverview.refetch(),
+      ]);
+    } finally {
+      setIsManualRefreshing(false);
+    }
+  };
+
+  // Alertas operacionais exibidos no topo (SLA, agentes em erro, logs, infra).
+  type DashboardAlert = { id: string; tone: 'danger' | 'warning'; message: string; onClick?: () => void };
+  const alerts: DashboardAlert[] = [];
+  if (ticketsSlaBreached > 0) {
+    alerts.push({ id: 'sla', tone: 'danger', message: ticketsSlaBreached + ' chamado(s) com SLA estourado', onClick: () => navigate('/tickets') });
+  }
+  if (agentsError > 0) {
+    alerts.push({ id: 'agents', tone: 'danger', message: agentsError + ' agente(s) em erro', onClick: () => navigate('/agents') });
+  }
+  if ((logs?.error ?? 0) > 0) {
+    alerts.push({ id: 'logs', tone: 'warning', message: (logs?.error ?? 0) + ' erro(s) de log na janela', onClick: () => navigate('/logs') });
+  }
+  if (realtime && !realtime.natsConnected) {
+    alerts.push({ id: 'nats', tone: 'danger', message: 'NATS desconectado' });
+  }
+  if (realtime && !realtime.redisConnected) {
+    alerts.push({ id: 'redis', tone: 'warning', message: 'Redis desconectado' });
+  }
+  if (database && !database.connected) {
+    alerts.push({ id: 'db', tone: 'danger', message: 'Banco de dados desconectado' });
+  }
+  const hasDangerAlert = alerts.some((a) => a.tone === 'danger');
+  const alertToneClass = (tone: 'danger' | 'warning') =>
+    tone === 'danger'
+      ? 'bg-danger/20 text-danger hover:bg-danger/30'
+      : 'bg-warning/20 text-warning hover:bg-warning/30';
+
+  // Composição de status dos agentes: usada no gráfico de barras empilhadas e
+  // como denominador das barras individuais (garante soma coerente com os erros).
+  const agentSegments = [
+    { label: 'Online', value: agentsOnline, bg: 'bg-success' },
+    { label: 'Offline', value: agentsOffline, bg: 'bg-danger' },
+    { label: 'Stale', value: agentsStale, bg: 'bg-warning' },
+    { label: 'Manutenção', value: agentsMaintenance, bg: 'bg-primary' },
+    { label: 'Erro', value: agentsError, bg: 'bg-accent' },
+  ];
+  const agentSegmentTotal = agentSegments.reduce((acc, segment) => acc + segment.value, 0);
 
   return (
     <div className="space-y-6">
@@ -121,27 +203,80 @@ export default function Dashboard() {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
-          <p className="text-sm text-muted">Visão geral do ambiente</p>
+          <p className="text-sm text-muted">
+            Visão geral do ambiente
+            {ds?.generatedAtUtc && (
+              <span className="ml-2">· Atualizado em {formatDateTime(ds.generatedAtUtc)}</span>
+            )}
+            {isAnyFetching && <span className="ml-2 text-primary">· atualizando…</span>}
+          </p>
         </div>
-        <div className="flex items-center gap-1 rounded-lg border border-border bg-surface-light p-1">
-          {WINDOWS.map(w => (
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 rounded-lg border border-border bg-surface-light p-1">
+            {WINDOWS.map(w => (
             <button
               key={w.value}
               type="button"
-              onClick={() => setWindow(w.value)}
+              aria-pressed={range === w.value}
+              onClick={() => setRange(w.value)}
               className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-                window === w.value
+                range === w.value
                   ? 'bg-primary/20 text-primary'
                   : 'text-muted hover:text-foreground'
               }`}
             >
               {w.label}
             </button>
-          ))}
+            ))}
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => void handleRefresh()}
+            loading={isManualRefreshing}
+            title="Atualizar dados do dashboard"
+            aria-label="Atualizar dados do dashboard"
+          >
+            <RefreshCw className="h-4 w-4" />
+          </Button>
         </div>
       </div>
 
-      {/* Linha 1 – KPIs principais */}
+      {/* Alertas operacionais */}
+      {alerts.length > 0 ? (
+        <div
+          role="status"
+          className={
+            'flex flex-wrap items-center gap-2 rounded-xl border px-4 py-3 text-sm ' +
+            (hasDangerAlert ? 'border-danger/30 bg-danger/10' : 'border-warning/30 bg-warning/10')
+          }
+        >
+          <AlertTriangle className={'h-4 w-4 shrink-0 ' + (hasDangerAlert ? 'text-danger' : 'text-warning')} />
+          <span className="font-medium text-foreground">Atenção:</span>
+          {alerts.map((alert) => (
+            <button
+              key={alert.id}
+              type="button"
+              onClick={alert.onClick}
+              disabled={!alert.onClick}
+              className={
+                'rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors ' +
+                alertToneClass(alert.tone) +
+                (alert.onClick ? ' cursor-pointer' : ' cursor-default')
+              }
+            >
+              {alert.message}
+            </button>
+          ))}
+        </div>
+      ) : (
+        <div role="status" className="flex items-center gap-2 rounded-xl border border-success/30 bg-success/10 px-4 py-2 text-sm text-success">
+          <CheckCircle2 className="h-4 w-4 shrink-0" />
+          Nenhum alerta crítico na janela de {rangeLabel.toLowerCase()}.
+        </div>
+      )}
+
+      {/* Linha 1 – KPIs principais */} 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <button
           type="button"
@@ -192,6 +327,7 @@ export default function Dashboard() {
             label="Softwares instalados"
             value={softwareSnapshot.isLoading ? '\u2014' : totalInstalledSoftware}
             tone="success"
+            trend={softwareSnapshot.isError ? <Badge color="danger">indisponível</Badge> : undefined}
           />
         </button>
         <button
@@ -219,26 +355,41 @@ export default function Dashboard() {
         <Card>
           <CardHeader
             title="Saúde dos Agentes"
-            subtitle={`Distribuição de status • ${window}`}
+            subtitle={`Distribuição de status • ${rangeLabel}`}
           />
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <StatusBar label="Online" value={agentsOnline} total={agentsTotal} color="text-success" bg="bg-success" />
-            <StatusBar label="Offline" value={agentsOffline} total={agentsTotal} color="text-danger" bg="bg-danger" />
-            <StatusBar label="Stale" value={agentsStale} total={agentsTotal} color="text-warning" bg="bg-warning" />
-            <StatusBar label="Manutenção" value={agentsMaintenance} total={agentsTotal} color="text-primary" bg="bg-primary" />
-          </div>
-          {agentsError > 0 && (
-            <div className="mt-3 flex items-center gap-2 rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger">
-              <AlertTriangle className="h-4 w-4 shrink-0" />
-              {agentsError} agente{agentsError !== 1 ? 's' : ''} em erro
+          {agentSegmentTotal > 0 && (
+            <div
+              role="img"
+              aria-label={'Distribuição de status: ' + agentSegments.map((segment) => segment.label + ' ' + segment.value).join(', ')}
+              className="mb-3 flex h-2.5 w-full overflow-hidden rounded-full bg-surface-light"
+            >
+              {agentSegments.map((segment) =>
+                segment.value > 0 ? (
+                  <div
+                    key={segment.label}
+                    className={segment.bg}
+                    style={{ width: (segment.value / agentSegmentTotal) * 100 + '%' }}
+                    title={segment.label + ': ' + segment.value}
+                  />
+                ) : null,
+              )}
             </div>
           )}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <StatusBar label="Online" value={agentsOnline} total={agentSegmentTotal} color="text-success" bg="bg-success" />
+            <StatusBar label="Offline" value={agentsOffline} total={agentSegmentTotal} color="text-danger" bg="bg-danger" />
+            <StatusBar label="Stale" value={agentsStale} total={agentSegmentTotal} color="text-warning" bg="bg-warning" />
+            <StatusBar label="Manutenção" value={agentsMaintenance} total={agentSegmentTotal} color="text-primary" bg="bg-primary" />
+            {agentsError > 0 && (
+              <StatusBar label="Erro" value={agentsError} total={agentSegmentTotal} color="text-danger" bg="bg-danger" />
+            )}
+          </div>
         </Card>
 
         <Card>
           <CardHeader
             title="Comandos"
-            subtitle={`Execuções na janela • ${window}`}
+            subtitle={`Execuções na janela • ${rangeLabel}`}
           />
           <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
             <MetricTile label="Pending" value={cmds?.pending ?? 0} icon={Clock} />
@@ -252,7 +403,7 @@ export default function Dashboard() {
                 <span>Sucesso</span>
               </div>
               <p className={`mt-1 text-base font-semibold ${(cmds?.successRate ?? 0) >= 80 ? 'text-success' : 'text-danger'}`}>
-                {cmds?.total ? `${cmds.successRate.toFixed(1)}%` : '\u2014'}
+                {cmds?.total ? formatPercent(cmds.successRate) : '\u2014'}
               </p>
             </div>
           </div>
@@ -264,7 +415,7 @@ export default function Dashboard() {
         <Card>
           <CardHeader
             title="Automação"
-            subtitle={`Execuções na janela • ${window}`}
+            subtitle={`Execuções na janela • ${rangeLabel}`}
           />
           <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
             <MetricTile label="Dispatched" value={auto?.dispatched ?? 0} icon={Zap} />
@@ -278,7 +429,7 @@ export default function Dashboard() {
                 <span>Sucesso</span>
               </div>
               <p className={`mt-1 text-base font-semibold ${(auto?.successRate ?? 0) >= 80 ? 'text-success' : 'text-danger'}`}>
-                {auto?.total ? `${auto.successRate.toFixed(1)}%` : '\u2014'}
+                {auto?.total ? formatPercent(auto.successRate) : '\u2014'}
               </p>
             </div>
           </div>
@@ -287,7 +438,7 @@ export default function Dashboard() {
         <Card>
           <CardHeader
             title="Distribuição de Logs"
-            subtitle={`Entradas na janela • ${window}`}
+            subtitle={`Entradas na janela • ${rangeLabel}`}
           />
           <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
             <div className="rounded-lg bg-danger/10 px-3 py-2">
@@ -329,6 +480,14 @@ export default function Dashboard() {
             title="Saúde da Plataforma"
             subtitle="Conectividade em tempo real e infraestrutura"
           />
+          {realtimeStats.isError && (
+            <div className="mb-3 flex items-center justify-between gap-2 rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger">
+              <span>Não foi possível carregar as métricas de infraestrutura.</span>
+              <Button variant="ghost" size="sm" onClick={() => void realtimeStats.refetch()}>
+                Tentar novamente
+              </Button>
+            </div>
+          )}
           <div className="space-y-3 text-sm">
             <div className="flex items-center justify-between rounded-lg bg-surface-light px-3 py-2">
               <span className="flex items-center gap-2 text-muted-foreground">
@@ -420,10 +579,18 @@ export default function Dashboard() {
       </div>
 
       {/* Linha 6 – P2P Summary Cards */}
+      {p2pOverview.isError && (
+        <div role="status" className="flex items-center justify-between gap-2 rounded-xl border border-danger/30 bg-danger/10 px-4 py-2 text-sm text-danger">
+          <span>Não foi possível carregar as métricas P2P.</span>
+          <Button variant="ghost" size="sm" onClick={() => void p2pOverview.refetch()}>
+            Tentar novamente
+          </Button>
+        </div>
+      )}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard icon={Monitor} label="Agentes ativos P2P" value={p2pKpis?.activeAgents ?? '\u2014'} tone="accent" />
         <StatCard icon={Server} label="Seeders ativos" value={p2pKpis?.activeSeeders ?? '\u2014'} tone="primary" />
-        <StatCard icon={CheckCircle2} label="Success rate" value={typeof p2pKpis?.replicationSuccessRate === 'number' ? `${p2pKpis.replicationSuccessRate.toFixed(1)}%` : '\u2014'} tone="success" />
+        <StatCard icon={CheckCircle2} label="Success rate" value={typeof p2pKpis?.replicationSuccessRate === 'number' ? formatPercent(p2pKpis.replicationSuccessRate) : '\u2014'} tone="success" />
         <StatCard icon={Database} label="Bytes servidos" value={formatBytes(p2pKpis?.bytesServedDelta)} tone="warning" />
       </div>
     </div>

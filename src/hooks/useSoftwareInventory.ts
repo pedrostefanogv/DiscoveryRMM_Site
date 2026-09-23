@@ -87,6 +87,7 @@ export function useSoftwareInventorySnapshot(
   scope: SoftwareInventoryScope,
   clientId?: string,
   siteId?: string,
+  options?: { refetchInterval?: number },
 ) {
   const hasScopeTarget =
     scope === "global" ||
@@ -102,6 +103,8 @@ export function useSoftwareInventorySnapshot(
       return softwareInventoryApi.snapshot({ scope, scopeId });
     },
     enabled: hasScopeTarget,
+    refetchInterval: options?.refetchInterval,
+    refetchIntervalInBackground: false,
   });
 }
 
