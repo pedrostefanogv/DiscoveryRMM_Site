@@ -14,6 +14,7 @@ import {
   Button,
   Card,
   CardHeader,
+  ConfirmDialog,
   ErrorDisplay,
   Input,
   Loading,
@@ -140,6 +141,7 @@ export default function TicketAlertsPage() {
 
   const [editingRuleId, setEditingRuleId] = useState<string | null>(null);
   const [filterWorkflowStateId, setFilterWorkflowStateId] = useState('');
+  const [deleteTarget, setDeleteTarget] = useState<TicketAlertRule | null>(null);
   const [form, setForm] = useState<RuleFormState>(DEFAULT_FORM);
 
   const states: WorkflowState[] = workflowStates.data ?? [];
@@ -261,10 +263,13 @@ export default function TicketAlertsPage() {
     }
   }
 
-  async function handleDelete(rule: TicketAlertRule) {
-    if (!window.confirm(`Excluir a regra "${rule.title}"?`)) {
-      return;
-    }
+  function handleDelete(rule: TicketAlertRule) {
+    setDeleteTarget(rule);
+  }
+
+  async function confirmDeleteRule() {
+    const rule = deleteTarget;
+    if (!rule) return;
 
     try {
       await deleteRule.mutateAsync(rule.id);
@@ -278,6 +283,8 @@ export default function TicketAlertsPage() {
           ? error.message
           : 'Não foi possível remover a regra.';
       toast.error(message);
+    } finally {
+      setDeleteTarget(null);
     }
   }
 
@@ -597,6 +604,21 @@ export default function TicketAlertsPage() {
           </Card>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title="Excluir regra de alerta"
+        message={
+          <>
+            Tem certeza que deseja excluir a regra{' '}
+            <span className="font-semibold text-foreground">{deleteTarget?.title}</span>? Esta ação não pode ser desfeita.
+          </>
+        }
+        confirmLabel="Excluir"
+        onConfirm={() => void confirmDeleteRule()}
+        onClose={() => setDeleteTarget(null)}
+        isLoading={deleteRule.isPending}
+      />
     </div>
   );
 }

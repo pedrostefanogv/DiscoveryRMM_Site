@@ -7,13 +7,17 @@ import {
   Button,
   Card,
   CardHeader,
+  ConfirmDialog,
   ErrorDisplay,
   Input,
   Loading,
   TextArea,
   Select,
 } from '@/components/ui';
+import { AlertTriangle } from 'lucide-react';
 import { autoTicketRulesApi } from '@/api';
+import { TICKET_PRIORITY_META } from '@/utils/labels';
+import type { TicketPriority } from '@/api';
 
 interface AutoTicketRule {
   id: string;
@@ -39,6 +43,7 @@ export default function AutoTicketRulesPage() {
   const queryClient = useQueryClient();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<AutoTicketRule | null>(null);
 
   const [form, setForm] = useState({
     name: '',
@@ -123,6 +128,18 @@ export default function AutoTicketRulesPage() {
         </Button>
       </div>
 
+      <div className="flex items-start gap-3 rounded-xl border border-warning/30 bg-warning/10 p-4 text-sm">
+        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+        <div>
+          <p className="font-medium text-warning">Recurso em elaboração</p>
+          <p className="mt-1 text-muted-foreground">
+            A configuração de escopo (cliente/site/departamento/perfil), simulação (dry-run) e
+            estatísticas ainda serão implementadas. Por enquanto, crie/edite regras e use os botões
+            de ativar/desativar normalmente.
+          </p>
+        </div>
+      </div>
+
       {(showCreate || editingId) && (
         <Card>
           <CardHeader title={editingId ? 'Editar Regra' : 'Nova Regra'} />
@@ -155,12 +172,10 @@ export default function AutoTicketRulesPage() {
               label="Prioridade"
               value={form.ticketPriority}
               onChange={(e) => setForm({ ...form, ticketPriority: e.target.value })}
-              options={[
-                { value: 'Low', label: 'Baixa' },
-                { value: 'Medium', label: 'Média' },
-                { value: 'High', label: 'Alta' },
-                { value: 'Critical', label: 'Crítica' },
-              ]}
+              options={(['Low', 'Medium', 'High', 'Critical'] as TicketPriority[]).map((priority) => ({
+                value: priority,
+                label: TICKET_PRIORITY_META[priority].label,
+              }))}
             />
             <div className="flex gap-2">
               <Button onClick={() => saveMutation.mutate(form)} disabled={saveMutation.isPending}>
@@ -239,9 +254,7 @@ export default function AutoTicketRulesPage() {
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => {
-                        if (confirm('Excluir esta regra?')) deleteMutation.mutate(rule.id);
-                      }}
+                      onClick={() => setDeleteTarget(rule)}
                       title="Excluir"
                     >
                       <Trash2 className="w-4 h-4 text-red-500" />
@@ -253,6 +266,29 @@ export default function AutoTicketRulesPage() {
           ))}
         </div>
       )}
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title="Excluir regra"
+        message={
+          <>
+            Tem certeza que deseja excluir a regra{' '}
+            <span className="font-semibold text-foreground">{deleteTarget?.name}</span>? Esta ação não pode ser desfeita.
+          </>
+        }
+        confirmLabel="Excluir"
+        onConfirm={() => {
+          if (!deleteTarget) return;
+          deleteMutation.mutate(deleteTarget.id, {
+            onSuccess: () => toast.success('Regra excluída.'),
+            onError: (error) =>
+              toast.error(error instanceof Error ? error.message : 'Não foi possível excluir a regra.'),
+            onSettled: () => setDeleteTarget(null),
+          });
+        }}
+        onClose={() => setDeleteTarget(null)}
+        isLoading={deleteMutation.isPending}
+      />
     </div>
   );
 }

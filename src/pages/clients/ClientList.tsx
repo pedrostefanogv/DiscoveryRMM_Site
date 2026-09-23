@@ -1,12 +1,18 @@
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQueries } from '@tanstack/react-query';
 import { Plus, Building2 } from 'lucide-react';
-import { useClients, useCreateClient } from '@/hooks/useClients';
+import { useClients } from '@/hooks/useClients';
+import { useAllSites } from '@/hooks/useSites';
 import { useAuthorization } from '@/auth/authorization';
-import { Button, Card, DataTable, Badge, Loading, ErrorDisplay, Modal, Input, TextArea, StatCard, PageHeader } from '@/components/ui';
-import type { Client, CreateClientRequest } from '@/api';
+import { Button, Card, DataTable, Badge, Loading, ErrorDisplay, Input, StatCard, PageHeader } from '@/components/ui';
+import { ClientFormModal } from '@/components/entity/ClientFormModal';
+import { agentsApi, type Client } from '@/api';
 import type { Column } from '@/components/ui';
-import toast from 'react-hot-toast';
+
+// Fan-out controlado: contagens de agentes exigem 1 requisição por cliente
+// (não há endpoint global). Limita para não sobrecarregar a API.
+const MAX_CLIENT_COUNT_QUERIES = 25;
 
 export default function ClientList() {
   const [showInactive, setShowInactive] = useState(false);
@@ -18,7 +24,42 @@ export default function ClientList() {
   const { hasAnyPermission } = useAuthorization();
   const canCreate = hasAnyPermission(['Clients.Create', 'clients.*', 'admin.*']);
 
-  const allData = allClients.data ?? [];
+  const allData = useMemo(() => allClients.data ?? [], [allClients.data]);
+
+  // Contagem de sites: uma única requisição global.
+  const allSitesQuery = useAllSites(true);
+
+  // Contagem de agentes: 1 requisição por cliente, limitada a um subconjunto.
+  const queriedClients = useMemo(
+    () => allData.slice(0, MAX_CLIENT_COUNT_QUERIES),
+    [allData],
+  );
+  const agentQueries = useQueries({
+    queries: queriedClients.map(c => ({
+      queryKey: ['agents', 'byClient', c.id] as const,
+      queryFn: ({ signal }: { signal: AbortSignal }) => agentsApi.listByClient(c.id, { signal }),
+      staleTime: 60_000,
+      refetchInterval: 300_000,
+      refetchIntervalInBackground: false,
+    })),
+  });
+
+  const sitesCountByClient = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const site of allSitesQuery.data ?? []) {
+      map.set(site.clientId, (map.get(site.clientId) ?? 0) + 1);
+    }
+    return map;
+  }, [allSitesQuery.data]);
+
+  const agentsCountByClient = useMemo(() => {
+    const map = new Map<string, number>();
+    queriedClients.forEach((client, index) => {
+      const data = agentQueries[index]?.data;
+      if (data) map.set(client.id, data.length);
+    });
+    return map;
+  }, [queriedClients, agentQueries]);
 
   const displayedClients = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -27,8 +68,8 @@ export default function ClientList() {
       .filter(c => !term || c.name.toLowerCase().includes(term) || (c.notes ?? '').toLowerCase().includes(term));
   }, [allData, showInactive, search]);
 
-  const activeClients = allData.filter(c => c.isActive).length;
-  const inactiveClients = allData.filter(c => !c.isActive).length;
+  const activeClients = useMemo(() => allData.filter(c => c.isActive).length, [allData]);
+  const inactiveClients = allData.length - activeClients;
 
   const columns: Column<Client>[] = [
     {
@@ -37,13 +78,31 @@ export default function ClientList() {
       render: c => (
         <div className="flex items-center gap-3">
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/20">
-            <Building2 className="h-4 w-4 text-primary" />
+            <Building2 className="h-4 w-4 text-primary" aria-hidden="true" />
           </div>
           <div className="min-w-0">
             <p className="font-medium text-foreground">{c.name}</p>
             <p className="truncate text-xs text-muted">{c.notes?.trim() ? c.notes : 'Sem observações'}</p>
           </div>
         </div>
+      ),
+    },
+    {
+      key: 'sites',
+      header: 'Sites',
+      render: c => (
+        <span className="tabular-nums text-foreground">
+          {sitesCountByClient.has(c.id) ? sitesCountByClient.get(c.id) : '—'}
+        </span>
+      ),
+    },
+    {
+      key: 'agents',
+      header: 'Agentes',
+      render: c => (
+        <span className="tabular-nums text-foreground">
+          {agentsCountByClient.has(c.id) ? agentsCountByClient.get(c.id) : '—'}
+        </span>
       ),
     },
     {
@@ -58,7 +117,7 @@ export default function ClientList() {
   ];
 
   if (allClients.isLoading && !allClients.data) return <Loading />;
-  if (allClients.isError) return <ErrorDisplay onRetry={() => allClients.refetch()} />;
+  if (allClients.isError) return <ErrorDisplay onRetry={() => void allClients.refetch()} />;
 
   return (
     <div className="space-y-6">
@@ -107,49 +166,13 @@ export default function ClientList() {
         />
       </Card>
 
-      <CreateClientModal open={modalOpen} onClose={() => setModalOpen(false)} />
+      {allData.length > MAX_CLIENT_COUNT_QUERIES && (
+        <p className="text-xs text-muted">
+          Contagens de agentes calculadas para os primeiros {MAX_CLIENT_COUNT_QUERIES} clientes para reduzir carga na API.
+        </p>
+      )}
+
+      <ClientFormModal open={modalOpen} onClose={() => setModalOpen(false)} />
     </div>
-  );
-}
-
-function CreateClientModal({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const create = useCreateClient();
-  const [form, setForm] = useState<CreateClientRequest>({
-    name: '',
-    notes: null,
-  });
-
-  // Reset form when modal opens
-  const prevOpen = useRef(open);
-  useEffect(() => {
-    if (open && !prevOpen.current) {
-      setForm({ name: '', notes: null });
-    }
-    prevOpen.current = open;
-  }, [open]);
-
-  const handleSubmit = () => {
-    if (!form.name.trim()) return;
-    create.mutate(form, {
-      onSuccess: () => {
-        toast.success('Cliente criado com sucesso');
-        onClose();
-        setForm({ name: '', notes: null });
-      },
-      onError: () => toast.error('Erro ao criar cliente'),
-    });
-  };
-
-  return (
-    <Modal open={open} onClose={onClose} title="Novo Cliente">
-      <div className="space-y-4">
-        <Input label="Nome" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} required />
-        <TextArea label="Observações" value={form.notes ?? ''} onChange={e => setForm(f => ({ ...f, notes: e.target.value || null }))} />
-        <div className="flex justify-end gap-3 pt-2">
-          <Button variant="ghost" onClick={onClose}>Cancelar</Button>
-          <Button onClick={handleSubmit} loading={create.isPending}>Salvar</Button>
-        </div>
-      </div>
-    </Modal>
   );
 }

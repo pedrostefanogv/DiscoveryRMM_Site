@@ -6,10 +6,12 @@ import {
   Trash2,
   ArrowRightLeft,
   Loader2,
+  Pencil,
 } from "lucide-react";
 import { ContextMenu, type ContextMenuItem } from "@/components/ui/ContextMenu";
 
 export type SiteContextAction =
+  | "edit"
   | "wake-on-lan"
   | "shutdown"
   | "restart"
@@ -30,6 +32,12 @@ export default function SiteContextMenu({
   onClose,
 }: SiteContextMenuProps) {
   const items: ContextMenuItem[] = [
+    {
+      key: "edit",
+      label: "Editar site",
+      icon: <Pencil className="h-4 w-4" />,
+      onClick: () => onAction("edit"),
+    },
     {
       key: "power",
       label: "Energia",

@@ -708,7 +708,15 @@ export interface TicketKpiResult {
 
 export interface TicketKpiQuery {
   clientId?: string;
+  siteId?: string;
+  workflowStateId?: string;
   departmentId?: string;
+  workflowProfileId?: string;
+  assignedToUserId?: string;
+  priority?: TicketPriority;
+  slaBreached?: boolean;
+  isClosed?: boolean;
+  text?: string;
   since?: string;
 }
 

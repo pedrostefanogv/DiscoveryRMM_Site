@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useDeferredValue, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   AlertTriangle,
@@ -38,7 +38,7 @@ import {
   useTicketSavedViews,
   useUpdateTicketSavedView,
 } from '@/hooks/useTicketSavedViews';
-import { Button, Card, DataTable, Badge, Loading, Modal, Input, Select, TextArea, Tooltip } from '@/components/ui';
+import { Button, Card, ConfirmDialog, DataTable, Badge, Loading, Modal, Input, Select, TextArea, Tooltip } from '@/components/ui';
 import type {
   CreateTicketRequest,
   Ticket,
@@ -47,24 +47,19 @@ import type {
   TicketSavedViewFilter,
   UserDto,
 } from '@/api';
-import { CustomFieldDataType, parseCustomFieldValue } from '@/api';
+import { CustomFieldDataType } from '@/api';
 import type { TicketSchemaField } from '@/api';
 import type { Column } from '@/components/ui';
 import toast from 'react-hot-toast';
-
-const PRIORITY_META: Record<TicketPriority, { label: string; color: 'slate' | 'success' | 'warning' | 'danger' }> = {
-  Low: { label: 'Baixa', color: 'slate' },
-  Medium: { label: 'Media', color: 'success' },
-  High: { label: 'Alta', color: 'warning' },
-  Critical: { label: 'Critica', color: 'danger' },
-};
+import { TICKET_PRIORITY_META, getTicketPriorityMeta } from '@/utils/labels';
+import { buildTicketCustomFieldValues } from '@/utils/ticketCustomFields';
 
 const PRIORITY_OPTIONS = [
   { value: '', label: 'Todas' },
-  { value: 'Low', label: 'Baixa' },
-  { value: 'Medium', label: 'Media' },
-  { value: 'High', label: 'Alta' },
-  { value: 'Critical', label: 'Critica' },
+  ...(['Low', 'Medium', 'High', 'Critical'] as TicketPriority[]).map((priority) => ({
+    value: priority,
+    label: TICKET_PRIORITY_META[priority].label,
+  })),
 ];
 
 const STATUS_OPTIONS = [
@@ -87,6 +82,32 @@ type TicketContextMenuState = {
   y: number;
 };
 
+// Paginação por cursor em um único estado: page e cursors mudam juntos, então
+// não há render intermediário com filtro novo + cursor antigo (race), nem
+// duplo-avanço por closures desatualizadas.
+type PaginationState = { page: number; cursors: Array<string | undefined> };
+type PaginationAction =
+  | { type: 'reset' }
+  | { type: 'next'; cursor: string; fromPage: number }
+  | { type: 'prev' };
+
+function paginationReducer(state: PaginationState, action: PaginationAction): PaginationState {
+  switch (action.type) {
+    case 'reset':
+      return { page: 1, cursors: [undefined] };
+    case 'next': {
+      // Ignora um segundo "next" disparado antes do re-render (duplo clique):
+      // evita gravar o mesmo cursor em duas posições e pular página.
+      if (action.fromPage !== state.page) return state;
+      const cursors = [...state.cursors];
+      cursors[state.page] = action.cursor;
+      return { page: state.page + 1, cursors };
+    }
+    case 'prev':
+      return { ...state, page: Math.max(1, state.page - 1) };
+  }
+}
+
 function isTicketPriority(value: unknown): value is TicketPriority {
   return value === 'Low' || value === 'Medium' || value === 'High' || value === 'Critical';
 }
@@ -95,27 +116,35 @@ function readFilterField(source: Record<string, unknown>, camelCase: string, pas
   return source[camelCase] ?? source[pascalCase];
 }
 
+function readStringField(source: Record<string, unknown>, camelCase: string, pascalCase: string): string | undefined {
+  const value = readFilterField(source, camelCase, pascalCase);
+  return typeof value === 'string' && value.length > 0 ? value : undefined;
+}
+
+function readBooleanField(source: Record<string, unknown>, camelCase: string, pascalCase: string): boolean | undefined {
+  const value = readFilterField(source, camelCase, pascalCase);
+  return typeof value === 'boolean' ? value : undefined;
+}
+
 function parseSavedViewFilter(raw: string): TicketSavedViewFilter {
   try {
     const parsed = JSON.parse(raw) as Record<string, unknown>;
     const priority = readFilterField(parsed, 'priority', 'Priority');
-    const isClosed = readFilterField(parsed, 'isClosed', 'IsClosed');
 
+    // Lê todos os campos de TicketsQuery (não só 5) para não descartar filtros
+    // salvos por outras telas (site, agente, departamento, perfil, SLA etc.).
     return {
-      clientId:
-        typeof readFilterField(parsed, 'clientId', 'ClientId') === 'string'
-          ? String(readFilterField(parsed, 'clientId', 'ClientId'))
-          : undefined,
-      workflowStateId:
-        typeof readFilterField(parsed, 'workflowStateId', 'WorkflowStateId') === 'string'
-          ? String(readFilterField(parsed, 'workflowStateId', 'WorkflowStateId'))
-          : undefined,
+      clientId: readStringField(parsed, 'clientId', 'ClientId'),
+      siteId: readStringField(parsed, 'siteId', 'SiteId'),
+      workflowStateId: readStringField(parsed, 'workflowStateId', 'WorkflowStateId'),
+      agentId: readStringField(parsed, 'agentId', 'AgentId'),
+      departmentId: readStringField(parsed, 'departmentId', 'DepartmentId'),
+      workflowProfileId: readStringField(parsed, 'workflowProfileId', 'WorkflowProfileId'),
+      assignedToUserId: readStringField(parsed, 'assignedToUserId', 'AssignedToUserId'),
       priority: isTicketPriority(priority) ? priority : undefined,
-      text:
-        typeof readFilterField(parsed, 'text', 'Text') === 'string'
-          ? String(readFilterField(parsed, 'text', 'Text'))
-          : undefined,
-      isClosed: typeof isClosed === 'boolean' ? isClosed : undefined,
+      slaBreached: readBooleanField(parsed, 'slaBreached', 'SlaBreached'),
+      isClosed: readBooleanField(parsed, 'isClosed', 'IsClosed'),
+      text: readStringField(parsed, 'text', 'Text'),
     };
   } catch {
     return {};
@@ -139,7 +168,7 @@ function formatSavedViewSummary(
   }
 
   if (filter.priority) {
-    parts.push(`Prioridade ${PRIORITY_META[filter.priority].label}`);
+    parts.push(`Prioridade ${getTicketPriorityMeta(filter.priority).label}`);
   }
 
   if (typeof filter.isClosed === 'boolean') {
@@ -158,7 +187,7 @@ function suggestSavedViewName(
   stateName?: string,
   priority?: TicketPriority | '',
 ) {
-  const parts = [clientName, stateName, priority ? PRIORITY_META[priority].label : undefined].filter(Boolean);
+  const parts = [clientName, stateName, priority ? getTicketPriorityMeta(priority).label : undefined].filter(Boolean);
 
   if (parts.length === 0) {
     return 'Minha visao';
@@ -237,6 +266,8 @@ export default function TicketList() {
   const [filterPriority, setFilterPriority] = useState<TicketPriority | ''>('');
   const [filterStatus, setFilterStatus] = useState<'' | 'true' | 'false'>(DEFAULT_STATUS_FILTER);
   const [filterText, setFilterText] = useState('');
+  // KPI agrega no servidor: usar valor adiado evita 1 request por tecla.
+  const deferredFilterText = useDeferredValue(filterText);
   const [advancedFiltersExpanded, setAdvancedFiltersExpanded] = useState(false);
   const [savedViewsExpanded, setSavedViewsExpanded] = useState(false);
   const [hoverPreviewTicketId, setHoverPreviewTicketId] = useState<string | null>(null);
@@ -245,12 +276,16 @@ export default function TicketList() {
   const [assignTargetTicket, setAssignTargetTicket] = useState<Ticket | null>(null);
   const [assignTargetUserId, setAssignTargetUserId] = useState('');
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
-  const [page, setPage] = useState(1);
-  const [pageCursors, setPageCursors] = useState<Array<string | undefined>>([undefined]);
+  const [{ page, cursors: pageCursors }, dispatchPagination] = useReducer(paginationReducer, {
+    page: 1,
+    cursors: [undefined],
+  });
   const [savedViewForm, setSavedViewForm] = useState<SavedViewFormState>({
     name: 'Minha visao',
     isShared: false,
   });
+  const [deletingSavedViewId, setDeletingSavedViewId] = useState<string | null>(null);
+  const [deleteSavedViewTarget, setDeleteSavedViewTarget] = useState<TicketSavedView | null>(null);
 
   const currentUserId = useMemo(
     () => getUserIdFromJwt(session.accessToken),
@@ -269,7 +304,14 @@ export default function TicketList() {
   });
   const hoverPreviewTicketQuery = useTicket(hoverPreviewTicketId ?? '');
   const hoverPreviewWatchersQuery = useTicketWatchers(hoverPreviewTicketId ?? '');
-  const kpiQuery = useTicketKpi({ clientId: filterClient || undefined });
+  // KPI usa os mesmos filtros da lista (o backend é alinhado em paralelo).
+  const kpiQuery = useTicketKpi({
+    clientId: filterClient || undefined,
+    workflowStateId: filterState || undefined,
+    priority: filterPriority || undefined,
+    isClosed: filterStatus === '' ? undefined : filterStatus === 'true',
+    text: deferredFilterText.trim() || undefined,
+  });
   const savedViewsQuery = useTicketSavedViews(currentUserId ?? undefined);
   const createSavedView = useCreateTicketSavedView();
   const updateSavedView = useUpdateTicketSavedView();
@@ -317,15 +359,20 @@ export default function TicketList() {
   );
   const kpi = kpiQuery.data;
 
-  // BUG-07: resetPagination agora definido como useCallback ANTES do useEffect que o chama
+  // Reset síncrono da paginação: deve ser chamado no MESMO handler que altera o
+  // filtro, para o próximo fetch já usar cursor undefined.
   const resetPagination = useCallback(() => {
-    setPage(1);
-    setPageCursors([undefined]);
+    dispatchPagination({ type: 'reset' });
   }, []);
 
-  useEffect(() => {
-    resetPagination();
-  }, [filterClient, filterPriority, filterState, filterStatus, filterText, pageSize, resetPagination]);
+  const applyFilterChange = useCallback(
+    (update: () => void) => {
+      update();
+      resetPagination();
+      setActiveSavedViewId(null);
+    },
+    [resetPagination],
+  );
 
   useEffect(() => {
     if (activeSavedViewId) {
@@ -383,17 +430,13 @@ export default function TicketList() {
   const hasPrevPage = page > 1;
 
   const goToNextPage = () => {
-    if (!tickets.data?.nextCursor) return;
-    setPageCursors((prev) => {
-      const next = [...prev];
-      next[page] = tickets.data!.nextCursor!;
-      return next;
-    });
-    setPage((p) => p + 1);
+    const nextCursor = tickets.data?.nextCursor;
+    if (!nextCursor) return;
+    dispatchPagination({ type: 'next', cursor: nextCursor, fromPage: page });
   };
 
   const goToPrevPage = () => {
-    setPage((p) => Math.max(1, p - 1));
+    dispatchPagination({ type: 'prev' });
   };
 
   const advancedFiltersActiveCount = Number(Boolean(filterClient)) + Number(Boolean(filterState));
@@ -441,7 +484,7 @@ export default function TicketList() {
       key: 'priority',
       header: 'Prioridade',
       render: (ticket) => {
-        const priority = PRIORITY_META[ticket.priority] ?? { label: ticket.priority, color: 'slate' as const };
+        const priority = getTicketPriorityMeta(ticket.priority);
         return <Badge color={priority.color}>{priority.label}</Badge>;
       },
     },
@@ -679,6 +722,7 @@ export default function TicketList() {
     setFilterStatus(DEFAULT_STATUS_FILTER);
     setFilterText('');
     setAdvancedFiltersExpanded(false);
+    resetPagination();
   };
 
   const buildCurrentFilter = (): TicketSavedViewFilter => ({
@@ -704,7 +748,7 @@ export default function TicketList() {
     setFilterText(filter.text ?? '');
     setActiveSavedViewId(view.id);
     setAdvancedFiltersExpanded(Boolean(filter.clientId || filter.workflowStateId));
-    setPage(1);
+    resetPagination();
     toast.success(`Visao aplicada: ${view.name}`);
   };
 
@@ -726,6 +770,7 @@ export default function TicketList() {
             onChange={(event) => {
               setPageSize(Number(event.target.value));
               setHoverPreviewTicketId(null);
+              resetPagination();
             }}
             className="rounded-lg border border-border bg-surface-light px-2 py-1 text-xs text-foreground outline-none transition-colors focus-visible:border-primary/60 focus-visible:ring-2 focus-visible:ring-primary/30"
             aria-label="Quantidade de chamados por pagina"
@@ -781,7 +826,6 @@ export default function TicketList() {
   };
 
   const openEditSavedViewModal = (view: TicketSavedView) => {
-    applySavedView(view);
     setEditingSavedView(view);
     setSavedViewForm({ name: view.name, isShared: view.isShared });
     setSavedViewModalOpen(true);
@@ -823,11 +867,15 @@ export default function TicketList() {
      }
    };
 
-   const handleDeleteSavedView = async (view: TicketSavedView) => {
-     if (!window.confirm(`Excluir a visão "${view.name}"?`)) {
-       return;
-     }
+   const handleDeleteSavedView = (view: TicketSavedView) => {
+     setDeleteSavedViewTarget(view);
+   };
 
+   const confirmDeleteSavedView = async () => {
+     const view = deleteSavedViewTarget;
+     if (!view) return;
+
+     setDeletingSavedViewId(view.id);
      try {
        await deleteSavedView.mutateAsync(view.id);
        if (activeSavedViewId === view.id) {
@@ -840,7 +888,10 @@ export default function TicketList() {
        toast.success('Visão removida com sucesso.');
      } catch (error) {
        toast.error(error instanceof Error ? error.message : 'Não foi possível excluir a visão.');
-    }
+     } finally {
+       setDeletingSavedViewId(null);
+       setDeleteSavedViewTarget(null);
+     }
   };
 
   return (
@@ -930,8 +981,7 @@ export default function TicketList() {
               label="Buscar"
               value={filterText}
               onChange={(event) => {
-                setActiveSavedViewId(null);
-                setFilterText(event.target.value);
+                applyFilterChange(() => setFilterText(event.target.value));
               }}
               placeholder="Título, descrição ou termo livre"
             />
@@ -941,8 +991,7 @@ export default function TicketList() {
             options={PRIORITY_OPTIONS}
             value={filterPriority}
             onChange={(event) => {
-              setActiveSavedViewId(null);
-              setFilterPriority(event.target.value as TicketPriority | '');
+              applyFilterChange(() => setFilterPriority(event.target.value as TicketPriority | ''));
             }}
           />
           <Select
@@ -950,8 +999,7 @@ export default function TicketList() {
             options={STATUS_OPTIONS}
             value={filterStatus}
             onChange={(event) => {
-              setActiveSavedViewId(null);
-              setFilterStatus(event.target.value as '' | 'true' | 'false');
+              applyFilterChange(() => setFilterStatus(event.target.value as '' | 'true' | 'false'));
             }}
           />
         </div>
@@ -980,8 +1028,7 @@ export default function TicketList() {
               options={clientOpts}
               value={filterClient}
               onChange={(event) => {
-                setActiveSavedViewId(null);
-                setFilterClient(event.target.value);
+                applyFilterChange(() => setFilterClient(event.target.value));
               }}
             />
             <Select
@@ -989,8 +1036,7 @@ export default function TicketList() {
               options={stateOpts}
               value={filterState}
               onChange={(event) => {
-                setActiveSavedViewId(null);
-                setFilterState(event.target.value);
+                applyFilterChange(() => setFilterState(event.target.value));
               }}
             />
           </div>
@@ -1066,7 +1112,7 @@ export default function TicketList() {
                               size="sm"
                               variant="danger"
                               onClick={() => void handleDeleteSavedView(view)}
-                              loading={deleteSavedView.isPending}
+                              loading={deletingSavedViewId === view.id}
                             >
                               <Trash2 className="h-4 w-4" />
                             </Button>
@@ -1263,6 +1309,21 @@ export default function TicketList() {
           </div>
         </div>
       </Modal>
+
+      <ConfirmDialog
+        open={deleteSavedViewTarget !== null}
+        title="Excluir visão"
+        message={
+          <>
+            Tem certeza que deseja excluir a visão{' '}
+            <span className="font-semibold text-foreground">{deleteSavedViewTarget?.name}</span>? Esta ação não pode ser desfeita.
+          </>
+        }
+        confirmLabel="Excluir"
+        onConfirm={() => void confirmDeleteSavedView()}
+        onClose={() => setDeleteSavedViewTarget(null)}
+        isLoading={deletingSavedViewId !== null}
+      />
     </div>
   );
 }
@@ -1288,6 +1349,11 @@ function CreateTicketModal({ open, onClose }: { open: boolean; onClose: () => vo
   }, [schemaQuery.data]);
 
   const [customFieldDrafts, setCustomFieldDrafts] = useState<Record<string, string>>({});
+
+  const customFieldValidation = useMemo(
+    () => buildTicketCustomFieldValues(schemaFields, customFieldDrafts),
+    [schemaFields, customFieldDrafts],
+  );
 
   const [form, setForm] = useState<CreateTicketRequest>({
     clientId: '',
@@ -1338,14 +1404,16 @@ function CreateTicketModal({ open, onClose }: { open: boolean; onClose: () => vo
   const agentOpts = [{ value: '', label: 'Nenhum' }, ...(agents.data ?? []).map((agent) => ({ value: agent.id, label: agent.displayName ?? agent.hostname }))];
   const deptOpts = [{ value: '', label: 'Nenhum' }, ...(departments.data ?? []).map((department) => ({ value: department.id, label: department.name }))];
   const profileOpts = [{ value: '', label: 'Padrao do departamento' }, ...(profiles.data ?? []).map((profile) => ({ value: profile.id, label: profile.name }))];
-  const priorityOpts = [
-    { value: 'Low', label: 'Baixa' },
-    { value: 'Medium', label: 'Media' },
-    { value: 'High', label: 'Alta' },
-    { value: 'Critical', label: 'Critica' },
-  ];
+  const priorityOpts = (['Low', 'Medium', 'High', 'Critical'] as TicketPriority[]).map((priority) => ({
+    value: priority,
+    label: TICKET_PRIORITY_META[priority].label,
+  }));
 
-  const valid = form.clientId && form.title.trim().length >= 3 && form.description.trim().length >= 3;
+  const valid =
+    Boolean(form.clientId) &&
+    form.title.trim().length >= 3 &&
+    form.description.trim().length >= 3 &&
+    customFieldValidation.errors.length === 0;
 
   const resetAndClose = () => {
     onClose();
@@ -1368,14 +1436,14 @@ function CreateTicketModal({ open, onClose }: { open: boolean; onClose: () => vo
   };
 
   const handleSubmit = () => {
+    if (customFieldValidation.errors.length > 0) {
+      toast.error(customFieldValidation.errors[0]);
+      return;
+    }
     if (!valid) return;
 
-    // Build customFieldValues from schema drafts
-    const customFieldValues: Record<string, unknown> = {};
-    for (const field of schemaFields) {
-      const draftValue = customFieldDrafts[field.definitionId] ?? '';
-      customFieldValues[field.definitionId] = parseCustomFieldValue(field.dataType, draftValue);
-    }
+    // Campos vazios são omitidos; apenas preenchidos/obrigatórios entram no payload.
+    const customFieldValues = customFieldValidation.values;
 
     const payload: CreateTicketRequest = {
       ...form,

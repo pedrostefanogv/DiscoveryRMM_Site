@@ -1,4 +1,4 @@
-﻿import { api } from "./client";
+import { ApiError, api, apiFetchResponse, parseErrorMessage } from "./client";
 import type {
   Ticket,
   TicketAttachment,
@@ -200,4 +200,40 @@ export const ticketsApi = {
       `${BASE}/${ticketId}/attachments/complete-upload`,
       data,
     ),
+
+  /**
+   * Baixa o anexo como blob (same-origin, com Authorization). O <a href> direto
+   * não envia o header e o endpoint redirecionava para o storage (CORS).
+   */
+  downloadAttachment: async (
+    ticketId: string,
+    attachmentId: string,
+  ): Promise<{ blob: Blob; fileName: string }> => {
+    const response = await apiFetchResponse(
+      `${BASE}/${ticketId}/attachments/${attachmentId}/download`,
+      { method: "GET" },
+    );
+
+    if (!response.ok) {
+      const message = await parseErrorMessage(response);
+      throw new ApiError(response.status, message);
+    }
+
+    const blob = await response.blob();
+    const disposition = response.headers.get("content-disposition") ?? "";
+    const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+    const quotedMatch = disposition.match(/filename="([^"]+)"/i);
+    let fileName = "anexo";
+    if (utf8Match?.[1]) {
+      try {
+        fileName = decodeURIComponent(utf8Match[1]);
+      } catch {
+        fileName = utf8Match[1];
+      }
+    } else if (quotedMatch?.[1]) {
+      fileName = quotedMatch[1];
+    }
+
+    return { blob, fileName };
+  },
 };

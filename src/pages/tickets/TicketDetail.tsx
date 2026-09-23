@@ -48,6 +48,7 @@ import {
   formatCustomFieldValue,
   getCustomFieldDataTypeLabel,
   parseCustomFieldValue,
+  ticketsApi,
 } from '@/api';
 import type {
   AutomationTaskSummary,
@@ -62,13 +63,7 @@ import type {
   UserDto,
 } from '@/api';
 import toast from 'react-hot-toast';
-
-const PRIORITY_META: Record<TicketPriority, { label: string; color: 'slate' | 'success' | 'warning' | 'danger' }> = {
-  Low:      { label: 'Baixa',    color: 'slate'   },
-  Medium:   { label: 'Média',    color: 'success' },
-  High:     { label: 'Alta',     color: 'warning' },
-  Critical: { label: 'Crítica',  color: 'danger'  },
-};
+import { getTicketPriorityMeta } from '@/utils/labels';
 
 const ACTIVITY_LABELS: Record<string, string> = {
   Created:           'Criado',
@@ -102,9 +97,24 @@ function resolveUserDisplayName(usersById: Map<string, UserDto>, userId: string 
   return user.fullName || user.email || user.login || user.id;
 }
 
+/**
+ * Config efetiva de anexos de chamado: herda Site > Cliente > Servidor.
+ * Compartilhada entre o gate da aba e o próprio painel.
+ */
+function useEffectiveTicketAttachmentSettings(siteId: string | null, clientId: string | null) {
+  const siteSettings = useSiteTicketAttachmentSettings(siteId);
+  const clientSettings = useClientTicketAttachmentSettings(!siteId ? clientId : null);
+  const serverSettings = useTicketAttachmentSettings();
+
+  if (siteId && siteSettings.data) return { data: siteSettings.data, isLoading: false };
+  if (clientId && clientSettings.data) return { data: clientSettings.data, isLoading: false };
+  return serverSettings;
+}
+
 export default function TicketDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { session } = useAuth();
   const ticket   = useTicket(id!);
   const comments = useTicketComments(id!);
   const states   = useWorkflowStates();
@@ -120,12 +130,33 @@ export default function TicketDetail() {
     () => new Map<string, UserDto>(iamUsersData.map((user) => [user.id, user])),
     [iamUsersData],
   );
+  const currentUserId = useMemo(
+    () => getUserIdFromJwt(session.accessToken),
+    [session.accessToken],
+  );
+  // Hook chamado antes dos returns condicionais (usa dados do ticket quando disponíveis).
+  const attachmentSettings = useEffectiveTicketAttachmentSettings(
+    ticket.data?.siteId ?? null,
+    ticket.data?.clientId ?? null,
+  );
 
   if (ticket.isLoading) return <Loading />;
   if (ticket.isError || !ticket.data) return <ErrorDisplay onRetry={() => ticket.refetch()} />;
 
   const t = ticket.data;
-  const p = PRIORITY_META[t.priority] ?? { label: t.priority, color: 'slate' as const };
+  const p = getTicketPriorityMeta(t.priority);
+  const attachmentsEnabled = attachmentSettings.data?.enabled !== false;
+
+  // Se os anexos forem desabilitados com a aba aberta, volta para comentários
+  // (senão o conteúdo mostra CommentsPanel sem nenhuma aba ativa).
+  useEffect(() => {
+    if (!attachmentsEnabled && tab === 'attachments') {
+      setTab('comments');
+    }
+  }, [attachmentsEnabled, tab]);
+  const currentUserName = currentUserId
+    ? resolveUserDisplayName(iamUsersById, currentUserId)
+    : 'Portal';
   const currentState = states.data?.find(s => s.id === t.workflowStateId);
   const assignedUser = t.assignedToUserId ? iamUsersById.get(t.assignedToUserId) : undefined;
   const assignedDisplayName = t.assignedToUserId && iamUsers.isLoading
@@ -206,13 +237,15 @@ export default function TicketDetail() {
                 <Activity className="inline h-4 w-4 mr-1" />
                 Timeline
               </button>
-              <button
-                className={`px-4 py-3 text-sm font-medium transition-colors ${tab === 'attachments' ? 'border-b-2 border-primary text-foreground' : 'text-muted hover:text-foreground'}`}
-                onClick={() => setTab('attachments')}
-              >
-                <Paperclip className="inline h-4 w-4 mr-1" />
-                Anexos
-              </button>
+              {attachmentsEnabled && (
+                <button
+                  className={`px-4 py-3 text-sm font-medium transition-colors ${tab === 'attachments' ? 'border-b-2 border-primary text-foreground' : 'text-muted hover:text-foreground'}`}
+                  onClick={() => setTab('attachments')}
+                >
+                  <Paperclip className="inline h-4 w-4 mr-1" />
+                  Anexos
+                </button>
+              )}
               <button
                 className={`px-4 py-3 text-sm font-medium transition-colors ${tab === 'automation' ? 'border-b-2 border-primary text-foreground' : 'text-muted hover:text-foreground'}`}
                 onClick={() => setTab('automation')}
@@ -251,8 +284,15 @@ export default function TicketDetail() {
                     toast.success('Resposta sugerida enviada para o rascunho do comentario.');
                   }}
                 />
+              ) : attachmentsEnabled ? (
+                <AttachmentsPanel
+                  ticketId={id!}
+                  siteId={t.siteId}
+                  clientId={t.clientId}
+                  uploadedBy={currentUserName}
+                />
               ) : (
-                <AttachmentsPanel ticketId={id!} siteId={t.siteId} clientId={t.clientId} />
+                <CommentsPanel ticketId={id!} draftSeed={commentSeed} />
               )}
             </div>
           </Card>
@@ -501,8 +541,8 @@ function TicketAiPanel({
               <>
                 <div className="flex flex-wrap gap-2">
                   {parsedTriage.priority && (
-                    <Badge color={PRIORITY_META[parsedTriage.priority].color}>
-                      {PRIORITY_META[parsedTriage.priority].label}
+                    <Badge color={getTicketPriorityMeta(parsedTriage.priority).color}>
+                      {getTicketPriorityMeta(parsedTriage.priority).label}
                     </Badge>
                   )}
                   {parsedTriage.category && (
@@ -1090,19 +1130,41 @@ function TicketCustomFieldsPanel({ ticketId }: { ticketId: string }) {
     [valuesQuery.data],
   );
 
+  // Assinatura do conjunto de campos (muda quando muda o ticket/definições).
+  const definitionsSignature = useMemo(
+    () => `${ticketId}::${definitions.map((definition) => definition.id).join('|')}`,
+    [ticketId, definitions],
+  );
+  const seededSignatureRef = useRef('');
+  const dirtyDefinitionIdsRef = useRef<Set<string>>(new Set());
+
   useEffect(() => {
-    const nextDrafts = Object.fromEntries(
-      definitions.map((definition) => [
-        definition.id,
-        formatTicketCustomFieldDraftValue(
+    const sameShape = seededSignatureRef.current === definitionsSignature;
+
+    // Refetch (ex.: após salvar um campo) NÃO sobrescreve campos que o usuário
+    // editou; só sincroniza com o servidor os campos não editados.
+    setDrafts((current) => {
+      const next: Record<string, string> = {};
+      for (const definition of definitions) {
+        const serverValue = formatTicketCustomFieldDraftValue(
           definition.dataType,
           valuesByDefinitionId.get(definition.id)?.value,
-        ),
-      ]),
-    );
+        );
+        next[definition.id] =
+          sameShape && dirtyDefinitionIdsRef.current.has(definition.id)
+            ? current[definition.id] ?? serverValue
+            : serverValue;
+      }
+      return next;
+    });
 
-    setDrafts(nextDrafts);
-  }, [definitions, valuesByDefinitionId]);
+    if (!sameShape) {
+      // Troca de ticket/conjunto: limpa TODAS as flags de "dirty" — flags do
+      // ticket anterior fariam o próximo refetch preservar valores antigos.
+      dirtyDefinitionIdsRef.current.clear();
+      seededSignatureRef.current = definitionsSignature;
+    }
+  }, [definitions, definitionsSignature, valuesByDefinitionId]);
 
   const handleSaveValue = async (definition: CustomFieldDefinition) => {
     setSavingDefinitionId(definition.id);
@@ -1117,6 +1179,7 @@ function TicketCustomFieldsPanel({ ticketId }: { ticketId: string }) {
         ),
       });
 
+      dirtyDefinitionIdsRef.current.delete(definition.id);
       toast.success(`Campo ${definition.label} atualizado.`);
     } catch (error) {
       toast.error(
@@ -1191,12 +1254,13 @@ function TicketCustomFieldsPanel({ ticketId }: { ticketId: string }) {
                   <TicketCustomFieldInput
                     definition={definition}
                     value={drafts[definition.id] ?? ''}
-                    onChange={(value) =>
+                    onChange={(value) => {
+                      dirtyDefinitionIdsRef.current.add(definition.id);
                       setDrafts((current) => ({
                         ...current,
                         [definition.id]: value,
-                      }))
-                    }
+                      }));
+                    }}
                   />
                 </div>
               </div>
@@ -1323,6 +1387,7 @@ function WatchersPanel({
   const [selectedUserId, setSelectedUserId] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [isAdding, setIsAdding] = useState(false);
+  const [removingWatcherId, setRemovingWatcherId] = useState<string | null>(null);
 
   const watcherItems = watchers.data ?? [];
   const userItems = users.data ?? [];
@@ -1395,6 +1460,7 @@ function WatchersPanel({
   };
 
   const handleRemoveWatcher = (userId: string) => {
+    setRemovingWatcherId(userId);
     removeWatcher.mutate(
       { ticketId, userId },
       {
@@ -1403,6 +1469,9 @@ function WatchersPanel({
         },
         onError: (error) => {
           toast.error(error instanceof Error ? error.message : 'Erro ao remover watcher.');
+        },
+        onSettled: () => {
+          setRemovingWatcherId(null);
         },
       },
     );
@@ -1456,7 +1525,7 @@ function WatchersPanel({
                         size="sm"
                         variant="ghost"
                         onClick={() => handleRemoveWatcher(watcher.userId)}
-                        loading={removeWatcher.isPending}
+                        loading={removingWatcherId === watcher.userId}
                         aria-label={`Remover watcher ${displayName}`}
                       >
                         <UserMinus className="h-4 w-4" />
@@ -1669,22 +1738,67 @@ function CommentsPanel({
   ticketId: string;
   draftSeed?: CommentSeed | null;
 }) {
-  const comments = useTicketComments(ticketId);
+  // Paginação por cursor: acumula páginas (antes crescia o limit, refazendo a
+  // 1ª página e sem teto).
+  type CommentPage = {
+    cursor?: string;
+    items: Array<{ id: string; author: string; content: string; isInternal: boolean; createdAt: string }>;
+  };
+  const [pages, setPages] = useState<CommentPage[]>([]);
+  const [cursor, setCursor] = useState<string | undefined>(undefined);
+  const comments = useTicketComments(ticketId, { cursor });
+  const items = pages.flatMap(page => page.items);
+
+  // Troca de ticket reinicia a paginação.
+  useEffect(() => {
+    setPages([]);
+    setCursor(undefined);
+  }, [ticketId]);
+
+  // Registra cada página carregada (a primeira tem cursor undefined).
+  useEffect(() => {
+    const data = comments.data;
+    if (!data) return;
+    setPages(prev => (prev.some(page => page.cursor === cursor) ? prev : [...prev, { cursor, items: data.items ?? [] }]));
+  }, [comments.data, cursor]);
+
   return (
     <>
       <div className="space-y-3 max-h-80 overflow-y-auto">
-        {(comments.data?.items ?? []).map(c => (
-          <div key={c.id} className={`rounded-lg px-4 py-3 ${c.isInternal ? 'bg-warning/10 border border-warning/20' : 'bg-surface-light'}`}>
-            <div className="mb-1 flex items-center gap-2">
-              <span className="text-sm font-medium text-foreground">{c.author}</span>
-              <span className="text-xs text-muted">{new Date(c.createdAt).toLocaleString('pt-BR')}</span>
-              {c.isInternal && <Badge color="warning"><Lock className="mr-1 h-3 w-3" />Interno</Badge>}
-            </div>
-            <p className="text-sm text-muted-foreground whitespace-pre-wrap">{c.content}</p>
+        {comments.isLoading && <Loading />}
+        {comments.isError && !comments.isLoading && (
+          <div className="flex flex-col items-center gap-2 py-4 text-center text-sm text-danger">
+            <span>Erro ao carregar comentários.</span>
+            <Button size="sm" variant="ghost" onClick={() => void comments.refetch()}>
+              Tentar novamente
+            </Button>
           </div>
-        ))}
-        {(comments.data?.items?.length ?? 0) === 0 && (
+        )}
+        {!comments.isError &&
+          items.map(c => (
+            <div key={c.id} className={`rounded-lg px-4 py-3 ${c.isInternal ? 'bg-warning/10 border border-warning/20' : 'bg-surface-light'}`}>
+              <div className="mb-1 flex items-center gap-2">
+                <span className="text-sm font-medium text-foreground">{c.author}</span>
+                <span className="text-xs text-muted">{new Date(c.createdAt).toLocaleString('pt-BR')}</span>
+                {c.isInternal && <Badge color="warning"><Lock className="mr-1 h-3 w-3" />Interno</Badge>}
+              </div>
+              <p className="text-sm text-muted-foreground whitespace-pre-wrap">{c.content}</p>
+            </div>
+          ))}
+        {!comments.isError && !comments.isLoading && items.length === 0 && (
           <p className="text-sm text-muted py-4 text-center">Sem comentários ainda</p>
+        )}
+        {!comments.isError && comments.data?.hasMore && (
+          <div className="flex justify-center pt-1">
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={comments.isFetching}
+              onClick={() => setCursor(comments.data?.nextCursor ?? undefined)}
+            >
+              Carregar mais
+            </Button>
+          </div>
         )}
       </div>
       <CommentForm ticketId={ticketId} draftSeed={draftSeed} />
@@ -1901,10 +2015,12 @@ function AttachmentsPanel({
   ticketId,
   siteId,
   clientId,
+  uploadedBy,
 }: {
   ticketId: string
   siteId: string | null
   clientId: string | null
+  uploadedBy: string
 }) {
   // Prioridade de herança: Site > Client > Server
   const siteSettings = useSiteTicketAttachmentSettings(siteId);
@@ -1923,7 +2039,28 @@ function AttachmentsPanel({
   const complete = useCompleteTicketUpload();
   const [queue, setQueue] = useState<FileEntry[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  // Baixa via API autenticada (blob) — um <a href> não envia Authorization.
+  const handleDownload = async (attachmentId: string, fileName: string) => {
+    setDownloadingId(attachmentId);
+    try {
+      const { blob, fileName: returnedName } = await ticketsApi.downloadAttachment(ticketId, attachmentId);
+      const objectUrl = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = objectUrl;
+      anchor.download = returnedName || fileName || 'anexo';
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(objectUrl);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Não foi possível baixar o anexo.');
+    } finally {
+      setDownloadingId(null);
+    }
+  };
 
   const cfg = settings.data;
   const isEnabled = cfg?.enabled !== false;
@@ -1951,14 +2088,25 @@ function AttachmentsPanel({
   const updateEntry = (idx: number, patch: Partial<FileEntry>) =>
     setQueue((q) => q.map((e, i) => (i === idx ? { ...e, ...patch } : e)));
 
+  // Espelho da fila mais recente: o "Carregar/Enviar" não pode operar sobre um
+  // snapshot antigo (item removido no meio do upload não deve ser enviado).
+  const queueRef = useRef<FileEntry[]>([]);
+  queueRef.current = queue;
+
   const uploadAll = async () => {
     if (uploading) return;
-    const idleIndexes = queue.map((_e, i) => i).filter((i) => queue[i].status === 'idle');
-    if (idleIndexes.length === 0) return;
+    const targetFiles = queue
+      .filter((entry) => entry.status === 'idle')
+      .map((entry) => entry.file);
+    if (targetFiles.length === 0) return;
     setUploading(true);
 
-    for (const idx of idleIndexes) {
-      const entry = queue[idx];
+    for (const file of targetFiles) {
+      // Re-resolve pelo File: se o item foi removido da fila, pula; se a fila
+      // mudou de ordem, o índice é recalculado no estado atual.
+      const idx = queueRef.current.findIndex((entry) => entry.file === file);
+      if (idx < 0) continue;
+      const entry = queueRef.current[idx];
       updateEntry(idx, { status: 'preparing', error: undefined });
 
       let prepareRes: { attachmentId: string; objectKey: string; uploadUrl: string; httpMethod: string; expiresAtUtc: string };
@@ -1999,7 +2147,7 @@ function AttachmentsPanel({
             fileName: entry.file.name,
             contentType: entry.file.type,
             sizeBytes: entry.file.size,
-            uploadedBy: 'Admin',
+            uploadedBy,
           },
         });
         updateEntry(idx, { status: 'done' });
@@ -2040,8 +2188,17 @@ function AttachmentsPanel({
       {isEnabled && (
         <>
           <div
-            className="flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border py-8 text-center transition-colors hover:border-border-strong cursor-pointer"
+            role="button"
+            tabIndex={0}
+            aria-label="Selecionar ou arrastar arquivos para anexar"
+            className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border py-8 text-center transition-colors hover:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
             onClick={() => fileRef.current?.click()}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                fileRef.current?.click();
+              }
+            }}
             onDragOver={(e) => e.preventDefault()}
             onDrop={(e) => { e.preventDefault(); handleFiles(e.dataTransfer.files); }}
           >
@@ -2079,6 +2236,14 @@ function AttachmentsPanel({
                     {STATUS_LABEL[entry.status]}
                   </span>
                   {STATUS_ICON[entry.status]}
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    aria-label={`Remover ${entry.file.name} da fila`}
+                    onClick={() => setQueue((q) => q.filter((_item, index) => index !== idx))}
+                  >
+                    <XCircle className="h-4 w-4" />
+                  </Button>
                 </div>
               ))}
               <div className="flex justify-end gap-2">
@@ -2101,21 +2266,40 @@ function AttachmentsPanel({
       <div className="space-y-2">
         <p className="text-xs font-medium uppercase tracking-wide text-muted">Arquivos anexados</p>
         {attachments.isLoading && <Loading />}
-        {(Array.isArray(attachments.data?.items) ? attachments.data.items : []).length === 0 && !attachments.isLoading && (
-          <p className="py-4 text-center text-sm text-muted">Nenhum anexo ainda.</p>
-        )}
-        {(Array.isArray(attachments.data?.items) ? attachments.data.items : []).map((a) => (
-          <div key={a.id} className="flex items-center gap-3 rounded-lg border border-border bg-surface-light px-3 py-2">
-            <File className="h-4 w-4 shrink-0 text-muted" />
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm text-foreground">{a.fileName}</p>
-              <p className="text-xs text-muted">
-                {formatBytes(a.sizeBytes)} · {a.contentType} · {new Date(a.createdAt).toLocaleString('pt-BR')}
-              </p>
-            </div>
-            <Badge color="slate">{a.uploadedBy}</Badge>
+        {attachments.isError && !attachments.isLoading && (
+          <div className="flex flex-col items-center gap-2 py-4 text-center text-sm text-danger">
+            <span>Não foi possível carregar os anexos.</span>
+            <Button size="sm" variant="ghost" onClick={() => void attachments.refetch()}>
+              Tentar novamente
+            </Button>
           </div>
-        ))}
+        )}
+        {!attachments.isError &&
+          (Array.isArray(attachments.data?.items) ? attachments.data.items : []).length === 0 &&
+          !attachments.isLoading && (
+            <p className="py-4 text-center text-sm text-muted">Nenhum anexo ainda.</p>
+          )}
+        {!attachments.isError &&
+          (Array.isArray(attachments.data?.items) ? attachments.data.items : []).map((a) => (
+            <div key={a.id} className="flex items-center gap-3 rounded-lg border border-border bg-surface-light px-3 py-2">
+              <File className="h-4 w-4 shrink-0 text-muted" />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm text-foreground">{a.fileName}</p>
+                <p className="text-xs text-muted">
+                  {formatBytes(a.sizeBytes)} · {a.contentType} · {new Date(a.createdAt).toLocaleString('pt-BR')}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => void handleDownload(a.id, a.fileName)}
+                disabled={downloadingId === a.id}
+                className="text-xs font-medium text-primary underline hover:text-primary/80 disabled:opacity-50"
+              >
+                {downloadingId === a.id ? 'Baixando...' : 'Baixar'}
+              </button>
+              <Badge color="slate">{a.uploadedBy}</Badge>
+            </div>
+          ))}
       </div>
     </div>
   );

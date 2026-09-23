@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { AlertCircle, AlertTriangle, Bug, Check, ChevronDown, ChevronUp, Clipboard, Info, RefreshCw, Shield } from 'lucide-react';
 import { LogLevel, LogSource, LogType } from '@/api';
+import { getLogLevelMeta } from '@/utils/labels';
 import type { LogEntry, LogsQuery } from '@/api';
 import { useLogScopeOptions, useLogSummary, useLogsPage } from '@/hooks/useLogs';
 import { Badge, Button, Card, CardHeader, ErrorDisplay, Input, Loading, PageHeader, Select } from '@/components/ui';
@@ -9,15 +10,6 @@ import { P2PMetricsCard } from '@/components/agents/P2PMetricsCard';
 const initialFilters: LogsQuery = {
   limit: 50,
   period: '24h',
-};
-
-const levelLabels: Record<number, { label: string; color: 'slate' | 'primary' | 'warning' | 'danger' | 'accent' }> = {
-  [LogLevel.Trace]: { label: 'Trace', color: 'slate' },
-  [LogLevel.Debug]: { label: 'Debug', color: 'slate' },
-  [LogLevel.Info]: { label: 'Info', color: 'primary' },
-  [LogLevel.Warn]: { label: 'Warn', color: 'warning' },
-  [LogLevel.Error]: { label: 'Error', color: 'danger' },
-  [LogLevel.Fatal]: { label: 'Fatal', color: 'danger' },
 };
 
 const sourceLabels: Record<number, string> = {
@@ -242,7 +234,7 @@ export default function LogViewer() {
       chips.push({ key: 'agentId', label: `Agente: ${agentLabel}` });
     }
     if (appliedFilters.level !== undefined) {
-      chips.push({ key: 'level', label: `Nível: ${levelLabels[appliedFilters.level]?.label ?? appliedFilters.level}` });
+      chips.push({ key: 'level', label: `Nível: ${getLogLevelMeta(appliedFilters.level).label}` });
     }
     if (appliedFilters.source !== undefined) {
       chips.push({ key: 'source', label: `Fonte: ${sourceLabels[appliedFilters.source] ?? appliedFilters.source}` });
@@ -705,7 +697,7 @@ function LogRow({
   const [showData, setShowData] = useState(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
 
-  const lvl = levelLabels[log.level] ?? { label: '?', color: 'slate' as const };
+  const lvl = getLogLevelMeta(log.level);
   const data = parseLogData(log.dataJson);
   const formattedData = data ? JSON.stringify(data, null, 2) : null;
   const traceId = getStringValue(data?.traceId);

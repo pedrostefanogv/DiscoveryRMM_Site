@@ -11,6 +11,7 @@ export { Skeleton, SkeletonCard, SkeletonTable, SkeletonStatCard, SkeletonDashbo
 export { Tooltip } from "./Tooltip";
 export { EmptyState } from "./EmptyState";
 export { PageHeader } from "./PageHeader";
+export { ConfirmDialog } from "./ConfirmDialog";
 export { MetricBar } from "./MetricBar";
 export { AgentHeartbeatCard } from "./AgentHeartbeatCard";
 export { MarkdownEditor } from "./MarkdownEditor";

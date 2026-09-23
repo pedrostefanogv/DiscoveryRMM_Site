@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   Building2,
@@ -16,6 +16,7 @@ import {
   Button,
   Card,
   CardHeader,
+  ConfirmDialog,
   ErrorDisplay,
   Input,
   Loading,
@@ -44,6 +45,14 @@ export default function DepartmentDetailPage() {
 
   const [tab, setTab] = useState<DepartmentTab>("general");
   const [form, setForm] = useState<UpdateDepartmentRequest | null>(null);
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  // Semeadura do form: só quando muda o departamento; refetch não sobrescreve
+  // edições pendentes do usuário.
+  const seededDepartmentIdRef = useRef<string | null>(null);
+  const dirtyRef = useRef(false);
+  const markDirty = () => {
+    dirtyRef.current = true;
+  };
 
   const clientsById = useMemo(
     () => new Map((clientsQuery.data ?? []).map((client) => [client.id, client.name])),
@@ -53,6 +62,9 @@ export default function DepartmentDetailPage() {
   useEffect(() => {
     if (!departmentQuery.data) return;
 
+    const entityChanged = seededDepartmentIdRef.current !== departmentQuery.data.id;
+    if (!entityChanged && dirtyRef.current) return;
+
     setForm({
       name: departmentQuery.data.name,
       description: departmentQuery.data.description,
@@ -60,6 +72,8 @@ export default function DepartmentDetailPage() {
       sortOrder: departmentQuery.data.sortOrder,
       isActive: departmentQuery.data.isActive,
     });
+    seededDepartmentIdRef.current = departmentQuery.data.id;
+    if (entityChanged) dirtyRef.current = false;
   }, [departmentQuery.data]);
 
   if (!departmentId) {
@@ -122,6 +136,7 @@ export default function DepartmentDetailPage() {
           isActive: currentForm.isActive ?? true,
         },
       });
+      dirtyRef.current = false;
       toast.success("Departamento atualizado com sucesso.");
       void departmentQuery.refetch();
     } catch {
@@ -129,11 +144,11 @@ export default function DepartmentDetailPage() {
     }
   }
 
-  async function handleDelete() {
-    if (!window.confirm(`Excluir departamento \"${department.name}\"?`)) {
-      return;
-    }
+function handleDelete() {
+    setConfirmDeleteOpen(true);
+  }
 
+  async function confirmDeleteDepartment() {
     try {
       await deleteDepartment.mutateAsync(department.id);
       toast.success("Departamento excluído com sucesso.");
@@ -224,31 +239,23 @@ export default function DepartmentDetailPage() {
               <Input
                 label="Nome *"
                 value={form.name}
-                onChange={(event) =>
+                onChange={(event) => {
+                  markDirty();
                   setForm((current) =>
-                    current
-                      ? {
-                          ...current,
-                          name: event.target.value,
-                        }
-                      : current,
-                  )
-                }
+                    current ? { ...current, name: event.target.value } : current,
+                  );
+                }}
               />
 
               <Input
                 label="Descrição"
                 value={form.description ?? ""}
-                onChange={(event) =>
+                onChange={(event) => {
+                  markDirty();
                   setForm((current) =>
-                    current
-                      ? {
-                          ...current,
-                          description: event.target.value || null,
-                        }
-                      : current,
-                  )
-                }
+                    current ? { ...current, description: event.target.value || null } : current,
+                  );
+                }}
                 placeholder="Contexto operacional e regras deste departamento"
               />
 
@@ -257,16 +264,14 @@ export default function DepartmentDetailPage() {
                 type="number"
                 min="0"
                 value={form.sortOrder}
-                onChange={(event) =>
+                onChange={(event) => {
+                  markDirty();
                   setForm((current) =>
                     current
-                      ? {
-                          ...current,
-                          sortOrder: Math.max(0, Number(event.target.value || 0)),
-                        }
+                      ? { ...current, sortOrder: Math.max(0, Number(event.target.value || 0)) }
                       : current,
-                  )
-                }
+                  );
+                }}
               />
 
               <div className="rounded-xl border border-border bg-surface-light px-4 py-3 text-sm text-muted-foreground">
@@ -281,16 +286,12 @@ export default function DepartmentDetailPage() {
                 <input
                   type="checkbox"
                   checked={form.isActive}
-                  onChange={(event) =>
+                  onChange={(event) => {
+                    markDirty();
                     setForm((current) =>
-                      current
-                        ? {
-                            ...current,
-                            isActive: event.target.checked,
-                          }
-                        : current,
-                    )
-                  }
+                      current ? { ...current, isActive: event.target.checked } : current,
+                    );
+                  }}
                   className="rounded border-border bg-surface-light"
                 />
                 Ativo
@@ -346,6 +347,21 @@ export default function DepartmentDetailPage() {
           <span>{`/tickets/departments/${department.id}`}</span>
         </div>
       )}
+
+      <ConfirmDialog
+        open={confirmDeleteOpen}
+        title="Excluir departamento"
+        message={
+          <>
+            Tem certeza que deseja excluir o departamento{' '}
+            <span className="font-semibold text-foreground">{department.name}</span>? Esta ação não pode ser desfeita.
+          </>
+        }
+        confirmLabel="Excluir"
+        onConfirm={() => void confirmDeleteDepartment()}
+        onClose={() => setConfirmDeleteOpen(false)}
+        isLoading={deleteDepartment.isPending}
+      />
     </div>
   );
 }

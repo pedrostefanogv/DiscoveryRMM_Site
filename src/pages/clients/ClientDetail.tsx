@@ -1,51 +1,45 @@
-import { useState, useMemo } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Plus, Monitor, Trash2, AppWindow, Building2, Ticket as TicketIcon, Copy, KeyRound, BookOpen, CheckCircle2, XCircle, AlertTriangle, Activity } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Plus, Monitor, Trash2, AppWindow, Building2, Ticket as TicketIcon, KeyRound, BookOpen, Pencil } from 'lucide-react';
 import { useClient, useDeleteClient } from '@/hooks/useClients';
-import { useSites, useCreateSite } from '@/hooks/useSites';
+import { useSites } from '@/hooks/useSites';
 import { useAgentsByClient } from '@/hooks/useAgents';
 import { useTicketsByClient } from '@/hooks/useTickets';
 import { useLogs } from '@/hooks/useLogs';
-import { useCreateDeployToken } from '@/hooks/useDeployTokens';
 import { useDashboardSummary } from '@/hooks/useDashboardSummary';
 import { useDashboardRealtime } from '@/hooks/useDashboardRealtime';
-import { Button, Card, CardHeader, Badge, Loading, ErrorDisplay, Modal, Input, TextArea, StatCard, Select, PageHeader } from '@/components/ui';
-import { NotesPanel } from '@/components/notes/NotesPanel';
-import { isAgentOnlineNow } from '@/utils/agentStatus';
 import { useNowTick } from '@/hooks/useNowTick';
 import { useSoftwareInventorySnapshot } from '@/hooks/useSoftwareInventory';
-import { LogLevel, type TicketPriority, type Site, type Agent, type Ticket, type LogEntry } from '@/api';
+import { Button, Card, CardHeader, Badge, Loading, ErrorDisplay, Modal, StatCard, PageHeader, ConfirmDialog } from '@/components/ui';
+import { NotesPanel } from '@/components/notes/NotesPanel';
+import { ClientFormModal } from '@/components/entity/ClientFormModal';
+import { SiteFormModal } from '@/components/entity/SiteFormModal';
+import { AgentMiniList } from '@/components/entity/AgentMiniList';
+import { CreateDeployTokenModal } from '@/components/entity/CreateDeployTokenModal';
+import { RecentTicketsCard } from '@/components/entity/RecentTicketsCard';
+import { RecentLogsCard } from '@/components/entity/RecentLogsCard';
+import { DashboardSummaryCard } from '@/components/entity/DashboardSummaryCard';
+import { WindowSelector, normalizeDashboardWindow } from '@/components/entity/WindowSelector';
+import { isAgentOnlineNow } from '@/utils/agentStatus';
 import { TransferBeforeDeleteModal } from '@/components/agents/TransferBeforeDeleteModal';
 import { ensureArray } from '@/utils/ensureArray';
+import type { Site, Agent, Ticket, LogEntry } from '@/api';
+import type { DashboardWindow } from '@/api/dashboard';
 import toast from 'react-hot-toast';
-
-const priorityLabels: Record<TicketPriority, { label: string; color: 'slate' | 'success' | 'warning' | 'danger' }> = {
-  Low: { label: 'Baixa', color: 'slate' },
-  Medium: { label: 'Média', color: 'success' },
-  High: { label: 'Alta', color: 'warning' },
-  Critical: { label: 'Crítica', color: 'danger' },
-};
-
-const levelLabels: Record<number, { label: string; color: 'slate' | 'primary' | 'warning' | 'danger' | 'accent' }> = {
-  [LogLevel.Debug]: { label: 'Debug', color: 'slate' },
-  [LogLevel.Info]: { label: 'Info', color: 'primary' },
-  [LogLevel.Warning]: { label: 'Aviso', color: 'warning' },
-  [LogLevel.Error]: { label: 'Erro', color: 'danger' },
-  [LogLevel.Critical]: { label: 'Crítico', color: 'danger' },
-};
 
 export default function ClientDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [range, setRange] = useState<DashboardWindow>(() =>
+    normalizeDashboardWindow(searchParams.get('window')),
+  );
+
   const [siteModalOpen, setSiteModalOpen] = useState(false);
-  const [siteName, setSiteName] = useState('');
-  const [siteNotes, setSiteNotes] = useState('');
+  const [editClientOpen, setEditClientOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const [notesSite, setNotesSite] = useState<Site | null>(null);
   const [deployModalOpen, setDeployModalOpen] = useState(false);
-  const [deploySiteId, setDeploySiteId] = useState('');
-  const [deployDescription, setDeployDescription] = useState('');
-  const [deployExpiresInHours, setDeployExpiresInHours] = useState<number | null>(24);
-  const [deployMultiUse, setDeployMultiUse] = useState(false);
   const [transferModalOpen, setTransferModalOpen] = useState(false);
 
   const client = useClient(id!);
@@ -56,16 +50,10 @@ export default function ClientDetail() {
   const softwareSnapshot = useSoftwareInventorySnapshot('client', id);
   const now = useNowTick(5_000);
   const deleteClient = useDeleteClient();
-  const createSite = useCreateSite();
-  const createDeployToken = useCreateDeployToken();
-  const clientDashboard = useDashboardSummary(
-    { clientId: id! },
-    '24h',
-    { enabled: !!id },
-  );
+  const clientDashboard = useDashboardSummary({ clientId: id! }, range, { enabled: !!id });
 
   // Subscribe to client-scoped NATS dashboard events for targeted refetch.
-  useDashboardRealtime({ clientId: id! }, '24h', !!id);
+  useDashboardRealtime({ clientId: id! }, range, !!id);
 
   // Memoized normalized arrays — MUST be before any early return (Rules of Hooks)
   const sitesArray = useMemo(() => ensureArray<Site>(sites.data), [sites.data]);
@@ -74,47 +62,48 @@ export default function ClientDetail() {
   const logsArray = useMemo(() => ensureArray<LogEntry>(logs.data), [logs.data]);
 
   if (client.isLoading) return <Loading />;
-  if (client.isError || !client.data) return <ErrorDisplay onRetry={() => client.refetch()} />;
+  if (client.isError || !client.data) return <ErrorDisplay onRetry={() => void client.refetch()} />;
 
   const c = client.data;
+
+  const handleWindowChange = (value: DashboardWindow) => {
+    setRange(value);
+    const next = new URLSearchParams(searchParams);
+    if (value === '24h') {
+      next.delete('window');
+    } else {
+      next.set('window', value);
+    }
+    setSearchParams(next, { replace: true });
+  };
 
   const handleDelete = () => {
     if (agentsArray.length > 0) {
       setTransferModalOpen(true);
     } else {
-      if (!confirm('Tem certeza que deseja excluir este cliente?')) return;
-      deleteClient.mutate(c.id, {
-        onSuccess: () => { toast.success('Cliente excluído'); navigate('/clients'); },
-        onError: () => toast.error('Erro ao excluir'),
-      });
+      setDeleteOpen(true);
     }
+  };
+
+  const confirmDeleteClient = () => {
+    deleteClient.mutate(c.id, {
+      onSuccess: () => {
+        toast.success('Cliente excluído');
+        navigate('/clients');
+      },
+      onError: (error) => toast.error(error.message || 'Erro ao excluir'),
+    });
   };
 
   const handleTransferAndDelete = () => {
     setTransferModalOpen(false);
     deleteClient.mutate(c.id, {
-      onSuccess: () => { toast.success('Cliente excluído'); navigate('/clients'); },
-      onError: () => toast.error('Erro ao excluir cliente após transferência'),
-    });
-  };
-
-  const handleCreateSite = () => {
-    if (!siteName.trim()) {
-      toast.error('Informe o nome do site');
-      return;
-    }
-    createSite.mutate(
-      { clientId: c.id, data: { name: siteName.trim(), notes: siteNotes.trim() || null } },
-      {
-        onSuccess: () => {
-          toast.success('Site cadastrado com sucesso');
-          setSiteModalOpen(false);
-          setSiteName('');
-          setSiteNotes('');
-        },
-        onError: () => toast.error('Erro ao cadastrar site'),
+      onSuccess: () => {
+        toast.success('Cliente excluído');
+        navigate('/clients');
       },
-    );
+      onError: (error) => toast.error(error.message || 'Erro ao excluir cliente após transferência'),
+    });
   };
 
   const totalSites = sitesArray.length;
@@ -126,161 +115,38 @@ export default function ClientDetail() {
   const totalTickets = ticketsArray.length;
   const recentTickets = ticketsArray.slice(0, 6);
   const recentLogs = logsArray.slice(0, 8);
-  const generatedDeployToken = createDeployToken.data ?? null;
-
-  const resetDeployModal = () => {
-    setDeployModalOpen(false);
-    setDeploySiteId('');
-    setDeployDescription('');
-    setDeployExpiresInHours(24);
-    setDeployMultiUse(false);
-    createDeployToken.reset();
-  };
-
-  const handleCreateDeployToken = () => {
-    if (!deploySiteId) {
-      toast.error('Selecione o site para gerar o token');
-      return;
-    }
-
-    createDeployToken.mutate(
-      {
-        clientId: c.id,
-        siteId: deploySiteId,
-        description: deployDescription.trim() ? deployDescription.trim() : null,
-        expiresInHours: deployExpiresInHours,
-        multiUse: deployMultiUse,
-      },
-      {
-        onSuccess: () => {
-          toast.success('Token de deploy criado com sucesso');
-        },
-        onError: () => {
-          toast.error('Erro ao criar token de deploy');
-        },
-      },
-    );
-  };
-
-  const handleCopyDeployToken = async () => {
-    const value = generatedDeployToken?.rawToken;
-    if (!value) return;
-    try {
-      await navigator.clipboard.writeText(value);
-      toast.success('Token copiado para a area de transferencia');
-    } catch {
-      toast.error('Não foi possível copiar o token');
-    }
-  };
-
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-start gap-3">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => navigate('/clients')}
-          aria-label="Voltar"
-          className="mt-0.5"
-        >
-          <ArrowLeft className="h-4 w-4" />
+      <PageHeader
+        title={c.name}
+        description="Detalhes do Cliente"
+        onBack={() => navigate('/clients')}
+        backLabel="Voltar para clientes"
+      >
+        <Badge color={c.isActive ? 'success' : 'slate'}>{c.isActive ? 'Ativo' : 'Inativo'}</Badge>
+        <WindowSelector value={range} onChange={handleWindowChange} />
+        <Button size="sm" variant="ghost" onClick={() => setEditClientOpen(true)}>
+          <Pencil className="h-4 w-4" /> Editar
         </Button>
-        <div className="flex-1">
-          <PageHeader title={c.name} description="Detalhes do Cliente">
-            <Badge color={c.isActive ? 'success' : 'slate'}>{c.isActive ? 'Ativo' : 'Inativo'}</Badge>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => navigate(`/knowledge?clientId=${c.id}`)}
-            >
-              <BookOpen className="h-4 w-4" /> Conhecimento
-            </Button>
-            <Button variant="danger" size="sm" onClick={handleDelete}>
-              <Trash2 className="h-4 w-4" /> Excluir
-            </Button>
-          </PageHeader>
-        </div>
-      </div>
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() => navigate(`/knowledge?clientId=${c.id}`)}
+        >
+          <BookOpen className="h-4 w-4" /> Conhecimento
+        </Button>
+        <Button variant="danger" size="sm" onClick={handleDelete}>
+          <Trash2 className="h-4 w-4" /> Excluir
+        </Button>
+      </PageHeader>
 
-      {/* Mini-dashboard do cliente (últimas 24h) */}
+      {/* Mini-dashboard do cliente */}
       {clientDashboard.data && (
-        <Card>
-          <CardHeader
-            title="Resumo do Cliente"
-            subtitle="Agregado das últimas 24h"
-          />
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 text-sm">
-            {/* Agentes */}
-            <div className="rounded-lg bg-surface-light px-3 py-2">
-              <div className="flex items-center gap-1.5 text-muted">
-                <Monitor className="h-3.5 w-3.5" />
-                <span>Agentes</span>
-              </div>
-              <p className="mt-1 text-base font-semibold text-foreground">
-                {clientDashboard.data.agents.online}
-                <span className="text-xs font-normal text-muted">/{clientDashboard.data.agents.total} online</span>
-              </p>
-              {clientDashboard.data.agents.error > 0 && (
-                <p className="mt-0.5 text-xs text-danger flex items-center gap-1">
-                  <AlertTriangle className="h-3 w-3" />{clientDashboard.data.agents.error} em erro
-                </p>
-              )}
-            </div>
-            {/* Chamados */}
-            <div className="rounded-lg bg-surface-light px-3 py-2">
-              <div className="flex items-center gap-1.5 text-muted">
-                <TicketIcon className="h-3.5 w-3.5" />
-                <span>Chamados</span>
-              </div>
-              <p className="mt-1 text-base font-semibold text-foreground">
-                {clientDashboard.data.tickets.open}
-                <span className="text-xs font-normal text-muted"> abertos</span>
-              </p>
-              {clientDashboard.data.tickets.slaBreachedOpen > 0 && (
-                <p className="mt-0.5 text-xs text-danger flex items-center gap-1">
-                  <AlertTriangle className="h-3 w-3" />{clientDashboard.data.tickets.slaBreachedOpen} SLA violado
-                </p>
-              )}
-            </div>
-            {/* Comandos */}
-            <div className="rounded-lg bg-surface-light px-3 py-2">
-              <div className="flex items-center gap-1.5 text-muted">
-                <Activity className="h-3.5 w-3.5" />
-                <span>Comandos</span>
-              </div>
-              {clientDashboard.data.commands.total > 0 ? (
-                <>
-                  <p className={`mt-1 text-base font-semibold ${clientDashboard.data.commands.successRate >= 80 ? 'text-success' : 'text-danger'}`}>
-                    {clientDashboard.data.commands.successRate.toFixed(1)}% sucesso
-                  </p>
-                  <p className="mt-0.5 text-xs text-muted">{clientDashboard.data.commands.total} total</p>
-                </>
-              ) : (
-                <p className="mt-1 text-base font-semibold text-muted">Nenhum</p>
-              )}
-            </div>
-            {/* Automação */}
-            <div className="rounded-lg bg-surface-light px-3 py-2">
-              <div className="flex items-center gap-1.5 text-muted">
-                {clientDashboard.data.automation.total > 0 && clientDashboard.data.automation.failed > 0
-                  ? <XCircle className="h-3.5 w-3.5 text-danger" />
-                  : <CheckCircle2 className="h-3.5 w-3.5" />}
-                <span>Automação</span>
-              </div>
-              {clientDashboard.data.automation.total > 0 ? (
-                <>
-                  <p className={`mt-1 text-base font-semibold ${clientDashboard.data.automation.successRate >= 80 ? 'text-success' : 'text-danger'}`}>
-                    {clientDashboard.data.automation.successRate.toFixed(1)}% sucesso
-                  </p>
-                  <p className="mt-0.5 text-xs text-muted">{clientDashboard.data.automation.total} execuções</p>
-                </>
-              ) : (
-                <p className="mt-1 text-base font-semibold text-muted">Nenhuma</p>
-              )}
-            </div>
-          </div>
-        </Card>
+        <DashboardSummaryCard
+          data={clientDashboard.data}
+          title="Resumo do Cliente"
+          subtitle={`Agregado da janela ${range}`}
+        />
       )}
 
       {/* Stat Cards */}
@@ -357,11 +223,7 @@ export default function ClientDetail() {
         </Card>
 
         <div className="lg:col-span-2">
-          <NotesPanel
-            entityType="client"
-            entityId={c.id}
-            title="Notas do Cliente"
-          />
+          <NotesPanel entityType="client" entityId={c.id} title="Notas do Cliente" />
         </div>
 
         {/* Sites */}
@@ -369,16 +231,18 @@ export default function ClientDetail() {
           <CardHeader
             title="Sites"
             subtitle={`${totalSites} total`}
-            action={(
+            action={
               <Button size="sm" variant="ghost" onClick={() => setSiteModalOpen(true)} aria-label="Cadastrar site">
                 <Plus className="h-4 w-4" />
               </Button>
-            )}
+            }
           />
           <div className="space-y-2">
-            {sitesArray.map(site => (
+            {sitesArray.map((site) => (
               <div
                 key={site.id}
+                role="button"
+                tabIndex={0}
                 onClick={() => navigate(`/clients/${c.id}/sites/${site.id}`)}
                 onKeyDown={(event) => {
                   if (event.key === 'Enter' || event.key === ' ') {
@@ -386,11 +250,9 @@ export default function ClientDetail() {
                     navigate(`/clients/${c.id}/sites/${site.id}`);
                   }
                 }}
-                role="button"
-                tabIndex={0}
-                className="flex cursor-pointer items-center gap-3 rounded-lg bg-surface-light px-3 py-2 transition-colors hover:bg-surface-hover"
+                className="flex cursor-pointer items-center gap-3 rounded-lg bg-surface-light px-3 py-2 transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
               >
-                <Building2 className="h-4 w-4 text-accent shrink-0" />
+                <Building2 className="h-4 w-4 shrink-0 text-accent" aria-hidden="true" />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium text-foreground">{site.name}</p>
                   {site.notes && <p className="truncate text-xs text-muted">{site.notes}</p>}
@@ -427,52 +289,23 @@ export default function ClientDetail() {
           </div>
         </Card>
 
-        {/* Chamados Recentes */}
-        <Card>
-          <CardHeader
-            title="Chamados Recentes"
-            subtitle={`${totalTickets} total`}
-            action={(
-              <Button size="sm" variant="ghost" onClick={() => navigate('/tickets')}>
-                Ver todos
-              </Button>
-            )}
-          />
-          <div className="space-y-2">
-            {recentTickets.map(ticket => {
-              const p = priorityLabels[ticket.priority] ?? { label: '?', color: 'slate' as const };
-              return (
-                <div
-                  key={ticket.id}
-                  onClick={() => navigate(`/tickets/${ticket.id}`)}
-                  className="flex cursor-pointer items-center gap-3 rounded-lg bg-surface-light px-3 py-2 hover:bg-surface-hover transition-colors"
-                >
-                  <TicketIcon className="h-4 w-4 text-warning shrink-0" />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-foreground">{ticket.title}</p>
-                    <p className="text-xs text-muted">{ticket.category ?? 'Sem categoria'}</p>
-                  </div>
-                  <Badge color={p.color}>{p.label}</Badge>
-                </div>
-              );
-            })}
-            {tickets.isLoading && <p className="text-sm text-muted">Carregando...</p>}
-            {totalTickets === 0 && !tickets.isLoading && (
-              <p className="text-sm text-muted">Nenhum chamado</p>
-            )}
-          </div>
-        </Card>
+        <RecentTicketsCard
+          tickets={recentTickets}
+          total={totalTickets}
+          isLoading={tickets.isLoading}
+          onSelect={(ticket) => navigate(`/tickets/${ticket.id}`)}
+          onViewAll={() => navigate('/tickets')}
+        />
       </div>
 
       {/* Bottom grid: Agents + Logs */}
       <div className="grid gap-6 lg:grid-cols-5">
-        {/* Agentes */}
         <div className="lg:col-span-3">
           <Card>
             <CardHeader
               title="Agentes"
               subtitle={`${onlineAgents} online`}
-              action={(
+              action={
                 <Button
                   size="sm"
                   variant="ghost"
@@ -482,76 +315,54 @@ export default function ClientDetail() {
                 >
                   <KeyRound className="h-4 w-4" />
                 </Button>
-              )}
+              }
             />
-            <div className="space-y-2">
-              {agentsArray.map(agent => {
-                const online = isAgentOnlineNow(agent, now);
-                return (
-                  <div
-                    key={agent.id}
-                    onClick={() => navigate(`/agents/${agent.id}`)}
-                    className="flex cursor-pointer items-center gap-3 rounded-lg bg-surface-light px-3 py-2 hover:bg-surface-hover transition-colors"
-                  >
-                    <Monitor className="h-4 w-4 text-primary shrink-0" />
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-foreground">
-                        {agent.displayName ?? agent.hostname}
-                      </p>
-                      <p className="text-xs text-muted">{agent.operatingSystem ?? 'N/A'}</p>
-                    </div>
-                    <span className={`h-2 w-2 shrink-0 rounded-full ${online ? 'bg-success' : 'bg-slate-600'}`} />
-                  </div>
-                );
-              })}
-              {agents.isLoading && <p className="text-sm text-muted">Carregando...</p>}
-              {totalAgents === 0 && !agents.isLoading && (
-                <p className="text-sm text-muted">Nenhum agente</p>
-              )}
-            </div>
+            <AgentMiniList
+              agents={agentsArray}
+              now={now}
+              isLoading={agents.isLoading}
+              emptyMessage="Nenhum agente"
+              onSelect={(agent) => navigate(`/agents/${agent.id}`)}
+            />
           </Card>
         </div>
 
-        {/* Logs Recentes */}
         <div className="lg:col-span-2">
-          <Card>
-            <CardHeader
-              title="Logs Recentes"
-              action={(
-                <Button size="sm" variant="ghost" onClick={() => navigate('/logs')}>
-                  Ver todos
-                </Button>
-              )}
-            />
-            <div className="space-y-2">
-              {recentLogs.map(log => {
-                const l = levelLabels[log.level] ?? { label: '?', color: 'slate' as const };
-                return (
-                  <div key={log.id} className="flex items-start gap-2 rounded-lg bg-surface-light px-3 py-2">
-                    <Badge color={l.color} className="mt-0.5 shrink-0">{l.label}</Badge>
-                    <p className="min-w-0 flex-1 truncate text-sm text-muted-foreground">{log.message}</p>
-                  </div>
-                );
-              })}
-              {logs.isLoading && <p className="text-sm text-muted">Carregando...</p>}
-              {(logs.data?.length ?? 0) === 0 && !logs.isLoading && (
-                <p className="text-sm text-muted">Nenhum log registrado</p>
-              )}
-            </div>
-          </Card>
+          <RecentLogsCard
+            logs={recentLogs}
+            total={logsArray.length}
+            isLoading={logs.isLoading}
+            onViewAll={() => navigate('/logs')}
+          />
         </div>
       </div>
 
-      <Modal open={siteModalOpen} onClose={() => setSiteModalOpen(false)} title="Cadastrar Site">
-        <div className="space-y-4">
-          <Input label="Nome" value={siteName} onChange={e => setSiteName(e.target.value)} />
-          <TextArea label="Observações" value={siteNotes} onChange={e => setSiteNotes(e.target.value)} rows={3} />
-          <div className="flex justify-end gap-3 pt-2">
-            <Button variant="ghost" onClick={() => setSiteModalOpen(false)}>Cancelar</Button>
-            <Button onClick={handleCreateSite} loading={createSite.isPending}>Salvar</Button>
-          </div>
-        </div>
-      </Modal>
+      <SiteFormModal
+        open={siteModalOpen}
+        onClose={() => setSiteModalOpen(false)}
+        clientId={c.id}
+      />
+
+      <ClientFormModal
+        open={editClientOpen}
+        onClose={() => setEditClientOpen(false)}
+        client={c}
+      />
+
+      <ConfirmDialog
+        open={deleteOpen}
+        title="Excluir cliente"
+        message={
+          <>
+            Tem certeza que deseja excluir o cliente{' '}
+            <span className="font-semibold text-foreground">{c.name}</span>? Esta ação não pode ser desfeita.
+          </>
+        }
+        confirmLabel="Excluir"
+        onConfirm={confirmDeleteClient}
+        onClose={() => setDeleteOpen(false)}
+        isLoading={deleteClient.isPending}
+      />
 
       <Modal
         open={!!notesSite}
@@ -560,92 +371,16 @@ export default function ClientDetail() {
         maxWidth="max-w-3xl"
       >
         {notesSite && (
-          <NotesPanel
-            entityType="site"
-            entityId={notesSite.id}
-            title="Notas do Site"
-          />
+          <NotesPanel entityType="site" entityId={notesSite.id} title="Notas do Site" />
         )}
       </Modal>
 
-      <Modal
+      <CreateDeployTokenModal
         open={deployModalOpen}
-        onClose={resetDeployModal}
-        title="Criar Token de Deploy"
-      >
-        <div className="space-y-4">
-          <Select
-            label="Site"
-            value={deploySiteId}
-            onChange={(e) => setDeploySiteId(e.target.value)}
-            options={[
-              { value: '', label: activeSitesList.length === 0 ? 'Nenhum site ativo' : 'Selecione um site' },
-              ...activeSitesList.map((site) => ({ value: site.id, label: site.name })),
-            ]}
-            disabled={activeSitesList.length === 0}
-          />
-
-          <TextArea
-             label="Descrição"
-            placeholder="Ex: onboarding de novo agente"
-            value={deployDescription}
-            onChange={(e) => setDeployDescription(e.target.value)}
-            rows={3}
-          />
-
-          <Input
-            label="Expira em (horas)"
-            type="number"
-            min={1}
-            value={deployExpiresInHours ?? ''}
-            onChange={(e) => {
-              const raw = e.target.value;
-              setDeployExpiresInHours(raw === '' ? null : Number(raw));
-            }}
-          />
-
-          <label className="flex items-center gap-2 text-sm text-muted-foreground">
-            <input
-              type="checkbox"
-              checked={deployMultiUse}
-              onChange={(e) => setDeployMultiUse(e.target.checked)}
-              className="rounded border-border bg-surface-light"
-            />
-            Permitir multiuso
-          </label>
-
-          {generatedDeployToken && (
-            <div className="space-y-3 rounded-lg border border-border bg-black/20 p-3">
-              <p className="text-xs uppercase tracking-wide text-muted">Token gerado</p>
-              <p className="break-all font-mono text-sm text-foreground">{generatedDeployToken.rawToken ?? ''}</p>
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge color={deployMultiUse ? 'accent' : 'slate'}>
-                  {deployMultiUse ? 'Multiuso' : 'Uso único'}
-                </Badge>
-                <Badge color="slate">
-                  Expira: {generatedDeployToken.expiresAt ? new Date(generatedDeployToken.expiresAt).toLocaleString('pt-BR') : 'Sem expiração'}
-                </Badge>
-              </div>
-              <div className="flex justify-end">
-                <Button variant="secondary" onClick={handleCopyDeployToken}>
-                  <Copy className="h-4 w-4" /> Copiar Token
-                </Button>
-              </div>
-            </div>
-          )}
-
-          <div className="flex justify-end gap-3 pt-2">
-            <Button variant="ghost" onClick={resetDeployModal}>Cancelar</Button>
-            <Button
-              onClick={handleCreateDeployToken}
-              loading={createDeployToken.isPending}
-              disabled={activeSitesList.length === 0}
-            >
-              <KeyRound className="h-4 w-4" /> Gerar Token
-            </Button>
-          </div>
-        </div>
-      </Modal>
+        onClose={() => setDeployModalOpen(false)}
+        clientId={c.id}
+        sites={activeSitesList.map((site) => ({ id: site.id, name: site.name }))}
+      />
 
       <TransferBeforeDeleteModal
         open={transferModalOpen}

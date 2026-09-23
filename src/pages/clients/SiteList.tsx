@@ -1,11 +1,11 @@
-import { useMemo, useRef, useState, useEffect } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Building2, Plus } from 'lucide-react';
 import { useClients } from '@/hooks/useClients';
-import { useAllSites, useCreateSite, useDeleteSite, useRestartSite, useShutdownSite, useWakeOnLanSite } from '@/hooks/useSites';
+import { useAllSites, useDeleteSite, useRestartSite, useShutdownSite, useWakeOnLanSite } from '@/hooks/useSites';
 import { useAgentsBySite } from '@/hooks/useAgents';
-import { Badge, Button, Card, DataTable, ErrorDisplay, Input, Loading, Modal, PageHeader, Select, StatCard, TextArea } from '@/components/ui';
-import { type Site, type SiteWakeOnLanResponse, type CreateSiteRequest } from '@/api';
+import { Badge, Button, Card, ConfirmDialog, DataTable, ErrorDisplay, Input, Loading, PageHeader, Select, StatCard } from '@/components/ui';
+import { type Site, type SiteWakeOnLanResponse } from '@/api';
 import { useAuthorization } from '@/auth/authorization';
 import type { Column } from '@/components/ui';
 import toast from 'react-hot-toast';
@@ -14,6 +14,7 @@ import SiteTransferAgentsModal from '@/components/sites/SiteTransferAgentsModal'
 import SitePowerConfirmationModal, { type SitePowerAction } from '@/components/sites/SitePowerConfirmationModal';
 import SiteWakeOnLanModal from '@/components/sites/SiteWakeOnLanModal';
 import { TransferBeforeDeleteModal } from '@/components/agents/TransferBeforeDeleteModal';
+import { SiteFormModal } from '@/components/entity/SiteFormModal';
 
 type SiteWithClient = Site & {
   clientName: string;
@@ -23,8 +24,8 @@ type SiteWithClient = Site & {
 export default function SiteList() {
   const navigate = useNavigate();
   const { hasAnyPermission } = useAuthorization();
-  // Sites são gerenciados sob o recurso Clients (não há SitesController próprio).
-  const canCreate = hasAnyPermission(['Clients.Create', 'clients.*', 'admin.*']);
+  // Sites têm recurso/permissões próprios (SitesController existe na API).
+  const canCreate = hasAnyPermission(['Sites.Create', 'sites.*', 'admin.*']);
   const [showInactive, setShowInactive] = useState(false);
   const [search, setSearch] = useState('');
   const [filterClient, setFilterClient] = useState('');
@@ -38,6 +39,7 @@ export default function SiteList() {
   const [powerAction, setPowerAction] = useState<SitePowerAction>('restart');
   const [wakeSite, setWakeSite] = useState<SiteWithClient | null>(null);
   const [deleteSiteModal, setDeleteSiteModal] = useState<SiteWithClient | null>(null);
+  const [editSite, setEditSite] = useState<SiteWithClient | null>(null);
 
   // Clientes sempre completos (nome/ativo + opções de filtro/criação); os sites
   // vêm de uma única requisição global (sem N+1 por cliente).
@@ -194,6 +196,9 @@ export default function SiteList() {
       case 'delete':
         setDeleteSiteModal(site);
         break;
+      case 'edit':
+        setEditSite(site);
+        break;
     }
   };
   const onlineCount = (activeSiteAgents ?? []).filter((a) => a.isOnline).length;
@@ -324,11 +329,20 @@ export default function SiteList() {
         )}
       </Card>
 
-      <CreateSiteModal
+      <SiteFormModal
         open={modalOpen}
         onClose={() => setModalOpen(false)}
         clients={clients.data ?? []}
       />
+
+      {editSite && (
+        <SiteFormModal
+          open
+          onClose={() => setEditSite(null)}
+          clientId={editSite.clientId}
+          site={editSite}
+        />
+      )}
 
       {contextMenuSite && contextPosition && (
         <SiteContextMenu
@@ -383,129 +397,21 @@ export default function SiteList() {
         />
       )}
 
-      {deleteSiteModal && !activeSiteAgentsLoading && (activeSiteAgents ?? []).length === 0 && (
-        <SiteDeleteConfirmModal
-          open
-          siteName={deleteSiteModal.name}
-          onClose={() => setDeleteSiteModal(null)}
-          onConfirm={handleConfirmDeleteNoAgents}
-          isLoading={deleteSiteMutation.isPending}
-        />
-      )}
+      <ConfirmDialog
+        open={!!deleteSiteModal && !activeSiteAgentsLoading && (activeSiteAgents ?? []).length === 0}
+        title="Excluir site"
+        message={
+          <>
+            Tem certeza que deseja excluir o site{' '}
+            <span className="font-semibold text-foreground">{deleteSiteModal?.name}</span>? Esta ação não pode ser desfeita.
+          </>
+        }
+        confirmLabel="Excluir"
+        onConfirm={handleConfirmDeleteNoAgents}
+        onClose={() => setDeleteSiteModal(null)}
+        isLoading={deleteSiteMutation.isPending}
+      />
     </div>
   );
 }
 
-function CreateSiteModal({
-  open,
-  onClose,
-  clients,
-}: {
-  open: boolean;
-  onClose: () => void;
-  clients: { id: string; name: string }[];
-}) {
-  const create = useCreateSite();
-  const [form, setForm] = useState<CreateSiteRequest & { clientId: string }>({
-    clientId: '',
-    name: '',
-    notes: null,
-  });
-
-  // Reset form when modal opens
-  const prevOpen = useRef(open);
-  useEffect(() => {
-    if (open && !prevOpen.current) {
-      setForm({ clientId: '', name: '', notes: null });
-    }
-    prevOpen.current = open;
-  }, [open]);
-
-  const handleSubmit = () => {
-    if (!form.clientId || !form.name.trim()) return;
-    create.mutate(
-      { clientId: form.clientId, data: { name: form.name, notes: form.notes } },
-      {
-        onSuccess: () => {
-          toast.success('Site criado com sucesso');
-          onClose();
-          setForm({ clientId: '', name: '', notes: null });
-        },
-        onError: () => toast.error('Erro ao criar site'),
-      },
-    );
-  };
-
-  const clientOptions = [
-    { value: '', label: 'Selecione um cliente', disabled: true },
-    ...clients.map((c) => ({ value: c.id, label: c.name })),
-  ];
-
-  return (
-    <Modal open={open} onClose={onClose} title="Novo Site">
-      <div className="space-y-4">
-        <Select
-          label="Cliente"
-          value={form.clientId}
-          onChange={(e) => setForm((f) => ({ ...f, clientId: e.target.value }))}
-          options={clientOptions}
-        />
-        <Input
-          label="Nome do Site"
-          value={form.name}
-          onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-          required
-        />
-        <TextArea
-          label="Observações"
-          value={form.notes ?? ''}
-          onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value || null }))}
-        />
-        <div className="flex justify-end gap-3 pt-2">
-          <Button variant="ghost" onClick={onClose}>
-            Cancelar
-          </Button>
-          <Button onClick={handleSubmit} loading={create.isPending}>
-            Salvar
-          </Button>
-        </div>
-      </div>
-    </Modal>
-  );
-}
-
-function SiteDeleteConfirmModal({
-  open,
-  siteName,
-  onClose,
-  onConfirm,
-  isLoading,
-}: {
-  open: boolean;
-  siteName: string;
-  onClose: () => void;
-  onConfirm: () => void;
-  isLoading: boolean;
-}) {
-  return (
-    <Modal open={open} onClose={onClose} title="Excluir site">
-      <div className="space-y-4">
-        <div className="rounded-lg border border-danger/30 bg-danger/10 p-3 text-sm text-foreground">
-          <p>
-            Tem certeza que deseja excluir o site{' '}
-            <span className="font-semibold text-foreground">{siteName}</span>?
-          </p>
-          <p className="mt-1 text-muted">Esta ação não pode ser desfeita.</p>
-        </div>
-        <div className="flex justify-end gap-2">
-          <Button variant="secondary" onClick={onClose} disabled={isLoading}>
-            Cancelar
-          </Button>
-          <Button variant="danger" onClick={onConfirm} loading={isLoading}>
-            Excluir
-          </Button>
-        </div>
-      </div>
-    </Modal>
-  );
-}

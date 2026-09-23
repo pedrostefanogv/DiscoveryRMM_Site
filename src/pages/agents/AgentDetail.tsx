@@ -25,7 +25,8 @@ import AgentScheduledTasksPanel from '@/components/agents/AgentScheduledTasksPan
 import WakeOnLanModal from '@/components/agents/WakeOnLanModal';
 import { NotesPanel } from '@/components/notes/NotesPanel';
 import type { AgentSoftwareInventoryItem, ListeningPortInfo, LogEntry, OpenSocketInfo, ScheduledTaskInfo, StartupItemInfo } from '@/api';
-import { ApiError, LogLevel, agentUpdatesApi, agentsApi } from '@/api';
+import { ApiError, agentUpdatesApi, agentsApi } from '@/api';
+import { getLogLevelMeta, getTicketPriorityMeta } from '@/utils/labels';
 import {
   LISTENING_PORTS_BACKEND_LIMIT,
   LISTENING_PORTS_MAX_PAGE_SIZE,
@@ -40,14 +41,6 @@ import { AgentLabelSourceType, type AgentLabel } from '@/modules/agent-labels/ty
 import { openRemoteDebugPopup } from './remoteDebugLauncher';
 import { openRemoteSessionPopup } from './remoteSessionLauncher';
 import { useAuthorization } from '@/auth/authorization';
-
-const levelLabels: Record<number, { label: string; color: 'slate' | 'primary' | 'warning' | 'danger' | 'accent' }> = {
-  [LogLevel.Debug]: { label: 'Debug', color: 'slate' },
-  [LogLevel.Info]: { label: 'Info', color: 'primary' },
-  [LogLevel.Warning]: { label: 'Aviso', color: 'warning' },
-  [LogLevel.Error]: { label: 'Erro', color: 'danger' },
-  [LogLevel.Critical]: { label: 'Crítico', color: 'danger' },
-};
 
 // formatBytes, formatDate, formatSocketFamily — importadas de ./agentDetailUtils
 
@@ -2104,18 +2097,7 @@ export default function AgentDetail() {
               {!agentTickets.isLoading && agentTickets.data && agentTickets.data.items.length > 0 && (
                 <div className="space-y-2">
                   {agentTickets.data.items.map(ticket => {
-                    const priorityColors: Record<string, 'slate' | 'success' | 'warning' | 'danger'> = {
-                      Low: 'slate',
-                      Medium: 'success',
-                      High: 'warning',
-                      Critical: 'danger',
-                    };
-                    const priorityLabels: Record<string, string> = {
-                      Low: 'Baixa',
-                      Medium: 'Média',
-                      High: 'Alta',
-                      Critical: 'Crítica',
-                    };
+                    const priority = getTicketPriorityMeta(ticket.priority);
                     return (
                       <button
                         key={ticket.id}
@@ -2135,8 +2117,8 @@ export default function AgentDetail() {
                               {ticket.closedAt && '  Encerrado'}
                             </p>
                           </div>
-                          <Badge color={priorityColors[ticket.priority] ?? 'slate'} className="shrink-0">
-                            {priorityLabels[ticket.priority] ?? ticket.priority}
+                          <Badge color={priority.color} className="shrink-0">
+                            {priority.label}
                           </Badge>
                         </div>
                       </button>
@@ -2452,7 +2434,7 @@ export default function AgentDetail() {
             <CardHeader title="Logs Recentes" />
             <div className="space-y-2">
               {logsArray.map(log => {
-                const l = levelLabels[log.level] ?? { label: '?', color: 'slate' as const };
+                const l = getLogLevelMeta(log.level);
                 return (
                   <div key={log.id} className="flex items-start gap-2 rounded-lg bg-surface-light px-3 py-2">
                     <Badge color={l.color} className="mt-0.5 shrink-0">{l.label}</Badge>

@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
-import { Copy, Download, KeyRound } from 'lucide-react';
+import { Download, KeyRound } from 'lucide-react';
 import { Badge, Button, Card, CardHeader, Input, Modal, Select, TextArea } from '@/components/ui';
 import {
-  useCreateDeployToken,
   useCreateDeployTokenAndDownload,
   useDeployTokens,
   useDownloadDeployInstaller,
@@ -14,11 +13,11 @@ import { useSites } from '@/hooks/useSites';
 import { agentUpdatesApi, ApiError, deployTokensApi } from '@/api';
 import type {
   CreateDeployTokenAndDownloadRequest,
-  CreateDeployTokenRequest,
   DeployInstallerType,
   DeployToken,
   ListDeployTokensParams,
 } from '@/api';
+import { CreateDeployTokenModal } from '@/components/entity/CreateDeployTokenModal';
 import toast from 'react-hot-toast';
 
 interface DeployTokenFormState {
@@ -126,7 +125,6 @@ function matchesPeriod(createdAt: string, period: TokenPeriodFilter, nowMs: numb
 }
 
 export default function DeployTokens() {
-  const createToken = useCreateDeployToken();
   const createAndDownload = useCreateDeployTokenAndDownload();
   const revokeToken = useRevokeDeployToken();
   const downloadInstaller = useDownloadDeployInstaller();
@@ -149,7 +147,7 @@ export default function DeployTokens() {
   // operador informe o valor original (única fonte confiável do segredo).
   const [downloadPrompt, setDownloadPrompt] = useState<DeployToken | null>(null);
   const [downloadPromptValue, setDownloadPromptValue] = useState('');
-  const [lastCreatedMultiUse, setLastCreatedMultiUse] = useState(false);
+  const [createModalOpen, setCreateModalOpen] = useState(false);
 
   const [tokensFilter, setTokensFilter] = useState<ListDeployTokensParams | null>(null);
   const [tokenSearch, setTokenSearch] = useState('');
@@ -173,8 +171,6 @@ export default function DeployTokens() {
     ),
     [deployTokens.data],
   );
-
-  const generatedToken = createToken.data ?? null;
 
   const tokenStats = useMemo(() => {
     const accumulator = {
@@ -327,16 +323,6 @@ export default function DeployTokens() {
     setForm(current => ({ ...current, ...preset }));
   }
 
-  function buildCreatePayload(): CreateDeployTokenRequest {
-    return {
-      clientId: selectedClientId,
-      siteId: selectedSiteId,
-      description: form.description?.trim() ? form.description.trim() : null,
-      expiresInHours: form.expiresInHours,
-      multiUse: form.multiUse,
-    };
-  }
-
   function buildDownloadPayload(): CreateDeployTokenAndDownloadRequest {
     return {
       clientId: selectedClientId,
@@ -346,25 +332,6 @@ export default function DeployTokens() {
       multiUse: form.multiUse,
       installerType,
     };
-  }
-
-  function handleCreateToken() {
-    if (!selectedClientId) {
-      toast.error('Selecione o cliente.');
-      return;
-    }
-    if (!selectedSiteId) {
-      toast.error('Selecione o site.');
-      return;
-    }
-
-    createToken.mutate(buildCreatePayload(), {
-      onSuccess: () => {
-        setLastCreatedMultiUse(Boolean(form.multiUse));
-        toast.success('Token de deploy criado com sucesso.');
-      },
-      onError: (error) => toast.error(error.message || 'Erro ao criar token de deploy.'),
-    });
   }
 
   function handleCreateAndDownload() {
@@ -441,15 +408,6 @@ export default function DeployTokens() {
         },
       },
     );
-  }
-
-  async function handleCopyToken(tokenValue: string) {
-    try {
-      await navigator.clipboard.writeText(tokenValue);
-      toast.success('Token copiado para a área de transferência.');
-    } catch {
-      toast.error('Não foi possível copiar o token.');
-    }
   }
 
   function handleRevokeToken(token: DeployToken) {
@@ -600,16 +558,6 @@ export default function DeployTokens() {
                   >
                     Implantação em lote (7d)
                   </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => applyCreationPreset({
-                      multiUse: false,
-                      expiresInHours: 24,
-                    })}
-                  >
-                    Somente token
-                  </Button>
                 </div>
               </div>
 
@@ -656,9 +604,8 @@ export default function DeployTokens() {
               <div className="flex flex-wrap justify-end gap-2">
                 <Button
                   variant="secondary"
-                  onClick={handleCreateToken}
-                  loading={createToken.isPending}
-                  disabled={!selectedClientId || !selectedSiteId}
+                  onClick={() => setCreateModalOpen(true)}
+                  disabled={!selectedClientId}
                 >
                   <KeyRound className="h-4 w-4" />
                   Gerar token
@@ -674,38 +621,6 @@ export default function DeployTokens() {
               </div>
             </div>
           </Card>
-
-          {generatedToken && (
-            <Card>
-              <CardHeader title="Token gerado" subtitle="Copie e guarde com segurança." />
-              <div className="space-y-4">
-                <div className="rounded-lg border border-border bg-black/20 p-3">
-                  <p className="break-all font-mono text-sm text-foreground">{generatedToken.rawToken ?? ''}</p>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge color={lastCreatedMultiUse ? 'accent' : 'slate'}>
-                    {lastCreatedMultiUse ? 'Multiuso' : 'Uso único'}
-                  </Badge>
-                  <Badge color="slate">
-                    Expira: {generatedToken.expiresAt ? new Date(generatedToken.expiresAt).toLocaleString('pt-BR') : 'Sem expiração'}
-                  </Badge>
-                </div>
-
-                <div className="flex justify-end">
-                  <Button
-                    variant="secondary"
-                    onClick={() => {
-                      const value = generatedToken.rawToken;
-                      if (value) void handleCopyToken(value);
-                    }}
-                  >
-                    <Copy className="h-4 w-4" /> Copiar token
-                  </Button>
-                </div>
-              </div>
-            </Card>
-          )}
         </>
       ) : (
         <>
@@ -982,6 +897,14 @@ export default function DeployTokens() {
           </div>
         </div>
       </Modal>
+
+      <CreateDeployTokenModal
+        open={createModalOpen}
+        onClose={() => setCreateModalOpen(false)}
+        clientId={selectedClientId}
+        sites={activeSites.map((site) => ({ id: site.id, name: site.name }))}
+        defaultSiteId={selectedSiteId}
+      />
     </div>
   );
 }
