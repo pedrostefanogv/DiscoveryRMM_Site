@@ -18,8 +18,10 @@ import {
   isCustomFieldAgentLabelField,
   isDiskAgentLabelField,
   type AgentLabelAvailableCustomField,
+  type AgentLabelReprocessStatus,
   type AgentLabelRuleAgentItem,
   type AgentLabelRuleDryRunResponse,
+  type AgentLabelRuleImpactResponse,
   type AgentLabelRuleExpressionNodeDto,
   type AgentLabelRuleResponse,
 } from '@/modules/agent-labels/types';
@@ -136,6 +138,11 @@ export default function AgentLabelsSettings() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isReprocessing, setIsReprocessing] = useState(false);
+  const [reprocessStatus, setReprocessStatus] = useState<AgentLabelReprocessStatus | null>(null);
+  const [rulePendingDeletion, setRulePendingDeletion] = useState<AgentLabelRuleResponse | null>(null);
+  const [isEstimatingImpact, setIsEstimatingImpact] = useState(false);
+  const [impactResult, setImpactResult] = useState<AgentLabelRuleImpactResponse | null>(null);
+  const [isDeletingRule, setIsDeletingRule] = useState(false);
   const [isRunningPreview, setIsRunningPreview] = useState(false);
   const [isLoadingAppliedAgents, setIsLoadingAppliedAgents] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -197,6 +204,7 @@ export default function AgentLabelsSettings() {
     setDryRunMode('site-batch');
     setPreviewLimit(25);
     setPreviewResults([]);
+    setImpactResult(null);
   }
 
   function startCreateRule() {
@@ -407,11 +415,15 @@ export default function AgentLabelsSettings() {
     }
   }
 
-  async function handleDeleteRule(rule: AgentLabelRuleResponse) {
-    if (!confirm(`Excluir a regra "${rule.name}"?`)) {
-      return;
-    }
+  function requestDeleteRule(rule: AgentLabelRuleResponse) {
+    setRulePendingDeletion(rule);
+  }
 
+  async function confirmDeleteRule() {
+    const rule = rulePendingDeletion;
+    if (!rule) return;
+
+    setIsDeletingRule(true);
     try {
       await agentLabelsApi.deleteRule(rule.id);
       setRules(prev => prev.filter(item => item.id !== rule.id));
@@ -420,6 +432,9 @@ export default function AgentLabelsSettings() {
       setViewMode('list');
     } catch (err) {
       toast.error(getApiErrorMessage(err, 'Falha ao excluir regra.'));
+    } finally {
+      setIsDeletingRule(false);
+      setRulePendingDeletion(null);
     }
   }
 
@@ -428,10 +443,88 @@ export default function AgentLabelsSettings() {
     try {
       const response = await agentLabelsApi.reprocessAll();
       toast.success(response.message || 'Reprocessamento iniciado.');
+
+      // Antes o endpoint so dizia "iniciado" e nao havia como saber se terminou.
+      if (response.jobId) {
+        setReprocessStatus({
+          jobId: response.jobId,
+          state: 'Queued',
+          processed: 0,
+          total: 0,
+          percent: 0,
+          isCompleted: false,
+          message: 'Aguardando início...',
+        });
+        void pollReprocessStatus(response.jobId);
+      }
     } catch (err) {
       toast.error(getApiErrorMessage(err, 'Falha ao reprocessar agentes.'));
     } finally {
       setIsReprocessing(false);
+    }
+  }
+
+  async function pollReprocessStatus(jobId: string) {
+    const maxAttempts = 600; // ~10 min em intervalos de 1s
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      try {
+        const status = await agentLabelsApi.getReprocessStatus(jobId);
+        setReprocessStatus(status);
+
+        if (status.isCompleted) {
+          if (status.state === 'Completed') {
+            toast.success(status.message || 'Reprocessamento concluído.');
+          } else if (status.state === 'Failed') {
+            toast.error(status.message || 'Falha no reprocessamento.');
+          }
+          return;
+        }
+      } catch {
+        // Rede instável: mantém o último estado conhecido e continua tentando.
+      }
+    }
+
+    setReprocessStatus(prev => (prev ? { ...prev, message: 'Acompanhamento encerrado.' } : prev));
+  }
+
+  async function handleEstimateImpact() {
+    let parsedExpression: AgentLabelRuleExpressionNodeDto;
+    try {
+      parsedExpression = JSON.parse(expressionText) as AgentLabelRuleExpressionNodeDto;
+    } catch {
+      toast.error('Expressão inválida: JSON malformado.');
+      return;
+    }
+
+    const validationErrors = validateRulePayload({
+      name: name || 'Impacto',
+      label,
+      expression: parsedExpression,
+      customFieldDataTypes,
+    });
+    if (validationErrors.length > 0) {
+      toast.error(validationErrors[0]);
+      return;
+    }
+
+    setIsEstimatingImpact(true);
+    try {
+      const result = await agentLabelsApi.evaluateImpact({
+        label: label.trim(),
+        applyMode,
+        expression: parsedExpression,
+        clientId: selectedClientId || null,
+        siteId: selectedSiteId || null,
+        sampleSize: 100,
+      });
+      setImpactResult(result);
+      toast.success(`Amostra avaliada: ${result.matched}/${result.sampled} agentes com match.`);
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Falha ao estimar o impacto da regra.'));
+    } finally {
+      setIsEstimatingImpact(false);
     }
   }
 
@@ -775,6 +868,56 @@ export default function AgentLabelsSettings() {
 
           {applyMode === AgentLabelApplyMode.Manual ? null : (
           <Card>
+            <CardHeader
+              title="Impacto na Frota"
+              subtitle="Estime quantos agentes a regra afetaria, sem precisar escolher um site"
+              action={(
+                <Button size="sm" variant="secondary" loading={isEstimatingImpact} onClick={() => void handleEstimateImpact()}>
+                  Estimar Impacto
+                </Button>
+              )}
+            />
+
+            {impactResult ? (
+              <div className="space-y-4">
+                <div className="grid gap-3 sm:grid-cols-4">
+                  <div className="rounded-lg border border-border bg-surface-light p-3">
+                    <p className="text-xs text-muted">Agentes na frota</p>
+                    <p className="text-lg font-semibold text-foreground">{impactResult.estimatedTotalAgents}</p>
+                  </div>
+                  <div className="rounded-lg border border-border bg-surface-light p-3">
+                    <p className="text-xs text-muted">Com match (estimado)</p>
+                    <p className="text-lg font-semibold text-foreground">
+                      ~{impactResult.estimatedMatched}
+                      <span className="ml-1 text-xs font-normal text-muted">({impactResult.matched}/{impactResult.sampled} amostrados)</span>
+                    </p>
+                  </div>
+                  <div className="rounded-lg border border-border bg-surface-light p-3">
+                    <p className="text-xs text-muted">Adicionaria label</p>
+                    <p className="text-lg font-semibold text-success">{impactResult.wouldAddLabel}</p>
+                  </div>
+                  <div className="rounded-lg border border-border bg-surface-light p-3">
+                    <p className="text-xs text-muted">Removeria label</p>
+                    <p className="text-lg font-semibold text-warning">{impactResult.wouldRemoveLabel}</p>
+                  </div>
+                </div>
+
+                {impactResult.truncated ? (
+                  <p className="text-xs text-muted">
+                    Estimativa baseada em uma amostra de {impactResult.sampled} agentes de {impactResult.estimatedTotalAgents}.
+                  </p>
+                ) : null}
+              </div>
+            ) : (
+              <p className="text-sm text-muted">
+                Clique em <strong>Estimar Impacto</strong> para avaliar a regra contra uma amostra da frota.
+              </p>
+            )}
+          </Card>
+          )}
+
+          {applyMode === AgentLabelApplyMode.Manual ? null : (
+          <Card>
             <CardHeader title="Prévia de Aplicação" subtitle="Simule em lote por site ou em um agente específico antes de salvar" />
 
             <div className="grid gap-4 lg:grid-cols-4">
@@ -1018,7 +1161,7 @@ export default function AgentLabelsSettings() {
                   <Button onClick={enableEditing}>Editar</Button>
                 ) : (
                   <>
-                    <Button variant="danger" onClick={() => void handleDeleteRule({ id: editingRuleId!, name } as AgentLabelRuleResponse)}>Excluir</Button>
+                    <Button variant="danger" onClick={() => requestDeleteRule({ id: editingRuleId!, name } as AgentLabelRuleResponse)}>Excluir</Button>
                   </>
                 )}
               </div>
@@ -1121,6 +1264,38 @@ export default function AgentLabelsSettings() {
             )}
           />
 
+          {reprocessStatus ? (
+            <div className="mb-4 rounded-xl border border-border bg-surface-light p-4">
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <p className="text-sm font-medium text-foreground">
+                  {reprocessStatus.isCompleted ? 'Reprocessamento finalizado' : 'Reprocessando agentes...'}
+                </p>
+                <span className="text-xs text-muted">
+                  {reprocessStatus.total > 0
+                    ? `${reprocessStatus.processed}/${reprocessStatus.total} (${reprocessStatus.percent}%)`
+                    : reprocessStatus.state}
+                </span>
+              </div>
+
+              <div className="h-2 w-full overflow-hidden rounded-full bg-background/60">
+                <div
+                  className="h-full rounded-full bg-primary transition-all"
+                  style={{ width: `${reprocessStatus.total > 0 ? reprocessStatus.percent : 5}%` }}
+                />
+              </div>
+
+              {reprocessStatus.message ? (
+                <p className="mt-2 text-xs text-muted">{reprocessStatus.message}</p>
+              ) : null}
+
+              {reprocessStatus.isCompleted ? (
+                <div className="mt-3 flex justify-end">
+                  <Button size="sm" variant="ghost" onClick={() => setReprocessStatus(null)}>Ocultar</Button>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
           {sortedRules.length === 0 ? (
             <div className="flex flex-col items-center gap-3 py-12">
               <Layers className="h-10 w-10 text-muted" />
@@ -1212,6 +1387,33 @@ export default function AgentLabelsSettings() {
             </div>
           )}
         </Card>
+      ) : null}
+
+      {rulePendingDeletion ? (
+        <Modal
+          open={true}
+          onClose={() => (isDeletingRule ? undefined : setRulePendingDeletion(null))}
+          title="Excluir regra"
+        >
+          <div className="space-y-4">
+            <p className="text-sm text-muted">
+              Excluir a regra <strong className="text-foreground">{rulePendingDeletion.name}</strong>?
+            </p>
+            <p className="text-xs text-muted">
+              As labels automáticas aplicadas por esta regra serão removidas dos agentes na
+              próxima reconciliação, que é disparada automaticamente agora.
+            </p>
+
+            <div className="flex justify-end gap-2 border-t border-border pt-3">
+              <Button variant="secondary" disabled={isDeletingRule} onClick={() => setRulePendingDeletion(null)}>
+                Cancelar
+              </Button>
+              <Button variant="danger" loading={isDeletingRule} onClick={() => void confirmDeleteRule()}>
+                Excluir regra
+              </Button>
+            </div>
+          </div>
+        </Modal>
       ) : null}
 
       {agentsModalRule ? (

@@ -123,9 +123,20 @@ function useEffectiveTicketAttachmentSettings(siteId: string | null, clientId: s
   const clientSettings = useClientTicketAttachmentSettings(!siteId ? clientId : null);
   const serverSettings = useTicketAttachmentSettings();
 
-  if (siteId && siteSettings.data) return { data: siteSettings.data, isLoading: false };
-  if (clientId && clientSettings.data) return { data: clientSettings.data, isLoading: false };
-  return serverSettings;
+  // IMPORTANTE: nunca use `return` antecipado aqui dentro de um caminho que
+  // mude a QUANTIDADE de hooks entre renders. Este hook precisa montar sempre
+  // os mesmos tres useQuery; apenas a resolucao do valor e condicional.
+  return useMemo(() => {
+    if (siteId && siteSettings.data) return { data: siteSettings.data, isLoading: false };
+    if (clientId && clientSettings.data) return { data: clientSettings.data, isLoading: false };
+    return serverSettings;
+  }, [
+    siteId,
+    clientId,
+    siteSettings.data,
+    clientSettings.data,
+    serverSettings,
+  ]);
 }
 
 export default function TicketDetail() {
@@ -2252,12 +2263,20 @@ function AttachmentsPanel({
   const clientSettings = useClientTicketAttachmentSettings(!siteId ? clientId : null);
   const serverSettings = useTicketAttachmentSettings();
 
-  // Determina qual config usar baseado na hierarquia
-  const settings = (() => {
+  // Determina qual config usar baseado na hierarquia.
+  // Mesmo cuidado do useEffectiveTicketAttachmentSettings: a resolucao do valor
+  // fica em useMemo, com os tres useQuery sempre montados na mesma ordem.
+  const settings = useMemo(() => {
     if (siteId && siteSettings.data) return { data: siteSettings.data, isLoading: false };
     if (clientId && clientSettings.data) return { data: clientSettings.data, isLoading: false };
     return serverSettings;
-  })();
+  }, [
+    siteId,
+    clientId,
+    siteSettings.data,
+    clientSettings.data,
+    serverSettings,
+  ]);
 
   const attachments = useTicketAttachments(ticketId);
   const prepare = usePrepareTicketUpload();

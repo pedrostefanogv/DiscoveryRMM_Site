@@ -41,6 +41,7 @@ export enum AgentLabelField {
   DiskFreeSpacePercent = 20,
   DiskFileSystem = 21,
   DiskMediaType = 22,
+  MachineScore = 23,
   AgentCustomField = 100,
   ClientCustomField = 101,
   SiteCustomField = 102,
@@ -145,12 +146,15 @@ export interface AgentLabelRuleAgentItem {
   lastEvaluatedAt: string | null;
 }
 
+/** Escopos suportados em regras de label: Cliente, Site e Agente. */
+export type AgentLabelCustomFieldScopeType = 1 | 2 | 3;
+
 export interface AgentLabelAvailableCustomField {
   id: string;
   name: string;
   label: string;
   description: string | null;
-  scopeType: 1 | 2 | 3;
+  scopeType: AgentLabelCustomFieldScopeType;
   dataType: number;
   options: string[];
 }
@@ -162,6 +166,46 @@ export interface AgentLabelRuleAgentsResponse {
   description: string | null;
   totalAgents: number;
   agents: AgentLabelRuleAgentItem[];
+}
+
+export interface AgentLabelRuleImpactRequest {
+  label?: string | null;
+  applyMode: AgentLabelApplyMode;
+  expression: AgentLabelRuleExpressionNodeDto;
+  clientId?: string | null;
+  siteId?: string | null;
+  sampleSize?: number;
+}
+
+export interface AgentLabelRuleImpactSample {
+  agentId: string;
+  hostname: string;
+  displayName: string | null;
+  matched: boolean;
+  wouldAddLabel: boolean;
+  wouldRemoveLabel: boolean;
+  currentAutomaticLabels: string[];
+}
+
+export interface AgentLabelRuleImpactResponse {
+  sampled: number;
+  matched: number;
+  wouldAddLabel: number;
+  wouldRemoveLabel: number;
+  estimatedTotalAgents: number;
+  estimatedMatched: number;
+  truncated: boolean;
+  samples: AgentLabelRuleImpactSample[];
+}
+
+export interface AgentLabelReprocessStatus {
+  jobId: string;
+  state: string;
+  processed: number;
+  total: number;
+  percent: number;
+  isCompleted: boolean;
+  message: string | null;
 }
 
 export interface ApiValidationError {
@@ -212,6 +256,7 @@ const FIELD_NAMES: Record<string, AgentLabelField> = {
   DiskFreeSpacePercent: AgentLabelField.DiskFreeSpacePercent,
   DiskFileSystem: AgentLabelField.DiskFileSystem,
   DiskMediaType: AgentLabelField.DiskMediaType,
+  MachineScore: AgentLabelField.MachineScore,
   AgentCustomField: AgentLabelField.AgentCustomField,
   ClientCustomField: AgentLabelField.ClientCustomField,
   SiteCustomField: AgentLabelField.SiteCustomField,
@@ -348,6 +393,8 @@ export function getAgentLabelFieldLabel(field: AgentLabelField): string {
       return "Sistema de Arquivos";
     case AgentLabelField.DiskMediaType:
       return "Tipo de Mídia";
+    case AgentLabelField.MachineScore:
+      return "MachineScore";
     case AgentLabelField.AgentCustomField:
       return "Custom Field do Agente";
     case AgentLabelField.ClientCustomField:

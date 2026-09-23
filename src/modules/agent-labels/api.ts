@@ -1,11 +1,15 @@
-﻿import {
+import {
   AgentLabel,
   AgentLabelAvailableCustomField,
+  AgentLabelCustomFieldScopeType,
   AgentLabelNodeType,
   AgentLabelRuleAgentItem,
   AgentLabelRuleAgentsResponse,
   AgentLabelRuleDryRunRequest,
   AgentLabelRuleDryRunResponse,
+  AgentLabelRuleImpactRequest,
+  AgentLabelRuleImpactResponse,
+  AgentLabelReprocessStatus,
   AgentLabelRuleResponse,
   AgentLabelSourceType,
   CreateAgentLabelRuleRequest,
@@ -157,8 +161,26 @@ export const agentLabelsApi = {
     await api.del<void>(`${BASE}/rules/${id}`);
   },
 
-  async reprocessAll(): Promise<{ message: string }> {
-    return api.post<{ message: string }>(`${BASE}/reprocess`);
+  async reprocessAll(): Promise<{ jobId: string; message: string }> {
+    const raw = await api.post<Record<string, unknown>>(`${BASE}/reprocess`);
+    return {
+      jobId: String(raw.jobId ?? raw.JobId ?? ""),
+      message: String(raw.message ?? raw.Message ?? "Reprocessamento iniciado."),
+    };
+  },
+
+  /** Progresso de um reprocessamento em andamento. */
+  async getReprocessStatus(jobId: string): Promise<AgentLabelReprocessStatus> {
+    const raw = await api.get<Record<string, unknown>>(`${BASE}/reprocess/${jobId}`);
+    return {
+      jobId: String(raw.jobId ?? jobId),
+      state: String(raw.state ?? "Unknown"),
+      processed: Number(raw.processed ?? 0),
+      total: Number(raw.total ?? 0),
+      percent: Number(raw.percent ?? 0),
+      isCompleted: Boolean(raw.isCompleted),
+      message: raw.message == null ? null : String(raw.message),
+    };
   },
 
   async dryRun(
@@ -170,54 +192,136 @@ export const agentLabelsApi = {
     );
   },
 
+  /** Estima quantos agentes da frota a regra afetaria, sem exigir escolher cliente/site. */
+  async evaluateImpact(
+    payload: AgentLabelRuleImpactRequest,
+  ): Promise<AgentLabelRuleImpactResponse> {
+    const raw = await api.post<Record<string, unknown>>(
+      `${BASE}/rules/impact`,
+      payload,
+    );
+
+    return {
+      sampled: Number(raw.sampled ?? 0),
+      matched: Number(raw.matched ?? 0),
+      wouldAddLabel: Number(raw.wouldAddLabel ?? 0),
+      wouldRemoveLabel: Number(raw.wouldRemoveLabel ?? 0),
+      estimatedTotalAgents: Number(raw.estimatedTotalAgents ?? 0),
+      estimatedMatched: Number(raw.estimatedMatched ?? 0),
+      truncated: Boolean(raw.truncated),
+      samples: Array.isArray(raw.samples)
+        ? (raw.samples as Array<Record<string, unknown>>).map(sample => ({
+            agentId: String(sample.agentId ?? ""),
+            hostname: String(sample.hostname ?? ""),
+            displayName: sample.displayName == null ? null : String(sample.displayName),
+            matched: Boolean(sample.matched),
+            wouldAddLabel: Boolean(sample.wouldAddLabel),
+            wouldRemoveLabel: Boolean(sample.wouldRemoveLabel),
+            currentAutomaticLabels: Array.isArray(sample.currentAutomaticLabels)
+              ? (sample.currentAutomaticLabels as unknown[]).map(item => String(item))
+              : [],
+          }))
+        : [],
+    };
+  },
+
   async getAvailableCustomFields(): Promise<AgentLabelAvailableCustomField[]> {
     const raw = await api.get<unknown>(`${BASE}/rules/available-custom-fields`);
-    if (Array.isArray(raw)) {
-      return (raw as Array<Record<string, unknown>>).map((item) => ({
-        id: String(item.id ?? ""),
-        name: String(item.name ?? ""),
-        label: String(item.label ?? item.name ?? ""),
-        description:
-          item.description === null || item.description === undefined
-            ? null
-            : String(item.description),
-        scopeType: Number(item.scopeType ?? item.ScopeType ?? 3) as 1 | 2 | 3,
-        dataType: Number(item.dataType ?? item.DataType ?? 0),
-        options: normalizeStringArray(
-          item.options ??
-            item.Options ??
-            item.allowedValues ??
-            item.AllowedValues,
-        ),
-      }));
-    }
-    if (
-      raw &&
-      typeof raw === "object" &&
-      Array.isArray((raw as Record<string, unknown>).items)
-    ) {
-      return (
-        (raw as Record<string, unknown>).items as Array<Record<string, unknown>>
-      ).map((item) => ({
-        id: String(item.id ?? ""),
-        name: String(item.name ?? ""),
-        label: String(item.label ?? item.name ?? ""),
-        description:
-          item.description === null || item.description === undefined
-            ? null
-            : String(item.description),
-        scopeType: Number(item.scopeType ?? item.ScopeType ?? 3) as 1 | 2 | 3,
-        dataType: Number(item.dataType ?? item.DataType ?? 0),
-        options: normalizeStringArray(
-          item.options ??
-            item.Options ??
-            item.allowedValues ??
-            item.AllowedValues,
-        ),
-      }));
-    }
-    return [];
+    const items = extractList(raw);
+    return items.map(normalizeAvailableCustomField);
   },
+};
+
+/**
+ * Normaliza um custom field disponivel para regras.
+ *
+ * A API passou a devolver `dataType` como numero, `label` e `scopeType`.
+ * Antes o backend enviava `fieldType` (string) e o front lia `dataType`,
+ * resultando em NaN e fazendo todos os campos caírem nos operadores de texto.
+ */
+function normalizeAvailableCustomField(
+  item: Record<string, unknown>,
+): AgentLabelAvailableCustomField {
+  const id = String(item.id ?? item.Id ?? "");
+  const name = String(item.name ?? item.Name ?? "");
+
+  return {
+    id,
+    name,
+    label: String(item.label ?? item.Label ?? name),
+    description:
+      item.description === null || item.description === undefined
+        ? null
+        : String(item.description),
+    scopeType: normalizeScopeType(item.scopeType ?? item.ScopeType),
+    dataType: normalizeDataType(
+      item.dataType ?? item.DataType ?? item.fieldType ?? item.FieldType,
+    ),
+    options: normalizeStringArray(
+      item.options ?? item.Options ?? item.allowedValues ?? item.AllowedValues,
+    ),
+  };
+}
+
+function extractList(raw: unknown): Array<Record<string, unknown>> {
+  if (Array.isArray(raw)) {
+    return raw as Array<Record<string, unknown>>;
+  }
+  if (raw && typeof raw === "object") {
+    const items = (raw as Record<string, unknown>).items;
+    if (Array.isArray(items)) {
+      return items as Array<Record<string, unknown>>;
+    }
+  }
+  return [];
+}
+
+const SCOPE_TYPE_NAMES: Record<string, AgentLabelCustomFieldScopeType> = {
+  Client: 1,
+  Site: 2,
+  Agent: 3,
+};
+
+function normalizeScopeType(value: unknown): AgentLabelCustomFieldScopeType {
+  if (typeof value === "number" && value >= 1 && value <= 3) {
+    return value as AgentLabelCustomFieldScopeType;
+  }
+  if (typeof value === "string") {
+    const numeric = Number(value);
+    if (!Number.isNaN(numeric) && numeric >= 1 && numeric <= 3) {
+      return numeric as AgentLabelCustomFieldScopeType;
+    }
+    const named = SCOPE_TYPE_NAMES[value.trim()];
+    if (named) return named;
+  }
+  return 3; // Agent
+}
+
+/** Aceita o numero do enum ou o nome textual ("Integer", "Boolean", ...). */
+function normalizeDataType(value: unknown): number {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === "string") {
+    const numeric = Number(value);
+    if (!Number.isNaN(numeric)) {
+      return numeric;
+    }
+    const named = DATA_TYPE_NAMES[value.trim()];
+    if (named !== undefined) return named;
+  }
+  return 0; // Text
+}
+
+const DATA_TYPE_NAMES: Record<string, number> = {
+  Text: 0,
+  Integer: 1,
+  Decimal: 2,
+  Boolean: 3,
+  Date: 4,
+  DateTime: 5,
+  Dropdown: 6,
+  ListBox: 7,
 };
 
 function normalizeStringArray(value: unknown): string[] {

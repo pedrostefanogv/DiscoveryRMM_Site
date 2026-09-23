@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Monitor, Wifi, WifiOff, Activity, Building2, Clock, HardDrive, MapPin, LayoutGrid, List, Bug, Trash2, ShieldCheck, ArrowUp, ArrowDown, Radio, RefreshCw, Move, RotateCcw, Power, Zap, Server, Apple, Thermometer, ChevronRight } from 'lucide-react';
 import { useQueries } from '@tanstack/react-query';
+import { useAgentLabelsByAgentIds } from '@/hooks/useAgentLabels';
 import toast from 'react-hot-toast';
 import { useClients } from '@/hooks/useClients';
 import { useAllSites } from '@/hooks/useSites';
@@ -148,6 +149,7 @@ export default function AgentList() {
   const [filterClient, setFilterClient] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'online' | 'offline'>('all');
   const [filterProvisioning, setFilterProvisioning] = useState<ProvisioningFilter>('all');
+  const [filterLabel, setFilterLabel] = useState('');
   const [sortBy, setSortBy] = useState<AgentSortField>('client');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
   const [viewMode, setViewMode] = useState<'card' | 'list'>('card');
@@ -494,6 +496,17 @@ export default function AgentList() {
     });
   }, [agentsWithHeartbeat]);
 
+  // Labels de todos os agentes listados: 1 query em vez de N (evita N+1 na UI).
+  const labelsByAgentId = useAgentLabelsByAgentIds(agentsWithStableIp.map(agent => agent.id));
+
+  const distinctLabels = useMemo(() => {
+    const set = new Set<string>();
+    for (const labels of labelsByAgentId.values()) {
+      for (const label of labels) set.add(label);
+    }
+    return [...set].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  }, [labelsByAgentId]);
+
   const totalOnline = agentsWithStableIp.filter(a => isAgentOnlineNow(a, now)).length;
   const totalOffline = agentsWithStableIp.length - totalOnline;
   const totalPendingApproval = agentsWithStableIp.filter(a => a.zeroTouchPending === true).length;
@@ -505,18 +518,26 @@ export default function AgentList() {
     if (filterClient && a.clientId !== filterClient) return false;
     if (filterProvisioning === 'pendingApproval' && !a.zeroTouchPending) return false;
     if (filterProvisioning === 'approved' && a.zeroTouchPending) return false;
+    if (filterLabel) {
+      // As labels só eram visíveis no detalhe do agente; sem filtro na lista o
+      // recurso não servia ao seu propósito principal (selecionar grupos de máquinas).
+      const agentLabels = labelsByAgentId.get(a.id) ?? [];
+      if (!agentLabels.some(label => label.toLowerCase() === filterLabel.toLowerCase())) return false;
+    }
     if (search) {
       const q = search.toLowerCase();
+      const agentLabels = (labelsByAgentId.get(a.id) ?? []).join(' ').toLowerCase();
       return (
         (a.displayName ?? a.hostname).toLowerCase().includes(q) ||
         a.hostname.toLowerCase().includes(q) ||
         (a.operatingSystem ?? '').toLowerCase().includes(q) ||
         (a.lastIpAddress ?? '').includes(q) ||
-        a.clientName.toLowerCase().includes(q)
+        a.clientName.toLowerCase().includes(q) ||
+        agentLabels.includes(q)
       );
     }
     return true;
-  }), [agentsWithStableIp, filterStatus, filterClient, filterProvisioning, search, now]);
+  }), [agentsWithStableIp, filterStatus, filterClient, filterProvisioning, search, filterLabel, labelsByAgentId, now]);
 
   const filtered = useMemo(
     () => [...baseFiltered].sort((a, b) => compareAgentsBySort(a, b, sortBy, sortDirection, now)),
@@ -643,6 +664,14 @@ export default function AgentList() {
             onChange={e => setFilterProvisioning(e.target.value as ProvisioningFilter)}
           />
           <Select
+            options={[
+              { value: '', label: 'Todas as labels' },
+              ...distinctLabels.map(label => ({ value: label, label })),
+            ]}
+            value={filterLabel}
+            onChange={e => setFilterLabel(e.target.value)}
+          />
+          <Select
             options={sortOptions}
             value={sortBy}
             onChange={e => setSortBy(e.target.value as AgentSortField)}
@@ -694,13 +723,14 @@ export default function AgentList() {
           icon={Monitor}
           title={agentsWithStableIp.length === 0 ? 'Nenhum agente encontrado' : 'Nenhum agente corresponde aos filtros'}
           description={agentsWithStableIp.length === 0 ? 'Nenhum dispositivo registrado no sistema.' : 'Tente ajustar os filtros de busca.'}
-          action={(search || filterClient || filterStatus !== 'all' || filterProvisioning !== 'all') ? {
+          action={(search || filterClient || filterStatus !== 'all' || filterProvisioning !== 'all' || filterLabel) ? {
             label: 'Limpar filtros',
             onClick: () => {
               setSearch('');
               setFilterClient('');
               setFilterStatus('all');
               setFilterProvisioning('all');
+              setFilterLabel('');
             },
           } : undefined}
         />

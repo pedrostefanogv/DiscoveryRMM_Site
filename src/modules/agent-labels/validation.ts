@@ -44,6 +44,7 @@ const numericFields = new Set<AgentLabelField>([
   AgentLabelField.DiskFreeSpaceBytes,
   AgentLabelField.DiskTotalSpaceBytes,
   AgentLabelField.DiskFreeSpacePercent,
+  AgentLabelField.MachineScore,
 ]);
 
 const textOperators = new Set<AgentLabelComparisonOperator>([
