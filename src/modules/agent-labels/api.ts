@@ -9,8 +9,11 @@ import {
   AgentLabelRuleDryRunResponse,
   AgentLabelRuleImpactRequest,
   AgentLabelRuleImpactResponse,
+  AgentIdsByLabelResponse,
   AgentLabelReprocessStatus,
+  AgentLabelSuppression,
   AgentLabelRuleResponse,
+  AgentLabelUsage,
   AgentLabelSourceType,
   CreateAgentLabelRuleRequest,
   normalizeAgentLabelApplyMode,
@@ -76,6 +79,58 @@ export const agentLabelsApi = {
       createdAt: String(item.createdAt ?? ""),
       updatedAt: String(item.updatedAt ?? ""),
     }));
+  },
+
+  /** Labels com contagem de agentes — alimenta o filtro sem carregar todas as labels. */
+  async getLabelUsage(limit = 200): Promise<AgentLabelUsage[]> {
+    const raw = await api.get<Array<Record<string, unknown>>>(`${BASE}/usage`, { limit });
+    return (raw ?? []).map((item) => ({
+      label: String(item.label ?? ""),
+      agentCount: Number(item.agentCount ?? 0),
+    }));
+  },
+
+  /** Ids de agentes que possuem uma label, paginados por cursor. */
+  async getAgentIdsByLabel(
+    label: string,
+    afterAgentId?: string | null,
+    limit = 500,
+  ): Promise<AgentIdsByLabelResponse> {
+    const raw = await api.get<Record<string, unknown>>(`${BASE}/agents-by-label`, {
+      label,
+      afterAgentId: afterAgentId ?? undefined,
+      limit,
+    });
+
+    return {
+      label: String(raw.label ?? label),
+      total: Number(raw.total ?? 0),
+      agentIds: Array.isArray(raw.agentIds) ? (raw.agentIds as unknown[]).map(String) : [],
+      nextCursor: raw.nextCursor == null ? null : String(raw.nextCursor),
+      hasMore: Boolean(raw.hasMore),
+      limit: Number(raw.limit ?? limit),
+    };
+  },
+
+  /** Supressões de labels de um agente (labels removidas manualmente que o reconcile respeita). */
+  async getSuppressions(agentId: string): Promise<AgentLabelSuppression[]> {
+    const raw = await api.get<Array<Record<string, unknown>>>(
+      `${BASE}/agents/${agentId}/suppressions`,
+    );
+
+    return (raw ?? []).map((item) => ({
+      id: String(item.id ?? ""),
+      agentId: String(item.agentId ?? agentId),
+      label: String(item.label ?? ""),
+      suppressedAt: String(item.suppressedAt ?? ""),
+      suppressedBy: item.suppressedBy == null ? null : String(item.suppressedBy),
+      ruleName: item.ruleName == null ? null : String(item.ruleName),
+    }));
+  },
+
+  /** Libera uma supressão: a label volta a ser aplicada na próxima reconciliação. */
+  async releaseSuppression(suppressionId: string): Promise<void> {
+    await api.del<void>(`${BASE}/suppressions/${suppressionId}`);
   },
 
   async getDistinctLabels(): Promise<string[]> {

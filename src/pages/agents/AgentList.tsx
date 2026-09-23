@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Monitor, Wifi, WifiOff, Activity, Building2, Clock, HardDrive, MapPin, LayoutGrid, List, Bug, Trash2, ShieldCheck, ArrowUp, ArrowDown, Radio, RefreshCw, Move, RotateCcw, Power, Zap, Server, Apple, Thermometer, ChevronRight } from 'lucide-react';
 import { useQueries } from '@tanstack/react-query';
-import { useAgentLabelsByAgentIds } from '@/hooks/useAgentLabels';
+import { useAgentLabelUsage, useAgentIdsByLabel, useAgentLabelsByAgentIds } from '@/hooks/useAgentLabels';
 import toast from 'react-hot-toast';
 import { useClients } from '@/hooks/useClients';
 import { useAllSites } from '@/hooks/useSites';
@@ -499,13 +499,25 @@ export default function AgentList() {
   // Labels de todos os agentes listados: 1 query em vez de N (evita N+1 na UI).
   const labelsByAgentId = useAgentLabelsByAgentIds(agentsWithStableIp.map(agent => agent.id));
 
+  // Filtro por label resolvido no SERVIDOR (paginado por cursor): antes a UI dependia
+  // das labels já carregadas, o que quebrava em frotas maiores que o limite de 500.
+  const labelUsage = useAgentLabelUsage();
+  const agentsWithFilterLabel = useAgentIdsByLabel(filterLabel || null);
+
   const distinctLabels = useMemo(() => {
     const set = new Set<string>();
+    for (const usage of labelUsage.data ?? []) set.add(usage.label);
+    // Inclui labels dos agentes já carregados que ainda não apareceram no ranking.
     for (const labels of labelsByAgentId.values()) {
       for (const label of labels) set.add(label);
     }
     return [...set].sort((a, b) => a.localeCompare(b, 'pt-BR'));
-  }, [labelsByAgentId]);
+  }, [labelUsage.data, labelsByAgentId]);
+
+  const labelFilterIds = useMemo(
+    () => new Set(agentsWithFilterLabel.data?.ids ?? []),
+    [agentsWithFilterLabel.data],
+  );
 
   const totalOnline = agentsWithStableIp.filter(a => isAgentOnlineNow(a, now)).length;
   const totalOffline = agentsWithStableIp.length - totalOnline;
@@ -518,12 +530,7 @@ export default function AgentList() {
     if (filterClient && a.clientId !== filterClient) return false;
     if (filterProvisioning === 'pendingApproval' && !a.zeroTouchPending) return false;
     if (filterProvisioning === 'approved' && a.zeroTouchPending) return false;
-    if (filterLabel) {
-      // As labels só eram visíveis no detalhe do agente; sem filtro na lista o
-      // recurso não servia ao seu propósito principal (selecionar grupos de máquinas).
-      const agentLabels = labelsByAgentId.get(a.id) ?? [];
-      if (!agentLabels.some(label => label.toLowerCase() === filterLabel.toLowerCase())) return false;
-    }
+    if (filterLabel && !labelFilterIds.has(a.id)) return false;
     if (search) {
       const q = search.toLowerCase();
       const agentLabels = (labelsByAgentId.get(a.id) ?? []).join(' ').toLowerCase();
@@ -537,7 +544,7 @@ export default function AgentList() {
       );
     }
     return true;
-  }), [agentsWithStableIp, filterStatus, filterClient, filterProvisioning, search, filterLabel, labelsByAgentId, now]);
+  }), [agentsWithStableIp, filterStatus, filterClient, filterProvisioning, search, filterLabel, labelFilterIds, labelsByAgentId, now]);
 
   const filtered = useMemo(
     () => [...baseFiltered].sort((a, b) => compareAgentsBySort(a, b, sortBy, sortDirection, now)),
@@ -666,7 +673,10 @@ export default function AgentList() {
           <Select
             options={[
               { value: '', label: 'Todas as labels' },
-              ...distinctLabels.map(label => ({ value: label, label })),
+              ...distinctLabels.map(label => {
+                const count = labelUsage.data?.find(usage => usage.label === label)?.agentCount;
+                return { value: label, label: count ? `${label} (${count})` : label };
+              }),
             ]}
             value={filterLabel}
             onChange={e => setFilterLabel(e.target.value)}
@@ -706,6 +716,17 @@ export default function AgentList() {
           </div>
         </div>
       </div>
+
+      {filterLabel ? (
+        <p className="text-xs text-muted">
+          {agentsWithFilterLabel.isLoading
+            ? `Filtrando por "${filterLabel}"...`
+            : `Label "${filterLabel}": ${agentsWithFilterLabel.data?.total ?? 0} agente(s).`}
+          {agentsWithFilterLabel.data?.truncated
+            ? ' Exibindo os primeiros 20.000; refine com outra label.'
+            : ''}
+        </p>
+      ) : null}
 
       {!filterClient && (clients.data?.length ?? 0) > MAX_CLIENTS_IN_OVERVIEW && (
         <div className="rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning">

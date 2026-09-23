@@ -208,6 +208,29 @@ export interface AgentLabelReprocessStatus {
   message: string | null;
 }
 
+export interface AgentLabelSuppression {
+  id: string;
+  agentId: string;
+  label: string;
+  suppressedAt: string;
+  suppressedBy: string | null;
+  ruleName: string | null;
+}
+
+export interface AgentLabelUsage {
+  label: string;
+  agentCount: number;
+}
+
+export interface AgentIdsByLabelResponse {
+  label: string;
+  total: number;
+  agentIds: string[];
+  nextCursor: string | null;
+  hasMore: boolean;
+  limit: number;
+}
+
 export interface ApiValidationError {
   errors: string[];
 }
