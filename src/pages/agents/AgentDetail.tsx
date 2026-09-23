@@ -1073,57 +1073,51 @@ export default function AgentDetail() {
       render: item => item.source ?? '\u2014',
     },
     {
-      key: 'update',
-      header: 'Atualização',
-      sortable: false,
-      render: item => item.updateAvailable ? (
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge color="warning">Disponível</Badge>
-          <Button
-            size="sm"
-            variant="secondary"
-            onClick={() => void handleUpdateSoftware(item)}
-            loading={updatingSoftwareId === item.inventoryId}
-            disabled={!isOnlineNow || updatingSoftwareId !== null || !canExecuteAgent}
-            title={
-              !canExecuteAgent
-                ? 'Sem permissão para executar ações no agente'
-                : !isOnlineNow
-                  ? 'Agente offline \u2014 atualização indisponível'
-                  : `Atualizar ${item.name}`
-            }
-          >
-            <ArrowUpCircle className="h-3.5 w-3.5" />
-            Atualizar
-          </Button>
-        </div>
-      ) : (
-        <span className="text-xs text-muted">\u2014</span>
-      ),
-    },
-    {
       key: 'actions',
       header: 'Ações',
       sortable: false,
-      render: item => item.uninstallAvailable ? (
-        <Button
-          size="sm"
-          variant="danger"
-          onClick={() => setPendingUninstall(item)}
-          disabled={!isOnlineNow || !canExecuteAgent || updatingSoftwareId !== null}
-          title={
-            !canExecuteAgent
-              ? 'Sem permissão para executar ações no agente'
-              : !isOnlineNow
-                ? 'Agente offline — desinstalação indisponível'
-                : 'Desinstalar ' + item.name
-          }
-        >
-          <Trash2 className="h-3.5 w-3.5" />
-          Desinstalar
-        </Button>
+      render: item => (item.updateAvailable || item.uninstallAvailable) ? (
+        <div className="flex flex-wrap items-center gap-2">
+          {item.updateAvailable && (
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => void handleUpdateSoftware(item)}
+              loading={updatingSoftwareId === item.inventoryId}
+              disabled={!isOnlineNow || updatingSoftwareId !== null || !canExecuteAgent}
+              title={
+                !canExecuteAgent
+                  ? 'Sem permissão para executar ações no agente'
+                  : !isOnlineNow
+                    ? 'Agente offline \u2014 atualização indisponível'
+                    : 'Atualizar ' + item.name
+              }
+            >
+              <ArrowUpCircle className="h-3.5 w-3.5" />
+              Atualizar
+            </Button>
+          )}
+          {item.uninstallAvailable && (
+            <Button
+              size="sm"
+              variant="danger"
+              onClick={() => setPendingUninstall(item)}
+              disabled={!isOnlineNow || !canExecuteAgent || updatingSoftwareId !== null}
+              title={
+                !canExecuteAgent
+                  ? 'Sem permissão para executar ações no agente'
+                  : !isOnlineNow
+                    ? 'Agente offline — desinstalação indisponível'
+                    : 'Desinstalar ' + item.name
+              }
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              Desinstalar
+            </Button>
+          )}
+        </div>
       ) : (
-        <span className="text-xs text-muted">\u2014</span>
+        <span className="text-xs text-muted">{'\u2014'}</span>
       ),
     },
     {
