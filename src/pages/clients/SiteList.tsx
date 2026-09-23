@@ -54,8 +54,10 @@ export default function SiteList() {
       const client = clientsById.get(site.clientId);
       return {
         ...site,
-        clientName: client?.name ?? 'Cliente desconhecido',
-        clientActive: client?.isActive ?? true,
+        // O endpoint global já resolve o cliente; o mapa local cobre o
+        // fallback (ex.: consultas em cache antigas).
+        clientName: site.clientName ?? client?.name ?? 'Cliente desconhecido',
+        clientActive: site.clientActive ?? client?.isActive ?? true,
       };
     });
     return filterClient ? list.filter((site) => site.clientId === filterClient) : list;
@@ -136,8 +138,9 @@ export default function SiteList() {
     ...(clients.data ?? []).map((client) => ({ value: client.id, label: client.name })),
   ];
 
-  if (clients.isLoading && !clients.data) return <Loading />;
-  if (clients.isError) return <ErrorDisplay onRetry={() => clients.refetch()} />;
+  // Não bloqueia a tela se a lista de clientes falhar (ex.: usuário com acesso
+  // só a Sites): os sites ainda renderizam, com nome de cliente desconhecido.
+  if (allSitesQuery.isLoading && !allSitesQuery.data) return <Loading />;
   if (hasQueryError && sites.length === 0) {
     return (
       <ErrorDisplay

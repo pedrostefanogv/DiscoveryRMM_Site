@@ -112,6 +112,12 @@ export interface Site {
   updatedAt: string;
 }
 
+/** Site com o cliente resolvido no servidor (endpoint global /api/v1/sites). */
+export interface SiteWithClient extends Site {
+  clientName: string | null;
+  clientActive: boolean;
+}
+
 export interface AgentHeartbeatMetrics {
   cpuPercent?: number;
   memoryPercent?: number;

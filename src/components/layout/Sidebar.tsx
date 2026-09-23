@@ -172,6 +172,11 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
     ? visibleTicketsLinks
     : visibleTicketsLinks.filter(({ to }) => to !== '/settings/workflow-profiles');
   const canViewLogs = hasAnyPermission(['logs.*', 'logs.read', 'admin.*']);
+  const canViewClients = hasAnyPermission(['Clients.View', 'clients.*', 'admin.*']);
+  const canViewSites = hasAnyPermission(['Sites.View', 'sites.*', 'admin.*']);
+  const visibleClientLinks = clientLinks.filter(({ to }) =>
+    to === '/sites' ? canViewSites : canViewClients,
+  );
   const visibleMainLinks = mainLinks
     .slice(1)
     .filter(({ to }) => {
@@ -241,11 +246,13 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
           {!effectiveCollapsed && <span className="truncate">Dashboard</span>}
         </NavLink>
 
+        {visibleClientLinks.length > 0 && (
+          <>
         <button
           type="button"
           onClick={() => {
             if (effectiveCollapsed) {
-              navigate('/clients');
+              navigate(visibleClientLinks[0]?.to ?? '/clients');
               return;
             }
             setOpenSection((prev) => (prev === 'clients' ? null : 'clients'));
@@ -272,7 +279,7 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
         {!effectiveCollapsed && (
           <div className={submenuAnimationClass(clientsOpen)} aria-hidden={!clientsOpen} inert={!clientsOpen}>
             <div className="ml-8 space-y-1 border-l border-border pl-3 pb-1">
-              {clientLinks.map(({ to, label }) => (
+              {visibleClientLinks.map(({ to, label }) => (
                 <NavLink
                   key={to}
                   to={to}
@@ -290,6 +297,8 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
               ))}
             </div>
           </div>
+        )}
+          </>
         )}
 
         {visibleMainLinks.map(({ to, icon: Icon, label }) => (
