@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   AGENT_DETAIL_DEFAULT_TAB,
+  AGENT_DETAIL_FALLBACK_ROUTE,
   AGENT_DETAIL_TAB_SLUGS,
+  agentDetailBackTarget,
   agentDetailTabFromSlug,
   agentDetailTabSlug,
   type AgentDetailDataTab,
@@ -45,5 +47,27 @@ describe("agentDetailTabFromSlug", () => {
 
   it("cai no padrão para slug desconhecido (URL antiga/inválida)", () => {
     expect(agentDetailTabFromSlug("aba-inexistente")).toBe(AGENT_DETAIL_DEFAULT_TAB);
+  });
+});
+
+/**
+ * Botão "Voltar" do detalhe do agente: com histórico anterior real, preserva a
+ * origem (`navigate(-1)`); sem histórico (link direto/refresh), cai na
+ * listagem de agentes em vez de sair do app. As abas internas não criam
+ * histórico porque a troca de aba usa `replace`.
+ */
+describe("agentDetailBackTarget", () => {
+  it("preserva a página anterior quando há histórico dentro do app", () => {
+    expect(agentDetailBackTarget(1)).toBeNull();
+    expect(agentDetailBackTarget(7)).toBeNull();
+  });
+
+  it("volta para a listagem quando o detalhe é a primeira entrada", () => {
+    expect(agentDetailBackTarget(0)).toBe(AGENT_DETAIL_FALLBACK_ROUTE);
+  });
+
+  it("volta para a listagem quando o índice de histórico é ausente/inválido", () => {
+    expect(agentDetailBackTarget(null)).toBe(AGENT_DETAIL_FALLBACK_ROUTE);
+    expect(agentDetailBackTarget(undefined)).toBe(AGENT_DETAIL_FALLBACK_ROUTE);
   });
 });

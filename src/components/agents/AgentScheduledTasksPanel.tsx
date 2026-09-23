@@ -368,6 +368,7 @@ export default function AgentScheduledTasksPanel({
     {
       key: 'taskName',
       header: 'Tarefa',
+      width: '24%',
       render: (task) => (
         <div className='min-w-0'>
           <p className='truncate font-medium text-foreground' title={task.taskName}>
@@ -382,6 +383,7 @@ export default function AgentScheduledTasksPanel({
     {
       key: 'state',
       header: 'Estado',
+      width: '12%',
       className: 'whitespace-nowrap',
       render: (task) => (
         <Badge color={scheduledTaskStateColor(task.state)}>
@@ -392,27 +394,37 @@ export default function AgentScheduledTasksPanel({
     {
       key: 'trigger',
       header: 'Gatilho',
-      className: 'whitespace-nowrap',
-      render: (task) =>
-        normalizeScheduledTaskTriggerDesc(task.triggerDesc) ||
-        scheduledTaskTriggerLabel(task.triggerType),
+      width: '22%',
+      render: (task) => {
+        const label =
+          normalizeScheduledTaskTriggerDesc(task.triggerDesc) ||
+          scheduledTaskTriggerLabel(task.triggerType);
+        return (
+          <span className='block truncate' title={label}>
+            {label}
+          </span>
+        );
+      },
     },
     {
       key: 'nextRunTime',
       header: 'Próxima execução',
+      width: '16%',
       className: 'hidden whitespace-nowrap lg:table-cell',
       render: (task) => (task.nextRunTime ? new Date(task.nextRunTime).toLocaleString('pt-BR') : '—'),
     },
     {
       key: 'lastRunTime',
       header: 'Última execução',
+      width: '12%',
       className: 'hidden whitespace-nowrap xl:table-cell',
       render: (task) => (task.lastRunTime ? new Date(task.lastRunTime).toLocaleString('pt-BR') : '—'),
     },
     {
       key: 'actionPath',
       header: 'Executa',
-      className: 'hidden min-w-0 xl:table-cell',
+      width: '14%',
+      className: 'hidden xl:table-cell',
       render: (task) => (
         <span className='block truncate font-mono text-xs text-muted-foreground' title={(task.actionPath || '') + ' ' + (task.actionArgs || '')}>
           {task.actionPath || '—'}
@@ -506,7 +518,8 @@ export default function AgentScheduledTasksPanel({
           onRowContextMenu={openMenu}
           showPagination={false}
           emptyMessage='Nenhuma tarefa agendada encontrada'
-          maxHeight='min(640px, 55vh)'
+          maxHeight='min(560px, 52vh)'
+          fixedLayout
         />
       )}
 

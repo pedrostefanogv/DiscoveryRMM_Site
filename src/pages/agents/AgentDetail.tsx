@@ -7,6 +7,7 @@ import {
 import toast from 'react-hot-toast';
 import { getDeleteAgentErrorMessage, useAgent, useAgentHardware, useAgentHardwareComponents, useAgentListeningPortsPage, useAgentOpenSocketsPage, useAgentSoftwarePage, useAgentSoftwareSnapshot, useApproveZeroTouch, useDeleteAgent, useRestartAgent, useShutdownAgent, useWakeOnLan } from '@/hooks/useAgents';
 import {
+  agentDetailBackTarget,
   agentDetailTabFromSlug,
   agentDetailTabSlug,
   formatBytes,
@@ -115,8 +116,9 @@ export default function AgentDetail() {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleteConfirmHostname, setDeleteConfirmHostname] = useState('');
   // A aba ativa é lida da querystring (?tab=aplicativos, ?tab=tarefas-agendadas...).
-  // Trocar de aba empilha uma entrada no histórico, então voltar/avançar do
-  // navegador percorre as abas visitadas e a URL fica compartilhável.
+  // A troca de aba usa `replace` para NÃO empilhar entradas no histórico: a URL
+  // continua compartilhável, mas o botão "Voltar" (e o voltar do navegador)
+  // saem da página de detalhes em vez de percorrer as abas visitadas.
   const [searchParams, setSearchParams] = useSearchParams();
   const activeDataTab = useMemo(
     () => agentDetailTabFromSlug(searchParams.get('tab')),
@@ -128,10 +130,25 @@ export default function AgentDetail() {
         const next = new URLSearchParams(prev);
         next.set('tab', agentDetailTabSlug(tab));
         return next;
-      });
+      }, { replace: true });
     },
     [setSearchParams],
   );
+  // Botão "Voltar" do cabeçalho: sai da página de detalhes (listagem de agentes
+  // ou página anterior real), nunca percorre as abas internas. Trocar de aba
+  // usa `replace`, então o histórico não acumula as abas visitadas; se o
+  // detalhe for a primeira entrada do histórico (link direto / refresh), volta
+  // para a listagem de agentes em vez de tentar sair do app.
+  const handleGoBack = useCallback(() => {
+    const historyIndex =
+      typeof window !== 'undefined' ? window.history.state?.idx : undefined;
+    const fallback = agentDetailBackTarget(historyIndex);
+    if (fallback === null) {
+      navigate(-1);
+      return;
+    }
+    navigate(fallback, { replace: true });
+  }, [navigate]);
   const [isPowerMenuOpen, setIsPowerMenuOpen] = useState(false);
   // Submenu de energia ("Ligar / Reiniciar / Desligar") aberto ao lado via hover.
   const [powerSubmenuOpen, setPowerSubmenuOpen] = useState(false);
@@ -993,7 +1010,7 @@ export default function AgentDetail() {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center gap-4">
-        <button onClick={() => navigate(-1)} aria-label="Voltar" className="rounded-lg p-2 text-muted hover:bg-surface-light hover:text-foreground">
+        <button onClick={handleGoBack} aria-label="Voltar" className="rounded-lg p-2 text-muted hover:bg-surface-light hover:text-foreground">
           <ArrowLeft className="h-5 w-5" />
         </button>
         <div className="flex-1">
@@ -2265,7 +2282,9 @@ export default function AgentDetail() {
         )}
 
         {activeDataTab === 'startupItems' && (
-          <div style={{ maxHeight: 'min(860px, 75vh)' }} className='w-full min-w-0 max-w-full overflow-x-hidden overflow-y-auto overscroll-auto'>
+          // Sem altura/rolagem própria: a tabela do painel já rola por dentro,
+          // evitando a barra de rolagem duplicada (aninhada) em telas pequenas.
+          <div className='w-full min-w-0 max-w-full'>
             <AgentStartupItemsPanel
               agentId={id!}
               items={startupItems}
@@ -2282,7 +2301,9 @@ export default function AgentDetail() {
         )}
 
         {activeDataTab === 'scheduledTasks' && (
-          <div style={{ maxHeight: 'min(860px, 75vh)' }} className='w-full min-w-0 max-w-full overflow-x-hidden overflow-y-auto overscroll-auto'>
+          // Sem altura/rolagem própria: a tabela do painel já rola por dentro,
+          // evitando a barra de rolagem duplicada (aninhada) em telas pequenas.
+          <div className='w-full min-w-0 max-w-full'>
             <AgentScheduledTasksPanel
               agentId={id!}
               tasks={scheduledTasks}

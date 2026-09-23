@@ -304,7 +304,7 @@ export const AGENT_DETAIL_DEFAULT_TAB: AgentDetailDataTab = "software";
 
 /**
  * Slugs legíveis usados na querystring (?tab=aplicativos, ?tab=tarefas-agendadas...).
- * Mantê-los estáveis preserva links compartilhados e o histórico do navegador.
+ * Mantê-los estáveis preserva links compartilhados e deep links.
  */
 export const AGENT_DETAIL_TAB_SLUGS: Record<AgentDetailDataTab, string> = {
   software: "aplicativos",
@@ -334,4 +334,30 @@ export function agentDetailTabFromSlug(
 /** Slug canônico de uma aba — usado ao montar a URL. */
 export function agentDetailTabSlug(tab: AgentDetailDataTab): string {
   return AGENT_DETAIL_TAB_SLUGS[tab];
+}
+
+// ── Voltar do detalhe do agente ─────────────────────────────────────────
+
+/** Rota usada quando não há uma página anterior real para onde voltar. */
+export const AGENT_DETAIL_FALLBACK_ROUTE = "/agents";
+
+/**
+ * Decide o destino do botão "Voltar" do cabeçalho do detalhe do agente.
+ *
+ * Retorna `null` quando existe uma página anterior real dentro do app — nesse
+ * caso o chamador deve usar `navigate(-1)` para preservar o contexto de origem
+ * (listagem, cliente, site, inventário de software...). Retorna a rota de
+ * fallback (listagem de agentes) quando o detalhe é a primeira entrada do
+ * histórico, como em link direto, refresh ou nova aba.
+ *
+ * `historyIndex` é o `window.history.state.idx` mantido pelo React Router:
+ * `0` (ou ausente) significa que não há entrada anterior dentro do app.
+ * A navegação entre abas do detalhe não conta, porque a troca de aba usa
+ * `replace` e portanto não empilha entradas no histórico.
+ */
+export function agentDetailBackTarget(
+  historyIndex: number | null | undefined,
+): string | null {
+  if (typeof historyIndex === "number" && historyIndex > 0) return null;
+  return AGENT_DETAIL_FALLBACK_ROUTE;
 }

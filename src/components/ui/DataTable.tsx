@@ -9,6 +9,12 @@ interface Column<T> {
   className?: string;
   sortable?: boolean;
   sortKey?: string;
+  /**
+   * Largura CSS da coluna (ex.: '30%'). Só tem efeito com `fixedLayout`, quando
+   * a tabela respeita as larguras e trunca o conteúdo em vez de crescer para os
+   * lados com valores longos (caminhos de registro, gatilhos etc.).
+   */
+  width?: string;
 }
 
 interface DataTableProps<T> {
@@ -30,6 +36,12 @@ interface DataTableProps<T> {
    * rodapé da área), impedindo que a página cresça para exibir o conteúdo.
    */
   maxHeight?: string;
+  /**
+   * Usa layout fixo (`table-fixed`): as larguras definidas em `Column.width`
+   * são respeitadas e o conteúdo longo é truncado/contido, evitando que a
+   * tabela estique horizontalmente em telas pequenas.
+   */
+  fixedLayout?: boolean;
 }
 
 type SortDirection = 'asc' | 'desc' | null;
@@ -52,6 +64,7 @@ export function DataTable<T>({
   pageSize = 20,
   showPagination = true,
   maxHeight,
+  fixedLayout = false,
 }: DataTableProps<T>) {
   const [sort, setSort] = useState<SortState | null>(null);
   const [page, setPage] = useState(1);
@@ -230,14 +243,18 @@ export function DataTable<T>({
           className="w-full max-w-full overflow-auto overscroll-auto"
           style={maxHeight ? { maxHeight } : undefined}
         >
-          <table className="w-full min-w-full text-left text-sm" role="grid">
+          <table
+            className={`w-full min-w-full text-left text-sm ${fixedLayout ? 'table-fixed' : ''}`}
+            role="grid"
+          >
             <caption className="sr-only">Tabela de dados</caption>
             <thead>
               <tr className="border-b border-border bg-surface-light">
                 {columns.map(col => (
                   <th
                     key={col.key}
-                    className={`whitespace-nowrap px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted ${col.className ?? ''} ${col.sortable !== false ? 'cursor-pointer select-none hover:text-foreground transition-colors' : ''}`}
+                    style={col.width ? { width: col.width } : undefined}
+                    className={`whitespace-nowrap px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted ${fixedLayout ? 'overflow-hidden' : ''} ${col.className ?? ''} ${col.sortable !== false ? 'cursor-pointer select-none hover:text-foreground transition-colors' : ''}`}
                     onClick={() => col.sortable !== false && handleSort(col)}
                   >
                     <span className="inline-flex items-center gap-1">
@@ -276,7 +293,10 @@ export function DataTable<T>({
                     } ${isHoverActive ? 'bg-surface-hover' : ''}`}
                   >
                     {columns.map(col => (
-                      <td key={col.key} className={`px-4 py-3 text-muted-foreground ${col.className ?? ''}`}>
+                      <td
+                        key={col.key}
+                        className={`px-4 py-3 text-muted-foreground ${fixedLayout ? 'overflow-hidden' : ''} ${col.className ?? ''}`}
+                      >
                         {col.render(item)}
                       </td>
                     ))}

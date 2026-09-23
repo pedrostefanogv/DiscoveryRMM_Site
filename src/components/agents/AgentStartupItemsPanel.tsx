@@ -192,6 +192,7 @@ export default function AgentStartupItemsPanel({
     {
       key: 'name',
       header: 'Item',
+      width: '30%',
       render: (item) => (
         <div className='min-w-0'>
           <p className='truncate font-medium text-foreground' title={item.name}>
@@ -206,18 +207,24 @@ export default function AgentStartupItemsPanel({
     {
       key: 'type',
       header: 'Tipo',
+      width: '11%',
       className: 'whitespace-nowrap',
       render: (item) => typeLabels[item.type] ?? item.type,
     },
     {
       key: 'source',
       header: 'Origem',
-      className: 'whitespace-nowrap',
-      render: (item) => item.source || '—',
+      width: '22%',
+      render: (item) => (
+        <span className='block truncate' title={item.source || undefined}>
+          {item.source || '—'}
+        </span>
+      ),
     },
     {
       key: 'username',
       header: 'Usuário',
+      width: '13%',
       className: 'hidden whitespace-nowrap lg:table-cell',
       render: (item) => (
         <span className='text-xs text-muted-foreground' title={item.hive ?? undefined}>
@@ -228,12 +235,18 @@ export default function AgentStartupItemsPanel({
     {
       key: 'detail',
       header: 'Detalhe',
-      className: 'hidden whitespace-nowrap xl:table-cell',
-      render: (item) => item.detail || '—',
+      width: '12%',
+      className: 'hidden xl:table-cell',
+      render: (item) => (
+        <span className='block truncate' title={item.detail || undefined}>
+          {item.detail || '—'}
+        </span>
+      ),
     },
     {
       key: 'status',
       header: 'Estado',
+      width: '12%',
       className: 'whitespace-nowrap',
       render: (item) => (
         <Badge color={startupItemStatusColor(item.status)}>
@@ -318,7 +331,8 @@ export default function AgentStartupItemsPanel({
           onRowContextMenu={openMenu}
           showPagination={false}
           emptyMessage='Nenhum item de inicialização encontrado'
-          maxHeight='min(640px, 55vh)'
+          maxHeight='min(560px, 52vh)'
+          fixedLayout
         />
       )}
 
