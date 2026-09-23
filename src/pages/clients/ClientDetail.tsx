@@ -163,9 +163,10 @@ export default function ClientDetail() {
   };
 
   const handleCopyDeployToken = async () => {
-    if (!generatedDeployToken?.token) return;
+    const value = generatedDeployToken?.rawToken;
+    if (!value) return;
     try {
-      await navigator.clipboard.writeText(generatedDeployToken.token);
+      await navigator.clipboard.writeText(value);
       toast.success('Token copiado para a area de transferencia');
     } catch {
       toast.error('Não foi possível copiar o token');
@@ -616,10 +617,10 @@ export default function ClientDetail() {
           {generatedDeployToken && (
             <div className="space-y-3 rounded-lg border border-border bg-black/20 p-3">
               <p className="text-xs uppercase tracking-wide text-muted">Token gerado</p>
-              <p className="break-all font-mono text-sm text-foreground">{generatedDeployToken.token}</p>
+              <p className="break-all font-mono text-sm text-foreground">{generatedDeployToken.rawToken ?? ''}</p>
               <div className="flex flex-wrap items-center gap-2">
-                <Badge color={generatedDeployToken.multiUse ? 'accent' : 'slate'}>
-                  {generatedDeployToken.multiUse ? 'Multiuso' : 'Uso único'}
+                <Badge color={deployMultiUse ? 'accent' : 'slate'}>
+                  {deployMultiUse ? 'Multiuso' : 'Uso único'}
                 </Badge>
                 <Badge color="slate">
                   Expira: {generatedDeployToken.expiresAt ? new Date(generatedDeployToken.expiresAt).toLocaleString('pt-BR') : 'Sem expiração'}

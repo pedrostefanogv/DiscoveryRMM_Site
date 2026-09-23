@@ -1022,13 +1022,16 @@ export interface LogScopeOptions {
 
 export interface DeployToken {
   id: string;
-  token: string;
+  /** Prefixo público do token — é o que a listagem retorna (nunca o valor cru). */
+  tokenPrefix: string;
+  /** Token cru: retornado APENAS na criação (create); a listagem nunca o expõe. */
+  rawToken?: string | null;
   description: string | null;
-  expiresAt: string | null;
-  multiUse: boolean;
   createdAt: string;
-  revokedAt?: string | null;
-  isActive?: boolean;
+  expiresAt: string | null;
+  isRevoked?: boolean;
+  isExpired?: boolean;
+  usedCount?: number;
 }
 
 export interface ApiToken {

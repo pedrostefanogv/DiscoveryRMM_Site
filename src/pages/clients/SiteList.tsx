@@ -79,6 +79,13 @@ export default function SiteList() {
   const activeSite = transferSite ?? powerSite ?? wakeSite ?? deleteSiteModal ?? null;
   const { data: activeSiteAgents, isLoading: activeSiteAgentsLoading } = useAgentsBySite(activeSite?.id ?? '');
 
+  // Mutations: keep every hook call above the conditional returns below,
+  // otherwise the hook count changes between renders (React error #310).
+  const restartSite = useRestartSite();
+  const shutdownSite = useShutdownSite();
+  const wakeOnLanSite = useWakeOnLanSite();
+  const deleteSiteMutation = useDeleteSite();
+
   const columns: Column<SiteWithClient>[] = [
     {
       key: 'site',
@@ -189,11 +196,6 @@ export default function SiteList() {
         break;
     }
   };
-  const restartSite = useRestartSite();
-  const shutdownSite = useShutdownSite();
-  const wakeOnLanSite = useWakeOnLanSite();
-  const deleteSiteMutation = useDeleteSite();
-
   const onlineCount = (activeSiteAgents ?? []).filter((a) => a.isOnline).length;
   const totalCount = (activeSiteAgents ?? []).length;
   const offlineCount = totalCount - onlineCount;

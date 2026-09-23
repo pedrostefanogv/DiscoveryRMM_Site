@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { Copy, Download, KeyRound } from 'lucide-react';
-import { Badge, Button, Card, CardHeader, Input, Select, TextArea } from '@/components/ui';
+import { Badge, Button, Card, CardHeader, Input, Modal, Select, TextArea } from '@/components/ui';
 import {
   useCreateDeployToken,
   useCreateDeployTokenAndDownload,
@@ -30,7 +30,6 @@ interface DeployTokenFormState {
 type DeployTab = 'create' | 'manage';
 type TokenStatus = 'active' | 'expired' | 'revoked';
 type TokenStatusFilter = 'all' | TokenStatus;
-type TokenUsageFilter = 'all' | 'single' | 'multi';
 type TokenPeriodFilter = 'all' | '24h' | '7d' | '30d';
 type TokenSortBy = 'created-desc' | 'created-asc' | 'expires-asc' | 'expires-desc' | 'status';
 
@@ -71,9 +70,9 @@ function toTimestamp(value: string | null | undefined): number {
 
 function getTokenStatus(token: DeployToken, revokedTokenIds: Set<string>, nowMs: number): TokenStatus {
   if (revokedTokenIds.has(token.id)) return 'revoked';
-  if (token.revokedAt) return 'revoked';
-  if (token.isActive === false) return 'revoked';
+  if (token.isRevoked === true) return 'revoked';
 
+  if (token.isExpired === true) return 'expired';
   const expiresMs = toTimestamp(token.expiresAt);
   if (Number.isFinite(expiresMs) && expiresMs <= nowMs) return 'expired';
 
@@ -126,11 +125,6 @@ function matchesPeriod(createdAt: string, period: TokenPeriodFilter, nowMs: numb
   return createdMs >= nowMs - deltaByPeriod[period];
 }
 
-function shortenToken(token: string): string {
-  if (token.length <= 12) return token;
-  return `${token.slice(0, 6)}...${token.slice(-4)}`;
-}
-
 export default function DeployTokens() {
   const createToken = useCreateDeployToken();
   const createAndDownload = useCreateDeployTokenAndDownload();
@@ -150,14 +144,16 @@ export default function DeployTokens() {
 
   const [downloadingTokenId, setDownloadingTokenId] = useState<string | null>(null);
   const [revokingTokenId, setRevokingTokenId] = useState<string | null>(null);
-  const [visibleTokenIds, setVisibleTokenIds] = useState<Set<string>>(new Set());
   const [revokedTokenIds, setRevokedTokenIds] = useState<Set<string>>(new Set());
-  const [openActionsForTokenId, setOpenActionsForTokenId] = useState<string | null>(null);
+  // A API não expõe o token cru na listagem; o download por token exige que o
+  // operador informe o valor original (única fonte confiável do segredo).
+  const [downloadPrompt, setDownloadPrompt] = useState<DeployToken | null>(null);
+  const [downloadPromptValue, setDownloadPromptValue] = useState('');
+  const [lastCreatedMultiUse, setLastCreatedMultiUse] = useState(false);
 
   const [tokensFilter, setTokensFilter] = useState<ListDeployTokensParams | null>(null);
   const [tokenSearch, setTokenSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<TokenStatusFilter>('all');
-  const [usageFilter, setUsageFilter] = useState<TokenUsageFilter>('all');
   const [periodFilter, setPeriodFilter] = useState<TokenPeriodFilter>('all');
   const [sortBy, setSortBy] = useState<TokenSortBy>('created-desc');
   const [pageSize, setPageSize] = useState(10);
@@ -211,8 +207,6 @@ export default function DeployTokens() {
       const status = getTokenStatus(token, revokedTokenIds, nowMs);
 
       if (statusFilter !== 'all' && status !== statusFilter) return false;
-      if (usageFilter === 'single' && token.multiUse) return false;
-      if (usageFilter === 'multi' && !token.multiUse) return false;
       if (!matchesPeriod(token.createdAt, periodFilter, nowMs)) return false;
 
       if (!normalizedSearch) return true;
@@ -220,8 +214,7 @@ export default function DeployTokens() {
       const searchable = [
         token.id,
         token.description ?? '',
-        token.token,
-        shortenToken(token.token),
+        token.tokenPrefix,
       ].join(' ').toLowerCase();
 
       return searchable.includes(normalizedSearch);
@@ -262,7 +255,7 @@ export default function DeployTokens() {
     });
 
     return sorted;
-  }, [listedTokens, revokedTokenIds, nowMs, statusFilter, usageFilter, periodFilter, sortBy, tokenSearch]);
+  }, [listedTokens, revokedTokenIds, nowMs, statusFilter, periodFilter, sortBy, tokenSearch]);
 
   const totalPages = Math.max(1, Math.ceil(filteredTokens.length / pageSize));
   const pagedTokens = useMemo(() => {
@@ -272,7 +265,7 @@ export default function DeployTokens() {
 
   useEffect(() => {
     setPage(1);
-  }, [statusFilter, usageFilter, periodFilter, sortBy, tokenSearch, pageSize, tokensFilter]);
+  }, [statusFilter, periodFilter, sortBy, tokenSearch, pageSize, tokensFilter]);
 
   useEffect(() => {
     if (page > totalPages) setPage(totalPages);
@@ -313,9 +306,9 @@ export default function DeployTokens() {
 
   function resetListingState() {
     setTokensFilter(null);
-    setVisibleTokenIds(new Set());
     setRevokedTokenIds(new Set());
-    setOpenActionsForTokenId(null);
+    setDownloadPrompt(null);
+    setDownloadPromptValue('');
     setPage(1);
   }
 
@@ -366,8 +359,11 @@ export default function DeployTokens() {
     }
 
     createToken.mutate(buildCreatePayload(), {
-      onSuccess: () => toast.success('Token de deploy criado com sucesso.'),
-      onError: () => toast.error('Erro ao criar token de deploy.'),
+      onSuccess: () => {
+        setLastCreatedMultiUse(Boolean(form.multiUse));
+        toast.success('Token de deploy criado com sucesso.');
+      },
+      onError: (error) => toast.error(error.message || 'Erro ao criar token de deploy.'),
     });
   }
 
@@ -415,9 +411,9 @@ export default function DeployTokens() {
       return;
     }
 
-    setVisibleTokenIds(new Set());
     setRevokedTokenIds(new Set());
-    setOpenActionsForTokenId(null);
+    setDownloadPrompt(null);
+    setDownloadPromptValue('');
     setTokensFilter(nextFilter);
   }
 
@@ -447,15 +443,6 @@ export default function DeployTokens() {
     );
   }
 
-  function toggleTokenVisibility(tokenId: string) {
-    setVisibleTokenIds(previous => {
-      const next = new Set(previous);
-      if (next.has(tokenId)) next.delete(tokenId);
-      else next.add(tokenId);
-      return next;
-    });
-  }
-
   async function handleCopyToken(tokenValue: string) {
     try {
       await navigator.clipboard.writeText(tokenValue);
@@ -474,7 +461,7 @@ export default function DeployTokens() {
     const confirmation = [
       'Revogar este deploy token?',
       '',
-      `Token: ${shortenToken(token.token)}`,
+      `Token (prefixo): ${token.tokenPrefix}`,
       `Criado em: ${createdAt}`,
       `Validade: ${expiresAt}`,
       '',
@@ -491,7 +478,6 @@ export default function DeployTokens() {
           next.add(token.id);
           return next;
         });
-        setOpenActionsForTokenId(null);
         toast.success('Deploy token revogado com sucesso.');
       },
       onError: (error) => {
@@ -694,12 +680,12 @@ export default function DeployTokens() {
               <CardHeader title="Token gerado" subtitle="Copie e guarde com segurança." />
               <div className="space-y-4">
                 <div className="rounded-lg border border-border bg-black/20 p-3">
-                  <p className="break-all font-mono text-sm text-foreground">{generatedToken.token}</p>
+                  <p className="break-all font-mono text-sm text-foreground">{generatedToken.rawToken ?? ''}</p>
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
-                  <Badge color={generatedToken.multiUse ? 'accent' : 'slate'}>
-                    {generatedToken.multiUse ? 'Multiuso' : 'Uso único'}
+                  <Badge color={lastCreatedMultiUse ? 'accent' : 'slate'}>
+                    {lastCreatedMultiUse ? 'Multiuso' : 'Uso único'}
                   </Badge>
                   <Badge color="slate">
                     Expira: {generatedToken.expiresAt ? new Date(generatedToken.expiresAt).toLocaleString('pt-BR') : 'Sem expiração'}
@@ -707,7 +693,13 @@ export default function DeployTokens() {
                 </div>
 
                 <div className="flex justify-end">
-                  <Button variant="secondary" onClick={() => void handleCopyToken(generatedToken.token)}>
+                  <Button
+                    variant="secondary"
+                    onClick={() => {
+                      const value = generatedToken.rawToken;
+                      if (value) void handleCopyToken(value);
+                    }}
+                  >
                     <Copy className="h-4 w-4" /> Copiar token
                   </Button>
                 </div>
@@ -752,7 +744,7 @@ export default function DeployTokens() {
                 <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
                   <Input
                     label="Busca"
-                    placeholder="Descrição, ID ou final do token"
+                    placeholder="Descrição, ID ou prefixo do token"
                     value={tokenSearch}
                     onChange={e => setTokenSearch(e.target.value)}
                     className="xl:col-span-2"
@@ -766,16 +758,6 @@ export default function DeployTokens() {
                       { value: 'active', label: 'Ativo' },
                       { value: 'expired', label: 'Expirado' },
                       { value: 'revoked', label: 'Revogado' },
-                    ]}
-                  />
-                  <Select
-                    label="Uso"
-                    value={usageFilter}
-                    onChange={e => setUsageFilter(e.target.value as TokenUsageFilter)}
-                    options={[
-                      { value: 'all', label: 'Todos' },
-                      { value: 'single', label: 'Uso único' },
-                      { value: 'multi', label: 'Multiuso' },
                     ]}
                   />
                   <Select
@@ -823,7 +805,6 @@ export default function DeployTokens() {
                       onClick={() => {
                         setTokenSearch('');
                         setStatusFilter('all');
-                        setUsageFilter('all');
                         setPeriodFilter('all');
                         setSortBy('created-desc');
                         setPageSize(10);
@@ -856,7 +837,6 @@ export default function DeployTokens() {
                   {pagedTokens.map(token => {
                     const status = getTokenStatus(token, revokedTokenIds, nowMs);
                     const statusUi = statusBadge(status);
-                    const tokenVisible = visibleTokenIds.has(token.id);
                     const isRevoked = status === 'revoked';
                     const canDownload = status === 'active';
 
@@ -869,9 +849,7 @@ export default function DeployTokens() {
                           <div className="min-w-0 space-y-2">
                             <div className="flex flex-wrap items-center gap-2">
                               <Badge color={statusUi.color}>{statusUi.label}</Badge>
-                              <Badge color={token.multiUse ? 'accent' : 'slate'}>
-                                {token.multiUse ? 'Multiuso' : 'Uso único'}
-                              </Badge>
+                              <Badge color="slate">Usos: {token.usedCount ?? 0}</Badge>
                               <Badge color="slate">Criado em {new Date(token.createdAt).toLocaleString('pt-BR')}</Badge>
                               <Badge color={status === 'active' ? 'warning' : 'slate'}>
                                 {formatExpiryRelative(token.expiresAt, nowMs)}
@@ -886,7 +864,8 @@ export default function DeployTokens() {
 
                             <div className="rounded-lg border border-border bg-black/20 p-3">
                               <p className="break-all font-mono text-xs text-foreground">
-                                {tokenVisible ? token.token : '••••••••••••••••••••••••••••••••'}
+                                {token.tokenPrefix || '—'}
+                                <span className="ml-2 text-muted">(prefixo público — o token completo não é exposto)</span>
                               </p>
                             </div>
                           </div>
@@ -894,53 +873,23 @@ export default function DeployTokens() {
                           <div className="flex shrink-0 items-start gap-2">
                             <Button
                               variant="secondary"
-                              onClick={() => handleDownloadInstallerByToken(token.id, token.token)}
-                              loading={downloadingTokenId === token.id}
+                              onClick={() => {
+                                setDownloadPrompt(token);
+                                setDownloadPromptValue('');
+                              }}
                               disabled={!canDownload}
                             >
                               Baixar {installerType === 'offline' ? 'pacote offline' : 'instalador mínimo'}
                             </Button>
 
-                            <div className="relative">
-                              <Button
-                                variant="ghost"
-                                onClick={() => setOpenActionsForTokenId(current => (current === token.id ? null : token.id))}
-                              >
-                                Ações
-                              </Button>
-
-                              {openActionsForTokenId === token.id ? (
-                                <div className="absolute right-0 top-11 z-20 w-48 rounded-xl border border-border bg-background/95 p-1 shadow-2xl">
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      toggleTokenVisibility(token.id);
-                                    }}
-                                    className="w-full rounded-lg px-3 py-2 text-left text-sm text-foreground hover:bg-surface-hover"
-                                  >
-                                    {tokenVisible ? 'Ocultar token' : 'Ver token'}
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      void handleCopyToken(token.token);
-                                      setOpenActionsForTokenId(null);
-                                    }}
-                                    className="w-full rounded-lg px-3 py-2 text-left text-sm text-foreground hover:bg-surface-hover"
-                                  >
-                                    Copiar token
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleRevokeToken(token)}
-                                    disabled={isRevoked || revokingTokenId === token.id}
-                                    className="w-full rounded-lg px-3 py-2 text-left text-sm text-rose-300 hover:bg-rose-500/10 disabled:cursor-not-allowed disabled:opacity-60"
-                                  >
-                                    {revokingTokenId === token.id ? 'Revogando...' : 'Revogar token'}
-                                  </button>
-                                </div>
-                              ) : null}
-                            </div>
+                            <Button
+                              variant="ghost"
+                              onClick={() => handleRevokeToken(token)}
+                              loading={revokingTokenId === token.id}
+                              disabled={isRevoked}
+                            >
+                              Revogar
+                            </Button>
                           </div>
                         </div>
                       </div>
@@ -986,6 +935,53 @@ export default function DeployTokens() {
           )}
         </>
       )}
+
+      <Modal
+        open={downloadPrompt !== null}
+        onClose={() => {
+          setDownloadPrompt(null);
+          setDownloadPromptValue('');
+        }}
+        title="Baixar instalador com token"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-muted">
+            O token completo não é exposto na listagem. Informe o token original (gerado no momento da criação)
+            para baixar o instalador do token de prefixo{' '}
+            <strong className="font-mono">{downloadPrompt?.tokenPrefix || '—'}</strong>.
+          </p>
+          <Input
+            label="Token"
+            value={downloadPromptValue}
+            onChange={e => setDownloadPromptValue(e.target.value)}
+            placeholder="Cole o token completo"
+          />
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setDownloadPrompt(null);
+                setDownloadPromptValue('');
+              }}
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={() => {
+                const target = downloadPrompt;
+                if (!target) return;
+                handleDownloadInstallerByToken(target.id, downloadPromptValue);
+                setDownloadPrompt(null);
+                setDownloadPromptValue('');
+              }}
+              disabled={!downloadPromptValue.trim()}
+              loading={downloadingTokenId !== null}
+            >
+              Baixar
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

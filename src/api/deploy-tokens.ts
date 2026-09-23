@@ -1,4 +1,4 @@
-﻿import { ApiError, api, apiFetchResponse, parseErrorMessage } from "./client";
+import { ApiError, api, apiFetchResponse, parseErrorMessage } from "./client";
 import type {
   CreateDeployTokenAndDownloadRequest,
   CreateDeployTokenRequest,
@@ -91,7 +91,8 @@ export const deployTokensApi = {
       { rawToken },
     ),
 
-  revoke: (id: string) => api.post<void>(`${BASE}/${id}/revoke`),
+  // O backend expõe apenas DELETE /deploy-tokens/{id} (POST /{id}/revoke dá 404).
+  revoke: (id: string) => api.del<void>(`${BASE}/${id}`),
 
   prebuild: (data?: PrebuildAgentRequest) =>
     api.post<unknown>(`${BASE}/prebuild`, data),
