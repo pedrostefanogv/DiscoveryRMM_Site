@@ -70,19 +70,11 @@ export default function AgentNotificationModal({
 
   const effectiveTimeout = useMemo(() => {
     if (mode === "wait") return null;
-    const fallback = mode === "toast" ? 15 : 60;
-    return Math.min(MAX_PROMPT_SECONDS, Math.max(5, timeoutSeconds || fallback));
+    // O toast é não-bloqueante e o tempo de exibição é controlado pelo
+    // Windows/balloon; enviamos apenas um valor padrão.
+    if (mode === "toast") return 15;
+    return Math.min(MAX_PROMPT_SECONDS, Math.max(5, timeoutSeconds || 60));
   }, [mode, timeoutSeconds]);
-
-  const handleModeChange = (next: NotificationMode) => {
-    setMode(next);
-    // Ajusta o default conforme o modo para evitar herdar 60s no toast.
-    if (next === "toast" && timeoutSeconds === 60) {
-      setTimeoutSeconds(15);
-    } else if (next === "timeout" && timeoutSeconds === 15) {
-      setTimeoutSeconds(60);
-    }
-  };
 
   const canSubmit = title.trim().length > 0 && message.trim().length > 0 && !isLoading;
 
@@ -167,7 +159,7 @@ export default function AgentNotificationModal({
                   name="notification-mode"
                   className="mt-0.5 h-4 w-4 text-primary focus:ring-primary/30"
                   checked={mode === option.value}
-                  onChange={() => handleModeChange(option.value)}
+                  onChange={() => setMode(option.value)}
                 />
                 <span className="min-w-0">
                   <span className="block text-sm text-foreground">{option.label}</span>
@@ -178,7 +170,7 @@ export default function AgentNotificationModal({
           </div>
         </div>
 
-        {mode !== "wait" && (
+        {mode === "timeout" && (
           <div className="mb-4">
             <label className="mb-1.5 block text-sm font-medium text-muted-foreground">
               Fechar automaticamente após (segundos)
@@ -195,9 +187,7 @@ export default function AgentNotificationModal({
               />
             </div>
             <p className="mt-1 text-xs text-muted">
-              {mode === "toast"
-                ? `O toast desaparece após ${effectiveTimeout}s.`
-                : `O prompt fecha sozinho após ${effectiveTimeout}s se o usuário não responder (máx. ${MAX_PROMPT_SECONDS}s).`}
+              { `O prompt fecha sozinho após ${effectiveTimeout}s se o usuário não responder (máx. ${MAX_PROMPT_SECONDS}s).` }
             </p>
           </div>
         )}
