@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft, Bell, Cpu, MemoryStick, Ticket as TicketIcon,
-  Monitor, Wifi, WifiOff, AppWindow, Search, Clock, HardDrive, Printer, Bug, AlertTriangle, Trash2, ShieldCheck, Plus, Gauge, Power, RotateCcw, Zap, ChevronDown, ChevronRight, RefreshCw, ArrowUpCircle,
+  Monitor, Wifi, WifiOff, AppWindow, Search, Clock, HardDrive, Printer, Bug, AlertTriangle, Trash2, ShieldCheck, Plus, Gauge, Power, RotateCcw, Zap, ChevronDown, ChevronRight, RefreshCw, ArrowUpCircle, Info, Copy,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getDeleteAgentErrorMessage, useAgent, useAgentHardware, useAgentHardwareComponents, useAgentListeningPortsPage, useAgentOpenSocketsPage, useAgentSoftwarePage, useAgentSoftwareSnapshot, useApproveZeroTouch, useDeleteAgent, useRestartAgent, useShutdownAgent, useWakeOnLan } from '@/hooks/useAgents';
@@ -17,7 +17,7 @@ import {
 } from './agentDetailUtils';
 import { useTickets } from '@/hooks/useTickets';
 import { useLogs } from '@/hooks/useLogs';
-import { Button, Card, CardHeader, Badge, Loading, ErrorDisplay, Input, Select, DataTable, Modal, StatCard, AgentHeartbeatCard, Tooltip, type Column } from '@/components/ui';
+import { Button, Card, CardHeader, Badge, Loading, ErrorDisplay, Input, Select, DataTable, Modal, StatCard, AgentHeartbeatCard, Tooltip, ContextMenu, type ContextMenuItem, type Column } from '@/components/ui';
 import { ensureArray } from '@/utils/ensureArray';
 import PowerActionModal from '@/components/agents/PowerActionModal';
 import AgentStartupItemsPanel from '@/components/agents/AgentStartupItemsPanel';
@@ -114,6 +114,16 @@ export default function AgentDetail() {
   const [pendingUnapprovedUpdate, setPendingUnapprovedUpdate] = useState<AgentSoftwareInventoryItem | null>(null);
   // App aguardando confirmação de desinstalação.
   const [pendingUninstall, setPendingUninstall] = useState<AgentSoftwareInventoryItem | null>(null);
+  // Menu de contexto (botão direito) da lista de aplicativos.
+  const [softwareMenu, setSoftwareMenu] = useState<{ x: number; y: number; item: AgentSoftwareInventoryItem } | null>(null);
+  // App aberto no modal de detalhes (a lista ficou enxuta: o detalhe traz
+  // fabricante, origem, datas e identificadores do pacote).
+  const [softwareDetails, setSoftwareDetails] = useState<AgentSoftwareInventoryItem | null>(null);
+  // Filtro rápido "somente com atualização pendente" na aba de aplicativos.
+  const [softwareOnlyUpdates, setSoftwareOnlyUpdates] = useState(false);
+  // Texto digitado para liberar a desinstalação (a ação é irreversível no host:
+  // além do comando, o desinstalador pode remover dados do aplicativo).
+  const [uninstallConfirmText, setUninstallConfirmText] = useState('');
   // Timers de refetch agendado após update/uninstall (o agent reenvia o
   // inventário ~2 min depois da alteração).
   const softwareRefetchTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
@@ -420,8 +430,13 @@ export default function AgentDetail() {
   const softwareTotalPages =
     software.data?.totalPages ?? Math.max(1, Math.ceil(softwareTotalCount / softwarePageSize));
   const safeSoftwarePage = Math.min(softwarePage, softwareTotalPages);
-  const softwareItems = software.data?.items ?? [];
-  const softwareUpdatesCount = softwareItems.filter((item) => item.updateAvailable).length;
+  const softwareItemsAll = software.data?.items ?? [];
+  // Filtro local (a página já veio do servidor): mantém só os apps com update
+  // pendente. A contagem do cabeçalho continua usando o total do snapshot.
+  const softwareItems = softwareOnlyUpdates
+    ? softwareItemsAll.filter((item) => item.updateAvailable)
+    : softwareItemsAll;
+  const softwareUpdatesCount = softwareItemsAll.filter((item) => item.updateAvailable).length;
   // Total do agente (não só a página) vem do snapshot; fallback para a página.
   const softwareUpdatesTotal = softwareSnapshot.data?.updateAvailableCount ?? softwareUpdatesCount;
 
@@ -975,12 +990,33 @@ export default function AgentDetail() {
     }
   };
 
+  // Nome exato que o operador deve digitar para liberar a desinstalação.
+  const uninstallConfirmTarget = (pendingUninstall?.name ?? '').trim();
+  const canConfirmUninstall =
+    uninstallConfirmTarget !== '' && uninstallConfirmText.trim() === uninstallConfirmTarget;
+
+  // Abre o modal de desinstalação SEMPRE com o campo de confirmação limpo. Os
+  // dois pontos de entrada (menu de contexto e modal de detalhes) passam por
+  // aqui, para nunca liberar o botão com um texto digitado numa abertura anterior.
+  const openUninstallModal = (item: AgentSoftwareInventoryItem) => {
+    setUninstallConfirmText('');
+    setPendingUninstall(item);
+  };
+
+  // Fecha o modal e descarta o texto digitado (mesmo motivo acima).
+  const closeUninstallModal = () => {
+    setPendingUninstall(null);
+    setUninstallConfirmText('');
+  };
+
   const handleUninstallSoftware = async (item: AgentSoftwareInventoryItem) => {
     if (!id || updatingSoftwareId) return;
     setUpdatingSoftwareId(item.inventoryId);
     try {
       await agentsApi.uninstallSoftware(id, item.inventoryId);
-      setPendingUninstall(null);
+      // closeUninstallModal também limpa o texto de confirmação — manter o valor
+      // permitiria reenviar o comando sem redigitar.
+      closeUninstallModal();
       toast.success('Desinstalação de "' + item.name + '" enviada ao agente.');
       scheduleSoftwareRefetch();
     } catch (error) {
@@ -1059,22 +1095,30 @@ export default function AgentDetail() {
     { value: 'desc', label: 'Mais recente primeiro' },
     { value: 'asc', label: 'Mais antigo primeiro' },
   ];
+  // Lista enxuta de propósito: só Aplicativo e Versão. As colunas Fonte, Ações e
+  // Última coleta saíram — a origem e as datas ficam no detalhe, e as ações
+  // passaram para o menu de contexto (botão direito), deixando a varredura da
+  // lista muito mais limpa.
   const softwareColumns: Column<AgentSoftwareInventoryItem>[] = [
     {
       key: 'name',
       header: 'Aplicativo',
       sortable: false,
       render: item => (
-        <div>
-          <p className="font-medium text-foreground">{item.name}</p>
-          <p className="text-xs text-muted">{item.publisher ?? 'Sem fabricante'}</p>
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="truncate font-medium text-foreground" title={item.name}>
+            {item.name}
+          </span>
+          {updatingSoftwareId === item.inventoryId && (
+            <RefreshCw className="h-3.5 w-3.5 shrink-0 animate-spin text-primary" aria-label="Processando" />
+          )}
         </div>
       ),
     },
     {
       key: 'version',
       header: 'Versão',
-      className: 'font-mono',
+      className: 'font-mono whitespace-nowrap',
       sortable: false,
       render: item => (
         <div className="flex flex-wrap items-center gap-2">
@@ -1085,67 +1129,78 @@ export default function AgentDetail() {
         </div>
       ),
     },
-    {
-      key: 'source',
-      header: 'Fonte',
-      sortable: false,
-      render: item => item.source ?? '\u2014',
-    },
-    {
-      key: 'actions',
-      header: 'Ações',
-      sortable: false,
-      render: item => (item.updateAvailable || item.uninstallAvailable) ? (
-        <div className="flex flex-wrap items-center gap-2">
-          {item.updateAvailable && (
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={() => void handleUpdateSoftware(item)}
-              loading={updatingSoftwareId === item.inventoryId}
-              disabled={!isOnlineNow || updatingSoftwareId !== null || !canExecuteAgent}
-              title={
-                !canExecuteAgent
-                  ? 'Sem permissão para executar ações no agente'
-                  : !isOnlineNow
-                    ? 'Agente offline \u2014 atualização indisponível'
-                    : 'Atualizar ' + item.name
-              }
-            >
-              <ArrowUpCircle className="h-3.5 w-3.5" />
-              Atualizar
-            </Button>
-          )}
-          {item.uninstallAvailable && (
-            <Button
-              size="sm"
-              variant="danger"
-              onClick={() => setPendingUninstall(item)}
-              disabled={!isOnlineNow || !canExecuteAgent || updatingSoftwareId !== null}
-              title={
-                !canExecuteAgent
-                  ? 'Sem permissão para executar ações no agente'
-                  : !isOnlineNow
-                    ? 'Agente offline — desinstalação indisponível'
-                    : 'Desinstalar ' + item.name
-              }
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-              Desinstalar
-            </Button>
-          )}
-        </div>
-      ) : (
-        <span className="text-xs text-muted">{'\u2014'}</span>
-      ),
-    },
-    {
-      key: 'collectedAt',
-      header: 'Última coleta',
-      sortable: false,
-      render: item => formatDate(item.collectedAt),
-    },
   ];
+
+  // Ações no botão direito. "Ver detalhes" vem primeiro por ser a ação
+  // inofensiva e mais usada; atualizar/desinstalar só aparecem quando aplicáveis,
+  // para o menu não oferecer uma ação que o servidor recusaria.
+  const softwareMenuItems: ContextMenuItem[] = softwareMenu
+    ? [
+        {
+          key: 'details',
+          label: 'Ver detalhes',
+          icon: <Info className="h-4 w-4" />,
+          onClick: () => {
+            const item = softwareMenu.item;
+            setSoftwareMenu(null);
+            setSoftwareDetails(item);
+          },
+        },
+        {
+          key: 'copy',
+          label: 'Copiar nome',
+          icon: <Copy className="h-4 w-4" />,
+          onClick: () => {
+            const item = softwareMenu.item;
+            setSoftwareMenu(null);
+            void navigator.clipboard?.writeText(item.name);
+            toast.success('Nome copiado.');
+          },
+        },
+        ...(softwareMenu.item.updateAvailable
+          ? [
+              {
+                key: 'update',
+                label: 'Atualizar aplicativo',
+                icon: <ArrowUpCircle className="h-4 w-4" />,
+                separatorBefore: true,
+                disabled: !isOnlineNow || !canExecuteAgent || updatingSoftwareId !== null,
+                hint: !canExecuteAgent
+                  ? 'sem permissão'
+                  : !isOnlineNow
+                    ? 'agente offline'
+                    : undefined,
+                onClick: () => {
+                  const item = softwareMenu.item;
+                  setSoftwareMenu(null);
+                  void handleUpdateSoftware(item);
+                },
+              } satisfies ContextMenuItem,
+            ]
+          : []),
+        ...(softwareMenu.item.uninstallAvailable
+          ? [
+              {
+                key: 'uninstall',
+                label: 'Desinstalar aplicativo',
+                icon: <Trash2 className="h-4 w-4" />,
+                danger: true,
+                disabled: !isOnlineNow || !canExecuteAgent || updatingSoftwareId !== null,
+                hint: !canExecuteAgent
+                  ? 'sem permissão'
+                  : !isOnlineNow
+                    ? 'agente offline'
+                    : undefined,
+                onClick: () => {
+                  const item = softwareMenu.item;
+                  setSoftwareMenu(null);
+                  openUninstallModal(item);
+                },
+              } satisfies ContextMenuItem,
+            ]
+          : []),
+      ]
+    : [];
 
   return (
     <div className="space-y-6">
@@ -2018,6 +2073,25 @@ export default function AgentDetail() {
                   )}
                 </p>
               </div>
+              <div className="flex items-center gap-2">
+              {/* Filtro rápido: mostra só os apps com atualização pendente. */}
+              {softwareUpdatesTotal > 0 && (
+                <Button
+                  size="sm"
+                  variant={softwareOnlyUpdates ? 'primary' : 'secondary'}
+                  onClick={() => setSoftwareOnlyUpdates((prev) => !prev)}
+                  aria-pressed={softwareOnlyUpdates}
+                  title={
+                    softwareOnlyUpdates
+                      ? 'Mostrando apenas aplicativos com atualização pendente'
+                      : 'Mostrar apenas aplicativos com atualização pendente'
+                  }
+                >
+                  <ArrowUpCircle className="h-4 w-4" />
+                  Com atualização
+                  <span className="ml-1 rounded-full bg-black/10 px-1.5 text-xs">{softwareUpdatesTotal}</span>
+                </Button>
+              )}
               <Button
                 size="sm"
                 variant="ghost"
@@ -2029,6 +2103,7 @@ export default function AgentDetail() {
                 <RefreshCw className="h-4 w-4" />
                 Atualizar
               </Button>
+              </div>
             </div>
             {software.isLoading ? (
               <Loading message="Carregando inventário de aplicativos..." />
@@ -2110,7 +2185,15 @@ export default function AgentDetail() {
                     columns={softwareColumns}
                     data={softwareItems}
                     keyExtractor={item => item.inventoryId}
-                    emptyMessage="Nenhum aplicativo encontrado para este agente"
+                    onRowContextMenu={(event, item) => {
+                      event.preventDefault();
+                      setSoftwareMenu({ x: event.clientX, y: event.clientY, item });
+                    }}
+                    emptyMessage={
+                      softwareOnlyUpdates
+                        ? 'Nenhum aplicativo com atualização pendente'
+                        : 'Nenhum aplicativo encontrado para este agente'
+                    }
                     showPagination={false}
                     maxHeight="min(640px, 55vh)"
                   />
@@ -2636,26 +2719,44 @@ export default function AgentDetail() {
 
       <Modal
         open={!!pendingUninstall}
-        onClose={() => setPendingUninstall(null)}
+        onClose={closeUninstallModal}
         title="Desinstalar aplicativo"
         maxWidth="max-w-lg"
       >
         <div className="space-y-4">
           <div className="rounded-lg border border-danger/30 bg-danger/10 p-3 text-sm text-foreground">
             <p>
-              Deseja desinstalar{' '}
+              Você está prestes a desinstalar{' '}
               <span className="font-semibold text-foreground">{pendingUninstall?.name}</span>
-              {pendingUninstall?.version ? ' (v' + pendingUninstall.version + ')' : ''} deste agente?
+              {pendingUninstall?.version ? ' (v' + pendingUninstall.version + ')' : ''} do agente{' '}
+              <span className="font-semibold text-foreground">{a.displayName ?? a.hostname}</span>.
             </p>
             <p className="mt-1 text-muted">
               O agent tentará pelo gerenciador de pacotes (winget/choco), pelo MSI (ProductCode) ou pelo
-              desinstalador do registro. A ação não pode ser desfeita.
+              desinstalador do registro. A ação não pode ser desfeita no host.
             </p>
           </div>
+
+          <div className="space-y-2">
+            <label htmlFor="uninstall-confirm-name" className="text-sm font-medium text-foreground">
+              Digite <span className="font-semibold text-danger">{uninstallConfirmTarget}</span> para confirmar:
+            </label>
+            <Input
+              id="uninstall-confirm-name"
+              value={uninstallConfirmText}
+              onChange={(e) => setUninstallConfirmText(e.target.value)}
+              placeholder={uninstallConfirmTarget}
+              disabled={updatingSoftwareId !== null}
+              autoFocus
+              autoComplete="off"
+              spellCheck={false}
+            />
+          </div>
+
           <div className="flex justify-end gap-2">
             <Button
               variant="secondary"
-              onClick={() => setPendingUninstall(null)}
+              onClick={closeUninstallModal}
               disabled={updatingSoftwareId !== null}
             >
               Cancelar
@@ -2668,6 +2769,12 @@ export default function AgentDetail() {
                 }
               }}
               loading={updatingSoftwareId !== null && updatingSoftwareId === pendingUninstall?.inventoryId}
+              disabled={!canConfirmUninstall || updatingSoftwareId !== null}
+              title={
+                canConfirmUninstall
+                  ? 'Desinstalar ' + uninstallConfirmTarget
+                  : 'Digite o nome do aplicativo para liberar a desinstalação'
+              }
             >
               <Trash2 className="h-4 w-4" />
               Desinstalar
@@ -2675,6 +2782,101 @@ export default function AgentDetail() {
           </div>
         </div>
       </Modal>
+
+      {/* Detalhes do aplicativo — absorve o que as colunas removidas mostravam
+          (fabricante, origem, datas e identificadores do pacote). */}
+      <Modal
+        open={!!softwareDetails}
+        onClose={() => setSoftwareDetails(null)}
+        title="Detalhes do aplicativo"
+        maxWidth="max-w-lg"
+      >
+        {softwareDetails && (
+          <div className="space-y-4">
+            <div>
+              <p className="font-medium text-foreground">{softwareDetails.name}</p>
+              <p className="text-sm text-muted">{softwareDetails.publisher ?? 'Sem fabricante'}</p>
+            </div>
+
+            <dl className="grid gap-2 text-sm sm:grid-cols-2">
+              <div>
+                <dt className="text-xs text-muted">Versão instalada</dt>
+                <dd className="font-mono text-foreground">{softwareDetails.version ?? '\u2014'}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-muted">Versão disponível</dt>
+                <dd className="font-mono text-foreground">
+                  {softwareDetails.updateAvailable && softwareDetails.availableVersion ? (
+                    <span className="text-warning">&rarr; {softwareDetails.availableVersion}</span>
+                  ) : (
+                    '\u2014'
+                  )}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-xs text-muted">Fonte</dt>
+                <dd className="text-foreground">{softwareDetails.source ?? '\u2014'}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-muted">Gerenciador</dt>
+                <dd className="text-foreground">{softwareDetails.updateSource ?? '\u2014'}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-muted">Última coleta</dt>
+                <dd className="text-foreground">{formatDate(softwareDetails.collectedAt)}</dd>
+              </div>
+              {softwareDetails.installSource && (
+                <div className="sm:col-span-2">
+                  <dt className="text-xs text-muted">Origem da instalação</dt>
+                  <dd className="break-all font-mono text-xs text-muted-foreground">{softwareDetails.installSource}</dd>
+                </div>
+              )}
+            </dl>
+
+            <div className="flex justify-end gap-2">
+              <Button variant="secondary" onClick={() => setSoftwareDetails(null)}>
+                Fechar
+              </Button>
+              {softwareDetails.updateAvailable && (
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    const item = softwareDetails;
+                    setSoftwareDetails(null);
+                    void handleUpdateSoftware(item);
+                  }}
+                  disabled={!isOnlineNow || !canExecuteAgent || updatingSoftwareId !== null}
+                >
+                  <ArrowUpCircle className="h-4 w-4" />
+                  Atualizar
+                </Button>
+              )}
+              {softwareDetails.uninstallAvailable && (
+                <Button
+                  variant="danger"
+                  onClick={() => {
+                    const item = softwareDetails;
+                    setSoftwareDetails(null);
+                    openUninstallModal(item);
+                  }}
+                  disabled={!isOnlineNow || !canExecuteAgent || updatingSoftwareId !== null}
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Desinstalar
+                </Button>
+              )}
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {softwareMenu && (
+        <ContextMenu
+          position={{ x: softwareMenu.x, y: softwareMenu.y }}
+          items={softwareMenuItems}
+          onClose={() => setSoftwareMenu(null)}
+        />
+      )}
     </div>
   );
 }
