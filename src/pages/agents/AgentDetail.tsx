@@ -20,6 +20,7 @@ import { useLogs } from '@/hooks/useLogs';
 import { Button, Card, CardHeader, Badge, Loading, ErrorDisplay, Input, Select, DataTable, Modal, StatCard, AgentHeartbeatCard, Tooltip, ContextMenu, type ContextMenuItem, type Column } from '@/components/ui';
 import { ensureArray } from '@/utils/ensureArray';
 import PowerActionModal from '@/components/agents/PowerActionModal';
+import AgentNotificationModal, { type AgentNotificationPayload } from '@/components/agents/AgentNotificationModal';
 import AgentStartupItemsPanel from '@/components/agents/AgentStartupItemsPanel';
 import AgentScheduledTasksPanel from '@/components/agents/AgentScheduledTasksPanel';
 import WakeOnLanModal from '@/components/agents/WakeOnLanModal';
@@ -42,6 +43,7 @@ import { AgentLabelSourceType, type AgentLabel } from '@/modules/agent-labels/ty
 import { openRemoteDebugPopup } from './remoteDebugLauncher';
 import { openRemoteSessionPopup } from './remoteSessionLauncher';
 import { useAuthorization } from '@/auth/authorization';
+import { useSendAgentNotification } from '@/hooks/useAgentAlerts';
 
 // formatBytes, formatDate, formatSocketFamily — importadas de ./agentDetailUtils
 
@@ -175,6 +177,7 @@ export default function AgentDetail() {
   const [powerSubmenuOpen, setPowerSubmenuOpen] = useState(false);
   const [powerAction, setPowerAction] = useState<'restart' | 'shutdown' | null>(null);
   const [wakeOnLanModalOpen, setWakeOnLanModalOpen] = useState(false);
+  const [notificationModalOpen, setNotificationModalOpen] = useState(false);
 
   const { hasAnyPermission } = useAuthorization();
   const canManageAgent = hasAnyPermission(['Agents.Edit', 'agents.*', 'admin.*']);
@@ -185,6 +188,7 @@ export default function AgentDetail() {
   const restartAgent = useRestartAgent();
   const shutdownAgent = useShutdownAgent();
   const wakeOnLan = useWakeOnLan();
+  const sendAgentNotification = useSendAgentNotification();
   const agent = useAgent(id!);
   const liveHeartbeat = useAgentHeartbeat(id!);
   const hw = useAgentHardware(id!);
@@ -875,6 +879,19 @@ export default function AgentDetail() {
     setWakeOnLanModalOpen(true);
   };
 
+  const handleOpenNotification = () => {
+    setIsPowerMenuOpen(false);
+    setNotificationModalOpen(true);
+  };
+
+  const handleNotificationConfirm = async (data: AgentNotificationPayload) => {
+    if (!id) {
+      throw new Error('Agente inválido para envio de notificação.');
+    }
+
+    await sendAgentNotification.mutateAsync({ agentId: id, ...data });
+  };
+
   const handlePowerActionConfirm = async (data: { delaySeconds: number; force: boolean; message: string }) => {
     if (!id || !powerAction) return;
 
@@ -1260,10 +1277,8 @@ export default function AgentDetail() {
               <button
                 type="button"
                 className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60"
-                onClick={() => {
-                  setIsPowerMenuOpen(false);
-                  toast('Notificações serão implementadas em breve.', { icon: '🔔' });
-                }}
+                onClick={handleOpenNotification}
+                disabled={!canExecuteAgent}
               >
                 <Bell className="h-4 w-4" />
                 Enviar notificação
@@ -2686,6 +2701,15 @@ export default function AgentDetail() {
           }}
           onConfirm={handleWakeOnLanConfirm}
           isLoading={wakeOnLan.isPending}
+        />
+      )}
+
+      {notificationModalOpen && id && (
+        <AgentNotificationModal
+          agent={a}
+          onClose={() => setNotificationModalOpen(false)}
+          onConfirm={handleNotificationConfirm}
+          isLoading={sendAgentNotification.isPending}
         />
       )}
 

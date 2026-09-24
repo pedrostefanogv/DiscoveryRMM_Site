@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Monitor, Wifi, WifiOff, Activity, Building2, Clock, HardDrive, MapPin, LayoutGrid, List, Bug, Trash2, ShieldCheck, ArrowUp, ArrowDown, Radio, RefreshCw, Move, RotateCcw, Power, Zap, Server, Apple, Thermometer, ChevronRight } from 'lucide-react';
+import { Monitor, Wifi, WifiOff, Activity, Building2, Clock, HardDrive, MapPin, LayoutGrid, List, Bug, Trash2, ShieldCheck, ArrowUp, ArrowDown, Radio, RefreshCw, Move, RotateCcw, Power, Zap, Server, Apple, Thermometer, ChevronRight, Bell } from 'lucide-react';
 import { useQueries } from '@tanstack/react-query';
 import { useAgentLabelUsage, useAgentIdsByLabel, useAgentLabelsByAgentIds } from '@/hooks/useAgentLabels';
 import toast from 'react-hot-toast';
@@ -11,12 +11,14 @@ import { ApiError, agentUpdatesApi, agentsApi } from '@/api';
 import { Badge, ErrorDisplay, Input, Select, StatCard, Modal, PageHeader, SkeletonCard, EmptyState, MetricBar, Button } from '@/components/ui';
 import { TransferAgentModal } from '@/components/agents/TransferAgentModal';
 import PowerActionModal from '@/components/agents/PowerActionModal';
+import AgentNotificationModal, { type AgentNotificationPayload } from '@/components/agents/AgentNotificationModal';
 import WakeOnLanModal from '@/components/agents/WakeOnLanModal';
 import type { Agent } from '@/api';
 import { getAgentLastSeen, isAgentOnlineNow } from '@/utils/agentStatus';
 import { useNowTick } from '@/hooks/useNowTick';
 import { isHeartbeatTimestampFresh, useAllAgentHeartbeats } from '@/stores/heartbeatStore';
 import { useAuthorization } from '@/auth/authorization';
+import { useSendAgentNotification } from '@/hooks/useAgentAlerts';
 import { openRemoteDebugPopup } from './remoteDebugLauncher';
 import { openRemoteSessionPopup } from './remoteSessionLauncher';
 
@@ -142,8 +144,11 @@ export default function AgentList() {
   const restartAgent = useRestartAgent();
   const shutdownAgent = useShutdownAgent();
   const wakeOnLan = useWakeOnLan();
+  const sendAgentNotification = useSendAgentNotification();
   const { hasAnyPermission } = useAuthorization();
   const canManageAgent = hasAnyPermission(['Agents.Edit', 'agents.*', 'admin.*']);
+  // Enviar notificação é uma ação de execução no endpoint (Agents.Execute).
+  const canExecuteAgent = hasAnyPermission(['Agents.Execute', 'Agents.Edit', 'agents.*', 'admin.*']);
 
   const [search, setSearch] = useState('');
   const [filterClient, setFilterClient] = useState('');
@@ -163,6 +168,7 @@ export default function AgentList() {
   const [transferAgent, setTransferAgent] = useState<AgentWithClient | null>(null);
   const [powerActionAgent, setPowerActionAgent] = useState<{ agent: AgentWithClient; action: "restart" | "shutdown" } | null>(null);
   const [wolAgent, setWolAgent] = useState<AgentWithClient | null>(null);
+  const [notificationAgent, setNotificationAgent] = useState<AgentWithClient | null>(null);
   const contextMenuRef = useRef<HTMLDivElement | null>(null);
   // Submenu de energia ("Ligar / Reiniciar / Desligar") aberto ao lado via hover.
   const [powerSubmenuOpen, setPowerSubmenuOpen] = useState(false);
@@ -345,6 +351,16 @@ export default function AgentList() {
   const handleWakeOnLan = (agent: AgentWithClient) => {
     setContextMenu(null);
     setWolAgent(agent);
+  };
+
+  const openNotificationModal = (agent: AgentWithClient) => {
+    setContextMenu(null);
+    setNotificationAgent(agent);
+  };
+
+  const handleNotificationConfirm = async (data: AgentNotificationPayload) => {
+    if (!notificationAgent) return;
+    await sendAgentNotification.mutateAsync({ agentId: notificationAgent.id, ...data });
   };
 
   const handlePowerActionConfirm = async (data: { delaySeconds: number; force: boolean; message: string }) => {
@@ -1090,6 +1106,16 @@ export default function AgentList() {
               <RefreshCw className="h-4 w-4" />
               {updatingAgentId === contextMenu.agent.id ? 'Disparando update...' : 'Atualizar agente'}
             </button>
+            <button
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-50"
+              onClick={() => openNotificationModal(contextMenu.agent)}
+              disabled={!canExecuteAgent}
+              title={canExecuteAgent ? undefined : 'Sem permissão para executar ações no agente'}
+            >
+              <Bell className="h-4 w-4" />
+              Enviar notificação
+              {!canExecuteAgent && <Badge>sem permissão</Badge>}
+            </button>
             {isAgentOnlineNow(contextMenu.agent, now) && (
               <div
                 className="relative flex w-full"
@@ -1256,6 +1282,15 @@ export default function AgentList() {
           onClose={() => setWolAgent(null)}
           onConfirm={handleWakeOnLanConfirm}
           isLoading={wakeOnLan.isPending}
+        />
+      )}
+
+      {notificationAgent && (
+        <AgentNotificationModal
+          agent={notificationAgent}
+          onClose={() => setNotificationAgent(null)}
+          onConfirm={handleNotificationConfirm}
+          isLoading={sendAgentNotification.isPending}
         />
       )}
     </div>

@@ -4,6 +4,7 @@ import type {
   AgentAlertsQuery,
   AgentAlertTestDispatchRequest,
   CreateAgentAlertRequest,
+  SendAgentNotificationRequest,
 } from "@/api";
 
 const KEYS = {
@@ -40,5 +41,16 @@ export function useAgentAlertTestDispatch() {
   return useMutation({
     mutationFn: (data: AgentAlertTestDispatchRequest) =>
       agentAlertsApi.testDispatch(data),
+  });
+}
+
+/**
+ * Envia uma notificação avulsa (prompt PSADT/toast) para o usuário da máquina
+ * do agent. Não invalida a lista de alertas porque não cria um alerta agendado.
+ */
+export function useSendAgentNotification() {
+  return useMutation({
+    mutationFn: (data: SendAgentNotificationRequest) =>
+      agentAlertsApi.sendNotification(data),
   });
 }

@@ -1,4 +1,4 @@
-﻿import { api } from "./client";
+import { api } from "./client";
 import { AgentAlertScopeType } from "./types";
 import type {
   AgentAlert,
@@ -8,6 +8,8 @@ import type {
   AgentAlertTestDispatchResponse,
   CreateAgentAlertRequest,
   CursorPageDto,
+  SendAgentNotificationRequest,
+  SendAgentNotificationResponse,
 } from "./types";
 
 const BASE = "/api/v1/agent-alerts";
@@ -139,4 +141,11 @@ export const agentAlertsApi = {
 
   testDispatch: (data: AgentAlertTestDispatchRequest) =>
     api.post<AgentAlertTestDispatchResponse>(`${BASE}/test-dispatch`, data),
+
+  /**
+   * Envia uma notificação avulsa (prompt PSADT modal ou toast) para o usuário
+   * da máquina do agent.
+   */
+  sendNotification: (data: SendAgentNotificationRequest) =>
+    api.post<SendAgentNotificationResponse>(`${BASE}/notify`, data),
 };

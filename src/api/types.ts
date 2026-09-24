@@ -2244,6 +2244,28 @@ export interface AgentAlertTestDispatchResponse {
   alertId: string;
 }
 
+/**
+ * Notificação avulsa para a sessão interativa do usuário de um agent.
+ * alertType: 0 = Toast (auto-fecha), 1 = Modal (prompt PSADT).
+ * timeoutSeconds ausente/0 + Modal = aguarda o clique em OK.
+ */
+export interface SendAgentNotificationRequest {
+  agentId: string;
+  title: string;
+  message: string;
+  alertType: number;
+  timeoutSeconds?: number | null;
+  icon?: AgentAlertIcon | null;
+  defaultAction?: string | null;
+}
+
+export interface SendAgentNotificationResponse {
+  success: boolean;
+  dispatched: boolean;
+  alertId: string;
+  agentId: string;
+}
+
 // ── Query params ───────────────────────────────────────
 
 export interface LogsQuery {
