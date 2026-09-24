@@ -5,6 +5,8 @@ import type {
   AgentAlertTestDispatchRequest,
   CreateAgentAlertRequest,
   SendAgentNotificationRequest,
+  SendScopeNotificationRequest,
+  SendScopeNotificationResponse,
 } from "@/api";
 
 const KEYS = {
@@ -52,5 +54,19 @@ export function useSendAgentNotification() {
   return useMutation({
     mutationFn: (data: SendAgentNotificationRequest) =>
       agentAlertsApi.sendNotification(data),
+  });
+}
+
+/**
+ * Broadcast de notificação para todos os agents de um escopo (cliente, site,
+ * label ou agent). Devolve as contagens de entrega para feedback na UI.
+ */
+export function useSendScopeNotification() {
+  return useMutation<
+    SendScopeNotificationResponse,
+    Error,
+    SendScopeNotificationRequest
+  >({
+    mutationFn: (data) => agentAlertsApi.sendScopeNotification(data),
   });
 }

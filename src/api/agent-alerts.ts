@@ -10,6 +10,8 @@ import type {
   CursorPageDto,
   SendAgentNotificationRequest,
   SendAgentNotificationResponse,
+  SendScopeNotificationRequest,
+  SendScopeNotificationResponse,
 } from "./types";
 
 const BASE = "/api/v1/agent-alerts";
@@ -148,4 +150,11 @@ export const agentAlertsApi = {
    */
   sendNotification: (data: SendAgentNotificationRequest) =>
     api.post<SendAgentNotificationResponse>(`${BASE}/notify`, data),
+
+  /**
+   * Envia a mesma notificação para todos os agents de um escopo
+   * (cliente, site, label ou agent único). A API resolve o escopo no servidor.
+   */
+  sendScopeNotification: (data: SendScopeNotificationRequest) =>
+    api.post<SendScopeNotificationResponse>(`${BASE}/notify/broadcast`, data),
 };

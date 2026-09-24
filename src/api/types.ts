@@ -2270,6 +2270,33 @@ export interface SendAgentNotificationResponse {
   agentId: string;
 }
 
+/**
+ * Broadcast de notificação para todos os agents de um escopo
+ * (cliente, site, label ou agent único).
+ */
+export interface SendScopeNotificationRequest {
+  scopeType: AlertScopeType;
+  title: string;
+  message: string;
+  scopeClientId?: string | null;
+  scopeSiteId?: string | null;
+  scopeAgentId?: string | null;
+  scopeLabelName?: string | null;
+  alertType: number;
+  timeoutSeconds?: number | null;
+  icon?: AgentAlertIcon | null;
+}
+
+export interface SendScopeNotificationResponse {
+  success: boolean;
+  dispatched: boolean;
+  alertId: string;
+  scopeType: AlertScopeType;
+  totalAgents: number;
+  dispatchedCount: number;
+  failedCount: number;
+}
+
 // ── Query params ───────────────────────────────────────
 
 export interface LogsQuery {

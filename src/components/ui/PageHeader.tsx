@@ -8,6 +8,8 @@ interface PageHeaderProps {
   /** Quando informado, renderiza um botão de voltar acessível antes do título. */
   onBack?: () => void;
   backLabel?: string;
+  /** Trilha de navegação exibida acima do título (ex.: Clientes / Acme / Matriz). */
+  breadcrumb?: ReactNode;
 }
 
 export function PageHeader({
@@ -16,6 +18,7 @@ export function PageHeader({
   children,
   onBack,
   backLabel = 'Voltar',
+  breadcrumb,
 }: PageHeaderProps) {
   return (
     <div className="flex items-start gap-3">
@@ -31,6 +34,7 @@ export function PageHeader({
       )}
       <div className="flex min-w-0 flex-1 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
+          {breadcrumb && <nav aria-label="Trilha de navegação" className="mb-1 text-xs text-muted">{breadcrumb}</nav>}
           <h1 className="text-2xl font-bold text-foreground">{title}</h1>
           {description && <p className="text-sm text-muted mt-0.5">{description}</p>}
         </div>

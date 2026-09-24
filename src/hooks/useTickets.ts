@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { ticketsApi } from "@/api";
 import type {
+  Ticket,
   CreateTicketRequest,
   UpdateTicketRequest,
   UpdateWorkflowStateRequest,
@@ -14,6 +15,7 @@ import type {
   ReopenTicketRequest,
   RateTicketRequest,
   CreateTicketRelationRequest,
+  CursorPageDto,
 } from "@/api";
 
 const KEYS = {
@@ -44,6 +46,24 @@ export function useTicketsByClient(clientId: string, workflowStateId?: string) {
     queryKey: KEYS.byClient(clientId),
     queryFn: () => ticketsApi.listByClient(clientId, workflowStateId),
     enabled: !!clientId,
+  });
+}
+
+/**
+ * Chamados de um site específico. Antes o SiteDetail carregava TODOS os
+ * chamados do cliente e filtrava no cliente — além de trafegar dados
+ * desnecessários, subestimava o total quando o cliente tinha mais de uma
+ * página. Agora o filtro é aplicado no servidor.
+ */
+export function useTicketsBySite(siteId: string, limit = 100) {
+  return useQuery({
+    queryKey: [...KEYS.all, "bySite", siteId, limit] as const,
+    queryFn: () => ticketsApi.list({ siteId, limit }),
+    enabled: !!siteId,
+    select: (data) => {
+      const page = data as unknown as CursorPageDto<Ticket> | Ticket[];
+      return Array.isArray(page) ? page : (page.items ?? []);
+    },
   });
 }
 
