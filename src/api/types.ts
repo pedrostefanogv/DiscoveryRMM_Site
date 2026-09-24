@@ -1610,12 +1610,14 @@ export interface SendCommandRequest {
 export interface RestartRequest {
   delaySeconds?: number;
   force?: boolean;
+  notifyUser?: boolean;
   message?: string;
 }
 
 export interface ShutdownRequest {
   delaySeconds?: number;
   force?: boolean;
+  notifyUser?: boolean;
   message?: string;
 }
 
@@ -1647,12 +1649,14 @@ export interface PowerCommandResponse {
 export interface SiteRestartRequest {
   delaySeconds?: number;
   force?: boolean;
+  notifyUser?: boolean;
   message?: string;
 }
 
 export interface SiteShutdownRequest {
   delaySeconds?: number;
   force?: boolean;
+  notifyUser?: boolean;
   message?: string;
 }
 

@@ -7,7 +7,12 @@ export interface PowerActionModalProps {
   agent: Agent & { clientName?: string; clientId?: string };
   action: "restart" | "shutdown";
   onClose: () => void;
-  onConfirm: (data: { delaySeconds: number; force: boolean; message: string }) => Promise<void>;
+  onConfirm: (data: {
+    delaySeconds: number;
+    force: boolean;
+    message: string;
+    notifyUser: boolean;
+  }) => Promise<void>;
   isLoading?: boolean;
 }
 
@@ -26,10 +31,12 @@ export default function PowerActionModal({
   const [delaySeconds, setDelaySeconds] = useState(defaultDelay);
   const [force, setForce] = useState(false);
   const [message, setMessage] = useState("");
+  // Notificar o usuário: aviso Fluent com contador (PSADT) antes de agir.
+  const [notifyUser, setNotifyUser] = useState(true);
 
   const handleSubmit = async () => {
     try {
-      await onConfirm({ delaySeconds, force, message });
+      await onConfirm({ delaySeconds, force, message, notifyUser });
       toast.success(
         `Comando de ${isRestart ? "reinicialização" : "desligamento"} enviado para ${agent.displayName ?? agent.hostname}.`,
       );
@@ -107,6 +114,23 @@ export default function PowerActionModal({
             <span className="text-sm text-muted-foreground">Forçar</span>
             <p className="text-xs text-muted">
               Não aguardar o fechamento de aplicativos abertos.
+            </p>
+          </div>
+        </label>
+
+        {/* Notificar usuário */}
+        <label className="mb-4 flex items-center gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={notifyUser}
+            onChange={(e) => setNotifyUser(e.target.checked)}
+            className="h-4 w-4 rounded border-border-strong bg-surface-light text-primary focus:ring-primary/30"
+          />
+          <div>
+            <span className="text-sm text-muted-foreground">Notificar o usuário</span>
+            <p className="text-xs text-muted">
+              Exibe um aviso Fluent com contador e botão OK na tela do usuário antes de{" "}
+              {isRestart ? "reiniciar" : "desligar"}. Sem isso, o comando é aplicado direto.
             </p>
           </div>
         </label>

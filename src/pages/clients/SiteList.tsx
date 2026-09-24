@@ -236,7 +236,7 @@ export default function SiteList() {
     );
   };
 
-  const handlePowerConfirm = async (data: { delaySeconds: number; force: boolean; message: string }) => {
+  const handlePowerConfirm = async (data: { delaySeconds: number; force: boolean; message: string; notifyUser: boolean }) => {
     const site = powerSite;
     const action = powerAction;
     if (!site) return;

@@ -892,7 +892,7 @@ export default function AgentDetail() {
     await sendAgentNotification.mutateAsync({ agentId: id, ...data });
   };
 
-  const handlePowerActionConfirm = async (data: { delaySeconds: number; force: boolean; message: string }) => {
+  const handlePowerActionConfirm = async (data: { delaySeconds: number; force: boolean; message: string; notifyUser: boolean }) => {
     if (!id || !powerAction) return;
 
     if (powerAction === 'restart') {

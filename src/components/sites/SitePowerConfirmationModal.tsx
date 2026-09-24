@@ -16,6 +16,7 @@ interface SitePowerConfirmationModalProps {
     delaySeconds: number;
     force: boolean;
     message: string;
+    notifyUser: boolean;
   }) => Promise<void>;
   isLoading?: boolean;
 }
@@ -38,6 +39,8 @@ export default function SitePowerConfirmationModal({
   const [delaySeconds, setDelaySeconds] = useState(defaultDelay);
   const [force, setForce] = useState(false);
   const [message, setMessage] = useState("");
+  // Notificar o usuário: aviso Fluent com contador (PSADT) antes de agir.
+  const [notifyUser, setNotifyUser] = useState(true);
   const [confirmation, setConfirmation] = useState("");
 
   const confirmed = confirmation.trim() === siteName;
@@ -46,7 +49,7 @@ export default function SitePowerConfirmationModal({
   const handleSubmit = async () => {
     if (!canSubmit) return;
     try {
-      await onConfirm({ delaySeconds, force, message });
+      await onConfirm({ delaySeconds, force, message, notifyUser });
       onClose();
     } catch {
       // onConfirm já trata erro com toast.
@@ -114,6 +117,23 @@ export default function SitePowerConfirmationModal({
             <span className="text-sm text-muted-foreground">Forçar</span>
             <p className="text-xs text-muted">
               Não aguardar o fechamento de aplicativos abertos.
+            </p>
+          </div>
+        </label>
+
+        {/* Notificar usuário */}
+        <label className="flex cursor-pointer items-center gap-3">
+          <input
+            type="checkbox"
+            checked={notifyUser}
+            onChange={(e) => setNotifyUser(e.target.checked)}
+            className="h-4 w-4 rounded border-border-strong bg-surface-light text-primary focus:ring-primary/30"
+          />
+          <div>
+            <span className="text-sm text-muted-foreground">Notificar o usuário</span>
+            <p className="text-xs text-muted">
+              Exibe um aviso Fluent com contador e botão OK em cada máquina antes de{" "}
+              {isRestart ? "reiniciar" : "desligar"}. Sem isso, o comando é aplicado direto.
             </p>
           </div>
         </label>

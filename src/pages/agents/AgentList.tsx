@@ -363,7 +363,7 @@ export default function AgentList() {
     await sendAgentNotification.mutateAsync({ agentId: notificationAgent.id, ...data });
   };
 
-  const handlePowerActionConfirm = async (data: { delaySeconds: number; force: boolean; message: string }) => {
+  const handlePowerActionConfirm = async (data: { delaySeconds: number; force: boolean; message: string; notifyUser: boolean }) => {
     if (!powerActionAgent) return;
     const { agent, action } = powerActionAgent;
     if (action === "restart") {
