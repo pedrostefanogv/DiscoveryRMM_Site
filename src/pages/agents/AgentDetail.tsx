@@ -224,6 +224,7 @@ export default function AgentDetail() {
     pageSize: softwarePageSize,
     search: softwareSearchApplied,
     order: softwareOrder,
+    onlyUpdates: softwareOnlyUpdates,
   });
   const softwareSnapshot = useAgentSoftwareSnapshot(id!);
   const agentLogs = useLogs({ agentId: id, limit: 10 }, { enabled: activeDataTab === 'logs' });
@@ -431,8 +432,9 @@ export default function AgentDetail() {
     software.data?.totalPages ?? Math.max(1, Math.ceil(softwareTotalCount / softwarePageSize));
   const safeSoftwarePage = Math.min(softwarePage, softwareTotalPages);
   const softwareItemsAll = software.data?.items ?? [];
-  // Filtro local (a página já veio do servidor): mantém só os apps com update
-  // pendente. A contagem do cabeçalho continua usando o total do snapshot.
+  // O filtro "somente com atualização" é aplicado no servidor (onlyUpdates no
+  // endpoint): totalCount/totalPages já refletem o subconjunto. Este filtro
+  // local fica só como defesa em profundidade.
   const softwareItems = softwareOnlyUpdates
     ? softwareItemsAll.filter((item) => item.updateAvailable)
     : softwareItemsAll;
@@ -726,6 +728,13 @@ export default function AgentDetail() {
   const handleClearSoftwareSearch = () => {
     setSoftwareSearchInput('');
     setSoftwareSearchApplied('');
+    resetSoftwarePagination();
+  };
+
+  // Filtro "somente com atualização": aplicado no servidor (o endpoint devolve
+  // total/páginas só dos apps com update pendente) e reinicia a paginação.
+  const handleToggleSoftwareOnlyUpdates = () => {
+    setSoftwareOnlyUpdates((prev) => !prev);
     resetSoftwarePagination();
   };
 
@@ -2067,8 +2076,10 @@ export default function AgentDetail() {
               <div>
                 <h3 className="text-lg font-semibold text-foreground sm:text-xl">Aplicativos</h3>
                 <p className="text-sm text-muted">
-                  {softwareTotalCount} aplicativo(s) no inventário
-                  {softwareUpdatesTotal > 0 && (
+                  {softwareOnlyUpdates
+                    ? `${softwareTotalCount} aplicativo(s) com atualização pendente`
+                    : `${softwareTotalCount} aplicativo(s) no inventário`}
+                  {softwareUpdatesTotal > 0 && !softwareOnlyUpdates && (
                     <span className="ml-2 font-medium text-warning">· {softwareUpdatesTotal} com atualização disponível</span>
                   )}
                 </p>
@@ -2079,7 +2090,7 @@ export default function AgentDetail() {
                 <Button
                   size="sm"
                   variant={softwareOnlyUpdates ? 'primary' : 'secondary'}
-                  onClick={() => setSoftwareOnlyUpdates((prev) => !prev)}
+                  onClick={handleToggleSoftwareOnlyUpdates}
                   aria-pressed={softwareOnlyUpdates}
                   title={
                     softwareOnlyUpdates
@@ -2158,6 +2169,7 @@ export default function AgentDetail() {
                   <div className="mb-4 flex items-center justify-between gap-3">
                     <p className="text-xs text-muted">
                       Página {safeSoftwarePage} de {softwareTotalPages} · {softwareTotalCount} itens no total
+                      {softwareOnlyUpdates ? ' · somente com atualização' : ''}
                       {softwareSearchApplied ? ` | filtro: "${softwareSearchApplied}"` : ''}
                     </p>
                     <div className="flex items-center gap-2">

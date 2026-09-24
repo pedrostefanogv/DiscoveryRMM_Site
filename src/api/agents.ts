@@ -174,6 +174,8 @@ export const agentsApi = {
       pageSize?: number;
       search?: string;
       order?: AgentSoftwareOrder;
+      /** Quando true, retorna apenas apps com atualização pendente (server-side). */
+      onlyUpdates?: boolean;
     },
     init?: ApiRequestInit,
   ) =>
@@ -184,6 +186,7 @@ export const agentsApi = {
         pageSize: params?.pageSize,
         search: params?.search,
         order: params?.order,
+        onlyUpdates: params?.onlyUpdates,
       },
       init,
     ),

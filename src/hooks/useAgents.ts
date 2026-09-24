@@ -37,7 +37,13 @@ const KEYS = {
   ) => [...KEYS.all, "software", id, params] as const,
   softwarePage: (
     id: string,
-    params: { page: number; pageSize: number; search: string; order: AgentSoftwareOrder },
+    params: {
+      page: number;
+      pageSize: number;
+      search: string;
+      order: AgentSoftwareOrder;
+      onlyUpdates: boolean;
+    },
   ) => [...KEYS.all, "softwarePage", id, params] as const,
   softwareSnapshot: (id: string) =>
     [...KEYS.all, "softwareSnapshot", id] as const,
@@ -220,6 +226,8 @@ export function useAgentSoftwarePage(
     pageSize?: number;
     search?: string;
     order?: AgentSoftwareOrder;
+    /** Quando true, filtra no servidor apenas apps com atualização pendente. */
+    onlyUpdates?: boolean;
   },
 ) {
   const safePage = Math.max(1, params?.page ?? 1);
@@ -227,6 +235,7 @@ export function useAgentSoftwarePage(
   const safeSearch = params?.search?.trim() ?? "";
   const safeOrder: AgentSoftwareOrder =
     params?.order === "asc" ? "asc" : "desc";
+  const safeOnlyUpdates = params?.onlyUpdates ?? false;
 
   return useQuery({
     queryKey: KEYS.softwarePage(id, {
@@ -234,6 +243,7 @@ export function useAgentSoftwarePage(
       pageSize: safePageSize,
       search: safeSearch,
       order: safeOrder,
+      onlyUpdates: safeOnlyUpdates,
     }),
     queryFn: ({ signal }) =>
       agentsApi.getSoftwarePage(
@@ -243,6 +253,7 @@ export function useAgentSoftwarePage(
           pageSize: safePageSize,
           search: safeSearch,
           order: safeOrder,
+          onlyUpdates: safeOnlyUpdates,
         },
         { signal },
       ),
