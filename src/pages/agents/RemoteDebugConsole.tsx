@@ -175,6 +175,10 @@ export default function RemoteDebugConsole() {
   const missedPingsBeforeClose = parsePositiveInt(searchParams.get("misses"));
   const initialGraceSeconds = parsePositiveInt(searchParams.get("grace"));
   const keepAliveSeconds = parsePositiveInt(searchParams.get("keepAlive"));
+  // Expiração do JWT NATS (≠ da sessão). Sem ela, o NatsService acharia que a
+  // credencial está expirando e cairia na rota GLOBAL de credenciais, que não
+  // autoriza o subject da sessão (e pode nem existir — 404).
+  const credsExpiresAtParam = searchParams.get("credsExpiresAt") ?? "";
 
   // Auto-conecta: a sessão já foi criada no servidor antes de a popup abrir, e
   // o NATS não faz replay — cada segundo parado em "iniciar debug" era log
@@ -190,6 +194,13 @@ export default function RemoteDebugConsole() {
   // precisa refletir o prazo atual no console.
   const [sessionExpiresAt, setSessionExpiresAt] = useState(expiresAt);
   const [maxExpiresAt, setMaxExpiresAt] = useState<string>("");
+  // Expiração (ms) do JWT NATS atual; usada para refresh proativo. 0 = nunca
+  // buscou (o keepalive busca na primeira oportunidade).
+  const credsExpiresAtRef = useRef<number>(
+    Number.isFinite(Date.parse(credsExpiresAtParam))
+      ? Date.parse(credsExpiresAtParam)
+      : 0,
+  );
   const [expired, setExpired] = useState(false);
   const [copyState, setCopyState] = useState<"idle" | "ok" | "error">("idle");
   const [levelFilters, setLevelFilters] = useState<Record<RemoteDebugLogLevel, boolean>>({
@@ -304,13 +315,32 @@ export default function RemoteDebugConsole() {
       jwt: jwtParam,
       nkeySeed: nkeySeedParam,
       publicKey: "",
-      expiresAtUtc: expiresAt || new Date(Date.now() + 7200000).toISOString(),
+      // A expiração é do JWT, NÃO da sessão: usar a da sessão fazia o serviço
+      // reemitir credenciais pela rota global do dashboard.
+      expiresAtUtc:
+        credsExpiresAtParam ||
+        expiresAt ||
+        new Date(Date.now() + 60 * 60_000).toISOString(),
       // O canal de controle é assinado pelo viewer (pong/closed/levelChanged)
       // além dos logs. A allow-list local precisa cobrir os dois subjects.
       publishSubjects: [],
       subscribeSubjects: [subject, controlSubject].filter(Boolean),
     };
-  }, [jwtParam, nkeySeedParam, expiresAt, subject, controlSubject]);
+  }, [jwtParam, nkeySeedParam, credsExpiresAtParam, expiresAt, subject, controlSubject]);
+
+  // Credencial escopada da SESSÃO. É a única fonte válida para o console: a
+  // rota global do dashboard não inclui o subject do agente no JWT.
+  const fetchScopedCredentials = useCallback(async (): Promise<NatsCredentialsResponse> => {
+    const fresh = await agentsApi.getRemoteDebugNatsCredentials(agentId, sessionId);
+    return {
+      jwt: fresh.jwt,
+      nkeySeed: fresh.nkeySeed,
+      publicKey: "",
+      expiresAtUtc: fresh.expiresAtUtc,
+      publishSubjects: [],
+      subscribeSubjects: [subject, controlSubject].filter(Boolean),
+    };
+  }, [agentId, sessionId, subject, controlSubject]);
 
   // ── Canal de controle: liveness (ping-pong) + renovação contínua ──────────
   //
@@ -333,6 +363,20 @@ export default function RemoteDebugConsole() {
   );
 
   const handleKeepAlive = useCallback(async () => {
+    // Refresh PROATIVO da credencial NATS escopada: a cada keepalive, se o JWT
+    // está a <10min de expirar, reemite para que a próxima (re)conexão já use
+    // a credencial nova — sem depender de auth_error e sem tocar na rota global.
+    const expiresAtMs = credsExpiresAtRef.current;
+    if (!expiresAtMs || expiresAtMs - Date.now() < 10 * 60_000) {
+      try {
+        const fresh = await fetchScopedCredentials();
+        credsExpiresAtRef.current = Date.parse(fresh.expiresAtUtc);
+        getNatsService().setPreSuppliedCredentials(fresh);
+      } catch {
+        // Mantém a credencial atual; auth_error cobre uma expiração real.
+      }
+    }
+
     const result = await agentsApi.renewRemoteDebugSession(agentId, sessionId);
     return {
       expiresAtUtc: result.expiresAtUtc,
@@ -340,7 +384,7 @@ export default function RemoteDebugConsole() {
       sessionActive: result.sessionActive,
       endReason: result.endReason,
     };
-  }, [agentId, sessionId]);
+  }, [agentId, sessionId, fetchScopedCredentials]);
 
   const handlePeerLost = useCallback(() => {
     // Para a liveness/keepalive: sem isso o hook continuaria renovando uma
@@ -441,12 +485,14 @@ export default function RemoteDebugConsole() {
     const natsService = getNatsService({
       url: natsUrl,
       enabled: true,
-      // O console recebe credenciais JWT escopadas pelo backend
-      // (POST .../nats-credentials). Usar o modo global do dashboard aqui faz a
-      // conexão autenticar com o token da API e IGNORAR as credenciais, o que
-      // quebra a assinatura do subject e/ou a allow-list do JWT. Sem credenciais
-      // (endpoint indisponível) cai no modo global como fallback.
-      authMode: creds ? "jwt_credentials" : realtimeConfig.natsAuthMode,
+      // O console SEMPRE usa credenciais JWT escopadas da sessão
+      // (POST .../nats-credentials). O modo global do dashboard autentica com o
+      // token da API e IGNORA as credenciais, quebrando a allow-list do
+      // subject; e a rota global de credenciais retorna 404/não autoriza o
+      // subject da sessão. O provider garante a fonte correta em qualquer
+      // reconexão, sem depender do jwt/nkeySeed da query string.
+      authMode: "jwt_credentials",
+      credentialsProvider: fetchScopedCredentials,
       scopeMode: "preserve",
     });
 
@@ -486,24 +532,14 @@ export default function RemoteDebugConsole() {
       if (state === "auth_error") {
         // JWT NATS expirado no meio da sessão longa: em vez de auth_error
         // terminal (que travava o console até reconectar à mão), busca
-        // credencial fresca e reconecta. O stream é retomado pelo
+        // credencial fresca (escopada) e reconecta. O stream é retomado pelo
         // restoreSubscriptions do próprio serviço.
         setConnectionState("reconnecting");
         void (async () => {
           try {
-            const fresh = await agentsApi.getRemoteDebugNatsCredentials(
-              agentId,
-              sessionId,
-            );
+            const fresh = await fetchScopedCredentials();
             if (disposed) return;
-            natsService.setPreSuppliedCredentials({
-              jwt: fresh.jwt,
-              nkeySeed: fresh.nkeySeed,
-              publicKey: "",
-              expiresAtUtc: fresh.expiresAtUtc,
-              publishSubjects: [],
-              subscribeSubjects: [subject, controlSubject].filter(Boolean),
-            });
+            natsService.setPreSuppliedCredentials(fresh);
             const reconnected = await natsService.forceReconnect();
             if (disposed) return;
             if (!reconnected) {
@@ -623,6 +659,7 @@ export default function RemoteDebugConsole() {
     agentId,
     buildCredentials,
     controlSubject,
+    fetchScopedCredentials,
     liveness,
     natsUrl,
     session.accessToken,

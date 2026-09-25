@@ -202,6 +202,13 @@ export interface NatsConfig {
   clientId?: string;
   siteId?: string;
   scopeMode?: "replace" | "preserve";
+  /**
+   * Provedor de credenciais escopadas da sessão. Quando definido, substitui a
+   * rota global do dashboard (/api/v1/nats-auth/user/credentials) — que não
+   * autoriza os subjects da sessão e pode nem existir nesse deployment.
+   * Usado pelo console de debug remoto.
+   */
+  credentialsProvider?: () => Promise<NatsCredentialsResponse>;
 }
 
 export type NatsConnectionState =
@@ -483,7 +490,13 @@ class NatsService {
    */
   async forceReconnect(): Promise<boolean> {
     this.emitTelemetry("info", "force_reconnect_requested");
-    this.invalidateCredentials();
+    // Só invalida credencial ausente/expirada: o console define credencial
+    // fresca imediatamente antes de reconectar, e invalidar aqui descartaria
+    // exatamente a credencial que deveria ser usada (fazia o NATS cair na
+    // rota global de credenciais, que não autoriza o subject da sessão).
+    if (!this.credentials || isCredentialsExpiring(this.credentials)) {
+      this.invalidateCredentials();
+    }
     this.clearReconnectTimer();
     this.reconnectAttempts = 0;
 
@@ -611,7 +624,17 @@ class NatsService {
       return this.credentialsInFlight;
     }
 
-    this.credentialsInFlight = this.issueCredentials()
+    const provider = this.config.credentialsProvider;
+    const issue = provider
+      ? provider().then((credentials) => {
+          this.emitTelemetry("info", "credentials_provider_success", {
+            expiresAtUtc: credentials.expiresAtUtc,
+          });
+          return credentials;
+        })
+      : this.issueCredentials();
+
+    this.credentialsInFlight = issue
       .then((credentials) => {
         this.credentials = credentials;
         return credentials;

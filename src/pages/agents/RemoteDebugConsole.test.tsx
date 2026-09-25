@@ -157,7 +157,11 @@ describe("RemoteDebugConsole", () => {
 
     startRemoteDebugMock.mockReset();
     stopRemoteDebugMock.mockReset().mockResolvedValue(undefined);
-    getCredentialsMock.mockReset().mockResolvedValue({ jwt: "jwt-2", nkeySeed: "seed-2" });
+    getCredentialsMock.mockReset().mockResolvedValue({
+      jwt: "jwt-2",
+      nkeySeed: "seed-2",
+      expiresAtUtc: new Date(Date.now() + 60 * 60_000).toISOString(),
+    });
     natsPublishMock.mockReset().mockResolvedValue(undefined);
     natsOnAuthErrorMock.mockReset().mockReturnValue(() => {});
     natsForceReconnectMock.mockReset().mockResolvedValue(true);
@@ -316,6 +320,21 @@ describe("RemoteDebugConsole", () => {
     expect(
       screen.getByText(/Sessão encerrada pelo servidor \(max-duration\)/),
     ).toBeTruthy();
+  });
+  // Regressão do 404: o console NÃO pode depender da rota global de credenciais
+  // (/api/v1/nats-auth/user/credentials), que não autoriza o subject do agente.
+  // Ele precisa configurar o NATS com o provedor escopado da sessão.
+  it("configura o NATS com provedor de credencial escopada (sem rota global)", async () => {
+    renderConsole();
+
+    await waitFor(() => {
+      expect(getNatsServiceMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          authMode: "jwt_credentials",
+          credentialsProvider: expect.any(Function),
+        }),
+      );
+    });
   });
 
 });

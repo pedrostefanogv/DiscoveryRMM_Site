@@ -26,6 +26,8 @@ interface ConsoleUrlParams {
   expiresAtUtc: string;
   jwt?: string;
   nkeySeed?: string;
+  /** Expiração do JWT NATS (diferente da expiração da sessão). */
+  credsExpiresAt?: string;
   controlSubject?: string | null;
   pingIntervalSeconds?: number;
   missedPingsBeforeClose?: number;
@@ -49,6 +51,9 @@ function toConsoleUrl(params: ConsoleUrlParams) {
   }
   if (params.nkeySeed) {
     query.set("nkeySeed", params.nkeySeed);
+  }
+  if (params.credsExpiresAt) {
+    query.set("credsExpiresAt", params.credsExpiresAt);
   }
   if (params.controlSubject) {
     query.set("controlSubject", params.controlSubject);
@@ -93,6 +98,7 @@ export async function openRemoteDebugPopup({
 
   let jwt: string | undefined;
   let nkeySeed: string | undefined;
+  let credsExpiresAt: string | undefined;
   try {
     const creds = await agentsApi.getRemoteDebugNatsCredentials(
       agentId,
@@ -100,6 +106,7 @@ export async function openRemoteDebugPopup({
     );
     jwt = creds.jwt;
     nkeySeed = creds.nkeySeed;
+    credsExpiresAt = creds.expiresAtUtc;
   } catch {
     // Endpoint pode nao existir ainda no backend — prossegue sem credentials JWT.
   }
@@ -113,6 +120,7 @@ export async function openRemoteDebugPopup({
       expiresAtUtc: session.expiresAtUtc,
       jwt,
       nkeySeed,
+      credsExpiresAt,
       controlSubject: session.natsControlSubject ?? null,
       pingIntervalSeconds: session.pingIntervalSeconds,
       missedPingsBeforeClose: session.missedPingsBeforeClose,
