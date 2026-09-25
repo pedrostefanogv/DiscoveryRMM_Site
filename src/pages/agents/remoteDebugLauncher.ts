@@ -18,16 +18,15 @@ const DEFAULT_PAYLOAD: StartRemoteDebugSessionRequest = {
   ttlMinutes: 20,
 };
 
+const POPUP_FEATURES =
+  "width=980,height=700,toolbar=no,menubar=no,scrollbars=no,resizable=yes,location=no,status=no";
+
 interface ConsoleUrlParams {
   sessionId: string;
   agentId: string;
   subject: string;
   natsUrl?: string | null;
   expiresAtUtc: string;
-  jwt?: string;
-  nkeySeed?: string;
-  /** Expiração do JWT NATS (diferente da expiração da sessão). */
-  credsExpiresAt?: string;
   controlSubject?: string | null;
   pingIntervalSeconds?: number;
   missedPingsBeforeClose?: number;
@@ -35,6 +34,14 @@ interface ConsoleUrlParams {
   keepAliveSeconds?: number;
 }
 
+/**
+ * Monta a URL do console.
+ *
+ * NÃO inclui jwt/nkeySeed: o console busca a credencial escopada da sessão via
+ * o endpoint dedicado (credentialsProvider do NatsService). Segredo de
+ * assinatura em query string vai para histórico/referrer — e a rota global de
+ * credenciais não autoriza o subject da sessão.
+ */
 function toConsoleUrl(params: ConsoleUrlParams) {
   const query = new URLSearchParams({
     sessionId: params.sessionId,
@@ -45,15 +52,6 @@ function toConsoleUrl(params: ConsoleUrlParams) {
 
   if (params.natsUrl) {
     query.set("natsUrl", params.natsUrl);
-  }
-  if (params.jwt) {
-    query.set("jwt", params.jwt);
-  }
-  if (params.nkeySeed) {
-    query.set("nkeySeed", params.nkeySeed);
-  }
-  if (params.credsExpiresAt) {
-    query.set("credsExpiresAt", params.credsExpiresAt);
   }
   if (params.controlSubject) {
     query.set("controlSubject", params.controlSubject);
@@ -74,75 +72,63 @@ function toConsoleUrl(params: ConsoleUrlParams) {
   return `/agents/remote-debug-console?${query.toString()}`;
 }
 
+async function stopQuietly(agentId: string, sessionId: string): Promise<void> {
+  try {
+    await agentsApi.stopRemoteDebugSession(agentId, sessionId);
+  } catch {
+    // best-effort: mantém o erro principal da UI
+  }
+}
+
 export async function openRemoteDebugPopup({
   agentId,
   payload,
 }: OpenRemoteDebugParams) {
-  const session = await agentsApi.startRemoteDebugSession(agentId, {
-    ...DEFAULT_PAYLOAD,
-    ...payload,
-  });
-
-  const natsSubject = session.natsTenantSubject;
-  if (!natsSubject) {
-    try {
-      await agentsApi.stopRemoteDebugSession(agentId, session.sessionId);
-    } catch {
-      // Mantem o erro principal para a UI.
-    }
-
-    throw new Error(
-      "Sessão de remote debug criada sem subject NATS. Verifique a configuração do backend.",
-    );
-  }
-
-  let jwt: string | undefined;
-  let nkeySeed: string | undefined;
-  let credsExpiresAt: string | undefined;
-  try {
-    const creds = await agentsApi.getRemoteDebugNatsCredentials(
-      agentId,
-      session.sessionId,
-    );
-    jwt = creds.jwt;
-    nkeySeed = creds.nkeySeed;
-    credsExpiresAt = creds.expiresAtUtc;
-  } catch {
-    // Endpoint pode nao existir ainda no backend — prossegue sem credentials JWT.
-  }
-
-  const popup = window.open(
-    toConsoleUrl({
-      sessionId: session.sessionId,
-      agentId: session.agentId,
-      subject: natsSubject,
-      natsUrl: session.natsWssUrl,
-      expiresAtUtc: session.expiresAtUtc,
-      jwt,
-      nkeySeed,
-      credsExpiresAt,
-      controlSubject: session.natsControlSubject ?? null,
-      pingIntervalSeconds: session.pingIntervalSeconds,
-      missedPingsBeforeClose: session.missedPingsBeforeClose,
-      initialGraceSeconds: session.initialGraceSeconds,
-      keepAliveSeconds: session.keepAliveSeconds,
-    }),
-    `rdebug-${session.sessionId}`,
-    "width=980,height=700,toolbar=no,menubar=no,scrollbars=no,resizable=yes,location=no,status=no",
-  );
-
+  // 1) Abre a janela SINCRONAMENTE, antes de qualquer await. Popup blockers
+  //    estritos barram window.open depois de chamadas de rede (o fluxo antigo
+  //    abria após 2 requisições e virava PopupBlockedError).
+  const popup = window.open("about:blank", "rdebug-console", POPUP_FEATURES);
   if (!popup) {
-    // Evita deixar sessão ativa quando o navegador bloqueia popup.
-    try {
-      await agentsApi.stopRemoteDebugSession(agentId, session.sessionId);
-    } catch {
-      // Mantem o erro principal para a UI.
-    }
     throw new PopupBlockedError(
       "Popup bloqueada pelo navegador. Permita popups para abrir o console de debug.",
     );
   }
 
-  popup.focus();
-  return session;
+  try {
+    const session = await agentsApi.startRemoteDebugSession(agentId, {
+      ...DEFAULT_PAYLOAD,
+      ...payload,
+    });
+
+    const natsSubject = session.natsTenantSubject;
+    if (!natsSubject) {
+      await stopQuietly(agentId, session.sessionId);
+      throw new Error(
+        "Sessão de remote debug criada sem subject NATS. Verifique a configuração do backend.",
+      );
+    }
+
+    // 2) Navega a janela já aberta para o console.
+    popup.location.href = toConsoleUrl({
+      sessionId: session.sessionId,
+      agentId: session.agentId,
+      subject: natsSubject,
+      natsUrl: session.natsWssUrl,
+      expiresAtUtc: session.expiresAtUtc,
+      controlSubject: session.natsControlSubject ?? null,
+      pingIntervalSeconds: session.pingIntervalSeconds,
+      missedPingsBeforeClose: session.missedPingsBeforeClose,
+      initialGraceSeconds: session.initialGraceSeconds,
+      keepAliveSeconds: session.keepAliveSeconds,
+    });
+    popup.focus();
+    return session;
+  } catch (error) {
+    try {
+      popup.close();
+    } catch {
+      // janela já fechada
+    }
+    throw error;
+  }
 }

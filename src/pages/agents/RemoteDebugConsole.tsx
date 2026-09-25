@@ -217,6 +217,18 @@ export default function RemoteDebugConsole() {
   const consoleRef = useRef<HTMLDivElement | null>(null);
   const [autoScroll, setAutoScroll] = useState(true);
   const cleanupRef = useRef<(() => void) | null>(null);
+  // Limita a recuperação de auth: sem contador, um auth_error persistente
+  // (ex.: auth callout recusando) geraria loop infinito de fetch de credencial
+  // + reconexão, martelando a API e o NATS. Reseta quando conecta.
+  const authRecoveryAttemptsRef = useRef(0);
+  // Marca que o limite foi atingido: a mensagem acionável do limite não pode ser
+  // sobrescrita por uma recuperação que ainda estava em voo.
+  const authRecoveryExhaustedRef = useRef(false);
+  const MAX_AUTH_RECOVERY_ATTEMPTS = 2;
+  // Instância REAL do NatsService criada pelo connect. Usar a ref (em vez do
+  // singleton getNatsService()) evita pingar/publicar num serviço "dummy"
+  // criado entre resetNatsService() e a recriação.
+  const natsServiceRef = useRef<ReturnType<typeof getNatsService> | null>(null);
 
   useEffect(() => {
     setSessionExpiresAt(expiresAt);
@@ -350,7 +362,9 @@ export default function RemoteDebugConsole() {
   const sendControlPing = useCallback(
     (sequence: number) => {
       if (!sessionId || !controlSubject) return;
-      const natsService = getNatsService();
+      // Só publica no serviço REAL criado pelo connect (nunca no dummy).
+      const natsService = natsServiceRef.current;
+      if (!natsService) return;
       const envelope = buildViewerControlEnvelope("ping", sessionId, sequence);
       void natsService
         .publish(controlSubject, envelope as unknown as Record<string, unknown>)
@@ -371,7 +385,7 @@ export default function RemoteDebugConsole() {
       try {
         const fresh = await fetchScopedCredentials();
         credsExpiresAtRef.current = Date.parse(fresh.expiresAtUtc);
-        getNatsService().setPreSuppliedCredentials(fresh);
+        natsServiceRef.current?.setPreSuppliedCredentials(fresh);
       } catch {
         // Mantém a credencial atual; auth_error cobre uma expiração real.
       }
@@ -407,6 +421,15 @@ export default function RemoteDebugConsole() {
     // Encerra a liveness para não ficar renovando uma sessão já finalizada.
     setDebugState("stopped");
     setExpired(true);
+    setConnectionState("closed");
+    // Mensagem acionável: sem isso o operador via só "EXPIRADO" e não sabia
+    // que precisava reabrir o debug (a sessão some da API em memória a cada
+    // restart/redeploy — o renew passa a responder 404).
+    setErrorMessage(
+      reason === "sessao-nao-encontrada"
+        ? "A sessão não existe mais no servidor (a API pode ter sido reiniciada ou a sessão foi limpa). Reabra o debug para criar uma nova sessão."
+        : `Sessão encerrada pelo servidor (${reason}). Reabra o debug para reconectar.`,
+    );
     setLogs((current) => [
       ...current,
       withSystemMessage("Sessão encerrada pelo servidor (" + reason + ")."),
@@ -474,6 +497,9 @@ export default function RemoteDebugConsole() {
         }
       }
       disposers.length = 0;
+      if (natsServiceRef.current === natsService) {
+        natsServiceRef.current = null;
+      }
     };
 
     setConnectionState("connecting");
@@ -495,6 +521,7 @@ export default function RemoteDebugConsole() {
       credentialsProvider: fetchScopedCredentials,
       scopeMode: "preserve",
     });
+    natsServiceRef.current = natsService;
 
     if (creds) {
       natsService.setPreSuppliedCredentials(creds);
@@ -517,6 +544,8 @@ export default function RemoteDebugConsole() {
     const unsubscribeConnectionState = natsService.onConnectionStateChange((state) => {
       if (disposed) return;
       if (state === "connected") {
+        authRecoveryAttemptsRef.current = 0;
+        authRecoveryExhaustedRef.current = false;
         setConnectionState("connected");
         setErrorMessage(null);
         return;
@@ -534,6 +563,18 @@ export default function RemoteDebugConsole() {
         // terminal (que travava o console até reconectar à mão), busca
         // credencial fresca (escopada) e reconecta. O stream é retomado pelo
         // restoreSubscriptions do próprio serviço.
+        //
+        // LIMITE: se o servidor continuar recusando (ex.: auth callout com
+        // problema), parar evita loop infinito martelando a API.
+        authRecoveryAttemptsRef.current += 1;
+        if (authRecoveryAttemptsRef.current > MAX_AUTH_RECOVERY_ATTEMPTS) {
+          authRecoveryExhaustedRef.current = true;
+          setConnectionState("closed");
+          setErrorMessage(
+            "O servidor NATS recusou as credenciais da sessão. Verifique o auth callout do discovery-api (log \"Rejected pre-issued NATS JWT\").",
+          );
+          return;
+        }
         setConnectionState("reconnecting");
         void (async () => {
           try {
@@ -542,7 +583,7 @@ export default function RemoteDebugConsole() {
             natsService.setPreSuppliedCredentials(fresh);
             const reconnected = await natsService.forceReconnect();
             if (disposed) return;
-            if (!reconnected) {
+            if (!reconnected && !authRecoveryExhaustedRef.current) {
               const diagnostics = natsService.getConnectionDiagnostics();
               setConnectionState("closed");
               setErrorMessage(
@@ -550,11 +591,14 @@ export default function RemoteDebugConsole() {
                   "Falha de autenticação no NATS para o console de remote debug.",
               );
             }
-          } catch {
-            if (!disposed) {
+          } catch (error) {
+            if (!disposed && !authRecoveryExhaustedRef.current) {
+              const detail = error instanceof Error ? error.message : String(error);
               setConnectionState("closed");
               setErrorMessage(
-                "Falha ao renovar as credenciais NATS do console de remote debug.",
+                "Não foi possível renovar as credenciais NATS da sessão de debug. " +
+                  "A sessão pode ter expirado no servidor. Detalhe: " +
+                  detail,
               );
             }
           }

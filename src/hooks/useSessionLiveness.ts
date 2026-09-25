@@ -153,9 +153,24 @@ export function useSessionLiveness(options: UseSessionLivenessOptions) {
           return;
         }
         optionsRef.current.onKeepAlive?.(result);
-      } catch {
-        // Erro de rede: tenta no proximo ciclo. Erros de negocio (sessao
-        // expirada) chegam como sessionActive=false e encerram aqui.
+      } catch (error) {
+        // 400/403/404 = a sessao nao existe mais no servidor (API reiniciada
+        // perdeu o estado em memoria, prune do cleanup, ou acesso negado).
+        // E terminal: sem isso o keepalive falhava em loop silencioso e o
+        // console ficava preso em "AGUARDANDO AGENTE" sem nenhuma explicacao
+        // (HAR: 404 "Remote debug session not found" ~1s apos abrir).
+        // Le apenas a propriedade `status` (ApiError a expoe): usar
+        // `instanceof` acoplaria o hook ao modulo @/api, que nao pode ser
+        // mockado nos testes do console.
+        const status = (error as { status?: number } | null | undefined)?.status;
+        if (status === 400 || status === 403 || status === 404) {
+          finished = true;
+          setStatusSafe("expired");
+          optionsRef.current.onExpired?.("sessao-nao-encontrada");
+          return;
+        }
+        // Erro de rede/5xx: tenta no proximo ciclo. Erros de negocio (sessao
+        // encerrada) chegam como sessionActive=false e encerram acima.
       }
     };
 

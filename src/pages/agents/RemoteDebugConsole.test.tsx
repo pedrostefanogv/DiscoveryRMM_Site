@@ -317,9 +317,30 @@ describe("RemoteDebugConsole", () => {
       expect(screen.getByText("EXPIRADO")).toBeTruthy();
     });
 
+    // Aparece no log do sistema E na faixa de erro (mensagem acionável).
     expect(
-      screen.getByText(/Sessão encerrada pelo servidor \(max-duration\)/),
-    ).toBeTruthy();
+      screen.getAllByText(/Sessão encerrada pelo servidor \(max-duration\)/).length,
+    ).toBeGreaterThan(0);
+  });
+
+  // Regressão do HAR: com a API reiniciada (estado de sessão em memória), o
+  // renew passa a responder 404 "Remote debug session not found". Antes o hook
+  // engolia esse erro no `catch` vazio e o console ficava preso em
+  // "AGUARDANDO AGENTE" sem nenhuma mensagem.
+  it("marca EXPIRADO e orienta reabrir quando o servidor perde a sessão (404)", async () => {
+    renewRemoteDebugMock.mockRejectedValue(
+      Object.assign(new Error("Remote debug session not found."), { status: 404 }),
+    );
+
+    renderConsole();
+
+    await waitFor(() => {
+      expect(screen.getByText("EXPIRADO")).toBeTruthy();
+    });
+
+    expect(
+      screen.getAllByText(/não existe mais no servidor/).length,
+    ).toBeGreaterThan(0);
   });
   // Regressão do 404: o console NÃO pode depender da rota global de credenciais
   // (/api/v1/nats-auth/user/credentials), que não autoriza o subject do agente.
@@ -335,6 +356,31 @@ describe("RemoteDebugConsole", () => {
         }),
       );
     });
+  });
+
+  // Regressão (revisão): auth_error persistente não pode gerar loop infinito de
+  // fetch de credencial + reconexão (martelando API e NATS).
+  it("limita a recuperação de auth_error e mostra erro acionável", async () => {
+    const stateListeners: Array<(state: string) => void> = [];
+    natsStateMock.mockImplementation((listener: (state: string) => void) => {
+      stateListeners.push(listener);
+      listener("connected");
+      return () => {};
+    });
+    natsForceReconnectMock.mockResolvedValue(false);
+
+    renderConsole();
+    await waitFor(() => expect(natsSubscribeMock).toHaveBeenCalled());
+
+    // auth_error persistente: 5 eventos seguidos.
+    for (let i = 0; i < 5; i++) {
+      stateListeners.forEach((listener) => listener("auth_error"));
+    }
+
+    await waitFor(() => {
+      expect(screen.getByText(/auth callout do discovery-api/)).toBeTruthy();
+    });
+    expect(natsForceReconnectMock.mock.calls.length).toBeLessThanOrEqual(2);
   });
 
 });
