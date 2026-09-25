@@ -108,10 +108,6 @@ function normalizeNatsUrl(url: string): string {
   return trimmed;
 }
 
-function buildCredsFile(credentials: NatsCredentialsResponse): string {
-  return `-----BEGIN NATS USER JWT-----\n${credentials.jwt}\n------END NATS USER JWT------\n\n************************* IMPORTANT *************************\nNKEY Seed printed below can be used sign and prove identity.\nNKEYs are sensitive and should be treated as secrets.\n\n-----BEGIN USER NKEY SEED-----\n${credentials.nkeySeed}\n------END USER NKEY SEED------\n`;
-}
-
 function isCredentialsExpiring(credentials: NatsCredentialsResponse): boolean {
   return (
     new Date(credentials.expiresAtUtc).getTime() <=
@@ -681,9 +677,15 @@ class NatsService {
       subscribeSubjectsCount: credentials.subscribeSubjects.length,
     });
 
-    return client.credsAuthenticator(
-      new TextEncoder().encode(buildCredsFile(credentials)),
-    );
+    // A credencial escopada da sessão é um JWT de usuário NATS pré-emitido.
+    // O nats-server em modo config (authorization.auth_callout sem operator
+    // mode) DESCARTA o campo "jwt" do CONNECT antes de chamar o auth callout
+    // ("when not in operator mode, discard the jwt" em server/client.go); via
+    // creds o callout recebia connect_opts vazio e respondia
+    // "Missing auth token." -> Authorization Violation no console. Enviada como
+    // auth_token, ela chega ao callout, que valida o JWT e reemite um vinculado
+    // à chave efêmera da conexão.
+    return client.tokenAuthenticator(credentials.jwt);
   }
 
   private watchConnection(connection: NatsConnection) {

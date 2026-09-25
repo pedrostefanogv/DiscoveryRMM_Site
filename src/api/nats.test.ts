@@ -76,6 +76,35 @@ describe("NatsService auth mode", () => {
     expect(credsAuthenticatorMock).not.toHaveBeenCalled();
   });
 
+  it("connect em jwt_credentials envia o JWT escopado como auth_token", async () => {
+    // O auth callout roda em modo config, onde o nats-server descarta o campo
+    // "jwt" do CONNECT. A credencial escopada da sessão precisa ir como
+    // auth_token para chegar ao callout (que reemite o JWT vinculado à chave
+    // efêmera da conexão).
+    wsconnectMock.mockResolvedValue(createConnectionMock());
+
+    const natsService = getNatsService({
+      url: "ws://localhost:9222",
+      enabled: true,
+      authMode: "jwt_credentials",
+      credentialsProvider: async () => ({
+        jwt: "scoped-nats-user-jwt",
+        nkeySeed: "SUANDKJUZCC3KC5KRUNDKWXDKXTTCP7Y3TSHD52IKH4RF4HTXJJ7WU3IX4",
+        publicKey: "",
+        expiresAtUtc: new Date(Date.now() + 600_000).toISOString(),
+        publishSubjects: [],
+        subscribeSubjects: ["tenant.c.site.s.agent.a.remote-debug.log"],
+      }),
+    });
+
+    const connected = await natsService.connect();
+
+    expect(connected).toBe(true);
+    expect(tokenAuthenticatorMock).toHaveBeenCalledWith("scoped-nats-user-jwt");
+    expect(credsAuthenticatorMock).not.toHaveBeenCalled();
+    expect(getApiAccessTokenMock).not.toHaveBeenCalled();
+  });
+
   it("connect em auth_error não agenda reconexao infinita", async () => {
     const authorizationError = new Error("Authorization Violation");
     authorizationError.name = "AuthorizationError";
