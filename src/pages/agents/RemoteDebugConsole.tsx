@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   agentsApi,
@@ -216,6 +216,28 @@ export default function RemoteDebugConsole() {
 
   const consoleRef = useRef<HTMLDivElement | null>(null);
   const [autoScroll, setAutoScroll] = useState(true);
+  // Espelho de autoScroll: o handler de scroll lê o valor ATUAL sem depender do
+  // closure do render (e sem precisar recriar o listener).
+  const autoScrollRef = useRef(autoScroll);
+  // Sequência de linhas recebidas. Não usa logs.length porque o console
+  // descarta as mais antigas no teto de MAX_LOG_LINES: o comprimento estagna,
+  // mas a sequência continua crescendo.
+  const logSeqRef = useRef(0);
+  // Sequência observada na última vez em que o console estava no fim. A
+  // diferença são as linhas que chegaram em modo manual.
+  const pinnedSeqRef = useRef(0);
+  const [pendingLines, setPendingLines] = useState(0);
+
+  const scrollToBottom = useCallback(() => {
+    const element = consoleRef.current;
+    if (!element) return;
+    element.scrollTop = element.scrollHeight;
+  }, []);
+
+  useEffect(() => {
+    autoScrollRef.current = autoScroll;
+  }, [autoScroll]);
+
   const cleanupRef = useRef<(() => void) | null>(null);
   // Limita a recuperação de auth: sem contador, um auth_error persistente
   // (ex.: auth callout recusando) geraria loop infinito de fetch de credencial
@@ -323,10 +345,38 @@ export default function RemoteDebugConsole() {
     return displayLogs.filter((entry) => entry.message.toLowerCase().includes(query));
   }, [displayLogs, messageFilter]);
 
+  // Segue o fim a cada linha nova enquanto o modo auto está ligado.
+  // useLayoutEffect rola ANTES do paint (a linha nova nunca aparece cortada).
+  // A área de logs é o scroller (root com h-screen); com o antigo min-h-screen o
+  // documento é que rolava e este assignment era um no-op.
+  useLayoutEffect(() => {
+    if (!autoScroll) return;
+    scrollToBottom();
+  }, [visibleLogs, autoScroll, scrollToBottom]);
+
+  // Conta as linhas que chegaram enquanto o operador está em modo manual para
+  // oferecer o "ir para o fim" em um clique.
   useEffect(() => {
-    if (!autoScroll || !consoleRef.current) return;
-    consoleRef.current.scrollTop = consoleRef.current.scrollHeight;
-  }, [visibleLogs, autoScroll]);
+    if (autoScroll) {
+      pinnedSeqRef.current = logSeqRef.current;
+      setPendingLines(0);
+      return;
+    }
+    setPendingLines(Math.max(0, logSeqRef.current - pinnedSeqRef.current));
+  }, [autoScroll, logs]);
+
+  const resumeAutoScroll = useCallback(() => {
+    setAutoScroll(true);
+    scrollToBottom();
+  }, [scrollToBottom]);
+
+  const toggleAutoScroll = useCallback(() => {
+    if (autoScroll) {
+      setAutoScroll(false);
+      return;
+    }
+    resumeAutoScroll();
+  }, [autoScroll, resumeAutoScroll]);
 
   const buildCredentials = useCallback((): NatsCredentialsResponse | null => {
     if (!jwtParam || !nkeySeedParam) return null;
@@ -538,6 +588,7 @@ export default function RemoteDebugConsole() {
     }
 
     const appendLog = (event: RemoteDebugLogEvent) => {
+      logSeqRef.current += 1;
       setLogs((previous) => {
         const next = [...previous, event];
         if (next.length <= MAX_LOG_LINES) return next;
@@ -881,7 +932,10 @@ export default function RemoteDebugConsole() {
     if (!element) return;
     const nearBottom =
       element.scrollTop + element.clientHeight >= element.scrollHeight - 20;
-    setAutoScroll(nearBottom);
+    // Só muda quando cruza o limiar; evita re-render a cada evento de scroll.
+    if (nearBottom !== autoScrollRef.current) {
+      setAutoScroll(nearBottom);
+    }
   };
 
   if (!sessionId || !agentId) {
@@ -933,7 +987,7 @@ export default function RemoteDebugConsole() {
   const agentLabel = target?.agentName || shortId(resolvedAgentId);
 
   return (
-    <div className="relative flex min-h-screen flex-col bg-background text-foreground">
+    <div className="relative flex h-screen flex-col overflow-hidden bg-background text-foreground">
       {/* Toolbar */}
       <header className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-border bg-surface/80 px-3 py-2 text-xs">
         <Badge color={statusColor}>{statusLabel}</Badge>
@@ -1047,8 +1101,9 @@ export default function RemoteDebugConsole() {
           <Button
             size="sm"
             variant="ghost"
-            onClick={() => setAutoScroll((current) => !current)}
+            onClick={toggleAutoScroll}
             disabled={totalLines === 0}
+            aria-pressed={autoScroll}
             title="Alterna a rolagem automática para o fim do console"
             className="text-[10px]"
           >
@@ -1120,55 +1175,70 @@ export default function RemoteDebugConsole() {
       </div>
       )}
 
-      {/* Log area */}
-      <div
-        ref={consoleRef}
-        onScroll={handleScroll}
-        className="flex-1 overflow-y-auto px-3 py-2 font-mono text-xs leading-relaxed"
-      >
-        {visibleLogs.length === 0 && (
-          <div className="py-12 text-center text-sm text-muted">
-            <p>
-              {debugState === "idle"
-                ? "Console pronto. Clique em \"iniciar debug\" para começar a receber logs."
-                : debugState === "stopped"
-                  ? "Debug pausado. Clique em \"iniciar debug\" para retomar."
-                  : connectionState === "connected"
-                    ? "Aguardando entradas de log..."
-                    : "Nenhuma linha para exibir."}
-            </p>
-            {waitingLongEnough && (
-              <p className="mx-auto mt-3 max-w-xl rounded border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning">
-                Conectado, mas nenhum log chegou em {Math.round(WAITING_HINT_MS / 1000)}s. Isso
-                normalmente significa que o <strong>agente não aceitou a sessão</strong>:
-                confira o <code className="font-mono">agent-service.log</code> do agente
-                procurando por <code className="font-mono">[remote-debug]</code> e o
-                resultado do comando <code className="font-mono">remotedebug</code>{" "}
-                (exitCode=1 indica falha ao iniciar a sessão no agente).
+      {/* Log area — a área de logs é o scroller da página (root com h-screen).
+          O wrapper com min-h-0 garante que ela encolha quando a faixa de erro
+          aparece no fim da coluna. */}
+      <div className="relative flex-1 min-h-0">
+        <div
+          ref={consoleRef}
+          onScroll={handleScroll}
+          data-testid="log-scroll"
+          className="h-full overflow-y-auto px-3 py-2 font-mono text-xs leading-relaxed"
+        >
+          {visibleLogs.length === 0 && (
+            <div className="py-12 text-center text-sm text-muted">
+              <p>
+                {debugState === "idle"
+                  ? "Console pronto. Clique em \"iniciar debug\" para começar a receber logs."
+                  : debugState === "stopped"
+                    ? "Debug pausado. Clique em \"iniciar debug\" para retomar."
+                    : connectionState === "connected"
+                      ? "Aguardando entradas de log..."
+                      : "Nenhuma linha para exibir."}
               </p>
-            )}
-          </div>
-        )}
-
-        {visibleLogs.map((entry, index) => {
-          const level = normalizeLevel(entry.level);
-          return (
-            <div
-              key={`${entry.sessionId}-${entry.sequence ?? index}-${entry.timestampUtc}-${index}`}
-              className="flex items-start gap-2 rounded px-1 py-0.5 hover:bg-surface-light"
-            >
-              <span className="shrink-0 text-muted">
-                {formatTimestamp(entry.timestampUtc)}
-              </span>
-              <span className="inline-block w-12 shrink-0">
-                <Badge color={levelBadgeColor(level)}>{level.toUpperCase()}</Badge>
-              </span>
-              <span className="break-all text-foreground">
-                {entry.message}
-              </span>
+              {waitingLongEnough && (
+                <p className="mx-auto mt-3 max-w-xl rounded border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning">
+                  Conectado, mas nenhum log chegou em {Math.round(WAITING_HINT_MS / 1000)}s. Isso
+                  normalmente significa que o <strong>agente não aceitou a sessão</strong>:
+                  confira o <code className="font-mono">agent-service.log</code> do agente
+                  procurando por <code className="font-mono">[remote-debug]</code> e o
+                  resultado do comando <code className="font-mono">remotedebug</code>{" "}
+                  (exitCode=1 indica falha ao iniciar a sessão no agente).
+                </p>
+              )}
             </div>
-          );
-        })}
+          )}
+
+          {visibleLogs.map((entry, index) => {
+            const level = normalizeLevel(entry.level);
+            return (
+              <div
+                key={`${entry.sessionId}-${entry.sequence ?? index}-${entry.timestampUtc}-${index}`}
+                className="flex items-start gap-2 rounded px-1 py-0.5 hover:bg-surface-light"
+              >
+                <span className="shrink-0 text-muted">
+                  {formatTimestamp(entry.timestampUtc)}
+                </span>
+                <span className="inline-block w-12 shrink-0">
+                  <Badge color={levelBadgeColor(level)}>{level.toUpperCase()}</Badge>
+                </span>
+                <span className="break-all text-foreground">
+                  {entry.message}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+
+        {!autoScroll && pendingLines > 0 && (
+          <button
+            type="button"
+            onClick={resumeAutoScroll}
+            className="absolute bottom-3 left-1/2 z-10 -translate-x-1/2 rounded-full border border-primary/40 bg-primary/95 px-3 py-1 text-[11px] font-medium text-white shadow-lg transition-colors hover:bg-primary"
+          >
+            {pendingLines} nova(s) linha(s) · ir para o fim
+          </button>
+        )}
       </div>
 
       {/* Erro em faixa (não em overlay): mantém a barra de identidade, os

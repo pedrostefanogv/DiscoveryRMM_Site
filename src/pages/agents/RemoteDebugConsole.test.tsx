@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, useLocation } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -411,6 +411,121 @@ describe("RemoteDebugConsole", () => {
       ).toBeTruthy();
     });
     expect(screen.queryByText(/auth callout do discovery-api/)).toBeNull();
+  });
+
+  // O auto-scroll não funcionava porque o root do console usava min-h-screen:
+  // a coluna crescia com o conteúdo, a área de logs ficava com
+  // clientHeight == scrollHeight (não rolável) e o documento é que rolava —
+  // então o scrollTop do container era um no-op e o onScroll nunca disparava.
+  // Os testes abaixo fixam o layout (h-screen) e o comportamento de seguir o fim.
+  describe("auto-scroll", () => {
+    function getScroller(): HTMLDivElement {
+      return screen.getByTestId("log-scroll") as HTMLDivElement;
+    }
+
+    // O jsdom não calcula layout: define a geometria do scroller à mão para
+    // observar o assignment de scrollTop.
+    function setGeometry(
+      element: HTMLElement,
+      geometry: { scrollHeight: number; clientHeight: number; scrollTop?: number },
+    ) {
+      let current = geometry.scrollTop ?? 0;
+      Object.defineProperty(element, "scrollHeight", {
+        value: geometry.scrollHeight,
+        configurable: true,
+      });
+      Object.defineProperty(element, "clientHeight", {
+        value: geometry.clientHeight,
+        configurable: true,
+      });
+      Object.defineProperty(element, "scrollTop", {
+        get: () => current,
+        set: (value: number) => {
+          current = value;
+        },
+        configurable: true,
+      });
+    }
+
+    function logListener(): (message: unknown) => void {
+      const call = natsSubscribeMock.mock.calls.find((args) => args[0] === SUBJECT_1);
+      expect(call, "listener do subject de log").toBeTruthy();
+      return call![1] as (message: unknown) => void;
+    }
+
+    function emitLog(message: string) {
+      act(() => {
+        logListener()({
+          data: {
+            sessionId: "sess-1",
+            agentId: AGENT_ID,
+            level: "info",
+            message,
+            timestampUtc: new Date().toISOString(),
+          },
+        });
+      });
+    }
+
+    it("mantém a área de logs como o scroller (root com h-screen)", async () => {
+      const { container } = renderConsole();
+      await waitFor(() => expect(natsSubscribeMock).toHaveBeenCalled());
+
+      const root = container.firstElementChild as HTMLElement;
+      expect(root.className).toContain("h-screen");
+      expect(root.className).not.toContain("min-h-screen");
+      expect(screen.getByTestId("log-scroll")).toBeTruthy();
+    });
+
+    it("com auto ligado, cada linha nova rola para o fim", async () => {
+      renderConsole();
+      await waitFor(() => expect(natsSubscribeMock).toHaveBeenCalled());
+
+      const scroller = getScroller();
+      setGeometry(scroller, { scrollHeight: 1000, clientHeight: 100, scrollTop: 900 });
+
+      emitLog("linha nova");
+
+      await waitFor(() => {
+        expect(scroller.scrollTop).toBe(1000);
+      });
+    });
+
+    it("em modo manual não rola e mostra o atalho para o fim", async () => {
+      renderConsole();
+      await waitFor(() => expect(natsSubscribeMock).toHaveBeenCalled());
+
+      const scroller = getScroller();
+      setGeometry(scroller, { scrollHeight: 1000, clientHeight: 100, scrollTop: 0 });
+
+      // Rolar para longe do fim desliga o auto.
+      fireEvent.scroll(scroller);
+      await waitFor(() => expect(screen.getByText("scroll: manual")).toBeTruthy());
+
+      emitLog("linha enquanto manual");
+      expect(scroller.scrollTop).toBe(0);
+
+      const jump = await screen.findByRole("button", { name: /ir para o fim/ });
+      fireEvent.click(jump);
+
+      await waitFor(() => expect(scroller.scrollTop).toBe(1000));
+      expect(screen.queryByRole("button", { name: /ir para o fim/ })).toBeNull();
+    });
+
+    it("voltar perto do fim religa o modo auto", async () => {
+      renderConsole();
+      await waitFor(() => expect(natsSubscribeMock).toHaveBeenCalled());
+
+      const scroller = getScroller();
+      setGeometry(scroller, { scrollHeight: 1000, clientHeight: 100, scrollTop: 0 });
+      fireEvent.scroll(scroller);
+      await waitFor(() => expect(screen.getByText("scroll: manual")).toBeTruthy());
+
+      scroller.scrollTop = 950; // dentro da tolerância de 20px do fim
+      fireEvent.scroll(scroller);
+
+      await waitFor(() => expect(screen.getByText("scroll: auto")).toBeTruthy());
+    });
   });
 
 });
