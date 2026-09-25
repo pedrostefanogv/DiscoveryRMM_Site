@@ -234,6 +234,7 @@ class NatsService {
   private credentials: NatsCredentialsResponse | null = null;
   private credentialsInFlight: Promise<NatsCredentialsResponse> | null = null;
   private stateListeners = new Set<(state: NatsConnectionState) => void>();
+  private authErrorListeners = new Set<() => void>();
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 5;
   private reconnectDelay = 1000;
@@ -457,6 +458,51 @@ class NatsService {
     this.credentials = creds;
   }
 
+  /** Assina eventos de falha de autorização (JWT NATS expirado). */
+  onAuthError(listener: () => void): () => void {
+    this.authErrorListeners.add(listener);
+    return () => {
+      this.authErrorListeners.delete(listener);
+    };
+  }
+
+  private emitAuthError(): void {
+    this.authErrorListeners.forEach((listener) => {
+      try {
+        listener();
+      } catch {
+        // listener de UI nunca deve derrubar o serviço de NATS
+      }
+    });
+  }
+
+  /**
+   * Reconecta reavaliando as credenciais. Usado quando o JWT NATS expira no
+   * meio de uma sessão longa: em vez de auth_error terminal (que travava o
+   * console até reconectar à mão), busca credencial fresca e reconecta.
+   */
+  async forceReconnect(): Promise<boolean> {
+    this.emitTelemetry("info", "force_reconnect_requested");
+    this.invalidateCredentials();
+    this.clearReconnectTimer();
+    this.reconnectAttempts = 0;
+
+    if (this.connection && !this.connection.isClosed()) {
+      try {
+        await this.connection.close();
+      } catch {
+        // conexão antiga já encerrada
+      }
+    }
+
+    this.connection = null;
+    this.subscriptions.clear();
+    this.subscriptionInFlight.clear();
+    this.clearConnectionError();
+    this.setConnectionState("disconnected");
+    return this.connect();
+  }
+
   private invalidateCredentials() {
     this.credentials = null;
     this.credentialsInFlight = null;
@@ -644,6 +690,7 @@ class NatsService {
         if (errorType === "auth") {
           this.invalidateCredentials();
           this.setConnectionState("auth_error");
+          this.emitAuthError();
           this.emitTelemetry("warn", "connection_closed_auth_error", {
             errorMessage: getNatsErrorMessage(error),
             errorCode: getErrorCode(error),

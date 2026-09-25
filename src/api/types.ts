@@ -515,6 +515,52 @@ export interface StartRemoteDebugSessionResponse {
   expiresAtUtc: string;
   natsTenantSubject: string | null;
   natsWssUrl: string | null;
+  /** Teto absoluto da sessão (duração configurada na instalação). */
+  maxExpiresAtUtc?: string | null;
+  /** Cadência do ping no canal de controle (segundos). */
+  pingIntervalSeconds?: number;
+  /** Sinais perdidos antes de encerrar por ausência do peer. */
+  missedPingsBeforeClose?: number;
+  /** Janela para o primeiro sinal do viewer (segundos). */
+  initialGraceSeconds?: number;
+  /** Cadência do keepalive HTTP do viewer (segundos). */
+  keepAliveSeconds?: number;
+  /** Subject único de controle (ping/pong/setLevel). */
+  natsControlSubject?: string | null;
+}
+
+export interface RemoteDebugRenewalResponse {
+  sessionId: string;
+  expiresAtUtc: string;
+  maxExpiresAtUtc?: string | null;
+  sessionActive: boolean;
+}
+
+export interface RemoteDebugLevelResponse {
+  sessionId: string;
+  logLevel: RemoteDebugLogLevel;
+  appliedAtUtc: string;
+}
+
+/**
+ * Envelope do canal único de controle do debug remoto. O MESMO subject carrega
+ * ping/pong (liveness) e setLevel; cada lado descarta o próprio `from`.
+ */
+export type RemoteDebugControlType =
+  | "ping"
+  | "pong"
+  | "setLevel"
+  | "levelChanged"
+  | "closed";
+
+export interface RemoteDebugControlEnvelope {
+  v: number;
+  type: RemoteDebugControlType;
+  sessionId: string;
+  from: "viewer" | "agent" | "server";
+  sequence?: number;
+  timestampUtc?: string;
+  payload?: Record<string, unknown>;
 }
 
 export interface RemoteDebugSessionJoinedEvent {

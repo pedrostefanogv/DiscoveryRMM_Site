@@ -26,6 +26,11 @@ interface ConsoleUrlParams {
   expiresAtUtc: string;
   jwt?: string;
   nkeySeed?: string;
+  controlSubject?: string | null;
+  pingIntervalSeconds?: number;
+  missedPingsBeforeClose?: number;
+  initialGraceSeconds?: number;
+  keepAliveSeconds?: number;
 }
 
 function toConsoleUrl(params: ConsoleUrlParams) {
@@ -44,6 +49,21 @@ function toConsoleUrl(params: ConsoleUrlParams) {
   }
   if (params.nkeySeed) {
     query.set("nkeySeed", params.nkeySeed);
+  }
+  if (params.controlSubject) {
+    query.set("controlSubject", params.controlSubject);
+  }
+  if (typeof params.pingIntervalSeconds === "number") {
+    query.set("pingInterval", String(params.pingIntervalSeconds));
+  }
+  if (typeof params.missedPingsBeforeClose === "number") {
+    query.set("misses", String(params.missedPingsBeforeClose));
+  }
+  if (typeof params.initialGraceSeconds === "number") {
+    query.set("grace", String(params.initialGraceSeconds));
+  }
+  if (typeof params.keepAliveSeconds === "number") {
+    query.set("keepAlive", String(params.keepAliveSeconds));
   }
 
   return `/agents/remote-debug-console?${query.toString()}`;
@@ -93,6 +113,11 @@ export async function openRemoteDebugPopup({
       expiresAtUtc: session.expiresAtUtc,
       jwt,
       nkeySeed,
+      controlSubject: session.natsControlSubject ?? null,
+      pingIntervalSeconds: session.pingIntervalSeconds,
+      missedPingsBeforeClose: session.missedPingsBeforeClose,
+      initialGraceSeconds: session.initialGraceSeconds,
+      keepAliveSeconds: session.keepAliveSeconds,
     }),
     `rdebug-${session.sessionId}`,
     "width=980,height=700,toolbar=no,menubar=no,scrollbars=no,resizable=yes,location=no,status=no",

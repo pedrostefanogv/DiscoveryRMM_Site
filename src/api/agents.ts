@@ -31,6 +31,9 @@ import type {
   StartRemoteDebugSessionRequest,
   StartRemoteDebugSessionResponse,
   RemoteDebugNatsCredentialsResponse,
+  RemoteDebugRenewalResponse,
+  RemoteDebugLevelResponse,
+  RemoteDebugLogLevel,
   TransferAgentRequest,
   TransferAgentResponse,
   TransferAgentBulkRequest,
@@ -232,6 +235,30 @@ export const agentsApi = {
   getRemoteDebugNatsCredentials: (id: string, sessionId: string) =>
     api.post<RemoteDebugNatsCredentialsResponse>(
       `${BASE}/${id}/remote-debug/${sessionId}/nats-credentials`,
+    ),
+
+  /**
+   * Keepalive/renovação do TTL da sessão de debug remoto. Sem renovação o
+   * servidor encerra por keepalive-timeout (evita sessão presa quando o
+   * navegador morre sem avisar).
+   */
+  renewRemoteDebugSession: (id: string, sessionId: string) =>
+    api.post<RemoteDebugRenewalResponse>(
+      `${BASE}/${id}/remote-debug/${sessionId}/renew`,
+    ),
+
+  /**
+   * Troca o nível de log da sessão viva, SEM reiniciar. O servidor entrega o
+   * comando ao agente pelo canal de controle (setLevel).
+   */
+  setRemoteDebugLogLevel: (
+    id: string,
+    sessionId: string,
+    logLevel: RemoteDebugLogLevel,
+  ) =>
+    api.put<RemoteDebugLevelResponse>(
+      `${BASE}/${id}/remote-debug/${sessionId}/level`,
+      { logLevel },
     ),
 
   // Zero-touch approval

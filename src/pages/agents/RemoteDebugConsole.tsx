@@ -6,9 +6,13 @@ import {
   sitesApi,
   type RemoteDebugLogEvent,
   type RemoteDebugLogLevel,
-  type StartRemoteDebugSessionRequest,
 } from "@/api";
 import { getNatsService, resetNatsService, type DashboardEvent, type NatsCredentialsResponse } from "@/api/nats";
+import {
+  buildViewerControlEnvelope,
+  decodeControlEnvelope,
+} from "@/api/sessionLiveness";
+import { useSessionLiveness } from "@/hooks/useSessionLiveness";
 import { realtimeConfig } from "@/config/realtime";
 import { useAuth } from "@/auth/AuthContext";
 import { Badge, Button, ErrorDisplay } from "@/components/ui";
@@ -63,6 +67,24 @@ function parseSubjectIds(subject: string): { clientId?: string; siteId?: string;
     siteId: after("site"),
     agentId: after("agent"),
   };
+}
+
+/**
+ * Deriva o subject único de controle a partir do subject de log quando a query
+ * string não traz `controlSubject` (ex.: popup aberta por uma versão anterior).
+ */
+function deriveControlSubject(logSubject: string): string {
+  const value = (logSubject ?? "").trim();
+  if (value.endsWith(".remote-debug.log")) {
+    return value.slice(0, -".log".length) + ".control";
+  }
+  return "";
+}
+
+function parsePositiveInt(value: string | null): number | undefined {
+  if (!value) return undefined;
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
 }
 
 function formatTimestamp(ts: string | undefined): string {
@@ -135,7 +157,7 @@ function formatLogLine(entry: RemoteDebugLogEvent): string {
 }
 
 export default function RemoteDebugConsole() {
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const { session } = useAuth();
 
   const sessionId = searchParams.get("sessionId") ?? "";
@@ -145,6 +167,14 @@ export default function RemoteDebugConsole() {
   const natsUrl = searchParams.get("natsUrl") ?? realtimeConfig.natsUrl;
   const jwtParam = searchParams.get("jwt");
   const nkeySeedParam = searchParams.get("nkeySeed");
+  // Subject único de controle (ping/pong/setLevel). Vem do launcher; se a
+  // popup foi aberta sem ele, deriva do subject de log.
+  const controlSubject =
+    searchParams.get("controlSubject") || deriveControlSubject(subject);
+  const pingIntervalSeconds = parsePositiveInt(searchParams.get("pingInterval"));
+  const missedPingsBeforeClose = parsePositiveInt(searchParams.get("misses"));
+  const initialGraceSeconds = parsePositiveInt(searchParams.get("grace"));
+  const keepAliveSeconds = parsePositiveInt(searchParams.get("keepAlive"));
 
   // Auto-conecta: a sessão já foi criada no servidor antes de a popup abrir, e
   // o NATS não faz replay — cada segundo parado em "iniciar debug" era log
@@ -156,6 +186,10 @@ export default function RemoteDebugConsole() {
   const [lastSequence, setLastSequence] = useState<number | null>(null);
   const [isRestarting, setIsRestarting] = useState(false);
   const [currentLevel, setCurrentLevel] = useState<RemoteDebugLogLevel>("debug");
+  // expiresAt deixa de ser só a query string: o keepalive renova e o valor
+  // precisa refletir o prazo atual no console.
+  const [sessionExpiresAt, setSessionExpiresAt] = useState(expiresAt);
+  const [maxExpiresAt, setMaxExpiresAt] = useState<string>("");
   const [expired, setExpired] = useState(false);
   const [copyState, setCopyState] = useState<"idle" | "ok" | "error">("idle");
   const [levelFilters, setLevelFilters] = useState<Record<RemoteDebugLogLevel, boolean>>({
@@ -172,6 +206,10 @@ export default function RemoteDebugConsole() {
   const consoleRef = useRef<HTMLDivElement | null>(null);
   const [autoScroll, setAutoScroll] = useState(true);
   const cleanupRef = useRef<(() => void) | null>(null);
+
+  useEffect(() => {
+    setSessionExpiresAt(expiresAt);
+  }, [expiresAt]);
 
   // Ids vindos do subject: disponíveis antes de qualquer chamada de API.
   const subjectIds = useMemo(() => parseSubjectIds(subject), [subject]);
@@ -267,10 +305,81 @@ export default function RemoteDebugConsole() {
       nkeySeed: nkeySeedParam,
       publicKey: "",
       expiresAtUtc: expiresAt || new Date(Date.now() + 7200000).toISOString(),
+      // O canal de controle é assinado pelo viewer (pong/closed/levelChanged)
+      // além dos logs. A allow-list local precisa cobrir os dois subjects.
       publishSubjects: [],
-      subscribeSubjects: [subject],
+      subscribeSubjects: [subject, controlSubject].filter(Boolean),
     };
-  }, [jwtParam, nkeySeedParam, expiresAt, subject]);
+  }, [jwtParam, nkeySeedParam, expiresAt, subject, controlSubject]);
+
+  // ── Canal de controle: liveness (ping-pong) + renovação contínua ──────────
+  //
+  // O núcleo useSessionLiveness é agnóstico ao debug: recebe aqui as funções
+  // de sinal e keepalive. Ele pinga no subject único, detecta a ausência do
+  // agente (grace inicial + 3 misses) e renova o TTL no servidor por HTTP.
+  const sendControlPing = useCallback(
+    (sequence: number) => {
+      if (!sessionId || !controlSubject) return;
+      const natsService = getNatsService();
+      const envelope = buildViewerControlEnvelope("ping", sessionId, sequence);
+      void natsService
+        .publish(controlSubject, envelope as unknown as Record<string, unknown>)
+        .catch(() => {
+          // Falha ao publicar o ping é tolerada: o agente também envia o seu e
+          // a ausência real é detectada pela falta de resposta.
+        });
+    },
+    [sessionId, controlSubject],
+  );
+
+  const handleKeepAlive = useCallback(async () => {
+    const result = await agentsApi.renewRemoteDebugSession(agentId, sessionId);
+    return {
+      expiresAtUtc: result.expiresAtUtc,
+      maxExpiresAtUtc: result.maxExpiresAtUtc,
+      sessionActive: result.sessionActive,
+    };
+  }, [agentId, sessionId]);
+
+  const handlePeerLost = useCallback(() => {
+    setConnectionState("closed");
+    setErrorMessage(
+      "O agente não respondeu ao canal de controle. Sessão encerrada automaticamente — reabra o debug para reconectar.",
+    );
+    setLogs((current) => [
+      ...current,
+      withSystemMessage("SEM AGENTE: sessão encerrada automaticamente pelo ping-pong."),
+    ]);
+    void agentsApi.stopRemoteDebugSession(agentId, sessionId).catch(() => {
+      // best-effort: a sessão já está inutilizável
+    });
+  }, [agentId, sessionId]);
+
+  const handleLivenessExpired = useCallback((reason: string) => {
+    setExpired(true);
+    setLogs((current) => [
+      ...current,
+      withSystemMessage("Sessão encerrada no teto de duração (" + reason + ")."),
+    ]);
+  }, []);
+
+  const liveness = useSessionLiveness({
+    enabled: debugState === "running",
+    sessionId,
+    connectionState,
+    pingIntervalSeconds,
+    missedPingsBeforeClose,
+    initialGraceSeconds,
+    keepAliveSeconds,
+    sendPing: sendControlPing,
+    keepAlive: handleKeepAlive,
+    onPeerLost: handlePeerLost,
+    onExpired: handleLivenessExpired,
+    onKeepAlive: (result) => {
+      setSessionExpiresAt(result.expiresAtUtc);
+      if (result.maxExpiresAtUtc) setMaxExpiresAt(result.maxExpiresAtUtc);
+    },
+  });
 
   // Retorna a função de teardown (ou null quando nem chegou a conectar).
   // Devolver o disposer — em vez de só gravar em cleanupRef ao final — é o que
@@ -369,12 +478,45 @@ export default function RemoteDebugConsole() {
         return;
       }
       if (state === "auth_error") {
-        setConnectionState("closed");
-        const diagnostics = natsService.getConnectionDiagnostics();
-        setErrorMessage(
-          diagnostics.lastErrorMessage ??
-            "Falha de autenticação no NATS para o console de remote debug.",
-        );
+        // JWT NATS expirado no meio da sessão longa: em vez de auth_error
+        // terminal (que travava o console até reconectar à mão), busca
+        // credencial fresca e reconecta. O stream é retomado pelo
+        // restoreSubscriptions do próprio serviço.
+        setConnectionState("reconnecting");
+        void (async () => {
+          try {
+            const fresh = await agentsApi.getRemoteDebugNatsCredentials(
+              agentId,
+              sessionId,
+            );
+            if (disposed) return;
+            natsService.setPreSuppliedCredentials({
+              jwt: fresh.jwt,
+              nkeySeed: fresh.nkeySeed,
+              publicKey: "",
+              expiresAtUtc: fresh.expiresAtUtc,
+              publishSubjects: [],
+              subscribeSubjects: [subject, controlSubject].filter(Boolean),
+            });
+            const reconnected = await natsService.forceReconnect();
+            if (disposed) return;
+            if (!reconnected) {
+              const diagnostics = natsService.getConnectionDiagnostics();
+              setConnectionState("closed");
+              setErrorMessage(
+                diagnostics.lastErrorMessage ??
+                  "Falha de autenticação no NATS para o console de remote debug.",
+              );
+            }
+          } catch {
+            if (!disposed) {
+              setConnectionState("closed");
+              setErrorMessage(
+                "Falha ao renovar as credenciais NATS do console de remote debug.",
+              );
+            }
+          }
+        })();
         return;
       }
       setConnectionState("closed");
@@ -418,13 +560,69 @@ export default function RemoteDebugConsole() {
       return dispose;
     }
 
+    // Canal de controle (ping/pong/setLevel). Frames de controle NÃO entram
+    // na lista de logs: alimentam a liveness e os estados da toolbar.
+    const onControlEvent = (message: DashboardEvent | Record<string, unknown>) => {
+      if (disposed) return;
+      const data = "data" in message && message.data ? message.data : message;
+      const envelope = decodeControlEnvelope(data);
+      if (!envelope || envelope.sessionId !== sessionId) return;
+      if (envelope.from === "viewer") return; // eco no subject único
+
+      liveness.notePeerSignal();
+
+      if (envelope.type === "closed") {
+        const reason =
+          typeof envelope.payload?.reason === "string"
+            ? envelope.payload.reason
+            : "encerrada";
+        setLogs((current) => [
+          ...current,
+          withSystemMessage(`Sessão encerrada pelo agente (${reason}).`),
+        ]);
+      }
+    };
+
+    let controlSubscribed = true;
+    if (controlSubject) {
+      controlSubscribed = await natsService.subscribe(
+        controlSubject,
+        onControlEvent,
+        { connectIfNeeded: false },
+      );
+      if (disposed) return dispose;
+      if (controlSubscribed) {
+        disposers.push(() =>
+          natsService.unsubscribe(controlSubject, onControlEvent),
+        );
+      }
+    }
+
     setErrorMessage(null);
     setConnectionState("connected");
     appendLog(withSystemMessage(`Escutando subject NATS: ${subject}`));
+    if (controlSubject) {
+      appendLog(
+        withSystemMessage(
+          controlSubscribed
+            ? `Canal de controle ativo: ${controlSubject}`
+            : `Canal de controle indisponível (${controlSubject}); a sessão não renovará.`,
+        ),
+      );
+    }
 
     disposers.push(() => natsService.unsubscribe(subject, onRemoteDebugEvent));
     return dispose;
-  }, [agentId, buildCredentials, natsUrl, session.accessToken, sessionId, subject]);
+  }, [
+    agentId,
+    buildCredentials,
+    controlSubject,
+    liveness,
+    natsUrl,
+    session.accessToken,
+    sessionId,
+    subject,
+  ]);
 
   // Conecta sempre que o estado é "running" E reconecta quando a sessão muda
   // (troca de nível gera novo sessionId/subject). Sem sessionId/subject nas
@@ -458,8 +656,8 @@ export default function RemoteDebugConsole() {
   }, [debugState, sessionId, subject, natsUrl]);
 
   useEffect(() => {
-    if (!expiresAt) return;
-    const expiresAtTs = new Date(expiresAt).getTime();
+    if (!sessionExpiresAt) return;
+    const expiresAtTs = new Date(sessionExpiresAt).getTime();
     if (Number.isNaN(expiresAtTs)) return;
 
     const markExpired = () => {
@@ -480,7 +678,7 @@ export default function RemoteDebugConsole() {
     return () => {
       window.clearTimeout(timerId);
     };
-  }, [expiresAt]);
+  }, [sessionExpiresAt]);
 
   // Aviso de "conectado mas nada chegou": cobre o caso clássico em que o
   // servidor criou a sessão e o agente a recusou (ver agent-service.log).
@@ -493,18 +691,6 @@ export default function RemoteDebugConsole() {
     const timerId = window.setTimeout(() => setWaitingLongEnough(true), WAITING_HINT_MS);
     return () => window.clearTimeout(timerId);
   }, [debugState, connectionState, logs.length]);
-
-  const updateQueryParams = (params: Record<string, string | undefined>) => {
-    const next = new URLSearchParams(searchParams);
-    for (const [key, value] of Object.entries(params)) {
-      if (value === undefined || value === "") {
-        next.delete(key);
-      } else {
-        next.set(key, value);
-      }
-    }
-    setSearchParams(next, { replace: true });
-  };
 
   const handleStartDebug = () => {
     setDebugState("running");
@@ -521,62 +707,28 @@ export default function RemoteDebugConsole() {
     ]);
   };
 
-  const handleRestartWithLevel = async (level: RemoteDebugLogLevel) => {
+  /**
+   * Troca o nível de log SEM reiniciar: o servidor atualiza o estado/auditoria
+   * e entrega setLevel ao agente pelo canal de controle. A sessão, o subject e
+   * as linhas já recebidas permanecem.
+   */
+  const handleSetLevel = async (level: RemoteDebugLogLevel) => {
     if (isRestarting) return;
     setIsRestarting(true);
-
-    cleanupRef.current?.();
-    cleanupRef.current = null;
-
-    try {
-      await agentsApi.stopRemoteDebugSession(agentId, sessionId);
-    } catch {
-      // Ignora falha no stop da sessão antiga.
-    }
-
-    setLogs([]);
-    setLastSequence(null);
-    setExpired(false);
     setCurrentLevel(level);
 
     try {
-      const payload: StartRemoteDebugSessionRequest = {
-        logLevel: level,
-        preferredTransport: "nats",
-        ttlMinutes: 20,
-      };
-      const newSession = await agentsApi.startRemoteDebugSession(agentId, payload);
-      const newSubject = newSession.natsTenantSubject;
-      if (!newSubject) {
-        throw new Error("Nova sessão criada sem subject NATS.");
-      }
-
-      let jwt: string | undefined;
-      let nkeySeed: string | undefined;
-      try {
-        const creds = await agentsApi.getRemoteDebugNatsCredentials(agentId, newSession.sessionId);
-        jwt = creds.jwt;
-        nkeySeed = creds.nkeySeed;
-      } catch {
-        // Endpoint pode não existir — prossegue sem JWT.
-      }
-
-      // UMA única atualização da query string: cada setSearchParams parte do
-      // searchParams DESTE render, então chamadas sequenciais sobrescreviam a
-      // anterior — o sessionId/subject novos eram perdidos ao gravar
-      // jwt/nkeySeed e a popup voltava a escutar a sessão antiga.
-      updateQueryParams({
-        sessionId: newSession.sessionId,
-        subject: newSubject,
-        expiresAt: newSession.expiresAtUtc,
-        natsUrl: newSession.natsWssUrl ?? natsUrl,
-        jwt,
-        nkeySeed,
-      });
-
-      setLogs([withSystemMessage(`Sessão reiniciada com nível: ${LEVEL_LABELS[level]}`)]);
+      const result = await agentsApi.setRemoteDebugLogLevel(agentId, sessionId, level);
+      setCurrentLevel(result.logLevel);
+      setLogs((current) => [
+        ...current,
+        withSystemMessage(
+          `Nível alterado em tempo real para ${LEVEL_LABELS[result.logLevel]} (sem reiniciar a sessão).`,
+        ),
+      ]);
     } catch (error) {
-      const msg = error instanceof Error ? error.message : "Falha ao reiniciar sessão.";
+      const msg =
+        error instanceof Error ? error.message : "Falha ao alterar o nível de log.";
       setErrorMessage(msg);
       setLogs((current) => [...current, withSystemMessage(`Erro: ${msg}`)]);
     } finally {
@@ -627,27 +779,35 @@ export default function RemoteDebugConsole() {
   }
 
   const totalLines = logs.length;
-  const expiresLabel = expiresAt
-    ? new Date(expiresAt).toLocaleTimeString("pt-BR", { hour12: false })
+  const expiresLabel = sessionExpiresAt
+    ? new Date(sessionExpiresAt).toLocaleTimeString("pt-BR", { hour12: false })
     : "--:--";
+
+  const peerLost = liveness.status === "peer-lost";
 
   const statusLabel =
     expired
       ? "EXPIRADO"
-      : debugState === "running" && connectionState === "connected"
-        ? "CONECTADO"
-        : debugState === "running" && connectionState === "reconnecting"
-          ? "RECONECTANDO"
-          : debugState === "running" && connectionState === "connecting"
-            ? "CONECTANDO"
-            : debugState === "stopped"
-              ? "PAUSADO"
-              : "PRONTO";
+      : peerLost
+        ? "SEM AGENTE"
+        : debugState === "running" && connectionState === "connected"
+          ? liveness.status === "alive"
+            ? "CONECTADO"
+            : "AGUARDANDO AGENTE"
+          : debugState === "running" && connectionState === "reconnecting"
+            ? "RECONECTANDO"
+            : debugState === "running" && connectionState === "connecting"
+              ? "CONECTANDO"
+              : debugState === "stopped"
+                ? "PAUSADO"
+                : "PRONTO";
 
-  const statusColor: "success" | "warning" | "slate" | "danger" = expired
+  const statusColor: "success" | "warning" | "slate" | "danger" = expired || peerLost
     ? "danger"
     : debugState === "running" && connectionState === "connected"
-      ? "success"
+      ? liveness.status === "alive"
+        ? "success"
+        : "warning"
       : debugState === "running" && (connectionState === "reconnecting" || connectionState === "connecting")
         ? "warning"
         : debugState === "stopped"
@@ -691,7 +851,13 @@ export default function RemoteDebugConsole() {
         <span className="text-muted">·</span>
         <span className="text-muted">{totalLines} linhas</span>
         <span className="text-muted">·</span>
-        <span className="text-muted" title={`Expira em ${expiresAt || "?"}`}>
+        <span
+          className="text-muted"
+          title={
+            `Expira em ${sessionExpiresAt || "?"}` +
+            (maxExpiresAt ? ` (teto: ${maxExpiresAt})` : "")
+          }
+        >
           exp: {expiresLabel}
         </span>
 
@@ -748,9 +914,9 @@ export default function RemoteDebugConsole() {
               <span className="text-muted">nível:</span>
               <select
                 value={currentLevel}
-                onChange={(e) => handleRestartWithLevel(e.target.value as RemoteDebugLogLevel)}
+                onChange={(e) => handleSetLevel(e.target.value as RemoteDebugLogLevel)}
                 disabled={isRestarting}
-                title="Reinicia a sessão no agente com o novo nível de log"
+                title="Altera o nível de log em tempo real, sem reiniciar a sessão"
                 className="h-6 rounded border border-border bg-surface-light px-2 text-[10px] font-mono uppercase text-foreground outline-none focus:border-primary disabled:opacity-50"
               >
                 {LEVELS.map((level) => (

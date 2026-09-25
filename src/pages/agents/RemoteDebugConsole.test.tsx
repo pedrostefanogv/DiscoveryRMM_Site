@@ -12,6 +12,11 @@ const {
   natsStateMock,
   natsDiagnosticsMock,
   setPreSuppliedCredentialsMock,
+  natsPublishMock,
+  natsOnAuthErrorMock,
+  natsForceReconnectMock,
+  renewRemoteDebugMock,
+  setRemoteDebugLevelMock,
   agentGetMock,
   clientGetMock,
   siteGetMock,
@@ -28,6 +33,11 @@ const {
   natsStateMock: vi.fn(),
   natsDiagnosticsMock: vi.fn(),
   setPreSuppliedCredentialsMock: vi.fn(),
+  natsPublishMock: vi.fn(),
+  natsOnAuthErrorMock: vi.fn(),
+  natsForceReconnectMock: vi.fn(),
+  renewRemoteDebugMock: vi.fn(),
+  setRemoteDebugLevelMock: vi.fn(),
   agentGetMock: vi.fn(),
   clientGetMock: vi.fn(),
   siteGetMock: vi.fn(),
@@ -48,6 +58,8 @@ vi.mock("@/api", () => ({
     startRemoteDebugSession: startRemoteDebugMock,
     stopRemoteDebugSession: stopRemoteDebugMock,
     getRemoteDebugNatsCredentials: getCredentialsMock,
+    renewRemoteDebugSession: renewRemoteDebugMock,
+    setRemoteDebugLogLevel: setRemoteDebugLevelMock,
   },
   clientsApi: { get: clientGetMock },
   sitesApi: { get: siteGetMock },
@@ -69,6 +81,10 @@ const CLIENT_ID = "019dead3-70ee-7c66-8662-7558e0b23ad5";
 const SITE_ID = "01a06390-3a0b-75a2-bb8c-cd87da00b0de";
 
 const SUBJECT_1 = `tenant.${CLIENT_ID}.site.${SITE_ID}.agent.${AGENT_ID}.remote-debug.log`;
+const CONTROL_SUBJECT_1 = SUBJECT_1.replace(
+  ".remote-debug.log",
+  ".remote-debug.control",
+);
 
 function consoleUrl(params: Record<string, string>) {
   const query = new URLSearchParams(params).toString();
@@ -124,6 +140,9 @@ describe("RemoteDebugConsole", () => {
       onConnectionStateChange: natsStateMock,
       getConnectionDiagnostics: natsDiagnosticsMock,
       setPreSuppliedCredentials: setPreSuppliedCredentialsMock,
+      publish: natsPublishMock,
+      onAuthError: natsOnAuthErrorMock,
+      forceReconnect: natsForceReconnectMock,
     });
 
     agentGetMock.mockReset().mockResolvedValue({
@@ -139,6 +158,20 @@ describe("RemoteDebugConsole", () => {
     startRemoteDebugMock.mockReset();
     stopRemoteDebugMock.mockReset().mockResolvedValue(undefined);
     getCredentialsMock.mockReset().mockResolvedValue({ jwt: "jwt-2", nkeySeed: "seed-2" });
+    natsPublishMock.mockReset().mockResolvedValue(undefined);
+    natsOnAuthErrorMock.mockReset().mockReturnValue(() => {});
+    natsForceReconnectMock.mockReset().mockResolvedValue(true);
+    renewRemoteDebugMock.mockReset().mockResolvedValue({
+      sessionId: "sess-1",
+      expiresAtUtc: new Date(Date.now() + 20 * 60_000).toISOString(),
+      maxExpiresAtUtc: new Date(Date.now() + 60 * 60_000).toISOString(),
+      sessionActive: true,
+    });
+    setRemoteDebugLevelMock.mockReset().mockResolvedValue({
+      sessionId: "sess-1",
+      logLevel: "warn",
+      appliedAtUtc: new Date().toISOString(),
+    });
   });
 
   afterEach(() => {
@@ -188,7 +221,9 @@ describe("RemoteDebugConsole", () => {
         expect.objectContaining({
           jwt: "jwt-token",
           nkeySeed: BASE_PARAMS.nkeySeed,
-          subscribeSubjects: [SUBJECT_1],
+          // O canal de controle é assinado junto com os logs (pong/closed/
+          // levelChanged) no MESMO subject de controle.
+          subscribeSubjects: [SUBJECT_1, CONTROL_SUBJECT_1],
         }),
       );
     });
@@ -197,49 +232,43 @@ describe("RemoteDebugConsole", () => {
     expect(config.authMode).toBe("jwt_credentials");
   });
 
-  // Regressão: updateQueryParams partia sempre do searchParams do render atual,
-  // então gravar jwt/nkeySeed SOBRESCREVIA o sessionId novo — a popup seguia
-  // apontando para a sessão antiga e, como o handler já tinha desinscrito do
-  // subject antes de reiniciar, o efeito não rodava de novo (dependências
-  // inalteradas) e o console ficava mudo para sempre.
-  it("reiniciar com outro nível grava o novo sessionId e volta a assinar", async () => {
-    const newSubject = SUBJECT_1;
-    startRemoteDebugMock.mockResolvedValue({
-      sessionId: "sess-2",
-      agentId: AGENT_ID,
-      natsTenantSubject: newSubject,
-      expiresAtUtc: new Date(Date.now() + 20 * 60_000).toISOString(),
-      natsWssUrl: "wss://tngplacas.com.br/nats/",
-      logLevel: "warn",
-    });
-
+  // A troca de nível passou a ser IN-PLACE: o servidor atualiza o estado e
+  // entrega setLevel ao agente pelo canal de controle. A sessão, o subject e as
+  // linhas já recebidas permanecem — nada de matar/recriar a sessão.
+  it("troca o nível em tempo real sem reiniciar a sessão", async () => {
     renderConsole();
 
-    await waitFor(() => expect(natsSubscribeMock).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(natsSubscribeMock).toHaveBeenCalled());
 
     const select = screen.getByRole("combobox");
     fireEvent.change(select, { target: { value: "warn" } });
 
     await waitFor(() => {
-      expect(startRemoteDebugMock).toHaveBeenCalledWith(
+      expect(setRemoteDebugLevelMock).toHaveBeenCalledWith(
         AGENT_ID,
-        expect.objectContaining({ logLevel: "warn" }),
+        "sess-1",
+        "warn",
       );
     });
 
-    await waitFor(() => {
-      const search = screen.getByTestId("location").textContent ?? "";
-      const params = new URLSearchParams(search);
-      expect(params.get("sessionId")).toBe("sess-2");
-      expect(params.get("subject")).toBe(newSubject);
-      expect(params.get("jwt")).toBe("jwt-2");
-      expect(params.get("nkeySeed")).toBe("seed-2");
-    });
+    expect(startRemoteDebugMock).not.toHaveBeenCalled();
+    expect(stopRemoteDebugMock).not.toHaveBeenCalled();
 
-    // O handler desinscreveu antes de reiniciar: se o efeito não voltar a
-    // rodar, o console fica DESINSCRITO para sempre — exibindo "Aguardando
-    // entradas de log..." enquanto o agente publica normalmente.
-    await waitFor(() => expect(natsSubscribeMock).toHaveBeenCalledTimes(2));
+    const search = screen.getByTestId("location").textContent ?? "";
+    expect(new URLSearchParams(search).get("sessionId")).toBe("sess-1");
+  });
+
+  // O canal de controle é assinado junto com os logs e alimenta a liveness.
+  it("assina o subject único de controle além dos logs", async () => {
+    renderConsole();
+
+    await waitFor(() => {
+      expect(natsSubscribeMock).toHaveBeenCalledWith(
+        CONTROL_SUBJECT_1,
+        expect.any(Function),
+        expect.objectContaining({ connectIfNeeded: false }),
+      );
+    });
   });
 
   // Regressão: o cleanup era registrado apenas DEPOIS do subscribe resolver.
