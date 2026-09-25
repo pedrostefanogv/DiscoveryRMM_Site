@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { resolveLivenessParams } from "@/api/sessionLiveness";
+import { createBackgroundTimer } from "@/hooks/createBackgroundTimer";
 
 export type SessionLivenessStatus = "idle" | "alive" | "peer-lost" | "expired";
 
@@ -91,7 +92,7 @@ export function useSessionLiveness(options: UseSessionLivenessOptions) {
     if (!enabled) return;
     const params = resolveLivenessParams(optionsRef.current);
 
-    const timer = window.setInterval(() => {
+    const stopTimer = createBackgroundTimer(params.pingIntervalMs, () => {
       const now = Date.now();
       const conn = optionsRef.current.connectionState;
 
@@ -125,9 +126,9 @@ export function useSessionLiveness(options: UseSessionLivenessOptions) {
           }
         }
       }
-    }, params.pingIntervalMs);
+    });
 
-    return () => window.clearInterval(timer);
+    return stopTimer;
   }, [enabled, connectionState, sessionId, setStatusSafe]);
 
   useEffect(() => {
@@ -175,13 +176,26 @@ export function useSessionLiveness(options: UseSessionLivenessOptions) {
     };
 
     void run();
-    const timer = window.setInterval(() => {
+    const stopTimer = createBackgroundTimer(params.keepAliveMs, () => {
       void run();
-    }, params.keepAliveMs);
+    });
+
+    // Aba/popup em segundo plano: o navegador estrangula o setInterval e a
+    // maquina pode hibernar. Ao recuperar foco/visibilidade renovamos na hora,
+    // em vez de esperar o proximo ciclo (que podia chegar depois do servidor
+    // encerrar por keepalive-timeout).
+    const resume = () => {
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+      void run();
+    };
+    document.addEventListener("visibilitychange", resume);
+    window.addEventListener("focus", resume);
 
     return () => {
       cancelled = true;
-      window.clearInterval(timer);
+      stopTimer();
+      document.removeEventListener("visibilitychange", resume);
+      window.removeEventListener("focus", resume);
     };
   }, [enabled, sessionId, setStatusSafe]);
 

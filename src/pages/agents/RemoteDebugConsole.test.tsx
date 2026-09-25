@@ -378,9 +378,39 @@ describe("RemoteDebugConsole", () => {
     }
 
     await waitFor(() => {
-      expect(screen.getByText(/auth callout do discovery-api/)).toBeTruthy();
+      expect(screen.getByText(/Confirme nos logs da API/)).toBeTruthy();
     });
     expect(natsForceReconnectMock.mock.calls.length).toBeLessThanOrEqual(2);
+  });
+
+  // Regressão do caso real (HAR): se o refresh da credencial escopada falha
+  // (ex.: 404 porque a API reiniciou e perdeu a sessão em memória), o auth_error
+  // do NATS NÃO é culpa do callout. A mensagem final precisa apontar a sessão.
+  it("não culpa o auth callout quando a renovação de credencial da sessão falha", async () => {
+    const stateListeners: Array<(state: string) => void> = [];
+    natsStateMock.mockImplementation((listener: (state: string) => void) => {
+      stateListeners.push(listener);
+      listener("connected");
+      return () => {};
+    });
+    natsForceReconnectMock.mockResolvedValue(false);
+    getCredentialsMock.mockRejectedValue(
+      Object.assign(new Error("Remote debug session not found."), { status: 404 }),
+    );
+
+    renderConsole();
+    await waitFor(() => expect(natsSubscribeMock).toHaveBeenCalled());
+
+    for (let i = 0; i < 3; i++) {
+      stateListeners.forEach((listener) => listener("auth_error"));
+    }
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(/não foi possível renovar as credenciais da sessão/),
+      ).toBeTruthy();
+    });
+    expect(screen.queryByText(/auth callout do discovery-api/)).toBeNull();
   });
 
 });

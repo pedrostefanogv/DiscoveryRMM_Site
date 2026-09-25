@@ -224,6 +224,13 @@ export default function RemoteDebugConsole() {
   // Marca que o limite foi atingido: a mensagem acionável do limite não pode ser
   // sobrescrita por uma recuperação que ainda estava em voo.
   const authRecoveryExhaustedRef = useRef(false);
+  // A sessao deixou de existir no servidor (renew 404 / TTL): a recuperacao de
+  // credencial e inutil e a mensagem NAO pode culpar o auth callout.
+  const sessionGoneRef = useRef(false);
+  // Último refresh de credencial escopada falhou? Se sim, o erro de auth NÃO é
+  // do callout: é a sessão/rota de credenciais. Sem isso a mensagem final
+  // mandava investigar o auth callout e escondia a causa real.
+  const credsRefreshFailedRef = useRef(false);
   const MAX_AUTH_RECOVERY_ATTEMPTS = 2;
   // Instância REAL do NatsService criada pelo connect. Usar a ref (em vez do
   // singleton getNatsService()) evita pingar/publicar num serviço "dummy"
@@ -386,8 +393,10 @@ export default function RemoteDebugConsole() {
         const fresh = await fetchScopedCredentials();
         credsExpiresAtRef.current = Date.parse(fresh.expiresAtUtc);
         natsServiceRef.current?.setPreSuppliedCredentials(fresh);
+        credsRefreshFailedRef.current = false;
       } catch {
         // Mantém a credencial atual; auth_error cobre uma expiração real.
+        credsRefreshFailedRef.current = true;
       }
     }
 
@@ -419,6 +428,7 @@ export default function RemoteDebugConsole() {
 
   const handleLivenessExpired = useCallback((reason: string) => {
     // Encerra a liveness para não ficar renovando uma sessão já finalizada.
+    sessionGoneRef.current = true;
     setDebugState("stopped");
     setExpired(true);
     setConnectionState("closed");
@@ -559,6 +569,17 @@ export default function RemoteDebugConsole() {
         return;
       }
       if (state === "auth_error") {
+        // Sessao que o servidor ja nao conhece: nao ha credencial a renovar.
+        // Sem este curto-circuito o operador recebia uma mensagem enganosa
+        // mandando investigar o auth callout, quando a causa era a sessao ter
+        // desaparecido (API reiniciada/limpa).
+        if (sessionGoneRef.current) {
+          setConnectionState("closed");
+          setErrorMessage(
+            "A sessão de debug não existe mais no servidor. Reabra o debug para criar uma nova sessão.",
+          );
+          return;
+        }
         // JWT NATS expirado no meio da sessão longa: em vez de auth_error
         // terminal (que travava o console até reconectar à mão), busca
         // credencial fresca (escopada) e reconecta. O stream é retomado pelo
@@ -571,7 +592,11 @@ export default function RemoteDebugConsole() {
           authRecoveryExhaustedRef.current = true;
           setConnectionState("closed");
           setErrorMessage(
-            "O servidor NATS recusou as credenciais da sessão. Verifique o auth callout do discovery-api (log \"Rejected pre-issued NATS JWT\").",
+            credsRefreshFailedRef.current || sessionGoneRef.current
+              ? "A sessão de debug não está mais disponível no servidor: não foi possível renovar as credenciais da sessão. Reabra o debug para criar uma nova sessão."
+              : "O servidor NATS recusou as credenciais da sessão após várias tentativas. " +
+                  "Confirme nos logs da API \"Rejected pre-issued NATS JWT\" (validade/assinatura) " +
+                  "e \"Authorization Violation\" no NATS.",
           );
           return;
         }
@@ -580,6 +605,7 @@ export default function RemoteDebugConsole() {
           try {
             const fresh = await fetchScopedCredentials();
             if (disposed) return;
+            credsRefreshFailedRef.current = false;
             natsService.setPreSuppliedCredentials(fresh);
             const reconnected = await natsService.forceReconnect();
             if (disposed) return;
@@ -592,6 +618,7 @@ export default function RemoteDebugConsole() {
               );
             }
           } catch (error) {
+            credsRefreshFailedRef.current = true;
             if (!disposed && !authRecoveryExhaustedRef.current) {
               const detail = error instanceof Error ? error.message : String(error);
               setConnectionState("closed");
