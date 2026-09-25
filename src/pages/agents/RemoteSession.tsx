@@ -4,6 +4,7 @@ import { ThemeToggle } from '@/components/auth/ThemeToggle';
 import { Film, Image, Gauge, Monitor } from 'lucide-react';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { remoteSessionsApi, type ChangeQualityRequest, type StartRemoteSessionRequest } from '@/api/remote-sessions';
+import { useRemoteSessionLiveness } from '@/hooks/useRemoteSessionLiveness';
 import { agentsApi } from '@/api/agents';
 import { sitesApi } from '@/api/sites';
 import { clientsApi } from '@/api/clients';
@@ -37,6 +38,12 @@ interface TabSession {
   kind: string;
   qualityProfile: string;
   codec: string;
+  // Cadência de liveness configurada no servidor (RemoteAccess:Liveness).
+  liveness?: {
+    pingIntervalSeconds: number;
+    missedPingsBeforeClose: number;
+    initialGraceSeconds: number;
+  };
 }
 
 // Detecta o erro específico do backend quando já existe uma sessão ativa no agent
@@ -48,6 +55,101 @@ function isSessionConflictError(err: unknown): boolean {
   // explícita "force=true to override" — evita regressão se a mensagem mudar.
   return /already\s+(has|have)/i.test(msg)
     && /active session/i.test(msg);
+}
+
+const LIVENESS_LABELS: Record<string, string> = {
+  idle: 'Conectando',
+  alive: 'Vivo',
+  'peer-lost': 'Sem resposta',
+  expired: 'Encerrado',
+};
+
+// Reporter de liveness de UMA sessao (uma aba). Mantem uma conexao NATS
+// isolada assinada no `.control`, responde aos pings do agente e renova o TTL
+// no servidor. Em caso de perda, tenta recriar a sessao (2s/5s/10s) e, se
+// falhar, avisa o pai para exibir o placeholder.
+function SessionLivenessBadge({
+  tab,
+  label,
+  enabled,
+  agentId,
+  session,
+  attemptsRef,
+  onStatusChange,
+  onFatal,
+  onRecreate,
+}: {
+  tab: Tab;
+  label: string;
+  enabled: boolean;
+  agentId: string;
+  session: TabSession;
+  attemptsRef: { current: Partial<Record<Tab, number>> };
+  onStatusChange: (tab: Tab, status: string) => void;
+  onFatal: (tab: Tab, reason: string) => void;
+  onRecreate: (tab: Tab) => Promise<void>;
+}) {
+  // Marca se o agente voltou a responder durante o backoff: evita recriar a
+  // sessao sem necessidade quando a queda foi passageira.
+  const aliveRef = useRef(false);
+  const attemptRecover = useCallback(
+    async (reason: string) => {
+      const attempt = attemptsRef.current[tab] ?? 0;
+      if (attempt >= 3) {
+        onFatal(tab, reason);
+        return;
+      }
+      attemptsRef.current[tab] = attempt + 1;
+      const delay = [2000, 5000, 10000][attempt] ?? 10000;
+      await new Promise((resolve) => setTimeout(resolve, delay));
+      if (aliveRef.current) return;
+      try {
+        await onRecreate(tab);
+      } catch {
+        onFatal(tab, 'Falha ao recriar a sessão.');
+      }
+    },
+    [tab, attemptsRef, onFatal, onRecreate],
+  );
+
+  const liveness = useRemoteSessionLiveness({
+    enabled,
+    agentId,
+    sessionId: session.sessionId,
+    natsSubject: session.natsSubject,
+    natsUrl: session.natsUrl,
+    jwt: session.jwt,
+    nkeySeed: session.nkeySeed,
+    credsExpiresAtUtc: session.expiresAtUtc,
+    pingIntervalSeconds: session.liveness?.pingIntervalSeconds,
+    missedPingsBeforeClose: session.liveness?.missedPingsBeforeClose,
+    initialGraceSeconds: session.liveness?.initialGraceSeconds,
+    onStatus: (status) => {
+      aliveRef.current = status === 'alive';
+      onStatusChange(tab, status);
+    },
+    onPeerLost: () => { void attemptRecover('sem-resposta'); },
+    onExpired: (reason) => { void attemptRecover(reason); },
+  });
+
+  const status = liveness.status;
+  const tone =
+    status === 'alive'
+      ? 'bg-success/20 text-success'
+      : status === 'peer-lost' || status === 'expired'
+        ? 'bg-danger/20 text-danger'
+        : 'bg-warning/20 text-warning';
+
+  return (
+    <span
+      data-testid={`liveness-badge-${tab}`}
+      className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium whitespace-nowrap ${tone}`}
+      title={liveness.errorMessage ?? `${label}: ${LIVENESS_LABELS[status] ?? status}`}
+    >
+      <span className="inline-block w-1.5 h-1.5 rounded-full bg-current" aria-hidden />
+      {label}: {LIVENESS_LABELS[status] ?? status}
+    </span>
+  );
 }
 
 export default function RemoteSession() {
@@ -109,6 +211,10 @@ export default function RemoteSession() {
   // Identidade do agente (Cliente → Site → Hostname) exibida no header para
   // evitar operar em máquinas indevidas.
   const [agentIdentity, setAgentIdentity] = useState<{ client: string; site: string; hostname: string } | null>(null);
+  // Liveness por aba: falha terminal (placeholder). livenessAttemptsRef limita
+  // a auto-recuperacao a 3 tentativas por sessao.
+  const [livenessFailure, setLivenessFailure] = useState<Partial<Record<Tab, string>>>({});
+  const livenessAttemptsRef = useRef<Partial<Record<Tab, number>>>({});
 
   // Carrega a cadeia de identidade do agente (client → site → hostname).
   useEffect(() => {
@@ -349,6 +455,7 @@ export default function RemoteSession() {
             jwt,
             nkeySeed,
             expiresAtUtc: session.expiresAtUtc,
+              liveness: session.liveness,
             kind: session.kind,
             qualityProfile: session.qualityProfile,
             codec: session.codec,
@@ -364,6 +471,7 @@ export default function RemoteSession() {
             jwt,
             nkeySeed,
             expiresAtUtc: session.expiresAtUtc,
+              liveness: session.liveness,
             kind: session.kind,
             qualityProfile: session.qualityProfile,
             codec: session.codec,
@@ -519,6 +627,7 @@ export default function RemoteSession() {
           jwt,
           nkeySeed,
           expiresAtUtc: session.expiresAtUtc,
+              liveness: session.liveness,
           kind: session.kind,
           qualityProfile: session.qualityProfile,
           codec: session.codec,
@@ -668,6 +777,7 @@ export default function RemoteSession() {
           jwt,
           nkeySeed,
           expiresAtUtc: session.expiresAtUtc,
+              liveness: session.liveness,
           kind: session.kind,
           qualityProfile: session.qualityProfile,
           codec: session.codec,
@@ -747,6 +857,44 @@ export default function RemoteSession() {
   const activeSession = sessions[activeTab];
   const isActiveConnected = !!activeSession;
 
+  // A sessao voltou a responder: limpa a falha (o badge ja mostra o status
+  // internamente; aqui so importa destravar o placeholder).
+  const handleLivenessStatus = useCallback((tab: Tab, status: string) => {
+    if (status === 'alive') {
+      // So o agente respondendo zera a auto-recuperacao. Renovacao bem-sucedida
+      // NAO serve: a API considera a sessao ativa mesmo com o agent offline —
+      // zerar ai derrotava o limite de 3 tentativas (loop infinito).
+      livenessAttemptsRef.current[tab] = 0;
+      setLivenessFailure((prev) => {
+        if (!prev[tab]) return prev;
+        const next = { ...prev };
+        delete next[tab];
+        return next;
+      });
+    }
+  }, []);
+
+  const handleLivenessFatal = useCallback((tab: Tab, reason: string) => {
+    setLivenessFailure((prev) => ({ ...prev, [tab]: reason }));
+  }, []);
+
+  const handleLivenessRecreate = useCallback(async (tab: Tab) => {
+    // force=true: a sessao morta continua "active" no servidor (o agent sumiu,
+    // nao a API), entao sem forcar o start falha por conflito e a recuperacao
+    // nunca criaria uma sessao nova.
+    await startTabSession(tab, true);
+  }, [startTabSession]);
+
+  // Badges de liveness: um por sessao REAL. Processos/Servicos compartilham a
+  // mesma sessao, entao renderiza so a aba "processes".
+  const livenessTabs: { key: Tab; label: string }[] = [
+    { key: 'screen', label: 'Tela' },
+    { key: 'terminal', label: 'Terminal' },
+    { key: 'files', label: 'Arquivos' },
+    { key: 'processes', label: 'Processos' },
+    { key: 'proxy', label: 'Proxy' },
+  ];
+
   return (
     <div className="flex flex-col h-screen bg-background text-foreground">
       {/* Header */}
@@ -771,6 +919,24 @@ export default function RemoteSession() {
           <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium whitespace-nowrap ${isActiveConnected ? 'bg-success/20 text-success' : 'bg-warning/20 text-warning'}`}>
             {isActiveConnected ? 'Conectado' : 'Não conectado'}
           </span>
+          {livenessTabs.map(({ key, label }) => {
+            const session = sessions[key];
+            if (!session) return null;
+            return (
+              <SessionLivenessBadge
+                key={`${key}-${session.sessionId}`}
+                tab={key}
+                label={label}
+                enabled={!livenessFailure[key]}
+                agentId={agentId}
+                session={session}
+                attemptsRef={livenessAttemptsRef}
+                onStatusChange={handleLivenessStatus}
+                onFatal={handleLivenessFatal}
+                onRecreate={handleLivenessRecreate}
+              />
+            );
+          })}
         </div>
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <Button variant="danger" size="sm" onClick={handleStop} title="Encerra todas as sessões ativas e fecha esta janela">Fechar</Button>
@@ -917,7 +1083,31 @@ export default function RemoteSession() {
       {/* min-h-0: sem ele, o flex-1 não encolhe abaixo do conteúdo (canvas) e o
           viewer calcula o fit com uma altura maior que a viewport — ao reduzir a
           ALTURA da janela a tela remota não redimensionava. */}
-      <div className="flex-1 min-h-0 overflow-hidden">
+      <div className="relative flex-1 min-h-0 overflow-hidden">
+        {livenessFailure[activeTab] && (
+          <div data-testid="liveness-placeholder" className="absolute inset-0 z-40 flex items-center justify-center bg-background/95 p-6">
+            <Card className="max-w-md p-6 text-center">
+              <p className="mb-1 text-sm font-semibold">Não foi possível manter a sessão remota</p>
+              <p className="mb-4 text-xs text-muted-foreground">
+                O agente pode estar offline ou a sessão foi encerrada ({livenessFailure[activeTab]}). Verifique se o computador remoto está ligado e tente reconectar.
+              </p>
+              <Button
+                size="sm"
+                onClick={() => {
+                  setLivenessFailure((prev) => {
+                    const next = { ...prev };
+                    delete next[activeTab];
+                    return next;
+                  });
+                  livenessAttemptsRef.current[activeTab] = 0;
+                  void startTabSession(activeTab);
+                }}
+              >
+                Reconectar
+              </Button>
+            </Card>
+          </div>
+        )}
         {activeTab === 'screen' && (
           screenSession ? (
             <div ref={screenContainerRef} className="h-full min-h-0 flex flex-col">

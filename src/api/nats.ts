@@ -224,7 +224,7 @@ export interface NatsConnectionDiagnostics {
 
 type NatsTelemetryLevel = "info" | "warn" | "error";
 
-class NatsService {
+export class NatsService {
   private config: NatsConfig;
   private connection: NatsConnection | null = null;
   private subscriptions: Map<string, Subscription> = new Map();
@@ -1304,6 +1304,19 @@ class NatsService {
     this.emitTelemetry("info", "disconnect_completed");
   }
 
+  /**
+   * Remove os listeners de janela/documento e fecha a conexão. Use em
+   * instâncias EFÊMERAS (sessões remotas): disconnect() sozinho deixaria os
+   * listeners "online"/"visibilitychange" registrados para sempre (leak).
+   */
+  async dispose(): Promise<void> {
+    if (typeof window !== "undefined") {
+      window.removeEventListener("online", this.handleConnectivityRestored);
+      document.removeEventListener("visibilitychange", this.handleVisibilityChanged);
+    }
+    await this.disconnect();
+  }
+
   isConnected(): boolean {
     return this.connection?.isClosed() === false;
   }
@@ -1366,6 +1379,15 @@ export function getNatsService(config?: NatsConfig): NatsService {
     natsService ||
     new NatsService({ url: "", enabled: false, authMode: "auth_token" })
   );
+}
+
+/**
+ * Cria uma instancia ISOLADA (nao-singleton) do servico NATS. Usado pelas
+ * sessoes de acesso remoto: cada aba/sessao tem credenciais escopadas proprias
+ * e nao pode compartilhar a conexao singleton do dashboard.
+ */
+export function createNatsService(config: NatsConfig): NatsService {
+  return new NatsService(config);
 }
 
 export function resetNatsService(): void {

@@ -38,14 +38,20 @@ export interface RemoteSessionResponse {
     expiresAtUtc: string;
     startedAtUtc: string;
     natsWssUrl?: string;
-    turnCredentials?: TurnCredentials;
+    /** Teto absoluto da sessao (startedAt + duracao maxima). */
+    maxExpiresAtUtc?: string;
+    /** Contrato de liveness (cadencia de ping) enviado pelo servidor. */
+    liveness?: RemoteSessionLiveness;
+    /** false quando a sessao ja nao esta mais ativa (ver endReason). */
+    sessionActive?: boolean;
+    /** Motivo do encerramento quando sessionActive=false. */
+    endReason?: string | null;
 }
 
-export interface TurnCredentials {
-    urls: string[];
-    username: string;
-    credential: string;
-    ttlSeconds: number;
+export interface RemoteSessionLiveness {
+    pingIntervalSeconds: number;
+    missedPingsBeforeClose: number;
+    initialGraceSeconds: number;
 }
 
 export interface ActiveSession {
@@ -106,10 +112,6 @@ export const remoteSessionsApi = {
     /** Lista sessões ativas para um agent. */
     getActiveSessions: (agentId: string): Promise<ActiveSession[]> =>
         api.get<ActiveSession[]>(`${BASE}/${agentId}/active`),
-
-    /** Obtém credenciais TURN para WebRTC. */
-    getTurnCredentials: (agentId: string, sessionId: string): Promise<TurnCredentials> =>
-        api.post<TurnCredentials>(`${BASE}/${agentId}/${sessionId}/turn-credentials`, undefined, { retryOnAuthError: false }),
 
     /** Obtém credenciais NATS (JWT + NKey) para o viewer se conectar ao stream. */
     getSessionCredentials: (agentId: string, sessionId: string): Promise<SessionCredentials> =>
