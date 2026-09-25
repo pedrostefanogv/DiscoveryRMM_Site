@@ -7,6 +7,7 @@ export interface SessionLivenessKeepAliveResult {
   expiresAtUtc: string;
   maxExpiresAtUtc?: string | null;
   sessionActive: boolean;
+  endReason?: string | null;
 }
 
 export interface UseSessionLivenessOptions {
@@ -136,14 +137,19 @@ export function useSessionLiveness(options: UseSessionLivenessOptions) {
 
     const params = resolveLivenessParams(optionsRef.current);
     let cancelled = false;
+    let finished = false;
 
     const run = async () => {
+      if (cancelled || finished) return;
       try {
         const result = await keepAlive();
-        if (cancelled) return;
+        if (cancelled || finished) return;
         if (!result.sessionActive) {
+          // Sessao encerrada no servidor (teto/keepalive): dispara UMA vez e
+          // para de renovar — sem isso o keepalive ficaria em loop silencioso.
+          finished = true;
           setStatusSafe("expired");
-          optionsRef.current.onExpired?.("max-duration");
+          optionsRef.current.onExpired?.(result.endReason ?? "sessao-encerrada");
           return;
         }
         optionsRef.current.onKeepAlive?.(result);

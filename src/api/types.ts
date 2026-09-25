@@ -534,6 +534,8 @@ export interface RemoteDebugRenewalResponse {
   expiresAtUtc: string;
   maxExpiresAtUtc?: string | null;
   sessionActive: boolean;
+  /** Motivo do encerramento quando sessionActive=false (ex.: max-duration). */
+  endReason?: string | null;
 }
 
 export interface RemoteDebugLevelResponse {

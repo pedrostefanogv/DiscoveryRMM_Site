@@ -294,4 +294,28 @@ describe("RemoteDebugConsole", () => {
       expect(natsUnsubscribeMock).toHaveBeenCalledWith(SUBJECT_1, expect.any(Function));
     });
   });
+  // Regressão (revisão): ao atingir o teto o servidor responde 200 com
+  // sessionActive=false. Antes esse caminho era inalcançável (o handler
+  // devolvia erro HTTP e o hook engolia), então o console nunca marcava
+  // EXPIRADO nem parava de renovar.
+  it("marca EXPIRADO quando o servidor encerra a sessão no teto", async () => {
+    renewRemoteDebugMock.mockResolvedValue({
+      sessionId: "sess-1",
+      expiresAtUtc: new Date().toISOString(),
+      maxExpiresAtUtc: new Date().toISOString(),
+      sessionActive: false,
+      endReason: "max-duration",
+    });
+
+    renderConsole();
+
+    await waitFor(() => {
+      expect(screen.getByText("EXPIRADO")).toBeTruthy();
+    });
+
+    expect(
+      screen.getByText(/Sessão encerrada pelo servidor \(max-duration\)/),
+    ).toBeTruthy();
+  });
+
 });

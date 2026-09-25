@@ -338,10 +338,14 @@ export default function RemoteDebugConsole() {
       expiresAtUtc: result.expiresAtUtc,
       maxExpiresAtUtc: result.maxExpiresAtUtc,
       sessionActive: result.sessionActive,
+      endReason: result.endReason,
     };
   }, [agentId, sessionId]);
 
   const handlePeerLost = useCallback(() => {
+    // Para a liveness/keepalive: sem isso o hook continuaria renovando uma
+    // sessão que o console já considera morta.
+    setDebugState("stopped");
     setConnectionState("closed");
     setErrorMessage(
       "O agente não respondeu ao canal de controle. Sessão encerrada automaticamente — reabra o debug para reconectar.",
@@ -356,10 +360,12 @@ export default function RemoteDebugConsole() {
   }, [agentId, sessionId]);
 
   const handleLivenessExpired = useCallback((reason: string) => {
+    // Encerra a liveness para não ficar renovando uma sessão já finalizada.
+    setDebugState("stopped");
     setExpired(true);
     setLogs((current) => [
       ...current,
-      withSystemMessage("Sessão encerrada no teto de duração (" + reason + ")."),
+      withSystemMessage("Sessão encerrada pelo servidor (" + reason + ")."),
     ]);
   }, []);
 
