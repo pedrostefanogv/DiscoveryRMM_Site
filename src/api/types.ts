@@ -1774,6 +1774,9 @@ export interface UpdateTicketRequest {
   /** Solicitante (quem abriu) e limpeza explícita do vínculo. */
   requesterUserId?: string | null;
   clearRequester?: boolean;
+  /** Agent (máquina) vinculado e limpeza explícita do vínculo. */
+  agentId?: string | null;
+  clearAgent?: boolean;
 }
 
 export interface CreateDepartmentRequest {

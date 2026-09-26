@@ -1,9 +1,11 @@
-import { useDeferredValue, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Link2, Search, Trash2 } from 'lucide-react';
 import { Badge, Button, Input, Loading, Select } from '@/components/ui';
 import {
   useCreateTicketRelation, useDeleteTicketRelation, useTicketRelations, useTickets,
 } from '@/hooks/useTickets';
+import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import type { TicketRelationKind } from '@/api';
 import toast from 'react-hot-toast';
 
@@ -37,6 +39,9 @@ const shortId = (id: string | null | undefined) => (id ? id.slice(0, 8) : '—')
 /** Quantos vínculos aparecem antes do "Ver todos". */
 const VISIBLE_RELATIONS = 3;
 
+/** A busca de chamados só dispara a partir daqui (evita varredura a cada tecla). */
+const MIN_SEARCH_CHARS = 3;
+
 /**
  * Vínculos do chamado (duplicado, bloqueia, relacionado, pai/filho) dentro do
  * Resumo geral. Traz busca por chamados (título/descrição/resposta) e ajuda
@@ -50,9 +55,11 @@ export function TicketRelationsSection({ ticketId }: { ticketId: string }) {
   const [relationType, setRelationType] = useState<TicketRelationKind>('RelatesTo');
   const [showAll, setShowAll] = useState(false);
   const [isLinking, setIsLinking] = useState(false);
+  const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<{ id: string; title: string } | null>(null);
-  const deferredSearch = useDeferredValue(search);
+  // A busca só dispara ~450ms depois da última tecla digitada.
+  const debouncedSearch = useDebouncedValue(search, 450);
 
   const items = Array.isArray(relations.data) ? relations.data : [];
   const linkedIds = useMemo(
@@ -60,10 +67,11 @@ export function TicketRelationsSection({ ticketId }: { ticketId: string }) {
     [items, ticketId],
   );
 
-  const term = deferredSearch.trim();
+  const term = debouncedSearch.trim();
+  const isTyping = search.trim() !== debouncedSearch.trim();
   const searchQuery = useTickets(
     { text: term || undefined, limit: 8 },
-    { enabled: term.length >= 2 },
+    { enabled: term.length >= MIN_SEARCH_CHARS },
   );
   const results = (searchQuery.data?.items ?? [])
     .filter((ticket) => ticket.id !== ticketId && !linkedIds.has(ticket.id))
@@ -119,19 +127,27 @@ export function TicketRelationsSection({ ticketId }: { ticketId: string }) {
             return (
               <li key={rel.id} className="rounded-lg border border-border bg-surface-light px-3 py-2">
                 <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
+                  {/* Clicar abre o chamado vinculado. */}
+                  <button
+                    type="button"
+                    onClick={() => otherId && navigate(`/tickets/${otherId}`)}
+                    disabled={!otherId}
+                    aria-label={title ? `Abrir chamado ${title}` : 'Abrir chamado vinculado'}
+                    title={title ? `Abrir ${title}` : undefined}
+                    className="min-w-0 flex-1 text-left transition-colors hover:text-primary disabled:cursor-default"
+                  >
                     <div className="flex flex-wrap items-center gap-2">
                       <Badge color="slate">{RELATION_LABELS[rel.relationType] ?? rel.relationType}</Badge>
                       {rel.otherTicketIsClosed === true && <Badge color="success">Encerrado</Badge>}
                       {rel.otherTicketIsClosed === false && <Badge color="accent">Aberto</Badge>}
                     </div>
-                    <p className="mt-1 truncate text-sm text-foreground">
+                    <p className="mt-1 truncate text-sm font-medium text-foreground hover:underline">
                       {title || 'Chamado não encontrado'}
                     </p>
                     <p className="truncate text-xs text-muted">
                       <code className="font-mono">{shortId(otherId)}</code>
                     </p>
-                  </div>
+                  </button>
                   <button
                     type="button"
                     aria-label="Remover vínculo"
@@ -176,11 +192,15 @@ export function TicketRelationsSection({ ticketId }: { ticketId: string }) {
               setSelected(null);
             }}
           />
-          {term.length > 0 && term.length < 2 && (
-            <p className="mt-1 text-xs text-muted">Digite ao menos 2 caracteres para buscar.</p>
+          {search.trim().length > 0 && search.trim().length < MIN_SEARCH_CHARS && (
+            <p className="mt-1 text-xs text-muted">
+              Digite ao menos {MIN_SEARCH_CHARS} caracteres para buscar.
+            </p>
           )}
-          {term.length >= 2 && searchQuery.isFetching && <p className="mt-1 text-xs text-muted">Buscando...</p>}
-          {term.length >= 2 && !searchQuery.isFetching && results.length === 0 && (
+          {search.trim().length >= MIN_SEARCH_CHARS && (isTyping || searchQuery.isFetching) && (
+            <p className="mt-1 text-xs text-muted">Buscando...</p>
+          )}
+          {term.length >= MIN_SEARCH_CHARS && !isTyping && !searchQuery.isFetching && results.length === 0 && (
             <p className="mt-1 text-xs text-muted">Nenhum chamado encontrado para “{term}”.</p>
           )}
           {results.length > 0 && (

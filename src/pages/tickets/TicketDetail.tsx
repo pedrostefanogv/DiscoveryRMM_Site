@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Send, Lock, Unlock, Clock, Activity, ChevronDown, BookOpen, Paperclip, Upload, File, CheckCircle, XCircle, Loader2, Wrench, Copy, RotateCcw, ClipboardList, UserCog, UserCheck } from 'lucide-react';
+import { ArrowLeft, Send, Lock, Unlock, Clock, Activity, BookOpen, Paperclip, Upload, File, CheckCircle, XCircle, Loader2, Wrench, Copy, RotateCcw, ClipboardList, UserCog, UserCheck, RefreshCw, Monitor } from 'lucide-react';
 import { MarkdownViewer } from '@/components/ui/MarkdownViewer';
 import { useAuth } from '@/auth/AuthContext';
 import { getUserIdFromJwt } from '@/auth/jwt';
@@ -24,6 +24,8 @@ import { WatchersSection } from '@/components/tickets/WatchersSection';
 import { TicketFieldsSection } from '@/components/tickets/TicketFieldsSection';
 import { TicketRelationsSection } from '@/components/tickets/TicketRelationsSection';
 import { RequesterPickerModal } from '@/components/tickets/RequesterPickerModal';
+import { AgentPickerModal } from '@/components/tickets/AgentPickerModal';
+import { useAgentsByClient, useAgentsBySite } from '@/hooks/useAgents';
 import { useTicketAnswers } from '@/hooks/useTicketAnswers';
 import { useAutomationTasks } from '@/hooks/useAutomation';
 import { useTicketAttachmentSettings } from '@/hooks/useConfigurationApi';
@@ -85,6 +87,7 @@ const ACTIVITY_LABELS: Record<string, string> = {
   KnowledgeUnlinked:    'Artigo desvinculado',
   Rated:                'Avaliado',
   RequesterChanged:     'Solicitante alterado',
+  AgentChanged:         'Agent alterado',
 };
 
 type Tab = 'comments' | 'timeline' | 'attachments' | 'automation' | 'ai';
@@ -341,12 +344,14 @@ export default function TicketDetail() {
             departmentId={t.departmentId}
             requesterUserId={t.requesterUserId ?? null}
             agentId={t.agentId}
+            clientId={t.clientId}
+            siteId={t.siteId}
             currentUserId={currentUserId}
             updatedAt={t.updatedAt}
             closedAt={t.closedAt}
             templateName={t.templateName}
+            currentStateId={t.workflowStateId}
           />
-          <WorkflowPanel ticketId={id!} currentStateId={t.workflowStateId} />
         </div>
       </div>
     </div>
@@ -1217,7 +1222,10 @@ function TicketSummaryPanel({
   departmentId,
   requesterUserId,
   agentId,
+  clientId,
+  siteId,
   currentUserId,
+  currentStateId,
   updatedAt,
   closedAt,
   templateName,
@@ -1232,7 +1240,10 @@ function TicketSummaryPanel({
   departmentId: string | null;
   requesterUserId: string | null;
   agentId: string | null;
+  clientId: string;
+  siteId: string | null;
   currentUserId: string | null;
+  currentStateId: string | null;
   updatedAt: string;
   closedAt: string | null;
   templateName?: string | null;
@@ -1242,7 +1253,66 @@ function TicketSummaryPanel({
   const agentQuery = useAgent(agentId ?? undefined);
 
   const agentHostname = agentQuery.data?.hostname ?? null;
+  const agentDisplayName = agentId
+    ? (agentQuery.data?.displayName || agentHostname || 'Agent vinculado')
+    : null;
   const [requesterModalOpen, setRequesterModalOpen] = useState(false);
+  const [agentModalOpen, setAgentModalOpen] = useState(false);
+
+  // Máquinas do escopo do chamado: site quando houver, senão o cliente.
+  const siteAgents = useAgentsBySite(siteId ?? '');
+  const clientAgents = useAgentsByClient(siteId ? '' : clientId);
+  const agentOptions = siteId ? (siteAgents.data ?? []) : (clientAgents.data ?? []);
+  const agentScopeLabel = siteId ? 'do site do chamado' : 'do cliente do chamado';
+
+  const changeAgent = (newAgentId: string | null) => {
+    updateRequester.mutate(
+      { id: ticketId, data: { agentId: newAgentId, clearAgent: newAgentId === null } },
+      {
+        onSuccess: () => {
+          toast.success(newAgentId ? 'Agent vinculado' : 'Agent removido');
+          setAgentModalOpen(false);
+        },
+        onError: (error: unknown) =>
+          toast.error(error instanceof Error ? error.message : 'Erro ao vincular o agent'),
+      },
+    );
+  };
+
+  // Estado do workflow: fica no Resumo (antes do Template), revelado por ícone.
+  const workflowStates = useWorkflowStates();
+  const updateWorkflow = useUpdateTicketWorkflow();
+  const [stateEditing, setStateEditing] = useState(false);
+  const [selectedState, setSelectedState] = useState(currentStateId ?? '');
+
+  useEffect(() => {
+    setSelectedState(currentStateId ?? '');
+    setStateEditing(false);
+  }, [ticketId, currentStateId]);
+
+  const stateOptions = [
+    { value: '', label: 'Selecione...' },
+    ...(Array.isArray(workflowStates.data) ? workflowStates.data : []).map((state) => ({
+      value: state.id,
+      label: state.name,
+    })),
+  ];
+  const currentStateName =
+    (workflowStates.data ?? []).find((state) => state.id === currentStateId)?.name ?? 'Não definido';
+
+  const saveState = () => {
+    if (!selectedState || selectedState === currentStateId) return;
+    updateWorkflow.mutate(
+      { id: ticketId, data: { workflowStateId: selectedState } },
+      {
+        onSuccess: () => {
+          toast.success('Estado atualizado');
+          setStateEditing(false);
+        },
+        onError: () => toast.error('Transição inválida ou erro ao atualizar'),
+      },
+    );
+  };
   const iamUsersById = useMemo(
     () => new Map((iamUsers.data ?? []).map((user) => [user.id, user])),
     [iamUsers.data],
@@ -1354,6 +1424,45 @@ function TicketSummaryPanel({
         }
       />
       <dl className="grid gap-3 text-sm sm:grid-cols-2">
+        <div className="sm:col-span-2">
+          <dt className="text-muted">Estado</dt>
+          <dd className="text-foreground">
+            <div className="flex items-start justify-between gap-2">
+              <Badge color="slate">{currentStateName}</Badge>
+              <button
+                type="button"
+                onClick={() => setStateEditing((current) => !current)}
+                aria-label="Alterar estado"
+                title="Alterar estado"
+                className="shrink-0 rounded-lg p-1 text-muted transition-colors hover:bg-surface-light hover:text-foreground"
+              >
+                <RefreshCw className="h-4 w-4" />
+              </button>
+            </div>
+            {stateEditing && (
+              <div className="mt-2 flex flex-wrap items-end gap-2">
+                <div className="min-w-[220px] flex-1">
+                  <Select
+                    aria-label="Novo estado"
+                    options={stateOptions}
+                    value={selectedState}
+                    disabled={workflowStates.isLoading}
+                    onChange={(event) => setSelectedState(event.target.value)}
+                    hint="A transição precisa ser permitida pelo workflow."
+                  />
+                </div>
+                <Button
+                  size="sm"
+                  onClick={saveState}
+                  loading={updateWorkflow.isPending}
+                  disabled={!selectedState || selectedState === currentStateId}
+                >
+                  Salvar
+                </Button>
+              </div>
+            )}
+          </dd>
+        </div>
         {templateName && (
           <div className="sm:col-span-2">
             <dt className="text-muted">Template</dt>
@@ -1376,9 +1485,7 @@ function TicketSummaryPanel({
                 <p className="break-words">{requesterDisplayName ?? 'Não informado'}</p>
                 {!requesterUserId && (
                   <p className="mt-1 text-xs text-muted">
-                    {agentHostname
-                      ? `Aberto pelo agent ${agentHostname} — vincule o solicitante para restringir a avaliação.`
-                      : 'Vincule o solicitante para restringir a avaliação.'}
+                    Vincule o solicitante para restringir a avaliação.
                   </p>
                 )}
               </div>
@@ -1390,6 +1497,31 @@ function TicketSummaryPanel({
                 className="shrink-0 rounded-lg p-1 text-muted transition-colors hover:bg-surface-light hover:text-foreground"
               >
                 <UserCog className="h-4 w-4" />
+              </button>
+            </div>
+          </dd>
+        </div>
+
+        <div className="sm:col-span-2">
+          <dt className="text-muted">Agent (máquina)</dt>
+          <dd className="text-foreground">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <p className="break-words">{agentDisplayName ?? 'Não vinculado'}</p>
+                {!agentId && (
+                  <p className="mt-1 text-xs text-muted">
+                    Vincule a máquina relacionada a este chamado.
+                  </p>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => setAgentModalOpen(true)}
+                aria-label={agentId ? 'Alterar agent' : 'Vincular agent'}
+                title={agentId ? 'Alterar agent' : 'Vincular agent'}
+                className="shrink-0 rounded-lg p-1 text-muted transition-colors hover:bg-surface-light hover:text-foreground"
+              >
+                <Monitor className="h-4 w-4" />
               </button>
             </div>
           </dd>
@@ -1460,6 +1592,17 @@ function TicketSummaryPanel({
         isSaving={updateRequester.isPending}
         onClose={() => setRequesterModalOpen(false)}
         onSave={changeRequester}
+      />
+
+      <AgentPickerModal
+        open={agentModalOpen}
+        agents={agentOptions}
+        isLoading={siteId ? siteAgents.isLoading : clientAgents.isLoading}
+        selectedId={agentId}
+        scopeLabel={agentScopeLabel}
+        isSaving={updateRequester.isPending}
+        onClose={() => setAgentModalOpen(false)}
+        onSave={changeAgent}
       />
     </Card>
   );
@@ -1646,46 +1789,6 @@ function CommentForm({
         </Button>
       </div>
     </div>
-  );
-}
-
-function WorkflowPanel({ ticketId, currentStateId }: { ticketId: string; currentStateId: string | null }) {
-  const states    = useWorkflowStates();
-  const updateWf  = useUpdateTicketWorkflow();
-  const [selected, setSelected] = useState(currentStateId ?? '');
-
-  const stateOptions = [
-    { value: '', label: 'Selecione...' },
-    ...(Array.isArray(states.data) ? states.data : []).map(s => ({ value: s.id, label: s.name })),
-  ];
-
-  const handleChange = () => {
-    if (!selected || selected === currentStateId) return;
-    updateWf.mutate(
-      { id: ticketId, data: { workflowStateId: selected } },
-      {
-        onSuccess: () => toast.success('Estado atualizado'),
-        onError:   () => toast.error('Transição inválida ou erro ao atualizar'),
-      },
-    );
-  };
-
-  return (
-    <Card>
-      <CardHeader title="Alterar Estado" />
-      <div className="space-y-3">
-        <Select options={stateOptions} value={selected} onChange={e => setSelected(e.target.value)} />
-        <Button
-          size="sm"
-          className="w-full"
-          onClick={handleChange}
-          loading={updateWf.isPending}
-          disabled={!selected || selected === currentStateId}
-        >
-          <ChevronDown className="h-4 w-4" /> Atualizar Estado
-        </Button>
-      </div>
-    </Card>
   );
 }
 

@@ -1,8 +1,9 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { createMock, relationsState, ticketsState } = vi.hoisted(() => ({
+const { createMock, searchMock, relationsState, ticketsState } = vi.hoisted(() => ({
   createMock: vi.fn(),
+  searchMock: vi.fn(),
   relationsState: {
     data: [
       {
@@ -30,17 +31,37 @@ vi.mock('@/hooks/useTickets', () => ({
   useTicketRelations: () => relationsState,
   useCreateTicketRelation: () => ({ mutate: createMock, isPending: false }),
   useDeleteTicketRelation: () => ({ mutate: vi.fn(), isPending: false }),
-  useTickets: () => ticketsState,
+  useTickets: (params: unknown, options: unknown) => {
+    searchMock(params, options);
+    return ticketsState;
+  },
 }));
 
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { TicketRelationsSection } from './TicketRelationsSection';
 
+/** O componente usa useNavigate: precisa de um router. */
+function renderSection(entry = '/tickets/t1') {
+  return render(
+    <MemoryRouter initialEntries={[entry]}>
+      <Routes>
+        <Route path="/tickets/t1" element={<TicketRelationsSection ticketId="t1" />} />
+        <Route path="/tickets/:id" element={<p>OUTRO CHAMADO</p>} />
+        <Route path="/tickets/t1" element={<TicketRelationsSection ticketId="t1" />} />
+      </Routes>
+    </MemoryRouter>,
+  );
+}
+
 describe('TicketRelationsSection', () => {
-  beforeEach(() => createMock.mockClear());
+  beforeEach(() => {
+    createMock.mockClear();
+    searchMock.mockClear();
+  });
   afterEach(() => cleanup());
 
   it('lista os vínculos com tipo amigável, título e status (não o GUID)', () => {
-    render(<TicketRelationsSection ticketId="t1" />);
+    renderSection();
 
     // "Bloqueia" também aparece como opção do seletor de tipo.
     expect(screen.getAllByText('Bloqueia').length).toBeGreaterThan(0);
@@ -50,7 +71,7 @@ describe('TicketRelationsSection', () => {
   });
 
   it('busca por texto, seleciona e cria o vínculo', () => {
-    render(<TicketRelationsSection ticketId="t1" />);
+    renderSection();
 
     // O formulário de vínculo abre pelo ícone do cabeçalho.
     expect(screen.queryByLabelText('Buscar chamado')).toBeNull();
@@ -76,7 +97,7 @@ describe('TicketRelationsSection', () => {
       otherTicketTitle: `Chamado ${index}`,
     }));
 
-    render(<TicketRelationsSection ticketId="t1" />);
+    renderSection();
 
     expect(screen.getByText('Chamado 0')).toBeTruthy();
     expect(screen.queryByText('Chamado 4')).toBeNull();
@@ -91,8 +112,42 @@ describe('TicketRelationsSection', () => {
     relationsState.data = [base];
   });
 
+  it('abre o chamado vinculado ao clicar no item', () => {
+    renderSection();
+
+    fireEvent.click(screen.getByRole('button', { name: /Abrir chamado Impressora não imprime/ }));
+
+    expect(screen.getByText('OUTRO CHAMADO')).toBeTruthy();
+  });
+
+  it('só busca com 3+ caracteres e depois de uma pausa na digitação', async () => {
+    renderSection();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Novo vínculo' }));
+    const input = screen.getByLabelText('Buscar chamado');
+
+    // 2 caracteres: ainda não busca (nem habilita a query).
+    fireEvent.change(input, { target: { value: 'VP' } });
+    expect(screen.getByText(/ao menos 3 caracteres/)).toBeTruthy();
+    expect(searchMock.mock.calls.every(([, options]) => (options as { enabled?: boolean })?.enabled === false)).toBe(true);
+
+    // 3 caracteres: a busca dispara depois da pausa (debounce).
+    fireEvent.change(input, { target: { value: 'VPN' } });
+    await waitFor(
+      () =>
+        expect(
+          searchMock.mock.calls.some(
+            ([params, options]) =>
+              (options as { enabled?: boolean })?.enabled === true &&
+              (params as { text?: string })?.text === 'VPN',
+          ),
+        ).toBe(true),
+      { timeout: 2000 },
+    );
+  });
+
   it('explica como funciona dentro do formulário de vínculo', () => {
-    render(<TicketRelationsSection ticketId="t1" />);
+    renderSection();
 
     fireEvent.click(screen.getByRole('button', { name: 'Novo vínculo' }));
     expect(screen.getByText('Como funciona?')).toBeTruthy();
