@@ -5,9 +5,9 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useLocation, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import { ArrowRight, LockKeyhole, UserRound, AlertTriangle } from "lucide-react";
-import { ApiError } from "@/api";
 import { Button, Card, CardHeader, Input } from "@/components/ui";
 import { useAuth } from "@/auth/AuthContext";
+import { resolveLoginErrorMessage } from "@/auth/errorMessages";
 
 const loginSchema = z.object({
   loginOrEmail: z.string().trim().min(1, "Informe seu login ou e-mail."),
@@ -70,14 +70,10 @@ export default function LoginPage() {
       }
       navigate(target, { replace: true });
     } catch (error) {
-      // Mostra a mensagem do servidor quando disponível (ex.: credenciais
-      // inválidas, conta desativada ou bloqueio temporário com contagem).
-      const fallback = "Não foi possível autenticar sua sessão. Verifique suas credenciais e tente novamente.";
-      const serverMessage =
-        error instanceof ApiError && error.message?.trim()
-          ? error.message
-          : null;
-      const message = serverMessage ?? fallback;
+      // Só repassa mensagens controladas do servidor (credenciais inválidas,
+      // conta bloqueada, MFA etc.). Erros 5xx/falha de rede usam um texto
+      // genérico — não expõe gateway/proxy/banco ao usuário.
+      const message = resolveLoginErrorMessage(error);
       setSubmitError(message);
       toast.error(message);
     }

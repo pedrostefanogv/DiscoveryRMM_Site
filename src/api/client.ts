@@ -45,9 +45,9 @@ const STATUS_FALLBACK_MESSAGE: Record<number, string> = {
   408: "Tempo de resposta excedido",
   429: "Muitas requisições",
   500: "Erro interno do servidor",
-  502: "Gateway indisponível",
+  502: "Serviço temporariamente indisponível",
   503: "Serviço indisponível",
-  504: "Tempo de resposta do gateway excedido",
+  504: "Tempo de resposta excedido",
 };
 
 function normalizeErrorDetails(details: unknown): string | null {
