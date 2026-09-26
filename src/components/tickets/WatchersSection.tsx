@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react';
 import { UserPlus, UserMinus } from 'lucide-react';
-import { Badge, Button, Input, Loading, Select } from '@/components/ui';
+import { Badge, Button, Input, Loading } from '@/components/ui';
 import {
   useAddTicketWatcher, useRemoveTicketWatcher, useTicketWatchers,
 } from '@/hooks/useTickets';
 import { useIamUsers } from '@/hooks/useIdentity';
+import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import type { UserDto } from '@/api';
 import toast from 'react-hot-toast';
 
@@ -12,6 +13,9 @@ import toast from 'react-hot-toast';
  * Quem acompanha o chamado (watchers) — renderizado dentro do card de Resumo
  * geral, antes do bloco de SLA.
  */
+/** Mínimo de caracteres para a busca de usuários. */
+const MIN_SEARCH_CHARS = 3;
+
 export function WatchersSection({
   ticketId,
   assignedToUserId,
@@ -46,31 +50,23 @@ export function WatchersSection({
     [existingWatcherIds, userItems],
   );
 
+  // Só busca a partir de 3 caracteres e depois de uma pausa na digitação.
+  const debouncedSearchTerm = useDebouncedValue(searchTerm, 450);
+  const searchTermTrimmed = searchTerm.trim();
+  const debouncedTerm = debouncedSearchTerm.trim();
+  const canSearch = debouncedTerm.length >= MIN_SEARCH_CHARS;
+
   const filteredAvailableUsers = useMemo(() => {
-    const term = searchTerm.trim().toLowerCase();
+    if (!canSearch) return [];
 
-    if (!term) {
-      return availableUsers.slice(0, 30);
-    }
-
+    const term = debouncedTerm.toLowerCase();
     return availableUsers
       .filter((user) => {
         const haystack = `${user.fullName ?? ''} ${user.login ?? ''} ${user.email ?? ''}`.toLowerCase();
         return haystack.includes(term);
       })
       .slice(0, 30);
-  }, [availableUsers, searchTerm]);
-
-  const userOptions = [
-    {
-      value: '',
-      label: filteredAvailableUsers.length === 0 ? 'Nenhum usuario encontrado' : 'Selecione um usuario',
-    },
-    ...filteredAvailableUsers.map((user) => ({
-      value: user.id,
-      label: user.fullName || user.login || user.email,
-    })),
-  ];
+  }, [availableUsers, canSearch, debouncedTerm]);
 
   const closeAddWatcher = () => {
     setIsAdding(false);
@@ -179,7 +175,7 @@ export function WatchersSection({
             {isAdding && (
               <div className={`${watcherItems.length > 0 ? 'border-t border-border pt-3' : ''} space-y-3`}>
                 <Input
-                  label="Pesquisar usuario"
+                  label="Pesquisar usuário"
                   value={searchTerm}
                   onChange={(event) => {
                     setSearchTerm(event.target.value);
@@ -187,13 +183,42 @@ export function WatchersSection({
                   }}
                   placeholder="Nome, login ou e-mail"
                 />
-                <Select
-                  label="Selecionar usuario"
-                  options={userOptions}
-                  value={selectedUserId}
-                  onChange={(event) => setSelectedUserId(event.target.value)}
-                  disabled={filteredAvailableUsers.length === 0}
-                />
+
+                {searchTermTrimmed.length > 0 && searchTermTrimmed.length < MIN_SEARCH_CHARS && (
+                  <p className="text-xs text-muted">
+                    Digite ao menos {MIN_SEARCH_CHARS} caracteres para buscar.
+                  </p>
+                )}
+
+                {canSearch && (
+                  <div className="max-h-56 space-y-1 overflow-y-auto rounded-lg border border-border p-1">
+                    {filteredAvailableUsers.length === 0 ? (
+                      <p className="px-2 py-3 text-sm text-muted">Nenhum usuário encontrado.</p>
+                    ) : (
+                      filteredAvailableUsers.map((user) => {
+                        const label = user.fullName || user.login || user.email;
+                        const selected = selectedUserId === user.id;
+                        return (
+                          <button
+                            key={user.id}
+                            type="button"
+                            onClick={() => setSelectedUserId(user.id)}
+                            aria-pressed={selected}
+                            className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm transition-colors ${
+                              selected ? 'bg-primary/10 text-foreground' : 'text-muted-foreground hover:bg-surface-hover/60'
+                            }`}
+                          >
+                            <UserPlus className={`h-3.5 w-3.5 shrink-0 ${selected ? 'text-primary' : 'text-muted'}`} />
+                            <span className="min-w-0 flex-1 truncate">{label}</span>
+                            {user.email && user.email !== label && (
+                              <span className="shrink-0 truncate text-xs text-muted">{user.email}</span>
+                            )}
+                          </button>
+                        );
+                      })
+                    )}
+                  </div>
+                )}
                 <div className="flex justify-end gap-2">
                   <Button size="sm" variant="ghost" onClick={closeAddWatcher}>
                     Cancelar

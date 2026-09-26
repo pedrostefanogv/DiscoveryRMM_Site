@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
@@ -61,12 +61,24 @@ describe('WatchersSection', () => {
     expect(screen.getByText('Ninguém acompanhando ainda')).toBeTruthy();
   });
 
-  it('adiciona um watcher pelo fluxo do seletor', () => {
+  it('adiciona um watcher pela busca (mínimo 3 caracteres, com pausa)', async () => {
     render(<WatchersSection ticketId="t1" assignedToUserId={null} />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Adicionar watcher' }));
-    // Bruno já acompanha: sobra apenas a Ana na lista de disponíveis.
-    fireEvent.change(screen.getByLabelText('Selecionar usuario'), { target: { value: 'u1' } });
+    const search = screen.getByLabelText('Pesquisar usuário');
+
+    // Com 2 caracteres ainda não busca.
+    fireEvent.change(search, { target: { value: 'an' } });
+    expect(screen.getByText(/ao menos 3 caracteres/)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Ana Souza/ })).toBeNull();
+
+    // 3+ caracteres: a lista aparece depois da pausa (debounce).
+    fireEvent.change(search, { target: { value: 'ana' } });
+    await waitFor(() => expect(screen.getByRole('button', { name: /Ana Souza/ })).toBeTruthy(), {
+      timeout: 2000,
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /Ana Souza/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Adicionar' }));
 
     expect(addMock).toHaveBeenCalledWith(
