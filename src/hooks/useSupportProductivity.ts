@@ -69,7 +69,9 @@ export function useUpdateTicketTemplate() {
 export function useDeleteTicketTemplate() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => ticketTemplatesApi.remove(id),
+    // force=true confirma a exclusão de template já usado por chamados.
+    mutationFn: ({ id, force = false }: { id: string; force?: boolean }) =>
+      ticketTemplatesApi.remove(id, force),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["ticket-templates"] }),
   });
 }

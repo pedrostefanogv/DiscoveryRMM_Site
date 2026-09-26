@@ -40,6 +40,7 @@ import {
   useUpdateTicketSavedView,
 } from '@/hooks/useTicketSavedViews';
 import { Button, Card, ConfirmDialog, DataTable, Badge, Loading, Modal, Input, Select, Tooltip } from '@/components/ui';
+import { TicketAnswerMatch } from '@/api';
 import type {
   CreateTicketRequest,
   Ticket,
@@ -53,6 +54,7 @@ import toast from 'react-hot-toast';
 import { TICKET_PRIORITY_META, getTicketPriorityMeta } from '@/utils/labels';
 import { buildTicketCustomFieldValues } from '@/utils/ticketCustomFields';
 import { templateDefaultsToDrafts } from '@/utils/ticketTemplateDefaults';
+import { parseTemplateQuestions, questionToSchemaField } from '@/utils/templateQuestions';
 import { TicketSchemaFieldInput } from '@/components/tickets/TicketSchemaFieldInput';
 
 const PRIORITY_OPTIONS = [
@@ -146,6 +148,13 @@ function parseSavedViewFilter(raw: string): TicketSavedViewFilter {
       slaBreached: readBooleanField(parsed, 'slaBreached', 'SlaBreached'),
       isClosed: readBooleanField(parsed, 'isClosed', 'IsClosed'),
       text: readStringField(parsed, 'text', 'Text'),
+      templateId: readStringField(parsed, 'templateId', 'TemplateId'),
+      answerKey: readStringField(parsed, 'answerKey', 'AnswerKey'),
+      answerValue: readStringField(parsed, 'answerValue', 'AnswerValue'),
+      answerMatch:
+        Number(parsed.answerMatch ?? parsed.AnswerMatch ?? 0) === TicketAnswerMatch.Contains
+          ? TicketAnswerMatch.Contains
+          : TicketAnswerMatch.Exact,
     };
   } catch {
     return {};
@@ -178,6 +187,18 @@ function formatSavedViewSummary(
 
   if (filter.text) {
     parts.push(`Busca: ${filter.text}`);
+  }
+
+  if (filter.templateId) {
+    parts.push('Template selecionado');
+  }
+
+  if (filter.answerKey) {
+    parts.push(
+      filter.answerValue
+        ? `Resposta ${filter.answerKey} ${filter.answerMatch === TicketAnswerMatch.Contains ? 'contém' : '='} ${filter.answerValue}`
+        : `Com resposta em ${filter.answerKey}`,
+    );
   }
 
   return parts.length > 0 ? parts.join(' · ') : 'Sem filtros adicionais';
@@ -267,6 +288,10 @@ export default function TicketList() {
   const [filterPriority, setFilterPriority] = useState<TicketPriority | ''>('');
   const [filterStatus, setFilterStatus] = useState<'' | 'true' | 'false'>(DEFAULT_STATUS_FILTER);
   const [filterText, setFilterText] = useState('');
+  const [filterTemplate, setFilterTemplate] = useState('');
+  const [filterAnswerKey, setFilterAnswerKey] = useState('');
+  const [filterAnswerValue, setFilterAnswerValue] = useState('');
+  const [filterAnswerMatch, setFilterAnswerMatch] = useState<TicketAnswerMatch>(TicketAnswerMatch.Exact);
   // KPI agrega no servidor: usar valor adiado evita 1 request por tecla.
   const deferredFilterText = useDeferredValue(filterText);
   const [advancedFiltersExpanded, setAdvancedFiltersExpanded] = useState(false);
@@ -300,6 +325,10 @@ export default function TicketList() {
     priority: filterPriority || undefined,
     isClosed: filterStatus === '' ? undefined : filterStatus === 'true',
     text: filterText.trim() || undefined,
+    templateId: filterTemplate || undefined,
+    answerKey: filterAnswerKey || undefined,
+    answerValue: filterAnswerValue.trim() || undefined,
+    answerMatch: filterAnswerMatch,
     cursor,
     limit: pageSize,
   });
@@ -312,6 +341,10 @@ export default function TicketList() {
     priority: filterPriority || undefined,
     isClosed: filterStatus === '' ? undefined : filterStatus === 'true',
     text: deferredFilterText.trim() || undefined,
+    templateId: filterTemplate || undefined,
+    answerKey: filterAnswerKey || undefined,
+    answerValue: filterAnswerValue.trim() || undefined,
+    answerMatch: filterAnswerMatch,
   });
   const savedViewsQuery = useTicketSavedViews(currentUserId ?? undefined);
   const createSavedView = useCreateTicketSavedView();
@@ -322,6 +355,12 @@ export default function TicketList() {
   const states = useWorkflowStates();
   const clients = useClients();
   const iamUsersQuery = useIamUsers();
+  // Templates (mini questionário) para o filtro por resposta — escopo do
+  // cliente filtrado (global + do cliente).
+  const filterTemplatesQuery = useTicketTemplates({
+    clientId: filterClient || undefined,
+    includeGlobal: true,
+  });
 
   const stateMap = useMemo(
     () => new Map((states.data ?? []).map((state) => [state.id, state])),
@@ -440,13 +479,31 @@ export default function TicketList() {
     dispatchPagination({ type: 'prev' });
   };
 
-  const advancedFiltersActiveCount = Number(Boolean(filterClient)) + Number(Boolean(filterState));
+  const advancedFiltersActiveCount =
+    Number(Boolean(filterClient)) +
+    Number(Boolean(filterState)) +
+    Number(Boolean(filterTemplate)) +
+    // Filtro de resposta conta uma vez, com ou sem pergunta escolhida.
+    Number(Boolean(filterAnswerKey || filterAnswerValue.trim()));
   const hasActiveFilters =
     Boolean(filterClient) ||
     Boolean(filterState) ||
     Boolean(filterPriority) ||
     Boolean(filterText) ||
+    Boolean(filterTemplate) ||
+    Boolean(filterAnswerKey) ||
     filterStatus !== DEFAULT_STATUS_FILTER;
+
+  const filterTemplateOptions = [
+    { value: '', label: 'Todos os templates' },
+    ...(filterTemplatesQuery.data ?? []).map((template) => ({ value: template.id, label: template.name })),
+  ];
+  const filterQuestions = useMemo(() => {
+    if (!filterTemplate) return [];
+    const template = (filterTemplatesQuery.data ?? []).find((item) => item.id === filterTemplate);
+    return parseTemplateQuestions(template?.questionsJson);
+  }, [filterTemplate, filterTemplatesQuery.data]);
+  const selectedFilterQuestion = filterQuestions.find((question) => question.key === filterAnswerKey);
 
   const clientOpts = [
     { value: '', label: 'Todos os clientes' },
@@ -722,6 +779,10 @@ export default function TicketList() {
     setFilterPriority('');
     setFilterStatus(DEFAULT_STATUS_FILTER);
     setFilterText('');
+    setFilterTemplate('');
+    setFilterAnswerKey('');
+    setFilterAnswerValue('');
+    setFilterAnswerMatch(TicketAnswerMatch.Exact);
     setAdvancedFiltersExpanded(false);
     resetPagination();
   };
@@ -732,6 +793,10 @@ export default function TicketList() {
     priority: filterPriority || undefined,
     isClosed: filterStatus === '' ? undefined : filterStatus === 'true',
     text: filterText.trim() || undefined,
+    templateId: filterTemplate || undefined,
+    answerKey: filterAnswerKey || undefined,
+    answerValue: filterAnswerValue.trim() || undefined,
+    answerMatch: filterAnswerMatch,
   });
 
   const applySavedView = (view: TicketSavedView) => {
@@ -747,6 +812,10 @@ export default function TicketList() {
         : DEFAULT_STATUS_FILTER,
     );
     setFilterText(filter.text ?? '');
+    setFilterTemplate(filter.templateId ?? '');
+    setFilterAnswerKey(filter.answerKey ?? '');
+    setFilterAnswerValue(filter.answerValue ?? '');
+    setFilterAnswerMatch(filter.answerMatch ?? TicketAnswerMatch.Exact);
     setActiveSavedViewId(view.id);
     setAdvancedFiltersExpanded(Boolean(filter.clientId || filter.workflowStateId));
     resetPagination();
@@ -984,7 +1053,7 @@ export default function TicketList() {
               onChange={(event) => {
                 applyFilterChange(() => setFilterText(event.target.value));
               }}
-              placeholder="Título, descrição ou termo livre"
+              placeholder="Título, descrição, categoria ou respostas do questionário"
             />
           </div>
           <Select
@@ -1029,7 +1098,14 @@ export default function TicketList() {
               options={clientOpts}
               value={filterClient}
               onChange={(event) => {
-                applyFilterChange(() => setFilterClient(event.target.value));
+                const value = event.target.value;
+                applyFilterChange(() => {
+                  setFilterClient(value);
+                  // Templates são escopados por cliente: reseta o filtro derivado.
+                  setFilterTemplate('');
+                  setFilterAnswerKey('');
+                  setFilterAnswerValue('');
+                });
               }}
             />
             <Select
@@ -1040,6 +1116,86 @@ export default function TicketList() {
                 applyFilterChange(() => setFilterState(event.target.value));
               }}
             />
+            <Select
+              label="Template"
+              options={filterTemplateOptions}
+              value={filterTemplate}
+              onChange={(event) => {
+                const value = event.target.value;
+                applyFilterChange(() => {
+                  setFilterTemplate(value);
+                  setFilterAnswerKey('');
+                  setFilterAnswerValue('');
+                });
+              }}
+            />
+            {filterTemplate && (
+              <>
+                <Select
+                  label="Pergunta do questionário"
+                  options={[
+                    { value: '', label: 'Qualquer pergunta' },
+                    ...filterQuestions.map((question) => ({ value: question.key, label: question.label })),
+                  ]}
+                  value={filterAnswerKey}
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    applyFilterChange(() => {
+                      setFilterAnswerKey(value);
+                      setFilterAnswerValue('');
+                    });
+                  }}
+                />
+                {selectedFilterQuestion && selectedFilterQuestion.options.length > 0 ? (
+                  <Select
+                    label="Resposta"
+                    options={[
+                      { value: '', label: 'Qualquer resposta' },
+                      ...selectedFilterQuestion.options.map((option) => ({ value: option, label: option })),
+                    ]}
+                    value={filterAnswerValue}
+                    onChange={(event) => {
+                      const value = event.target.value;
+                      applyFilterChange(() => setFilterAnswerValue(value));
+                    }}
+                  />
+                ) : (
+                  <Input
+                    label="Resposta"
+                    value={filterAnswerValue}
+                    placeholder={
+                      filterAnswerKey
+                        ? filterAnswerMatch === TicketAnswerMatch.Contains
+                          ? 'Contém o termo...'
+                          : 'Valor exato (vazio = qualquer resposta)'
+                        : 'Busca em qualquer pergunta'
+                    }
+                    onChange={(event) => {
+                      const value = event.target.value;
+                      applyFilterChange(() => setFilterAnswerValue(value));
+                    }}
+                  />
+                )}
+                {(filterAnswerKey || filterAnswerValue.trim()) && (
+                  <Select
+                    label="Correspondência"
+                    options={[
+                      { value: String(TicketAnswerMatch.Exact), label: 'Igual' },
+                      { value: String(TicketAnswerMatch.Contains), label: 'Contém' },
+                    ]}
+                    value={String(filterAnswerMatch)}
+                    onChange={(event) => {
+                      const value =
+                        Number(event.target.value) === TicketAnswerMatch.Contains
+                          ? TicketAnswerMatch.Contains
+                          : TicketAnswerMatch.Exact;
+                      applyFilterChange(() => setFilterAnswerMatch(value));
+                    }}
+                    hint="Contém ignora maiúsculas e acha itens dentro de listas."
+                  />
+                )}
+              </>
+            )}
           </div>
         )}
 
@@ -1351,6 +1507,11 @@ function CreateTicketModal({ open, onClose }: { open: boolean; onClose: () => vo
 
   const [customFieldDrafts, setCustomFieldDrafts] = useState<Record<string, string>>({});
 
+  // Mini questionário do template (perguntas próprias do modelo, não são
+  // campos do chamado) + respostas em rascunho.
+  const [selectedTemplateId, setSelectedTemplateId] = useState('');
+  const [questionDrafts, setQuestionDrafts] = useState<Record<string, string>>({});
+
   const customFieldValidation = useMemo(
     () => buildTicketCustomFieldValues(schemaFields, customFieldDrafts),
     [schemaFields, customFieldDrafts],
@@ -1370,6 +1531,22 @@ function CreateTicketModal({ open, onClose }: { open: boolean; onClose: () => vo
   }, [schemaFields]);
 
   const templatesQuery = useTicketTemplates({ clientId: selectedClient || undefined, includeGlobal: true });
+
+  const templateQuestions = useMemo(() => {
+    if (!selectedTemplateId) return [];
+    const template = (templatesQuery.data ?? []).find((t) => t.id === selectedTemplateId);
+    return parseTemplateQuestions(template?.questionsJson);
+  }, [selectedTemplateId, templatesQuery.data]);
+
+  const questionFields = useMemo(
+    () => templateQuestions.map(questionToSchemaField),
+    [templateQuestions],
+  );
+
+  const templateAnswerValidation = useMemo(
+    () => buildTicketCustomFieldValues(questionFields, questionDrafts),
+    [questionFields, questionDrafts],
+  );
   const [form, setForm] = useState<CreateTicketRequest>({
     clientId: '',
     siteId: null,
@@ -1387,6 +1564,9 @@ function CreateTicketModal({ open, onClose }: { open: boolean; onClose: () => vo
     if (!id) return;
     const template = (templatesQuery.data ?? []).find((t) => t.id === id);
     if (!template) return;
+
+    setSelectedTemplateId(template.id);
+    setQuestionDrafts({});
 
     setForm((current) => ({
       ...current,
@@ -1416,12 +1596,14 @@ function CreateTicketModal({ open, onClose }: { open: boolean; onClose: () => vo
     setForm((current) => ({ ...current, [key]: value }));
 
   const clearCustomFields = () => setCustomFieldDrafts({});
+  const clearTemplate = () => { setSelectedTemplateId(''); setQuestionDrafts({}); };
 
   const handleClientChange = (id: string) => {
     setSelectedClient(id);
     setSelectedSite('');
     setSelectedDept('');
     clearCustomFields();
+    clearTemplate();
     setForm((current) => ({
       ...current,
       clientId: id,
@@ -1457,7 +1639,8 @@ function CreateTicketModal({ open, onClose }: { open: boolean; onClose: () => vo
     Boolean(form.clientId) &&
     form.title.trim().length >= 3 &&
     form.description.trim().length >= 3 &&
-    customFieldValidation.errors.length === 0;
+    customFieldValidation.errors.length === 0 &&
+    templateAnswerValidation.errors.length === 0;
 
   const resetAndClose = () => {
     onClose();
@@ -1465,6 +1648,7 @@ function CreateTicketModal({ open, onClose }: { open: boolean; onClose: () => vo
     setSelectedSite('');
     setSelectedDept('');
     clearCustomFields();
+    clearTemplate();
     setForm({
       clientId: '',
       siteId: null,
@@ -1480,6 +1664,10 @@ function CreateTicketModal({ open, onClose }: { open: boolean; onClose: () => vo
   };
 
   const handleSubmit = () => {
+    if (templateAnswerValidation.errors.length > 0) {
+      toast.error(templateAnswerValidation.errors[0]);
+      return;
+    }
     if (customFieldValidation.errors.length > 0) {
       toast.error(customFieldValidation.errors[0]);
       return;
@@ -1488,10 +1676,14 @@ function CreateTicketModal({ open, onClose }: { open: boolean; onClose: () => vo
 
     // Campos vazios são omitidos; apenas preenchidos/obrigatórios entram no payload.
     const customFieldValues = customFieldValidation.values;
+    const templateAnswers = templateAnswerValidation.values;
 
     const payload: CreateTicketRequest = {
       ...form,
       ...(Object.keys(customFieldValues).length > 0 ? { customFieldValues } : {}),
+      ...(selectedTemplateId && Object.keys(templateAnswers).length > 0
+        ? { templateAnswers }
+        : {}),
     };
 
     create.mutate(payload, {
@@ -1550,14 +1742,43 @@ function CreateTicketModal({ open, onClose }: { open: boolean; onClose: () => vo
 
         {(templatesQuery.data?.length ?? 0) > 0 && (
           <Select
-            label="Usar template"
+            label="Usar template (opcional)"
             options={[
-              { value: '', label: 'Selecione um template...' },
+              { value: '', label: 'Nenhum — abrir normalmente' },
               ...(templatesQuery.data ?? []).map((t) => ({ value: t.id, label: t.name })),
             ]}
-            value=""
-            onChange={(event) => applyTemplate(event.target.value)}
+            value={selectedTemplateId}
+            onChange={(event) => {
+              const value = event.target.value;
+              if (!value) {
+                clearTemplate();
+                return;
+              }
+              applyTemplate(value);
+            }}
           />
+        )}
+
+        {/* Mini questionário do template selecionado (não são campos do chamado) */}
+        {templateQuestions.length > 0 && (
+          <div className="rounded-lg border border-dashed border-primary/40 bg-surface-light p-4">
+            <p className="mb-1 text-xs font-medium text-muted">Questionário do modelo</p>
+            <p className="mb-3 text-xs text-muted">
+              Perguntas adicionais do modelo selecionado — as respostas ficam registradas no chamado.
+            </p>
+            <div className="space-y-3">
+              {questionFields.map((field) => (
+                <TicketSchemaFieldInput
+                  key={field.definitionId}
+                  field={field}
+                  value={questionDrafts[field.definitionId] ?? ''}
+                  onChange={(value) =>
+                    setQuestionDrafts((prev) => ({ ...prev, [field.definitionId]: value }))
+                  }
+                />
+              ))}
+            </div>
+          </div>
         )}
         <div className="grid grid-cols-2 gap-4">
           <Select label="Prioridade" options={priorityOpts} value={form.priority} onChange={(event) => set('priority', event.target.value as TicketPriority)} />

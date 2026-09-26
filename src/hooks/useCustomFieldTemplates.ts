@@ -16,6 +16,7 @@ export function useCustomFieldTemplates(
     departmentId?: string;
     includeGlobal?: boolean;
     includeInactive?: boolean;
+    allScopes?: boolean;
   } = {},
 ) {
   return useQuery({

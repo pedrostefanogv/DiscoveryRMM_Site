@@ -36,6 +36,7 @@ export interface TicketTemplateDto {
   priority: string | null;
   category: string | null;
   customFieldDefaultsJson: string;
+  questionsJson: string;
   isActive: boolean;
   createdBy: string | null;
   createdAt: string;
@@ -51,6 +52,7 @@ export interface UpsertTicketTemplateRequest {
   priority: string | null;
   category: string | null;
   customFieldDefaultsJson: string;
+  questionsJson: string;
   isActive: boolean;
 }
 
@@ -124,7 +126,8 @@ export const ticketTemplatesApi = {
     api.get<TicketTemplateDto[]>(TEMPLATES, params as Record<string, unknown>),
   create: (data: UpsertTicketTemplateRequest) => api.post<TicketTemplateDto>(TEMPLATES, data),
   update: (id: string, data: UpsertTicketTemplateRequest) => api.put<TicketTemplateDto>(`${TEMPLATES}/${id}`, data),
-  remove: (id: string) => api.del<void>(`${TEMPLATES}/${id}`),
+  // force=true confirma a exclusão de template já usado por chamados.
+  remove: (id: string, force = false) => api.del<void>(`${TEMPLATES}/${id}${force ? "?force=true" : ""}`),
 };
 
 export const notificationChannelsApi = {

@@ -447,7 +447,7 @@ function handleDelete() {
             title="Campos customizados"
             subtitle="Defina quais campos aparecem na abertura de chamados deste departamento."
           />
-          <DepartmentCustomFieldsSection departmentId={department.id} />
+          <DepartmentCustomFieldsSection departmentId={department.id} clientId={department.clientId} />
         </Card>
       ) : (
         <DepartmentMembersCard departmentId={department.id} />

@@ -184,8 +184,10 @@ function MaskPreview({ mask }: { mask: string }) {
 
 export function DepartmentCustomFieldsSection({
   departmentId,
+  clientId = null,
 }: {
   departmentId: string;
+  clientId?: string | null;
 }) {
   const fieldsQuery = useDepartmentCustomFields(departmentId);
 
@@ -209,7 +211,7 @@ export function DepartmentCustomFieldsSection({
             {fields.length} campo(s) — esses campos aparecerão no formulário de abertura de chamado
           </p>
         </div>
-        <CreateFieldButton departmentId={departmentId} />
+        <CreateFieldButton departmentId={departmentId} clientId={clientId} />
       </div>
 
       {fields.length === 0 ? (
@@ -219,7 +221,7 @@ export function DepartmentCustomFieldsSection({
       ) : (
         <div className="space-y-2">
           {fields.map((field) => (
-            <FieldRow key={field.id} field={field} departmentId={departmentId} />
+            <FieldRow key={field.id} field={field} departmentId={departmentId} clientId={clientId} />
           ))}
         </div>
       )}
@@ -232,9 +234,11 @@ export function DepartmentCustomFieldsSection({
 function FieldRow({
   field,
   departmentId,
+  clientId,
 }: {
   field: DepartmentCustomFieldDefinition;
   departmentId: string;
+  clientId: string | null;
 }) {
   const [editOpen, setEditOpen] = useState(false);
   const deleteMutation = useDeleteDepartmentCustomField();
@@ -316,6 +320,7 @@ function FieldRow({
       {editOpen && (
         <FieldFormModal
           departmentId={departmentId}
+          clientId={clientId}
           field={field}
           open={editOpen}
           onClose={() => setEditOpen(false)}
@@ -327,7 +332,7 @@ function FieldRow({
 
 // ── Create Button ────────────────────────────────────────
 
-function CreateFieldButton({ departmentId }: { departmentId: string }) {
+function CreateFieldButton({ departmentId, clientId }: { departmentId: string; clientId: string | null }) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -338,6 +343,7 @@ function CreateFieldButton({ departmentId }: { departmentId: string }) {
       {open && (
         <FieldFormModal
           departmentId={departmentId}
+          clientId={clientId}
           open={open}
           onClose={() => setOpen(false)}
         />
@@ -367,11 +373,13 @@ const EMPTY_FORM: CreateDepartmentCustomFieldRequest = {
 
 function FieldFormModal({
   departmentId,
+  clientId,
   field,
   open,
   onClose,
 }: {
   departmentId: string;
+  clientId: string | null;
   field?: DepartmentCustomFieldDefinition;
   open: boolean;
   onClose: () => void;
@@ -406,8 +414,12 @@ function FieldFormModal({
     return formatOptionsForInput(parseOptionsFromJson(field.optionsJson));
   });
 
-  // Global + modelos do próprio departamento (o handler filtra por escopo).
-  const templatesQuery = useCustomFieldTemplates({ departmentId, includeGlobal: true });
+  // Global + modelos do cliente e do próprio departamento (o handler filtra por escopo).
+  const templatesQuery = useCustomFieldTemplates({
+    clientId: clientId ?? undefined,
+    departmentId,
+    includeGlobal: true,
+  });
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
 
   const applyFieldTemplate = (template: CustomFieldTemplateDto) => {

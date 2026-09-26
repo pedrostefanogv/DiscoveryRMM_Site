@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Plus, Pencil, Trash2, LayoutTemplate, Globe, Building2 } from 'lucide-react';
 import { Badge, Button, Card, CardHeader, ConfirmDialog, ErrorDisplay, Input, Loading, Modal, Select, TextArea } from '@/components/ui';
 import {
@@ -7,15 +8,22 @@ import {
 import { useClients } from '@/hooks/useClients';
 import { useDepartments } from '@/hooks/useDepartments';
 import { useDepartmentTicketSchema } from '@/hooks/useDepartmentCustomFields';
+import { ApiError, CustomFieldDataType } from '@/api';
 import type { TicketTemplateDto, UpsertTicketTemplateRequest } from '@/api';
 import { TicketSchemaFieldInput } from '@/components/tickets/TicketSchemaFieldInput';
 import { templateDefaultsToDrafts } from '@/utils/ticketTemplateDefaults';
+import {
+  parseTemplateQuestions,
+  serializeTemplateQuestions,
+  type TemplateQuestion,
+} from '@/utils/templateQuestions';
+import { TemplateQuestionsEditor } from '@/components/tickets/TemplateQuestionsEditor';
 import { buildTicketCustomFieldValues } from '@/utils/ticketCustomFields';
 import toast from 'react-hot-toast';
 
 const EMPTY: UpsertTicketTemplateRequest = {
   clientId: null, departmentId: null, name: '', title: '', description: '',
-  priority: null, category: null, customFieldDefaultsJson: '{}', isActive: true,
+  priority: null, category: null, customFieldDefaultsJson: '{}', questionsJson: '[]', isActive: true,
 };
 
 const PRIORITY_OPTIONS = [
@@ -33,6 +41,7 @@ export default function TicketTemplatesPage() {
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState<UpsertTicketTemplateRequest>(EMPTY);
   const [deleteTarget, setDeleteTarget] = useState<TicketTemplateDto | null>(null);
+  const [forceDeleteTarget, setForceDeleteTarget] = useState<TicketTemplateDto | null>(null);
 
   const clients = useClients();
 
@@ -42,7 +51,7 @@ export default function TicketTemplatesPage() {
     setForm({
       clientId: t.clientId, departmentId: t.departmentId, name: t.name, title: t.title,
       description: t.description, priority: t.priority, category: t.category,
-      customFieldDefaultsJson: t.customFieldDefaultsJson, isActive: t.isActive,
+      customFieldDefaultsJson: t.customFieldDefaultsJson, questionsJson: t.questionsJson, isActive: t.isActive,
     });
     setOpen(true);
   };
@@ -73,6 +82,7 @@ export default function TicketTemplatesPage() {
           {(templates.data ?? []).map((t) => {
             const client = (clients.data ?? []).find((c) => c.id === t.clientId);
             const fieldCount = countDefaultFields(t.customFieldDefaultsJson);
+            const questionCount = parseTemplateQuestions(t.questionsJson).length;
             return (
               <div key={t.id} className="flex items-start gap-3 py-3">
                 <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-surface-light">
@@ -88,7 +98,8 @@ export default function TicketTemplatesPage() {
                       <Badge color="slate"><Globe className="mr-0.5 inline h-3 w-3" />Global</Badge>
                     )}
                     {t.departmentId && <Badge color="accent">Departamento</Badge>}
-                    {fieldCount > 0 && <Badge color="success">{fieldCount} campo(s) padrão</Badge>}
+                    {questionCount > 0 && <Badge color="success">{questionCount} pergunta(s)</Badge>}
+                    {fieldCount > 0 && <Badge color="slate">{fieldCount} campo(s) padrão</Badge>}
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -125,14 +136,83 @@ export default function TicketTemplatesPage() {
         onClose={() => setDeleteTarget(null)}
         onConfirm={() => {
           if (!deleteTarget) return;
-          remove.mutate(deleteTarget.id, {
-            onSuccess: () => { toast.success('Template excluído'); setDeleteTarget(null); },
-            onError: () => toast.error('Erro ao excluir template'),
-          });
+          remove.mutate(
+            { id: deleteTarget.id },
+            {
+              onSuccess: () => { toast.success('Template excluído'); setDeleteTarget(null); },
+              onError: (error: unknown) => {
+                // 409 = template já usado por chamados: pede confirmação explícita.
+                const status = error instanceof ApiError ? error.status : undefined;
+                if (status === 409) {
+                  setForceDeleteTarget(deleteTarget);
+                  setDeleteTarget(null);
+                  return;
+                }
+                toast.error(error instanceof Error ? error.message : 'Erro ao excluir template');
+              },
+            },
+          );
+        }}
+      />
+
+      <ConfirmDialog
+        open={forceDeleteTarget !== null}
+        title="Template usado por chamados"
+        message={`O template "${forceDeleteTarget?.name ?? ''}" já foi usado para abrir chamados. O nome usado continuará registrado no histórico de cada chamado (somente leitura), mas o vínculo com o catálogo será removido. Excluir mesmo assim?`}
+        confirmLabel="Excluir definitivamente"
+        isLoading={remove.isPending}
+        onClose={() => setForceDeleteTarget(null)}
+        onConfirm={() => {
+          if (!forceDeleteTarget) return;
+          remove.mutate(
+            { id: forceDeleteTarget.id, force: true },
+            {
+              onSuccess: () => { toast.success('Template excluído'); setForceDeleteTarget(null); },
+              onError: (error: unknown) =>
+                toast.error(error instanceof Error ? error.message : 'Erro ao excluir template'),
+            },
+          );
         }}
       />
     </div>
   );
+}
+
+function validateQuestions(questions: TemplateQuestion[]): string | null {
+  const seen = new Set<string>();
+  for (const question of questions) {
+    const label = question.label.trim();
+    const key = question.key.trim();
+    if (!label || !key) return 'Toda pergunta do modelo precisa de rótulo e chave.';
+    if (seen.has(key.toLowerCase())) return `Chave de pergunta duplicada: "${key}".`;
+    seen.add(key.toLowerCase());
+
+    if (
+      (question.dataType === CustomFieldDataType.Dropdown ||
+        question.dataType === CustomFieldDataType.ListBox) &&
+      question.options.length === 0
+    ) {
+      return `Pergunta "${label}": informe ao menos uma opção.`;
+    }
+
+    const regex = question.validationRegex?.trim();
+    if (regex) {
+      try {
+        // eslint-disable-next-line no-new
+        new RegExp(regex);
+      } catch {
+        return `Pergunta "${label}": regex de validação inválida.`;
+      }
+    }
+
+    if (question.minLength != null && question.maxLength != null && question.minLength > question.maxLength) {
+      return `Pergunta "${label}": tamanho mínimo maior que o máximo.`;
+    }
+    if (question.minValue != null && question.maxValue != null && question.minValue > question.maxValue) {
+      return `Pergunta "${label}": valor mínimo maior que o máximo.`;
+    }
+  }
+  return null;
 }
 
 function countDefaultFields(json: string): number {
@@ -162,6 +242,7 @@ function TemplateFormModal({
   const update = useUpdateTicketTemplate();
   const isSaving = create.isPending || update.isPending;
   const [form, setForm] = useState<UpsertTicketTemplateRequest>(initial);
+  const [questions, setQuestions] = useState<TemplateQuestion[]>(() => parseTemplateQuestions(initial.questionsJson));
   const [drafts, setDrafts] = useState<Record<string, string>>({});
 
   const departments = useDepartments({ clientId: form.clientId ?? undefined, includeGlobal: true });
@@ -201,6 +282,11 @@ function TemplateFormModal({
       toast.error('Informe nome e título do template.');
       return;
     }
+    const questionError = validateQuestions(questions);
+    if (questionError) {
+      toast.error(questionError);
+      return;
+    }
     if (validation.errors.length > 0) {
       toast.error(validation.errors[0]);
       return;
@@ -209,6 +295,7 @@ function TemplateFormModal({
     const payload: UpsertTicketTemplateRequest = {
       ...form,
       customFieldDefaultsJson: JSON.stringify(validation.values),
+      questionsJson: serializeTemplateQuestions(questions),
     };
 
     const opts = {
@@ -251,15 +338,39 @@ function TemplateFormModal({
           <Input label="Categoria" value={form.category ?? ''} onChange={(e) => set('category', e.target.value || null)} />
         </div>
 
+        <TemplateQuestionsEditor
+          questions={questions}
+          onChange={setQuestions}
+          clientId={form.clientId}
+          departmentId={form.departmentId}
+        />
+
         {form.departmentId && (
           <div className="rounded-lg border border-border bg-surface-light p-4">
-            <p className="mb-1 text-xs font-medium text-muted">Valores padrão dos campos personalizados</p>
+            <div className="mb-1 flex items-start justify-between gap-3">
+              <p className="text-xs font-medium text-muted">
+                Opcional: pré-preencher campos do departamento
+              </p>
+              <Link
+                to={`/tickets/departments/${form.departmentId}`}
+                className="shrink-0 text-xs font-medium text-primary hover:underline"
+              >
+                Gerenciar campos do departamento
+              </Link>
+            </div>
             <p className="mb-3 text-xs text-muted">
-              Preencha o que deve vir pré-selecionado no chamado. Campos vazios ficam como estão no formulário.
+              Estes são os campos fixos do departamento (existem em todo chamado, obrigatórios ou não conforme a
+              configuração de cada campo). Aqui você só define valores iniciais — opcional.
             </p>
             {schemaQuery.isLoading && <Loading message="Carregando campos..." />}
             {!schemaQuery.isLoading && schemaFields.length === 0 && (
-              <p className="text-sm text-muted">Este departamento não possui campos personalizados.</p>
+              <p className="text-sm text-muted">
+                Este departamento não possui campos personalizados.{' '}
+                <Link to={`/tickets/departments/${form.departmentId}`} className="font-medium text-primary hover:underline">
+                  Criar campos
+                </Link>
+                .
+              </p>
             )}
             <div className="space-y-3">
               {schemaFields.map((field) => (

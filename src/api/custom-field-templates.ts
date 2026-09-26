@@ -141,6 +141,7 @@ export const customFieldTemplatesApi = {
       departmentId?: string;
       includeGlobal?: boolean;
       includeInactive?: boolean;
+      allScopes?: boolean;
     } = {},
   ): Promise<CustomFieldTemplateDto[]> {
     const raw = await api.get<unknown>(BASE, params as Record<string, unknown>);

@@ -11,6 +11,8 @@ export { ticketSavedViewsApi } from "./ticket-saved-views";
 export { ticketKpiApi } from "./ticket-kpi";
 export { ticketAutomationLinksApi } from "./ticket-automation-links";
 export { ticketCustomFieldsApi } from "./ticket-custom-fields";
+export { ticketAnswersApi } from "./ticket-answers";
+export type { TicketAnswerItem } from "./ticket-answers";
 export { ticketAiApi } from "./ticket-ai";
 export { ticketsApi } from "./tickets";
 export {

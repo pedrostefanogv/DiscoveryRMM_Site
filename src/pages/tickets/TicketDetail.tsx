@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Send, Lock, Unlock, Clock, Activity, ChevronDown, BookOpen, Paperclip, Upload, File, CheckCircle, XCircle, Loader2, UserPlus, UserMinus, Wrench, Copy, RotateCcw, Star, Trash2, Link2 } from 'lucide-react';
+import { ArrowLeft, Send, Lock, Unlock, Clock, Activity, ChevronDown, BookOpen, Paperclip, Upload, File, CheckCircle, XCircle, Loader2, UserPlus, UserMinus, Wrench, Copy, RotateCcw, Star, Trash2, Link2, ClipboardList } from 'lucide-react';
 import { MarkdownViewer } from '@/components/ui/MarkdownViewer';
 import { useAuth } from '@/auth/AuthContext';
 import { getUserIdFromJwt } from '@/auth/jwt';
@@ -26,6 +26,7 @@ import {
   useDeleteTicketRelation,
 } from '@/hooks/useTickets';
 import { useTicketMacros } from '@/hooks/useSupportProductivity';
+import { useTicketAnswers } from '@/hooks/useTicketAnswers';
 import { useAutomationTasks } from '@/hooks/useAutomation';
 import { useTicketAttachmentSettings } from '@/hooks/useConfigurationApi';
 import { useSiteTicketAttachmentSettings, useClientTicketAttachmentSettings } from '@/hooks/useConfigurationApi';
@@ -255,18 +256,8 @@ export default function TicketDetail() {
             <p className="text-sm text-muted-foreground whitespace-pre-wrap">{t.description}</p>
           </Card>
 
-          {/* Snapshot do formulário/template enviado na abertura (somente leitura) */}
-          {t.submissionSnapshotMarkdown && (
-            <Card>
-              <CardHeader
-                title="Formulário enviado"
-                subtitle="Registro somente leitura da abertura do chamado"
-              />
-              <div className="text-sm">
-                <MarkdownViewer source={t.submissionSnapshotMarkdown} />
-              </div>
-            </Card>
-          )}
+          {/* Abertura: template + respostas estruturadas do questionário */}
+          <TicketOpeningPanel ticket={t} />
 
           {/* Tabs: Comments / Timeline */}
           <Card padding={false}>
@@ -356,6 +347,7 @@ export default function TicketDetail() {
             assignedEmail={assignedEmail}
             updatedAt={t.updatedAt}
             closedAt={t.closedAt}
+            templateName={t.templateName}
           />
           <TicketCustomFieldsPanel ticketId={id!} />
           <WorkflowPanel ticketId={id!} currentStateId={t.workflowStateId} />
@@ -1823,6 +1815,83 @@ function RelationsPanel({ ticketId }: { ticketId: string }) {
   );
 }
 
+function TicketOpeningPanel({ ticket }: { ticket: Ticket }) {
+  const answers = useTicketAnswers(ticket.id);
+  const items = answers.data ?? [];
+  const hasTemplate = Boolean(ticket.templateName);
+  const templateRemoved = Boolean(ticket.templateName) && !ticket.templateId;
+
+  // Nada a exibir em chamados abertos sem template e sem snapshot (dados legados).
+  if (!hasTemplate && items.length === 0 && !ticket.submissionSnapshotMarkdown) return null;
+
+  return (
+    <Card>
+      <CardHeader
+        title="Abertura do chamado"
+        subtitle="Template e respostas do questionário (somente leitura)"
+      />
+      <div className="space-y-4">
+        <div className="flex flex-wrap items-center gap-2">
+          {hasTemplate ? (
+            <>
+              <Badge color={templateRemoved ? 'warning' : 'accent'}>
+                <ClipboardList className="mr-0.5 inline h-3 w-3" />
+                {ticket.templateName}
+              </Badge>
+              {templateRemoved && (
+                <span className="text-xs text-muted">Template removido do catálogo</span>
+              )}
+            </>
+          ) : (
+            <Badge color="slate">Abertura normal (sem template)</Badge>
+          )}
+        </div>
+
+        {answers.isLoading && <Loading message="Carregando respostas..." />}
+        {answers.isError && (
+          <p className="text-sm text-muted">Não foi possível carregar as respostas deste chamado.</p>
+        )}
+
+        {!answers.isLoading && items.length > 0 && (
+          <dl className="space-y-2">
+            {items.map((answer) => (
+              <div
+                key={answer.questionKey}
+                className="rounded-lg border border-border bg-surface-light px-3 py-2"
+              >
+                <dt className="text-xs font-medium text-muted">{answer.questionLabel}</dt>
+                <dd className="mt-0.5 whitespace-pre-wrap text-sm text-foreground">
+                  {answer.valueText?.trim() ? answer.valueText : '—'}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        )}
+
+        {!answers.isLoading && hasTemplate && items.length === 0 && (
+          <p className="text-sm text-muted">
+            Nenhuma resposta registrada para este chamado (modelo sem perguntas ou respostas vazias).
+          </p>
+        )}
+
+        {ticket.submissionSnapshotMarkdown && (
+          <details
+            className="rounded-lg border border-border bg-surface-light p-3"
+            open={items.length === 0}
+          >
+            <summary className="cursor-pointer text-xs font-medium text-muted">
+              Registro original da abertura (markdown)
+            </summary>
+            <div className="mt-3 text-sm">
+              <MarkdownViewer source={ticket.submissionSnapshotMarkdown} />
+            </div>
+          </details>
+        )}
+      </div>
+    </Card>
+  );
+}
+
 function TicketSummaryPanel({
   ticketId,
   category,
@@ -1832,6 +1901,7 @@ function TicketSummaryPanel({
   assignedEmail,
   updatedAt,
   closedAt,
+  templateName,
 }: {
   ticketId: string;
   category: string | null;
@@ -1841,6 +1911,7 @@ function TicketSummaryPanel({
   assignedEmail: string | null;
   updatedAt: string;
   closedAt: string | null;
+  templateName?: string | null;
 }) {
   const sla = useSlaDetails(ticketId);
   const navigate = useNavigate();
@@ -1917,6 +1988,12 @@ function TicketSummaryPanel({
         }
       />
       <dl className="grid gap-3 text-sm sm:grid-cols-2">
+        {templateName && (
+          <div className="sm:col-span-2">
+            <dt className="text-muted">Template</dt>
+            <dd className="text-foreground">{templateName}</dd>
+          </div>
+        )}
         <div>
           <dt className="text-muted">Categoria</dt>
           <dd className="text-foreground">{category ?? '\u2014'}</dd>

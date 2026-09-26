@@ -620,6 +620,10 @@ export interface Ticket {
   ratedBy?: string | null;
   /** Snapshot markdown (somente leitura) do formulário/template enviado na abertura. */
   submissionSnapshotMarkdown?: string | null;
+  /** Template usado na abertura (null = abertura normal ou template removido). */
+  templateId?: string | null;
+  /** Snapshot do nome do template (sobrevive à exclusão do template). */
+  templateName?: string | null;
 }
 
 export interface Department {
@@ -774,6 +778,12 @@ export interface TicketKpiQuery {
   isClosed?: boolean;
   text?: string;
   since?: string;
+  /** Recorte por template de abertura. */
+  templateId?: string;
+  /** Recorte por resposta do questionário. */
+  answerKey?: string;
+  answerValue?: string;
+  answerMatch?: TicketAnswerMatch;
 }
 
 export interface TicketAiBaseResponse {
@@ -1744,6 +1754,8 @@ export interface CreateTicketRequest {
   category: string | null;
   assignedToUserId: string | null;
   customFieldValues?: Record<string, unknown>;
+  /** Respostas do mini questionário do template (chave da pergunta → valor). */
+  templateAnswers?: Record<string, unknown>;
 }
 
 export interface UpdateTicketRequest {
@@ -2368,6 +2380,11 @@ export interface LogsQuery {
   limit?: number;
 }
 
+export enum TicketAnswerMatch {
+  Exact = 0,
+  Contains = 1,
+}
+
 export interface TicketsQuery {
   clientId?: string;
   siteId?: string;
@@ -2382,6 +2399,14 @@ export interface TicketsQuery {
   text?: string;
   cursor?: string;
   limit?: number;
+  /** Filtro por template de abertura. */
+  templateId?: string;
+  /** Filtro por resposta do mini questionário (chave da pergunta). */
+  answerKey?: string;
+  /** Valor esperado da resposta (opcional; vazio = "existe resposta"). */
+  answerValue?: string;
+  /** Correspondência do valor: exact (padrão) ou contains. */
+  answerMatch?: TicketAnswerMatch;
 }
 
 // ── Reports ────────────────────────────────────────────
@@ -2411,6 +2436,7 @@ export enum ReportDatasetType {
   TicketActivity = 19,
   TicketEscalations = 20,
   CustomFields = 21,
+  TicketAnswers = 23,
   KnowledgeBase = 22,
 }
 

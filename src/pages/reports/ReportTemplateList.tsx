@@ -63,6 +63,7 @@ const DATASET_LABELS: Record<ReportDatasetType, string> = {
   [ReportDatasetType.TicketEscalations]: "Regras de Escalonamento",
   [ReportDatasetType.CustomFields]: "Campos Personalizados",
   [ReportDatasetType.KnowledgeBase]: "Base de Conhecimento",
+  [ReportDatasetType.TicketAnswers]: "Respostas do Questionário",
 };
 
 const FORMAT_LABELS: Record<ReportFormat, string> = {

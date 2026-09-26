@@ -19,6 +19,7 @@ import {
   useUpsertCustomFieldValue,
 } from '@/hooks';
 import { agentsApi, clientsApi, sitesApi, type Agent, type Client, type Site } from '@/api';
+import { CustomFieldTemplatesSection } from '@/components/configuration/CustomFieldTemplatesSection';
 
 type DefinitionFormState = {
   name: string;
@@ -348,6 +349,8 @@ export default function CustomFieldsSettings() {
           )}
         </div>
       </Card>
+
+      <CustomFieldTemplatesSection />
 
       <Card>
         <CardHeader title="Valores por Escopo" subtitle="Selecione a entidade e edite os valores das definições correspondentes. Valores de Ticket sao gerenciados no detalhe do chamado." />
