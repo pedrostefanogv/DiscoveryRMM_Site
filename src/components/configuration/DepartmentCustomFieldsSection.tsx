@@ -55,6 +55,14 @@ const DATA_TYPE_OPTIONS = Object.values(CustomFieldDataType)
   .filter((v): v is CustomFieldDataType => typeof v === "number")
   .map((v) => ({ value: String(v), label: getCustomFieldDataTypeLabel(v) }));
 
+// Tipos que consomem máscara na entrada (TicketSchemaFieldInput). Booleano,
+// data/hora e seleção usam controles nativos e ignoram a máscara.
+const MASK_SUPPORTED_DATA_TYPES: CustomFieldDataType[] = [
+  CustomFieldDataType.Text,
+  CustomFieldDataType.Integer,
+  CustomFieldDataType.Decimal,
+];
+
 type RegexPreset = {
   value: string;
   label: string;
@@ -480,6 +488,8 @@ function FieldFormModal({
 
   const showRegex = form.dataType === CustomFieldDataType.Text;
 
+  const showMask = MASK_SUPPORTED_DATA_TYPES.includes(form.dataType);
+
   const availableRegexPresets = useMemo(
     () =>
       REGEX_ASSISTANT_PRESETS.filter(
@@ -567,7 +577,7 @@ function FieldFormModal({
       description: form.description?.trim() || null,
       options: needsOptions ? parseOptionsFromInput(optionsText) : [],
       validationRegex: form.validationRegex?.trim() || null,
-      inputMask: form.inputMask?.trim() || null,
+      inputMask: showMask ? form.inputMask?.trim() || null : null,
     };
 
     const parsedRegex = parseRegexInput(payload.validationRegex ?? "");
@@ -677,35 +687,44 @@ function FieldFormModal({
             label="Tipo do Campo *"
             value={String(form.dataType)}
             options={DATA_TYPE_OPTIONS}
-            onChange={(e) =>
+            onChange={(e) => {
+              const nextDataType = Number(e.target.value) as CustomFieldDataType;
               setForm((f) => ({
                 ...f,
-                dataType: Number(e.target.value) as CustomFieldDataType,
-              }))
-            }
+                dataType: nextDataType,
+                // Não deixar máscara residual em tipo que não a usa.
+                inputMask: MASK_SUPPORTED_DATA_TYPES.includes(nextDataType)
+                  ? f.inputMask
+                  : null,
+              }));
+            }}
           />
 
-          <Input
-            label="Máscara de entrada"
-            value={form.inputMask ?? ""}
-            onChange={(e) =>
-              setForm((f) => ({ ...f, inputMask: e.target.value || null }))
-            }
-            placeholder="ex: 999.999.999-99"
-            hint={
-              form.inputMask
-                ? `Exemplo: ${fieldMaskPlaceholder(form.inputMask)} (9=dígito, A=letra, *=alfanumérico)`
-                : "Opcional. 9=dígito, A=letra, *=alfanumérico; demais caracteres são literais."
-            }
-          />
+          {showMask && (
+            <>
+              <Input
+                label="Máscara de entrada"
+                value={form.inputMask ?? ""}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, inputMask: e.target.value || null }))
+                }
+                placeholder="ex: 999.999.999-99"
+                hint={
+                  form.inputMask
+                    ? `Exemplo: ${fieldMaskPlaceholder(form.inputMask)} (9=dígito, A=letra, *=alfanumérico)`
+                    : "Opcional. 9=dígito, A=letra, *=alfanumérico; demais caracteres são literais."
+                }
+              />
 
-          {form.inputMask && (
-            <div className="mb-3 rounded-lg border border-border bg-surface-light p-3">
-              <p className="mb-2 text-xs font-medium text-muted">Prévia da máscara</p>
-              <div className="flex items-center gap-2">
-                <MaskPreview mask={form.inputMask} />
-              </div>
-            </div>
+              {form.inputMask && (
+                <div className="mb-3 rounded-lg border border-border bg-surface-light p-3">
+                  <p className="mb-2 text-xs font-medium text-muted">Prévia da máscara</p>
+                  <div className="flex items-center gap-2">
+                    <MaskPreview mask={form.inputMask} />
+                  </div>
+                </div>
+              )}
+            </>
           )}
 
           {needsOptions && (
