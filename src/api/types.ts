@@ -647,6 +647,7 @@ export interface WorkflowProfile {
   description: string | null;
   slaHours: number;
   slaCalendarId: string | null;
+  slaWarningPercent: number | null;
   defaultPriority: TicketPriority | null;
   isActive: boolean;
 }
@@ -851,11 +852,12 @@ export interface SlaCalendarSummary {
   workDayEndHour: number;
   workDaysJson: string;
   holidayCount: number;
+  isDefault: boolean;
 }
 
 export interface SlaCalendarHoliday {
   id: string;
-  date: string;
+  date: string | null;
   name: string;
   holidayType: number; // 0=Fixed, 1=Yearly, 2=Relative
   relativeMonth: number | null;
@@ -878,6 +880,7 @@ export interface CreateSlaCalendarRequest {
   workDayStartHour?: number | null;
   workDayEndHour?: number | null;
   workDaysJson?: string | null;
+  isDefault?: boolean | null;
 }
 
 export interface UpdateSlaCalendarRequest {
@@ -886,10 +889,11 @@ export interface UpdateSlaCalendarRequest {
   workDayStartHour?: number | null;
   workDayEndHour?: number | null;
   workDaysJson?: string | null;
+  isDefault?: boolean | null;
 }
 
 export interface AddSlaCalendarHolidayRequest {
-  date: string;
+  date: string | null;
   name: string;
   holidayType?: number;
   relativeMonth?: number | null;
@@ -899,7 +903,7 @@ export interface AddSlaCalendarHolidayRequest {
 }
 
 export interface UpdateSlaCalendarHolidayRequest {
-  date: string;
+  date: string | null;
   name: string;
   holidayType?: number;
   relativeMonth?: number | null;
@@ -928,6 +932,7 @@ export interface TicketEscalationRule {
   bumpPriority: boolean;
   notifyAssignee: boolean;
   isActive: boolean;
+  escalationCooldownMinutes: number;
 }
 
 export interface CreateEscalationRuleRequest {
@@ -939,6 +944,7 @@ export interface CreateEscalationRuleRequest {
   reassignToDepartmentId?: string | null;
   bumpPriority?: boolean;
   notifyAssignee?: boolean;
+  escalationCooldownMinutes?: number;
 }
 
 export interface UpdateEscalationRuleRequest {
@@ -952,6 +958,7 @@ export interface UpdateEscalationRuleRequest {
   bumpPriority?: boolean;
   notifyAssignee?: boolean;
   isActive?: boolean;
+  escalationCooldownMinutes?: number;
 }
 
 export interface TicketComment {
@@ -1807,6 +1814,7 @@ export interface CreateWorkflowProfileRequest {
   description: string | null;
   slaHours: number;
   slaCalendarId?: string | null;
+  slaWarningPercent?: number | null;
   defaultPriority: TicketPriority | null;
 }
 
@@ -1817,6 +1825,7 @@ export interface UpdateWorkflowProfileRequest {
   slaHours: number;
   slaCalendarId?: string | null;
   clearSlaCalendar?: boolean;
+  slaWarningPercent?: number | null;
   defaultPriority: TicketPriority | null;
   isActive: boolean;
 }

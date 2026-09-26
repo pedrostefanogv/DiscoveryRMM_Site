@@ -48,6 +48,7 @@ import {
   useSlaCalendars,
   useUpdateEscalationRule,
   useUpdateSlaCalendar,
+  useUpdateSlaCalendarHoliday,
   useWorkflowProfiles,
 } from "@/hooks";
 
@@ -61,7 +62,7 @@ const WORKDAY_OPTIONS = [
   { value: 0, label: "Dom" },
 ];
 
-const TIMEZONE_OPTIONS = [
+const TIMEZONE_FALLBACK = [
   { value: "UTC", label: "UTC (UTC±0)" },
   { value: "America/Sao_Paulo", label: "Brasília (GMT-3)" },
   { value: "America/New_York", label: "Nova York (GMT-5/-4)" },
@@ -91,6 +92,28 @@ const TIMEZONE_OPTIONS = [
   { value: "Africa/Cairo", label: "Cairo (GMT+2)" },
   { value: "Africa/Johannesburg", label: "África do Sul (GMT+2)" },
 ];
+
+// Lista de fusos: usa todos os suportados pelo runtime. Antes era uma lista fixa
+// de 28 opções, o que impedia escolher America/Fortaleza, por exemplo.
+const TIMEZONE_OPTIONS: { value: string; label: string }[] = (() => {
+  try {
+    const supported = (
+      Intl as unknown as { supportedValuesOf?: (key: string) => string[] }
+    ).supportedValuesOf?.("timeZone");
+
+    if (supported && supported.length > 0) {
+      const known = new Map(TIMEZONE_FALLBACK.map((option) => [option.value, option.label]));
+      return ["UTC", ...supported.filter((zone) => zone !== "UTC")].map((zone) => ({
+        value: zone,
+        label: known.get(zone) ?? zone.replace(/_/g, " "),
+      }));
+    }
+  } catch {
+    // Sem Intl.supportedValuesOf: usa o fallback abaixo.
+  }
+
+  return TIMEZONE_FALLBACK;
+})();
 
 const HOLIDAY_TYPE_OPTIONS = [
    { value: "0", label: "Fixo (data específica, não recorre)" },
@@ -143,6 +166,7 @@ type CalendarFormState = {
   workDayStartHour: string;
   workDayEndHour: string;
   workDays: number[];
+  isDefault: boolean;
 };
 
 type EscalationFormState = {
@@ -155,6 +179,7 @@ type EscalationFormState = {
   bumpPriority: boolean;
   notifyAssignee: boolean;
   isActive: boolean;
+  escalationCooldownMinutes: string;
 };
 
 const DEFAULT_CALENDAR_FORM: CalendarFormState = {
@@ -164,6 +189,7 @@ const DEFAULT_CALENDAR_FORM: CalendarFormState = {
   workDayStartHour: "8",
   workDayEndHour: "18",
   workDays: [1, 2, 3, 4, 5],
+  isDefault: false,
 };
 
 const DEFAULT_RULE_FORM: EscalationFormState = {
@@ -176,6 +202,7 @@ const DEFAULT_RULE_FORM: EscalationFormState = {
   bumpPriority: false,
   notifyAssignee: true,
   isActive: true,
+  escalationCooldownMinutes: "360",
 };
 
 function parseWorkDaysJson(raw: string | null | undefined) {
@@ -225,6 +252,7 @@ function toCalendarFormState(calendar: SlaCalendarDetail): CalendarFormState {
     workDayStartHour: String(calendar.workDayStartHour),
     workDayEndHour: String(calendar.workDayEndHour),
     workDays: parseWorkDaysJson(calendar.workDaysJson),
+    isDefault: calendar.isDefault,
   };
 }
 
@@ -239,6 +267,7 @@ function toRuleFormState(rule: TicketEscalationRule): EscalationFormState {
     bumpPriority: rule.bumpPriority,
     notifyAssignee: rule.notifyAssignee,
     isActive: rule.isActive,
+    escalationCooldownMinutes: String(rule.escalationCooldownMinutes ?? 360),
   };
 }
 
@@ -278,6 +307,13 @@ export default function TicketSlaPage() {
   const [holidayRelativeDayOfWeek, setHolidayRelativeDayOfWeek] = useState("1");
   const [holidayRelativeOccurrence, setHolidayRelativeOccurrence] = useState("1");
   const [holidayRelativeMethod, setHolidayRelativeMethod] = useState("0"); // DayOfWeekOccurrence
+  const [editingHolidayId, setEditingHolidayId] = useState<string | null>(null);
+  const [confirmState, setConfirmState] = useState<{
+    title: string;
+    message: string;
+    confirmLabel: string;
+    onConfirm: () => Promise<void>;
+  } | null>(null);
 
   const [selectedWorkflowProfileId, setSelectedWorkflowProfileId] = useState("");
   const [editingRuleId, setEditingRuleId] = useState<string | null>(null);
@@ -302,6 +338,7 @@ export default function TicketSlaPage() {
   const updateCalendar = useUpdateSlaCalendar();
   const deleteCalendar = useDeleteSlaCalendar();
   const addHoliday = useAddSlaCalendarHoliday();
+  const updateHoliday = useUpdateSlaCalendarHoliday();
   const deleteHoliday = useDeleteSlaCalendarHoliday();
 
   const createRule = useCreateEscalationRule();
@@ -570,8 +607,10 @@ export default function TicketSlaPage() {
       return;
     }
 
-    if (endHour <= startHour) {
-      toast.error("Horário final deve ser maior que o inicial.");
+    if (endHour === startHour) {
+      toast.error(
+        "Horário final deve ser diferente do inicial. Para jornada de 24h contínuas use 0 e 24.",
+      );
       return;
     }
 
@@ -590,6 +629,7 @@ export default function TicketSlaPage() {
             workDayStartHour: startHour,
             workDayEndHour: endHour,
             workDaysJson: buildWorkDaysJson(calendarForm.workDays),
+            isDefault: calendarForm.isDefault,
           },
         });
         toast.success("Calendário atualizado com sucesso.");
@@ -601,6 +641,7 @@ export default function TicketSlaPage() {
           workDayStartHour: startHour,
           workDayEndHour: endHour,
           workDaysJson: buildWorkDaysJson(calendarForm.workDays),
+          isDefault: calendarForm.isDefault,
         });
         toast.success("Calendário criado com sucesso.");
       }
@@ -615,11 +656,16 @@ export default function TicketSlaPage() {
     }
   }
 
-  async function handleDeleteCalendar(id: string, name: string) {
-    if (!window.confirm(`Excluir o calendário \"${name}\"?`)) {
-      return;
-    }
+  function handleDeleteCalendar(id: string, name: string) {
+    setConfirmState({
+      title: "Excluir calendário",
+      message: `Excluir o calendário \"${name}\"? Esta ação não pode ser desfeita.`,
+      confirmLabel: "Excluir",
+      onConfirm: () => performDeleteCalendar(id),
+    });
+  }
 
+  async function performDeleteCalendar(id: string) {
     try {
       await deleteCalendar.mutateAsync(id);
       if (editingCalendarId === id) {
@@ -638,7 +684,7 @@ export default function TicketSlaPage() {
     }
   }
 
-  async function handleAddHoliday() {
+  async function handleSaveHoliday() {
     if (!holidayCalendarId) {
       toast.error("Selecione um calendário para gerenciar os feriados.");
       return;
@@ -671,7 +717,8 @@ export default function TicketSlaPage() {
     try {
       const payload: Record<string, unknown> = {
         name: holidayName.trim(),
-        date: holidayDate ? `${holidayDate}T00:00:00` : "2000-01-01T00:00:00",
+        // Feriado relativo não tem data própria: envia null.
+        date: holidayDate ? `${holidayDate}T00:00:00` : null,
         holidayType: typeNum,
       };
 
@@ -687,22 +734,44 @@ export default function TicketSlaPage() {
         }
       }
 
-      await addHoliday.mutateAsync({
-        id: holidayCalendarId,
-        data: payload as never,
-      });
+      if (editingHolidayId) {
+        await updateHoliday.mutateAsync({
+          id: holidayCalendarId,
+          holidayId: editingHolidayId,
+          data: payload as never,
+        });
+        toast.success("Feriado atualizado com sucesso.");
+      } else {
+        await addHoliday.mutateAsync({
+          id: holidayCalendarId,
+          data: payload as never,
+        });
+        toast.success("Feriado adicionado com sucesso.");
+      }
+
       resetHolidayForm();
-      toast.success("Feriado adicionado com sucesso.");
     } catch (error) {
       toast.error(
         error instanceof Error
           ? error.message
-          : "Não foi possível adicionar o feriado.",
+          : "Não foi possível salvar o feriado.",
       );
     }
   }
 
+  function startEditHoliday(holiday: SlaCalendarHoliday) {
+    setEditingHolidayId(holiday.id);
+    setHolidayName(holiday.name);
+    setHolidayType(String(holiday.holidayType));
+    setHolidayDate(holiday.date ? holiday.date.slice(0, 10) : "");
+    setHolidayRelativeMonth(String(holiday.relativeMonth ?? 1));
+    setHolidayRelativeDayOfWeek(String(holiday.relativeDayOfWeek ?? 1));
+    setHolidayRelativeOccurrence(String(holiday.relativeOccurrence ?? 1));
+    setHolidayRelativeMethod(String(holiday.relativeMethod ?? 0));
+  }
+
   function resetHolidayForm() {
+    setEditingHolidayId(null);
     setHolidayDate("");
     setHolidayName("");
     setHolidayType("1");
@@ -710,6 +779,17 @@ export default function TicketSlaPage() {
     setHolidayRelativeDayOfWeek("1");
     setHolidayRelativeOccurrence("1");
     setHolidayRelativeMethod("0");
+  }
+
+  // Ordena por mês/dia (fixos e anuais) e deixa os relativos no fim. Antes os
+  // relativos usavam a data-sentinela 2000-01-01 e ficavam todos agrupados no topo.
+  function getHolidaySortKey(holiday: SlaCalendarHoliday) {
+    if (holiday.holidayType === 2) {
+      return 100000 + (holiday.relativeMonth ?? 0) * 100 + (holiday.relativeOccurrence ?? 0);
+    }
+    if (!holiday.date) return 200000;
+    const [, month, day] = holiday.date.slice(0, 10).split("-").map(Number);
+    return (month || 0) * 100 + (day || 0);
   }
 
   function getHolidayTypeLabel(holiday: SlaCalendarHoliday): string {
@@ -728,14 +808,21 @@ export default function TicketSlaPage() {
     return "Fixo";
   }
 
-  async function handleDeleteHoliday(holidayId: string, name: string) {
+  function handleDeleteHoliday(holidayId: string, name: string) {
     if (!holidayCalendarId) return;
-    if (!window.confirm(`Remover o feriado \"${name}\"?`)) {
-      return;
-    }
+    const calendarId = holidayCalendarId;
 
+    setConfirmState({
+      title: "Remover feriado",
+      message: `Remover o feriado \"${name}\"?`,
+      confirmLabel: "Remover",
+      onConfirm: () => performDeleteHoliday(calendarId, holidayId),
+    });
+  }
+
+  async function performDeleteHoliday(calendarId: string, holidayId: string) {
     try {
-      await deleteHoliday.mutateAsync({ id: holidayCalendarId, holidayId });
+      await deleteHoliday.mutateAsync({ id: calendarId, holidayId });
       toast.success("Feriado removido com sucesso.");
     } catch (error) {
       toast.error(
@@ -767,6 +854,7 @@ export default function TicketSlaPage() {
 
     const triggerAtSlaPercent = Number(ruleForm.triggerAtSlaPercent || "0");
     const triggerAtHoursBefore = Number(ruleForm.triggerAtHoursBefore || "0");
+    const escalationCooldownMinutes = Number(ruleForm.escalationCooldownMinutes || "360");
 
     if (!Number.isFinite(triggerAtSlaPercent) || triggerAtSlaPercent < 0) {
       toast.error("Percentual de disparo inválido.");
@@ -785,6 +873,11 @@ export default function TicketSlaPage() {
       return;
     }
 
+    if (!Number.isFinite(escalationCooldownMinutes) || escalationCooldownMinutes < 1) {
+      toast.error("Cooldown de escalonamento inválido (mínimo 1 minuto).");
+      return;
+    }
+
     try {
       if (editingRuleId) {
         await updateRule.mutateAsync({
@@ -800,6 +893,7 @@ export default function TicketSlaPage() {
             bumpPriority: ruleForm.bumpPriority,
             notifyAssignee: ruleForm.notifyAssignee,
             isActive: ruleForm.isActive,
+            escalationCooldownMinutes,
           },
         });
         toast.success("Regra de escalonamento atualizada.");
@@ -813,6 +907,7 @@ export default function TicketSlaPage() {
           reassignToDepartmentId: ruleForm.reassignToDepartmentId || null,
           bumpPriority: ruleForm.bumpPriority,
           notifyAssignee: ruleForm.notifyAssignee,
+          escalationCooldownMinutes,
         });
         toast.success("Regra de escalonamento criada.");
       }
@@ -829,11 +924,16 @@ export default function TicketSlaPage() {
     }
   }
 
-  async function handleDeleteRule(id: string, name: string) {
-    if (!window.confirm(`Excluir a regra \"${name}\"?`)) {
-      return;
-    }
+  function handleDeleteRule(id: string, name: string) {
+    setConfirmState({
+      title: "Excluir regra",
+      message: `Excluir a regra \"${name}\"? Esta ação não pode ser desfeita.`,
+      confirmLabel: "Excluir",
+      onConfirm: () => performDeleteRule(id),
+    });
+  }
 
+  async function performDeleteRule(id: string) {
     try {
       await deleteRule.mutateAsync(id);
       if (editingRuleId === id) {
@@ -967,11 +1067,13 @@ export default function TicketSlaPage() {
                           ? clientsById.get(calendar.clientId)?.name ?? "Cliente vinculado"
                           : "Global"}
                       </Badge>
+                      {calendar.isDefault && <Badge color="success">Padrão</Badge>}
                     </div>
                     <div className="mt-2 flex flex-wrap gap-2 text-xs text-muted">
                       <span>Timezone: {calendar.timezone}</span>
                       <span>
                         Jornada: {calendar.workDayStartHour}:00 - {calendar.workDayEndHour}:00
+                        {calendar.workDayEndHour < calendar.workDayStartHour ? " (vira o dia)" : ""}
                       </span>
                       <span>Dias: {formatWorkDays(calendar.workDaysJson)}</span>
                       <span>Feriados: {calendar.holidayCount ?? 0}</span>
@@ -1270,6 +1372,21 @@ export default function TicketSlaPage() {
               </div>
             </div>
 
+            <label className="flex items-center gap-3 rounded-xl border border-border bg-surface-light px-4 py-3 text-sm text-muted-foreground">
+              <input
+                type="checkbox"
+                checked={calendarForm.isDefault}
+                onChange={(event) =>
+                  setCalendarForm((current) => ({
+                    ...current,
+                    isDefault: event.target.checked,
+                  }))
+                }
+                className="h-4 w-4 rounded border-border-strong bg-transparent"
+              />
+              <span>Calendário padrão do escopo (pré-selecionado em novos perfis)</span>
+            </label>
+
             {editingCalendarId && (
               <p className="text-xs text-muted">
                 O cliente do calendário não pode ser alterado pelo endpoint atual. Para mudar o
@@ -1405,11 +1522,23 @@ export default function TicketSlaPage() {
                 </div>
               )}
 
-              <div className="flex justify-end">
-                <Button onClick={() => void handleAddHoliday()} loading={addHoliday.isPending}>
-                  <Plus className="h-4 w-4" />
-                  Adicionar feriado
+              <div className="flex flex-wrap justify-end gap-3">
+                <Button
+                  onClick={() => void handleSaveHoliday()}
+                  loading={addHoliday.isPending || updateHoliday.isPending}
+                >
+                  {editingHolidayId ? (
+                    <Pencil className="h-4 w-4" />
+                  ) : (
+                    <Plus className="h-4 w-4" />
+                  )}
+                  {editingHolidayId ? "Salvar feriado" : "Adicionar feriado"}
                 </Button>
+                {editingHolidayId && (
+                  <Button variant="ghost" onClick={resetHolidayForm}>
+                    Cancelar edição
+                  </Button>
+                )}
               </div>
             </div>
 
@@ -1419,10 +1548,7 @@ export default function TicketSlaPage() {
               )}
 
               {[...holidayCalendarHolidays]
-                .sort(
-                  (left, right) =>
-                    new Date(left.date).getTime() - new Date(right.date).getTime(),
-                )
+                .sort((left, right) => getHolidaySortKey(left) - getHolidaySortKey(right))
                 .map((holiday) => (
                   <div
                     key={holiday.id}
@@ -1436,25 +1562,37 @@ export default function TicketSlaPage() {
                         ) : holiday.holidayType === 1 ? (
                           <span className="text-primary">
                             Anual:{" "}
-                            {new Date(holiday.date).toLocaleDateString("pt-BR", {
-                              day: "numeric",
-                              month: "long",
-                            })}
+                            {holiday.date
+                              ? new Date(holiday.date).toLocaleDateString("pt-BR", {
+                                  day: "numeric",
+                                  month: "long",
+                                })
+                              : "sem data"}
                           </span>
                         ) : (
-                          <span>{new Date(holiday.date).toLocaleDateString("pt-BR")}</span>
+                          <span>
+                            {holiday.date
+                              ? new Date(holiday.date).toLocaleDateString("pt-BR")
+                              : "sem data"}
+                          </span>
                         )}
                       </div>
                     </div>
-                    <Button
-                      size="sm"
-                      variant="danger"
-                      onClick={() => void handleDeleteHoliday(holiday.id, holiday.name)}
-                      loading={deleteHoliday.isPending}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                      Remover
-                    </Button>
+                    <div className="flex shrink-0 gap-2">
+                      <Button size="sm" variant="secondary" onClick={() => startEditHoliday(holiday)}>
+                        <Pencil className="h-4 w-4" />
+                        Editar
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="danger"
+                        onClick={() => void handleDeleteHoliday(holiday.id, holiday.name)}
+                        loading={deleteHoliday.isPending}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        Remover
+                      </Button>
+                    </div>
                   </div>
                 ))}
             </div>
@@ -1541,6 +1679,19 @@ export default function TicketSlaPage() {
                   }
                 />
               </div>
+              <Input
+                label="Cooldown da regra (minutos)"
+                type="number"
+                min="1"
+                value={ruleForm.escalationCooldownMinutes}
+                onChange={(event) =>
+                  setRuleForm((current) => ({
+                    ...current,
+                    escalationCooldownMinutes: event.target.value,
+                  }))
+                }
+                placeholder="Padrão: 360"
+              />
               <Select
                 label="Reatribuir para usuário"
                 options={userOptions}
@@ -1692,6 +1843,32 @@ export default function TicketSlaPage() {
           <div className="rounded-xl border border-primary/10 bg-primary/5 p-4 text-xs text-muted">
             Dica: selecione um workflow profile para listar as regras — sem filtro nenhuma
             regra é exibida.
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        open={!!confirmState}
+        onClose={() => setConfirmState(null)}
+        title={confirmState?.title ?? "Confirmar"}
+        maxWidth="max-w-md"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-muted-foreground">{confirmState?.message}</p>
+          <div className="flex justify-end gap-3">
+            <Button variant="ghost" onClick={() => setConfirmState(null)}>
+              Cancelar
+            </Button>
+            <Button
+              variant="danger"
+              onClick={() => {
+                const action = confirmState?.onConfirm;
+                setConfirmState(null);
+                void action?.();
+              }}
+            >
+              {confirmState?.confirmLabel ?? "Confirmar"}
+            </Button>
           </div>
         </div>
       </Modal>

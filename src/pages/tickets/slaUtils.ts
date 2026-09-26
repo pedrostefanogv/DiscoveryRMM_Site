@@ -93,7 +93,7 @@ export function toHolidayFormState(
   holiday: SlaCalendarHoliday,
 ): HolidayFormState {
   return {
-    date: holiday.date,
+    date: holiday.date ?? "",
     name: holiday.name,
     holidayType: holiday.holidayType,
     relativeMonth: holiday.relativeMonth,
