@@ -3,15 +3,18 @@ import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
- * Listagem de templates: catálogo (ativos/inativos), lixeira e restauração.
- * O mock da query imita o servidor aplicando includeInactive/includeDeleted,
- * de modo que alternar os filtros na tela tenha efeito real no teste.
+ * Listagem de templates: catálogo (ativos/inativos), lixeira, restauração e
+ * detalhe somente-leitura.
+ *
+ * Importante: o mock imita a API real, que serializa com
+ * JsonIgnoreCondition.WhenWritingNull — templates NÃO excluídos vêm SEM a
+ * propriedade deletedAt (e não com deletedAt: null).
  */
 const { restoreMock, deleteMock, purgeMock, templates } = vi.hoisted(() => {
   const base = {
     clientId: null,
     departmentId: null,
-    description: 'd',
+    description: 'Descrição do template',
     priority: null,
     category: null,
     customFieldDefaultsJson: '{}',
@@ -19,8 +22,6 @@ const { restoreMock, deleteMock, purgeMock, templates } = vi.hoisted(() => {
     createdBy: null,
     createdAt: '2026-01-01T00:00:00Z',
     updatedAt: '2026-01-01T00:00:00Z',
-    deletedAt: null,
-    deletedBy: null,
   };
 
   return {
@@ -30,17 +31,29 @@ const { restoreMock, deleteMock, purgeMock, templates } = vi.hoisted(() => {
     templates: {
       active: { ...base, id: 'a1', name: 'Template ativo', title: 'Abrir', isActive: true },
       inactive: { ...base, id: 'a2', name: 'Template inativo', title: 'Abrir', isActive: false },
-      deleted: { ...base, id: 'a3', name: 'Template excluído', title: 'Abrir', isActive: true, deletedAt: '2026-09-20T10:00:00Z', deletedBy: 'admin' },
       clientScoped: { ...base, id: 'a4', name: 'Template do cliente', title: 'Abrir', isActive: true, clientId: 'c1' },
+      deleted: {
+        ...base,
+        id: 'a3',
+        name: 'Template excluído',
+        title: 'Abrir',
+        isActive: true,
+        deletedAt: '2026-09-20T10:00:00Z',
+        deletedBy: 'admin',
+      },
     },
   };
 });
 
 vi.mock('@/hooks/useSupportProductivity', () => ({
   useAdminTicketTemplates: (params: { includeInactive?: boolean; includeDeleted?: boolean } = {}) => {
-    const all = [templates.active, templates.inactive, templates.deleted, templates.clientScoped];
+    // deletedAt é opcional: a API omite a propriedade quando não há exclusão.
+    const all = [templates.active, templates.inactive, templates.deleted, templates.clientScoped] as Array<{
+      deletedAt?: string | null;
+      isActive: boolean;
+    }>;
     const data = all.filter((t) => {
-      if (!params.includeDeleted && t.deletedAt !== null) return false;
+      if (!params.includeDeleted && Boolean(t.deletedAt)) return false;
       if (!params.includeInactive && !t.isActive) return false;
       return true;
     });
@@ -55,6 +68,10 @@ vi.mock('@/hooks/useSupportProductivity', () => ({
 }));
 
 vi.mock('@/hooks/useClients', () => ({ useClients: () => ({ data: [{ id: 'c1', name: 'Acme' }] }) }));
+vi.mock('@/hooks/useDepartments', () => ({ useDepartments: () => ({ data: [{ id: 'd1', name: 'TI' }], isLoading: false }) }));
+vi.mock('@/hooks/useDepartmentCustomFields', () => ({
+  useDepartmentTicketSchema: () => ({ data: [], isLoading: false }),
+}));
 
 import TicketTemplatesPage from './TicketTemplatesPage';
 
@@ -79,10 +96,16 @@ describe('TicketTemplatesPage', () => {
 
   afterEach(() => cleanup());
 
-  it('mostra o catálogo ativo, incluindo templates por cliente, sem inativos/excluídos', () => {
+  it('não marca como excluído um template sem deletedAt (a API omite a propriedade)', () => {
     renderPage();
 
     expect(screen.getByText('Template ativo')).toBeTruthy();
+    expect(screen.queryByText(/^Excluído/)).toBeNull();
+  });
+
+  it('mostra o catálogo ativo, incluindo templates por cliente, sem inativos/excluídos', () => {
+    renderPage();
+
     expect(screen.getByText('Template do cliente')).toBeTruthy();
     expect(screen.queryByText('Template inativo')).toBeNull();
     expect(screen.queryByText('Template excluído')).toBeNull();
@@ -109,6 +132,28 @@ describe('TicketTemplatesPage', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Restaurar/ }));
     expect(restoreMock).toHaveBeenCalledWith({ id: 'a3' }, expect.anything());
+  });
+
+  it('abre o detalhe somente-leitura sem entrar no formulário de edição', () => {
+    renderPage();
+
+    fireEvent.click(screen.getAllByLabelText('Ver dados')[0]);
+
+    // O nome aparece na lista e no modal; a rota continua na listagem.
+    expect(screen.getAllByText('Template ativo').length).toBeGreaterThan(1);
+    expect(screen.getByText('Título do chamado')).toBeTruthy();
+    expect(screen.getByText('Questionário do modelo (0)')).toBeTruthy();
+    expect(screen.queryByText('EDITAR TEMPLATE')).toBeNull();
+  });
+
+  it('permite ver os dados de um template excluído', () => {
+    renderPage();
+
+    fireEvent.click(screen.getByRole('button', { name: /Lixeira/ }));
+    fireEvent.click(screen.getAllByLabelText('Ver dados')[0]);
+
+    expect(screen.getByText(/Excluído em/)).toBeTruthy();
+    expect(screen.getByText('Título do chamado')).toBeTruthy();
   });
 
   it('excluir do catálogo pede confirmação e move para a lixeira', () => {

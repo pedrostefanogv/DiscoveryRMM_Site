@@ -47,6 +47,9 @@ export function TemplateQuestionsEditor({
   const [expanded, setExpanded] = useState<Record<number, boolean>>(
     () => (questions.length === 1 ? { 0: true } : ({} as Record<number, boolean>)),
   );
+  // Texto cru do campo de opções. Guardar o rascunho evita o vaivém
+  // digita → split → join que apagava a vírgula (e o Enter) na hora.
+  const [optionDrafts, setOptionDrafts] = useState<Record<number, string>>({});
 
   const update = (index: number, patch: Partial<TemplateQuestion>) => {
     onChange(questions.map((question, i) => (i === index ? { ...question, ...patch } : question)));
@@ -68,6 +71,19 @@ export function TemplateQuestionsEditor({
     setModelSelection((prev) => reindex(prev, index));
     setManualKeyIndexes((prev) => reindex(prev, index));
     setExpanded((prev) => reindex(prev, index));
+    setOptionDrafts((prev) => reindex(prev, index));
+  };
+
+  const parseOptions = (text: string): string[] =>
+    text
+      // Vírgula e quebra de linha separam; ponto e vírgula também (planilhas).
+      .split(/[,\n;]/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+
+  const changeOptions = (index: number, text: string) => {
+    setOptionDrafts((prev) => ({ ...prev, [index]: text }));
+    update(index, { options: parseOptions(text) });
   };
 
   const add = () => {
@@ -86,6 +102,13 @@ export function TemplateQuestionsEditor({
     const model = (templatesQuery.data ?? []).find((item) => item.id === modelId);
     if (!model) return;
     const current = questions[index];
+    // O rascunho passa a refletir as opções do modelo (ou volta a ser derivado).
+    setOptionDrafts((prev) => {
+      const next = { ...prev };
+      if (model.options.length > 0) next[index] = model.options.join(', ');
+      else delete next[index];
+      return next;
+    });
     update(index, {
       dataType: model.dataType,
       isRequired: current.isRequired || model.defaultIsRequired,
@@ -134,6 +157,17 @@ export function TemplateQuestionsEditor({
               question.dataType === CustomFieldDataType.Decimal;
             const isOpen = Boolean(expanded[index]);
             const isIncomplete = !question.label.trim() || !question.key.trim();
+            // Resumo do que o modelo escolhido traz (tipo, máscara, validador),
+            // para ficar claro por que o formulário mudou de forma.
+            const selectedModel = (templatesQuery.data ?? []).find((m) => m.id === modelSelection[index]);
+            const selectedModelHint = selectedModel
+              ? [
+                  getCustomFieldDataTypeLabel(selectedModel.dataType),
+                  selectedModel.inputMask ? `máscara ${fieldMaskPlaceholder(selectedModel.inputMask)}` : null,
+                  selectedModel.validationRegex ? 'validador (regex)' : null,
+                  selectedModel.options.length > 0 ? `${selectedModel.options.length} opção(ões)` : null,
+                ].filter(Boolean).join(' · ')
+              : undefined;
 
             return (
               <div key={index} className="rounded-lg border border-border bg-background/30 p-3">
@@ -196,15 +230,11 @@ export function TemplateQuestionsEditor({
                       />
                     </div>
 
+                    {/* Modelo primeiro: ele já define tipo, máscara, validador e limites. */}
                     <div className="mt-3 grid gap-3 sm:grid-cols-2">
                       <Select
-                        label="Tipo"
-                        value={String(question.dataType)}
-                        options={DATA_TYPE_OPTIONS}
-                        onChange={(e) => update(index, { dataType: Number(e.target.value) as CustomFieldDataType })}
-                      />
-                      <Select
                         label="Usar modelo de campo"
+                        hint={selectedModelHint}
                         value={modelSelection[index] ?? ''}
                         options={[
                           { value: '', label: 'Selecionar modelo...' },
@@ -218,20 +248,22 @@ export function TemplateQuestionsEditor({
                           applyModel(index, e.target.value);
                         }}
                       />
+                      <Select
+                        label="Tipo"
+                        value={String(question.dataType)}
+                        options={DATA_TYPE_OPTIONS}
+                        onChange={(e) => update(index, { dataType: Number(e.target.value) as CustomFieldDataType })}
+                      />
                     </div>
 
                     {needsOptions && (
                       <div className="mt-3">
                         <TextArea
                           label="Opções *"
-                          rows={2}
-                          value={question.options.join(', ')}
-                          onChange={(e) =>
-                            update(index, {
-                              options: e.target.value.split(',').map((item) => item.trim()).filter(Boolean),
-                            })
-                          }
-                          hint="Valores separados por vírgula. Ex: Sistemas internos, Softwares de terceiros"
+                          rows={3}
+                          value={optionDrafts[index] ?? question.options.join(', ')}
+                          onChange={(e) => changeOptions(index, e.target.value)}
+                          hint="Separe por vírgula ou uma por linha. Ex: Sistemas internos, Softwares de terceiros"
                         />
                       </div>
                     )}

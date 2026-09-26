@@ -41,9 +41,13 @@ export interface TicketTemplateDto {
   createdBy: string | null;
   createdAt: string;
   updatedAt: string;
-  /** Soft delete: preenchido quando o template está na lixeira. */
-  deletedAt: string | null;
-  deletedBy: string | null;
+  /**
+   * Soft delete. ATENÇÃO: a API serializa com JsonIgnoreCondition.WhenWritingNull,
+   * então estes campos ficam AUSENTES (undefined) quando não há exclusão — nunca
+   * compare com null; use sempre checagem de veracidade (Boolean(deletedAt)).
+   */
+  deletedAt?: string | null;
+  deletedBy?: string | null;
 }
 
 /**

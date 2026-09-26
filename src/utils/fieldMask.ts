@@ -56,6 +56,59 @@ export function applyFieldMask(
   return out;
 }
 
+/**
+ * Normaliza um rascunho numérico (pt-BR ou en-US) para uma string que o
+ * Number() entende. Aceita valores mascarados como "R$ 1.234,56".
+ *
+ * Regra: se houver vírgula depois do último ponto, o formato é pt-BR
+ * (ponto = milhar, vírgula = decimal); caso contrário o ponto é decimal.
+ */
+export function normalizeNumericDraft(draft: string | null | undefined): string {
+  const raw = (draft ?? "").trim();
+  if (!raw) return "";
+  const cleaned = raw.replace(/[^\d,.-]/g, "");
+  if (!cleaned) return "";
+  const lastComma = cleaned.lastIndexOf(",");
+  const lastDot = cleaned.lastIndexOf(".");
+  const negative = cleaned.startsWith("-");
+  const body = cleaned.replace(/-/g, "");
+  let normalized: string;
+  if (lastComma >= 0 && lastComma > lastDot) {
+    normalized = body.replace(/\./g, "").replace(",", ".");
+  } else {
+    normalized = body.replace(/,/g, "");
+  }
+  return (negative ? "-" : "") + normalized;
+}
+
+/**
+ * Formata um valor numérico para exibição segundo a máscara (ex.: "1234.56"
+ * virando "R$ 1.234,56" com a máscara "R$ 9.999.999,99").
+ *
+ * Diferente de applyFieldMask (largura fixa, usada em CPF/CNPJ), aqui o
+ * agrupamento é calculado a partir do valor real: não trunca números grandes
+ * e preenche as casas decimais do sufixo ",99" da máscara.
+ */
+export function maskNumericDraft(
+  mask: string | null | undefined,
+  draft: string | null | undefined,
+): string {
+  const trimmedMask = (mask ?? "").trim();
+  const normalized = normalizeNumericDraft(draft);
+  if (!normalized) return "";
+  if (!trimmedMask) return normalized;
+
+  // Literais que antecedem o primeiro token viram prefixo (ex.: "R$ ").
+  const prefix = (/^[^9A*]*/.exec(trimmedMask) ?? [""])[0];
+  const decimalSuffix = /,9+\s*$/.exec(trimmedMask);
+  const decimals = decimalSuffix ? decimalSuffix[0].replace(/[^9]/g, "").length : 0;
+  const negative = normalized.startsWith("-");
+  const [integerPart, decimalPart = ""] = normalized.replace("-", "").split(".");
+  const grouped = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  const decimalText = decimals > 0 ? `,${decimalPart.padEnd(decimals, "0").slice(0, decimals)}` : "";
+  return `${negative ? "-" : ""}${prefix}${grouped}${decimalText}`;
+}
+
 /** Exemplo visual da máscara (9→0, A→A, *→X) para preview na configuração. */
 export function fieldMaskPlaceholder(mask: string | null | undefined): string {
   const trimmedMask = (mask ?? "").trim();

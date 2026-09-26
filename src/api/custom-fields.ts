@@ -441,10 +441,11 @@ export function getCustomFieldDataTypeLabel(
       return "Data";
     case CustomFieldDataType.DateTime:
       return "Data/Hora";
+    // Rótulos em português: "Dropdown"/"ListBox" confundiam na tela de templates.
     case CustomFieldDataType.Dropdown:
-      return "Dropdown";
+      return "Seleção única";
     case CustomFieldDataType.ListBox:
-      return "ListBox";
+      return "Múltipla escolha";
     default:
       return "Texto";
   }

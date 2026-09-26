@@ -387,21 +387,8 @@ function TicketTemplateForm({
         </Card>
       )}
 
-      <details className="surface-card glass-card rounded-2xl border border-border bg-surface/90 p-4 sm:p-5">
-        <summary className="cursor-pointer select-none text-sm font-medium text-muted-foreground">
-          Avançado: JSON de campos personalizados
-        </summary>
-        <div className="mt-3">
-          <TextArea
-            label="Campos personalizados (JSON avançado)"
-            rows={3}
-            value={JSON.stringify(validation.values)}
-            readOnly
-            hint="Gerado automaticamente a partir dos valores padrão acima."
-            onChange={() => {}}
-          />
-        </div>
-      </details>
+      {/* O JSON avançado foi removido: os valores são gerados pelos inputs de
+          campos padrão acima (e ficam visíveis no detalhe em modo leitura). */}
 
       <div className="sticky bottom-0 z-10 -mx-4 -mb-8 flex justify-end gap-3 border-t border-border bg-surface/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
         <Button type="button" variant="ghost" onClick={backToList}>Cancelar</Button>

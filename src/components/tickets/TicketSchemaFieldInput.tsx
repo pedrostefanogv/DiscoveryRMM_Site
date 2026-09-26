@@ -1,6 +1,12 @@
+import { useEffect, useState } from 'react';
 import { Input, Select, TextArea } from '@/components/ui';
 import { CustomFieldDataType, type TicketSchemaField } from '@/api';
-import { applyFieldMask, fieldMaskPlaceholder } from '@/utils/fieldMask';
+import {
+  applyFieldMask,
+  fieldMaskPlaceholder,
+  maskNumericDraft,
+  normalizeNumericDraft,
+} from '@/utils/fieldMask';
 
 /**
  * Renderiza um campo dinâmico do schema de tickets (usado na abertura de
@@ -67,9 +73,25 @@ export function TicketSchemaFieldInput({
         />
       );
     case CustomFieldDataType.Integer:
-      return <Input label={label} type="number" step="1" value={value} disabled={disabled} onChange={(e) => onChange(e.target.value)} hint={hint} />;
-    case CustomFieldDataType.Decimal:
-      return <Input label={label} type="number" step="any" value={value} disabled={disabled} onChange={(e) => onChange(e.target.value)} hint={hint} />;
+    case CustomFieldDataType.Decimal: {
+      // Com máscara (ex.: "Valor (R$)" = "R$ 9.999.999,99") o input precisa ser
+      // texto: type="number" rejeitaria os literais da máscara.
+      if (mask) {
+        return (
+          <MaskedNumericInput
+            label={label}
+            mask={mask}
+            value={value}
+            disabled={disabled}
+            hint={hint}
+            onChange={onChange}
+          />
+        );
+      }
+      return field.dataType === CustomFieldDataType.Integer
+        ? <Input label={label} type="number" step="1" value={value} disabled={disabled} onChange={(e) => onChange(e.target.value)} hint={hint} />
+        : <Input label={label} type="number" step="any" value={value} disabled={disabled} onChange={(e) => onChange(e.target.value)} hint={hint} />;
+    }
     case CustomFieldDataType.Date:
       return <Input label={label} type="date" value={value} disabled={disabled} onChange={(e) => onChange(e.target.value)} />;
     case CustomFieldDataType.DateTime:
@@ -86,4 +108,58 @@ export function TicketSchemaFieldInput({
         />
       );
   }
+}
+
+/**
+ * Campo numérico com máscara de moeda (ex.: R$ 9.999.999,99).
+ *
+ * Durante a digitação o texto é livre (dá para apagar/apontar normalmente);
+ * o valor entregue ao formulário é sempre o número normalizado ("1234.56"),
+ * e ao sair do campo o texto é reformatado com a máscara.
+ */
+function MaskedNumericInput({
+  label,
+  mask,
+  value,
+  onChange,
+  hint,
+  disabled,
+}: {
+  label: string;
+  mask: string;
+  value: string;
+  onChange: (value: string) => void;
+  hint?: string;
+  disabled?: boolean;
+}) {
+  const [text, setText] = useState(() => maskNumericDraft(mask, value));
+  const [editing, setEditing] = useState(false);
+
+  // Valor externo (defaults do template, reset) reflete quando não está editando.
+  useEffect(() => {
+    if (!editing) setText(maskNumericDraft(mask, value));
+  }, [value, mask, editing]);
+
+  return (
+    <Input
+      label={label}
+      inputMode="decimal"
+      value={text}
+      disabled={disabled}
+      hint={hint}
+      placeholder={fieldMaskPlaceholder(mask)}
+      onFocus={() => {
+        setEditing(true);
+        setText(value);
+      }}
+      onChange={(e) => {
+        setText(e.target.value);
+        onChange(normalizeNumericDraft(e.target.value));
+      }}
+      onBlur={() => {
+        setEditing(false);
+        setText(maskNumericDraft(mask, value));
+      }}
+    />
+  );
 }

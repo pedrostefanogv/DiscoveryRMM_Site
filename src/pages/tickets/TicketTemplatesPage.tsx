@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Plus, Pencil, Trash2, LayoutTemplate, Globe, Building2, ArchiveRestore, Power, Undo2,
+  Plus, Pencil, Trash2, LayoutTemplate, Globe, Building2, ArchiveRestore, Power, Undo2, Eye,
 } from 'lucide-react';
 import { Badge, Button, Card, CardHeader, ConfirmDialog, ErrorDisplay, Loading } from '@/components/ui';
 import {
@@ -9,6 +9,8 @@ import {
   useRestoreTicketTemplate, useUpdateTicketTemplate,
 } from '@/hooks/useSupportProductivity';
 import { useClients } from '@/hooks/useClients';
+import { useDepartments } from '@/hooks/useDepartments';
+import { TemplateDetailsModal } from '@/components/tickets/TemplateDetailsModal';
 import { ApiError } from '@/api';
 import type { TicketTemplateDto } from '@/api';
 import { parseTemplateQuestions } from '@/utils/templateQuestions';
@@ -27,6 +29,7 @@ export default function TicketTemplatesPage() {
   const [deleteTarget, setDeleteTarget] = useState<TicketTemplateDto | null>(null);
   const [purgeTarget, setPurgeTarget] = useState<TicketTemplateDto | null>(null);
   const [forcePurgeTarget, setForcePurgeTarget] = useState<TicketTemplateDto | null>(null);
+  const [detailsTarget, setDetailsTarget] = useState<TicketTemplateDto | null>(null);
 
   const templates = useAdminTicketTemplates({
     includeGlobal: true,
@@ -38,17 +41,23 @@ export default function TicketTemplatesPage() {
   const restore = useRestoreTicketTemplate();
   const update = useUpdateTicketTemplate();
   const clients = useClients();
+  const departments = useDepartments();
 
   const clientMap = useMemo(
     () => new Map((clients.data ?? []).map((client) => [client.id, client.name])),
     [clients.data],
+  );
+  const departmentMap = useMemo(
+    () => new Map((departments.data ?? []).map((department) => [department.id, department.name])),
+    [departments.data],
   );
 
   // A API devolve "tudo" quando includeDeleted=true (o form precisa localizar
   // também templates excluídos); a lixeira mostra apenas os excluídos.
   const visibleTemplates = useMemo(() => {
     const data = templates.data ?? [];
-    return showTrash ? data.filter((t) => t.deletedAt !== null) : data;
+    // Boolean(): a API omite a propriedade quando não há exclusão.
+    return showTrash ? data.filter((t) => Boolean(t.deletedAt)) : data;
   }, [templates.data, showTrash]);
 
   const openCreate = () => navigate('/tickets/templates/new');
@@ -133,7 +142,7 @@ export default function TicketTemplatesPage() {
           {visibleTemplates.map((t) => {
             const fieldCount = countDefaultFields(t.customFieldDefaultsJson);
             const questionCount = parseTemplateQuestions(t.questionsJson).length;
-            const isDeleted = t.deletedAt !== null;
+            const isDeleted = Boolean(t.deletedAt);
             return (
               <div key={t.id} className="flex items-start gap-3 py-3">
                 <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-surface-light">
@@ -189,6 +198,14 @@ export default function TicketTemplatesPage() {
                         <ArchiveRestore className="h-4 w-4" /> Restaurar
                       </Button>
                       <button
+                        onClick={() => setDetailsTarget(t)}
+                        aria-label="Ver dados"
+                        title="Ver dados (somente leitura)"
+                        className="p-1 text-muted hover:text-foreground"
+                      >
+                        <Eye className="h-4 w-4" />
+                      </button>
+                      <button
                         onClick={() => setPurgeTarget(t)}
                         aria-label="Excluir definitivamente"
                         title="Excluir definitivamente"
@@ -207,6 +224,14 @@ export default function TicketTemplatesPage() {
                       >
                         <Power className="h-4 w-4" />
                       </button>
+                      <button
+                        onClick={() => setDetailsTarget(t)}
+                        aria-label="Ver dados"
+                        title="Ver dados (somente leitura)"
+                        className="p-1 text-muted hover:text-foreground"
+                      >
+                        <Eye className="h-4 w-4" />
+                      </button>
                       <button onClick={() => openEdit(t)} aria-label="Editar" className="p-1 text-muted hover:text-foreground"><Pencil className="h-4 w-4" /></button>
                       <button onClick={() => setDeleteTarget(t)} aria-label="Excluir" title="Mover para a lixeira" className="p-1 text-muted hover:text-danger"><Trash2 className="h-4 w-4" /></button>
                     </>
@@ -222,6 +247,13 @@ export default function TicketTemplatesPage() {
           )}
         </div>
       </Card>
+
+      <TemplateDetailsModal
+        template={detailsTarget}
+        clientName={detailsTarget?.clientId ? clientMap.get(detailsTarget.clientId) : null}
+        departmentName={detailsTarget?.departmentId ? departmentMap.get(detailsTarget.departmentId) : null}
+        onClose={() => setDetailsTarget(null)}
+      />
 
       <ConfirmDialog
         open={deleteTarget !== null}
@@ -286,7 +318,7 @@ export default function TicketTemplatesPage() {
 }
 
 /** Data amigável do soft delete; vazio quando o template não está na lixeira. */
-function formatDeletedAt(value: string | null): string {
+function formatDeletedAt(value: string | null | undefined): string {
   if (!value) return '';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '';

@@ -1,4 +1,5 @@
 import { CustomFieldDataType, parseCustomFieldValue, type TicketSchemaField } from '@/api';
+import { normalizeNumericDraft } from '@/utils/fieldMask';
 
 export interface CustomFieldValidationResult {
   ok: boolean;
@@ -18,6 +19,12 @@ export function isBlankCustomFieldDraft(draft: string | null | undefined): boole
  */
 export function parseCustomFieldDraft(dataType: CustomFieldDataType, draft: string): unknown {
   if (isBlankCustomFieldDraft(draft)) return null;
+  // Números com máscara chegam como "R$ 1.234,56": normaliza antes de converter
+  // (o Number() não entende separador de milhar nem vírgula decimal).
+  if (dataType === CustomFieldDataType.Integer || dataType === CustomFieldDataType.Decimal) {
+    const numeric = normalizeNumericDraft(draft);
+    return numeric ? parseCustomFieldValue(dataType, numeric) : null;
+  }
   return parseCustomFieldValue(dataType, draft);
 }
 
@@ -37,14 +44,20 @@ export function validateTicketSchemaField(
       : { ok: true, value: null, hasValue: false };
   }
 
+  // Números podem vir mascarados ("R$ 1.234,56"): valida o valor normalizado.
+  const numericText =
+    field.dataType === CustomFieldDataType.Integer || field.dataType === CustomFieldDataType.Decimal
+      ? normalizeNumericDraft(trimmed)
+      : trimmed;
+
   switch (field.dataType) {
     case CustomFieldDataType.Integer:
-      if (!/^-?\d+$/.test(trimmed)) {
+      if (!/^-?\d+$/.test(numericText)) {
         return { ok: false, error: `${field.label} deve ser um número inteiro.` };
       }
       break;
     case CustomFieldDataType.Decimal:
-      if (Number.isNaN(Number(trimmed))) {
+      if (!numericText || Number.isNaN(Number(numericText))) {
         return { ok: false, error: `${field.label} deve ser um número.` };
       }
       break;
@@ -86,7 +99,7 @@ export function validateTicketSchemaField(
   const value = parseCustomFieldDraft(field.dataType, trimmed);
 
   if (field.minValue != null || field.maxValue != null) {
-    const numeric = typeof value === 'number' ? value : Number(trimmed);
+    const numeric = typeof value === 'number' ? value : Number(numericText);
     if (!Number.isNaN(numeric)) {
       if (field.minValue != null && numeric < field.minValue) {
         return { ok: false, error: `${field.label} deve ser maior ou igual a ${field.minValue}.` };
