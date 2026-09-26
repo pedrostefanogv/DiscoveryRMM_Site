@@ -26,7 +26,9 @@ function normalizeDepartmentCustomField(
   raw: Record<string, unknown>,
 ): DepartmentCustomFieldDefinition {
   return {
-    id: String(raw.id ?? ""),
+    // A API de definições devolve `id`; alguns endpoints legados devolvem
+    // `definitionId`. Aceitar os dois evita montar a URL com id vazio.
+    id: String(raw.id ?? raw.definitionId ?? raw.DefinitionId ?? ""),
     name: String(raw.name ?? ""),
     label: String(raw.label ?? raw.name ?? ""),
     description:
