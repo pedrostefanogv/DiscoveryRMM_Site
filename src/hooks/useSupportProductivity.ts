@@ -5,6 +5,7 @@ import {
   ticketCsatApi,
   ticketMacrosApi,
   ticketTemplatesApi,
+  type TicketTemplateListParams,
   type UpsertNotificationChannelRequest,
   type UpsertTicketMacroRequest,
   type UpsertTicketTemplateRequest,
@@ -46,8 +47,20 @@ export function useDeleteTicketMacro() {
   });
 }
 
-export function useTicketTemplates(params: { clientId?: string; departmentId?: string; includeGlobal?: boolean } = {}) {
-  return useQuery({ queryKey: KEYS.templates(params), queryFn: () => ticketTemplatesApi.list(params) });
+export function useTicketTemplates(
+  params: TicketTemplateListParams = {},
+  options: { refetchOnMount?: boolean | "always" } = {},
+) {
+  return useQuery({
+    queryKey: KEYS.templates(params),
+    queryFn: () => ticketTemplatesApi.list(params),
+    ...options,
+  });
+}
+
+/** Listagem da administração: inclui inativos, lixeira e templates por cliente. */
+export function useAdminTicketTemplates(params: Omit<TicketTemplateListParams, "allClients"> = {}) {
+  return useTicketTemplates({ ...params, allClients: true });
 }
 
 export function useCreateTicketTemplate() {
@@ -69,9 +82,26 @@ export function useUpdateTicketTemplate() {
 export function useDeleteTicketTemplate() {
   const qc = useQueryClient();
   return useMutation({
-    // force=true confirma a exclusão de template já usado por chamados.
+    // Soft delete: vai para a lixeira e pode ser restaurado.
+    mutationFn: ({ id }: { id: string }) => ticketTemplatesApi.remove(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["ticket-templates"] }),
+  });
+}
+
+export function usePurgeTicketTemplate() {
+  const qc = useQueryClient();
+  return useMutation({
+    // Exclusão física (lixeira). force=true confirma template já usado por chamados.
     mutationFn: ({ id, force = false }: { id: string; force?: boolean }) =>
-      ticketTemplatesApi.remove(id, force),
+      ticketTemplatesApi.purge(id, force),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["ticket-templates"] }),
+  });
+}
+
+export function useRestoreTicketTemplate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id }: { id: string }) => ticketTemplatesApi.restore(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["ticket-templates"] }),
   });
 }

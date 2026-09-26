@@ -1,137 +1,233 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { Plus, Pencil, Trash2, LayoutTemplate, Globe, Building2 } from 'lucide-react';
-import { Badge, Button, Card, CardHeader, ConfirmDialog, ErrorDisplay, Input, Loading, Modal, Select, TextArea } from '@/components/ui';
+import { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
-  useTicketTemplates, useCreateTicketTemplate, useUpdateTicketTemplate, useDeleteTicketTemplate,
+  Plus, Pencil, Trash2, LayoutTemplate, Globe, Building2, ArchiveRestore, Power, Undo2,
+} from 'lucide-react';
+import { Badge, Button, Card, CardHeader, ConfirmDialog, ErrorDisplay, Loading } from '@/components/ui';
+import {
+  useAdminTicketTemplates, useDeleteTicketTemplate, usePurgeTicketTemplate,
+  useRestoreTicketTemplate, useUpdateTicketTemplate,
 } from '@/hooks/useSupportProductivity';
 import { useClients } from '@/hooks/useClients';
-import { useDepartments } from '@/hooks/useDepartments';
-import { useDepartmentTicketSchema } from '@/hooks/useDepartmentCustomFields';
-import { ApiError, CustomFieldDataType } from '@/api';
-import type { TicketTemplateDto, UpsertTicketTemplateRequest } from '@/api';
-import { TicketSchemaFieldInput } from '@/components/tickets/TicketSchemaFieldInput';
-import { templateDefaultsToDrafts } from '@/utils/ticketTemplateDefaults';
-import {
-  parseTemplateQuestions,
-  serializeTemplateQuestions,
-  type TemplateQuestion,
-} from '@/utils/templateQuestions';
-import { TemplateQuestionsEditor } from '@/components/tickets/TemplateQuestionsEditor';
-import { buildTicketCustomFieldValues } from '@/utils/ticketCustomFields';
+import { ApiError } from '@/api';
+import type { TicketTemplateDto } from '@/api';
+import { parseTemplateQuestions } from '@/utils/templateQuestions';
 import toast from 'react-hot-toast';
 
-const EMPTY: UpsertTicketTemplateRequest = {
-  clientId: null, departmentId: null, name: '', title: '', description: '',
-  priority: null, category: null, customFieldDefaultsJson: '{}', questionsJson: '[]', isActive: true,
-};
-
-const PRIORITY_OPTIONS = [
-  { value: '', label: 'Nenhuma' },
-  { value: 'Low', label: 'Baixa' },
-  { value: 'Medium', label: 'Média' },
-  { value: 'High', label: 'Alta' },
-  { value: 'Critical', label: 'Crítica' },
-];
-
+/**
+ * Listagem de templates de chamado: catálogo (com inativos), lixeira
+ * (restaurar/excluir definitivamente) e acesso à página de edição.
+ * A listagem administrativa usa allClients para também enxergar templates
+ * por cliente (antes ficavam invisíveis).
+ */
 export default function TicketTemplatesPage() {
-  const templates = useTicketTemplates({ includeGlobal: true });
-  const remove = useDeleteTicketTemplate();
-  const [open, setOpen] = useState(false);
-  const [editId, setEditId] = useState<string | null>(null);
-  const [form, setForm] = useState<UpsertTicketTemplateRequest>(EMPTY);
+  const navigate = useNavigate();
+  const [showInactive, setShowInactive] = useState(false);
+  const [showTrash, setShowTrash] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<TicketTemplateDto | null>(null);
-  const [forceDeleteTarget, setForceDeleteTarget] = useState<TicketTemplateDto | null>(null);
+  const [purgeTarget, setPurgeTarget] = useState<TicketTemplateDto | null>(null);
+  const [forcePurgeTarget, setForcePurgeTarget] = useState<TicketTemplateDto | null>(null);
 
+  const templates = useAdminTicketTemplates({
+    includeGlobal: true,
+    includeInactive: showInactive || showTrash,
+    includeDeleted: showTrash,
+  });
+  const remove = useDeleteTicketTemplate();
+  const purge = usePurgeTicketTemplate();
+  const restore = useRestoreTicketTemplate();
+  const update = useUpdateTicketTemplate();
   const clients = useClients();
 
-  const openCreate = () => { setEditId(null); setForm(EMPTY); setOpen(true); };
-  const openEdit = (t: TicketTemplateDto) => {
-    setEditId(t.id);
-    setForm({
-      clientId: t.clientId, departmentId: t.departmentId, name: t.name, title: t.title,
-      description: t.description, priority: t.priority, category: t.category,
-      customFieldDefaultsJson: t.customFieldDefaultsJson, questionsJson: t.questionsJson, isActive: t.isActive,
-    });
-    setOpen(true);
-  };
-
-  const clientOptions = useMemo(
-    () => [
-      { value: '', label: 'Global (todos os clientes)' },
-      ...(clients.data ?? []).map((client) => ({ value: client.id, label: client.name })),
-    ],
+  const clientMap = useMemo(
+    () => new Map((clients.data ?? []).map((client) => [client.id, client.name])),
     [clients.data],
   );
 
+  // A API devolve "tudo" quando includeDeleted=true (o form precisa localizar
+  // também templates excluídos); a lixeira mostra apenas os excluídos.
+  const visibleTemplates = useMemo(() => {
+    const data = templates.data ?? [];
+    return showTrash ? data.filter((t) => t.deletedAt !== null) : data;
+  }, [templates.data, showTrash]);
+
+  const openCreate = () => navigate('/tickets/templates/new');
+  const openEdit = (t: TicketTemplateDto) => navigate(`/tickets/templates/${t.id}/edit`);
+
+  const toggleActive = (t: TicketTemplateDto) => {
+    update.mutate(
+      {
+        id: t.id,
+        data: {
+          clientId: t.clientId, departmentId: t.departmentId, name: t.name, title: t.title,
+          description: t.description, priority: t.priority, category: t.category,
+          customFieldDefaultsJson: t.customFieldDefaultsJson, questionsJson: t.questionsJson,
+          isActive: !t.isActive,
+        },
+      },
+      {
+        onSuccess: () => toast.success(t.isActive ? 'Template desativado' : 'Template ativado'),
+        onError: (error: unknown) =>
+          toast.error(error instanceof Error ? error.message : 'Erro ao alterar o template'),
+      },
+    );
+  };
+
+  const handlePurgeError = (error: unknown, target: TicketTemplateDto) => {
+    const status = error instanceof ApiError ? error.status : undefined;
+    if (status === 409) {
+      setForcePurgeTarget(target);
+      setPurgeTarget(null);
+      return;
+    }
+    toast.error(error instanceof Error ? error.message : 'Erro ao excluir template');
+  };
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Templates de chamado</h1>
-          <p className="text-sm text-muted">Pré-preenchem título, descrição, prioridade, categoria e os campos personalizados do departamento na abertura.</p>
+          <h1 className="text-2xl font-bold text-foreground">
+            {showTrash ? 'Templates excluídos' : 'Templates de chamado'}
+          </h1>
+          <p className="text-sm text-muted">
+            {showTrash
+              ? 'Templates na lixeira. Restaure para voltar ao catálogo ou exclua definitivamente.'
+              : 'Pré-preenchem título, descrição, prioridade, categoria e os campos personalizados do departamento na abertura.'}
+          </p>
         </div>
-        <Button size="sm" onClick={openCreate}><Plus className="h-4 w-4" /> Novo template</Button>
+        <div className="flex flex-wrap items-center gap-2">
+          {!showTrash && (
+            <>
+              <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                <input
+                  type="checkbox"
+                  checked={showInactive}
+                  onChange={(e) => setShowInactive(e.target.checked)}
+                  className="rounded border-border bg-surface-light"
+                />
+                Mostrar inativos
+              </label>
+              <Button type="button" size="sm" variant="secondary" onClick={() => { setShowTrash(true); setShowInactive(false); }}>
+                <Trash2 className="h-4 w-4" /> Lixeira
+              </Button>
+              <Button size="sm" onClick={openCreate}><Plus className="h-4 w-4" /> Novo template</Button>
+            </>
+          )}
+          {showTrash && (
+            <Button type="button" size="sm" variant="secondary" onClick={() => setShowTrash(false)}>
+              <Undo2 className="h-4 w-4" /> Voltar ao catálogo
+            </Button>
+          )}
+        </div>
       </div>
 
       <Card>
-        <CardHeader title="Templates" subtitle={`${templates.data?.length ?? 0} template(s)`} />
+        <CardHeader
+          title={showTrash ? 'Excluídos' : 'Templates'}
+          subtitle={`${visibleTemplates.length} template(s)`}
+        />
         {templates.isLoading && <Loading />}
         {templates.isError && <ErrorDisplay onRetry={() => templates.refetch()} />}
         <div className="divide-y divide-white/5">
-          {(templates.data ?? []).map((t) => {
-            const client = (clients.data ?? []).find((c) => c.id === t.clientId);
+          {visibleTemplates.map((t) => {
             const fieldCount = countDefaultFields(t.customFieldDefaultsJson);
             const questionCount = parseTemplateQuestions(t.questionsJson).length;
+            const isDeleted = t.deletedAt !== null;
             return (
               <div key={t.id} className="flex items-start gap-3 py-3">
                 <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-surface-light">
-                  <LayoutTemplate className="h-4 w-4 text-muted" />
+                  {isDeleted
+                    ? <ArchiveRestore className="h-4 w-4 text-muted" />
+                    : <LayoutTemplate className="h-4 w-4 text-muted" />}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="font-medium text-foreground">{t.name}</p>
+                  <button
+                    type="button"
+                    onClick={() => { if (!isDeleted) openEdit(t); }}
+                    disabled={isDeleted}
+                    className={`text-left font-medium text-foreground ${isDeleted ? 'cursor-default' : 'hover:text-primary hover:underline'}`}
+                  >
+                    {t.name}
+                  </button>
                   <p className="truncate text-xs text-muted">{t.title}</p>
                   <div className="mt-1 flex flex-wrap items-center gap-1.5">
                     {t.clientId ? (
-                      <Badge color="slate"><Building2 className="mr-0.5 inline h-3 w-3" />{client?.name ?? 'Cliente'}</Badge>
+                      <Badge color="slate">
+                        <Building2 className="mr-0.5 inline h-3 w-3" />
+                        {clientMap.get(t.clientId) ?? 'Cliente'}
+                      </Badge>
                     ) : (
                       <Badge color="slate"><Globe className="mr-0.5 inline h-3 w-3" />Global</Badge>
                     )}
                     {t.departmentId && <Badge color="accent">Departamento</Badge>}
                     {questionCount > 0 && <Badge color="success">{questionCount} pergunta(s)</Badge>}
                     {fieldCount > 0 && <Badge color="slate">{fieldCount} campo(s) padrão</Badge>}
+                    {isDeleted && <Badge color="danger">Excluído {formatDeletedAt(t.deletedAt)}</Badge>}
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  {t.priority && <Badge color="accent">{t.priority}</Badge>}
-                  {!t.isActive && <Badge color="warning">Inativo</Badge>}
-                  <button onClick={() => openEdit(t)} aria-label="Editar" className="p-1 text-muted hover:text-foreground"><Pencil className="h-4 w-4" /></button>
-                  <button onClick={() => setDeleteTarget(t)} aria-label="Excluir" className="p-1 text-muted hover:text-danger"><Trash2 className="h-4 w-4" /></button>
+                  {!isDeleted && t.priority && <Badge color="accent">{t.priority}</Badge>}
+                  {!isDeleted && !t.isActive && <Badge color="warning">Inativo</Badge>}
+                  {isDeleted ? (
+                    <>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        loading={restore.isPending}
+                        onClick={() =>
+                          restore.mutate(
+                            { id: t.id },
+                            {
+                              onSuccess: () => toast.success('Template restaurado'),
+                              onError: (error: unknown) =>
+                                toast.error(error instanceof Error ? error.message : 'Erro ao restaurar template'),
+                            },
+                          )
+                        }
+                      >
+                        <ArchiveRestore className="h-4 w-4" /> Restaurar
+                      </Button>
+                      <button
+                        onClick={() => setPurgeTarget(t)}
+                        aria-label="Excluir definitivamente"
+                        title="Excluir definitivamente"
+                        className="p-1 text-muted hover:text-danger"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => toggleActive(t)}
+                        aria-label={t.isActive ? 'Desativar template' : 'Ativar template'}
+                        title={t.isActive ? 'Desativar (sai da abertura de chamados)' : 'Ativar template'}
+                        className={`p-1 ${t.isActive ? 'text-muted hover:text-warning' : 'text-warning hover:text-success'}`}
+                      >
+                        <Power className="h-4 w-4" />
+                      </button>
+                      <button onClick={() => openEdit(t)} aria-label="Editar" className="p-1 text-muted hover:text-foreground"><Pencil className="h-4 w-4" /></button>
+                      <button onClick={() => setDeleteTarget(t)} aria-label="Excluir" title="Mover para a lixeira" className="p-1 text-muted hover:text-danger"><Trash2 className="h-4 w-4" /></button>
+                    </>
+                  )}
                 </div>
               </div>
             );
           })}
-          {(templates.data?.length ?? 0) === 0 && !templates.isLoading && (
-            <p className="py-6 text-center text-sm text-muted">Nenhum template cadastrado.</p>
+          {visibleTemplates.length === 0 && !templates.isLoading && (
+            <p className="py-6 text-center text-sm text-muted">
+              {showTrash ? 'A lixeira está vazia.' : 'Nenhum template cadastrado.'}
+            </p>
           )}
         </div>
       </Card>
 
-      {open && (
-        <TemplateFormModal
-          editId={editId}
-          initial={form}
-          clientOptions={clientOptions}
-          onClose={() => setOpen(false)}
-          onSaved={() => setOpen(false)}
-        />
-      )}
-
       <ConfirmDialog
         open={deleteTarget !== null}
-        title="Excluir template"
-        message={`Excluir o template "${deleteTarget?.name ?? ''}"?`}
-        confirmLabel="Excluir"
+        title="Mover template para a lixeira"
+        message={`O template "${deleteTarget?.name ?? ''}" será movido para a lixeira e poderá ser restaurado depois. Os chamados já abertos não são afetados. Continuar?`}
+        confirmLabel="Mover para a lixeira"
         isLoading={remove.isPending}
         onClose={() => setDeleteTarget(null)}
         onConfirm={() => {
@@ -139,35 +235,46 @@ export default function TicketTemplatesPage() {
           remove.mutate(
             { id: deleteTarget.id },
             {
-              onSuccess: () => { toast.success('Template excluído'); setDeleteTarget(null); },
-              onError: (error: unknown) => {
-                // 409 = template já usado por chamados: pede confirmação explícita.
-                const status = error instanceof ApiError ? error.status : undefined;
-                if (status === 409) {
-                  setForceDeleteTarget(deleteTarget);
-                  setDeleteTarget(null);
-                  return;
-                }
-                toast.error(error instanceof Error ? error.message : 'Erro ao excluir template');
-              },
+              onSuccess: () => { toast.success('Template movido para a lixeira'); setDeleteTarget(null); },
+              onError: (error: unknown) =>
+                toast.error(error instanceof Error ? error.message : 'Erro ao excluir template'),
             },
           );
         }}
       />
 
       <ConfirmDialog
-        open={forceDeleteTarget !== null}
-        title="Template usado por chamados"
-        message={`O template "${forceDeleteTarget?.name ?? ''}" já foi usado para abrir chamados. O nome usado continuará registrado no histórico de cada chamado (somente leitura), mas o vínculo com o catálogo será removido. Excluir mesmo assim?`}
+        open={purgeTarget !== null}
+        title="Excluir definitivamente"
+        message={`O template "${purgeTarget?.name ?? ''}" será removido do banco, sem possibilidade de restauração. Continuar?`}
         confirmLabel="Excluir definitivamente"
-        isLoading={remove.isPending}
-        onClose={() => setForceDeleteTarget(null)}
+        isLoading={purge.isPending}
+        onClose={() => setPurgeTarget(null)}
         onConfirm={() => {
-          if (!forceDeleteTarget) return;
-          remove.mutate(
-            { id: forceDeleteTarget.id, force: true },
+          if (!purgeTarget) return;
+          purge.mutate(
+            { id: purgeTarget.id },
             {
-              onSuccess: () => { toast.success('Template excluído'); setForceDeleteTarget(null); },
+              onSuccess: () => { toast.success('Template excluído definitivamente'); setPurgeTarget(null); },
+              onError: (error: unknown) => handlePurgeError(error, purgeTarget),
+            },
+          );
+        }}
+      />
+
+      <ConfirmDialog
+        open={forcePurgeTarget !== null}
+        title="Template usado por chamados"
+        message={`O template "${forcePurgeTarget?.name ?? ''}" já foi usado para abrir chamados. O nome usado continuará registrado no histórico de cada chamado (somente leitura), mas o template será removido do banco. Excluir definitivamente?`}
+        confirmLabel="Excluir definitivamente"
+        isLoading={purge.isPending}
+        onClose={() => setForcePurgeTarget(null)}
+        onConfirm={() => {
+          if (!forcePurgeTarget) return;
+          purge.mutate(
+            { id: forcePurgeTarget.id, force: true },
+            {
+              onSuccess: () => { toast.success('Template excluído definitivamente'); setForcePurgeTarget(null); },
               onError: (error: unknown) =>
                 toast.error(error instanceof Error ? error.message : 'Erro ao excluir template'),
             },
@@ -178,41 +285,12 @@ export default function TicketTemplatesPage() {
   );
 }
 
-function validateQuestions(questions: TemplateQuestion[]): string | null {
-  const seen = new Set<string>();
-  for (const question of questions) {
-    const label = question.label.trim();
-    const key = question.key.trim();
-    if (!label || !key) return 'Toda pergunta do modelo precisa de rótulo e chave.';
-    if (seen.has(key.toLowerCase())) return `Chave de pergunta duplicada: "${key}".`;
-    seen.add(key.toLowerCase());
-
-    if (
-      (question.dataType === CustomFieldDataType.Dropdown ||
-        question.dataType === CustomFieldDataType.ListBox) &&
-      question.options.length === 0
-    ) {
-      return `Pergunta "${label}": informe ao menos uma opção.`;
-    }
-
-    const regex = question.validationRegex?.trim();
-    if (regex) {
-      try {
-        // eslint-disable-next-line no-new
-        new RegExp(regex);
-      } catch {
-        return `Pergunta "${label}": regex de validação inválida.`;
-      }
-    }
-
-    if (question.minLength != null && question.maxLength != null && question.minLength > question.maxLength) {
-      return `Pergunta "${label}": tamanho mínimo maior que o máximo.`;
-    }
-    if (question.minValue != null && question.maxValue != null && question.minValue > question.maxValue) {
-      return `Pergunta "${label}": valor mínimo maior que o máximo.`;
-    }
-  }
-  return null;
+/** Data amigável do soft delete; vazio quando o template não está na lixeira. */
+function formatDeletedAt(value: string | null): string {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return `em ${date.toLocaleDateString('pt-BR')}`;
 }
 
 function countDefaultFields(json: string): number {
@@ -223,186 +301,4 @@ function countDefaultFields(json: string): number {
   } catch {
     return 0;
   }
-}
-
-function TemplateFormModal({
-  editId,
-  initial,
-  clientOptions,
-  onClose,
-  onSaved,
-}: {
-  editId: string | null;
-  initial: UpsertTicketTemplateRequest;
-  clientOptions: { value: string; label: string }[];
-  onClose: () => void;
-  onSaved: () => void;
-}) {
-  const create = useCreateTicketTemplate();
-  const update = useUpdateTicketTemplate();
-  const isSaving = create.isPending || update.isPending;
-  const [form, setForm] = useState<UpsertTicketTemplateRequest>(initial);
-  const [questions, setQuestions] = useState<TemplateQuestion[]>(() => parseTemplateQuestions(initial.questionsJson));
-  const [drafts, setDrafts] = useState<Record<string, string>>({});
-
-  const departments = useDepartments({ clientId: form.clientId ?? undefined, includeGlobal: true });
-  const schemaQuery = useDepartmentTicketSchema(form.departmentId, !!form.departmentId);
-  const schemaFields = useMemo(
-    () => (schemaQuery.data ?? []).filter((field) => field.isActive),
-    [schemaQuery.data],
-  );
-
-  // Aplica os defaults salvos quando o schema do departamento carrega.
-  const pendingDefaultsRef = useRef<string | null>(initial.customFieldDefaultsJson);
-  useEffect(() => {
-    const pending = pendingDefaultsRef.current;
-    if (!pending || schemaFields.length === 0) return;
-    pendingDefaultsRef.current = null;
-    setDrafts((prev) => ({ ...templateDefaultsToDrafts(pending, schemaFields), ...prev }));
-  }, [schemaFields]);
-
-  const validation = useMemo(
-    () => buildTicketCustomFieldValues(schemaFields, drafts),
-    [schemaFields, drafts],
-  );
-
-  const departmentOptions = useMemo(
-    () => [
-      { value: '', label: 'Nenhum (todos os departamentos)' },
-      ...(departments.data ?? []).map((department) => ({ value: department.id, label: department.name })),
-    ],
-    [departments.data],
-  );
-
-  const set = <K extends keyof UpsertTicketTemplateRequest>(key: K, value: UpsertTicketTemplateRequest[K]) =>
-    setForm((current) => ({ ...current, [key]: value }));
-
-  const handleSubmit = () => {
-    if (form.name.trim().length < 2 || form.title.trim().length < 3) {
-      toast.error('Informe nome e título do template.');
-      return;
-    }
-    const questionError = validateQuestions(questions);
-    if (questionError) {
-      toast.error(questionError);
-      return;
-    }
-    if (validation.errors.length > 0) {
-      toast.error(validation.errors[0]);
-      return;
-    }
-
-    const payload: UpsertTicketTemplateRequest = {
-      ...form,
-      customFieldDefaultsJson: JSON.stringify(validation.values),
-      questionsJson: serializeTemplateQuestions(questions),
-    };
-
-    const opts = {
-      onSuccess: () => { toast.success(editId ? 'Template atualizado' : 'Template criado'); onSaved(); },
-      onError: (e: unknown) => toast.error(e instanceof Error ? e.message : 'Erro ao salvar template'),
-    };
-    if (editId) update.mutate({ id: editId, data: payload }, opts);
-    else create.mutate(payload, opts);
-  };
-
-  return (
-    <Modal open onClose={onClose} title={editId ? 'Editar template' : 'Novo template'} maxWidth="max-w-2xl">
-      <div className="space-y-4">
-        <Input label="Nome *" value={form.name} onChange={(e) => set('name', e.target.value)} />
-        <Input label="Título *" value={form.title} onChange={(e) => set('title', e.target.value)} />
-        <TextArea label="Descrição" value={form.description} onChange={(e) => set('description', e.target.value)} />
-
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Select
-            label="Cliente"
-            options={clientOptions}
-            value={form.clientId ?? ''}
-            onChange={(e) => setForm((current) => ({ ...current, clientId: e.target.value || null, departmentId: null }))}
-          />
-          <Select
-            label="Departamento"
-            options={departmentOptions}
-            value={form.departmentId ?? ''}
-            disabled={departments.isLoading}
-            onChange={(e) => {
-              pendingDefaultsRef.current = null;
-              setDrafts({});
-              setForm((current) => ({ ...current, departmentId: e.target.value || null }));
-            }}
-          />
-        </div>
-
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Select label="Prioridade padrão" options={PRIORITY_OPTIONS} value={form.priority ?? ''} onChange={(e) => set('priority', e.target.value || null)} />
-          <Input label="Categoria" value={form.category ?? ''} onChange={(e) => set('category', e.target.value || null)} />
-        </div>
-
-        <TemplateQuestionsEditor
-          questions={questions}
-          onChange={setQuestions}
-          clientId={form.clientId}
-          departmentId={form.departmentId}
-        />
-
-        {form.departmentId && (
-          <div className="rounded-lg border border-border bg-surface-light p-4">
-            <div className="mb-1 flex items-start justify-between gap-3">
-              <p className="text-xs font-medium text-muted">
-                Opcional: pré-preencher campos do departamento
-              </p>
-              <Link
-                to={`/tickets/departments/${form.departmentId}`}
-                className="shrink-0 text-xs font-medium text-primary hover:underline"
-              >
-                Gerenciar campos do departamento
-              </Link>
-            </div>
-            <p className="mb-3 text-xs text-muted">
-              Estes são os campos fixos do departamento (existem em todo chamado, obrigatórios ou não conforme a
-              configuração de cada campo). Aqui você só define valores iniciais — opcional.
-            </p>
-            {schemaQuery.isLoading && <Loading message="Carregando campos..." />}
-            {!schemaQuery.isLoading && schemaFields.length === 0 && (
-              <p className="text-sm text-muted">
-                Este departamento não possui campos personalizados.{' '}
-                <Link to={`/tickets/departments/${form.departmentId}`} className="font-medium text-primary hover:underline">
-                  Criar campos
-                </Link>
-                .
-              </p>
-            )}
-            <div className="space-y-3">
-              {schemaFields.map((field) => (
-                <TicketSchemaFieldInput
-                  key={field.definitionId}
-                  field={field}
-                  value={drafts[field.definitionId] ?? ''}
-                  onChange={(value) => setDrafts((prev) => ({ ...prev, [field.definitionId]: value }))}
-                />
-              ))}
-            </div>
-          </div>
-        )}
-
-        <TextArea
-          label="Campos personalizados (JSON avançado)"
-          rows={2}
-          value={JSON.stringify(validation.values)}
-          readOnly
-          hint="Gerado automaticamente a partir dos valores padrão acima."
-          onChange={() => {}}
-        />
-
-        <label className="flex items-center gap-2 text-sm text-muted-foreground">
-          <input type="checkbox" checked={form.isActive} onChange={(e) => set('isActive', e.target.checked)} className="rounded bg-surface-light border-border" />
-          Ativo
-        </label>
-        <div className="flex justify-end gap-3 pt-2">
-          <Button variant="ghost" onClick={onClose}>Cancelar</Button>
-          <Button onClick={handleSubmit} loading={isSaving}>Salvar</Button>
-        </div>
-      </div>
-    </Modal>
-  );
 }

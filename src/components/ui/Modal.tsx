@@ -31,9 +31,9 @@ export function Modal({ open, onClose, title, children, maxWidth = 'max-w-lg' }:
       onClick={e => { if (e.target === overlayRef.current) onClose(); }}
       onKeyDown={e => { if (e.key === 'Escape') onClose(); }}
     >
-      <div className={`animate-modal-in w-full ${maxWidth} rounded-xl border border-border bg-surface shadow-2xl`}>
+      <div className={`animate-modal-in flex max-h-[calc(100dvh-2rem)] w-full ${maxWidth} flex-col rounded-xl border border-border bg-surface shadow-2xl`}>
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-border px-6 py-4">
+        <div className="flex shrink-0 items-center justify-between border-b border-border px-6 py-4">
           <h2 className="text-lg font-semibold text-foreground">{title}</h2>
           <button
             onClick={onClose}
@@ -43,8 +43,8 @@ export function Modal({ open, onClose, title, children, maxWidth = 'max-w-lg' }:
             <X className="h-5 w-5" />
           </button>
         </div>
-        {/* Body */}
-        <div className="px-6 py-4">{children}</div>
+        {/* Body — rola quando o conteúdo excede a viewport (modais longos). */}
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 py-4">{children}</div>
       </div>
     </div>
   );

@@ -125,6 +125,49 @@ export function slugifyQuestionKey(label: string, index: number): string {
 }
 
 /**
+ * Valida o questionário do modelo antes de salvar. Retorna a primeira mensagem
+ * de erro encontrada ou null quando está tudo certo. Compartilhado entre a
+ * página de edição do template e os testes — as perguntas aqui NÃO são campos
+ * do chamado, então as regras vivem apenas deste lado.
+ */
+export function validateTemplateQuestions(questions: TemplateQuestion[]): string | null {
+  const seen = new Set<string>();
+  for (const question of questions) {
+    const label = question.label.trim();
+    const key = question.key.trim();
+    if (!label || !key) return 'Toda pergunta do modelo precisa de rótulo e chave.';
+    if (seen.has(key.toLowerCase())) return `Chave de pergunta duplicada: "${key}".`;
+    seen.add(key.toLowerCase());
+
+    if (
+      (question.dataType === CustomFieldDataType.Dropdown ||
+        question.dataType === CustomFieldDataType.ListBox) &&
+      question.options.length === 0
+    ) {
+      return `Pergunta "${label}": informe ao menos uma opção.`;
+    }
+
+    const regex = question.validationRegex?.trim();
+    if (regex) {
+      try {
+        // eslint-disable-next-line no-new
+        new RegExp(regex);
+      } catch {
+        return `Pergunta "${label}": regex de validação inválida.`;
+      }
+    }
+
+    if (question.minLength != null && question.maxLength != null && question.minLength > question.maxLength) {
+      return `Pergunta "${label}": tamanho mínimo maior que o máximo.`;
+    }
+    if (question.minValue != null && question.maxValue != null && question.minValue > question.maxValue) {
+      return `Pergunta "${label}": valor mínimo maior que o máximo.`;
+    }
+  }
+  return null;
+}
+
+/**
  * Converte a pergunta para o formato aceito pelo renderer/validador de campos,
  * reaproveitando a validação já usada pelos campos do departamento.
  */

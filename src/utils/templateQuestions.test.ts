@@ -5,6 +5,7 @@ import {
   questionToSchemaField,
   serializeTemplateQuestions,
   slugifyQuestionKey,
+  validateTemplateQuestions,
   type TemplateQuestion,
 } from './templateQuestions';
 
@@ -73,6 +74,56 @@ describe('slugifyQuestionKey', () => {
     expect(slugifyQuestionKey('Nome completo', 0)).toBe('nome_completo');
     expect(slugifyQuestionKey('E-mail de contato', 1)).toBe('e_mail_de_contato');
     expect(slugifyQuestionKey('???', 2)).toBe('pergunta_3');
+  });
+});
+
+describe('validateTemplateQuestions', () => {
+  it('aceita um questionário válido', () => {
+    expect(validateTemplateQuestions([])).toBeNull();
+    expect(
+      validateTemplateQuestions([
+        question({ key: 'email', label: 'E-mail', validationRegex: '^\\S+@\\S+\\.\\S+$' }),
+        question({ key: 'sistema', label: 'Sistema' }),
+      ]),
+    ).toBeNull();
+  });
+
+  it('exige rótulo e chave em toda pergunta', () => {
+    expect(validateTemplateQuestions([question({ label: 'Sem chave', key: '' })]))
+      .toBe('Toda pergunta do modelo precisa de rótulo e chave.');
+    expect(validateTemplateQuestions([question({ label: '  ', key: 'x' })]))
+      .toBe('Toda pergunta do modelo precisa de rótulo e chave.');
+  });
+
+  it('bloqueia chave duplicada ignorando maiúsculas', () => {
+    expect(
+      validateTemplateQuestions([
+        question({ key: 'email', label: 'E-mail' }),
+        question({ key: 'Email', label: 'E-mail 2' }),
+      ]),
+    ).toBe('Chave de pergunta duplicada: "Email".');
+  });
+
+  it('exige opções para dropdown e listbox', () => {
+    expect(
+      validateTemplateQuestions([question({ dataType: CustomFieldDataType.Dropdown, options: [] })]),
+    ).toBe('Pergunta "Nome": informe ao menos uma opção.');
+    expect(
+      validateTemplateQuestions([question({ dataType: CustomFieldDataType.ListBox, options: ['A'] })]),
+    ).toBeNull();
+  });
+
+  it('rejeita regex inválida', () => {
+    expect(
+      validateTemplateQuestions([question({ validationRegex: '([a-z' })]),
+    ).toBe('Pergunta "Nome": regex de validação inválida.');
+  });
+
+  it('exige mínimo menor ou igual ao máximo', () => {
+    expect(validateTemplateQuestions([question({ minLength: 10, maxLength: 4 })]))
+      .toBe('Pergunta "Nome": tamanho mínimo maior que o máximo.');
+    expect(validateTemplateQuestions([question({ minValue: 10, maxValue: 4 })]))
+      .toBe('Pergunta "Nome": valor mínimo maior que o máximo.');
   });
 });
 

@@ -41,7 +41,26 @@ export interface TicketTemplateDto {
   createdBy: string | null;
   createdAt: string;
   updatedAt: string;
+  /** Soft delete: preenchido quando o template está na lixeira. */
+  deletedAt: string | null;
+  deletedBy: string | null;
 }
+
+/**
+ * Escopo da listagem de templates. A página de administração usa os flags
+ * amplos (includeInactive/includeDeleted/allClients).
+ *
+ * Declarado como type alias (e não interface) para ganhar index signature
+ * implícita e poder alimentar as APIs que recebem Record<string, unknown>.
+ */
+export type TicketTemplateListParams = {
+  clientId?: string;
+  departmentId?: string;
+  includeGlobal?: boolean;
+  includeInactive?: boolean;
+  includeDeleted?: boolean;
+  allClients?: boolean;
+};
 
 export interface UpsertTicketTemplateRequest {
   clientId: string | null;
@@ -122,12 +141,16 @@ export const ticketMacrosApi = {
 };
 
 export const ticketTemplatesApi = {
-  list: (params: { clientId?: string; departmentId?: string; includeGlobal?: boolean } = {}) =>
+  list: (params: TicketTemplateListParams = {}) =>
     api.get<TicketTemplateDto[]>(TEMPLATES, params as Record<string, unknown>),
   create: (data: UpsertTicketTemplateRequest) => api.post<TicketTemplateDto>(TEMPLATES, data),
   update: (id: string, data: UpsertTicketTemplateRequest) => api.put<TicketTemplateDto>(`${TEMPLATES}/${id}`, data),
-  // force=true confirma a exclusão de template já usado por chamados.
-  remove: (id: string, force = false) => api.del<void>(`${TEMPLATES}/${id}${force ? "?force=true" : ""}`),
+  /** Soft delete: o template vai para a lixeira e pode ser restaurado. */
+  remove: (id: string) => api.del<void>(`${TEMPLATES}/${id}`),
+  /** Exclusão física. permanent + force confirma template já usado por chamados. */
+  purge: (id: string, force = false) =>
+    api.del<void>(`${TEMPLATES}/${id}?permanent=true${force ? "&force=true" : ""}`),
+  restore: (id: string) => api.post<void>(`${TEMPLATES}/${id}/restore`),
 };
 
 export const notificationChannelsApi = {
