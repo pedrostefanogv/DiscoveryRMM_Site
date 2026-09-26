@@ -52,6 +52,9 @@ describe('TicketRelationsSection', () => {
   it('busca por texto, seleciona e cria o vínculo', () => {
     render(<TicketRelationsSection ticketId="t1" />);
 
+    // O formulário de vínculo abre pelo ícone do cabeçalho.
+    expect(screen.queryByLabelText('Buscar chamado')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Novo vínculo' }));
     fireEvent.change(screen.getByLabelText('Buscar chamado'), { target: { value: 'VPN' } });
     fireEvent.click(screen.getByRole('button', { name: /VPN caiu/ }));
 
@@ -88,8 +91,13 @@ describe('TicketRelationsSection', () => {
     relationsState.data = [base];
   });
 
-  it('explica como funciona', () => {
+  it('explica como funciona dentro do formulário de vínculo', () => {
     render(<TicketRelationsSection ticketId="t1" />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Novo vínculo' }));
     expect(screen.getByText('Como funciona?')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
+    expect(screen.queryByText('Como funciona?')).toBeNull();
   });
 });

@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Send, Lock, Unlock, Clock, Activity, ChevronDown, BookOpen, Paperclip, Upload, File, CheckCircle, XCircle, Loader2, Wrench, Copy, RotateCcw, ClipboardList } from 'lucide-react';
+import { ArrowLeft, Send, Lock, Unlock, Clock, Activity, ChevronDown, BookOpen, Paperclip, Upload, File, CheckCircle, XCircle, Loader2, Wrench, Copy, RotateCcw, ClipboardList, UserCog, UserCheck } from 'lucide-react';
 import { MarkdownViewer } from '@/components/ui/MarkdownViewer';
 import { useAuth } from '@/auth/AuthContext';
 import { getUserIdFromJwt } from '@/auth/jwt';
@@ -23,6 +23,7 @@ import { TicketRatingCard } from '@/components/tickets/TicketRatingCard';
 import { WatchersSection } from '@/components/tickets/WatchersSection';
 import { TicketFieldsSection } from '@/components/tickets/TicketFieldsSection';
 import { TicketRelationsSection } from '@/components/tickets/TicketRelationsSection';
+import { RequesterPickerModal } from '@/components/tickets/RequesterPickerModal';
 import { useTicketAnswers } from '@/hooks/useTicketAnswers';
 import { useAutomationTasks } from '@/hooks/useAutomation';
 import { useTicketAttachmentSettings } from '@/hooks/useConfigurationApi';
@@ -340,6 +341,7 @@ export default function TicketDetail() {
             departmentId={t.departmentId}
             requesterUserId={t.requesterUserId ?? null}
             agentId={t.agentId}
+            currentUserId={currentUserId}
             updatedAt={t.updatedAt}
             closedAt={t.closedAt}
             templateName={t.templateName}
@@ -1215,6 +1217,7 @@ function TicketSummaryPanel({
   departmentId,
   requesterUserId,
   agentId,
+  currentUserId,
   updatedAt,
   closedAt,
   templateName,
@@ -1229,6 +1232,7 @@ function TicketSummaryPanel({
   departmentId: string | null;
   requesterUserId: string | null;
   agentId: string | null;
+  currentUserId: string | null;
   updatedAt: string;
   closedAt: string | null;
   templateName?: string | null;
@@ -1238,24 +1242,40 @@ function TicketSummaryPanel({
   const agentQuery = useAgent(agentId ?? undefined);
 
   const agentHostname = agentQuery.data?.hostname ?? null;
-  const requesterOptions = useMemo(
-    () => [
-      { value: '', label: 'Não informado' },
-      ...(iamUsers.data ?? []).map((user) => ({
-        value: user.id,
-        label: user.fullName || user.login || user.email,
-      })),
-    ],
+  const [requesterModalOpen, setRequesterModalOpen] = useState(false);
+  const iamUsersById = useMemo(
+    () => new Map((iamUsers.data ?? []).map((user) => [user.id, user])),
     [iamUsers.data],
   );
+  const requesterDisplayName = requesterUserId
+    ? resolveUserDisplayName(iamUsersById, requesterUserId)
+    : null;
 
   const changeRequester = (userId: string | null) => {
     updateRequester.mutate(
       { id: ticketId, data: { requesterUserId: userId, clearRequester: userId === null } },
       {
-        onSuccess: () => toast.success(userId ? 'Solicitante atualizado' : 'Solicitante removido'),
+        onSuccess: () => {
+          toast.success(userId ? 'Solicitante atualizado' : 'Solicitante removido');
+          setRequesterModalOpen(false);
+        },
         onError: (error: unknown) =>
           toast.error(error instanceof Error ? error.message : 'Erro ao atualizar o solicitante'),
+      },
+    );
+  };
+
+  const assumeTicket = () => {
+    if (!currentUserId) {
+      toast.error('Não foi possível identificar o usuário autenticado.');
+      return;
+    }
+    updateRequester.mutate(
+      { id: ticketId, data: { assignedToUserId: currentUserId } },
+      {
+        onSuccess: () => toast.success('Chamado assumido com sucesso.'),
+        onError: (error: unknown) =>
+          toast.error(error instanceof Error ? error.message : 'Não foi possível assumir o chamado.'),
       },
     );
   };
@@ -1351,28 +1371,54 @@ function TicketSummaryPanel({
         <div className="sm:col-span-2">
           <dt className="text-muted">Solicitado por</dt>
           <dd className="text-foreground">
-            <Select
-              aria-label="Solicitado por"
-              options={requesterOptions}
-              value={requesterUserId ?? ''}
-              disabled={updateRequester.isPending}
-              onChange={(e) => changeRequester(e.target.value || null)}
-            />
-            {!requesterUserId && (
-              <p className="mt-1 text-xs text-muted">
-                {agentHostname
-                  ? `Aberto pelo agent ${agentHostname} — informe o solicitante para restringir a avaliação.`
-                  : 'Não informado — informe o solicitante para restringir a avaliação.'}
-              </p>
-            )}
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <p className="break-words">{requesterDisplayName ?? 'Não informado'}</p>
+                {!requesterUserId && (
+                  <p className="mt-1 text-xs text-muted">
+                    {agentHostname
+                      ? `Aberto pelo agent ${agentHostname} — vincule o solicitante para restringir a avaliação.`
+                      : 'Vincule o solicitante para restringir a avaliação.'}
+                  </p>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => setRequesterModalOpen(true)}
+                aria-label={requesterUserId ? 'Alterar solicitante' : 'Vincular solicitante'}
+                title={requesterUserId ? 'Alterar solicitante' : 'Vincular solicitante'}
+                className="shrink-0 rounded-lg p-1 text-muted transition-colors hover:bg-surface-light hover:text-foreground"
+              >
+                <UserCog className="h-4 w-4" />
+              </button>
+            </div>
           </dd>
         </div>
 
         <div className="sm:col-span-2">
           <dt className="text-muted">Responsável</dt>
           <dd className="text-foreground">
-            <p className="break-words">{assignedDisplayName}</p>
-            {assignedEmail && <p className="text-xs text-muted">{assignedEmail}</p>}
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <p className="flex flex-wrap items-center gap-1.5 break-words">
+                  {assignedDisplayName}
+                  {assignedToUserId && assignedToUserId === currentUserId && <Badge color="accent">você</Badge>}
+                </p>
+                {assignedEmail && <p className="text-xs text-muted">{assignedEmail}</p>}
+              </div>
+              {!assignedToUserId && currentUserId && (
+                <button
+                  type="button"
+                  onClick={assumeTicket}
+                  disabled={updateRequester.isPending}
+                  aria-label="Assumir chamado"
+                  title="Assumir este chamado"
+                  className="shrink-0 rounded-lg p-1 text-muted transition-colors hover:bg-surface-light hover:text-foreground disabled:opacity-50"
+                >
+                  <UserCheck className="h-4 w-4" />
+                </button>
+              )}
+            </div>
           </dd>
         </div>
         <div>
@@ -1406,6 +1452,15 @@ function TicketSummaryPanel({
       <div className="mt-4 border-t border-border pt-4">
         <TicketRelationsSection ticketId={ticketId} />
       </div>
+
+      <RequesterPickerModal
+        open={requesterModalOpen}
+        users={iamUsers.data ?? []}
+        selectedId={requesterUserId}
+        isSaving={updateRequester.isPending}
+        onClose={() => setRequesterModalOpen(false)}
+        onSave={changeRequester}
+      />
     </Card>
   );
 }

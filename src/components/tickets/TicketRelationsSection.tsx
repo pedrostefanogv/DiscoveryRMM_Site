@@ -49,6 +49,7 @@ export function TicketRelationsSection({ ticketId }: { ticketId: string }) {
 
   const [relationType, setRelationType] = useState<TicketRelationKind>('RelatesTo');
   const [showAll, setShowAll] = useState(false);
+  const [isLinking, setIsLinking] = useState(false);
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<{ id: string; title: string } | null>(null);
   const deferredSearch = useDeferredValue(search);
@@ -77,6 +78,7 @@ export function TicketRelationsSection({ ticketId }: { ticketId: string }) {
           toast.success('Vínculo criado');
           setSelected(null);
           setSearch('');
+          setIsLinking(false);
         },
         onError: (err) => toast.error(err instanceof Error ? err.message : 'Erro ao criar vínculo'),
       },
@@ -92,6 +94,16 @@ export function TicketRelationsSection({ ticketId }: { ticketId: string }) {
             {items.length === 0 ? 'Nenhum vínculo' : `${items.length} vínculo(s)`}
           </p>
         </div>
+        <Button
+          size="sm"
+          variant={isLinking ? 'secondary' : 'ghost'}
+          className="px-2"
+          onClick={() => setIsLinking((current) => !current)}
+          aria-label="Novo vínculo"
+          title="Novo vínculo"
+        >
+          <Link2 className="h-4 w-4" />
+        </Button>
       </div>
 
       {relations.isLoading && <Loading />}
@@ -152,6 +164,7 @@ export function TicketRelationsSection({ ticketId }: { ticketId: string }) {
         </Button>
       )}
 
+      {isLinking && (
       <div className="space-y-3 rounded-lg border border-border bg-surface-light p-3">
         <div>
           <Input
@@ -215,6 +228,21 @@ export function TicketRelationsSection({ ticketId }: { ticketId: string }) {
           <Link2 className="h-4 w-4" /> Vincular chamado
         </Button>
 
+        <div className="flex justify-end">
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            onClick={() => {
+              setIsLinking(false);
+              setSelected(null);
+              setSearch('');
+            }}
+          >
+            Cancelar
+          </Button>
+        </div>
+
         <details className="text-xs text-muted">
           <summary className="cursor-pointer select-none font-medium text-muted-foreground">
             Como funciona?
@@ -227,6 +255,7 @@ export function TicketRelationsSection({ ticketId }: { ticketId: string }) {
           </ul>
         </details>
       </div>
+      )}
     </div>
   );
 }
