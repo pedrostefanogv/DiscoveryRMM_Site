@@ -28,8 +28,13 @@ export interface UpsertTicketMacroRequest {
 
 export interface TicketTemplateDto {
   id: string;
-  clientId: string | null;
-  departmentId: string | null;
+  /**
+   * ATENÇÃO: a API serializa com JsonIgnoreCondition.WhenWritingNull, então
+   * escopo global vem como propriedade AUSENTE (undefined) — trate com
+   * `?? null` ou checagem de veracidade, nunca com `=== null`.
+   */
+  clientId?: string | null;
+  departmentId?: string | null;
   name: string;
   title: string;
   description: string;

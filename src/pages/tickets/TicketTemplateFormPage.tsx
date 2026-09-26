@@ -142,8 +142,9 @@ export default function TicketTemplateFormPage() {
 
   const initial: UpsertTicketTemplateRequest = template
     ? {
-        clientId: template.clientId,
-        departmentId: template.departmentId,
+        // A API omite escopo global: normaliza para null antes de editar.
+        clientId: template.clientId ?? null,
+        departmentId: template.departmentId ?? null,
         name: template.name,
         title: template.title,
         description: template.description,

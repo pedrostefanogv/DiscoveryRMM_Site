@@ -1873,8 +1873,9 @@ function CreateTicketModal({ open, onClose }: { open: boolean; onClose: () => vo
             <div className="self-end pb-1">
               {(templatesQuery.data?.length ?? 0) > 0 && (
                 <p className="text-xs text-muted">
-                  Nenhum template para este escopo
-                  {selectedDept ? '' : ' — escolha o departamento para ver os vinculados'}.
+                  {selectedDept
+                    ? 'Nenhum template para este escopo — confira se o template está ativo e vinculado a este cliente/departamento.'
+                    : 'Templates gerais: escolha o departamento para ver os vinculados.'}
                 </p>
               )}
             </div>

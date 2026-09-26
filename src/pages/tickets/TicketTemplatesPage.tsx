@@ -68,7 +68,7 @@ export default function TicketTemplatesPage() {
       {
         id: t.id,
         data: {
-          clientId: t.clientId, departmentId: t.departmentId, name: t.name, title: t.title,
+          clientId: t.clientId ?? null, departmentId: t.departmentId ?? null, name: t.name, title: t.title,
           description: t.description, priority: t.priority, category: t.category,
           customFieldDefaultsJson: t.customFieldDefaultsJson, questionsJson: t.questionsJson,
           isActive: !t.isActive,

@@ -18,12 +18,17 @@ export function selectableTemplates(
   const departmentId = scope.departmentId ?? null;
 
   return templates.filter((template) => {
+    // A API omite propriedades nulas: ausente significa global (não "sem
+    // escopo"), então normaliza antes de comparar.
+    const templateClientId = template.clientId ?? null;
+    const templateDepartmentId = template.departmentId ?? null;
+
     const clientOk = clientId
-      ? template.clientId === null || template.clientId === clientId
-      : template.clientId === null;
+      ? templateClientId === null || templateClientId === clientId
+      : templateClientId === null;
     const departmentOk = departmentId
-      ? template.departmentId === null || template.departmentId === departmentId
-      : template.departmentId === null;
+      ? templateDepartmentId === null || templateDepartmentId === departmentId
+      : templateDepartmentId === null;
     return clientOk && departmentOk;
   });
 }
