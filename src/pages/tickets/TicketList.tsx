@@ -58,6 +58,7 @@ import { selectableTemplates } from '@/utils/ticketTemplateSelection';
 import { buildCreateTicketPayload } from '@/utils/ticketCreatePayload';
 import { TicketSchemaFieldInput } from '@/components/tickets/TicketSchemaFieldInput';
 import { TicketAnswerSemanticSearchPanel } from '@/components/tickets/TicketAnswerSemanticSearchPanel';
+import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 
 const PRIORITY_OPTIONS = [
   { value: '', label: 'Todas' },
@@ -296,6 +297,8 @@ export default function TicketList() {
   const [filterAnswerMatch, setFilterAnswerMatch] = useState<TicketAnswerMatch>(TicketAnswerMatch.Exact);
   // KPI agrega no servidor: usar valor adiado evita 1 request por tecla.
   const deferredFilterText = useDeferredValue(filterText);
+  // As sugestões de resposta do questionário reaproveitam o termo do "Buscar".
+  const debouncedFilterText = useDebouncedValue(filterText, 350);
   const [advancedFiltersExpanded, setAdvancedFiltersExpanded] = useState(false);
   const [savedViewsExpanded, setSavedViewsExpanded] = useState(false);
   const [hoverPreviewTicketId, setHoverPreviewTicketId] = useState<string | null>(null);
@@ -1019,15 +1022,10 @@ export default function TicketList() {
       </div>
 
       <Card>
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div>
-            <div className="flex items-center gap-2">
-              <Filter className="h-4 w-4 text-muted" />
-              <h2 className="text-lg font-semibold text-foreground">Filtros e visões salvas</h2>
-            </div>
-            <p className="mt-1 text-sm text-muted">
-              Ajuste a fila com os filtros abaixo e salve combinações para reaplicar em um clique.
-            </p>
+        <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex items-center gap-2">
+            <Filter className="h-4 w-4 text-muted" />
+            <h2 className="text-base font-semibold text-foreground">Filtros e visões salvas</h2>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Button variant="secondary" onClick={openCreateSavedViewModal} disabled={!currentUserId}>
@@ -1047,7 +1045,7 @@ export default function TicketList() {
           </div>
         </div>
 
-        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <div className="xl:col-span-2">
             <Input
               label="Buscar"
@@ -1057,6 +1055,7 @@ export default function TicketList() {
               }}
               placeholder="Título, descrição, categoria ou respostas do questionário"
             />
+            <TicketAnswerSemanticSearchPanel term={debouncedFilterText} />
           </div>
           <Select
             label="Prioridade"
@@ -1201,17 +1200,13 @@ export default function TicketList() {
           </div>
         )}
 
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-          {hasActiveFilters && (
+        {hasActiveFilters && (
+          <div className="mt-3 flex flex-wrap items-center gap-2">
             <Button variant="ghost" size="sm" onClick={handleClearFilters}>
               Limpar filtros
             </Button>
-          )}
-
-          {!savedViewsQuery.isLoading && !savedViewsQuery.isError && savedViews.length === 0 && (
-            <p className="text-sm text-muted">Nenhuma visão salva disponível.</p>
-          )}
-        </div>
+          </div>
+        )}
 
         {savedViewsQuery.isLoading ? (
           <div className="mt-4"><Loading /></div>
@@ -1285,7 +1280,6 @@ export default function TicketList() {
             </div>
           </div>
         ) : null}
-        <TicketAnswerSemanticSearchPanel embedded />
       </Card>
 
       <Card padding={false}>
