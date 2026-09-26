@@ -59,6 +59,7 @@ import type {
 } from '@/api';
 import toast from 'react-hot-toast';
 import { getTicketPriorityMeta } from '@/utils/labels';
+import { upsertCommentPage, type CommentPage } from '@/utils/commentPages';
 
 const ACTIVITY_LABELS: Record<string, string> = {
   Created:              'Criado',
@@ -1608,6 +1609,14 @@ function TicketSummaryPanel({
   );
 }
 
+type CommentItem = {
+  id: string;
+  author: string;
+  content: string;
+  isInternal: boolean;
+  createdAt: string;
+};
+
 function CommentsPanel({
   ticketId,
   draftSeed,
@@ -1617,11 +1626,7 @@ function CommentsPanel({
 }) {
   // Paginação por cursor: acumula páginas (antes crescia o limit, refazendo a
   // 1ª página e sem teto).
-  type CommentPage = {
-    cursor?: string;
-    items: Array<{ id: string; author: string; content: string; isInternal: boolean; createdAt: string }>;
-  };
-  const [pages, setPages] = useState<CommentPage[]>([]);
+  const [pages, setPages] = useState<CommentPage<CommentItem>[]>([]);
   const [cursor, setCursor] = useState<string | undefined>(undefined);
   const comments = useTicketComments(ticketId, { cursor });
   const items = pages.flatMap(page => page.items);
@@ -1632,11 +1637,13 @@ function CommentsPanel({
     setCursor(undefined);
   }, [ticketId]);
 
-  // Registra cada página carregada (a primeira tem cursor undefined).
+  // Registra/atualiza cada página carregada. `upsertCommentPage` SUBSTITUI os
+  // itens quando a mesma página é refeita (ex.: após adicionar comentário);
+  // antes o refetch era ignorado e o comentário só aparecia após um F5.
   useEffect(() => {
     const data = comments.data;
     if (!data) return;
-    setPages(prev => (prev.some(page => page.cursor === cursor) ? prev : [...prev, { cursor, items: data.items ?? [] }]));
+    setPages(prev => upsertCommentPage(prev, cursor, data.items ?? []));
   }, [comments.data, cursor]);
 
   return (
@@ -1678,7 +1685,15 @@ function CommentsPanel({
           </div>
         )}
       </div>
-      <CommentForm ticketId={ticketId} draftSeed={draftSeed} />
+      <CommentForm
+        ticketId={ticketId}
+        draftSeed={draftSeed}
+        onAdded={() => {
+          // Garante que a 1ª página esteja ativa: a invalidação da mutation só
+          // refaz queries ativas, e o comentário novo entra no topo dela.
+          setCursor(undefined);
+        }}
+      />
     </>
   );
 }
@@ -1722,9 +1737,11 @@ function TimelinePanel({ ticketId }: { ticketId: string }) {
 function CommentForm({
   ticketId,
   draftSeed,
+  onAdded,
 }: {
   ticketId: string;
   draftSeed?: CommentSeed | null;
+  onAdded?: () => void;
 }) {
   const addComment = useAddComment();
   const macrosQuery = useTicketMacros({ includeGlobal: true });
@@ -1761,7 +1778,13 @@ function CommentForm({
       // Autoria é derivada do token no backend — não enviar author.
       { id: ticketId, data: { content: trimmed, isInternal } },
       {
-        onSuccess: () => { setContent(''); setIsInternal(false); toast.success('Comentário adicionado'); },
+        onSuccess: () => {
+          setContent('');
+          setIsInternal(false);
+          // Garante que o comentário recém-criado apareça sem F5.
+          onAdded?.();
+          toast.success('Comentário adicionado');
+        },
         onError:   (err) => toast.error(err instanceof Error && err.message ? err.message : 'Erro ao adicionar comentário'),
       },
     );

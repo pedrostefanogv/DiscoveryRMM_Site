@@ -155,8 +155,11 @@ export function useAddComment() {
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: AddCommentRequest }) =>
       ticketsApi.addComment(id, data),
-    onSuccess: (_d, vars) =>
-      qc.invalidateQueries({ queryKey: KEYS.comments(vars.id) }),
+    onSuccess: (_d, vars) => {
+      qc.invalidateQueries({ queryKey: KEYS.comments(vars.id) });
+      // A timeline registra o evento de comentário — sem isso ela fica stale.
+      qc.invalidateQueries({ queryKey: KEYS.timeline(vars.id) });
+    },
   });
 }
 
