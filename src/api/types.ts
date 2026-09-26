@@ -1293,6 +1293,8 @@ export interface AIIntegrationSettings {
   temperature?: number;
   embeddingEnabled?: boolean;
   embeddingArticlesEnabled?: boolean;
+  /** Opt-in: indexa as respostas do questionário para busca semântica (envia dados ao provedor). */
+  embeddingTicketAnswersEnabled?: boolean;
   maxHistoryMessages?: number;
   maxKbContextTokens?: number;
   rateLimitPerMinute?: number;

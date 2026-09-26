@@ -21,6 +21,7 @@ const question = (overrides: Partial<TemplateQuestion> = {}): TemplateQuestion =
   minValue: null,
   maxValue: null,
   helpText: null,
+  isSensitive: false,
   ...overrides,
 });
 
@@ -35,6 +36,16 @@ describe('parseTemplateQuestions', () => {
     expect(parsed[0].isRequired).toBe(true);
     expect(parsed[1].dataType).toBe(CustomFieldDataType.Dropdown);
     expect(parsed[1].options).toEqual(['Interno', 'Terceiros']);
+  });
+
+  it('lê a marca de sensibilidade (não indexar na busca semântica)', () => {
+    const json = JSON.stringify([
+      { key: 'cpf', label: 'CPF', dataType: 0, isSensitive: true },
+      { key: 'obs', label: 'Observação', dataType: 0 },
+    ]);
+    const parsed = parseTemplateQuestions(json);
+    expect(parsed[0].isSensitive).toBe(true);
+    expect(parsed[1].isSensitive).toBe(false);
   });
 
   it('ignora JSON inválido e perguntas incompletas', () => {

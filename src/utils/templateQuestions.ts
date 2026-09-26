@@ -17,6 +17,8 @@ export interface TemplateQuestion {
   minValue: number | null;
   maxValue: number | null;
   helpText: string | null;
+  /** Pergunta sensível: não é indexada para a busca semântica. */
+  isSensitive: boolean;
 }
 
 export const EMPTY_TEMPLATE_QUESTION: TemplateQuestion = {
@@ -32,6 +34,7 @@ export const EMPTY_TEMPLATE_QUESTION: TemplateQuestion = {
   minValue: null,
   maxValue: null,
   helpText: null,
+  isSensitive: false,
 };
 
 function normalizeOptions(value: unknown): string[] {
@@ -86,6 +89,7 @@ export function parseTemplateQuestions(json: string | null | undefined): Templat
         minValue: nullableNumber(raw.minValue ?? raw.MinValue),
         maxValue: nullableNumber(raw.maxValue ?? raw.MaxValue),
         helpText: (raw.helpText ?? raw.HelpText ?? null) as string | null,
+        isSensitive: Boolean(raw.isSensitive ?? raw.IsSensitive ?? false),
       }))
       .filter((question) => question.key.length > 0 && question.label.length > 0);
   } catch {
@@ -103,6 +107,7 @@ export function serializeTemplateQuestions(questions: TemplateQuestion[]): strin
       validationRegex: question.validationRegex?.trim() || null,
       inputMask: question.inputMask?.trim() || null,
       helpText: question.helpText?.trim() || null,
+      isSensitive: Boolean(question.isSensitive),
     }))
     .filter((question) => question.key.length > 0 && question.label.length > 0);
   return JSON.stringify(clean);

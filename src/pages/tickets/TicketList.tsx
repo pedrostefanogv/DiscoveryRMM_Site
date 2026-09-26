@@ -56,6 +56,7 @@ import { buildTicketCustomFieldValues } from '@/utils/ticketCustomFields';
 import { templateDefaultsToDrafts } from '@/utils/ticketTemplateDefaults';
 import { parseTemplateQuestions, questionToSchemaField } from '@/utils/templateQuestions';
 import { TicketSchemaFieldInput } from '@/components/tickets/TicketSchemaFieldInput';
+import { TicketAnswerSemanticSearchPanel } from '@/components/tickets/TicketAnswerSemanticSearchPanel';
 
 const PRIORITY_OPTIONS = [
   { value: '', label: 'Todas' },
@@ -1284,6 +1285,8 @@ export default function TicketList() {
           </div>
         ) : null}
       </Card>
+
+      <TicketAnswerSemanticSearchPanel />
 
       <Card padding={false}>
         {tickets.isLoading ? (

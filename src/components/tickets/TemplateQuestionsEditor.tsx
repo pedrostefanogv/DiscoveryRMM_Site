@@ -275,6 +275,16 @@ export function TemplateQuestionsEditor({
                   />
                   Resposta obrigatória
                 </label>
+
+                <label className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
+                  <input
+                    type="checkbox"
+                    checked={question.isSensitive}
+                    onChange={(e) => update(index, { isSensitive: e.target.checked })}
+                    className="rounded border-border bg-surface-light"
+                  />
+                  Não indexar para busca semântica (dados sensíveis)
+                </label>
               </div>
             );
           })}

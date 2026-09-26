@@ -65,6 +65,9 @@ export function AiIntegrationCard({ aiSettings, onSave, saving }: Props) {
   const [chatModel, setChatModel] = useState(aiSettings?.chatModel ?? "");
   const [embeddingModel, setEmbeddingModel] = useState(aiSettings?.embeddingModel ?? "");
   const [embeddingDimensions, setEmbeddingDimensions] = useState(aiSettings?.embeddingDimensions ?? 1536);
+  const [embeddingArticlesEnabled, setEmbeddingArticlesEnabled] = useState(aiSettings?.embeddingArticlesEnabled ?? true);
+  // Opt-in: nasce desligado (envia respostas de chamados ao provedor de embeddings).
+  const [embeddingTicketAnswersEnabled, setEmbeddingTicketAnswersEnabled] = useState(aiSettings?.embeddingTicketAnswersEnabled ?? false);
   const [temperature, setTemperature] = useState(aiSettings?.temperature ?? 0.7);
   const [topP, setTopP] = useState(aiSettings?.topP ?? 1.0);
   const [freqPen, setFreqPen] = useState(aiSettings?.frequencyPenalty ?? 0);
@@ -153,6 +156,8 @@ export function AiIntegrationCard({ aiSettings, onSave, saving }: Props) {
       chatModel: chatModel || undefined,
       embeddingModel: embeddingModel || undefined,
       embeddingDimensions, temperature, topP,
+      embeddingArticlesEnabled,
+      embeddingTicketAnswersEnabled,
       frequencyPenalty: freqPen, presencePenalty: presPen,
       maxTokensPerRequest: maxTokens,
     };
@@ -257,6 +262,42 @@ export function AiIntegrationCard({ aiSettings, onSave, saving }: Props) {
                 {filteredChat.length > 50 && <p className="text-xs text-muted px-2">Mostrando 50 de {filteredChat.length}. Refine a busca.</p>}
               </div>
             )}
+          </div>
+
+          {/* ── O que é indexado para busca semântica ── */}
+          <div className="space-y-2 rounded-lg border border-border bg-surface-light p-3">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted">Indexação para busca semântica</p>
+
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-medium text-foreground">Artigos da base de conhecimento</p>
+                <p className="text-xs text-muted">Gera embeddings dos artigos para o RAG e a busca da KB.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEmbeddingArticlesEnabled(!embeddingArticlesEnabled)}
+                className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${embeddingArticlesEnabled ? "bg-sky-500" : "bg-muted"}`}
+              >
+                <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${embeddingArticlesEnabled ? "translate-x-4" : "translate-x-0.5"}`} />
+              </button>
+            </div>
+
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-medium text-foreground">Respostas dos chamados (busca semântica)</p>
+                <p className="text-xs text-muted">
+                  Envia as respostas do questionário ao provedor de embeddings. Perguntas marcadas como sensíveis
+                  no template nunca são indexadas. Desligado por padrão.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEmbeddingTicketAnswersEnabled(!embeddingTicketAnswersEnabled)}
+                className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${embeddingTicketAnswersEnabled ? "bg-sky-500" : "bg-muted"}`}
+              >
+                <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${embeddingTicketAnswersEnabled ? "translate-x-4" : "translate-x-0.5"}`} />
+              </button>
+            </div>
           </div>
 
           {/* ── Embedding Model ── */}
