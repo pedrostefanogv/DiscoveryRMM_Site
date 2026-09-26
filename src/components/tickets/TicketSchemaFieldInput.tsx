@@ -8,6 +8,7 @@ import {
   normalizeNumericDraft,
 } from '@/utils/fieldMask';
 import { describeFieldFormat } from '@/utils/fieldFormatHints';
+import { supportsInputMask } from '@/utils/customFieldMask';
 
 /**
  * Renderiza um campo dinâmico do schema de tickets (usado na abertura de
@@ -35,7 +36,9 @@ export function TicketSchemaFieldInput({
   id?: string;
 }) {
   const label = `${field.label}${field.isRequired ? ' *' : ''}`;
-  const mask = field.inputMask ?? null;
+  // Defensivo: se a definição carregar máscara num tipo que não a usa (ex.:
+  // veio de um modelo antigo), o render a ignora em vez de aplicar parcialmente.
+  const mask = supportsInputMask(field.dataType) ? (field.inputMask ?? null) : null;
   const hint = describeFieldFormat({
     inputMask: mask,
     validationRegex: field.validationRegex,

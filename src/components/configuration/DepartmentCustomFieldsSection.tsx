@@ -26,6 +26,7 @@ import {
 } from "@/hooks/useDepartmentCustomFields";
 import { useCustomFieldTemplates } from "@/hooks/useCustomFieldTemplates";
 import { applyFieldMask, fieldMaskPlaceholder } from "@/utils/fieldMask";
+import { supportsInputMask } from "@/utils/customFieldMask";
 
 // ── Helpers ──────────────────────────────────────────────
 
@@ -54,14 +55,6 @@ function parseOptionsFromInput(input: string): string[] {
 const DATA_TYPE_OPTIONS = Object.values(CustomFieldDataType)
   .filter((v): v is CustomFieldDataType => typeof v === "number")
   .map((v) => ({ value: String(v), label: getCustomFieldDataTypeLabel(v) }));
-
-// Tipos que consomem máscara na entrada (TicketSchemaFieldInput). Booleano,
-// data/hora e seleção usam controles nativos e ignoram a máscara.
-const MASK_SUPPORTED_DATA_TYPES: CustomFieldDataType[] = [
-  CustomFieldDataType.Text,
-  CustomFieldDataType.Integer,
-  CustomFieldDataType.Decimal,
-];
 
 type RegexPreset = {
   value: string;
@@ -209,6 +202,9 @@ export function DepartmentCustomFieldsSection({
     );
 
   const fields = fieldsQuery.data ?? [];
+  const activePublic = fields.filter((field) => field.isActive && !field.isInternal).length;
+  const activeInternal = fields.filter((field) => field.isActive && field.isInternal).length;
+  const inactive = fields.filter((field) => !field.isActive).length;
 
   return (
     <div className="space-y-4">
@@ -216,7 +212,9 @@ export function DepartmentCustomFieldsSection({
         <div>
           <h3 className="text-sm font-semibold text-foreground">Campos Customizados</h3>
           <p className="text-xs text-muted">
-            {fields.length} campo(s) — esses campos aparecerão no formulário de abertura de chamado
+            {fields.length} campo(s): {activePublic} público(s) (aparecem na abertura) e{' '}
+            {activeInternal} interno(s) (só para atendentes)
+            {inactive > 0 ? `, ${inactive} inativo(s)` : ''}.
           </p>
         </div>
         <CreateFieldButton departmentId={departmentId} clientId={clientId} />
@@ -436,7 +434,9 @@ function FieldFormModal({
       dataType: template.dataType,
       isRequired: template.defaultIsRequired,
       validationRegex: template.validationRegex,
-      inputMask: template.inputMask,
+      // Modelo pode trazer máscara para tipo que não a usa (ex.: seleção) —
+      // não deixar um valor invisível no formulário.
+      inputMask: supportsInputMask(template.dataType) ? template.inputMask : null,
       minLength: template.minLength,
       maxLength: template.maxLength,
       minValue: template.minValue,
@@ -488,7 +488,7 @@ function FieldFormModal({
 
   const showRegex = form.dataType === CustomFieldDataType.Text;
 
-  const showMask = MASK_SUPPORTED_DATA_TYPES.includes(form.dataType);
+  const showMask = supportsInputMask(form.dataType);
 
   const availableRegexPresets = useMemo(
     () =>
@@ -693,9 +693,7 @@ function FieldFormModal({
                 ...f,
                 dataType: nextDataType,
                 // Não deixar máscara residual em tipo que não a usa.
-                inputMask: MASK_SUPPORTED_DATA_TYPES.includes(nextDataType)
-                  ? f.inputMask
-                  : null,
+                inputMask: supportsInputMask(nextDataType) ? f.inputMask : null,
               }));
             }}
           />

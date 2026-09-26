@@ -164,9 +164,18 @@ export const departmentCustomFieldsApi = {
     );
   },
 
-  async getTicketSchema(departmentId: string): Promise<TicketSchemaField[]> {
+  /**
+   * Schema do departamento para chamados. Por padrão devolve apenas os campos
+   * públicos (formulário de abertura); com includeInternal=true inclui também
+   * os campos internos (tela de detalhe do chamado, lado do atendente).
+   */
+  async getTicketSchema(
+    departmentId: string,
+    includeInternal = false,
+  ): Promise<TicketSchemaField[]> {
     const raw = await api.get<Array<Record<string, unknown>>>(
       `/api/v1/departments/${departmentId}/ticket-schema`,
+      includeInternal ? { includeInternal: true } : {},
     );
     return raw.map(normalizeTicketSchemaField);
   },

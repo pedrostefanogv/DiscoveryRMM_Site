@@ -11,8 +11,8 @@ import type { CursorPageDto } from "@/api";
 const KEYS = {
   all: ["department-custom-fields"] as const,
   list: (departmentId: string) => [...KEYS.all, "list", departmentId] as const,
-  schema: (departmentId: string) =>
-    [...KEYS.all, "schema", departmentId] as const,
+  schema: (departmentId: string, includeInternal = false) =>
+    [...KEYS.all, "schema", departmentId, includeInternal] as const,
 };
 
 function normalizeArray<T>(data: CursorPageDto<T> | T[]): T[] {
@@ -40,10 +40,13 @@ export function useDepartmentCustomFields(
 export function useDepartmentTicketSchema(
   departmentId: string | null,
   enabled = true,
+  /** Inclui também campos internos (tela de detalhe do chamado). */
+  includeInternal = false,
 ) {
   return useQuery({
-    queryKey: KEYS.schema(departmentId ?? ""),
-    queryFn: () => departmentCustomFieldsApi.getTicketSchema(departmentId!),
+    queryKey: KEYS.schema(departmentId ?? "", includeInternal),
+    queryFn: () =>
+      departmentCustomFieldsApi.getTicketSchema(departmentId!, includeInternal),
     enabled: enabled && !!departmentId,
     select: (data) =>
       normalizeArray(
@@ -64,7 +67,10 @@ export function useCreateDepartmentCustomField() {
     }) => departmentCustomFieldsApi.create(departmentId, data),
     onSuccess: (_result, vars) => {
       qc.invalidateQueries({ queryKey: KEYS.list(vars.departmentId) });
-      qc.invalidateQueries({ queryKey: KEYS.schema(vars.departmentId) });
+      // Prefixo: invalida o schema nas duas variantes (público e com internos).
+      qc.invalidateQueries({
+        queryKey: [...KEYS.all, "schema", vars.departmentId],
+      });
     },
   });
 }
@@ -83,7 +89,9 @@ export function useUpdateDepartmentCustomField() {
     }) => departmentCustomFieldsApi.update(departmentId, fieldId, data),
     onSuccess: (_result, vars) => {
       qc.invalidateQueries({ queryKey: KEYS.list(vars.departmentId) });
-      qc.invalidateQueries({ queryKey: KEYS.schema(vars.departmentId) });
+      qc.invalidateQueries({
+        queryKey: [...KEYS.all, "schema", vars.departmentId],
+      });
     },
   });
 }

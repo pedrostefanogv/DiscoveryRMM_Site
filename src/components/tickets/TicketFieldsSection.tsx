@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 
+import { AlertTriangle, Shield } from 'lucide-react';
+
 import { Badge, Button, Input, Loading, Select, TextArea } from '@/components/ui';
 import {
   CustomFieldDataType,
@@ -23,8 +25,9 @@ import toast from 'react-hot-toast';
 /**
  * Campos do chamado dentro do Resumo geral, logo após o SLA.
  *
- * - "Campos do departamento": definidos para o departamento do chamado (cobrados
- *   na abertura). Somente leitura aqui.
+ * - "Campos do departamento": definidos para o departamento do chamado. Públicos
+ *   são cobrados na abertura; internos não aparecem lá. Nesta tela (atendente)
+ *   ambos são editáveis, e os internos recebem o selo "Interno".
  * - "Campos adicionais do chamado": campos de escopo do próprio chamado,
  *   editáveis.
  */
@@ -36,7 +39,13 @@ export function TicketFieldsSection({
   departmentId?: string | null;
 }) {
   const valuesQuery = useTicketCustomFields(ticketId);
-  const schemaQuery = useDepartmentTicketSchema(departmentId ?? null, Boolean(departmentId));
+  // Tela do atendente: inclui também campos internos do departamento (eles não
+  // aparecem no formulário de abertura, mas precisam ser preenchíveis aqui).
+  const schemaQuery = useDepartmentTicketSchema(
+    departmentId ?? null,
+    Boolean(departmentId),
+    true,
+  );
   const values = Array.isArray(valuesQuery.data) ? valuesQuery.data : [];
 
   const upsertValue = useUpsertTicketCustomFieldValue();
@@ -157,6 +166,18 @@ export function TicketFieldsSection({
         <p className="text-xs text-muted">Definidos para o departamento deste chamado.</p>
         {isLoading ? (
           <Loading />
+        ) : schemaQuery.isError ? (
+          // Falha do schema (403/500) não pode virar fallback silencioso de
+          // somente leitura: sem a definição não há input nem validação.
+          <div className="mt-2 flex flex-wrap items-center gap-3 rounded-xl border border-border bg-surface-light px-4 py-3">
+            <AlertTriangle className="h-4 w-4 text-danger" />
+            <p className="text-sm text-muted">
+              Não foi possível carregar os campos deste departamento.
+            </p>
+            <Button size="sm" variant="ghost" onClick={() => schemaQuery.refetch()}>
+              Tentar novamente
+            </Button>
+          </div>
         ) : rows.length === 0 ? (
           <p className="mt-2 text-sm text-muted">
             {departmentId
@@ -194,6 +215,12 @@ export function TicketFieldsSection({
                         <Badge color="slate">{getCustomFieldDataTypeLabel(row.dataType)}</Badge>
                       )}
                       {row.isRequired && <Badge color="accent">Obrigatório</Badge>}
+                      {row.field?.isInternal && (
+                        <Badge color="accent">
+                          <Shield className="mr-0.5 inline h-3 w-3" />
+                          Interno
+                        </Badge>
+                      )}
                       {!dirty && missing && <span className="text-xs text-muted italic">Não informado</span>}
                     </span>
                     {dirty && (

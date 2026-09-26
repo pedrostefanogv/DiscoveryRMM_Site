@@ -11,6 +11,8 @@ interface TicketAnswerSemanticSearchPanelProps {
    */
   term: string;
   limit?: number;
+  /** Restringe as sugestões ao template selecionado no filtro, quando houver. */
+  templateId?: string;
 }
 
 /**
@@ -22,14 +24,18 @@ interface TicketAnswerSemanticSearchPanelProps {
 export function TicketAnswerSemanticSearchPanel({
   term,
   limit = 6,
+  templateId,
 }: TicketAnswerSemanticSearchPanelProps) {
   const navigate = useNavigate();
   const query = term.trim();
-  const search = useTicketAnswerSearch({ q: query, limit });
+  const search = useTicketAnswerSearch({ q: query, limit, templateId });
   const hits = search.data?.hits ?? [];
   const mode = search.data?.mode;
 
   if (query.length < 3) return null;
+  // Só ocupa espaço quando há resultado (ou enquanto busca): enquanto o usuário
+  // apenas filtra por título, a lista de sugestões não aparece.
+  if (!search.isFetching && hits.length === 0) return null;
 
   return (
     <div className="mt-2 overflow-hidden rounded-xl border border-border bg-surface-light">
@@ -45,12 +51,8 @@ export function TicketAnswerSemanticSearchPanel({
         )}
       </div>
 
-      {search.isFetching && (
+      {search.isFetching && hits.length === 0 && (
         <p className="px-3 py-2 text-xs text-muted">Buscando respostas...</p>
-      )}
-
-      {!search.isFetching && hits.length === 0 && (
-        <p className="px-3 py-2 text-xs text-muted">Nenhuma resposta semelhante.</p>
       )}
 
       {hits.length > 0 && (

@@ -74,6 +74,26 @@ describe('TicketFieldsSection', () => {
         name: 'ramal',
       },
     ];
+    schemaState.data = [
+      {
+        definitionId: 'd1',
+        name: 'ramal',
+        label: 'Ramal',
+        description: null,
+        dataType: 0,
+        isRequired: true,
+        isInternal: false,
+        isActive: true,
+        options: [],
+        validationRegex: null,
+        inputMask: null,
+        minLength: null,
+        maxLength: null,
+        minValue: null,
+        maxValue: null,
+        currentValueJson: null,
+      },
+    ] as TicketSchemaField[];
     cleanup();
   });
 
@@ -117,5 +137,37 @@ describe('TicketFieldsSection', () => {
     render(<TicketFieldsSection ticketId="t1" />);
 
     expect(screen.getByText(/Chamado sem departamento/)).toBeTruthy();
+  });
+
+  it('renderiza campo de departamento interno como editável, com selo "Interno"', () => {
+    valuesState.data = [];
+    schemaState.isLoading = false;
+    schemaState.data = [
+      {
+        definitionId: 'd1',
+        name: 'aprovado_por',
+        label: 'Aprovador por',
+        description: null,
+        dataType: 0,
+        isRequired: false,
+        isInternal: true,
+        isActive: true,
+        options: [],
+        validationRegex: null,
+        inputMask: null,
+        minLength: null,
+        maxLength: null,
+        minValue: null,
+        maxValue: null,
+        currentValueJson: null,
+      },
+    ] as TicketSchemaField[];
+
+    render(<TicketFieldsSection ticketId="t1" departmentId="dep1" />);
+
+    // Editável: o input existe (não caiu no fallback somente leitura).
+    expect(screen.getByLabelText('Aprovador por')).toBeTruthy();
+    // Marcado como interno.
+    expect(screen.getByText('Interno')).toBeTruthy();
   });
 });

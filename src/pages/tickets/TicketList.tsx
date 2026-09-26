@@ -383,7 +383,9 @@ export default function TicketList() {
     workflowStateId: filterState || undefined,
     priority: filterPriority || undefined,
     isClosed: filterStatus === '' ? undefined : filterStatus === 'true',
-    text: filterText.trim() || undefined,
+    // Debounced: evita um request de listagem a cada tecla (o input continua
+    // com o valor imediato; o KPI e as sugestões já usam valores adiados).
+    text: debouncedFilterText.trim() || undefined,
     templateId: filterTemplate || undefined,
     answerKey: filterAnswerKey || undefined,
     answerValue: filterAnswerValue.trim() || undefined,
@@ -543,6 +545,14 @@ export default function TicketList() {
     Number(Boolean(filterTemplate)) +
     // Filtro de resposta conta uma vez, com ou sem pergunta escolhida.
     Number(Boolean(filterAnswerKey || filterAnswerValue.trim()));
+  // Resumo real dos avançados ativos (Estado não entra: está na linha principal).
+  const advancedFilterSummary = [
+    filterClient ? 'Cliente' : '',
+    filterTemplate ? 'Template' : '',
+    filterAnswerKey || filterAnswerValue.trim() ? 'Resposta do questionário' : '',
+  ]
+    .filter(Boolean)
+    .join(', ');
   const hasActiveFilters =
     Boolean(filterClient) ||
     Boolean(filterState) ||
@@ -918,7 +928,11 @@ export default function TicketList() {
     setFilterAnswerValue(filter.answerValue ?? '');
     setFilterAnswerMatch(filter.answerMatch ?? TicketAnswerMatch.Exact);
     setActiveSavedViewId(view.id);
-    setAdvancedFiltersExpanded(Boolean(filter.clientId || filter.workflowStateId));
+    // Abre os avançados apenas se a visão trouxer filtros que vivem lá
+    // (Estado agora fica na linha principal).
+    setAdvancedFiltersExpanded(
+      Boolean(filter.clientId || filter.templateId || filter.answerKey || filter.answerValue),
+    );
     resetPagination();
     toast.success(`Visao aplicada: ${view.name}`);
   };
@@ -930,10 +944,6 @@ export default function TicketList() {
       }`}
     >
       <div className="flex items-center gap-3">
-        <span>Mostrando ate {pageSize} chamados por pagina</span>
-      </div>
-      <div className="flex items-center gap-3">
-        <span className="text-muted">{pageSize} chamados/pagina</span>
         <label className="flex items-center gap-2">
           <span className="text-muted">Por pagina</span>
           <select
@@ -1151,7 +1161,10 @@ export default function TicketList() {
               }}
               placeholder="Título, descrição, categoria ou respostas do questionário"
             />
-            <TicketAnswerSemanticSearchPanel term={debouncedFilterText} />
+            <TicketAnswerSemanticSearchPanel
+              term={debouncedFilterText}
+              templateId={filterTemplate || undefined}
+            />
           </div>
           <Select
             label="Prioridade"
@@ -1192,7 +1205,7 @@ export default function TicketList() {
             {advancedFiltersExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
           </Button>
           {advancedFiltersActiveCount > 0 && !advancedFiltersExpanded && (
-            <span className="text-xs text-muted">Cliente filtrado.</span>
+            <span className="text-xs text-muted">Filtros ativos: {advancedFilterSummary}.</span>
           )}
         </div>
 
