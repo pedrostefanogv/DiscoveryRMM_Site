@@ -11,8 +11,8 @@ import type { CursorPageDto } from "@/api";
 const KEYS = {
   all: ["department-custom-fields"] as const,
   list: (departmentId: string) => [...KEYS.all, "list", departmentId] as const,
-  schema: (departmentId: string, includeInternal = false) =>
-    [...KEYS.all, "schema", departmentId, includeInternal] as const,
+  schema: (departmentId: string, includeInternal = false, ticketId = "") =>
+    [...KEYS.all, "schema", departmentId, includeInternal, ticketId] as const,
 };
 
 function normalizeArray<T>(data: CursorPageDto<T> | T[]): T[] {
@@ -42,11 +42,13 @@ export function useDepartmentTicketSchema(
   enabled = true,
   /** Inclui também campos internos (tela de detalhe do chamado). */
   includeInternal = false,
+  /** Quando informado, o schema já vem com o valor atual (CurrentValueJson). */
+  ticketId?: string,
 ) {
   return useQuery({
-    queryKey: KEYS.schema(departmentId ?? "", includeInternal),
+    queryKey: KEYS.schema(departmentId ?? "", includeInternal, ticketId ?? ""),
     queryFn: () =>
-      departmentCustomFieldsApi.getTicketSchema(departmentId!, includeInternal),
+      departmentCustomFieldsApi.getTicketSchema(departmentId!, includeInternal, ticketId),
     enabled: enabled && !!departmentId,
     select: (data) =>
       normalizeArray(

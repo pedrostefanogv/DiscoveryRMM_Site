@@ -45,6 +45,7 @@ export function TicketFieldsSection({
     departmentId ?? null,
     Boolean(departmentId),
     true,
+    ticketId,
   );
   const values = Array.isArray(valuesQuery.data) ? valuesQuery.data : [];
 
@@ -74,7 +75,12 @@ export function TicketFieldsSection({
         label: field.label,
         dataType: field.dataType as CustomFieldDataType | null,
         isRequired: field.isRequired,
-        value: valueByDefinitionId.get(field.definitionId)?.value ?? null,
+        // Com ticketId o schema já traz o valor atual; o mapa de valores do
+        // chamado fica como fallback (ex.: resposta antiga sem CurrentValueJson).
+        value:
+          parseSchemaCurrentValue(field.currentValueJson) ??
+          valueByDefinitionId.get(field.definitionId)?.value ??
+          null,
         field,
       }));
     }
@@ -252,6 +258,18 @@ export function TicketFieldsSection({
       <AdditionalTicketFields ticketId={ticketId} />
     </div>
   );
+}
+
+/** `CurrentValueJson` vem serializado ("null", "\"x\"", "[...]"); devolve o valor. */
+function parseSchemaCurrentValue(raw: string | null | undefined): unknown {
+  if (raw == null) return null;
+  const text = raw.trim();
+  if (!text || text === 'null') return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return raw;
+  }
 }
 
 function formatDateInputValue(value: string) {

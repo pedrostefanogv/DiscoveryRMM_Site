@@ -172,10 +172,11 @@ export const departmentCustomFieldsApi = {
   async getTicketSchema(
     departmentId: string,
     includeInternal = false,
+    ticketId?: string,
   ): Promise<TicketSchemaField[]> {
     const raw = await api.get<Array<Record<string, unknown>>>(
       `/api/v1/departments/${departmentId}/ticket-schema`,
-      includeInternal ? { includeInternal: true } : {},
+      includeInternal ? { includeInternal: true, ticketId } : {},
     );
     return raw.map(normalizeTicketSchemaField);
   },
