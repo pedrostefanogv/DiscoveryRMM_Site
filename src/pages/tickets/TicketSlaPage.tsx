@@ -450,7 +450,7 @@ export default function TicketSlaPage() {
   ]);
 
   const totalHolidays = sortedCalendars.reduce(
-    (sum, calendar) => sum + calendar.holidayCount,
+    (sum, calendar) => sum + (calendar.holidayCount ?? 0),
     0,
   );
 
@@ -778,6 +778,13 @@ export default function TicketSlaPage() {
       return;
     }
 
+    if (triggerAtSlaPercent <= 0 && triggerAtHoursBefore <= 0) {
+      toast.error(
+        "Informe ao menos um gatilho: percentual de SLA ou horas antes do vencimento.",
+      );
+      return;
+    }
+
     try {
       if (editingRuleId) {
         await updateRule.mutateAsync({
@@ -788,6 +795,8 @@ export default function TicketSlaPage() {
             triggerAtHoursBefore,
             reassignToUserId: ruleForm.reassignToUserId || null,
             reassignToDepartmentId: ruleForm.reassignToDepartmentId || null,
+            clearReassignToUser: !ruleForm.reassignToUserId,
+            clearReassignToDepartment: !ruleForm.reassignToDepartmentId,
             bumpPriority: ruleForm.bumpPriority,
             notifyAssignee: ruleForm.notifyAssignee,
             isActive: ruleForm.isActive,
@@ -845,6 +854,9 @@ export default function TicketSlaPage() {
     ? sortedCalendars.find((item) => item.id === holidayCalendarId) ?? null
     : null;
   const holidayCalendarDetail = holidayDetailQuery.data;
+  // A API pode não devolver a coleção (ex.: respostas antigas em cache);
+  // normalizar evita TypeError ao abrir o modal de feriados.
+  const holidayCalendarHolidays = holidayCalendarDetail?.holidays ?? [];
 
   return (
     <div className="space-y-6">
@@ -962,7 +974,7 @@ export default function TicketSlaPage() {
                         Jornada: {calendar.workDayStartHour}:00 - {calendar.workDayEndHour}:00
                       </span>
                       <span>Dias: {formatWorkDays(calendar.workDaysJson)}</span>
-                      <span>Feriados: {calendar.holidayCount}</span>
+                      <span>Feriados: {calendar.holidayCount ?? 0}</span>
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-2">
@@ -1045,8 +1057,8 @@ export default function TicketSlaPage() {
             <div className="mt-3 flex items-start gap-3 rounded-xl border border-border bg-surface-light p-4 text-sm text-muted-foreground">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
               <p>
-                Sem filtro, o backend retorna apenas regras ativas. Para editar regras inativas,
-                selecione o workflow profile correspondente.
+                As regras são sempre listadas por workflow profile. Selecione um perfil acima
+                para ver (e editar) as regras dele, inclusive as inativas.
               </p>
             </div>
           )}
@@ -1179,12 +1191,16 @@ export default function TicketSlaPage() {
               />
               <Select
                 label="Timezone"
-                options={TIMEZONE_OPTIONS}
-                value={
+                options={
+                  !calendarForm.timezone ||
                   TIMEZONE_OPTIONS.some((option) => option.value === calendarForm.timezone)
-                    ? calendarForm.timezone
-                    : "UTC"
+                    ? TIMEZONE_OPTIONS
+                    : [
+                        ...TIMEZONE_OPTIONS,
+                        { value: calendarForm.timezone, label: calendarForm.timezone },
+                      ]
                 }
+                value={calendarForm.timezone}
                 onChange={(event) =>
                   setCalendarForm((current) => ({
                     ...current,
@@ -1398,11 +1414,11 @@ export default function TicketSlaPage() {
             </div>
 
             <div className="space-y-2">
-              {holidayCalendarDetail.holidays.length === 0 && (
+              {holidayCalendarHolidays.length === 0 && (
                 <p className="text-sm text-muted">Nenhum feriado cadastrado.</p>
               )}
 
-              {[...holidayCalendarDetail.holidays]
+              {[...holidayCalendarHolidays]
                 .sort(
                   (left, right) =>
                     new Date(left.date).getTime() - new Date(right.date).getTime(),
@@ -1674,7 +1690,8 @@ export default function TicketSlaPage() {
             </div>
           </div>
           <div className="rounded-xl border border-primary/10 bg-primary/5 p-4 text-xs text-muted">
-            Dica: sem filtro de workflow profile, o backend retorna apenas regras ativas.
+            Dica: selecione um workflow profile para listar as regras — sem filtro nenhuma
+            regra é exibida.
           </div>
         </div>
       </Modal>

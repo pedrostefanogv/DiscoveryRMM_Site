@@ -646,6 +646,7 @@ export interface WorkflowProfile {
   name: string;
   description: string | null;
   slaHours: number;
+  slaCalendarId: string | null;
   defaultPriority: TicketPriority | null;
   isActive: boolean;
 }
@@ -946,6 +947,8 @@ export interface UpdateEscalationRuleRequest {
   triggerAtHoursBefore?: number;
   reassignToUserId?: string | null;
   reassignToDepartmentId?: string | null;
+  clearReassignToUser?: boolean;
+  clearReassignToDepartment?: boolean;
   bumpPriority?: boolean;
   notifyAssignee?: boolean;
   isActive?: boolean;
@@ -1803,6 +1806,7 @@ export interface CreateWorkflowProfileRequest {
   name: string;
   description: string | null;
   slaHours: number;
+  slaCalendarId?: string | null;
   defaultPriority: TicketPriority | null;
 }
 
@@ -1811,6 +1815,8 @@ export interface UpdateWorkflowProfileRequest {
   description: string | null;
   departmentId: string;
   slaHours: number;
+  slaCalendarId?: string | null;
+  clearSlaCalendar?: boolean;
   defaultPriority: TicketPriority | null;
   isActive: boolean;
 }

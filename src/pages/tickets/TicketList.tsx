@@ -1285,9 +1285,8 @@ export default function TicketList() {
             </div>
           </div>
         ) : null}
+        <TicketAnswerSemanticSearchPanel embedded />
       </Card>
-
-      <TicketAnswerSemanticSearchPanel />
 
       <Card padding={false}>
         {tickets.isLoading ? (

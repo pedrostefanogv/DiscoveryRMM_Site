@@ -4,12 +4,20 @@ import { Search, Sparkles, FileText } from 'lucide-react';
 import { Badge, Card, CardHeader, Input, Loading } from '@/components/ui';
 import { useTicketAnswerSearch } from '@/hooks/useTicketAnswerSearch';
 
+interface TicketAnswerSemanticSearchPanelProps {
+  /**
+   * Embute a busca dentro de outro card (sem o Card/CardHeader externo).
+   * Usado na página de chamados para unificar filtros e busca num único card.
+   */
+  embedded?: boolean;
+}
+
 /**
  * Busca nos chamados pela resposta do questionário. Usa embeddings quando o
  * servidor tem a funcionalidade habilitada e degrada para correspondência por
  * texto automaticamente (o modo vem na resposta).
  */
-export function TicketAnswerSemanticSearchPanel() {
+export function TicketAnswerSemanticSearchPanel({ embedded = false }: TicketAnswerSemanticSearchPanelProps) {
   const [term, setTerm] = useState('');
   const [debounced, setDebounced] = useState('');
   const navigate = useNavigate();
@@ -24,20 +32,15 @@ export function TicketAnswerSemanticSearchPanel() {
   const mode = search.data?.mode;
   const hasQuery = debounced.length >= 3;
 
-  return (
-    <Card>
-      <CardHeader
-        title="Busca nas respostas dos chamados"
-        subtitle="Encontre chamados por respostas de questionário (ex: 'Softwares de terceiros')."
-        action={
-          mode && hasQuery ? (
-            <Badge color={mode === 'semantic' ? 'success' : 'slate'}>
-              {mode === 'semantic' ? 'Semântica' : 'Por texto'}
-            </Badge>
-          ) : undefined
-        }
-      />
+  const modeBadge =
+    mode && hasQuery ? (
+      <Badge color={mode === 'semantic' ? 'success' : 'slate'}>
+        {mode === 'semantic' ? 'Semântica' : 'Por texto'}
+      </Badge>
+    ) : undefined;
 
+  const body = (
+    <>
       <Input
         value={term}
         onChange={(e) => setTerm(e.target.value)}
@@ -91,6 +94,37 @@ export function TicketAnswerSemanticSearchPanel() {
           Digite para buscar em todas as respostas dos chamados que você pode ver.
         </p>
       )}
+    </>
+  );
+
+  if (embedded) {
+    return (
+      <section className="mt-5 border-t border-border pt-4" aria-label="Busca nas respostas dos chamados">
+        <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <div className="flex items-center gap-2">
+              <Search className="h-4 w-4 text-muted" />
+              <h3 className="text-sm font-semibold text-foreground">Busca nas respostas dos chamados</h3>
+            </div>
+            <p className="mt-1 text-xs text-muted">
+              Encontre chamados por respostas de questionário (ex: 'Softwares de terceiros').
+            </p>
+          </div>
+          {modeBadge}
+        </div>
+        {body}
+      </section>
+    );
+  }
+
+  return (
+    <Card>
+      <CardHeader
+        title="Busca nas respostas dos chamados"
+        subtitle="Encontre chamados por respostas de questionário (ex: 'Softwares de terceiros')."
+        action={modeBadge}
+      />
+      {body}
     </Card>
   );
 }

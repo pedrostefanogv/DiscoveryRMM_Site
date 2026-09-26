@@ -7,6 +7,7 @@ import {
   useDeleteWorkflowProfile,
 } from '@/hooks/useWorkflowProfiles';
 import { useDepartments } from '@/hooks/useDepartments';
+import { useSlaCalendars } from '@/hooks/useSlaCalendars';
 import { useClients } from '@/hooks/useClients';
 import { Card, CardHeader, Button, Modal, Input, Select, Badge, Loading, ErrorDisplay } from '@/components/ui';
 import type { WorkflowProfile, CreateWorkflowProfileRequest, UpdateWorkflowProfileRequest, TicketPriority } from '@/api';
@@ -31,6 +32,18 @@ export default function WorkflowProfileSettings() {
 
   const deptMap   = new Map((depts.data   ?? []).map(d => [d.id, d]));
   const clientMap = new Map((clients.data ?? []).map(c => [c.id, c]));
+
+  // Calendários de SLA disponíveis para vincular ao perfil. Sem vínculo o SLA
+  // corre 24x7; com vínculo conta apenas em horas úteis.
+  const calendars = useSlaCalendars();
+  const calendarMap = new Map((calendars.data ?? []).map(c => [c.id, c]));
+  const calendarOpts = [
+    { value: '', label: '24x7 (sem calendário)' },
+    ...(calendars.data ?? []).map(c => ({
+      value: c.id,
+      label: `${c.name} · ${c.clientId ? (clientMap.get(c.clientId)?.name ?? 'cliente') : 'global'}`,
+    })),
+  ];
 
   const clientOpts = [
     { value: '', label: 'Todos' },
@@ -85,6 +98,7 @@ export default function WorkflowProfileSettings() {
               profile={p}
               deptName={deptMap.get(p.departmentId)?.name ?? '\u2014'}
               clientName={p.clientId ? (clientMap.get(p.clientId)?.name ?? '\u2014') : null}
+              calendarName={p.slaCalendarId ? (calendarMap.get(p.slaCalendarId)?.name ?? 'calendário removido') : null}
               onEdit={() => setEditTarget(p)}
             />
           ))}
@@ -94,15 +108,15 @@ export default function WorkflowProfileSettings() {
         </div>
       </Card>
 
-      <CreateProfileModal open={createOpen} onClose={() => setCreateOpen(false)} depts={depts.data ?? []} clients={clients.data ?? []} />
+      <CreateProfileModal open={createOpen} onClose={() => setCreateOpen(false)} depts={depts.data ?? []} clients={clients.data ?? []} calendarOpts={calendarOpts} />
       {editTarget && (
-        <EditProfileModal profile={editTarget} onClose={() => setEditTarget(null)} depts={depts.data ?? []} />
+        <EditProfileModal profile={editTarget} onClose={() => setEditTarget(null)} depts={depts.data ?? []} calendarOpts={calendarOpts} />
       )}
     </div>
   );
 }
 
-function ProfileRow({ profile, deptName, clientName, onEdit }: { profile: WorkflowProfile; deptName: string; clientName: string | null; onEdit: () => void }) {
+function ProfileRow({ profile, deptName, clientName, calendarName, onEdit }: { profile: WorkflowProfile; deptName: string; clientName: string | null; calendarName: string | null; onEdit: () => void }) {
   const del = useDeleteWorkflowProfile();
 
   const handleDelete = () => {
@@ -124,6 +138,9 @@ function ProfileRow({ profile, deptName, clientName, onEdit }: { profile: Workfl
           {deptName} • SLA: {profile.slaHours}h
           {profile.defaultPriority && ` • Prioridade padrão: ${profile.defaultPriority}`}
         </p>
+        <p className="text-xs text-muted">
+          {calendarName ? `Calendário: ${calendarName}` : 'Sem calendário (SLA 24x7)'}
+        </p>
       </div>
       <div className="flex items-center gap-2 shrink-0">
         {clientName ? <Badge color="accent">{clientName}</Badge> : <Badge color="slate">Global</Badge>}
@@ -140,12 +157,13 @@ function ProfileRow({ profile, deptName, clientName, onEdit }: { profile: Workfl
 }
 
 function CreateProfileModal({
-  open, onClose, depts, clients,
+  open, onClose, depts, clients, calendarOpts,
 }: {
   open: boolean;
   onClose: () => void;
   depts: { id: string; name: string }[];
   clients: { id: string; name: string }[];
+  calendarOpts: { value: string; label: string }[];
 }) {
   const create = useCreateWorkflowProfile();
   const [form, setForm] = useState<CreateWorkflowProfileRequest>({
@@ -154,6 +172,7 @@ function CreateProfileModal({
     name: '',
     description: null,
     slaHours: 24,
+    slaCalendarId: null,
     defaultPriority: null,
   });
 
@@ -174,7 +193,7 @@ function CreateProfileModal({
       onSuccess: () => {
         toast.success('Perfil criado');
         onClose();
-        setForm({ clientId: null, departmentId: '', name: '', description: null, slaHours: 24, defaultPriority: null });
+        setForm({ clientId: null, departmentId: '', name: '', description: null, slaHours: 24, slaCalendarId: null, defaultPriority: null });
       },
       onError: () => toast.error('Erro ao criar (departamento não existe?)'),
     });
@@ -196,6 +215,12 @@ function CreateProfileModal({
             onChange={e => setForm(f => ({ ...f, defaultPriority: (e.target.value as TicketPriority) || null }))}
           />
         </div>
+        <Select
+          label="Calendário de SLA"
+          options={calendarOpts}
+          value={form.slaCalendarId ?? ''}
+          onChange={e => setForm(f => ({ ...f, slaCalendarId: e.target.value || null }))}
+        />
         <div className="flex justify-end gap-3 pt-2">
           <Button variant="ghost" onClick={onClose}>Cancelar</Button>
           <Button onClick={handleSubmit} loading={create.isPending} disabled={!valid}>Criar</Button>
@@ -205,13 +230,14 @@ function CreateProfileModal({
   );
 }
 
-function EditProfileModal({ profile, onClose, depts }: { profile: WorkflowProfile; onClose: () => void; depts: { id: string; name: string }[] }) {
+function EditProfileModal({ profile, onClose, depts, calendarOpts }: { profile: WorkflowProfile; onClose: () => void; depts: { id: string; name: string }[]; calendarOpts: { value: string; label: string }[] }) {
   const update = useUpdateWorkflowProfile();
   const [form, setForm] = useState<UpdateWorkflowProfileRequest>({
     name:            profile.name,
     description:     profile.description,
     departmentId:    profile.departmentId,
     slaHours:        profile.slaHours,
+    slaCalendarId:   profile.slaCalendarId ?? null,
     defaultPriority: profile.defaultPriority,
     isActive:        profile.isActive,
   });
@@ -221,7 +247,7 @@ function EditProfileModal({ profile, onClose, depts }: { profile: WorkflowProfil
 
   const handleSubmit = () => {
     if (!valid) return;
-    update.mutate({ id: profile.id, data: form }, {
+    update.mutate({ id: profile.id, data: { ...form, clearSlaCalendar: !form.slaCalendarId } }, {
       onSuccess: () => { toast.success('Perfil atualizado'); onClose(); },
       onError:   () => toast.error('Erro ao atualizar'),
     });
@@ -242,6 +268,12 @@ function EditProfileModal({ profile, onClose, depts }: { profile: WorkflowProfil
             onChange={e => setForm(f => ({ ...f, defaultPriority: (e.target.value as TicketPriority) || null }))}
           />
         </div>
+        <Select
+          label="Calendário de SLA"
+          options={calendarOpts}
+          value={form.slaCalendarId ?? ''}
+          onChange={e => setForm(f => ({ ...f, slaCalendarId: e.target.value || null }))}
+        />
         <label className="flex items-center gap-2 text-sm text-muted-foreground">
           <input type="checkbox" checked={form.isActive} onChange={e => setForm(f => ({ ...f, isActive: e.target.checked }))} className="rounded bg-surface-light border-border" />
           Ativo
