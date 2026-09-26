@@ -624,6 +624,8 @@ export interface Ticket {
   templateId?: string | null;
   /** Snapshot do nome do template (sobrevive à exclusão do template). */
   templateName?: string | null;
+  /** Solicitante (quem abriu). Ausente = legado ou aberto pelo chat/agent. */
+  requesterUserId?: string | null;
 }
 
 export interface Department {
@@ -1763,11 +1765,15 @@ export interface CreateTicketRequest {
 }
 
 export interface UpdateTicketRequest {
-  title: string;
-  description: string;
-  priority: TicketPriority;
-  assignedToUserId: string | null;
-  category: string | null;
+  /** Opcionais: o backend aplica apenas os campos enviados (null = não alterar). */
+  title?: string;
+  description?: string;
+  priority?: TicketPriority;
+  assignedToUserId?: string | null;
+  category?: string | null;
+  /** Solicitante (quem abriu) e limpeza explícita do vínculo. */
+  requesterUserId?: string | null;
+  clearRequester?: boolean;
 }
 
 export interface CreateDepartmentRequest {

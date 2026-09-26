@@ -29,6 +29,7 @@ import { useTicketAttachmentSettings } from '@/hooks/useConfigurationApi';
 import { useSiteTicketAttachmentSettings, useClientTicketAttachmentSettings } from '@/hooks/useConfigurationApi';
 import { useWorkflowStates } from '@/hooks/useWorkflow';
 import { useIamUsers } from '@/hooks/useIdentity';
+import { useAgent } from '@/hooks/useAgents';
 import {
   useApproveTicketAutomationLink,
   useCreateTicketAutomationLink,
@@ -82,6 +83,7 @@ const ACTIVITY_LABELS: Record<string, string> = {
   KnowledgeLinked:      'Artigo vinculado',
   KnowledgeUnlinked:    'Artigo desvinculado',
   Rated:                'Avaliado',
+  RequesterChanged:     'Solicitante alterado',
 };
 
 type Tab = 'comments' | 'timeline' | 'attachments' | 'automation' | 'ai';
@@ -322,7 +324,11 @@ export default function TicketDetail() {
         {/* Sidebar */}
         <div className="space-y-4">
           {/* CSAT primeiro; o card só aparece depois do encerramento. */}
-          <TicketRatingCard ticket={t} />
+          <TicketRatingCard
+            ticket={t}
+            currentUserId={currentUserId}
+            requesterName={resolveUserDisplayName(iamUsersById, t.requesterUserId)}
+          />
           <TicketSummaryPanel
             ticketId={id!}
             category={t.category}
@@ -331,6 +337,9 @@ export default function TicketDetail() {
             assignedDisplayName={assignedDisplayName}
             assignedEmail={assignedEmail}
             assignedToUserId={t.assignedToUserId}
+            departmentId={t.departmentId}
+            requesterUserId={t.requesterUserId ?? null}
+            agentId={t.agentId}
             updatedAt={t.updatedAt}
             closedAt={t.closedAt}
             templateName={t.templateName}
@@ -1203,6 +1212,9 @@ function TicketSummaryPanel({
   assignedDisplayName,
   assignedEmail,
   assignedToUserId,
+  departmentId,
+  requesterUserId,
+  agentId,
   updatedAt,
   closedAt,
   templateName,
@@ -1214,10 +1226,39 @@ function TicketSummaryPanel({
   assignedDisplayName: string;
   assignedEmail: string | null;
   assignedToUserId: string | null;
+  departmentId: string | null;
+  requesterUserId: string | null;
+  agentId: string | null;
   updatedAt: string;
   closedAt: string | null;
   templateName?: string | null;
 }) {
+  const updateRequester = useUpdateTicket();
+  const iamUsers = useIamUsers();
+  const agentQuery = useAgent(agentId ?? undefined);
+
+  const agentHostname = agentQuery.data?.hostname ?? null;
+  const requesterOptions = useMemo(
+    () => [
+      { value: '', label: 'Não informado' },
+      ...(iamUsers.data ?? []).map((user) => ({
+        value: user.id,
+        label: user.fullName || user.login || user.email,
+      })),
+    ],
+    [iamUsers.data],
+  );
+
+  const changeRequester = (userId: string | null) => {
+    updateRequester.mutate(
+      { id: ticketId, data: { requesterUserId: userId, clearRequester: userId === null } },
+      {
+        onSuccess: () => toast.success(userId ? 'Solicitante atualizado' : 'Solicitante removido'),
+        onError: (error: unknown) =>
+          toast.error(error instanceof Error ? error.message : 'Erro ao atualizar o solicitante'),
+      },
+    );
+  };
   const sla = useSlaDetails(ticketId);
   const navigate = useNavigate();
 
@@ -1308,6 +1349,26 @@ function TicketSummaryPanel({
           <dd><Badge color={priorityColor}>{priorityLabel}</Badge></dd>
         </div>
         <div className="sm:col-span-2">
+          <dt className="text-muted">Solicitado por</dt>
+          <dd className="text-foreground">
+            <Select
+              aria-label="Solicitado por"
+              options={requesterOptions}
+              value={requesterUserId ?? ''}
+              disabled={updateRequester.isPending}
+              onChange={(e) => changeRequester(e.target.value || null)}
+            />
+            {!requesterUserId && (
+              <p className="mt-1 text-xs text-muted">
+                {agentHostname
+                  ? `Aberto pelo agent ${agentHostname} — informe o solicitante para restringir a avaliação.`
+                  : 'Não informado — informe o solicitante para restringir a avaliação.'}
+              </p>
+            )}
+          </dd>
+        </div>
+
+        <div className="sm:col-span-2">
           <dt className="text-muted">Responsável</dt>
           <dd className="text-foreground">
             <p className="break-words">{assignedDisplayName}</p>
@@ -1339,7 +1400,7 @@ function TicketSummaryPanel({
       </div>
 
       <div className="mt-4 border-t border-border pt-4">
-        <TicketFieldsSection ticketId={ticketId} />
+        <TicketFieldsSection ticketId={ticketId} departmentId={departmentId} />
       </div>
 
       <div className="mt-4 border-t border-border pt-4">
@@ -1586,7 +1647,7 @@ function EditTicketForm({ ticket, onDone }: { ticket: { id: string; title: strin
   const set = <K extends keyof UpdateTicketRequest>(k: K, v: UpdateTicketRequest[K]) =>
     setForm(f => ({ ...f, [k]: v }));
 
-  const valid = form.title.trim().length >= 3 && form.description.trim().length >= 3;
+  const valid = (form.title ?? '').trim().length >= 3 && (form.description ?? '').trim().length >= 3;
 
   const handleSubmit = () => {
     if (!valid) return;

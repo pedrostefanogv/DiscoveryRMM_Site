@@ -64,6 +64,30 @@ describe('TicketRelationsSection', () => {
     );
   });
 
+  it('colapsa a lista e mostra "Ver todos" quando passa de 3 vínculos', () => {
+    const base = relationsState.data[0];
+    relationsState.data = Array.from({ length: 5 }, (_, index) => ({
+      ...base,
+      id: `r${index}`,
+      otherTicketId: `t${index}`,
+      otherTicketTitle: `Chamado ${index}`,
+    }));
+
+    render(<TicketRelationsSection ticketId="t1" />);
+
+    expect(screen.getByText('Chamado 0')).toBeTruthy();
+    expect(screen.queryByText('Chamado 4')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: /Ver todos \(5\)/ }));
+    expect(screen.getByText('Chamado 4')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mostrar menos' }));
+    expect(screen.queryByText('Chamado 4')).toBeNull();
+
+    // Restaura a fixture para os demais testes.
+    relationsState.data = [base];
+  });
+
   it('explica como funciona', () => {
     render(<TicketRelationsSection ticketId="t1" />);
     expect(screen.getByText('Como funciona?')).toBeTruthy();

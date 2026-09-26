@@ -44,6 +44,28 @@ describe('TicketRatingCard', () => {
     expect(screen.getByRole('button', { name: /Salvar avaliação/ })).toBeTruthy();
   });
 
+  it('restringe o formulário ao solicitante quando ele está definido', () => {
+    const { rerender } = render(
+      <TicketRatingCard
+        ticket={ticket({ closedAt: '2026-02-01T10:00:00Z', requesterUserId: 'u9' })}
+        currentUserId="u1"
+        requesterName="Ana Souza"
+      />,
+    );
+
+    expect(screen.getByText(/Aguardando a avaliação de Ana Souza/)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Salvar avaliação/ })).toBeNull();
+
+    // O próprio solicitante vê o formulário.
+    rerender(
+      <TicketRatingCard
+        ticket={ticket({ closedAt: '2026-02-01T10:00:00Z', requesterUserId: 'u9' })}
+        currentUserId="u9"
+      />,
+    );
+    expect(screen.getByRole('button', { name: /Salvar avaliação/ })).toBeTruthy();
+  });
+
   it('encerrado e avaliado mostra o resultado (somente leitura)', () => {
     render(
       <TicketRatingCard

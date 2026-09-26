@@ -34,6 +34,9 @@ const RELATION_HELP: Record<TicketRelationKind, string> = {
 
 const shortId = (id: string | null | undefined) => (id ? id.slice(0, 8) : '—');
 
+/** Quantos vínculos aparecem antes do "Ver todos". */
+const VISIBLE_RELATIONS = 3;
+
 /**
  * Vínculos do chamado (duplicado, bloqueia, relacionado, pai/filho) dentro do
  * Resumo geral. Traz busca por chamados (título/descrição/resposta) e ajuda
@@ -45,6 +48,7 @@ export function TicketRelationsSection({ ticketId }: { ticketId: string }) {
   const remove = useDeleteTicketRelation();
 
   const [relationType, setRelationType] = useState<TicketRelationKind>('RelatesTo');
+  const [showAll, setShowAll] = useState(false);
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<{ id: string; title: string } | null>(null);
   const deferredSearch = useDeferredValue(search);
@@ -91,9 +95,12 @@ export function TicketRelationsSection({ ticketId }: { ticketId: string }) {
       </div>
 
       {relations.isLoading && <Loading />}
+      {relations.isError && !relations.isLoading && (
+        <p className="text-sm text-danger">Erro ao carregar os vínculos. Tente novamente.</p>
+      )}
       {!relations.isLoading && items.length > 0 && (
-        <ul className="space-y-2">
-          {items.map((rel) => {
+        <ul className={`space-y-2 ${showAll && items.length > VISIBLE_RELATIONS ? 'max-h-64 overflow-y-auto pr-1' : ''}`}>
+          {(showAll ? items : items.slice(0, VISIBLE_RELATIONS)).map((rel) => {
             const otherId = rel.otherTicketId ?? (rel.sourceTicketId === ticketId ? rel.targetTicketId : rel.sourceTicketId);
             const title = rel.otherTicketTitle?.trim();
 
@@ -131,6 +138,18 @@ export function TicketRelationsSection({ ticketId }: { ticketId: string }) {
             );
           })}
         </ul>
+      )}
+
+      {items.length > VISIBLE_RELATIONS && (
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          className="w-full"
+          onClick={() => setShowAll((current) => !current)}
+        >
+          {showAll ? 'Mostrar menos' : `Ver todos (${items.length})`}
+        </Button>
       )}
 
       <div className="space-y-3 rounded-lg border border-border bg-surface-light p-3">

@@ -9,7 +9,11 @@ import {
   parseCustomFieldValue,
 } from '@/api';
 import type { CustomFieldDefinition } from '@/api';
+import { TicketSchemaFieldInput } from '@/components/tickets/TicketSchemaFieldInput';
+import { draftFromCustomFieldValue } from '@/utils/ticketTemplateDefaults';
+import { parseCustomFieldDraft, validateTicketSchemaField } from '@/utils/ticketCustomFields';
 import { useCustomFieldDefinitions } from '@/hooks/useCustomFields';
+import { useDepartmentTicketSchema } from '@/hooks/useDepartmentCustomFields';
 import {
   useTicketCustomFields,
   useUpsertTicketCustomFieldValue,
@@ -26,14 +30,123 @@ import toast from 'react-hot-toast';
  */
 export function TicketFieldsSection({
   ticketId,
+  departmentId,
 }: {
   ticketId: string;
+  departmentId?: string | null;
 }) {
   const valuesQuery = useTicketCustomFields(ticketId);
+  const schemaQuery = useDepartmentTicketSchema(departmentId ?? null, Boolean(departmentId));
   const values = Array.isArray(valuesQuery.data) ? valuesQuery.data : [];
-  const departmentValues = values.filter(
-    (value) => value.scopeType === CustomFieldScopeType.Department,
+
+  const upsertValue = useUpsertTicketCustomFieldValue();
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [savingId, setSavingId] = useState<string | null>(null);
+
+  // Trocar de chamado/departamento descarta rascunhos: sem isso, a mesma
+  // definição em outro chamado mostraria a edição não salva do anterior.
+  useEffect(() => {
+    setDrafts({});
+  }, [ticketId, departmentId]);
+
+  const valueByDefinitionId = useMemo(
+    () => new Map(values.map((value) => [value.definitionId, value])),
+    [values],
   );
+
+  // O schema do departamento dá rótulo/tipo/obrigatoriedade e a ordem canônica;
+  // os valores vêm do próprio chamado. Sem schema (chamado antigo/sem
+  // departamento), cai para o que a API devolveu resolvido (somente leitura).
+  const rows = useMemo(() => {
+    const schemaFields = (schemaQuery.data ?? []).filter((field) => field.isActive);
+    if (schemaFields.length > 0) {
+      return schemaFields.map((field) => ({
+        id: field.definitionId,
+        label: field.label,
+        dataType: field.dataType as CustomFieldDataType | null,
+        isRequired: field.isRequired,
+        value: valueByDefinitionId.get(field.definitionId)?.value ?? null,
+        field,
+      }));
+    }
+
+    return values
+      .filter((value) => value.scopeType === CustomFieldScopeType.Department)
+      .map((value) => ({
+        id: value.definitionId,
+        label: value.label ?? value.name ?? value.definitionId,
+        dataType: null,
+        isRequired: false,
+        value: value.value,
+        field: null,
+      }));
+  }, [schemaQuery.data, valueByDefinitionId, values]);
+
+  // Valor salvo no formato de rascunho do input (o usuário edita em cima).
+  const savedDrafts = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const row of rows) {
+      map[row.id] = row.field
+        ? draftFromCustomFieldValue(row.field.dataType, row.value)
+        : formatCustomFieldValue(row.value);
+    }
+    return map;
+  }, [rows]);
+
+  const draftOf = (row: (typeof rows)[number]) => drafts[row.id] ?? savedDrafts[row.id] ?? '';
+  const isDirty = (row: (typeof rows)[number]) =>
+    drafts[row.id] !== undefined && drafts[row.id] !== (savedDrafts[row.id] ?? '');
+
+  const saveRow = async (row: (typeof rows)[number]) => {
+    if (!row.field) return;
+    const draft = draftOf(row);
+    const fieldError = validateTicketSchemaField(row.field, draft).error;
+    if (fieldError) {
+      toast.error(fieldError);
+      return;
+    }
+
+    setSavingId(row.id);
+    try {
+      await upsertValue.mutateAsync({
+        ticketId,
+        definitionId: row.id,
+        value: parseCustomFieldDraft(row.field.dataType, draft),
+      });
+      setDrafts((prev) => {
+        const next = { ...prev };
+        delete next[row.id];
+        return next;
+      });
+      toast.success(`Campo ${row.label} atualizado.`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Não foi possível salvar o campo.');
+    } finally {
+      setSavingId(null);
+    }
+  };
+
+  const isLoading = valuesQuery.isLoading || schemaQuery.isLoading;
+
+  /** Booleanos e datas ficam mais legíveis do que o JSON cru. */
+  const formatValue = (dataType: CustomFieldDataType | null, value: unknown): string => {
+    if (dataType === CustomFieldDataType.Boolean) {
+      return value === true || String(value).toLowerCase() === 'true' ? 'Sim' : 'Não';
+    }
+    if (
+      (dataType === CustomFieldDataType.Date || dataType === CustomFieldDataType.DateTime) &&
+      typeof value === 'string' &&
+      value.trim()
+    ) {
+      const parsed = new Date(value);
+      if (!Number.isNaN(parsed.getTime())) {
+        return dataType === CustomFieldDataType.Date
+          ? parsed.toLocaleDateString('pt-BR')
+          : parsed.toLocaleString('pt-BR');
+      }
+    }
+    return formatCustomFieldValue(value);
+  };
 
   return (
     <div className="space-y-3">
@@ -42,20 +155,69 @@ export function TicketFieldsSection({
           Campos do departamento
         </p>
         <p className="text-xs text-muted">Definidos para o departamento deste chamado.</p>
-        {valuesQuery.isLoading ? (
+        {isLoading ? (
           <Loading />
-        ) : departmentValues.length === 0 ? (
-          <p className="mt-2 text-sm text-muted">Nenhum campo do departamento informado.</p>
+        ) : rows.length === 0 ? (
+          <p className="mt-2 text-sm text-muted">
+            {departmentId
+              ? 'Este departamento não possui campos configurados.'
+              : 'Chamado sem departamento — não há campos do departamento.'}
+          </p>
         ) : (
           <ul className="mt-2 divide-y divide-white/5 rounded-lg border border-border">
-            {departmentValues.map((value) => (
-              <li key={value.definitionId} className="flex items-start justify-between gap-3 px-3 py-2 text-sm">
-                <span className="text-muted-foreground">{value.label ?? value.name ?? value.definitionId}</span>
-                <span className="min-w-0 break-words text-right text-foreground">
-                  {formatCustomFieldValue(value.value)}
-                </span>
-              </li>
-            ))}
+            {rows.map((row) => {
+              const text = formatValue(row.dataType, row.value);
+              const missing = !text.trim();
+
+              // Sem schema (chamado antigo) não há como editar com validação.
+              if (!row.field) {
+                return (
+                  <li key={row.id} className="flex items-start justify-between gap-3 px-3 py-2 text-sm">
+                    <span className="text-muted-foreground">{row.label}</span>
+                    <span className="min-w-0 break-words text-right text-foreground">
+                      {missing ? <span className="text-xs text-muted italic">Não informado</span> : text}
+                    </span>
+                  </li>
+                );
+              }
+
+              const draft = draftOf(row);
+              const fieldError = draft.trim() ? validateTicketSchemaField(row.field, draft).error : undefined;
+              const dirty = isDirty(row);
+
+              return (
+                <li key={row.id} className="px-3 py-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <span className="flex min-w-0 flex-wrap items-center gap-1.5 text-sm text-foreground">
+                      {row.label}
+                      {row.dataType !== null && (
+                        <Badge color="slate">{getCustomFieldDataTypeLabel(row.dataType)}</Badge>
+                      )}
+                      {row.isRequired && <Badge color="accent">Obrigatório</Badge>}
+                      {!dirty && missing && <span className="text-xs text-muted italic">Não informado</span>}
+                    </span>
+                    {dirty && (
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => void saveRow(row)}
+                        loading={savingId === row.id}
+                      >
+                        Salvar
+                      </Button>
+                    )}
+                  </div>
+                  <div className="mt-2">
+                    <TicketSchemaFieldInput
+                      field={row.field}
+                      value={draft}
+                      error={fieldError}
+                      onChange={(value) => setDrafts((prev) => ({ ...prev, [row.id]: value }))}
+                    />
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>
@@ -208,6 +370,11 @@ function AdditionalTicketFields({ ticketId }: { ticketId: string }) {
     }
   };
 
+  // Grupo opcional: sem campos de escopo do chamado ele não aparece no Resumo.
+  if (!definitionsQuery.isLoading && !valuesQuery.isLoading && definitions.length === 0) {
+    return null;
+  }
+
   return (
     <div className="space-y-3">
       <p className="text-xs font-medium uppercase tracking-wider text-muted">
@@ -223,8 +390,6 @@ function AdditionalTicketFields({ ticketId }: { ticketId: string }) {
           <p className="text-sm text-danger">
             Erro ao carregar os campos adicionais do chamado.
           </p>
-        ) : definitions.length === 0 ? (
-          <p className="text-sm text-muted">Nenhum campo adicional cadastrado.</p>
         ) : (
           definitions.map((definition) => {
             const valueItem = valuesByDefinitionId.get(definition.id);

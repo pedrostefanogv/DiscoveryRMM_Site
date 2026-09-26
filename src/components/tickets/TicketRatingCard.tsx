@@ -10,7 +10,17 @@ import toast from 'react-hot-toast';
  * resultado quando já avaliado e o formulário quando ainda não há nota
  * (normalmente quem avalia é quem abriu o chamado, pelo chat do agent).
  */
-export function TicketRatingCard({ ticket }: { ticket: Ticket }) {
+export function TicketRatingCard({
+  ticket,
+  currentUserId = null,
+  requesterName = null,
+}: {
+  ticket: Ticket;
+  /** Usuário logado na console (para restringir a avaliação ao solicitante). */
+  currentUserId?: string | null;
+  /** Nome do solicitante, para a mensagem de espera. */
+  requesterName?: string | null;
+}) {
   const rate = useRateTicket();
   const [value, setValue] = useState(ticket.rating ?? 0);
   const [feedback, setFeedback] = useState(ticket.ratingFeedback ?? '');
@@ -24,6 +34,10 @@ export function TicketRatingCard({ ticket }: { ticket: Ticket }) {
   if (!ticket.closedAt) return null;
 
   const rated = Boolean(ticket.rating);
+  // Sem solicitante registrado (legado/chat) a avaliação segue liberada; com
+  // solicitante, só ele pode avaliar.
+  const requesterId = ticket.requesterUserId ?? null;
+  const canRate = !requesterId || requesterId === currentUserId;
   const stars = (count: number) => (
     <div className="flex items-center gap-1" role={rated ? 'img' : 'radiogroup'} aria-label="Nota da avaliação">
       {[1, 2, 3, 4, 5].map((star) => (
@@ -52,7 +66,11 @@ export function TicketRatingCard({ ticket }: { ticket: Ticket }) {
         subtitle={rated ? 'Resultado registrado após o encerramento' : 'Chamado encerrado — avalie o atendimento'}
       />
 
-      {rated ? (
+      {!rated && !canRate ? (
+        <p className="text-sm text-muted">
+          Aguardando a avaliação de {requesterName?.trim() || 'quem abriu o chamado'}.
+        </p>
+      ) : rated ? (
         <div className="space-y-3">
           {stars(ticket.rating ?? 0)}
           <p className="text-sm text-foreground">
