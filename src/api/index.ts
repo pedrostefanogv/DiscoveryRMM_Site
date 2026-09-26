@@ -126,6 +126,11 @@ export {
   parseCustomFieldValue,
 } from "./custom-fields";
 export { departmentCustomFieldsApi } from "./department-custom-fields";
+export { customFieldTemplatesApi, normalizeCustomFieldTemplate } from "./custom-field-templates";
+export type {
+  CustomFieldTemplateDto,
+  UpsertCustomFieldTemplateRequest,
+} from "./custom-field-templates";
 export type {
   LoginRequest,
   LoginResponse,

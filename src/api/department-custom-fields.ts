@@ -50,6 +50,10 @@ function normalizeDepartmentCustomField(
       raw.validationRegex === null || raw.validationRegex === undefined
         ? null
         : String(raw.validationRegex),
+    inputMask:
+      raw.inputMask === null || raw.inputMask === undefined
+        ? null
+        : String(raw.inputMask ?? raw.InputMask) || null,
     minLength:
       raw.minLength === null || raw.minLength === undefined
         ? null
@@ -94,6 +98,10 @@ function normalizeTicketSchemaField(
       raw.validationRegex === null || raw.validationRegex === undefined
         ? null
         : String(raw.validationRegex),
+    inputMask:
+      raw.inputMask === null || raw.inputMask === undefined
+        ? null
+        : String(raw.inputMask ?? raw.InputMask) || null,
     minLength:
       raw.minLength === null || raw.minLength === undefined
         ? null
@@ -142,7 +150,7 @@ export const departmentCustomFieldsApi = {
     data: UpdateDepartmentCustomFieldRequest,
   ): Promise<DepartmentCustomFieldDefinition> {
     const raw = await api.put<Record<string, unknown>>(
-      `/api/v1/departments/${departmentId}/custom-fields/${fieldId}`,
+      `/api/v1/departments/${departmentId}/custom-fields/${fieldId}/definition`,
       data,
     );
     return normalizeDepartmentCustomField(raw);

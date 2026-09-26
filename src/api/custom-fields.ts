@@ -1,4 +1,4 @@
-﻿import { api } from "./client";
+import { api } from "./client";
 
 export enum CustomFieldScopeType {
   Server = 0,
@@ -58,6 +58,7 @@ export interface DepartmentCustomFieldDefinition {
   departmentId: string;
   optionsJson: string | null;
   validationRegex: string | null;
+  inputMask: string | null;
   minLength: number | null;
   maxLength: number | null;
   minValue: number | null;
@@ -79,6 +80,7 @@ export interface CreateDepartmentCustomFieldRequest {
   isActive?: boolean;
   options?: string[];
   validationRegex?: string | null;
+  inputMask?: string | null;
   minLength?: number | null;
   maxLength?: number | null;
   minValue?: number | null;
@@ -95,6 +97,7 @@ export interface UpdateDepartmentCustomFieldRequest {
   isActive?: boolean;
   options?: string[];
   validationRegex?: string | null;
+  inputMask?: string | null;
   minLength?: number | null;
   maxLength?: number | null;
   minValue?: number | null;
@@ -112,6 +115,7 @@ export interface TicketSchemaField {
   isActive: boolean;
   options: string[];
   validationRegex: string | null;
+  inputMask: string | null;
   minLength: number | null;
   maxLength: number | null;
   minValue: number | null;

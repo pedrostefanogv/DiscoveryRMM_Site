@@ -898,11 +898,9 @@ export default function RemoteSession() {
   return (
     <div className="flex flex-col h-screen bg-background text-foreground">
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-2 bg-surface border-b border-border">
-        <div className="flex items-center gap-3 min-w-0">
-          <h1 className="text-sm font-semibold flex items-center gap-2 whitespace-nowrap">
-            Acesso Remoto — {activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}
-          </h1>
+      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-4 px-4 py-2 bg-surface border-b border-border">
+        <div aria-hidden className="min-w-0" />
+        <div className="flex flex-wrap items-center justify-center gap-3 min-w-0">
           {agentIdentity && (
             <span
               className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-surface-hover text-foreground/80 text-xs font-medium truncate max-w-[40vw]"
@@ -938,7 +936,7 @@ export default function RemoteSession() {
             );
           })}
         </div>
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <div className="flex items-center justify-end gap-2 text-xs text-muted-foreground">
           <Button variant="danger" size="sm" onClick={handleStop} title="Encerra todas as sessões ativas e fecha esta janela">Fechar</Button>
           <ThemeToggle />
         </div>

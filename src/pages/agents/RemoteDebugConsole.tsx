@@ -992,29 +992,34 @@ export default function RemoteDebugConsole() {
       <header className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-border bg-surface/80 px-3 py-2 text-xs">
         <Badge color={statusColor}>{statusLabel}</Badge>
 
-        {/* Hierarquia do alvo: cliente › site › agente */}
-        <div className="flex min-w-0 items-center gap-1.5">
+        {/* Identidade do alvo — MESMO formato da tela de acesso remoto:
+            🖥 cliente → site → agente (agente em destaque). */}
+        <span
+          className="inline-flex min-w-0 items-center gap-1 rounded bg-surface-hover px-2 py-0.5 text-xs font-medium text-foreground/80"
+          title={`${agentLabel} — ${siteLabel}`}
+        >
+          <span className="text-muted">🖥</span>
           <span
-            className="max-w-[14rem] truncate font-medium text-foreground"
+            className="max-w-[10rem] truncate text-muted"
             title={clientId ? `Cliente: ${target?.clientName ?? ""} (${clientId})` : "Cliente (não identificado)"}
           >
             {clientLabel}
           </span>
-          <span className="text-muted">›</span>
+          <span className="text-muted-foreground">→</span>
           <span
-            className="max-w-[14rem] truncate text-foreground/90"
+            className="max-w-[10rem] truncate text-muted"
             title={siteId ? `Site: ${target?.siteName ?? ""} (${siteId})` : "Site (não identificado)"}
           >
             {siteLabel}
           </span>
-          <span className="text-muted">›</span>
-          <span
-            className="max-w-[16rem] truncate font-mono text-foreground/90"
+          <span className="text-muted-foreground">→</span>
+          <strong
+            className="max-w-[12rem] truncate text-foreground"
             title={`Agente: ${agentLabel} (${resolvedAgentId})`}
           >
             {agentLabel}
-          </span>
-        </div>
+          </strong>
+        </span>
 
         <span className="text-muted">·</span>
         <span className="text-muted">{totalLines} linhas</span>

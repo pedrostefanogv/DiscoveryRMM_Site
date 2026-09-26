@@ -39,7 +39,7 @@ import {
   useTicketSavedViews,
   useUpdateTicketSavedView,
 } from '@/hooks/useTicketSavedViews';
-import { Button, Card, ConfirmDialog, DataTable, Badge, Loading, Modal, Input, Select, TextArea, Tooltip } from '@/components/ui';
+import { Button, Card, ConfirmDialog, DataTable, Badge, Loading, Modal, Input, Select, Tooltip } from '@/components/ui';
 import type {
   CreateTicketRequest,
   Ticket,
@@ -48,12 +48,12 @@ import type {
   TicketSavedViewFilter,
   UserDto,
 } from '@/api';
-import { CustomFieldDataType } from '@/api';
-import type { TicketSchemaField } from '@/api';
 import type { Column } from '@/components/ui';
 import toast from 'react-hot-toast';
 import { TICKET_PRIORITY_META, getTicketPriorityMeta } from '@/utils/labels';
 import { buildTicketCustomFieldValues } from '@/utils/ticketCustomFields';
+import { templateDefaultsToDrafts } from '@/utils/ticketTemplateDefaults';
+import { TicketSchemaFieldInput } from '@/components/tickets/TicketSchemaFieldInput';
 
 const PRIORITY_OPTIONS = [
   { value: '', label: 'Todas' },
@@ -1356,6 +1356,19 @@ function CreateTicketModal({ open, onClose }: { open: boolean; onClose: () => vo
     [schemaFields, customFieldDrafts],
   );
 
+  // Defaults do template aguardando o schema do departamento carregar.
+  const pendingTemplateDefaultsRef = useRef<string | null>(null);
+  useEffect(() => {
+    const pending = pendingTemplateDefaultsRef.current;
+    if (!pending || schemaFields.length === 0) return;
+    pendingTemplateDefaultsRef.current = null;
+    const drafts = templateDefaultsToDrafts(pending, schemaFields);
+    if (Object.keys(drafts).length > 0) {
+      // Valores já digitados pelo usuário têm precedência sobre os defaults.
+      setCustomFieldDrafts((prev) => ({ ...drafts, ...prev }));
+    }
+  }, [schemaFields]);
+
   const templatesQuery = useTicketTemplates({ clientId: selectedClient || undefined, includeGlobal: true });
   const [form, setForm] = useState<CreateTicketRequest>({
     clientId: '',
@@ -1374,13 +1387,29 @@ function CreateTicketModal({ open, onClose }: { open: boolean; onClose: () => vo
     if (!id) return;
     const template = (templatesQuery.data ?? []).find((t) => t.id === id);
     if (!template) return;
+
     setForm((current) => ({
       ...current,
       title: template.title || current.title,
       description: template.description || current.description,
       priority: (template.priority as TicketPriority) || current.priority,
       category: template.category ?? current.category,
+      // Departamento do template quando o usuário ainda não escolheu um.
+      departmentId: current.departmentId ?? template.departmentId ?? null,
     }));
+
+    if (template.departmentId && !selectedDept) {
+      setSelectedDept(template.departmentId);
+      setForm((current) => ({ ...current, workflowProfileId: null }));
+      // Schema ainda vai carregar: aplica os defaults quando ele chegar.
+      pendingTemplateDefaultsRef.current = template.customFieldDefaultsJson;
+      return;
+    }
+
+    const drafts = templateDefaultsToDrafts(template.customFieldDefaultsJson, schemaFields);
+    if (Object.keys(drafts).length > 0) {
+      setCustomFieldDrafts((prev) => ({ ...drafts, ...prev }));
+    }
   };
 
   const set = <K extends keyof CreateTicketRequest>(key: K, value: CreateTicketRequest[K]) =>
@@ -1543,64 +1572,4 @@ function CreateTicketModal({ open, onClose }: { open: boolean; onClose: () => vo
   );
 }
 
-/** Renders a single dynamic schema field in the ticket creation form */
-function TicketSchemaFieldInput({
-  field,
-  value,
-  onChange,
-}: {
-  field: TicketSchemaField;
-  value: string;
-  onChange: (value: string) => void;
-}) {
-  const label = `${field.label}${field.isRequired ? ' *' : ''}`;
-  const hint = field.validationRegex ? `Formato: ${field.validationRegex}` : undefined;
 
-  switch (field.dataType) {
-    case CustomFieldDataType.Boolean:
-      return (
-        <Select
-          label={label}
-          value={value}
-          options={[
-            { value: '', label: 'Selecione...' },
-            { value: 'true', label: 'Sim' },
-            { value: 'false', label: 'Não' },
-          ]}
-          onChange={(e) => onChange(e.target.value)}
-        />
-      );
-    case CustomFieldDataType.Dropdown:
-      return (
-        <Select
-          label={label}
-          value={value}
-          options={[
-            { value: '', label: 'Selecione...' },
-            ...field.options.map((opt) => ({ value: opt, label: opt })),
-          ]}
-          onChange={(e) => onChange(e.target.value)}
-        />
-      );
-    case CustomFieldDataType.ListBox:
-      return (
-        <TextArea
-          label={label}
-          rows={2}
-          value={value}
-          hint={field.options.length > 0 ? `Opções: ${field.options.join(', ')}` : 'Valores separados por vírgula'}
-          onChange={(e) => onChange(e.target.value)}
-        />
-      );
-    case CustomFieldDataType.Integer:
-      return <Input label={label} type="number" step="1" value={value} onChange={(e) => onChange(e.target.value)} hint={hint} />;
-    case CustomFieldDataType.Decimal:
-      return <Input label={label} type="number" step="any" value={value} onChange={(e) => onChange(e.target.value)} hint={hint} />;
-    case CustomFieldDataType.Date:
-      return <Input label={label} type="date" value={value} onChange={(e) => onChange(e.target.value)} />;
-    case CustomFieldDataType.DateTime:
-      return <Input label={label} type="datetime-local" value={value} onChange={(e) => onChange(e.target.value)} />;
-    default:
-      return <Input label={label} value={value} onChange={(e) => onChange(e.target.value)} hint={hint} placeholder={field.description ?? undefined} />;
-  }
-}

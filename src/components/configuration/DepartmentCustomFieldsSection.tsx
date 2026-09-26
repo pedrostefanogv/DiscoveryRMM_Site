@@ -14,6 +14,7 @@ import {
 import {
   CustomFieldDataType,
   getCustomFieldDataTypeLabel,
+  type CustomFieldTemplateDto,
   type DepartmentCustomFieldDefinition,
   type CreateDepartmentCustomFieldRequest,
 } from "@/api";
@@ -23,6 +24,8 @@ import {
   useUpdateDepartmentCustomField,
   useDeleteDepartmentCustomField,
 } from "@/hooks/useDepartmentCustomFields";
+import { useCustomFieldTemplates } from "@/hooks/useCustomFieldTemplates";
+import { applyFieldMask, fieldMaskPlaceholder } from "@/utils/fieldMask";
 
 // ── Helpers ──────────────────────────────────────────────
 
@@ -163,6 +166,20 @@ function parseRegexInput(input: string): { regex: RegExp | null; error: string |
   }
 }
 
+// ── Mask Preview ────────────────────────────────────────
+
+function MaskPreview({ mask }: { mask: string }) {
+  const [value, setValue] = useState("");
+  return (
+    <input
+      className="w-full rounded-lg border border-border bg-background/40 px-3 py-2 text-sm text-foreground placeholder-muted focus:border-primary focus:outline-none"
+      placeholder={fieldMaskPlaceholder(mask)}
+      value={value}
+      onChange={(e) => setValue(applyFieldMask(mask, e.target.value))}
+    />
+  );
+}
+
 // ── Main Component ──────────────────────────────────────
 
 export function DepartmentCustomFieldsSection({
@@ -271,6 +288,11 @@ function FieldRow({
                 Regex: <code>{field.validationRegex}</code>
               </p>
             )}
+            {field.inputMask && (
+              <p className="mt-0.5 text-[11px] text-muted">
+                Máscara: <code>{field.inputMask}</code> ({fieldMaskPlaceholder(field.inputMask)})
+              </p>
+            )}
           </div>
           <div className="flex items-center gap-1 shrink-0">
             <button
@@ -336,6 +358,7 @@ const EMPTY_FORM: CreateDepartmentCustomFieldRequest = {
   isActive: true,
   options: [],
   validationRegex: null,
+  inputMask: null,
   minLength: null,
   maxLength: null,
   minValue: null,
@@ -370,6 +393,7 @@ function FieldFormModal({
       isActive: field.isActive,
       options,
       validationRegex: field.validationRegex,
+      inputMask: field.inputMask,
       minLength: field.minLength,
       maxLength: field.maxLength,
       minValue: field.minValue,
@@ -381,6 +405,30 @@ function FieldFormModal({
     if (!field) return "";
     return formatOptionsForInput(parseOptionsFromJson(field.optionsJson));
   });
+
+  // Global + modelos do próprio departamento (o handler filtra por escopo).
+  const templatesQuery = useCustomFieldTemplates({ departmentId, includeGlobal: true });
+  const [selectedTemplateId, setSelectedTemplateId] = useState("");
+
+  const applyFieldTemplate = (template: CustomFieldTemplateDto) => {
+    setForm((current) => ({
+      ...current,
+      dataType: template.dataType,
+      isRequired: template.defaultIsRequired,
+      validationRegex: template.validationRegex,
+      inputMask: template.inputMask,
+      minLength: template.minLength,
+      maxLength: template.maxLength,
+      minValue: template.minValue,
+      maxValue: template.maxValue,
+    }));
+    setOptionsText(formatOptionsForInput(template.options));
+    setSelectedRegexPreset(
+      template.validationRegex
+        ? REGEX_ASSISTANT_PRESETS.find((item) => item.regex === template.validationRegex)?.value ?? ""
+        : "",
+    );
+  };
 
   const [selectedRegexPreset, setSelectedRegexPreset] = useState(() => {
     if (!field?.validationRegex) return "";
@@ -507,6 +555,7 @@ function FieldFormModal({
       description: form.description?.trim() || null,
       options: needsOptions ? parseOptionsFromInput(optionsText) : [],
       validationRegex: form.validationRegex?.trim() || null,
+      inputMask: form.inputMask?.trim() || null,
     };
 
     const parsedRegex = parseRegexInput(payload.validationRegex ?? "");
@@ -550,6 +599,43 @@ function FieldFormModal({
           <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted">
             Informações Básicas
           </p>
+
+          {/* Modelos pré-configurados: preenchem tipo/máscara/validador. */}
+          <div className="mb-3 rounded-lg border border-border bg-background/30 p-3">
+            <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
+              <Select
+                label="Modelo de campo"
+                value={selectedTemplateId}
+                options={[
+                  { value: "", label: "Selecionar modelo..." },
+                  ...(templatesQuery.data ?? []).map((template) => ({
+                    value: template.id,
+                    label: template.isBuiltIn ? template.label : `${template.label} (personalizado)`,
+                  })),
+                ]}
+                onChange={(e) => setSelectedTemplateId(e.target.value)}
+              />
+              <div className="flex items-end">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  disabled={!selectedTemplateId}
+                  onClick={() => {
+                    const template = (templatesQuery.data ?? []).find(
+                      (item) => item.id === selectedTemplateId,
+                    );
+                    if (template) applyFieldTemplate(template);
+                  }}
+                >
+                  Aplicar modelo
+                </Button>
+              </div>
+            </div>
+            <p className="mt-2 text-xs text-muted">
+              O modelo preenche tipo, máscara, validador e limites — tudo continua editável abaixo.
+            </p>
+          </div>
+
           <div className="grid grid-cols-2 gap-3">
             <Input
               label="Nome do Campo *"
@@ -586,6 +672,29 @@ function FieldFormModal({
               }))
             }
           />
+
+          <Input
+            label="Máscara de entrada"
+            value={form.inputMask ?? ""}
+            onChange={(e) =>
+              setForm((f) => ({ ...f, inputMask: e.target.value || null }))
+            }
+            placeholder="ex: 999.999.999-99"
+            hint={
+              form.inputMask
+                ? `Exemplo: ${fieldMaskPlaceholder(form.inputMask)} (9=dígito, A=letra, *=alfanumérico)`
+                : "Opcional. 9=dígito, A=letra, *=alfanumérico; demais caracteres são literais."
+            }
+          />
+
+          {form.inputMask && (
+            <div className="mb-3 rounded-lg border border-border bg-surface-light p-3">
+              <p className="mb-2 text-xs font-medium text-muted">Prévia da máscara</p>
+              <div className="flex items-center gap-2">
+                <MaskPreview mask={form.inputMask} />
+              </div>
+            </div>
+          )}
 
           {needsOptions && (
             <TextArea

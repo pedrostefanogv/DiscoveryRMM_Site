@@ -255,6 +255,19 @@ export default function TicketDetail() {
             <p className="text-sm text-muted-foreground whitespace-pre-wrap">{t.description}</p>
           </Card>
 
+          {/* Snapshot do formulário/template enviado na abertura (somente leitura) */}
+          {t.submissionSnapshotMarkdown && (
+            <Card>
+              <CardHeader
+                title="Formulário enviado"
+                subtitle="Registro somente leitura da abertura do chamado"
+              />
+              <div className="text-sm">
+                <MarkdownViewer source={t.submissionSnapshotMarkdown} />
+              </div>
+            </Card>
+          )}
+
           {/* Tabs: Comments / Timeline */}
           <Card padding={false}>
             <div className="flex border-b border-border">

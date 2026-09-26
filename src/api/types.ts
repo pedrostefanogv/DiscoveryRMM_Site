@@ -618,6 +618,8 @@ export interface Ticket {
   ratingFeedback?: string | null;
   ratedAt?: string | null;
   ratedBy?: string | null;
+  /** Snapshot markdown (somente leitura) do formulário/template enviado na abertura. */
+  submissionSnapshotMarkdown?: string | null;
 }
 
 export interface Department {
