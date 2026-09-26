@@ -1,17 +1,26 @@
-import { useCallback, useDeferredValue, useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import { useCallback, useDeferredValue, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   AlertTriangle,
   BarChart3,
   Bookmark,
+  Building2,
+  CalendarDays,
   ChevronDown,
   ChevronUp,
+  CircleDot,
+  CircleUserRound,
+  Clock,
   Filter,
+  Monitor,
   Pencil,
   Plus,
   Save,
+  Tag,
   Ticket as TicketIcon,
   Trash2,
+  UserRound,
+  Users,
 } from 'lucide-react';
 import { useAuth } from '@/auth/AuthContext';
 import { getUserIdFromJwt } from '@/auth/jwt';
@@ -235,6 +244,51 @@ function resolveUserDisplayName(usersById: Map<string, UserDto>, userId: string 
   return user.fullName || user.login || user.email || user.id;
 }
 
+function formatRelativeTime(value: string | null | undefined) {
+  if (!value) return 'agora';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'agora';
+  const diffMinutes = Math.floor((Date.now() - date.getTime()) / 60000);
+  if (diffMinutes < 1) return 'agora';
+  if (diffMinutes < 60) return `há ${diffMinutes} min`;
+  const diffHours = Math.floor(diffMinutes / 60);
+  if (diffHours < 24) return `há ${diffHours} h`;
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffDays < 30) return `há ${diffDays} d`;
+  return date.toLocaleDateString('pt-BR');
+}
+
+function TicketHoverInfo({
+  icon,
+  label,
+  value,
+  dotColor,
+}: {
+  icon: ReactNode;
+  label: string;
+  value: ReactNode;
+  dotColor?: string | null;
+}) {
+  return (
+    <div className="flex items-start gap-2 rounded-lg border border-border bg-surface-light px-3 py-2">
+      <span className="mt-0.5 shrink-0 text-muted">{icon}</span>
+      <div className="min-w-0">
+        <p className="text-[10px] uppercase tracking-wide text-muted">{label}</p>
+        <p className="mt-0.5 flex items-center gap-1.5 text-sm text-foreground">
+          {dotColor && (
+            <span
+              className="h-2 w-2 shrink-0 rounded-full"
+              style={{ backgroundColor: dotColor }}
+              aria-hidden="true"
+            />
+          )}
+          <span className="truncate">{value}</span>
+        </p>
+      </div>
+    </div>
+  );
+}
+
 function KpiTile({
   label,
   value,
@@ -426,10 +480,10 @@ export default function TicketList() {
   }, [activeSavedViewId]);
 
   useEffect(() => {
-    if (filterClient || filterState) {
+    if (filterClient) {
       setAdvancedFiltersExpanded(true);
     }
-  }, [filterClient, filterState]);
+  }, [filterClient]);
 
   useEffect(() => {
     if (!hoverPreviewTicketId) return;
@@ -486,7 +540,6 @@ export default function TicketList() {
 
   const advancedFiltersActiveCount =
     Number(Boolean(filterClient)) +
-    Number(Boolean(filterState)) +
     Number(Boolean(filterTemplate)) +
     // Filtro de resposta conta uma vez, com ou sem pergunta escolhida.
     Number(Boolean(filterAnswerKey || filterAnswerValue.trim()));
@@ -602,6 +655,9 @@ export default function TicketList() {
     const isPreviewTarget = hoverPreviewTicketId === ticket.id;
     const previewTicket = isPreviewTarget && hoverPreviewTicket ? hoverPreviewTicket : ticket;
     const assigneeLabel = resolveUserDisplayName(iamUsersById, previewTicket.assignedToUserId);
+    const requesterLabel = previewTicket.requesterUserId
+      ? resolveUserDisplayName(iamUsersById, previewTicket.requesterUserId)
+      : 'Não informado';
     const watcherItems = isPreviewTarget ? (hoverPreviewWatchersQuery.data ?? []) : [];
     const watcherNames = watcherItems.map((watcher) => resolveUserDisplayName(iamUsersById, watcher.userId));
     const watcherSummary = !isPreviewTarget || hoverPreviewWatchersQuery.isLoading
@@ -618,42 +674,82 @@ export default function TicketList() {
           ? 'Carregando máquina...'
           : hoverPreviewAgentQuery.data?.displayName || hoverPreviewAgentQuery.data?.hostname || previewTicket.agentId
         : previewTicket.agentId;
-    const stateLabel = previewTicket.workflowStateId
-      ? stateMap.get(previewTicket.workflowStateId)?.name ?? 'Estado não mapeado'
-      : 'Sem estado';
+    const state = previewTicket.workflowStateId ? stateMap.get(previewTicket.workflowStateId) : null;
+    const stateLabel = state?.name ?? 'Sem estado';
     const clientLabel = clientMap.get(previewTicket.clientId)?.name ?? '-';
+    const priorityMeta = getTicketPriorityMeta(previewTicket.priority);
+    const isClosed = Boolean(previewTicket.closedAt);
     const detailsAreLoading = isPreviewTarget && (hoverPreviewTicketQuery.isLoading || iamUsersQuery.isLoading);
 
     return (
       <div className="space-y-3">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="truncate text-sm font-semibold text-foreground">{previewTicket.title}</p>
-            <p className="mt-1 text-xs leading-relaxed text-muted">
-              {formatTicketPreviewDescription(previewTicket.description)}
-            </p>
+            <p className="line-clamp-2 text-sm font-semibold leading-snug text-foreground">{previewTicket.title}</p>
+            <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+              <Badge color={priorityMeta.color}>{priorityMeta.label}</Badge>
+              <Badge color={isClosed ? 'slate' : 'success'}>{isClosed ? 'Encerrado' : 'Aberto'}</Badge>
+              {previewTicket.category && (
+                <Badge color="slate">
+                  <Tag className="mr-1 inline h-3 w-3" />
+                  {previewTicket.category}
+                </Badge>
+              )}
+            </div>
           </div>
-          {detailsAreLoading && <span className="text-[11px] text-muted">Carregando detalhes...</span>}
+          <span className="shrink-0 font-mono text-[11px] text-muted">#{previewTicket.id.slice(0, 8)}</span>
         </div>
 
-        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-          <div className="rounded-lg border border-border bg-surface-light px-3 py-2">
-            <p className="text-[11px] uppercase tracking-wide text-muted">Responsável</p>
-            <p className="mt-1 truncate text-sm text-foreground">{assigneeLabel}</p>
-          </div>
-          <div className="rounded-lg border border-border bg-surface-light px-3 py-2">
-            <p className="text-[11px] uppercase tracking-wide text-muted">Watchers</p>
-            <p className="mt-1 text-sm text-foreground">{watcherSummary}</p>
-          </div>
-          <div className="rounded-lg border border-border bg-surface-light px-3 py-2 sm:col-span-2">
-            <p className="text-[11px] uppercase tracking-wide text-muted">Máquina vinculada</p>
-            <p className="mt-1 truncate text-sm text-foreground">{linkedMachineLabel}</p>
-          </div>
+        <p className="rounded-lg border border-border bg-surface-light/60 px-3 py-2 text-xs leading-relaxed text-muted">
+          {formatTicketPreviewDescription(previewTicket.description, 220)}
+        </p>
+
+        <div className="grid gap-2 sm:grid-cols-2">
+          <TicketHoverInfo
+            icon={<Building2 className="h-3.5 w-3.5" />}
+            label="Cliente"
+            value={clientLabel}
+          />
+          <TicketHoverInfo
+            icon={<CircleDot className="h-3.5 w-3.5" />}
+            label="Estado"
+            value={stateLabel}
+            dotColor={state?.color}
+          />
+          <TicketHoverInfo
+            icon={<UserRound className="h-3.5 w-3.5" />}
+            label="Responsável"
+            value={assigneeLabel}
+          />
+          <TicketHoverInfo
+            icon={<CircleUserRound className="h-3.5 w-3.5" />}
+            label="Solicitante"
+            value={requesterLabel}
+          />
+          <TicketHoverInfo
+            icon={<Monitor className="h-3.5 w-3.5" />}
+            label="Máquina vinculada"
+            value={linkedMachineLabel}
+          />
+          <TicketHoverInfo
+            icon={<Users className="h-3.5 w-3.5" />}
+            label="Watchers"
+            value={watcherSummary}
+          />
         </div>
 
-        <div className="text-[11px] text-muted">
-          Estado: {stateLabel} · Cliente: {clientLabel} · Criado em {new Date(previewTicket.createdAt).toLocaleString('pt-BR')}
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t border-border pt-2 text-[11px] text-muted">
+          <span className="inline-flex items-center gap-1.5">
+            <CalendarDays className="h-3.5 w-3.5" />
+            Criado em {new Date(previewTicket.createdAt).toLocaleString('pt-BR')}
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <Clock className="h-3.5 w-3.5" />
+            Atualizado {formatRelativeTime(previewTicket.updatedAt)}
+          </span>
         </div>
+
+        {detailsAreLoading && <p className="text-[11px] text-muted">Carregando detalhes do chamado...</p>}
       </div>
     );
   };
@@ -1045,8 +1141,8 @@ export default function TicketList() {
           </div>
         </div>
 
-        <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <div className="xl:col-span-2">
+        <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-6">
+          <div className="md:col-span-2 xl:col-span-3">
             <Input
               label="Buscar"
               value={filterText}
@@ -1073,6 +1169,14 @@ export default function TicketList() {
               applyFilterChange(() => setFilterStatus(event.target.value as '' | 'true' | 'false'));
             }}
           />
+          <Select
+            label="Estado"
+            options={stateOpts}
+            value={filterState}
+            onChange={(event) => {
+              applyFilterChange(() => setFilterState(event.target.value));
+            }}
+          />
         </div>
 
         <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -1088,7 +1192,7 @@ export default function TicketList() {
             {advancedFiltersExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
           </Button>
           {advancedFiltersActiveCount > 0 && !advancedFiltersExpanded && (
-            <span className="text-xs text-muted">Cliente e/ou estado filtrados.</span>
+            <span className="text-xs text-muted">Cliente filtrado.</span>
           )}
         </div>
 
@@ -1107,14 +1211,6 @@ export default function TicketList() {
                   setFilterAnswerKey('');
                   setFilterAnswerValue('');
                 });
-              }}
-            />
-            <Select
-              label="Estado"
-              options={stateOpts}
-              value={filterState}
-              onChange={(event) => {
-                applyFilterChange(() => setFilterState(event.target.value));
               }}
             />
             <Select
@@ -1311,6 +1407,7 @@ export default function TicketList() {
               rowHoverCard={renderTicketHoverCard}
               onRowHoverCardChange={(ticket) => setHoverPreviewTicketId(ticket?.id ?? null)}
               showPagination={false}
+              flush
             />
             {renderPaginationBar('bottom')}
           </>

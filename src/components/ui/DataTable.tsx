@@ -42,6 +42,12 @@ interface DataTableProps<T> {
    * tabela estique horizontalmente em telas pequenas.
    */
   fixedLayout?: boolean;
+  /**
+   * Remove o contêiner arredondado/borda própria da tabela. Use quando ela é
+   * embutida num card que já tem barras acima/abaixo (paginação): assim o
+   * cabeçalho alinha com as linhas em vez de ficar com os cantos "soltos".
+   */
+  flush?: boolean;
 }
 
 type SortDirection = 'asc' | 'desc' | null;
@@ -65,6 +71,7 @@ export function DataTable<T>({
   showPagination = true,
   maxHeight,
   fixedLayout = false,
+  flush = false,
 }: DataTableProps<T>) {
   const [sort, setSort] = useState<SortState | null>(null);
   const [page, setPage] = useState(1);
@@ -238,7 +245,7 @@ export function DataTable<T>({
 
   return (
     <div ref={containerRef} className="relative space-y-3">
-      <div className="overflow-hidden rounded-xl border border-border bg-surface">
+      <div className={`overflow-hidden bg-surface ${flush ? '' : 'rounded-xl border border-border'}`}>
         <div
           className="w-full max-w-full overflow-auto overscroll-auto"
           style={maxHeight ? { maxHeight } : undefined}
