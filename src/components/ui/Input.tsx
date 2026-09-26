@@ -37,11 +37,13 @@ interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
   label?: string;
   options: { value: string; label: string; disabled?: boolean }[];
   hint?: string;
+  error?: string;
 }
 
-export function Select({ label, options, className = '', id, hint, ...props }: SelectProps) {
+export function Select({ label, options, className = '', id, hint, error, ...props }: SelectProps) {
   const generatedId = useId();
   const selectId = id ?? label?.toLowerCase().replace(/\s+/g, '-') ?? generatedId;
+  const helpId = `${selectId}-help`;
   return (
     <div className="space-y-1">
       {label && (
@@ -51,7 +53,11 @@ export function Select({ label, options, className = '', id, hint, ...props }: S
       )}
       <select
         id={selectId}
-        className={`w-full rounded-xl border border-input-border bg-input px-3 py-2 text-sm text-foreground outline-none transition-colors focus-visible:border-primary/60 focus-visible:ring-2 focus-visible:ring-primary/30 ${className}`}
+        aria-invalid={Boolean(error)}
+        aria-describedby={error || hint ? helpId : undefined}
+        className={`w-full rounded-xl border border-input-border bg-input px-3 py-2 text-sm text-foreground outline-none transition-colors focus-visible:border-primary/60 focus-visible:ring-2 focus-visible:ring-primary/30 ${
+          error ? 'border-danger/50' : ''
+        } ${className}`}
         {...props}
       >
         {options.map(opt => (
@@ -65,7 +71,8 @@ export function Select({ label, options, className = '', id, hint, ...props }: S
           </option>
         ))}
       </select>
-      {hint && <p className="text-xs text-muted">{hint}</p>}
+      {error && <p id={helpId} className="text-xs text-danger">{error}</p>}
+      {hint && !error && <p id={helpId} className="text-xs text-muted">{hint}</p>}
     </div>
   );
 }

@@ -28,7 +28,6 @@ import { useSites } from '@/hooks/useSites';
 import { useAgent, useAgentsBySite } from '@/hooks/useAgents';
 import { useWorkflowStates } from '@/hooks/useWorkflow';
 import { useDepartments } from '@/hooks/useDepartments';
-import { useWorkflowProfilesByDepartment } from '@/hooks/useWorkflowProfiles';
 import { useTicketKpi } from '@/hooks/useTicketKpi';
 import { useTicketTemplates } from '@/hooks/useSupportProductivity';
 import { useDepartmentTicketSchema } from '@/hooks/useDepartmentCustomFields';
@@ -52,9 +51,11 @@ import type {
 import type { Column } from '@/components/ui';
 import toast from 'react-hot-toast';
 import { TICKET_PRIORITY_META, getTicketPriorityMeta } from '@/utils/labels';
-import { buildTicketCustomFieldValues } from '@/utils/ticketCustomFields';
+import { buildTicketCustomFieldValidation } from '@/utils/ticketCustomFields';
 import { templateDefaultsToDrafts } from '@/utils/ticketTemplateDefaults';
 import { parseTemplateQuestions, questionToSchemaField } from '@/utils/templateQuestions';
+import { selectableTemplates } from '@/utils/ticketTemplateSelection';
+import { buildCreateTicketPayload } from '@/utils/ticketCreatePayload';
 import { TicketSchemaFieldInput } from '@/components/tickets/TicketSchemaFieldInput';
 import { TicketAnswerSemanticSearchPanel } from '@/components/tickets/TicketAnswerSemanticSearchPanel';
 
@@ -1489,6 +1490,7 @@ export default function TicketList() {
 }
 
 function CreateTicketModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const navigate = useNavigate();
   const create = useCreateTicket();
   const clients = useClients();
 
@@ -1499,7 +1501,6 @@ function CreateTicketModal({ open, onClose }: { open: boolean; onClose: () => vo
   const sites = useSites(selectedClient);
   const agents = useAgentsBySite(selectedSite);
   const departments = useDepartments({ clientId: selectedClient || undefined, includeGlobal: true });
-  const profiles = useWorkflowProfilesByDepartment(selectedDept);
 
   // Ticket schema (dynamic fields) for the selected department
   const schemaQuery = useDepartmentTicketSchema(selectedDept || null, !!selectedDept);
@@ -1516,7 +1517,7 @@ function CreateTicketModal({ open, onClose }: { open: boolean; onClose: () => vo
   const [questionDrafts, setQuestionDrafts] = useState<Record<string, string>>({});
 
   const customFieldValidation = useMemo(
-    () => buildTicketCustomFieldValues(schemaFields, customFieldDrafts),
+    () => buildTicketCustomFieldValidation(schemaFields, customFieldDrafts),
     [schemaFields, customFieldDrafts],
   );
 
@@ -1533,7 +1534,26 @@ function CreateTicketModal({ open, onClose }: { open: boolean; onClose: () => vo
     }
   }, [schemaFields]);
 
-  const templatesQuery = useTicketTemplates({ clientId: selectedClient || undefined, includeGlobal: true });
+  const templatesQuery = useTicketTemplates({
+    clientId: selectedClient || undefined,
+    departmentId: selectedDept || undefined,
+    includeGlobal: true,
+  });
+
+  // Hierarquia de escopo: gerais sempre; os vinculados aparecem quando o
+  // departamento correspondente é escolhido.
+  const templateOptions = useMemo(
+    () => selectableTemplates(templatesQuery.data ?? [], {
+      clientId: selectedClient || null,
+      departmentId: selectedDept || null,
+    }),
+    [templatesQuery.data, selectedClient, selectedDept],
+  );
+
+  const departmentNames = useMemo(
+    () => new Map((departments.data ?? []).map((department) => [department.id, department.name])),
+    [departments.data],
+  );
 
   const templateQuestions = useMemo(() => {
     if (!selectedTemplateId) return [];
@@ -1547,7 +1567,7 @@ function CreateTicketModal({ open, onClose }: { open: boolean; onClose: () => vo
   );
 
   const templateAnswerValidation = useMemo(
-    () => buildTicketCustomFieldValues(questionFields, questionDrafts),
+    () => buildTicketCustomFieldValidation(questionFields, questionDrafts),
     [questionFields, questionDrafts],
   );
   const [form, setForm] = useState<CreateTicketRequest>({
@@ -1604,15 +1624,14 @@ function CreateTicketModal({ open, onClose }: { open: boolean; onClose: () => vo
   const handleClientChange = (id: string) => {
     setSelectedClient(id);
     setSelectedSite('');
-    setSelectedDept('');
-    clearCustomFields();
     clearTemplate();
+    // O departamento é mantido se continuar disponível para o novo cliente; o
+    // efeito de disponibilidade limpa (com campos/template) se ele sair.
     setForm((current) => ({
       ...current,
       clientId: id,
       siteId: null,
       agentId: null,
-      departmentId: null,
       workflowProfileId: null,
     }));
   };
@@ -1625,28 +1644,86 @@ function CreateTicketModal({ open, onClose }: { open: boolean; onClose: () => vo
   const handleDeptChange = (id: string) => {
     setSelectedDept(id);
     clearCustomFields();
+    // Template vinculado ao departamento anterior deixa de valer.
+    clearTemplate();
     setForm((current) => ({ ...current, departmentId: id || null, workflowProfileId: null }));
   };
+
+  // Departamento é obrigatório: pré-seleciona quando só há uma opção e limpa a
+  // seleção quando ela sai do escopo do cliente atual.
+  useEffect(() => {
+    const options = departments.data ?? [];
+    if (departments.isLoading) return;
+
+    if (!selectedDept) {
+      if (options.length === 1) handleDeptChange(options[0].id);
+      return;
+    }
+
+    // Sem exceção para lista vazia: se o departamento não está (mais) disponível
+    // para o cliente atual, a seleção precisa cair — inclusive quando o cliente
+    // novo não tem nenhum departamento.
+    if (!options.some((department) => department.id === selectedDept)) {
+      handleDeptChange('');
+    }
+    // handleDeptChange é recriado a cada render; as deps relevantes são as abaixo.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [departments.data, departments.isLoading, selectedDept]);
 
   const clientOpts = [{ value: '', label: 'Selecione...' }, ...(clients.data ?? []).map((client) => ({ value: client.id, label: client.name }))];
   const siteOpts = [{ value: '', label: 'Nenhum' }, ...(sites.data ?? []).map((site) => ({ value: site.id, label: site.name }))];
   const agentOpts = [{ value: '', label: 'Nenhum' }, ...(agents.data ?? []).map((agent) => ({ value: agent.id, label: agent.displayName ?? agent.hostname }))];
-  const deptOpts = [{ value: '', label: 'Nenhum' }, ...(departments.data ?? []).map((department) => ({ value: department.id, label: department.name }))];
-  const profileOpts = [{ value: '', label: 'Padrao do departamento' }, ...(profiles.data ?? []).map((profile) => ({ value: profile.id, label: profile.name }))];
+  const deptOpts = [{ value: '', label: 'Selecione...' }, ...(departments.data ?? []).map((department) => ({ value: department.id, label: department.name }))];
   const priorityOpts = (['Low', 'Medium', 'High', 'Critical'] as TicketPriority[]).map((priority) => ({
     value: priority,
     label: TICKET_PRIORITY_META[priority].label,
   }));
 
-  const valid =
-    Boolean(form.clientId) &&
-    form.title.trim().length >= 3 &&
-    form.description.trim().length >= 3 &&
-    customFieldValidation.errors.length === 0 &&
-    templateAnswerValidation.errors.length === 0;
+  // ── Feedback de validação ────────────────────────────────────────────────
+  // Erros na ordem em que os campos aparecem na ficha: o primeiro recebe foco
+  // e todos entram no resumo do topo.
+  const [submitAttempted, setSubmitAttempted] = useState(false);
+  const orderedErrors = useMemo(() => {
+    const list: { id: string; message: string }[] = [];
+    if (!form.clientId) list.push({ id: 'field-client', message: 'Selecione o cliente.' });
+    if (!selectedDept) list.push({ id: 'field-dept', message: 'Selecione o departamento.' });
+    if (form.title.trim().length < 3) list.push({ id: 'field-title', message: 'Informe o título (mínimo 3 caracteres).' });
+    if (form.description.trim().length < 3) list.push({ id: 'field-description', message: 'Descreva o chamado (mínimo 3 caracteres).' });
+    for (const field of schemaFields) {
+      const message = customFieldValidation.errorsByField[field.definitionId];
+      if (message) list.push({ id: `field-schema-${field.definitionId}`, message });
+    }
+    for (const field of questionFields) {
+      const message = templateAnswerValidation.errorsByField[field.definitionId];
+      if (message) list.push({ id: `field-question-${field.definitionId}`, message });
+    }
+    return list;
+  }, [
+    form.clientId, form.title, form.description, selectedDept,
+    schemaFields, customFieldValidation.errorsByField,
+    questionFields, templateAnswerValidation.errorsByField,
+  ]);
+
+  const focusField = (id: string) => {
+    const element = document.getElementById(id);
+    element?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    element?.focus?.();
+  };
+
+  const focusGuardRef = useRef(false);
+  useEffect(() => {
+    if (!submitAttempted) { focusGuardRef.current = false; return; }
+    const first = orderedErrors[0];
+    if (!first || focusGuardRef.current) return;
+    focusGuardRef.current = true;
+    focusField(first.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [submitAttempted, orderedErrors]);
+
 
   const resetAndClose = () => {
     onClose();
+    setSubmitAttempted(false);
     setSelectedClient('');
     setSelectedSite('');
     setSelectedDept('');
@@ -1667,27 +1744,23 @@ function CreateTicketModal({ open, onClose }: { open: boolean; onClose: () => vo
   };
 
   const handleSubmit = () => {
-    if (templateAnswerValidation.errors.length > 0) {
-      toast.error(templateAnswerValidation.errors[0]);
+    // Mostra os destaques e manda o foco para o primeiro campo inválido.
+    // O guard de foco é liberado a cada tentativa (o alvo pode ter mudado).
+    focusGuardRef.current = false;
+    setSubmitAttempted(true);
+    if (orderedErrors.length > 0) {
+      toast.error(orderedErrors[0].message);
       return;
     }
-    if (customFieldValidation.errors.length > 0) {
-      toast.error(customFieldValidation.errors[0]);
-      return;
-    }
-    if (!valid) return;
 
-    // Campos vazios são omitidos; apenas preenchidos/obrigatórios entram no payload.
-    const customFieldValues = customFieldValidation.values;
-    const templateAnswers = templateAnswerValidation.values;
-
-    const payload: CreateTicketRequest = {
-      ...form,
-      ...(Object.keys(customFieldValues).length > 0 ? { customFieldValues } : {}),
-      ...(selectedTemplateId && Object.keys(templateAnswers).length > 0
-        ? { templateAnswers }
-        : {}),
-    };
+    const payload = buildCreateTicketPayload({
+      form,
+      templateId: selectedTemplateId || null,
+      customFieldValues: customFieldValidation.values,
+      templateAnswers: templateAnswerValidation.values,
+      // Com template, os campos vazios vão como null para não reaplicar o default.
+      departmentFieldIds: schemaFields.map((field) => field.definitionId),
+    });
 
     create.mutate(payload, {
       onSuccess: () => {
@@ -1700,26 +1773,135 @@ function CreateTicketModal({ open, onClose }: { open: boolean; onClose: () => vo
 
   return (
     <Modal open={open} onClose={resetAndClose} title="Novo Chamado" maxWidth="max-w-2xl">
-      <div className="space-y-4">
-        <Select label="Cliente *" options={clientOpts} value={form.clientId} onChange={(event) => handleClientChange(event.target.value)} />
-        <div className="grid grid-cols-2 gap-4">
-          <Select label="Site" options={siteOpts} value={form.siteId ?? ''} onChange={(event) => handleSiteChange(event.target.value)} disabled={!selectedClient} />
-          <Select label="Agente" options={agentOpts} value={form.agentId ?? ''} onChange={(event) => set('agentId', event.target.value || null)} disabled={!selectedSite} />
+      <form
+        className="space-y-4"
+        onSubmit={(event) => {
+          event.preventDefault();
+          handleSubmit();
+        }}
+      >
+        {submitAttempted && orderedErrors.length > 0 && (
+          <div role="alert" className="rounded-lg border border-danger/40 bg-danger/10 px-3 py-2">
+            <p className="text-sm font-medium text-foreground">Corrija os campos destacados:</p>
+            <ul className="mt-1 list-disc pl-5 text-xs text-muted-foreground">
+              {orderedErrors.slice(0, 5).map((item) => (
+                <li key={item.id}>
+                  <button
+                    type="button"
+                    onClick={() => focusField(item.id)}
+                    className="text-left underline-offset-2 hover:text-foreground hover:underline"
+                  >
+                    {item.message}
+                  </button>
+                </li>
+              ))}
+              {orderedErrors.length > 5 && (
+                <li className="list-none text-muted">
+                  …e mais {orderedErrors.length - 5} campo(s) com problema.
+                </li>
+              )}
+            </ul>
+          </div>
+        )}
+        <Select
+          label="Cliente *"
+          id="field-client"
+          options={clientOpts}
+          value={form.clientId}
+          error={submitAttempted && !form.clientId ? 'Selecione o cliente.' : undefined}
+          onChange={(event) => handleClientChange(event.target.value)}
+        />
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Select label="Site" id="field-site" options={siteOpts} value={form.siteId ?? ''} onChange={(event) => handleSiteChange(event.target.value)} disabled={!selectedClient} hint={!selectedClient ? 'Selecione o cliente primeiro' : undefined} />
+          <Select label="Agente" options={agentOpts} value={form.agentId ?? ''} onChange={(event) => set('agentId', event.target.value || null)} disabled={!selectedSite} hint={!selectedSite ? 'Selecione o site primeiro' : undefined} />
         </div>
-        <div className="grid grid-cols-2 gap-4">
-          <Select label="Departamento" options={deptOpts} value={selectedDept} onChange={(event) => handleDeptChange(event.target.value)} disabled={!selectedClient} />
-          <Select label="Perfil de Workflow" options={profileOpts} value={form.workflowProfileId ?? ''} onChange={(event) => set('workflowProfileId', event.target.value || null)} disabled={!selectedDept} />
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Select
+            label="Departamento *"
+            id="field-dept"
+            options={deptOpts}
+            value={selectedDept}
+            error={submitAttempted && !selectedDept ? 'Selecione o departamento.' : undefined}
+            onChange={(event) => handleDeptChange(event.target.value)}
+            hint={!selectedClient ? 'Departamentos globais — escolha o cliente para ver os dele' : undefined}
+          />
+          {!departments.isLoading && (departments.data?.length ?? 0) === 0 && (
+            // Sem nenhum departamento (nem global) não há como abrir chamado:
+            // aponta o caminho para criar em vez de deixar um beco sem saída.
+            <p className="self-end pb-1 text-xs text-warning">
+              Nenhum departamento cadastrado.{' '}
+              <button
+                type="button"
+                onClick={() => navigate('/tickets/departments')}
+                className="font-medium text-primary underline-offset-2 hover:underline"
+              >
+                Criar departamento
+              </button>
+            </p>
+          )}
+          {templateOptions.length > 0 ? (
+            <Select
+              label="Usar template (opcional)"
+              options={[
+                { value: '', label: 'Nenhum — abrir normalmente' },
+                ...templateOptions.map((template) => ({
+                  value: template.id,
+                  label: template.departmentId
+                    ? `${template.name} · ${departmentNames.get(template.departmentId) ?? 'departamento'}`
+                    : template.name,
+                })),
+              ]}
+              value={selectedTemplateId}
+              disabled={!selectedClient}
+              hint={
+                !selectedClient
+                  ? 'Selecione o cliente primeiro'
+                  : selectedDept
+                    ? 'Templates gerais e deste departamento'
+                    : 'Templates gerais — escolha o departamento para ver os vinculados'
+              }
+              onChange={(event) => {
+                const value = event.target.value;
+                if (!value) {
+                  clearTemplate();
+                  return;
+                }
+                applyTemplate(value);
+              }}
+            />
+          ) : (
+            <div className="self-end pb-1">
+              {(templatesQuery.data?.length ?? 0) > 0 && (
+                <p className="text-xs text-muted">
+                  Nenhum template para este escopo
+                  {selectedDept ? '' : ' — escolha o departamento para ver os vinculados'}.
+                </p>
+              )}
+            </div>
+          )}
         </div>
-        <Input label="Título *" value={form.title} onChange={(event) => set('title', event.target.value)} placeholder="Min. 3 caracteres" />
+        <Input
+          label="Título *"
+          id="field-title"
+          value={form.title}
+          onChange={(event) => set('title', event.target.value)}
+          placeholder="Min. 3 caracteres"
+          error={submitAttempted && form.title.trim().length < 3 ? 'Informe o título (mínimo 3 caracteres).' : undefined}
+        />
         <div>
-          <label className="mb-1 block text-sm font-medium text-muted-foreground">Descrição *</label>
+          <label className="mb-1 block text-sm font-medium text-muted-foreground" htmlFor="field-description">Descrição *</label>
           <textarea
-            className="w-full resize-none rounded-lg border border-border bg-surface-light px-3 py-2 text-sm text-foreground placeholder-muted focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            id="field-description"
+            aria-invalid={submitAttempted && form.description.trim().length < 3}
+            className={`w-full resize-none rounded-lg border border-border bg-surface-light px-3 py-2 text-sm text-foreground placeholder-muted focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary ${submitAttempted && form.description.trim().length < 3 ? 'border-danger/50' : ''}`}
             rows={4}
             placeholder="Descreva o chamado (min. 3 caracteres)"
             value={form.description}
             onChange={(event) => set('description', event.target.value)}
           />
+          {submitAttempted && form.description.trim().length < 3 && (
+            <p className="mt-1 text-xs text-danger">Descreva o chamado (mínimo 3 caracteres).</p>
+          )}
         </div>
 
         {/* Dynamic custom fields from department schema */}
@@ -1732,7 +1914,9 @@ function CreateTicketModal({ open, onClose }: { open: boolean; onClose: () => vo
               {schemaFields.map((field) => (
                 <TicketSchemaFieldInput
                   key={field.definitionId}
+                  id={`field-schema-${field.definitionId}`}
                   field={field}
+                  error={submitAttempted ? customFieldValidation.errorsByField[field.definitionId] : undefined}
                   value={customFieldDrafts[field.definitionId] ?? ''}
                   onChange={(value) =>
                     setCustomFieldDrafts((prev) => ({ ...prev, [field.definitionId]: value }))
@@ -1743,24 +1927,7 @@ function CreateTicketModal({ open, onClose }: { open: boolean; onClose: () => vo
           </div>
         )}
 
-        {(templatesQuery.data?.length ?? 0) > 0 && (
-          <Select
-            label="Usar template (opcional)"
-            options={[
-              { value: '', label: 'Nenhum — abrir normalmente' },
-              ...(templatesQuery.data ?? []).map((t) => ({ value: t.id, label: t.name })),
-            ]}
-            value={selectedTemplateId}
-            onChange={(event) => {
-              const value = event.target.value;
-              if (!value) {
-                clearTemplate();
-                return;
-              }
-              applyTemplate(value);
-            }}
-          />
-        )}
+        {/* Seletor de template movido para a linha do Departamento. */}
 
         {/* Mini questionário do template selecionado (não são campos do chamado) */}
         {templateQuestions.length > 0 && (
@@ -1773,7 +1940,9 @@ function CreateTicketModal({ open, onClose }: { open: boolean; onClose: () => vo
               {questionFields.map((field) => (
                 <TicketSchemaFieldInput
                   key={field.definitionId}
+                  id={`field-question-${field.definitionId}`}
                   field={field}
+                  error={submitAttempted ? templateAnswerValidation.errorsByField[field.definitionId] : undefined}
                   value={questionDrafts[field.definitionId] ?? ''}
                   onChange={(value) =>
                     setQuestionDrafts((prev) => ({ ...prev, [field.definitionId]: value }))
@@ -1783,17 +1952,15 @@ function CreateTicketModal({ open, onClose }: { open: boolean; onClose: () => vo
             </div>
           </div>
         )}
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Select label="Prioridade" options={priorityOpts} value={form.priority} onChange={(event) => set('priority', event.target.value as TicketPriority)} />
           <Input label="Categoria" value={form.category ?? ''} onChange={(event) => set('category', event.target.value || null)} placeholder="Opcional, ate 100 chars" />
         </div>
         <div className="flex justify-end gap-3 pt-2">
-          <Button variant="ghost" onClick={resetAndClose}>Cancelar</Button>
-          <Button onClick={handleSubmit} loading={create.isPending} disabled={!valid}>Criar Chamado</Button>
+          <Button type="button" variant="ghost" onClick={resetAndClose}>Cancelar</Button>
+          <Button type="submit" loading={create.isPending}>Criar Chamado</Button>
         </div>
-      </div>
+      </form>
     </Modal>
   );
 }
-
-

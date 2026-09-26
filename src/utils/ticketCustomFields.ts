@@ -1,5 +1,6 @@
 import { CustomFieldDataType, parseCustomFieldValue, type TicketSchemaField } from '@/api';
 import { normalizeNumericDraft } from '@/utils/fieldMask';
+import { describeFieldFormatError } from '@/utils/fieldFormatHints';
 
 export interface CustomFieldValidationResult {
   ok: boolean;
@@ -89,7 +90,14 @@ export function validateTicketSchemaField(
   if (field.validationRegex) {
     try {
       if (!new RegExp(field.validationRegex).test(trimmed)) {
-        return { ok: false, error: `${field.label} não corresponde ao formato exigido.` };
+        // Mensagem com exemplo em vez de regex crua ("informe um valor como ...").
+        return {
+          ok: false,
+          error: describeFieldFormatError(field.label, {
+            inputMask: field.inputMask,
+            validationRegex: field.validationRegex,
+          }),
+        };
       }
     } catch {
       // regex inválida cadastrada: ignora para não travar o formulário
@@ -113,21 +121,32 @@ export function validateTicketSchemaField(
   return { ok: true, value, hasValue: true };
 }
 
+export interface CustomFieldValidation {
+  values: Record<string, unknown>;
+  errors: string[];
+  /** Mensagem por definitionId, para destacar exatamente o campo inválido. */
+  errorsByField: Record<string, string>;
+}
+
 /**
- * Constrói o mapa definitionId→valor, omitindo campos vazios e acumulando os
- * erros de validação dos campos preenchidos/obrigatórios.
+ * Constrói o mapa definitionId→valor, omitindo campos vazios, acumulando os
+ * erros e identificando a qual campo cada erro pertence (destaque na ficha).
  */
-export function buildTicketCustomFieldValues(
+export function buildTicketCustomFieldValidation(
   fields: TicketSchemaField[],
   drafts: Record<string, string>,
-): { values: Record<string, unknown>; errors: string[] } {
+): CustomFieldValidation {
   const values: Record<string, unknown> = {};
   const errors: string[] = [];
+  const errorsByField: Record<string, string> = {};
 
   for (const field of fields) {
     const result = validateTicketSchemaField(field, drafts[field.definitionId] ?? '');
     if (!result.ok) {
-      if (result.error) errors.push(result.error);
+      if (result.error) {
+        errors.push(result.error);
+        errorsByField[field.definitionId] = result.error;
+      }
       continue;
     }
     if (result.hasValue) {
@@ -135,5 +154,16 @@ export function buildTicketCustomFieldValues(
     }
   }
 
+  return { values, errors, errorsByField };
+}
+
+/**
+ * Compatibilidade: consumidores que só precisam de valores/erros agregados.
+ */
+export function buildTicketCustomFieldValues(
+  fields: TicketSchemaField[],
+  drafts: Record<string, string>,
+): { values: Record<string, unknown>; errors: string[] } {
+  const { values, errors } = buildTicketCustomFieldValidation(fields, drafts);
   return { values, errors };
 }

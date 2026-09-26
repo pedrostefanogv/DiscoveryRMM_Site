@@ -1,4 +1,5 @@
 import { api } from "./client";
+import { normalizeNumericDraft } from "@/utils/fieldMask";
 
 export enum CustomFieldScopeType {
   Server = 0,
@@ -472,11 +473,18 @@ export function parseCustomFieldValue(
   input: string,
 ): unknown {
   const trimmed = input.trim();
+  // Valores numéricos podem chegar mascarados ("R$ 1.234,56"): normaliza antes
+  // de converter, protegendo qualquer consumidor (o Number() não entende
+  // separador de milhar nem vírgula decimal).
+  const numeric =
+    dataType === CustomFieldDataType.Integer || dataType === CustomFieldDataType.Decimal
+      ? normalizeNumericDraft(trimmed)
+      : trimmed;
   switch (dataType) {
     case CustomFieldDataType.Integer:
-      return trimmed ? Number.parseInt(trimmed, 10) : null;
+      return numeric ? Number.parseInt(numeric, 10) : null;
     case CustomFieldDataType.Decimal:
-      return trimmed ? Number(trimmed) : null;
+      return numeric ? Number(numeric) : null;
     case CustomFieldDataType.Boolean:
       return trimmed.toLowerCase() === "true" || trimmed === "1";
     case CustomFieldDataType.ListBox:

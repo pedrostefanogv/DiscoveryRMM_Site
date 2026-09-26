@@ -1755,6 +1755,8 @@ export interface CreateTicketRequest {
   priority: TicketPriority;
   category: string | null;
   assignedToUserId: string | null;
+  /** Template usado na abertura: vincula o chamado (histórico/snapshot) e habilita as respostas. */
+  templateId?: string | null;
   customFieldValues?: Record<string, unknown>;
   /** Respostas do mini questionário do template (chave da pergunta → valor). */
   templateAnswers?: Record<string, unknown>;
