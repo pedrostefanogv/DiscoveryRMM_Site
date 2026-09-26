@@ -21,6 +21,7 @@ import {
   type TemplateQuestion,
 } from '@/utils/templateQuestions';
 import { buildTicketCustomFieldValues } from '@/utils/ticketCustomFields';
+import { slugifyTemplateKey, templateKeyError } from '@/utils/templateKey';
 import toast from 'react-hot-toast';
 
 const EMPTY: UpsertTicketTemplateRequest = {
@@ -174,6 +175,10 @@ function TicketTemplateForm({
   const [questions, setQuestions] = useState<TemplateQuestion[]>(() => parseTemplateQuestions(initial.questionsJson));
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const initialQuestionsRef = useRef(questions);
+  // Chave do template: derivada do título até o usuário editá-la à mão (e
+  // sempre preservada na edição de um template existente).
+  const keyTouchedRef = useRef(Boolean(editId));
+  const keyError = form.name.trim() ? templateKeyError(form.name) : null;
 
   // Snapshot do que está persistido: base para o aviso de alterações não
   // salvas. Atualizado quando o save conclui.
@@ -247,14 +252,21 @@ function TicketTemplateForm({
     return () => window.removeEventListener('beforeunload', handler);
   }, [isDirty]);
 
-  const backToList = () => navigate('/tickets/templates');
+  // Edição volta para a VISUALIZAÇÃO do template; criação vai para a lista.
+  const backTarget = editId ? `/tickets/templates/${editId}` : '/tickets/templates';
+  const backToList = () => navigate(backTarget);
   // Após salvar, substitui a entrada do formulário no histórico para que o
   // botão "voltar" do navegador não reabra o formulário com estado antigo.
-  const backToSavedList = () => navigate('/tickets/templates', { replace: true });
+  const backToSavedList = () => navigate(backTarget, { replace: true });
 
   const handleSubmit = () => {
-    if (form.name.trim().length < 2 || form.title.trim().length < 3) {
-      toast.error('Informe nome e título do template.');
+    if (form.title.trim().length < 3) {
+      toast.error('Informe o título do template (mínimo 3 caracteres).');
+      return;
+    }
+    const invalidKey = templateKeyError(form.name);
+    if (invalidKey) {
+      toast.error(invalidKey);
       return;
     }
     const questionError = validateTemplateQuestions(questions);
@@ -304,8 +316,32 @@ function TicketTemplateForm({
       <Card>
         <CardHeader title="Identificação" subtitle="Como o template aparece no catálogo e o texto sugerido ao abrir o chamado." />
         <div className="space-y-4">
-          <Input label="Nome *" value={form.name} onChange={(e) => set('name', e.target.value)} />
-          <Input label="Título *" value={form.title} onChange={(e) => set('title', e.target.value)} />
+          <Input
+            label="Título *"
+            value={form.title}
+            placeholder="ex: Criação de login"
+            hint="Nome exibido no catálogo (e título sugerido ao abrir o chamado)."
+            onChange={(e) => {
+              const title = e.target.value;
+              // Enquanto a chave não for editada à mão, ela acompanha o título.
+              setForm((current) => ({
+                ...current,
+                title,
+                name: keyTouchedRef.current ? current.name : slugifyTemplateKey(title),
+              }));
+            }}
+          />
+          <Input
+            label="Chave *"
+            value={form.name}
+            placeholder="ex: criacao_de_login"
+            hint="Identificador único no escopo ([a-z0-9_])."
+            error={keyError ?? undefined}
+            onChange={(e) => {
+              keyTouchedRef.current = true;
+              set('name', e.target.value.toLowerCase());
+            }}
+          />
           <TextArea label="Descrição" value={form.description} onChange={(e) => set('description', e.target.value)} />
         </div>
       </Card>

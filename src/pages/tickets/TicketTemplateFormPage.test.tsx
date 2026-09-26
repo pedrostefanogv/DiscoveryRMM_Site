@@ -12,7 +12,7 @@ const { updateMock, createMock, restoreMock, templatesState } = vi.hoisted(() =>
     id: 't1',
     clientId: null,
     departmentId: null,
-    name: 'Suporte padrão',
+    name: 'suporte_padrao',
     title: 'Abrir chamado de suporte',
     description: 'Descrição do template',
     priority: 'Medium',
@@ -27,7 +27,7 @@ const { updateMock, createMock, restoreMock, templatesState } = vi.hoisted(() =>
   const deleted = {
     ...template,
     id: 't2',
-    name: 'Template na lixeira',
+    name: 'template_na_lixeira',
     deletedAt: '2026-09-20T10:00:00Z',
     deletedBy: 'admin',
   };
@@ -73,6 +73,7 @@ function renderPage(entry: string) {
     [
       { path: '/tickets/templates/new', element: <TicketTemplateFormPage /> },
       { path: '/tickets/templates/:id/edit', element: <TicketTemplateFormPage /> },
+      { path: '/tickets/templates/:id', element: <p>VISUALIZAR TEMPLATE</p> },
       { path: '/tickets/templates', element: <p>LISTA DE TEMPLATES</p> },
     ],
     { initialEntries: [entry] },
@@ -92,7 +93,7 @@ describe('TicketTemplateFormPage', () => {
   it('preenche o formulário no modo edição e envia o PUT com o id da rota', () => {
     const { container } = renderPage('/tickets/templates/t1/edit');
 
-    expect(screen.getByDisplayValue('Suporte padrão')).toBeTruthy();
+    expect(screen.getByDisplayValue('suporte_padrao')).toBeTruthy();
     expect(screen.getByDisplayValue('Abrir chamado de suporte')).toBeTruthy();
 
     fireEvent.submit(container.querySelector('form') as HTMLFormElement);
@@ -102,7 +103,7 @@ describe('TicketTemplateFormPage', () => {
       {
         id: 't1',
         data: expect.objectContaining({
-          name: 'Suporte padrão',
+          name: 'suporte_padrao',
           title: 'Abrir chamado de suporte',
           customFieldDefaultsJson: '{}',
           questionsJson: '[]',
@@ -115,14 +116,14 @@ describe('TicketTemplateFormPage', () => {
   it('cria um template quando a rota é /new', () => {
     const { container } = renderPage('/tickets/templates/new');
 
-    fireEvent.change(screen.getByLabelText('Nome *'), { target: { value: 'Novo modelo' } });
-    fireEvent.change(screen.getByLabelText('Título *'), { target: { value: 'Título do modelo' } });
+    // Título é o nome exibido; a Chave é derivada dele (slug).
+    fireEvent.change(screen.getByLabelText('Título *'), { target: { value: 'Novo modelo' } });
     fireEvent.submit(container.querySelector('form') as HTMLFormElement);
 
     expect(createMock).toHaveBeenCalledTimes(1);
     expect(updateMock).not.toHaveBeenCalled();
     expect(createMock.mock.calls[0][0]).toEqual(
-      expect.objectContaining({ name: 'Novo modelo', title: 'Título do modelo' }),
+      expect.objectContaining({ name: 'novo_modelo', title: 'Novo modelo' }),
     );
   });
 
@@ -148,28 +149,29 @@ describe('TicketTemplateFormPage', () => {
     renderPage('/tickets/templates/t1/edit');
 
     fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
-    expect(screen.getByText('LISTA DE TEMPLATES')).toBeTruthy();
+    expect(screen.getByText('VISUALIZAR TEMPLATE')).toBeTruthy();
   });
 
   it('pede confirmação ao sair com alterações e respeita continuar editando', () => {
     renderPage('/tickets/templates/t1/edit');
 
-    fireEvent.change(screen.getByLabelText('Nome *'), { target: { value: 'Nome alterado' } });
+    // Editar o TÍTULO não mexe na chave (já existente no modo edição).
+    fireEvent.change(screen.getByLabelText('Título *'), { target: { value: 'Nome alterado' } });
     fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
 
     expect(screen.getByText('Descartar alterações?')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Continuar editando' }));
     expect(screen.getByDisplayValue('Nome alterado')).toBeTruthy();
-    expect(screen.queryByText('LISTA DE TEMPLATES')).toBeNull();
+    expect(screen.queryByText('VISUALIZAR TEMPLATE')).toBeNull();
   });
 
   it('descartar e sair confirma a navegação para a listagem', () => {
     renderPage('/tickets/templates/t1/edit');
 
-    fireEvent.change(screen.getByLabelText('Nome *'), { target: { value: 'Nome alterado' } });
+    fireEvent.change(screen.getByLabelText('Título *'), { target: { value: 'Nome alterado' } });
     fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
     fireEvent.click(screen.getByRole('button', { name: 'Descartar e sair' }));
 
-    expect(screen.getByText('LISTA DE TEMPLATES')).toBeTruthy();
+    expect(screen.getByText('VISUALIZAR TEMPLATE')).toBeTruthy();
   });
 });

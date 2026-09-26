@@ -1847,8 +1847,8 @@ function CreateTicketModal({ open, onClose }: { open: boolean; onClose: () => vo
                 ...templateOptions.map((template) => ({
                   value: template.id,
                   label: template.departmentId
-                    ? `${template.name} · ${departmentNames.get(template.departmentId) ?? 'departamento'}`
-                    : template.name,
+                    ? `${template.title || template.name} · ${departmentNames.get(template.departmentId) ?? 'departamento'}`
+                    : template.title || template.name,
                 })),
               ]}
               value={selectedTemplateId}

@@ -29,14 +29,15 @@ const { restoreMock, deleteMock, purgeMock, templates } = vi.hoisted(() => {
     deleteMock: vi.fn(),
     purgeMock: vi.fn(),
     templates: {
-      active: { ...base, id: 'a1', name: 'Template ativo', title: 'Abrir', isActive: true },
-      inactive: { ...base, id: 'a2', name: 'Template inativo', title: 'Abrir', isActive: false },
-      clientScoped: { ...base, id: 'a4', name: 'Template do cliente', title: 'Abrir', isActive: true, clientId: 'c1' },
+      // name = chave padronizada; title = nome exibido.
+      active: { ...base, id: 'a1', name: 'template_ativo', title: 'Template ativo', isActive: true },
+      inactive: { ...base, id: 'a2', name: 'template_inativo', title: 'Template inativo', isActive: false },
+      clientScoped: { ...base, id: 'a4', name: 'template_do_cliente', title: 'Template do cliente', isActive: true, clientId: 'c1' },
       deleted: {
         ...base,
         id: 'a3',
-        name: 'Template excluído',
-        title: 'Abrir',
+        name: 'template_excluido',
+        title: 'Template excluído',
         isActive: true,
         deletedAt: '2026-09-20T10:00:00Z',
         deletedBy: 'admin',
@@ -80,6 +81,7 @@ function renderPage() {
     [
       { path: '/tickets/templates', element: <TicketTemplatesPage /> },
       { path: '/tickets/templates/new', element: <p>NOVO TEMPLATE</p> },
+      { path: '/tickets/templates/:id', element: <p>VISUALIZAR TEMPLATE</p> },
       { path: '/tickets/templates/:id/edit', element: <p>EDITAR TEMPLATE</p> },
     ],
     { initialEntries: ['/tickets/templates'] },
@@ -132,6 +134,15 @@ describe('TicketTemplatesPage', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Restaurar/ }));
     expect(restoreMock).toHaveBeenCalledWith({ id: 'a3' }, expect.anything());
+  });
+
+  it('clicar no template abre a página de visualização (não a edição)', () => {
+    renderPage();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Template ativo' }));
+
+    expect(screen.getByText('VISUALIZAR TEMPLATE')).toBeTruthy();
+    expect(screen.queryByText('EDITAR TEMPLATE')).toBeNull();
   });
 
   it('abre o detalhe somente-leitura sem entrar no formulário de edição', () => {

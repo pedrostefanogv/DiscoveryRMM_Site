@@ -61,6 +61,8 @@ export default function TicketTemplatesPage() {
   }, [templates.data, showTrash]);
 
   const openCreate = () => navigate('/tickets/templates/new');
+  // Clicar no template abre a VISUALIZAÇÃO (a edição sai de lá pelo botão Editar).
+  const openView = (t: TicketTemplateDto) => navigate(`/tickets/templates/${t.id}`);
   const openEdit = (t: TicketTemplateDto) => navigate(`/tickets/templates/${t.id}/edit`);
 
   const toggleActive = (t: TicketTemplateDto) => {
@@ -151,15 +153,17 @@ export default function TicketTemplatesPage() {
                     : <LayoutTemplate className="h-4 w-4 text-muted" />}
                 </div>
                 <div className="min-w-0 flex-1">
+                  {/* Título é o nome exibido; a chave é o identificador. */}
                   <button
                     type="button"
-                    onClick={() => { if (!isDeleted) openEdit(t); }}
-                    disabled={isDeleted}
-                    className={`text-left font-medium text-foreground ${isDeleted ? 'cursor-default' : 'hover:text-primary hover:underline'}`}
+                    onClick={() => openView(t)}
+                    className="text-left font-medium text-foreground hover:text-primary hover:underline"
                   >
-                    {t.name}
+                    {t.title || t.name}
                   </button>
-                  <p className="truncate text-xs text-muted">{t.title}</p>
+                  <p className="truncate text-xs text-muted">
+                    <code className="font-mono">{t.name}</code>
+                  </p>
                   <div className="mt-1 flex flex-wrap items-center gap-1.5">
                     {t.clientId ? (
                       <Badge color="slate">
@@ -258,7 +262,7 @@ export default function TicketTemplatesPage() {
       <ConfirmDialog
         open={deleteTarget !== null}
         title="Mover template para a lixeira"
-        message={`O template "${deleteTarget?.name ?? ''}" será movido para a lixeira e poderá ser restaurado depois. Os chamados já abertos não são afetados. Continuar?`}
+        message={`O template "${deleteTarget?.title || deleteTarget?.name || ''}" será movido para a lixeira e poderá ser restaurado depois. Os chamados já abertos não são afetados. Continuar?`}
         confirmLabel="Mover para a lixeira"
         isLoading={remove.isPending}
         onClose={() => setDeleteTarget(null)}
@@ -278,7 +282,7 @@ export default function TicketTemplatesPage() {
       <ConfirmDialog
         open={purgeTarget !== null}
         title="Excluir definitivamente"
-        message={`O template "${purgeTarget?.name ?? ''}" será removido do banco, sem possibilidade de restauração. Continuar?`}
+        message={`O template "${purgeTarget?.title || purgeTarget?.name || ''}" será removido do banco, sem possibilidade de restauração. Continuar?`}
         confirmLabel="Excluir definitivamente"
         isLoading={purge.isPending}
         onClose={() => setPurgeTarget(null)}
@@ -297,7 +301,7 @@ export default function TicketTemplatesPage() {
       <ConfirmDialog
         open={forcePurgeTarget !== null}
         title="Template usado por chamados"
-        message={`O template "${forcePurgeTarget?.name ?? ''}" já foi usado para abrir chamados. O nome usado continuará registrado no histórico de cada chamado (somente leitura), mas o template será removido do banco. Excluir definitivamente?`}
+        message={`O template "${forcePurgeTarget?.title || forcePurgeTarget?.name || ''}" já foi usado para abrir chamados. O nome usado continuará registrado no histórico de cada chamado (somente leitura), mas o template será removido do banco. Excluir definitivamente?`}
         confirmLabel="Excluir definitivamente"
         isLoading={purge.isPending}
         onClose={() => setForcePurgeTarget(null)}

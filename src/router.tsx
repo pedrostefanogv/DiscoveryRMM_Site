@@ -26,6 +26,7 @@ const TicketCsatPage = lazy(() => import('@/pages/tickets/TicketCsatPage'));
 const TicketMacrosPage = lazy(() => import('@/pages/tickets/TicketMacrosPage'));
 const TicketTemplatesPage = lazy(() => import('@/pages/tickets/TicketTemplatesPage'));
 const TicketTemplateFormPage = lazy(() => import('@/pages/tickets/TicketTemplateFormPage'));
+const TicketTemplateViewPage = lazy(() => import('@/pages/tickets/TicketTemplateViewPage'));
 const NotificationChannelsPage = lazy(() => import('@/pages/settings/NotificationChannelsPage'));
 const LogViewer = lazy(() => import('@/pages/logs/LogViewer'));
 const DeployTokens = lazy(() => import('@/pages/deploy/DeployTokens'));
@@ -244,6 +245,14 @@ export const router = createBrowserRouter([
         element: (
           <PermissionGate anyOf={['tickets.*', 'tickets.edit', 'admin.*']}>
             <LazyPage><TicketTemplateFormPage /></LazyPage>
+          </PermissionGate>
+        ),
+      },
+      {
+        path: 'tickets/templates/:id',
+        element: (
+          <PermissionGate anyOf={['tickets.*', 'tickets.edit', 'admin.*']}>
+            <LazyPage><TicketTemplateViewPage /></LazyPage>
           </PermissionGate>
         ),
       },
