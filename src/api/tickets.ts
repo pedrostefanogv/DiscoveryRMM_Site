@@ -45,6 +45,10 @@ export interface TicketRelationDto {
   createdBy: string | null;
   createdAt: string;
   direction?: string | null;
+  /** Dados do OUTRO chamado (aditivo) para o console exibir título/status. */
+  otherTicketId?: string | null;
+  otherTicketTitle?: string | null;
+  otherTicketIsClosed?: boolean | null;
 }
 
 function normalizeNullableString(value: unknown): string | null {

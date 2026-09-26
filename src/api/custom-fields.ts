@@ -141,6 +141,9 @@ export interface CustomFieldValueItem {
   value: unknown;
   isSecret: boolean;
   updatedAt: string | null;
+  /** Nome técnico e rótulo da definição (a API devolve resolvido). */
+  name?: string;
+  label?: string;
 }
 
 export interface UpsertCustomFieldValueRequest {

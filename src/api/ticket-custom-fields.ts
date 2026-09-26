@@ -1,9 +1,22 @@
-﻿import { api } from "./client";
+import { api } from "./client";
 import {
   CustomFieldScopeType,
   normalizeCustomFieldScopeType,
   type CustomFieldValueItem,
 } from "./custom-fields";
+
+/** Converte o "valueJson" da API no valor utilizável pelo formulário. */
+function parseValueJson(rawValue: unknown, rawJson: unknown): unknown {
+  if (rawValue !== undefined && rawValue !== null) return rawValue;
+  if (typeof rawJson !== 'string') return rawJson ?? null;
+  const text = rawJson.trim();
+  if (!text || text === 'null') return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return rawJson;
+  }
+}
 
 function normalizeTicketCustomFieldValue(
   raw: Record<string, unknown>,
@@ -21,7 +34,11 @@ function normalizeTicketCustomFieldValue(
     scopeType: normalizeCustomFieldScopeType(
       raw.scopeType ?? raw.ScopeType ?? CustomFieldScopeType.Ticket,
     ),
-    value: raw.value ?? raw.Value ?? null,
+    // A API devolve "valueJson" (JSON serializado); antes líamos só "value" e os
+    // valores salvos nunca apareciam.
+    value: parseValueJson(raw.value ?? raw.Value, raw.valueJson ?? raw.ValueJson),
+    name: raw.name === undefined && raw.Name === undefined ? undefined : String(raw.name ?? raw.Name),
+    label: raw.label === undefined && raw.Label === undefined ? undefined : String(raw.label ?? raw.Label),
     isSecret: Boolean(raw.isSecret ?? raw.IsSecret ?? false),
     updatedAt:
       raw.updatedAt === null || raw.UpdatedAt === null

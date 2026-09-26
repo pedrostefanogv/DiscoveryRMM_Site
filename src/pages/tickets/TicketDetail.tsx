@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Send, Lock, Unlock, Clock, Activity, ChevronDown, BookOpen, Paperclip, Upload, File, CheckCircle, XCircle, Loader2, UserPlus, UserMinus, Wrench, Copy, RotateCcw, Star, Trash2, Link2, ClipboardList } from 'lucide-react';
+import { ArrowLeft, Send, Lock, Unlock, Clock, Activity, ChevronDown, BookOpen, Paperclip, Upload, File, CheckCircle, XCircle, Loader2, Wrench, Copy, RotateCcw, ClipboardList } from 'lucide-react';
 import { MarkdownViewer } from '@/components/ui/MarkdownViewer';
 import { useAuth } from '@/auth/AuthContext';
 import { getUserIdFromJwt } from '@/auth/jwt';
@@ -8,10 +8,7 @@ import { AppApprovalScopeType, AutomationTaskActionType } from '@/api';
 import {
   useTicket,
   useTicketComments,
-  useTicketWatchers,
   useAddComment,
-  useAddTicketWatcher,
-  useRemoveTicketWatcher,
   useUpdateTicketWorkflow,
   useUpdateTicket,
   useTicketTimeline,
@@ -20,18 +17,17 @@ import {
   usePrepareTicketUpload,
   useCompleteTicketUpload,
   useReopenTicket,
-  useRateTicket,
-  useTicketRelations,
-  useCreateTicketRelation,
-  useDeleteTicketRelation,
 } from '@/hooks/useTickets';
 import { useTicketMacros } from '@/hooks/useSupportProductivity';
+import { TicketRatingCard } from '@/components/tickets/TicketRatingCard';
+import { WatchersSection } from '@/components/tickets/WatchersSection';
+import { TicketFieldsSection } from '@/components/tickets/TicketFieldsSection';
+import { TicketRelationsSection } from '@/components/tickets/TicketRelationsSection';
 import { useTicketAnswers } from '@/hooks/useTicketAnswers';
 import { useAutomationTasks } from '@/hooks/useAutomation';
 import { useTicketAttachmentSettings } from '@/hooks/useConfigurationApi';
 import { useSiteTicketAttachmentSettings, useClientTicketAttachmentSettings } from '@/hooks/useConfigurationApi';
 import { useWorkflowStates } from '@/hooks/useWorkflow';
-import { useCustomFieldDefinitions } from '@/hooks/useCustomFields';
 import { useIamUsers } from '@/hooks/useIdentity';
 import {
   useApproveTicketAutomationLink,
@@ -44,29 +40,16 @@ import {
   useTicketAiSummary,
   useTicketAiTriage,
 } from '@/hooks/useTicketAi';
-import {
-  useTicketCustomFields,
-  useUpsertTicketCustomFieldValue,
-} from '@/hooks/useTicketCustomFields';
 import { Button, Card, CardHeader, Badge, Loading, ErrorDisplay, TextArea, Select, Input } from '@/components/ui';
-import {
-  CustomFieldDataType,
-  CustomFieldScopeType,
-  formatCustomFieldValue,
-  getCustomFieldDataTypeLabel,
-  parseCustomFieldValue,
-  ticketsApi,
-} from '@/api';
+import { ticketsApi } from '@/api';
 import type {
   AutomationTaskSummary,
-  CustomFieldDefinition,
   Ticket,
   TicketAutomationLink,
   TicketAiSuggestedReplyResponse,
   TicketAiSummaryResponse,
   TicketAiTriageResponse,
   TicketPriority,
-  TicketRelationKind,
   UpdateTicketRequest,
   UserDto,
 } from '@/api';
@@ -338,6 +321,8 @@ export default function TicketDetail() {
 
         {/* Sidebar */}
         <div className="space-y-4">
+          {/* CSAT primeiro; o card só aparece depois do encerramento. */}
+          <TicketRatingCard ticket={t} />
           <TicketSummaryPanel
             ticketId={id!}
             category={t.category}
@@ -345,78 +330,16 @@ export default function TicketDetail() {
             priorityColor={p.color}
             assignedDisplayName={assignedDisplayName}
             assignedEmail={assignedEmail}
+            assignedToUserId={t.assignedToUserId}
             updatedAt={t.updatedAt}
             closedAt={t.closedAt}
             templateName={t.templateName}
           />
-          <TicketCustomFieldsPanel ticketId={id!} />
           <WorkflowPanel ticketId={id!} currentStateId={t.workflowStateId} />
-          <TicketRatingPanel ticket={t} />
-          <RelationsPanel ticketId={id!} />
-          <WatchersPanel ticketId={id!} assignedToUserId={t.assignedToUserId} />
         </div>
       </div>
     </div>
   );
-}
-
-function formatDateInputValue(value: string) {
-  return value.slice(0, 10);
-}
-
-function formatDateTimeLocalInputValue(value: string) {
-  const parsed = new Date(value);
-
-  if (Number.isNaN(parsed.getTime())) {
-    return value.slice(0, 16);
-  }
-
-  const year = parsed.getFullYear();
-  const month = String(parsed.getMonth() + 1).padStart(2, '0');
-  const day = String(parsed.getDate()).padStart(2, '0');
-  const hours = String(parsed.getHours()).padStart(2, '0');
-  const minutes = String(parsed.getMinutes()).padStart(2, '0');
-
-  return `${year}-${month}-${day}T${hours}:${minutes}`;
-}
-
-function formatTicketCustomFieldDraftValue(
-  dataType: CustomFieldDataType,
-  value: unknown,
-) {
-  if (value === null || value === undefined) {
-    return '';
-  }
-
-  switch (dataType) {
-    case CustomFieldDataType.Boolean:
-      return String(value);
-    case CustomFieldDataType.ListBox:
-      return Array.isArray(value)
-        ? value.map((item) => String(item ?? '')).join(', ')
-        : formatCustomFieldValue(value);
-    case CustomFieldDataType.Date:
-      return typeof value === 'string'
-        ? formatDateInputValue(value)
-        : formatDateInputValue(formatCustomFieldValue(value));
-    case CustomFieldDataType.DateTime:
-      return typeof value === 'string'
-        ? formatDateTimeLocalInputValue(value)
-        : formatDateTimeLocalInputValue(formatCustomFieldValue(value));
-    default:
-      return formatCustomFieldValue(value);
-  }
-}
-
-function parseTicketCustomFieldDraftValue(
-  dataType: CustomFieldDataType,
-  input: string,
-) {
-  if (dataType === CustomFieldDataType.Boolean && !input.trim()) {
-    return null;
-  }
-
-  return parseCustomFieldValue(dataType, input);
 }
 
 function normalizeTicketPriority(value: unknown): TicketPriority | null {
@@ -1149,474 +1072,6 @@ function AutomationLinksPanel({
   );
 }
 
-function TicketCustomFieldsPanel({ ticketId }: { ticketId: string }) {
-  const definitionsQuery = useCustomFieldDefinitions({
-    scopeType: CustomFieldScopeType.Ticket,
-  });
-  const valuesQuery = useTicketCustomFields(ticketId);
-  const upsertValue = useUpsertTicketCustomFieldValue();
-  const [drafts, setDrafts] = useState<Record<string, string>>({});
-  const [savingDefinitionId, setSavingDefinitionId] = useState<string | null>(null);
-
-  const definitions = useMemo(
-    () =>
-      (Array.isArray(definitionsQuery.data) ? [...definitionsQuery.data] : [])
-        .filter((definition) => definition.isActive)
-        .sort((left, right) => left.label.localeCompare(right.label, 'pt-BR')),
-    [definitionsQuery.data],
-  );
-
-  const valuesByDefinitionId = useMemo(
-    () => new Map((Array.isArray(valuesQuery.data) ? valuesQuery.data : []).map((item) => [item.definitionId, item])),
-    [valuesQuery.data],
-  );
-
-  // Assinatura do conjunto de campos (muda quando muda o ticket/definições).
-  const definitionsSignature = useMemo(
-    () => `${ticketId}::${definitions.map((definition) => definition.id).join('|')}`,
-    [ticketId, definitions],
-  );
-  const seededSignatureRef = useRef('');
-  const dirtyDefinitionIdsRef = useRef<Set<string>>(new Set());
-
-  useEffect(() => {
-    const sameShape = seededSignatureRef.current === definitionsSignature;
-
-    // Refetch (ex.: após salvar um campo) NÃO sobrescreve campos que o usuário
-    // editou; só sincroniza com o servidor os campos não editados.
-    setDrafts((current) => {
-      const next: Record<string, string> = {};
-      for (const definition of definitions) {
-        const serverValue = formatTicketCustomFieldDraftValue(
-          definition.dataType,
-          valuesByDefinitionId.get(definition.id)?.value,
-        );
-        next[definition.id] =
-          sameShape && dirtyDefinitionIdsRef.current.has(definition.id)
-            ? current[definition.id] ?? serverValue
-            : serverValue;
-      }
-      return next;
-    });
-
-    if (!sameShape) {
-      // Troca de ticket/conjunto: limpa TODAS as flags de "dirty" — flags do
-      // ticket anterior fariam o próximo refetch preservar valores antigos.
-      dirtyDefinitionIdsRef.current.clear();
-      seededSignatureRef.current = definitionsSignature;
-    }
-  }, [definitions, definitionsSignature, valuesByDefinitionId]);
-
-  const handleSaveValue = async (definition: CustomFieldDefinition) => {
-    setSavingDefinitionId(definition.id);
-
-    try {
-      await upsertValue.mutateAsync({
-        ticketId,
-        definitionId: definition.id,
-        value: parseTicketCustomFieldDraftValue(
-          definition.dataType,
-          drafts[definition.id] ?? '',
-        ),
-      });
-
-      dirtyDefinitionIdsRef.current.delete(definition.id);
-      toast.success(`Campo ${definition.label} atualizado.`);
-    } catch (error) {
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : 'Não foi possível salvar o campo customizado.',
-      );
-    } finally {
-      setSavingDefinitionId(null);
-    }
-  };
-
-  return (
-    <Card>
-      <CardHeader
-        title="Campos customizados"
-        subtitle="Valores específicos deste chamado definidos pela operação."
-      />
-      <div className="space-y-3">
-        {definitionsQuery.isLoading || valuesQuery.isLoading ? (
-          <Loading />
-        ) : definitionsQuery.isError || valuesQuery.isError ? (
-          <p className="text-sm text-danger">
-            Erro ao carregar os campos customizados do ticket.
-          </p>
-        ) : definitions.length === 0 ? (
-          <p className="text-sm text-muted">
-            Nenhum campo customizado ativo para tickets.
-          </p>
-        ) : (
-          definitions.map((definition) => {
-            const valueItem = valuesByDefinitionId.get(definition.id);
-
-            return (
-              <div
-                key={definition.id}
-                className="rounded-lg border border-border bg-surface-light px-3 py-3"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="truncate text-sm font-medium text-foreground">
-                        {definition.label}
-                      </p>
-                      <Badge color="slate">
-                        {getCustomFieldDataTypeLabel(definition.dataType)}
-                      </Badge>
-                    </div>
-                    {definition.description && (
-                      <p className="mt-1 text-xs text-muted">
-                        {definition.description}
-                      </p>
-                    )}
-                    {valueItem?.updatedAt && (
-                      <p className="mt-2 text-[11px] text-muted">
-                        Atualizado em{' '}
-                        {new Date(valueItem.updatedAt).toLocaleString('pt-BR')}
-                      </p>
-                    )}
-                  </div>
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    onClick={() => void handleSaveValue(definition)}
-                    loading={savingDefinitionId === definition.id}
-                  >
-                    Salvar
-                  </Button>
-                </div>
-
-                <div className="mt-3">
-                  <TicketCustomFieldInput
-                    definition={definition}
-                    value={drafts[definition.id] ?? ''}
-                    onChange={(value) => {
-                      dirtyDefinitionIdsRef.current.add(definition.id);
-                      setDrafts((current) => ({
-                        ...current,
-                        [definition.id]: value,
-                      }));
-                    }}
-                  />
-                </div>
-              </div>
-            );
-          })
-        )}
-      </div>
-    </Card>
-  );
-}
-
-function TicketCustomFieldInput({
-  definition,
-  value,
-  onChange,
-}: {
-  definition: CustomFieldDefinition;
-  value: string;
-  onChange: (value: string) => void;
-}) {
-  switch (definition.dataType) {
-    case CustomFieldDataType.Boolean:
-      return (
-        <Select
-          label="Valor"
-          value={value}
-          options={[
-            { value: '', label: 'Não definido' },
-            { value: 'true', label: 'Verdadeiro' },
-            { value: 'false', label: 'Falso' },
-          ]}
-          onChange={(event) => onChange(event.target.value)}
-        />
-      );
-    case CustomFieldDataType.Dropdown:
-      return (
-        <Select
-          label="Valor"
-          value={value}
-          options={[
-            { value: '', label: 'Selecione...' },
-            ...definition.options.map((option) => ({
-              value: option,
-              label: option,
-            })),
-          ]}
-          onChange={(event) => onChange(event.target.value)}
-        />
-      );
-    case CustomFieldDataType.ListBox:
-      return (
-        <TextArea
-          label="Valor"
-          rows={2}
-          value={value}
-          hint={
-            definition.options.length > 0
-              ? `Opções permitidas: ${definition.options.join(', ')}`
-              : 'Separe múltiplos valores por vírgula.'
-          }
-          onChange={(event) => onChange(event.target.value)}
-        />
-      );
-    case CustomFieldDataType.Integer:
-      return (
-        <Input
-          label="Valor"
-          type="number"
-          step="1"
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-        />
-      );
-    case CustomFieldDataType.Decimal:
-      return (
-        <Input
-          label="Valor"
-          type="number"
-          step="any"
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-        />
-      );
-    case CustomFieldDataType.Date:
-      return (
-        <Input
-          label="Valor"
-          type="date"
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-        />
-      );
-    case CustomFieldDataType.DateTime:
-      return (
-        <Input
-          label="Valor"
-          type="datetime-local"
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-        />
-      );
-    default:
-      return (
-        <Input
-          label="Valor"
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-        />
-      );
-  }
-}
-
-function WatchersPanel({
-  ticketId,
-  assignedToUserId,
-}: {
-  ticketId: string;
-  assignedToUserId: string | null;
-}) {
-  const watchers = useTicketWatchers(ticketId);
-  const users = useIamUsers();
-  const addWatcher = useAddTicketWatcher();
-  const removeWatcher = useRemoveTicketWatcher();
-  const [selectedUserId, setSelectedUserId] = useState('');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [isAdding, setIsAdding] = useState(false);
-  const [removingWatcherId, setRemovingWatcherId] = useState<string | null>(null);
-
-  const watcherItems = watchers.data ?? [];
-  const userItems = users.data ?? [];
-
-  const userMap = useMemo(
-    () => new Map<string, UserDto>(userItems.map((user) => [user.id, user])),
-    [userItems],
-  );
-
-  const existingWatcherIds = useMemo(
-    () => new Set(watcherItems.map((watcher) => watcher.userId)),
-    [watcherItems],
-  );
-
-  const availableUsers = useMemo(
-    () => userItems.filter((user) => !existingWatcherIds.has(user.id)),
-    [existingWatcherIds, userItems],
-  );
-
-  const filteredAvailableUsers = useMemo(() => {
-    const term = searchTerm.trim().toLowerCase();
-
-    if (!term) {
-      return availableUsers.slice(0, 30);
-    }
-
-    return availableUsers
-      .filter((user) => {
-        const haystack = `${user.fullName ?? ''} ${user.login ?? ''} ${user.email ?? ''}`.toLowerCase();
-        return haystack.includes(term);
-      })
-      .slice(0, 30);
-  }, [availableUsers, searchTerm]);
-
-  const userOptions = [
-    {
-      value: '',
-      label: filteredAvailableUsers.length === 0 ? 'Nenhum usuario encontrado' : 'Selecione um usuario',
-    },
-    ...filteredAvailableUsers.map((user) => ({
-      value: user.id,
-      label: user.fullName || user.login || user.email,
-    })),
-  ];
-
-  const closeAddWatcher = () => {
-    setIsAdding(false);
-    setSelectedUserId('');
-    setSearchTerm('');
-  };
-
-  const handleAddWatcher = () => {
-    if (!selectedUserId) return;
-
-    addWatcher.mutate(
-      {
-        ticketId,
-        data: { userId: selectedUserId },
-      },
-      {
-        onSuccess: () => {
-          closeAddWatcher();
-          toast.success('Watcher adicionado com sucesso.');
-        },
-        onError: (error) => {
-          toast.error(error instanceof Error ? error.message : 'Erro ao adicionar watcher.');
-        },
-      },
-    );
-  };
-
-  const handleRemoveWatcher = (userId: string) => {
-    setRemovingWatcherId(userId);
-    removeWatcher.mutate(
-      { ticketId, userId },
-      {
-        onSuccess: () => {
-          toast.success('Watcher removido com sucesso.');
-        },
-        onError: (error) => {
-          toast.error(error instanceof Error ? error.message : 'Erro ao remover watcher.');
-        },
-        onSettled: () => {
-          setRemovingWatcherId(null);
-        },
-      },
-    );
-  };
-
-  return (
-    <Card>
-      <div className="mb-3 flex items-center justify-between gap-2">
-        <div>
-          <h3 className="text-base font-semibold text-foreground">Watchers</h3>
-          <p className="text-xs text-muted">
-            {watcherItems.length === 0 ? 'Sem watchers' : `${watcherItems.length} acompanhando`}
-          </p>
-        </div>
-        <Button
-          size="sm"
-          variant={isAdding ? 'secondary' : 'ghost'}
-          className="px-2"
-          onClick={() => (isAdding ? closeAddWatcher() : setIsAdding(true))}
-          aria-label="Adicionar watcher"
-        >
-          <UserPlus className="h-4 w-4" />
-        </Button>
-      </div>
-
-      <div className="space-y-3">
-        {watchers.isLoading || users.isLoading ? (
-          <Loading />
-        ) : watchers.isError || users.isError ? (
-          <p className="text-sm text-danger">Erro ao carregar watchers.</p>
-        ) : (
-          <>
-            {watcherItems.length > 0 && (
-              <div className="space-y-2">
-              {watcherItems.map((watcher) => {
-                const user = userMap.get(watcher.userId);
-                const displayName = user?.fullName || user?.login || user?.email || watcher.userId;
-                const isAssignedUser = assignedToUserId === watcher.userId;
-
-                return (
-                  <div key={watcher.id} className="rounded-lg border border-border bg-surface-light px-3 py-2">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-medium text-foreground">{displayName}</p>
-                        <div className="mt-1 flex flex-wrap gap-2">
-                          {user?.email && user.email !== displayName && <Badge color="slate">{user.email}</Badge>}
-                          {isAssignedUser && <Badge color="accent">Responsavel</Badge>}
-                        </div>
-                      </div>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => handleRemoveWatcher(watcher.userId)}
-                        loading={removingWatcherId === watcher.userId}
-                        aria-label={`Remover watcher ${displayName}`}
-                      >
-                        <UserMinus className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                );
-              })}
-              </div>
-            )}
-
-            {isAdding && (
-              <div className={`${watcherItems.length > 0 ? 'border-t border-border pt-3' : ''} space-y-3`}>
-                <Input
-                  label="Pesquisar usuario"
-                  value={searchTerm}
-                  onChange={(event) => {
-                    setSearchTerm(event.target.value);
-                    setSelectedUserId('');
-                  }}
-                  placeholder="Nome, login ou e-mail"
-                />
-                <Select
-                  label="Selecionar usuario"
-                  options={userOptions}
-                  value={selectedUserId}
-                  onChange={(event) => setSelectedUserId(event.target.value)}
-                  disabled={filteredAvailableUsers.length === 0}
-                />
-                <div className="flex justify-end gap-2">
-                  <Button size="sm" variant="ghost" onClick={closeAddWatcher}>
-                    Cancelar
-                  </Button>
-                  <Button
-                    size="sm"
-                    onClick={handleAddWatcher}
-                    loading={addWatcher.isPending}
-                    disabled={!selectedUserId}
-                  >
-                    Adicionar
-                  </Button>
-                </div>
-              </div>
-            )}
-          </>
-        )}
-      </div>
-    </Card>
-  );
-}
 
 function SlaProgressBar({ pct, barColor }: { pct: number; barColor: string }) {
   const trackRef = useRef<HTMLDivElement>(null);
@@ -1660,158 +1115,6 @@ function ReopenButton({ ticketId, isClosed }: { ticketId: string; isClosed: bool
     <Button size="sm" variant="secondary" onClick={handleReopen} loading={reopen.isPending}>
       <RotateCcw className="h-4 w-4" /> Reabrir
     </Button>
-  );
-}
-
-function TicketRatingPanel({ ticket }: { ticket: Ticket }) {
-  const rate = useRateTicket();
-  const [value, setValue] = useState(ticket.rating ?? 0);
-  const [feedback, setFeedback] = useState(ticket.ratingFeedback ?? '');
-  const isClosed = Boolean(ticket.closedAt) || ticket.rating != null;
-
-  useEffect(() => {
-    setValue(ticket.rating ?? 0);
-    setFeedback(ticket.ratingFeedback ?? '');
-  }, [ticket.id, ticket.rating, ticket.ratingFeedback]);
-
-  const submit = (rating: number) => {
-    if (rating < 1) return;
-    rate.mutate(
-      { id: ticket.id, data: { rating, feedback: feedback.trim() || null } },
-      {
-        onSuccess: () => toast.success('Avaliação registrada'),
-        onError: (err) => toast.error(err instanceof Error ? err.message : 'Erro ao avaliar o chamado'),
-      },
-    );
-  };
-
-  return (
-    <Card>
-      <CardHeader title="Avaliação (CSAT)" />
-      {!isClosed ? (
-        <p className="text-sm text-muted">Disponível após o encerramento do chamado.</p>
-      ) : (
-        <div className="space-y-3">
-          <div className="flex items-center gap-1" role="radiogroup" aria-label="Nota da avaliação">
-            {[1, 2, 3, 4, 5].map((star) => (
-              <button
-                key={star}
-                type="button"
-                aria-label={star + ' estrela(s)'}
-                onClick={() => setValue(star)}
-                className="p-0.5"
-              >
-                <Star className={star <= value ? 'h-5 w-5 fill-amber-400 text-amber-400' : 'h-5 w-5 text-muted'} />
-              </button>
-            ))}
-          </div>
-          <TextArea
-            placeholder="Feedback (opcional)"
-            value={feedback}
-            onChange={(e) => setFeedback(e.target.value)}
-          />
-          <Button size="sm" onClick={() => submit(value)} loading={rate.isPending} disabled={value < 1}>
-            Salvar avaliação
-          </Button>
-          {ticket.ratedAt && ticket.rating ? (
-            <p className="text-xs text-muted">
-              Avaliado em {new Date(ticket.ratedAt).toLocaleString('pt-BR')}
-              {ticket.ratedBy ? ' por ' + ticket.ratedBy : ''}
-            </p>
-          ) : null}
-        </div>
-      )}
-    </Card>
-  );
-}
-
-const RELATION_TYPE_OPTIONS: { value: TicketRelationKind; label: string }[] = [
-  { value: 'Duplicate', label: 'Duplicado de' },
-  { value: 'Blocks', label: 'Bloqueia' },
-  { value: 'RelatesTo', label: 'Relacionado a' },
-  { value: 'ParentOf', label: 'Pai de' },
-  { value: 'ChildOf', label: 'Filho de' },
-];
-
-function RelationsPanel({ ticketId }: { ticketId: string }) {
-  const relations = useTicketRelations(ticketId);
-  const create = useCreateTicketRelation();
-  const remove = useDeleteTicketRelation();
-  const [targetId, setTargetId] = useState('');
-  const [relationType, setRelationType] = useState<TicketRelationKind>('RelatesTo');
-
-  const items = Array.isArray(relations.data) ? relations.data : [];
-
-  const add = () => {
-    if (!targetId.trim()) return;
-    create.mutate(
-      { id: ticketId, data: { targetTicketId: targetId.trim(), relationType } },
-      {
-        onSuccess: () => {
-          toast.success('Relação criada');
-          setTargetId('');
-        },
-        onError: (err) => toast.error(err instanceof Error ? err.message : 'Erro ao criar relação'),
-      },
-    );
-  };
-
-  return (
-    <Card>
-      <CardHeader title="Relações" subtitle={items.length + ' vínculo(s)'} />
-      <div className="space-y-3">
-        {relations.isLoading && <Loading />}
-        {items.map((rel) => {
-          const other = rel.sourceTicketId === ticketId ? rel.targetTicketId : rel.sourceTicketId;
-          return (
-            <div key={rel.id} className="flex items-center justify-between gap-2 rounded-lg bg-surface-light px-3 py-2">
-              <div className="min-w-0">
-                <p className="truncate text-xs font-medium text-foreground">{rel.relationType}</p>
-                <p className="truncate text-xs text-muted">{other}</p>
-              </div>
-              <button
-                type="button"
-                aria-label="Remover relação"
-                onClick={() =>
-                  remove.mutate(
-                    { id: ticketId, relationId: rel.id },
-                    { onError: () => toast.error('Erro ao remover relação') },
-                  )
-                }
-                className="p-1 text-muted transition-colors hover:text-danger"
-              >
-                <Trash2 className="h-4 w-4" />
-              </button>
-            </div>
-          );
-        })}
-        {!relations.isLoading && items.length === 0 && (
-          <p className="text-sm text-muted">Nenhuma relação.</p>
-        )}
-        <div className="space-y-2 border-t border-border pt-3">
-          <Input
-            label="ID do chamado relacionado"
-            value={targetId}
-            onChange={(e) => setTargetId(e.target.value)}
-            placeholder="GUID do chamado"
-          />
-          <Select
-            options={RELATION_TYPE_OPTIONS}
-            value={relationType}
-            onChange={(e) => setRelationType(e.target.value as TicketRelationKind)}
-          />
-          <Button
-            size="sm"
-            className="w-full"
-            onClick={add}
-            loading={create.isPending}
-            disabled={!targetId.trim()}
-          >
-            <Link2 className="h-4 w-4" /> Adicionar relação
-          </Button>
-        </div>
-      </div>
-    </Card>
   );
 }
 
@@ -1899,6 +1202,7 @@ function TicketSummaryPanel({
   priorityColor,
   assignedDisplayName,
   assignedEmail,
+  assignedToUserId,
   updatedAt,
   closedAt,
   templateName,
@@ -1909,6 +1213,7 @@ function TicketSummaryPanel({
   priorityColor: 'slate' | 'success' | 'warning' | 'danger';
   assignedDisplayName: string;
   assignedEmail: string | null;
+  assignedToUserId: string | null;
   updatedAt: string;
   closedAt: string | null;
   templateName?: string | null;
@@ -2022,11 +1327,23 @@ function TicketSummaryPanel({
       </dl>
 
       <div className="mt-4 border-t border-border pt-4">
+        <WatchersSection ticketId={ticketId} assignedToUserId={assignedToUserId} />
+      </div>
+
+      <div className="mt-4 border-t border-border pt-4">
         <div className="mb-2 flex items-center gap-2 text-muted-foreground">
           <Clock className="h-4 w-4" />
           <p className="text-sm font-medium">SLA</p>
         </div>
         {renderSlaContent()}
+      </div>
+
+      <div className="mt-4 border-t border-border pt-4">
+        <TicketFieldsSection ticketId={ticketId} />
+      </div>
+
+      <div className="mt-4 border-t border-border pt-4">
+        <TicketRelationsSection ticketId={ticketId} />
       </div>
     </Card>
   );
