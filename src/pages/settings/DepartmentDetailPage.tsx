@@ -990,7 +990,7 @@ function MemberProfileRow({ member }: { member: DepartmentMemberProfileDto }) {
             1ª resposta: <strong className="text-foreground">{formatMinutes(m.avgFirstResponseMinutes)}</strong>
           </span>
           <span>
-            CSAT: <strong className="text-foreground">{m.csatAverage === null ? "—" : m.csatAverage.toFixed(1)}</strong>
+            CSAT: <strong className="text-foreground">{m.csatAverage == null ? "—" : m.csatAverage.toFixed(1)}</strong>
           </span>
           <span>
             SLA violado: <strong className="text-foreground">{formatPercent(m.slaBreachRate)}</strong>
