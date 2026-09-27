@@ -17,6 +17,7 @@ import {
   ConfigurationFieldEditor,
   ConfigurationPageHeader,
   ConfigurationSectionCard,
+  tintedIcon,
 } from "@/components/configuration";
 import { Button, ErrorDisplay, Loading, Select } from "@/components/ui";
 import {
@@ -292,7 +293,7 @@ export default function SiteConfigurationPage() {
         title="Escopo de Site"
         subtitle="Selecione cliente e site para editar apenas configurações válidas neste escopo."
         icon={<MapPin className="h-4 w-4" />}
-        iconClassName="bg-cyan-500/20 text-cyan-400"
+        iconClassName={tintedIcon.cyan}
       >
 
         {clientsQuery.isLoading && <Loading message="Carregando clientes..." />}
@@ -355,7 +356,7 @@ export default function SiteConfigurationPage() {
               title="Funcionalidades do Sistema"
               subtitle="Ative ou desative módulos que impactam os agentes desse site."
               icon={<ShieldCheck className="h-4 w-4" />}
-              iconClassName="bg-sky-500/20 text-sky-400"
+              iconClassName={tintedIcon.sky}
             >
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                 {featureFields.map((field) =>
@@ -370,7 +371,7 @@ export default function SiteConfigurationPage() {
               title="Política da Loja de Aplicativos"
               subtitle="Define quais aplicativos são permitidos para os agentes do site."
               icon={<Store className="h-4 w-4" />}
-              iconClassName="bg-violet-500/20 text-violet-400"
+              iconClassName={tintedIcon.violet}
             >
               <div className="space-y-4">
                 {policyFields.map((field) =>
@@ -385,7 +386,7 @@ export default function SiteConfigurationPage() {
               title="Intervalos e Comportamento do Agente"
               subtitle="Frequência de heartbeat, detecção de offline e coleta de inventário no escopo do site."
               icon={<Clock className="h-4 w-4" />}
-              iconClassName="bg-emerald-500/20 text-emerald-400"
+              iconClassName={tintedIcon.emerald}
             >
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                 {agentFields.map((field) =>
@@ -400,7 +401,7 @@ export default function SiteConfigurationPage() {
               title="Perfil do Site"
               subtitle="Dados cadastrais e de contato específicos desta unidade."
               icon={<UserSquare2 className="h-4 w-4" />}
-              iconClassName="bg-amber-500/20 text-amber-400"
+              iconClassName={tintedIcon.amber}
             >
               <div className="grid gap-4 xl:grid-cols-2">
                 {siteProfileFields.map((field) =>
@@ -415,7 +416,7 @@ export default function SiteConfigurationPage() {
               title="Configurações Avançadas"
               subtitle="Campos estruturados de integração e atualização automática."
               icon={<Bot className="h-4 w-4" />}
-              iconClassName="bg-blue-500/20 text-blue-400"
+              iconClassName={tintedIcon.blue}
             >
               <div className="space-y-4">
                 {advancedFields.map((field) =>

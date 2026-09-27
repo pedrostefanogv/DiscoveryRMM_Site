@@ -30,7 +30,16 @@ import {
   BackgroundProcessingCard,
   ConfigHealthCard,
   LockedFieldsEditor,
+  chipActive,
+  chipCustom,
   parseBackgroundProcessingSettings,
+  selectedIcon,
+  selectedSurface,
+  statusSurface,
+  statusText,
+  tintedIcon,
+  unselectedIcon,
+  unselectedSurface,
 } from "@/components/configuration";
 import { Button, Card, CardHeader, ErrorDisplay, Input, Loading, Modal } from "@/components/ui";
 import {
@@ -620,14 +629,12 @@ export default function ServerConfigurationPage() {
         onClick={toggle}
         disabled={isToggling}
         className={`group relative flex w-full items-start gap-3 rounded-xl border p-4 text-left transition-all ${
-          isEnabled
-            ? "border-sky-500/30 bg-sky-500/10 hover:border-sky-500/50"
-            : "border-border bg-surface-light hover:border-border"
+          isEnabled ? `${selectedSurface} hover:border-sky-500/50` : unselectedSurface
         }`}
       >
         <div
           className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors ${
-            isEnabled ? "bg-sky-500/20 text-sky-400" : "bg-surface-light text-muted"
+            isEnabled ? selectedIcon : unselectedIcon
           }`}
         >
           {featureIcons[field.key] ?? <Zap className="h-4 w-4" />}
@@ -643,7 +650,7 @@ export default function ServerConfigurationPage() {
         </div>
 
         {isToggling ? (
-          <div className="mt-0.5 h-5 w-5 shrink-0 animate-spin rounded-full border-2 border-sky-500/30 border-t-sky-400" />
+          <div className="mt-0.5 h-5 w-5 shrink-0 animate-spin rounded-full border-2 border-sky-500/30 border-t-sky-600 dark:border-t-sky-400" />
         ) : (
           <div
             className={`relative mt-0.5 h-5 w-9 shrink-0 rounded-full transition-colors ${
@@ -675,9 +682,7 @@ export default function ServerConfigurationPage() {
           <div className="flex flex-wrap items-center gap-2">
             <span
               className={`rounded-full border px-3 py-1 text-xs ${
-                pendingKeys.size > 0
-                  ? "border-amber-500/40 bg-amber-500/10 text-amber-300"
-                  : "border-border bg-surface-light text-muted"
+                pendingKeys.size > 0 ? statusSurface.warning : statusSurface.neutral
               }`}
             >
               {pendingKeys.size > 0
@@ -746,21 +751,21 @@ export default function ServerConfigurationPage() {
             </div>
             <div className="rounded-xl border border-border bg-surface-light p-3">
               <p className="text-xs uppercase tracking-wide text-muted">NATS</p>
-              <p className={`mt-1 text-lg font-semibold ${natsEnabled ? "text-emerald-300" : "text-amber-300"}`}>
+              <p className={`mt-1 text-lg font-semibold ${natsEnabled ? statusText.success : statusText.warning}`}>
                 {natsEnabled ? "Habilitado" : "Desabilitado"}
               </p>
               <p className="text-xs text-muted">Canal de realtime e comunicação</p>
             </div>
             <div className="rounded-xl border border-border bg-surface-light p-3">
               <p className="text-xs uppercase tracking-wide text-muted">Object Storage</p>
-              <p className={`mt-1 text-lg font-semibold ${storageConfigured ? "text-emerald-300" : "text-amber-300"}`}>
+              <p className={`mt-1 text-lg font-semibold ${storageConfigured ? statusText.success : statusText.warning}`}>
                 {storageConfigured ? "Configurado" : "Pendente"}
               </p>
               <p className="text-xs text-muted">Endpoint + bucket para anexos</p>
             </div>
             <div className="rounded-xl border border-border bg-surface-light p-3">
               <p className="text-xs uppercase tracking-wide text-muted">Alterações pendentes</p>
-              <p className={`mt-1 text-lg font-semibold ${pendingKeys.size > 0 ? "text-amber-300" : "text-muted-foreground"}`}>
+              <p className={`mt-1 text-lg font-semibold ${pendingKeys.size > 0 ? statusText.warning : statusText.neutral}`}>
                 {pendingKeys.size}
               </p>
               <p className="text-xs text-muted">
@@ -795,7 +800,7 @@ export default function ServerConfigurationPage() {
           />
           {!collapsedSections.policy && (
             <div className="flex items-start gap-3">
-              <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-500/20 text-violet-400">
+              <div className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${tintedIcon.violet}`}>
                 <Store className="h-4 w-4" />
               </div>
               <div className="flex-1">
@@ -814,7 +819,7 @@ export default function ServerConfigurationPage() {
           />
           {!collapsedSections.agent && (
             <div className="flex items-start gap-3">
-              <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-500/20 text-emerald-400">
+              <div className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${tintedIcon.emerald}`}>
                 <Clock className="h-4 w-4" />
               </div>
               <div className="grid flex-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -865,9 +870,7 @@ export default function ServerConfigurationPage() {
               {testResult && (
                 <div
                   className={`flex items-start gap-3 rounded-lg border p-3 text-sm ${
-                    testResult.success
-                      ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-300"
-                      : "border-red-500/20 bg-red-500/10 text-red-300"
+                    testResult.success ? statusSurface.success : statusSurface.danger
                   }`}
                 >
                   {testResult.success ? (
@@ -936,9 +939,7 @@ export default function ServerConfigurationPage() {
               {natsTestResult && (
                 <div
                   className={`flex items-start gap-3 rounded-lg border p-3 text-sm ${
-                    natsTestResult.ok
-                      ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-300"
-                      : "border-red-500/20 bg-red-500/10 text-red-300"
+                    natsTestResult.ok ? statusSurface.success : statusSurface.danger
                   }`}
                 >
                   {natsTestResult.ok ? (
@@ -970,9 +971,9 @@ export default function ServerConfigurationPage() {
                 </div>
               )}
 
-              <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 p-4 text-sm text-amber-100">
+              <div className={`rounded-lg border p-4 text-sm ${statusSurface.warning}`}>
                 <p className="font-medium">Geração de Account Key fora do escopo atual da API</p>
-                <p className="mt-1 text-xs text-amber-100/80">
+                <p className="mt-1 text-xs opacity-80">
                   O OpenAPI publicado não expõe endpoint de geração de account seed/xKey. Esta tela segue apenas os endpoints documentados para configuração e teste de conectividade.
                 </p>
               </div>
@@ -995,7 +996,7 @@ export default function ServerConfigurationPage() {
           />
           {!collapsedSections.advanced && (
             <div className="space-y-6">
-              <div className="rounded-lg border border-sky-500/20 bg-sky-500/10 p-3 text-xs text-sky-200">
+              <div className={`rounded-lg border p-3 text-xs ${statusSurface.info}`}>
                 Apenas o campo de branding foi separado para a tela dedicada. IA e auto-update continuam editáveis aqui.
               </div>
 
@@ -1010,7 +1011,7 @@ export default function ServerConfigurationPage() {
                 if (field.key === "backgroundProcessingSettingsJson") {
                   return (
                     <div key={field.key} className="flex items-start gap-3">
-                      <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-500/20 text-emerald-400">
+                      <div className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${tintedIcon.emerald}`}>
                         <Activity className="h-4 w-4" />
                       </div>
                       <div className="min-w-0 flex-1 space-y-1">
@@ -1036,7 +1037,7 @@ export default function ServerConfigurationPage() {
                 if (field.key === "lockedFieldsJson") {
                   return (
                     <div key={field.key} className="flex items-start gap-3">
-                      <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-red-500/20 text-red-400">
+                      <div className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${tintedIcon.red}`}>
                         <Lock className="h-4 w-4" />
                       </div>
                       <div className="min-w-0 flex-1">
@@ -1061,7 +1062,7 @@ export default function ServerConfigurationPage() {
                 if (field.key === "aiIntegrationSettingsJson") {
                   return (
                     <div key={field.key} className="flex items-start gap-3">
-                      <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-purple-500/20 text-purple-400">
+                      <div className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${tintedIcon.purple}`}>
                         <Bot className="h-4 w-4" />
                       </div>
                       <div className="min-w-0 flex-1 space-y-1">
@@ -1085,9 +1086,9 @@ export default function ServerConfigurationPage() {
                   lockedFieldsJson: <Lock className="h-4 w-4" />,
                 };
                 const colors: Record<string, string> = {
-                  autoUpdateSettingsJson: "bg-blue-500/20 text-blue-400",
-                  aiIntegrationSettingsJson: "bg-purple-500/20 text-purple-400",
-                  lockedFieldsJson: "bg-red-500/20 text-red-400",
+                  autoUpdateSettingsJson: tintedIcon.blue,
+                  aiIntegrationSettingsJson: tintedIcon.purple,
+                  lockedFieldsJson: tintedIcon.red,
                 };
                 return (
                   <div key={field.key} className="flex items-start gap-3">
@@ -1124,8 +1125,8 @@ export default function ServerConfigurationPage() {
       >
         <div className="space-y-4">
           <div className="flex items-start gap-3 rounded-lg border border-red-500/20 bg-red-500/10 p-3">
-            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-red-400" />
-            <p className="text-sm text-red-300">
+            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-red-600 dark:text-red-400" />
+            <p className="text-sm text-red-700 dark:text-red-300">
               Esta ação irá apagar todas as configurações personalizadas do servidor e restaurar
               os valores padrão do sistema. A operação não pode ser desfeita.
             </p>
@@ -1236,10 +1237,10 @@ export default function ServerConfigurationPage() {
           />
           <div aria-live="polite">
             {importPreview && (
-              <div className="rounded-lg border border-sky-500/30 bg-sky-500/10 p-3 text-xs text-sky-100">
+              <div className={`rounded-lg border p-3 text-xs ${statusSurface.info}`}>
                 <p className="font-medium">{importPreview.applied.length} campo(s) serão aplicados.</p>
                 {importPreview.unknown.length > 0 && (
-                  <p className="mt-1 text-amber-200">
+                  <p className={`mt-1 ${statusText.warning}`}>
                     Campos desconhecidos (bloquearão a importação): {importPreview.unknown.join(", ")}
                   </p>
                 )}
@@ -1462,14 +1463,12 @@ function TicketAttachmentSettingsCard({
           type="button"
           onClick={() => set("enabled", !form.enabled)}
           className={`group relative flex w-full items-start gap-3 rounded-xl border p-4 text-left transition-all ${
-            form.enabled
-              ? "border-sky-500/30 bg-sky-500/10 hover:border-sky-500/50"
-              : "border-border bg-surface-light hover:border-border"
+            form.enabled ? `${selectedSurface} hover:border-sky-500/50` : unselectedSurface
           }`}
         >
           <div
             className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors ${
-              form.enabled ? "bg-sky-500/20 text-sky-400" : "bg-surface-light text-muted"
+              form.enabled ? selectedIcon : unselectedIcon
             }`}
           >
             <FileStack className="h-4 w-4" />
@@ -1557,7 +1556,7 @@ function TicketAttachmentSettingsCard({
                   onClick={() => toggleType(preset.value)}
                   className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-all ${
                     active
-                      ? "border-cyan-500/40 bg-cyan-500/15 text-cyan-300 hover:bg-cyan-500/25"
+                      ? chipActive
                       : "border-border bg-surface-hover text-muted hover:border-border-strong hover:text-muted-foreground"
                   }`}
                 >
@@ -1582,7 +1581,7 @@ function TicketAttachmentSettingsCard({
                 .map((mime) => (
                   <span
                     key={mime}
-                    className="flex items-center gap-1.5 rounded-full border border-violet-500/30 bg-violet-500/10 px-3 py-1 text-xs font-medium text-violet-300"
+                    className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium ${chipCustom}`}
                   >
                     {mime}
                     <button

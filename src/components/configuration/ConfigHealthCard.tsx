@@ -23,6 +23,7 @@ import {
   useTestObjectStorage,
   useTestStoredAiKey,
 } from "@/hooks/useConfigurationApi";
+import { statusSurface } from "./statusStyles";
 
 type HealthStatus = "ok" | "warn" | "error" | "unknown";
 
@@ -35,10 +36,10 @@ interface HealthItem {
 }
 
 const STATUS_CLASSES: Record<HealthStatus, string> = {
-  ok: "border-emerald-500/30 bg-emerald-500/10 text-emerald-300",
-  warn: "border-amber-500/30 bg-amber-500/10 text-amber-200",
-  error: "border-red-500/30 bg-red-500/10 text-red-300",
-  unknown: "border-border bg-surface-light text-muted",
+  ok: statusSurface.success,
+  warn: statusSurface.warning,
+  error: statusSurface.danger,
+  unknown: statusSurface.neutral,
 };
 
 function statusIcon(status: HealthStatus) {
@@ -193,7 +194,7 @@ export function ConfigHealthCard({ config }: { config: ServerConfiguration | und
             key={item.key}
             className={`flex items-start gap-3 rounded-xl border p-4 ${STATUS_CLASSES[item.status]}`}
           >
-            <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-black/10">
+            <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-background/70 dark:bg-black/10">
               {isBusy && item.status === "unknown" ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (

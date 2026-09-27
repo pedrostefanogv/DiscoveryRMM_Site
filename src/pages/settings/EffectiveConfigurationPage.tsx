@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Building2, Lock, MapPin, RefreshCw } from "lucide-react";
 import { Badge, Button, Card, CardHeader, ErrorDisplay, Loading, Select } from "@/components/ui";
-import { toApiFieldName } from "@/components/configuration";
+import { statusSurface, toApiFieldName } from "@/components/configuration";
 import { useClients } from "@/hooks/useClients";
 import { useSites } from "@/hooks/useSites";
 import {
@@ -199,7 +199,7 @@ export default function EffectiveConfigurationPage() {
                 {(resolved.blockedFields ?? []).map((field) => (
                   <span
                     key={field}
-                    className="inline-flex items-center gap-1.5 rounded-full border border-red-500/30 bg-red-500/10 px-3 py-1 font-mono text-xs text-red-300"
+                    className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 font-mono text-xs ${statusSurface.danger}`}
                   >
                     <Lock className="h-3 w-3" />
                     {field}

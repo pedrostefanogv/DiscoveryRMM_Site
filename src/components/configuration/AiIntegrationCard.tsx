@@ -211,10 +211,10 @@ export function AiIntegrationCard({ aiSettings, onSave, saving }: Props) {
                 <Button type="button" size="sm" variant="ghost" onClick={handleValidateKey} disabled={validating || !apiKey.trim()}>
                   {validating ? <RefreshCw className="h-3 w-3 animate-spin" /> : "Validar"}
                 </Button>
-                {keyValid === true && <CheckCircle2 className="h-5 w-5 text-green-400 self-center" />}
-                {keyValid === false && <span title={keyError ?? ""}><XCircle className="h-5 w-5 text-red-400 self-center" /></span>}
+                {keyValid === true && <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400 self-center" />}
+                {keyValid === false && <span title={keyError ?? ""}><XCircle className="h-5 w-5 text-red-600 dark:text-red-400 self-center" /></span>}
               </div>
-              {keyValid === false && keyError && <p className="text-xs text-red-400 mt-1">{keyError}</p>}
+              {keyValid === false && keyError && <p className="text-xs text-red-600 dark:text-red-400 mt-1">{keyError}</p>}
             </div>
           </div>
 
@@ -224,7 +224,7 @@ export function AiIntegrationCard({ aiSettings, onSave, saving }: Props) {
               <span>
                 Chat Model{" "}
                 {chatModel && <span className="text-muted">— {providerFromId(chatModel)}: {allChat.find((m) => m.id === chatModel)?.name ?? chatModel}</span>}
-                {fetchError && !fetching && <span className="ml-2 text-amber-400">(offline)</span>}
+                {fetchError && !fetching && <span className="ml-2 text-amber-600 dark:text-amber-400">(offline)</span>}
               </span>
               {expandedChat ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
             </button>

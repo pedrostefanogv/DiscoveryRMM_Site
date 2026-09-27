@@ -3,6 +3,7 @@ import toast from "react-hot-toast";
 import { RotateCcw, Save } from "lucide-react";
 import { Button, Card, CardHeader, ErrorDisplay, Input, Loading } from "@/components/ui";
 import { ApiError } from "@/api";
+import { statusSurface } from "@/components/configuration";
 import { usePatchServerConfig, useServerConfig } from "@/hooks/useConfigurationApi";
 import { parseBrandingSettings } from "@/services/configurationApi";
 import { useTheme } from "@/theme/ThemeContext";
@@ -120,7 +121,7 @@ export default function BrandingSettings() {
         <div className="flex items-center gap-2">
           <span
             className={`rounded-full border px-3 py-1 text-xs ${
-              dirty ? "border-amber-500/40 bg-amber-500/10 text-amber-300" : "border-border bg-surface-light text-muted"
+              dirty ? statusSurface.warning : statusSurface.neutral
             }`}
           >
             {dirty ? "Alterações não salvas" : "Sem alterações pendentes"}

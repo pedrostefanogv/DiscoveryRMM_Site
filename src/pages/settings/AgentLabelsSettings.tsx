@@ -716,49 +716,49 @@ export default function AgentLabelsSettings() {
                   <div className="mt-3 space-y-3">
                     <div className="rounded-lg bg-surface/60 p-3 font-mono text-xs text-muted">
                       <p className="text-muted-foreground font-medium mb-1">Exemplo 1 — Simples: SO + (hostname OU memória)</p>
-                      <p>Grupo raiz: <strong className="text-yellow-400">E</strong></p>
+                      <p>Grupo raiz: <strong className="text-yellow-600 dark:text-yellow-400">E</strong></p>
                       <p className="ml-2">├─ Condição: SO <em>contém</em> "Windows"</p>
-                      <p className="ml-2">└─ Grupo filho: <strong className="text-yellow-400">OU</strong></p>
+                      <p className="ml-2">└─ Grupo filho: <strong className="text-yellow-600 dark:text-yellow-400">OU</strong></p>
                       <p className="ml-4">&nbsp;&nbsp;├─ Condição: Hostname <em>contém</em> "PROD"</p>
                       <p className="ml-4">&nbsp;&nbsp;└─ Condição: Memória <em>&gt;=</em> "8589934592"</p>
-                      <p className="mt-2 text-muted">Resultado: (SO contém "Windows") <strong className="text-yellow-400">E</strong> (Hostname contém "PROD" <strong className="text-yellow-400">OU</strong> Memória &gt;= 8GB)</p>
+                      <p className="mt-2 text-muted">Resultado: (SO contém "Windows") <strong className="text-yellow-600 dark:text-yellow-400">E</strong> (Hostname contém "PROD" <strong className="text-yellow-600 dark:text-yellow-400">OU</strong> Memória &gt;= 8GB)</p>
                     </div>
 
                     <div className="rounded-lg bg-surface/60 p-3 font-mono text-xs text-muted">
                       <p className="text-muted-foreground font-medium mb-1">Exemplo 2 — Intermediário: Windows + (PROD OU 8GB) E (SP OU RJ)</p>
-                      <p>Grupo raiz: <strong className="text-yellow-400">E</strong></p>
+                      <p>Grupo raiz: <strong className="text-yellow-600 dark:text-yellow-400">E</strong></p>
                       <p className="ml-2">├─ Condição: SO <em>contém</em> "Windows"</p>
-                      <p className="ml-2">├─ Grupo filho: <strong className="text-yellow-400">OU</strong></p>
+                      <p className="ml-2">├─ Grupo filho: <strong className="text-yellow-600 dark:text-yellow-400">OU</strong></p>
                       <p className="ml-4">&nbsp;&nbsp;├─ Condição: Hostname <em>contém</em> "PROD"</p>
                       <p className="ml-4">&nbsp;&nbsp;└─ Condição: Memória <em>&gt;=</em> "8589934592"</p>
-                      <p className="ml-2">└─ Grupo filho: <strong className="text-yellow-400">OU</strong></p>
+                      <p className="ml-2">└─ Grupo filho: <strong className="text-yellow-600 dark:text-yellow-400">OU</strong></p>
                       <p className="ml-4">&nbsp;&nbsp;├─ Condição: DisplayName <em>contém</em> "SP"</p>
                       <p className="ml-4">&nbsp;&nbsp;└─ Condição: DisplayName <em>contém</em> "RJ"</p>
-                      <p className="mt-2 text-muted">Resultado: SO Windows <strong className="text-yellow-400">E</strong> (PROD <strong className="text-yellow-400">OU</strong> 8GB) <strong className="text-yellow-400">E</strong> (SP <strong className="text-yellow-400">OU</strong> RJ)</p>
+                      <p className="mt-2 text-muted">Resultado: SO Windows <strong className="text-yellow-600 dark:text-yellow-400">E</strong> (PROD <strong className="text-yellow-600 dark:text-yellow-400">OU</strong> 8GB) <strong className="text-yellow-600 dark:text-yellow-400">E</strong> (SP <strong className="text-yellow-600 dark:text-yellow-400">OU</strong> RJ)</p>
                     </div>
 
                     <div className="rounded-lg bg-surface/60 p-3 font-mono text-xs text-muted">
                       <p className="text-muted-foreground font-medium mb-1">Exemplo 3 — Avançado: servidores Windows com bastante memória OU estações Linux</p>
-                      <p>Grupo raiz: <strong className="text-yellow-400">OU</strong></p>
-                      <p className="ml-2">├─ Grupo filho: <strong className="text-yellow-400">E</strong> — Servidores Windows</p>
+                      <p>Grupo raiz: <strong className="text-yellow-600 dark:text-yellow-400">OU</strong></p>
+                      <p className="ml-2">├─ Grupo filho: <strong className="text-yellow-600 dark:text-yellow-400">E</strong> — Servidores Windows</p>
                       <p className="ml-4">&nbsp;&nbsp;├─ Condição: SO <em>contém</em> "Windows"</p>
                       <p className="ml-4">&nbsp;&nbsp;├─ Condição: Hostname <em>contém</em> "SRV"</p>
                       <p className="ml-4">&nbsp;&nbsp;└─ Condição: Memória <em>&gt;=</em> "17179869184"</p>
-                      <p className="ml-2">└─ Grupo filho: <strong className="text-yellow-400">E</strong> — Estações Linux</p>
+                      <p className="ml-2">└─ Grupo filho: <strong className="text-yellow-600 dark:text-yellow-400">E</strong> — Estações Linux</p>
                       <p className="ml-4">&nbsp;&nbsp;├─ Condição: SO <em>contém</em> "Linux"</p>
                       <p className="ml-4">&nbsp;&nbsp;└─ Condição: Hostname <em>NÃO contém</em> "SRV"</p>
-                      <p className="mt-2 text-muted">Resultado: (Windows <strong className="text-yellow-400">E</strong> SRV <strong className="text-yellow-400">E</strong> 16GB+) <strong className="text-yellow-400">OU</strong> (Linux <strong className="text-yellow-400">E</strong> NÃO estação)</p>
+                      <p className="mt-2 text-muted">Resultado: (Windows <strong className="text-yellow-600 dark:text-yellow-400">E</strong> SRV <strong className="text-yellow-600 dark:text-yellow-400">E</strong> 16GB+) <strong className="text-yellow-600 dark:text-yellow-400">OU</strong> (Linux <strong className="text-yellow-600 dark:text-yellow-400">E</strong> NÃO estação)</p>
                     </div>
 
                     <div className="rounded-lg bg-surface/60 p-3 font-mono text-xs text-muted">
                       <p className="text-muted-foreground font-medium mb-1">Exemplo 4 — Discos: SSD C: com menos de 20% livre</p>
-                      <p>Grupo raiz: <strong className="text-yellow-400">E</strong></p>
-                      <p className="ml-2">├─ <strong className="text-orange-400">Disco</strong> [<strong className="text-yellow-400">OU</strong> — algum disco atende]</p>
+                      <p>Grupo raiz: <strong className="text-yellow-600 dark:text-yellow-400">E</strong></p>
+                      <p className="ml-2">├─ <strong className="text-orange-600 dark:text-orange-400">Disco</strong> [<strong className="text-yellow-600 dark:text-yellow-400">OU</strong> — algum disco atende]</p>
                       <p className="ml-4">&nbsp;&nbsp;├─ Condição: Letra <em>=</em> "C:"</p>
                       <p className="ml-4">&nbsp;&nbsp;├─ Condição: Tipo <em>=</em> "SSD"</p>
                       <p className="ml-4">&nbsp;&nbsp;└─ Condição: % Livre <em>&lt;</em> "20"</p>
                       <p className="ml-2">└─ Condição: Status <em>=</em> "Online"</p>
-                      <p className="mt-2 text-muted">Resultado: (C: SSD &lt;20% livre) <strong className="text-yellow-400">E</strong> Online</p>
+                      <p className="mt-2 text-muted">Resultado: (C: SSD &lt;20% livre) <strong className="text-yellow-600 dark:text-yellow-400">E</strong> Online</p>
                     </div>
                   </div>
                 </div>
@@ -811,7 +811,7 @@ export default function AgentLabelsSettings() {
 
             {applyMode === AgentLabelApplyMode.Manual ? (
               <div className="mt-4 rounded-xl border border-amber-500/20 bg-amber-500/5 p-4">
-                <p className="text-sm text-amber-300 font-medium">Modo Manual</p>
+                <p className="text-sm text-amber-700 dark:text-amber-300 font-medium">Modo Manual</p>
                 <p className="mt-1 text-xs text-muted">
                   As labels serão vinculadas manualmente aos agentes pela página do agente. Nenhuma expressão automática será processada.
                   Após criar a regra, vá até o agente desejado e vincule esta label pelo ícone <strong>+</strong>.
@@ -1016,49 +1016,49 @@ export default function AgentLabelsSettings() {
                   <div className="mt-3 space-y-3">
                     <div className="rounded-lg bg-surface/60 p-3 font-mono text-xs text-muted">
                       <p className="text-muted-foreground font-medium mb-1">Exemplo 1 — Simples: SO + (hostname OU memória)</p>
-                      <p>Grupo raiz: <strong className="text-yellow-400">E</strong></p>
+                      <p>Grupo raiz: <strong className="text-yellow-600 dark:text-yellow-400">E</strong></p>
                       <p className="ml-2">├─ Condição: SO <em>contém</em> "Windows"</p>
-                      <p className="ml-2">└─ Grupo filho: <strong className="text-yellow-400">OU</strong></p>
+                      <p className="ml-2">└─ Grupo filho: <strong className="text-yellow-600 dark:text-yellow-400">OU</strong></p>
                       <p className="ml-4">&nbsp;&nbsp;├─ Condição: Hostname <em>contém</em> "PROD"</p>
                       <p className="ml-4">&nbsp;&nbsp;└─ Condição: Memória <em>&gt;=</em> "8589934592"</p>
-                      <p className="mt-2 text-muted">Resultado: (SO contém "Windows") <strong className="text-yellow-400">E</strong> (Hostname contém "PROD" <strong className="text-yellow-400">OU</strong> Memória &gt;= 8GB)</p>
+                      <p className="mt-2 text-muted">Resultado: (SO contém "Windows") <strong className="text-yellow-600 dark:text-yellow-400">E</strong> (Hostname contém "PROD" <strong className="text-yellow-600 dark:text-yellow-400">OU</strong> Memória &gt;= 8GB)</p>
                     </div>
 
                     <div className="rounded-lg bg-surface/60 p-3 font-mono text-xs text-muted">
                       <p className="text-muted-foreground font-medium mb-1">Exemplo 2 — Intermediário: Windows + (PROD OU 8GB) E (SP OU RJ)</p>
-                      <p>Grupo raiz: <strong className="text-yellow-400">E</strong></p>
+                      <p>Grupo raiz: <strong className="text-yellow-600 dark:text-yellow-400">E</strong></p>
                       <p className="ml-2">├─ Condição: SO <em>contém</em> "Windows"</p>
-                      <p className="ml-2">├─ Grupo filho: <strong className="text-yellow-400">OU</strong></p>
+                      <p className="ml-2">├─ Grupo filho: <strong className="text-yellow-600 dark:text-yellow-400">OU</strong></p>
                       <p className="ml-4">&nbsp;&nbsp;├─ Condição: Hostname <em>contém</em> "PROD"</p>
                       <p className="ml-4">&nbsp;&nbsp;└─ Condição: Memória <em>&gt;=</em> "8589934592"</p>
-                      <p className="ml-2">└─ Grupo filho: <strong className="text-yellow-400">OU</strong></p>
+                      <p className="ml-2">└─ Grupo filho: <strong className="text-yellow-600 dark:text-yellow-400">OU</strong></p>
                       <p className="ml-4">&nbsp;&nbsp;├─ Condição: DisplayName <em>contém</em> "SP"</p>
                       <p className="ml-4">&nbsp;&nbsp;└─ Condição: DisplayName <em>contém</em> "RJ"</p>
-                      <p className="mt-2 text-muted">Resultado: SO Windows <strong className="text-yellow-400">E</strong> (PROD <strong className="text-yellow-400">OU</strong> 8GB) <strong className="text-yellow-400">E</strong> (SP <strong className="text-yellow-400">OU</strong> RJ)</p>
+                      <p className="mt-2 text-muted">Resultado: SO Windows <strong className="text-yellow-600 dark:text-yellow-400">E</strong> (PROD <strong className="text-yellow-600 dark:text-yellow-400">OU</strong> 8GB) <strong className="text-yellow-600 dark:text-yellow-400">E</strong> (SP <strong className="text-yellow-600 dark:text-yellow-400">OU</strong> RJ)</p>
                     </div>
 
                     <div className="rounded-lg bg-surface/60 p-3 font-mono text-xs text-muted">
                       <p className="text-muted-foreground font-medium mb-1">Exemplo 3 — Avançado: servidores Windows com bastante memória OU estações Linux</p>
-                      <p>Grupo raiz: <strong className="text-yellow-400">OU</strong></p>
-                      <p className="ml-2">├─ Grupo filho: <strong className="text-yellow-400">E</strong> — Servidores Windows</p>
+                      <p>Grupo raiz: <strong className="text-yellow-600 dark:text-yellow-400">OU</strong></p>
+                      <p className="ml-2">├─ Grupo filho: <strong className="text-yellow-600 dark:text-yellow-400">E</strong> — Servidores Windows</p>
                       <p className="ml-4">&nbsp;&nbsp;├─ Condição: SO <em>contém</em> "Windows"</p>
                       <p className="ml-4">&nbsp;&nbsp;├─ Condição: Hostname <em>contém</em> "SRV"</p>
                       <p className="ml-4">&nbsp;&nbsp;└─ Condição: Memória <em>&gt;=</em> "17179869184"</p>
-                      <p className="ml-2">└─ Grupo filho: <strong className="text-yellow-400">E</strong> — Estações Linux</p>
+                      <p className="ml-2">└─ Grupo filho: <strong className="text-yellow-600 dark:text-yellow-400">E</strong> — Estações Linux</p>
                       <p className="ml-4">&nbsp;&nbsp;├─ Condição: SO <em>contém</em> "Linux"</p>
                       <p className="ml-4">&nbsp;&nbsp;└─ Condição: Hostname <em>NÃO contém</em> "SRV"</p>
-                      <p className="mt-2 text-muted">Resultado: (Windows <strong className="text-yellow-400">E</strong> SRV <strong className="text-yellow-400">E</strong> 16GB+) <strong className="text-yellow-400">OU</strong> (Linux <strong className="text-yellow-400">E</strong> NÃO estação)</p>
+                      <p className="mt-2 text-muted">Resultado: (Windows <strong className="text-yellow-600 dark:text-yellow-400">E</strong> SRV <strong className="text-yellow-600 dark:text-yellow-400">E</strong> 16GB+) <strong className="text-yellow-600 dark:text-yellow-400">OU</strong> (Linux <strong className="text-yellow-600 dark:text-yellow-400">E</strong> NÃO estação)</p>
                     </div>
 
                     <div className="rounded-lg bg-surface/60 p-3 font-mono text-xs text-muted">
                       <p className="text-muted-foreground font-medium mb-1">Exemplo 4 — Discos: SSD C: com menos de 20% livre</p>
-                      <p>Grupo raiz: <strong className="text-yellow-400">E</strong></p>
-                      <p className="ml-2">├─ <strong className="text-orange-400">Disco</strong> [<strong className="text-yellow-400">OU</strong> — algum disco atende]</p>
+                      <p>Grupo raiz: <strong className="text-yellow-600 dark:text-yellow-400">E</strong></p>
+                      <p className="ml-2">├─ <strong className="text-orange-600 dark:text-orange-400">Disco</strong> [<strong className="text-yellow-600 dark:text-yellow-400">OU</strong> — algum disco atende]</p>
                       <p className="ml-4">&nbsp;&nbsp;├─ Condição: Letra <em>=</em> "C:"</p>
                       <p className="ml-4">&nbsp;&nbsp;├─ Condição: Tipo <em>=</em> "SSD"</p>
                       <p className="ml-4">&nbsp;&nbsp;└─ Condição: % Livre <em>&lt;</em> "20"</p>
                       <p className="ml-2">└─ Condição: Status <em>=</em> "Online"</p>
-                      <p className="mt-2 text-muted">Resultado: (C: SSD &lt;20% livre) <strong className="text-yellow-400">E</strong> Online</p>
+                      <p className="mt-2 text-muted">Resultado: (C: SSD &lt;20% livre) <strong className="text-yellow-600 dark:text-yellow-400">E</strong> Online</p>
                     </div>
                   </div>
                 </div>
@@ -1111,7 +1111,7 @@ export default function AgentLabelsSettings() {
 
             {applyMode === AgentLabelApplyMode.Manual ? (
               <div className="mt-4 rounded-xl border border-amber-500/20 bg-amber-500/5 p-4">
-                <p className="text-sm text-amber-300 font-medium">Modo Manual</p>
+                <p className="text-sm text-amber-700 dark:text-amber-300 font-medium">Modo Manual</p>
                 <p className="mt-1 text-xs text-muted">
                   Labels manuais não usam expressão — são vinculadas individualmente pela página do agente.
                   {!isReadOnly ? ' Altere para "Aplicar apenas" ou "Aplicar e remover" para editar a expressão.' : ''}

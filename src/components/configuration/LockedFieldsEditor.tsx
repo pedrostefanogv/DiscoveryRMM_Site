@@ -4,6 +4,7 @@ import { Button } from "@/components/ui";
 import { useServerLocksImpact } from "@/hooks/useConfigurationApi";
 import type { ConfigurationLockImpact } from "@/services/configurationApi";
 import type { EditableField } from "@/utils/configurationEditors";
+import { statusSurface, statusText } from "./statusStyles";
 
 /**
  * Nome da propriedade na API (PascalCase) para um campo do editor (camelCase).
@@ -123,7 +124,7 @@ export function LockedFieldsEditor({ value, fields, onChange, disabled }: Locked
                   : "border-border bg-surface-light text-muted hover:border-border-strong"
               }`}
             >
-              <Lock className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${selected ? "text-red-400" : "text-muted"}`} />
+              <Lock className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${selected ? statusText.danger : "text-muted"}`} />
               <span className="min-w-0">
                 <span className="block font-medium">{field.label}</span>
                 <span className="block font-mono text-[11px] text-muted">{apiName}</span>
@@ -137,7 +138,7 @@ export function LockedFieldsEditor({ value, fields, onChange, disabled }: Locked
         {error && <p className="text-xs text-danger">{error}</p>}
 
         {impact && (
-          <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-100">
+          <div className={`rounded-lg border p-3 text-xs ${statusSurface.warning}`}>
             {impact.fields.length === 0 ? (
               <p>Nenhum override encontrado para os campos selecionados.</p>
             ) : (

@@ -18,6 +18,7 @@ import {
   parseBackgroundProcessingSettings,
   ConfigurationPageHeader,
   ConfigurationSectionCard,
+  tintedIcon,
 } from "@/components/configuration";
 import { Button, ErrorDisplay, Loading, Select } from "@/components/ui";
 import { useClients } from "@/hooks/useClients";
@@ -281,7 +282,7 @@ export default function ClientConfigurationPage() {
         title="Escopo de Cliente"
         subtitle="Selecione o cliente para editar apenas configurações válidas neste escopo."
         icon={<Building2 className="h-4 w-4" />}
-        iconClassName="bg-violet-500/20 text-violet-400"
+        iconClassName={tintedIcon.violet}
       >
         {clientsQuery.isLoading && <Loading message="Carregando clientes..." />}
         {clientsQuery.isError && (
@@ -317,7 +318,7 @@ export default function ClientConfigurationPage() {
               title="Funcionalidades do Sistema"
               subtitle="Ative ou desative módulos que impactam os agentes e sites desse cliente."
               icon={<ShieldCheck className="h-4 w-4" />}
-              iconClassName="bg-sky-500/20 text-sky-400"
+              iconClassName={tintedIcon.sky}
             >
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                 {featureFields.map((field) =>
@@ -332,7 +333,7 @@ export default function ClientConfigurationPage() {
               title="Política da Loja de Aplicativos"
               subtitle="Define quais aplicativos podem ser instalados pelos agentes."
               icon={<Store className="h-4 w-4" />}
-              iconClassName="bg-violet-500/20 text-violet-400"
+              iconClassName={tintedIcon.violet}
             >
               <div className="space-y-4">
                 {policyFields.map((field) =>
@@ -347,7 +348,7 @@ export default function ClientConfigurationPage() {
               title="Intervalos e Comportamento do Agente"
               subtitle="Frequência de heartbeat, detecção de offline e coleta de inventário no escopo do cliente."
               icon={<Clock className="h-4 w-4" />}
-              iconClassName="bg-emerald-500/20 text-emerald-400"
+              iconClassName={tintedIcon.emerald}
             >
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                 {agentFields.map((field) =>
@@ -362,7 +363,7 @@ export default function ClientConfigurationPage() {
               title="Configurações Avançadas"
               subtitle="Auto-update e IA estruturada no escopo do cliente."
               icon={<Bot className="h-4 w-4" />}
-              iconClassName="bg-blue-500/20 text-blue-400"
+              iconClassName={tintedIcon.blue}
             >
               <div className="space-y-4">
                 {advancedFields.map((field) =>
