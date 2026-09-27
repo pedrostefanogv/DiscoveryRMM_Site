@@ -2063,6 +2063,11 @@ export interface UpdateTicketRequest {
   priority?: TicketPriority;
   assignedToUserId?: string | null;
   category?: string | null;
+  /** Departamento do chamado (transferência). Ao trocar, o backend re-herda o
+   * perfil de workflow/SLA do novo departamento quando nenhum perfil é enviado. */
+  departmentId?: string | null;
+  /** Remove o vínculo de departamento sem enviar um novo Id. */
+  clearDepartment?: boolean;
   /** Solicitante (quem abriu) e limpeza explícita do vínculo. */
   requesterUserId?: string | null;
   clearRequester?: boolean;

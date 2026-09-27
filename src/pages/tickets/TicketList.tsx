@@ -51,10 +51,12 @@ import { Button, Card, ConfirmDialog, DataTable, Badge, Loading, Modal, Input, S
 import { TicketAnswerMatch } from '@/api';
 import type {
   CreateTicketRequest,
+  Department,
   Ticket,
   TicketPriority,
   TicketSavedView,
   TicketSavedViewFilter,
+  UpdateTicketRequest,
   UserDto,
 } from '@/api';
 import type { Column } from '@/components/ui';
@@ -66,6 +68,7 @@ import { parseTemplateQuestions, questionToSchemaField } from '@/utils/templateQ
 import { selectableTemplates } from '@/utils/ticketTemplateSelection';
 import { buildCreateTicketPayload } from '@/utils/ticketCreatePayload';
 import { TicketSchemaFieldInput } from '@/components/tickets/TicketSchemaFieldInput';
+import { TicketStateBadge, stateColorVars } from '@/components/tickets/TicketStateBadge';
 import { TicketAnswerSemanticSearchPanel } from '@/components/tickets/TicketAnswerSemanticSearchPanel';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 
@@ -262,12 +265,17 @@ function TicketHoverInfo({
   icon,
   label,
   value,
-  dotColor,
+  stateColor,
 }: {
   icon: ReactNode;
   label: string;
   value: ReactNode;
-  dotColor?: string | null;
+  /**
+   * Cor de um estado de workflow. Recebe o tom com contraste garantido em cada
+   * tema (classe `.state-dot`), em vez da cor crua — que podia sumir sobre a
+   * superfície clara.
+   */
+  stateColor?: string | null;
 }) {
   return (
     <div className="flex items-start gap-2 rounded-lg border border-border bg-surface-light px-3 py-2">
@@ -275,10 +283,10 @@ function TicketHoverInfo({
       <div className="min-w-0">
         <p className="text-[10px] uppercase tracking-wide text-muted">{label}</p>
         <p className="mt-0.5 flex items-center gap-1.5 text-sm text-foreground">
-          {dotColor && (
+          {stateColor && (
             <span
-              className="h-2 w-2 shrink-0 rounded-full"
-              style={{ backgroundColor: dotColor }}
+              className="state-dot h-2 w-2 shrink-0 rounded-full"
+              style={stateColorVars(stateColor)}
               aria-hidden="true"
             />
           )}
@@ -360,6 +368,7 @@ export default function TicketList() {
   const [assignModalOpen, setAssignModalOpen] = useState(false);
   const [assignTargetTicket, setAssignTargetTicket] = useState<Ticket | null>(null);
   const [assignTargetUserId, setAssignTargetUserId] = useState('');
+  const [assignTargetDepartmentId, setAssignTargetDepartmentId] = useState('');
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [{ page, cursors: pageCursors }, dispatchPagination] = useReducer(paginationReducer, {
     page: 1,
@@ -584,13 +593,32 @@ export default function TicketList() {
   const assignUserOptions = [
     {
       value: '',
-      label: iamUsersQuery.isLoading ? 'Carregando usuarios...' : 'Selecione um usuario',
+      label: iamUsersQuery.isLoading ? 'Carregando usuarios...' : 'Manter responsável atual',
     },
     ...(iamUsersQuery.data ?? []).map((user) => ({
       value: user.id,
       label: user.fullName || user.login || user.email || user.id,
     })),
   ];
+
+  // Departamentos do cliente do chamado-alvo (do cliente + globais). O hook é
+  // chamado sempre para não alterar a ordem de hooks do componente.
+  const assignDepartmentsQuery = useDepartments({
+    clientId: assignTargetTicket?.clientId,
+    includeGlobal: true,
+    // Só consulta quando há chamado-alvo (evita request no load da lista).
+    enabled: !!assignTargetTicket,
+  });
+  const assignDepartmentOptions = [
+    { value: '', label: 'Sem departamento' },
+    ...((assignDepartmentsQuery.data ?? []) as Department[])
+      .filter((department) => department.isActive !== false)
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map((department) => ({ value: department.id, label: department.name })),
+  ];
+  const assignDepartmentName = ((assignDepartmentsQuery.data ?? []) as Department[]).find(
+    (department) => department.id === assignTargetTicket?.departmentId,
+  )?.name;
 
   const columns: Column<Ticket>[] = [
     {
@@ -620,16 +648,7 @@ export default function TicketList() {
       render: (ticket) => {
         const state = ticket.workflowStateId ? stateMap.get(ticket.workflowStateId) : null;
         return state ? (
-          <Badge color="accent">
-            <span className="flex items-center gap-1.5">
-              {state.color && (
-                <svg className="h-2 w-2" viewBox="0 0 8 8" aria-hidden="true">
-                  <circle cx="4" cy="4" r="4" fill={state.color} />
-                </svg>
-              )}
-              {state.name}
-            </span>
-          </Badge>
+          <TicketStateBadge name={state.name} color={state.color} />
         ) : (
           <span className="text-muted">-</span>
         );
@@ -724,7 +743,7 @@ export default function TicketList() {
             icon={<CircleDot className="h-3.5 w-3.5" />}
             label="Estado"
             value={stateLabel}
-            dotColor={state?.color}
+            stateColor={state?.color}
           />
           <TicketHoverInfo
             icon={<UserRound className="h-3.5 w-3.5" />}
@@ -768,6 +787,7 @@ export default function TicketList() {
     setAssignModalOpen(false);
     setAssignTargetTicket(null);
     setAssignTargetUserId('');
+    setAssignTargetDepartmentId('');
   };
 
   const assignTicketToUser = async (ticket: Ticket, assignedToUserId: string | null, successMessage: string) => {
@@ -857,6 +877,7 @@ export default function TicketList() {
 
     setAssignTargetTicket(ticketContextMenu.ticket);
     setAssignTargetUserId(ticketContextMenu.ticket.assignedToUserId ?? '');
+    setAssignTargetDepartmentId(ticketContextMenu.ticket.departmentId ?? '');
     setAssignModalOpen(true);
     setTicketContextMenu(null);
   };
@@ -864,22 +885,41 @@ export default function TicketList() {
   const handleConfirmAssign = async () => {
     if (!assignTargetTicket) return;
 
-    if (!assignTargetUserId) {
-      toast.error('Selecione um usuário para atribuir o chamado.');
-      return;
-    }
+    const originalDepartmentId = assignTargetTicket.departmentId ?? '';
+    const departmentChanged = assignTargetDepartmentId !== originalDepartmentId;
+    const clearingDepartment = departmentChanged && !assignTargetDepartmentId;
+    const userChanged =
+      !!assignTargetUserId && assignTargetUserId !== assignTargetTicket.assignedToUserId;
 
-    if (assignTargetTicket.assignedToUserId === assignTargetUserId) {
-      toast('Este usuário já é o responsável deste chamado.');
+    if (!departmentChanged && !userChanged) {
+      toast('Nada para alterar neste chamado.');
       closeAssignModal();
       return;
     }
+
+    // Patch parcial: só o que mudou, para não sobrescrever edições concorrentes.
+    const patch: UpdateTicketRequest = {};
+    if (departmentChanged) {
+      if (clearingDepartment) patch.clearDepartment = true;
+      else patch.departmentId = assignTargetDepartmentId;
+    }
+    if (userChanged) patch.assignedToUserId = assignTargetUserId;
 
     try {
-      await assignTicketToUser(assignTargetTicket, assignTargetUserId, 'Responsável atualizado com sucesso.');
+      await updateTicket.mutateAsync({ id: assignTargetTicket.id, data: patch });
+
+      const parts: string[] = [];
+      if (departmentChanged) {
+        parts.push(clearingDepartment ? 'departamento removido' : 'departamento atualizado');
+      }
+      if (userChanged) parts.push('responsável atualizado');
+      const summary = parts.join(' e ');
+      toast.success(summary.charAt(0).toUpperCase() + summary.slice(1) + '.');
       closeAssignModal();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Não foi possível transferir a responsabilidade.');
+      toast.error(
+        error instanceof Error ? error.message : 'Não foi possível transferir o chamado.',
+      );
     }
   };
 
@@ -1459,11 +1499,11 @@ export default function TicketList() {
             type="button"
             className="mt-1 flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-50"
             onClick={handleContextMenuOpenAssign}
-            disabled={updateTicket.isPending || iamUsersQuery.isLoading || (iamUsersQuery.data?.length ?? 0) === 0}
+            disabled={updateTicket.isPending}
             role="menuitem"
           >
             <span>Transferir / Atribuir</span>
-            <span className="text-xs text-muted">selecionar usuario</span>
+            <span className="text-xs text-muted">departamento ou usuario</span>
           </button>
         </div>
       )}
@@ -1475,7 +1515,19 @@ export default function TicketList() {
           <div className="rounded-xl border border-border bg-surface-light px-4 py-3">
             <p className="text-[11px] uppercase tracking-wide text-muted">Chamado selecionado</p>
             <p className="mt-1 truncate text-sm text-foreground">{assignTargetTicket?.title ?? '-'}</p>
+            <p className="mt-1 truncate text-xs text-muted">
+              Departamento atual: {assignDepartmentName ?? 'não definido'}
+            </p>
           </div>
+
+          <Select
+            label="Departamento"
+            options={assignDepartmentOptions}
+            value={assignTargetDepartmentId}
+            disabled={assignDepartmentsQuery.isLoading}
+            onChange={(event) => setAssignTargetDepartmentId(event.target.value)}
+            hint="Ao trocar, o SLA passa a usar o perfil do novo departamento."
+          />
 
           <Select
             label="Novo responsável"
@@ -1491,7 +1543,7 @@ export default function TicketList() {
             <Button
               onClick={() => void handleConfirmAssign()}
               loading={updateTicket.isPending}
-              disabled={iamUsersQuery.isLoading || (iamUsersQuery.data?.length ?? 0) === 0}
+              disabled={updateTicket.isPending}
             >
               Confirmar
             </Button>

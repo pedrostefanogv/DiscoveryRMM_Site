@@ -31,6 +31,12 @@ vi.mock("@/api", async (importOriginal) => {
       ...actual.ticketsApi,
       get: (...args: unknown[]) => getTicketMock(...args),
     },
+    // O Resumo geral carrega os departamentos do cliente; sem mock a query
+    // tentaria um fetch real no jsdom.
+    departmentsApi: {
+      ...actual.departmentsApi,
+      list: () => Promise.resolve([]),
+    },
   };
 });
 

@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Send, Lock, Unlock, Clock, Activity, BookOpen, Paperclip, Upload, File, CheckCircle, XCircle, Loader2, Wrench, Copy, RotateCcw, ClipboardList, UserCog, UserCheck, RefreshCw, Monitor } from 'lucide-react';
+import { ArrowLeft, Send, Lock, Unlock, Clock, Activity, BookOpen, Paperclip, Upload, File, CheckCircle, XCircle, Loader2, Wrench, Copy, RotateCcw, ClipboardList, UserCog, UserCheck, RefreshCw, Monitor, Building2 } from 'lucide-react';
 import { MarkdownViewer } from '@/components/ui/MarkdownViewer';
 import { useAuth } from '@/auth/AuthContext';
 import { getUserIdFromJwt } from '@/auth/jwt';
@@ -20,12 +20,15 @@ import {
 } from '@/hooks/useTickets';
 import { useTicketMacros } from '@/hooks/useSupportProductivity';
 import { TicketRatingCard } from '@/components/tickets/TicketRatingCard';
+import { TicketStateBadge } from '@/components/tickets/TicketStateBadge';
 import { WatchersSection } from '@/components/tickets/WatchersSection';
 import { TicketAiAssignmentCard } from '@/components/tickets/TicketAiAssignmentCard';
 import { TicketFieldsSection } from '@/components/tickets/TicketFieldsSection';
 import { TicketRelationsSection } from '@/components/tickets/TicketRelationsSection';
 import { RequesterPickerModal } from '@/components/tickets/RequesterPickerModal';
 import { AgentPickerModal } from '@/components/tickets/AgentPickerModal';
+import { DepartmentPickerModal } from '@/components/tickets/DepartmentPickerModal';
+import { useDepartments } from '@/hooks/useDepartments';
 import { useAgentsByClient, useAgentsBySite } from '@/hooks/useAgents';
 import { useTicketAnswers } from '@/hooks/useTicketAnswers';
 import { useAutomationTasks } from '@/hooks/useAutomation';
@@ -55,7 +58,6 @@ import type {
   TicketAiSummaryResponse,
   TicketAiTriageResponse,
   TicketPriority,
-  UpdateTicketRequest,
   UserDto,
 } from '@/api';
 import toast from 'react-hot-toast';
@@ -116,7 +118,6 @@ export default function TicketDetail() {
   const states   = useWorkflowStates();
   const iamUsers = useIamUsers();
   const [tab, setTab] = useState<Tab>('comments');
-  const [editing, setEditing] = useState(false);
   const [commentSeed, setCommentSeed] = useState<CommentSeed | null>(null);
   const iamUsersData = useMemo(
     () => (Array.isArray(iamUsers.data) ? iamUsers.data : []),
@@ -191,40 +192,39 @@ export default function TicketDetail() {
         <div className="flex items-center gap-2 shrink-0">
           <Badge color={p.color}>{p.label}</Badge>
           {currentState && (
-            <Badge color="accent">
-              <span className="flex items-center gap-1.5">
-                {currentState.color && (
-                  <svg className="h-2 w-2" viewBox="0 0 8 8" aria-hidden="true">
-                    <circle cx="4" cy="4" r="4" fill={currentState.color} />
-                  </svg>
-                )}
-                {currentState.name}
-              </span>
-            </Badge>
+            <TicketStateBadge name={currentState.name} color={currentState.color} />
           )}
           <ReopenButton ticketId={t.id} isClosed={Boolean(t.closedAt) || currentState?.isFinal === true} />
-          <Button size="sm" variant="ghost" onClick={() => setEditing(e => !e)}>
-            {editing ? 'Cancelar edição' : 'Editar'}
-          </Button>
           <Button size="sm" variant="ghost" onClick={() => navigate(knowledgeUrl)}>
             <BookOpen className="h-4 w-4" /> Conhecimento
           </Button>
         </div>
       </div>
 
-      {editing && <EditTicketForm ticket={t} onDone={() => setEditing(false)} />}
-
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Main content */}
         <div className="space-y-6 lg:col-span-2">
-          {/* Description */}
+          {/* Solicitação original: descrição + abertura (template/respostas).
+              Somente leitura: depois de aberto, o pedido não é editado; a evolução
+              acontece nos comentários e na timeline. */}
           <Card>
-            <CardHeader title="Descrição" />
-            <p className="text-sm text-muted-foreground whitespace-pre-wrap">{t.description}</p>
-          </Card>
+            <CardHeader
+              title="Chamado"
+              subtitle="Solicitação original — somente leitura"
+            />
+            <div className="space-y-5">
+              <section>
+                <h4 className="text-xs font-medium uppercase tracking-wider text-muted">
+                  Descrição
+                </h4>
+                <p className="mt-1 whitespace-pre-wrap text-sm text-foreground">
+                  {t.description?.trim() ? t.description : 'Sem descrição informada.'}
+                </p>
+              </section>
 
-          {/* Abertura: template + respostas estruturadas do questionário */}
-          <TicketOpeningPanel ticket={t} />
+              <TicketOpeningSection ticket={t} />
+            </div>
+          </Card>
 
           {/* Tabs: Comments / Timeline */}
           <Card padding={false}>
@@ -463,7 +463,7 @@ function TicketAiPanel({
       <div className="rounded-xl border border-border bg-surface-light p-4 text-sm text-muted-foreground">
         <p className="font-medium text-foreground">Assistente de IA do ticket</p>
         <p className="mt-1 text-muted">
-           Usa o contrato real do backend para triagem, resumo e próxima resposta. A triagem pode aplicar apenas categoria e prioridade, porque o update atual do ticket não aceita departamento.
+           Usa o contrato real do backend para triagem, resumo e próxima resposta. A triagem pode aplicar categoria e prioridade em um clique; o departamento sugerido pode ser transferido na linha "Departamento" do Resumo geral.
         </p>
       </div>
 
@@ -519,7 +519,7 @@ function TicketAiPanel({
 
                 {parsedTriage.department && (
                   <p className="mt-3 text-xs text-muted">
-                    O departamento sugerido ainda depende de ajuste manual fora do endpoint atual de update do ticket.
+                    Departamento sugerido: use a linha "Departamento" do Resumo geral para transferir o chamado.
                   </p>
                 )}
 
@@ -1112,7 +1112,7 @@ function ReopenButton({ ticketId, isClosed }: { ticketId: string; isClosed: bool
   );
 }
 
-function TicketOpeningPanel({ ticket }: { ticket: Ticket }) {
+function TicketOpeningSection({ ticket }: { ticket: Ticket }) {
   const answers = useTicketAnswers(ticket.id);
   const items = answers.data ?? [];
   const hasTemplate = Boolean(ticket.templateName);
@@ -1122,11 +1122,15 @@ function TicketOpeningPanel({ ticket }: { ticket: Ticket }) {
   if (!hasTemplate && items.length === 0 && !ticket.submissionSnapshotMarkdown) return null;
 
   return (
-    <Card>
-      <CardHeader
-        title="Abertura do chamado"
-        subtitle="Template e respostas do questionário (somente leitura)"
-      />
+    <section className="space-y-4 border-t border-border pt-4">
+      <div>
+        <h4 className="text-xs font-medium uppercase tracking-wider text-muted">
+          Abertura do chamado
+        </h4>
+        <p className="text-xs text-muted">
+          Formulário e respostas registrados na abertura.
+        </p>
+      </div>
       <div className="space-y-4">
         <div className="flex flex-wrap items-center gap-2">
           {hasTemplate ? (
@@ -1185,7 +1189,7 @@ function TicketOpeningPanel({ ticket }: { ticket: Ticket }) {
           </details>
         )}
       </div>
-    </Card>
+    </section>
   );
 }
 
@@ -1236,6 +1240,7 @@ function TicketSummaryPanel({
     : null;
   const [requesterModalOpen, setRequesterModalOpen] = useState(false);
   const [agentModalOpen, setAgentModalOpen] = useState(false);
+  const [departmentModalOpen, setDepartmentModalOpen] = useState(false);
 
   // Máquinas do escopo do chamado: site quando houver, senão o cliente.
   const siteAgents = useAgentsBySite(siteId ?? '');
@@ -1291,10 +1296,15 @@ function TicketSummaryPanel({
       },
     );
   };
+  // Departamentos do escopo do chamado (do cliente + globais) para a
+  // transferência. Hook incondicional para não alterar a ordem no render.
+  const departmentsQuery = useDepartments({ clientId, includeGlobal: true });
   const iamUsersById = useMemo(
     () => new Map((iamUsers.data ?? []).map((user) => [user.id, user])),
     [iamUsers.data],
   );
+  const departmentName =
+    (departmentsQuery.data ?? []).find((department) => department.id === departmentId)?.name ?? null;
   const requesterDisplayName = requesterUserId
     ? resolveUserDisplayName(iamUsersById, requesterUserId)
     : null;
@@ -1309,6 +1319,34 @@ function TicketSummaryPanel({
         },
         onError: (error: unknown) =>
           toast.error(error instanceof Error ? error.message : 'Erro ao atualizar o solicitante'),
+      },
+    );
+  };
+
+  const changeDepartment = (nextDepartmentId: string | null) => {
+    if (nextDepartmentId === (departmentId ?? null)) {
+      setDepartmentModalOpen(false);
+      return;
+    }
+
+    updateRequester.mutate(
+      {
+        id: ticketId,
+        data: nextDepartmentId
+          ? { departmentId: nextDepartmentId }
+          : { clearDepartment: true },
+      },
+      {
+        onSuccess: () => {
+          toast.success(
+            nextDepartmentId ? 'Departamento transferido' : 'Departamento removido',
+          );
+          setDepartmentModalOpen(false);
+        },
+        onError: (error: unknown) =>
+          toast.error(
+            error instanceof Error ? error.message : 'Erro ao transferir o chamado',
+          ),
       },
     );
   };
@@ -1328,7 +1366,6 @@ function TicketSummaryPanel({
     );
   };
   const sla = useSlaDetails(ticketId);
-  const navigate = useNavigate();
 
   const renderSlaContent = () => {
     if (sla.isLoading) {
@@ -1350,14 +1387,7 @@ function TicketSummaryPanel({
     const barColor = isBreached ? 'bg-danger' : pct >= 75 ? 'bg-warning' : 'bg-success';
 
     if (d.message && !d.slaExpiresAt) {
-      return (
-        <div className="space-y-2">
-          <p className="text-sm text-muted">{d.message}</p>
-          <p className="text-xs text-muted">
-            O SLA depende do perfil de workflow do departamento. Sem perfil definido, o prazo não é calculado.
-          </p>
-        </div>
-      );
+      return <p className="text-sm text-muted">Sem SLA definido para o chamado.</p>;
     }
 
     return (
@@ -1395,11 +1425,6 @@ function TicketSummaryPanel({
       <CardHeader
         title="Resumo geral"
         subtitle="Detalhes do chamado e status de SLA"
-        action={
-          <Button size="sm" variant="secondary" onClick={() => navigate('/tickets/sla')}>
-            <Clock className="h-4 w-4" /> Gerenciar SLA
-          </Button>
-        }
       />
       <dl className="grid gap-3 text-sm sm:grid-cols-2">
         <div className="sm:col-span-2">
@@ -1506,6 +1531,31 @@ function TicketSummaryPanel({
         </div>
 
         <div className="sm:col-span-2">
+          <dt className="text-muted">Departamento</dt>
+          <dd className="text-foreground">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <p className="break-words">
+                  {departmentsQuery.isLoading ? 'Carregando...' : departmentName ?? 'Não definido'}
+                </p>
+                <p className="mt-1 text-xs text-muted">
+                  Transferir altera o perfil de workflow e o SLA do chamado.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDepartmentModalOpen(true)}
+                aria-label="Alterar departamento"
+                title="Alterar departamento"
+                className="shrink-0 rounded-lg p-1 text-muted transition-colors hover:bg-surface-light hover:text-foreground"
+              >
+                <Building2 className="h-4 w-4" />
+              </button>
+            </div>
+          </dd>
+        </div>
+
+        <div className="sm:col-span-2">
           <dt className="text-muted">Responsável</dt>
           <dd className="text-foreground">
             <div className="flex items-start justify-between gap-2">
@@ -1585,6 +1635,17 @@ function TicketSummaryPanel({
         isSaving={updateRequester.isPending}
         onClose={() => setAgentModalOpen(false)}
         onSave={changeAgent}
+      />
+
+      <DepartmentPickerModal
+        open={departmentModalOpen}
+        departments={departmentsQuery.data ?? []}
+        isLoading={departmentsQuery.isLoading}
+        selectedId={departmentId}
+        scopeLabel="do cliente do chamado"
+        isSaving={updateRequester.isPending}
+        onClose={() => setDepartmentModalOpen(false)}
+        onSave={changeDepartment}
       />
     </Card>
   );
@@ -1851,71 +1912,6 @@ function CommentForm({
         </Button>
       </div>
     </div>
-  );
-}
-
-function EditTicketForm({ ticket, onDone }: { ticket: { id: string; title: string; description: string; priority: TicketPriority; category: string | null; assignedToUserId: string | null }; onDone: () => void }) {
-  const update = useUpdateTicket();
-  const [form, setForm] = useState<UpdateTicketRequest>({
-    title:           ticket.title,
-    description:     ticket.description,
-    priority:        ticket.priority,
-    category:        ticket.category,
-    assignedToUserId: ticket.assignedToUserId,
-  });
-
-  const set = <K extends keyof UpdateTicketRequest>(k: K, v: UpdateTicketRequest[K]) =>
-    setForm(f => ({ ...f, [k]: v }));
-
-  const valid = (form.title ?? '').trim().length >= 3 && (form.description ?? '').trim().length >= 3;
-
-  const handleSubmit = () => {
-    if (!valid) return;
-    update.mutate(
-      { id: ticket.id, data: form },
-      {
-        onSuccess: () => { toast.success('Chamado atualizado'); onDone(); },
-        onError:   () => toast.error('Erro ao atualizar'),
-      },
-    );
-  };
-
-  return (
-    <Card>
-      <CardHeader title="Editar Chamado" />
-      <div className="space-y-4">
-        <Input label="Título *" value={form.title} onChange={e => set('title', e.target.value)} />
-        <div>
-          <label className="block text-sm font-medium text-muted-foreground mb-1">Descrição *</label>
-          <textarea
-            aria-label="Descrição do chamado"
-            className="w-full rounded-lg border border-border bg-surface-light px-3 py-2 text-sm text-foreground placeholder-muted focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary resize-none"
-            rows={4}
-            placeholder="Descreva o chamado..."
-            value={form.description}
-            onChange={e => set('description', e.target.value)}
-          />
-        </div>
-        <div className="grid grid-cols-2 gap-4">
-          <Select
-            label="Prioridade"
-            options={[
-              { value: 'Low',      label: 'Baixa'   },
-              { value: 'Medium',   label: 'Média'   },
-              { value: 'High',     label: 'Alta'    },
-              { value: 'Critical', label: 'Crítica' },
-            ]}
-            value={form.priority}
-            onChange={e => set('priority', e.target.value as TicketPriority)}
-          />
-          <Input label="Categoria" value={form.category ?? ''} onChange={e => set('category', e.target.value || null)} />
-        </div>
-        <div className="flex justify-end gap-3">
-          <Button variant="ghost" onClick={onDone}>Cancelar</Button>
-          <Button onClick={handleSubmit} loading={update.isPending} disabled={!valid}>Salvar</Button>
-        </div>
-      </div>
-    </Card>
   );
 }
 

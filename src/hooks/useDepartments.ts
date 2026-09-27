@@ -30,12 +30,16 @@ export function useDepartments(
     clientId?: string;
     includeGlobal?: boolean;
     activeOnly?: boolean;
+    /** Permite adiar a consulta (ex.: modal de transferência ainda fechado). */
+    enabled?: boolean;
   } = {},
 ) {
+  const { enabled = true, ...listParams } = params;
   return useQuery({
-    queryKey: KEYS.list(params),
-    queryFn: () => departmentsApi.list(params),
+    queryKey: KEYS.list(listParams),
+    queryFn: () => departmentsApi.list(listParams),
     staleTime: 60_000,
+    enabled,
     select: (data) =>
       normalizeArray(data as CursorPageDto<Department> | Department[]),
   });

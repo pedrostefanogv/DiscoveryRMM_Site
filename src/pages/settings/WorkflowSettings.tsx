@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Plus, Trash2, ArrowRight } from 'lucide-react';
 import { useWorkflowStates, useWorkflowTransitions, useCreateWorkflowState, useDeleteWorkflowState, useCreateWorkflowTransition, useDeleteWorkflowTransition } from '@/hooks/useWorkflow';
 import { Card, CardHeader, Badge, Button, Modal, Input, Loading, ErrorDisplay } from '@/components/ui';
+import { TicketStateBadge, stateColorVars } from '@/components/tickets/TicketStateBadge';
 import toast from 'react-hot-toast';
 
 export default function WorkflowSettings() {
@@ -84,11 +85,9 @@ function StateCard({ state }: { state: { id: string; name: string; color: string
 
   return (
     <div className="flex items-center gap-3 rounded-lg border border-border bg-surface-light p-3">
-      <svg className="h-3 w-3 shrink-0" viewBox="0 0 12 12" aria-hidden="true">
-        <circle cx="6" cy="6" r="6" fill={state.color ?? '#64748b'} />
-      </svg>
       <div className="min-w-0 flex-1">
-        <p className="font-medium text-foreground">{state.name}</p>
+        {/* Prévia exatamente como o estado aparece na lista de chamados. */}
+        <TicketStateBadge name={state.name} color={state.color} />
         <div className="flex gap-1 mt-1">
           {state.isInitial && <Badge color="accent">Inicial</Badge>}
           {state.isFinal && <Badge color="success">Final</Badge>}
@@ -108,16 +107,12 @@ function TransitionRow({ id, name, fromName, fromColor, toName, toColor }: { id:
   return (
     <div className="flex items-center gap-3 rounded-lg bg-surface-light px-4 py-2">
       <span className="flex items-center gap-1.5 text-sm text-foreground">
-        <svg className="h-2 w-2" viewBox="0 0 8 8" aria-hidden="true">
-          <circle cx="4" cy="4" r="4" fill={fromColor ?? '#64748b'} />
-        </svg>
+        <span className="state-dot h-2 w-2 shrink-0 rounded-full" style={stateColorVars(fromColor)} aria-hidden="true" />
         {fromName}
       </span>
       <ArrowRight className="h-4 w-4 text-muted" />
       <span className="flex items-center gap-1.5 text-sm text-foreground">
-        <svg className="h-2 w-2" viewBox="0 0 8 8" aria-hidden="true">
-          <circle cx="4" cy="4" r="4" fill={toColor ?? '#64748b'} />
-        </svg>
+        <span className="state-dot h-2 w-2 shrink-0 rounded-full" style={stateColorVars(toColor)} aria-hidden="true" />
         {toName}
       </span>
       <span className="ml-auto text-xs text-muted">{name}</span>

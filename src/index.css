@@ -194,6 +194,32 @@ select optgroup {
   transition: width 200ms ease, transform 220ms ease, opacity 180ms ease;
 }
 
+/* Badge de estado do workflow (TicketStateBadge.tsx).
+   A matiz vem da cor do próprio estado e o texto/ponto usam --state-tone-*, um
+   tom derivado dela com contraste WCAG garantido (calculado em JS). Fundo e
+   borda são pré-computados por tema — sem color-mix, o resultado é idêntico em
+   qualquer navegador. */
+.state-pill {
+  color: var(--state-tone-light, var(--color-muted-foreground));
+  background-color: var(--state-bg-light, var(--color-surface-light));
+  border-color: var(--state-border-light, var(--color-border));
+}
+
+.dark .state-pill {
+  color: var(--state-tone-dark, var(--color-foreground));
+  background-color: var(--state-bg-dark, var(--color-surface-light));
+  border-color: var(--state-border-dark, var(--color-border));
+}
+
+/* Ponto solto de estado (hover card, tela de workflow). */
+.state-dot {
+  background-color: var(--state-tone-light, var(--color-muted-foreground));
+}
+
+.dark .state-dot {
+  background-color: var(--state-tone-dark, var(--color-foreground));
+}
+
 /* SLA progress bar — dynamic width via CSS variable */
 .sla-bar-fill {
   width: var(--sla-progress, 0%);
