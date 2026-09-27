@@ -84,9 +84,10 @@ export default function TicketCsatPage() {
             </div>
           </Card>
 
-          <div className="grid gap-4 lg:grid-cols-2">
+          <div className="grid gap-4 lg:grid-cols-3">
             <CsatTable title="Por departamento" groups={d.byDepartment} />
             <CsatTable title="Por técnico" groups={d.byTechnician} />
+            <CsatTable title="Por máquina" groups={d.byHostname} />
           </div>
         </>
       )}

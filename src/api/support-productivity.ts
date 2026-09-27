@@ -133,6 +133,8 @@ export interface TicketCsatSummaryDto {
   distribution: Record<string, number>;
   byDepartment: TicketCsatGroupDto[];
   byTechnician: TicketCsatGroupDto[];
+  /** CSAT por máquina (hostname do agent) — inclui avaliações feitas na aba Suporte do agent. */
+  byHostname: TicketCsatGroupDto[];
 }
 
 const MACROS = "/api/v1/ticket-macros";

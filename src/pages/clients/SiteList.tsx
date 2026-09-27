@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Building2, Plus } from 'lucide-react';
+import { Building2, Monitor, Plus } from 'lucide-react';
 import { useClients } from '@/hooks/useClients';
 import { useAllSites, useDeleteSite, useRestartSite, useShutdownSite, useWakeOnLanSite } from '@/hooks/useSites';
 import { useAgentsBySite } from '@/hooks/useAgents';
@@ -19,6 +19,10 @@ import { SiteFormModal } from '@/components/entity/SiteFormModal';
 type SiteWithClient = Site & {
   clientName: string;
   clientActive: boolean;
+  /** Total de agentes do site (exclui os da lixeira). */
+  agentCount?: number;
+  /** Agentes com status online no site. */
+  agentOnlineCount?: number;
 };
 
 export default function SiteList() {
@@ -128,6 +132,23 @@ export default function SiteList() {
       ),
     },
     {
+      key: 'agents',
+      header: 'Agentes',
+      render: (site) => {
+        const total = site.agentCount ?? 0;
+        const online = site.agentOnlineCount ?? 0;
+        if (total === 0) {
+          return <span className="text-muted">—</span>;
+        }
+        return (
+          <div>
+            <p className="text-foreground">{total} agente{total !== 1 ? 's' : ''}</p>
+            <p className="text-xs text-muted">{online} online</p>
+          </div>
+        );
+      },
+    },
+    {
       key: 'updatedAt',
       header: 'Atualizado em',
       render: (site) => (
@@ -142,6 +163,8 @@ export default function SiteList() {
   const hasQueryError = clients.isError || allSitesQuery.isError;
   const activeSites = sites.filter((site) => site.isActive).length;
   const inactiveSites = sites.length - activeSites;
+  const totalAgents = sites.reduce((sum, site) => sum + (site.agentCount ?? 0), 0);
+  const onlineAgents = sites.reduce((sum, site) => sum + (site.agentOnlineCount ?? 0), 0);
   const clientOptions = [
     { value: '', label: 'Todos os clientes' },
     ...(clients.data ?? []).map((client) => ({ value: client.id, label: client.name })),
@@ -291,10 +314,21 @@ export default function SiteList() {
         )}
       </PageHeader>
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard icon={Building2} label="Total de sites" value={sites.length} tone="accent" />
         <StatCard icon={Building2} label="Sites ativos" value={activeSites} tone="success" />
         <StatCard icon={Building2} label="Sites inativos" value={inactiveSites} tone="warning" />
+        <StatCard
+          icon={Monitor}
+          label="Agentes nos sites"
+          value={totalAgents}
+          tone="primary"
+          trend={
+            totalAgents > 0 ? (
+              <span className="text-xs font-medium text-success">{onlineAgents} online</span>
+            ) : undefined
+          }
+        />
       </div>
 
       <Card>

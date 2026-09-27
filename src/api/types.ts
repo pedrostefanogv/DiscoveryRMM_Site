@@ -130,6 +130,10 @@ export interface Site {
 export interface SiteWithClient extends Site {
   clientName: string | null;
   clientActive: boolean;
+  /** Total de agentes do site (exclui os da lixeira). */
+  agentCount?: number;
+  /** Agentes com status online no site. */
+  agentOnlineCount?: number;
 }
 
 export interface AgentHeartbeatMetrics {
