@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Monitor, Wifi, WifiOff, Activity, Building2, Clock, HardDrive, MapPin, LayoutGrid, List, Bug, Trash2, ShieldCheck, ArrowUp, ArrowDown, Radio, RefreshCw, Move, RotateCcw, Power, Zap, Server, Apple, Thermometer, ChevronRight, Bell, ArchiveRestore, Undo2 } from 'lucide-react';
+import { Monitor, Wifi, WifiOff, LayoutGrid, List, Bug, Trash2, ShieldCheck, ArrowUp, ArrowDown, RefreshCw, Move, RotateCcw, Power, Zap, ChevronRight, Bell, ArchiveRestore, Undo2 } from 'lucide-react';
 import { useQueries } from '@tanstack/react-query';
 import { useAgentLabelUsage, useAgentIdsByLabel, useAgentLabelsByAgentIds } from '@/hooks/useAgentLabels';
 import toast from 'react-hot-toast';
@@ -10,6 +10,7 @@ import { getDeleteAgentErrorMessage, getPurgeAgentErrorMessage, useApproveZeroTo
 import { ApiError, agentUpdatesApi, agentsApi } from '@/api';
 import { Badge, ErrorDisplay, Input, Select, StatCard, Modal, PageHeader, SkeletonCard, EmptyState, MetricBar, Button, ConfirmDialog } from '@/components/ui';
 import { TransferAgentModal } from '@/components/agents/TransferAgentModal';
+import { AgentCard, formatDateBrazil, formatRelative, getAgentOsIcon } from '@/components/agents/AgentCard';
 import PowerActionModal from '@/components/agents/PowerActionModal';
 import AgentNotificationModal, { type AgentNotificationPayload } from '@/components/agents/AgentNotificationModal';
 import WakeOnLanModal from '@/components/agents/WakeOnLanModal';
@@ -105,35 +106,7 @@ function compareAgentsBySort(
   return compareAgentsTieBreaker(a, b);
 }
 
-function formatDateBrazil(value: string): string {
-  const d = new Date(value);
-  if (!Number.isFinite(d.getTime())) return value;
-  return d.toLocaleString('pt-BR', {
-    day: '2-digit',
-    month: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}
 
-function formatRelative(dateStr: string | null, now: number): { text: string; fullDate: string | null } {
-  if (!dateStr) return { text: '\u2014', fullDate: null };
-  const diff = now - new Date(dateStr).getTime();
-  const fullDate = formatDateBrazil(dateStr);
-  if (diff < 60_000) return { text: 'agora mesmo', fullDate };
-  if (diff < 3_600_000) return { text: `há ${Math.floor(diff / 60_000)} min`, fullDate };
-  if (diff < 86_400_000) return { text: `há ${Math.floor(diff / 3_600_000)} h`, fullDate };
-  return { text: fullDate, fullDate };
-}
-
-function getOsIconComponent(os: string | null) {
-  if (!os) return <Monitor className="h-5 w-5 text-primary" />;
-  const lower = os.toLowerCase();
-  if (lower.includes('windows')) return <Monitor className="h-5 w-5 text-primary" />;
-  if (lower.includes('linux') || lower.includes('ubuntu') || lower.includes('debian') || lower.includes('centos')) return <Server className="h-5 w-5 text-accent" />;
-  if (lower.includes('mac') || lower.includes('darwin')) return <Apple className="h-5 w-5 text-foreground" />;
-  return <Monitor className="h-5 w-5 text-primary" />;
-}
 
 export default function AgentList() {
   const navigate = useNavigate();
@@ -831,6 +804,8 @@ export default function AgentList() {
             {showDeleted ? <Undo2 className="h-4 w-4" /> : <Trash2 className="h-4 w-4" />}
             {showDeleted ? 'Voltar' : 'Excluídos'}
           </button>
+          {/* O toggle card/lista não se aplica à lixeira (sempre tabela). */}
+          {!showDeleted && (
           <div className="flex overflow-hidden rounded-lg border border-border">
             <button
               onClick={() => setViewMode('card')}
@@ -847,10 +822,11 @@ export default function AgentList() {
               <List className="h-4 w-4" />
             </button>
           </div>
+          )}
         </div>
       </div>
 
-      {filterLabel ? (
+      {!showDeleted && filterLabel ? (
         <p className="text-xs text-muted">
           {agentsWithFilterLabel.isLoading
             ? `Filtrando por "${filterLabel}"...`
@@ -1012,176 +988,22 @@ export default function AgentList() {
           {/* -- CARD VIEW -- */}
           {viewMode === 'card' && (
             <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 3xl:grid-cols-5">
-              {filtered.map(a => {
-                const online = isAgentOnlineNow(a, now);
-                const lastSeen = getAgentLastSeen(a);
-                const displayName = a.displayName ?? a.hostname;
-                const isZeroTouchPending = a.zeroTouchPending === true;
-                const relativeTime = formatRelative(lastSeen, now);
-                return (
-                  <div
-                    key={a.id}
-                    onClick={() => navigate(`/agents/${a.id}`)}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter' || event.key === ' ') {
-                        event.preventDefault();
-                        navigate(`/agents/${a.id}`);
-                      }
-                    }}
-                    onContextMenu={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      setContextMenu({ x: event.clientX, y: event.clientY, agent: a });
-                    }}
-                    role="button"
-                    tabIndex={0}
-                    className="group relative flex flex-col gap-4 rounded-xl border border-border bg-surface p-5 text-left transition-all hover:border-primary/30 hover:bg-surface-light hover:shadow-lg"
-                  >
-                    <div className="absolute right-4 top-4">
-                      <Badge color={online ? 'success' : 'slate'}>
-                        <span className="flex items-center gap-1">
-                          {online ? <Wifi className="h-2.5 w-2.5" /> : <WifiOff className="h-2.5 w-2.5" />}
-                          {online ? 'Online' : 'Offline'}
-                        </span>
-                      </Badge>
-                    </div>
-                    <div className="flex items-start gap-3 pr-6">
-                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-primary/15">
-                        {getOsIconComponent(a.operatingSystem)}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate font-semibold text-foreground transition-colors group-hover:text-primary">{displayName}</p>
-                        {a.displayName && a.displayName !== a.hostname && (
-                          <p className="truncate font-mono text-xs text-muted">{a.hostname}</p>
-                        )}
-                        {isZeroTouchPending && (
-                          <div className="mt-1.5 flex flex-wrap gap-1.5">
-                            <Badge color="warning">Aguardando aprovação</Badge>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                    <div className="space-y-1.5 text-xs">
-                      <div className="flex items-center gap-2 text-muted">
-                        <Activity className="h-3.5 w-3.5 shrink-0 text-muted" />
-                        <span className="truncate">{a.operatingSystem ?? '\u2014'}{a.osVersion ? ` · ${a.osVersion}` : ''}</span>
-                      </div>
-                      <div className="flex items-center gap-2 text-muted">
-                        <span className="h-3.5 w-3.5 shrink-0 pt-px text-center font-mono text-[10px] leading-none text-muted">IP</span>
-                        <span className="font-mono">{a.lastIpAddress ?? 'IP indisponível'}</span>
-                      </div>
-                      <div className="flex items-center gap-2 text-muted">
-                        <Building2 className="h-3.5 w-3.5 shrink-0 text-muted" />
-                        <span className="truncate">{a.clientName}</span>
-                        {a.siteName && (
-                          <>
-                            <span className="text-muted/50">·</span>
-                            <MapPin className="h-3 w-3 shrink-0 text-muted" />
-                            <span className="truncate">{a.siteName}</span>
-                          </>
-                        )}
-                      </div>
-                      {/* Footer row: peers, ping, temp, disk% — before the heartbeat separator */}
-                      <div className="flex items-center gap-3 text-muted pt-0.5">
-                        {a.heartbeatMetrics?.p2pPeers != null && (
-                          <span className="flex items-center gap-1 text-[10px]">
-                            <Radio className="h-3 w-3" />
-                            {a.heartbeatMetrics.p2pPeers} peers
-                          </span>
-                        )}
-                        <span className="flex items-center gap-1 text-[10px]">
-                          <Clock className="h-3 w-3" />
-                          {relativeTime.text}
-                        </span>
-                        {a.heartbeatMetrics?.cpuTemperatureCelsius != null && (() => {
-                          const t = a.heartbeatMetrics.cpuTemperatureCelsius;
-                          const tempColor = t > 80 ? 'text-danger' : t > 60 ? 'text-warning' : '';
-                          return (
-                            <span className={`flex items-center gap-1 text-[10px] ${tempColor}`}>
-                              <Thermometer className="h-3 w-3" />
-                              {Math.round(t)}°C
-                            </span>
-                          );
-                        })()}
-                        {a.heartbeatMetrics?.diskPercent != null && (() => {
-                          const pct = a.heartbeatMetrics.diskPercent;
-                          const colorClass = pct >= 90 ? 'text-danger' : pct >= 70 ? 'text-warning' : '';
-                          return (
-                            <span className={`flex items-center gap-1 text-[10px] ${colorClass}`}>
-                              <HardDrive className="h-3 w-3" />
-                              {Math.round(pct)}%
-                            </span>
-                          );
-                        })()}
-                      </div>
-                      {/* Heartbeat metrics */}
-                      {a.heartbeatMetrics && (
-                        <div className="border-t border-border pt-2 mt-1 space-y-1.5">
-                          <MetricBar
-                            label="CPU"
-                            value={a.heartbeatMetrics.cpuPercent}
-                            compact
-                          />
-                          <MetricBar
-                            label="RAM"
-                            value={a.heartbeatMetrics.memoryPercent}
-                            compact
-                          />
-                          {(a.heartbeatMetrics.diskReadPercent != null || a.heartbeatMetrics.diskWritePercent != null) && (
-                            <div className="flex items-stretch gap-2">
-                              <span className="shrink-0 text-xs text-muted min-w-[2rem]">HDD</span>
-                              {/* Leitura — mini bar ciano */}
-                              <div className="flex flex-1 items-center gap-1.5">
-                                <ArrowUp className="h-3 w-3 shrink-0 text-cyan-600 dark:text-cyan-400" />
-                                <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-cyan-500/20">
-                                  <div
-                                    className="h-full rounded-full bg-cyan-500 transition-all duration-500"
-                                    style={{ width: `${Math.min(100, Math.max(0, a.heartbeatMetrics.diskReadPercent ?? 0))}%` }}
-                                  />
-                                </div>
-                                <span className="shrink-0 text-[10px] font-medium tabular-nums text-cyan-600 dark:text-cyan-400">
-                                  {a.heartbeatMetrics.diskReadPercent != null ? `${Math.round(a.heartbeatMetrics.diskReadPercent)}%` : '\u2014'}
-                                </span>
-                              </div>
-                              {/* Escrita — mini bar âmbar */}
-                              <div className="flex flex-1 items-center gap-1.5">
-                                <ArrowDown className="h-3 w-3 shrink-0 text-amber-600 dark:text-amber-400" />
-                                <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-amber-500/20">
-                                  <div
-                                    className="h-full rounded-full bg-amber-500 transition-all duration-500"
-                                    style={{ width: `${Math.min(100, Math.max(0, a.heartbeatMetrics.diskWritePercent ?? 0))}%` }}
-                                  />
-                                </div>
-                                <span className="shrink-0 text-[10px] font-medium tabular-nums text-amber-600 dark:text-amber-400">
-                                  {a.heartbeatMetrics.diskWritePercent != null ? `${Math.round(a.heartbeatMetrics.diskWritePercent)}%` : '\u2014'}
-                                </span>
-                              </div>
-                            </div>
-                          )}
-
-                        </div>
-                      )}
-                    </div>
-                    {canManageAgent && isZeroTouchPending && (
-                      <div className="pt-1">
-                        <button
-                          type="button"
-                          onClick={(event) => {
-                            event.preventDefault();
-                            event.stopPropagation();
-                            void handleApproveZeroTouch(a);
-                          }}
-                          disabled={approvingAgentId === a.id}
-                          className="inline-flex items-center gap-1 rounded-md border border-warning/40 bg-warning/10 px-2.5 py-1 text-xs font-medium text-warning transition-colors hover:bg-warning/20 disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                          <ShieldCheck className="h-3.5 w-3.5" />
-                          {approvingAgentId === a.id ? 'Aprovando...' : 'Aprovar'}
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+              {filtered.map(a => (
+                <AgentCard
+                  key={a.id}
+                  agent={a}
+                  now={now}
+                  onOpen={(agent) => navigate(`/agents/${agent.id}`)}
+                  onContextMenu={(event, agent) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    setContextMenu({ x: event.clientX, y: event.clientY, agent });
+                  }}
+                  canApprove={canManageAgent}
+                  isApproving={approvingAgentId === a.id}
+                  onApprove={handleApproveZeroTouch}
+                />
+              ))}
             </div>
           )}
 
@@ -1223,7 +1045,7 @@ export default function AgentList() {
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-3">
                             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/15">
-                              {getOsIconComponent(a.operatingSystem)}
+                              {getAgentOsIcon(a.operatingSystem)}
                             </div>
                             <div className="min-w-0">
                               <p className="truncate font-medium text-foreground">{displayName}</p>

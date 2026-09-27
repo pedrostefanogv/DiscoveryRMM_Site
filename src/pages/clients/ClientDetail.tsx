@@ -30,7 +30,7 @@ import { Button, Card, CardHeader, Badge, Loading, ErrorDisplay, Modal, StatCard
 import { NotesPanel } from '@/components/notes/NotesPanel';
 import { ClientFormModal } from '@/components/entity/ClientFormModal';
 import { SiteFormModal } from '@/components/entity/SiteFormModal';
-import { AgentMiniList } from '@/components/entity/AgentMiniList';
+import { AgentCardsGrid } from '@/components/agents/AgentCardsGrid';
 import { DetailTabs, resolveDetailTab, type DetailTab } from '@/components/entity/DetailTabs';
 import { CreateDeployTokenModal } from '@/components/entity/CreateDeployTokenModal';
 import { RecentTicketsCard } from '@/components/entity/RecentTicketsCard';
@@ -97,6 +97,11 @@ export default function ClientDetail() {
   // Memoized normalized arrays — MUST be before any early return (Rules of Hooks)
   const sitesArray = useMemo(() => ensureArray<Site>(sites.data), [sites.data]);
   const agentsArray = useMemo(() => ensureArray<Agent>(agents.data), [agents.data]);
+  const siteNameMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const site of sitesArray) map.set(site.id, site.name);
+    return map;
+  }, [sitesArray]);
   const ticketsArray = useMemo(() => ensureArray<Ticket>(tickets.data), [tickets.data]);
   const logsArray = useMemo(() => ensureArray<LogEntry>(logs.data), [logs.data]);
 
@@ -505,13 +510,20 @@ export default function ClientDetail() {
                 className="py-8"
               />
             ) : (
-              <AgentMiniList
-                agents={agentsArray}
+              <AgentCardsGrid
+                agents={agentsArray.map((agent) => ({
+                  ...agent,
+                  clientName: c.name,
+                  clientId: c.id,
+                  siteName: siteNameMap.get(agent.siteId),
+                }))}
                 now={now}
                 isLoading={agents.isLoading}
                 emptyMessage="Nenhum agente"
+                showClient={false}
+                showSite={false}
                 filterable
-                onSelect={(agent) => navigate(`/agents/${agent.id}`)}
+                onOpen={(agent) => navigate(`/agents/${agent.id}`)}
               />
             )}
           </Card>
