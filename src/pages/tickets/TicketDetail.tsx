@@ -1430,7 +1430,11 @@ function TicketSummaryPanel({
     const d = sla.data;
     const pct = Math.min(d.percentUsed ?? 0, 100);
     const isBreached = Boolean(d.breached);
-    const barColor = isBreached ? 'bg-danger' : pct >= 75 ? 'bg-warning' : 'bg-success';
+    // Chamado encerrado (ou SLA já marcado como congelado): o relógio parou no
+    // fechamento, então o percentual exibido é o valor no momento do encerramento.
+    const isFrozen = Boolean(d.slaFrozen) || Boolean(closedAt);
+    const frozenAt = d.closedAt ?? closedAt;
+    const barColor = isBreached ? 'bg-danger' : isFrozen ? 'bg-slate-400' : pct >= 75 ? 'bg-warning' : 'bg-success';
 
     if (d.message && !d.slaExpiresAt) {
       return <p className="text-sm text-muted">Sem SLA definido para o chamado.</p>;
@@ -1439,20 +1443,24 @@ function TicketSummaryPanel({
     return (
       <div className="space-y-3">
         <div className="flex flex-wrap items-center gap-2">
-          <Badge color={isBreached ? 'danger' : d.onHold ? 'accent' : 'success'}>
-            {isBreached ? 'SLA violado' : d.onHold ? 'SLA em pausa' : d.status ?? 'SLA ativo'}
+          <Badge color={isBreached ? 'danger' : isFrozen ? 'slate' : d.onHold ? 'accent' : 'success'}>
+            {isBreached ? 'SLA violado' : isFrozen ? 'SLA encerrado' : d.onHold ? 'SLA em pausa' : d.status ?? 'SLA ativo'}
           </Badge>
-          {d.warningLevel && !isBreached && (
+          {d.warningLevel && !isBreached && !isFrozen && (
             <Badge color={d.warningLevel === 'low' ? 'success' : d.warningLevel === 'medium' ? 'warning' : 'danger'}>
               Nivel {d.warningLevel}
             </Badge>
           )}
         </div>
-        {d.slaExpiresAt && (
+        {isFrozen ? (
+          <p className="text-xs text-muted">
+            SLA congelado no fechamento{frozenAt ? ` em ${new Date(frozenAt).toLocaleString('pt-BR')}` : ''} — o tempo não continua contando.
+          </p>
+        ) : d.slaExpiresAt ? (
           <p className="text-xs text-muted">
             Expira em {new Date(d.slaExpiresAt).toLocaleString('pt-BR')}
           </p>
-        )}
+        ) : null}
         {d.percentUsed != null && (
           <div>
             <div className="mb-1 flex justify-between text-xs text-muted">
@@ -1816,7 +1824,7 @@ function TimelinePanel({
   const groups = groupTimelineByDay(entries);
 
   return (
-    <div className="max-h-96 space-y-4 overflow-y-auto pr-1">
+    <div className="min-h-[24rem] max-h-[70vh] space-y-4 overflow-y-auto pr-1">
       <p className="text-xs text-muted">{entries.length} evento(s)</p>
 
       {groups.map((group) => (

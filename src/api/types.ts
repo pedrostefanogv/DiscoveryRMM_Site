@@ -1111,6 +1111,10 @@ export interface SlaDetails extends SlaStatus {
   totalSlaHours?: number | null;
   elapsedHours?: number | null;
   onHold?: boolean;
+  /** SLA congelado no momento do fechamento do chamado. */
+  slaFrozen?: boolean;
+  /** Data/hora de encerramento do chamado (usada para congelar o SLA). */
+  closedAt?: string | null;
   slaHoldStartedAt?: string | null;
   slaPausedSeconds?: number;
   warningLevel?: "low" | "medium" | "high" | "critical" | null;
