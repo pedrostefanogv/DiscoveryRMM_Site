@@ -87,9 +87,23 @@ export type TicketActivityType =
   | "PriorityChanged"
   | "DescriptionUpdated"
   | "CategoryChanged"
+  | "Deleted"
+  | "RemoteSessionStarted"
+  | "RemoteSessionEnded"
   | "AutomationLinked"
   | "AutomationApproved"
-  | "AutomationRejected";
+  | "AutomationRejected"
+  | "AutoCreatedFromAlert"
+  | "TicketMerged"
+  | "TicketRelationAdded"
+  | "TicketRelationRemoved"
+  | "KnowledgeLinked"
+  | "KnowledgeUnlinked"
+  | "Rated"
+  | "RequesterChanged"
+  | "AgentChanged"
+  | "AiAssigned"
+  | "AiAssignmentSuggested";
 
 // ── Base Entities (response shapes) ────────────────────
 
@@ -628,7 +642,91 @@ export interface Ticket {
   requesterUserId?: string | null;
 }
 
-export interface Department {
+export interface DepartmentAiAssignmentSettings {
+  /** Modo da triagem por IA: 0 = sugerir, 1 = atribuir automaticamente. */
+  aiAssignmentMode?: number;
+  /** Confiança mínima da IA (0..1) para aceitar a escolha. */
+  aiAssignmentMinConfidence?: number;
+  /** Estratégia determinística de fallback (1 = round-robin, 2 = menos abertos). */
+  aiAssignmentFallbackStrategy?: number;
+  /** Quantidade máxima de candidatos enviados ao modelo. */
+  aiAssignmentMaxCandidates?: number;
+  /** Pesos do score por dimensão (JSON de AiAssignmentWeights). */
+  aiAssignmentWeightsJson?: string | null;
+  /** Orientações livres do gestor anexadas ao prompt de triagem. */
+  aiAssignmentInstructions?: string | null;
+  /** Usa afinidade com chamados semelhantes já resolvidos. */
+  aiAssignmentUseAffinity?: boolean;
+  /** Teto de tokens de saída da triagem (combinado com a capacidade do modelo). */
+  aiAssignmentMaxOutputTokens?: number;
+  /** Aprendizado de competências: 0=Off, 1=Sugerir, 2=Automático. */
+  aiSkillLearningMode?: number;
+  /** Mínimo de chamados resolvidos para sugerir uma competência. */
+  aiSkillMinEvidence?: number;
+  /** Máximo de competências por atendente. */
+  aiSkillMaxTags?: number;
+  /** Recalibração de pesos: 0=Off, 1=Sugerir, 2=Automático. */
+  aiWeightLearningMode?: number;
+  /** Ajuste máximo por dimensão em cada ciclo. */
+  aiWeightMaxDeltaPerCycle?: number;
+  /** Duração do ciclo de calibração em dias. */
+  aiWeightCycleDays?: number;
+  /** Peso mínimo por dimensão. */
+  aiWeightMin?: number;
+  /** Peso máximo por dimensão. */
+  aiWeightMax?: number;
+}
+
+/** Pesos do score determinístico da triagem por IA (somados e normalizados no servidor). */
+export interface AiAssignmentWeights {
+  skill: number;
+  affinity: number;
+  performance: number;
+  load: number;
+  csat: number;
+  slaQuality: number;
+}
+
+/** Sugestão de competências derivada do histórico do atendente. */
+export interface TechnicianSkillSuggestionDto {
+  id: string;
+  departmentId: string;
+  userId: string;
+  userName: string | null;
+  windowDays: number;
+  suggestedTags: string[];
+  appliedTags: string[];
+  evidenceJson: string | null;
+  status: string;
+  autoApplied: boolean;
+  createdAt: string;
+  decidedAt: string | null;
+  decidedByUserId: string | null;
+}
+
+/** Proposta de recalibração dos pesos do score. */
+export interface AiWeightSuggestionDto {
+  id: string;
+  departmentId: string;
+  cycleDays: number;
+  windowStart: string;
+  windowEnd: string;
+  currentWeights: AiAssignmentWeights;
+  suggestedWeights: AiAssignmentWeights;
+  evidenceJson: string | null;
+  status: string;
+  autoApplied: boolean;
+  createdAt: string;
+  decidedAt: string | null;
+  decidedByUserId: string | null;
+}
+
+export interface DepartmentLearningSuggestionsDto {
+  skills: TechnicianSkillSuggestionDto[];
+  weights: AiWeightSuggestionDto[];
+}
+
+export interface Department extends DepartmentAiAssignmentSettings {
   id: string;
   clientId: string | null;
   name: string;
@@ -637,6 +735,99 @@ export interface Department {
   sortOrder: number;
   isActive: boolean;
   assignmentStrategy?: number;
+}
+
+/** Métricas históricas de um atendente usadas pela triagem por IA. */
+export interface TechnicianMetricsDto {
+  userId: string;
+  windowDays: number;
+  assignedTotal: number;
+  resolvedTotal: number;
+  openNow: number;
+  avgFirstResponseMinutes: number | null;
+  avgResolutionMinutes: number | null;
+  p90ResolutionMinutes: number | null;
+  slaBreachRate: number;
+  reopenRate: number;
+  csatAverage: number | null;
+  csatRatedCount: number;
+  difficultyAverage: number | null;
+  topCategories: string[];
+  topTags: string[];
+  computedAt: string | null;
+}
+
+/** Perfil do membro da equipe (competências/capacidade) + métricas. */
+export interface DepartmentMemberProfileDto {
+  departmentId: string;
+  userId: string;
+  userName: string | null;
+  isActive: boolean;
+  createdAt: string;
+  skillTags: string[];
+  skillLevel: number;
+  maxOpenTickets: number | null;
+  weight: number;
+  acceptsAiAssignment: boolean;
+  metrics: TechnicianMetricsDto | null;
+}
+
+export interface UpdateDepartmentMemberProfileRequest {
+  skillTags?: string[] | null;
+  skillLevel?: number | null;
+  maxOpenTickets?: number | null;
+  weight?: number | null;
+  acceptsAiAssignment?: boolean | null;
+  clearMaxOpenTickets?: boolean;
+}
+
+/** Sub-scores de um candidato avaliado pela triagem por IA. */
+export interface AssignmentCandidateDto {
+  userId: string;
+  userName: string | null;
+  score: number;
+  skillScore: number;
+  affinityScore: number;
+  performanceScore: number;
+  loadScore: number;
+  csatScore: number;
+  slaScore: number;
+  overCapacity: boolean;
+  openNow: number;
+  bestAffinityTicketTitle: string | null;
+}
+
+export interface TicketAssignmentDecisionDto {
+  id: string;
+  ticketId: string;
+  departmentId: string;
+  mode: number;
+  strategySource: string;
+  difficulty: number;
+  chosenUserId: string | null;
+  chosenUserName: string | null;
+  confidence: number;
+  score: number;
+  rationale: string | null;
+  model: string | null;
+  tokensUsed: number;
+  applied: boolean;
+  notAppliedReason: string | null;
+  overriddenAt: string | null;
+  overriddenByUserId: string | null;
+  createdAt: string;
+  candidates: AssignmentCandidateDto[];
+  /** Teto de tokens de saída usado na decisão (auditoria do orçamento). */
+  maxOutputTokens: number;
+  /** Caracteres do prompt enviado ao modelo. */
+  promptChars: number;
+}
+
+export interface TicketAssignmentResultDto {
+  decision: TicketAssignmentDecisionDto;
+  assignedUserId: string | null;
+  applied: boolean;
+  result: string;
 }
 
 export interface WorkflowProfile {
@@ -656,9 +847,17 @@ export interface TicketTimelineEntry {
   id: string;
   ticketId: string;
   activityType: TicketActivityType;
-  userId: string | null;
-  description: string;
-  metadata: unknown;
+  changedByUserId: string | null;
+  /** Nome de quem alterou (resolvido na API); null = ação do sistema. */
+  changedByName: string | null;
+  oldValue: string | null;
+  newValue: string | null;
+  /** Valores já resolvidos (ex.: nome do estado/responsável/departamento). */
+  oldLabel: string | null;
+  newLabel: string | null;
+  comment: string | null;
+  /** Descrição legível montada pela API (pt-BR). */
+  description: string | null;
   createdAt: string;
 }
 
@@ -1789,7 +1988,7 @@ export interface UpdateTicketRequest {
   clearAgent?: boolean;
 }
 
-export interface CreateDepartmentRequest {
+export interface CreateDepartmentRequest extends DepartmentAiAssignmentSettings {
   clientId: string | null;
   name: string;
   description: string | null;
@@ -1798,7 +1997,7 @@ export interface CreateDepartmentRequest {
   assignmentStrategy?: number;
 }
 
-export interface UpdateDepartmentRequest {
+export interface UpdateDepartmentRequest extends DepartmentAiAssignmentSettings {
   name: string;
   description: string | null;
   inheritFromGlobalId: string | null;

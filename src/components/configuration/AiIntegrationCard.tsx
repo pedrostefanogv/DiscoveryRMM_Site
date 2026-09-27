@@ -364,7 +364,15 @@ export function AiIntegrationCard({ aiSettings, onSave, saving }: Props) {
                 <div className="grid gap-3 sm:grid-cols-3">
                   <div className="space-y-1"><label className="block text-xs text-muted">Temperature (0-2)</label><Input type="number" min={0} max={2} step={0.1} value={String(temperature)} onChange={(e) => setTemperature(Number(e.target.value))} /></div>
                   <div className="space-y-1"><label className="block text-xs text-muted">Top P (0-1)</label><Input type="number" min={0} max={1} step={0.05} value={String(topP)} onChange={(e) => setTopP(Number(e.target.value))} /></div>
-                  <div className="space-y-1"><label className="block text-xs text-muted">Max Tokens</label><Input type="number" min={1} step={100} value={String(maxTokens)} onChange={(e) => setMaxTokens(Number(e.target.value))} /></div>
+                  <div className="space-y-1">
+                    <label className="block text-xs text-muted">Max Tokens (saída)</label>
+                    <Input type="number" min={100} max={32768} step={100} value={String(maxTokens)} onChange={(e) => setMaxTokens(Number(e.target.value))} />
+                    <p className="text-[11px] text-muted">
+                      Teto de tokens de saída das chamadas de IA. O valor efetivo nunca passa do que o
+                      modelo selecionado suporta (ex.: gpt-4o-mini 16.384; gemini-2.5-flash 65.535).
+                      Valores acima de 32.768 são limitados pelo produto.
+                    </p>
+                  </div>
                   <div className="space-y-1"><label className="block text-xs text-muted">Freq. Penalty (-2 a 2)</label><Input type="number" min={-2} max={2} step={0.1} value={String(freqPen)} onChange={(e) => setFreqPen(Number(e.target.value))} /></div>
                   <div className="space-y-1"><label className="block text-xs text-muted">Pres. Penalty (-2 a 2)</label><Input type="number" min={-2} max={2} step={0.1} value={String(presPen)} onChange={(e) => setPresPen(Number(e.target.value))} /></div>
                 </div>

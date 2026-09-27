@@ -21,6 +21,7 @@ import {
 import { useTicketMacros } from '@/hooks/useSupportProductivity';
 import { TicketRatingCard } from '@/components/tickets/TicketRatingCard';
 import { WatchersSection } from '@/components/tickets/WatchersSection';
+import { TicketAiAssignmentCard } from '@/components/tickets/TicketAiAssignmentCard';
 import { TicketFieldsSection } from '@/components/tickets/TicketFieldsSection';
 import { TicketRelationsSection } from '@/components/tickets/TicketRelationsSection';
 import { RequesterPickerModal } from '@/components/tickets/RequesterPickerModal';
@@ -60,36 +61,12 @@ import type {
 import toast from 'react-hot-toast';
 import { getTicketPriorityMeta } from '@/utils/labels';
 import { upsertCommentPage, type CommentPage } from '@/utils/commentPages';
-
-const ACTIVITY_LABELS: Record<string, string> = {
-  Created:              'Criado',
-  StateChanged:         'Estado alterado',
-  Assigned:             'Atribuído',
-  Commented:            'Comentado',
-  SlaWarning:           'Aviso de SLA',
-  SlaBreached:          'SLA violado',
-  Escalated:            'Escalado',
-  Reopened:             'Reaberto',
-  DepartmentChanged:    'Departamento alterado',
-  PriorityChanged:      'Prioridade alterada',
-  DescriptionUpdated:   'Descrição atualizada',
-  CategoryChanged:      'Categoria alterada',
-  Deleted:              'Excluído',
-  RemoteSessionStarted: 'Sessão remota iniciada',
-  RemoteSessionEnded:   'Sessão remota encerrada',
-  AutomationLinked:     'Automação vinculada',
-  AutomationApproved:   'Automação aprovada',
-  AutomationRejected:   'Automação rejeitada',
-  AutoCreatedFromAlert: 'Criado automaticamente por alerta',
-  TicketMerged:         'Chamados mesclados',
-  TicketRelationAdded:  'Relacionamento adicionado',
-  TicketRelationRemoved:'Relacionamento removido',
-  KnowledgeLinked:      'Artigo vinculado',
-  KnowledgeUnlinked:    'Artigo desvinculado',
-  Rated:                'Avaliado',
-  RequesterChanged:     'Solicitante alterado',
-  AgentChanged:         'Agent alterado',
-};
+import {
+  formatRelativeTime,
+  groupTimelineByDay,
+  TIMELINE_TONE_CLASS,
+  timelineMetaFor,
+} from '@/utils/ticketTimeline';
 
 type Tab = 'comments' | 'timeline' | 'attachments' | 'automation' | 'ai';
 
@@ -292,7 +269,7 @@ export default function TicketDetail() {
               {tab === 'comments' ? (
                 <CommentsPanel ticketId={id!} draftSeed={commentSeed} />
               ) : tab === 'timeline' ? (
-                <TimelinePanel ticketId={id!} />
+                <TimelinePanel ticketId={id!} onOpenComments={() => setTab('comments')} />
               ) : tab === 'automation' ? (
                 <AutomationLinksPanel
                   ticketId={id!}
@@ -1571,6 +1548,10 @@ function TicketSummaryPanel({
       </div>
 
       <div className="mt-4 border-t border-border pt-4">
+        <TicketAiAssignmentCard ticketId={ticketId} />
+      </div>
+
+      <div className="mt-4 border-t border-border pt-4">
         <div className="mb-2 flex items-center gap-2 text-muted-foreground">
           <Clock className="h-4 w-4" />
           <p className="text-sm font-medium">SLA</p>
@@ -1698,38 +1679,96 @@ function CommentsPanel({
   );
 }
 
-function TimelinePanel({ ticketId }: { ticketId: string }) {
+function TimelinePanel({
+  ticketId,
+  onOpenComments,
+}: {
+  ticketId: string;
+  onOpenComments?: () => void;
+}) {
   const timeline = useTicketTimeline(ticketId);
 
   if (timeline.isLoading) return <Loading />;
-  if (timeline.isError) return <p className="text-sm text-danger">Erro ao carregar timeline</p>;
+  if (timeline.isError) {
+    return (
+      <div className="flex flex-col items-center gap-2 py-4 text-center text-sm text-danger">
+        <span>Erro ao carregar timeline.</span>
+        <Button size="sm" variant="ghost" onClick={() => void timeline.refetch()}>
+          Tentar novamente
+        </Button>
+      </div>
+    );
+  }
 
   const entries = timeline.data ?? [];
 
+  if (entries.length === 0) {
+    return <p className="text-sm text-muted py-4 text-center">Nenhum evento registrado</p>;
+  }
+
+  const groups = groupTimelineByDay(entries);
+
   return (
-    <div className="space-y-3 max-h-96 overflow-y-auto">
-      {entries.length === 0 ? (
-        <p className="text-sm text-muted py-4 text-center">Nenhum evento registrado</p>
-      ) : (
-        entries.map(e => (
-          <div key={e.id} className="flex gap-3">
-            <div className="mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-surface-hover">
-              <Activity className="h-3 w-3 text-muted" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-sm font-medium text-foreground">
-                  {ACTIVITY_LABELS[e.activityType] ?? e.activityType}
-                </span>
-                <span className="text-xs text-muted">
-                  {new Date(e.createdAt).toLocaleString('pt-BR')}
-                </span>
-              </div>
-              <p className="text-xs text-muted mt-0.5">{e.description}</p>
-            </div>
+    <div className="max-h-96 space-y-4 overflow-y-auto pr-1">
+      <p className="text-xs text-muted">{entries.length} evento(s)</p>
+
+      {groups.map((group) => (
+        <div key={group.key}>
+          <div className="mb-2 flex items-center gap-2">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-muted">
+              {group.label}
+            </span>
+            <span className="h-px flex-1 bg-border" />
           </div>
-        ))
-      )}
+
+          <div className="space-y-3">
+            {group.items.map((entry) => {
+              const meta = timelineMetaFor(entry.activityType);
+              const Icon = meta.icon;
+
+              return (
+                <div key={entry.id} className="flex gap-3">
+                  <div
+                    className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${TIMELINE_TONE_CLASS[meta.tone]}`}
+                  >
+                    <Icon className="h-3.5 w-3.5" />
+                  </div>
+
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-sm font-medium text-foreground">{meta.label}</span>
+                      <span
+                        className="text-xs text-muted"
+                        title={new Date(entry.createdAt).toLocaleString('pt-BR')}
+                      >
+                        {formatRelativeTime(entry.createdAt)}
+                      </span>
+                    </div>
+
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      {entry.description ?? meta.label}
+                    </p>
+
+                    <p className="mt-0.5 text-[11px] text-muted">
+                      {entry.changedByName ?? 'Sistema'}
+                    </p>
+
+                    {entry.activityType === 'Commented' && onOpenComments && (
+                      <button
+                        type="button"
+                        onClick={onOpenComments}
+                        className="mt-1 text-[11px] text-primary hover:underline"
+                      >
+                        Ver comentários
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
