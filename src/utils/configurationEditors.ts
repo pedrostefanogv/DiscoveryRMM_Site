@@ -1,4 +1,4 @@
-﻿import type {
+import type {
   ClientConfiguration,
   ConfigurationFieldMetadata,
   ConfigurationOrigin,
@@ -198,6 +198,22 @@ export const serverEditableFields: EditableField[] = [
       "Chave de API, modelo e parâmetros do provedor de IA. A chave é write-only e só deve ser enviada quando informada novamente.",
   },
   {
+    key: "backgroundProcessingSettingsJson",
+    label: "Processamento em Segundo Plano",
+    kind: "json",
+    group: "advanced",
+    description:
+      "Ciclos agendados: métricas por atendente (intervalo mínimo de 10 min) e triagem por IA em lotes. Clientes herdam estes valores e podem sobrescrever campo a campo.",
+  },
+  {
+    key: "backgroundProcessingSettingsJson",
+    label: "Processamento em Segundo Plano",
+    kind: "json",
+    group: "advanced",
+    description:
+      "Ciclos agendados: métricas por atendente (piso de 10 min) e triagem por IA em lotes. Clientes herdam estes valores e podem sobrescrever campo a campo.",
+  },
+  {
     key: "meshCentralGroupPolicyProfile",
     label: "Perfil de Política de Grupo MeshCentral",
     kind: "string",
@@ -386,6 +402,14 @@ export const clientEditableFields: EditableField[] = [
     group: "advanced",
     description:
       "ApiKey e write-only: mantenha ausente no JSON e inclua somente quando quiser trocar a chave.",
+  },
+  {
+    key: "backgroundProcessingSettingsJson",
+    label: "Processamento em Segundo Plano (override)",
+    kind: "json",
+    group: "advanced",
+    description:
+      "Sobrescreve os ciclos herdados do global. Envie apenas os campos que quiser mudar (ausentes herdam); ex.: Metrics.IntervalMinutes=60 ou Triage.Enabled=false.",
   },
   {
     key: "lockedFieldsJson",

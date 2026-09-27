@@ -14,6 +14,8 @@ import { ApiError } from "@/api";
 import type { ConfigurationValue } from "@/api";
 import {
   ConfigurationFieldEditor,
+  BackgroundProcessingCard,
+  parseBackgroundProcessingSettings,
   ConfigurationPageHeader,
   ConfigurationSectionCard,
 } from "@/components/configuration";
@@ -196,6 +198,25 @@ export default function ClientConfigurationPage() {
     const fieldMeta = getFieldMetadata(metadataQuery.data?.fields, fieldKey);
     const canEditField = canEditFieldAtScope(fieldMeta, "client");
     const fieldDef = clientEditableFields.find((f) => f.key === fieldKey);
+
+    // Processamento em segundo plano usa card dedicado no modo override.
+    if (fieldKey === "backgroundProcessingSettingsJson") {
+      return (
+        <BackgroundProcessingCard
+          key={fieldKey}
+          mode="override"
+          settings={parseBackgroundProcessingSettings(value)}
+          clientId={clientId || null}
+          canManage={canEditFieldAtScope(fieldMeta, "client")}
+          onSave={async (json) => {
+            setValue(`values.${fieldKey}` as never, json as never, { shouldDirty: true });
+            await patchMutation.mutateAsync({ clientId, payload: { [fieldKey]: json } });
+            toast.success("Processamento em segundo plano (override) atualizado.");
+          }}
+          saving={patchMutation.isPending}
+        />
+      );
+    }
 
     return (
       <ConfigurationFieldEditor

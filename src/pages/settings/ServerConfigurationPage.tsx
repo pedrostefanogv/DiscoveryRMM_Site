@@ -22,7 +22,12 @@ import {
   XCircle,
   Zap,
 } from "lucide-react";
-import { ConfigurationFieldEditor, AiIntegrationCard } from "@/components/configuration";
+import {
+  ConfigurationFieldEditor,
+  AiIntegrationCard,
+  BackgroundProcessingCard,
+  parseBackgroundProcessingSettings,
+} from "@/components/configuration";
 import { Button, Card, CardHeader, ErrorDisplay, Loading, Modal } from "@/components/ui";
 import {
   usePatchServerNatsConfig,
@@ -797,6 +802,31 @@ export default function ServerConfigurationPage() {
               )}
 
               {advancedFields.map((field) => {
+                // Processamento em segundo plano usa card dedicado
+                if (field.key === "backgroundProcessingSettingsJson") {
+                  return (
+                    <div key={field.key} className="flex items-start gap-3">
+                      <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-500/20 text-emerald-400">
+                        <Activity className="h-4 w-4" />
+                      </div>
+                      <div className="min-w-0 flex-1 space-y-1">
+                        <BackgroundProcessingCard
+                          mode="global"
+                          settings={parseBackgroundProcessingSettings(
+                            serverQuery.data?.backgroundProcessingSettingsJson,
+                          )}
+                          onSave={async (json) => {
+                            await patchMutation.mutateAsync({ backgroundProcessingSettingsJson: json });
+                            toast.success("Processamento em segundo plano salvo.");
+                            serverQuery.refetch();
+                          }}
+                          saving={patchMutation.isPending}
+                        />
+                      </div>
+                    </div>
+                  );
+                }
+
                 // IA usa componente dedicado
                 if (field.key === "aiIntegrationSettingsJson") {
                   return (

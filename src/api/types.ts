@@ -721,6 +721,78 @@ export interface AiWeightSuggestionDto {
   decidedByUserId: string | null;
 }
 
+/** Configuração dos ciclos de métricas por atendente. */
+export interface TechnicianMetricsProcessingSettings {
+  enabled: boolean;
+  /** Granularidade mínima de varredura (tick do job) — global. */
+  tickSeconds: number;
+  intervalMinutes: number;
+  staleThresholdMinutes: number;
+  windowDays: number;
+  batchSize: number;
+  maxBatchesPerRun: number;
+  maxRunSeconds: number;
+  bootstrapMissingSnapshots: boolean;
+}
+
+/** Configuração do ciclo de triagem por IA. */
+export interface TicketTriageProcessingSettings {
+  enabled: boolean;
+  enqueueOnCreate: boolean;
+  /** Granularidade mínima de varredura (tick do job) — global. */
+  tickSeconds: number;
+  intervalSeconds: number;
+  batchSize: number;
+  maxPerClientPerRun: number;
+  maxAttempts: number;
+  retryAfterMinutes: number;
+  batchDelaySeconds: number;
+}
+
+export interface BackgroundProcessingSettings {
+  metrics: TechnicianMetricsProcessingSettings;
+  triage: TicketTriageProcessingSettings;
+}
+
+/** Estado do agendamento aplicado pelo Quartz (tick vindo do banco). */
+export interface BackgroundScheduleProcessState {
+  process: string;
+  jobName: string;
+  jobGroup: string;
+  tickSeconds: number;
+  appliedTickSeconds: number | null;
+  enabled: boolean;
+  nextFireTimeUtc: string | null;
+}
+
+export interface BackgroundScheduleSnapshot {
+  appliedAt: string;
+  processes: BackgroundScheduleProcessState[];
+}
+
+/** Estado do backfill de snapshots de métricas. */
+export interface BackgroundBackfillStateDto {
+  clientId: string;
+  status: string;
+  requestedAt: string;
+  requestedBy: string | null;
+  total: number;
+  processed: number;
+  purgeOrphans: boolean;
+  lastError: string | null;
+  completedAt: string | null;
+}
+
+/** Última execução de um ciclo por escopo (processing_scope_state). */
+export interface ProcessingScopeStateDto {
+  id: string;
+  scopeType: string;
+  scopeId: string;
+  lastRunAt: string;
+  lastResultJson: string | null;
+  updatedAt: string;
+}
+
 export interface DepartmentLearningSuggestionsDto {
   skills: TechnicianSkillSuggestionDto[];
   weights: AiWeightSuggestionDto[];
@@ -1654,6 +1726,11 @@ export interface ServerConfiguration {
   lockedFieldsJson: string;
   brandingSettingsJson: string;
   aiIntegrationSettingsJson: string;
+  /**
+   * Configuração global dos processamentos em segundo plano (JSON): ciclos das
+   * métricas por atendente e da triagem por IA. Clientes podem sobrescrever.
+   */
+  backgroundProcessingSettingsJson?: string | null;
   meshCentralGroupPolicyProfile: string;
   reportingSettingsJson?: string;
   ticketAttachmentSettingsJson?: string;
@@ -1692,6 +1769,8 @@ export interface ClientConfiguration {
   knowledgeBaseEnabled?: boolean | null;
   appStorePolicy?: AppStorePolicyType | null;
   aiIntegrationSettingsJson?: string | null;
+  /** Override (por cliente/site) dos processamentos em segundo plano. */
+  backgroundProcessingSettingsJson?: string | null;
   meshCentralGroupPolicyProfile?: string | null;
   inventoryIntervalHours?: number | null;
   autoUpdateSettingsJson?: string | null;
@@ -1721,6 +1800,8 @@ export interface SiteConfiguration {
   knowledgeBaseEnabled?: boolean | null;
   appStorePolicy?: AppStorePolicyType | null;
   aiIntegrationSettingsJson?: string | null;
+  /** Override (por cliente/site) dos processamentos em segundo plano. */
+  backgroundProcessingSettingsJson?: string | null;
   meshCentralGroupPolicyProfile?: string | null;
   inventoryIntervalHours?: number | null;
   autoUpdateSettingsJson?: string | null;

@@ -44,6 +44,7 @@ export { logsApi } from "./logs";
 export { workflowApi } from "./workflow";
 export { departmentsApi } from "./departments";
 export { ticketAssignmentApi } from "./ticket-assignment";
+export { backgroundProcessingApi } from "./background-processing";
 export { workflowProfilesApi } from "./workflowProfiles";
 export { deployTokensApi } from "./deploy-tokens";
 export { apiTokensApi } from "./api-tokens";
