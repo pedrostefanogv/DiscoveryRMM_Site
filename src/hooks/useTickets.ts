@@ -284,6 +284,21 @@ export function useRateTicket() {
   });
 }
 
+/**
+ * Move o chamado para a lixeira (soft delete). Invalida listagem + detalhe
+ * para que o chamado saia da tela imediatamente.
+ */
+export function useDeleteTicket() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => ticketsApi.delete(id),
+    onSuccess: (_result, id) => {
+      qc.invalidateQueries({ queryKey: KEYS.all });
+      qc.invalidateQueries({ queryKey: KEYS.detail(id) });
+    },
+  });
+}
+
 export function useTicketRelations(id: string) {
   return useQuery({
     queryKey: KEYS.relations(id),

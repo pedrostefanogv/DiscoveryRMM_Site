@@ -120,8 +120,29 @@ async function parseErrorMessage(res: Response): Promise<string> {
 
         // ValidationProblemDetails: extrai erros por campo
         if (payload.errors && typeof payload.errors === "object") {
+          const errorsValue = payload.errors as unknown;
+
+          // Shape da API: { errors: [{ code, message, field }] }
+          if (Array.isArray(errorsValue)) {
+            const itemMessages = errorsValue
+              .map((item) => {
+                if (typeof item === "string") return item;
+                const obj = item as { message?: unknown; field?: unknown };
+                const field = typeof obj.field === "string" ? obj.field : null;
+                const message =
+                  typeof obj.message === "string" && obj.message.trim()
+                    ? obj.message
+                    : null;
+                if (field && message) return `${field}: ${message}`;
+                return message ?? field ?? null;
+              })
+              .filter((m): m is string => typeof m === "string" && m.trim() !== "");
+            if (itemMessages.length) return itemMessages.join("; ");
+          }
+
+          // Shape FluentValidation: { errors: { Campo: ["mensagem"] } }
           const fieldErrors = Object.entries(
-            payload.errors as Record<string, unknown>,
+            errorsValue as Record<string, unknown>,
           )
             .flatMap(([field, msgs]) => {
               if (Array.isArray(msgs))

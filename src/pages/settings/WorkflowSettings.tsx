@@ -79,7 +79,8 @@ function StateCard({ state }: { state: { id: string; name: string; color: string
     if (!confirm(`Excluir estado "${state.name}"?`)) return;
     deleteState.mutate(state.id, {
       onSuccess: () => toast.success('Estado excluído'),
-      onError: () => toast.error('Erro'),
+      onError: (error) =>
+        toast.error(error instanceof Error ? error.message : 'Erro ao excluir o estado'),
     });
   };
 
@@ -117,7 +118,11 @@ function TransitionRow({ id, name, fromName, fromColor, toName, toColor }: { id:
       </span>
       <span className="ml-auto text-xs text-muted">{name}</span>
       <button
-        onClick={() => deleteTrans.mutate(id, { onSuccess: () => toast.success('Transição excluída'), onError: () => toast.error('Erro') })}
+        onClick={() => deleteTrans.mutate(id, {
+          onSuccess: () => toast.success('Transição excluída'),
+          onError: (error) =>
+            toast.error(error instanceof Error ? error.message : 'Erro ao excluir a transição'),
+        })}
         aria-label="Excluir transição"
         className="p-1 text-muted hover:text-danger transition-colors"
       >
@@ -141,7 +146,8 @@ function CreateStateModal({ open, onClose }: { open: boolean; onClose: () => voi
       { clientId: null, name, color, isInitial, isFinal, sortOrder },
       {
         onSuccess: () => { toast.success('Estado criado'); onClose(); setName(''); },
-        onError: () => toast.error('Erro'),
+        onError: (error) =>
+          toast.error(error instanceof Error ? error.message : 'Erro ao criar o estado'),
       },
     );
   };
@@ -181,6 +187,7 @@ function CreateTransitionModal({ open, onClose, states }: { open: boolean; onClo
   const [name, setName] = useState('');
   const [fromId, setFromId] = useState('');
   const [toId, setToId] = useState('');
+  const [validationError, setValidationError] = useState<string | null>(null);
 
   const stateOptions = [
     { value: '', label: 'Selecione...' },
@@ -188,12 +195,34 @@ function CreateTransitionModal({ open, onClose, states }: { open: boolean; onClo
   ];
 
   const handleSubmit = () => {
-    if (!name.trim() || !fromId || !toId) return;
+    // Validação visível: antes o modal voltava em silêncio quando faltava o
+    // nome ou a origem/destino, e o usuário entendia como "não aceita criar".
+    if (!name.trim()) {
+      setValidationError('Informe um nome para a transição (ex.: "Close").');
+      return;
+    }
+    if (!fromId || !toId) {
+      setValidationError('Selecione o estado de origem (De) e o de destino (Para).');
+      return;
+    }
+    if (fromId === toId) {
+      setValidationError('A origem e o destino devem ser estados diferentes.');
+      return;
+    }
+    setValidationError(null);
     create.mutate(
-      { clientId: null, fromStateId: fromId, toStateId: toId, name },
+      { clientId: null, fromStateId: fromId, toStateId: toId, name: name.trim() },
       {
-        onSuccess: () => { toast.success('Transição criada'); onClose(); setName(''); },
-        onError: () => toast.error('Erro'),
+        onSuccess: () => {
+          toast.success('Transição criada');
+          onClose();
+          setName('');
+          setFromId('');
+          setToId('');
+          setValidationError(null);
+        },
+        onError: (error) =>
+          toast.error(error instanceof Error ? error.message : 'Erro ao criar a transição'),
       },
     );
   };
@@ -216,6 +245,13 @@ function CreateTransitionModal({ open, onClose, states }: { open: boolean; onClo
             </select>
           </div>
         </div>
+        {validationError && (
+          <p role="alert" className="text-xs text-danger">{validationError}</p>
+        )}
+        <p className="text-xs text-muted">
+          Chamados também podem ir direto para um estado <strong>inicial</strong> ou{' '}
+          <strong>final</strong> sem transição cadastrada. Use transições para os caminhos intermediários.
+        </p>
         <div className="flex justify-end gap-3 pt-2">
           <Button variant="ghost" onClick={onClose}>Cancelar</Button>
           <Button onClick={handleSubmit} loading={create.isPending}>Criar</Button>

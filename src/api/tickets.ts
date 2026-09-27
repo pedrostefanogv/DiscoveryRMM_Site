@@ -119,8 +119,16 @@ export const ticketsApi = {
   update: (id: string, data: UpdateTicketRequest) =>
     api.put<Ticket>(`${BASE}/${id}`, data),
 
+  // Envia "targetStateId" (contrato canônico do CQRS). Antes a console
+  // enviava "workflowStateId" e o endpoint devolvia 400 em TODA troca de
+  // estado. O backend aceita as duas grafias, mas o cliente envia a correta.
   updateWorkflowState: (id: string, data: UpdateWorkflowStateRequest) =>
-    api.patch<void>(`${BASE}/${id}/workflow-state`, data),
+    api.patch<void>(`${BASE}/${id}/workflow-state`, {
+      targetStateId: data.workflowStateId,
+    }),
+
+  // Move o chamado para a lixeira (soft delete no backend).
+  delete: (id: string) => api.del<void>(`${BASE}/${id}`),
 
   // Comments
   listComments: (id: string, params?: { cursor?: string; limit?: number }) =>

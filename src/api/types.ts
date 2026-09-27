@@ -2120,6 +2120,12 @@ export interface UpdateWorkflowProfileRequest {
   isActive: boolean;
 }
 
+/**
+ * Estado de destino da troca de workflow.
+ *
+ * O backend (CQRS) chama o campo de `targetStateId`; a console usa o nome
+ * histórico `workflowStateId` e o adapter em `api/tickets.ts` converte.
+ */
 export interface UpdateWorkflowStateRequest {
   workflowStateId: string;
 }

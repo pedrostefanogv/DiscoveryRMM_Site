@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Send, Lock, Unlock, Clock, Activity, BookOpen, Paperclip, Upload, File, CheckCircle, XCircle, Loader2, Wrench, Copy, RotateCcw, ClipboardList, UserCog, UserCheck, RefreshCw, Monitor, Building2 } from 'lucide-react';
+import { ArrowLeft, Send, Lock, Unlock, Clock, Activity, BookOpen, Paperclip, Upload, File, CheckCircle, XCircle, Loader2, Wrench, Copy, RotateCcw, ClipboardList, UserCog, UserCheck, RefreshCw, Monitor, Building2, Trash2 } from 'lucide-react';
 import { MarkdownViewer } from '@/components/ui/MarkdownViewer';
 import { useAuth } from '@/auth/AuthContext';
 import { getUserIdFromJwt } from '@/auth/jwt';
@@ -17,6 +17,7 @@ import {
   usePrepareTicketUpload,
   useCompleteTicketUpload,
   useReopenTicket,
+  useDeleteTicket,
 } from '@/hooks/useTickets';
 import { useTicketMacros } from '@/hooks/useSupportProductivity';
 import { TicketRatingCard } from '@/components/tickets/TicketRatingCard';
@@ -198,6 +199,7 @@ export default function TicketDetail() {
           <Button size="sm" variant="ghost" onClick={() => navigate(knowledgeUrl)}>
             <BookOpen className="h-4 w-4" /> Conhecimento
           </Button>
+          <DeleteTicketButton ticketId={t.id} title={t.title} />
         </div>
       </div>
 
@@ -1192,6 +1194,46 @@ export function TicketOpeningSection({ ticket }: { ticket: Ticket }) {
   );
 }
 
+
+/**
+ * Move o chamado para a lixeira (soft delete no backend).
+ * Confirma com o usuário e volta para a lista de chamados.
+ */
+function DeleteTicketButton({ ticketId, title }: { ticketId: string; title: string }) {
+  const navigate = useNavigate();
+  const deleteTicket = useDeleteTicket();
+
+  const handleDelete = () => {
+    if (!window.confirm(`Excluir o chamado "${title}"?\n\nEle será movido para a lixeira e deixará de aparecer nas listagens.`))
+      return;
+    deleteTicket.mutate(ticketId, {
+      onSuccess: () => {
+        toast.success('Chamado movido para a lixeira');
+        navigate('/tickets');
+      },
+      onError: (error: unknown) =>
+        toast.error(
+          error instanceof Error && error.message
+            ? error.message
+            : 'Não foi possível excluir o chamado',
+        ),
+    });
+  };
+
+  return (
+    <Button
+      size="sm"
+      variant="ghost"
+      onClick={handleDelete}
+      loading={deleteTicket.isPending}
+      aria-label="Excluir chamado"
+      title="Excluir chamado"
+      className="text-danger hover:bg-danger/10"
+    >
+      <Trash2 className="h-4 w-4" /> Excluir
+    </Button>
+  );
+}
 function TicketSummaryPanel({
   ticketId,
   category,
@@ -1291,7 +1333,12 @@ function TicketSummaryPanel({
           toast.success('Estado atualizado');
           setStateEditing(false);
         },
-        onError: () => toast.error('Transição inválida ou erro ao atualizar'),
+        onError: (error: unknown) =>
+          toast.error(
+            error instanceof Error && error.message
+              ? error.message
+              : 'Transição inválida ou erro ao atualizar',
+          ),
       },
     );
   };
