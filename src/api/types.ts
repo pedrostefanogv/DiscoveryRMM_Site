@@ -632,7 +632,10 @@ export interface Ticket {
   ratingFeedback?: string | null;
   ratedAt?: string | null;
   ratedBy?: string | null;
-  /** Snapshot markdown (somente leitura) do formulário/template enviado na abertura. */
+  /**
+   * Snapshot markdown (somente leitura) do formulário/template enviado na
+   * abertura. Ausente/nulo em abertura comum (sem template).
+   */
   submissionSnapshotMarkdown?: string | null;
   /** Template usado na abertura (null = abertura normal ou template removido). */
   templateId?: string | null;

@@ -1112,14 +1112,19 @@ function ReopenButton({ ticketId, isClosed }: { ticketId: string; isClosed: bool
   );
 }
 
-function TicketOpeningSection({ ticket }: { ticket: Ticket }) {
-  const answers = useTicketAnswers(ticket.id);
-  const items = answers.data ?? [];
+/** Exportado para teste: a seção só existe em abertura por modelo/template. */
+export function TicketOpeningSection({ ticket }: { ticket: Ticket }) {
   const hasTemplate = Boolean(ticket.templateName);
-  const templateRemoved = Boolean(ticket.templateName) && !ticket.templateId;
+  // Chamado comum (sem template) não busca respostas: a seção inteira é do
+  // formulário de abertura.
+  const answers = useTicketAnswers(ticket.id, hasTemplate);
+  const items = answers.data ?? [];
+  const templateRemoved = hasTemplate && !ticket.templateId;
 
-  // Nada a exibir em chamados abertos sem template e sem snapshot (dados legados).
-  if (!hasTemplate && items.length === 0 && !ticket.submissionSnapshotMarkdown) return null;
+  // A seção existe apenas para abertura por modelo/template. Sem template, o
+  // chamado segue com os dados normais (Descrição, campos do departamento,
+  // timeline); o snapshot markdown legado de aberturas comuns não é exibido.
+  if (!hasTemplate) return null;
 
   return (
     <section className="space-y-4 border-t border-border pt-4">
@@ -1133,18 +1138,12 @@ function TicketOpeningSection({ ticket }: { ticket: Ticket }) {
       </div>
       <div className="space-y-4">
         <div className="flex flex-wrap items-center gap-2">
-          {hasTemplate ? (
-            <>
-              <Badge color={templateRemoved ? 'warning' : 'accent'}>
-                <ClipboardList className="mr-0.5 inline h-3 w-3" />
-                {ticket.templateName}
-              </Badge>
-              {templateRemoved && (
-                <span className="text-xs text-muted">Template removido do catálogo</span>
-              )}
-            </>
-          ) : (
-            <Badge color="slate">Abertura normal (sem template)</Badge>
+          <Badge color={templateRemoved ? 'warning' : 'accent'}>
+            <ClipboardList className="mr-0.5 inline h-3 w-3" />
+            {ticket.templateName}
+          </Badge>
+          {templateRemoved && (
+            <span className="text-xs text-muted">Template removido do catálogo</span>
           )}
         </div>
 
@@ -1169,7 +1168,7 @@ function TicketOpeningSection({ ticket }: { ticket: Ticket }) {
           </dl>
         )}
 
-        {!answers.isLoading && hasTemplate && items.length === 0 && (
+        {!answers.isLoading && items.length === 0 && (
           <p className="text-sm text-muted">
             Nenhuma resposta registrada para este chamado (modelo sem perguntas ou respostas vazias).
           </p>
