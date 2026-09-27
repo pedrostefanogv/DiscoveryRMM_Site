@@ -47,6 +47,7 @@ const ConfigurationSettings = lazy(() => import('@/pages/settings/ConfigurationS
 const ServerConfigurationPage = lazy(() => import('@/pages/settings/ServerConfigurationPage'));
 const ClientConfigurationPage = lazy(() => import('@/pages/settings/ClientConfigurationPage'));
 const SiteConfigurationPage = lazy(() => import('@/pages/settings/SiteConfigurationPage'));
+const EffectiveConfigurationPage = lazy(() => import('@/pages/settings/EffectiveConfigurationPage'));
 const ConfigurationAudit = lazy(() => import('@/pages/settings/ConfigurationAudit'));
 const AgentLabelsSettings = lazy(() => import('@/pages/settings/AgentLabelsSettings'));
 const AgentUpdatesPage = lazy(() => import('@/pages/settings/AgentUpdatesPage'));
@@ -409,6 +410,14 @@ export const router = createBrowserRouter([
         element: (
           <PermissionGate anyOf={['settings.*', 'settings.read', 'admin.*']}>
             <LazyPage><SiteConfigurationPage /></LazyPage>
+          </PermissionGate>
+        ),
+      },
+      {
+        path: 'settings/effective',
+        element: (
+          <PermissionGate anyOf={['settings.*', 'settings.read', 'admin.*']}>
+            <LazyPage><EffectiveConfigurationPage /></LazyPage>
           </PermissionGate>
         ),
       },

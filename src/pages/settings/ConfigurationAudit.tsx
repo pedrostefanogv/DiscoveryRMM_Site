@@ -1,6 +1,9 @@
 import { useMemo, useState } from "react";
+import { Download } from "lucide-react";
 import type { ConfigurationAuditEntry } from "@/api";
-import { Badge, Card, CardHeader, ErrorDisplay, Input, Loading, Select } from "@/components/ui";
+import { Badge, Button, Card, CardHeader, ErrorDisplay, Input, Loading, Select } from "@/components/ui";
+import { useClients } from "@/hooks/useClients";
+import { useAllSites } from "@/hooks/useSites";
 import {
   useConfigurationAuditByUser,
   useConfigurationAuditReport,
@@ -9,8 +12,21 @@ import {
   useRecentConfigurationAudit,
 } from "../../hooks/useConfigurationApi";
 import type { ConfigurationEntityType } from "@/services/configurationApi";
+import { buildAuditCsv, entityLabel, shortEntityId } from "@/utils/configurationAudit";
 
 const PAGE_SIZE = 20;
+
+function exportCsv(entries: ConfigurationAuditEntry[]) {
+  const blob = new Blob([buildAuditCsv(entries)], {
+    type: "text/csv;charset=utf-8;",
+  });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `auditoria-config-${new Date().toISOString().slice(0, 10)}.csv`;
+  link.click();
+  URL.revokeObjectURL(url);
+}
 
 export default function ConfigurationAudit() {
   const [days, setDays] = useState("30");
@@ -22,6 +38,20 @@ export default function ConfigurationAudit() {
   const [fieldName, setFieldName] = useState("");
   const [username, setUsername] = useState("");
   const [page, setPage] = useState(1);
+
+  const clientsQuery = useClients();
+  const sitesQuery = useAllSites(false);
+
+  const entityNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const client of clientsQuery.data ?? []) {
+      map.set(client.id, `Cliente: ${client.name}`);
+    }
+    for (const site of sitesQuery.data ?? []) {
+      map.set(site.id, `Site: ${site.name}`);
+    }
+    return map;
+  }, [clientsQuery.data, sitesQuery.data]);
 
   const recentQuery = useRecentConfigurationAudit(Number(days) || 30, Number(limit) || 200);
   const byEntityQuery = useEntityConfigurationAudit(entityType || "Server", entityId, Number(limit) || 200);
@@ -171,6 +201,17 @@ export default function ConfigurationAudit() {
         <CardHeader
           title="Eventos"
           subtitle={`${sortedEntries.length} registros | página ${currentPage} de ${pageCount}`}
+          action={
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => exportCsv(sortedEntries)}
+              disabled={sortedEntries.length === 0}
+            >
+              <Download className="h-3.5 w-3.5" />
+              Exportar CSV
+            </Button>
+          }
         />
 
         {activeQuery.isLoading && <Loading message="Carregando auditoria..." />}
@@ -180,7 +221,11 @@ export default function ConfigurationAudit() {
           <>
             <div className="space-y-3">
               {pageItems.map((entry) => (
-                <AuditRow key={entry.id} entry={entry} />
+                <AuditRow
+                  key={entry.id}
+                  entry={entry}
+                  entityName={entityNameById.get(entry.entityId)}
+                />
               ))}
 
               {pageItems.length === 0 && (
@@ -215,14 +260,31 @@ export default function ConfigurationAudit() {
   );
 }
 
-function AuditRow({ entry }: { entry: ConfigurationAuditEntry }) {
+function AuditRow({
+  entry,
+  entityName,
+}: {
+  entry: ConfigurationAuditEntry;
+  entityName?: string;
+}) {
+  // UUID truncado por padrão; o valor completo fica no tooltip e no CSV exportado.
+  const shortId = shortEntityId(entry.entityId);
+
   return (
     <div className="rounded-lg border border-border bg-surface-light p-3">
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <Badge color="accent">{entry.entityType}</Badge>
-          <Badge color="slate">{entry.entityId}</Badge>
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge color="accent">{entityLabel(entry.entityType)}</Badge>
           <Badge color="primary">{entry.fieldName}</Badge>
+          <span
+            className="inline-flex max-w-full items-center rounded-full border border-border bg-surface-hover px-2.5 py-0.5 text-xs text-foreground"
+            title={entityName ? undefined : entry.entityId}
+          >
+            <span className="truncate">{entityName ?? shortId}</span>
+          </span>
+          <span className="font-mono text-[11px] text-muted" title={entry.entityId}>
+            {shortId}
+          </span>
         </div>
         <p className="text-xs text-muted">{new Date(entry.changedAt).toLocaleString()}</p>
       </div>

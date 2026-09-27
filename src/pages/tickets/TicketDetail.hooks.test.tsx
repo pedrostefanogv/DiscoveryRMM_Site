@@ -20,8 +20,6 @@ import type { ReactNode } from "react";
  */
 
 const getTicketMock = vi.fn();
-const getSiteEffectiveMock = vi.fn();
-const getClientEffectiveMock = vi.fn();
 const getTicketAttachmentSettingsMock = vi.fn();
 
 vi.mock("@/api", async (importOriginal) => {
@@ -33,13 +31,16 @@ vi.mock("@/api", async (importOriginal) => {
       ...actual.ticketsApi,
       get: (...args: unknown[]) => getTicketMock(...args),
     },
-    configurationApi: {
-      ...actual.configurationApi,
-      getTicketAttachmentSettings: (...args: unknown[]) =>
-        getTicketAttachmentSettingsMock(...args),
-      getSiteEffective: (...args: unknown[]) => getSiteEffectiveMock(...args),
-      getClientEffective: (...args: unknown[]) => getClientEffectiveMock(...args),
-    },
+  };
+});
+
+vi.mock("@/services/configurationApi", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/services/configurationApi")>();
+
+  return {
+    ...actual,
+    getTicketAttachmentSettings: (...args: unknown[]) =>
+      getTicketAttachmentSettingsMock(...args),
   };
 });
 
@@ -112,8 +113,6 @@ describe("TicketDetail hook order", () => {
   beforeEach(() => {
     consoleError.mockReset();
     getTicketMock.mockReset();
-    getSiteEffectiveMock.mockReset().mockResolvedValue({});
-    getClientEffectiveMock.mockReset().mockResolvedValue({});
     getTicketAttachmentSettingsMock
       .mockReset()
       .mockResolvedValue({ enabled: true });
@@ -132,7 +131,7 @@ describe("TicketDetail hook order", () => {
       expect(screen.getByText("Chamado de teste")).toBeTruthy();
     });
 
-    // A aba de Anexos depende da config efetiva herdada (Site > Cliente > Servidor).
+    // A aba de Anexos depende da config global de anexos (não há override por escopo).
     expect(screen.getByText("Anexos")).toBeTruthy();
     expect(hookViolations(consoleError)).toEqual([]);
   });
@@ -170,8 +169,10 @@ describe("TicketDetail hook order", () => {
     await queryClient.invalidateQueries();
     rerender(<TicketDetail />);
 
+    // Com escopo de site, o hook por escopo passa a ficar habilitado e busca a
+    // config de anexos novamente (o ramo de resolucao muda sem alterar a ordem).
     await waitFor(() => {
-      expect(getSiteEffectiveMock).toHaveBeenCalledWith("site-1");
+      expect(getTicketAttachmentSettingsMock.mock.calls.length).toBeGreaterThanOrEqual(2);
     });
 
     expect(hookViolations(consoleError)).toEqual([]);

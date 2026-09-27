@@ -388,7 +388,7 @@ const TERM_THEME_LIGHT = {
   brightWhite: '#f8fafc',
 };
 
-// Console único — um único terminal por sessão (como o MeshCentral).
+// Console único — um terminal por sessão de suporte remoto.
 export default function RemoteTerminal({
   sessionId,
   agentId,

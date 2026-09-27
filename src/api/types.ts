@@ -1699,12 +1699,18 @@ export interface AiModelValidationRequest {
   siteId?: string | null;
 }
 
+/**
+ * Branding persistido no servidor (brandingSettingsJson) e distribuído aos agentes.
+ * Chaves em camelCase, alinhadas a Discovery.Core.ValueObjects.BrandingSettings.
+ */
 export interface BrandingSettings {
-  companyName?: string;
-  logoUrl?: string;
+  applicationName?: string;
+  logoUrl?: string | null;
   primaryColor?: string;
   secondaryColor?: string;
-  faviconUrl?: string;
+  companyName?: string | null;
+  companyWebsite?: string | null;
+  supportEmail?: string | null;
 }
 
 export interface ServerConfiguration {
@@ -1719,10 +1725,9 @@ export interface ServerConfiguration {
   appStorePolicy: AppStorePolicyType;
   inventoryIntervalHours: number;
   autoUpdateSettingsJson: string;
-  tokenExpirationDays: number;
-  maxTokensPerAgent: number;
+  agentUpdatePolicyJson?: string;
   agentHeartbeatIntervalSeconds: number;
-  agentOfflineThresholdSeconds: number;
+  agentOnlineGraceSeconds: number;
   lockedFieldsJson: string;
   brandingSettingsJson: string;
   aiIntegrationSettingsJson: string;
@@ -1731,9 +1736,14 @@ export interface ServerConfiguration {
    * métricas por atendente e da triagem por IA. Clientes podem sobrescrever.
    */
   backgroundProcessingSettingsJson?: string | null;
-  meshCentralGroupPolicyProfile: string;
   reportingSettingsJson?: string;
+  retentionSettingsJson?: string;
   ticketAttachmentSettingsJson?: string;
+  appCatalogSyncSettingsJson?: string;
+  natsWebSocketExternalUrl?: string;
+  currentEmbeddingDimensions?: number;
+  objectStorageSecretKeyConfigured?: boolean;
+  aiApiKeyConfigured?: boolean;
   objectStorageBucketName?: string;
   objectStorageEndpoint?: string;
   objectStorageRegion?: string;
@@ -1771,13 +1781,11 @@ export interface ClientConfiguration {
   aiIntegrationSettingsJson?: string | null;
   /** Override (por cliente/site) dos processamentos em segundo plano. */
   backgroundProcessingSettingsJson?: string | null;
-  meshCentralGroupPolicyProfile?: string | null;
   inventoryIntervalHours?: number | null;
   autoUpdateSettingsJson?: string | null;
-  tokenExpirationDays?: number | null;
-  maxTokensPerAgent?: number | null;
+  agentUpdatePolicyJson?: string | null;
   agentHeartbeatIntervalSeconds?: number | null;
-  agentOfflineThresholdSeconds?: number | null;
+  agentOnlineGraceSeconds?: number | null;
   lockedFieldsJson?: string | null;
   createdAt: string;
   updatedAt: string;
@@ -1802,18 +1810,15 @@ export interface SiteConfiguration {
   aiIntegrationSettingsJson?: string | null;
   /** Override (por cliente/site) dos processamentos em segundo plano. */
   backgroundProcessingSettingsJson?: string | null;
-  meshCentralGroupPolicyProfile?: string | null;
   inventoryIntervalHours?: number | null;
   autoUpdateSettingsJson?: string | null;
+  agentUpdatePolicyJson?: string | null;
+  agentOnlineGraceSeconds?: number | null;
   timezone?: string | null;
   location?: string | null;
   contactPerson?: string | null;
   contactEmail?: string | null;
   lockedFieldsJson?: string | null;
-  meshCentralGroupName?: string | null;
-  meshCentralMeshId?: string | null;
-  meshCentralAppliedGroupPolicyProfile?: string | null;
-  meshCentralAppliedGroupPolicyAt?: string | null;
   createdAt: string;
   updatedAt: string;
   createdBy?: string | null;
@@ -1834,13 +1839,10 @@ export interface ResolvedConfiguration {
   knowledgeBaseEnabled: boolean;
   appStorePolicy: AppStorePolicyType;
   inventoryIntervalHours: number;
-  tokenExpirationDays: number;
-  maxTokensPerAgent: number;
   agentHeartbeatIntervalSeconds: number;
-  agentOfflineThresholdSeconds: number;
+  agentOnlineGraceSeconds: number;
   autoUpdate: Record<string, unknown>;
   aiIntegration: Record<string, unknown>;
-  meshCentralGroupPolicyProfile?: string | null;
   inheritance?: Record<string, number>;
   blockedFields?: string[];
   resolvedAt: string;

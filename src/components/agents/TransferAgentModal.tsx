@@ -153,7 +153,7 @@ export function TransferAgentModal({ open, onClose, agent }: TransferAgentModalP
                 {validation.isCrossClient && (
                   <div className="flex items-center gap-1.5 rounded bg-warning/15 px-2 py-1 text-xs text-warning mt-2">
                     <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-                    Transferência entre clientes diferentes. ACL do MeshCentral será reconciliada em segundo plano.
+                    Transferência entre clientes diferentes. As permissões de acesso remoto serão reconciliadas em segundo plano.
                   </div>
                 )}
               </div>

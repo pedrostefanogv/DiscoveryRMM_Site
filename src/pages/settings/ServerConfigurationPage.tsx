@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import toast from "react-hot-toast";
 import {
@@ -10,6 +10,7 @@ import {
   CheckCircle2,
   Clock,
   Cloud,
+  Download,
   FileStack,
   HardDrive,
   Layers,
@@ -18,6 +19,7 @@ import {
   Save,
   ShieldCheck,
   Store,
+  Upload,
   Wifi,
   XCircle,
   Zap,
@@ -26,10 +28,14 @@ import {
   ConfigurationFieldEditor,
   AiIntegrationCard,
   BackgroundProcessingCard,
+  ConfigHealthCard,
+  LockedFieldsEditor,
   parseBackgroundProcessingSettings,
 } from "@/components/configuration";
 import { Button, Card, CardHeader, ErrorDisplay, Loading, Modal } from "@/components/ui";
 import {
+  useExportServerConfig,
+  useImportServerConfig,
   usePatchServerNatsConfig,
   usePatchServerConfig,
   useResetServerConfig,
@@ -37,11 +43,11 @@ import {
   useTestNatsServer,
   useTestObjectStorage,
   useTicketAttachmentSettings,
-  useUpdateServerConfig,
   useUpdateTicketAttachmentSettings,
 } from "../../hooks/useConfigurationApi";
 import {
   buildServerDraft,
+  formatFieldValue,
   parseFieldValue,
   serverEditableFields,
   validateFieldValue,
@@ -78,12 +84,18 @@ export default function ServerConfigurationPage() {
   const serverQuery = useServerConfig();
   const patchMutation = usePatchServerConfig();
   const patchNatsMutation = usePatchServerNatsConfig();
-  const putMutation = useUpdateServerConfig();
   const resetMutation = useResetServerConfig();
+  const exportMutation = useExportServerConfig();
+  const importMutation = useImportServerConfig();
   const testNatsMutation = useTestNatsServer();
   const testStorageMutation = useTestObjectStorage();
 
   const [confirmReset, setConfirmReset] = useState(false);
+  const [confirmSave, setConfirmSave] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+  const [importText, setImportText] = useState("");
+  const [importPreview, setImportPreview] = useState<{ applied: string[]; unknown: string[] } | null>(null);
+  const [pendingKeys, setPendingKeys] = useState<Set<string>>(new Set());
   const [togglingKey, setTogglingKey] = useState<string | null>(null);
   const [savingNats, setSavingNats] = useState(false);
   const [savingStorage, setSavingStorage] = useState(false);
@@ -116,7 +128,6 @@ export default function ServerConfigurationPage() {
     watch,
     formState: { errors },
     trigger,
-    handleSubmit,
   } = useForm<FormValues>({
     defaultValues: { values: {} },
     mode: "onBlur",
@@ -124,17 +135,53 @@ export default function ServerConfigurationPage() {
 
   const formValues = watch();
 
+  const markPending = (key: string) => {
+    setPendingKeys((current) => {
+      if (current.has(key)) return current;
+      const next = new Set(current);
+      next.add(key);
+      return next;
+    });
+  };
+
+  const clearPending = (keys: string[] | Set<string>) => {
+    const list = keys instanceof Set ? [...keys] : keys;
+    setPendingKeys((current) => {
+      const next = new Set(current);
+      let changed = false;
+      for (const key of list) changed = next.delete(key) || changed;
+      return changed ? next : current;
+    });
+  };
+
+  // Ref evita que o reseed por refetch (ex.: após salvar) sobrescreva edições pendentes.
+  const pendingKeysRef = useRef(pendingKeys);
+  useEffect(() => {
+    pendingKeysRef.current = pendingKeys;
+  }, [pendingKeys]);
+
   useEffect(() => {
     if (!serverQuery.data) return;
     const draft = buildServerDraft(serverQuery.data, serverEditableFields);
     for (const field of serverEditableFields) {
+      if (pendingKeysRef.current.has(field.key)) continue;
       setValue(`values.${field.key}` as never, draft[field.key] as never);
     }
   }, [serverQuery.data, setValue]);
 
-  const saveFull = handleSubmit(async () => {
+  /**
+   * Salva apenas os campos alterados (PATCH). Antes, o botão "Salvar tudo" fazia PUT
+   * da entidade inteira e apagava campos fora da tela (anexos, IA, storage, retenção).
+   */
+  const saveChanges = async () => {
+    if (pendingKeys.size === 0) {
+      toast("Nenhuma alteração pendente.");
+      return;
+    }
+
     const payload: Record<string, ConfigurationValue> = {};
     for (const field of serverEditableFields) {
+      if (!pendingKeys.has(field.key)) continue;
       let value = String(getValues(`values.${field.key}` as never) ?? "");
       if (field.kind === "boolean" && value === "") value = "false";
       const validation = validateFieldValue(field.kind, value, field.key);
@@ -144,13 +191,107 @@ export default function ServerConfigurationPage() {
       }
       payload[field.key] = parseFieldValue(field.kind, value, field.key);
     }
+
     try {
-      await putMutation.mutateAsync(payload);
-      toast.success("Configuração do servidor salva com sucesso.");
+      await patchMutation.mutateAsync(payload);
+      clearPending(pendingKeys);
+      toast.success("Alterações salvas.");
     } catch (error) {
       toast.error(readApiError(error));
     }
-  });
+  };
+
+  const discardChanges = () => {
+    if (!serverQuery.data) return;
+    const draft = buildServerDraft(serverQuery.data, serverEditableFields);
+    for (const field of serverEditableFields) {
+      setValue(`values.${field.key}` as never, draft[field.key] as never, {
+        shouldDirty: false,
+        shouldTouch: false,
+      });
+    }
+    setPendingKeys(new Set());
+    toast("Alterações descartadas.");
+  };
+
+  const pendingChanges = useMemo(
+    () =>
+      serverEditableFields
+        .filter((field) => pendingKeys.has(field.key))
+        .map((field) => ({
+          fieldKey: field.key,
+          label: field.label,
+          before: describePendingValue(field.key, formatFieldValue(serverQuery.data?.[field.key], field.key)),
+          after: describePendingValue(
+            field.key,
+            formatFieldValue(getValues(`values.${field.key}` as never) as never, field.key),
+          ),
+        })),
+    [pendingKeys, serverQuery.data, formValues, getValues],
+  );
+
+  const handleExport = async () => {
+    try {
+      const data = await exportMutation.mutateAsync();
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `server-config-${new Date().toISOString().slice(0, 10)}.json`;
+      link.click();
+      URL.revokeObjectURL(url);
+      toast.success("Configuração exportada (sem segredos).");
+    } catch (error) {
+      toast.error(readApiError(error));
+    }
+  };
+
+  const parseImportSettings = (): Record<string, unknown> | null => {
+    try {
+      const parsed = JSON.parse(importText) as unknown;
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+      const record = parsed as Record<string, unknown>;
+      const settings = record.settings;
+      if (settings && typeof settings === "object" && !Array.isArray(settings)) {
+        return settings as Record<string, unknown>;
+      }
+      return record;
+    } catch {
+      return null;
+    }
+  };
+
+  const handleValidateImport = async () => {
+    const settings = parseImportSettings();
+    if (!settings) {
+      toast.error("JSON inválido.");
+      return;
+    }
+    try {
+      const result = await importMutation.mutateAsync({ settings, dryRun: true });
+      setImportPreview({ applied: result.appliedFields, unknown: result.unknownFields });
+    } catch (error) {
+      toast.error(readApiError(error));
+    }
+  };
+
+  const handleImport = async () => {
+    const settings = parseImportSettings();
+    if (!settings) {
+      toast.error("JSON inválido.");
+      return;
+    }
+    try {
+      const result = await importMutation.mutateAsync({ settings, dryRun: false });
+      setImportOpen(false);
+      setImportPreview(null);
+      setImportText("");
+      setPendingKeys(new Set());
+      toast.success(`Configuração importada (${result.appliedFields.length} campo(s)).`);
+    } catch (error) {
+      toast.error(readApiError(error));
+    }
+  };
 
   const savePartial = async (fieldKey: string) => {
     const field = serverEditableFields.find((item) => item.key === fieldKey);
@@ -162,6 +303,7 @@ export default function ServerConfigurationPage() {
       await patchMutation.mutateAsync({
         [field.key]: parseFieldValue(field.kind, String(value), field.key),
       });
+      clearPending([field.key]);
       toast.success(`"${field.label}" atualizado.`);
     } catch (error) {
       toast.error(readApiError(error));
@@ -179,6 +321,7 @@ export default function ServerConfigurationPage() {
     }
     try {
       await patchMutation.mutateAsync(payload);
+      clearPending(storageFields.map((field) => field.key));
       toast.success("Configurações de armazenamento salvas.");
       setTestResult(null);
     } catch (error) {
@@ -204,6 +347,7 @@ export default function ServerConfigurationPage() {
     }
     try {
       await patchNatsMutation.mutateAsync(payload);
+      clearPending(natsFields.map((field) => field.key));
       toast.success("Configuração NATS salva.");
       setNatsTestResult(null);
     } catch (error) {
@@ -343,7 +487,10 @@ export default function ServerConfigurationPage() {
         description={field.description}
         unit={field.unit}
         hideSaveButton
+        secret={field.key === "objectStorageSecretKey"}
+        secretConfigured={Boolean(serverQuery.data?.objectStorageSecretKeyConfigured)}
         onValueChange={(next) => {
+          markPending(field.key);
           setValue(`values.${field.key}` as never, next as never, {
             shouldDirty: true,
             shouldTouch: true,
@@ -376,6 +523,7 @@ export default function ServerConfigurationPage() {
         description={field.description}
         hideSaveButton
         onValueChange={(next) => {
+          markPending(field.key);
           setValue(`values.${field.key}` as never, next as never, {
             shouldDirty: true,
             shouldTouch: true,
@@ -408,6 +556,7 @@ export default function ServerConfigurationPage() {
         description={field.description}
         unit={field.unit}
         onValueChange={(next) => {
+          markPending(field.key);
           setValue(`values.${field.key}` as never, next as never, {
             shouldDirty: true,
             shouldTouch: true,
@@ -443,15 +592,18 @@ export default function ServerConfigurationPage() {
         shouldDirty: true,
         shouldTouch: true,
       });
+      markPending(field.key);
       setTogglingKey(field.key);
       try {
         await patchMutation.mutateAsync({
           [field.key]: parseFieldValue("boolean", next, field.key),
         });
+        clearPending([field.key]);
         toast.success(`"${field.label}" ${next === "true" ? "ativado" : "desativado"}.`);
       } catch (error) {
         toast.error(readApiError(error));
         setValue(`values.${field.key}` as never, String(isEnabled) as never);
+        clearPending([field.key]);
       } finally {
         setTogglingKey(null);
       }
@@ -461,6 +613,8 @@ export default function ServerConfigurationPage() {
       <button
         key={field.key}
         type="button"
+        role="switch"
+        aria-checked={isEnabled}
         onClick={toggle}
         disabled={isToggling}
         className={`group relative flex w-full items-start gap-3 rounded-xl border p-4 text-left transition-all ${
@@ -516,15 +670,54 @@ export default function ServerConfigurationPage() {
               Valores base aplicados a todos os clientes e sites via herança.
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <span
+              className={`rounded-full border px-3 py-1 text-xs ${
+                pendingKeys.size > 0
+                  ? "border-amber-500/40 bg-amber-500/10 text-amber-300"
+                  : "border-border bg-surface-light text-muted"
+              }`}
+            >
+              {pendingKeys.size > 0
+                ? `${pendingKeys.size} alteração(ões) pendente(s)`
+                : "Sem alterações pendentes"}
+            </span>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={handleExport}
+              loading={exportMutation.isPending}
+            >
+              <Download className="h-3.5 w-3.5" />
+              Exportar
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                setImportPreview(null);
+                setImportOpen(true);
+              }}
+            >
+              <Upload className="h-3.5 w-3.5" />
+              Importar
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={discardChanges}
+              disabled={pendingKeys.size === 0}
+            >
+              Descartar
+            </Button>
             <Button
               size="sm"
               variant="secondary"
-              onClick={saveFull}
-              loading={putMutation.isPending}
+              onClick={() => setConfirmSave(true)}
+              disabled={pendingKeys.size === 0}
             >
               <Save className="h-3.5 w-3.5" />
-              Salvar tudo
+              Salvar alterações
             </Button>
             <Button
               size="sm"
@@ -561,12 +754,18 @@ export default function ServerConfigurationPage() {
               <p className="text-xs text-muted">Endpoint + bucket para anexos</p>
             </div>
             <div className="rounded-xl border border-border bg-surface-light p-3">
-              <p className="text-xs uppercase tracking-wide text-muted">Campos técnicos</p>
-              <p className="mt-1 text-lg font-semibold text-sky-300">Parcial</p>
-              <p className="text-xs text-muted">Branding separado em /settings/branding</p>
+              <p className="text-xs uppercase tracking-wide text-muted">Alterações pendentes</p>
+              <p className={`mt-1 text-lg font-semibold ${pendingKeys.size > 0 ? "text-amber-300" : "text-muted-foreground"}`}>
+                {pendingKeys.size}
+              </p>
+              <p className="text-xs text-muted">
+                Versão {serverQuery.data?.version ?? "-"} · Branding em /settings/branding
+              </p>
             </div>
           </div>
         </Card>
+
+        <ConfigHealthCard config={serverQuery.data} />
 
         {/* Funcionalidades */}
         <Card>
@@ -817,10 +1016,36 @@ export default function ServerConfigurationPage() {
                           )}
                           onSave={async (json) => {
                             await patchMutation.mutateAsync({ backgroundProcessingSettingsJson: json });
+                            clearPending(["backgroundProcessingSettingsJson"]);
                             toast.success("Processamento em segundo plano salvo.");
                             serverQuery.refetch();
                           }}
                           saving={patchMutation.isPending}
+                        />
+                      </div>
+                    </div>
+                  );
+                }
+
+                // Campos bloqueados usam editor com checkboxes + prévia de impacto
+                if (field.key === "lockedFieldsJson") {
+                  return (
+                    <div key={field.key} className="flex items-start gap-3">
+                      <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-red-500/20 text-red-400">
+                        <Lock className="h-4 w-4" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <LockedFieldsEditor
+                          value={String(formValues.values?.[field.key] ?? "[]")}
+                          fields={serverEditableFields.filter((candidate) => candidate.key !== field.key)}
+                          disabled={patchMutation.isPending}
+                          onChange={(next) => {
+                            markPending(field.key);
+                            setValue(`values.${field.key}` as never, next as never, {
+                              shouldDirty: true,
+                              shouldValidate: true,
+                            });
+                          }}
                         />
                       </div>
                     </div>
@@ -839,6 +1064,7 @@ export default function ServerConfigurationPage() {
                           aiSettings={parseAIIntegrationSettings(serverQuery.data?.aiIntegrationSettingsJson)}
                           onSave={async (json) => {
                             await patchMutation.mutateAsync({ aiIntegrationSettingsJson: json });
+                            clearPending(["aiIntegrationSettingsJson"]);
                             toast.success("Configuração de IA salva.");
                             serverQuery.refetch();
                           }}
@@ -852,13 +1078,11 @@ export default function ServerConfigurationPage() {
                   autoUpdateSettingsJson: <Zap className="h-4 w-4" />,
                   aiIntegrationSettingsJson: <Bot className="h-4 w-4" />,
                   lockedFieldsJson: <Lock className="h-4 w-4" />,
-                  meshCentralGroupPolicyProfile: <ShieldCheck className="h-4 w-4" />,
                 };
                 const colors: Record<string, string> = {
                   autoUpdateSettingsJson: "bg-blue-500/20 text-blue-400",
                   aiIntegrationSettingsJson: "bg-purple-500/20 text-purple-400",
                   lockedFieldsJson: "bg-red-500/20 text-red-400",
-                  meshCentralGroupPolicyProfile: "bg-emerald-500/20 text-emerald-400",
                 };
                 return (
                   <div key={field.key} className="flex items-start gap-3">
@@ -913,8 +1137,132 @@ export default function ServerConfigurationPage() {
           </div>
         </div>
       </Modal>
+
+      {/* Modal de confirmação de alterações pendentes (diff antes → depois) */}
+      <Modal
+        open={confirmSave}
+        onClose={() => setConfirmSave(false)}
+        title="Confirmar alterações"
+        maxWidth="max-w-2xl"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-muted">
+            {pendingChanges.length} campo(s) serão alterados no servidor e herdados por clientes e sites.
+          </p>
+          <div className="max-h-80 space-y-2 overflow-y-auto">
+            {pendingChanges.map((change) => (
+              <div key={change.fieldKey} className="rounded-lg border border-border bg-surface-light p-3 text-xs">
+                <p className="font-medium text-foreground">
+                  {change.label} <span className="font-mono text-muted">{change.fieldKey}</span>
+                </p>
+                <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                  <div>
+                    <p className="text-muted">Antes</p>
+                    <pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap break-words rounded border border-border bg-background/40 p-2 font-mono text-[11px] text-muted-foreground">
+                      {truncateValue(change.before)}
+                    </pre>
+                  </div>
+                  <div>
+                    <p className="text-muted">Depois</p>
+                    <pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap break-words rounded border border-emerald-500/20 bg-emerald-500/5 p-2 font-mono text-[11px] text-foreground">
+                      {truncateValue(change.after)}
+                    </pre>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" onClick={() => setConfirmSave(false)}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={async () => {
+                setConfirmSave(false);
+                await saveChanges();
+              }}
+              loading={patchMutation.isPending}
+            >
+              <Save className="h-3.5 w-3.5" />
+              Confirmar e salvar
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Modal de importação */}
+      <Modal
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        title="Importar configuração"
+        maxWidth="max-w-2xl"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-muted">
+            Cole o JSON exportado de outro ambiente. Segredos não são importados nem sobrescritos.
+          </p>
+          <textarea
+            value={importText}
+            onChange={(event) => {
+              setImportText(event.target.value);
+              setImportPreview(null);
+            }}
+            rows={10}
+            aria-label="JSON de configuração para importar"
+            placeholder='{ "settings": { "discoveryEnabled": true } }'
+            className="w-full rounded-lg border border-border bg-surface-light px-3 py-2 font-mono text-xs text-foreground outline-none focus:border-primary/50"
+          />
+          <div aria-live="polite">
+            {importPreview && (
+              <div className="rounded-lg border border-sky-500/30 bg-sky-500/10 p-3 text-xs text-sky-100">
+                <p className="font-medium">{importPreview.applied.length} campo(s) serão aplicados.</p>
+                {importPreview.unknown.length > 0 && (
+                  <p className="mt-1 text-amber-200">
+                    Campos desconhecidos (bloquearão a importação): {importPreview.unknown.join(", ")}
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" onClick={() => setImportOpen(false)}>
+              Cancelar
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={handleValidateImport}
+              loading={importMutation.isPending}
+              disabled={!importText.trim()}
+            >
+              Validar
+            </Button>
+            <Button
+              onClick={handleImport}
+              loading={importMutation.isPending}
+              disabled={!importText.trim()}
+            >
+              <Upload className="h-3.5 w-3.5" />
+              Importar
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </>
   );
+}
+
+function truncateValue(value: string, max = 600): string {
+  if (!value) return "—";
+  if (value.length <= max) return value;
+  return `${value.slice(0, max)}… (${value.length} caracteres)`;
+}
+
+/** Nunca exibir segredos no diff de confirmação. */
+function describePendingValue(fieldKey: string, value: string): string {
+  if (fieldKey === "objectStorageSecretKey") {
+    return value ? "•••••••• (novo valor)" : "—";
+  }
+  return value;
 }
 
 function readApiError(error: unknown): string {

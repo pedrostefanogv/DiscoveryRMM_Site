@@ -1,22 +1,8 @@
-﻿import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { configurationApi, extractTicketAttachmentSettingsFromEffective } from "@/api";
-import type {
-  AiCredentialQuery,
-  AiModelQuery,
-  AiModelScopeQuery,
-  AiModelValidationRequest,
-  AiProviderCredentialUpsertRequest,
-  ServerRetentionSettings,
-  TicketAttachmentSettings,
-  TriggerMaintenanceRequest,
-} from "@/api";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { TicketAttachmentSettings } from "@/api";
 import {
-  deleteAiCredential,
   deleteClientConfig,
   deleteSiteConfig,
-  getAiModel,
-  getAgentMeEffectiveConfig,
-  getServerRetentionConfig,
   getAuditByUser,
   getAuditReport,
   getClientConfig,
@@ -25,32 +11,27 @@ import {
   getEntityAudit,
   getFieldAudit,
   getRecentAudit,
-  listAiCredentials,
-  listAiModels,
-  listAiProviders,
+  exportServerConfig,
   getServerConfig,
-  getServerReportingConfig,
-  getServerMetadata,
+  getServerLocksImpact,
   getSiteConfig,
   getSiteEffectiveConfig,
   getSiteMetadata,
+  getTicketAttachmentSettings,
   patchClientConfig,
   patchServerConfig,
   patchServerNatsConfig,
   patchSiteConfig,
+  importServerConfig,
+  putTicketAttachmentSettings,
   resetClientProperty,
-  resetServerRetentionConfig,
   resetServerConfig,
   resetSiteProperty,
-  testAiCredential,
-  triggerServerRetentionMaintenance,
-  updateServerConfig,
-  updateServerRetentionConfig,
-  updateServerReportingConfig,
-  upsertAiCredential,
+  testNatsServer,
+  testObjectStorage,
+  testStoredAiKey,
   upsertClientConfig,
   upsertSiteConfig,
-  validateAiModel,
   type ClientConfigurationPayload,
   type ConfigurationEntityType,
   type ServerConfigurationPayload,
@@ -59,9 +40,6 @@ import {
 
 export const configurationQueryKeys = {
   server: ["config", "server"] as const,
-  serverMetadata: ["config", "server-metadata"] as const,
-  serverReporting: ["config", "server-reporting"] as const,
-  serverRetention: ["config", "server-retention"] as const,
   client: (clientId: string) => ["config", "client", clientId] as const,
   clientEffective: (clientId: string) =>
     ["config", "client-effective", clientId] as const,
@@ -98,29 +76,6 @@ export const configurationQueryKeys = {
   auditReport: (startDate: string, endDate: string) =>
     ["config", "audit", "report", startDate, endDate] as const,
   ticketAttachmentSettings: ["config", "ticket-attachment-settings"] as const,
-  aiCredentials: (params: AiCredentialQuery = {}) =>
-    [
-      "config",
-      "ai-credentials",
-      params.scopeType ?? null,
-      params.clientId ?? null,
-      params.siteId ?? null,
-    ] as const,
-  aiProviders: ["config", "ai-providers"] as const,
-  aiModels: (params: AiModelQuery = {}) =>
-    [
-      "config",
-      "ai-models",
-      params.provider ?? null,
-      params.capability ?? null,
-      params.search ?? null,
-      Boolean(params.refresh),
-      Boolean(params.freeOnly),
-      params.clientId ?? null,
-      params.siteId ?? null,
-    ] as const,
-  aiModel: (modelId: string, params: AiModelScopeQuery = {}) =>
-    ["config", "ai-model", modelId, params.clientId ?? null, params.siteId ?? null] as const,
 };
 
 function invalidateRecentAudit(queryClient: ReturnType<typeof useQueryClient>) {
@@ -134,44 +89,6 @@ export function useServerConfig() {
   });
 }
 
-export function useServerMetadata() {
-  return useQuery({
-    queryKey: configurationQueryKeys.serverMetadata,
-    queryFn: getServerMetadata,
-  });
-}
-
-export function useServerReportingConfig() {
-  return useQuery({
-    queryKey: configurationQueryKeys.serverReporting,
-    queryFn: getServerReportingConfig,
-  });
-}
-
-export function useServerRetentionConfig() {
-  return useQuery({
-    queryKey: configurationQueryKeys.serverRetention,
-    queryFn: getServerRetentionConfig,
-  });
-}
-
-export function useUpdateServerConfig() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (payload: ServerConfigurationPayload) =>
-      updateServerConfig(payload),
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: configurationQueryKeys.server,
-      });
-      queryClient.invalidateQueries({
-        queryKey: configurationQueryKeys.serverMetadata,
-      });
-      invalidateRecentAudit(queryClient);
-    },
-  });
-}
-
 export function usePatchServerConfig() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -180,9 +97,6 @@ export function usePatchServerConfig() {
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: configurationQueryKeys.server,
-      });
-      queryClient.invalidateQueries({
-        queryKey: configurationQueryKeys.serverMetadata,
       });
       invalidateRecentAudit(queryClient);
     },
@@ -197,9 +111,6 @@ export function usePatchServerNatsConfig() {
       queryClient.invalidateQueries({
         queryKey: configurationQueryKeys.server,
       });
-      queryClient.invalidateQueries({
-        queryKey: configurationQueryKeys.serverMetadata,
-      });
       invalidateRecentAudit(queryClient);
     },
   });
@@ -213,62 +124,7 @@ export function useResetServerConfig() {
       queryClient.invalidateQueries({
         queryKey: configurationQueryKeys.server,
       });
-      queryClient.invalidateQueries({
-        queryKey: configurationQueryKeys.serverMetadata,
-      });
       invalidateRecentAudit(queryClient);
-    },
-  });
-}
-
-export function useUpdateServerReportingConfig() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: updateServerReportingConfig,
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: configurationQueryKeys.serverReporting,
-      });
-    },
-  });
-}
-
-export function useUpdateServerRetentionConfig() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (payload: ServerRetentionSettings) =>
-      updateServerRetentionConfig(payload),
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: configurationQueryKeys.serverRetention,
-      });
-      invalidateRecentAudit(queryClient);
-    },
-  });
-}
-
-export function useResetServerRetentionConfig() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: resetServerRetentionConfig,
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: configurationQueryKeys.serverRetention,
-      });
-      invalidateRecentAudit(queryClient);
-    },
-  });
-}
-
-export function useTriggerServerRetentionMaintenance() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (payload: TriggerMaintenanceRequest) =>
-      triggerServerRetentionMaintenance(payload),
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: configurationQueryKeys.serverRetention,
-      });
     },
   });
 }
@@ -509,13 +365,6 @@ export function useResetSiteProperty() {
   });
 }
 
-export function useAgentMeEffectiveConfig() {
-  return useQuery({
-    queryKey: configurationQueryKeys.agentMe,
-    queryFn: getAgentMeEffectiveConfig,
-  });
-}
-
 export function useRecentConfigurationAudit(days = 30, limit = 200) {
   return useQuery({
     queryKey: configurationQueryKeys.auditRecent(days, limit),
@@ -570,77 +419,10 @@ export function useConfigurationAuditReport(
   });
 }
 
-export function useAiCredentials(params: AiCredentialQuery = {}) {
-  return useQuery({
-    queryKey: configurationQueryKeys.aiCredentials(params),
-    queryFn: () => listAiCredentials(params),
-  });
-}
-
-export function useUpsertAiCredential() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (payload: AiProviderCredentialUpsertRequest) =>
-      upsertAiCredential(payload),
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ["config", "ai-credentials"],
-      });
-    },
-  });
-}
-
-export function useDeleteAiCredential() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (credentialId: string) => deleteAiCredential(credentialId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ["config", "ai-credentials"],
-      });
-    },
-  });
-}
-
-export function useTestAiCredential() {
-  return useMutation({
-    mutationFn: (payload: AiProviderCredentialUpsertRequest) =>
-      testAiCredential(payload),
-  });
-}
-
-export function useAiProviders() {
-  return useQuery({
-    queryKey: configurationQueryKeys.aiProviders,
-    queryFn: () => listAiProviders(),
-  });
-}
-
-export function useAiModels(params: AiModelQuery = {}) {
-  return useQuery({
-    queryKey: configurationQueryKeys.aiModels(params),
-    queryFn: () => listAiModels(params),
-  });
-}
-
-export function useAiModel(modelId: string, params: AiModelScopeQuery = {}) {
-  return useQuery({
-    queryKey: configurationQueryKeys.aiModel(modelId, params),
-    queryFn: () => getAiModel(modelId, params),
-    enabled: !!modelId,
-  });
-}
-
-export function useValidateAiModel() {
-  return useMutation({
-    mutationFn: (payload: AiModelValidationRequest) => validateAiModel(payload),
-  });
-}
-
 export function useTicketAttachmentSettings() {
   return useQuery({
     queryKey: configurationQueryKeys.ticketAttachmentSettings,
-    queryFn: () => configurationApi.getTicketAttachmentSettings(),
+    queryFn: () => getTicketAttachmentSettings(),
   });
 }
 
@@ -648,7 +430,7 @@ export function useUpdateTicketAttachmentSettings() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (data: TicketAttachmentSettings) =>
-      configurationApi.putTicketAttachmentSettings(data),
+      putTicketAttachmentSettings(data),
 
     onSuccess: () => {
       queryClient.invalidateQueries({
@@ -659,7 +441,9 @@ export function useUpdateTicketAttachmentSettings() {
 }
 
 /**
- * Obtém a config efetiva de TicketAttachmentSettings para um site (com herança aplicada)
+ * Anexos de tickets são configurados apenas no servidor (não há override por
+ * cliente/site no schema atual). Os hooks por escopo existem para a UI do ticket
+ * e retornam a configuração global, evitando duplicar a lógica de fallback.
  */
 export function useSiteTicketAttachmentSettings(siteId: string | null | undefined) {
   return useQuery({
@@ -668,21 +452,11 @@ export function useSiteTicketAttachmentSettings(siteId: string | null | undefine
       "site",
       siteId,
     ] as const,
-    queryFn: async () => {
-      if (!siteId) {
-        // Fallback para servidor se siteId não disponível
-        return configurationApi.getTicketAttachmentSettings();
-      }
-      const effective = await configurationApi.getSiteEffective(siteId);
-      return extractTicketAttachmentSettingsFromEffective(effective);
-    },
+    queryFn: () => getTicketAttachmentSettings(),
     enabled: !!siteId,
   });
 }
 
-/**
- * Obtém a config efetiva de TicketAttachmentSettings para um cliente (com herança aplicada)
- */
 export function useClientTicketAttachmentSettings(
   clientId: string | null | undefined,
 ) {
@@ -692,14 +466,7 @@ export function useClientTicketAttachmentSettings(
       "client",
       clientId,
     ] as const,
-    queryFn: async () => {
-      if (!clientId) {
-        // Fallback para servidor se clientId não disponível
-        return configurationApi.getTicketAttachmentSettings();
-      }
-      const effective = await configurationApi.getClientEffective(clientId);
-      return extractTicketAttachmentSettingsFromEffective(effective);
-    },
+    queryFn: () => getTicketAttachmentSettings(),
     enabled: !!clientId,
   });
 }
@@ -707,13 +474,44 @@ export function useClientTicketAttachmentSettings(
 
 export function useTestObjectStorage() {
   return useMutation({
-    mutationFn: () => configurationApi.testObjectStorage(),
+    mutationFn: () => testObjectStorage(),
   });
 }
 
 export function useTestNatsServer() {
   return useMutation({
     mutationFn: (payload: { url: string; user?: string; password?: string }) =>
-      configurationApi.testNatsServer(payload),
+      testNatsServer(payload),
+  });
+}
+
+export function useServerLocksImpact() {
+  return useMutation({
+    mutationFn: (fields: string[]) => getServerLocksImpact(fields),
+  });
+}
+
+export function useExportServerConfig() {
+  return useMutation({
+    mutationFn: () => exportServerConfig(),
+  });
+}
+
+export function useImportServerConfig() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ settings, dryRun }: { settings: Record<string, unknown>; dryRun: boolean }) =>
+      importServerConfig(settings, dryRun),
+    onSuccess: (result) => {
+      if (result.dryRun) return;
+      queryClient.invalidateQueries({ queryKey: configurationQueryKeys.server });
+      invalidateRecentAudit(queryClient);
+    },
+  });
+}
+
+export function useTestStoredAiKey() {
+  return useMutation({
+    mutationFn: () => testStoredAiKey(),
   });
 }

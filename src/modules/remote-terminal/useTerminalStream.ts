@@ -63,7 +63,7 @@ function base64ToBytes(b64: string): Uint8Array<ArrayBufferLike> {
 }
 
 // Console único: usa subjects fixos term.out / term.in (sem tabId),
-// como o MeshCentral (um terminal por sessão).
+// um terminal por sessão de suporte remoto.
 export function useTerminalStream({
     natsSubject,
     natsUrl,

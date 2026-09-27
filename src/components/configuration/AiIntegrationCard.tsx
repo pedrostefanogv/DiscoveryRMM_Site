@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Bot, CheckCircle2, ChevronDown, ChevronUp, RefreshCw, Search, XCircle } from "lucide-react";
 import { Button, Card, CardHeader, Input, Select } from "@/components/ui";
-import { configurationApi } from "@/api/configuration";
+import { listOpenRouterModels, validateApiKey } from "@/services/configurationApi";
 import type { AIIntegrationSettings } from "@/api";
 
 // ── Fallback inicial (substituído pela API OpenRouter se disponível) ─
@@ -91,7 +91,7 @@ export function AiIntegrationCard({ aiSettings, onSave, saving }: Props) {
     (async () => {
       setFetching(true);
       try {
-        const data = await configurationApi.listOpenRouterModels();
+        const data = await listOpenRouterModels();
         if (!c) {
           const payload = data as unknown as { chatModels?: OrModel[]; embeddingModels?: OrModel[] };
           if (payload.chatModels?.length) setAllChat(payload.chatModels);
@@ -136,7 +136,7 @@ export function AiIntegrationCard({ aiSettings, onSave, saving }: Props) {
     if (!apiKey.trim()) return;
     setValidating(true); setKeyValid(null); setKeyError(null);
     try {
-      const data = await configurationApi.validateApiKey({
+      const data = await validateApiKey({
         apiKey: apiKey.trim(), provider, baseUrl: getBaseUrl(),
       }) as unknown as { valid: boolean; error?: string };
       setKeyValid(data.valid === true);

@@ -67,10 +67,15 @@ const ticketsLinks = [
 
 const settingsLinks = [
   { to: '/settings', label: 'Geral' },
-  { to: '/settings/notifications', label: 'Notificações' },
+  { to: '/settings/server', label: 'Servidor' },
+  { to: '/settings/client', label: 'Cliente' },
+  { to: '/settings/site', label: 'Site' },
+  { to: '/settings/effective', label: 'Config. Efetiva' },
   { to: '/settings/workflow', label: 'Workflow' },
-  { to: '/settings/audit', label: 'Auditoria Config' },
+  { to: '/settings/notifications', label: 'Notificações' },
   { to: '/settings/custom-fields', label: 'Campos Personalizados' },
+  { to: '/settings/agent-updates', label: 'Agent Updates' },
+  { to: '/settings/audit', label: 'Auditoria Config' },
   { to: '/settings/branding', label: 'Branding' },
 ];
 

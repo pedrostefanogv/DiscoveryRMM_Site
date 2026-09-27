@@ -166,12 +166,12 @@ export const serverEditableFields: EditableField[] = [
     unit: "segundos",
   },
   {
-    key: "agentOfflineThresholdSeconds",
-    label: "Limite para Considerar Offline",
+    key: "agentOnlineGraceSeconds",
+    label: "Janela de Tolerância para Offline",
     kind: "number",
     group: "agent",
     description:
-      "Tempo máximo (em segundos) sem receber heartbeat antes que o agente seja marcado como offline. Deve ser > que o intervalo de heartbeat.",
+      "Tempo (em segundos) sem receber heartbeat antes de considerar o agente offline. Deve ser maior que o intervalo de heartbeat.",
     unit: "segundos",
   },
   {
@@ -204,22 +204,6 @@ export const serverEditableFields: EditableField[] = [
     group: "advanced",
     description:
       "Ciclos agendados: métricas por atendente (intervalo mínimo de 10 min) e triagem por IA em lotes. Clientes herdam estes valores e podem sobrescrever campo a campo.",
-  },
-  {
-    key: "backgroundProcessingSettingsJson",
-    label: "Processamento em Segundo Plano",
-    kind: "json",
-    group: "advanced",
-    description:
-      "Ciclos agendados: métricas por atendente (piso de 10 min) e triagem por IA em lotes. Clientes herdam estes valores e podem sobrescrever campo a campo.",
-  },
-  {
-    key: "meshCentralGroupPolicyProfile",
-    label: "Perfil de Política de Grupo MeshCentral",
-    kind: "string",
-    group: "advanced",
-    description:
-      "Perfil de policy aplicado ao MeshCentral em nível global. Pode ser herdado por cliente e site.",
   },
   {
     key: "lockedFieldsJson",
@@ -420,14 +404,6 @@ export const clientEditableFields: EditableField[] = [
       "Lista de campos bloqueados neste cliente para impedir override no nível de site.",
   },
   {
-    key: "meshCentralGroupPolicyProfile",
-    label: "Perfil de Política de Grupo MeshCentral",
-    kind: "string",
-    group: "advanced",
-    description:
-      "Override do perfil de policy MeshCentral no escopo do cliente. Deixe herdado para usar o global.",
-  },
-  {
     key: "inventoryIntervalHours",
     label: "Intervalo de Inventário",
     kind: "number",
@@ -452,13 +428,13 @@ export const clientEditableFields: EditableField[] = [
       "Com qual frequência (em segundos) o agente envia um sinal de presença. Define se o agente está ativo e conectado ao servidor.",
   },
   {
-    key: "agentOfflineThresholdSeconds",
-    label: "Limite para Considerar Offline",
+    key: "agentOnlineGraceSeconds",
+    label: "Janela de Tolerância para Offline",
     kind: "number",
     group: "agent",
     unit: "segundos",
     description:
-      "Tempo máximo (em segundos) sem receber heartbeat antes que o agente seja marcado como offline. Deve ser > que o intervalo de heartbeat.",
+      "Tempo (em segundos) sem receber heartbeat antes de considerar o agente offline. Deve ser maior que o intervalo de heartbeat.",
   },
 ];
 
@@ -518,44 +494,6 @@ export const siteEditableFields: EditableField[] = [
     group: "advanced",
     description:
       "ApiKey e write-only: mantenha ausente no JSON e inclua somente quando quiser trocar a chave.",
-  },
-  {
-    key: "meshCentralGroupPolicyProfile",
-    label: "Perfil de Política de Grupo MeshCentral",
-    kind: "string",
-    group: "advanced",
-    description:
-      "Override do perfil de policy MeshCentral no escopo do site. Deixe herdado para usar cliente/global.",
-  },
-  {
-    key: "meshCentralGroupName",
-    label: "Nome do Grupo MeshCentral",
-    kind: "string",
-    group: "siteProfile",
-    description:
-      "Nome lógico do grupo MeshCentral associado a este site.",
-  },
-  {
-    key: "meshCentralMeshId",
-    label: "Mesh ID",
-    kind: "string",
-    group: "siteProfile",
-    description: "Identificador de mesh aplicado ao site no MeshCentral.",
-  },
-  {
-    key: "meshCentralAppliedGroupPolicyProfile",
-    label: "Policy MeshCentral Aplicada",
-    kind: "string",
-    group: "siteProfile",
-    description:
-      "Perfil efetivamente aplicado pelo backend ao site no MeshCentral.",
-  },
-  {
-    key: "meshCentralAppliedGroupPolicyAt",
-    label: "Policy Aplicada em",
-    kind: "string",
-    group: "siteProfile",
-    description: "Data/hora da última aplicação de policy no site.",
   },
   {
     key: "lockedFieldsJson",
@@ -690,9 +628,7 @@ export function validateFieldValue(
     const ranges: Record<string, [number, number]> = {
       inventoryIntervalHours: [1, 168],
       agentHeartbeatIntervalSeconds: [10, 3600],
-      agentOfflineThresholdSeconds: [30, 86400],
-      tokenExpirationDays: [1, 3650],
-      maxTokensPerAgent: [1, 100],
+      agentOnlineGraceSeconds: [60, 3600],
       objectStorageUrlTtlHours: [1, 168],
       natsAgentJwtTtlMinutes: [15, 4320],
       natsUserJwtTtlMinutes: [15, 4320],

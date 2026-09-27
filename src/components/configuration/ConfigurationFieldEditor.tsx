@@ -30,6 +30,10 @@ interface ConfigurationFieldEditorProps {
   description?: string;
   unit?: string;
   hideSaveButton?: boolean;
+  /** Campo write-only (segredo): renderiza input de senha e não exibe o valor salvo. */
+  secret?: boolean;
+  /** Indica que já existe um valor salvo para o segredo (placeholder). */
+  secretConfigured?: boolean;
 }
 
 export function ConfigurationFieldEditor({
@@ -54,6 +58,8 @@ export function ConfigurationFieldEditor({
   description,
   unit,
   hideSaveButton,
+  secret,
+  secretConfigured,
 }: ConfigurationFieldEditorProps) {
   const [showDiff, setShowDiff] = useState(false);
   const [showAiAdvanced, setShowAiAdvanced] = useState(false);
@@ -64,9 +70,7 @@ export function ConfigurationFieldEditor({
   const numberRanges: Record<string, { min: number; max: number }> = {
     inventoryIntervalHours: { min: 1, max: 168 },
     agentHeartbeatIntervalSeconds: { min: 10, max: 3600 },
-    agentOfflineThresholdSeconds: { min: 30, max: 86400 },
-    tokenExpirationDays: { min: 1, max: 3650 },
-    maxTokensPerAgent: { min: 1, max: 100 },
+    agentOnlineGraceSeconds: { min: 60, max: 3600 },
   };
 
   const fieldRange = numberRanges[fieldKey];
@@ -640,6 +644,32 @@ export function ConfigurationFieldEditor({
             }
           />
         </>
+      );
+    }
+
+    if (secret) {
+      return (
+        <div className="space-y-1">
+          <Input
+            type="password"
+            autoComplete="new-password"
+            label="Valor local"
+            value={value}
+            onChange={(event) => onValueChange(event.target.value)}
+            disabled={inputDisabled}
+            error={error}
+            placeholder={
+              secretConfigured
+                ? "•••••••• (configurado) — informe para trocar"
+                : "Informe o valor do segredo"
+            }
+          />
+          {secretConfigured && !value && (
+            <p className="text-xs text-muted">
+              Já existe um segredo salvo. Deixe em branco para mantê-lo ou digite um novo valor para substituí-lo.
+            </p>
+          )}
+        </div>
       );
     }
 
