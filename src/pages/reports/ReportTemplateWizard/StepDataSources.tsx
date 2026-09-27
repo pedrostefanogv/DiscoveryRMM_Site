@@ -103,7 +103,7 @@ export function StepDataSources({ wizard, datasets, onNext }: Props) {
                   {wizard.state.selectedDatasets.length > 1 && (
                     <button
                       onClick={() => wizard.removeDataset(ds.alias)}
-                      className="ml-1 rounded p-1 text-muted hover:bg-red-500/10 hover:text-red-400"
+                      className="ml-1 rounded p-1 text-muted hover:bg-danger/10 hover:text-danger"
                       title="Remover"
                     >
                       ✕

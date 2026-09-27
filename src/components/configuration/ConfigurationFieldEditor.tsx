@@ -597,7 +597,7 @@ export function ConfigurationFieldEditor({
                 updateJsonObjectValue("accentColor", event.target.value, "string")
               }
               disabled={inputDisabled}
-              placeholder="#06b6d4"
+              placeholder="#ec4899"
             />
             <Input
               label="Sidebar Color"

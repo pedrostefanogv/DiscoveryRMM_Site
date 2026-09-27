@@ -1,9 +1,10 @@
 /**
- * Estilos de status compartilhados pela área de configuração.
+ * Tokens de cor centralizados da aplicação.
  *
- * O tema escuro é o padrão e muitos componentes usam tons pastel (ex.: text-emerald-300).
- * No tema claro esses tons ficam ilegíveis sobre fundos claros — aqui cada tom define a
- * cor de texto para o tema claro e a variante \`dark:\` para o escuro.
+ * Regra geral: o tema claro recebe tons escuros (700/600) e o tema escuro recebe os
+ * tons vivos (300/400) via variante \`dark:\`. Cores de ESTADO (sucesso/aviso/erro/info)
+ * devem usar os tokens semânticos — \`text-success\`, \`text-warning\`, \`text-danger\` —
+ * definidos em src/index.css e já theme-aware.
  */
 
 export type StatusTone = "success" | "warning" | "danger" | "info" | "neutral";
@@ -26,6 +27,38 @@ export const statusText: Record<StatusTone, string> = {
   neutral: "text-muted-foreground",
 };
 
+/** Texto por matiz decorativo (claro 700 / escuro 300). */
+export const textTone = {
+  amber: "text-amber-700 dark:text-amber-300",
+  yellow: "text-yellow-700 dark:text-yellow-300",
+  orange: "text-orange-700 dark:text-orange-300",
+  red: "text-red-700 dark:text-red-300",
+  rose: "text-rose-700 dark:text-rose-300",
+  green: "text-green-700 dark:text-green-300",
+  emerald: "text-emerald-700 dark:text-emerald-300",
+  cyan: "text-cyan-700 dark:text-cyan-300",
+  sky: "text-sky-700 dark:text-sky-300",
+  blue: "text-blue-700 dark:text-blue-300",
+  violet: "text-violet-700 dark:text-violet-300",
+  purple: "text-purple-700 dark:text-purple-300",
+} as const;
+
+/** Ícone/texto pequeno por matiz (claro 600 / escuro 400). */
+export const textToneIcon = {
+  amber: "text-amber-600 dark:text-amber-400",
+  yellow: "text-yellow-600 dark:text-yellow-400",
+  orange: "text-orange-600 dark:text-orange-400",
+  red: "text-red-600 dark:text-red-400",
+  rose: "text-rose-600 dark:text-rose-400",
+  green: "text-green-600 dark:text-green-400",
+  emerald: "text-emerald-600 dark:text-emerald-400",
+  cyan: "text-cyan-600 dark:text-cyan-400",
+  sky: "text-sky-600 dark:text-sky-400",
+  blue: "text-blue-600 dark:text-blue-400",
+  violet: "text-violet-600 dark:text-violet-400",
+  purple: "text-purple-600 dark:text-purple-400",
+} as const;
+
 /** Ícone com fundo tingido (badges de seção). */
 export const tintedIcon = {
   sky: "bg-sky-500/15 text-sky-600 dark:bg-sky-500/20 dark:text-sky-400",
@@ -40,6 +73,7 @@ export const tintedIcon = {
 } as const;
 
 export type TintedIconTone = keyof typeof tintedIcon;
+export type TextTone = keyof typeof textTone;
 
 /** Card/botão selecionado (toggles). */
 export const selectedSurface =

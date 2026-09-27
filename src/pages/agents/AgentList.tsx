@@ -900,7 +900,7 @@ export default function AgentList() {
                               <span className="shrink-0 text-xs text-muted min-w-[2rem]">HDD</span>
                               {/* Leitura — mini bar ciano */}
                               <div className="flex flex-1 items-center gap-1.5">
-                                <ArrowUp className="h-3 w-3 shrink-0 text-cyan-500" />
+                                <ArrowUp className="h-3 w-3 shrink-0 text-cyan-600 dark:text-cyan-400" />
                                 <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-cyan-500/20">
                                   <div
                                     className="h-full rounded-full bg-cyan-500 transition-all duration-500"
@@ -913,7 +913,7 @@ export default function AgentList() {
                               </div>
                               {/* Escrita — mini bar âmbar */}
                               <div className="flex flex-1 items-center gap-1.5">
-                                <ArrowDown className="h-3 w-3 shrink-0 text-amber-500" />
+                                <ArrowDown className="h-3 w-3 shrink-0 text-amber-600 dark:text-amber-400" />
                                 <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-amber-500/20">
                                   <div
                                     className="h-full rounded-full bg-amber-500 transition-all duration-500"
@@ -1160,7 +1160,7 @@ export default function AgentList() {
             )}
             {!isAgentOnlineNow(contextMenu.agent, now) && (
               <button
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-violet-300 transition-colors hover:bg-violet-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-violet-700 dark:text-violet-300 transition-colors hover:bg-violet-500/10 disabled:cursor-not-allowed disabled:opacity-60"
                 onClick={() => handleWakeOnLan(contextMenu.agent)}
                 disabled={wakeOnLan.isPending}
               >

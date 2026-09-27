@@ -42,7 +42,7 @@ export function TicketRatingCard({
     <div className="flex items-center gap-1" role={rated ? 'img' : 'radiogroup'} aria-label="Nota da avaliação">
       {[1, 2, 3, 4, 5].map((star) => (
         <span key={star} className="p-0.5">
-          <Star className={star <= count ? 'h-5 w-5 fill-amber-400 text-amber-400' : 'h-5 w-5 text-muted'} />
+          <Star className={star <= count ? 'h-5 w-5 fill-amber-500 text-amber-600 dark:text-amber-400 dark:fill-amber-400 dark:text-amber-400' : 'h-5 w-5 text-muted'} />
         </span>
       ))}
     </div>
@@ -95,7 +95,7 @@ export function TicketRatingCard({
                 onClick={() => setValue(star)}
                 className="p-0.5"
               >
-                <Star className={star <= value ? 'h-5 w-5 fill-amber-400 text-amber-400' : 'h-5 w-5 text-muted'} />
+                <Star className={star <= value ? 'h-5 w-5 fill-amber-500 text-amber-600 dark:text-amber-400 dark:fill-amber-400 dark:text-amber-400' : 'h-5 w-5 text-muted'} />
               </button>
             ))}
           </div>

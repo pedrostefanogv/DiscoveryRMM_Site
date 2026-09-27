@@ -22,11 +22,11 @@ const ENTITY_ICONS: Record<string, typeof Monitor> = {
 };
 
 const ENTITY_COLORS: Record<string, string> = {
-  agents: "text-cyan-400",
-  clients: "text-violet-400",
-  sites: "text-amber-400",
-  tickets: "text-rose-400",
-  software: "text-emerald-400",
+  agents: "text-cyan-700 dark:text-cyan-400",
+  clients: "text-violet-700 dark:text-violet-400",
+  sites: "text-amber-700 dark:text-amber-400",
+  tickets: "text-rose-700 dark:text-rose-400",
+  software: "text-emerald-700 dark:text-emerald-400",
 };
 
 function getEntityIcon(entityType: string) {

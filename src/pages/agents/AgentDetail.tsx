@@ -1646,7 +1646,7 @@ export default function AgentDetail() {
 
             {labelSuppressions.length > 0 ? (
               <div className="mt-3 rounded-lg border border-amber-500/20 bg-amber-500/5 p-3">
-                <p className="mb-2 text-xs font-medium text-amber-300">
+                <p className="mb-2 text-xs font-medium text-amber-700 dark:text-amber-300">
                   Labels suprimidas ({labelSuppressions.length})
                 </p>
                 <p className="mb-2 text-[11px] text-muted">
@@ -2484,7 +2484,7 @@ export default function AgentDetail() {
               </Button>
             </div>
             {socketsTotalCount >= OPEN_SOCKETS_BACKEND_LIMIT && (
-              <div className="mb-3 flex items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-400">
+              <div className="mb-3 flex items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
                 <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
                 Lista truncada pelo backend no limite de {OPEN_SOCKETS_BACKEND_LIMIT} itens. Podem existir mais conexões abertas.
               </div>

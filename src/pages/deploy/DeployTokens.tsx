@@ -742,7 +742,7 @@ export default function DeployTokens() {
               {deployTokens.isLoading && listedTokens.length === 0 ? (
                 <p className="text-sm text-muted">Carregando tokens...</p>
               ) : deployTokens.isError ? (
-                <p className="text-sm text-rose-300">Não foi possível carregar os deploy tokens.</p>
+                <p className="text-sm text-danger">Não foi possível carregar os deploy tokens.</p>
               ) : filteredTokens.length === 0 ? (
                 <div className="rounded-xl border border-dashed border-border-strong bg-surface-light px-4 py-5 text-sm text-muted">
                   Nenhum token corresponde aos filtros atuais.
@@ -920,9 +920,9 @@ function MetricCard({
 }) {
   const toneClass: Record<typeof tone, string> = {
     slate: 'text-foreground border-border bg-surface-light',
-    success: 'text-emerald-200 border-emerald-400/25 bg-emerald-500/10',
-    warning: 'text-amber-200 border-amber-400/25 bg-amber-500/10',
-    danger: 'text-rose-200 border-rose-400/25 bg-rose-500/10',
+    success: 'text-success border-success/30 bg-success/10',
+    warning: 'text-warning border-warning/30 bg-warning/10',
+    danger: 'text-danger border-danger/30 bg-danger/10',
   };
 
   return (

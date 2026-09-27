@@ -105,7 +105,7 @@ function ContextMenuItemView({
         }}
         className={`flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
           item.danger
-            ? "text-red-500 hover:bg-red-500/10"
+            ? "text-danger hover:bg-danger/10"
             : "text-foreground hover:bg-surface-hover"
         }`}
       >
@@ -128,7 +128,7 @@ function SubmenuItem({
     <div className="group relative">
       <div
         className={`flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm transition-colors hover:bg-surface-hover ${
-          item.danger ? "text-red-500" : "text-foreground"
+          item.danger ? "text-danger" : "text-foreground"
         }`}
       >
         {item.icon ? <span className="shrink-0">{item.icon}</span> : null}

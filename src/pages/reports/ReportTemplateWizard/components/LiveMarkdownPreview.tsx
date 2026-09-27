@@ -251,7 +251,7 @@ export function LiveMarkdownPreview({ wizard }: Props) {
           </div>
         )}
         {mode === "data" && previewMutation.isError && (
-          <div className="rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-xs text-red-300 m-4">
+          <div className="rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-xs text-danger m-4">
             {previewErrorMessage ?? "Erro ao carregar preview. Verifique os filtros."}
           </div>
         )}

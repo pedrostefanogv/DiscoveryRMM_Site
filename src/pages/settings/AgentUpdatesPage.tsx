@@ -103,17 +103,17 @@ export default function AgentUpdatesPage() {
               <div className="text-2xl font-bold">{rollout.totalAgents}</div>
               <div className="text-sm text-muted-foreground">Total Agentes</div>
             </div>
-            <div className="text-center p-3 bg-green-50 rounded-lg">
-              <div className="text-2xl font-bold text-green-700">{rollout.updatedAgents}</div>
-              <div className="text-sm text-green-600">Atualizados</div>
+            <div className="rounded-lg border border-success/20 bg-success/10 p-3 text-center">
+              <div className="text-2xl font-bold text-success">{rollout.updatedAgents}</div>
+              <div className="text-sm text-muted-foreground">Atualizados</div>
             </div>
-            <div className="text-center p-3 bg-yellow-50 rounded-lg">
-              <div className="text-2xl font-bold text-yellow-700">{rollout.pendingAgents}</div>
-              <div className="text-sm text-yellow-600">Pendentes</div>
+            <div className="rounded-lg border border-warning/20 bg-warning/10 p-3 text-center">
+              <div className="text-2xl font-bold text-warning">{rollout.pendingAgents}</div>
+              <div className="text-sm text-muted-foreground">Pendentes</div>
             </div>
-            <div className="text-center p-3 bg-red-50 rounded-lg">
-              <div className="text-2xl font-bold text-red-700">{rollout.failedAgents}</div>
-              <div className="text-sm text-red-600">Falhas</div>
+            <div className="rounded-lg border border-danger/20 bg-danger/10 p-3 text-center">
+              <div className="text-2xl font-bold text-danger">{rollout.failedAgents}</div>
+              <div className="text-sm text-muted-foreground">Falhas</div>
             </div>
           </div>
           {rollout.currentVersion && (

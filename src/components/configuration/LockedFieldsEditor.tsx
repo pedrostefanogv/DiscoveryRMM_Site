@@ -4,7 +4,7 @@ import { Button } from "@/components/ui";
 import { useServerLocksImpact } from "@/hooks/useConfigurationApi";
 import type { ConfigurationLockImpact } from "@/services/configurationApi";
 import type { EditableField } from "@/utils/configurationEditors";
-import { statusSurface, statusText } from "./statusStyles";
+import { statusSurface, statusText } from "@/theme/statusStyles";
 
 /**
  * Nome da propriedade na API (PascalCase) para um campo do editor (camelCase).

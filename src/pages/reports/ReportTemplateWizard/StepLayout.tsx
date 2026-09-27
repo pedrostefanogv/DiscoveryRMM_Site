@@ -273,7 +273,7 @@ export function StepLayout({ wizard, onBack, onNext }: Props) {
                             <td className="px-2 py-1">
                               <button
                                 onClick={() => wizard.removeColumn(i)}
-                                className="text-red-400 hover:text-red-300"
+                                className="text-danger hover:text-danger"
                                 title="Remover"
                               >
                                 ✕
@@ -343,7 +343,7 @@ export function StepLayout({ wizard, onBack, onNext }: Props) {
                         />
                         <button
                           onClick={() => wizard.removeSubTable(st.id)}
-                          className="text-xs text-red-400 hover:text-red-300"
+                          className="text-xs text-danger hover:text-danger"
                         >
                           Remover
                         </button>
@@ -438,7 +438,7 @@ export function StepLayout({ wizard, onBack, onNext }: Props) {
                                       );
                                       wizard.setField("subTables", updated as any);
                                     }}
-                                    className="text-red-400 hover:text-red-300"
+                                    className="text-danger hover:text-danger"
                                   >
                                     ✕
                                   </button>
@@ -458,7 +458,7 @@ export function StepLayout({ wizard, onBack, onNext }: Props) {
 
         {/* Right: Live Preview */}
         <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4">
-          <h3 className="mb-3 text-sm font-semibold text-emerald-200">
+          <h3 className="mb-3 text-sm font-semibold text-emerald-700 dark:text-emerald-200">
             👁 Preview ao vivo
           </h3>
           <LiveMarkdownPreview wizard={wizard} />

@@ -423,8 +423,8 @@ export function LayoutBuilderTopSection({
         <div className="mt-5 space-y-4 rounded-xl border border-sky-500/20 bg-sky-500/5 p-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h3 className="text-sm font-semibold text-sky-100">Data sources e joins</h3>
-              <p className="text-xs text-sky-200/80">
+              <h3 className="text-sm font-semibold text-sky-700 dark:text-sky-100">Data sources e joins</h3>
+              <p className="text-xs text-sky-700/90 dark:text-sky-200/80">
                 Quando houver mais de uma fonte, o layout passa a usar referencias no formato alias.field.
               </p>
             </div>
@@ -771,7 +771,7 @@ export function LayoutBuilderTopSection({
                           }))
                         }
                       >
-                        <Trash2 className="h-4 w-4 text-red-400" />
+                        <Trash2 className="h-4 w-4 text-danger" />
                       </Button>
                     </div>
                     {joinSuggestions.length > 0 && index > 0 && (
@@ -1032,7 +1032,7 @@ export function LayoutBuilderDetailsSection({
                       }))
                     }
                   >
-                    <Trash2 className="h-4 w-4 text-red-400" />
+                    <Trash2 className="h-4 w-4 text-danger" />
                   </Button>
                 </td>
               </tr>
@@ -1042,7 +1042,7 @@ export function LayoutBuilderDetailsSection({
       </div>
 
       <details className="mt-5">
-        <summary className="flex cursor-pointer select-none items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-sm font-medium text-amber-300 hover:bg-amber-500/10">
+        <summary className="flex cursor-pointer select-none items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-sm font-medium text-amber-700 hover:bg-amber-500/10 dark:text-amber-300">
           <span>&#9654;</span> Opções avançadas &mdash; Group details, Summaries e Group summaries
         </summary>
         <div className="mt-3 rounded-lg border border-border bg-surface-light p-3">
@@ -1118,7 +1118,7 @@ export function LayoutBuilderDetailsSection({
                         }))
                       }
                     >
-                      <Trash2 className="h-4 w-4 text-red-400" />
+                      <Trash2 className="h-4 w-4 text-danger" />
                     </Button>
                   </div>
                 ))}
@@ -1223,7 +1223,7 @@ export function LayoutBuilderDetailsSection({
                         }))
                       }
                     >
-                      <Trash2 className="h-4 w-4 text-red-400" />
+                      <Trash2 className="h-4 w-4 text-danger" />
                     </Button>
                   </div>
                 ))}
@@ -1327,7 +1327,7 @@ export function LayoutBuilderDetailsSection({
                         }))
                       }
                     >
-                      <Trash2 className="h-4 w-4 text-red-400" />
+                      <Trash2 className="h-4 w-4 text-danger" />
                     </Button>
                   </div>
                 ))}
@@ -1345,7 +1345,7 @@ export function LayoutBuilderDetailsSection({
           <div className="flex items-center gap-3">
             <h3 className="text-sm font-semibold text-foreground">Seções adicionais</h3>
             {selectedDataset && (DATASET_SECTION_SOURCES[selectedDataset.key.toLowerCase()] ?? []).length > 0 && (
-              <span className="rounded bg-blue-500/10 px-2 py-0.5 text-xs text-blue-300">
+              <span className="rounded bg-blue-500/10 px-2 py-0.5 text-xs text-blue-700 dark:text-blue-300">
                 Fontes disponíveis para <strong>{selectedDataset.name}</strong>: {" "}
                 {(DATASET_SECTION_SOURCES[selectedDataset.key.toLowerCase()] ?? []).map((s) => s.source).join(", ")}
               </span>
@@ -1401,7 +1401,7 @@ export function LayoutBuilderDetailsSection({
                       }))
                     }
                   >
-                    <Trash2 className="h-4 w-4 text-red-400" />
+                    <Trash2 className="h-4 w-4 text-danger" />
                   </Button>
                 </div>
               </div>
@@ -1525,7 +1525,7 @@ export function LayoutBuilderDetailsSection({
                               }))
                             }
                           >
-                            <Trash2 className="h-4 w-4 text-red-400" />
+                            <Trash2 className="h-4 w-4 text-danger" />
                           </Button>
                         </td>
                       </tr>
@@ -1539,7 +1539,7 @@ export function LayoutBuilderDetailsSection({
       )}
 
       <details className="mt-5">
-        <summary className="flex cursor-pointer select-none items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-sm font-medium text-amber-300 hover:bg-amber-500/10">
+        <summary className="flex cursor-pointer select-none items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-sm font-medium text-amber-700 hover:bg-amber-500/10 dark:text-amber-300">
           <span>&#9654;</span> Opções avançadas &mdash; Seções adicionais (JSON)
         </summary>
         <div className="mt-3 rounded-lg border border-border bg-surface-light p-3">
@@ -1739,7 +1739,7 @@ export function LayoutBrandingSection({
         </div>
       </div>
 
-      <div className="mt-4 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs text-emerald-200">
+      <div className="mt-4 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs text-emerald-700 dark:text-emerald-200">
         Aggregates suportados: {supportedAggregates.join(", ")}
       </div>
     </>
@@ -1875,7 +1875,7 @@ export function PreviewCard({
       )}
 
       {previewUnexpectedHeaders.length > 0 && (
-        <div className="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-200">
+        <div className="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-warning">
           <p className="font-medium">Colunas extras detectadas no preview da API</p>
           <p className="mt-1">
             Foi aplicada filtragem visual para manter apenas o layout solicitado. Colunas recebidas fora do layout: {previewUnexpectedHeaders.join(", ")}.
@@ -2151,8 +2151,8 @@ export function ValidationErrorsCard({ errors }: ValidationErrorsCardProps) {
 
   return (
     <Card>
-      <h2 className="text-sm font-semibold text-red-300">Erros de validação</h2>
-      <ul className="mt-2 list-disc pl-5 text-xs text-red-200">
+      <h2 className="text-sm font-semibold text-danger">Erros de validação</h2>
+      <ul className="mt-2 list-disc pl-5 text-xs text-danger">
         {errors.map((error, index) => (
           <li key={`${error}-${index}`}>{error}</li>
         ))}

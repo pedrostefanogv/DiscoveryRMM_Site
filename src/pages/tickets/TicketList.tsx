@@ -302,13 +302,13 @@ function KpiTile({
 }) {
   const toneClass =
     tone === 'success'
-      ? 'text-green-300'
+      ? 'text-green-700 dark:text-green-300'
       : tone === 'warning'
-        ? 'text-amber-300'
+        ? 'text-amber-700 dark:text-amber-300'
         : tone === 'danger'
-          ? 'text-rose-300'
+          ? 'text-rose-700 dark:text-rose-300'
           : tone === 'primary'
-            ? 'text-sky-300'
+            ? 'text-sky-700 dark:text-sky-300'
             : 'text-foreground';
 
   return (

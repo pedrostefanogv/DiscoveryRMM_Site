@@ -2093,9 +2093,9 @@ function AttachmentsPanel({
 
   const STATUS_ICON: Record<UploadStatus, React.ReactNode> = {
     idle: <Upload className="h-4 w-4 text-muted" />,
-    preparing: <Loader2 className="h-4 w-4 animate-spin text-sky-400" />,
-    uploading: <Loader2 className="h-4 w-4 animate-spin text-sky-400" />,
-    confirming: <Loader2 className="h-4 w-4 animate-spin text-sky-400" />,
+    preparing: <Loader2 className="h-4 w-4 animate-spin text-sky-600 dark:text-sky-400" />,
+    uploading: <Loader2 className="h-4 w-4 animate-spin text-sky-600 dark:text-sky-400" />,
+    confirming: <Loader2 className="h-4 w-4 animate-spin text-sky-600 dark:text-sky-400" />,
     done: <CheckCircle className="h-4 w-4 text-success" />,
     error: <XCircle className="h-4 w-4 text-danger" />,
   };

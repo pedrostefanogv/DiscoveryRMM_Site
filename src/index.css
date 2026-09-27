@@ -7,12 +7,17 @@
   /* Breakpoint extra-largo — grids adaptativos aproveitam telas muito grandes */
   --breakpoint-3xl: 112rem;
 
-  /* Brand (controlado por branding) */
-  --color-primary: #3b82f6;
-  --color-accent: #0ea5e9;
-  --color-danger: #ef4444;
-  --color-success: #22c55e;
-  --color-warning: #f59e0b;
+  /* Brand — base alinhada ao ícone do produto (indigo + magenta/pink).
+     Estes são os valores do tema CLARO (variação mais escura); o tema escuro
+     redefine abaixo e o branding do usuário sobrescreve em runtime. */
+  --color-primary: #5154c6; /* indigo-500 escurecido ~18% */
+  --color-accent: #c23b7d;  /* pink-500 escurecido ~18% */
+
+  /* Semânticos de estado — tema claro usa tons escuros para contraste em fundo claro.
+     O tema escuro redefine para os tons vivos (ver bloco .dark). */
+  --color-danger: #b91c1c;   /* red-700 */
+  --color-success: #15803d;  /* green-700 */
+  --color-warning: #b45309;  /* amber-700 */
 
   /* Semânticos — Light (default) */
   --color-background: #f8fafc;
@@ -33,6 +38,15 @@
 
 /* Tema escuro — ativado quando <html> tem classe .dark */
 .dark {
+  /* Brand — tons vivos do ícone no fundo escuro */
+  --color-primary: #6366f1; /* indigo-500 */
+  --color-accent: #ec4899;  /* pink-500 */
+
+  /* Semânticos de estado — tons vivos (contraste em fundo escuro) */
+  --color-danger: #ef4444;
+  --color-success: #22c55e;
+  --color-warning: #f59e0b;
+
   --color-background: #050b16;
   --color-foreground: #e2e8f0;
   --color-surface: #111d33;
@@ -108,7 +122,7 @@ h3 {
 }
 
 :where(button, a, [tabindex]):focus-visible {
-  outline: 2px solid rgb(56 189 248 / 0.8);
+  outline: 2px solid color-mix(in srgb, var(--color-primary) 70%, transparent);
   outline-offset: 2px;
 }
 

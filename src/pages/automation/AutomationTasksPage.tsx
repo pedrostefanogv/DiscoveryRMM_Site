@@ -54,7 +54,7 @@ function HighlightText({ text, highlight }: { text: string; highlight: string })
     <>
       {parts.map((part, i) =>
         i % 2 !== 0 ? (
-          <mark key={i} className="bg-yellow-400/30 text-yellow-200 rounded-sm px-0.5">
+          <mark key={i} className="bg-yellow-400/30 text-yellow-900 dark:text-yellow-200 rounded-sm px-0.5">
             {part}
           </mark>
         ) : part ? (
@@ -1496,7 +1496,7 @@ export default function AutomationTasksPage() {
               placeholder="Ex.: 0 8 * * 1 (toda segunda 08:00)"
             />
             {form.triggerRecurring && form.scheduleCron.trim() && !isValidCron(form.scheduleCron) && (
-              <p className="text-xs text-red-500">Cron inválida — use 5 campos: minuto (0-59) hora (0-23) dia (1-31) mês (1-12) dia-semana (0-6). Suporta * , - /</p>
+              <p className="text-xs text-danger">Cron inválida — use 5 campos: minuto (0-59) hora (0-23) dia (1-31) mês (1-12) dia-semana (0-6). Suporta * , - /</p>
             )}
             {form.triggerRecurring && <p className="text-xs text-muted">Executada no fuso horário local do agent.</p>}
           </div>

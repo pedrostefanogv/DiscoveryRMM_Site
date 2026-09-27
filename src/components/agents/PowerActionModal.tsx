@@ -61,7 +61,9 @@ export default function PowerActionModal({
         <div className="mb-5 flex items-center gap-3">
           <div
             className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${
-              isRestart ? "bg-amber-500/15 text-amber-400" : "bg-red-500/15 text-red-400"
+              isRestart
+                ? "bg-amber-500/15 text-amber-700 dark:text-amber-400"
+                : "bg-red-500/15 text-red-700 dark:text-red-400"
             }`}
           >
             <Icon className="h-5 w-5" />

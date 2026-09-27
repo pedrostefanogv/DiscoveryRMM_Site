@@ -376,12 +376,12 @@ export default function ReportTemplateList() {
             e.stopPropagation();
             toggleFavorite(t.id, t.name);
           }}
-          className="text-muted hover:text-yellow-400 transition-colors"
+          className="text-muted transition-colors hover:text-yellow-600 dark:hover:text-warning"
           aria-label={isFavorite(t.id) ? "Remover dos favoritos" : "Adicionar aos favoritos"}
         >
           <Star
             className={`h-5 w-5 ${
-              isFavorite(t.id) ? "fill-yellow-400 text-yellow-400" : ""
+              isFavorite(t.id) ? "fill-yellow-500 text-yellow-500 dark:fill-yellow-400 dark:text-yellow-400" : ""
             }`}
           />
         </button>
@@ -517,15 +517,15 @@ export default function ReportTemplateList() {
         </Card>
         <Card className="p-3">
           <p className="text-xs uppercase tracking-wide text-muted">Ativos</p>
-          <p className="mt-1 text-xl font-semibold text-emerald-300">{activeCount}</p>
+          <p className="mt-1 text-xl font-semibold text-emerald-700 dark:text-emerald-300">{activeCount}</p>
         </Card>
         <Card className="p-3">
           <p className="text-xs uppercase tracking-wide text-muted">Inativos</p>
-          <p className="mt-1 text-xl font-semibold text-amber-300">{inactiveCount}</p>
+          <p className="mt-1 text-xl font-semibold text-amber-700 dark:text-amber-300">{inactiveCount}</p>
         </Card>
         <Card className="p-3">
           <p className="text-xs uppercase tracking-wide text-muted">Favoritos</p>
-          <p className="mt-1 text-xl font-semibold text-sky-300">
+          <p className="mt-1 text-xl font-semibold text-sky-700 dark:text-sky-300">
             {templates.data?.filter((t) => isFavorite(t.id)).length ?? 0}
           </p>
         </Card>
@@ -624,12 +624,12 @@ export default function ReportTemplateList() {
           </button>
           <button
             type="button"
-            className="mt-1 flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm text-red-300 transition-colors hover:bg-red-500/15"
+            className="mt-1 flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm text-danger transition-colors hover:bg-red-500/15"
             onClick={handleContextMenuDelete}
             role="menuitem"
           >
             <span>Excluir template</span>
-            <Trash2 className="h-4 w-4 text-red-400" />
+            <Trash2 className="h-4 w-4 text-danger" />
           </button>
         </div>
       )}

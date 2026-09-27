@@ -21,8 +21,8 @@ interface BrandingForm {
 const DEFAULTS: BrandingForm = {
   applicationName: "Discovery",
   logoUrl: "",
-  primaryColor: "#1E90FF",
-  secondaryColor: "#FFD700",
+  primaryColor: "#6366f1",
+  secondaryColor: "#ec4899",
   companyName: "",
   companyWebsite: "",
   supportEmail: "",

@@ -179,7 +179,7 @@ export function ReportTemplateHistoryPanel({ templateId, limit = 50 }: ReportTem
                       {getFormatLabel(entry.defaultFormat)}
                     </span>
                     <span>•</span>
-                    <span className={entry.isActive ? "text-green-400" : "text-red-400"}>
+                    <span className={entry.isActive ? "text-success" : "text-danger"}>
                       {entry.isActive ? "Ativo" : "Inativo"}
                     </span>
                   </div>

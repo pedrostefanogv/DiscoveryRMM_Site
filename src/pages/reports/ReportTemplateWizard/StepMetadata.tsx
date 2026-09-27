@@ -398,7 +398,7 @@ export function StepMetadata({ wizard, onBack, onCreate, isCreating }: Props) {
 
         {/* Right: Preview */}
         <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4">
-          <h3 className="mb-3 text-sm font-semibold text-emerald-200">
+          <h3 className="mb-3 text-sm font-semibold text-emerald-700 dark:text-emerald-200">
             👁 Preview Final
           </h3>
           <LiveMarkdownPreview wizard={wizard} />

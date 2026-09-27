@@ -49,7 +49,7 @@ export default function WakeOnLanModal({
       <div className="relative z-10 w-full max-w-md rounded-xl border border-border bg-surface p-6 shadow-2xl">
         {/* Header */}
         <div className="mb-5 flex items-center gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-violet-500/15 text-violet-400">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-violet-500/15 text-violet-600 dark:text-violet-400">
             <Zap className="h-5 w-5" />
           </div>
           <div>
@@ -75,8 +75,8 @@ export default function WakeOnLanModal({
 
         {/* Info */}
         <div className="mb-4 flex items-start gap-2 rounded-lg border border-violet-500/20 bg-violet-500/10 p-3">
-          <Info className="mt-0.5 h-4 w-4 shrink-0 text-violet-400" />
-          <div className="text-xs text-violet-300 space-y-1">
+          <Info className="mt-0.5 h-4 w-4 shrink-0 text-violet-600 dark:text-violet-400" />
+          <div className="text-xs text-violet-700 dark:text-violet-300 space-y-1">
             <p>
               O comando será enviado para <strong>todos os agentes online</strong> no
               mesmo site, que enviarão o Magic Packet via broadcast UDP.

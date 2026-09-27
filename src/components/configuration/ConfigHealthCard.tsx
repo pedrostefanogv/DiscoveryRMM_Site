@@ -23,7 +23,7 @@ import {
   useTestObjectStorage,
   useTestStoredAiKey,
 } from "@/hooks/useConfigurationApi";
-import { statusSurface } from "./statusStyles";
+import { statusSurface } from "@/theme/statusStyles";
 
 type HealthStatus = "ok" | "warn" | "error" | "unknown";
 

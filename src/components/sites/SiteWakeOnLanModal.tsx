@@ -37,7 +37,7 @@ export default function SiteWakeOnLanModal({
       <div className="space-y-4">
         {/* Header icon + info */}
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-violet-500/15 text-violet-400">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-violet-500/15 text-violet-600 dark:text-violet-400">
             <Zap className="h-5 w-5" />
           </div>
           <div>
@@ -50,7 +50,7 @@ export default function SiteWakeOnLanModal({
 
         {/* Info */}
         <div className="flex items-start gap-2 rounded-lg border border-violet-500/20 bg-violet-500/10 p-3">
-          <Info className="mt-0.5 h-4 w-4 shrink-0 text-violet-400" />
+          <Info className="mt-0.5 h-4 w-4 shrink-0 text-violet-600 dark:text-violet-400" />
           <div className="text-xs text-muted-foreground space-y-1">
             <p>
               O Magic Packet será enviado para <strong className="text-foreground">

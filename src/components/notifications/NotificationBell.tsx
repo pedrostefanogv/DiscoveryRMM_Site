@@ -5,6 +5,11 @@ import toast from "react-hot-toast";
 import { Badge, Button, Card, Loading } from "@/components/ui";
 import { useNotifications } from "@/hooks/useNotifications";
 import type { AppNotification } from "@/api/notifications";
+import {
+  formatNotificationMessage,
+  parseNavigationTarget,
+  shortTicketRef,
+} from "@/components/notifications/notificationNavigation";
 
 function getSeverityColor(severity: string): "slate" | "warning" | "danger" | "primary" {
   const normalized = severity.trim().toLowerCase();
@@ -22,30 +27,6 @@ function getSeverityLabel(severity: string) {
   if (normalized === "warning") return "Aviso";
   if (normalized === "informational") return "Info";
   return severity;
-}
-
-interface NavigationTarget {
-  path: string;
-  label: string;
-}
-
-function parseNavigationTarget(payloadJson: string | null | undefined): NavigationTarget | null {
-  if (!payloadJson) return null;
-
-  try {
-    const parsed = JSON.parse(payloadJson) as Record<string, unknown>;
-    const ticketId = String(parsed.ticketId ?? parsed.ticket_id ?? "");
-    const agentId = String(parsed.agentId ?? parsed.agent_id ?? "");
-    const clientId = String(parsed.clientId ?? parsed.client_id ?? "");
-
-    if (ticketId) return { path: `/tickets/${ticketId}`, label: "chamado" };
-    if (agentId) return { path: `/agents/${agentId}`, label: "agente" };
-    if (clientId) return { path: `/clients/${clientId}`, label: "cliente" };
-
-    return null;
-  } catch {
-    return null;
-  }
 }
 
 export function NotificationBell() {
@@ -166,17 +147,20 @@ export function NotificationBell() {
 
               {visibleList.map((item) => {
                 const target = parseNavigationTarget(item.payloadJson);
+                const reference = shortTicketRef(target?.ticketId);
+                const displayMessage = formatNotificationMessage(item);
 
                 return (
                   <button
                     key={item.id}
                     type="button"
                     onClick={() => void handleNotificationClick(item)}
+                    aria-label={target ? `Abrir ${target.label}: ${item.title}` : item.title}
                     className={`group relative w-full rounded-lg border p-3 text-left transition ${
                       item.isRead
                         ? "border-border bg-surface-light"
                         : "border-primary/30 bg-primary/10"
-                    }`}
+                    } ${target ? "cursor-pointer hover:border-primary/50 hover:bg-primary/5" : "cursor-default"}`}
                   >
                     <div className="flex items-center justify-between gap-3">
                       <p className="text-sm font-medium text-foreground">{item.title}</p>
@@ -198,16 +182,21 @@ export function NotificationBell() {
                       </div>
                     </div>
 
-                    <p className="mt-1 text-xs text-muted">{item.message}</p>
+                    <p className="mt-1 text-xs text-muted">{displayMessage}</p>
 
                     <div className="mt-2 flex items-center justify-between gap-2 text-[11px] text-muted">
-                      <span>
+                      <span className="truncate">
                         {item.topic || item.eventType}
+                        {reference ? (
+                          <span className="ml-1.5 font-mono">{reference}</span>
+                        ) : null}
                         {target ? (
                           <span className="ml-1.5 text-primary/70">Abrir {target.label} &rarr;</span>
                         ) : null}
                       </span>
-                      <span>{new Date(item.createdAt).toLocaleString("pt-BR")}</span>
+                      <span className="shrink-0">
+                        {new Date(item.createdAt).toLocaleString("pt-BR")}
+                      </span>
                     </div>
                   </button>
                 );

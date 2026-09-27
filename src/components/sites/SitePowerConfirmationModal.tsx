@@ -62,9 +62,9 @@ export default function SitePowerConfirmationModal({
         {/* Aviso */}
         <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-4">
           <div className="flex items-start gap-3">
-            <AlertTriangle className="mt-0.5 h-6 w-6 shrink-0 text-amber-500" />
+            <AlertTriangle className="mt-0.5 h-6 w-6 shrink-0 text-amber-600 dark:text-amber-400" />
             <div>
-              <p className="font-semibold text-amber-400">
+              <p className="font-semibold text-amber-700 dark:text-amber-400">
                 Esta ação afetará TODOS os agentes do site
               </p>
               <p className="mt-1 text-sm text-muted-foreground">
@@ -85,7 +85,7 @@ export default function SitePowerConfirmationModal({
         </div>
 
         {onlineCount === 0 && (
-          <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-400">
+          <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-danger">
             Nenhum agente online para receber o comando. A ação foi desabilitada.
           </div>
         )}
@@ -159,7 +159,7 @@ export default function SitePowerConfirmationModal({
             className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground placeholder-muted transition-colors focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/30"
           />
           {confirmation.length > 0 && !confirmed && (
-            <p className="mt-1 text-xs text-red-500">
+            <p className="mt-1 text-xs text-danger">
               O texto digitado não corresponde ao nome do site.
             </p>
           )}

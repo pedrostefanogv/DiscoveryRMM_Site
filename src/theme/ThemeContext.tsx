@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useState, useEffect, type ReactNode } from 'react';
+import { darken } from './color';
 
 export interface BrandingConfig {
   appName: string;
@@ -11,11 +12,12 @@ export interface BrandingConfig {
 
 export type ThemeMode = 'light' | 'dark';
 
+// Paleta alinhada ao ícone do produto: base indigo + destaque magenta/pink.
 const defaultBranding: BrandingConfig = {
   appName: 'Discovery RMM',
   logoUrl: null,
-  primaryColor: '#6366f1',
-  accentColor: '#06b6d4',
+  primaryColor: '#6366f1', // indigo-500
+  accentColor: '#ec4899',  // pink-500
   sidebarColor: '#0f172a',
   headerColor: '#1e293b',
 };
@@ -46,16 +48,22 @@ function saveBranding(b: BrandingConfig) {
 
 function applyCSSVars(b: BrandingConfig, mode: ThemeMode) {
   const root = document.documentElement;
-  root.style.setProperty('--color-accent', b.accentColor);
 
-  // Em light mode, usa azul profissional em vez do indigo/roxo do branding.
-  // Em dark mode, mantém a cor de branding original.
+  // A cor de branding é a referência. No tema claro aplicamos uma variação mais
+  // escura (contraste sobre fundos claros); no escuro usamos a cor como escolhida.
+  root.style.setProperty(
+    '--color-primary',
+    mode === 'dark' ? b.primaryColor : darken(b.primaryColor, 0.18),
+  );
+  root.style.setProperty(
+    '--color-accent',
+    mode === 'dark' ? b.accentColor : darken(b.accentColor, 0.18),
+  );
+
   if (mode === 'dark') {
-    root.style.setProperty('--color-primary', b.primaryColor);
     root.style.setProperty('--color-sidebar', b.sidebarColor);
     root.style.setProperty('--color-header', b.headerColor);
   } else {
-    root.style.setProperty('--color-primary', '#3b82f6');
     root.style.removeProperty('--color-sidebar');
     root.style.removeProperty('--color-header');
   }

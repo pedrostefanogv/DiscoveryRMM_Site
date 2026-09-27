@@ -110,7 +110,7 @@ export default function ArticlePagesManager({
           <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
             <button
               type="button"
-              className="rounded p-1 text-muted hover:text-red-400"
+              className="rounded p-1 text-muted hover:text-danger"
               onClick={(event) => {
                 event.stopPropagation();
                 handleDelete(node.id, node.title);

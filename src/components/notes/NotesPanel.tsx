@@ -289,7 +289,7 @@ export function NotesPanel({ entityType, entityId, title = "Notas", subtitle }: 
                                   Editar
                                 </button>
                                 <button
-                                  className="flex w-full items-center gap-2 px-3 py-2 text-sm text-red-400 hover:bg-surface-hover transition-colors"
+                                  className="flex w-full items-center gap-2 px-3 py-2 text-sm text-danger hover:bg-surface-hover transition-colors"
                                   onClick={() => handleMenuDelete(note.id)}
                                   disabled={isDeleting}
                                 >

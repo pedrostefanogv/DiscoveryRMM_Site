@@ -446,7 +446,7 @@ export default function RunReport() {
           <div key={filter.name}>
             <label className="mb-2 block text-sm font-medium text-muted-foreground">
               {filter.label}
-              {filter.required && <span className="text-red-400 ml-1">*</span>}
+              {filter.required && <span className="text-danger ml-1">*</span>}
             </label>
             <Input
               type="date"
@@ -470,7 +470,7 @@ export default function RunReport() {
             <div key={filter.name}>
               <label className="mb-2 block text-sm font-medium text-muted-foreground">
                 {filter.label}
-                {filter.required && <span className="text-red-400 ml-1">*</span>}
+                {filter.required && <span className="text-danger ml-1">*</span>}
               </label>
               <select
                 value={value}
@@ -499,7 +499,7 @@ export default function RunReport() {
             <div key={filter.name}>
               <label className="mb-2 block text-sm font-medium text-muted-foreground">
                 {filter.label}
-                {filter.required && <span className="text-red-400 ml-1">*</span>}
+                {filter.required && <span className="text-danger ml-1">*</span>}
               </label>
               <select
                 value={value}
@@ -532,7 +532,7 @@ export default function RunReport() {
             <div key={filter.name}>
               <label className="mb-2 block text-sm font-medium text-muted-foreground">
                 {filter.label}
-                {filter.required && <span className="text-red-400 ml-1">*</span>}
+                {filter.required && <span className="text-danger ml-1">*</span>}
               </label>
               <select
                 value={value}
@@ -565,7 +565,7 @@ export default function RunReport() {
           <div key={filter.name}>
             <label className="mb-2 block text-sm font-medium text-muted-foreground">
               {filter.label}
-              {filter.required && <span className="text-red-400 ml-1">*</span>}
+              {filter.required && <span className="text-danger ml-1">*</span>}
             </label>
             <Input
               type="text"
@@ -586,7 +586,7 @@ export default function RunReport() {
           <div key={filter.name}>
             <label className="mb-2 block text-sm font-medium text-muted-foreground">
               {filter.label}
-              {filter.required && <span className="text-red-400 ml-1">*</span>}
+              {filter.required && <span className="text-danger ml-1">*</span>}
             </label>
             <Input
               type="number"
@@ -606,7 +606,7 @@ export default function RunReport() {
             <div key={filter.name}>
               <label className="mb-2 block text-sm font-medium text-muted-foreground">
                 {filter.label}
-                {filter.required && <span className="text-red-400 ml-1">*</span>}
+                {filter.required && <span className="text-danger ml-1">*</span>}
               </label>
               <select
                 value={value}
@@ -633,7 +633,7 @@ export default function RunReport() {
           <div key={filter.name}>
             <label className="mb-2 block text-sm font-medium text-muted-foreground">
               {filter.label}
-              {filter.required && <span className="text-red-400 ml-1">*</span>}
+              {filter.required && <span className="text-danger ml-1">*</span>}
             </label>
             <Input
               type="text"
@@ -653,7 +653,7 @@ export default function RunReport() {
           <div key={filter.name}>
             <label className="mb-2 block text-sm font-medium text-muted-foreground">
               {filter.label}
-              {filter.required && <span className="text-red-400 ml-1">*</span>}
+              {filter.required && <span className="text-danger ml-1">*</span>}
             </label>
             <Input
               type="text"
@@ -678,7 +678,7 @@ export default function RunReport() {
                 className="rounded border-border bg-surface-light"
               />
               {filter.label}
-              {filter.required && <span className="text-red-400 ml-1">*</span>}
+              {filter.required && <span className="text-danger ml-1">*</span>}
             </label>
             {filter.description && (
               <p className="mt-1 text-xs text-muted">{filter.description}</p>
@@ -923,15 +923,15 @@ export default function RunReport() {
                 ) : (
                   <div className="rounded-lg border border-yellow-500/20 bg-yellow-500/10 p-4">
                     <div className="flex gap-2 items-start">
-                      <Info className="h-5 w-5 text-yellow-500 flex-shrink-0 mt-0.5" />
+                      <Info className="h-5 w-5 text-yellow-600 dark:text-yellow-400 flex-shrink-0 mt-0.5" />
                       <div>
-                        <p className="text-sm font-medium text-yellow-500 mb-1">
+                        <p className="text-sm font-medium text-yellow-600 dark:text-yellow-400 mb-1">
                           Nenhum filtro configurado
                         </p>
-                        <p className="text-xs text-yellow-500/80 mb-2">
+                        <p className="text-xs text-yellow-700/90 dark:text-yellow-400/80 mb-2">
                           Este template não possui filtros dinâmicos configurados. O relatório será executado com os dados completos do dataset.
                         </p>
-                        <p className="text-xs text-yellow-500/80">
+                        <p className="text-xs text-yellow-700/90 dark:text-yellow-400/80">
                           💡 Para adicionar filtros (datas, clientes, etc), edite o template e configure um <strong>Schema de Execução Customizado</strong>.
                         </p>
                       </div>
@@ -1001,7 +1001,7 @@ export default function RunReport() {
 
               {execution.data.errorMessage && (
                 <div className="rounded-lg bg-red-500/10 border border-red-500/20 p-3">
-                  <p className="text-sm text-red-400">
+                  <p className="text-sm text-danger">
                     {execution.data.errorMessage}
                   </p>
                 </div>
@@ -1078,7 +1078,7 @@ export default function RunReport() {
                       <div key={idx} className="text-muted-foreground">
                         • <span className="text-primary">{f.name}</span>{" "}
                         <span className="text-muted">({f.type})</span>
-                        {f.required && <span className="text-red-400 ml-1">*obrigatório</span>}
+                        {f.required && <span className="text-danger ml-1">*obrigatório</span>}
                         {f.label && <span className="text-muted"> - {f.label}</span>}
                       </div>
                     ))}
@@ -1089,19 +1089,19 @@ export default function RunReport() {
               {/* Estado dos Filtros Obrigatórios */}
               {schema.filters && schema.filters.some(f => f.required) && (
                 <div className="mt-3 rounded border border-blue-500/20 bg-blue-500/10 p-2">
-                  <div className="text-blue-400 text-xs font-semibold mb-2">📊 Estado dos Campos Obrigatórios:</div>
+                  <div className="text-blue-600 dark:text-blue-400 text-xs font-semibold mb-2">📊 Estado dos Campos Obrigatórios:</div>
                   <div className="space-y-1">
                     {schema.filters.filter(f => f.required).map((f) => {
                       const value = dynamicFilters[f.name];
                       const hasValue = value !== undefined && value !== null && value !== "";
                       return (
                         <div key={f.name} className="flex items-center gap-2 text-xs">
-                          <span className={hasValue ? "text-green-400" : "text-red-400"}>
+                          <span className={hasValue ? "text-success" : "text-danger"}>
                             {hasValue ? "✓" : "✗"}
                           </span>
                           <span className="text-muted-foreground font-mono">{f.name}</span>
                           <span className="text-muted">:</span>
-                          <span className={hasValue ? "text-green-400" : "text-red-400"}>
+                          <span className={hasValue ? "text-success" : "text-danger"}>
                             {hasValue ? `"${String(value).slice(0, 30)}${String(value).length > 30 ? "..." : ""}"` : "vazio"}
                           </span>
                         </div>
@@ -1113,10 +1113,10 @@ export default function RunReport() {
               
               {(!schema.filters || schema.filters.length === 0) && (
                 <div className="mt-3 rounded bg-yellow-500/10 border border-yellow-500/20 p-3">
-                  <p className="text-yellow-500 text-xs">
+                  <p className="text-yellow-600 dark:text-yellow-400 text-xs">
                     ⚠️ <strong>Problema:</strong> Este template não tem filtros configurados no executionSchema.
                   </p>
-                  <p className="text-yellow-500/80 text-xs mt-1">
+                  <p className="text-yellow-700/90 dark:text-yellow-400/80 text-xs mt-1">
                     Para adicionar filtros de data, cliente, etc, você precisa editar o template e definir um schema customizado.
                   </p>
                 </div>

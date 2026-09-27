@@ -242,10 +242,10 @@ export default function ReportExecutionList() {
                   <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
                 )}
                 {progress.status === "completed" && (
-                  <CheckCircle className="h-3.5 w-3.5 text-green-400" />
+                  <CheckCircle className="h-3.5 w-3.5 text-success" />
                 )}
                 {progress.status === "error" && (
-                  <AlertCircle className="h-3.5 w-3.5 text-red-400" />
+                  <AlertCircle className="h-3.5 w-3.5 text-danger" />
                 )}
 
                 {progress.status === "running" && (
@@ -255,12 +255,12 @@ export default function ReportExecutionList() {
                   <span className="truncate text-muted">{progress.message}</span>
                 )}
                 {progress.status === "completed" && (
-                  <span className="text-green-400">Download concluído</span>
+                  <span className="text-success">Download concluído</span>
                 )}
               </div>
 
               {progress.status === "error" && (
-                <div className="flex items-center gap-1 text-xs text-red-400">
+                <div className="flex items-center gap-1 text-xs text-danger">
                   {progress.errorMessage || "Erro no download"}
                 </div>
               )}
@@ -296,7 +296,7 @@ export default function ReportExecutionList() {
         </div>
         <Card>
           <div className="rounded-lg bg-red-500/10 border border-red-500/20 p-4">
-            <p className="text-sm text-red-400">
+            <p className="text-sm text-danger">
               Erro ao carregar execuções de relatórios. Por favor, selecione um cliente ou tente novamente.
             </p>
           </div>

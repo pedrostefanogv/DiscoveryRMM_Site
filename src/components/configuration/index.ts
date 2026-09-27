@@ -7,6 +7,8 @@ export { LockedFieldsEditor, parseLockedFields, toApiFieldName } from "./LockedF
 export {
   statusSurface,
   statusText,
+  textTone,
+  textToneIcon,
   tintedIcon,
   selectedSurface,
   selectedIcon,
@@ -14,8 +16,8 @@ export {
   unselectedIcon,
   chipActive,
   chipCustom,
-} from "./statusStyles";
-export type { StatusTone, TintedIconTone } from "./statusStyles";
+} from "@/theme/statusStyles";
+export type { StatusTone, TintedIconTone, TextTone } from "@/theme/statusStyles";
 export { AiIntegrationCard } from "./AiIntegrationCard";
 export {
   BackgroundProcessingCard,
