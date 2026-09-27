@@ -14,7 +14,9 @@ import { useSendScopeNotification } from '@/hooks/useAgentAlerts';
 import { useAuthorization } from '@/auth/authorization';
 import { Badge, Button, Card, CardHeader, ConfirmDialog, ErrorDisplay, Loading, PageHeader, StatCard, EmptyState } from '@/components/ui';
 import { NotesPanel } from '@/components/notes/NotesPanel';
-import { AgentMiniList } from '@/components/entity/AgentMiniList';
+import { AgentCollectionView } from '@/components/agents/AgentCollectionView';
+import { AgentContextMenu } from '@/components/agents/AgentContextMenu';
+import type { AgentCardAgent } from '@/components/agents/AgentCard';
 import { DetailTabs, resolveDetailTab, type DetailTab } from '@/components/entity/DetailTabs';
 import { RecentTicketsCard } from '@/components/entity/RecentTicketsCard';
 import { RecentLogsCard } from '@/components/entity/RecentLogsCard';
@@ -57,6 +59,7 @@ export default function SiteDetail() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [transferModalOpen, setTransferModalOpen] = useState(false);
   const [notifyOpen, setNotifyOpen] = useState(false);
+  const [agentMenu, setAgentMenu] = useState<{ x: number; y: number; agent: AgentCardAgent } | null>(null);
 
   const client = useClient(clientId!);
   const site = useSite(clientId!, siteId!);
@@ -447,13 +450,25 @@ export default function SiteDetail() {
                 className="py-8"
               />
             ) : (
-              <AgentMiniList
-                agents={agentsArray}
+              <AgentCollectionView
+                agents={agentsArray.map((agent) => ({
+                  ...agent,
+                  clientName: currentClient.name,
+                  clientId: currentClient.id,
+                  siteName: currentSite.name,
+                }))}
                 now={now}
                 isLoading={agents.isLoading}
                 emptyMessage="Nenhum agente neste site"
+                showClient={false}
+                showSite={false}
                 filterable
-                onSelect={(agent) => navigate(`/agents/${agent.id}`)}
+                onOpen={(agent) => navigate(`/agents/${agent.id}`)}
+                onContextMenu={(event, agent) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  setAgentMenu({ x: event.clientX, y: event.clientY, agent });
+                }}
               />
             )}
           </Card>
@@ -503,6 +518,15 @@ export default function SiteDetail() {
           onClose={() => setNotifyOpen(false)}
           onConfirm={handleNotifyConfirm}
           isLoading={sendScopeNotification.isPending}
+        />
+      )}
+
+      {agentMenu && (
+        <AgentContextMenu
+          agent={agentMenu.agent}
+          now={now}
+          position={agentMenu}
+          onClose={() => setAgentMenu(null)}
         />
       )}
     </div>

@@ -30,7 +30,9 @@ import { Button, Card, CardHeader, Badge, Loading, ErrorDisplay, Modal, StatCard
 import { NotesPanel } from '@/components/notes/NotesPanel';
 import { ClientFormModal } from '@/components/entity/ClientFormModal';
 import { SiteFormModal } from '@/components/entity/SiteFormModal';
-import { AgentCardsGrid } from '@/components/agents/AgentCardsGrid';
+import { AgentCollectionView } from '@/components/agents/AgentCollectionView';
+import { AgentContextMenu } from '@/components/agents/AgentContextMenu';
+import type { AgentCardAgent } from '@/components/agents/AgentCard';
 import { DetailTabs, resolveDetailTab, type DetailTab } from '@/components/entity/DetailTabs';
 import { CreateDeployTokenModal } from '@/components/entity/CreateDeployTokenModal';
 import { RecentTicketsCard } from '@/components/entity/RecentTicketsCard';
@@ -76,6 +78,7 @@ export default function ClientDetail() {
   const [deployModalOpen, setDeployModalOpen] = useState(false);
   const [transferModalOpen, setTransferModalOpen] = useState(false);
   const [notifyOpen, setNotifyOpen] = useState(false);
+  const [agentMenu, setAgentMenu] = useState<{ x: number; y: number; agent: AgentCardAgent } | null>(null);
 
   const client = useClient(id!);
   const sites = useSites(id!);
@@ -510,7 +513,7 @@ export default function ClientDetail() {
                 className="py-8"
               />
             ) : (
-              <AgentCardsGrid
+              <AgentCollectionView
                 agents={agentsArray.map((agent) => ({
                   ...agent,
                   clientName: c.name,
@@ -524,6 +527,11 @@ export default function ClientDetail() {
                 showSite={false}
                 filterable
                 onOpen={(agent) => navigate(`/agents/${agent.id}`)}
+                onContextMenu={(event, agent) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  setAgentMenu({ x: event.clientX, y: event.clientY, agent });
+                }}
               />
             )}
           </Card>
@@ -596,6 +604,15 @@ export default function ClientDetail() {
           onClose={() => setNotifyOpen(false)}
           onConfirm={handleNotifyConfirm}
           isLoading={sendScopeNotification.isPending}
+        />
+      )}
+
+      {agentMenu && (
+        <AgentContextMenu
+          agent={agentMenu.agent}
+          now={now}
+          position={agentMenu}
+          onClose={() => setAgentMenu(null)}
         />
       )}
     </div>
