@@ -108,7 +108,7 @@ export function DepartmentPickerModal({
                 >
                   <Building2 className={`h-3.5 w-3.5 shrink-0 ${selected ? 'text-primary' : 'text-muted'}`} />
                   <span className="min-w-0 flex-1 truncate">{department.name}</span>
-                  {department.clientId === null && (
+                  {department.clientId == null && (
                     <span className="shrink-0 rounded-full border border-border px-1.5 text-[10px] uppercase tracking-wide text-muted">
                       Global
                     </span>

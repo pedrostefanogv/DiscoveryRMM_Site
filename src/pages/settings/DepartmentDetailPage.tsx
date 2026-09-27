@@ -188,6 +188,16 @@ function formatPercent(value?: number | null): string {
   return (value * 100).toFixed(0) + "%";
 }
 
+/**
+ * Formata decimais opcionais. A API usa JsonIgnoreCondition.WhenWritingNull, então
+ * um campo anulável pode chegar como `undefined` (propriedade omitida) em vez de
+ * `null`. Sem esta guarda, `undefined.toFixed(...)` derruba o render.
+ */
+function formatDecimal(value?: number | null, digits = 1): string {
+  if (value === null || value === undefined || !Number.isFinite(value)) return "—";
+  return value.toFixed(digits);
+}
+
 function DepartmentMembersCard({ departmentId }: { departmentId: string }) {
   const members = useDepartmentMembers(departmentId);
   const add = useAddDepartmentMember();
@@ -931,12 +941,12 @@ function DepartmentAssignmentTeamCard({ departmentId }: { departmentId: string }
   );
 }
 
-function MemberProfileRow({ member }: { member: DepartmentMemberProfileDto }) {
+export function MemberProfileRow({ member }: { member: DepartmentMemberProfileDto }) {
   const updateProfile = useUpdateDepartmentMemberProfile(member.departmentId);
   const [tags, setTags] = useState(member.skillTags.join(", "));
   const [level, setLevel] = useState(String(member.skillLevel));
   const [maxOpen, setMaxOpen] = useState(
-    member.maxOpenTickets === null ? "" : String(member.maxOpenTickets),
+    member.maxOpenTickets == null ? "" : String(member.maxOpenTickets),
   );
   const [weight, setWeight] = useState(String(member.weight));
   const [accepts, setAccepts] = useState(member.acceptsAiAssignment);
@@ -990,7 +1000,7 @@ function MemberProfileRow({ member }: { member: DepartmentMemberProfileDto }) {
             1ª resposta: <strong className="text-foreground">{formatMinutes(m.avgFirstResponseMinutes)}</strong>
           </span>
           <span>
-            CSAT: <strong className="text-foreground">{m.csatAverage == null ? "—" : m.csatAverage.toFixed(1)}</strong>
+            CSAT: <strong className="text-foreground">{formatDecimal(m.csatAverage)}</strong>
           </span>
           <span>
             SLA violado: <strong className="text-foreground">{formatPercent(m.slaBreachRate)}</strong>
