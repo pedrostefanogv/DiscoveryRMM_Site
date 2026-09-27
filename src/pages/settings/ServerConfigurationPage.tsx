@@ -32,7 +32,7 @@ import {
   LockedFieldsEditor,
   parseBackgroundProcessingSettings,
 } from "@/components/configuration";
-import { Button, Card, CardHeader, ErrorDisplay, Loading, Modal } from "@/components/ui";
+import { Button, Card, CardHeader, ErrorDisplay, Input, Loading, Modal } from "@/components/ui";
 import {
   useExportServerConfig,
   useImportServerConfig,
@@ -91,6 +91,7 @@ export default function ServerConfigurationPage() {
   const testStorageMutation = useTestObjectStorage();
 
   const [confirmReset, setConfirmReset] = useState(false);
+  const [resetConfirmText, setResetConfirmText] = useState("");
   const [confirmSave, setConfirmSave] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [importText, setImportText] = useState("");
@@ -409,6 +410,7 @@ export default function ServerConfigurationPage() {
 
   const resetServer = async () => {
     setConfirmReset(false);
+    setResetConfirmText("");
     try {
       await resetMutation.mutateAsync();
       toast.success("Configuração do servidor restaurada para os padrões.");
@@ -722,7 +724,10 @@ export default function ServerConfigurationPage() {
             <Button
               size="sm"
               variant="danger"
-              onClick={() => setConfirmReset(true)}
+              onClick={() => {
+                setResetConfirmText("");
+                setConfirmReset(true);
+              }}
             >
               <RotateCcw className="h-3.5 w-3.5" />
               Restaurar padrões
@@ -1110,7 +1115,10 @@ export default function ServerConfigurationPage() {
       {/* Modal de confirmação de reset */}
       <Modal
         open={confirmReset}
-        onClose={() => setConfirmReset(false)}
+        onClose={() => {
+          setResetConfirmText("");
+          setConfirmReset(false);
+        }}
         title="Restaurar configurações padrão?"
         maxWidth="max-w-md"
       >
@@ -1122,14 +1130,28 @@ export default function ServerConfigurationPage() {
               os valores padrão do sistema. A operação não pode ser desfeita.
             </p>
           </div>
+          <Input
+            label='Digite "RESET" para confirmar'
+            value={resetConfirmText}
+            onChange={(event) => setResetConfirmText(event.target.value)}
+            placeholder="RESET"
+            autoComplete="off"
+          />
           <div className="flex justify-end gap-2">
-            <Button variant="ghost" onClick={() => setConfirmReset(false)}>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setResetConfirmText("");
+                setConfirmReset(false);
+              }}
+            >
               Cancelar
             </Button>
             <Button
               variant="danger"
               onClick={resetServer}
               loading={resetMutation.isPending}
+              disabled={resetConfirmText.trim().toUpperCase() !== "RESET"}
             >
               <RotateCcw className="h-3.5 w-3.5" />
               Confirmar reset

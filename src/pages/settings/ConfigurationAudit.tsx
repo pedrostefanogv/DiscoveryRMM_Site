@@ -277,13 +277,12 @@ function AuditRow({
           <Badge color="accent">{entityLabel(entry.entityType)}</Badge>
           <Badge color="primary">{entry.fieldName}</Badge>
           <span
-            className="inline-flex max-w-full items-center rounded-full border border-border bg-surface-hover px-2.5 py-0.5 text-xs text-foreground"
-            title={entityName ? undefined : entry.entityId}
+            className={`inline-flex max-w-full items-center rounded-full border border-border px-2.5 py-0.5 text-xs ${
+              entityName ? "bg-surface-hover text-foreground" : "font-mono text-muted"
+            }`}
+            title={entry.entityId}
           >
             <span className="truncate">{entityName ?? shortId}</span>
-          </span>
-          <span className="font-mono text-[11px] text-muted" title={entry.entityId}>
-            {shortId}
           </span>
         </div>
         <p className="text-xs text-muted">{new Date(entry.changedAt).toLocaleString()}</p>
