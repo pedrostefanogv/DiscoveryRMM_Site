@@ -56,6 +56,7 @@ const ProfilePage = lazy(() => import('@/pages/settings/ProfilePage'));
 const IamUsersPage = lazy(() => import('@/pages/settings/IamUsersPage'));
 const IamGroupsPage = lazy(() => import('@/pages/settings/IamGroupsPage'));
 const IamRolesPage = lazy(() => import('@/pages/settings/IamRolesPage'));
+const DatabaseMaintenanceSettings = lazy(() => import('@/pages/settings/DatabaseMaintenanceSettings'));
 const ReportTemplateList = lazy(() => import('@/pages/reports/ReportTemplateList'));
 const ReportTemplateForm = lazy(() => import('@/pages/reports/ReportTemplateForm'));
 const ReportTemplateWizard = lazy(() => import('@/pages/reports/ReportTemplateWizard'));
@@ -478,6 +479,14 @@ export const router = createBrowserRouter([
         element: (
           <PermissionGate anyOf={['settings.*', 'settings.read', 'admin.*']}>
             <LazyPage><AgentUpdatesPage /></LazyPage>
+          </PermissionGate>
+        ),
+      },
+      {
+        path: 'settings/database-maintenance',
+        element: (
+          <PermissionGate anyOf={['settings.*', 'settings.read', 'admin.*']}>
+            <LazyPage><DatabaseMaintenanceSettings /></LazyPage>
           </PermissionGate>
         ),
       },

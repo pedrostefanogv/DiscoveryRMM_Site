@@ -29,6 +29,7 @@ export * from "./useAgentAlerts";
 export * from "./useWorkflow";
 export * from "./useDepartments";
 export * from "./useWorkflowProfiles";
+export * from "./useDatabaseSanitization";
 export * from "./useDeployTokens";
 
 // Reports

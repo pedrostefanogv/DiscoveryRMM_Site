@@ -50,6 +50,12 @@ export { deployTokensApi } from "./deploy-tokens";
 export { apiTokensApi } from "./api-tokens";
 export { monitoringEventsApi } from "./monitoring-events";
 export { backgroundServicesApi } from "./background-services";
+export {
+  databaseSanitizationApi,
+  type SanitizationCheckDescriptor,
+  type SanitizationCheckResult,
+  type SanitizationReport,
+} from "./database-sanitization";
 export { jobsApi } from "./jobs";
 export { softwareInventoryApi } from "./software-inventory";
 export { appStoreApi } from "./app-store";
