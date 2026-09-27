@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   Building2,
-  Copy,
   Globe,
   ListTodo,
   Settings,
@@ -348,16 +347,6 @@ export default function DepartmentDetailPage() {
 
   const valid = form.name.trim().length >= 2;
 
-  async function handleCopyUrl() {
-    const url = `${window.location.origin}/tickets/departments/${department.id}`;
-    try {
-      await navigator.clipboard.writeText(url);
-      toast.success("URL copiada para a área de transferência.");
-    } catch {
-      toast.error("Não foi possível copiar automaticamente a URL.");
-    }
-  }
-
   async function handleSave() {
     const currentForm = form;
     if (!currentForm) return;
@@ -417,10 +406,6 @@ function handleDelete() {
         <Button variant="ghost" onClick={() => navigate("/tickets/departments")}>
           <ArrowLeft className="h-4 w-4" />
           Voltar para listagem
-        </Button>
-        <Button variant="secondary" onClick={() => void handleCopyUrl()}>
-          <Copy className="h-4 w-4" />
-          Copiar URL
         </Button>
       </PageHeader>
 
@@ -866,13 +851,6 @@ function handleDelete() {
         </div>
       )}
 
-      {!clientsQuery.isLoading && (
-        <div className="flex items-center gap-2 text-xs text-muted">
-          <Badge color="slate">URL direta</Badge>
-          <span>{`/tickets/departments/${department.id}`}</span>
-        </div>
-      )}
-
       <ConfirmDialog
         open={confirmDeleteOpen}
         title="Excluir departamento"
@@ -929,7 +907,12 @@ function DepartmentAssignmentTeamCard({ departmentId }: { departmentId: string }
             onClick={() =>
               refresh.mutate(undefined, {
                 onSuccess: () => toast.success("Métricas recalculadas."),
-                onError: () => toast.error("Erro ao recalcular as métricas."),
+                onError: (error) =>
+                  toast.error(
+                    error instanceof Error && error.message
+                      ? `Erro ao recalcular as métricas: ${error.message}`
+                      : "Erro ao recalcular as métricas.",
+                  ),
               })
             }
           >

@@ -49,9 +49,13 @@ export const departmentsApi = {
       data,
     ),
 
-  /** Força o recálculo dos snapshots de métricas usados pela triagem. */
+  /**
+   * Força o recálculo dos snapshots de métricas usados pela triagem.
+   * Ação administrativa potencialmente longa (agregações SQL por atendente):
+   * usa timeout maior que o padrão de 60s em vez de abortar e mostrar erro.
+   */
   refreshTeamMetrics: (id: string) =>
-    api.post<number>(BASE + "/" + id + "/assignment/metrics/refresh", {}),
+    api.post<number>(BASE + "/" + id + "/assignment/metrics/refresh", {}, { timeoutMs: 120_000 }),
 
   // ── Aprendizado (competências e pesos) ───────────────────────────────
 
