@@ -15,6 +15,7 @@ import { useAuthorization } from '@/auth/authorization';
 import { Badge, Button, Card, CardHeader, ConfirmDialog, ErrorDisplay, Loading, PageHeader, StatCard, EmptyState } from '@/components/ui';
 import { NotesPanel } from '@/components/notes/NotesPanel';
 import { AgentMiniList } from '@/components/entity/AgentMiniList';
+import { DetailTabs, resolveDetailTab, type DetailTab } from '@/components/entity/DetailTabs';
 import { RecentTicketsCard } from '@/components/entity/RecentTicketsCard';
 import { RecentLogsCard } from '@/components/entity/RecentLogsCard';
 import { DashboardSummaryCard } from '@/components/entity/DashboardSummaryCard';
@@ -32,6 +33,16 @@ import toast from 'react-hot-toast';
 function scrollToSection(id: string) {
   document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
+
+type SiteTab = 'chamados' | 'logs' | 'agentes';
+
+const SITE_TAB_IDS: SiteTab[] = ['chamados', 'logs', 'agentes'];
+
+const SITE_TABS: DetailTab<SiteTab>[] = [
+  { id: 'chamados', label: 'Chamados', icon: TicketIcon },
+  { id: 'logs', label: 'Logs', icon: ScrollText },
+  { id: 'agentes', label: 'Agentes', icon: Monitor },
+];
 
 export default function SiteDetail() {
   const { id: clientId, siteId } = useParams<{ id: string; siteId: string }>();
@@ -76,6 +87,13 @@ export default function SiteDetail() {
   const logsArray = useMemo(() => ensureArray<LogEntry>(logs.data), [logs.data]);
   const agentsArray = useMemo(() => ensureArray<Agent>(agents.data), [agents.data]);
 
+  // Aba ativa lida da querystring (?tab=chamados, ?tab=agentes...). Valores
+  // desconhecidos caem em "chamados". Fica antes dos early returns (Rules of Hooks).
+  const activeTab = useMemo(
+    () => resolveDetailTab(searchParams.get('tab'), SITE_TAB_IDS, 'chamados'),
+    [searchParams],
+  );
+
   if (client.isLoading || site.isLoading) return <Loading />;
   if (client.isError || site.isError || !client.data || !site.data) {
     return (
@@ -93,13 +111,42 @@ export default function SiteDetail() {
 
   const handleWindowChange = (value: DashboardWindow) => {
     setRange(value);
-    const next = new URLSearchParams(searchParams);
-    if (value === '24h') {
-      next.delete('window');
-    } else {
-      next.set('window', value);
-    }
-    setSearchParams(next, { replace: true });
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (value === '24h') {
+          next.delete('window');
+        } else {
+          next.set('window', value);
+        }
+        return next;
+      },
+      { replace: true },
+    );
+  };
+
+  // Troca de aba usa `replace` para NÃO empilhar entradas no histórico e
+  // preserva o `?window=` vigente (updater funcional evita closure obsoleta).
+  const handleSelectTab = (tab: SiteTab) => {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (tab === 'chamados') {
+          next.delete('tab');
+        } else {
+          next.set('tab', tab);
+        }
+        return next;
+      },
+      { replace: true },
+    );
+  };
+
+  // StatCards levam até a aba correspondente; como a barra fica abaixo do
+  // Dashboard/Notas, rolamos até ela para dar feedback visível ao clique.
+  const goToTab = (tab: SiteTab) => {
+    handleSelectTab(tab);
+    scrollToSection('site-tabs-tablist');
   };
 
   const recentTickets = ticketsArray.slice(0, 8);
@@ -232,7 +279,8 @@ export default function SiteDetail() {
           label="Agentes"
           value={agents.isLoading ? '—' : totalAgents}
           tone="primary"
-          onClick={() => scrollToSection('site-agents')}
+          onClick={() => goToTab('agentes')}
+          active={activeTab === 'agentes'}
           trend={
             !agents.isLoading && totalAgents > 0 ? (
               <span className={`text-xs font-medium ${onlineAgents > 0 ? 'text-success' : 'text-muted'}`}>
@@ -246,7 +294,8 @@ export default function SiteDetail() {
           label="Chamados do site"
           value={dashboard.isLoading ? (tickets.isLoading ? '—' : totalTickets) : dashboard.data?.tickets.open ?? totalTickets}
           tone="warning"
-          onClick={() => scrollToSection('site-tickets')}
+          onClick={() => goToTab('chamados')}
+          active={activeTab === 'chamados'}
           trend={
             dashboard.data && dashboard.data.tickets.slaBreachedOpen > 0 ? (
               <span className="text-xs font-medium text-danger">
@@ -267,7 +316,8 @@ export default function SiteDetail() {
           label={`Logs ${range}`}
           value={dashboard.isLoading ? (logs.isLoading ? '—' : recentLogs.length) : dashboard.data?.logs.total ?? recentLogs.length}
           tone="accent"
-          onClick={() => scrollToSection('site-logs')}
+          onClick={() => goToTab('logs')}
+          active={activeTab === 'logs'}
         />
       </div>
 
@@ -342,8 +392,21 @@ export default function SiteDetail() {
         </Card>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <section id="site-tickets">
+      {/* Abas de recursos: Chamados · Logs · Agentes */}
+      <DetailTabs
+        tabs={SITE_TABS}
+        active={activeTab}
+        onChange={handleSelectTab}
+        ariaLabel="Seções do site"
+        panelIdPrefix="site-tabs"
+      />
+
+      <div
+        id="site-tabs-panel"
+        role="tabpanel"
+        aria-labelledby={`site-tabs-tab-${activeTab}`}
+      >
+        {activeTab === 'chamados' && (
           <RecentTicketsCard
             tickets={recentTickets}
             total={totalTickets}
@@ -352,9 +415,9 @@ export default function SiteDetail() {
             onSelect={(ticket) => navigate(`/tickets/${ticket.id}`)}
             onViewAll={() => navigate('/tickets')}
           />
-        </section>
+        )}
 
-        <section id="site-logs">
+        {activeTab === 'logs' && (
           <RecentLogsCard
             logs={recentLogs}
             total={logsArray.length}
@@ -362,40 +425,40 @@ export default function SiteDetail() {
             emptyMessage="Nenhum log registrado neste site"
             onViewAll={() => navigate('/logs')}
           />
-        </section>
-      </div>
+        )}
 
-      <section id="site-agents">
-        <Card>
-          <CardHeader
-            title="Agentes do Site"
-            subtitle={`${onlineAgents} de ${totalAgents} online`}
-            action={
-              <Button size="sm" variant="ghost" onClick={() => navigate('/agents')}>
-                <Users className="h-4 w-4" /> Gerenciar
-              </Button>
-            }
-          />
-          {totalAgents === 0 && !agents.isLoading ? (
-            <EmptyState
-              icon={Monitor}
-              title="Nenhum agente neste site"
-              description="Gere um token de deploy no cliente para instalar agentes neste site."
-              action={{ label: 'Ver tokens de deploy', onClick: () => navigate('/deploy') }}
-              className="py-8"
+        {activeTab === 'agentes' && (
+          <Card>
+            <CardHeader
+              title="Agentes do Site"
+              subtitle={`${onlineAgents} de ${totalAgents} online`}
+              action={
+                <Button size="sm" variant="ghost" onClick={() => navigate('/agents')}>
+                  <Users className="h-4 w-4" /> Gerenciar
+                </Button>
+              }
             />
-          ) : (
-            <AgentMiniList
-              agents={agentsArray}
-              now={now}
-              isLoading={agents.isLoading}
-              emptyMessage="Nenhum agente neste site"
-              filterable
-              onSelect={(agent) => navigate(`/agents/${agent.id}`)}
-            />
-          )}
-        </Card>
-      </section>
+            {totalAgents === 0 && !agents.isLoading ? (
+              <EmptyState
+                icon={Monitor}
+                title="Nenhum agente neste site"
+                description="Gere um token de deploy no cliente para instalar agentes neste site."
+                action={{ label: 'Ver tokens de deploy', onClick: () => navigate('/deploy') }}
+                className="py-8"
+              />
+            ) : (
+              <AgentMiniList
+                agents={agentsArray}
+                now={now}
+                isLoading={agents.isLoading}
+                emptyMessage="Nenhum agente neste site"
+                filterable
+                onSelect={(agent) => navigate(`/agents/${agent.id}`)}
+              />
+            )}
+          </Card>
+        )}
+      </div>
 
       <SiteFormModal
         open={editSiteOpen}

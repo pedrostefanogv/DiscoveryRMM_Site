@@ -13,6 +13,7 @@ import {
   Bell,
   StickyNote,
   Users,
+  ScrollText,
 } from 'lucide-react';
 import { useClient, useDeleteClient } from '@/hooks/useClients';
 import { useSites } from '@/hooks/useSites';
@@ -30,6 +31,7 @@ import { NotesPanel } from '@/components/notes/NotesPanel';
 import { ClientFormModal } from '@/components/entity/ClientFormModal';
 import { SiteFormModal } from '@/components/entity/SiteFormModal';
 import { AgentMiniList } from '@/components/entity/AgentMiniList';
+import { DetailTabs, resolveDetailTab, type DetailTab } from '@/components/entity/DetailTabs';
 import { CreateDeployTokenModal } from '@/components/entity/CreateDeployTokenModal';
 import { RecentTicketsCard } from '@/components/entity/RecentTicketsCard';
 import { RecentLogsCard } from '@/components/entity/RecentLogsCard';
@@ -47,6 +49,17 @@ import toast from 'react-hot-toast';
 function scrollToSection(id: string) {
   document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
+
+type ClientTab = 'sites' | 'chamados' | 'logs' | 'agentes';
+
+const CLIENT_TAB_IDS: ClientTab[] = ['sites', 'chamados', 'logs', 'agentes'];
+
+const CLIENT_TABS: DetailTab<ClientTab>[] = [
+  { id: 'sites', label: 'Sites', icon: Building2 },
+  { id: 'chamados', label: 'Chamados', icon: TicketIcon },
+  { id: 'logs', label: 'Logs', icon: ScrollText },
+  { id: 'agentes', label: 'Agentes', icon: Monitor },
+];
 
 export default function ClientDetail() {
   const { id } = useParams<{ id: string }>();
@@ -87,6 +100,13 @@ export default function ClientDetail() {
   const ticketsArray = useMemo(() => ensureArray<Ticket>(tickets.data), [tickets.data]);
   const logsArray = useMemo(() => ensureArray<LogEntry>(logs.data), [logs.data]);
 
+  // Aba ativa lida da querystring (?tab=sites, ?tab=agentes...). Valores
+  // desconhecidos caem em "sites". Fica antes dos early returns (Rules of Hooks).
+  const activeTab = useMemo(
+    () => resolveDetailTab(searchParams.get('tab'), CLIENT_TAB_IDS, 'sites'),
+    [searchParams],
+  );
+
   const siteAgentStats = useMemo(() => {
     const map = new Map<string, { total: number; online: number }>();
     for (const agent of agentsArray) {
@@ -105,13 +125,42 @@ export default function ClientDetail() {
 
   const handleWindowChange = (value: DashboardWindow) => {
     setRange(value);
-    const next = new URLSearchParams(searchParams);
-    if (value === '24h') {
-      next.delete('window');
-    } else {
-      next.set('window', value);
-    }
-    setSearchParams(next, { replace: true });
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (value === '24h') {
+          next.delete('window');
+        } else {
+          next.set('window', value);
+        }
+        return next;
+      },
+      { replace: true },
+    );
+  };
+
+  // Troca de aba usa `replace` para NÃO empilhar entradas no histórico e
+  // preserva o `?window=` vigente (updater funcional evita closure obsoleta).
+  const handleSelectTab = (tab: ClientTab) => {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (tab === 'sites') {
+          next.delete('tab');
+        } else {
+          next.set('tab', tab);
+        }
+        return next;
+      },
+      { replace: true },
+    );
+  };
+
+  // StatCards levam até a aba correspondente; como a barra fica abaixo do
+  // Resumo/Notas, rolamos até ela para dar feedback visível ao clique.
+  const goToTab = (tab: ClientTab) => {
+    handleSelectTab(tab);
+    scrollToSection('client-tabs-tablist');
   };
 
   const handleDelete = () => {
@@ -232,7 +281,8 @@ export default function ClientDetail() {
           label="Agentes"
           value={agents.isLoading ? '—' : totalAgents}
           tone="primary"
-          onClick={() => scrollToSection('client-agents')}
+          onClick={() => goToTab('agentes')}
+          active={activeTab === 'agentes'}
           trend={
             !agents.isLoading && totalAgents > 0 ? (
               <span className={`text-xs font-medium ${onlineAgents > 0 ? 'text-success' : 'text-muted'}`}>
@@ -246,7 +296,8 @@ export default function ClientDetail() {
           label="Sites"
           value={sites.isLoading ? '—' : totalSites}
           tone="accent"
-          onClick={() => scrollToSection('client-sites')}
+          onClick={() => goToTab('sites')}
+          active={activeTab === 'sites'}
           trend={
             !sites.isLoading && totalSites > 0 ? (
               <span className="text-xs font-medium text-muted">{activeSites} ativos</span>
@@ -265,7 +316,8 @@ export default function ClientDetail() {
           label="Chamados"
           value={tickets.isLoading ? '—' : totalTickets}
           tone="warning"
-          onClick={() => scrollToSection('client-tickets')}
+          onClick={() => goToTab('chamados')}
+          active={activeTab === 'chamados'}
         />
       </div>
 
@@ -327,10 +379,22 @@ export default function ClientDetail() {
         </Card>
       </div>
 
-      {/* Sites + Chamados + Logs */}
-      <div className="grid gap-6 lg:grid-cols-3">
-        <section id="client-sites">
-          <Card className="h-full">
+      {/* Abas de recursos: Sites · Chamados · Logs · Agentes */}
+      <DetailTabs
+        tabs={CLIENT_TABS}
+        active={activeTab}
+        onChange={handleSelectTab}
+        ariaLabel="Seções do cliente"
+        panelIdPrefix="client-tabs"
+      />
+
+      <div
+        id="client-tabs-panel"
+        role="tabpanel"
+        aria-labelledby={`client-tabs-tab-${activeTab}`}
+      >
+        {activeTab === 'sites' && (
+          <Card>
             <CardHeader
               title="Sites"
               subtitle={`${totalSites} total · ${activeSites} ativo(s)`}
@@ -389,9 +453,9 @@ export default function ClientDetail() {
               )}
             </div>
           </Card>
-        </section>
+        )}
 
-        <section id="client-tickets">
+        {activeTab === 'chamados' && (
           <RecentTicketsCard
             tickets={recentTickets}
             total={totalTickets}
@@ -399,61 +463,60 @@ export default function ClientDetail() {
             onSelect={(ticket) => navigate(`/tickets/${ticket.id}`)}
             onViewAll={() => navigate('/tickets')}
           />
-        </section>
+        )}
 
-        <section id="client-logs">
+        {activeTab === 'logs' && (
           <RecentLogsCard
             logs={recentLogs}
             total={logsArray.length}
             isLoading={logs.isLoading}
             onViewAll={() => navigate('/logs')}
           />
-        </section>
-      </div>
+        )}
 
-      {/* Agents */}
-      <section id="client-agents">
-        <Card>
-          <CardHeader
-            title="Agentes"
-            subtitle={`${onlineAgents} de ${totalAgents} online`}
-            action={
-              <div className="flex items-center gap-2">
-                <Button size="sm" variant="ghost" onClick={() => navigate('/agents')}>
-                  <Users className="h-4 w-4" /> Gerenciar
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => setDeployModalOpen(true)}
-                  aria-label="Criar token de deploy"
-                  title="Criar token de deploy"
-                >
-                  <KeyRound className="h-4 w-4" /> Deploy
-                </Button>
-              </div>
-            }
-          />
-          {totalAgents === 0 && !agents.isLoading ? (
-            <EmptyState
-              icon={Monitor}
-              title="Nenhum agente neste cliente"
-              description="Gere um token de deploy para instalar o agente nas máquinas."
-              action={{ label: 'Criar token de deploy', onClick: () => setDeployModalOpen(true) }}
-              className="py-8"
+        {activeTab === 'agentes' && (
+          <Card>
+            <CardHeader
+              title="Agentes"
+              subtitle={`${onlineAgents} de ${totalAgents} online`}
+              action={
+                <div className="flex items-center gap-2">
+                  <Button size="sm" variant="ghost" onClick={() => navigate('/agents')}>
+                    <Users className="h-4 w-4" /> Gerenciar
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setDeployModalOpen(true)}
+                    aria-label="Criar token de deploy"
+                    title="Criar token de deploy"
+                  >
+                    <KeyRound className="h-4 w-4" /> Deploy
+                  </Button>
+                </div>
+              }
             />
-          ) : (
-            <AgentMiniList
-              agents={agentsArray}
-              now={now}
-              isLoading={agents.isLoading}
-              emptyMessage="Nenhum agente"
-              filterable
-              onSelect={(agent) => navigate(`/agents/${agent.id}`)}
-            />
-          )}
-        </Card>
-      </section>
+            {totalAgents === 0 && !agents.isLoading ? (
+              <EmptyState
+                icon={Monitor}
+                title="Nenhum agente neste cliente"
+                description="Gere um token de deploy para instalar o agente nas máquinas."
+                action={{ label: 'Criar token de deploy', onClick: () => setDeployModalOpen(true) }}
+                className="py-8"
+              />
+            ) : (
+              <AgentMiniList
+                agents={agentsArray}
+                now={now}
+                isLoading={agents.isLoading}
+                emptyMessage="Nenhum agente"
+                filterable
+                onSelect={(agent) => navigate(`/agents/${agent.id}`)}
+              />
+            )}
+          </Card>
+        )}
+      </div>
 
       <SiteFormModal
         open={siteModalOpen}

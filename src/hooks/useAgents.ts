@@ -25,6 +25,8 @@ const KEYS = {
   byClient: (clientId: string) => [...KEYS.all, "byClient", clientId] as const,
   bySite: (siteId: string) => [...KEYS.all, "bySite", siteId] as const,
   detail: (id: string) => [...KEYS.all, "detail", id] as const,
+  deleted: (params: { clientId?: string; search?: string; page: number; pageSize: number }) =>
+    [...KEYS.all, "deleted", params] as const,
   hardware: (id: string) => [...KEYS.all, "hardware", id] as const,
   software: (
     id: string,
@@ -121,7 +123,7 @@ export function getDeleteAgentErrorMessage(error: unknown): string {
         isLikelyDeleteDependencyError(error.message) ||
         isGenericInternalError(error.message)
       ) {
-        return "Não foi possível excluir o agente porque existem vínculos ativos (FK), como tickets, tokens, inventário ou comandos.";
+        return "Não foi possível mover o agente para a lixeira. Tente novamente em instantes.";
       }
     }
 
@@ -133,6 +135,33 @@ export function getDeleteAgentErrorMessage(error: unknown): string {
   }
 
   return "Falha ao excluir o agente.";
+}
+
+/** Mensagem para falha na exclusão definitiva (purge) do agente. */
+export function getPurgeAgentErrorMessage(error: unknown): string {
+  if (error instanceof ApiError) {
+    if (error.status === 404) {
+      return "Agente não encontrado. Ele pode já ter sido excluído definitivamente.";
+    }
+
+    // 409 = agente com chamados vinculados; a UI usa a mensagem do backend
+    // para abrir a confirmação reforçada (force).
+    if (error.status === 409) {
+      return error.message;
+    }
+
+    if (error.status === 500) {
+      return "Não foi possível excluir o agente definitivamente porque ainda existem registros vinculados no banco. Nenhuma alteração foi aplicada.";
+    }
+
+    return error.message;
+  }
+
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return "Falha ao excluir o agente definitivamente.";
 }
 
 export function useAgentsByClient(clientId: string) {
@@ -414,6 +443,51 @@ export function useDeleteAgent() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => agentsApi.delete(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: KEYS.all });
+    },
+  });
+}
+
+/** Lixeira de agentes (soft-deleted). Habilitar só quando a visão está aberta. */
+export function useDeletedAgents(
+  params?: { clientId?: string; search?: string; page?: number; pageSize?: number },
+  options?: { enabled?: boolean },
+) {
+  const page = Math.max(1, params?.page ?? 1);
+  const pageSize = Math.min(200, Math.max(1, params?.pageSize ?? 200));
+  const clientId = params?.clientId || undefined;
+  const search = params?.search?.trim() || undefined;
+
+  return useQuery({
+    queryKey: KEYS.deleted({ clientId, search, page, pageSize }),
+    queryFn: ({ signal }) =>
+      agentsApi.listDeleted({ clientId, search, page, pageSize }, { signal }),
+    enabled: options?.enabled ?? true,
+    staleTime: 30_000,
+  });
+}
+
+/** Tira o agente da lixeira (volta à listagem normal). */
+export function useRestoreAgent() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => agentsApi.restore(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: KEYS.all });
+    },
+  });
+}
+
+/**
+ * Exclusão definitiva (hard delete). force=true confirma a remoção de agente
+ * com chamados vinculados; sem force o backend responde 409.
+ */
+export function usePurgeAgent() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, force = false }: { id: string; force?: boolean }) =>
+      agentsApi.purge(id, force),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: KEYS.all });
     },

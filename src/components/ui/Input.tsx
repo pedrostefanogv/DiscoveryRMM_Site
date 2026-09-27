@@ -38,14 +38,20 @@ interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
   options: { value: string; label: string; disabled?: boolean }[];
   hint?: string;
   error?: string;
+  /**
+   * Quando false, o select se dimensiona pelo texto da maior opção (em vez de
+   * ocupar 100% do contêiner). Útil em barras de filtro, onde o texto não pode
+   * ser cortado.
+   */
+  fullWidth?: boolean;
 }
 
-export function Select({ label, options, className = '', id, hint, error, ...props }: SelectProps) {
+export function Select({ label, options, className = '', id, hint, error, fullWidth = true, ...props }: SelectProps) {
   const generatedId = useId();
   const selectId = id ?? label?.toLowerCase().replace(/\s+/g, '-') ?? generatedId;
   const helpId = `${selectId}-help`;
   return (
-    <div className="space-y-1">
+    <div className={fullWidth ? 'space-y-1' : 'w-auto shrink-0 space-y-1'}>
       {label && (
         <label htmlFor={selectId} className="block text-sm font-medium text-muted-foreground">
           {label}
@@ -55,7 +61,7 @@ export function Select({ label, options, className = '', id, hint, error, ...pro
         id={selectId}
         aria-invalid={Boolean(error)}
         aria-describedby={error || hint ? helpId : undefined}
-        className={`w-full rounded-xl border border-input-border bg-input px-3 py-2 text-sm text-foreground outline-none transition-colors focus-visible:border-primary/60 focus-visible:ring-2 focus-visible:ring-primary/30 ${
+        className={`${fullWidth ? 'w-full' : 'w-auto'} rounded-xl border border-input-border bg-input px-3 py-2 text-sm text-foreground outline-none transition-colors focus-visible:border-primary/60 focus-visible:ring-2 focus-visible:ring-primary/30 ${
           error ? 'border-danger/50' : ''
         } ${className}`}
         {...props}

@@ -175,6 +175,16 @@ export interface Agent {
   heartbeatMetrics?: AgentHeartbeatMetrics;
   createdAt: string;
   updatedAt: string;
+  /** Preenchido apenas quando o agente está na lixeira (soft delete). */
+  deletedAt?: string | null;
+}
+
+/** Página da lixeira de agentes (GET /agents/deleted). */
+export interface DeletedAgentsPage {
+  items: Agent[];
+  total: number;
+  page: number;
+  pageSize: number;
 }
 
 export interface AgentHardwareInfo {

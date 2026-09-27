@@ -1,14 +1,14 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Monitor, Wifi, WifiOff, Activity, Building2, Clock, HardDrive, MapPin, LayoutGrid, List, Bug, Trash2, ShieldCheck, ArrowUp, ArrowDown, Radio, RefreshCw, Move, RotateCcw, Power, Zap, Server, Apple, Thermometer, ChevronRight, Bell } from 'lucide-react';
+import { Monitor, Wifi, WifiOff, Activity, Building2, Clock, HardDrive, MapPin, LayoutGrid, List, Bug, Trash2, ShieldCheck, ArrowUp, ArrowDown, Radio, RefreshCw, Move, RotateCcw, Power, Zap, Server, Apple, Thermometer, ChevronRight, Bell, ArchiveRestore, Undo2 } from 'lucide-react';
 import { useQueries } from '@tanstack/react-query';
 import { useAgentLabelUsage, useAgentIdsByLabel, useAgentLabelsByAgentIds } from '@/hooks/useAgentLabels';
 import toast from 'react-hot-toast';
 import { useClients } from '@/hooks/useClients';
 import { useAllSites } from '@/hooks/useSites';
-import { getDeleteAgentErrorMessage, useApproveZeroTouch, useDeleteAgent, useRestartAgent, useShutdownAgent, useWakeOnLan } from '@/hooks/useAgents';
+import { getDeleteAgentErrorMessage, getPurgeAgentErrorMessage, useApproveZeroTouch, useDeleteAgent, useDeletedAgents, usePurgeAgent, useRestartAgent, useRestoreAgent, useShutdownAgent, useWakeOnLan } from '@/hooks/useAgents';
 import { ApiError, agentUpdatesApi, agentsApi } from '@/api';
-import { Badge, ErrorDisplay, Input, Select, StatCard, Modal, PageHeader, SkeletonCard, EmptyState, MetricBar, Button } from '@/components/ui';
+import { Badge, ErrorDisplay, Input, Select, StatCard, Modal, PageHeader, SkeletonCard, EmptyState, MetricBar, Button, ConfirmDialog } from '@/components/ui';
 import { TransferAgentModal } from '@/components/agents/TransferAgentModal';
 import PowerActionModal from '@/components/agents/PowerActionModal';
 import AgentNotificationModal, { type AgentNotificationPayload } from '@/components/agents/AgentNotificationModal';
@@ -27,7 +27,7 @@ type ContextMenuState = { x: number; y: number; agent: AgentWithClient } | null;
 type ProvisioningFilter = 'all' | 'pendingApproval' | 'approved';
 type AgentSortField = 'name' | 'site' | 'client' | 'lastSeen' | 'status';
 type SortDirection = 'asc' | 'desc';
-const MAX_CLIENTS_IN_OVERVIEW = 5;
+const DELETED_PAGE_SIZE = 200;
 
 function normalizeIp(value: string | null | undefined): string | null {
   if (typeof value !== 'string') return null;
@@ -140,6 +140,8 @@ export default function AgentList() {
   const now = useNowTick(5_000);
   const clients = useClients();
   const deleteAgent = useDeleteAgent();
+  const restoreAgent = useRestoreAgent();
+  const purgeAgent = usePurgeAgent();
   const approveZeroTouch = useApproveZeroTouch();
   const restartAgent = useRestartAgent();
   const shutdownAgent = useShutdownAgent();
@@ -162,8 +164,16 @@ export default function AgentList() {
   const [remoteDebugAgentId, setRemoteDebugAgentId] = useState<string | null>(null);
   const [approvingAgentId, setApprovingAgentId] = useState<string | null>(null);
   const [deletingAgentId, setDeletingAgentId] = useState<string | null>(null);
+  const [showDeleted, setShowDeleted] = useState(false);
+  const [deletedPage, setDeletedPage] = useState(1);
+  // Soft delete (mover para a lixeira) — confirmação simples.
   const [deleteConfirmAgent, setDeleteConfirmAgent] = useState<AgentWithClient | null>(null);
-  const [deleteConfirmHostname, setDeleteConfirmHostname] = useState('');
+  // Hard delete (exclusão definitiva) — exige digitar o nome do agente.
+  const [purgeTarget, setPurgeTarget] = useState<AgentWithClient | null>(null);
+  const [purgeConfirmName, setPurgeConfirmName] = useState('');
+  // Segundo passo quando o backend responde 409 (agente com chamados vinculados).
+  const [purgeForceTarget, setPurgeForceTarget] = useState<AgentWithClient | null>(null);
+  const [restoringAgentId, setRestoringAgentId] = useState<string | null>(null);
   const [updatingAgentId, setUpdatingAgentId] = useState<string | null>(null);
   const [transferAgent, setTransferAgent] = useState<AgentWithClient | null>(null);
   const [powerActionAgent, setPowerActionAgent] = useState<{ agent: AgentWithClient; action: "restart" | "shutdown" } | null>(null);
@@ -173,6 +183,17 @@ export default function AgentList() {
   // Submenu de energia ("Ligar / Reiniciar / Desligar") aberto ao lado via hover.
   const [powerSubmenuOpen, setPowerSubmenuOpen] = useState(false);
   const lastKnownIpByAgentRef = useRef<Map<string, string>>(new Map());
+
+  // Lixeira: busca somente quando a visão de excluídos está aberta.
+  const deletedAgents = useDeletedAgents(
+    {
+      clientId: filterClient || undefined,
+      search: search.trim() || undefined,
+      page: deletedPage,
+      pageSize: DELETED_PAGE_SIZE,
+    },
+    { enabled: showDeleted },
+  );
 
   useEffect(() => {
     if (!contextMenu) return;
@@ -249,16 +270,91 @@ export default function AgentList() {
     }
   };
 
+  // ── Soft delete: mover para a lixeira ────────────────────────────────────
   const openDeleteAgentModal = (agent: AgentWithClient) => {
     setContextMenu(null);
     setDeleteConfirmAgent(agent);
-    setDeleteConfirmHostname('');
   };
 
   const closeDeleteAgentModal = () => {
     if (deleteAgent.isPending) return;
     setDeleteConfirmAgent(null);
-    setDeleteConfirmHostname('');
+  };
+
+  const handleDeleteAgent = async () => {
+    if (!deleteConfirmAgent) return;
+    const agent = deleteConfirmAgent;
+    setDeletingAgentId(agent.id);
+    try {
+      await deleteAgent.mutateAsync(agent.id);
+      toast.success(`Agente ${agent.displayName ?? agent.hostname} movido para a lixeira.`);
+      setDeleteConfirmAgent(null);
+    } catch (error) {
+      toast.error(getDeleteAgentErrorMessage(error));
+    } finally {
+      setDeletingAgentId(null);
+    }
+  };
+
+  // ── Hard delete: exclusão definitiva (com digitação do nome) ─────────────
+  const runPurge = async (agent: AgentWithClient, force: boolean) => {
+    try {
+      await purgeAgent.mutateAsync({ id: agent.id, force });
+      toast.success(`Agente ${agent.displayName ?? agent.hostname} excluído definitivamente.`);
+      setPurgeTarget(null);
+      setPurgeConfirmName('');
+      setPurgeForceTarget(null);
+    } catch (error) {
+      if (!force && error instanceof ApiError && error.status === 409) {
+        // Agente com chamados vinculados: exige a confirmação reforçada.
+        setPurgeForceTarget(agent);
+        setPurgeTarget(null);
+        setPurgeConfirmName('');
+        return;
+      }
+      toast.error(getPurgeAgentErrorMessage(error));
+    }
+  };
+
+  const openPurgeAgentModal = (agent: AgentWithClient) => {
+    setContextMenu(null);
+    setPurgeTarget(agent);
+    setPurgeConfirmName('');
+  };
+
+  const closePurgeAgentModal = () => {
+    if (purgeAgent.isPending) return;
+    setPurgeTarget(null);
+    setPurgeConfirmName('');
+  };
+
+  const handlePurgeAgent = async () => {
+    if (!purgeTarget) return;
+    const agent = purgeTarget;
+    const expectedName = (agent.displayName ?? agent.hostname).trim();
+    if (purgeConfirmName.trim() !== expectedName) {
+      toast.error('O nome digitado não confere. Verifique e tente novamente.');
+      return;
+    }
+    await runPurge(agent, false);
+  };
+
+  const handleForcePurge = async () => {
+    if (!purgeForceTarget) return;
+    await runPurge(purgeForceTarget, true);
+  };
+
+  const handleRestoreAgent = async (agent: AgentWithClient) => {
+    if (restoringAgentId) return;
+    setRestoringAgentId(agent.id);
+    try {
+      await restoreAgent.mutateAsync(agent.id);
+      toast.success(`Agente ${agent.displayName ?? agent.hostname} restaurado.`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Falha ao restaurar o agente.');
+    } finally {
+      setRestoringAgentId(null);
+    }
   };
 
   const openTransferAgentModal = (agent: AgentWithClient) => {
@@ -268,29 +364,6 @@ export default function AgentList() {
 
   const closeTransferAgentModal = () => {
     setTransferAgent(null);
-  };
-
-  const handleDeleteAgent = async () => {
-    if (!deleteConfirmAgent) return;
-    const agent = deleteConfirmAgent;
-    const expectedHostname = (agent.displayName ?? agent.hostname).trim();
-
-    if (deleteConfirmHostname.trim() !== expectedHostname) {
-      toast.error('O hostname digitado não confere. Verifique e tente novamente.');
-      return;
-    }
-
-    setDeletingAgentId(agent.id);
-    try {
-      await deleteAgent.mutateAsync(agent.id);
-      toast.success(`Agente ${expectedHostname} excluído com sucesso.`);
-      setDeleteConfirmAgent(null);
-      setDeleteConfirmHostname('');
-    } catch (error) {
-      toast.error(getDeleteAgentErrorMessage(error));
-    } finally {
-      setDeletingAgentId(null);
-    }
   };
 
   const handleTriggerAgentUpdate = async (agent: AgentWithClient) => {
@@ -378,15 +451,17 @@ export default function AgentList() {
     return await wakeOnLan.mutateAsync({ id: wolAgent.id, data });
   };
 
+  // Carrega os agentes de TODOS os clientes (decisão de produto): a contagem
+  // das labels mostrada na tela precisa bater com a lista exibida. Um cliente
+  // selecionado no filtro continua reduzindo o escopo para 1 requisição.
   const queriedClients = useMemo(() => {
     const allClients = clients.data ?? [];
     if (filterClient) {
       return allClients.filter(c => c.id === filterClient);
     }
-    return allClients.slice(0, MAX_CLIENTS_IN_OVERVIEW);
+    return allClients;
   }, [clients.data, filterClient]);
 
-  // Evita fan-out total: carrega apenas cliente filtrado ou um subconjunto.
   const agentQueries = useQueries({
     queries: queriedClients.map(c => ({
       queryKey: ['agents', 'byClient', c.id] as const,
@@ -567,6 +642,23 @@ export default function AgentList() {
     [baseFiltered, sortBy, sortDirection, now],
   );
 
+  // A busca da lixeira é resolvida no servidor (GET /agents/deleted?search=).
+  const deletedItems = deletedAgents.data?.items ?? [];
+
+  const deletedTotal = deletedAgents.data?.total ?? 0;
+  const deletedTotalPages = Math.max(1, Math.ceil(deletedTotal / DELETED_PAGE_SIZE));
+
+  // Se a última página da lixeira ficar vazia (ex.: excluir o último item),
+  // volta automaticamente para uma página válida.
+  useEffect(() => {
+    setDeletedPage(page => Math.min(page, deletedTotalPages));
+  }, [deletedTotalPages]);
+
+  // Trocar o cliente filtrado ou a busca reinicia a paginação da lixeira.
+  useEffect(() => {
+    setDeletedPage(1);
+  }, [filterClient, search]);
+
   if (clients.isError) return <ErrorDisplay onRetry={() => clients.refetch()} />;
 
   const clientOptions = [
@@ -664,29 +756,37 @@ export default function AgentList() {
       </div>
 
       {/* Filtros + toggle de visualização */}
-      <div className="flex gap-3">
-        <div className="grid flex-1 gap-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-[minmax(200px,1fr)_minmax(150px,1fr)_minmax(130px,1fr)_minmax(170px,1fr)_minmax(140px,1fr)_48px]">
-          <Input
-            placeholder="Buscar por nome, hostname, OS, IP ou cliente..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-          />
+      <div className="flex flex-wrap items-start gap-3">
+        <div className="flex min-w-0 flex-1 flex-wrap items-start gap-3">
+          <div className="min-w-[240px] flex-1">
+            <Input
+              placeholder="Buscar por nome, hostname, OS, IP ou cliente..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+            />
+          </div>
           <Select
+            fullWidth={false}
             options={clientOptions}
             value={filterClient}
             onChange={e => setFilterClient(e.target.value)}
           />
           <Select
+            fullWidth={false}
             options={statusOptions}
             value={filterStatus}
+            disabled={showDeleted}
             onChange={e => setFilterStatus(e.target.value as 'all' | 'online' | 'offline')}
           />
           <Select
+            fullWidth={false}
             options={provisioningOptions}
             value={filterProvisioning}
+            disabled={showDeleted}
             onChange={e => setFilterProvisioning(e.target.value as ProvisioningFilter)}
           />
           <Select
+            fullWidth={false}
             options={[
               { value: '', label: 'Todas as labels' },
               ...distinctLabels.map(label => {
@@ -696,24 +796,41 @@ export default function AgentList() {
             ]}
             value={filterLabel}
             onChange={e => setFilterLabel(e.target.value)}
+            disabled={showDeleted}
           />
           <Select
+            fullWidth={false}
             options={sortOptions}
             value={sortBy}
+            disabled={showDeleted}
             onChange={e => setSortBy(e.target.value as AgentSortField)}
           />
           <button
             type="button"
             onClick={() => setSortDirection((current) => (current === 'asc' ? 'desc' : 'asc'))}
-            className="flex h-10 w-12 items-center justify-center self-end rounded-xl border border-border bg-surface-light text-foreground transition-colors hover:bg-surface-hover"
+            className="flex h-10 w-12 shrink-0 items-center justify-center rounded-xl border border-border bg-surface-light text-foreground transition-colors hover:bg-surface-hover"
             title={sortDirection === 'asc' ? 'Ordenação crescente' : 'Ordenação decrescente'}
             aria-label={sortDirection === 'asc' ? 'Ordenação crescente' : 'Ordenação decrescente'}
           >
             {sortDirection === 'asc' ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />}
           </button>
         </div>
-        {/* Toggle card / lista */}
-        <div className="flex shrink-0 items-end">
+        {/* Lixeira + toggle card / lista */}
+        <div className="flex shrink-0 items-center gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              setShowDeleted(current => !current);
+              setDeletedPage(1);
+              setContextMenu(null);
+            }}
+            className={'inline-flex h-9 items-center gap-1.5 rounded-lg border border-border px-3 text-sm transition-colors ' + (showDeleted ? 'bg-primary/20 text-primary' : 'bg-surface-light text-muted hover:text-foreground')}
+            title={showDeleted ? 'Voltar para os agentes ativos' : 'Ver agentes excluídos (lixeira)'}
+            aria-pressed={showDeleted}
+          >
+            {showDeleted ? <Undo2 className="h-4 w-4" /> : <Trash2 className="h-4 w-4" />}
+            {showDeleted ? 'Voltar' : 'Excluídos'}
+          </button>
           <div className="flex overflow-hidden rounded-lg border border-border">
             <button
               onClick={() => setViewMode('card')}
@@ -744,14 +861,129 @@ export default function AgentList() {
         </p>
       ) : null}
 
-      {!filterClient && (clients.data?.length ?? 0) > MAX_CLIENTS_IN_OVERVIEW && (
-        <div className="rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning">
-          Exibindo agentes dos primeiros {MAX_CLIENTS_IN_OVERVIEW} clientes para reduzir carga. Selecione um cliente no filtro para visualizar dados específicos.
-        </div>
-      )}
 
       {/* Conteúdo */}
-      {isLoadingAgents ? (
+      {showDeleted ? (
+        deletedAgents.isLoading ? (
+          <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 3xl:grid-cols-5">
+            {Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} />)}
+          </div>
+        ) : deletedAgents.isError ? (
+          <ErrorDisplay onRetry={() => deletedAgents.refetch()} />
+        ) : deletedItems.length === 0 ? (
+          <EmptyState
+            icon={Trash2}
+            title="A lixeira está vazia"
+            description="Agentes excluídos aparecem aqui e podem ser restaurados ou removidos definitivamente."
+          />
+        ) : (
+          <>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="text-xs text-muted">
+                {deletedTotal} agente{deletedTotal !== 1 ? 's' : ''} excluído{deletedTotal !== 1 ? 's' : ''}
+                {deletedItems.length < deletedTotal ? ' (mostrando ' + deletedItems.length + ' nesta página)' : ''}
+              </p>
+              {deletedTotalPages > 1 && (
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    disabled={deletedPage <= 1}
+                    onClick={() => setDeletedPage(page => Math.max(1, page - 1))}
+                  >
+                    Anterior
+                  </Button>
+                  <span className="text-xs text-muted">
+                    Página {deletedPage} de {deletedTotalPages}
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    disabled={deletedPage >= deletedTotalPages}
+                    onClick={() => setDeletedPage(page => page + 1)}
+                  >
+                    Próxima
+                  </Button>
+                </div>
+              )}
+            </div>
+            <div className="overflow-hidden rounded-xl border border-border bg-surface">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border text-left">
+                    <th className="px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted">Agente</th>
+                    <th className="px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted">Cliente / Site</th>
+                    <th className="hidden px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted md:table-cell">Sistema Operacional</th>
+                    <th className="hidden px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted lg:table-cell">IP</th>
+                    <th className="px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted">Excluído em</th>
+                    <th className="px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted">Ações</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/5">
+                  {deletedItems.map(agent => {
+                    const displayName = agent.displayName ?? agent.hostname;
+                    const clientName = clients.data?.find(c => c.id === agent.clientId)?.name ?? '—';
+                    const siteName = siteNameMap.get(agent.siteId);
+                    const deletedLabel = agent.deletedAt ? formatDateBrazil(agent.deletedAt) : '—';
+                    const trashAgent: AgentWithClient = {
+                      ...agent,
+                      clientName,
+                      clientId: agent.clientId ?? '',
+                      siteName,
+                    };
+                    return (
+                      <tr key={agent.id} className="align-top">
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-3">
+                            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-danger/10">
+                              <ArchiveRestore className="h-4 w-4 text-danger" />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="truncate font-medium text-foreground">{displayName}</p>
+                              {agent.displayName && agent.displayName !== agent.hostname && (
+                                <p className="truncate font-mono text-xs text-muted">{agent.hostname}</p>
+                              )}
+                              <Badge color="danger">Excluído</Badge>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-muted">
+                          <span className="block">{clientName}</span>
+                          {siteName && <span className="block text-xs text-muted/80">{siteName}</span>}
+                        </td>
+                        <td className="hidden px-4 py-3 text-muted md:table-cell">{agent.operatingSystem ?? '—'}{agent.osVersion ? ` · ${agent.osVersion}` : ''}</td>
+                        <td className="hidden px-4 py-3 font-mono text-muted lg:table-cell">{agent.lastIpAddress ?? '—'}</td>
+                        <td className="px-4 py-3 text-muted">{deletedLabel}</td>
+                        <td className="px-4 py-3">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              onClick={() => { void handleRestoreAgent(trashAgent); }}
+                              loading={restoringAgentId === agent.id}
+                              disabled={restoreAgent.isPending || purgeAgent.isPending}
+                            >
+                              <ArchiveRestore className="h-4 w-4" /> Restaurar
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="danger"
+                              onClick={() => openPurgeAgentModal(trashAgent)}
+                              disabled={restoreAgent.isPending || purgeAgent.isPending}
+                            >
+                              <Trash2 className="h-4 w-4" /> Excluir definitivamente
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )
+      ) : isLoadingAgents ? (
         <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 3xl:grid-cols-5">
           {Array.from({ length: 10 }).map((_, i) => <SkeletonCard key={i} />)}
         </div>
@@ -1200,39 +1432,55 @@ export default function AgentList() {
                 disabled={deleteAgent.isPending}
               >
                 <Trash2 className="h-4 w-4" />
-                {deletingAgentId === contextMenu.agent.id ? 'Excluindo...' : 'Excluir agente'}
+                {deletingAgentId === contextMenu.agent.id ? 'Movendo...' : 'Mover para a lixeira'}
               </button>
             )}
           </div>
         </>
       )}
 
-      <Modal
-        open={!!deleteConfirmAgent}
+      {/* Soft delete: mover para a lixeira (restaurável) */}
+      <ConfirmDialog
+        open={deleteConfirmAgent !== null}
+        title="Mover agente para a lixeira"
+        message={
+          <>
+            O agente <span className="font-semibold">{deleteConfirmAgent?.displayName ?? deleteConfirmAgent?.hostname}</span> será movido para a lixeira e poderá ser restaurado depois. Os dados (hardware, software, comandos, tokens) são mantidos.
+          </>
+        }
+        confirmLabel="Mover para a lixeira"
+        isLoading={deleteAgent.isPending}
         onClose={closeDeleteAgentModal}
-        title="Confirmar exclusão de agente"
+        onConfirm={() => { void handleDeleteAgent(); }}
+      />
+
+      {/* Hard delete: exclusão definitiva (exige digitar o nome) */}
+      <Modal
+        open={!!purgeTarget}
+        onClose={closePurgeAgentModal}
+        title="Excluir agente definitivamente"
         maxWidth="max-w-lg"
       >
-        {deleteConfirmAgent && (
+        {purgeTarget && (
           <div className="space-y-4">
             <div className="rounded-lg border border-danger/30 bg-danger/10 p-3 text-sm text-foreground">
               <p>
-                Você está prestes a excluir o agente{' '}
-                <span className="font-semibold text-foreground">{deleteConfirmAgent.displayName ?? deleteConfirmAgent.hostname}</span>.
+                Você está prestes a excluir DEFINITIVAMENTE o agente{' '}
+                <span className="font-semibold text-foreground">{purgeTarget.displayName ?? purgeTarget.hostname}</span>.
               </p>
-              <p className="mt-1 text-muted">Esta ação não pode ser desfeita. Todos os dados do agente (hardware, software, comandos, tokens) serão permanentemente removidos.</p>
+              <p className="mt-1 text-muted">Esta ação não pode ser desfeita. Hardware, software, comandos, tokens, labels e histórico do agente são removidos do banco. Chamados e logs já registrados permanecem no histórico, mas deixam de ficar vinculados ao agente.</p>
             </div>
 
             <div className="space-y-2">
-              <label htmlFor="delete-confirm-hostname" className="text-sm font-medium text-foreground">
-                Digite <span className="font-semibold text-danger">{deleteConfirmAgent.displayName ?? deleteConfirmAgent.hostname}</span> para confirmar:
+              <label htmlFor="purge-confirm-name" className="text-sm font-medium text-foreground">
+                Digite <span className="font-semibold text-danger">{purgeTarget.displayName ?? purgeTarget.hostname}</span> para confirmar:
               </label>
               <Input
-                id="delete-confirm-hostname"
-                value={deleteConfirmHostname}
-                onChange={(e) => setDeleteConfirmHostname(e.target.value)}
-                placeholder={deleteConfirmAgent.displayName ?? deleteConfirmAgent.hostname}
-                disabled={deleteAgent.isPending}
+                id="purge-confirm-name"
+                value={purgeConfirmName}
+                onChange={(e) => setPurgeConfirmName(e.target.value)}
+                placeholder={purgeTarget.displayName ?? purgeTarget.hostname}
+                disabled={purgeAgent.isPending}
                 autoFocus
               />
             </div>
@@ -1240,25 +1488,40 @@ export default function AgentList() {
             <div className="flex justify-end gap-2">
               <Button
                 variant="secondary"
-                onClick={closeDeleteAgentModal}
-                disabled={deleteAgent.isPending}
+                onClick={closePurgeAgentModal}
+                disabled={purgeAgent.isPending}
               >
                 Cancelar
               </Button>
               <Button
                 variant="danger"
                 onClick={() => {
-                  void handleDeleteAgent();
+                  void handlePurgeAgent();
                 }}
-                loading={deleteAgent.isPending}
-                disabled={deleteConfirmHostname.trim() !== (deleteConfirmAgent.displayName ?? deleteConfirmAgent.hostname).trim() || deleteAgent.isPending}
+                loading={purgeAgent.isPending}
+                disabled={purgeConfirmName.trim() !== (purgeTarget.displayName ?? purgeTarget.hostname).trim() || purgeAgent.isPending}
               >
-                Excluir agente
+                Excluir definitivamente
               </Button>
             </div>
           </div>
         )}
       </Modal>
+
+      {/* Agente com chamados vinculados: confirmação reforçada (force) */}
+      <ConfirmDialog
+        open={purgeForceTarget !== null}
+        title="Agente vinculado a chamados"
+        message={
+          <>
+            O agente <span className="font-semibold">{purgeForceTarget?.displayName ?? purgeForceTarget?.hostname}</span> possui chamados vinculados. Eles continuam registrados no histórico, mas sem vínculo com o agente. Excluir definitivamente?
+          </>
+        }
+        confirmLabel="Excluir definitivamente"
+        isLoading={purgeAgent.isPending}
+        onClose={() => { if (!purgeAgent.isPending) setPurgeForceTarget(null); }}
+        onConfirm={() => { void handleForcePurge(); }}
+      />
 
       <TransferAgentModal
         open={!!transferAgent}

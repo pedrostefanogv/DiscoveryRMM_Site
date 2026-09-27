@@ -17,7 +17,7 @@ import {
 } from './agentDetailUtils';
 import { useTickets } from '@/hooks/useTickets';
 import { useLogs } from '@/hooks/useLogs';
-import { Button, Card, CardHeader, Badge, Loading, ErrorDisplay, Input, Select, DataTable, Modal, StatCard, AgentHeartbeatCard, Tooltip, ContextMenu, type ContextMenuItem, type Column } from '@/components/ui';
+import { Button, Card, CardHeader, Badge, Loading, ErrorDisplay, Input, ConfirmDialog, Select, DataTable, Modal, StatCard, AgentHeartbeatCard, Tooltip, ContextMenu, type ContextMenuItem, type Column } from '@/components/ui';
 import { ensureArray } from '@/utils/ensureArray';
 import PowerActionModal from '@/components/agents/PowerActionModal';
 import AgentNotificationModal, { type AgentNotificationPayload } from '@/components/agents/AgentNotificationModal';
@@ -137,7 +137,6 @@ export default function AgentDetail() {
   const [isRefreshingStartup, setIsRefreshingStartup] = useState(false);
   const [isRefreshingScheduledTasks, setIsRefreshingScheduledTasks] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
-  const [deleteConfirmHostname, setDeleteConfirmHostname] = useState('');
   // A aba ativa é lida da querystring (?tab=aplicativos, ?tab=tarefas-agendadas...).
   // A troca de aba usa `replace` para NÃO empilhar entradas no histórico: a URL
   // continua compartilhável, mas o botão "Voltar" (e o voltar do navegador)
@@ -796,29 +795,20 @@ export default function AgentDetail() {
   const closeDeleteAgentModal = () => {
     if (deleteAgent.isPending) return;
     setDeleteConfirmOpen(false);
-    setDeleteConfirmHostname('');
   };
 
   const handleDeleteAgent = () => {
     if (!id) return;
-    setDeleteConfirmHostname('');
     setDeleteConfirmOpen(true);
   };
 
   const confirmDeleteAgent = async () => {
     if (!id) return;
-    const expectedHostname = (a.displayName ?? a.hostname).trim();
-
-    if (deleteConfirmHostname.trim() !== expectedHostname) {
-      toast.error('O hostname digitado não confere. Verifique e tente novamente.');
-      return;
-    }
 
     try {
       await deleteAgent.mutateAsync(id);
-      toast.success('Agente excluído com sucesso.');
+      toast.success('Agente movido para a lixeira.');
       setDeleteConfirmOpen(false);
-      setDeleteConfirmHostname('');
       navigate('/agents', { replace: true });
     } catch (error) {
       toast.error(getDeleteAgentErrorMessage(error));
@@ -1410,7 +1400,7 @@ export default function AgentDetail() {
                   disabled={deleteAgent.isPending}
                 >
                   <Trash2 className="h-4 w-4" />
-                  {deleteAgent.isPending ? 'Excluindo...' : 'Excluir agente'}
+                  {deleteAgent.isPending ? 'Movendo...' : 'Mover para a lixeira'}
                 </button>
               )}
             </div>
@@ -2630,56 +2620,19 @@ export default function AgentDetail() {
         )}
       </Card>
 
-      <Modal
+      <ConfirmDialog
         open={deleteConfirmOpen}
+        title="Mover agente para a lixeira"
+        message={
+          <>
+            O agente <span className="font-semibold">{a.displayName ?? a.hostname}</span> será movido para a lixeira e poderá ser restaurado depois. Os dados (hardware, software, comandos, tokens) são mantidos.
+          </>
+        }
+        confirmLabel="Mover para a lixeira"
+        isLoading={deleteAgent.isPending}
         onClose={closeDeleteAgentModal}
-        title="Confirmar exclusão de agente"
-        maxWidth="max-w-lg"
-      >
-        <div className="space-y-4">
-          <div className="rounded-lg border border-danger/30 bg-danger/10 p-3 text-sm text-foreground">
-            <p>
-              Você está prestes a excluir o agente{' '}
-              <span className="font-semibold text-foreground">{a.displayName ?? a.hostname}</span>.
-            </p>
-            <p className="mt-1 text-muted">Esta ação não pode ser desfeita. Todos os dados do agente (hardware, software, comandos, tokens) serão permanentemente removidos.</p>
-          </div>
-
-          <div className="space-y-2">
-            <label htmlFor="delete-confirm-hostname-detail" className="text-sm font-medium text-foreground">
-              Digite <span className="font-semibold text-danger">{a.displayName ?? a.hostname}</span> para confirmar:
-            </label>
-            <Input
-              id="delete-confirm-hostname-detail"
-              value={deleteConfirmHostname}
-              onChange={(e) => setDeleteConfirmHostname(e.target.value)}
-              placeholder={a.displayName ?? a.hostname}
-              disabled={deleteAgent.isPending}
-              autoFocus
-            />
-          </div>
-
-          <div className="flex justify-end gap-2">
-            <Button
-              variant="secondary"
-              onClick={closeDeleteAgentModal}
-              disabled={deleteAgent.isPending}
-            >
-              Cancelar
-            </Button>
-            <Button
-              variant="danger"
-              onClick={() => {
-                void confirmDeleteAgent();
-              }}
-              loading={deleteAgent.isPending}
-              disabled={deleteConfirmHostname.trim() !== (a.displayName ?? a.hostname).trim() || deleteAgent.isPending}
-            >
-              Excluir agente
-            </Button>
-          </div>
-        </div>
-      </Modal>
+        onConfirm={() => { void confirmDeleteAgent(); }}
+      />
 
       {powerAction && (
         <PowerActionModal

@@ -24,6 +24,7 @@ import type {
   ApproveZeroTouchResponse,
   AutomationExecutionReport,
   CreateAgentRequest,
+  DeletedAgentsPage,
   UpdateAgentRequest,
   SendCommandRequest,
   CreateTokenRequest,
@@ -110,6 +111,30 @@ export const agentsApi = {
     api.put<Agent>(`${BASE}/${id}`, data),
 
   delete: (id: string) => api.del<void>(`${BASE}/${id}`),
+
+  /** Lixeira: agentes soft-deleted (paginado), opcionalmente por cliente/site. */
+  listDeleted: (
+    params?: { clientId?: string; siteId?: string; search?: string; page?: number; pageSize?: number },
+    init?: ApiRequestInit,
+  ) =>
+    api.get<DeletedAgentsPage>(`${BASE}/deleted`, {
+      clientId: params?.clientId,
+      siteId: params?.siteId,
+      search: params?.search,
+      page: params?.page,
+      pageSize: params?.pageSize,
+    }, init),
+
+  /** Tira o agente da lixeira (volta a listagem normal). */
+  restore: (id: string) => api.post<void>(`${BASE}/${id}/restore`),
+
+  /**
+   * Exclusao definitiva (hard delete). force=true confirma a remocao mesmo
+   * quando o agente tem chamados vinculados (o historico e preservado sem
+   * vinculo).
+   */
+  purge: (id: string, force = false) =>
+    api.del<void>(`${BASE}/${id}?permanent=true&force=${force ? 'true' : 'false'}`),
 
   // Hardware
   getHardware: (id: string, init?: ApiRequestInit) =>
