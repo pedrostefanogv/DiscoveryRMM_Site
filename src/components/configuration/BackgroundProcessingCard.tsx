@@ -125,6 +125,11 @@ export function BackgroundProcessingCard({
   const [values, setValues] = useState<Record<string, Record<string, unknown>>>({ metrics: {}, triage: {} });
   const [overridden, setOverridden] = useState<Set<string>>(new Set());
 
+  // Chave por CONTEÚDO: o pai recria os objetos a cada render (parse do JSON da
+  // query) e usá-los como dependência resetava as edições do usuário.
+  const settingsKey = useMemo(() => JSON.stringify(settings ?? null), [settings]);
+  const effectiveKey = useMemo(() => JSON.stringify(effective.data ?? null), [effective.data]);
+
   // Semeia o formulário: global parte do efetivo (defaults + salvo); override
   // parte do que o cliente realmente sobrescreveu.
   useEffect(() => {
@@ -136,20 +141,29 @@ export function BackgroundProcessingCard({
     const source = effective.data ?? settings;
     setValues({ metrics: sectionOf(source, "metrics"), triage: sectionOf(source, "triage") });
     setOverridden(new Set());
-  }, [settings, effective.data, isOverride]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settingsKey, effectiveKey, isOverride]);
 
-  const status = useBackgroundProcessingStatus(clientId ?? null, {
-    enabled: true,
-    refetchIntervalMs: 20000,
-  });
-  const backfill = useBackgroundBackfillState(status.data);
+  const status = useBackgroundProcessingStatus(clientId ?? null);
   const requestBackfill = useRequestBackgroundBackfill();
   const cancelBackfill = useCancelBackgroundBackfill();
 
   const scopeRows = useMemo(
-    () => (status.data ?? []).filter((row) => !clientId || row.scopeId === clientId),
+    () =>
+      (status.data ?? []).filter(
+        (row) => !clientId || row.scopeId.toLowerCase() === clientId.toLowerCase(),
+      ),
     [status.data, clientId],
   );
+
+  // O backfill exibido é o DESTE escopo: o card global só olha a linha global
+  // (Guid.Empty) e o card do cliente só a linha dele.
+  const backfillRows = useMemo(() => {
+    const scopeId = (clientId ?? "00000000-0000-0000-0000-000000000000").toLowerCase();
+    return scopeRows.filter((row) => row.scopeId.toLowerCase() === scopeId);
+  }, [scopeRows, clientId]);
+
+  const backfill = useBackgroundBackfillState(backfillRows);
 
   function updateValue(section: SectionKey, key: string, value: unknown) {
     setValues((current) => ({ ...current, [section]: { ...current[section], [key]: value } }));
@@ -190,9 +204,9 @@ export function BackgroundProcessingCard({
     }
   }
 
-  const globalDisabled = !isOverride
-    ? false
-    : !(settings?.metrics?.enabled ?? true) || !(settings?.triage?.enabled ?? true);
+  // O aviso considera o valor EFETIVO (herdado + override), não só o do cliente.
+  const globalDisabled = isOverride
+    && (!(effective.data?.metrics?.enabled ?? true) || !(effective.data?.triage?.enabled ?? true));
 
   return (
     <Card>

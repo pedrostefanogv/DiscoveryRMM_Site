@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { backgroundProcessingApi } from "@/api";
+import type { ProcessingScopeStateDto } from "@/api";
 
 const KEYS = {
   effective: (clientId?: string | null) => ["background-processing", "effective", clientId ?? "global"] as const,
@@ -17,17 +18,30 @@ export function useBackgroundProcessingEffective(clientId?: string | null, enabl
   });
 }
 
-/** Último ciclo por escopo (processing_scope_state). */
+/**
+ * Último ciclo por escopo (processing_scope_state).
+ *
+ * Polling adaptativo: 10s enquanto houver backfill pendente/em andamento (para o
+ * progresso andar na tela) e 60s quando está tudo parado.
+ */
 export function useBackgroundProcessingStatus(
   clientId?: string | null,
-  options: { enabled?: boolean; refetchIntervalMs?: number } = {},
+  options: { enabled?: boolean } = {},
 ) {
   return useQuery({
     queryKey: KEYS.status(clientId),
     queryFn: () => backgroundProcessingApi.status(clientId),
     enabled: options.enabled ?? true,
-    refetchInterval: options.refetchIntervalMs,
     staleTime: 10_000,
+    refetchInterval: (query) => {
+      const rows = (query.state.data ?? []) as ProcessingScopeStateDto[];
+      const runningBackfill = rows.some(
+        (row) =>
+          row.scopeType === "technician_metrics_backfill" &&
+          /"status"\s*:\s*"(pending|running)"/.test(row.lastResultJson ?? ""),
+      );
+      return runningBackfill ? 10_000 : 60_000;
+    },
   });
 }
 
