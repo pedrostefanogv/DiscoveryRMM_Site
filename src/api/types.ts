@@ -3724,7 +3724,14 @@ export interface AutomationTaskSummary {
   deletedAt?: string | null;
   isDeleted?: boolean;
   isActive: boolean;
+  /** Notifica o usuario (prompt Welcome do PSADT) antes de executar. Nao e aprovacao. */
   requiresApproval: boolean;
+  /** Usuario pode adiar a execucao (botao Adiar do Welcome). */
+  allowDefer?: boolean;
+  /** Processos fechados antes de executar (CloseProcesses). */
+  closeProcesses?: string[];
+  /** Tempo (s) para a acao padrao continuar quando o usuario nao responde. Default 60. */
+  promptTimeoutSeconds?: number;
   lastUpdatedAt: string;
 }
 
@@ -3761,7 +3768,14 @@ export interface CreateAutomationTaskRequest {
   triggerOnUserLogin?: boolean;
   triggerOnAgentCheckIn?: boolean;
   scheduleCron: string | null;
+  /** Notifica o usuario (prompt Welcome do PSADT) antes de executar. */
   requiresApproval?: boolean;
+  /** Usuario pode adiar a execucao. Default true. */
+  allowDefer?: boolean;
+  /** Processos fechados antes de executar. */
+  closeProcesses?: string[];
+  /** Tempo (s) para a acao padrao continuar. Default 60. */
+  promptTimeoutSeconds?: number;
   isActive?: boolean;
 }
 

@@ -1015,7 +1015,7 @@ function AutomationLinksPanel({
                       )}
                       {task && (
                         <Badge color={task.requiresApproval ? 'warning' : 'accent'}>
-                          {task.requiresApproval ? 'Requer aprovação' : 'Execução direta'}
+                          {task.requiresApproval ? 'Notifica o usuário' : 'Execução direta'}
                         </Badge>
                       )}
                     </div>

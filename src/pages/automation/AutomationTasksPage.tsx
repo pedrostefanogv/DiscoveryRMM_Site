@@ -146,6 +146,9 @@ type TaskFormState = {
   triggerOnAgentCheckIn: boolean;
   scheduleCron: string;
   requiresApproval: boolean;
+  allowDefer: boolean;
+  closeProcesses: string[];
+  promptTimeoutSeconds: number;
   isActive: boolean;
 };
 
@@ -166,6 +169,9 @@ const defaultForm: TaskFormState = {
   triggerOnAgentCheckIn: false,
   scheduleCron: "",
   requiresApproval: false,
+  allowDefer: true,
+  closeProcesses: [],
+  promptTimeoutSeconds: 60,
   isActive: true,
 };
 
@@ -207,6 +213,7 @@ export default function AutomationTasksPage() {
   const [packagePickerView, setPackagePickerView] = useState<"list" | "card">("list");
   const [tagPickerOpen, setTagPickerOpen] = useState(false);
   const [tagSearch, setTagSearch] = useState("");
+  const [closeProcessInput, setCloseProcessInput] = useState("");
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; item: AutomationTaskSummary } | null>(null);
   const [triggersHelpOpen, setTriggersHelpOpen] = useState(false);
 
@@ -315,6 +322,9 @@ export default function AutomationTasksPage() {
       triggerOnAgentCheckIn: detail.triggerOnAgentCheckIn,
       scheduleCron: detail.scheduleCron || "",
       requiresApproval: detail.requiresApproval,
+      allowDefer: detail.allowDefer ?? true,
+      closeProcesses: detail.closeProcesses ?? [],
+      promptTimeoutSeconds: detail.promptTimeoutSeconds ?? 60,
       isActive: detail.isActive,
     });
 
@@ -355,6 +365,7 @@ export default function AutomationTasksPage() {
     setScopeAgentId("");
     setPackageSearch("");
     setTagSearch("");
+    setCloseProcessInput("");
     setForm(defaultForm);
   };
 
@@ -511,6 +522,9 @@ export default function AutomationTasksPage() {
       scopeType: String(normalizedScopeType),
       scopeId: item.scopeId || "",
       requiresApproval: item.requiresApproval,
+      allowDefer: item.allowDefer ?? true,
+      closeProcesses: item.closeProcesses ?? [],
+      promptTimeoutSeconds: item.promptTimeoutSeconds ?? 60,
       isActive: item.isActive,
     });
     applyScopeCascade(normalizedScopeType, item);
@@ -596,13 +610,19 @@ export default function AutomationTasksPage() {
         ),
       },
       {
-        key: "approval",
-        header: "Aprovação",
-        render: (item) => (
-          <Badge color={item.requiresApproval ? "warning" : "slate"}>
-            {item.requiresApproval ? "Requer" : "Não"}
-          </Badge>
-        ),
+        key: "notify",
+        header: "Notificação",
+        render: (item) =>
+          item.requiresApproval ? (
+            <div className="space-y-0.5">
+              <Badge color="warning">Pergunta ao usuário</Badge>
+              <p className="text-xs text-muted">
+                {item.allowDefer === false ? "sem adiar" : "pode adiar"} · {item.promptTimeoutSeconds ?? 60}s
+              </p>
+            </div>
+          ) : (
+            <Badge color="slate">Silenciosa</Badge>
+          ),
       },
       {
         key: "status",
@@ -731,9 +751,36 @@ export default function AutomationTasksPage() {
     }));
   };
 
+  // Aceita vírgula como separador (o campo também adiciona no Enter/comma):
+  // "winword, excel" insere os dois processos em vez de um item inválido.
+  const addCloseProcess = (rawValue: string) => {
+    const candidates = rawValue
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+    if (!candidates.length) return;
+    setForm((prev) => {
+      const next = [...prev.closeProcesses];
+      for (const candidate of candidates) {
+        if (!next.some((item) => item.toLowerCase() === candidate.toLowerCase())) {
+          next.push(candidate);
+        }
+      }
+      return { ...prev, closeProcesses: next };
+    });
+    setCloseProcessInput("");
+  };
+
+  const removeCloseProcess = (processName: string) => {
+    setForm((prev) => ({
+      ...prev,
+      closeProcesses: prev.closeProcesses.filter((item) => item !== processName),
+    }));
+  };
+
   // Valida cron de 5 campos (dialeto do agent: robfig/cron padrão).
   const isValidCron = (expr: string): boolean => {
-    const fields = expr.trim().split(/\\s+/);
+    const fields = expr.trim().split(/\s+/);
     if (fields.length !== 5) return false;
     const ranges: Array<[number, number]> = [[0, 59], [0, 23], [1, 31], [1, 12], [0, 7]];
     return fields.every((field, i) =>
@@ -741,8 +788,8 @@ export default function AutomationTasksPage() {
         const rangePart = part.split("/")[0];
         if (rangePart === "*" || rangePart === "?") return true;
         const step = part.split("/")[1];
-        if (step !== undefined && (!/^\\d+$/.test(step) || parseInt(step, 10) < 1)) return false;
-        const m = rangePart.match(/^(\\d+)(-(\\d+))?$/);
+        if (step !== undefined && (!/^\d+$/.test(step) || parseInt(step, 10) < 1)) return false;
+        const m = rangePart.match(/^(\d+)(-(\d+))?$/);
         if (!m) return false;
         const start = parseInt(m[1], 10);
         const end = m[3] ? parseInt(m[3], 10) : start;
@@ -778,6 +825,26 @@ export default function AutomationTasksPage() {
 
     if (scopeType !== AppApprovalScopeType.Global && !form.scopeId.trim()) {
       return toast.error("ScopeId obrigatório para escopos não globais");
+    }
+
+    const promptTimeoutSeconds = Number.isFinite(form.promptTimeoutSeconds)
+      ? Math.trunc(form.promptTimeoutSeconds)
+      : 60;
+    const closeProcesses = form.closeProcesses.map((item) => item.trim()).filter(Boolean);
+
+    // Campos de notificação só são relevantes quando o usuário será notificado:
+    // valores antigos não devem bloquear o salvamento de uma tarefa silenciosa.
+    if (form.requiresApproval) {
+      if (promptTimeoutSeconds < 5 || promptTimeoutSeconds > 3600) {
+        return toast.error("Tempo para ação padrão deve ficar entre 5 e 3600 segundos");
+      }
+      if (closeProcesses.length > 20) {
+        return toast.error("Informe no máximo 20 processos para fechar");
+      }
+      const invalidProcess = closeProcesses.find((item) => !/^[A-Za-z0-9._ -]+$/.test(item));
+      if (invalidProcess) {
+        return toast.error(`Processo inválido: "${invalidProcess}" (use letras, números, ponto, hífen ou underscore)`);
+      }
     }
 
     if (
@@ -831,6 +898,9 @@ export default function AutomationTasksPage() {
       triggerOnAgentCheckIn: form.triggerOnAgentCheckIn,
       scheduleCron: form.triggerRecurring ? form.scheduleCron.trim() : null,
       requiresApproval: form.requiresApproval,
+      allowDefer: form.allowDefer,
+      closeProcesses,
+      promptTimeoutSeconds,
       isActive: form.isActive,
     };
 
@@ -855,7 +925,10 @@ export default function AutomationTasksPage() {
             setTagSearch("");
             setForm(defaultForm);
           },
-          onError: () => toast.error("Falha ao atualizar tarefa"),
+          onError: (error) => {
+            const message = error instanceof Error ? error.message : "Falha ao atualizar tarefa";
+            toast.error(message);
+          },
         },
       );
       return;
@@ -882,7 +955,10 @@ export default function AutomationTasksPage() {
           setTagSearch("");
           setForm(defaultForm);
         },
-        onError: () => toast.error("Falha ao criar tarefa"),
+        onError: (error) => {
+          const message = error instanceof Error ? error.message : "Falha ao criar tarefa";
+          toast.error(message);
+        },
       },
     );
   };
@@ -1538,24 +1614,115 @@ export default function AutomationTasksPage() {
           </div>
         </div>
 
-        <div className="mt-3 grid gap-3 md:grid-cols-3">
-          <Select
-            label="RequiresApproval"
-            options={[{ value: "true", label: "Sim" }, { value: "false", label: "Nao" }]}
-            value={String(form.requiresApproval)}
-            onChange={(e) => setForm((p) => ({ ...p, requiresApproval: e.target.value === "true" }))}
-          />
-          <Select
-            label="Status"
-            options={[{ value: "true", label: "Ativa" }, { value: "false", label: "Inativa" }]}
-            value={String(form.isActive)}
-            onChange={(e) => setForm((p) => ({ ...p, isActive: e.target.value === "true" }))}
-          />
+        <div className="mt-4 space-y-3 rounded-xl border border-border bg-surface-light p-3">
+          <div>
+            <p className="text-sm font-medium text-foreground">Notificação ao usuário</p>
+            <p className="text-xs text-muted">
+              Quando ativada, o agent exibe o prompt <span className="font-medium">Welcome do PSADT</span> antes de
+              executar (Continuar / Adiar). Não é aprovação: se o usuário não responder, a ação padrão é continuar.
+            </p>
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-3">
+            <Select
+              label="Notificar usuário antes de executar"
+              options={[{ value: "true", label: "Sim" }, { value: "false", label: "Não" }]}
+              value={String(form.requiresApproval)}
+              onChange={(e) => setForm((p) => ({ ...p, requiresApproval: e.target.value === "true" }))}
+            />
+            <Select
+              label="Usuário pode adiar"
+              options={[{ value: "true", label: "Sim" }, { value: "false", label: "Não" }]}
+              value={String(form.allowDefer)}
+              disabled={!form.requiresApproval}
+              onChange={(e) => setForm((p) => ({ ...p, allowDefer: e.target.value === "true" }))}
+            />
+            <Input
+              label="Tempo para ação padrão (segundos)"
+              type="number"
+              min={5}
+              max={3600}
+              value={String(form.promptTimeoutSeconds)}
+              disabled={!form.requiresApproval}
+              onChange={(e) => setForm((p) => ({ ...p, promptTimeoutSeconds: Number(e.target.value) }))}
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label className="block text-sm font-medium text-muted-foreground">
+              Processos a fechar antes de executar
+            </label>
+            <div className="flex gap-2">
+              <Input
+                value={closeProcessInput}
+                disabled={!form.requiresApproval}
+                placeholder="Ex.: WINWORD (Enter para adicionar)"
+                onChange={(e) => setCloseProcessInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === ",") {
+                    e.preventDefault();
+                    addCloseProcess(closeProcessInput);
+                  }
+                }}
+                className="flex-1"
+              />
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={!form.requiresApproval || !closeProcessInput.trim()}
+                onClick={() => addCloseProcess(closeProcessInput)}
+              >
+                Adicionar
+              </Button>
+            </div>
+            <p className="text-xs text-muted">
+              Lista entregue ao <span className="font-mono">CloseProcesses</span> do Welcome (máx. 20). Sem processos, o
+              prompt apenas pergunta antes de continuar.
+            </p>
+            {!!form.closeProcesses.length && (
+              <div className="flex flex-wrap gap-2 rounded-lg border border-border bg-surface/40 p-2">
+                {form.closeProcesses.map((processName) => (
+                  <span
+                    key={processName}
+                    className="inline-flex items-center gap-2 rounded-full border border-border bg-surface-light px-3 py-1 text-xs text-foreground"
+                  >
+                    {processName}
+                    <button
+                      type="button"
+                      className="text-muted hover:text-foreground"
+                      onClick={() => removeCloseProcess(processName)}
+                      aria-label={`Remover processo ${processName}`}
+                    >
+                      x
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-3">
+            <Select
+              label="Status"
+              options={[{ value: "true", label: "Ativa" }, { value: "false", label: "Inativa" }]}
+              value={String(form.isActive)}
+              onChange={(e) => setForm((p) => ({ ...p, isActive: e.target.value === "true" }))}
+            />
+          </div>
         </div>
 
         <div className="mt-4 flex justify-end gap-2">
           <Button variant="secondary" onClick={closeFormModal}>Cancelar</Button>
-          <Button onClick={handleSubmit} loading={createMutation.isPending || updateMutation.isPending}>
+          <Button
+            onClick={handleSubmit}
+            loading={createMutation.isPending || updateMutation.isPending}
+            disabled={editing ? taskDetail.isLoading || taskDetail.isError : false}
+            title={
+              editing && (taskDetail.isLoading || taskDetail.isError)
+                ? "Aguarde o carregamento dos detalhes da tarefa para não sobrescrever campos com valores vazios"
+                : undefined
+            }
+          >
             {editing ? "Salvar" : "Criar"}
           </Button>
         </div>
@@ -1805,7 +1972,9 @@ export default function AutomationTasksPage() {
                   <Badge color={detailIsDeleted ? "danger" : d.isActive ? "success" : "slate"}>
                     {detailIsDeleted ? "Excluida" : d.isActive ? "Ativa" : "Inativa"}
                   </Badge>
-                  <Badge color={d.requiresApproval ? "warning" : "slate"}>{d.requiresApproval ? "Requer aprovação" : "Auto"}</Badge>
+                  <Badge color={d.requiresApproval ? "warning" : "slate"}>
+                    {d.requiresApproval ? "Pergunta ao usuário" : "Silenciosa"}
+                  </Badge>
                 </div>
               </div>
 
@@ -1847,6 +2016,27 @@ export default function AutomationTasksPage() {
                     {d.triggerOnAgentCheckIn && <Badge color="accent">Check-in</Badge>}
                   </div>
                   {d.scheduleCron && <p className="font-mono text-xs text-muted mt-1">{d.scheduleCron}</p>}
+                </div>
+
+                {/* Notificação ao usuário */}
+                <div className="rounded-lg bg-surface-light border border-border p-3">
+                  <p className="text-xs text-muted mb-1">Notificação ao usuário</p>
+                  {d.requiresApproval ? (
+                    <div className="space-y-1">
+                      <p className="text-sm text-foreground">Prompt Welcome (PSADT)</p>
+                      <p className="text-xs text-muted">
+                        {d.allowDefer === false ? "Não pode adiar" : "Pode adiar"} · ação padrão em{" "}
+                        {d.promptTimeoutSeconds ?? 60}s
+                      </p>
+                      {!!(d.closeProcesses?.length) && (
+                        <p className="text-xs text-muted truncate" title={(d.closeProcesses ?? []).join(", ")}>
+                          Fecha: {(d.closeProcesses ?? []).join(", ")}
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted">Execução silenciosa</p>
+                  )}
                 </div>
               </div>
 
