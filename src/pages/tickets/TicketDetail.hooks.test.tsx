@@ -56,6 +56,7 @@ vi.mock("@/auth/AuthContext", () => ({
 
 vi.mock("@/auth/jwt", () => ({
   getUserIdFromJwt: () => null,
+  getUserNameFromJwt: () => null,
 }));
 
 import TicketDetail from "./TicketDetail";

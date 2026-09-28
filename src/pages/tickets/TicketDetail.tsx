@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Send, Lock, Unlock, Clock, Activity, BookOpen, Paperclip, Upload, File, CheckCircle, XCircle, Loader2, Wrench, Copy, RotateCcw, ClipboardList, UserCog, UserCheck, RefreshCw, Monitor, Building2, Trash2 } from 'lucide-react';
 import { MarkdownViewer } from '@/components/ui/MarkdownViewer';
 import { useAuth } from '@/auth/AuthContext';
-import { getUserIdFromJwt } from '@/auth/jwt';
+import { getUserIdFromJwt, getUserNameFromJwt } from '@/auth/jwt';
 import { AppApprovalScopeType, AutomationTaskActionType } from '@/api';
 import {
   useTicket,
@@ -1722,10 +1722,21 @@ function CommentsPanel({
 }) {
   // Paginação por cursor: acumula páginas (antes crescia o limit, refazendo a
   // 1ª página e sem teto).
+  const { session } = useAuth();
   const [pages, setPages] = useState<CommentPage<CommentItem>[]>([]);
   const [cursor, setCursor] = useState<string | undefined>(undefined);
   const comments = useTicketComments(ticketId, { cursor });
   const items = pages.flatMap(page => page.items);
+
+  // O autor de um comentario e o login do usuario (claim unique_name do JWT);
+  // e o que permite alinhar a propria mensagem a direita, como no agent.
+  const currentUserLogin = useMemo(
+    () => (getUserNameFromJwt(session.accessToken) ?? '').trim().toLowerCase(),
+    [session.accessToken],
+  );
+  const isOwnComment = (author: string | null | undefined) =>
+    Boolean(currentUserLogin) &&
+    (author ?? '').trim().toLowerCase() === currentUserLogin;
 
   // Troca de ticket reinicia a paginação.
   useEffect(() => {
@@ -1755,16 +1766,32 @@ function CommentsPanel({
           </div>
         )}
         {!comments.isError &&
-          items.map(c => (
-            <div key={c.id} className={`rounded-lg px-4 py-3 ${c.isInternal ? 'bg-warning/10 border border-warning/20' : 'bg-surface-light'}`}>
-              <div className="mb-1 flex items-center gap-2">
-                <span className="text-sm font-medium text-foreground">{c.author}</span>
-                <span className="text-xs text-muted">{new Date(c.createdAt).toLocaleString('pt-BR')}</span>
-                {c.isInternal && <Badge color="warning"><Lock className="mr-1 h-3 w-3" />Interno</Badge>}
+          items.map(c => {
+            const own = isOwnComment(c.author);
+            // Classe por combinação (proprio/suporte x publico/interno): uma única
+            // classe de cor de borda por balão, sem depender da ordem do Tailwind.
+            const bubbleTone = own
+              ? c.isInternal
+                ? 'bg-primary text-white rounded-br-md border border-warning/40'
+                : 'bg-primary text-white rounded-br-md'
+              : c.isInternal
+                ? 'bg-surface-light text-foreground rounded-bl-md border border-warning/40'
+                : 'bg-surface-light text-foreground rounded-bl-md border border-border';
+            return (
+              <div key={c.id} className={`flex flex-col ${own ? 'items-end' : 'items-start'}`}>
+                <div
+                  className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm whitespace-pre-wrap break-words ${bubbleTone}`}
+                >
+                  {c.content}
+                </div>
+                <div className="mt-1 flex items-center gap-2 text-xs text-muted">
+                  <span className="text-sm font-medium text-foreground">{c.author}</span>
+                  <span className="text-xs text-muted">{new Date(c.createdAt).toLocaleString('pt-BR')}</span>
+                  {c.isInternal && <Badge color="warning"><Lock className="mr-1 h-3 w-3" />Interno</Badge>}
+                </div>
               </div>
-              <p className="text-sm text-muted-foreground whitespace-pre-wrap">{c.content}</p>
-            </div>
-          ))}
+            );
+          })}
         {!comments.isError && !comments.isLoading && items.length === 0 && (
           <p className="text-sm text-muted py-4 text-center">Sem comentários ainda</p>
         )}
