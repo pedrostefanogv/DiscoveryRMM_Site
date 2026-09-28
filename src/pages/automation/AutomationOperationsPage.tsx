@@ -21,6 +21,7 @@ import { useAgentsBySite } from "@/hooks/useAgents";
 import { useClients } from "@/hooks/useClients";
 import { useSites } from "@/hooks/useSites";
 import { useAutomationScripts, useAutomationTasks, useAutomationExecutions, useForceAutomationSync, useRunAutomationScriptNow, useRunAutomationTaskNow } from "@/hooks/useAutomation";
+import { wingetDecisionFromMetadata } from "./automationTasksUtils";
 
 function buildCorrelationId(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
@@ -145,12 +146,21 @@ export default function AutomationOperationsPage() {
       {
         key: "result",
         header: "Resultado",
-        render: (item) => (
-          <div className="text-xs">
-            <p className="text-foreground">ExitCode: {item.exitCode ?? "-"}</p>
-            <p className="text-muted">{item.errorMessage || "Sem erro"}</p>
-          </div>
-        ),
+        render: (item) => {
+          const decision = wingetDecisionFromMetadata(item.resultMetadataJson);
+          return (
+            <div className="text-xs">
+              <p className="text-foreground">ExitCode: {item.exitCode ?? "-"}</p>
+              <p className="text-muted">{item.errorMessage || "Sem erro"}</p>
+              {decision?.skip && (
+                <p className="text-warning" title={decision.reason ?? undefined}>
+                  Sem instalação: {decision.reason ?? "pacote já em estado final"}
+                  {decision.decidedBy ? ` (${decision.decidedBy})` : ""}
+                </p>
+              )}
+            </div>
+          );
+        },
       },
       {
         key: "correlation",

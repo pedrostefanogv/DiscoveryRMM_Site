@@ -97,3 +97,38 @@ export function normalizeInstallationType(value: unknown): AppInstallationType {
   }
   return AppInstallationType.Winget;
 }
+
+export interface WingetDecisionInfo {
+  skip: boolean;
+  benign: boolean;
+  reason: string | null;
+  decidedBy: string | null;
+}
+
+/**
+ * Extrai a decisão do winget do metadata de resultado do agent
+ * (`resultMetadataJson` -> `wingetDecision`). Serve para explicar na UI por que
+ * uma execução não instalou nada (ex.: pacote já instalado) e qual fonte decidiu
+ * ("winget" ou "inventory-cache" quando o winget está indisponível).
+ */
+export function wingetDecisionFromMetadata(
+  metadataJson: string | null | undefined,
+): WingetDecisionInfo | null {
+  if (!metadataJson) return null;
+  try {
+    const parsed = JSON.parse(metadataJson) as {
+      wingetDecision?: unknown;
+    } | null;
+    const decision = parsed?.wingetDecision;
+    if (!decision || typeof decision !== "object") return null;
+    const record = decision as Record<string, unknown>;
+    return {
+      skip: record.skip === true,
+      benign: record.benign === true,
+      reason: typeof record.reason === "string" ? record.reason : null,
+      decidedBy: typeof record.decidedBy === "string" ? record.decidedBy : null,
+    };
+  } catch {
+    return null;
+  }
+}
