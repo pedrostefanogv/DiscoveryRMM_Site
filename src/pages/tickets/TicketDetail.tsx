@@ -37,6 +37,7 @@ import { useTicketAttachmentSettings } from '@/hooks/useConfigurationApi';
 import { useSiteTicketAttachmentSettings, useClientTicketAttachmentSettings } from '@/hooks/useConfigurationApi';
 import { useWorkflowStates } from '@/hooks/useWorkflow';
 import { useIamUsers } from '@/hooks/useIdentity';
+import { useWheelScrollChaining } from '@/hooks/useWheelScrollChaining';
 import { useAgent } from '@/hooks/useAgents';
 import {
   useApproveTicketAutomationLink,
@@ -132,6 +133,19 @@ export default function TicketDetail() {
     () => getUserIdFromJwt(session.accessToken),
     [session.accessToken],
   );
+  // "Próprio" na conversa do chamado: o autor do comentário é o LOGIN do
+  // usuário. Fonte primária é o claim unique_name do JWT; sem ele (token sem
+  // login), cai para o login do usuário na lista do IAM.
+  const currentUserLogin = useMemo(() => {
+    const fromToken = getUserNameFromJwt(session.accessToken);
+    if (fromToken) return fromToken.trim().toLowerCase();
+
+    const fromIam = currentUserId
+      ? iamUsersById.get(currentUserId)?.login
+      : undefined;
+    return (fromIam ?? '').trim().toLowerCase();
+  }, [session.accessToken, currentUserId, iamUsersById]);
+
   // Hook chamado antes dos returns condicionais (usa dados do ticket quando disponíveis).
   const attachmentSettings = useEffectiveTicketAttachmentSettings(
     ticket.data?.siteId ?? null,
@@ -269,7 +283,11 @@ export default function TicketDetail() {
             </div>
             <div className="p-4">
               {tab === 'comments' ? (
-                <CommentsPanel ticketId={id!} draftSeed={commentSeed} />
+                <CommentsPanel
+                  ticketId={id!}
+                  draftSeed={commentSeed}
+                  currentUserLogin={currentUserLogin}
+                />
               ) : tab === 'timeline' ? (
                 <TimelinePanel ticketId={id!} onOpenComments={() => setTab('comments')} />
               ) : tab === 'automation' ? (
@@ -299,7 +317,11 @@ export default function TicketDetail() {
                   uploadedBy={currentUserName}
                 />
               ) : (
-                <CommentsPanel ticketId={id!} draftSeed={commentSeed} />
+                <CommentsPanel
+                  ticketId={id!}
+                  draftSeed={commentSeed}
+                  currentUserLogin={currentUserLogin}
+                />
               )}
             </div>
           </Card>
@@ -1716,24 +1738,23 @@ type CommentItem = {
 function CommentsPanel({
   ticketId,
   draftSeed,
+  currentUserLogin,
 }: {
   ticketId: string;
   draftSeed?: CommentSeed | null;
+  /** Login do usuário logado já em minúsculas; vazio quando não resolvido. */
+  currentUserLogin: string;
 }) {
+  // Rolagem do histórico: ao chegar no fim, o restante do delta vai para a
+  // página (mesmo comportamento do agent desktop).
+  const commentsListRef = useWheelScrollChaining<HTMLDivElement>();
   // Paginação por cursor: acumula páginas (antes crescia o limit, refazendo a
   // 1ª página e sem teto).
-  const { session } = useAuth();
   const [pages, setPages] = useState<CommentPage<CommentItem>[]>([]);
   const [cursor, setCursor] = useState<string | undefined>(undefined);
   const comments = useTicketComments(ticketId, { cursor });
   const items = pages.flatMap(page => page.items);
 
-  // O autor de um comentario e o login do usuario (claim unique_name do JWT);
-  // e o que permite alinhar a propria mensagem a direita, como no agent.
-  const currentUserLogin = useMemo(
-    () => (getUserNameFromJwt(session.accessToken) ?? '').trim().toLowerCase(),
-    [session.accessToken],
-  );
   const isOwnComment = (author: string | null | undefined) =>
     Boolean(currentUserLogin) &&
     (author ?? '').trim().toLowerCase() === currentUserLogin;
@@ -1755,7 +1776,7 @@ function CommentsPanel({
 
   return (
     <>
-      <div className="space-y-3 max-h-80 overflow-y-auto">
+      <div ref={commentsListRef} className="space-y-3 max-h-80 overflow-y-auto">
         {comments.isLoading && <Loading />}
         {comments.isError && !comments.isLoading && (
           <div className="flex flex-col items-center gap-2 py-4 text-center text-sm text-danger">

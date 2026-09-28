@@ -11,8 +11,10 @@ export function useP2POverview(params: P2POverviewParams, enabled = true) {
     queryKey: P2P_KEYS.overview(params),
     queryFn: ({ signal }) => p2pApi.getOverview(params, { signal }),
     enabled,
-    staleTime: 30_000,
-    refetchInterval: 300_000,
+    // Telemetria chega a cada ~5 min; 60s garante que o card reflita o primeiro
+    // envio (e mudanças de janela) sem exigir clique em "Atualizar".
+    staleTime: 15_000,
+    refetchInterval: 60_000,
     refetchIntervalInBackground: false,
   });
 }

@@ -1,17 +1,42 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 import type { ReactNode } from "react";
 
 /**
  * Regressao do layout de conversa da aba Comentarios: o comentario do proprio
- * usuario logado (author == login do claim unique_name) fica a direita
- * (bg-primary / items-end) e os demais (agent, outros tecnicos) a esquerda
- * (bg-surface-light / items-start), como no agent desktop.
+ * usuario logado fica a direita (bg-primary / items-end) e os demais (agent,
+ * outros tecnicos) a esquerda (bg-surface-light / items-start), como no agent
+ * desktop.
+ *
+ * O "proprio" e resolvido pelo login: claim unique_name do JWT e, quando o
+ * token nao o traz, pelo login do usuario na lista do IAM.
  */
 
-const ACCESS_TOKEN = `header.eyJ1bmlxdWVfbmFtZSI6InBlZHJvLnN0ZWZhbm8iLCJzdWIiOiJ1c2VyLTEifQ.sig`;
+/** Monta um JWT sintaticamente valido (so o payload importa). */
+function makeToken(payload: Record<string, unknown>): string {
+  const base64url = btoa(JSON.stringify(payload))
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
+
+  return `header.${base64url}.sig`;
+}
+
+const IAM_USERS = [
+  {
+    id: "user-2",
+    login: "pedro.stefano",
+    email: "pedro@example.com",
+    fullName: "Pedro Stefano",
+    isActive: true,
+    mfaRequired: false,
+  },
+];
+
+// MUTAVEL: cada teste escolhe o token da sessao (o mock de useAuth le daqui).
+let CURRENT_TOKEN = makeToken({ unique_name: "pedro.stefano", sub: "user-1" });
 
 const COMMENTS = [
   {
@@ -87,6 +112,10 @@ vi.mock("@/api", async (importOriginal) => {
       ...actual.departmentsApi,
       list: () => Promise.resolve([]),
     },
+    iamApi: {
+      ...actual.iamApi,
+      listUsers: () => Promise.resolve(IAM_USERS),
+    },
   };
 });
 
@@ -100,7 +129,7 @@ vi.mock("@/services/configurationApi", async (importOriginal) => {
 });
 
 vi.mock("@/auth/AuthContext", () => ({
-  useAuth: () => ({ session: { accessToken: ACCESS_TOKEN } }),
+  useAuth: () => ({ session: { accessToken: CURRENT_TOKEN } }),
 }));
 
 vi.mock("@/hooks/useTickets", async (importOriginal) => {
@@ -152,5 +181,21 @@ describe("TicketDetail comentarios em baloes", () => {
     const internalBubble = screen.getAllByText("Comentario interno de teste")[0];
     expect(internalBubble.className).toContain("border-warning/40");
     expect(screen.getAllByText("Interno").length).toBeGreaterThan(0);
+  });
+
+  it("usa o login do IAM quando o JWT nao traz unique_name", async () => {
+    // Token sem unique_name: so o fallback pelo IAM pode identificar o autor.
+    CURRENT_TOKEN = makeToken({ sub: "user-2" });
+
+    render(<TicketDetail />, { wrapper: createWrapper() });
+
+    await waitFor(() => {
+      const ownBubble = screen.getByText("Comentario proprio");
+      expect(ownBubble.className).toContain("bg-primary");
+      expect(ownBubble.parentElement?.className).toContain("items-end");
+    });
+
+    const agentBubble = screen.getByText("Comentario do agent");
+    expect(agentBubble.parentElement?.className).toContain("items-start");
   });
 });
