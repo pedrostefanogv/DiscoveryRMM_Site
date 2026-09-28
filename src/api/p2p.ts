@@ -10,7 +10,8 @@ export interface P2PQueryScope {
 }
 
 export interface P2POverviewParams extends P2PQueryScope {
-  window?: string;
+  /** Janela em horas (24/168/720). O endpoint /ops/p2p/overview espera `windowHours`. */
+  windowHours?: number;
 }
 
 export interface P2POverviewResponse {
@@ -20,7 +21,12 @@ export interface P2POverviewResponse {
   kpis: {
     activeAgents: number;
     activeSeeders: number;
+    /** Percentual 0..100 (consistente com o dashboard). */
     replicationSuccessRate: number;
+    /** Replicações iniciadas na janela (delta cumulativo). */
+    replicationsStartedDelta?: number;
+    /** Replicações concluídas com sucesso na janela. */
+    replicationsSucceededDelta?: number;
     bytesServedDelta: number;
     bytesDownloadedDelta: number;
     queuePressure: number;

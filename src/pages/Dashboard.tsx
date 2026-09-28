@@ -17,9 +17,9 @@ import {
 import type { ComponentType } from 'react';
 import { memo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useIsFetching, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useDashboardSummary } from '@/hooks/useDashboardSummary';
-import { useP2POverview } from '@/hooks/useP2POverview';
+import { P2PMetricsCard } from '@/components/agents/P2PMetricsCard';
 import { StatCard, Card, CardHeader, Badge, Button, SkeletonDashboard, ErrorDisplay } from '@/components/ui';
 import { getRealtimeStats } from '@/api';
 import { useSoftwareInventorySnapshot } from '@/hooks/useSoftwareInventory';
@@ -94,7 +94,10 @@ export default function Dashboard() {
     refetchInterval: 300_000,
     refetchIntervalInBackground: false,
   });
-  const p2pOverview = useP2POverview({ scope: 'global', window: range });
+  // O card P2P é dono da própria query; o refresh global invalida a chave 'p2p'.
+  const queryClient = useQueryClient();
+  // useIsFetching é reativo (queryClient.isFetching no render não era).
+  const p2pFetching = useIsFetching({ queryKey: ['p2p'] }) > 0;
 
   const ds = dashboard.data;
 
@@ -137,13 +140,12 @@ export default function Dashboard() {
   const cmds = ds?.commands;
   const auto = ds?.automation;
   const logs = ds?.logs;
-  const p2pKpis = p2pOverview.data?.kpis;
   const rangeLabel = WINDOWS.find((w) => w.value === range)?.label ?? range;
   const isAnyFetching =
     dashboard.isFetching ||
     realtimeStats.isFetching ||
     softwareSnapshot.isFetching ||
-    p2pOverview.isFetching;
+    p2pFetching;
 
   const handleRefresh = async () => {
     setIsManualRefreshing(true);
@@ -152,7 +154,7 @@ export default function Dashboard() {
         dashboard.refetch(),
         realtimeStats.refetch(),
         softwareSnapshot.refetch(),
-        p2pOverview.refetch(),
+        queryClient.invalidateQueries({ queryKey: ['p2p'] }),
       ]);
     } finally {
       setIsManualRefreshing(false);
@@ -578,21 +580,8 @@ export default function Dashboard() {
         </Card>
       </div>
 
-      {/* Linha 6 – P2P Summary Cards */}
-      {p2pOverview.isError && (
-        <div role="status" className="flex items-center justify-between gap-2 rounded-xl border border-danger/30 bg-danger/10 px-4 py-2 text-sm text-danger">
-          <span>Não foi possível carregar as métricas P2P.</span>
-          <Button variant="ghost" size="sm" onClick={() => void p2pOverview.refetch()}>
-            Tentar novamente
-          </Button>
-        </div>
-      )}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard icon={Monitor} label="Agentes ativos P2P" value={p2pKpis?.activeAgents ?? '\u2014'} tone="accent" />
-        <StatCard icon={Server} label="Seeders ativos" value={p2pKpis?.activeSeeders ?? '\u2014'} tone="primary" />
-        <StatCard icon={CheckCircle2} label="Success rate" value={typeof p2pKpis?.replicationSuccessRate === 'number' ? formatPercent(p2pKpis.replicationSuccessRate) : '\u2014'} tone="success" />
-        <StatCard icon={Database} label="Bytes servidos" value={formatBytes(p2pKpis?.bytesServedDelta)} tone="warning" />
-      </div>
+      {/* Linha 6 – Métricas P2P */}
+      <P2PMetricsCard window={range} />
     </div>
   );
 }
