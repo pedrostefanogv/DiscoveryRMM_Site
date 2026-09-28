@@ -29,6 +29,8 @@ export interface P2POverviewResponse {
     replicationsSucceededDelta?: number;
     bytesServedDelta: number;
     bytesDownloadedDelta: number;
+    /** Pré-cargas evitadas na janela por o pacote já estar em estado final. */
+    preloadSkippedFinalStateDelta?: number;
     queuePressure: number;
     artifactsWithPeers: number;
     lastTelemetryAtUtc?: string | null;

@@ -5,6 +5,7 @@ import {
   Download,
   Gauge,
   Network,
+  PackageCheck,
   RefreshCw,
   Server,
   ShieldCheck,
@@ -132,7 +133,7 @@ export function P2PMetricsCard({ scope = 'global', window = '24h' }: P2PMetricsC
 
       {overview.isLoading ? (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {Array.from({ length: 8 }).map((_, index) => (
+          {Array.from({ length: 9 }).map((_, index) => (
             <Skeleton key={index} variant="rectangular" height="54px" />
           ))}
         </div>
@@ -176,6 +177,13 @@ export function P2PMetricsCard({ scope = 'global', window = '24h' }: P2PMetricsC
             {kpiCard(<CheckCircle2 className="h-3.5 w-3.5" />, 'Replicações concluídas', formatNumber(kpis?.replicationsSucceededDelta), 'success')}
             {kpiCard(<Upload className="h-3.5 w-3.5" />, 'Bytes servidos', formatBytes(kpis?.bytesServedDelta), 'warning')}
             {kpiCard(<Download className="h-3.5 w-3.5" />, 'Bytes baixados', formatBytes(kpis?.bytesDownloadedDelta), 'primary')}
+            {/* Tráfego evitado: o agent consulta o estado real antes de pré-carregar. */}
+            {kpiCard(
+              <PackageCheck className="h-3.5 w-3.5" />,
+              'Pré-cargas evitadas (já instalado)',
+              formatNumber(kpis?.preloadSkippedFinalStateDelta),
+              'accent',
+            )}
           </div>
 
           <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-3">
