@@ -58,6 +58,17 @@ describe("normalizeExecutionStatus", () => {
     expect(normalizeExecutionStatus("2")).toBe(AutomationExecutionStatus.Completed);
   });
 
+  it("reconhece o status Cancelada (cancelamento pelo operador)", () => {
+    expect(normalizeExecutionStatus(4)).toBe(AutomationExecutionStatus.Cancelled);
+    expect(normalizeExecutionStatus("Cancelled")).toBe(AutomationExecutionStatus.Cancelled);
+    expect(executionStatusMeta("Cancelled")).toEqual({
+      label: "Cancelada",
+      color: "slate",
+      pending: false,
+    });
+    expect(isExecutionPending("Cancelled")).toBe(false);
+  });
+
   it("devolve null para valores desconhecidos", () => {
     expect(normalizeExecutionStatus("Running")).toBeNull();
     expect(normalizeExecutionStatus(9)).toBeNull();
@@ -179,6 +190,17 @@ describe("summarizeExecutions", () => {
       pending: 2,
     });
     expect(summary.successRate).toBe(0.5);
+  });
+
+  it("conta canceladas sem inflar a taxa de sucesso", () => {
+    const summary = summarizeExecutions([
+      makeReport({ id: "1", status: AutomationExecutionStatus.Completed }),
+      makeReport({ id: "2", status: "Cancelled" }),
+    ]);
+
+    expect(summary.cancelled).toBe(1);
+    expect(summary.pending).toBe(0);
+    expect(summary.successRate).toBe(1);
   });
 
   it("taxa de sucesso é 0 quando nada finalizou", () => {

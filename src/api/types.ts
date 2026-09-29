@@ -3647,6 +3647,8 @@ export enum AutomationExecutionStatus {
   Acknowledged = 1,
   Completed = 2,
   Failed = 3,
+  /** Cancelada pelo operador antes de finalizar. */
+  Cancelled = 4,
 }
 
 export enum AutomationScriptChangeType {
@@ -3822,6 +3824,19 @@ export interface AutomationTaskAudit {
   changedAt: string;
 }
 
+/** Resposta das ações de disparo/cancelamento (backend `AutomationExecutionDto`). */
+export interface AutomationExecutionDto {
+  id: string;
+  status: string;
+  createdAt: string;
+  commandId?: string | null;
+  agentId?: string;
+  taskId?: string | null;
+  scriptId?: string | null;
+  sourceType?: string | null;
+  correlationId?: string | null;
+}
+
 export interface AutomationRunNowTaskResponse {
   command: AgentCommand;
   taskId: string;
@@ -3876,7 +3891,10 @@ export interface AutomationScopeTarget {
 export interface AutomationScopeDispatchItem {
   agentId: string;
   hostname: string;
-  /** "dispatched" | "failed" | "skipped-offline" | "skipped-maintenance" */
+  /**
+   * "dispatched" (enviado agora) | "queued" (agent offline: entrega na
+   * reconexão) | "failed" | "skipped-offline" | "skipped-maintenance".
+   */
   status: string;
   error: string | null;
 }
@@ -3889,8 +3907,12 @@ export interface AutomationScopeDispatchResult {
   correlationId: string;
   totalAgents: number;
   eligibleAgents: number;
+  /** Enviados imediatamente (agent online). */
   dispatched: number;
+  /** Persistidos para agent offline — entregues na reconexão. */
+  queued: number;
   failed: number;
+  /** Offline sem reentrega ativa (configuração) — não receberam comando. */
   skippedOffline: number;
   skippedMaintenance: number;
   items: AutomationScopeDispatchItem[];

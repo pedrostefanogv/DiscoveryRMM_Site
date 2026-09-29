@@ -3,6 +3,7 @@ import type {
   AppApprovalScopeType,
   AutomationExecutionSourceType,
   AutomationExecutionStatus,
+  AutomationExecutionDto,
   AutomationScopeDispatchResult,
   AutomationScopeTarget,
   AutomationTaskActionType,
@@ -227,6 +228,18 @@ export const automationApi = {
     api.post<AutomationScopeDispatchResult>(
       `${scopeBase(scope)}/force-sync`,
       request,
+      correlationInit(correlationId),
+    ),
+
+  /**
+   * Cancela uma execução pendente: o comando vira terminal (sai da reentrega) e
+   * o histórico passa a exibir "Cancelada". Não interrompe execução já em
+   * andamento no agent.
+   */
+  cancelExecution: (agentId: string, executionId: string, correlationId?: string) =>
+    api.post<AutomationExecutionDto>(
+      `${AGENTS_BASE}/${agentId}/automation/executions/${executionId}/cancel`,
+      undefined,
       correlationInit(correlationId),
     ),
 

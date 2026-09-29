@@ -348,8 +348,9 @@ export default function AgentScheduledTasksPanel({
             ) : (
               <Ban className='h-4 w-4' />
             ),
-          disabled: !canManage || !isOnline,
-          hint: !isOnline ? 'offline' : undefined,
+          // Comando vai pelo dispatcher: offline entra na fila.
+          disabled: !canManage,
+          hint: !isOnline ? 'offline — o comando entra na fila' : undefined,
           onClick: () => {
             const enable = menu.task.state?.toLowerCase() === 'disabled';
             setMenu(null);
@@ -360,14 +361,14 @@ export default function AgentScheduledTasksPanel({
           key: 'run',
           label: 'Executar agora',
           icon: <Zap className='h-4 w-4' />,
-          disabled: !canManage || !isOnline,
+          disabled: !canManage,
           onClick: () => runNow(menu.task),
         },
         {
           key: 'edit',
           label: 'Editar gatilho/ação',
           icon: <Pencil className='h-4 w-4' />,
-          disabled: !canManage || !isOnline,
+          disabled: !canManage,
           separatorBefore: true,
           onClick: () => openEdit(menu.task),
         },
@@ -382,7 +383,7 @@ export default function AgentScheduledTasksPanel({
           label: 'Excluir tarefa',
           icon: <Trash2 className='h-4 w-4' />,
           danger: true,
-          disabled: !canManage || !isOnline,
+          disabled: !canManage,
           separatorBefore: true,
           onClick: () => {
             setMenu(null);
@@ -511,8 +512,11 @@ export default function AgentScheduledTasksPanel({
           variant='ghost'
           onClick={onRefresh}
           loading={isRefreshing}
-          disabled={!isOnline}
-          title={!isOnline ? 'Agente offline — refresh indisponível' : 'Solicitar nova coleta ao agent'}
+          title={
+            !isOnline
+              ? 'Agente offline — o pedido de coleta entra na fila e roda quando ele reconectar'
+              : 'Solicitar nova coleta ao agent'
+          }
         >
           <RefreshCw className='h-4 w-4' />
           Atualizar

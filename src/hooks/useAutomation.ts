@@ -353,6 +353,25 @@ export function useForceAutomationSync() {
 }
 
 /**
+ * Cancela uma execução pendente (comando terminal → sai da reentrega).
+ */
+export function useCancelAutomationExecution() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      agentId,
+      executionId,
+      correlationId,
+    }: {
+      agentId: string;
+      executionId: string;
+      correlationId?: string;
+    }) => automationApi.cancelExecution(agentId, executionId, correlationId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: KEYS.executions.all }),
+  });
+}
+
+/**
  * Operações em massa por cliente/site. Um comando (e um report) por agente
  * online do escopo; o resultado traz quantos ficaram de fora e por quê.
  */

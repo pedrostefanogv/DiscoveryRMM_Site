@@ -16,6 +16,8 @@ const STATUS_BY_NAME: Record<string, AutomationExecutionStatus> = {
   acknowledged: AutomationExecutionStatus.Acknowledged,
   completed: AutomationExecutionStatus.Completed,
   failed: AutomationExecutionStatus.Failed,
+  cancelled: AutomationExecutionStatus.Cancelled,
+  canceled: AutomationExecutionStatus.Cancelled,
 };
 
 const SOURCE_BY_NAME: Record<string, AutomationExecutionSourceType> = {
@@ -37,7 +39,7 @@ export function normalizeExecutionStatus(
   value: unknown,
 ): AutomationExecutionStatus | null {
   if (typeof value === "number") {
-    return Number.isInteger(value) && value >= 0 && value <= 3
+    return Number.isInteger(value) && value >= 0 && value <= 4
       ? (value as AutomationExecutionStatus)
       : null;
   }
@@ -48,7 +50,7 @@ export function normalizeExecutionStatus(
 
     const numeric = Number(trimmed);
     if (!Number.isNaN(numeric)) {
-      return Number.isInteger(numeric) && numeric >= 0 && numeric <= 3
+      return Number.isInteger(numeric) && numeric >= 0 && numeric <= 4
         ? (numeric as AutomationExecutionStatus)
         : null;
     }
@@ -82,6 +84,8 @@ export function executionStatusMeta(value: unknown): {
       return { label: "Completed", color: "success", pending: false };
     case AutomationExecutionStatus.Failed:
       return { label: "Failed", color: "danger", pending: false };
+    case AutomationExecutionStatus.Cancelled:
+      return { label: "Cancelada", color: "slate", pending: false };
     default:
       return { label: String(value ?? "Desconhecido"), color: "warning", pending: false };
   }
@@ -216,6 +220,7 @@ export interface ExecutionSummary {
   acknowledged: number;
   completed: number;
   failed: number;
+  cancelled: number;
   pending: number;
   /** Sucesso sobre execuções finalizadas (0 quando nenhuma finalizou). */
   successRate: number;
@@ -230,6 +235,7 @@ export function summarizeExecutions(
     acknowledged: 0,
     completed: 0,
     failed: 0,
+    cancelled: 0,
     pending: 0,
     successRate: 0,
   };
@@ -247,6 +253,9 @@ export function summarizeExecutions(
         break;
       case AutomationExecutionStatus.Failed:
         summary.failed += 1;
+        break;
+      case AutomationExecutionStatus.Cancelled:
+        summary.cancelled += 1;
         break;
       default:
         break;

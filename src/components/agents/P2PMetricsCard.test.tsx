@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const { overviewMock } = vi.hoisted(() => ({ overviewMock: vi.fn() }));
@@ -19,6 +19,8 @@ type Kpis = {
   bytesDownloadedDelta: number;
   queuePressure: number;
   artifactsWithPeers: number;
+  /** Tráfego evitado: pré-cargas abortadas por o pacote já estar no estado final. */
+  preloadSkippedFinalStateDelta?: number;
   lastTelemetryAtUtc?: string | null;
 };
 
@@ -56,6 +58,7 @@ const baseKpis: Kpis = {
   bytesDownloadedDelta: 512 * 1024 ** 2,
   queuePressure: 0.2,
   artifactsWithPeers: 4,
+  preloadSkippedFinalStateDelta: 2,
   lastTelemetryAtUtc: '2026-09-27T11:55:00Z',
 };
 
@@ -105,7 +108,12 @@ describe('P2PMetricsCard', () => {
     render(<P2PMetricsCard />);
 
     // Único "—" da tela: o success rate sem replicações observáveis.
-    expect(screen.getAllByText('\u2014')).toHaveLength(1);
+    // Asserção escopada no card de success rate: contar "\u2014" na tela inteira
+    // é frágil — outros KPIs (ex.: pré-cargas evitadas) também usam "\u2014" sem dado.
+    const successLabel = screen.getByText('Success rate');
+    const successCard = successLabel.closest('div')?.parentElement;
+    expect(successCard).toBeTruthy();
+    expect(within(successCard!).getByText('\u2014')).toBeTruthy();
     expect(screen.queryByText('0.0%')).toBeNull();
   });
 

@@ -3,6 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import toast from "react-hot-toast";
 import {
   Activity,
+  Ban,
   Building2,
   CheckCircle2,
   Clock,
@@ -47,6 +48,7 @@ import {
   useAutomationScripts,
   useAutomationTasks,
   useAutomationExecutions,
+  useCancelAutomationExecution,
   useForceAutomationSync,
   useForceAutomationSyncForScope,
   useRunAutomationScriptForScope,
@@ -63,6 +65,7 @@ import {
   executionStatusMeta,
   executionTargetName,
   filterExecutions,
+  isExecutionPending,
   formatDuration,
   summarizeExecutions,
 } from "@/modules/automation/executionUtils";
@@ -74,6 +77,7 @@ const STATUS_OPTIONS = [
   { value: String(AutomationExecutionStatus.Acknowledged), label: "Acknowledged" },
   { value: String(AutomationExecutionStatus.Completed), label: "Completed" },
   { value: String(AutomationExecutionStatus.Failed), label: "Failed" },
+  { value: String(AutomationExecutionStatus.Cancelled), label: "Cancelada" },
 ];
 
 const SOURCE_OPTIONS = [
@@ -156,6 +160,7 @@ export default function AutomationOperationsPage() {
   const [onlyFailures, setOnlyFailures] = useState(false);
   const [onlyPending, setOnlyPending] = useState(false);
   const [retryTarget, setRetryTarget] = useState<AutomationExecutionReport | null>(null);
+  const [cancelTarget, setCancelTarget] = useState<AutomationExecutionReport | null>(null);
 
   // Escopo da operação: agente único (padrão), site inteiro ou cliente inteiro.
   const [scopeMode, setScopeMode] = useState<"agent" | "site" | "client">("agent");
@@ -168,6 +173,12 @@ export default function AutomationOperationsPage() {
   useEffect(() => {
     setAgentId(urlAgentId);
   }, [urlAgentId]);
+
+  // Trocar de escopo/alvo invalida o resultado exibido: manter o painel do lote
+  // anterior ao lado de um novo contexto confunde.
+  useEffect(() => {
+    setBulkResult(null);
+  }, [scopeMode, clientId, siteId]);
 
   /**
    * O link vindo do detalhe do agente traz só o agentId. Sem client/site o
@@ -219,6 +230,7 @@ export default function AutomationOperationsPage() {
     !!agentId,
   );
 
+  const cancelExecution = useCancelAutomationExecution();
   const runTaskNow = useRunAutomationTaskNow();
   const runScriptNow = useRunAutomationScriptNow();
   const forceSync = useForceAutomationSync();
@@ -294,23 +306,22 @@ export default function AutomationOperationsPage() {
   const currentAgent =
     (agents.data ?? []).find((agent) => agent.id === agentId) ?? agentDetail.data ?? null;
 
-  // Em modo agente, operar um alvo offline só criaria comando órfão (o NATS core
-  // não entrega ao reconectar) — mesmo guard do detalhe do agente.
-  const agentOffline = Boolean(currentAgent && !currentAgent.isOnline);
+  // Agente offline não impede mais a operação: o comando é persistido e a
+  // reentrega o envia quando ele reconectar.
   const canRunInScope =
-    scopeMode === "agent" ? !agentOffline : Boolean(bulkScope) && scopeAgents.length > 0;
+    scopeMode === "agent" ? true : Boolean(bulkScope) && scopeAgents.length > 0;
 
   const bulkActionTitle = !canExecute
     ? "Sem permissão para executar automações"
     : scopeMode === "agent"
-      ? agentOffline
-        ? "Agent offline: sem entrega de comando até reconectar"
-        : undefined
+      ? undefined
       : !bulkScope
         ? "Selecione o escopo (cliente/site)"
-        : scopeOnline === 0
-          ? "Nenhum agente online no escopo"
-          : undefined;
+        : undefined;
+
+  // Com a confirmação aberta ou um lote em voo, os botões de escopo ficam
+  // bloqueados — evita disparar dois lotes por duplo clique.
+  const bulkBusy = bulkPending || pendingBulk !== null;
 
   const clearQuickFilters = () => {
     setOnlyFailures(false);
@@ -398,9 +409,10 @@ export default function AutomationOperationsPage() {
       setRetryTarget(null);
       return toast.error("Selecione um agent");
     }
-    if (agentOffline) {
-      setRetryTarget(null);
-      return toast.error("Agent offline: sem entrega de comando até reconectar");
+    if (currentAgent && !currentAgent.isOnline) {
+      toast(
+        "Agent offline: o comando fica na fila e é entregue quando ele reconectar",
+      );
     }
 
     const onSuccess = () => {
@@ -431,6 +443,29 @@ export default function AutomationOperationsPage() {
 
     setRetryTarget(null);
     toast.error("Execução sem tarefa/script — não é possível reenviar");
+  };
+
+  const handleConfirmCancel = () => {
+    const target = cancelTarget;
+    if (!target) return;
+    if (!agentId) {
+      setCancelTarget(null);
+      return toast.error("Selecione um agent");
+    }
+
+    cancelExecution.mutate(
+      { agentId, executionId: target.id, correlationId: buildCorrelationId("execution-cancel") },
+      {
+        onSuccess: () => {
+          setCancelTarget(null);
+          toast.success("Execução cancelada");
+        },
+        onError: (error) => {
+          setCancelTarget(null);
+          toast.error(errorMessage(error, "Falha ao cancelar execução"));
+        },
+      },
+    );
   };
 
   /** Abre a confirmação; o disparo em si acontece em handleConfirmBulk. */
@@ -644,28 +679,46 @@ export default function AutomationOperationsPage() {
       {
         key: "actions",
         header: "Ações",
-        render: (item) => (
-          <div className="flex items-center gap-1">
-            {canRetryExecution(item) ? (
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => setRetryTarget(item)}
-                disabled={!canExecute}
-                title={
-                  canExecute
-                    ? "Reenviar esta operação para o agent"
-                    : "Sem permissão para executar automações"
-                }
-              >
-                <RotateCcw className="h-3.5 w-3.5" />
-                Reenviar
-              </Button>
-            ) : (
-              <span className="text-xs text-muted">-</span>
-            )}
-          </div>
-        ),
+        render: (item) =>
+          // Execução em voo: cancelar (o comando vira terminal e sai da
+          // reentrega). Finalizada: reenviar.
+          isExecutionPending(item.status) ? (
+            <Button
+              variant="danger"
+              size="sm"
+              onClick={() => setCancelTarget(item)}
+              disabled={!canExecute}
+              title={
+                canExecute
+                  ? "Cancelar esta execução pendente"
+                  : "Sem permissão para executar automações"
+              }
+            >
+              <Ban className="h-3.5 w-3.5" />
+              Cancelar
+            </Button>
+          ) : (
+            <div className="flex items-center gap-1">
+              {canRetryExecution(item) ? (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setRetryTarget(item)}
+                  disabled={!canExecute}
+                  title={
+                    canExecute
+                      ? "Reenviar esta operação para o agent"
+                      : "Sem permissão para executar automações"
+                  }
+                >
+                  <RotateCcw className="h-3.5 w-3.5" />
+                  Reenviar
+                </Button>
+              ) : (
+                <span className="text-xs text-muted">-</span>
+              )}
+            </div>
+          ),
       },
     ],
     [canExecute, handleCopyCorrelation],
@@ -802,8 +855,8 @@ export default function AutomationOperationsPage() {
             <span className="font-mono text-xs text-muted">{agentId}</span>
             {currentAgent && !currentAgent.isOnline && (
               <span className="w-full text-xs text-warning">
-                Agent offline: não há entrega de comando para agente desconectado — aguarde
-                ele reconectar e dispare novamente.
+                Agent offline: o comando fica na fila e é entregue quando ele reconectar
+                (a reentrega roda em segundo plano).
               </span>
             )}
           </div>
@@ -820,16 +873,15 @@ export default function AutomationOperationsPage() {
             )}
             {bulkScope && (
               <p className="text-muted">
-                A operação será aplicada a <strong className="text-foreground">{scopeOnline}</strong>{" "}
-                agente(s) online. {scopeOffline > 0 && (
+                A operação atinge <strong className="text-foreground">{scopeOnline}</strong>{" "}
+                agente(s) online agora
+                {scopeOffline > 0 && (
                   <>
-                    <span className="text-warning">
-                      {scopeOffline} offline não receberão o comando
-                    </span>{" "}
-                    (não há entrega para agente desconectado) — dispare novamente quando
-                    reconectarem.
+                    {" "}e deixa <strong className="text-foreground">{scopeOffline}</strong> na fila
+                    para quando reconectarem
                   </>
                 )}
+                .
               </p>
             )}
           </div>
@@ -855,7 +907,7 @@ export default function AutomationOperationsPage() {
                   ? runTaskNow.isPending
                   : runTaskForScope.isPending && pendingBulk?.kind === "task"
               }
-              disabled={!canExecute || !canRunInScope}
+              disabled={!canExecute || !canRunInScope || (scopeMode !== "agent" && bulkBusy)}
               title={bulkActionTitle}
             >
               {scopeMode === "agent"
@@ -877,7 +929,7 @@ export default function AutomationOperationsPage() {
                   ? runScriptNow.isPending
                   : runScriptForScope.isPending && pendingBulk?.kind === "script"
               }
-              disabled={!canExecute || !canRunInScope}
+              disabled={!canExecute || !canRunInScope || (scopeMode !== "agent" && bulkBusy)}
               title={bulkActionTitle}
             >
               {scopeMode === "agent"
@@ -924,7 +976,7 @@ export default function AutomationOperationsPage() {
                   ? forceSync.isPending
                   : forceSyncForScope.isPending && pendingBulk?.kind === "force-sync"
               }
-              disabled={!canExecute || !canRunInScope}
+              disabled={!canExecute || !canRunInScope || (scopeMode !== "agent" && bulkBusy)}
               title={bulkActionTitle}
             >
               {scopeMode === "agent"
@@ -945,15 +997,26 @@ export default function AutomationOperationsPage() {
             subtitle={`${bulkResult.scope === "site" ? "Site" : "Cliente"} ${shortId(bulkResult.scopeId)} · correlation ${bulkResult.correlationId}`}
           />
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <StatCard icon={CheckCircle2} label="Comando enviado" value={bulkResult.dispatched} tone="success" />
-            <StatCard icon={WifiOff} label="Offline ignorados" value={bulkResult.skippedOffline} tone="warning" />
-            <StatCard icon={ServerCog} label="Em manutenção" value={bulkResult.skippedMaintenance} tone="accent" />
-            <StatCard icon={XCircle} label="Falhas" value={bulkResult.failed} tone="primary" />
+            <StatCard icon={CheckCircle2} label="Enviados agora" value={bulkResult.dispatched} tone="success" />
+            <StatCard icon={Clock} label="Na fila (offline)" value={bulkResult.queued} tone="accent" />
+            <StatCard icon={XCircle} label="Falhas" value={bulkResult.failed} tone="warning" />
+            <StatCard
+              icon={WifiOff}
+              label="Ignorados"
+              value={bulkResult.skippedOffline + bulkResult.skippedMaintenance}
+              tone="primary"
+            />
           </div>
           <p className="mt-3 text-xs text-muted">
-            {bulkResult.totalAgents} agente(s) no escopo · {bulkResult.eligibleAgents} elegível(is).
-            Cada disparo gera uma execução no histórico do respectivo agente com a mesma
-            correlation do lote.
+            {bulkResult.totalAgents} agente(s) no escopo · {bulkResult.eligibleAgents} receberam o
+            comando (agora ou na reconexão). Cada disparo gera uma execução no histórico do
+            respectivo agente com a mesma correlation do lote.
+            {bulkResult.skippedMaintenance > 0 && (
+              <> {bulkResult.skippedMaintenance} em manutenção foram excluídos.</>
+            )}
+            {bulkResult.skippedOffline > 0 && (
+              <> {bulkResult.skippedOffline} offline não receberam porque a reentrega está desativada.</>
+            )}
           </p>
           {bulkResult.failed > 0 && (
             <ul className="mt-2 space-y-1 text-xs">
@@ -1144,6 +1207,26 @@ export default function AutomationOperationsPage() {
       />
 
       <ConfirmDialog
+        open={cancelTarget !== null}
+        title="Cancelar execução"
+        confirmLabel="Cancelar execução"
+        message={
+          <>
+            Cancelar a execução{" "}
+            <strong className="font-mono text-xs">{cancelTarget?.id.slice(0, 8)}</strong>?
+            <br />
+            <span className="text-muted">
+              O comando não será mais entregue (sai da reentrega automática). Se o agent já
+              começou a executar, a execução em si não é interrompida.
+            </span>
+          </>
+        }
+        isLoading={cancelExecution.isPending}
+        onConfirm={handleConfirmCancel}
+        onClose={() => setCancelTarget(null)}
+      />
+
+      <ConfirmDialog
         open={pendingBulk !== null}
         title="Confirmar operação em massa"
         tone="primary"
@@ -1160,9 +1243,9 @@ export default function AutomationOperationsPage() {
               ({scopeMode === "site" ? "site inteiro" : "cliente inteiro"})?
               <br />
               <span className="text-muted">
-                {scopeOnline} agente(s) online receberão o comando agora
+                {scopeOnline} agente(s) online recebem agora
                 {scopeOffline > 0
-                  ? ` · ${scopeOffline} offline serão ignorados (sem entrega para agente desconectado).`
+                  ? ` · ${scopeOffline} offline entram na fila e recebem quando reconectarem.`
                   : "."}
               </span>
             </>

@@ -526,6 +526,12 @@ export default function AgentDetail() {
   if (agent.isError || !a || !aWithHeartbeat) return <ErrorDisplay onRetry={() => agent.refetch()} />;
 
   const isOnlineNow = isAgentOnlineNow(aWithHeartbeat, now);
+
+  // Ações que passam pelo dispatcher de comandos NÃO exigem mais agente online:
+  // o comando é persistido e a reentrega do servidor o entrega no reconhecimento.
+  // Continuam exigindo online apenas as ações de sessão ao vivo (acesso remoto) e
+  // a energia imediata (restart/shutdown), que são disruptivas por natureza.
+  const offlineQueueHint = 'agente offline — o comando entra na fila e é entregue quando ele reconectar';
   const isZeroTouchPending = aWithHeartbeat.zeroTouchPending === true;
   const canGoPrevSoftwarePage = safeSoftwarePage > 1;
   const canGoNextSoftwarePage = safeSoftwarePage < softwareTotalPages;
@@ -1182,11 +1188,11 @@ export default function AgentDetail() {
                 label: 'Atualizar aplicativo',
                 icon: <ArrowUpCircle className="h-4 w-4" />,
                 separatorBefore: true,
-                disabled: !isOnlineNow || !canExecuteAgent || updatingSoftwareId !== null,
+                disabled: !canExecuteAgent || updatingSoftwareId !== null,
                 hint: !canExecuteAgent
                   ? 'sem permissão'
                   : !isOnlineNow
-                    ? 'agente offline'
+                    ? offlineQueueHint
                     : undefined,
                 onClick: () => {
                   const item = softwareMenu.item;
@@ -1203,11 +1209,11 @@ export default function AgentDetail() {
                 label: 'Desinstalar aplicativo',
                 icon: <Trash2 className="h-4 w-4" />,
                 danger: true,
-                disabled: !isOnlineNow || !canExecuteAgent || updatingSoftwareId !== null,
+                disabled: !canExecuteAgent || updatingSoftwareId !== null,
                 hint: !canExecuteAgent
                   ? 'sem permissão'
                   : !isOnlineNow
-                    ? 'agente offline'
+                    ? offlineQueueHint
                     : undefined,
                 onClick: () => {
                   const item = softwareMenu.item;
@@ -2138,8 +2144,11 @@ export default function AgentDetail() {
                 variant="ghost"
                 onClick={handleRefreshSoftware}
                 loading={isRefreshingSoftware}
-                disabled={!isOnlineNow}
-                title={!isOnlineNow ? 'Agente offline \u2014 refresh indisponível' : 'Solicitar nova coleta de software ao agente'}
+                title={
+                  !isOnlineNow
+                    ? 'Agente offline — o pedido de coleta entra na fila e roda quando ele reconectar'
+                    : 'Solicitar nova coleta de software ao agente'
+                }
               >
                 <RefreshCw className="h-4 w-4" />
                 Atualizar
@@ -2334,8 +2343,11 @@ export default function AgentDetail() {
                 variant="ghost"
                 onClick={handleRefreshPrinters}
                 loading={isRefreshingPrinters || hwComponents.isFetching}
-                disabled={!isOnlineNow}
-                title={!isOnlineNow ? 'Agente offline \u2014 refresh indisponível' : 'Solicitar nova coleta de impressoras ao agente'}
+                title={
+                  !isOnlineNow
+                    ? 'Agente offline — o pedido de coleta entra na fila e roda quando ele reconectar'
+                    : 'Solicitar nova coleta de impressoras ao agente'
+                }
               >
                 <RefreshCw className="h-4 w-4" />
                 Atualizar
@@ -2394,8 +2406,11 @@ export default function AgentDetail() {
                 variant="ghost"
                 onClick={handleRefreshPorts}
                 loading={isRefreshingPorts}
-                disabled={!isOnlineNow}
-                title={!isOnlineNow ? 'Agente offline \u2014 refresh indisponível' : 'Solicitar nova coleta de portas ao agente'}
+                title={
+                  !isOnlineNow
+                    ? 'Agente offline — o pedido de coleta entra na fila e roda quando ele reconectar'
+                    : 'Solicitar nova coleta de portas ao agente'
+                }
               >
                 <RefreshCw className="h-4 w-4" />
                 Atualizar
@@ -2491,8 +2506,11 @@ export default function AgentDetail() {
                 variant="ghost"
                 onClick={handleRefreshConnections}
                 loading={isRefreshingConnections}
-                disabled={!isOnlineNow}
-                title={!isOnlineNow ? 'Agente offline \u2014 refresh indisponível' : 'Solicitar nova coleta de conexões ao agente'}
+                title={
+                  !isOnlineNow
+                    ? 'Agente offline — o pedido de coleta entra na fila e roda quando ele reconectar'
+                    : 'Solicitar nova coleta de conexões ao agente'
+                }
               >
                 <RefreshCw className="h-4 w-4" />
                 Atualizar
@@ -2859,7 +2877,7 @@ export default function AgentDetail() {
                     setSoftwareDetails(null);
                     void handleUpdateSoftware(item);
                   }}
-                  disabled={!isOnlineNow || !canExecuteAgent || updatingSoftwareId !== null}
+                  disabled={!canExecuteAgent || updatingSoftwareId !== null}
                 >
                   <ArrowUpCircle className="h-4 w-4" />
                   Atualizar
@@ -2873,7 +2891,7 @@ export default function AgentDetail() {
                     setSoftwareDetails(null);
                     openUninstallModal(item);
                   }}
-                  disabled={!isOnlineNow || !canExecuteAgent || updatingSoftwareId !== null}
+                  disabled={!canExecuteAgent || updatingSoftwareId !== null}
                 >
                   <Trash2 className="h-4 w-4" />
                   Desinstalar

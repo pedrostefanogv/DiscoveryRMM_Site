@@ -17,6 +17,7 @@ const {
   runTaskForScopeMock,
   runScriptForScopeMock,
   forceSyncForScopeMock,
+  cancelExecutionMock,
   toastErrorMock,
   toastSuccessMock,
   hasAnyPermissionMock,
@@ -27,6 +28,7 @@ const {
   runTaskForScopeMock: vi.fn(),
   runScriptForScopeMock: vi.fn(),
   forceSyncForScopeMock: vi.fn(),
+  cancelExecutionMock: vi.fn(),
   toastErrorMock: vi.fn(),
   toastSuccessMock: vi.fn(),
   hasAnyPermissionMock: vi.fn(() => true),
@@ -37,14 +39,20 @@ const bulkResult = {
   scopeId: "s1",
   correlationId: "bulk-task-1",
   totalAgents: 2,
-  eligibleAgents: 1,
+  eligibleAgents: 2,
   dispatched: 1,
+  queued: 1,
   failed: 0,
-  skippedOffline: 1,
+  skippedOffline: 0,
   skippedMaintenance: 0,
   items: [
     { agentId: "agent-1", hostname: "PC-001", status: "dispatched", error: null },
-    { agentId: "agent-2", hostname: "PC-002", status: "skipped-offline", error: null },
+    {
+      agentId: "agent-2",
+      hostname: "PC-002",
+      status: "queued",
+      error: "agent offline: aguardando reconexão",
+    },
   ],
 };
 
@@ -116,14 +124,38 @@ const executions = [
     taskName: null,
     scriptName: "Limpar Temp",
   },
+  {
+    id: "e3",
+    commandId: "cmd-3",
+    agentId: "agent-1",
+    taskId: "t2",
+    scriptId: null,
+    sourceType: "RunNow",
+    status: "Dispatched",
+    correlationId: "corr-3",
+    createdAt: "2026-01-01T12:00:00Z",
+    acknowledgedAt: null,
+    resultReceivedAt: null,
+    exitCode: null,
+    errorMessage: null,
+    requestMetadataJson: null,
+    ackMetadataJson: null,
+    resultMetadataJson: null,
+    taskName: "Aplicar Política",
+    scriptName: null,
+  },
 ];
 
-vi.mock("react-hot-toast", () => ({
-  default: {
-    success: (...args: unknown[]) => toastSuccessMock(...args),
-    error: (...args: unknown[]) => toastErrorMock(...args),
-  },
-}));
+vi.mock("react-hot-toast", () => {
+  // O default é chamável (toast("...")) e também expõe success/error.
+  const toastFn = (...args: unknown[]) => toastSuccessMock(...args);
+  return {
+    default: Object.assign(toastFn, {
+      success: (...args: unknown[]) => toastSuccessMock(...args),
+      error: (...args: unknown[]) => toastErrorMock(...args),
+    }),
+  };
+});
 
 vi.mock("@/hooks/useAutomation", () => ({
   useAutomationScripts: () => ({
@@ -152,6 +184,7 @@ vi.mock("@/hooks/useAutomation", () => ({
   useRunAutomationTaskForScope: () => ({ mutate: scopeMutation(runTaskForScopeMock), isPending: false }),
   useRunAutomationScriptForScope: () => ({ mutate: scopeMutation(runScriptForScopeMock), isPending: false }),
   useForceAutomationSyncForScope: () => ({ mutate: scopeMutation(forceSyncForScopeMock), isPending: false }),
+  useCancelAutomationExecution: () => ({ mutate: cancelExecutionMock, isPending: false }),
 }));
 
 const clientAgents = [
@@ -205,6 +238,7 @@ describe("AutomationOperationsPage", () => {
     runTaskForScopeMock.mockClear();
     runScriptForScopeMock.mockClear();
     forceSyncForScopeMock.mockClear();
+    cancelExecutionMock.mockClear();
   });
 
   afterEach(() => cleanup());
@@ -261,7 +295,7 @@ describe("AutomationOperationsPage", () => {
     });
   });
 
-  it("opera o cliente inteiro (sem site) e reporta agentes offline ignorados", () => {
+  it("opera o cliente inteiro (sem site) e enfileira agentes offline", () => {
     renderPage();
 
     fireEvent.click(screen.getByRole("button", { name: "Cliente inteiro" }));
@@ -274,9 +308,9 @@ describe("AutomationOperationsPage", () => {
       taskId: "t1",
     });
 
-    // Painel de resultado: 1 enviado, 1 offline ignorado.
+    // Painel de resultado: 1 enviado agora, 1 na fila para a reconexão.
     expect(screen.getByText("Resultado do último lote")).toBeTruthy();
-    expect(screen.getByText("Offline ignorados")).toBeTruthy();
+    expect(screen.getByText("Na fila (offline)")).toBeTruthy();
   });
 
   it("não deixa disparar em massa sem escopo selecionado", () => {
@@ -292,6 +326,19 @@ describe("AutomationOperationsPage", () => {
     expect(
       screen.getByRole("button", { name: /Executar tarefa/ }).hasAttribute("disabled"),
     ).toBe(true);
+  });
+
+  it("cancela uma execução pendente (comando sai da reentrega)", () => {
+    renderPage();
+
+    fireEvent.click(screen.getByRole("button", { name: "Cancelar" }));
+    fireEvent.click(screen.getByRole("button", { name: "Cancelar execução" }));
+
+    expect(cancelExecutionMock).toHaveBeenCalledTimes(1);
+    expect(cancelExecutionMock.mock.calls[0][0]).toMatchObject({
+      agentId: "agent-1",
+      executionId: "e3",
+    });
   });
 
   it("desabilita os disparos quando a conta não tem permissão de execução", () => {

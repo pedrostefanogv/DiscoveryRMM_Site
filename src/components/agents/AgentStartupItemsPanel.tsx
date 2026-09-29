@@ -201,8 +201,10 @@ export default function AgentStartupItemsPanel({
             ) : (
               <Ban className='h-4 w-4' />
             ),
-          disabled: !canManage || !isOnline,
-          hint: !isOnline ? 'offline' : undefined,
+          // Comando vai pelo dispatcher: offline entra na fila e é entregue no
+          // reconhecimento (a reentrega roda em segundo plano).
+          disabled: !canManage,
+          hint: !isOnline ? 'offline — o comando entra na fila' : undefined,
           onClick: () => requestToggle(menu.item),
         },
         {
@@ -306,8 +308,11 @@ export default function AgentStartupItemsPanel({
           variant='ghost'
           onClick={onRefresh}
           loading={isRefreshing}
-          disabled={!isOnline}
-          title={!isOnline ? 'Agente offline — refresh indisponível' : 'Solicitar nova coleta ao agent'}
+          title={
+            !isOnline
+              ? 'Agente offline — o pedido de coleta entra na fila e roda quando ele reconectar'
+              : 'Solicitar nova coleta ao agent'
+          }
         >
           <RefreshCw className='h-4 w-4' />
           Atualizar
