@@ -27,6 +27,7 @@ import {
   type UpdateAutomationTaskRequest,
 } from "@/api";
 import {
+  describeCron,
   normalizeNotificationMode,
   normalizeToastTiming,
   notificationModeFromTask,
@@ -48,7 +49,7 @@ import { useClients } from "@/hooks/useClients";
 import { useSites } from "@/hooks/useSites";
 import { useAgentsBySite } from "@/hooks/useAgents";
 import { useAppStoreCatalog } from "@/hooks/useAppStore";
-import { Search, LayoutGrid, List, Eye, Pencil, ScrollText, Trash2, RotateCcw, Info } from "lucide-react";
+import { Search, LayoutGrid, List, Eye, Pencil, ScrollText, Trash2, RotateCcw, Info, CalendarClock } from "lucide-react";
 
 function buildCorrelationId(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
@@ -186,6 +187,46 @@ const defaultForm: TaskFormState = {
   isActive: true,
 };
 
+// Atalhos e opções do assistente de agendamento (cron de 5 campos).
+const CRON_PRESETS = [
+  { label: "A cada hora", value: "0 * * * *" },
+  { label: "A cada 15 min", value: "*/15 * * * *" },
+  { label: "Todo dia 08:00", value: "0 8 * * *" },
+  { label: "Dias úteis 07:30", value: "30 7 * * 1-5" },
+  { label: "Toda segunda 08:00", value: "0 8 * * 1" },
+  { label: "Todo dia 1º 03:00", value: "0 3 1 * *" },
+];
+
+const CRON_HOUR_OPTIONS = Array.from({ length: 24 }, (_, hour) => ({
+  value: String(hour),
+  label: `${String(hour).padStart(2, "0")}h`,
+}));
+
+const CRON_MINUTE_OPTIONS = Array.from({ length: 60 }, (_, minute) => ({
+  value: String(minute),
+  label: `${String(minute).padStart(2, "0")} min`,
+}));
+
+const CRON_WEEKDAY_OPTIONS = [
+  { value: "1", label: "Segunda-feira" },
+  { value: "2", label: "Terça-feira" },
+  { value: "3", label: "Quarta-feira" },
+  { value: "4", label: "Quinta-feira" },
+  { value: "5", label: "Sexta-feira" },
+  { value: "6", label: "Sábado" },
+  { value: "0", label: "Domingo" },
+];
+
+const CRON_MONTH_DAY_OPTIONS = Array.from({ length: 31 }, (_, index) => ({
+  value: String(index + 1),
+  label: `Dia ${index + 1}`,
+}));
+
+const CRON_STEP_OPTIONS = [5, 10, 15, 20, 30].map((step) => ({
+  value: String(step),
+  label: `A cada ${step} minutos`,
+}));
+
 export default function AutomationTasksPage() {
   const [listMode, setListMode] = useState<"default" | "all" | "deleted">("default");
   const [searchFilter, setSearchFilter] = useState("");
@@ -225,6 +266,13 @@ export default function AutomationTasksPage() {
   const [tagPickerOpen, setTagPickerOpen] = useState(false);
   const [tagSearch, setTagSearch] = useState("");
   const [closeProcessInput, setCloseProcessInput] = useState("");
+  const [cronAssistantOpen, setCronAssistantOpen] = useState(true);
+  const [cronFrequency, setCronFrequency] = useState("daily");
+  const [cronMinute, setCronMinute] = useState("0");
+  const [cronHour, setCronHour] = useState("8");
+  const [cronWeekday, setCronWeekday] = useState("1");
+  const [cronMonthDay, setCronMonthDay] = useState("1");
+  const [cronStep, setCronStep] = useState("15");
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; item: AutomationTaskSummary } | null>(null);
   const [triggersHelpOpen, setTriggersHelpOpen] = useState(false);
 
@@ -822,6 +870,51 @@ export default function AutomationTasksPage() {
         return start >= ranges[i][0] && end <= max && start <= end;
       })
     );
+  };
+
+  // Monta a expressão cron a partir das opções do assistente. Os overrides
+  // evitam ler estado defasado quando o próprio select alterado dispara o rebuild.
+  const buildCronFromAssistant = (
+    overrides: Partial<{
+      frequency: string;
+      minute: string;
+      hour: string;
+      weekday: string;
+      monthDay: string;
+      step: string;
+    }> = {},
+  ): string => {
+    const frequency = overrides.frequency ?? cronFrequency;
+    const minute = overrides.minute ?? cronMinute;
+    const hour = overrides.hour ?? cronHour;
+    const weekday = overrides.weekday ?? cronWeekday;
+    const monthDay = overrides.monthDay ?? cronMonthDay;
+    const step = overrides.step ?? cronStep;
+    switch (frequency) {
+      case "minutes":
+        return `*/${step} * * * *`;
+      case "hourly":
+        return `${minute} * * * *`;
+      case "monthly":
+        return `${minute} ${hour} ${monthDay} * *`;
+      case "weekly":
+        return `${minute} ${hour} * * ${weekday}`;
+      default:
+        return `${minute} ${hour} * * *`;
+    }
+  };
+
+  const applyCronFromAssistant = (
+    overrides: Partial<{
+      frequency: string;
+      minute: string;
+      hour: string;
+      weekday: string;
+      monthDay: string;
+      step: string;
+    }> = {},
+  ) => {
+    setForm((prev) => ({ ...prev, scheduleCron: buildCronFromAssistant(overrides) }));
   };
 
   const handleSubmit = () => {
@@ -1596,19 +1689,6 @@ export default function AutomationTasksPage() {
               </div>
             )}
           </div>
-          <div className="space-y-1">
-            <Input
-              label="ScheduleCron (5 campos: min hora dia mes dia-semana)"
-              value={form.scheduleCron}
-              onChange={(e) => setForm((p) => ({ ...p, scheduleCron: e.target.value }))}
-              disabled={!form.triggerRecurring}
-              placeholder="Ex.: 0 8 * * 1 (toda segunda 08:00)"
-            />
-            {form.triggerRecurring && form.scheduleCron.trim() && !isValidCron(form.scheduleCron) && (
-              <p className="text-xs text-danger">Cron inválida — use 5 campos: minuto (0-59) hora (0-23) dia (1-31) mês (1-12) dia-semana (0-6). Suporta * , - /</p>
-            )}
-            {form.triggerRecurring && <p className="text-xs text-muted">Executada no fuso horário local do agent.</p>}
-          </div>
         </div>
 
         <div className="mt-3 space-y-1">
@@ -1646,6 +1726,142 @@ export default function AutomationTasksPage() {
             ))}
           </div>
         </div>
+
+        {form.triggerRecurring && (
+          <div className="mt-3 space-y-3 rounded-xl border border-border bg-surface-light p-3">
+            <div className="flex items-start justify-between gap-2">
+              <div className="space-y-0.5">
+                <p className="text-sm font-medium text-foreground">Agendamento recorrente (cron)</p>
+                <p className="text-xs text-muted">
+                  Expressão de 5 campos: minuto hora dia do mês mês dia da semana — no fuso local do agent.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="inline-flex shrink-0 items-center gap-1 rounded-full border border-border bg-surface px-2 py-0.5 text-xs text-muted transition-colors hover:bg-surface-hover hover:text-foreground"
+                onClick={() => setCronAssistantOpen((v) => !v)}
+              >
+                <CalendarClock className="h-3.5 w-3.5" />
+                {cronAssistantOpen ? "Ocultar assistente" : "Assistente de agendamento"}
+              </button>
+            </div>
+
+            <div className="space-y-1">
+              <Input
+                label="ScheduleCron (5 campos: min hora dia mes dia-semana)"
+                value={form.scheduleCron}
+                onChange={(e) => setForm((p) => ({ ...p, scheduleCron: e.target.value }))}
+                placeholder="Ex.: 0 8 * * 1 (toda segunda 08:00)"
+              />
+              {form.scheduleCron.trim() ? (
+                <p className={`text-xs ${isValidCron(form.scheduleCron) ? "text-muted" : "text-danger"}`}>
+                  {describeCron(form.scheduleCron)}
+                </p>
+              ) : (
+                <p className="text-xs text-muted">Informe a expressão cron ou use o assistente para montá-la.</p>
+              )}
+            </div>
+
+            {cronAssistantOpen && (
+              <div className="space-y-3 rounded-lg border border-border bg-surface/40 p-3">
+                <div className="space-y-1">
+                  <p className="text-xs font-medium text-muted-foreground">Atalhos</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {CRON_PRESETS.map((preset) => (
+                      <button
+                        key={preset.value}
+                        type="button"
+                        className="rounded-full border border-border bg-surface-light px-2.5 py-1 text-xs text-foreground transition-colors hover:bg-surface-hover"
+                        onClick={() => setForm((p) => ({ ...p, scheduleCron: preset.value }))}
+                      >
+                        {preset.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="grid gap-3 md:grid-cols-4">
+                  <Select
+                    label="Frequência"
+                    options={[
+                      { value: "minutes", label: "A cada N minutos" },
+                      { value: "hourly", label: "A cada hora" },
+                      { value: "daily", label: "Diariamente" },
+                      { value: "weekly", label: "Semanalmente" },
+                      { value: "monthly", label: "Mensalmente" },
+                    ]}
+                    value={cronFrequency}
+                    onChange={(e) => {
+                      setCronFrequency(e.target.value);
+                      applyCronFromAssistant({ frequency: e.target.value });
+                    }}
+                  />
+                  {cronFrequency === "minutes" && (
+                    <Select
+                      label="Intervalo"
+                      options={CRON_STEP_OPTIONS}
+                      value={cronStep}
+                      onChange={(e) => {
+                        setCronStep(e.target.value);
+                        applyCronFromAssistant({ step: e.target.value });
+                      }}
+                    />
+                  )}
+                  {(cronFrequency === "daily" ||
+                    cronFrequency === "weekly" ||
+                    cronFrequency === "monthly") && (
+                    <Select
+                      label="Hora"
+                      options={CRON_HOUR_OPTIONS}
+                      value={cronHour}
+                      onChange={(e) => {
+                        setCronHour(e.target.value);
+                        applyCronFromAssistant({ hour: e.target.value });
+                      }}
+                    />
+                  )}
+                  {cronFrequency !== "minutes" && (
+                    <Select
+                      label="Minuto"
+                      options={CRON_MINUTE_OPTIONS}
+                      value={cronMinute}
+                      onChange={(e) => {
+                        setCronMinute(e.target.value);
+                        applyCronFromAssistant({ minute: e.target.value });
+                      }}
+                    />
+                  )}
+                  {cronFrequency === "weekly" && (
+                    <Select
+                      label="Dia da semana"
+                      options={CRON_WEEKDAY_OPTIONS}
+                      value={cronWeekday}
+                      onChange={(e) => {
+                        setCronWeekday(e.target.value);
+                        applyCronFromAssistant({ weekday: e.target.value });
+                      }}
+                    />
+                  )}
+                  {cronFrequency === "monthly" && (
+                    <Select
+                      label="Dia do mês"
+                      options={CRON_MONTH_DAY_OPTIONS}
+                      value={cronMonthDay}
+                      onChange={(e) => {
+                        setCronMonthDay(e.target.value);
+                        applyCronFromAssistant({ monthDay: e.target.value });
+                      }}
+                    />
+                  )}
+                </div>
+
+                <p className="text-xs text-muted">
+                  O assistente apenas monta a expressão — você pode refiná-la manualmente no campo acima.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="mt-4 space-y-3 rounded-xl border border-border bg-surface-light p-3">
           <div>

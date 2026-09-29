@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { AutomationNotificationMode, AutomationToastTiming } from '@/api/types';
 import {
+  describeCron,
   normalizeNotificationMode,
   normalizeToastTiming,
   notificationModeFromTask,
@@ -52,6 +53,35 @@ describe('wingetDecisionFromMetadata', () => {
       reason: null,
       decidedBy: null,
     });
+  });
+});
+
+describe('describeCron', () => {
+  it('descreve horário e dia da semana', () => {
+    expect(describeCron('0 8 * * 1')).toBe('Executa às 08:00, toda segunda-feira.');
+    expect(describeCron('30 7 * * 1-5')).toBe('Executa às 07:30, de segunda-feira a sexta-feira.');
+    // 0 e 7 são domingo no cron.
+    expect(describeCron('0 8 * * 0')).toBe('Executa às 08:00, todo domingo.');
+    expect(describeCron('0 8 * * 7')).toBe('Executa às 08:00, todo domingo.');
+    expect(describeCron('0 8 * * 6')).toBe('Executa às 08:00, todo sábado.');
+  });
+
+  it('descreve intervalos e execuções por hora', () => {
+    expect(describeCron('*/15 * * * *')).toBe('Executa a cada 15 minutos, todos os dias.');
+    expect(describeCron('0 * * * *')).toBe('Executa a cada hora (no minuto 00), todos os dias.');
+  });
+
+  it('descreve dia do mês e mês', () => {
+    expect(describeCron('0 3 1 * *')).toBe('Executa às 03:00, no dia 1 do mês.');
+    expect(describeCron('0 0 1 1 *')).toBe('Executa às 00:00, no dia 1 do mês e em janeiro.');
+  });
+
+  it('avisa quando a expressão está vazia, incompleta ou inválida', () => {
+    expect(describeCron('')).toContain('Informe uma expressão');
+    expect(describeCron('0 8 * *')).toContain('5 campos');
+    expect(describeCron('99 8 * * *')).toContain('minuto');
+    expect(describeCron('0 8 * * 9')).toContain('dia da semana');
+    expect(describeCron('0 8 * 13 *')).toContain('mês');
   });
 });
 

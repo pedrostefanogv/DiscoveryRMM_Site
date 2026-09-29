@@ -159,6 +159,184 @@ export function toastTimingLabel(value: unknown): string {
     : "Após a conclusão";
 }
 
+
+// ── Descrição de cron (5 campos, dialeto robfig/cron) ───────────────────────
+const CRON_WEEKDAY_NAMES = [
+  "domingo",
+  "segunda-feira",
+  "terça-feira",
+  "quarta-feira",
+  "quinta-feira",
+  "sexta-feira",
+  "sábado",
+];
+
+const CRON_MONTH_NAMES = [
+  "janeiro",
+  "fevereiro",
+  "março",
+  "abril",
+  "maio",
+  "junho",
+  "julho",
+  "agosto",
+  "setembro",
+  "outubro",
+  "novembro",
+  "dezembro",
+];
+
+function pad2(value: string | number): string {
+  return String(value).padStart(2, "0");
+}
+
+function isCronNumber(field: string): boolean {
+  return /^\d+$/.test(field);
+}
+
+// O cron aceita 0 ou 7 para domingo.
+function cronWeekdayName(value: string): string | undefined {
+  const n = Number(value);
+  return CRON_WEEKDAY_NAMES[n === 7 ? 0 : n];
+}
+
+// "toda segunda-feira" / "todo sábado" / "todo domingo".
+function weekdayPhrase(name: string): string {
+  return name.endsWith("feira") ? `toda ${name}` : `todo ${name}`;
+}
+
+function describeCronWeekdays(field: string): string | null {
+  if (isCronNumber(field)) {
+    const n = Number(field);
+    if (n < 0 || n > 7) return null;
+    return weekdayPhrase(cronWeekdayName(field)!);
+  }
+  const range = field.match(/^(\d)-(\d)$/);
+  if (range) {
+    const from = Number(range[1]);
+    const to = Number(range[2]);
+    if (from < 0 || to > 7 || from >= to) return null;
+    return `de ${cronWeekdayName(range[1])} a ${cronWeekdayName(range[2])}`;
+  }
+  const step = field.match(/^\*\/(\d+)$/);
+  if (step) {
+    const n = Number(step[1]);
+    return n >= 1 && n <= 6 ? `a cada ${n} dias da semana` : null;
+  }
+  const list = field.split(",");
+  if (list.length > 1 && list.every((item) => isCronNumber(item) && Number(item) >= 0 && Number(item) <= 7)) {
+    return list.map((item) => weekdayPhrase(cronWeekdayName(item)!)).join(", ");
+  }
+  return null;
+}
+
+function describeCronMonthDays(field: string): string | null {
+  if (isCronNumber(field)) {
+    const n = Number(field);
+    if (n < 1 || n > 31) return null;
+    return `${n}`;
+  }
+  const range = field.match(/^(\d+)-(\d+)$/);
+  if (range) {
+    const from = Number(range[1]);
+    const to = Number(range[2]);
+    if (from < 1 || to > 31 || from >= to) return null;
+    return `${from} ao ${to}`;
+  }
+  const step = field.match(/^\*\/(\d+)$/);
+  if (step) {
+    const n = Number(step[1]);
+    return n >= 1 && n <= 31 ? `a cada ${n} dias` : null;
+  }
+  return null;
+}
+
+function describeCronMonths(field: string): string | null {
+  const name = (value: string) => CRON_MONTH_NAMES[Number(value) - 1];
+  if (isCronNumber(field)) {
+    const n = Number(field);
+    return n >= 1 && n <= 12 ? name(field) : null;
+  }
+  const range = field.match(/^(\d+)-(\d+)$/);
+  if (range) {
+    const from = Number(range[1]);
+    const to = Number(range[2]);
+    if (from < 1 || to > 12 || from >= to) return null;
+    return `${name(range[1])} a ${name(range[2])}`;
+  }
+  const list = field.split(",");
+  if (list.length > 1 && list.every((item) => isCronNumber(item) && Number(item) >= 1 && Number(item) <= 12)) {
+    return list.map(name).join(", ");
+  }
+  return null;
+}
+
+function describeCronTime(minute: string, hour: string): string | null {
+  const minuteStep = minute.match(/^\*\/(\d+)$/);
+  if (minuteStep && hour === "*") {
+    const n = Number(minuteStep[1]);
+    if (n < 1 || n > 59) return null;
+    return n === 1 ? "a cada minuto" : `a cada ${n} minutos`;
+  }
+  const hourStep = hour.match(/^\*\/(\d+)$/);
+  if (isCronNumber(minute) && hourStep) {
+    const n = Number(hourStep[1]);
+    if (n < 1 || n > 23) return null;
+    return `a cada ${n} horas (no minuto ${pad2(minute)})`;
+  }
+  if (minute === "*" && hour === "*") return "a cada minuto";
+  if (isCronNumber(minute) && hour === "*") return `a cada hora (no minuto ${pad2(minute)})`;
+  if (isCronNumber(minute) && isCronNumber(hour)) {
+    if (Number(minute) > 59 || Number(hour) > 23) return null;
+    return `às ${pad2(hour)}:${pad2(minute)}`;
+  }
+  return null;
+}
+
+/**
+ * Traduz uma expressão cron de 5 campos (minuto hora dia-do-mês mês
+ * dia-da-semana) para uma frase em português. Serve de feedback ao usuário
+ * enquanto ele monta o agendamento. Retorna uma mensagem de erro amigável
+ * quando a expressão não é reconhecida.
+ */
+export function describeCron(expr: string): string {
+  const raw = String(expr ?? "").trim();
+  if (!raw) return "Informe uma expressão cron para ver a descrição.";
+  const fields = raw.split(/\s+/);
+  if (fields.length !== 5) {
+    return "Expressão incompleta — o cron deve ter 5 campos (minuto hora dia do mês mês dia da semana).";
+  }
+  const [minute, hour, monthDay, month, weekday] = fields;
+
+  const time = describeCronTime(minute, hour);
+  if (!time) return "Expressão inválida — confira minuto (0-59) e hora (0-23).";
+
+  const dateParts: string[] = [];
+  const weekdays = weekday === "*" ? null : describeCronWeekdays(weekday);
+  const monthDays = monthDay === "*" ? null : describeCronMonthDays(monthDay);
+  if (weekday !== "*" && !weekdays) return "Expressão inválida — confira o dia da semana (0-6).";
+  if (monthDay !== "*" && !monthDays) return "Expressão inválida — confira o dia do mês (1-31).";
+
+  const months = month === "*" ? null : describeCronMonths(month);
+  if (month !== "*" && !months) return "Expressão inválida — confira o mês (1-12).";
+
+  if (!weekdays && !monthDays) {
+    dateParts.push(months ? `todos os dias de ${months}` : "todos os dias");
+  } else if (weekdays && monthDays) {
+    // No cron padrão, dia-do-mês e dia-da-semana restritos se combinam com OU.
+    dateParts.push(`${weekdays} ou no dia ${monthDays} do mês`);
+  } else if (weekdays) {
+    dateParts.push(weekdays);
+  } else {
+    dateParts.push(`no dia ${monthDays} do mês`);
+  }
+  if (months && (weekdays || monthDays)) {
+    dateParts.push(`em ${months}`);
+  }
+
+  return `Executa ${time}, ${dateParts.join(" e ")}.`;
+}
+
 export interface WingetDecisionInfo {
   skip: boolean;
   benign: boolean;
