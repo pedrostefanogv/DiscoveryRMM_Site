@@ -1155,6 +1155,13 @@ export default function RemoteSession() {
                   nkeySeed={sessions.terminal.nkeySeed}
                   onConnectionChange={setTerminalConnected}
                   onShells={(shells) => setAvailableShells(shells)}
+                  // Reconexão automática do WebSocket: busca credencial nova
+                  // (o JWT do viewer tem TTL próprio) em vez de reusar a antiga.
+                  getFreshCredentials={() =>
+                    remoteSessionsApi
+                      .getSessionCredentials(agentId, sessions.terminal!.sessionId)
+                      .then((creds) => creds.jwt)
+                  }
                 />
               </div>
             </div>

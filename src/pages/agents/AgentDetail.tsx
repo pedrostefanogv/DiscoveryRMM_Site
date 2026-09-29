@@ -38,7 +38,7 @@ import { isAgentOnlineNow } from '@/utils/agentStatus';
 import { useNowTick } from '@/hooks/useNowTick';
 import { isHeartbeatTimestampFresh, useAgentHeartbeat } from '@/stores/heartbeatStore';
 import { agentLabelsApi } from '@/modules/agent-labels/api';
-import type { AgentLabelChangeLog, AgentLabelSuppression } from '@/modules/agent-labels/types';
+import type { AgentLabelChangeLog } from '@/modules/agent-labels/types';
 import { AgentLabelApplyMode, AgentLabelSourceType, type AgentLabel } from '@/modules/agent-labels/types';
 import { openRemoteDebugPopup } from './remoteDebugLauncher';
 import { openRemoteSessionPopup } from './remoteSessionLauncher';
@@ -99,12 +99,8 @@ export default function AgentDetail() {
   // curada) + labels que ja existem como manuais em algum agente. Automaticas ficam fora.
   const [manualLabelOptions, setManualLabelOptions] = useState<string[]>([]);
   const [showLabelHistory, setShowLabelHistory] = useState(false);
-  // Labels suprimidas: removidas manualmente e que o reconcile respeita enquanto a
-  // condição da regra continuar verdadeira. Visíveis para poder liberá-las.
-  const [labelSuppressions, setLabelSuppressions] = useState<AgentLabelSuppression[]>([]);
   // Histórico de aplicação/remoção gravado pelo motor (auditoria).
   const [labelHistory, setLabelHistory] = useState<AgentLabelChangeLog[]>([]);
-  const [isReleasingSuppression, setIsReleasingSuppression] = useState<string | null>(null);
   const [showLabelPicker, setShowLabelPicker] = useState(false);
   const [labelPickerQuery, setLabelPickerQuery] = useState('');
   const labelPickerRef = useRef<HTMLDivElement>(null);
@@ -259,14 +255,12 @@ export default function AgentDetail() {
       setLabelsError(null);
 
       try {
-        const [data, rules, manualDistinct, suppressions, history] = await Promise.all([
+        const [data, rules, manualDistinct, history] = await Promise.all([
           agentLabelsApi.getAgentLabels(id),
           // Regras definem as labels manuais "oficiais" (modo Manual).
           agentLabelsApi.getRules(true).catch(() => []),
           // Labels que JÁ existem como manuais em algum agente (dado legado/sem regra).
           agentLabelsApi.getDistinctLabels(500, 'Manual').catch(() => []),
-          // Labels suprimidas: removidas manualmente e que o reconcile está respeitando.
-          agentLabelsApi.getSuppressions(id).catch(() => []),
           // Histórico de aplicação/remoção (auditoria do motor).
           agentLabelsApi.getHistory(id, 20).catch(() => []),
         ]);
@@ -284,7 +278,6 @@ export default function AgentDetail() {
             .filter(Boolean)
             .sort((a, b) => a.localeCompare(b, 'pt-BR')),
         );
-        setLabelSuppressions(suppressions);
         setLabelHistory(history);
       } catch {
         if (isCancelled) return;
@@ -347,28 +340,10 @@ export default function AgentDetail() {
     }
   }
 
-  async function handleReleaseSuppression(suppressionId: string, label: string) {
-    setIsReleasingSuppression(suppressionId);
-    try {
-      await agentLabelsApi.releaseSuppression(suppressionId);
-      setLabelSuppressions(prev => prev.filter(item => item.id !== suppressionId));
-      toast.success(`Supressão de "${label}" liberada. A label volta na próxima reconciliação.`);
-    } catch {
-      toast.error('Falha ao liberar a supressão.');
-    } finally {
-      setIsReleasingSuppression(null);
-    }
-  }
-
   async function handleRemoveManualLabel(labelId: string) {
     try {
       await agentLabelsApi.removeManualLabel(labelId);
       setAllLabels(prev => prev.filter(item => item.id !== labelId));
-      // Se era uma label automática, passa a constar como suprimida (não volta sozinha).
-      if (id) {
-        const refreshed = await agentLabelsApi.getSuppressions(id).catch(() => null);
-        if (refreshed) setLabelSuppressions(refreshed);
-      }
       toast.success('Label removida.');
     } catch (err) {
       if (err && typeof err === 'object' && 'status' in err) {
@@ -1682,12 +1657,12 @@ export default function AgentDetail() {
         </Tooltip>
       </div>
 
-      {/* Histórico e supressões saíram do card de labels: aquele card mostra só as labels. */}
-      {(labelSuppressions.length > 0 || labelHistory.length > 0) ? (
+      {/* Histórico saiu do card de labels: aquele card mostra só as labels. */}
+      {labelHistory.length > 0 ? (
         <Card>
           <CardHeader
-            title="Histórico e supressões de labels"
-            subtitle="Auditoria do motor e labels contidas manualmente"
+            title="Histórico de labels"
+            subtitle="Auditoria de aplicação e remoção de labels"
             action={labelHistory.length > 0 ? (
               <Button size="sm" variant="ghost" onClick={() => setShowLabelHistory(prev => !prev)}>
                 {showLabelHistory ? 'Ocultar histórico' : `Mostrar histórico (${labelHistory.length})`}
@@ -1695,43 +1670,9 @@ export default function AgentDetail() {
             ) : undefined}
           />
 
-          {labelSuppressions.length > 0 ? (
-            <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-3">
-              <p className="mb-2 text-xs font-medium text-amber-700 dark:text-amber-300">
-                Labels suprimidas ({labelSuppressions.length})
-              </p>
-              <p className="mb-2 text-[11px] text-muted">
-                Removidas manualmente. A regra não as reaplica enquanto a condição continuar
-                verdadeira; quando a condição deixar de valer, voltam a ser aplicadas automaticamente.
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {labelSuppressions.map(item => (
-                  <span
-                    key={item.id}
-                    className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface px-2.5 py-1 text-xs text-muted"
-                    title={item.ruleName ? `Regra: ${item.ruleName}` : 'Sem regra associada no momento'}
-                  >
-                    <span className="line-through">{item.label}</span>
-                    <span className="text-[10px] text-muted-foreground">
-                      {item.suppressedBy ? `por ${item.suppressedBy}` : 'manual'}
-                    </span>
-                    <button
-                      className="ml-0.5 inline-flex items-center justify-center rounded-full p-0.5 text-muted transition-colors hover:bg-surface-hover hover:text-success"
-                      title="Liberar supressão (a label volta a ser aplicada)"
-                      disabled={isReleasingSuppression === item.id}
-                      onClick={() => void handleReleaseSuppression(item.id, item.label)}
-                    >
-                      <RotateCcw className="h-3 w-3" />
-                    </button>
-                  </span>
-                ))}
-              </div>
-            </div>
-          ) : null}
-
           {showLabelHistory ? (
             labelHistory.length > 0 ? (
-              <div className="mt-3 max-h-72 space-y-1.5 overflow-y-auto pr-1">
+              <div className="max-h-72 space-y-1.5 overflow-y-auto pr-1">
                 {labelHistory.map(item => (
                   <div key={item.id} className="flex flex-wrap items-center gap-2 text-[11px] text-muted">
                     <span className={item.action === 'Removed' ? 'text-warning' : 'text-success'}>
@@ -1746,7 +1687,7 @@ export default function AgentDetail() {
                 ))}
               </div>
             ) : (
-              <p className="mt-3 text-sm text-muted">Sem histórico registrado.</p>
+              <p className="text-sm text-muted">Sem histórico registrado.</p>
             )
           ) : null}
         </Card>

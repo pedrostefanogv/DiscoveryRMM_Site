@@ -1,11 +1,10 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import { SearchAddon } from '@xterm/addon-search';
 import { ClipboardAddon } from '@xterm/addon-clipboard';
-import { useTerminalStream } from './useTerminalStream';
-import { remoteSessionsApi } from '@/api/remote-sessions';
+import { useTerminalStream, type TerminalErrorInfo } from './useTerminalStream';
 import { useTheme } from '@/theme/ThemeContext';
 import '@xterm/xterm/css/xterm.css';
 
@@ -40,6 +39,11 @@ interface RemoteTerminalProps {
   onConnectionChange?: (connected: boolean) => void;
   /** Reporta os shells disponíveis ao pai (para popular o seletor de shell). */
   onShells?: (shells: string[]) => void;
+  /**
+   * Renova as credenciais NATS antes de um reconnect AUTOMÁTICO. Sem isto o
+   * hook reusa o JWT da abertura e o WebSocket cai em -ERR authorization.
+   */
+  getFreshCredentials?: () => Promise<string>;
 }
 
 // TermReadyInfo compatível com o hook (avoid import cycle)
@@ -398,6 +402,7 @@ export default function RemoteTerminal({
   nkeySeed = '',
   onConnectionChange,
   onShells,
+  getFreshCredentials,
 }: RemoteTerminalProps) {
   const termRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
@@ -483,12 +488,16 @@ export default function RemoteTerminal({
   }, [mode]);
 
   // Wire NATS stream — console único (subjects fixos term.out / term.in)
-  const { isConnected, sendData, sendResize, onOutput, onExit, onReady } = useTerminalStream({
+  const { isConnected, sendData, sendResize, onOutput, onExit, onReady, onError, onReset, error } = useTerminalStream({
     natsSubject,
     natsUrl,
     jwt,
     nkeySeed,
+    getFreshCredentials,
   });
+
+  // Último erro reportado pelo agente/hook, exibido como banner persistente.
+  const [terminalError, setTerminalError] = useState<TerminalErrorInfo | null>(null);
 
   // Re-aplica o fit quando a conexão abre (garante resize correto para o agent).
   useEffect(() => {
@@ -498,15 +507,25 @@ export default function RemoteTerminal({
       try {
         fitAddonRef.current?.fit();
         const t2 = termRef.current;
-        if (t2) { lastFittedCols = t2.cols; lastFittedRows = t2.rows; }
+        if (t2) {
+          lastFittedCols = t2.cols; lastFittedRows = t2.rows;
+          // Envia as dimensões reais MESMO sem onResize: quando o fit não muda
+          // o tamanho o evento não dispara e o console ficaria no default do
+          // agente (120x40) até o usuário redimensionar a janela.
+          sendResize(t2.cols, t2.rows);
+        }
       } catch { /* ignore */ }
     }, 50);
     return () => clearTimeout(t);
-  }, [isConnected]);
+  }, [isConnected, sendResize]);
 
   // term.ready — reporta shells disponíveis ao pai
   useEffect(() => {
     const unsubscribe = onReady((info: TermReadyPayload) => {
+      // Console pronto = sessão saudável: limpa o erro anterior. NÃO limpamos
+      // no isConnected: um erro recebido no MESMO lote do +OK (start falhou +
+      // hello) seria apagado pelo efeito que roda logo depois.
+      setTerminalError(null);
       if (Array.isArray(info.shells) && info.shells.length > 0) {
         onShells?.(info.shells);
       }
@@ -575,13 +594,24 @@ export default function RemoteTerminal({
     return () => dispose.dispose();
   }, [sendData]);
 
+  // Debounce de 200 ms (mesmo padrão do MeshCentral): o ResizeObserver dispara
+  // em rajada durante o arraste da janela e cada evento viraria um
+  // ResizePseudoConsole + uma república de ready.
+  const resizeTimerRef = useRef<number | null>(null);
   useEffect(() => {
     if (!termRef.current) return;
     const dispose = termRef.current.onResize(({ cols, rows }) => {
       legacyEditorRef.current?.onResize();
-      sendResize(cols, rows);
+      if (resizeTimerRef.current !== null) window.clearTimeout(resizeTimerRef.current);
+      resizeTimerRef.current = window.setTimeout(() => {
+        resizeTimerRef.current = null;
+        sendResize(cols, rows);
+      }, 200);
     });
-    return () => dispose.dispose();
+    return () => {
+      dispose.dispose();
+      if (resizeTimerRef.current !== null) window.clearTimeout(resizeTimerRef.current);
+    };
   }, [sendResize]);
 
   useEffect(() => {
@@ -596,15 +626,60 @@ export default function RemoteTerminal({
     return unsubscribe;
   }, [onExit]);
 
-  // Para a sessão ao desmontar
+  // Erros de terminal/sessão reportados pelo agente (.term.out error / .event).
+  // Sem isto a falha ao iniciar o console era invisível: terminal vazio, sem
+  // mensagem, e o operador sem saber o que aconteceu.
   useEffect(() => {
-    return () => {
-      remoteSessionsApi.stopSession(agentId, sessionId).catch(() => {});
-    };
-  }, [agentId, sessionId]);
+    const unsubscribe = onError((info: TerminalErrorInfo) => {
+      setTerminalError(info);
+      termRef.current?.writeln(`\r\n\x1b[1;31m── Erro no terminal (${info.code}): ${info.reason} ──\x1b[0m\r\n`);
+    });
+    return unsubscribe;
+  }, [onError]);
+
+  // O anel de replay do agente não cobriu a lacuna: limpa o buffer para não
+  // emendar saída nova em saída velha.
+  useEffect(() => {
+    const unsubscribe = onReset(() => {
+      termRef.current?.reset();
+    });
+    return unsubscribe;
+  }, [onReset]);
+
+  // NÃO encerrar a sessão no unmount. Este componente é desmontado em dois
+  // fluxos que precisam da sessão VIVA:
+  //   1) "Reconectar" (a página troca a `key` para remontar com credencial
+  //      nova) — o cleanup antigo chamava stopSession e MATAVA a sessão que o
+  //      reconnect acabou de verificar como ativa;
+  //   2) troca de aba (só a aba ativa é renderizada) — encerrava o terminal
+  //      imediatamente em vez de deixar a política de liveness decidir.
+  // O ciclo de vida é da página (stopTabSession / handleStop / handleSwitchShell
+  // / resolução de conflito); as sessões sem viewer são encerradas pelo
+  // watchdog de liveness do agent (MissedPingsBeforeClose).
+  const bannerMessage = terminalError
+    ? `Terminal: ${terminalError.reason} (${terminalError.code})`
+    : error
+      ? `Conexão NATS: ${error}`
+      : null;
 
   return (
-    <div className="flex flex-col h-full bg-background">
+    // data-* com a identidade da sessão: o encerramento deixou de ser
+    // responsabilidade deste componente, mas os atributos mantêm a sessão
+    // rastreável no DOM (E2E/diagnóstico) sem prop morta.
+    <div
+      className="flex flex-col h-full bg-background"
+      data-session-id={sessionId}
+      data-agent-id={agentId}
+    >
+      {bannerMessage && (
+        <div
+          role="alert"
+          data-testid="terminal-error-banner"
+          className="px-3 py-1.5 text-xs bg-danger/15 text-danger border-b border-danger/30"
+        >
+          {bannerMessage}
+        </div>
+      )}
       {/* xterm.js container */}
       <div ref={containerRef} className="flex-1" style={{ minHeight: 0 }} />
     </div>
