@@ -19,11 +19,20 @@ import {
 import {
   AppApprovalScopeType,
   AppInstallationType,
+  AutomationNotificationMode,
   AutomationTaskActionType,
+  AutomationToastTiming,
   type AutomationTaskSummary,
   type CreateAutomationTaskRequest,
   type UpdateAutomationTaskRequest,
 } from "@/api";
+import {
+  normalizeNotificationMode,
+  normalizeToastTiming,
+  notificationModeFromTask,
+  notificationModeLabel,
+  toastTimingLabel,
+} from "./automationTasksUtils";
 import {
   useAutomationKnownTags,
   useAutomationScripts,
@@ -145,7 +154,8 @@ type TaskFormState = {
   triggerOnUserLogin: boolean;
   triggerOnAgentCheckIn: boolean;
   scheduleCron: string;
-  requiresApproval: boolean;
+  notificationMode: string;
+  toastTiming: string;
   allowDefer: boolean;
   closeProcesses: string[];
   promptTimeoutSeconds: number;
@@ -168,7 +178,8 @@ const defaultForm: TaskFormState = {
   triggerOnUserLogin: false,
   triggerOnAgentCheckIn: false,
   scheduleCron: "",
-  requiresApproval: false,
+  notificationMode: String(AutomationNotificationMode.Silent),
+  toastTiming: String(AutomationToastTiming.After),
   allowDefer: true,
   closeProcesses: [],
   promptTimeoutSeconds: 60,
@@ -259,6 +270,7 @@ export default function AutomationTasksPage() {
   const agents = useAgentsBySite(scopeSiteId);
   const selectedActionType = normalizeActionType(form.actionType);
   const selectedScopeType = normalizeScopeType(form.scopeType);
+  const formNotificationMode = normalizeNotificationMode(form.notificationMode);
   const isPackageAction =
     selectedActionType === AutomationTaskActionType.InstallPackage ||
     selectedActionType === AutomationTaskActionType.UpdatePackage ||
@@ -321,7 +333,8 @@ export default function AutomationTasksPage() {
       triggerOnUserLogin: detail.triggerOnUserLogin,
       triggerOnAgentCheckIn: detail.triggerOnAgentCheckIn,
       scheduleCron: detail.scheduleCron || "",
-      requiresApproval: detail.requiresApproval,
+      notificationMode: String(notificationModeFromTask(detail.notificationMode, detail.requiresApproval)),
+      toastTiming: String(normalizeToastTiming(detail.toastTiming)),
       allowDefer: detail.allowDefer ?? true,
       closeProcesses: detail.closeProcesses ?? [],
       promptTimeoutSeconds: detail.promptTimeoutSeconds ?? 60,
@@ -521,7 +534,8 @@ export default function AutomationTasksPage() {
       actionType: String(normalizeActionType(item.actionType)),
       scopeType: String(normalizedScopeType),
       scopeId: item.scopeId || "",
-      requiresApproval: item.requiresApproval,
+      notificationMode: String(notificationModeFromTask(item.notificationMode, item.requiresApproval)),
+      toastTiming: String(normalizeToastTiming(item.toastTiming)),
       allowDefer: item.allowDefer ?? true,
       closeProcesses: item.closeProcesses ?? [],
       promptTimeoutSeconds: item.promptTimeoutSeconds ?? 60,
@@ -612,17 +626,28 @@ export default function AutomationTasksPage() {
       {
         key: "notify",
         header: "Notificação",
-        render: (item) =>
-          item.requiresApproval ? (
-            <div className="space-y-0.5">
-              <Badge color="warning">Pergunta ao usuário</Badge>
-              <p className="text-xs text-muted">
-                {item.allowDefer === false ? "sem adiar" : "pode adiar"} · {item.promptTimeoutSeconds ?? 60}s
-              </p>
-            </div>
-          ) : (
-            <Badge color="slate">Silenciosa</Badge>
-          ),
+        render: (item) => {
+          const mode = notificationModeFromTask(item.notificationMode, item.requiresApproval);
+          if (mode === AutomationNotificationMode.Prompt) {
+            return (
+              <div className="space-y-0.5">
+                <Badge color="warning">Prompt PSADT</Badge>
+                <p className="text-xs text-muted">
+                  {item.allowDefer === false ? "sem adiar" : "pode adiar"} · {item.promptTimeoutSeconds ?? 60}s
+                </p>
+              </div>
+            );
+          }
+          if (mode === AutomationNotificationMode.Toast) {
+            return (
+              <div className="space-y-0.5">
+                <Badge color="accent">Toast</Badge>
+                <p className="text-xs text-muted">{toastTimingLabel(item.toastTiming)}</p>
+              </div>
+            );
+          }
+          return <Badge color="slate">Silenciosa</Badge>;
+        },
       },
       {
         key: "status",
@@ -834,7 +859,9 @@ export default function AutomationTasksPage() {
 
     // Campos de notificação só são relevantes quando o usuário será notificado:
     // valores antigos não devem bloquear o salvamento de uma tarefa silenciosa.
-    if (form.requiresApproval) {
+    const notificationMode = normalizeNotificationMode(form.notificationMode);
+    const promptMode = notificationMode === AutomationNotificationMode.Prompt;
+    if (promptMode) {
       if (promptTimeoutSeconds < 5 || promptTimeoutSeconds > 3600) {
         return toast.error("Tempo para ação padrão deve ficar entre 5 e 3600 segundos");
       }
@@ -897,10 +924,16 @@ export default function AutomationTasksPage() {
       triggerOnUserLogin: form.triggerOnUserLogin,
       triggerOnAgentCheckIn: form.triggerOnAgentCheckIn,
       scheduleCron: form.triggerRecurring ? form.scheduleCron.trim() : null,
-      requiresApproval: form.requiresApproval,
-      allowDefer: form.allowDefer,
-      closeProcesses,
-      promptTimeoutSeconds,
+      // requiresApproval continua no payload por compatibilidade com APIs
+      // antigas; notificationMode é a fonte de verdade.
+      requiresApproval: promptMode,
+      notificationMode,
+      toastTiming: normalizeToastTiming(form.toastTiming),
+      // Campos do Prompt não se aplicam a Silencioso/Toast: evita reenviar uma
+      // lista oculta que poderia reprovar na validação do servidor.
+      allowDefer: promptMode ? form.allowDefer : true,
+      closeProcesses: promptMode ? closeProcesses : [],
+      promptTimeoutSeconds: promptMode ? promptTimeoutSeconds : 60,
       isActive: form.isActive,
     };
 
@@ -1618,88 +1651,124 @@ export default function AutomationTasksPage() {
           <div>
             <p className="text-sm font-medium text-foreground">Notificação ao usuário</p>
             <p className="text-xs text-muted">
-              Quando ativada, o agent exibe o prompt <span className="font-medium">Welcome do PSADT</span> antes de
-              executar (Continuar / Adiar). Não é aprovação: se o usuário não responder, a ação padrão é continuar.
+              Escolha como o usuário da máquina é avisado. O{" "}
+              <span className="font-medium">Prompt</span> exibe o Welcome do PSADT (Continuar / Adiar), sem ser
+              aprovação: se o usuário não responder, a ação padrão é continuar. O{" "}
+              <span className="font-medium">Toast</span> é um aviso informativo simples, sem exigir interação. Em{" "}
+              <span className="font-medium">Silencioso</span> nenhuma notificação é exibida.
             </p>
           </div>
 
           <div className="grid gap-3 md:grid-cols-3">
             <Select
-              label="Notificar usuário antes de executar"
-              options={[{ value: "true", label: "Sim" }, { value: "false", label: "Não" }]}
-              value={String(form.requiresApproval)}
-              onChange={(e) => setForm((p) => ({ ...p, requiresApproval: e.target.value === "true" }))}
+              label="Como notificar"
+              options={[
+                { value: String(AutomationNotificationMode.Silent), label: "Silencioso (sem notificação)" },
+                { value: String(AutomationNotificationMode.Prompt), label: "Prompt PSADT (Continuar / Adiar)" },
+                { value: String(AutomationNotificationMode.Toast), label: "Toast simples (sem interação)" },
+              ]}
+              value={form.notificationMode}
+              onChange={(e) => setForm((p) => ({ ...p, notificationMode: e.target.value }))}
             />
-            <Select
-              label="Usuário pode adiar"
-              options={[{ value: "true", label: "Sim" }, { value: "false", label: "Não" }]}
-              value={String(form.allowDefer)}
-              disabled={!form.requiresApproval}
-              onChange={(e) => setForm((p) => ({ ...p, allowDefer: e.target.value === "true" }))}
-            />
-            <Input
-              label="Tempo para ação padrão (segundos)"
-              type="number"
-              min={5}
-              max={3600}
-              value={String(form.promptTimeoutSeconds)}
-              disabled={!form.requiresApproval}
-              onChange={(e) => setForm((p) => ({ ...p, promptTimeoutSeconds: Number(e.target.value) }))}
-            />
-          </div>
-
-          <div className="space-y-1">
-            <label className="block text-sm font-medium text-muted-foreground">
-              Processos a fechar antes de executar
-            </label>
-            <div className="flex gap-2">
-              <Input
-                value={closeProcessInput}
-                disabled={!form.requiresApproval}
-                placeholder="Ex.: WINWORD (Enter para adicionar)"
-                onChange={(e) => setCloseProcessInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === ",") {
-                    e.preventDefault();
-                    addCloseProcess(closeProcessInput);
-                  }
-                }}
-                className="flex-1"
+            {formNotificationMode === AutomationNotificationMode.Toast && (
+              <Select
+                label="Quando notificar"
+                options={[
+                  { value: String(AutomationToastTiming.Before), label: "Antes de executar" },
+                  { value: String(AutomationToastTiming.After), label: "Após a conclusão" },
+                ]}
+                value={form.toastTiming}
+                onChange={(e) => setForm((p) => ({ ...p, toastTiming: e.target.value }))}
               />
-              <Button
-                type="button"
-                variant="secondary"
-                disabled={!form.requiresApproval || !closeProcessInput.trim()}
-                onClick={() => addCloseProcess(closeProcessInput)}
-              >
-                Adicionar
-              </Button>
-            </div>
-            <p className="text-xs text-muted">
-              Lista entregue ao <span className="font-mono">CloseProcesses</span> do Welcome (máx. 20). Sem processos, o
-              prompt apenas pergunta antes de continuar.
-            </p>
-            {!!form.closeProcesses.length && (
-              <div className="flex flex-wrap gap-2 rounded-lg border border-border bg-surface/40 p-2">
-                {form.closeProcesses.map((processName) => (
-                  <span
-                    key={processName}
-                    className="inline-flex items-center gap-2 rounded-full border border-border bg-surface-light px-3 py-1 text-xs text-foreground"
-                  >
-                    {processName}
-                    <button
-                      type="button"
-                      className="text-muted hover:text-foreground"
-                      onClick={() => removeCloseProcess(processName)}
-                      aria-label={`Remover processo ${processName}`}
-                    >
-                      x
-                    </button>
-                  </span>
-                ))}
-              </div>
             )}
           </div>
+
+          {formNotificationMode === AutomationNotificationMode.Toast && (
+            <p className="text-xs text-muted">
+              O toast não exige autorização do usuário: ele apenas informa{" "}
+              {form.toastTiming === String(AutomationToastTiming.Before)
+                ? "antes de iniciar a execução"
+                : "após a conclusão da tarefa"}
+              .
+            </p>
+          )}
+
+          {formNotificationMode === AutomationNotificationMode.Silent && (
+            <p className="text-xs text-muted">A tarefa executa sem exibir nada ao usuário.</p>
+          )}
+
+          {formNotificationMode === AutomationNotificationMode.Prompt && (
+            <>
+              <div className="grid gap-3 md:grid-cols-3">
+                <Select
+                  label="Usuário pode adiar"
+                  options={[{ value: "true", label: "Sim" }, { value: "false", label: "Não" }]}
+                  value={String(form.allowDefer)}
+                  onChange={(e) => setForm((p) => ({ ...p, allowDefer: e.target.value === "true" }))}
+                />
+                <Input
+                  label="Tempo para ação padrão (segundos)"
+                  type="number"
+                  min={5}
+                  max={3600}
+                  value={String(form.promptTimeoutSeconds)}
+                  onChange={(e) => setForm((p) => ({ ...p, promptTimeoutSeconds: Number(e.target.value) }))}
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="block text-sm font-medium text-muted-foreground">
+                  Processos a fechar antes de executar
+                </label>
+                <div className="flex gap-2">
+                  <Input
+                    value={closeProcessInput}
+                    placeholder="Ex.: WINWORD (Enter para adicionar)"
+                    onChange={(e) => setCloseProcessInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === ",") {
+                        e.preventDefault();
+                        addCloseProcess(closeProcessInput);
+                      }
+                    }}
+                    className="flex-1"
+                  />
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    disabled={!closeProcessInput.trim()}
+                    onClick={() => addCloseProcess(closeProcessInput)}
+                  >
+                    Adicionar
+                  </Button>
+                </div>
+                <p className="text-xs text-muted">
+                  Lista entregue ao <span className="font-mono">CloseProcesses</span> do Welcome (máx. 20). Sem
+                  processos, o prompt apenas pergunta antes de continuar.
+                </p>
+                {!!form.closeProcesses.length && (
+                  <div className="flex flex-wrap gap-2 rounded-lg border border-border bg-surface/40 p-2">
+                    {form.closeProcesses.map((processName) => (
+                      <span
+                        key={processName}
+                        className="inline-flex items-center gap-2 rounded-full border border-border bg-surface-light px-3 py-1 text-xs text-foreground"
+                      >
+                        {processName}
+                        <button
+                          type="button"
+                          className="text-muted hover:text-foreground"
+                          onClick={() => removeCloseProcess(processName)}
+                          aria-label={`Remover processo ${processName}`}
+                        >
+                          x
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
 
           <div className="grid gap-3 md:grid-cols-3">
             <Select
@@ -1960,6 +2029,7 @@ export default function AutomationTasksPage() {
         {detailTask.data && !detailTask.isLoading && (() => {
           const d = detailTask.data;
           const detailIsDeleted = isTaskDeleted(d);
+          const detailNotificationMode = notificationModeFromTask(d.notificationMode, d.requiresApproval);
           return (
             <div className="space-y-4">
               {/* Cabeçalho */}
@@ -1972,8 +2042,16 @@ export default function AutomationTasksPage() {
                   <Badge color={detailIsDeleted ? "danger" : d.isActive ? "success" : "slate"}>
                     {detailIsDeleted ? "Excluida" : d.isActive ? "Ativa" : "Inativa"}
                   </Badge>
-                  <Badge color={d.requiresApproval ? "warning" : "slate"}>
-                    {d.requiresApproval ? "Pergunta ao usuário" : "Silenciosa"}
+                  <Badge
+                    color={
+                      detailNotificationMode === AutomationNotificationMode.Silent
+                        ? "slate"
+                        : detailNotificationMode === AutomationNotificationMode.Prompt
+                          ? "warning"
+                          : "accent"
+                    }
+                  >
+                    {notificationModeLabel(detailNotificationMode)}
                   </Badge>
                 </div>
               </div>
@@ -2021,7 +2099,7 @@ export default function AutomationTasksPage() {
                 {/* Notificação ao usuário */}
                 <div className="rounded-lg bg-surface-light border border-border p-3">
                   <p className="text-xs text-muted mb-1">Notificação ao usuário</p>
-                  {d.requiresApproval ? (
+                  {detailNotificationMode === AutomationNotificationMode.Prompt ? (
                     <div className="space-y-1">
                       <p className="text-sm text-foreground">Prompt Welcome (PSADT)</p>
                       <p className="text-xs text-muted">
@@ -2033,6 +2111,13 @@ export default function AutomationTasksPage() {
                           Fecha: {(d.closeProcesses ?? []).join(", ")}
                         </p>
                       )}
+                    </div>
+                  ) : detailNotificationMode === AutomationNotificationMode.Toast ? (
+                    <div className="space-y-1">
+                      <p className="text-sm text-foreground">Toast simples (PSADT)</p>
+                      <p className="text-xs text-muted">
+                        {toastTimingLabel(d.toastTiming)} · sem interação do usuário
+                      </p>
                     </div>
                   ) : (
                     <p className="text-sm text-muted">Execução silenciosa</p>
@@ -2087,6 +2172,8 @@ export default function AutomationTasksPage() {
                           isDeleted: d.isDeleted,
                           isActive: d.isActive,
                           requiresApproval: d.requiresApproval,
+                          notificationMode: d.notificationMode,
+                          toastTiming: d.toastTiming,
                           lastUpdatedAt: d.lastUpdatedAt,
                         },
                       );

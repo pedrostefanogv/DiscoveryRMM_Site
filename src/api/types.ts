@@ -3607,6 +3607,24 @@ export enum AutomationTaskActionType {
   UpdateOrInstallPackage = 5,
 }
 
+/** Como o usuário é notificado durante a execução da automation task. */
+export enum AutomationNotificationMode {
+  /** Nenhuma notificação. */
+  Silent = 0,
+  /** Prompt Welcome do PSADT (Continuar/Adiar) — sem autorização, ação padrão continuar. */
+  Prompt = 1,
+  /** Toast informativo do PSADT, sem interação. */
+  Toast = 2,
+}
+
+/** Momento do toast informativo (modo Toast). */
+export enum AutomationToastTiming {
+  /** Antes de iniciar a execução. */
+  Before = 0,
+  /** Após a conclusão. */
+  After = 1,
+}
+
 export enum AutomationScriptType {
   PowerShell = 0,
   Shell = 1,
@@ -3732,6 +3750,10 @@ export interface AutomationTaskSummary {
   closeProcesses?: string[];
   /** Tempo (s) para a acao padrao continuar quando o usuario nao responde. Default 60. */
   promptTimeoutSeconds?: number;
+  /** Como notificar o usuario: Silent, Prompt (Welcome) ou Toast. */
+  notificationMode?: AutomationNotificationMode | string | number;
+  /** Momento do toast informativo (Before/After); só se aplica ao modo Toast. */
+  toastTiming?: AutomationToastTiming | string | number;
   lastUpdatedAt: string;
 }
 
@@ -3776,6 +3798,10 @@ export interface CreateAutomationTaskRequest {
   closeProcesses?: string[];
   /** Tempo (s) para a acao padrao continuar. Default 60. */
   promptTimeoutSeconds?: number;
+  /** Como notificar o usuario. Ausente = derivado de requiresApproval (compatibilidade). */
+  notificationMode?: AutomationNotificationMode;
+  /** Momento do toast informativo. Ausente = After. */
+  toastTiming?: AutomationToastTiming;
   isActive?: boolean;
 }
 

@@ -1,7 +1,9 @@
 import {
   AppApprovalScopeType,
   AppInstallationType,
+  AutomationNotificationMode,
   AutomationTaskActionType,
+  AutomationToastTiming,
 } from "@/api/types";
 
 export function buildCorrelationId(prefix: string) {
@@ -96,6 +98,65 @@ export function normalizeInstallationType(value: unknown): AppInstallationType {
     if (value === "custom") return AppInstallationType.Custom;
   }
   return AppInstallationType.Winget;
+}
+
+export function normalizeNotificationMode(
+  value: unknown,
+): AutomationNotificationMode {
+  if (typeof value === "number") return value as AutomationNotificationMode;
+  if (typeof value === "string") {
+    const numeric = Number(value);
+    if (!Number.isNaN(numeric)) return numeric as AutomationNotificationMode;
+    if (value === "Silent") return AutomationNotificationMode.Silent;
+    if (value === "Prompt") return AutomationNotificationMode.Prompt;
+    if (value === "Toast") return AutomationNotificationMode.Toast;
+  }
+  return AutomationNotificationMode.Silent;
+}
+
+export function normalizeToastTiming(value: unknown): AutomationToastTiming {
+  if (typeof value === "number") return value as AutomationToastTiming;
+  if (typeof value === "string") {
+    const numeric = Number(value);
+    if (!Number.isNaN(numeric)) return numeric as AutomationToastTiming;
+    if (value === "Before") return AutomationToastTiming.Before;
+    if (value === "After") return AutomationToastTiming.After;
+  }
+  return AutomationToastTiming.After;
+}
+
+/**
+ * Resolve o modo efetivo de uma tarefa. Quando a resposta não traz
+ * `notificationMode` (API/cache antigos), deriva de `requiresApproval` para não
+ * exibir "Silenciosa" numa tarefa que na verdade pede o Prompt.
+ */
+export function notificationModeFromTask(
+  value: unknown,
+  requiresApproval?: boolean,
+): AutomationNotificationMode {
+  if (value === null || value === undefined || value === "") {
+    return requiresApproval
+      ? AutomationNotificationMode.Prompt
+      : AutomationNotificationMode.Silent;
+  }
+  return normalizeNotificationMode(value);
+}
+
+export function notificationModeLabel(value: unknown): string {
+  switch (normalizeNotificationMode(value)) {
+    case AutomationNotificationMode.Prompt:
+      return "Prompt PSADT (Continuar/Adiar)";
+    case AutomationNotificationMode.Toast:
+      return "Toast simples";
+    default:
+      return "Silencioso";
+  }
+}
+
+export function toastTimingLabel(value: unknown): string {
+  return normalizeToastTiming(value) === AutomationToastTiming.Before
+    ? "Antes de executar"
+    : "Após a conclusão";
 }
 
 export interface WingetDecisionInfo {
