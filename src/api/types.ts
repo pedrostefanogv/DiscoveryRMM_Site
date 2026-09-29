@@ -3859,6 +3859,41 @@ export interface AutomationExecutionReport {
   requestMetadataJson: string | null;
   ackMetadataJson: string | null;
   resultMetadataJson: string | null;
+  /** Nome da tarefa resolvido pela API (null quando não resolvível). */
+  taskName?: string | null;
+  /** Nome do script resolvido pela API (null quando não resolvível). */
+  scriptName?: string | null;
+}
+
+// ── Operações de automação em massa (cliente/site inteiro) ──
+
+/** Escopo de uma operação em massa: cliente ou cliente+site. */
+export interface AutomationScopeTarget {
+  clientId: string;
+  siteId?: string | null;
+}
+
+export interface AutomationScopeDispatchItem {
+  agentId: string;
+  hostname: string;
+  /** "dispatched" | "failed" | "skipped-offline" | "skipped-maintenance" */
+  status: string;
+  error: string | null;
+}
+
+export interface AutomationScopeDispatchResult {
+  /** "client" | "site" */
+  scope: string;
+  scopeId: string;
+  /** Correlation do lote gravada em cada execução do histórico. */
+  correlationId: string;
+  totalAgents: number;
+  eligibleAgents: number;
+  dispatched: number;
+  failed: number;
+  skippedOffline: number;
+  skippedMaintenance: number;
+  items: AutomationScopeDispatchItem[];
 }
 
 // ── Agent Transfer ─────────────────────────────────────

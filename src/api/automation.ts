@@ -1,6 +1,10 @@
-﻿import { api } from "./client";
+import { api } from "./client";
 import type {
   AppApprovalScopeType,
+  AutomationExecutionSourceType,
+  AutomationExecutionStatus,
+  AutomationScopeDispatchResult,
+  AutomationScopeTarget,
   AutomationTaskActionType,
   AutomationExecutionReport,
   AutomationForceSyncRequest,
@@ -21,6 +25,7 @@ import type {
 } from "./types";
 
 const SCRIPTS_BASE = "/api/v1/automation/scripts";
+const OPERATIONS_BASE = "/api/v1/automation/operations";
 const TASKS_BASE = "/api/v1/automation/tasks";
 const AGENTS_BASE = "/api/v1/agents";
 
@@ -40,6 +45,18 @@ export interface ListAutomationScriptsParams {
   limit?: number;
 }
 
+/**
+ * Filtros do histórico de execuções. Os filtros de status/origem/alvo são
+ * aplicados no backend; a busca textual continua no cliente.
+ */
+export interface ExecutionHistoryParams {
+  limit?: number;
+  status?: AutomationExecutionStatus | string | number;
+  sourceType?: AutomationExecutionSourceType | string | number;
+  taskId?: string;
+  scriptId?: string;
+}
+
 export interface ListAutomationTasksParams {
   search?: string;
   clientId?: string;
@@ -55,6 +72,16 @@ export interface ListAutomationTasksParams {
   includeDeleted?: boolean;
   cursor?: string;
   limit?: number;
+}
+
+/**
+ * Base do escopo em massa. O escopo vai na ROTA (não em query) para que o
+ * backend valide a permissão no nível certo (cliente ou site).
+ */
+function scopeBase(scope: AutomationScopeTarget): string {
+  return scope.siteId
+    ? `${OPERATIONS_BASE}/clients/${scope.clientId}/sites/${scope.siteId}`
+    : `${OPERATIONS_BASE}/clients/${scope.clientId}`;
 }
 
 export const automationApi = {
@@ -170,9 +197,48 @@ export const automationApi = {
       correlationInit(correlationId),
     ),
 
-  getExecutions: (agentId: string, limit = 50) =>
+  runTaskForScope: (
+    scope: AutomationScopeTarget,
+    taskId: string,
+    correlationId?: string,
+  ) =>
+    api.post<AutomationScopeDispatchResult>(
+      `${scopeBase(scope)}/tasks/${taskId}/run-now`,
+      undefined,
+      correlationInit(correlationId),
+    ),
+
+  runScriptForScope: (
+    scope: AutomationScopeTarget,
+    scriptId: string,
+    correlationId?: string,
+  ) =>
+    api.post<AutomationScopeDispatchResult>(
+      `${scopeBase(scope)}/scripts/${scriptId}/run-now`,
+      undefined,
+      correlationInit(correlationId),
+    ),
+
+  forceSyncForScope: (
+    scope: AutomationScopeTarget,
+    request: AutomationForceSyncRequest,
+    correlationId?: string,
+  ) =>
+    api.post<AutomationScopeDispatchResult>(
+      `${scopeBase(scope)}/force-sync`,
+      request,
+      correlationInit(correlationId),
+    ),
+
+  getExecutions: (agentId: string, params: ExecutionHistoryParams = {}) =>
     api.get<AutomationExecutionReport[]>(
       `${AGENTS_BASE}/${agentId}/automation/executions`,
-      { limit },
+      {
+        limit: params.limit ?? 50,
+        status: params.status,
+        sourceType: params.sourceType,
+        taskId: params.taskId,
+        scriptId: params.scriptId,
+      },
     ),
 };

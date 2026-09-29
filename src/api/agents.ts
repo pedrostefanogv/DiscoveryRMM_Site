@@ -22,7 +22,6 @@ import type {
   AgentCommand,
   AgentToken,
   ApproveZeroTouchResponse,
-  AutomationExecutionReport,
   CreateAgentRequest,
   DeletedAgentsPage,
   UpdateAgentRequest,
@@ -299,36 +298,9 @@ export const agentsApi = {
   getMyHeartbeat: () =>
     api.get<AgentHeartbeat>(`/api/v1/agent-auth/me/heartbeat`),
 
-  // Automation - run task/script on agent
-  runAutomationTask: (agentId: string, taskId: string) =>
-    api.post<Record<string, unknown>>(
-      `/api/v1/agents/${agentId}/automation/tasks/${taskId}/run-now`,
-    ),
-
-  runAutomationScript: (agentId: string, scriptId: string) =>
-    api.post<Record<string, unknown>>(
-      `/api/v1/agents/${agentId}/automation/scripts/${scriptId}/run-now`,
-    ),
-
-  forceAutomationSync: (
-    agentId: string,
-    data: {
-      policies?: boolean;
-      inventory?: boolean;
-      software?: boolean;
-      appStore?: boolean;
-    },
-  ) =>
-    api.post<Record<string, unknown>>(
-      `/api/v1/agents/${agentId}/automation/force-sync`,
-      data,
-    ),
-
-  getAutomationExecutions: (agentId: string, limit = 50) =>
-    api.get<AutomationExecutionReport[]>(
-      `/api/v1/agents/${agentId}/automation/executions`,
-      { limit },
-    ),
+  // Operações de automação (run-now/force-sync/execuções) ficam em
+  // `automationApi` (@/api/automation): a cópia que existia aqui não enviava o
+  // header X-Correlation-Id nem os filtros do histórico.
 
   // Transfer
   transfer: (agentId: string, data: TransferAgentRequest) =>

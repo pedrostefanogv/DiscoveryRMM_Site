@@ -1,8 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { automationApi } from "@/api/automation";
 import { agentLabelsApi } from "@/modules/agent-labels/api";
+import { isExecutionPending } from "@/modules/automation/executionUtils";
 import type {
   AppApprovalScopeType,
+  AutomationExecutionSourceType,
+  AutomationExecutionStatus,
+  AutomationScopeTarget,
   AutomationTaskActionType,
   AutomationForceSyncRequest,
   AutomationScriptAudit,
@@ -50,8 +54,8 @@ const KEYS = {
   },
   executions: {
     all: ["automationExecutions"] as const,
-    byAgent: (agentId: string, limit: number) =>
-      [...KEYS.executions.all, agentId, limit] as const,
+    byAgent: (agentId: string, filters: AutomationExecutionFilters) =>
+      [...KEYS.executions.all, agentId, filters] as const,
   },
 };
 
@@ -251,22 +255,45 @@ export function useRestoreAutomationTask() {
   });
 }
 
+export interface AutomationExecutionFilters {
+  limit?: number;
+  status?: AutomationExecutionStatus | string | number;
+  sourceType?: AutomationExecutionSourceType | string | number;
+  taskId?: string;
+  scriptId?: string;
+}
+
 export function useAutomationExecutions(
   agentId: string,
-  limit = 50,
+  filters: AutomationExecutionFilters = {},
   enabled = true,
 ) {
+  const { limit = 50, status, sourceType, taskId, scriptId } = filters;
+
   return useQuery({
-    queryKey: KEYS.executions.byAgent(agentId, limit),
-    queryFn: () => automationApi.getExecutions(agentId, limit),
+    queryKey: KEYS.executions.byAgent(agentId, {
+      limit,
+      status,
+      sourceType,
+      taskId,
+      scriptId,
+    }),
+    queryFn: () =>
+      automationApi.getExecutions(agentId, {
+        limit,
+        status,
+        sourceType,
+        taskId,
+        scriptId,
+      }),
     enabled: !!agentId && enabled,
+    placeholderData: (prev) => prev,
+    // A API devolve o status como string ("Dispatched"/"Acknowledged"); a versão
+    // anterior comparava com 0/1 e o polling nunca ligava.
     refetchInterval: (query) => {
       const data = query.state.data;
       if (!data?.length) return false;
-      const hasPending = data.some(
-        (item) => item.status === 0 || item.status === 1,
-      );
-      return hasPending ? 3000 : false;
+      return data.some((item) => isExecutionPending(item.status)) ? 3000 : false;
     },
   });
 }
@@ -283,10 +310,8 @@ export function useRunAutomationTaskNow() {
       taskId: string;
       correlationId?: string;
     }) => automationApi.runTaskNow(agentId, taskId, correlationId),
-    onSuccess: (_data, vars) => {
-      qc.invalidateQueries({
-        queryKey: KEYS.executions.byAgent(vars.agentId, 50),
-      });
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: KEYS.executions.all });
     },
   });
 }
@@ -303,10 +328,8 @@ export function useRunAutomationScriptNow() {
       scriptId: string;
       correlationId?: string;
     }) => automationApi.runScriptNow(agentId, scriptId, correlationId),
-    onSuccess: (_data, vars) => {
-      qc.invalidateQueries({
-        queryKey: KEYS.executions.byAgent(vars.agentId, 50),
-      });
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: KEYS.executions.all });
     },
   });
 }
@@ -323,11 +346,61 @@ export function useForceAutomationSync() {
       request: AutomationForceSyncRequest;
       correlationId?: string;
     }) => automationApi.forceSync(agentId, request, correlationId),
-    onSuccess: (_data, vars) => {
-      qc.invalidateQueries({
-        queryKey: KEYS.executions.byAgent(vars.agentId, 50),
-      });
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: KEYS.executions.all });
     },
+  });
+}
+
+/**
+ * Operações em massa por cliente/site. Um comando (e um report) por agente
+ * online do escopo; o resultado traz quantos ficaram de fora e por quê.
+ */
+export function useRunAutomationTaskForScope() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      scope,
+      taskId,
+      correlationId,
+    }: {
+      scope: AutomationScopeTarget;
+      taskId: string;
+      correlationId?: string;
+    }) => automationApi.runTaskForScope(scope, taskId, correlationId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: KEYS.executions.all }),
+  });
+}
+
+export function useRunAutomationScriptForScope() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      scope,
+      scriptId,
+      correlationId,
+    }: {
+      scope: AutomationScopeTarget;
+      scriptId: string;
+      correlationId?: string;
+    }) => automationApi.runScriptForScope(scope, scriptId, correlationId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: KEYS.executions.all }),
+  });
+}
+
+export function useForceAutomationSyncForScope() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      scope,
+      request,
+      correlationId,
+    }: {
+      scope: AutomationScopeTarget;
+      request: AutomationForceSyncRequest;
+      correlationId?: string;
+    }) => automationApi.forceSyncForScope(scope, request, correlationId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: KEYS.executions.all }),
   });
 }
 
