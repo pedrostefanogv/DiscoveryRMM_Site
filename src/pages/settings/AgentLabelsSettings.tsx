@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import toast from 'react-hot-toast';
 import { Layers, Clock, HardDrive, Monitor, Filter, Tags, CheckCircle2, XCircle } from 'lucide-react';
 import { Badge, Button, Card, CardHeader, ErrorDisplay, Input, Loading, Modal, Select, TextArea } from '@/components/ui';
@@ -13,6 +13,7 @@ import {
   AgentStatus,
   getAgentLabelApplyModeLabel,
   getAgentLabelComparisonOperatorLabel,
+  normalizeAgentLabelApplyMode,
   getAgentLabelFieldLabel,
   getAgentLabelLogicalOperatorLabel,
   isCustomFieldAgentLabelField,
@@ -21,6 +22,8 @@ import {
   type AgentLabelReprocessStatus,
   type AgentLabelRuleAgentItem,
   type AgentLabelRuleDryRunResponse,
+  type AgentLabelRuleExport,
+  type AgentLabelRuleVersion,
   type AgentLabelRuleImpactResponse,
   type AgentLabelRuleExpressionNodeDto,
   type AgentLabelRuleResponse,
@@ -95,6 +98,12 @@ const GROUP_ACCENTS = [
 
 type DryRunMode = 'site-batch' | 'single-agent';
 
+/** Itens por pagina no modal "Ver Agentes" (o backend aceita 1..500). */
+const APPLIED_PAGE_SIZE = 50;
+
+/** Teto do dry-run em lote (alinhado ao endpoint /rules/dry-run/batch). */
+const MAX_PREVIEW_AGENTS = 500;
+
 function countExpressionNodes(node: AgentLabelRuleExpressionNodeDto | null | undefined): { conditions: number; groups: number; disks: number } {
   if (!node) return { conditions: 0, groups: 0, disks: 0 };
   const result = { conditions: 0, groups: 0, disks: 0 };
@@ -140,6 +149,11 @@ export default function AgentLabelsSettings() {
   const [isReprocessing, setIsReprocessing] = useState(false);
   const [reprocessStatus, setReprocessStatus] = useState<AgentLabelReprocessStatus | null>(null);
   const [rulePendingDeletion, setRulePendingDeletion] = useState<AgentLabelRuleResponse | null>(null);
+  const [isExportingRules, setIsExportingRules] = useState(false);
+  const [importCandidate, setImportCandidate] = useState<AgentLabelRuleExport[] | null>(null);
+  const [importOverwrite, setImportOverwrite] = useState(false);
+  const [isImportingRules, setIsImportingRules] = useState(false);
+  const importFileRef = useRef<HTMLInputElement>(null);
   const [isEstimatingImpact, setIsEstimatingImpact] = useState(false);
   const [impactResult, setImpactResult] = useState<AgentLabelRuleImpactResponse | null>(null);
   const [isDeletingRule, setIsDeletingRule] = useState(false);
@@ -167,8 +181,12 @@ export default function AgentLabelsSettings() {
   const [previewLimit, setPreviewLimit] = useState(25);
   const [previewResults, setPreviewResults] = useState<Array<AgentLabelRuleDryRunResponse & { agentName: string }>>([]);
 
+  const [versionHistoryRule, setVersionHistoryRule] = useState<AgentLabelRuleResponse | null>(null);
+  const [ruleVersions, setRuleVersions] = useState<AgentLabelRuleVersion[]>([]);
+  const [isLoadingVersions, setIsLoadingVersions] = useState(false);
   const [agentsModalRule, setAgentsModalRule] = useState<AgentLabelRuleResponse | null>(null);
   const [appliedAgentsTotal, setAppliedAgentsTotal] = useState(0);
+  const [appliedPage, setAppliedPage] = useState(1);
   const [appliedResults, setAppliedResults] = useState<Array<{
     agentId: string;
     agentName: string;
@@ -241,11 +259,26 @@ export default function AgentLabelsSettings() {
     setAgentsModalRule(rule);
     setAppliedAgentsTotal(0);
     setAppliedResults([]);
-    void handleLoadAppliedAgents(rule);
+    setAppliedPage(1);
+    void handleLoadAppliedAgents(rule, 1);
   }
 
   function closeAgentsModal() {
     setAgentsModalRule(null);
+  }
+
+  /** Historico de versoes (configuracao) da regra — auditoria e rollback manual. */
+  async function openVersionHistory(rule: AgentLabelRuleResponse) {
+    setVersionHistoryRule(rule);
+    setRuleVersions([]);
+    setIsLoadingVersions(true);
+    try {
+      setRuleVersions(await agentLabelsApi.getRuleVersions(rule.id, 20));
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Falha ao carregar o histórico da regra.'));
+    } finally {
+      setIsLoadingVersions(false);
+    }
   }
 
   async function loadAll() {
@@ -419,6 +452,79 @@ export default function AgentLabelsSettings() {
     setRulePendingDeletion(rule);
   }
 
+  /** Exporta todas as regras em JSON (backup / promocao entre ambientes). */
+  async function handleExportRules() {
+    setIsExportingRules(true);
+    try {
+      const rulesToExport = await agentLabelsApi.exportRules();
+      const blob = new Blob([JSON.stringify(rulesToExport, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = `agent-label-rules-${new Date().toISOString().slice(0, 10)}.json`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+      toast.success(`${rulesToExport.length} regra(s) exportada(s).`);
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Falha ao exportar regras.'));
+    } finally {
+      setIsExportingRules(false);
+    }
+  }
+
+  function requestImportRules() {
+    importFileRef.current?.click();
+  }
+
+  async function handleImportFile(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+
+    try {
+      const parsed = JSON.parse(await file.text()) as unknown;
+      const list = Array.isArray(parsed)
+        ? parsed
+        : parsed && typeof parsed === 'object' && Array.isArray((parsed as { rules?: unknown }).rules)
+          ? ((parsed as { rules: unknown[] }).rules)
+          : null;
+
+      if (!list || list.length === 0) {
+        toast.error('Arquivo não contém regras para importar.');
+        return;
+      }
+
+      setImportCandidate(list as AgentLabelRuleExport[]);
+      setImportOverwrite(false);
+    } catch {
+      toast.error('Arquivo inválido: JSON malformado.');
+    }
+  }
+
+  async function confirmImportRules() {
+    if (!importCandidate) return;
+
+    setIsImportingRules(true);
+    try {
+      const result = await agentLabelsApi.importRules({
+        rules: importCandidate,
+        overwriteExisting: importOverwrite,
+      });
+      toast.success(
+        `Importação: ${result.created} criada(s), ${result.updated} atualizada(s), ${result.skipped} ignorada(s).`,
+      );
+      if (result.errors.length > 0) {
+        toast.error(`${result.errors.length} regra(s) com erro: ${result.errors[0]}`);
+      }
+      setImportCandidate(null);
+      await loadAll();
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Falha ao importar regras.'));
+    } finally {
+      setIsImportingRules(false);
+    }
+  }
+
   async function confirmDeleteRule() {
     const rule = rulePendingDeletion;
     if (!rule) return;
@@ -551,7 +657,7 @@ export default function AgentLabelsSettings() {
     const scopedAgents =
       dryRunMode === 'single-agent'
         ? agents.filter(agent => agent.id === selectedAgentId)
-        : agents.slice(0, Math.min(Math.max(previewLimit, 1), 100));
+        : agents.slice(0, Math.min(Math.max(previewLimit, 1), MAX_PREVIEW_AGENTS));
 
     if (dryRunMode === 'single-agent' && !selectedAgentId) {
       toast.error('Selecione um agente para simulação individual.');
@@ -570,21 +676,22 @@ export default function AgentLabelsSettings() {
 
     setIsRunningPreview(true);
     try {
-      const responses = await Promise.all(
-        scopedAgents.map(async agent => {
-          const result = await agentLabelsApi.dryRun({
-            agentId: agent.id,
-            label: label.trim(),
-            applyMode,
-            expression: parsedExpression,
-          });
+      // Uma unica requisicao em lote: antes era um POST /rules/dry-run por agente
+      // (ate 100 requisicoes concorrentes por clique).
+      const results = await agentLabelsApi.dryRunBatch({
+        agentIds: scopedAgents.map(agent => agent.id),
+        label: label.trim(),
+        applyMode,
+        expression: parsedExpression,
+      });
 
-          return {
-            ...result,
-            agentName: agent.displayName || agent.hostname || agent.id,
-          };
-        }),
+      const nameByAgentId = new Map(
+        scopedAgents.map(agent => [agent.id, agent.displayName || agent.hostname || agent.id]),
       );
+      const responses = results.map(result => ({
+        ...result,
+        agentName: nameByAgentId.get(result.agentId) ?? result.agentId,
+      }));
 
       setPreviewResults(responses);
       const matchedCount = responses.filter(item => item.matched).length;
@@ -596,10 +703,10 @@ export default function AgentLabelsSettings() {
     }
   }
 
-  async function handleLoadAppliedAgents(rule: AgentLabelRuleResponse) {
+  async function handleLoadAppliedAgents(rule: AgentLabelRuleResponse, page = 1) {
     setIsLoadingAppliedAgents(true);
     try {
-      const response = await agentLabelsApi.getRuleAgents(rule.id);
+      const response = await agentLabelsApi.getRuleAgents(rule.id, page, APPLIED_PAGE_SIZE);
       const mapped = response.agents.map((agent: AgentLabelRuleAgentItem) => ({
         agentId: agent.agentId,
         agentName: agent.displayName || agent.hostname || agent.agentId,
@@ -610,7 +717,7 @@ export default function AgentLabelsSettings() {
 
       setAppliedAgentsTotal(response.totalAgents);
       setAppliedResults(mapped);
-      toast.success(`Consulta concluída: ${mapped.length} agentes retornados pela regra.`);
+      setAppliedPage(page);
     } catch (err) {
       toast.error(getApiErrorMessage(err, 'Falha ao consultar labels aplicadas.'));
     } finally {
@@ -657,6 +764,8 @@ export default function AgentLabelsSettings() {
       toast.error('Expressão inválida: JSON malformado.');
     }
   }
+
+  const appliedTotalPages = Math.max(1, Math.ceil(appliedAgentsTotal / APPLIED_PAGE_SIZE));
 
   if (isLoading) {
     return <Loading message="Carregando regras de labels..." />;
@@ -932,7 +1041,7 @@ export default function AgentLabelsSettings() {
               <Select label="Site" value={selectedSiteId} options={[{ value: '', label: 'Selecione...' }, ...sites.map(site => ({ value: site.id, label: site.name }))]} onChange={event => setSelectedSiteId(event.target.value)} />
 
               {dryRunMode === 'site-batch' ? (
-                <Input label="Limite de agentes" type="number" min={1} max={100} value={previewLimit} onChange={event => setPreviewLimit(Number(event.target.value || 1))} />
+                <Input label="Limite de agentes" type="number" min={1} max={MAX_PREVIEW_AGENTS} value={previewLimit} onChange={event => setPreviewLimit(Number(event.target.value || 1))} />
               ) : (
                 <Select
                   label="Agente"
@@ -969,6 +1078,7 @@ export default function AgentLabelsSettings() {
                       <th className="px-3 py-2 text-left font-medium text-muted-foreground">Adicionar</th>
                       <th className="px-3 py-2 text-left font-medium text-muted-foreground">Remover</th>
                       <th className="px-3 py-2 text-left font-medium text-muted-foreground">Labels automáticas atuais</th>
+                      <th className="px-3 py-2 text-left font-medium text-muted-foreground">Motivo (condição falsa)</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/5">
@@ -979,6 +1089,9 @@ export default function AgentLabelsSettings() {
                         <td className="px-3 py-2"><Badge color={result.wouldAddLabel ? 'success' : 'slate'}>{result.wouldAddLabel ? 'Sim' : 'Não'}</Badge></td>
                         <td className="px-3 py-2"><Badge color={result.wouldRemoveLabel ? 'warning' : 'slate'}>{result.wouldRemoveLabel ? 'Sim' : 'Não'}</Badge></td>
                         <td className="px-3 py-2 text-muted-foreground">{result.currentAutomaticLabels.length > 0 ? result.currentAutomaticLabels.join(', ') : '-'}</td>
+                        <td className="px-3 py-2 text-muted-foreground" title={result.failedConditions.join('; ')}>
+                          {result.matched ? '-' : (result.failedConditions[0] ?? 'sem match')}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -1192,7 +1305,7 @@ export default function AgentLabelsSettings() {
               <Select label="Site" value={selectedSiteId} options={[{ value: '', label: 'Selecione...' }, ...sites.map(site => ({ value: site.id, label: site.name }))]} onChange={event => setSelectedSiteId(event.target.value)} />
 
               {dryRunMode === 'site-batch' ? (
-                <Input label="Limite de agentes" type="number" min={1} max={100} value={previewLimit} onChange={event => setPreviewLimit(Number(event.target.value || 1))} />
+                <Input label="Limite de agentes" type="number" min={1} max={MAX_PREVIEW_AGENTS} value={previewLimit} onChange={event => setPreviewLimit(Number(event.target.value || 1))} />
               ) : (
                 <Select
                   label="Agente"
@@ -1229,6 +1342,7 @@ export default function AgentLabelsSettings() {
                       <th className="px-3 py-2 text-left font-medium text-muted-foreground">Adicionar</th>
                       <th className="px-3 py-2 text-left font-medium text-muted-foreground">Remover</th>
                       <th className="px-3 py-2 text-left font-medium text-muted-foreground">Labels automáticas atuais</th>
+                      <th className="px-3 py-2 text-left font-medium text-muted-foreground">Motivo (condição falsa)</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/5">
@@ -1239,6 +1353,9 @@ export default function AgentLabelsSettings() {
                         <td className="px-3 py-2"><Badge color={result.wouldAddLabel ? 'success' : 'slate'}>{result.wouldAddLabel ? 'Sim' : 'Não'}</Badge></td>
                         <td className="px-3 py-2"><Badge color={result.wouldRemoveLabel ? 'warning' : 'slate'}>{result.wouldRemoveLabel ? 'Sim' : 'Não'}</Badge></td>
                         <td className="px-3 py-2 text-muted-foreground">{result.currentAutomaticLabels.length > 0 ? result.currentAutomaticLabels.join(', ') : '-'}</td>
+                        <td className="px-3 py-2 text-muted-foreground" title={result.failedConditions.join('; ')}>
+                          {result.matched ? '-' : (result.failedConditions[0] ?? 'sem match')}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -1258,7 +1375,9 @@ export default function AgentLabelsSettings() {
             title="Regras Cadastradas"
             subtitle={`${sortedRules.length} regra(s)`}
             action={(
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <Button variant="ghost" size="sm" loading={isExportingRules} onClick={() => void handleExportRules()}>Exportar JSON</Button>
+                <Button variant="ghost" size="sm" onClick={requestImportRules}>Importar JSON</Button>
                 <Button variant="secondary" size="sm" loading={isReprocessing} onClick={() => void handleReprocessAll()}>Reprocessar Agentes</Button>
               </div>
             )}
@@ -1380,6 +1499,9 @@ export default function AgentLabelsSettings() {
                       <Button size="sm" variant="secondary" onClick={() => openAgentsModal(rule)}>
                         <Monitor className="h-3.5 w-3.5" /> Ver Agentes
                       </Button>
+                      <Button size="sm" variant="ghost" onClick={() => void openVersionHistory(rule)}>
+                        <Clock className="h-3.5 w-3.5" /> Histórico
+                      </Button>
                     </div>
                   </div>
                 );
@@ -1387,6 +1509,105 @@ export default function AgentLabelsSettings() {
             </div>
           )}
         </Card>
+      ) : null}
+
+      <input
+        ref={importFileRef}
+        type="file"
+        accept="application/json,.json"
+        className="hidden"
+        onChange={event => void handleImportFile(event)}
+      />
+
+      {importCandidate ? (
+        <Modal
+          open={true}
+          onClose={() => (isImportingRules ? undefined : setImportCandidate(null))}
+          title="Importar regras"
+        >
+          <div className="space-y-4">
+            <p className="text-sm text-muted">
+              O arquivo contém <strong className="text-foreground">{importCandidate.length}</strong> regra(s).
+            </p>
+            <label className="flex items-center gap-2 text-sm text-muted">
+              <input
+                type="checkbox"
+                checked={importOverwrite}
+                onChange={event => setImportOverwrite(event.target.checked)}
+              />
+              Sobrescrever regras existentes com o mesmo nome
+            </label>
+            <p className="text-xs text-muted">
+              Regras com erro de validação são ignoradas e reportadas ao final, sem abortar o lote.
+            </p>
+
+            <div className="flex justify-end gap-2 border-t border-border pt-3">
+              <Button variant="secondary" disabled={isImportingRules} onClick={() => setImportCandidate(null)}>
+                Cancelar
+              </Button>
+              <Button loading={isImportingRules} onClick={() => void confirmImportRules()}>
+                Importar
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      ) : null}
+
+      {versionHistoryRule ? (
+        <Modal
+          open={true}
+          onClose={() => setVersionHistoryRule(null)}
+          title={`Histórico — ${versionHistoryRule.name}`}
+        >
+          <div className="space-y-3">
+            {isLoadingVersions ? (
+              <Loading message="Carregando histórico..." />
+            ) : ruleVersions.length === 0 ? (
+              <p className="text-sm text-muted">Nenhuma versão registrada para esta regra.</p>
+            ) : (
+              <div className="space-y-2">
+                {ruleVersions.map((version, index) => {
+                  const changes = describeVersionChanges(version, ruleVersions[index + 1]);
+
+                  return (
+                    <div key={version.id} className="rounded-lg border border-border bg-surface-light p-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="text-sm font-medium text-foreground">{version.name}</span>
+                        <Badge color={version.isEnabled ? 'success' : 'slate'}>
+                          {version.isEnabled ? 'Ativa' : 'Inativa'}
+                        </Badge>
+                      </div>
+
+                      <p className="mt-1 text-xs text-muted">
+                        {formatDateTime(version.changedAt)} • {version.changedBy ?? 'sistema'} •{' '}
+                        {getAgentLabelApplyModeLabel(normalizeAgentLabelApplyMode(version.applyMode))}
+                      </p>
+
+                      <p className="mt-1 text-xs text-muted">
+                        Label: <span className="font-mono text-foreground">{version.label}</span>
+                      </p>
+
+                      <div className="mt-2 flex flex-wrap gap-1">
+                        {changes.map(change => (
+                          <span
+                            key={change}
+                            className="rounded-full border border-border px-2 py-0.5 text-[10px] text-muted"
+                          >
+                            {change}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            <div className="flex justify-end border-t border-border pt-2">
+              <Button variant="secondary" onClick={() => setVersionHistoryRule(null)}>Fechar</Button>
+            </div>
+          </div>
+        </Modal>
       ) : null}
 
       {rulePendingDeletion ? (
@@ -1461,6 +1682,32 @@ export default function AgentLabelsSettings() {
                 ) : (
                   <p className="text-sm text-muted">Nenhum agente retornado pela regra.</p>
                 )}
+
+                {appliedAgentsTotal > APPLIED_PAGE_SIZE ? (
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs text-muted">
+                      Página {appliedPage} de {appliedTotalPages}
+                    </span>
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        disabled={appliedPage <= 1 || isLoadingAppliedAgents}
+                        onClick={() => { if (agentsModalRule) void handleLoadAppliedAgents(agentsModalRule, appliedPage - 1); }}
+                      >
+                        Anterior
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        disabled={appliedPage >= appliedTotalPages || isLoadingAppliedAgents}
+                        onClick={() => { if (agentsModalRule) void handleLoadAppliedAgents(agentsModalRule, appliedPage + 1); }}
+                      >
+                        Próxima
+                      </Button>
+                    </div>
+                  </div>
+                ) : null}
               </>
             )}
 
@@ -1472,6 +1719,25 @@ export default function AgentLabelsSettings() {
       ) : null}
     </div>
   );
+}
+
+/** Campos alterados em relação à versão anterior (a lista vem da mais nova para a mais antiga). */
+function describeVersionChanges(version: AgentLabelRuleVersion, previous?: AgentLabelRuleVersion): string[] {
+  if (!previous) {
+    return ['Versão mais recente'];
+  }
+
+  const changes: string[] = [];
+  if (version.name !== previous.name) changes.push('nome');
+  if (version.label !== previous.label) changes.push('label');
+  if (version.isEnabled !== previous.isEnabled) {
+    changes.push(version.isEnabled ? 'habilitada' : 'desabilitada');
+  }
+  if (version.applyMode !== previous.applyMode) changes.push('modo de aplicação');
+  if ((version.description ?? '') !== (previous.description ?? '')) changes.push('descrição');
+  if (JSON.stringify(version.expression) !== JSON.stringify(previous.expression)) changes.push('expressão');
+
+  return changes.length > 0 ? changes : ['sem mudanças'];
 }
 
 function formatDateTime(value: string) {

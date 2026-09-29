@@ -135,6 +135,59 @@ export interface AgentLabelRuleDryRunResponse {
   wouldAddLabel: boolean;
   wouldRemoveLabel: boolean;
   currentAutomaticLabels: string[];
+  /** Diagnóstico: condições avaliadas como falsas (preenchido quando não há match). */
+  failedConditions: string[];
+}
+
+/** Previa de uma regra para varios agentes em uma unica chamada. */
+export interface AgentLabelRuleDryRunBatchRequest {
+  agentIds: string[];
+  label?: string | null;
+  applyMode: AgentLabelApplyMode;
+  expression: AgentLabelRuleExpressionNodeDto;
+}
+
+/** Item do historico de aplicacao/remocao de labels de um agente. */
+export interface AgentLabelChangeLog {
+  id: string;
+  agentId: string;
+  label: string;
+  sourceType: AgentLabelSourceType;
+  action: string;
+  reason: string | null;
+  actor: string | null;
+  occurredAt: string;
+}
+
+/** Snapshot de configuracao de uma regra (auditoria/versionamento). */
+export interface AgentLabelRuleVersion {
+  id: string;
+  ruleId: string;
+  name: string;
+  label: string;
+  description: string | null;
+  isEnabled: boolean;
+  applyMode: string;
+  expression: AgentLabelRuleExpressionNodeDto;
+  changedBy: string | null;
+  changedAt: string;
+}
+
+/** Regra em formato portavel para export/import. */
+export interface AgentLabelRuleExport {
+  name: string;
+  label: string;
+  description?: string | null;
+  applyMode: string;
+  isEnabled: boolean;
+  expression: AgentLabelRuleExpressionNodeDto;
+}
+
+export interface AgentLabelRuleImportResult {
+  created: number;
+  updated: number;
+  skipped: number;
+  errors: string[];
 }
 
 export interface AgentLabelRuleAgentItem {

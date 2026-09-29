@@ -238,8 +238,11 @@ export function validateExpression(
         );
       }
 
+      // Propaga insideDiskGroup: um grupo aninhado dentro de um DiskGroup continua
+      // podendo usar campos de disco (o backend valida assim). Fixar `false` aqui
+      // rejeitava na UI regras que o motor executa corretamente.
       children.forEach((child, i) =>
-        walk(child, depth + 1, `${path}.children[${i}]`, false),
+        walk(child, depth + 1, `${path}.children[${i}]`, insideDiskGroup),
       );
       return;
     }

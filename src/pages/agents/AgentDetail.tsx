@@ -38,7 +38,7 @@ import { isAgentOnlineNow } from '@/utils/agentStatus';
 import { useNowTick } from '@/hooks/useNowTick';
 import { isHeartbeatTimestampFresh, useAgentHeartbeat } from '@/stores/heartbeatStore';
 import { agentLabelsApi } from '@/modules/agent-labels/api';
-import type { AgentLabelSuppression } from '@/modules/agent-labels/types';
+import type { AgentLabelChangeLog, AgentLabelSuppression } from '@/modules/agent-labels/types';
 import { AgentLabelSourceType, type AgentLabel } from '@/modules/agent-labels/types';
 import { openRemoteDebugPopup } from './remoteDebugLauncher';
 import { openRemoteSessionPopup } from './remoteSessionLauncher';
@@ -99,6 +99,8 @@ export default function AgentDetail() {
   // Labels suprimidas: removidas manualmente e que o reconcile respeita enquanto a
   // condição da regra continuar verdadeira. Visíveis para poder liberá-las.
   const [labelSuppressions, setLabelSuppressions] = useState<AgentLabelSuppression[]>([]);
+  // Histórico de aplicação/remoção gravado pelo motor (auditoria).
+  const [labelHistory, setLabelHistory] = useState<AgentLabelChangeLog[]>([]);
   const [isReleasingSuppression, setIsReleasingSuppression] = useState<string | null>(null);
   const [showLabelPicker, setShowLabelPicker] = useState(false);
   const [labelPickerQuery, setLabelPickerQuery] = useState('');
@@ -254,11 +256,13 @@ export default function AgentDetail() {
       setLabelsError(null);
 
       try {
-        const [data, distinct, suppressions] = await Promise.all([
+        const [data, distinct, suppressions, history] = await Promise.all([
           agentLabelsApi.getAgentLabels(id),
           agentLabelsApi.getDistinctLabels(),
           // Labels suprimidas: removidas manualmente e que o reconcile está respeitando.
           agentLabelsApi.getSuppressions(id).catch(() => []),
+          // Histórico de aplicação/remoção (auditoria do motor).
+          agentLabelsApi.getHistory(id, 20).catch(() => []),
         ]);
         if (isCancelled) return;
 
@@ -266,6 +270,7 @@ export default function AgentDetail() {
         setAllLabels(sorted);
         setDistinctLabels(distinct);
         setLabelSuppressions(suppressions);
+        setLabelHistory(history);
       } catch {
         if (isCancelled) return;
         setLabelsError('Falha ao carregar labels.');
@@ -353,10 +358,7 @@ export default function AgentDetail() {
     } catch (err) {
       if (err && typeof err === 'object' && 'status' in err) {
         const apiErr = err as { status?: number; message?: string };
-        if (apiErr.status === 400) {
-          toast.error(apiErr.message || 'Não é possível remover label automática por este endpoint.');
-          return;
-        }
+        // 400 nao e mais esperado: remover label automatica e valido (registra supressao).
         if (apiErr.status === 404) {
           toast.error('Label não encontrada.');
           return;
@@ -1668,6 +1670,29 @@ export default function AgentDetail() {
                         <RotateCcw className="h-3 w-3" />
                       </button>
                     </span>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            {labelHistory.length > 0 ? (
+              <div className="mt-3 rounded-lg border border-border bg-surface-light p-3">
+                <p className="mb-2 text-xs font-medium text-muted-foreground">
+                  Histórico de labels ({labelHistory.length})
+                </p>
+                <div className="space-y-1.5">
+                  {labelHistory.map(item => (
+                    <div key={item.id} className="flex flex-wrap items-center gap-2 text-[11px] text-muted">
+                      <span className={item.action === 'Removed' ? 'text-warning' : 'text-success'}>
+                        {item.action === 'Removed' ? 'Removida' : 'Aplicada'}
+                      </span>
+                      <span className="font-mono text-foreground">{item.label}</span>
+                      <span>• {formatDate(item.occurredAt)}</span>
+                      {item.actor ? <span>• {item.actor}</span> : null}
+                      {item.reason ? (
+                        <span className="text-muted-foreground">• {item.reason}</span>
+                      ) : null}
+                    </div>
                   ))}
                 </div>
               </div>

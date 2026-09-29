@@ -1,12 +1,17 @@
 import {
   AgentLabel,
   AgentLabelAvailableCustomField,
+  AgentLabelChangeLog,
   AgentLabelCustomFieldScopeType,
   AgentLabelNodeType,
   AgentLabelRuleAgentItem,
   AgentLabelRuleAgentsResponse,
+  AgentLabelRuleDryRunBatchRequest,
   AgentLabelRuleDryRunRequest,
   AgentLabelRuleDryRunResponse,
+  AgentLabelRuleExport,
+  AgentLabelRuleImportResult,
+  AgentLabelRuleVersion,
   AgentLabelRuleImpactRequest,
   AgentLabelRuleImpactResponse,
   AgentIdsByLabelResponse,
@@ -24,27 +29,9 @@ import {
   normalizeAgentLabelSourceType,
   UpdateAgentLabelRuleRequest,
 } from "./types";
-import {
-  api,
-  ApiError,
-  parseErrorMessage,
-  apiFetchResponse,
-} from "@/api/client";
+import { api } from "@/api/client";
 
 const BASE = "/api/v1/agent-labels";
-
-async function toJson<T>(res: Response): Promise<T> {
-  if (!res.ok) {
-    const message = await parseErrorMessage(res);
-    throw new ApiError(res.status, message);
-  }
-
-  if (res.status === 204) {
-    return undefined as T;
-  }
-
-  return (await res.json()) as T;
-}
 
 export const agentLabelsApi = {
   async getAgentLabels(agentId: string): Promise<AgentLabel[]> {
@@ -133,8 +120,9 @@ export const agentLabelsApi = {
     await api.del<void>(`${BASE}/suppressions/${suppressionId}`);
   },
 
-  async getDistinctLabels(): Promise<string[]> {
-    return api.get<string[]>(`${BASE}/distinct`);
+  /** Labels distintas, com limite (evita payload ilimitado em frotas grandes). */
+  async getDistinctLabels(limit = 500): Promise<string[]> {
+    return api.get<string[]>(`${BASE}/distinct`, { limit });
   },
 
   async addManualLabel(agentId: string, label: string): Promise<AgentLabel> {
@@ -175,9 +163,12 @@ export const agentLabelsApi = {
     return [];
   },
 
-  async getRuleAgents(ruleId: string): Promise<AgentLabelRuleAgentsResponse> {
-    const res = await apiFetchResponse(`${BASE}/rules/${ruleId}/agents`);
-    const raw = await toJson<{
+  async getRuleAgents(
+    ruleId: string,
+    page = 1,
+    pageSize = 100,
+  ): Promise<AgentLabelRuleAgentsResponse> {
+    const raw = await api.get<{
       ruleId?: string;
       ruleName?: string;
       label?: string;
@@ -185,9 +176,11 @@ export const agentLabelsApi = {
       totalAgents?: number;
       total?: number;
       count?: number;
+      page?: number;
+      pageSize?: number;
       agents?: AgentLabelRuleAgentItem[];
       items?: AgentLabelRuleAgentItem[];
-    }>(res);
+    }>(`${BASE}/rules/${ruleId}/agents`, { page, pageSize });
 
     const agents = raw.agents ?? raw.items ?? [];
     const totalAgents =
@@ -295,6 +288,97 @@ export const agentLabelsApi = {
               : [],
           }))
         : [],
+    };
+  },
+
+  /** Histórico de mudanças de label do agente (auditoria de aplicação/remoção). */
+  async getHistory(agentId: string, limit = 50): Promise<AgentLabelChangeLog[]> {
+    const raw = await api.get<Array<Record<string, unknown>>>(
+      `${BASE}/agents/${agentId}/history`,
+      { limit },
+    );
+
+    return (raw ?? []).map(item => ({
+      id: String(item.id ?? ""),
+      agentId: String(item.agentId ?? agentId),
+      label: String(item.label ?? ""),
+      sourceType: normalizeAgentLabelSourceType(item.sourceType),
+      action: String(item.action ?? ""),
+      reason: item.reason == null ? null : String(item.reason),
+      actor: item.actor == null ? null : String(item.actor),
+      occurredAt: String(item.occurredAt ?? ""),
+    }));
+  },
+
+  /** Prévias em lote: uma única requisição para vários agentes (antes era 1 por agente). */
+  async dryRunBatch(
+    payload: AgentLabelRuleDryRunBatchRequest,
+  ): Promise<AgentLabelRuleDryRunResponse[]> {
+    const raw = await api.post<Array<Record<string, unknown>>>(
+      `${BASE}/rules/dry-run/batch`,
+      payload,
+    );
+
+    return (raw ?? []).map(item => ({
+      agentId: String(item.agentId ?? ""),
+      matched: Boolean(item.matched),
+      label: item.label == null ? null : String(item.label),
+      wouldAddLabel: Boolean(item.wouldAddLabel),
+      wouldRemoveLabel: Boolean(item.wouldRemoveLabel),
+      currentAutomaticLabels: Array.isArray(item.currentAutomaticLabels)
+        ? (item.currentAutomaticLabels as unknown[]).map(String)
+        : [],
+      failedConditions: Array.isArray(item.failedConditions)
+        ? (item.failedConditions as unknown[]).map(String)
+        : [],
+    }));
+  },
+
+  /** Histórico de versões (configuração) de uma regra, mais recente primeiro. */
+  async getRuleVersions(ruleId: string, limit = 20): Promise<AgentLabelRuleVersion[]> {
+    const raw = await api.get<Array<Record<string, unknown>>>(
+      `${BASE}/rules/${ruleId}/versions`,
+      { limit },
+    );
+
+    return (raw ?? []).map(item => ({
+      id: String(item.id ?? ""),
+      ruleId: String(item.ruleId ?? ruleId),
+      name: String(item.name ?? ""),
+      label: String(item.label ?? ""),
+      description: item.description == null ? null : String(item.description),
+      isEnabled: Boolean(item.isEnabled ?? true),
+      applyMode: String(item.applyMode ?? ""),
+      expression: normalizeExpressionNode(item.expression ?? item.Expression),
+      changedBy: item.changedBy == null ? null : String(item.changedBy),
+      changedAt: String(item.changedAt ?? ""),
+    }));
+  },
+
+  /** Exporta todas as regras em formato portável (JSON). */
+  async exportRules(): Promise<AgentLabelRuleExport[]> {
+    const raw = await api.get<Array<Record<string, unknown>>>(`${BASE}/rules/export`);
+    return (raw ?? []).map(item => ({
+      name: String(item.name ?? ""),
+      label: String(item.label ?? ""),
+      description: item.description == null ? null : String(item.description),
+      applyMode: String(item.applyMode ?? ""),
+      isEnabled: Boolean(item.isEnabled ?? true),
+      expression: normalizeExpressionNode(item.expression ?? item.Expression),
+    }));
+  },
+
+  /** Importa regras de um JSON exportado. */
+  async importRules(payload: {
+    rules: AgentLabelRuleExport[];
+    overwriteExisting: boolean;
+  }): Promise<AgentLabelRuleImportResult> {
+    const raw = await api.post<Record<string, unknown>>(`${BASE}/rules/import`, payload);
+    return {
+      created: Number(raw.created ?? 0),
+      updated: Number(raw.updated ?? 0),
+      skipped: Number(raw.skipped ?? 0),
+      errors: Array.isArray(raw.errors) ? (raw.errors as unknown[]).map(String) : [],
     };
   },
 

@@ -11,27 +11,54 @@ const MAX_AGENTS_PER_REQUEST = 500;
  *
  * Uso: exibir as labels dos agentes VISÍVEIS na tela. Para filtrar a frota por label,
  * prefira useAgentIdsByLabel, que resolve no servidor e não depende deste limite.
+ *
+ * Frotas maiores que o limite do endpoint são divididas em vários lotes de 500.
  */
+
+/**
+ * Hash FNV-1a dos ids: a chave de cache nao pode ser a lista inteira (frotas
+ * grandes produziriam uma query key gigante).
+ */
+function hashAgentIds(ids: readonly string[]): string {
+  let hash = 2166136261;
+  for (const id of ids) {
+    for (let index = 0; index < id.length; index += 1) {
+      hash ^= id.charCodeAt(index);
+      hash = Math.imul(hash, 16777619);
+    }
+  }
+
+  return (hash >>> 0).toString(36);
+}
+
 export function useAgentLabels(agentIds: readonly string[]) {
   // Chave estável e curta: derivada do conteúdo, não do array de entrada (que muda de
   // identidade a cada render da lista).
   const ids = useMemo(
-    () => [...new Set(agentIds)].filter(Boolean).sort().slice(0, MAX_AGENTS_PER_REQUEST),
+    () => [...new Set(agentIds)].filter(Boolean).sort(),
     [agentIds],
   );
-  const cacheKey = useMemo(() => ids.join(','), [ids]);
+  const cacheKey = useMemo(() => `${ids.length}:${hashAgentIds(ids)}`, [ids]);
 
   return useQuery({
     queryKey: ['agentLabels', 'batch', cacheKey],
     queryFn: async () => {
-      const labels = await agentLabelsApi.getAgentLabelsBatch(ids);
-
       const byAgent: Record<string, AgentLabel[]> = {};
-      for (const label of labels) {
-        const bucket = byAgent[label.agentId] ?? [];
-        bucket.push(label);
-        byAgent[label.agentId] = bucket;
+
+      // Chunks de 500. Antes a lista era TRUNCADA no limite do endpoint: agentes
+      // além dos 500 primeiros ficavam sem labels (quebrava exibição e a busca
+      // textual por label em frotas maiores).
+      for (let offset = 0; offset < ids.length; offset += MAX_AGENTS_PER_REQUEST) {
+        const chunk = ids.slice(offset, offset + MAX_AGENTS_PER_REQUEST);
+        const labels = await agentLabelsApi.getAgentLabelsBatch(chunk);
+
+        for (const label of labels) {
+          const bucket = byAgent[label.agentId] ?? [];
+          bucket.push(label);
+          byAgent[label.agentId] = bucket;
+        }
       }
+
       return byAgent;
     },
     enabled: ids.length > 0,
