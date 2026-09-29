@@ -4,6 +4,15 @@ export enum AgentLabelApplyMode {
   ApplyOnly = 0,
   ApplyAndRemove = 1,
   Manual = 2,
+  /** Remove labels MANUAIS que casem com o alvo enquanto a condição for verdadeira. */
+  Remove = 3,
+}
+
+/** Como o alvo de uma regra no modo Remove casa com as labels do agente. */
+export enum AgentLabelLabelMatch {
+  Exact = 0,
+  Prefix = 1,
+  Regex = 2,
 }
 
 export enum AgentLabelNodeType {
@@ -88,6 +97,7 @@ export interface CreateAgentLabelRuleRequest {
   label: string;
   description?: string | null;
   applyMode: AgentLabelApplyMode;
+  labelMatch?: AgentLabelLabelMatch;
   expression: AgentLabelRuleExpressionNodeDto;
 }
 
@@ -97,6 +107,7 @@ export interface UpdateAgentLabelRuleRequest {
   description?: string | null;
   isEnabled: boolean;
   applyMode: AgentLabelApplyMode;
+  labelMatch?: AgentLabelLabelMatch;
   expression: AgentLabelRuleExpressionNodeDto;
 }
 
@@ -107,9 +118,18 @@ export interface AgentLabelRuleResponse {
   description?: string | null;
   isEnabled: boolean;
   applyMode: AgentLabelApplyMode;
+  labelMatch: AgentLabelLabelMatch;
   expression: AgentLabelRuleExpressionNodeDto;
   createdAt: string;
   updatedAt: string;
+}
+
+/** Label protegida: nenhuma regra Remove pode apagá-la. */
+export interface AgentLabelProtectedLabel {
+  id: string;
+  label: string;
+  createdBy: string | null;
+  createdAt: string;
 }
 
 export interface AgentLabel {
@@ -125,6 +145,7 @@ export interface AgentLabelRuleDryRunRequest {
   agentId: string;
   label?: string | null;
   applyMode: AgentLabelApplyMode;
+  labelMatch?: AgentLabelLabelMatch;
   expression: AgentLabelRuleExpressionNodeDto;
 }
 
@@ -135,6 +156,8 @@ export interface AgentLabelRuleDryRunResponse {
   wouldAddLabel: boolean;
   wouldRemoveLabel: boolean;
   currentAutomaticLabels: string[];
+  currentManualLabels: string[];
+  removableLabels: string[];
   /** Diagnóstico: condições avaliadas como falsas (preenchido quando não há match). */
   failedConditions: string[];
 }
@@ -144,6 +167,7 @@ export interface AgentLabelRuleDryRunBatchRequest {
   agentIds: string[];
   label?: string | null;
   applyMode: AgentLabelApplyMode;
+  labelMatch?: AgentLabelLabelMatch;
   expression: AgentLabelRuleExpressionNodeDto;
 }
 
@@ -156,6 +180,9 @@ export interface AgentLabelChangeLog {
   action: string;
   reason: string | null;
   actor: string | null;
+  /** Regra que causou a mudança (quando identificável). */
+  ruleId: string | null;
+  ruleName: string | null;
   occurredAt: string;
 }
 
@@ -168,6 +195,7 @@ export interface AgentLabelRuleVersion {
   description: string | null;
   isEnabled: boolean;
   applyMode: string;
+  labelMatch: string;
   expression: AgentLabelRuleExpressionNodeDto;
   changedBy: string | null;
   changedAt: string;
@@ -179,6 +207,7 @@ export interface AgentLabelRuleExport {
   label: string;
   description?: string | null;
   applyMode: string;
+  labelMatch?: string;
   isEnabled: boolean;
   expression: AgentLabelRuleExpressionNodeDto;
 }
@@ -224,6 +253,7 @@ export interface AgentLabelRuleAgentsResponse {
 export interface AgentLabelRuleImpactRequest {
   label?: string | null;
   applyMode: AgentLabelApplyMode;
+  labelMatch?: AgentLabelLabelMatch;
   expression: AgentLabelRuleExpressionNodeDto;
   clientId?: string | null;
   siteId?: string | null;
@@ -238,6 +268,8 @@ export interface AgentLabelRuleImpactSample {
   wouldAddLabel: boolean;
   wouldRemoveLabel: boolean;
   currentAutomaticLabels: string[];
+  currentManualLabels: string[];
+  removableLabels: string[];
 }
 
 export interface AgentLabelRuleImpactResponse {
@@ -295,6 +327,14 @@ export interface ApiNotFoundError {
 const APPLY_MODE_NAMES: Record<string, AgentLabelApplyMode> = {
   ApplyOnly: AgentLabelApplyMode.ApplyOnly,
   ApplyAndRemove: AgentLabelApplyMode.ApplyAndRemove,
+  Manual: AgentLabelApplyMode.Manual,
+  Remove: AgentLabelApplyMode.Remove,
+};
+
+const LABEL_MATCH_NAMES: Record<string, AgentLabelLabelMatch> = {
+  Exact: AgentLabelLabelMatch.Exact,
+  Prefix: AgentLabelLabelMatch.Prefix,
+  Regex: AgentLabelLabelMatch.Regex,
 };
 
 const NODE_TYPE_NAMES: Record<string, AgentLabelNodeType> = {
@@ -383,6 +423,21 @@ function normalizeEnumValue<T extends number>(
 
 export function normalizeAgentLabelApplyMode(value: unknown): AgentLabelApplyMode {
   return normalizeEnumValue(value, APPLY_MODE_NAMES, AgentLabelApplyMode.ApplyOnly);
+}
+
+export function normalizeAgentLabelLabelMatch(value: unknown): AgentLabelLabelMatch {
+  return normalizeEnumValue(value, LABEL_MATCH_NAMES, AgentLabelLabelMatch.Exact);
+}
+
+export function getAgentLabelLabelMatchLabel(value: AgentLabelLabelMatch): string {
+  switch (value) {
+    case AgentLabelLabelMatch.Prefix:
+      return 'Prefixo';
+    case AgentLabelLabelMatch.Regex:
+      return 'Regex';
+    default:
+      return 'Exata';
+  }
 }
 
 export function normalizeAgentLabelNodeType(value: unknown): AgentLabelNodeType {
@@ -488,6 +543,8 @@ export function getAgentLabelApplyModeLabel(mode: AgentLabelApplyMode): string {
       return "Aplicar e remover";
     case AgentLabelApplyMode.Manual:
       return "Manual";
+    case AgentLabelApplyMode.Remove:
+      return "Remover labels manuais";
     default:
       return "Aplicar apenas";
   }

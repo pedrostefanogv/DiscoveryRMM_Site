@@ -8,11 +8,13 @@ import {
   AgentLabelApplyMode,
   AgentLabelComparisonOperator,
   AgentLabelField,
+  AgentLabelLabelMatch,
   AgentLabelLogicalOperator,
   AgentLabelNodeType,
   AgentStatus,
   getAgentLabelApplyModeLabel,
   getAgentLabelComparisonOperatorLabel,
+  getAgentLabelLabelMatchLabel,
   normalizeAgentLabelApplyMode,
   getAgentLabelFieldLabel,
   getAgentLabelLogicalOperatorLabel,
@@ -24,6 +26,7 @@ import {
   type AgentLabelRuleDryRunResponse,
   type AgentLabelRuleExport,
   type AgentLabelRuleVersion,
+  type AgentLabelProtectedLabel,
   type AgentLabelRuleImpactResponse,
   type AgentLabelRuleExpressionNodeDto,
   type AgentLabelRuleResponse,
@@ -84,6 +87,10 @@ const logicalOperatorOptions = Object.values(AgentLabelLogicalOperator)
 const applyModeOptions = Object.values(AgentLabelApplyMode)
   .filter((value): value is AgentLabelApplyMode => typeof value === 'number')
   .map(mode => ({ value: String(mode), label: getAgentLabelApplyModeLabel(mode) }));
+
+const labelMatchOptions = Object.values(AgentLabelLabelMatch)
+  .filter((value): value is AgentLabelLabelMatch => typeof value === 'number')
+  .map(match => ({ value: String(match), label: getAgentLabelLabelMatchLabel(match) }));
 
 const GROUP_ACCENTS = [
   { border: 'border-l-cyan-500/50', dot: 'bg-cyan-500' },
@@ -165,6 +172,11 @@ export default function AgentLabelsSettings() {
   const [label, setLabel] = useState('');
   const [description, setDescription] = useState('');
   const [applyMode, setApplyMode] = useState<AgentLabelApplyMode>(AgentLabelApplyMode.ApplyOnly);
+  const [labelMatch, setLabelMatch] = useState<AgentLabelLabelMatch>(AgentLabelLabelMatch.Exact);
+  const [pendingRemoveConfirm, setPendingRemoveConfirm] = useState(false);
+  const [protectedLabels, setProtectedLabels] = useState<AgentLabelProtectedLabel[]>([]);
+  const [newProtectedLabel, setNewProtectedLabel] = useState('');
+  const [isSavingProtectedLabel, setIsSavingProtectedLabel] = useState(false);
   const [editorMode, setEditorMode] = useState<'visual' | 'json'>('visual');
   const [showJsonInVisual, setShowJsonInVisual] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
@@ -205,6 +217,17 @@ export default function AgentLabelsSettings() {
     [rules],
   );
 
+  /** Labels produzidas por regras aditivas ativas — usadas no aviso de conflito. */
+  const additiveLabels = useMemo(
+    () => rules
+      .filter(rule => rule.isEnabled)
+      .filter(rule =>
+        rule.applyMode === AgentLabelApplyMode.ApplyOnly
+        || rule.applyMode === AgentLabelApplyMode.ApplyAndRemove)
+      .map(rule => rule.label),
+    [rules],
+  );
+
   function resetCreateState() {
     setEditingRuleId(null);
     setIsReadOnly(true);
@@ -212,6 +235,8 @@ export default function AgentLabelsSettings() {
     setLabel('');
     setDescription('');
     setApplyMode(AgentLabelApplyMode.ApplyOnly);
+    setLabelMatch(AgentLabelLabelMatch.Exact);
+    setPendingRemoveConfirm(false);
     setEditorMode('visual');
     setShowJsonInVisual(false);
     setShowHelp(false);
@@ -238,6 +263,8 @@ export default function AgentLabelsSettings() {
     setLabel(rule.label);
     setDescription(rule.description ?? '');
     setApplyMode(rule.applyMode);
+    setLabelMatch(rule.labelMatch ?? AgentLabelLabelMatch.Exact);
+    setPendingRemoveConfirm(false);
     setEditorMode('visual');
     setShowJsonInVisual(false);
     setShowHelp(false);
@@ -281,18 +308,53 @@ export default function AgentLabelsSettings() {
     }
   }
 
+  async function handleAddProtectedLabel() {
+    const label = newProtectedLabel.trim();
+    if (!label) {
+      toast.error('Informe a label a proteger.');
+      return;
+    }
+
+    setIsSavingProtectedLabel(true);
+    try {
+      const created = await agentLabelsApi.addProtectedLabel(label);
+      setProtectedLabels(prev => {
+        if (prev.some(item => item.id === created.id)) return prev;
+        return [...prev, created].sort((a, b) => a.label.localeCompare(b.label, 'pt-BR'));
+      });
+      setNewProtectedLabel('');
+      toast.success(`Label "${created.label}" protegida.`);
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Falha ao proteger a label.'));
+    } finally {
+      setIsSavingProtectedLabel(false);
+    }
+  }
+
+  async function handleRemoveProtectedLabel(id: string, label: string) {
+    try {
+      await agentLabelsApi.removeProtectedLabel(id);
+      setProtectedLabels(prev => prev.filter(item => item.id !== id));
+      toast.success(`Proteção de "${label}" removida.`);
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Falha ao remover a proteção.'));
+    }
+  }
+
   async function loadAll() {
     setError(null);
     setIsLoading(true);
     try {
-      const [rulesData, clientsData, customFieldsData] = await Promise.all([
+      const [rulesData, clientsData, customFieldsData, protectedLabelsData] = await Promise.all([
         agentLabelsApi.getRules(true),
         clientsApi.list(false),
         agentLabelsApi.getAvailableCustomFields(),
+        agentLabelsApi.getProtectedLabels().catch(() => []),
       ]);
       setRules(rulesData);
       setClients(clientsData);
       setAvailableCustomFields(customFieldsData);
+      setProtectedLabels(protectedLabelsData);
     } catch (err) {
       setError(getApiErrorMessage(err, 'Falha ao carregar regras e dependências.'));
     } finally {
@@ -365,7 +427,15 @@ export default function AgentLabelsSettings() {
     setExpressionText(JSON.stringify(expressionBuilder, null, 2));
   }, [expressionBuilder]);
 
-  async function handleSaveRule() {
+  /**
+   * Confirma uma regra no modo Remover antes de gravar: a remoção é irreversível e
+   * se repete enquanto a condição valer.
+   */
+  function requestRemoveConfirm() {
+    setPendingRemoveConfirm(true);
+  }
+
+  async function handleSaveRule(bypassRemoveConfirmation = false) {
     const isManualMode = applyMode === AgentLabelApplyMode.Manual;
     let parsedExpression: AgentLabelRuleExpressionNodeDto;
 
@@ -384,11 +454,27 @@ export default function AgentLabelsSettings() {
         label,
         expression: parsedExpression,
         customFieldDataTypes,
+        applyMode,
+        labelMatch,
+        protectedLabels: protectedLabels.map(item => item.label),
+        additiveLabels: rules
+          .filter(rule => rule.id !== editingRuleId)
+          .filter(rule => rule.isEnabled)
+          .filter(rule =>
+            rule.applyMode === AgentLabelApplyMode.ApplyOnly
+            || rule.applyMode === AgentLabelApplyMode.ApplyAndRemove)
+          .map(rule => rule.label),
       });
       if (errors.length > 0) {
         toast.error(errors[0]);
         return;
       }
+    }
+
+    // Modo Remover: exige confirmação explícita (modal) antes de persistir.
+    if (applyMode === AgentLabelApplyMode.Remove && !bypassRemoveConfirmation) {
+      requestRemoveConfirm();
+      return;
     }
 
     setIsSaving(true);
@@ -406,8 +492,10 @@ export default function AgentLabelsSettings() {
           description: normalizeOptionalText(description),
           isEnabled: currentRule.isEnabled,
           applyMode,
+          labelMatch: applyMode === AgentLabelApplyMode.Remove ? labelMatch : AgentLabelLabelMatch.Exact,
           expression: parsedExpression,
         });
+        setPendingRemoveConfirm(false);
         toast.success('Regra atualizada com sucesso.');
       } else {
         await agentLabelsApi.createRule({
@@ -415,8 +503,10 @@ export default function AgentLabelsSettings() {
           label: label.trim(),
           description: normalizeOptionalText(description),
           applyMode,
+          labelMatch: applyMode === AgentLabelApplyMode.Remove ? labelMatch : AgentLabelLabelMatch.Exact,
           expression: parsedExpression,
         });
+        setPendingRemoveConfirm(false);
         toast.success('Regra criada com sucesso.');
       }
 
@@ -609,6 +699,10 @@ export default function AgentLabelsSettings() {
       label,
       expression: parsedExpression,
       customFieldDataTypes,
+      applyMode,
+      labelMatch,
+      protectedLabels: protectedLabels.map(item => item.label),
+      additiveLabels: additiveLabels.filter(existing => existing !== label.trim()),
     });
     if (validationErrors.length > 0) {
       toast.error(validationErrors[0]);
@@ -620,6 +714,7 @@ export default function AgentLabelsSettings() {
       const result = await agentLabelsApi.evaluateImpact({
         label: label.trim(),
         applyMode,
+        labelMatch,
         expression: parsedExpression,
         clientId: selectedClientId || null,
         siteId: selectedSiteId || null,
@@ -648,6 +743,10 @@ export default function AgentLabelsSettings() {
       label,
       expression: parsedExpression,
       customFieldDataTypes,
+      applyMode,
+      labelMatch,
+      protectedLabels: protectedLabels.map(item => item.label),
+      additiveLabels: additiveLabels.filter(existing => existing !== label.trim()),
     });
     if (validationErrors.length > 0) {
       toast.error(validationErrors[0]);
@@ -682,6 +781,7 @@ export default function AgentLabelsSettings() {
         agentIds: scopedAgents.map(agent => agent.id),
         label: label.trim(),
         applyMode,
+        labelMatch,
         expression: parsedExpression,
       });
 
@@ -766,6 +866,37 @@ export default function AgentLabelsSettings() {
   }
 
   const appliedTotalPages = Math.max(1, Math.ceil(appliedAgentsTotal / APPLIED_PAGE_SIZE));
+
+  // Campos ficam travados apenas na VISUALIZACAO: no modo criar, isReadOnly tambem e true
+  // (estado inicial), o que desabilitaria os controles indevidamente.
+  const isFieldDisabled = viewMode === 'view' && isReadOnly;
+
+  /** Alvo do modo Remover: exato, prefixo ou regex (a condição continua no editor). */
+  const removeTargetEditor = applyMode === AgentLabelApplyMode.Remove ? (
+    <div className="mt-4 space-y-3 rounded-xl border border-rose-500/20 bg-rose-500/5 p-4">
+      <p className="text-sm font-medium text-rose-700 dark:text-rose-300">Modo Remover</p>
+      <p className="text-xs text-muted">
+        Enquanto a condição for verdadeira, as labels <strong>manuais</strong> que casarem com o alvo
+        serão removidas. A remoção é irreversível (fica no histórico) e se repete caso a label seja
+        re-adicionada. Labels automáticas e protegidas nunca são removidas.
+      </p>
+      <Select
+        label="Tipo de alvo"
+        value={String(labelMatch)}
+        options={labelMatchOptions}
+        disabled={isFieldDisabled}
+        onChange={event => setLabelMatch(Number(event.target.value) as AgentLabelLabelMatch)}
+      />
+      <p className="text-xs text-muted">
+        Use o campo <strong>Label</strong> acima para informar o alvo{' '}
+        {labelMatch === AgentLabelLabelMatch.Prefix
+          ? '(ex.: TEMP-)'
+          : labelMatch === AgentLabelLabelMatch.Regex
+            ? '(ex.: ^TEMP-\\d+$)'
+            : '(ex.: PROD)'}.
+      </p>
+    </div>
+  ) : null;
 
   if (isLoading) {
     return <Loading message="Carregando regras de labels..." />;
@@ -907,7 +1038,7 @@ export default function AgentLabelsSettings() {
 
             <div className="grid gap-4 lg:grid-cols-2">
               <Input label="Nome" placeholder="Ex.: Windows Produção" value={name} maxLength={200} onChange={event => setName(event.target.value)} />
-              <Input label="Label" placeholder="Ex.: PROD" value={label} maxLength={120} onChange={event => setLabel(event.target.value)} />
+              <Input label={applyMode === AgentLabelApplyMode.Remove ? 'Label / alvo' : 'Label'} placeholder={applyMode === AgentLabelApplyMode.Remove ? 'Ex.: PROD, TEMP- ou ^TEMP-\\d+$' : 'Ex.: PROD'} value={label} maxLength={120} onChange={event => setLabel(event.target.value)} />
             </div>
 
             <div className="mt-4">
@@ -915,8 +1046,10 @@ export default function AgentLabelsSettings() {
             </div>
 
             <div className="mt-4">
-              <Select label="Modo de Aplicação" value={String(applyMode)} options={applyModeOptions} onChange={event => setApplyMode(Number(event.target.value) as AgentLabelApplyMode)} />
+              <Select label="Modo de Aplicação" value={String(applyMode)} options={applyModeOptions} onChange={event => { const next = Number(event.target.value) as AgentLabelApplyMode; setApplyMode(next); if (next !== AgentLabelApplyMode.Remove) setLabelMatch(AgentLabelLabelMatch.Exact); }} />
             </div>
+
+            {removeTargetEditor}
 
             {applyMode === AgentLabelApplyMode.Manual ? (
               <div className="mt-4 rounded-xl border border-amber-500/20 bg-amber-500/5 p-4">
@@ -1077,6 +1210,7 @@ export default function AgentLabelsSettings() {
                       <th className="px-3 py-2 text-left font-medium text-muted-foreground">Match</th>
                       <th className="px-3 py-2 text-left font-medium text-muted-foreground">Adicionar</th>
                       <th className="px-3 py-2 text-left font-medium text-muted-foreground">Remover</th>
+                      <th className="px-3 py-2 text-left font-medium text-muted-foreground">Removeria (manual)</th>
                       <th className="px-3 py-2 text-left font-medium text-muted-foreground">Labels automáticas atuais</th>
                       <th className="px-3 py-2 text-left font-medium text-muted-foreground">Motivo (condição falsa)</th>
                     </tr>
@@ -1088,6 +1222,9 @@ export default function AgentLabelsSettings() {
                         <td className="px-3 py-2"><Badge color={result.matched ? 'success' : 'slate'}>{result.matched ? 'Sim' : 'Não'}</Badge></td>
                         <td className="px-3 py-2"><Badge color={result.wouldAddLabel ? 'success' : 'slate'}>{result.wouldAddLabel ? 'Sim' : 'Não'}</Badge></td>
                         <td className="px-3 py-2"><Badge color={result.wouldRemoveLabel ? 'warning' : 'slate'}>{result.wouldRemoveLabel ? 'Sim' : 'Não'}</Badge></td>
+                        <td className="px-3 py-2 text-muted-foreground">
+                          {result.removableLabels.length > 0 ? result.removableLabels.join(', ') : '-'}
+                        </td>
                         <td className="px-3 py-2 text-muted-foreground">{result.currentAutomaticLabels.length > 0 ? result.currentAutomaticLabels.join(', ') : '-'}</td>
                         <td className="px-3 py-2 text-muted-foreground" title={result.failedConditions.join('; ')}>
                           {result.matched ? '-' : (result.failedConditions[0] ?? 'sem match')}
@@ -1211,7 +1348,7 @@ export default function AgentLabelsSettings() {
 
             <div className="grid gap-4 lg:grid-cols-2">
               <Input label="Nome" placeholder="Ex.: Windows Produção" value={name} maxLength={200} disabled={isReadOnly} onChange={event => setName(event.target.value)} />
-              <Input label="Label" placeholder="Ex.: PROD" value={label} maxLength={120} disabled={isReadOnly} onChange={event => setLabel(event.target.value)} />
+              <Input label={applyMode === AgentLabelApplyMode.Remove ? 'Label / alvo' : 'Label'} placeholder={applyMode === AgentLabelApplyMode.Remove ? 'Ex.: PROD, TEMP- ou ^TEMP-\\d+$' : 'Ex.: PROD'} value={label} maxLength={120} disabled={isReadOnly} onChange={event => setLabel(event.target.value)} />
             </div>
 
             <div className="mt-4">
@@ -1219,8 +1356,10 @@ export default function AgentLabelsSettings() {
             </div>
 
             <div className="mt-4">
-              <Select label="Modo de Aplicação" value={String(applyMode)} options={applyModeOptions} disabled={isReadOnly} onChange={event => setApplyMode(Number(event.target.value) as AgentLabelApplyMode)} />
+              <Select label="Modo de Aplicação" value={String(applyMode)} options={applyModeOptions} disabled={isReadOnly} onChange={event => { const next = Number(event.target.value) as AgentLabelApplyMode; setApplyMode(next); if (next !== AgentLabelApplyMode.Remove) setLabelMatch(AgentLabelLabelMatch.Exact); }} />
             </div>
+
+            {removeTargetEditor}
 
             {applyMode === AgentLabelApplyMode.Manual ? (
               <div className="mt-4 rounded-xl border border-amber-500/20 bg-amber-500/5 p-4">
@@ -1341,6 +1480,7 @@ export default function AgentLabelsSettings() {
                       <th className="px-3 py-2 text-left font-medium text-muted-foreground">Match</th>
                       <th className="px-3 py-2 text-left font-medium text-muted-foreground">Adicionar</th>
                       <th className="px-3 py-2 text-left font-medium text-muted-foreground">Remover</th>
+                      <th className="px-3 py-2 text-left font-medium text-muted-foreground">Removeria (manual)</th>
                       <th className="px-3 py-2 text-left font-medium text-muted-foreground">Labels automáticas atuais</th>
                       <th className="px-3 py-2 text-left font-medium text-muted-foreground">Motivo (condição falsa)</th>
                     </tr>
@@ -1352,6 +1492,9 @@ export default function AgentLabelsSettings() {
                         <td className="px-3 py-2"><Badge color={result.matched ? 'success' : 'slate'}>{result.matched ? 'Sim' : 'Não'}</Badge></td>
                         <td className="px-3 py-2"><Badge color={result.wouldAddLabel ? 'success' : 'slate'}>{result.wouldAddLabel ? 'Sim' : 'Não'}</Badge></td>
                         <td className="px-3 py-2"><Badge color={result.wouldRemoveLabel ? 'warning' : 'slate'}>{result.wouldRemoveLabel ? 'Sim' : 'Não'}</Badge></td>
+                        <td className="px-3 py-2 text-muted-foreground">
+                          {result.removableLabels.length > 0 ? result.removableLabels.join(', ') : '-'}
+                        </td>
                         <td className="px-3 py-2 text-muted-foreground">{result.currentAutomaticLabels.length > 0 ? result.currentAutomaticLabels.join(', ') : '-'}</td>
                         <td className="px-3 py-2 text-muted-foreground" title={result.failedConditions.join('; ')}>
                           {result.matched ? '-' : (result.failedConditions[0] ?? 'sem match')}
@@ -1370,6 +1513,7 @@ export default function AgentLabelsSettings() {
       ) : null}
 
       {viewMode === 'list' ? (
+        <>
         <Card>
           <CardHeader
             title="Regras Cadastradas"
@@ -1509,6 +1653,50 @@ export default function AgentLabelsSettings() {
             </div>
           )}
         </Card>
+
+        <Card>
+          <CardHeader
+            title="Labels protegidas"
+            subtitle="Nenhuma regra no modo Remover pode apagar estas labels"
+          />
+
+          <div className="flex flex-wrap items-end gap-2">
+            <Input
+              label="Label"
+              placeholder="Ex.: PROD"
+              value={newProtectedLabel}
+              maxLength={120}
+              onChange={event => setNewProtectedLabel(event.target.value)}
+            />
+            <Button size="sm" loading={isSavingProtectedLabel} onClick={() => void handleAddProtectedLabel()}>
+              Proteger
+            </Button>
+          </div>
+
+          {protectedLabels.length === 0 ? (
+            <p className="mt-3 text-sm text-muted">Nenhuma label protegida.</p>
+          ) : (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {protectedLabels.map(item => (
+                <span
+                  key={item.id}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface px-2.5 py-1 text-xs text-muted"
+                  title={item.createdBy ? `Protegida por ${item.createdBy}` : undefined}
+                >
+                  <span className="font-mono text-foreground">{item.label}</span>
+                  <button
+                    className="ml-0.5 inline-flex items-center justify-center rounded-full p-0.5 text-muted transition-colors hover:bg-surface-hover hover:text-danger"
+                    title="Remover proteção"
+                    onClick={() => void handleRemoveProtectedLabel(item.id, item.label)}
+                  >
+                    <XCircle className="h-3 w-3" />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+        </Card>
+        </>
       ) : null}
 
       <input
@@ -1547,6 +1735,44 @@ export default function AgentLabelsSettings() {
               </Button>
               <Button loading={isImportingRules} onClick={() => void confirmImportRules()}>
                 Importar
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      ) : null}
+
+      {pendingRemoveConfirm ? (
+        <Modal
+          open={true}
+          onClose={() => (isSaving ? undefined : setPendingRemoveConfirm(false))}
+          title="Confirmar regra de remoção"
+        >
+          <div className="space-y-4">
+            <p className="text-sm text-muted">
+              A regra <strong className="text-foreground">{name || '(sem nome)'}</strong> vai remover labels{' '}
+              <strong>manuais</strong> que casem com o alvo{' '}
+              <span className="font-mono text-foreground">{label || '-'}</span>{' '}
+              ({getAgentLabelLabelMatchLabel(labelMatch)}).
+            </p>
+            <p className="text-xs text-muted">
+              A remoção é irreversível (fica registrada no histórico do agente) e se repete enquanto a
+              condição for verdadeira. Labels automáticas e protegidas não são afetadas.
+            </p>
+            {impactResult ? (
+              <p className="text-xs text-muted">
+                Estimativa: {impactResult.estimatedMatched} de {impactResult.estimatedTotalAgents} agentes com match.
+              </p>
+            ) : null}
+
+            <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-3">
+              <Button variant="ghost" disabled={isSaving} onClick={() => setPendingRemoveConfirm(false)}>
+                Cancelar
+              </Button>
+              <Button variant="secondary" loading={isEstimatingImpact} onClick={() => void handleEstimateImpact()}>
+                Estimar impacto
+              </Button>
+              <Button variant="danger" loading={isSaving} onClick={() => void handleSaveRule(true)}>
+                Confirmar e salvar
               </Button>
             </div>
           </div>

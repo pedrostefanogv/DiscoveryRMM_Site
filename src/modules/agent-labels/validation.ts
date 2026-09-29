@@ -1,6 +1,8 @@
 import {
+  AgentLabelApplyMode,
   AgentLabelComparisonOperator,
   AgentLabelField,
+  AgentLabelLabelMatch,
   AgentLabelLogicalOperator,
   AgentLabelNodeType,
   AgentLabelRuleExpressionNodeDto,
@@ -128,6 +130,10 @@ export function validateRulePayload(input: {
   label: string;
   expression: AgentLabelRuleExpressionNodeDto;
   customFieldDataTypes?: Record<string, CustomFieldDataType | undefined>;
+  applyMode?: AgentLabelApplyMode;
+  labelMatch?: AgentLabelLabelMatch;
+  protectedLabels?: readonly string[];
+  additiveLabels?: readonly string[];
 }): string[] {
   const errors: string[] = [];
 
@@ -143,8 +149,78 @@ export function validateRulePayload(input: {
     errors.push("Label exceeds maximum length of 120.");
   }
 
+  errors.push(...validateLabelTarget(input));
   errors.push(...validateExpression(input.expression, input.customFieldDataTypes));
   return errors;
+}
+
+/**
+ * Valida o alvo de uma regra (paridade com LabelRuleValidation.ValidateLabelTarget do backend):
+ * match coerente com o modo, tamanho/validade do padrão, label protegida e conflito direto
+ * com regra aditiva habilitada.
+ */
+function validateLabelTarget(input: {
+  label: string;
+  applyMode?: AgentLabelApplyMode;
+  labelMatch?: AgentLabelLabelMatch;
+  protectedLabels?: readonly string[];
+  additiveLabels?: readonly string[];
+}): string[] {
+  const applyMode = input.applyMode;
+  if (applyMode === undefined) {
+    return [];
+  }
+
+  const labelMatch = input.labelMatch ?? AgentLabelLabelMatch.Exact;
+
+  if (applyMode !== AgentLabelApplyMode.Remove) {
+    return labelMatch === AgentLabelLabelMatch.Exact
+      ? []
+      : ['O tipo de alvo só é suportado no modo "Remover labels manuais".'];
+  }
+
+  const target = (input.label ?? '').trim();
+  if (!target) {
+    return ['Regras no modo Remover exigem uma label ou padrão alvo.'];
+  }
+
+  if (labelMatch === AgentLabelLabelMatch.Prefix && target.length < 2) {
+    return ['O prefixo deve ter ao menos 2 caracteres.'];
+  }
+
+  let matcher: (value: string) => boolean;
+  if (labelMatch === AgentLabelLabelMatch.Regex) {
+    if (target.length > AgentLabelExpressionLimits.maxRegexLength) {
+      return [`O padrão excede ${AgentLabelExpressionLimits.maxRegexLength} caracteres.`];
+    }
+
+    try {
+      const regex = new RegExp(target, 'i');
+      matcher = value => regex.test(value);
+    } catch {
+      return ['Regex inválida.'];
+    }
+  } else if (labelMatch === AgentLabelLabelMatch.Prefix) {
+    const prefix = target.toLowerCase();
+    matcher = value => value.toLowerCase().startsWith(prefix);
+  } else {
+    const expected = target.toLowerCase();
+    matcher = value => value.toLowerCase() === expected;
+  }
+
+  const protectedHit = (input.protectedLabels ?? []).find(label => matcher(label));
+  if (protectedHit) {
+    return [`O alvo atinge a label protegida "${protectedHit}".`];
+  }
+
+  if (
+    labelMatch === AgentLabelLabelMatch.Exact
+    && (input.additiveLabels ?? []).some(label => label.toLowerCase() === target.toLowerCase())
+  ) {
+    return [`A label "${target}" também é produzida por uma regra ativa que aplica labels.`];
+  }
+
+  return [];
 }
 
 export function validateExpression(

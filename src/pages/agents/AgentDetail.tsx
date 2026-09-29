@@ -39,7 +39,7 @@ import { useNowTick } from '@/hooks/useNowTick';
 import { isHeartbeatTimestampFresh, useAgentHeartbeat } from '@/stores/heartbeatStore';
 import { agentLabelsApi } from '@/modules/agent-labels/api';
 import type { AgentLabelChangeLog, AgentLabelSuppression } from '@/modules/agent-labels/types';
-import { AgentLabelSourceType, type AgentLabel } from '@/modules/agent-labels/types';
+import { AgentLabelApplyMode, AgentLabelSourceType, type AgentLabel } from '@/modules/agent-labels/types';
 import { openRemoteDebugPopup } from './remoteDebugLauncher';
 import { openRemoteSessionPopup } from './remoteSessionLauncher';
 import { useAuthorization } from '@/auth/authorization';
@@ -95,7 +95,10 @@ export default function AgentDetail() {
   const [isLoadingLabels, setIsLoadingLabels] = useState(true);
   const [labelsError, setLabelsError] = useState<string | null>(null);
   const [isAddingManualLabel, setIsAddingManualLabel] = useState(false);
-  const [distinctLabels, setDistinctLabels] = useState<string[]>([]);
+  // Opcoes do seletor de vinculacao MANUAL: labels de regras em modo Manual (definicao
+  // curada) + labels que ja existem como manuais em algum agente. Automaticas ficam fora.
+  const [manualLabelOptions, setManualLabelOptions] = useState<string[]>([]);
+  const [showLabelHistory, setShowLabelHistory] = useState(false);
   // Labels suprimidas: removidas manualmente e que o reconcile respeita enquanto a
   // condição da regra continuar verdadeira. Visíveis para poder liberá-las.
   const [labelSuppressions, setLabelSuppressions] = useState<AgentLabelSuppression[]>([]);
@@ -256,9 +259,12 @@ export default function AgentDetail() {
       setLabelsError(null);
 
       try {
-        const [data, distinct, suppressions, history] = await Promise.all([
+        const [data, rules, manualDistinct, suppressions, history] = await Promise.all([
           agentLabelsApi.getAgentLabels(id),
-          agentLabelsApi.getDistinctLabels(),
+          // Regras definem as labels manuais "oficiais" (modo Manual).
+          agentLabelsApi.getRules(true).catch(() => []),
+          // Labels que JÁ existem como manuais em algum agente (dado legado/sem regra).
+          agentLabelsApi.getDistinctLabels(500, 'Manual').catch(() => []),
           // Labels suprimidas: removidas manualmente e que o reconcile está respeitando.
           agentLabelsApi.getSuppressions(id).catch(() => []),
           // Histórico de aplicação/remoção (auditoria do motor).
@@ -268,7 +274,16 @@ export default function AgentDetail() {
 
         const sorted = data.sort((a, b) => a.label.localeCompare(b.label, 'pt-BR'));
         setAllLabels(sorted);
-        setDistinctLabels(distinct);
+
+        const manualFromRules = rules
+          .filter(rule => rule.applyMode === AgentLabelApplyMode.Manual)
+          .filter(rule => rule.isEnabled)
+          .map(rule => rule.label);
+        setManualLabelOptions(
+          [...new Set([...manualFromRules, ...manualDistinct])]
+            .filter(Boolean)
+            .sort((a, b) => a.localeCompare(b, 'pt-BR')),
+        );
         setLabelSuppressions(suppressions);
         setLabelHistory(history);
       } catch {
@@ -1565,7 +1580,7 @@ export default function AgentDetail() {
                     autoFocus
                   />
                   <div className="max-h-48 overflow-y-auto space-y-1">
-                    {distinctLabels
+                    {manualLabelOptions
                       .filter(l => l.toLowerCase().includes(labelPickerQuery.toLowerCase()))
                       .map(l => {
                         const alreadyHas = allLabels.some(
@@ -1594,12 +1609,12 @@ export default function AgentDetail() {
                           </button>
                         );
                       })}
-                    {distinctLabels.length === 0 ? (
+                    {manualLabelOptions.length === 0 ? (
                       <p className="px-3 py-2 text-xs text-muted">
-                        Nenhuma label cadastrada. Crie uma regra com modo Manual em Labels Automáticas.
+                        Nenhuma label manual disponível. Crie uma regra com modo Manual em Labels Automáticas (labels automáticas não aparecem aqui).
                       </p>
                     ) : null}
-                    {distinctLabels.filter(l => l.toLowerCase().includes(labelPickerQuery.toLowerCase())).length === 0 ? (
+                    {manualLabelOptions.filter(l => l.toLowerCase().includes(labelPickerQuery.toLowerCase())).length === 0 ? (
                       <p className="px-3 py-2 text-xs text-muted">Nenhuma label encontrada.</p>
                     ) : null}
                   </div>
@@ -1641,68 +1656,6 @@ export default function AgentDetail() {
             ) : (
               <p className="text-sm text-muted">Nenhuma label aplicada.</p>
             )}
-
-            {labelSuppressions.length > 0 ? (
-              <div className="mt-3 rounded-lg border border-amber-500/20 bg-amber-500/5 p-3">
-                <p className="mb-2 text-xs font-medium text-amber-700 dark:text-amber-300">
-                  Labels suprimidas ({labelSuppressions.length})
-                </p>
-                <p className="mb-2 text-[11px] text-muted">
-                  Removidas manualmente. A regra não as reaplica enquanto a condição continuar
-                  verdadeira; quando a condição deixar de valer, voltam a ser aplicadas
-                  automaticamente.
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  {labelSuppressions.map(item => (
-                    <span
-                      key={item.id}
-                      className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface px-2.5 py-1 text-xs text-muted"
-                      title={
-                        item.ruleName
-                          ? `Regra: ${item.ruleName}`
-                          : 'Sem regra associada no momento'
-                      }
-                    >
-                      <span className="line-through">{item.label}</span>
-                      <span className="text-[10px] text-muted-foreground">
-                        {item.suppressedBy ? `por ${item.suppressedBy}` : 'manual'}
-                      </span>
-                      <button
-                        className="ml-0.5 inline-flex items-center justify-center rounded-full p-0.5 text-muted transition-colors hover:bg-surface-hover hover:text-success"
-                        title="Liberar supressão (a label volta a ser aplicada)"
-                        disabled={isReleasingSuppression === item.id}
-                        onClick={() => void handleReleaseSuppression(item.id, item.label)}
-                      >
-                        <RotateCcw className="h-3 w-3" />
-                      </button>
-                    </span>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-
-            {labelHistory.length > 0 ? (
-              <div className="mt-3 rounded-lg border border-border bg-surface-light p-3">
-                <p className="mb-2 text-xs font-medium text-muted-foreground">
-                  Histórico de labels ({labelHistory.length})
-                </p>
-                <div className="space-y-1.5">
-                  {labelHistory.map(item => (
-                    <div key={item.id} className="flex flex-wrap items-center gap-2 text-[11px] text-muted">
-                      <span className={item.action === 'Removed' ? 'text-warning' : 'text-success'}>
-                        {item.action === 'Removed' ? 'Removida' : 'Aplicada'}
-                      </span>
-                      <span className="font-mono text-foreground">{item.label}</span>
-                      <span>• {formatDate(item.occurredAt)}</span>
-                      {item.actor ? <span>• {item.actor}</span> : null}
-                      {item.reason ? (
-                        <span className="text-muted-foreground">• {item.reason}</span>
-                      ) : null}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : null}
           </div>
         </Tooltip>
         <Tooltip
@@ -1728,6 +1681,76 @@ export default function AgentDetail() {
           </div>
         </Tooltip>
       </div>
+
+      {/* Histórico e supressões saíram do card de labels: aquele card mostra só as labels. */}
+      {(labelSuppressions.length > 0 || labelHistory.length > 0) ? (
+        <Card>
+          <CardHeader
+            title="Histórico e supressões de labels"
+            subtitle="Auditoria do motor e labels contidas manualmente"
+            action={labelHistory.length > 0 ? (
+              <Button size="sm" variant="ghost" onClick={() => setShowLabelHistory(prev => !prev)}>
+                {showLabelHistory ? 'Ocultar histórico' : `Mostrar histórico (${labelHistory.length})`}
+              </Button>
+            ) : undefined}
+          />
+
+          {labelSuppressions.length > 0 ? (
+            <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-3">
+              <p className="mb-2 text-xs font-medium text-amber-700 dark:text-amber-300">
+                Labels suprimidas ({labelSuppressions.length})
+              </p>
+              <p className="mb-2 text-[11px] text-muted">
+                Removidas manualmente. A regra não as reaplica enquanto a condição continuar
+                verdadeira; quando a condição deixar de valer, voltam a ser aplicadas automaticamente.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {labelSuppressions.map(item => (
+                  <span
+                    key={item.id}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface px-2.5 py-1 text-xs text-muted"
+                    title={item.ruleName ? `Regra: ${item.ruleName}` : 'Sem regra associada no momento'}
+                  >
+                    <span className="line-through">{item.label}</span>
+                    <span className="text-[10px] text-muted-foreground">
+                      {item.suppressedBy ? `por ${item.suppressedBy}` : 'manual'}
+                    </span>
+                    <button
+                      className="ml-0.5 inline-flex items-center justify-center rounded-full p-0.5 text-muted transition-colors hover:bg-surface-hover hover:text-success"
+                      title="Liberar supressão (a label volta a ser aplicada)"
+                      disabled={isReleasingSuppression === item.id}
+                      onClick={() => void handleReleaseSuppression(item.id, item.label)}
+                    >
+                      <RotateCcw className="h-3 w-3" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {showLabelHistory ? (
+            labelHistory.length > 0 ? (
+              <div className="mt-3 max-h-72 space-y-1.5 overflow-y-auto pr-1">
+                {labelHistory.map(item => (
+                  <div key={item.id} className="flex flex-wrap items-center gap-2 text-[11px] text-muted">
+                    <span className={item.action === 'Removed' ? 'text-warning' : 'text-success'}>
+                      {item.action === 'Removed' ? 'Removida' : 'Aplicada'}
+                    </span>
+                    <span className="font-mono text-foreground">{item.label}</span>
+                    <span>• {formatDate(item.occurredAt)}</span>
+                    {item.ruleName ? <span>• regra {item.ruleName}</span> : null}
+                    {item.actor ? <span>• {item.actor}</span> : null}
+                    {item.reason ? <span className="text-muted-foreground">• {item.reason}</span> : null}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-3 text-sm text-muted">Sem histórico registrado.</p>
+            )
+          ) : null}
+        </Card>
+      ) : null}
 
       <div className="grid gap-4 lg:grid-cols-2">
         <NotesPanel

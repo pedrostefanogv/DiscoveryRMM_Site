@@ -12,6 +12,7 @@ import {
   AgentLabelRuleExport,
   AgentLabelRuleImportResult,
   AgentLabelRuleVersion,
+  AgentLabelProtectedLabel,
   AgentLabelRuleImpactRequest,
   AgentLabelRuleImpactResponse,
   AgentIdsByLabelResponse,
@@ -24,6 +25,7 @@ import {
   normalizeAgentLabelApplyMode,
   normalizeAgentLabelComparisonOperator,
   normalizeAgentLabelField,
+  normalizeAgentLabelLabelMatch,
   normalizeAgentLabelLogicalOperator,
   normalizeAgentLabelNodeType,
   normalizeAgentLabelSourceType,
@@ -120,9 +122,12 @@ export const agentLabelsApi = {
     await api.del<void>(`${BASE}/suppressions/${suppressionId}`);
   },
 
-  /** Labels distintas, com limite (evita payload ilimitado em frotas grandes). */
-  async getDistinctLabels(limit = 500): Promise<string[]> {
-    return api.get<string[]>(`${BASE}/distinct`, { limit });
+  /**
+   * Labels distintas, com limite e filtro opcional por origem.
+   * Use sourceType='Manual' para o seletor de vinculacao manual do agente.
+   */
+  async getDistinctLabels(limit = 500, sourceType?: 'Automatic' | 'Manual'): Promise<string[]> {
+    return api.get<string[]>(`${BASE}/distinct`, { limit, sourceType });
   },
 
   async addManualLabel(agentId: string, label: string): Promise<AgentLabel> {
@@ -286,6 +291,12 @@ export const agentLabelsApi = {
             currentAutomaticLabels: Array.isArray(sample.currentAutomaticLabels)
               ? (sample.currentAutomaticLabels as unknown[]).map(item => String(item))
               : [],
+            currentManualLabels: Array.isArray(sample.currentManualLabels)
+              ? (sample.currentManualLabels as unknown[]).map(item => String(item))
+              : [],
+            removableLabels: Array.isArray(sample.removableLabels)
+              ? (sample.removableLabels as unknown[]).map(item => String(item))
+              : [],
           }))
         : [],
     };
@@ -306,6 +317,8 @@ export const agentLabelsApi = {
       action: String(item.action ?? ""),
       reason: item.reason == null ? null : String(item.reason),
       actor: item.actor == null ? null : String(item.actor),
+      ruleId: item.ruleId == null ? null : String(item.ruleId),
+      ruleName: item.ruleName == null ? null : String(item.ruleName),
       occurredAt: String(item.occurredAt ?? ""),
     }));
   },
@@ -328,6 +341,12 @@ export const agentLabelsApi = {
       currentAutomaticLabels: Array.isArray(item.currentAutomaticLabels)
         ? (item.currentAutomaticLabels as unknown[]).map(String)
         : [],
+      currentManualLabels: Array.isArray(item.currentManualLabels)
+        ? (item.currentManualLabels as unknown[]).map(String)
+        : [],
+      removableLabels: Array.isArray(item.removableLabels)
+        ? (item.removableLabels as unknown[]).map(String)
+        : [],
       failedConditions: Array.isArray(item.failedConditions)
         ? (item.failedConditions as unknown[]).map(String)
         : [],
@@ -349,10 +368,36 @@ export const agentLabelsApi = {
       description: item.description == null ? null : String(item.description),
       isEnabled: Boolean(item.isEnabled ?? true),
       applyMode: String(item.applyMode ?? ""),
+      labelMatch: String(item.labelMatch ?? "Exact"),
       expression: normalizeExpressionNode(item.expression ?? item.Expression),
       changedBy: item.changedBy == null ? null : String(item.changedBy),
       changedAt: String(item.changedAt ?? ""),
     }));
+  },
+
+  /** Labels protegidas: nenhuma regra Remove pode apagá-las. */
+  async getProtectedLabels(): Promise<AgentLabelProtectedLabel[]> {
+    const raw = await api.get<Array<Record<string, unknown>>>(`${BASE}/protected-labels`);
+    return (raw ?? []).map(item => ({
+      id: String(item.id ?? ""),
+      label: String(item.label ?? ""),
+      createdBy: item.createdBy == null ? null : String(item.createdBy),
+      createdAt: String(item.createdAt ?? ""),
+    }));
+  },
+
+  async addProtectedLabel(label: string): Promise<AgentLabelProtectedLabel> {
+    const raw = await api.post<Record<string, unknown>>(`${BASE}/protected-labels`, { label });
+    return {
+      id: String(raw.id ?? ""),
+      label: String(raw.label ?? label),
+      createdBy: raw.createdBy == null ? null : String(raw.createdBy),
+      createdAt: String(raw.createdAt ?? ""),
+    };
+  },
+
+  async removeProtectedLabel(id: string): Promise<void> {
+    await api.del<void>(`${BASE}/protected-labels/${id}`);
   },
 
   /** Exporta todas as regras em formato portável (JSON). */
@@ -363,6 +408,7 @@ export const agentLabelsApi = {
       label: String(item.label ?? ""),
       description: item.description == null ? null : String(item.description),
       applyMode: String(item.applyMode ?? ""),
+      labelMatch: String(item.labelMatch ?? "Exact"),
       isEnabled: Boolean(item.isEnabled ?? true),
       expression: normalizeExpressionNode(item.expression ?? item.Expression),
     }));
@@ -507,6 +553,7 @@ function normalizeRuleResponse(
         : String(raw.description),
     isEnabled: Boolean(raw.isEnabled ?? raw.IsEnabled ?? true),
     applyMode: normalizeAgentLabelApplyMode(raw.applyMode ?? raw.ApplyMode),
+    labelMatch: normalizeAgentLabelLabelMatch(raw.labelMatch ?? raw.LabelMatch),
     expression: normalizeExpressionNode(raw.expression ?? raw.Expression),
     createdAt: String(raw.createdAt ?? raw.CreatedAt ?? ""),
     updatedAt: String(raw.updatedAt ?? raw.UpdatedAt ?? ""),
