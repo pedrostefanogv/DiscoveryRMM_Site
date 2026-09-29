@@ -80,6 +80,12 @@ export function DashboardSummaryCard({ data, title, subtitle }: DashboardSummary
                 {data.automation.successRate.toFixed(1)}% sucesso
               </p>
               <p className="mt-0.5 text-xs text-muted">{data.automation.total} execuções</p>
+              {/* Contagem separada: canceladas contam no total, mas não na taxa. */}
+              {data.automation.cancelled > 0 && (
+                <p className="mt-0.5 text-xs text-warning">
+                  {data.automation.cancelled} cancelada(s)
+                </p>
+              )}
             </>
           ) : (
             <p className="mt-1 text-base font-semibold text-muted">Nenhuma</p>

@@ -56,6 +56,8 @@ export interface ExecutionHistoryParams {
   sourceType?: AutomationExecutionSourceType | string | number;
   taskId?: string;
   scriptId?: string;
+  /** Correlation do lote: mostra só as execuções de uma operação em massa. */
+  correlationId?: string;
 }
 
 export interface ListAutomationTasksParams {
@@ -252,6 +254,7 @@ export const automationApi = {
         sourceType: params.sourceType,
         taskId: params.taskId,
         scriptId: params.scriptId,
+        correlationId: params.correlationId,
       },
     ),
 };

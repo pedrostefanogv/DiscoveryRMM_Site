@@ -200,6 +200,12 @@ vi.mock("@/hooks/useAgents", () => ({
   useAgentsByClient: () => ({ data: clientAgents, isLoading: false }),
 }));
 
+// O realtime usa useQueryClient + NATS: fora do escopo deste teste de UI.
+vi.mock("@/hooks/useAutomationExecutionsRealtime", () => ({
+  useAutomationExecutionsRealtime: vi.fn(),
+  isAutomationExecutionEventForAgent: vi.fn(() => true),
+}));
+
 vi.mock("@/hooks/useClients", () => ({
   useClients: () => ({ data: [{ id: "c1", name: "Acme" }], isLoading: false }),
 }));

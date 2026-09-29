@@ -54,6 +54,8 @@ export interface DashboardAutomationSummaryDto {
   acknowledged: number;
   completed: number;
   failed: number;
+  /** Canceladas pelo operador: contam no total, fora da taxa de sucesso. */
+  cancelled: number;
   successRate: number;
 }
 

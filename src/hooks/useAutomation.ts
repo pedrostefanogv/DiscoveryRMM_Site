@@ -261,6 +261,7 @@ export interface AutomationExecutionFilters {
   sourceType?: AutomationExecutionSourceType | string | number;
   taskId?: string;
   scriptId?: string;
+  correlationId?: string;
 }
 
 export function useAutomationExecutions(
@@ -268,7 +269,7 @@ export function useAutomationExecutions(
   filters: AutomationExecutionFilters = {},
   enabled = true,
 ) {
-  const { limit = 50, status, sourceType, taskId, scriptId } = filters;
+  const { limit = 50, status, sourceType, taskId, scriptId, correlationId } = filters;
 
   return useQuery({
     queryKey: KEYS.executions.byAgent(agentId, {
@@ -277,6 +278,7 @@ export function useAutomationExecutions(
       sourceType,
       taskId,
       scriptId,
+      correlationId,
     }),
     queryFn: () =>
       automationApi.getExecutions(agentId, {
@@ -285,6 +287,7 @@ export function useAutomationExecutions(
         sourceType,
         taskId,
         scriptId,
+        correlationId,
       }),
     enabled: !!agentId && enabled,
     placeholderData: (prev) => prev,

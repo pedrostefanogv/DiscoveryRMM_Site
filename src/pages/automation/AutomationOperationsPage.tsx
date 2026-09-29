@@ -16,6 +16,7 @@ import {
   ServerCog,
   Wifi,
   WifiOff,
+  X,
   XCircle,
 } from "lucide-react";
 import {
@@ -41,6 +42,7 @@ import {
   type AutomationScopeTarget,
 } from "@/api";
 import { useAuthorization } from "@/auth/authorization";
+import { useAutomationExecutionsRealtime } from "@/hooks/useAutomationExecutionsRealtime";
 import { useAgent, useAgentsByClient, useAgentsBySite } from "@/hooks/useAgents";
 import { useClients } from "@/hooks/useClients";
 import { useSites } from "@/hooks/useSites";
@@ -155,6 +157,7 @@ export default function AutomationOperationsPage() {
   const [statusFilter, setStatusFilter] = useState("");
   const [sourceFilter, setSourceFilter] = useState("");
   const [targetFilter, setTargetFilter] = useState("");
+  const [correlationFilter, setCorrelationFilter] = useState("");
   const [limit, setLimit] = useState(50);
   const [search, setSearch] = useState("");
   const [onlyFailures, setOnlyFailures] = useState(false);
@@ -226,9 +229,14 @@ export default function AutomationOperationsPage() {
       sourceType: sourceFilter || undefined,
       taskId: targetKind === "task" ? targetId : undefined,
       scriptId: targetKind === "script" ? targetId : undefined,
+      correlationId: correlationFilter || undefined,
     },
     !!agentId,
   );
+
+  // Atualização em tempo real do histórico (NATS). O polling de 3 s continua
+  // como fallback quando o transporte não está disponível.
+  useAutomationExecutionsRealtime({ clientId, siteId }, agentId, Boolean(clientId && agentId));
 
   const cancelExecution = useCancelAutomationExecution();
   const runTaskNow = useRunAutomationTaskNow();
@@ -1030,7 +1038,21 @@ export default function AutomationOperationsPage() {
                 ))}
             </ul>
           )}
-          <div className="mt-3 flex justify-end">
+          <div className="mt-3 flex flex-wrap justify-end gap-2">
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={!agentId}
+              title={
+                agentId
+                  ? "Filtrar o histórico deste agente pelas execuções deste lote"
+                  : "Selecione “Agente único” para ver o histórico do lote"
+              }
+              onClick={() => setCorrelationFilter(bulkResult.correlationId)}
+            >
+              <Layers className="h-3.5 w-3.5" />
+              Filtrar histórico por este lote
+            </Button>
             <Button variant="secondary" size="sm" onClick={() => setBulkResult(null)}>
               Fechar resultado
             </Button>
@@ -1142,6 +1164,19 @@ export default function AutomationOperationsPage() {
                   <Clock className="h-3.5 w-3.5" />
                   Somente em andamento
                 </Button>
+                {correlationFilter && (
+                  <span className="flex items-center gap-1 rounded-full border border-primary/40 bg-primary/10 px-2 py-0.5 text-xs text-primary">
+                    lote: <span className="font-mono">{correlationFilter}</span>
+                    <button
+                      type="button"
+                      onClick={() => setCorrelationFilter("")}
+                      className="rounded p-0.5 transition-colors hover:text-foreground"
+                      aria-label="Limpar filtro de lote"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </span>
+                )}
                 {summary.pending > 0 && (
                   <span className="flex items-center gap-1.5 text-xs text-muted">
                     <RefreshCw className="h-3.5 w-3.5 animate-spin" />
