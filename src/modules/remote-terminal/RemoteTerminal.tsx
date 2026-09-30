@@ -44,6 +44,17 @@ interface RemoteTerminalProps {
    * hook reusa o JWT da abertura e o WebSocket cai em -ERR authorization.
    */
   getFreshCredentials?: () => Promise<string>;
+  /**
+   * Reconexão imperativa no MESMO componente (a página incrementa a cada
+   * "Reconectar"): preserva o scrollback do xterm e o lastSeq do replay.
+   */
+  reconnectToken?: number;
+  /**
+   * A aba do terminal está visível. O viewer fica MONTADO mesmo quando outra
+   * aba está ativa (apenas oculto) para a sessão e o buffer sobreviverem à
+   * troca de aba; ao voltar, refaz o fit e repinta o canvas.
+   */
+  isVisible?: boolean;
 }
 
 // TermReadyInfo compatível com o hook (avoid import cycle)
@@ -403,6 +414,8 @@ export default function RemoteTerminal({
   onConnectionChange,
   onShells,
   getFreshCredentials,
+  reconnectToken,
+  isVisible = true,
 }: RemoteTerminalProps) {
   const termRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
@@ -416,10 +429,6 @@ export default function RemoteTerminal({
   const legacyEditorRef = useRef<LegacyEditor | null>(null);
   // sendData mais recente (o editor envia a linha submetida pelo caminho atual).
   const sendDataRef = useRef<(data: string) => void>(() => {});
-  // Backend já anunciado no banner: o agent REPUBLICA o term.ready no 1º
-  // term.in e em CADA resize (handshake/reconexão) — sem dedup, o banner
-  // aparecia duplicado (bug visto em 20/09: resize do fit → ready → banner 2×).
-  const backendAnnouncedRef = useRef<string | null>(null);
   const { mode } = useTheme();
 
   // Initialize xterm.js (uma única instância)
@@ -469,6 +478,16 @@ export default function RemoteTerminal({
         } catch { /* addon pode nao expor show em runtime */ }
         return false;
       }
+      // Ctrl+Shift+C copia a seleção (o ClipboardAddon cobre o paste; sem isto
+      // não havia atalho de cópia — Ctrl+C precisa continuar indo ao shell como
+      // SIGINT).
+      if (e.ctrlKey && e.shiftKey && (e.key === 'C' || e.key === 'c')) {
+        const selection = term.getSelection();
+        if (selection) {
+          void navigator.clipboard?.writeText(selection).catch(() => {});
+          return false;
+        }
+      }
       return true;
     });
 
@@ -494,6 +513,7 @@ export default function RemoteTerminal({
     jwt,
     nkeySeed,
     getFreshCredentials,
+    reconnectToken,
   });
 
   // Último erro reportado pelo agente/hook, exibido como banner persistente.
@@ -507,7 +527,9 @@ export default function RemoteTerminal({
       try {
         fitAddonRef.current?.fit();
         const t2 = termRef.current;
-        if (t2) {
+        // Container oculto (aba inativa) mede 0x0 — não guardar como "último
+        // fit" e não enviar resize inválido ao agente.
+        if (t2 && t2.cols > 0 && t2.rows > 0) {
           lastFittedCols = t2.cols; lastFittedRows = t2.rows;
           // Envia as dimensões reais MESMO sem onResize: quando o fit não muda
           // o tamanho o evento não dispara e o console ficaria no default do
@@ -540,22 +562,12 @@ export default function RemoteTerminal({
       // O que corrige a formatação é o resize real + ANSI que agora são
       // aplicados no lado do agente.
       if (info.backend) {
+        // Só marca o backend para o editor de linha do modo legacy. O aviso ao
+        // usuário vem do AGENTE, no próprio stream (NewLegacyShell): antes o
+        // viewer escrevia um SEGUNDO banner, duplicando a mensagem — e ele
+        // atribuía o 0xC0000142 ao AV/EDR, diagnóstico que se provou INCORRETO
+        // (era o STARTF_USESTDHANDLES ausente no spawn do ConPTY).
         backendRef.current = info.backend;
-        // Banner APENAS na primeira vez que este backend é anunciado — o
-        // agent republica o term.ready no 1º term.in e em cada resize;
-        // sem dedup o banner aparecia duplicado (bug 20/09).
-        if (
-          (info.backend === 'legacy' || info.backend === 'none') &&
-          backendAnnouncedRef.current !== info.backend
-        ) {
-          backendAnnouncedRef.current = info.backend;
-          const t = termRef.current;
-          // Modo legacy = stdin em PIPE (sem ConPTY): VT não é processado no
-          // child. O editor local (createLegacyEditor) cobre edição/histórico.
-          t?.writeln(ESC + '[1;33m── Modo compatibilidade (ConPTY indisponível neste agente) ──' + ESC + '[0m');
-          t?.writeln(ESC + '[33m   Edição local ativa: ↑/↓ histórico, Backspace/Home/End/Delete, clear/cls, Ctrl+L' + ESC + '[0m');
-          t?.writeln(ESC + '[33m   TAB e Ctrl+C (interromper) não funcionam — causa comum: AV/EDR encerra o ConPTY (0xC0000142)' + ESC + '[0m');
-        }
       }
     });
     return unsubscribe;
@@ -593,6 +605,22 @@ export default function RemoteTerminal({
     });
     return () => dispose.dispose();
   }, [sendData]);
+
+  // Voltou a ficar visível (troca de aba): o container saiu de 0x0, então
+  // refaz o fit, repinta o canvas e reenvia as dimensões reais ao agent.
+  useEffect(() => {
+    if (!isVisible) return;
+    const t = window.setTimeout(() => {
+      try { fitAddonRef.current?.fit(); } catch { /* ignore */ }
+      const term = termRef.current;
+      if (term && term.rows > 0) {
+        try { term.refresh(0, term.rows - 1); } catch { /* ignore */ }
+        lastFittedCols = term.cols; lastFittedRows = term.rows;
+        sendResize(term.cols, term.rows);
+      }
+    }, 30);
+    return () => window.clearTimeout(t);
+  }, [isVisible, sendResize]);
 
   // Debounce de 200 ms (mesmo padrão do MeshCentral): o ResizeObserver dispara
   // em rajada durante o arraste da janela e cada evento viraria um

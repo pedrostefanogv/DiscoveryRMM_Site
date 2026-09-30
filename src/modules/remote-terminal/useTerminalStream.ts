@@ -13,6 +13,13 @@ interface UseTerminalStreamOptions {
      * fetch no componente pai.
      */
     getFreshCredentials?: () => Promise<string>;
+    /**
+     * Sinal imperativo de reconexão: quando muda, o hook derruba o socket atual
+     * e reconecta no MESMO componente — preservando o xterm (scrollback) e o
+     * lastSeq (o agente reenvia só o que faltou, em vez de reenviar o anel).
+     * Substitui a remontagem por `key` que a página fazia no reconnect.
+     */
+    reconnectToken?: number;
 }
 
 export interface TerminalReadyInfo {
@@ -71,8 +78,11 @@ function appendBytes(left: Uint8Array<ArrayBufferLike>, right: Uint8Array<ArrayB
     return result;
 }
 
-function findCrlf(data: Uint8Array<ArrayBufferLike>): number {
-    for (let i = 0; i <= data.length - CRLF.length; i++) {
+// findCrlf procura o CRLF a partir de `from` (cursor). Sem o cursor, cada
+// mensagem revarria o buffer desde o início: com um prefixo longo sem CRLF o
+// custo vira O(n²). O chamador avança o cursor e o zera quando consome bytes.
+function findCrlf(data: Uint8Array<ArrayBufferLike>, from = 0): number {
+    for (let i = Math.max(0, from); i <= data.length - CRLF.length; i++) {
         if (data[i] === CRLF[0] && data[i + 1] === CRLF[1]) return i;
     }
     return -1;
@@ -137,6 +147,7 @@ export function useTerminalStream({
     jwt,
     nkeySeed: _nkeySeed,
     getFreshCredentials,
+    reconnectToken = 0,
 }: UseTerminalStreamOptions): UseTerminalStreamReturn {
     const [isConnected, setIsConnected] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -201,6 +212,11 @@ export function useTerminalStream({
             let protocolBuffer: Uint8Array<ArrayBufferLike> = new Uint8Array();
             let connectSent = false;
             let authenticated = false;
+            // Cursor do CRLF e MSG já cabeçalhada aguardando o corpo: evitam
+            // revarrer/parsear o buffer inteiro a cada chunk de um payload
+            // grande (o custo anterior era O(n²) por payload fatiado).
+            let scanFrom = 0;
+            let pendingMsg: { subject: string; end: number } | null = null;
 
             // Decoder UTF-8 PERSISTENTE por conexão ({ stream: true }): o
             // term.out pode dividir um caractere multi-byte entre mensagens
@@ -208,6 +224,9 @@ export function useTerminalStream({
             // runa que ainda atravesse uma mensagem é concluída na próxima,
             // sem U+FFFD). Reconexão cria novo decoder (estado limpo).
             const utf8Stream = new TextDecoder('utf-8');
+            // Decoder do CABEÇALHO do protocolo, reutilizado por mensagem (o
+            // anterior criava um TextDecoder novo a cada onmessage).
+            const protoDecoder = new TextDecoder();
 
             const sendProtocol = (cmd: string) => ws?.send(new TextEncoder().encode(`${cmd}\r\n`));
 
@@ -273,11 +292,40 @@ export function useTerminalStream({
                 } catch { /* payload de evento inválido — ignora */ }
             };
 
+            const decoder = protoDecoder;
+
+            // consumePending conclui o corpo de uma MSG já cabeçalhada. Devolve
+            // false quando ainda faltam bytes — sem re-parsear o header nem
+            // revarrer o buffer a cada chunk (era o custo O(n²) do payload
+            // grande que chega fatiado em várias mensagens do WebSocket).
+            const consumePending = (): boolean => {
+                if (pendingMsg === null) return true;
+                if (protocolBuffer.length < pendingMsg.end) return false;
+                const subject = pendingMsg.subject;
+                const payload = decoder.decode(protocolBuffer.slice(0, pendingMsg.end - 2));
+                protocolBuffer = protocolBuffer.slice(pendingMsg.end);
+                pendingMsg = null;
+                scanFrom = 0;
+                if (subject.endsWith('.event')) {
+                    handleSessionEvent(payload);
+                } else {
+                    // .term.out (saída, ready, erro, reset, exit)
+                    handleTermOut(payload);
+                }
+                return true;
+            };
+
             const processProtocol = () => {
-                const decoder = new TextDecoder();
+                if (!consumePending()) return;
+
                 while (mountedRef.current) {
-                    const lineEnd = findCrlf(protocolBuffer);
-                    if (lineEnd < 0) return;
+                    const lineEnd = findCrlf(protocolBuffer, scanFrom);
+                    if (lineEnd < 0) {
+                        // Sem CRLF: a próxima busca recomeça no fim (um CRLF pode
+                        // começar no último byte) em vez de revarrer o buffer.
+                        scanFrom = protocolBuffer.length > 0 ? protocolBuffer.length - 1 : 0;
+                        return;
+                    }
 
                     const line = decoder.decode(protocolBuffer.slice(0, lineEnd));
                     const tokens = line.trim().split(/\s+/);
@@ -290,24 +338,16 @@ export function useTerminalStream({
                             ws?.close(4000, 'Invalid MSG');
                             return;
                         }
-                        const ps = lineEnd + 2;
-                        const pe = ps + plN;
-                        if (protocolBuffer.length < pe + 2) return;
-
-                        const subject = tokens[1] ?? '';
-                        const payload = decoder.decode(protocolBuffer.slice(ps, pe));
-                        protocolBuffer = protocolBuffer.slice(pe + 2);
-
-                        if (subject.endsWith('.event')) {
-                            handleSessionEvent(payload);
-                        } else {
-                            // .term.out (saída, ready, erro, reset, exit)
-                            handleTermOut(payload);
-                        }
+                        // Consome só o HEADER; o corpo (plN + CRLF) fica pendente.
+                        protocolBuffer = protocolBuffer.slice(lineEnd + 2);
+                        scanFrom = 0;
+                        pendingMsg = { subject: tokens[1] ?? '', end: plN + 2 };
+                        if (!consumePending()) return;
                         continue;
                     }
 
                     protocolBuffer = protocolBuffer.slice(lineEnd + 2);
+                    scanFrom = 0;
 
                     if (tokens[0] === 'INFO') {
                         sendProtocol(`CONNECT ${JSON.stringify({
@@ -371,8 +411,14 @@ export function useTerminalStream({
 
             ws.onopen = () => { /* aguarda INFO */ };
 
+            // Guarda de socket OBSoLETO: em StrictMode (e ao trocar natsUrl/
+            // subj) a conexão anterior é fechada e uma nova é criada; os
+            // eventos da anterior chegam DEPOIS e derrubavam a nova
+            // (isConnected=false, authenticatedRef=false e um reconnect extra).
+            const isStale = () => wsRef.current !== ws;
+
             ws.onmessage = (event) => {
-                if (!mountedRef.current) return;
+                if (!mountedRef.current || isStale()) return;
                 // Aceita string, ArrayBuffer e views (Uint8Array): alguns
                 // ambientes entregam a view binária em vez do ArrayBuffer cru,
                 // e `instanceof ArrayBuffer` falha entre realms. ArrayBuffer.isView
@@ -400,7 +446,7 @@ export function useTerminalStream({
 
             ws.onerror = () => { /* tratado no onclose */ };
             ws.onclose = () => {
-                if (!mountedRef.current) return;
+                if (!mountedRef.current || isStale()) return;
                 authenticatedRef.current = false;
                 setIsConnected(false);
                 if (reconnectAttemptsRef.current < maxReconnect) {
@@ -440,6 +486,28 @@ export function useTerminalStream({
         };
     }, [connect]);
 
+    // Reconexão IMPERATIVA (botão "Reconectar"): sem remontar o componente, para
+    // não perder o buffer do xterm nem o lastSeq. O socket atual é descartado
+    // como "obsoleto" (wsRef=null antes do close) para a guarda de socket
+    // obsoleto ignorar o onclose dele e não agendar um reconnect duplicado.
+    const reconnectTokenRef = useRef(reconnectToken);
+    useEffect(() => {
+        if (reconnectTokenRef.current === reconnectToken) return;
+        reconnectTokenRef.current = reconnectToken;
+        if (!mountedRef.current) return;
+        if (reconnectTimerRef.current) {
+            clearTimeout(reconnectTimerRef.current);
+            reconnectTimerRef.current = null;
+        }
+        const old = wsRef.current;
+        wsRef.current = null;
+        authenticatedRef.current = false;
+        setIsConnected(false);
+        try { old?.close(); } catch { /* socket já fechado */ }
+        reconnectAttemptsRef.current = 0;
+        connect();
+    }, [reconnectToken, connect]);
+
     const sendData = useCallback((data: string) => {
         const ws = wsRef.current;
         const open = !!ws && ws.readyState === WebSocket.OPEN && authenticatedRef.current;
@@ -472,6 +540,9 @@ export function useTerminalStream({
     // Envia com fila: se a conexão ainda não autenticou (ou está reconectando),
     // guarda o ÚLTIMO resize para ser drenado no +OK — evita perder o fit.
     const sendResize = useCallback((cols: number, rows: number) => {
+        // Aba inativa/container oculto reporta 0x0: não é um resize válido e
+        // envenenaria o ConPTY e as dimensões do hello (lastDimsRef).
+        if (cols <= 0 || rows <= 0) return;
         lastDimsRef.current = { cols, rows };
         const msg = buildPub(inSubject, JSON.stringify({ cols, rows }));
         const ws = wsRef.current;

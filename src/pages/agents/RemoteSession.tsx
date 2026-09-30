@@ -1141,12 +1141,19 @@ export default function RemoteSession() {
           )
         )}
 
-        {activeTab === 'terminal' && (
-          sessions.terminal ? (
-            <div className="h-full flex flex-col">
-              <div className="flex-1">
-                <RemoteTerminal
-                  key={`terminal-${sessions.terminal.sessionId}-${reconnectKeys.terminal ?? 0}`}
+        {/* Terminal mantido MONTADO quando a aba não está ativa (apenas oculto):
+            a sessão e o buffer do xterm sobrevivem à troca de aba. Antes, cada
+            volta remontava o viewer, reconectava e o agente reenviava o anel de
+            replay inteiro (até 512 KB) — o terminal "piscava" e perdia o
+            scrollback local. */}
+        {sessions.terminal && (
+          <div
+            className="h-full flex-col"
+            style={{ display: activeTab === 'terminal' ? 'flex' : 'none' }}
+          >
+            <div className="flex-1">
+              <RemoteTerminal
+                  key={`terminal-${sessions.terminal.sessionId}`}
                   sessionId={sessions.terminal.sessionId}
                   agentId={agentId}
                   natsSubject={sessions.terminal.natsSubject}
@@ -1162,19 +1169,26 @@ export default function RemoteSession() {
                       .getSessionCredentials(agentId, sessions.terminal!.sessionId)
                       .then((creds) => creds.jwt)
                   }
+                  // Reconexão imperativa: incrementa o token em vez de trocar a
+                  // `key` — o viewer NÃO é remontado, então o scrollback do
+                  // xterm e o lastSeq (replay incremental) são preservados.
+                  reconnectToken={reconnectKeys.terminal ?? 0}
+                  // Aba inativa: o viewer refaz o fit/repaint ao voltar.
+                  isVisible={activeTab === 'terminal'}
                 />
-              </div>
             </div>
-          ) : (
-            <ConnectPlaceholder
-              label="Terminal"
-              icon="⌨️"
-              connecting={connectingTab === 'terminal'}
-              onConnect={() => startTabSession('terminal')}
-              conflict={sessionConflict}
-              onForce={() => startTabSession('terminal', true)}
-            />
-          )
+          </div>
+        )}
+
+        {activeTab === 'terminal' && !sessions.terminal && (
+          <ConnectPlaceholder
+            label="Terminal"
+            icon="⌨️"
+            connecting={connectingTab === 'terminal'}
+            onConnect={() => startTabSession('terminal')}
+            conflict={sessionConflict}
+            onForce={() => startTabSession('terminal', true)}
+          />
         )}
 
         {activeTab === 'files' && (

@@ -84,21 +84,27 @@ function decodeBase64Utf8(b64: string): string {
     return new TextDecoder().decode(bytes);
 }
 
-function renderTerminal(overrides: Partial<Parameters<typeof useTerminalStream>[0]> = {}) {
+type StreamProps = Parameters<typeof useTerminalStream>[0];
+
+const BASE_PROPS: StreamProps = {
+    natsSubject: NATS_SUBJECT,
+    natsUrl: 'wss://nats.example/nats',
+    jwt: 'jwt-1',
+    nkeySeed: '',
+    reconnectToken: 0,
+};
+
+function renderTerminal(overrides: Partial<StreamProps> = {}) {
     const onError = vi.fn<(info: TerminalErrorInfo) => void>();
     const onReset = vi.fn<() => void>();
     const onExit = vi.fn<(reason: string) => void>();
     const onReady = vi.fn<(info: TerminalReadyInfo) => void>();
     const onOutput = vi.fn<(data: string) => void>();
-    const utils = renderHook(() =>
-        useTerminalStream({
-            natsSubject: NATS_SUBJECT,
-            natsUrl: 'wss://nats.example/nats',
-            jwt: 'jwt-1',
-            nkeySeed: '',
-            ...overrides,
-        }),
-    );
+    // initialProps permitem trocar natsUrl/subj e reexecutar o efeito NO MESMO
+    // componente — exatamente o que o StrictMode (e uma troca de props) faz.
+    const utils = renderHook((props: StreamProps) => useTerminalStream(props), {
+        initialProps: { ...BASE_PROPS, ...overrides },
+    });
     act(() => {
         utils.result.current.onError(onError);
         utils.result.current.onReset(onReset);
@@ -339,6 +345,137 @@ describe('useTerminalStream — erros e reset', () => {
         const hello = pubs(next, TERM_IN).find((m) => m.includes('"hello":true'));
         expect(hello).toBeDefined();
         expect(pubBody(hello!).lastSeq).toBe(7);
+    });
+});
+
+describe('useTerminalStream — reconexão imperativa (R4)', () => {
+    it('reconecta no MESMO componente preservando o lastSeq do replay', () => {
+        const { rerender, result } = renderTerminal();
+        const first = lastSocket();
+        act(() => {
+            first.completeHandshake();
+        });
+        act(() => {
+            first.emitMessage(TERM_OUT, { data: btoa('x'), seq: 9 });
+        });
+
+        // Botão "Reconectar": a página incrementa o token (sem trocar a key).
+        act(() => {
+            rerender({ ...BASE_PROPS, reconnectToken: 1 });
+        });
+        const second = lastSocket();
+        expect(second).not.toBe(first);
+        act(() => {
+            second.completeHandshake();
+        });
+        expect(result.current.isConnected).toBe(true);
+
+        // O hello pede replay a partir do seq JÁ visto: com o componente
+        // preservado (scrollback intacto) o agente reenvia só a lacuna, em vez
+        // de mandar o anel inteiro (comportamento da remontagem antiga).
+        const hello = pubs(second, TERM_IN).find((m) => m.includes('"hello":true'));
+        expect(hello).toBeDefined();
+        expect(pubBody(hello!).lastSeq).toBe(9);
+    });
+
+    it('ignora resize 0x0 (aba inativa/container oculto)', () => {
+        const { result } = renderTerminal();
+        const socket = lastSocket();
+        act(() => {
+            result.current.sendResize(0, 0);
+        });
+        act(() => {
+            socket.completeHandshake();
+        });
+        const hello = pubs(socket, TERM_IN).find((m) => m.includes('"hello":true'));
+        expect(hello).toBeDefined();
+        // Sem dimensões válidas o hello vai sem cols/rows (o agente trata como
+        // handshake puro e não redimensiona para 0).
+        expect(pubBody(hello!).cols).toBeUndefined();
+        expect(pubBody(hello!).rows).toBeUndefined();
+        expect(pubs(socket, TERM_IN).some((m) => m.includes('"cols":0'))).toBe(false);
+    });
+
+    it('não reconecta quando o token não muda', () => {
+        const { rerender } = renderTerminal();
+        const first = lastSocket();
+        act(() => {
+            first.completeHandshake();
+        });
+        act(() => {
+            rerender({ ...BASE_PROPS, reconnectToken: 0 });
+        });
+        expect(lastSocket()).toBe(first);
+    });
+});
+
+describe('useTerminalStream — protocolo fatiado', () => {
+    it('remonta um payload MSG dividido em vários eventos do WebSocket', () => {
+        const { onOutput } = renderTerminal();
+        const socket = lastSocket();
+        act(() => {
+            socket.completeHandshake();
+        });
+
+        const body = JSON.stringify({ data: btoa('fatiado'), seq: 3 });
+        const len = new TextEncoder().encode(body).length;
+        const frame = `MSG ${TERM_OUT} 1 ${len}\r\n${body}\r\n`;
+        // Três pedaços: header + metade do corpo, resto do corpo, CRLF final.
+        const cut1 = frame.indexOf('\r\n') + 2 + 5;
+        const cut2 = frame.length - 3;
+        act(() => { socket.emitRaw(frame.slice(0, cut1)); });
+        expect(onOutput).not.toHaveBeenCalled();
+        act(() => { socket.emitRaw(frame.slice(cut1, cut2)); });
+        act(() => { socket.emitRaw(frame.slice(cut2)); });
+
+        expect(onOutput).toHaveBeenCalledWith('fatiado');
+    });
+
+    it('processa duas mensagens MSG coladas no mesmo evento', () => {
+        const { onOutput } = renderTerminal();
+        const socket = lastSocket();
+        act(() => {
+            socket.completeHandshake();
+        });
+        const frame = (text: string, seq: number) => {
+            const body = JSON.stringify({ data: btoa(text), seq });
+            const len = new TextEncoder().encode(body).length;
+            return `MSG ${TERM_OUT} 1 ${len}\r\n${body}\r\n`;
+        };
+        act(() => { socket.emitRaw(frame('um', 1) + frame('dois', 2)); });
+        expect(onOutput).toHaveBeenCalledWith('um');
+        expect(onOutput).toHaveBeenCalledWith('dois');
+    });
+});
+
+describe('useTerminalStream — socket obsoleto', () => {
+    it('não deixa o evento tardio do socket ANTIGO derrubar a conexão nova', () => {
+        const { rerender, result } = renderTerminal();
+        const first = lastSocket();
+        act(() => {
+            first.completeHandshake();
+        });
+        expect(result.current.isConnected).toBe(true);
+
+        // Troca a URL no MESMO componente: o efeito refaz a conexão.
+        act(() => {
+            rerender({ ...BASE_PROPS, natsUrl: 'wss://nats2.example/nats' });
+        });
+        const second = lastSocket();
+        expect(second).not.toBe(first);
+        act(() => {
+            second.completeHandshake();
+        });
+        expect(result.current.isConnected).toBe(true);
+
+        // Evento TARDIO do socket antigo (o navegador dispara o close DEPOIS de
+        // o novo efeito rodar — StrictMode/remontagem). Sem a guarda de socket
+        // obsoleto isto marcava isConnected=false e agendava um reconnect extra,
+        // derrubando a conexão saudável.
+        act(() => {
+            first.onclose?.();
+        });
+        expect(result.current.isConnected).toBe(true);
     });
 });
 
