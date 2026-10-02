@@ -1,4 +1,4 @@
-﻿import { api } from "./client";
+import { api } from "./client";
 import type { AdminJobActionResult } from "./types";
 
 const BASE = "/api/v1/admin/jobs";
@@ -66,8 +66,13 @@ async function runJobAction(
   jobGroup: string,
   jobName: string,
   action: string,
+  query?: Record<string, string>,
 ): Promise<AdminJobActionResult> {
-  const raw = await api.post<unknown>(buildJobPath(jobGroup, jobName, action));
+  const search =
+    query && Object.keys(query).length > 0
+      ? "?" + new URLSearchParams(query).toString()
+      : "";
+  const raw = await api.post<unknown>(buildJobPath(jobGroup, jobName, action) + search);
   return normalizeActionResult(raw, jobGroup, jobName, action);
 }
 
@@ -79,8 +84,9 @@ export const jobsApi = {
       `${BASE}/${encodeURIComponent(jobGroup)}/${encodeURIComponent(jobName)}`,
     ),
 
-  trigger: (jobGroup: string, jobName: string) =>
-    runJobAction(jobGroup, jobName, "trigger"),
+  /** force=true: métricas/triagem ignoram o vencimento do escopo neste disparo. */
+  trigger: (jobGroup: string, jobName: string, force = false) =>
+    runJobAction(jobGroup, jobName, "trigger", force ? { force: "true" } : undefined),
 
   pause: (jobGroup: string, jobName: string) =>
     runJobAction(jobGroup, jobName, "pause"),

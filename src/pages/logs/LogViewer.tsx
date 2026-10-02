@@ -4,6 +4,7 @@ import { LogLevel, LogSource, LogType } from '@/api';
 import { getLogLevelMeta } from '@/utils/labels';
 import type { LogEntry, LogsQuery } from '@/api';
 import { useLogScopeOptions, useLogSummary, useLogsPage } from '@/hooks/useLogs';
+import { readDataField } from './logDataUtils';
 import { Badge, Button, Card, CardHeader, ErrorDisplay, Input, Loading, PageHeader, Select } from '@/components/ui';
 
 const initialFilters: LogsQuery = {
@@ -697,11 +698,14 @@ function LogRow({
   const lvl = getLogLevelMeta(log.level);
   const data = parseLogData(log.dataJson);
   const formattedData = data ? JSON.stringify(data, null, 2) : null;
-  const traceId = getStringValue(data?.traceId);
-  const correlationId = getStringValue(data?.correlationId);
-  const requestPath = getStringValue(data?.path) ?? getStringValue(data?.requestPath);
-  const queryString = getStringValue(data?.queryString);
-  const statusCode = getNumberValue(data?.statusCode);
+  // data_json é gravado em PascalCase pelo backend ({"Path":...,"StatusCode":...});
+  // readDataField aceita as duas formas.
+  const traceId = getStringValue(readDataField(data, 'traceId'));
+  const correlationId = getStringValue(readDataField(data, 'correlationId'));
+  const requestPath =
+    getStringValue(readDataField(data, 'path')) ?? getStringValue(readDataField(data, 'requestPath'));
+  const queryString = getStringValue(readDataField(data, 'queryString'));
+  const statusCode = getNumberValue(readDataField(data, 'statusCode'));
   const toneClass =
     log.level === LogLevel.Error || log.level === LogLevel.Fatal
       ? 'border-l-danger/60'

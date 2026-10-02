@@ -85,18 +85,36 @@ function formatRelative(value: string | null | undefined): string {
   return Math.round(minutes / 1440) + " d atrás";
 }
 
+/**
+ * Lê um campo do JSON de processing_scope_state aceitando camelCase e
+ * PascalCase: métricas/triagem gravam camelCase (objeto anônimo) e o backfill
+ * gravava PascalCase (default do System.Text.Json em record posicional).
+ * Linhas antigas em PascalCase continuam sendo exibidas corretamente.
+ */
+function readField<T>(source: Record<string, unknown>, key: string): T | undefined {
+  const pascal = key.charAt(0).toUpperCase() + key.slice(1);
+  return (source[key] ?? source[pascal]) as T | undefined;
+}
+
 function summarizeScope(row: ProcessingScopeStateDto): string {
   if (!row.lastResultJson) return "—";
   try {
     const parsed = JSON.parse(row.lastResultJson) as Record<string, unknown>;
-    if (typeof parsed.updated === "number" || typeof parsed.pending === "number") {
-      return "snapshots " + (parsed.updated ?? 0) + " · pendentes " + (parsed.pending ?? 0);
+    const updated = readField<number>(parsed, "updated");
+    const pending = readField<number>(parsed, "pending");
+    if (typeof updated === "number" || typeof pending === "number") {
+      return "snapshots " + (updated ?? 0) + " · pendentes " + (pending ?? 0);
     }
-    if (typeof parsed.triaged === "number" || typeof parsed.swept === "number") {
-      return "triados " + (parsed.triaged ?? 0) + " · fallback " + (parsed.swept ?? 0);
+    const triaged = readField<number>(parsed, "triaged");
+    const swept = readField<number>(parsed, "swept");
+    if (typeof triaged === "number" || typeof swept === "number") {
+      return "triados " + (triaged ?? 0) + " · fallback " + (swept ?? 0);
     }
-    if (typeof parsed.processed === "number") {
-      return "backfill " + parsed.processed + "/" + (parsed.total ?? 0) + " (" + String(parsed.status ?? "") + ")";
+    const processed = readField<number>(parsed, "processed");
+    if (typeof processed === "number") {
+      const total = readField<number>(parsed, "total") ?? 0;
+      const status = readField<string>(parsed, "status") ?? "";
+      return "backfill " + processed + "/" + total + " (" + status + ")";
     }
     return "—";
   } catch {
@@ -148,22 +166,15 @@ export function BackgroundProcessingCard({
   const requestBackfill = useRequestBackgroundBackfill();
   const cancelBackfill = useCancelBackgroundBackfill();
 
-  const scopeRows = useMemo(
-    () =>
-      (status.data ?? []).filter(
-        (row) => !clientId || row.scopeId.toLowerCase() === clientId.toLowerCase(),
-      ),
-    [status.data, clientId],
-  );
+  // O card mostra SOMENTE o escopo dele: o cliente informado no modo override ou
+  // o escopo global (Guid.Empty) no modo global. Antes, o card global não
+  // filtrava nada e "Últimos ciclos" listava linhas de todos os clientes.
+  const scopeRows = useMemo(() => {
+    const target = (clientId ?? "00000000-0000-0000-0000-000000000000").toLowerCase();
+    return (status.data ?? []).filter((row) => row.scopeId.toLowerCase() === target);
+  }, [status.data, clientId]);
 
-  // O backfill exibido é o DESTE escopo: o card global só olha a linha global
-  // (Guid.Empty) e o card do cliente só a linha dele.
-  const backfillRows = useMemo(() => {
-    const scopeId = (clientId ?? "00000000-0000-0000-0000-000000000000").toLowerCase();
-    return scopeRows.filter((row) => row.scopeId.toLowerCase() === scopeId);
-  }, [scopeRows, clientId]);
-
-  const backfill = useBackgroundBackfillState(backfillRows);
+  const backfill = useBackgroundBackfillState(scopeRows);
 
   function updateValue(section: SectionKey, key: string, value: unknown) {
     setValues((current) => ({ ...current, [section]: { ...current[section], [key]: value } }));
@@ -337,7 +348,7 @@ export function BackgroundProcessingCard({
               disabled={!canManage}
               onClick={() =>
                 jobsApi
-                  .trigger("tickets", "technician-metrics-refresh")
+                  .trigger("tickets", "technician-metrics-refresh", true)
                   .then(() => toast.success("Ciclo de métricas disparado."))
                   .catch(() => toast.error("Não foi possível disparar o ciclo de métricas."))
               }
@@ -351,7 +362,7 @@ export function BackgroundProcessingCard({
               disabled={!canManage}
               onClick={() =>
                 jobsApi
-                  .trigger("tickets", "ai-ticket-assignment")
+                  .trigger("tickets", "ai-ticket-assignment", true)
                   .then(() => toast.success("Ciclo de triagem disparado."))
                   .catch(() => toast.error("Não foi possível disparar o ciclo de triagem."))
               }
@@ -464,13 +475,15 @@ function useBackgroundBackfillState(rows: ProcessingScopeStateDto[] | undefined)
     const row = (rows ?? []).find((item) => item.scopeType === "technician_metrics_backfill");
     if (!row?.lastResultJson) return null;
     try {
-      const parsed = JSON.parse(row.lastResultJson) as {
-        status?: string;
-        total?: number;
-        processed?: number;
-        lastError?: string | null;
+      const parsed = JSON.parse(row.lastResultJson) as Record<string, unknown>;
+      const status = readField<string>(parsed, "status");
+      if (!status) return null;
+      return {
+        status,
+        total: readField<number>(parsed, "total") ?? 0,
+        processed: readField<number>(parsed, "processed") ?? 0,
+        lastError: readField<string | null>(parsed, "lastError") ?? null,
       };
-      return parsed;
     } catch {
       return null;
     }

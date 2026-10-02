@@ -38,7 +38,7 @@ export function useBackgroundProcessingStatus(
       const runningBackfill = rows.some(
         (row) =>
           row.scopeType === "technician_metrics_backfill" &&
-          /"status"\s*:\s*"(pending|running)"/.test(row.lastResultJson ?? ""),
+          /"(?:status|Status)"\s*:\s*"(?:pending|running)"/.test(row.lastResultJson ?? ""),
       );
       return runningBackfill ? 10_000 : 60_000;
     },

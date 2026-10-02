@@ -145,9 +145,54 @@ describe('BackgroundProcessingCard', () => {
     expect(screen.getByText(/Backfill: running — 10\/100/)).toBeTruthy();
 
     fireEvent.click(screen.getByText('Rodar métricas agora'));
-    expect(jobsTrigger).toHaveBeenCalledWith('tickets', 'technician-metrics-refresh');
+    expect(jobsTrigger).toHaveBeenCalledWith('tickets', 'technician-metrics-refresh', true);
 
     fireEvent.click(screen.getByText('Cancelar backfill'));
     expect(cancelBackfillMock.mock.calls[0][0]).toEqual({ clientId: null });
+  });
+
+  it('no card global lista apenas o escopo global (não mistura clientes)', () => {
+    statusState.data = [
+      {
+        id: 'g1',
+        scopeType: 'technician_metrics',
+        scopeId: '00000000-0000-0000-0000-000000000000',
+        lastRunAt: '2026-01-01T00:00:00Z',
+        lastResultJson: '{"updated":1,"pending":0}',
+        updatedAt: '2026-01-01T00:00:00Z',
+      },
+      {
+        id: 'c1',
+        scopeType: 'technician_metrics',
+        scopeId: '11111111-1111-1111-1111-111111111111',
+        lastRunAt: '2026-01-01T00:00:00Z',
+        lastResultJson: '{"updated":9,"pending":0}',
+        updatedAt: '2026-01-01T00:00:00Z',
+      },
+    ];
+
+    render(<BackgroundProcessingCard mode="global" settings={effective as never} onSave={onSaveMock} />);
+
+    expect(screen.getByText(/snapshots 1 · pendentes 0/)).toBeTruthy();
+    expect(screen.queryByText(/snapshots 9 · pendentes 0/)).toBeNull();
+  });
+
+  it('interpreta backfill legado gravado em PascalCase (sem perder progresso/cancelamento)', () => {
+    statusState.data = [
+      {
+        id: 'b1',
+        scopeType: 'technician_metrics_backfill',
+        scopeId: '00000000-0000-0000-0000-000000000000',
+        lastRunAt: '2026-01-01T00:00:00Z',
+        lastResultJson: '{"Total":100,"Status":"running","Processed":10,"LastError":null}',
+        updatedAt: '2026-01-01T00:00:00Z',
+      },
+    ];
+
+    render(<BackgroundProcessingCard mode="global" settings={effective as never} onSave={onSaveMock} />);
+
+    expect(screen.getByText(/backfill 10\/100 \(running\)/)).toBeTruthy();
+    expect(screen.getByText(/Backfill: running — 10\/100/)).toBeTruthy();
+    expect(screen.getByText('Cancelar backfill')).toBeTruthy();
   });
 });
