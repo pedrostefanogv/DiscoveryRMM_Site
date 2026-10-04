@@ -17,6 +17,7 @@ import {
   ReportDateMode,
   ReportFilterFieldType,
   type RunReportRequest,
+  type ReportExecutionSchema,
   type ReportFilterField,
   type ReportFilterPreset,
 } from "@/api/types";
@@ -75,8 +76,26 @@ function normalizeDateFilterValue(value: unknown, fieldName?: string): string | 
 const FORMAT_LABELS: Record<ReportFormat, string> = {
   [ReportFormat.Xlsx]: "Excel (.xlsx)",
   [ReportFormat.Csv]: "CSV (.csv)",
-  [ReportFormat.Pdf]: "PDF (.pdf)",
   [ReportFormat.Markdown]: "Markdown (.md)",
+};
+
+/**
+ * Fallback de schema quando a API nao devolve executionSchema. O DTO de
+ * template nao inclui esse campo, e o handler de execucao acessava
+ * template.data.executionSchema.filters direto — TypeError ao rodar um
+ * relatorio sem filtros avancados.
+ */
+const EMPTY_EXECUTION_SCHEMA = {
+  scopeType: ReportScopeType.Global,
+  dateMode: ReportDateMode.None,
+  filters: [] as ReportExecutionSchema["filters"],
+  allowedOrientations: ["portrait"],
+  defaultOrientation: "portrait",
+  allowedSortFields: [] as string[],
+  defaultSortField: "",
+  allowedSortDirections: ["asc", "desc"],
+  defaultSortDirection: "asc",
+  sampleFilterPresets: [],
 };
 
 const STATUS_CONFIG = {
@@ -301,7 +320,7 @@ export default function RunReport() {
     const normalized: Record<string, any> = {};
     for (const [key, val] of Object.entries(filterValues)) {
       if (val === undefined || val === null) continue;
-      const filterDef = template.data?.executionSchema.filters.find((f) => f.name === key);
+      const filterDef = (template.data?.executionSchema ?? EMPTY_EXECUTION_SCHEMA).filters.find((f) => f.name === key);
       if (
         (filterDef?.type === ReportFilterFieldType.DateTime ||
           filterDef?.type === ReportFilterFieldType.Date) &&
@@ -367,7 +386,7 @@ export default function RunReport() {
         })
       );
 
-      for (const filterDef of template.data.executionSchema.filters) {
+      for (const filterDef of (template.data.executionSchema ?? EMPTY_EXECUTION_SCHEMA).filters) {
         if (
           filterDef.type !== ReportFilterFieldType.DateTime &&
           filterDef.type !== ReportFilterFieldType.Date
@@ -384,8 +403,8 @@ export default function RunReport() {
     }
 
     // Validar campos obrigatórios
-    const schema = template.data.executionSchema;
-    const requiredFields = schema.filters.filter((f) => f.required);
+    const schema = template.data.executionSchema ?? EMPTY_EXECUTION_SCHEMA;
+    const requiredFields = (schema.filters ?? []).filter((f) => f.required);
     const missingFields = requiredFields.filter(f => {
       const fieldValue = filters[f.name];
       // Campo está faltando se for undefined, null ou string vazia (false é válido)
@@ -407,9 +426,22 @@ export default function RunReport() {
       filters.orientation = orientation;
     }
 
+    // RunReportNowCommand.Format e int nao-nulo: enviar undefined fazia o
+    // backend assumir 0 (Xlsx) e ignorar o formato padrao do template.
+    const templateDefaultFormat = template.data?.defaultFormat;
+    const resolvedFormat =
+      format ??
+      (typeof templateDefaultFormat === "number"
+        ? templateDefaultFormat
+        : templateDefaultFormat === "Csv" || templateDefaultFormat === "csv"
+          ? 2
+          : templateDefaultFormat === "Markdown" || templateDefaultFormat === "markdown"
+            ? 3
+            : 0);
+
     const request: RunReportRequest = {
       templateId,
-      format: format ?? undefined,
+      format: resolvedFormat,
       filtersJson:
         Object.keys(filters).length > 0 ? JSON.stringify(filters) : undefined,
       createdBy: "user@example.com",
@@ -702,18 +734,7 @@ export default function RunReport() {
     );
   }
 
-  const schema = template.data.executionSchema || {
-    scopeType: ReportScopeType.Global,
-    dateMode: ReportDateMode.None,
-    filters: [],
-    allowedOrientations: ["portrait"],
-    defaultOrientation: "portrait",
-    allowedSortFields: [],
-    defaultSortField: "",
-    allowedSortDirections: ["asc", "desc"],
-    defaultSortDirection: "asc",
-    sampleFilterPresets: [],
-  };
+  const schema = template.data.executionSchema ?? EMPTY_EXECUTION_SCHEMA;
   
   const selectedFormat = format ?? template.data.defaultFormat;
   const executionStatus = normalizeExecutionStatus(
@@ -797,8 +818,8 @@ export default function RunReport() {
                 <option className={SELECT_OPTION_CLASSNAME} value={ReportFormat.Csv}>
                   {FORMAT_LABELS[ReportFormat.Csv]}
                 </option>
-                <option className={SELECT_OPTION_CLASSNAME} value={ReportFormat.Pdf}>
-                  {FORMAT_LABELS[ReportFormat.Pdf]}
+                <option className={SELECT_OPTION_CLASSNAME} value={ReportFormat.Markdown}>
+                  {FORMAT_LABELS[ReportFormat.Markdown]}
                 </option>
               </select>
             </div>

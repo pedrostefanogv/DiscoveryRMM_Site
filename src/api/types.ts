@@ -2784,7 +2784,9 @@ export enum ReportDatasetType {
 
 export enum ReportFormat {
   Xlsx = 0,
-  Pdf = 1,
+  // 1 era Pdf. O PDF deixou de ser gerado no servidor: o Markdown/HTML e salvo
+  // em PDF pelo dialogo de impressao do navegador. O valor numerico NAO e
+  // reaproveitado para nao quebrar os registros ja gravados no banco.
   Csv = 2,
   Markdown = 3,
 }
@@ -2977,11 +2979,9 @@ export interface DatasetFilterDefinition {
 }
 
 export type ReportFormatString =
-  | "pdf"
   | "xlsx"
   | "csv"
   | "markdown"
-  | "Pdf"
   | "Xlsx"
   | "Csv"
   | "Markdown";

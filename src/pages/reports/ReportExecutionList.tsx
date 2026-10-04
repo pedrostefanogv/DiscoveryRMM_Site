@@ -41,7 +41,6 @@ const STATUS_CONFIG = {
 const FORMAT_LABELS: Record<ReportFormat, string> = {
   [ReportFormat.Xlsx]: "Excel",
   [ReportFormat.Csv]: "CSV",
-  [ReportFormat.Pdf]: "PDF",
   [ReportFormat.Markdown]: "Markdown",
 };
 
@@ -76,7 +75,7 @@ function normalizeReportFormat(
   const normalized = String(format).toLowerCase();
   if (normalized === "xlsx" || normalized === "excel") return ReportFormat.Xlsx;
   if (normalized === "csv") return ReportFormat.Csv;
-  if (normalized === "pdf") return ReportFormat.Pdf;
+  if (normalized === "markdown" || normalized === "md") return ReportFormat.Markdown;
   return undefined;
 }
 

@@ -124,11 +124,11 @@ export function useReportDownload() {
 
         // Determine file extension from format or content type
         const getFileExtension = (exec: ReportExecution): string => {
-          if (exec.resultContentType?.includes("pdf")) return "pdf";
           if (exec.resultContentType?.includes("spreadsheet")) return "xlsx";
           if (exec.resultContentType?.includes("csv")) return "csv";
-          // Fallback to PDF
-          return "pdf";
+          if (exec.resultContentType?.includes("markdown")) return "md";
+          // Fallback: execucoes sem content-type conhecido sao Markdown.
+          return "md";
         };
 
         const extension = getFileExtension(execution);

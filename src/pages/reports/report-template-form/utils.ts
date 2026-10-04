@@ -117,20 +117,35 @@ export function getFirstFieldOption(fieldOptions: FieldOption[]): string {
 export function normalizeFormat(value: unknown): SupportedFormat {
   if (typeof value === "string") {
     const lower = value.toLowerCase();
-    if (lower === "pdf" || lower === "xlsx" || lower === "csv") {
+    if (lower === "md") return "markdown";
+    if (lower === "xlsx" || lower === "csv" || lower === "markdown") {
       return lower;
     }
   }
 
-  if (value === ReportFormat.Pdf || value === 1) return "pdf";
+  // O valor 1 era Pdf: registros antigos sao tratados como Markdown.
+  if (value === 1) return "markdown";
   if (value === ReportFormat.Csv || value === 2) return "csv";
+  if (value === ReportFormat.Markdown || value === 3) return "markdown";
   return "xlsx";
 }
 
-export function toApiFormat(format: SupportedFormat): "Pdf" | "Xlsx" | "Csv" {
-  if (format === "pdf") return "Pdf";
+export function toApiFormat(format: SupportedFormat): "Xlsx" | "Csv" | "Markdown" {
   if (format === "csv") return "Csv";
+  if (format === "markdown") return "Markdown";
   return "Xlsx";
+}
+
+/**
+ * Valor numerico do formato aceito pela API (ReportFormat: Xlsx=0, Csv=2,
+ * Markdown=3). O comando CreateReportTemplateCommand/UpdateReportTemplateCommand
+ * declara DefaultFormat como int: enviar "Markdown" faz o binding falhar com 400
+ * e nenhum template e salvo.
+ */
+export function toApiFormatValue(format: SupportedFormat): number {
+  if (format === "csv" || format === "Csv") return 2;
+  if (format === "markdown" || format === "Markdown") return 3;
+  return 0;
 }
 
 export function parseJsonObject<T>(value: unknown, fallback: T): T {
@@ -326,7 +341,7 @@ export function normalizeDataset(item: DatasetCatalogItem): NormalizedDataset {
 
   const defaultFormat = item.defaultFormat
     ? normalizeFormat(item.defaultFormat)
-    : (supportedFormats[0] ?? "pdf");
+    : (supportedFormats[0] ?? "markdown");
 
   const numericType = Number(item.datasetType ?? item.type);
   const legacyDatasetType: ReportDatasetType | undefined = (() => {
@@ -510,9 +525,30 @@ export function toScopePayload(scopeType: ScopeTypeString): ScopeTypeString {
   return scopeType;
 }
 
-export function getTemplateDatasetKey(template: ReportTemplate): string {
+export function getTemplateDatasetKey(
+  template: ReportTemplate,
+  datasets: NormalizedDataset[] = [],
+): string {
+  const datasetType = template.datasetType;
+
+  // O DTO pode devolver o enum numerico legado (ex.: 4 = AgentHardware),
+  // enquanto o catalogo usa chaves textuais (ex.: "agentHardware"). Resolve a
+  // chave textual a partir do enum antes dos fallbacks.
+  if (datasetType !== undefined && datasetType !== null && datasetType !== "") {
+    const matched = datasets.find(
+      (dataset) =>
+        dataset.legacyDatasetType !== undefined &&
+        String(dataset.legacyDatasetType) === String(datasetType),
+    );
+    if (matched) return matched.key;
+  }
+
+  // Fallbacks: datasetKey do template e, por fim, o proprio valor textual.
   if (template.datasetKey) return template.datasetKey;
-  return String(template.datasetType ?? "");
+
+  return datasetType !== undefined && datasetType !== null
+    ? String(datasetType)
+    : "";
 }
 
 export function buildFieldOptions(

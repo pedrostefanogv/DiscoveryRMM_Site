@@ -67,7 +67,7 @@ export function ReportTemplateWizardEdit() {
     // For edit in the legacy flow, use /reports/templates/:id/edit
   };
 
-  return <ReportTemplateWizard initialTemplate={initial} />;
+  return <ReportTemplateWizard initialTemplate={initial} templateId={id} />;
 }
 
 export default ReportTemplateWizardEdit;

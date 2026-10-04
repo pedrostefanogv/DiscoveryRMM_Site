@@ -55,7 +55,7 @@ export interface WizardState {
   name: string;
   subtitle: string;
   description: string;
-  defaultFormat: "xlsx" | "pdf" | "csv" | "markdown";
+  defaultFormat: "xlsx" | "csv" | "markdown";
   scopeType: "global" | "client" | "site" | "agent";
   style: ReportLayoutStyleDefinition;
   logoUrl: string;
@@ -660,11 +660,15 @@ export function useWizardState(initialState?: Partial<WizardState>) {
     ) => {
       const primaryDs = state.selectedDatasets[0];
       const dsType = primaryDs?.catalogItem.datasetType ?? primaryDs?.catalogItem.type;
+      // CreateReportTemplateCommand.DefaultFormat e int: "markdown" como string
+      // faz o binding falhar (400) e o template nao e salvo.
+      const requestedFormat = (overrides?.format ?? state.defaultFormat ?? "xlsx").toLowerCase();
+      const defaultFormat = requestedFormat === "csv" ? 2 : requestedFormat === "markdown" || requestedFormat === "md" ? 3 : 0;
       return {
         name: state.name || "Novo Template",
         description: state.description || null,
         datasetType: dsType ?? "",
-        defaultFormat: overrides?.format ?? state.defaultFormat,
+        defaultFormat,
         scopeType: state.scopeType,
         layoutJson: buildLayoutJson(),
         filtersJson: overrides?.filtersJson ?? null,

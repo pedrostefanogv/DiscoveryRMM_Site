@@ -144,6 +144,29 @@ function parsePreviewHtmlTable(
   });
 }
 
+/**
+ * A API devolve o schema de execucao como executionSchemaJson (string). O
+ * formulario/execucao esperam executionSchema (objeto) — sem isso os filtros
+ * dinamicos, presets e validacao de obrigatorios ficavam inertes.
+ */
+function withExecutionSchema<T extends { executionSchema?: unknown; executionSchemaJson?: unknown }>(template: T): T {
+  if (template.executionSchema) return template;
+
+  const raw = template.executionSchemaJson;
+  if (typeof raw !== "string" || !raw.trim()) return template;
+
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === "object") {
+      return { ...template, executionSchema: parsed };
+    }
+  } catch {
+    // JSON invalido: mantem o template como veio.
+  }
+
+  return template;
+}
+
 export async function getDatasetCatalog(): Promise<DatasetCatalogItem[]> {
   return api.get<DatasetCatalogItem[]>("/api/v1/reports/datasets");
 }
@@ -179,16 +202,20 @@ export async function getReportTemplates(params?: {
   datasetType?: ReportDatasetTypeValue;
   isActive?: boolean;
 }): Promise<ReportTemplate[]> {
-  return api.get<ReportTemplate[]>("/api/v1/reports/templates", params ?? {});
+  const templates = await api.get<ReportTemplate[]>("/api/v1/reports/templates", params ?? {});
+  return Array.isArray(templates)
+    ? templates.map((template) => withExecutionSchema(template))
+    : templates;
 }
 
 export async function getReportTemplateById(
   id: string,
   clientId?: string,
 ): Promise<ReportTemplate> {
-  return api.get<ReportTemplate>(`/api/v1/reports/templates/${id}`, {
+  const template = await api.get<ReportTemplate>(`/api/v1/reports/templates/${id}`, {
     clientId,
   });
+  return withExecutionSchema(template);
 }
 
 export async function updateReportTemplate(
@@ -239,7 +266,7 @@ export async function installLibraryTemplate(
 export async function runReport(
   request: RunReportRequest,
 ): Promise<RunReportResponse> {
-  // Geração (PDF/XLSX via Playwright) pode exceder o timeout default.
+  // Geracao (XLSX de inventarios grandes) pode exceder o timeout default.
   return api.post<RunReportResponse>("/api/v1/reports/run", request, {
     timeoutMs: 0,
   });
@@ -402,7 +429,7 @@ export async function previewReportData(
     template: {
       name: "Previa temporaria",
       datasetType,
-      defaultFormat: "pdf",
+      defaultFormat: "markdown",
       layoutJson: buildPreviewLayoutJson(fields),
     },
     filtersJson: filters ?? null,

@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Loading, ErrorDisplay, EmptyState } from "@/components/ui";
 import { useReportDatasets } from "@/hooks/useReportDatasets";
-import { useCreateReportTemplate } from "@/hooks/useReportTemplates";
+import { useCreateReportTemplate, useUpdateReportTemplate } from "@/hooks/useReportTemplates";
 import { useWizardState, WizardState } from "./hooks/useWizardState";
 import { StepDataSources } from "./StepDataSources";
 import { StepLayout } from "./StepLayout";
@@ -11,9 +11,11 @@ import { buildRunReportPath, resolveBuiltInTemplateId } from "../builtInTemplate
 
 interface Props {
   initialTemplate?: Partial<WizardState>;
+  /** Quando presente, o wizard atualiza o template existente em vez de criar um novo. */
+  templateId?: string;
 }
 
-export function ReportTemplateWizard({ initialTemplate }: Props) {
+export function ReportTemplateWizard({ initialTemplate, templateId }: Props) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const clientIdParam = searchParams.get("clientId");
@@ -29,6 +31,7 @@ export function ReportTemplateWizard({ initialTemplate }: Props) {
     refetch,
   } = useReportDatasets();
   const createMutation = useCreateReportTemplate();
+  const updateMutation = useUpdateReportTemplate();
   const legacyBuiltInTemplateId = resolveBuiltInTemplateId(searchParams.get("template"));
 
   const wizard = useWizardState(initialTemplate);
@@ -41,6 +44,16 @@ export function ReportTemplateWizard({ initialTemplate }: Props) {
   const handleCreate = useCallback(async () => {
     const request = wizard.buildRequest();
     try {
+      // Edicao: atualiza o template existente. Novo: mantem o create.
+      if (templateId) {
+        await updateMutation.mutateAsync({ id: templateId, data: request as any });
+        const params = new URLSearchParams();
+        if (clientId) params.set("clientId", clientId);
+        const query = params.toString();
+        navigate(`/reports/templates${query ? `?${query}` : ""}`);
+        return;
+      }
+
       const result = await createMutation.mutateAsync(request as any);
       const basePath = `/reports/templates/${result.id}/edit/wizard`;
       if (clientId) {
@@ -53,7 +66,7 @@ export function ReportTemplateWizard({ initialTemplate }: Props) {
     } catch {
       // Error handled by mutation
     }
-  }, [wizard, createMutation, navigate, clientId]);
+  }, [wizard, createMutation, updateMutation, templateId, navigate, clientId]);
 
   if (isLoading || legacyBuiltInTemplateId) return <Loading />;
 
@@ -147,7 +160,7 @@ export function ReportTemplateWizard({ initialTemplate }: Props) {
             wizard={wizard}
             onBack={() => setStep(1)}
             onCreate={handleCreate}
-            isCreating={createMutation.isPending}
+            isCreating={createMutation.isPending || updateMutation.isPending}
           />
         )}
       </div>

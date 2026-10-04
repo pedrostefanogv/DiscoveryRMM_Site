@@ -18,7 +18,6 @@ const EVENT_COLORS = {
 const FORMAT_LABELS: Record<ReportFormat, string> = {
   [ReportFormat.Xlsx]: "Excel",
   [ReportFormat.Csv]: "CSV",
-  [ReportFormat.Pdf]: "PDF",
   [ReportFormat.Markdown]: "Markdown",
 };
 
@@ -107,8 +106,8 @@ function getDatasetLabel(datasetType: ReportDatasetTypeValue): string {
 function getFormatLabel(format: ReportFormatValue): string {
   if (typeof format === "string") {
     const lower = format.toLowerCase();
-    if (lower === "pdf") return "PDF";
     if (lower === "csv") return "CSV";
+    if (lower === "markdown" || lower === "md") return "Markdown";
     if (lower === "xlsx") return "Excel";
     return format;
   }

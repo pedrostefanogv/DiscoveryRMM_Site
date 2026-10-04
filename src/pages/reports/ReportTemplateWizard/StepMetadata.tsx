@@ -124,7 +124,6 @@ export function StepMetadata({ wizard, onBack, onCreate, isCreating }: Props) {
                 >
                   <option value="xlsx" className="bg-surface">XLSX</option>
                   <option value="csv" className="bg-surface">CSV</option>
-                  <option value="pdf" className="bg-surface">PDF</option>
                   <option value="markdown" className="bg-surface">Markdown</option>
                 </select>
               </div>

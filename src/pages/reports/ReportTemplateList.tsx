@@ -69,7 +69,6 @@ const DATASET_LABELS: Record<ReportDatasetType, string> = {
 const FORMAT_LABELS: Record<ReportFormat, string> = {
   [ReportFormat.Xlsx]: "Excel",
   [ReportFormat.Csv]: "CSV",
-  [ReportFormat.Pdf]: "PDF",
   [ReportFormat.Markdown]: "Markdown",
 };
 
@@ -100,8 +99,8 @@ function getDatasetLabel(datasetType: ReportDatasetTypeValue): string {
 function getFormatLabel(format: ReportFormatValue): string {
   if (typeof format === "string") {
     const lower = format.toLowerCase();
-    if (lower === "pdf") return "PDF";
     if (lower === "csv") return "CSV";
+    if (lower === "markdown" || lower === "md") return "Markdown";
     if (lower === "xlsx") return "Excel";
     return format;
   }
@@ -143,8 +142,10 @@ export default function ReportTemplateList() {
     return `${basePath}?${params.toString()}`;
   };
 
+  // Contrato: isActive ausente = todos os templates; isActive=true = somente ativos.
+  // "Mostrar inativos" desligado envia isActive=true; ligado omite o filtro (todos).
   const templates = useReportTemplates({
-    isActive: !showInactive ? true : undefined,
+    isActive: showInactive ? undefined : true,
   });
   const deleteMutation = useDeleteReportTemplate();
   const createMutation = useCreateReportTemplate();

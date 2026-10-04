@@ -44,7 +44,7 @@ const DEFAULT_FORM: FormState = {
   dayOfMonth: 1,
   hourUtc: 8,
   minuteUtc: 0,
-  format: 'Pdf',
+  format: 'Markdown',
   recipients: '',
   isActive: true,
 };
@@ -95,7 +95,7 @@ export default function ReportSchedulesPage() {
       frequency: form.frequency,
       hourUtc: form.hourUtc,
       minuteUtc: form.minuteUtc,
-      format: form.format as 'Pdf' | 'Xlsx' | 'Csv',
+      format: form.format as 'Xlsx' | 'Csv' | 'Markdown',
       dayOfWeek: form.frequency === 1 ? form.dayOfWeek : undefined,
       dayOfMonth: form.frequency === 2 ? form.dayOfMonth : undefined,
       recipients: form.recipients ? form.recipients.split(',').map((s) => s.trim()) : undefined,
@@ -168,7 +168,7 @@ export default function ReportSchedulesPage() {
                 value={form.format}
                 onChange={(e) => setForm({ ...form, format: e.target.value })}
                 options={[
-                  { value: 'Pdf', label: 'PDF' },
+                  { value: 'Markdown', label: 'Markdown' },
                   { value: 'Xlsx', label: 'Excel (XLSX)' },
                   { value: 'Csv', label: 'CSV' },
                 ]}

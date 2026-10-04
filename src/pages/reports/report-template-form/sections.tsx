@@ -14,6 +14,7 @@ import {
   parseJsonObject,
 } from "./utils";
 import type { FieldOption, LayoutEditorState, NormalizedDataset, SupportedFormat, TemplateDraft } from "./types";
+import { printHtmlAsPdf } from "@/utils/reportPrint";
 
 type DraftSetter = Dispatch<SetStateAction<TemplateDraft>>;
 
@@ -351,7 +352,7 @@ export function LayoutBuilderTopSection({
               </option>
             ))}
           </select>
-          <p className="mt-1 text-xs text-muted">Retrato (A4 vertical) ou Paisagem (A4 horizontal). Aplicado ao PDF.</p>
+          <p className="mt-1 text-xs text-muted">Retrato (A4 vertical) ou Paisagem (A4 horizontal). Define a paginacao do Markdown e o formato usado ao salvar em PDF pelo navegador.</p>
         </div>
         <Input
           label="GroupBy"
@@ -1884,20 +1885,47 @@ export function PreviewCard({
       )}
 
       {draft.previewMode === "html" && previewHtml && (
-        <div className="mt-4 overflow-hidden rounded-lg border border-border">
-          <iframe title="Preview HTML" className="h-[560px] w-full bg-white" srcDoc={previewHtml} />
+        <div className="mt-4 space-y-3">
+          <div className="overflow-hidden rounded-lg border border-border">
+            {/* sandbox: o HTML vem de dados de inventario; sem scripts, o preview
+                nao executa conteudo ativo mesmo que algo escape do backend. */}
+            <iframe
+              title="Preview HTML"
+              className="h-[560px] w-full bg-white"
+              sandbox=""
+              srcDoc={previewHtml}
+            />
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                try {
+                  printHtmlAsPdf(previewHtml, draft.fileName || draft.name || "relatorio");
+                } catch (error) {
+                  window.alert(
+                    error instanceof Error
+                      ? error.message
+                      : "Nao foi possivel abrir a janela de impressao.",
+                  );
+                }
+              }}
+            >
+              Salvar como PDF
+            </Button>
+            <p className="text-xs text-muted">
+              O PDF e gerado pela impressao do navegador (escolha &quot;Salvar como PDF&quot; no dialogo).
+            </p>
+          </div>
         </div>
       )}
 
       {draft.previewMode === "document" && previewBlobUrl && (
         <div className="mt-4 space-y-3">
-          {draft.format === "pdf" && draft.responseDisposition === "inline" ? (
-            <iframe title="Preview PDF" src={previewBlobUrl} className="h-[560px] w-full rounded-lg border border-border bg-white" />
-          ) : (
-            <div className="rounded-lg border border-border bg-surface-light p-3 text-sm text-muted-foreground">
-              Preview gerado. Use o botao para baixar novamente.
-            </div>
-          )}
+          <div className="rounded-lg border border-border bg-surface-light p-3 text-sm text-muted-foreground">
+            Preview gerado. Use o botao para baixar novamente.
+          </div>
           <Button type="button" variant="secondary" onClick={onDownloadPreview}>
             Baixar preview
           </Button>

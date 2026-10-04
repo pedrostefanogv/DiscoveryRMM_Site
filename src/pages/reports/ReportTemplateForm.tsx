@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   useAgentsByClient,
@@ -47,6 +47,7 @@ import {
   parseJsonObject,
   sanitizePreviewHtmlByLayout,
   toApiFormat,
+  toApiFormatValue,
   toScopePayload,
 } from "./report-template-form/utils";
 import type {
@@ -78,7 +79,7 @@ export default function ReportTemplateForm() {
     description: "",
     auditUser: "",
     datasetKey: "",
-    format: "pdf",
+    format: "markdown",
     scopeType: "global",
     responseDisposition: "inline",
     previewMode: "html",
@@ -227,7 +228,7 @@ export default function ReportTemplateForm() {
     if (!isEdit || !templateQuery.data || normalizedDatasets.length === 0) return;
 
     const template = templateQuery.data;
-    const datasetKey = getTemplateDatasetKey(template);
+    const datasetKey = getTemplateDatasetKey(template, normalizedDatasets);
     const currentDataset =
       normalizedDatasets.find((dataset) => dataset.key === datasetKey) ?? normalizedDatasets[0];
 
@@ -545,7 +546,7 @@ export default function ReportTemplateForm() {
           description: draft.description.trim() || null,
           datasetKey: selectedDataset.key,
           datasetType: selectedDataset.apiDatasetType,
-          defaultFormat: toApiFormat(draft.format),
+          defaultFormat: toApiFormatValue(draft.format),
           scopeType: toScopePayload(draft.scopeType),
           filtersJson,
           layoutJson,
@@ -594,7 +595,7 @@ export default function ReportTemplateForm() {
           setPreviewBlobUrl(nextUrl);
 
           const safeContentType = response.contentType.toLowerCase();
-          if (draft.responseDisposition === "attachment" || (!safeContentType.includes("pdf") && !safeContentType.includes("text/csv"))) {
+          if (draft.responseDisposition === "attachment" || safeContentType.includes("spreadsheet")) {
             const link = document.createElement("a");
             link.href = nextUrl;
             const fileNameFromHeader = parseContentDispositionFileName(response.headers.disposition);
@@ -636,7 +637,7 @@ export default function ReportTemplateForm() {
       scopeType: toScopePayload(draft.scopeType),
       layoutJson,
       filtersJson,
-      defaultFormat: toApiFormat(draft.format),
+      defaultFormat: toApiFormatValue(draft.format),
       createdBy: draft.auditUser.trim() || null,
       updatedBy: draft.auditUser.trim() || null,
       isActive: true,
