@@ -31,9 +31,15 @@ type FormState = {
   dayOfMonth: number;
   hourUtc: number;
   minuteUtc: number;
-  format: string;
+  format: number;
   recipients: string;
   isActive: boolean;
+};
+
+const FORMAT_LABELS: Record<number, string> = {
+  0: 'Excel (XLSX)',
+  2: 'CSV',
+  3: 'Markdown',
 };
 
 const DEFAULT_FORM: FormState = {
@@ -44,7 +50,7 @@ const DEFAULT_FORM: FormState = {
   dayOfMonth: 1,
   hourUtc: 8,
   minuteUtc: 0,
-  format: 'Markdown',
+  format: 3,
   recipients: '',
   isActive: true,
 };
@@ -95,7 +101,7 @@ export default function ReportSchedulesPage() {
       frequency: form.frequency,
       hourUtc: form.hourUtc,
       minuteUtc: form.minuteUtc,
-      format: form.format as 'Xlsx' | 'Csv' | 'Markdown',
+      format: Number(form.format),
       dayOfWeek: form.frequency === 1 ? form.dayOfWeek : undefined,
       dayOfMonth: form.frequency === 2 ? form.dayOfMonth : undefined,
       recipients: form.recipients ? form.recipients.split(',').map((s) => s.trim()) : undefined,
@@ -166,11 +172,11 @@ export default function ReportSchedulesPage() {
               <Select
                 label="Formato"
                 value={form.format}
-                onChange={(e) => setForm({ ...form, format: e.target.value })}
+                onChange={(e) => setForm({ ...form, format: Number(e.target.value) })}
                 options={[
-                  { value: 'Markdown', label: 'Markdown' },
-                  { value: 'Xlsx', label: 'Excel (XLSX)' },
-                  { value: 'Csv', label: 'CSV' },
+                  { value: '3', label: 'Markdown' },
+                  { value: '0', label: 'Excel (XLSX)' },
+                  { value: '2', label: 'CSV' },
                 ]}
               />
             </div>
@@ -272,7 +278,7 @@ export default function ReportSchedulesPage() {
                       </span>
                       <span className="flex items-center gap-1">
                         <FileText className="w-3.5 h-3.5" />
-                        {schedule.format}
+                        {FORMAT_LABELS[Number(schedule.format)] ?? String(schedule.format)}
                       </span>
                     </div>
                     {schedule.lastRunAt && (
@@ -294,7 +300,7 @@ export default function ReportSchedulesPage() {
                           dayOfMonth: schedule.dayOfMonth ?? 1,
                           hourUtc: schedule.hourUtc,
                           minuteUtc: schedule.minuteUtc,
-                          format: String(schedule.format),
+                          format: Number(schedule.format),
                           recipients: schedule.recipients?.join(', ') ?? '',
                           isActive: schedule.isActive,
                         });
