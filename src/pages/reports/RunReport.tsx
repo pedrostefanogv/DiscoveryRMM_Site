@@ -454,8 +454,13 @@ export default function RunReport() {
         setLastAutoDownloadedExecutionId(null);
         toast.success("Relatório em processamento...");
       },
-      onError: (error: any) => {
-        const errorMsg = error?.response?.data?.errors?.join(", ") || "Erro ao executar relatório";
+      onError: (error: unknown) => {
+        // O cliente HTTP lanca ApiError (Error com .message) — nao existe
+        // error.response.data, entao a mensagem do backend era sempre descartada.
+        const errorMsg =
+          error instanceof Error && error.message
+            ? error.message
+            : "Erro ao executar relatório";
         toast.error(errorMsg);
       },
     });

@@ -107,6 +107,19 @@ const DEFAULT_PREVIEW_FIELDS: Partial<Record<ReportDatasetType, string[]>> = {
   ],
 };
 
+/**
+ * O titulo do relatorio chega percent-encoded em X-Report-Title (headers HTTP
+ * nao aceitam acentos). Decodifica com fallback para backends antigos.
+ */
+function decodeHeaderValue(value: string | null): string | undefined {
+  if (!value) return undefined;
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
 function buildPreviewLayoutJson(fields: string[]) {
   return JSON.stringify({
     title: "Previa dos Dados",
@@ -316,7 +329,7 @@ export async function previewReport(
     contentType: res.headers.get("Content-Type") ?? "application/octet-stream",
     headers: {
       rowCount: Number.isFinite(rowCount) ? rowCount : undefined,
-      title: res.headers.get("X-Report-Title") ?? undefined,
+      title: decodeHeaderValue(res.headers.get("X-Report-Title")),
       format: res.headers.get("X-Report-Format") ?? undefined,
       isPreview: isPreviewHeader === "true",
       disposition: res.headers.get("Content-Disposition"),
