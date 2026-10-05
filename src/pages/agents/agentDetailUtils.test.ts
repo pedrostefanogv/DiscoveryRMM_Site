@@ -17,6 +17,9 @@ import {
 describe("agentDetailTabSlug", () => {
   it("mapeia cada aba para um slug legível e estável", () => {
     expect(AGENT_DETAIL_TAB_SLUGS).toEqual({
+      info: "info",
+      notes: "anotacoes",
+      labelHistory: "historico-de-labels",
       software: "aplicativos",
       printers: "impressoras",
       tickets: "ultimos-chamados",
@@ -44,6 +47,16 @@ describe("agentDetailTabFromSlug", () => {
 
   it("ignora caixa e espaços extras", () => {
     expect(agentDetailTabFromSlug("  TAREFAS-AGENDADAS ")).toBe("scheduledTasks");
+  });
+
+  it("abre na aba principal Info por padrão", () => {
+    expect(AGENT_DETAIL_DEFAULT_TAB).toBe("info");
+  });
+
+  it("resolve os deep links das abas de anotações e histórico de labels", () => {
+    expect(agentDetailTabFromSlug("info")).toBe("info");
+    expect(agentDetailTabFromSlug("anotacoes")).toBe("notes");
+    expect(agentDetailTabFromSlug("historico-de-labels")).toBe("labelHistory");
   });
 
   it("cai no padrão para slug desconhecido (URL antiga/inválida)", () => {

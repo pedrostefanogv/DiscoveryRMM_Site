@@ -64,6 +64,26 @@ describe('DetailTabs', () => {
     expect(onChange).toHaveBeenCalledWith('agentes');
   });
 
+  it('exibe o contador opcional e omite quando não informado', () => {
+    render(
+      <DetailTabs
+        tabs={[
+          { id: 'sites', label: 'Sites', icon: Building2, badge: 3 },
+          { id: 'agentes', label: 'Agentes', icon: Monitor },
+        ]}
+        active="sites"
+        onChange={() => {}}
+        ariaLabel="Seções"
+      />,
+    );
+
+    const sites = screen.getByRole('tab', { name: /Sites/ });
+    const agentes = screen.getByRole('tab', { name: /Agentes/ });
+
+    expect(sites.textContent).toContain('3');
+    expect(agentes.querySelector('span')).toBeNull();
+  });
+
   it('resolveDetailTab usa o valor conhecido e cai no fallback para nulo/desconhecido', () => {
     expect(resolveDetailTab('agentes', IDS, 'sites')).toBe('agentes');
     expect(resolveDetailTab(null, IDS, 'sites')).toBe('sites');

@@ -1,10 +1,15 @@
-import { useId, type KeyboardEvent } from 'react';
+import { useId, type KeyboardEvent, type ReactNode } from 'react';
 import type { LucideIcon } from 'lucide-react';
 
 export interface DetailTab<Id extends string> {
   id: Id;
   label: string;
   icon: LucideIcon;
+  /**
+   * Contador/rótulo curto exibido ao lado do texto (ex.: quantidade de itens).
+   * Opcional: as abas de Clientes/Sites usam só texto.
+   */
+  badge?: ReactNode;
 }
 
 interface DetailTabsProps<Id extends string> {
@@ -64,7 +69,7 @@ export function DetailTabs<Id extends string>({
       aria-label={ariaLabel}
       className="inline-flex flex-wrap rounded-xl border border-border bg-surface-light p-1"
     >
-      {tabs.map(({ id, label, icon: Icon }, index) => {
+      {tabs.map(({ id, label, icon: Icon, badge }, index) => {
         const isActive = id === active;
         return (
           <button
@@ -81,6 +86,11 @@ export function DetailTabs<Id extends string>({
           >
             <Icon className="mr-1.5 inline h-4 w-4" aria-hidden="true" />
             {label}
+            {badge !== undefined && badge !== null ? (
+              <span className="ml-1.5 rounded-full bg-surface-hover/60 px-2 py-0.5 text-xs text-muted-foreground">
+                {badge}
+              </span>
+            ) : null}
           </button>
         );
       })}

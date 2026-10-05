@@ -3,10 +3,12 @@ import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft, Bell, Cpu, MemoryStick, Ticket as TicketIcon,
   Monitor, Wifi, WifiOff, AppWindow, Search, Clock, HardDrive, Printer, Bug, AlertTriangle, Trash2, ShieldCheck, Plus, Gauge, Power, RotateCcw, Zap, ChevronDown, ChevronRight, RefreshCw, ArrowUpCircle, Info, Copy,
+  Cable, History, Network, ScrollText, StickyNote,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getDeleteAgentErrorMessage, useAgent, useAgentHardware, useAgentHardwareComponents, useAgentListeningPortsPage, useAgentOpenSocketsPage, useAgentSoftwarePage, useAgentSoftwareSnapshot, useApproveZeroTouch, useDeleteAgent, useRestartAgent, useShutdownAgent, useWakeOnLan } from '@/hooks/useAgents';
 import {
+  AGENT_DETAIL_DEFAULT_TAB,
   agentDetailBackTarget,
   agentDetailTabFromSlug,
   agentDetailTabSlug,
@@ -25,6 +27,8 @@ import AgentStartupItemsPanel from '@/components/agents/AgentStartupItemsPanel';
 import AgentScheduledTasksPanel from '@/components/agents/AgentScheduledTasksPanel';
 import WakeOnLanModal from '@/components/agents/WakeOnLanModal';
 import { NotesPanel } from '@/components/notes/NotesPanel';
+import { PinnedNotesCard } from '@/components/notes/PinnedNotesCard';
+import { DetailTabs, type DetailTab } from '@/components/entity/DetailTabs';
 import type { AgentSoftwareInventoryItem, ListeningPortInfo, LogEntry, OpenSocketInfo, ScheduledTaskInfo, StartupItemInfo } from '@/api';
 import { ApiError, agentUpdatesApi, agentsApi } from '@/api';
 import { getLogLevelMeta, getTicketPriorityMeta } from '@/utils/labels';
@@ -46,6 +50,39 @@ import { useAuthorization } from '@/auth/authorization';
 import { useSendAgentNotification } from '@/hooks/useAgentAlerts';
 
 // formatBytes, formatDate, formatSocketFamily — importadas de ./agentDetailUtils
+
+/** Contadores exibidos ao lado do rótulo de cada aba (undefined = sem contador). */
+interface AgentTabBadges {
+  labelHistory?: number;
+  software?: number;
+  printers?: number;
+  tickets?: number;
+  listeningPorts?: number;
+  openSockets?: number;
+  startupItems?: number;
+  scheduledTasks?: number;
+  logs?: number;
+}
+
+/**
+ * Abas do detalhe do agente, no mesmo "segmented control" usado em
+ * Clientes/Sites (DetailTabs). "Info" é a aba principal e a aba inicial.
+ */
+function buildAgentDetailTabs(badges: AgentTabBadges = {}): DetailTab<AgentDetailDataTab>[] {
+  return [
+    { id: 'info', label: 'Info', icon: Info },
+    { id: 'notes', label: 'Anotações', icon: StickyNote },
+    { id: 'labelHistory', label: 'Histórico de Labels', icon: History, badge: badges.labelHistory },
+    { id: 'software', label: 'Aplicativos', icon: AppWindow, badge: badges.software },
+    { id: 'printers', label: 'Impressoras', icon: Printer, badge: badges.printers },
+    { id: 'tickets', label: 'Últimos Chamados', icon: TicketIcon, badge: badges.tickets },
+    { id: 'listeningPorts', label: 'Portas em Escuta', icon: Network, badge: badges.listeningPorts },
+    { id: 'openSockets', label: 'Conexões Abertas', icon: Cable, badge: badges.openSockets },
+    { id: 'startupItems', label: 'Inicialização', icon: Power, badge: badges.startupItems },
+    { id: 'scheduledTasks', label: 'Tarefas Agendadas', icon: Clock, badge: badges.scheduledTasks },
+    { id: 'logs', label: 'Logs Recentes', icon: ScrollText, badge: badges.logs },
+  ];
+}
 
 function printerStatusColor(status: string | null): 'success' | 'warning' | 'danger' | 'slate' {
   if (!status) return 'slate';
@@ -98,9 +135,10 @@ export default function AgentDetail() {
   // Opcoes do seletor de vinculacao MANUAL: labels de regras em modo Manual (definicao
   // curada) + labels que ja existem como manuais em algum agente. Automaticas ficam fora.
   const [manualLabelOptions, setManualLabelOptions] = useState<string[]>([]);
-  const [showLabelHistory, setShowLabelHistory] = useState(false);
   // Histórico de aplicação/remoção gravado pelo motor (auditoria).
   const [labelHistory, setLabelHistory] = useState<AgentLabelChangeLog[]>([]);
+  // Incrementar dispara a recarga de labels + histórico (botão "Atualizar").
+  const [labelsReloadToken, setLabelsReloadToken] = useState(0);
   const [showLabelPicker, setShowLabelPicker] = useState(false);
   const [labelPickerQuery, setLabelPickerQuery] = useState('');
   const labelPickerRef = useRef<HTMLDivElement>(null);
@@ -151,7 +189,12 @@ export default function AgentDetail() {
     (tab: AgentDetailDataTab) => {
       setSearchParams((prev) => {
         const next = new URLSearchParams(prev);
-        next.set('tab', agentDetailTabSlug(tab));
+        // A aba principal ("info") não polui a URL; as demais entram como deep link.
+        if (tab === AGENT_DETAIL_DEFAULT_TAB) {
+          next.delete('tab');
+        } else {
+          next.set('tab', agentDetailTabSlug(tab));
+        }
         return next;
       }, { replace: true });
     },
@@ -261,8 +304,9 @@ export default function AgentDetail() {
           agentLabelsApi.getRules(true).catch(() => []),
           // Labels que JÁ existem como manuais em algum agente (dado legado/sem regra).
           agentLabelsApi.getDistinctLabels(500, 'Manual').catch(() => []),
-          // Histórico de aplicação/remoção (auditoria do motor).
-          agentLabelsApi.getHistory(id, 20).catch(() => []),
+          // Histórico de aplicação/remoção (auditoria do motor). 50 é o
+          // limite padrão aceito pelo endpoint.
+          agentLabelsApi.getHistory(id, 50).catch(() => []),
         ]);
         if (isCancelled) return;
 
@@ -294,7 +338,7 @@ export default function AgentDetail() {
     return () => {
       isCancelled = true;
     };
-  }, [id]);
+  }, [id, labelsReloadToken]);
 
   // Close label picker on outside click
   useEffect(() => {
@@ -1657,22 +1701,334 @@ export default function AgentDetail() {
         </Tooltip>
       </div>
 
-      {/* Histórico saiu do card de labels: aquele card mostra só as labels. */}
-      {labelHistory.length > 0 ? (
-        <Card>
-          <CardHeader
-            title="Histórico de labels"
-            subtitle="Auditoria de aplicação e remoção de labels"
-            action={labelHistory.length > 0 ? (
-              <Button size="sm" variant="ghost" onClick={() => setShowLabelHistory(prev => !prev)}>
-                {showLabelHistory ? 'Ocultar histórico' : `Mostrar histórico (${labelHistory.length})`}
-              </Button>
-            ) : undefined}
-          />
+      {/* Abas do agente: Info (principal) · Anotações · Histórico de labels · dados */}
+      <DetailTabs
+        tabs={buildAgentDetailTabs({
+          labelHistory: labelHistory.length,
+          software: softwareTotalCount,
+          printers: hwComponents.data ? printers.length : undefined,
+          tickets: agentTickets.data ? (agentTickets.data?.items?.length ?? 0) : undefined,
+          listeningPorts: portsPageQuery.data ? portsTotalCount : undefined,
+          openSockets: socketsPageQuery.data ? socketsTotalCount : undefined,
+          startupItems: hwComponents.data ? startupItems.length : undefined,
+          scheduledTasks: hwComponents.data ? scheduledTasks.length : undefined,
+          logs: agentLogs.data ? logsArray.length : undefined,
+        })}
+        active={activeDataTab}
+        onChange={handleSelectDataTab}
+        ariaLabel="Seções do agente"
+        panelIdPrefix="agent-tabs"
+      />
 
-          {showLabelHistory ? (
-            labelHistory.length > 0 ? (
-              <div className="max-h-72 space-y-1.5 overflow-y-auto pr-1">
+      <div
+        id="agent-tabs-panel"
+        role="tabpanel"
+        aria-labelledby={`agent-tabs-tab-${activeDataTab}`}
+        className="space-y-6"
+      >
+        {activeDataTab === 'info' && (
+          <>
+            <div className="grid gap-6 lg:grid-cols-2">
+              <Card>
+                <CardHeader title="Informações" />
+                <dl className="space-y-3 text-sm">
+                  <div>
+                    <dt className="text-muted">Hostname</dt>
+                    <dd className="mt-0.5 font-mono text-foreground">{a.hostname}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-muted">Sistema Operacional</dt>
+                    <dd className="mt-0.5 text-foreground">{a.operatingSystem ?? '\u2014'}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-muted">Versão do SO</dt>
+                    <dd className="mt-0.5 font-mono text-foreground">{a.osVersion ?? '\u2014'}</dd>
+                  </div>
+                  {hw.data?.hardware?.osBuild && (
+                    <div>
+                      <dt className="text-muted">Build</dt>
+                      <dd className="mt-0.5 font-mono text-foreground">{hw.data.hardware.osBuild}</dd>
+                    </div>
+                  )}
+                  <div className="border-t border-border pt-3">
+                    <dt className="text-muted">Versão do Agente</dt>
+                    <dd className="mt-0.5 font-mono text-foreground">{a.agentVersion ?? '\u2014'}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-muted">Commit</dt>
+                    <dd className="mt-0.5 font-mono text-foreground">
+                      {agentCommitHash(a.commitHash) ? (
+                        <Tooltip content={agentCommitHash(a.commitHash)!} className="inline-flex">
+                          <span className="cursor-default">{agentCommitHash(a.commitHash)!.slice(0, 7)}</span>
+                        </Tooltip>
+                      ) : (
+                        '\u2014'
+                      )}
+                    </dd>
+                  </div>
+                  {isZeroTouchPending && (
+                    <div>
+                      <dt className="text-muted">Zero-Touch Config Registration</dt>
+                      <dd className="mt-1 flex items-center gap-2">
+                        <Badge color="warning">Aguardando aprovação</Badge>
+                        {canManageAgent && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => {
+                              void handleApproveZeroTouch();
+                            }}
+                            loading={isApprovingZeroTouch}
+                          >
+                            <ShieldCheck className="h-4 w-4" />
+                            Aprovar
+                          </Button>
+                        )}
+                      </dd>
+                    </div>
+                  )}
+                  <div>
+                    <dt className="text-muted">Último IP</dt>
+                    <dd className="mt-0.5 font-mono text-foreground">{a.lastIpAddress ?? hw.data?.networkAdapters?.find(n => n.ipAddress && !n.ipAddress.startsWith('169.254'))?.ipAddress ?? '\u2014'}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-muted">Última vez online</dt>
+                    <dd className="mt-0.5 text-foreground">{a.lastSeen ? formatDate(a.lastSeen) : (a.lastSeenAt ? formatDate(a.lastSeenAt) : '\u2014')}</dd>
+                  </div>
+                  {hw.data?.hardware?.manufacturer && (
+                    <div className="border-t border-border pt-3">
+                      <dt className="text-muted">Fabricante / Modelo</dt>
+                      <dd className="mt-0.5 text-foreground">{hw.data.hardware.manufacturer} {hw.data.hardware.model ?? ''}</dd>
+                    </div>
+                  )}
+                  {hw.data?.hardware?.serialNumber && (
+                    <div>
+                      <dt className="text-muted">Número de série</dt>
+                      <dd className="mt-0.5 font-mono text-foreground">{hw.data.hardware.serialNumber}</dd>
+                    </div>
+                  )}
+                </dl>
+              </Card>
+              <PinnedNotesCard agentId={a.id} onViewAll={() => handleSelectDataTab('notes')} />
+            </div>
+
+            <div className="grid gap-6 lg:grid-cols-2">
+              {/* Disk */}
+              <Card>
+                <CardHeader title="Disco" subtitle="Espaço agregado do agente" />
+
+                {disks.length === 0 ? (
+                  <p className="text-sm text-muted">Sem dados de disco coletados para este agente.</p>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      <div className="rounded-lg bg-surface-light px-3 py-2">
+                        <p className="text-xs text-muted">Usado</p>
+                        <p className="text-sm font-medium text-foreground">{formatBytes(usedDiskBytes)}</p>
+                      </div>
+                      <div className="rounded-lg bg-surface-light px-3 py-2">
+                        <p className="text-xs text-muted">Livre</p>
+                        <p className="text-sm font-medium text-foreground">{formatBytes(freeDiskBytes)}</p>
+                      </div>
+                      <div className="rounded-lg bg-surface-light px-3 py-2">
+                        <p className="text-xs text-muted">Total</p>
+                        <p className="text-sm font-medium text-foreground">{formatBytes(totalDiskBytes)}</p>
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="mb-1 flex items-center justify-between text-xs">
+                        <span className="flex items-center gap-1 text-muted">
+                          <HardDrive className="h-3.5 w-3.5" />
+                          Utilização
+                        </span>
+                        <span className={`font-medium ${getDiskStatusTextClass(diskUsagePercent)}`}>{diskUsagePercent ?? 0}%</span>
+                      </div>
+                      <progress
+                        className={`h-2 w-full overflow-hidden rounded-full [&::-webkit-progress-bar]:bg-surface-hover ${getDiskStatusClass(diskUsagePercent)}`}
+                        value={diskUsagePercent ?? 0}
+                        max={100}
+                      />
+                    </div>
+
+                    <div className="max-h-80 space-y-2 overflow-y-auto">
+                      {disks.map((disk) => {
+                        const diskUsedBytes = Math.max(0, disk.totalSizeBytes - disk.freeSpaceBytes);
+                        const diskUsedPercent = disk.totalSizeBytes > 0
+                          ? Math.min(100, Math.round((diskUsedBytes / disk.totalSizeBytes) * 100))
+                          : 0;
+                        const smartStatus = disk.smartStatus ?? null;
+                        const hasSmart = smartStatus != null && smartStatus !== 'Indisponível';
+
+                        return (
+                          <Tooltip
+                            key={disk.id}
+                            position="top"
+                            delay={250}
+                            className="block"
+                            variant="hover-card"
+                            content={(
+                              <div className="w-64 space-y-2 text-left text-[11px] text-muted-foreground">
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="font-medium text-foreground">
+                                    {disk.driveLetter}{disk.label ? ` (${disk.label})` : ''}
+                                  </span>
+                                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${getSmartBadgeClass(smartStatus)}`}>
+                                    {hasSmart ? smartStatus : 'Sem dados'}
+                                  </span>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
+                                  <div>
+                                    <p className="text-muted">Saúde</p>
+                                    <p className={`font-medium ${getSmartStatusClass(smartStatus)}`}>
+                                      {hasSmart ? smartStatus : 'Indisponível'}
+                                    </p>
+                                  </div>
+                                  <div>
+                                    <p className="text-muted">Temperatura</p>
+                                    <p className={`font-medium ${getTempClass(disk.temperatureC)}`}>
+                                      {disk.temperatureC != null ? `${disk.temperatureC}°C` : '\u2014'}
+                                    </p>
+                                  </div>
+                                  <div>
+                                    <p className="text-muted">Horas ligadas</p>
+                                    <p className="font-medium text-foreground">{formatHours(disk.powerOnHours)}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-muted">Tipo</p>
+                                    <p className="font-medium text-foreground">{disk.mediaType || '\u2014'}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-muted">Sistema de arquivos</p>
+                                    <p className="font-medium text-foreground">{disk.fileSystem || '\u2014'}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-muted">Erros acumulados</p>
+                                    <p className={`font-medium ${(disk.reallocatedSectors ?? 0) > 0 ? 'text-warning' : 'text-success'}`}>
+                                      {disk.reallocatedSectors ?? 0}
+                                    </p>
+                                  </div>
+                                </div>
+
+                                <div className="border-t border-border pt-1.5 text-muted">
+                                  {formatBytes(diskUsedBytes)} usados de {formatBytes(disk.totalSizeBytes)}
+                                </div>
+                              </div>
+                            )}
+                          >
+                            <div className="rounded-lg bg-surface-light px-3 py-2 text-xs">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="flex items-center gap-1.5 font-medium text-foreground">
+                                  {hasSmart && (
+                                    <span className={`inline-block h-1.5 w-1.5 rounded-full ${smartStatus === 'OK' ? 'bg-success' : smartStatus === 'Atenção' ? 'bg-warning' : 'bg-danger'}`} />
+                                  )}
+                                  {disk.driveLetter}{disk.label ? ` (${disk.label})` : ''}
+                                </span>
+                                <span className={`${getDiskStatusTextClass(diskUsedPercent)}`}>{diskUsedPercent}% usado</span>
+                              </div>
+                              <progress
+                                className={`mt-2 h-1.5 w-full overflow-hidden rounded-full [&::-webkit-progress-bar]:bg-surface-hover ${getDiskStatusClass(diskUsedPercent)}`}
+                                value={diskUsedPercent}
+                                max={100}
+                              />
+                              <p className="mt-1 text-muted">
+                                {formatBytes(diskUsedBytes)} usados de {formatBytes(disk.totalSizeBytes)}
+                              </p>
+                              {disk.powerOnHours != null && (
+                                <p className="mt-0.5 text-muted">
+                                  Horas ligadas: <span className="text-muted-foreground">{formatHours(disk.powerOnHours)}</span>
+                                </p>
+                              )}
+                            </div>
+                          </Tooltip>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </Card>
+
+              {/* Adaptadores de Rede */}
+              {hw.data?.networkAdapters && hw.data.networkAdapters.length > 0 && (
+                <Card>
+                  <CardHeader title="Adaptadores de Rede" subtitle={`${hw.data.networkAdapters.length} adaptador(es)`} />
+                  <div className="space-y-2">
+                    {hw.data.networkAdapters.map(n => (
+                      <div key={n.id} className="rounded-lg bg-surface-light px-3 py-2.5">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-medium text-foreground">{n.name}</p>
+                            {n.macAddress && <p className="font-mono text-xs text-muted">{n.macAddress}</p>}
+                          </div>
+                          <Badge color={n.isDhcpEnabled ? 'success' : 'slate'}>{n.isDhcpEnabled ? 'DHCP' : 'Estático'}</Badge>
+                        </div>
+                        {(n.ipAddress || n.ipv6Address || n.gateway) && (
+                          <div className="mt-1.5 grid grid-cols-2 gap-2 text-xs">
+                            {n.ipAddress && (
+                              <div>
+                                <span className="text-muted">IP: </span>
+                                <span className="font-mono text-muted-foreground">{n.ipAddress}</span>
+                                {n.subnetMask && <span className="text-muted"> / {n.subnetMask}</span>}
+                              </div>
+                            )}
+                            {n.ipv6Address && (
+                              <div className="col-span-full">
+                                <span className="text-muted">IPv6: </span>
+                                <span className="font-mono text-xs text-muted-foreground break-all">{n.ipv6Address}</span>
+                              </div>
+                            )}
+                            {n.gateway && (
+                              <div>
+                                <span className="text-muted">Gateway: </span>
+                                <span className="font-mono text-muted-foreground">{n.gateway}</span>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </Card>
+              )}
+            </div>
+          </>
+        )}
+
+        {activeDataTab === 'notes' && (
+          <NotesPanel
+            entityType="agent"
+            entityId={a.id}
+            title="Anotações do Agente"
+            singular="anotação"
+            plural="anotações"
+          />
+        )}
+
+        {activeDataTab === 'labelHistory' && (
+          <Card>
+            <CardHeader
+              title="Histórico de labels"
+              subtitle={
+                labelHistory.length > 0
+                  ? `Últimos ${labelHistory.length} registros de aplicação e remoção`
+                  : 'Auditoria de aplicação e remoção de labels'
+              }
+              action={
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setLabelsReloadToken((token) => token + 1)}
+                  disabled={isLoadingLabels}
+                  aria-label="Atualizar histórico de labels"
+                  title="Atualizar histórico de labels"
+                >
+                  <RefreshCw className={`h-4 w-4 ${isLoadingLabels ? 'animate-spin' : ''}`} /> Atualizar
+                </Button>
+              }
+            />
+            {labelHistory.length > 0 ? (
+              <div className="max-h-96 space-y-1.5 overflow-y-auto pr-1">
                 {labelHistory.map(item => (
                   <div key={item.id} className="flex flex-wrap items-center gap-2 text-[11px] text-muted">
                     <span className={item.action === 'Removed' ? 'text-warning' : 'text-success'}>
@@ -1688,944 +2044,571 @@ export default function AgentDetail() {
               </div>
             ) : (
               <p className="text-sm text-muted">Sem histórico registrado.</p>
-            )
-          ) : null}
-        </Card>
-      ) : null}
-
-      <div className="grid gap-4 lg:grid-cols-2">
-        <NotesPanel
-          entityType="agent"
-          entityId={a.id}
-          title="Notas do Agente"
-        />
-
-        {/* Disk */}
-        <Card>
-          <CardHeader title="Disco" subtitle="Espaço agregado do agente" />
-
-          {disks.length === 0 ? (
-            <p className="text-sm text-muted">Sem dados de disco coletados para este agente.</p>
-          ) : (
-            <div className="space-y-4">
-              <div className="grid gap-3 sm:grid-cols-3">
-                <div className="rounded-lg bg-surface-light px-3 py-2">
-                  <p className="text-xs text-muted">Usado</p>
-                  <p className="text-sm font-medium text-foreground">{formatBytes(usedDiskBytes)}</p>
-                </div>
-                <div className="rounded-lg bg-surface-light px-3 py-2">
-                  <p className="text-xs text-muted">Livre</p>
-                  <p className="text-sm font-medium text-foreground">{formatBytes(freeDiskBytes)}</p>
-                </div>
-                <div className="rounded-lg bg-surface-light px-3 py-2">
-                  <p className="text-xs text-muted">Total</p>
-                  <p className="text-sm font-medium text-foreground">{formatBytes(totalDiskBytes)}</p>
-                </div>
-              </div>
-
-              <div>
-                <div className="mb-1 flex items-center justify-between text-xs">
-                  <span className="flex items-center gap-1 text-muted">
-                    <HardDrive className="h-3.5 w-3.5" />
-                    Utilização
-                  </span>
-                  <span className={`font-medium ${getDiskStatusTextClass(diskUsagePercent)}`}>{diskUsagePercent ?? 0}%</span>
-                </div>
-                <progress
-                  className={`h-2 w-full overflow-hidden rounded-full [&::-webkit-progress-bar]:bg-surface-hover ${getDiskStatusClass(diskUsagePercent)}`}
-                  value={diskUsagePercent ?? 0}
-                  max={100}
-                />
-              </div>
-
-              <div className="max-h-80 space-y-2 overflow-y-auto">
-                {disks.map((disk) => {
-                  const diskUsedBytes = Math.max(0, disk.totalSizeBytes - disk.freeSpaceBytes);
-                  const diskUsedPercent = disk.totalSizeBytes > 0
-                    ? Math.min(100, Math.round((diskUsedBytes / disk.totalSizeBytes) * 100))
-                    : 0;
-                  const smartStatus = disk.smartStatus ?? null;
-                  const hasSmart = smartStatus != null && smartStatus !== 'Indisponível';
-
-                  return (
-                    <Tooltip
-                      key={disk.id}
-                      position="top"
-                      delay={250}
-                      className="block"
-                      variant="hover-card"
-                      content={(
-                        <div className="w-64 space-y-2 text-left text-[11px] text-muted-foreground">
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="font-medium text-foreground">
-                              {disk.driveLetter}{disk.label ? ` (${disk.label})` : ''}
-                            </span>
-                            <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${getSmartBadgeClass(smartStatus)}`}>
-                              {hasSmart ? smartStatus : 'Sem dados'}
-                            </span>
-                          </div>
-
-                          <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
-                            <div>
-                              <p className="text-muted">Saúde</p>
-                              <p className={`font-medium ${getSmartStatusClass(smartStatus)}`}>
-                                {hasSmart ? smartStatus : 'Indisponível'}
-                              </p>
-                            </div>
-                            <div>
-                              <p className="text-muted">Temperatura</p>
-                              <p className={`font-medium ${getTempClass(disk.temperatureC)}`}>
-                                {disk.temperatureC != null ? `${disk.temperatureC}°C` : '\u2014'}
-                              </p>
-                            </div>
-                            <div>
-                              <p className="text-muted">Horas ligadas</p>
-                              <p className="font-medium text-foreground">{formatHours(disk.powerOnHours)}</p>
-                            </div>
-                            <div>
-                              <p className="text-muted">Tipo</p>
-                              <p className="font-medium text-foreground">{disk.mediaType || '\u2014'}</p>
-                            </div>
-                            <div>
-                              <p className="text-muted">Sistema de arquivos</p>
-                              <p className="font-medium text-foreground">{disk.fileSystem || '\u2014'}</p>
-                            </div>
-                            <div>
-                              <p className="text-muted">Erros acumulados</p>
-                              <p className={`font-medium ${(disk.reallocatedSectors ?? 0) > 0 ? 'text-warning' : 'text-success'}`}>
-                                {disk.reallocatedSectors ?? 0}
-                              </p>
-                            </div>
-                          </div>
-
-                          <div className="border-t border-border pt-1.5 text-muted">
-                            {formatBytes(diskUsedBytes)} usados de {formatBytes(disk.totalSizeBytes)}
-                          </div>
-                        </div>
-                      )}
-                    >
-                      <div className="rounded-lg bg-surface-light px-3 py-2 text-xs">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="flex items-center gap-1.5 font-medium text-foreground">
-                            {hasSmart && (
-                              <span className={`inline-block h-1.5 w-1.5 rounded-full ${smartStatus === 'OK' ? 'bg-success' : smartStatus === 'Atenção' ? 'bg-warning' : 'bg-danger'}`} />
-                            )}
-                            {disk.driveLetter}{disk.label ? ` (${disk.label})` : ''}
-                          </span>
-                          <span className={`${getDiskStatusTextClass(diskUsedPercent)}`}>{diskUsedPercent}% usado</span>
-                        </div>
-                        <progress
-                          className={`mt-2 h-1.5 w-full overflow-hidden rounded-full [&::-webkit-progress-bar]:bg-surface-hover ${getDiskStatusClass(diskUsedPercent)}`}
-                          value={diskUsedPercent}
-                          max={100}
-                        />
-                        <p className="mt-1 text-muted">
-                          {formatBytes(diskUsedBytes)} usados de {formatBytes(disk.totalSizeBytes)}
-                        </p>
-                        {disk.powerOnHours != null && (
-                          <p className="mt-0.5 text-muted">
-                            Horas ligadas: <span className="text-muted-foreground">{formatHours(disk.powerOnHours)}</span>
-                          </p>
-                        )}
-                      </div>
-                    </Tooltip>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-        </Card>
-      </div>
-
-      {/* Agent Info + Hardware Detail */}
-      <div className="grid gap-6 lg:grid-cols-2">
-        {/* Info do Agente */}
-        <Card>
-          <CardHeader title="Informações" />
-          <dl className="space-y-3 text-sm">
-            <div>
-              <dt className="text-muted">Hostname</dt>
-              <dd className="mt-0.5 font-mono text-foreground">{a.hostname}</dd>
-            </div>
-            <div>
-              <dt className="text-muted">Sistema Operacional</dt>
-              <dd className="mt-0.5 text-foreground">{a.operatingSystem ?? '\u2014'}</dd>
-            </div>
-            <div>
-              <dt className="text-muted">Versão do SO</dt>
-              <dd className="mt-0.5 font-mono text-foreground">{a.osVersion ?? '\u2014'}</dd>
-            </div>
-            {hw.data?.hardware?.osBuild && (
-              <div>
-                <dt className="text-muted">Build</dt>
-                <dd className="mt-0.5 font-mono text-foreground">{hw.data.hardware.osBuild}</dd>
-              </div>
             )}
-            {hw.data?.hardware?.serialNumber && (
-              <div>
-                <dt className="text-muted">Número de série</dt>
-                <dd className="mt-0.5 font-mono text-foreground">{hw.data.hardware.serialNumber}</dd>
-              </div>
-            )}
-            <div className="border-t border-border pt-3">
-              <dt className="text-muted">Versão do Agente</dt>
-              <dd className="mt-0.5 font-mono text-foreground">{a.agentVersion ?? '\u2014'}</dd>
-            </div>
-            <div>
-              <dt className="text-muted">Commit</dt>
-              <dd className="mt-0.5 font-mono text-foreground">
-                {agentCommitHash(a.commitHash) ? (
-                  <Tooltip content={agentCommitHash(a.commitHash)!} className="inline-flex">
-                    <span className="cursor-default">{agentCommitHash(a.commitHash)!.slice(0, 7)}</span>
-                  </Tooltip>
-                ) : (
-                  '\u2014'
-                )}
-              </dd>
-            </div>
-            {isZeroTouchPending && (
-              <div>
-                <dt className="text-muted">Zero-Touch Config Registration</dt>
-                <dd className="mt-1 flex items-center gap-2">
-                  <Badge color="warning">Aguardando aprovação</Badge>
-                  {canManageAgent && (
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => {
-                        void handleApproveZeroTouch();
-                      }}
-                      loading={isApprovingZeroTouch}
-                    >
-                      <ShieldCheck className="h-4 w-4" />
-                      Aprovar
-                    </Button>
-                  )}
-                </dd>
-              </div>
-            )}
-            <div>
-              <dt className="text-muted">Último IP</dt>
-              <dd className="mt-0.5 font-mono text-foreground">{a.lastIpAddress ?? hw.data?.networkAdapters?.find(n => n.ipAddress && !n.ipAddress.startsWith('169.254'))?.ipAddress ?? '\u2014'}</dd>
-            </div>
-            <div>
-              <dt className="text-muted">Última vez online</dt>
-              <dd className="mt-0.5 text-foreground">{a.lastSeen ? formatDate(a.lastSeen) : (a.lastSeenAt ? formatDate(a.lastSeenAt) : '\u2014')}</dd>
-            </div>
-            {hw.data?.hardware?.manufacturer && (
-              <div className="border-t border-border pt-3">
-                <dt className="text-muted">Fabricante / Modelo</dt>
-                <dd className="mt-0.5 text-foreground">{hw.data.hardware.manufacturer} {hw.data.hardware.model ?? ''}</dd>
-              </div>
-            )}
-            {hw.data?.hardware?.serialNumber && (
-              <div>
-                <dt className="text-muted">Número de série</dt>
-                <dd className="mt-0.5 font-mono text-foreground">{hw.data.hardware.serialNumber}</dd>
-              </div>
-            )}
-          </dl>
-        </Card>
-
-        {/* Adaptadores de Rede */}
-        {hw.data?.networkAdapters && hw.data.networkAdapters.length > 0 && (
-          <Card>
-            <CardHeader title="Adaptadores de Rede" subtitle={`${hw.data.networkAdapters.length} adaptador(es)`} />
-            <div className="space-y-2">
-              {hw.data.networkAdapters.map(n => (
-                <div key={n.id} className="rounded-lg bg-surface-light px-3 py-2.5">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-foreground">{n.name}</p>
-                      {n.macAddress && <p className="font-mono text-xs text-muted">{n.macAddress}</p>}
-                    </div>
-                    <Badge color={n.isDhcpEnabled ? 'success' : 'slate'}>{n.isDhcpEnabled ? 'DHCP' : 'Estático'}</Badge>
-                  </div>
-                  {(n.ipAddress || n.ipv6Address || n.gateway) && (
-                    <div className="mt-1.5 grid grid-cols-2 gap-2 text-xs">
-                      {n.ipAddress && (
-                        <div>
-                          <span className="text-muted">IP: </span>
-                          <span className="font-mono text-muted-foreground">{n.ipAddress}</span>
-                          {n.subnetMask && <span className="text-muted"> / {n.subnetMask}</span>}
-                        </div>
-                      )}
-                      {n.ipv6Address && (
-                        <div className="col-span-full">
-                          <span className="text-muted">IPv6: </span>
-                          <span className="font-mono text-xs text-muted-foreground break-all">{n.ipv6Address}</span>
-                        </div>
-                      )}
-                      {n.gateway && (
-                        <div>
-                          <span className="text-muted">Gateway: </span>
-                          <span className="font-mono text-muted-foreground">{n.gateway}</span>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
           </Card>
         )}
-      </div>
 
-      <Card className="surface-card">
-        <div role="tablist" aria-label="Abas de dados do agente" className="mb-4 flex flex-wrap gap-2 border-b border-border pb-3">
-          <button
-            type="button"
-            role="tab"
-            onClick={() => handleSelectDataTab('software')}
-            aria-selected={activeDataTab === 'software'}
-            className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors ${activeDataTab === 'software' ? 'border-primary/40 bg-primary/15 text-primary' : 'border-border bg-surface-light text-muted-foreground hover:text-foreground'}`}
-          >
-            Aplicativos
-            <span className="rounded-full bg-surface-hover/60 px-2 py-0.5 text-xs text-muted-foreground">{softwareTotalCount}</span>
-          </button>
-          <button
-            type="button"
-            role="tab"
-            onClick={() => handleSelectDataTab('printers')}
-            aria-selected={activeDataTab === 'printers'}
-            className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors ${activeDataTab === 'printers' ? 'border-primary/40 bg-primary/15 text-primary' : 'border-border bg-surface-light text-muted-foreground hover:text-foreground'}`}
-          >
-            Impressoras
-            {hwComponents.data && (
-              <span className="rounded-full bg-surface-hover/60 px-2 py-0.5 text-xs text-muted-foreground">{printers.length}</span>
-            )}
-          </button>
-          <button
-            type="button"
-            role="tab"
-            onClick={() => handleSelectDataTab('tickets')}
-            aria-selected={activeDataTab === 'tickets'}
-            className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors ${activeDataTab === 'tickets' ? 'border-primary/40 bg-primary/15 text-primary' : 'border-border bg-surface-light text-muted-foreground hover:text-foreground'}`}
-          >
-            Últimos Chamados
-            {agentTickets.data && (
-              <span className="rounded-full bg-surface-hover/60 px-2 py-0.5 text-xs text-muted-foreground">{agentTickets.data?.items?.length ?? 0}</span>
-            )}
-          </button>
-          <button
-            type="button"
-            role="tab"
-            onClick={() => handleSelectDataTab('listeningPorts')}
-            aria-selected={activeDataTab === 'listeningPorts'}
-            className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors ${activeDataTab === 'listeningPorts' ? 'border-primary/40 bg-primary/15 text-primary' : 'border-border bg-surface-light text-muted-foreground hover:text-foreground'}`}
-          >
-            Portas em Escuta
-            {portsPageQuery.data && (
-              <span className="rounded-full bg-surface-hover/60 px-2 py-0.5 text-xs text-muted-foreground">{portsTotalCount}</span>
-            )}
-          </button>
-          <button
-            type="button"
-            role="tab"
-            onClick={() => handleSelectDataTab('openSockets')}
-            aria-selected={activeDataTab === 'openSockets'}
-            className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors ${activeDataTab === 'openSockets' ? 'border-primary/40 bg-primary/15 text-primary' : 'border-border bg-surface-light text-muted-foreground hover:text-foreground'}`}
-          >
-            Conexões Abertas
-            {socketsPageQuery.data && (
-              <span className="rounded-full bg-surface-hover/60 px-2 py-0.5 text-xs text-muted-foreground">{socketsTotalCount}</span>
-            )}
-          </button>
-          <button
-            type="button"
-            role="tab"
-            onClick={() => handleSelectDataTab('startupItems')}
-            aria-selected={activeDataTab === 'startupItems'}
-            className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors ${activeDataTab === 'startupItems' ? 'border-primary/40 bg-primary/15 text-primary' : 'border-border bg-surface-light text-muted-foreground hover:text-foreground'}`}
-          >
-            Inicialização
-            {hwComponents.data && (
-              <span className="rounded-full bg-surface-hover/60 px-2 py-0.5 text-xs text-muted-foreground">{startupItems.length}</span>
-            )}
-          </button>
-          <button
-            type="button"
-            role="tab"
-            onClick={() => handleSelectDataTab('scheduledTasks')}
-            aria-selected={activeDataTab === 'scheduledTasks'}
-            className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors ${activeDataTab === 'scheduledTasks' ? 'border-primary/40 bg-primary/15 text-primary' : 'border-border bg-surface-light text-muted-foreground hover:text-foreground'}`}
-          >
-            Tarefas Agendadas
-            {hwComponents.data && (
-              <span className="rounded-full bg-surface-hover/60 px-2 py-0.5 text-xs text-muted-foreground">{scheduledTasks.length}</span>
-            )}
-          </button>
-          <button
-            type="button"
-            role="tab"
-            onClick={() => handleSelectDataTab('logs')}
-            aria-selected={activeDataTab === 'logs'}
-            className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors ${activeDataTab === 'logs' ? 'border-primary/40 bg-primary/15 text-primary' : 'border-border bg-surface-light text-muted-foreground hover:text-foreground'}`}
-          >
-            Logs Recentes
-            {agentLogs.data && (
-              <span className="rounded-full bg-surface-hover/60 px-2 py-0.5 text-xs text-muted-foreground">{logsArray.length}</span>
-            )}
-          </button>
-        </div>
-
-        {activeDataTab === 'software' && (
-          <div style={{ maxHeight: 'min(860px, 75vh)' }} className="w-full min-w-0 max-w-full overflow-x-hidden overflow-y-auto overscroll-auto">
-            <>
-            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h3 className="text-lg font-semibold text-foreground sm:text-xl">Aplicativos</h3>
-                <p className="text-sm text-muted">
-                  {softwareOnlyUpdates
-                    ? `${softwareTotalCount} aplicativo(s) com atualização pendente`
-                    : `${softwareTotalCount} aplicativo(s) no inventário`}
-                  {softwareUpdatesTotal > 0 && !softwareOnlyUpdates && (
-                    <span className="ml-2 font-medium text-warning">· {softwareUpdatesTotal} com atualização disponível</span>
+        {activeDataTab !== 'info' && activeDataTab !== 'notes' && activeDataTab !== 'labelHistory' && (
+          <Card className="surface-card">
+            {activeDataTab === 'software' && (
+              <div style={{ maxHeight: 'min(860px, 75vh)' }} className="w-full min-w-0 max-w-full overflow-x-hidden overflow-y-auto overscroll-auto">
+                <>
+                <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <h3 className="text-lg font-semibold text-foreground sm:text-xl">Aplicativos</h3>
+                    <p className="text-sm text-muted">
+                      {softwareOnlyUpdates
+                        ? `${softwareTotalCount} aplicativo(s) com atualização pendente`
+                        : `${softwareTotalCount} aplicativo(s) no inventário`}
+                      {softwareUpdatesTotal > 0 && !softwareOnlyUpdates && (
+                        <span className="ml-2 font-medium text-warning">· {softwareUpdatesTotal} com atualização disponível</span>
+                      )}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                  {/* Filtro rápido: mostra só os apps com atualização pendente. */}
+                  {softwareUpdatesTotal > 0 && (
+                    <Button
+                      size="sm"
+                      variant={softwareOnlyUpdates ? 'primary' : 'secondary'}
+                      onClick={handleToggleSoftwareOnlyUpdates}
+                      aria-pressed={softwareOnlyUpdates}
+                      title={
+                        softwareOnlyUpdates
+                          ? 'Mostrando apenas aplicativos com atualização pendente'
+                          : 'Mostrar apenas aplicativos com atualização pendente'
+                      }
+                    >
+                      <ArrowUpCircle className="h-4 w-4" />
+                      Com atualização
+                      <span className="ml-1 rounded-full bg-black/10 px-1.5 text-xs">{softwareUpdatesTotal}</span>
+                    </Button>
                   )}
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-              {/* Filtro rápido: mostra só os apps com atualização pendente. */}
-              {softwareUpdatesTotal > 0 && (
-                <Button
-                  size="sm"
-                  variant={softwareOnlyUpdates ? 'primary' : 'secondary'}
-                  onClick={handleToggleSoftwareOnlyUpdates}
-                  aria-pressed={softwareOnlyUpdates}
-                  title={
-                    softwareOnlyUpdates
-                      ? 'Mostrando apenas aplicativos com atualização pendente'
-                      : 'Mostrar apenas aplicativos com atualização pendente'
-                  }
-                >
-                  <ArrowUpCircle className="h-4 w-4" />
-                  Com atualização
-                  <span className="ml-1 rounded-full bg-black/10 px-1.5 text-xs">{softwareUpdatesTotal}</span>
-                </Button>
-              )}
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={handleRefreshSoftware}
-                loading={isRefreshingSoftware}
-                title={
-                  !isOnlineNow
-                    ? 'Agente offline — o pedido de coleta entra na fila e roda quando ele reconectar'
-                    : 'Solicitar nova coleta de software ao agente'
-                }
-              >
-                <RefreshCw className="h-4 w-4" />
-                Atualizar
-              </Button>
-              </div>
-            </div>
-            {software.isLoading ? (
-              <Loading message="Carregando inventário de aplicativos..." />
-            ) : software.isError ? (
-              <ErrorDisplay onRetry={() => software.refetch()} />
-            ) : (
-              <>
-                {softwareSnapshot.data?.updatedAt && (
-                  <div className="mb-3 flex items-center justify-end gap-2 text-xs text-muted">
-                    <Clock className="h-3.5 w-3.5" />
-                    <span>Última coleta: <span className="text-muted-foreground">{formatDate(softwareSnapshot.data.updatedAt)}</span></span>
-                  </div>
-                )}
-
-                <div className="mb-4 grid gap-3 md:grid-cols-2">
-                  <div className="rounded-lg bg-surface-light px-3 py-2">
-                    <p className="text-xs text-muted">Total instalado</p>
-                    <p className="text-sm font-medium text-foreground">{softwareTotalCount}</p>
-                  </div>
-                  <div className="rounded-lg bg-surface-light px-3 py-2">
-                    <p className="text-xs text-muted">Última coleta</p>
-                    <p className="text-sm text-muted-foreground">{formatDate(softwareSnapshot.data?.lastCollectedAt ?? null)}</p>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={handleRefreshSoftware}
+                    loading={isRefreshingSoftware}
+                    title={
+                      !isOnlineNow
+                        ? 'Agente offline — o pedido de coleta entra na fila e roda quando ele reconectar'
+                        : 'Solicitar nova coleta de software ao agente'
+                    }
+                  >
+                    <RefreshCw className="h-4 w-4" />
+                    Atualizar
+                  </Button>
                   </div>
                 </div>
+                {software.isLoading ? (
+                  <Loading message="Carregando inventário de aplicativos..." />
+                ) : software.isError ? (
+                  <ErrorDisplay onRetry={() => software.refetch()} />
+                ) : (
+                  <>
+                    {softwareSnapshot.data?.updatedAt && (
+                      <div className="mb-3 flex items-center justify-end gap-2 text-xs text-muted">
+                        <Clock className="h-3.5 w-3.5" />
+                        <span>Última coleta: <span className="text-muted-foreground">{formatDate(softwareSnapshot.data.updatedAt)}</span></span>
+                      </div>
+                    )}
 
-                <form className="mb-4 grid gap-3 lg:grid-cols-[1fr_200px_160px_auto_auto]" onSubmit={handleApplySoftwareFilters}>
+                    <div className="mb-4 grid gap-3 md:grid-cols-2">
+                      <div className="rounded-lg bg-surface-light px-3 py-2">
+                        <p className="text-xs text-muted">Total instalado</p>
+                        <p className="text-sm font-medium text-foreground">{softwareTotalCount}</p>
+                      </div>
+                      <div className="rounded-lg bg-surface-light px-3 py-2">
+                        <p className="text-xs text-muted">Última coleta</p>
+                        <p className="text-sm text-muted-foreground">{formatDate(softwareSnapshot.data?.lastCollectedAt ?? null)}</p>
+                      </div>
+                    </div>
+
+                    <form className="mb-4 grid gap-3 lg:grid-cols-[1fr_200px_160px_auto_auto]" onSubmit={handleApplySoftwareFilters}>
+                      <Input
+                        value={softwareSearchInput}
+                        onChange={(e) => setSoftwareSearchInput(e.target.value)}
+                        placeholder="Pesquisar por nome, versão, fabricante, installId, serial ou fonte"
+                      />
+                      <Select
+                        value={softwareOrder}
+                        options={softwareOrderOptions}
+                        onChange={(e) => handleSoftwareOrderChange(e.target.value as 'asc' | 'desc')}
+                      />
+                      <Select
+                        value={softwareLimitSelected}
+                        options={pageSizeOptions}
+                        onChange={(e) => handleSoftwareLimitChange(e.target.value)}
+                      />
+                      <Button type="submit" variant="secondary" size="sm">
+                        <Search className="h-4 w-4" />
+                        Buscar
+                      </Button>
+                      <Button type="button" variant="ghost" size="sm" onClick={handleClearSoftwareSearch}>
+                        Limpar
+                      </Button>
+                    </form>
+
+                    {softwareItems.length > 0 && (
+                      <div className="mb-4 flex items-center justify-between gap-3">
+                        <p className="text-xs text-muted">
+                          Página {safeSoftwarePage} de {softwareTotalPages} · {softwareTotalCount} itens no total
+                          {softwareOnlyUpdates ? ' · somente com atualização' : ''}
+                          {softwareSearchApplied ? ` | filtro: "${softwareSearchApplied}"` : ''}
+                        </p>
+                        <div className="flex items-center gap-2">
+                          <Button variant="secondary" size="sm" onClick={goToPreviousSoftwarePage} disabled={!canGoPrevSoftwarePage}>
+                            Voltar
+                          </Button>
+                          <div className="rounded-md border border-border px-3 py-1 text-xs text-muted-foreground">
+                            {safeSoftwarePage}
+                          </div>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={goToNextSoftwarePage}
+                            disabled={!canGoNextSoftwarePage}
+                            loading={software.isFetching}
+                          >
+                            Avançar
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+
+                    <div style={{ minHeight: '400px' }} className="relative">
+                      <DataTable
+                        columns={softwareColumns}
+                        data={softwareItems}
+                        keyExtractor={item => item.inventoryId}
+                        onRowContextMenu={(event, item) => {
+                          event.preventDefault();
+                          setSoftwareMenu({ x: event.clientX, y: event.clientY, item });
+                        }}
+                        emptyMessage={
+                          softwareOnlyUpdates
+                            ? 'Nenhum aplicativo com atualização pendente'
+                            : 'Nenhum aplicativo encontrado para este agente'
+                        }
+                        showPagination={false}
+                        maxHeight="min(640px, 55vh)"
+                      />
+                    </div>
+                    <div className="mt-4 flex items-center justify-between gap-3">
+                      <p className="text-xs text-muted">
+                        Página {safeSoftwarePage} de {softwareTotalPages} · {softwareTotalCount} itens no total
+                        {softwareSearchApplied ? ` | filtro: "${softwareSearchApplied}"` : ''}
+                      </p>
+                      <div className="flex items-center gap-2">
+                        <Button variant="secondary" size="sm" onClick={goToPreviousSoftwarePage} disabled={!canGoPrevSoftwarePage}>
+                          Voltar
+                        </Button>
+                        <div className="rounded-md border border-border px-3 py-1 text-xs text-muted-foreground">
+                          {safeSoftwarePage}
+                        </div>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={goToNextSoftwarePage}
+                          disabled={!canGoNextSoftwarePage}
+                          loading={software.isFetching}
+                        >
+                          Avançar
+                        </Button>
+                      </div>
+                    </div>
+                  </>
+                )}
+                </>
+              </div>
+            )}
+
+            {activeDataTab === 'tickets' && (
+              <div style={{ maxHeight: 'min(860px, 75vh)' }} className="w-full min-w-0 max-w-full overflow-x-hidden overflow-y-auto overscroll-auto">
+                <>
+                <CardHeader title="Últimos Chamados" subtitle={`${agentTickets.data?.items?.length ?? 0} chamado(s) retornado(s)`} />
+                <div className="space-y-2">
+                  {agentTickets.isLoading && (
+                    <div className="py-4 text-center text-sm text-muted">
+                      Carregando chamados...
+                    </div>
+                  )}
+                  {!agentTickets.isLoading && (!agentTickets.data || agentTickets.data.items.length === 0) && (
+                    <div className="py-4 text-center text-sm text-muted">
+                      Nenhum chamado encontrado
+                    </div>
+                  )}
+                  {!agentTickets.isLoading && agentTickets.data && agentTickets.data.items.length > 0 && (
+                    <div className="space-y-2">
+                      {agentTickets.data.items.map(ticket => {
+                        const priority = getTicketPriorityMeta(ticket.priority);
+                        return (
+                          <button
+                            key={ticket.id}
+                            onClick={() => navigate(`/tickets/${ticket.id}`)}
+                            className="w-full rounded-lg bg-surface-light px-3 py-2.5 text-left transition-colors hover:bg-surface-hover"
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-2">
+                                  <TicketIcon className="h-3.5 w-3.5 shrink-0 text-muted" />
+                                  <p className="truncate text-sm font-medium text-foreground">
+                                    {ticket.title}
+                                  </p>
+                                </div>
+                                <p className="mt-1 text-xs text-muted">
+                                  {new Date(ticket.createdAt).toLocaleDateString('pt-BR')}
+                                  {ticket.closedAt && '  Encerrado'}
+                                </p>
+                              </div>
+                              <Badge color={priority.color} className="shrink-0">
+                                {priority.label}
+                              </Badge>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+                </>
+              </div>
+            )}
+
+            {activeDataTab === 'printers' && (
+              <div style={{ maxHeight: 'min(860px, 75vh)' }} className="w-full min-w-0 max-w-full overflow-x-hidden overflow-y-auto overscroll-auto">
+                <>
+                <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <h3 className="text-lg font-semibold text-foreground sm:text-xl">Impressoras</h3>
+                    <p className="text-sm text-muted">{printers.length} impressora(s) detectada(s)</p>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={handleRefreshPrinters}
+                    loading={isRefreshingPrinters || hwComponents.isFetching}
+                    title={
+                      !isOnlineNow
+                        ? 'Agente offline — o pedido de coleta entra na fila e roda quando ele reconectar'
+                        : 'Solicitar nova coleta de impressoras ao agente'
+                    }
+                  >
+                    <RefreshCw className="h-4 w-4" />
+                    Atualizar
+                  </Button>
+                </div>
+                {printers.length === 0 ? (
+                  <p className="text-sm text-muted">Nenhuma impressora coletada para este agente.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {printers.map((printer, index) => (
+                      <div key={`${printer.name}-${printer.portName ?? index}`} className="rounded-lg bg-surface-light px-3 py-2.5">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-medium text-foreground">{printer.name}</p>
+                            {printer.driverName && (
+                              <p className="truncate text-xs text-muted">Driver: {printer.driverName}</p>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {printer.isDefault && <Badge color="primary">Padrão</Badge>}
+                            <Badge color={printerStatusColor(printer.printerStatus)}>{printer.printerStatus ?? 'Sem status'}</Badge>
+                          </div>
+                        </div>
+
+                        <div className="mt-2 grid gap-2 text-xs text-muted sm:grid-cols-2">
+                          <span className="flex items-center gap-1">
+                            <Printer className="h-3.5 w-3.5" />
+                            {printer.isNetworkPrinter ? 'Rede' : 'Local'}
+                          </span>
+                          <span>{printer.portName ? `Porta: ${printer.portName}` : 'Porta não informada'}</span>
+                          <span>{printer.location ? `Local: ${printer.location}` : 'Local não informado'}</span>
+                          <span>
+                            {printer.shared
+                              ? `Compartilhada${printer.shareName ? ` (${printer.shareName})` : ''}`
+                              : 'Não compartilhada'}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                </>
+              </div>
+            )}
+
+            {activeDataTab === 'listeningPorts' && (
+              <div style={{ maxHeight: 'min(860px, 75vh)' }} className="w-full min-w-0 max-w-full overflow-x-hidden overflow-y-auto overscroll-auto">
+                <>
+                <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <h3 className="text-lg font-semibold text-foreground sm:text-xl">Portas em Escuta</h3>
+                    <p className="text-sm text-muted">{portsTotalCount} porta(s) ativa(s)</p>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={handleRefreshPorts}
+                    loading={isRefreshingPorts}
+                    title={
+                      !isOnlineNow
+                        ? 'Agente offline — o pedido de coleta entra na fila e roda quando ele reconectar'
+                        : 'Solicitar nova coleta de portas ao agente'
+                    }
+                  >
+                    <RefreshCw className="h-4 w-4" />
+                    Atualizar
+                  </Button>
+                </div>
+                {portsTotalCount >= LISTENING_PORTS_BACKEND_LIMIT && (
+                  <div className="mb-3 flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-400">
+                    <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                    Lista truncada pelo backend no limite de {LISTENING_PORTS_BACKEND_LIMIT} itens. Podem existir mais portas em escuta.
+                  </div>
+                )}
+                <form className="mb-4 grid gap-3 lg:grid-cols-[1fr_160px_auto_auto]" onSubmit={handleApplyPortsSearch}>
                   <Input
-                    value={softwareSearchInput}
-                    onChange={(e) => setSoftwareSearchInput(e.target.value)}
-                    placeholder="Pesquisar por nome, versão, fabricante, installId, serial ou fonte"
+                    value={listeningPortsSearchInput}
+                    onChange={(e) => setListeningPortsSearchInput(e.target.value)}
+                    placeholder="Pesquisar por processo, PID, protocolo, endereço ou porta"
                   />
                   <Select
-                    value={softwareOrder}
-                    options={softwareOrderOptions}
-                    onChange={(e) => handleSoftwareOrderChange(e.target.value as 'asc' | 'desc')}
-                  />
-                  <Select
-                    value={softwareLimitSelected}
+                    value={listeningPortsLimit}
                     options={pageSizeOptions}
-                    onChange={(e) => handleSoftwareLimitChange(e.target.value)}
+                    onChange={(e) => handlePortsLimitChange(e.target.value)}
                   />
                   <Button type="submit" variant="secondary" size="sm">
                     <Search className="h-4 w-4" />
                     Buscar
                   </Button>
-                  <Button type="button" variant="ghost" size="sm" onClick={handleClearSoftwareSearch}>
+                  <Button type="button" variant="ghost" size="sm" onClick={handleClearPortsSearch}>
                     Limpar
                   </Button>
                 </form>
-
-                {softwareItems.length > 0 && (
+                {portsPageItems.length > 0 && (
                   <div className="mb-4 flex items-center justify-between gap-3">
                     <p className="text-xs text-muted">
-                      Página {safeSoftwarePage} de {softwareTotalPages} · {softwareTotalCount} itens no total
-                      {softwareOnlyUpdates ? ' · somente com atualização' : ''}
-                      {softwareSearchApplied ? ` | filtro: "${softwareSearchApplied}"` : ''}
+                      Página {portsPageIndex} de {portsTotalPages} · {portsTotalCount} itens no total
+                      {listeningPortsSearchApplied ? ` | filtro: "${listeningPortsSearchApplied}"` : ''}
                     </p>
                     <div className="flex items-center gap-2">
-                      <Button variant="secondary" size="sm" onClick={goToPreviousSoftwarePage} disabled={!canGoPrevSoftwarePage}>
+                      <Button variant="secondary" size="sm" onClick={goToPreviousPortsPage} disabled={!canGoPrevPortsPage}>
                         Voltar
                       </Button>
                       <div className="rounded-md border border-border px-3 py-1 text-xs text-muted-foreground">
-                        {safeSoftwarePage}
+                        {portsPageIndex}
                       </div>
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={goToNextSoftwarePage}
-                        disabled={!canGoNextSoftwarePage}
-                        loading={software.isFetching}
-                      >
+                      <Button variant="secondary" size="sm" onClick={goToNextPortsPage} disabled={!canGoNextPortsPage || portsPageQuery.isFetching} loading={portsPageQuery.isFetching}>
                         Avançar
                       </Button>
                     </div>
                   </div>
                 )}
-
                 <div style={{ minHeight: '400px' }} className="relative">
                   <DataTable
-                    columns={softwareColumns}
-                    data={softwareItems}
-                    keyExtractor={item => item.inventoryId}
-                    onRowContextMenu={(event, item) => {
-                      event.preventDefault();
-                      setSoftwareMenu({ x: event.clientX, y: event.clientY, item });
-                    }}
-                    emptyMessage={
-                      softwareOnlyUpdates
-                        ? 'Nenhum aplicativo com atualização pendente'
-                        : 'Nenhum aplicativo encontrado para este agente'
-                    }
+                    columns={listeningPortColumns}
+                    data={portsPageItems}
+                    keyExtractor={item => `${item.protocol}|${item.address}:${item.port}|${item.processId}`}
+                    emptyMessage="Nenhuma porta em escuta encontrada"
                     showPagination={false}
                     maxHeight="min(640px, 55vh)"
                   />
                 </div>
-                <div className="mt-4 flex items-center justify-between gap-3">
-                  <p className="text-xs text-muted">
-                    Página {safeSoftwarePage} de {softwareTotalPages} · {softwareTotalCount} itens no total
-                    {softwareSearchApplied ? ` | filtro: "${softwareSearchApplied}"` : ''}
-                  </p>
-                  <div className="flex items-center gap-2">
-                    <Button variant="secondary" size="sm" onClick={goToPreviousSoftwarePage} disabled={!canGoPrevSoftwarePage}>
-                      Voltar
-                    </Button>
-                    <div className="rounded-md border border-border px-3 py-1 text-xs text-muted-foreground">
-                      {safeSoftwarePage}
+                {portsPageItems.length > 0 && (
+                  <div className="mt-4 flex items-center justify-between gap-3">
+                    <p className="text-xs text-muted">
+                      Página {portsPageIndex} de {portsTotalPages} · {portsTotalCount} itens no total
+                      {listeningPortsSearchApplied ? ` | filtro: "${listeningPortsSearchApplied}"` : ''}
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <Button variant="secondary" size="sm" onClick={goToPreviousPortsPage} disabled={!canGoPrevPortsPage}>
+                        Voltar
+                      </Button>
+                      <div className="rounded-md border border-border px-3 py-1 text-xs text-muted-foreground">
+                        {portsPageIndex}
+                      </div>
+                      <Button variant="secondary" size="sm" onClick={goToNextPortsPage} disabled={!canGoNextPortsPage || portsPageQuery.isFetching} loading={portsPageQuery.isFetching}>
+                        Avançar
+                      </Button>
                     </div>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={goToNextSoftwarePage}
-                      disabled={!canGoNextSoftwarePage}
-                      loading={software.isFetching}
-                    >
-                      Avançar
-                    </Button>
                   </div>
-                </div>
-              </>
+                )}
+                </>
+              </div>
             )}
-            </>
-          </div>
-        )}
 
-        {activeDataTab === 'tickets' && (
-          <div style={{ maxHeight: 'min(860px, 75vh)' }} className="w-full min-w-0 max-w-full overflow-x-hidden overflow-y-auto overscroll-auto">
-            <>
-            <CardHeader title="Últimos Chamados" subtitle={`${agentTickets.data?.items?.length ?? 0} chamado(s) retornado(s)`} />
-            <div className="space-y-2">
-              {agentTickets.isLoading && (
-                <div className="py-4 text-center text-sm text-muted">
-                  Carregando chamados...
+            {activeDataTab === 'openSockets' && (
+              <div style={{ maxHeight: 'min(860px, 75vh)' }} className="w-full min-w-0 max-w-full overflow-x-hidden overflow-y-auto overscroll-auto">
+                <>
+                <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <h3 className="text-lg font-semibold text-foreground sm:text-xl">Conexões Abertas</h3>
+                    <p className="text-sm text-muted">{socketsTotalCount} conexão(ões) ativa(s)</p>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={handleRefreshConnections}
+                    loading={isRefreshingConnections}
+                    title={
+                      !isOnlineNow
+                        ? 'Agente offline — o pedido de coleta entra na fila e roda quando ele reconectar'
+                        : 'Solicitar nova coleta de conexões ao agente'
+                    }
+                  >
+                    <RefreshCw className="h-4 w-4" />
+                    Atualizar
+                  </Button>
                 </div>
-              )}
-              {!agentTickets.isLoading && (!agentTickets.data || agentTickets.data.items.length === 0) && (
-                <div className="py-4 text-center text-sm text-muted">
-                  Nenhum chamado encontrado
+                {socketsTotalCount >= OPEN_SOCKETS_BACKEND_LIMIT && (
+                  <div className="mb-3 flex items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
+                    <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                    Lista truncada pelo backend no limite de {OPEN_SOCKETS_BACKEND_LIMIT} itens. Podem existir mais conexões abertas.
+                  </div>
+                )}
+                <form className="mb-4 grid gap-3 lg:grid-cols-[1fr_170px_220px_auto_auto]" onSubmit={handleApplySocketsSearch}>
+                  <Input
+                    value={openSocketsSearchInput}
+                    onChange={(e) => setOpenSocketsSearchInput(e.target.value)}
+                    placeholder="Pesquisar por processo, PID, protocolo, endereço, porta ou estado"
+                  />
+                  <Select
+                    value={openSocketsStateFilter}
+                    options={socketStateOptions}
+                    onChange={(e) => handleSocketsStateChange(e.target.value)}
+                  />
+                  <Select
+                    value={openSocketsLimit}
+                    options={pageSizeOptions}
+                    onChange={(e) => handleSocketsLimitChange(e.target.value)}
+                  />
+                  <Button type="submit" variant="secondary" size="sm">
+                    <Search className="h-4 w-4" />
+                    Buscar
+                  </Button>
+                  <Button type="button" variant="ghost" size="sm" onClick={handleClearSocketsSearch}>
+                    Limpar
+                  </Button>
+                </form>
+                {socketsPageItems.length > 0 && (
+                  <div className="mb-4 flex items-center justify-between gap-3">
+                    <p className="text-xs text-muted">
+                      Página {socketsPageIndex} de {socketsTotalPages} · {socketsTotalCount} itens no total
+                      {openSocketsSearchApplied ? ` | filtro: "${openSocketsSearchApplied}"` : ''}
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <Button variant="secondary" size="sm" onClick={goToPreviousSocketsPage} disabled={!canGoPrevSocketsPage}>
+                        Voltar
+                      </Button>
+                      <div className="rounded-md border border-border px-3 py-1 text-xs text-muted-foreground">
+                        {socketsPageIndex}
+                      </div>
+                      <Button variant="secondary" size="sm" onClick={goToNextSocketsPage} disabled={!canGoNextSocketsPage || socketsPageQuery.isFetching} loading={socketsPageQuery.isFetching}>
+                        Avançar
+                      </Button>
+                    </div>
+                  </div>
+                )}
+                <div style={{ minHeight: '400px' }} className="relative">
+                  <DataTable
+                    columns={openSocketColumns}
+                    data={socketsPageItems}
+                    keyExtractor={item => `${item.protocol}|${item.family}|${item.localAddress}:${item.localPort}|${item.remoteAddress}:${item.remotePort}|${item.processId}`}
+                    emptyMessage="Nenhuma conexão aberta encontrada"
+                    showPagination={false}
+                    maxHeight="min(640px, 55vh)"
+                  />
                 </div>
-              )}
-              {!agentTickets.isLoading && agentTickets.data && agentTickets.data.items.length > 0 && (
+                {socketsPageItems.length > 0 && (
+                  <div className="mt-4 flex items-center justify-between gap-3">
+                    <p className="text-xs text-muted">
+                      Página {socketsPageIndex} de {socketsTotalPages} · {socketsTotalCount} itens no total
+                      {openSocketsSearchApplied ? ` | filtro: "${openSocketsSearchApplied}"` : ''}
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <Button variant="secondary" size="sm" onClick={goToPreviousSocketsPage} disabled={!canGoPrevSocketsPage}>
+                        Voltar
+                      </Button>
+                      <div className="rounded-md border border-border px-3 py-1 text-xs text-muted-foreground">
+                        {socketsPageIndex}
+                      </div>
+                      <Button variant="secondary" size="sm" onClick={goToNextSocketsPage} disabled={!canGoNextSocketsPage || socketsPageQuery.isFetching} loading={socketsPageQuery.isFetching}>
+                        Avançar
+                      </Button>
+                    </div>
+                  </div>
+                )}
+                </>
+              </div>
+            )}
+
+            {activeDataTab === 'startupItems' && (
+              // Sem altura/rolagem própria: a tabela do painel já rola por dentro,
+              // evitando a barra de rolagem duplicada (aninhada) em telas pequenas.
+              <div className='w-full min-w-0 max-w-full'>
+                <AgentStartupItemsPanel
+                  agentId={id!}
+                  items={startupItems}
+                  canManage={canManageAgent}
+                  isOnline={isOnlineNow}
+                  isLoading={hwComponents.isLoading}
+                  isError={Boolean(hwComponents.isError)}
+                  onRetry={() => void hwComponents.refetch()}
+                  isRefreshing={isRefreshingStartup || hwComponents.isFetching}
+                  onRefresh={handleRefreshStartup}
+                  onDataRefetch={() => void hwComponents.refetch()}
+                />
+              </div>
+            )}
+
+            {activeDataTab === 'scheduledTasks' && (
+              // Sem altura/rolagem própria: a tabela do painel já rola por dentro,
+              // evitando a barra de rolagem duplicada (aninhada) em telas pequenas.
+              <div className='w-full min-w-0 max-w-full'>
+                <AgentScheduledTasksPanel
+                  agentId={id!}
+                  tasks={scheduledTasks}
+                  canManage={canManageAgent}
+                  isOnline={isOnlineNow}
+                  isLoading={hwComponents.isLoading}
+                  isError={Boolean(hwComponents.isError)}
+                  onRetry={() => void hwComponents.refetch()}
+                  isRefreshing={isRefreshingScheduledTasks || hwComponents.isFetching}
+                  onRefresh={handleRefreshScheduledTasks}
+                  onDataRefetch={() => void hwComponents.refetch()}
+                />
+              </div>
+            )}
+
+            {activeDataTab === 'logs' && (
+              <div style={{ maxHeight: 'min(860px, 75vh)' }} className="w-full min-w-0 max-w-full overflow-x-hidden overflow-y-auto overscroll-auto">
+                <>
+                <CardHeader title="Logs Recentes" />
                 <div className="space-y-2">
-                  {agentTickets.data.items.map(ticket => {
-                    const priority = getTicketPriorityMeta(ticket.priority);
+                  {logsArray.map(log => {
+                    const l = getLogLevelMeta(log.level);
                     return (
-                      <button
-                        key={ticket.id}
-                        onClick={() => navigate(`/tickets/${ticket.id}`)}
-                        className="w-full rounded-lg bg-surface-light px-3 py-2.5 text-left transition-colors hover:bg-surface-hover"
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2">
-                              <TicketIcon className="h-3.5 w-3.5 shrink-0 text-muted" />
-                              <p className="truncate text-sm font-medium text-foreground">
-                                {ticket.title}
-                              </p>
-                            </div>
-                            <p className="mt-1 text-xs text-muted">
-                              {new Date(ticket.createdAt).toLocaleDateString('pt-BR')}
-                              {ticket.closedAt && '  Encerrado'}
-                            </p>
-                          </div>
-                          <Badge color={priority.color} className="shrink-0">
-                            {priority.label}
-                          </Badge>
+                      <div key={log.id} className="flex items-start gap-2 rounded-lg bg-surface-light px-3 py-2">
+                        <Badge color={l.color} className="mt-0.5 shrink-0">{l.label}</Badge>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm text-muted-foreground">{log.message}</p>
+                          <p className="text-xs text-muted">{formatDate(log.createdAt)}</p>
                         </div>
-                      </button>
+                      </div>
                     );
                   })}
+                  {agentLogs.isLoading && <p className="text-sm text-muted">Carregando...</p>}
+                  {(logsArray.length === 0) && !agentLogs.isLoading && (
+                    <p className="text-sm text-muted">Nenhum log registrado</p>
+                  )}
                 </div>
-              )}
-            </div>
-            </>
-          </div>
-        )}
-
-        {activeDataTab === 'printers' && (
-          <div style={{ maxHeight: 'min(860px, 75vh)' }} className="w-full min-w-0 max-w-full overflow-x-hidden overflow-y-auto overscroll-auto">
-            <>
-            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h3 className="text-lg font-semibold text-foreground sm:text-xl">Impressoras</h3>
-                <p className="text-sm text-muted">{printers.length} impressora(s) detectada(s)</p>
-              </div>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={handleRefreshPrinters}
-                loading={isRefreshingPrinters || hwComponents.isFetching}
-                title={
-                  !isOnlineNow
-                    ? 'Agente offline — o pedido de coleta entra na fila e roda quando ele reconectar'
-                    : 'Solicitar nova coleta de impressoras ao agente'
-                }
-              >
-                <RefreshCw className="h-4 w-4" />
-                Atualizar
-              </Button>
-            </div>
-            {printers.length === 0 ? (
-              <p className="text-sm text-muted">Nenhuma impressora coletada para este agente.</p>
-            ) : (
-              <div className="space-y-2">
-                {printers.map((printer, index) => (
-                  <div key={`${printer.name}-${printer.portName ?? index}`} className="rounded-lg bg-surface-light px-3 py-2.5">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium text-foreground">{printer.name}</p>
-                        {printer.driverName && (
-                          <p className="truncate text-xs text-muted">Driver: {printer.driverName}</p>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {printer.isDefault && <Badge color="primary">Padrão</Badge>}
-                        <Badge color={printerStatusColor(printer.printerStatus)}>{printer.printerStatus ?? 'Sem status'}</Badge>
-                      </div>
-                    </div>
-
-                    <div className="mt-2 grid gap-2 text-xs text-muted sm:grid-cols-2">
-                      <span className="flex items-center gap-1">
-                        <Printer className="h-3.5 w-3.5" />
-                        {printer.isNetworkPrinter ? 'Rede' : 'Local'}
-                      </span>
-                      <span>{printer.portName ? `Porta: ${printer.portName}` : 'Porta não informada'}</span>
-                      <span>{printer.location ? `Local: ${printer.location}` : 'Local não informado'}</span>
-                      <span>
-                        {printer.shared
-                          ? `Compartilhada${printer.shareName ? ` (${printer.shareName})` : ''}`
-                          : 'Não compartilhada'}
-                      </span>
-                    </div>
-                  </div>
-                ))}
+                </>
               </div>
             )}
-            </>
-          </div>
+          </Card>
         )}
-
-        {activeDataTab === 'listeningPorts' && (
-          <div style={{ maxHeight: 'min(860px, 75vh)' }} className="w-full min-w-0 max-w-full overflow-x-hidden overflow-y-auto overscroll-auto">
-            <>
-            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h3 className="text-lg font-semibold text-foreground sm:text-xl">Portas em Escuta</h3>
-                <p className="text-sm text-muted">{portsTotalCount} porta(s) ativa(s)</p>
-              </div>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={handleRefreshPorts}
-                loading={isRefreshingPorts}
-                title={
-                  !isOnlineNow
-                    ? 'Agente offline — o pedido de coleta entra na fila e roda quando ele reconectar'
-                    : 'Solicitar nova coleta de portas ao agente'
-                }
-              >
-                <RefreshCw className="h-4 w-4" />
-                Atualizar
-              </Button>
-            </div>
-            {portsTotalCount >= LISTENING_PORTS_BACKEND_LIMIT && (
-              <div className="mb-3 flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-400">
-                <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-                Lista truncada pelo backend no limite de {LISTENING_PORTS_BACKEND_LIMIT} itens. Podem existir mais portas em escuta.
-              </div>
-            )}
-            <form className="mb-4 grid gap-3 lg:grid-cols-[1fr_160px_auto_auto]" onSubmit={handleApplyPortsSearch}>
-              <Input
-                value={listeningPortsSearchInput}
-                onChange={(e) => setListeningPortsSearchInput(e.target.value)}
-                placeholder="Pesquisar por processo, PID, protocolo, endereço ou porta"
-              />
-              <Select
-                value={listeningPortsLimit}
-                options={pageSizeOptions}
-                onChange={(e) => handlePortsLimitChange(e.target.value)}
-              />
-              <Button type="submit" variant="secondary" size="sm">
-                <Search className="h-4 w-4" />
-                Buscar
-              </Button>
-              <Button type="button" variant="ghost" size="sm" onClick={handleClearPortsSearch}>
-                Limpar
-              </Button>
-            </form>
-            {portsPageItems.length > 0 && (
-              <div className="mb-4 flex items-center justify-between gap-3">
-                <p className="text-xs text-muted">
-                  Página {portsPageIndex} de {portsTotalPages} · {portsTotalCount} itens no total
-                  {listeningPortsSearchApplied ? ` | filtro: "${listeningPortsSearchApplied}"` : ''}
-                </p>
-                <div className="flex items-center gap-2">
-                  <Button variant="secondary" size="sm" onClick={goToPreviousPortsPage} disabled={!canGoPrevPortsPage}>
-                    Voltar
-                  </Button>
-                  <div className="rounded-md border border-border px-3 py-1 text-xs text-muted-foreground">
-                    {portsPageIndex}
-                  </div>
-                  <Button variant="secondary" size="sm" onClick={goToNextPortsPage} disabled={!canGoNextPortsPage || portsPageQuery.isFetching} loading={portsPageQuery.isFetching}>
-                    Avançar
-                  </Button>
-                </div>
-              </div>
-            )}
-            <div style={{ minHeight: '400px' }} className="relative">
-              <DataTable
-                columns={listeningPortColumns}
-                data={portsPageItems}
-                keyExtractor={item => `${item.protocol}|${item.address}:${item.port}|${item.processId}`}
-                emptyMessage="Nenhuma porta em escuta encontrada"
-                showPagination={false}
-                maxHeight="min(640px, 55vh)"
-              />
-            </div>
-            {portsPageItems.length > 0 && (
-              <div className="mt-4 flex items-center justify-between gap-3">
-                <p className="text-xs text-muted">
-                  Página {portsPageIndex} de {portsTotalPages} · {portsTotalCount} itens no total
-                  {listeningPortsSearchApplied ? ` | filtro: "${listeningPortsSearchApplied}"` : ''}
-                </p>
-                <div className="flex items-center gap-2">
-                  <Button variant="secondary" size="sm" onClick={goToPreviousPortsPage} disabled={!canGoPrevPortsPage}>
-                    Voltar
-                  </Button>
-                  <div className="rounded-md border border-border px-3 py-1 text-xs text-muted-foreground">
-                    {portsPageIndex}
-                  </div>
-                  <Button variant="secondary" size="sm" onClick={goToNextPortsPage} disabled={!canGoNextPortsPage || portsPageQuery.isFetching} loading={portsPageQuery.isFetching}>
-                    Avançar
-                  </Button>
-                </div>
-              </div>
-            )}
-            </>
-          </div>
-        )}
-
-        {activeDataTab === 'openSockets' && (
-          <div style={{ maxHeight: 'min(860px, 75vh)' }} className="w-full min-w-0 max-w-full overflow-x-hidden overflow-y-auto overscroll-auto">
-            <>
-            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h3 className="text-lg font-semibold text-foreground sm:text-xl">Conexões Abertas</h3>
-                <p className="text-sm text-muted">{socketsTotalCount} conexão(ões) ativa(s)</p>
-              </div>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={handleRefreshConnections}
-                loading={isRefreshingConnections}
-                title={
-                  !isOnlineNow
-                    ? 'Agente offline — o pedido de coleta entra na fila e roda quando ele reconectar'
-                    : 'Solicitar nova coleta de conexões ao agente'
-                }
-              >
-                <RefreshCw className="h-4 w-4" />
-                Atualizar
-              </Button>
-            </div>
-            {socketsTotalCount >= OPEN_SOCKETS_BACKEND_LIMIT && (
-              <div className="mb-3 flex items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
-                <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-                Lista truncada pelo backend no limite de {OPEN_SOCKETS_BACKEND_LIMIT} itens. Podem existir mais conexões abertas.
-              </div>
-            )}
-            <form className="mb-4 grid gap-3 lg:grid-cols-[1fr_170px_220px_auto_auto]" onSubmit={handleApplySocketsSearch}>
-              <Input
-                value={openSocketsSearchInput}
-                onChange={(e) => setOpenSocketsSearchInput(e.target.value)}
-                placeholder="Pesquisar por processo, PID, protocolo, endereço, porta ou estado"
-              />
-              <Select
-                value={openSocketsStateFilter}
-                options={socketStateOptions}
-                onChange={(e) => handleSocketsStateChange(e.target.value)}
-              />
-              <Select
-                value={openSocketsLimit}
-                options={pageSizeOptions}
-                onChange={(e) => handleSocketsLimitChange(e.target.value)}
-              />
-              <Button type="submit" variant="secondary" size="sm">
-                <Search className="h-4 w-4" />
-                Buscar
-              </Button>
-              <Button type="button" variant="ghost" size="sm" onClick={handleClearSocketsSearch}>
-                Limpar
-              </Button>
-            </form>
-            {socketsPageItems.length > 0 && (
-              <div className="mb-4 flex items-center justify-between gap-3">
-                <p className="text-xs text-muted">
-                  Página {socketsPageIndex} de {socketsTotalPages} · {socketsTotalCount} itens no total
-                  {openSocketsSearchApplied ? ` | filtro: "${openSocketsSearchApplied}"` : ''}
-                </p>
-                <div className="flex items-center gap-2">
-                  <Button variant="secondary" size="sm" onClick={goToPreviousSocketsPage} disabled={!canGoPrevSocketsPage}>
-                    Voltar
-                  </Button>
-                  <div className="rounded-md border border-border px-3 py-1 text-xs text-muted-foreground">
-                    {socketsPageIndex}
-                  </div>
-                  <Button variant="secondary" size="sm" onClick={goToNextSocketsPage} disabled={!canGoNextSocketsPage || socketsPageQuery.isFetching} loading={socketsPageQuery.isFetching}>
-                    Avançar
-                  </Button>
-                </div>
-              </div>
-            )}
-            <div style={{ minHeight: '400px' }} className="relative">
-              <DataTable
-                columns={openSocketColumns}
-                data={socketsPageItems}
-                keyExtractor={item => `${item.protocol}|${item.family}|${item.localAddress}:${item.localPort}|${item.remoteAddress}:${item.remotePort}|${item.processId}`}
-                emptyMessage="Nenhuma conexão aberta encontrada"
-                showPagination={false}
-                maxHeight="min(640px, 55vh)"
-              />
-            </div>
-            {socketsPageItems.length > 0 && (
-              <div className="mt-4 flex items-center justify-between gap-3">
-                <p className="text-xs text-muted">
-                  Página {socketsPageIndex} de {socketsTotalPages} · {socketsTotalCount} itens no total
-                  {openSocketsSearchApplied ? ` | filtro: "${openSocketsSearchApplied}"` : ''}
-                </p>
-                <div className="flex items-center gap-2">
-                  <Button variant="secondary" size="sm" onClick={goToPreviousSocketsPage} disabled={!canGoPrevSocketsPage}>
-                    Voltar
-                  </Button>
-                  <div className="rounded-md border border-border px-3 py-1 text-xs text-muted-foreground">
-                    {socketsPageIndex}
-                  </div>
-                  <Button variant="secondary" size="sm" onClick={goToNextSocketsPage} disabled={!canGoNextSocketsPage || socketsPageQuery.isFetching} loading={socketsPageQuery.isFetching}>
-                    Avançar
-                  </Button>
-                </div>
-              </div>
-            )}
-            </>
-          </div>
-        )}
-
-        {activeDataTab === 'startupItems' && (
-          // Sem altura/rolagem própria: a tabela do painel já rola por dentro,
-          // evitando a barra de rolagem duplicada (aninhada) em telas pequenas.
-          <div className='w-full min-w-0 max-w-full'>
-            <AgentStartupItemsPanel
-              agentId={id!}
-              items={startupItems}
-              canManage={canManageAgent}
-              isOnline={isOnlineNow}
-              isLoading={hwComponents.isLoading}
-              isError={Boolean(hwComponents.isError)}
-              onRetry={() => void hwComponents.refetch()}
-              isRefreshing={isRefreshingStartup || hwComponents.isFetching}
-              onRefresh={handleRefreshStartup}
-              onDataRefetch={() => void hwComponents.refetch()}
-            />
-          </div>
-        )}
-
-        {activeDataTab === 'scheduledTasks' && (
-          // Sem altura/rolagem própria: a tabela do painel já rola por dentro,
-          // evitando a barra de rolagem duplicada (aninhada) em telas pequenas.
-          <div className='w-full min-w-0 max-w-full'>
-            <AgentScheduledTasksPanel
-              agentId={id!}
-              tasks={scheduledTasks}
-              canManage={canManageAgent}
-              isOnline={isOnlineNow}
-              isLoading={hwComponents.isLoading}
-              isError={Boolean(hwComponents.isError)}
-              onRetry={() => void hwComponents.refetch()}
-              isRefreshing={isRefreshingScheduledTasks || hwComponents.isFetching}
-              onRefresh={handleRefreshScheduledTasks}
-              onDataRefetch={() => void hwComponents.refetch()}
-            />
-          </div>
-        )}
-
-        {activeDataTab === 'logs' && (
-          <div style={{ maxHeight: 'min(860px, 75vh)' }} className="w-full min-w-0 max-w-full overflow-x-hidden overflow-y-auto overscroll-auto">
-            <>
-            <CardHeader title="Logs Recentes" />
-            <div className="space-y-2">
-              {logsArray.map(log => {
-                const l = getLogLevelMeta(log.level);
-                return (
-                  <div key={log.id} className="flex items-start gap-2 rounded-lg bg-surface-light px-3 py-2">
-                    <Badge color={l.color} className="mt-0.5 shrink-0">{l.label}</Badge>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm text-muted-foreground">{log.message}</p>
-                      <p className="text-xs text-muted">{formatDate(log.createdAt)}</p>
-                    </div>
-                  </div>
-                );
-              })}
-              {agentLogs.isLoading && <p className="text-sm text-muted">Carregando...</p>}
-              {(logsArray.length === 0) && !agentLogs.isLoading && (
-                <p className="text-sm text-muted">Nenhum log registrado</p>
-              )}
-            </div>
-            </>
-          </div>
-        )}
-      </Card>
+      </div>
 
       <ConfirmDialog
         open={deleteConfirmOpen}

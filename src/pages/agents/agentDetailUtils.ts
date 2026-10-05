@@ -303,6 +303,9 @@ export function nodeLinkStatusColor(
 // ── Navegação entre abas de dados do agente (deep link via ?tab=) ────────
 
 export type AgentDetailDataTab =
+  | "info"
+  | "notes"
+  | "labelHistory"
   | "software"
   | "printers"
   | "tickets"
@@ -312,13 +315,20 @@ export type AgentDetailDataTab =
   | "scheduledTasks"
   | "logs";
 
-export const AGENT_DETAIL_DEFAULT_TAB: AgentDetailDataTab = "software";
+/**
+ * Aba inicial do detalhe: "Info" concentra os dados cadastrais do host e as
+ * anotações fixadas — é a primeira coisa que o operador precisa ver.
+ */
+export const AGENT_DETAIL_DEFAULT_TAB: AgentDetailDataTab = "info";
 
 /**
- * Slugs legíveis usados na querystring (?tab=aplicativos, ?tab=tarefas-agendadas...).
+ * Slugs legíveis usados na querystring (?tab=aplicativos, ?tab=anotacoes...).
  * Mantê-los estáveis preserva links compartilhados e deep links.
  */
 export const AGENT_DETAIL_TAB_SLUGS: Record<AgentDetailDataTab, string> = {
+  info: "info",
+  notes: "anotacoes",
+  labelHistory: "historico-de-labels",
   software: "aplicativos",
   printers: "impressoras",
   tickets: "ultimos-chamados",

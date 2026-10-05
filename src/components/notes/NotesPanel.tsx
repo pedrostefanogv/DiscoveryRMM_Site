@@ -21,6 +21,13 @@ interface NotesPanelProps {
   entityId: string;
   title?: string;
   subtitle?: string;
+  /**
+   * Substantivo no singular usado em textos/botões (ex.: "nota" ou "anotação").
+   * Mantém a terminologia da tela que hospeda o painel.
+   */
+  singular?: string;
+  /** Substantivo no plural correspondente ao singular. */
+  plural?: string;
 }
 
 function getNoteDate(note: Note): number {
@@ -38,8 +45,16 @@ function errorMessage(error: unknown, fallback: string): string {
   return fallback;
 }
 
-export function NotesPanel({ entityType, entityId, title = "Notas", subtitle }: NotesPanelProps) {
+export function NotesPanel({
+  entityType,
+  entityId,
+  title = "Notas",
+  subtitle,
+  singular = "nota",
+  plural = "notas",
+}: NotesPanelProps) {
   const LIMIT = 20;
+  const singularCap = singular.charAt(0).toUpperCase() + singular.slice(1);
 
   const notesQuery = entityType === "client"
     ? useClientNotesPage(entityId, LIMIT)
@@ -87,7 +102,7 @@ export function NotesPanel({ entityType, entityId, title = "Notas", subtitle }: 
   const handleCreate = () => {
     const content = newContent.trim();
     if (content.length < 3) {
-      toast.error("O conteúdo da nota deve ter ao menos 3 caracteres");
+      toast.error(`O conteúdo da ${singular} deve ter ao menos 3 caracteres`);
       return;
     }
 
@@ -97,13 +112,13 @@ export function NotesPanel({ entityType, entityId, title = "Notas", subtitle }: 
     };
 
     const onSuccess = () => {
-      toast.success("Nota criada");
+      toast.success(`${singularCap} criada`);
       setNewContent("");
       setNewPinned(false);
     };
 
     const onError = (error: unknown) =>
-      toast.error(errorMessage(error, "Erro ao criar nota"));
+      toast.error(errorMessage(error, `Erro ao criar ${singular}`));
 
     if (entityType === "client") {
       createClientNote.mutate({ clientId: entityId, data: payload }, { onSuccess, onError });
@@ -134,7 +149,7 @@ export function NotesPanel({ entityType, entityId, title = "Notas", subtitle }: 
     if (!editingId) return;
     const content = editingContent.trim();
     if (content.length < 3) {
-      toast.error("O conteúdo da nota deve ter ao menos 3 caracteres");
+      toast.error(`O conteúdo da ${singular} deve ter ao menos 3 caracteres`);
       return;
     }
 
@@ -148,21 +163,21 @@ export function NotesPanel({ entityType, entityId, title = "Notas", subtitle }: 
       },
       {
         onSuccess: () => {
-          toast.success("Nota atualizada");
+          toast.success(`${singularCap} atualizada`);
           cancelEdit();
         },
         onError: (error: unknown) =>
-          toast.error(errorMessage(error, "Erro ao atualizar nota")),
+          toast.error(errorMessage(error, `Erro ao atualizar ${singular}`)),
       },
     );
   };
 
   const removeNote = (noteId: string) => {
-    if (!confirm("Deseja excluir esta nota?")) return;
+    if (!confirm(`Deseja excluir esta ${singular}?`)) return;
     deleteNote.mutate(noteId, {
-      onSuccess: () => toast.success("Nota excluída"),
+      onSuccess: () => toast.success(`${singularCap} excluída`),
       onError: (error: unknown) =>
-        toast.error(errorMessage(error, "Erro ao excluir nota")),
+        toast.error(errorMessage(error, `Erro ao excluir ${singular}`)),
     });
   };
 
@@ -190,14 +205,14 @@ export function NotesPanel({ entityType, entityId, title = "Notas", subtitle }: 
     <Card>
       <CardHeader
         title={title}
-        subtitle={subtitle ?? `${totalCount} nota(s)`}
+        subtitle={subtitle ?? `${totalCount} ${totalCount === 1 ? singular : plural}`}
         action={
           hasNotes ? (
             <Button
               size="sm"
               variant="ghost"
               onClick={() => setShowCreateForm((v) => !v)}
-              aria-label={showCreateForm ? "Fechar formulário" : "Nova nota"}
+              aria-label={showCreateForm ? "Fechar formulário" : `Nova ${singular}`}
             >
               {showCreateForm ? <ChevronUp className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
             </Button>
@@ -206,7 +221,7 @@ export function NotesPanel({ entityType, entityId, title = "Notas", subtitle }: 
       />
 
       {notesQuery.isLoading ? (
-        <Loading message="Carregando notas..." />
+        <Loading message={`Carregando ${plural}...`} />
       ) : notesQuery.isError ? (
         <ErrorDisplay onRetry={() => notesQuery.refetch()} />
       ) : (
@@ -234,7 +249,7 @@ export function NotesPanel({ entityType, entityId, title = "Notas", subtitle }: 
                           onChange={(e) => setEditingPinned(e.target.checked)}
                           className="rounded border-border bg-surface-light"
                         />
-                        Fixar nota
+                        Fixar {singular}
                       </label>
                       <div className="flex justify-end gap-2">
                         <Button variant="ghost" size="sm" onClick={cancelEdit}>
@@ -270,7 +285,7 @@ export function NotesPanel({ entityType, entityId, title = "Notas", subtitle }: 
                               size="sm"
                               variant="ghost"
                               onClick={() => toggleMenu(note.id)}
-                              aria-label="Opções da nota"
+                              aria-label={`Opções da ${singular}`}
                               aria-haspopup="true"
                               aria-expanded={openMenuId === note.id}
                             >
@@ -309,7 +324,7 @@ export function NotesPanel({ entityType, entityId, title = "Notas", subtitle }: 
             })}
 
             {sortedNotes.length === 0 && (
-              <p className="text-sm text-muted">Nenhuma nota cadastrada</p>
+              <p className="text-sm text-muted">Nenhuma {singular} cadastrada</p>
             )}
 
             {hasMore && (
@@ -321,20 +336,20 @@ export function NotesPanel({ entityType, entityId, title = "Notas", subtitle }: 
                   loading={isFetchingNextPage}
                 >
                   <ChevronDown className="h-4 w-4" />
-                  Carregar mais notas
+                  Carregar mais {plural}
                 </Button>
               </div>
             )}
           </div>
 
           {createFormVisible && <div className="mt-4 space-y-3 border-t border-border pt-4">
-            <p className="text-sm font-medium text-foreground">Nova nota</p>
+            <p className="text-sm font-medium text-foreground">Nova {singular}</p>
             <TextArea
               label="Conteúdo"
               value={newContent}
               onChange={(e) => setNewContent(e.target.value)}
               rows={4}
-              placeholder="Escreva a nota"
+              placeholder={`Escreva a ${singular}`}
             />
             <label className="flex items-center gap-2 text-sm text-muted-foreground">
               <input
@@ -343,7 +358,7 @@ export function NotesPanel({ entityType, entityId, title = "Notas", subtitle }: 
                 onChange={(e) => setNewPinned(e.target.checked)}
                 className="rounded border-border bg-surface-light"
               />
-              Fixar nota
+              Fixar {singular}
             </label>
             <div className="flex justify-end gap-2">
               {hasNotes && (
@@ -352,7 +367,7 @@ export function NotesPanel({ entityType, entityId, title = "Notas", subtitle }: 
                 </Button>
               )}
               <Button size="sm" onClick={handleCreate} loading={isCreating}>
-                Salvar nota
+                Salvar {singular}
               </Button>
             </div>
           </div>}

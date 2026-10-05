@@ -65,6 +65,34 @@ export function useAgentNotesPage(agentId: string, limit = 20) {
   });
 }
 
+/**
+ * Tamanho de página do carregamento completo. 200 é o teto aceito pelo
+ * backend (Math.Clamp em EntityNoteRepository.GetPageAsync).
+ */
+const AGENT_NOTES_ALL_PAGE_SIZE = 200;
+
+/**
+ * Carrega TODAS as anotações do agente (páginas em sequência).
+ *
+ * Necessário porque o endpoint pagina por cursor ordenando apenas por
+ * CreatedAt — não há filtro/ordenação por "fixada". Para exibir só as
+ * fixadas sem perder as mais antigas, é preciso percorrer as páginas.
+ */
+export function useAgentNotesAll(agentId: string) {
+  return useInfiniteQuery<CursorPageDto<Note>>({
+    queryKey: [...KEYS.byAgentPage(agentId), "all"] as const,
+    queryFn: ({ pageParam }) =>
+      notesApi.listNotesPage({
+        agentId,
+        cursor: typeof pageParam === "string" ? pageParam : undefined,
+        limit: AGENT_NOTES_ALL_PAGE_SIZE,
+      }),
+    initialPageParam: null as string | null,
+    getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
+    enabled: !!agentId,
+  });
+}
+
 // ── Detail ─────────────────────────────────────────────────
 
 export function useNote(id: string) {
