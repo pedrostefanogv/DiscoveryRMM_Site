@@ -1809,10 +1809,6 @@ export default function AgentDetail() {
                   )}
                 </dl>
               </Card>
-              <PinnedNotesCard agentId={a.id} onViewAll={() => handleSelectDataTab('notes')} />
-            </div>
-
-            <div className="grid gap-6 lg:grid-cols-2">
               {/* Disk */}
               <Card>
                 <CardHeader title="Disco" subtitle="Espaço agregado do agente" />
@@ -1948,6 +1944,10 @@ export default function AgentDetail() {
                   </div>
                 )}
               </Card>
+            </div>
+
+            <div className="grid gap-6 lg:grid-cols-2">
+              <PinnedNotesCard agentId={a.id} onViewAll={() => handleSelectDataTab('notes')} />
 
               {/* Adaptadores de Rede */}
               {hw.data?.networkAdapters && hw.data.networkAdapters.length > 0 && (
