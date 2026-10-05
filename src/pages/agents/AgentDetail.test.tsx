@@ -166,6 +166,8 @@ describe('AgentDetail — abas do agente', () => {
     // Os contadores por aba foram preservados na nova barra.
     expect(screen.getByRole('tab', { name: /Aplicativos/ }).textContent).toContain('42');
     expect(screen.getByRole('tab', { name: /Histórico de Labels/ }).textContent).toContain('1');
+    // Portas/Conexões saíram da barra principal: 10 abas de topo.
+    expect(screen.getAllByRole('tab')).toHaveLength(10);
   });
 
   it('troca para a aba Anotações ao clicar', async () => {
@@ -197,5 +199,31 @@ describe('AgentDetail — abas do agente', () => {
     await renderPage('?tab=aplicativos');
     expect(screen.getByRole('tab', { name: /Aplicativos/ }).getAttribute('aria-selected')).toBe('true');
     expect(screen.queryByTestId('pinned-notes')).toBeNull();
+  });
+
+  it('unifica adaptadores, portas e conexões na aba Rede', async () => {
+    await renderPage('?tab=rede');
+
+    expect(screen.getByRole('tab', { name: /^Rede/ }).getAttribute('aria-selected')).toBe('true');
+    expect(screen.getByRole('tab', { name: /Adaptadores/ }).getAttribute('aria-selected')).toBe('true');
+    expect(screen.getByRole('tab', { name: /Portas em Escuta/ })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: /Conexões Abertas/ })).toBeTruthy();
+    expect(screen.getByText('Nenhum adaptador de rede coletado para este agente.')).toBeTruthy();
+  });
+
+  it('abre a sub-aba de portas pelo deep link legado', async () => {
+    await renderPage('?tab=portas-em-escuta');
+
+    expect(screen.getByRole('tab', { name: /^Rede/ }).getAttribute('aria-selected')).toBe('true');
+    expect(screen.getByRole('tab', { name: /Portas em Escuta/ }).getAttribute('aria-selected')).toBe('true');
+    expect(screen.getByRole('heading', { name: 'Portas em Escuta' })).toBeTruthy();
+  });
+
+  it('troca para Conexões Abertas dentro da aba Rede', async () => {
+    await renderPage('?tab=rede');
+    fireEvent.click(screen.getByRole('tab', { name: /Conexões Abertas/ }));
+
+    expect(screen.getByRole('tab', { name: /Conexões Abertas/ }).getAttribute('aria-selected')).toBe('true');
+    expect(screen.getByRole('heading', { name: 'Conexões Abertas' })).toBeTruthy();
   });
 });

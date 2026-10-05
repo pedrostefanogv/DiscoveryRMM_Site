@@ -309,11 +309,17 @@ export type AgentDetailDataTab =
   | "software"
   | "printers"
   | "tickets"
-  | "listeningPorts"
-  | "openSockets"
+  | "network"
   | "startupItems"
   | "scheduledTasks"
   | "logs";
+
+/**
+ * Sub-abas da aba unificada "Rede": adaptadores, portas em escuta e conexões
+ * abertas descrevem o mesmo assunto (a rede do host) e ficam agrupados para
+ * não inflar a barra principal de abas.
+ */
+export type AgentNetworkView = "adapters" | "listeningPorts" | "openSockets";
 
 /**
  * Aba inicial do detalhe: "Info" concentra os dados cadastrais do host e as
@@ -332,12 +338,29 @@ export const AGENT_DETAIL_TAB_SLUGS: Record<AgentDetailDataTab, string> = {
   software: "aplicativos",
   printers: "impressoras",
   tickets: "ultimos-chamados",
-  listeningPorts: "portas-em-escuta",
-  openSockets: "conexoes-abertas",
+  network: "rede",
   startupItems: "inicializacao",
   scheduledTasks: "tarefas-agendadas",
   logs: "logs",
 };
+
+/**
+ * Slugs das sub-abas de rede. Os dois últimos eram abas de topo antes da
+ * unificação e continuam válidos como deep link (caem na sub-aba correta).
+ */
+export const AGENT_NETWORK_VIEW_SLUGS: Record<AgentNetworkView, string> = {
+  adapters: "rede",
+  listeningPorts: "portas-em-escuta",
+  openSockets: "conexoes-abertas",
+};
+
+export const AGENT_NETWORK_DEFAULT_VIEW: AgentNetworkView = "adapters";
+
+const AGENT_NETWORK_VIEW_BY_SLUG = new Map<string, AgentNetworkView>(
+  (Object.entries(AGENT_NETWORK_VIEW_SLUGS) as [AgentNetworkView, string][]).map(
+    ([view, slug]) => [slug, view],
+  ),
+);
 
 const AGENT_DETAIL_TAB_BY_SLUG = new Map<string, AgentDetailDataTab>(
   (Object.entries(AGENT_DETAIL_TAB_SLUGS) as [AgentDetailDataTab, string][]).map(
@@ -350,7 +373,29 @@ export function agentDetailTabFromSlug(
   slug: string | null | undefined,
 ): AgentDetailDataTab {
   if (!slug) return AGENT_DETAIL_DEFAULT_TAB;
-  return AGENT_DETAIL_TAB_BY_SLUG.get(slug.trim().toLowerCase()) ?? AGENT_DETAIL_DEFAULT_TAB;
+  const normalized = slug.trim().toLowerCase();
+  const tab = AGENT_DETAIL_TAB_BY_SLUG.get(normalized);
+  if (tab) return tab;
+  // Slugs legados das abas de rede agora apontam para a aba unificada "Rede".
+  if (AGENT_NETWORK_VIEW_BY_SLUG.has(normalized)) return "network";
+  return AGENT_DETAIL_DEFAULT_TAB;
+}
+
+/** Slug canônico de uma sub-aba de rede — usado ao montar a URL (?tab=...). */
+export function agentNetworkViewSlug(view: AgentNetworkView): string {
+  return AGENT_NETWORK_VIEW_SLUGS[view];
+}
+
+/**
+ * Resolve a sub-aba de rede a partir do slug. Aceita tanto o slug canônico da
+ * aba ("rede") quanto os slugs legados de portas/conexões; desconhecidos caem
+ * em "adapters".
+ */
+export function agentNetworkViewFromSlug(
+  slug: string | null | undefined,
+): AgentNetworkView {
+  if (!slug) return AGENT_NETWORK_DEFAULT_VIEW;
+  return AGENT_NETWORK_VIEW_BY_SLUG.get(slug.trim().toLowerCase()) ?? AGENT_NETWORK_DEFAULT_VIEW;
 }
 
 /** Slug canônico de uma aba — usado ao montar a URL. */

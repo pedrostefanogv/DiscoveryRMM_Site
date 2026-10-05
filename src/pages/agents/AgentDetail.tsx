@@ -3,7 +3,7 @@ import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft, Bell, Cpu, MemoryStick, Ticket as TicketIcon,
   Monitor, Wifi, WifiOff, AppWindow, Search, Clock, HardDrive, Printer, Bug, AlertTriangle, Trash2, ShieldCheck, Plus, Gauge, Power, RotateCcw, Zap, ChevronDown, ChevronRight, RefreshCw, ArrowUpCircle, Info, Copy,
-  Cable, History, Network, ScrollText, StickyNote,
+  Cable, EthernetPort, History, Network, Radio, ScrollText, StickyNote,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getDeleteAgentErrorMessage, useAgent, useAgentHardware, useAgentHardwareComponents, useAgentListeningPortsPage, useAgentOpenSocketsPage, useAgentSoftwarePage, useAgentSoftwareSnapshot, useApproveZeroTouch, useDeleteAgent, useRestartAgent, useShutdownAgent, useWakeOnLan } from '@/hooks/useAgents';
@@ -12,10 +12,13 @@ import {
   agentDetailBackTarget,
   agentDetailTabFromSlug,
   agentDetailTabSlug,
+  agentNetworkViewFromSlug,
+  agentNetworkViewSlug,
   formatBytes,
   formatDate,
   formatSocketFamily,
   type AgentDetailDataTab,
+  type AgentNetworkView,
 } from './agentDetailUtils';
 import { useTickets } from '@/hooks/useTickets';
 import { useLogs } from '@/hooks/useLogs';
@@ -57,11 +60,16 @@ interface AgentTabBadges {
   software?: number;
   printers?: number;
   tickets?: number;
-  listeningPorts?: number;
-  openSockets?: number;
   startupItems?: number;
   scheduledTasks?: number;
   logs?: number;
+}
+
+/** Contadores das sub-abas de rede. */
+interface AgentNetworkBadges {
+  adapters?: number;
+  listeningPorts?: number;
+  openSockets?: number;
 }
 
 /**
@@ -76,11 +84,22 @@ function buildAgentDetailTabs(badges: AgentTabBadges = {}): DetailTab<AgentDetai
     { id: 'software', label: 'Aplicativos', icon: AppWindow, badge: badges.software },
     { id: 'printers', label: 'Impressoras', icon: Printer, badge: badges.printers },
     { id: 'tickets', label: 'Últimos Chamados', icon: TicketIcon, badge: badges.tickets },
-    { id: 'listeningPorts', label: 'Portas em Escuta', icon: Network, badge: badges.listeningPorts },
-    { id: 'openSockets', label: 'Conexões Abertas', icon: Cable, badge: badges.openSockets },
+    { id: 'network', label: 'Rede', icon: Network },
     { id: 'startupItems', label: 'Inicialização', icon: Power, badge: badges.startupItems },
     { id: 'scheduledTasks', label: 'Tarefas Agendadas', icon: Clock, badge: badges.scheduledTasks },
     { id: 'logs', label: 'Logs Recentes', icon: ScrollText, badge: badges.logs },
+  ];
+}
+
+/**
+ * Sub-abas da aba "Rede": adaptadores, portas em escuta e conexões abertas.
+ * Reaproveita o mesmo segmented control da barra principal.
+ */
+function buildAgentNetworkTabs(badges: AgentNetworkBadges = {}): DetailTab<AgentNetworkView>[] {
+  return [
+    { id: 'adapters', label: 'Adaptadores', icon: EthernetPort, badge: badges.adapters },
+    { id: 'listeningPorts', label: 'Portas em Escuta', icon: Radio, badge: badges.listeningPorts },
+    { id: 'openSockets', label: 'Conexões Abertas', icon: Cable, badge: badges.openSockets },
   ];
 }
 
@@ -195,6 +214,23 @@ export default function AgentDetail() {
         } else {
           next.set('tab', agentDetailTabSlug(tab));
         }
+        return next;
+      }, { replace: true });
+    },
+    [setSearchParams],
+  );
+  // Sub-aba ativa da aba "Rede". Os slugs legados (?tab=portas-em-escuta e
+  // ?tab=conexoes-abertas) continuam válidos: a aba de topo resolve para
+  // "network" e o slug também define a sub-aba.
+  const activeNetworkView = useMemo(
+    () => agentNetworkViewFromSlug(searchParams.get('tab')),
+    [searchParams],
+  );
+  const handleSelectNetworkView = useCallback(
+    (view: AgentNetworkView) => {
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        next.set('tab', agentNetworkViewSlug(view));
         return next;
       }, { replace: true });
     },
@@ -1708,8 +1744,6 @@ export default function AgentDetail() {
           software: softwareTotalCount,
           printers: hwComponents.data ? printers.length : undefined,
           tickets: agentTickets.data ? (agentTickets.data?.items?.length ?? 0) : undefined,
-          listeningPorts: portsPageQuery.data ? portsTotalCount : undefined,
-          openSockets: socketsPageQuery.data ? socketsTotalCount : undefined,
           startupItems: hwComponents.data ? startupItems.length : undefined,
           scheduledTasks: hwComponents.data ? scheduledTasks.length : undefined,
           logs: agentLogs.data ? logsArray.length : undefined,
@@ -1946,52 +1980,7 @@ export default function AgentDetail() {
               </Card>
             </div>
 
-            <div className="grid gap-6 lg:grid-cols-2">
-              <PinnedNotesCard agentId={a.id} onViewAll={() => handleSelectDataTab('notes')} />
-
-              {/* Adaptadores de Rede */}
-              {hw.data?.networkAdapters && hw.data.networkAdapters.length > 0 && (
-                <Card>
-                  <CardHeader title="Adaptadores de Rede" subtitle={`${hw.data.networkAdapters.length} adaptador(es)`} />
-                  <div className="space-y-2">
-                    {hw.data.networkAdapters.map(n => (
-                      <div key={n.id} className="rounded-lg bg-surface-light px-3 py-2.5">
-                        <div className="flex items-center justify-between gap-3">
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-sm font-medium text-foreground">{n.name}</p>
-                            {n.macAddress && <p className="font-mono text-xs text-muted">{n.macAddress}</p>}
-                          </div>
-                          <Badge color={n.isDhcpEnabled ? 'success' : 'slate'}>{n.isDhcpEnabled ? 'DHCP' : 'Estático'}</Badge>
-                        </div>
-                        {(n.ipAddress || n.ipv6Address || n.gateway) && (
-                          <div className="mt-1.5 grid grid-cols-2 gap-2 text-xs">
-                            {n.ipAddress && (
-                              <div>
-                                <span className="text-muted">IP: </span>
-                                <span className="font-mono text-muted-foreground">{n.ipAddress}</span>
-                                {n.subnetMask && <span className="text-muted"> / {n.subnetMask}</span>}
-                              </div>
-                            )}
-                            {n.ipv6Address && (
-                              <div className="col-span-full">
-                                <span className="text-muted">IPv6: </span>
-                                <span className="font-mono text-xs text-muted-foreground break-all">{n.ipv6Address}</span>
-                              </div>
-                            )}
-                            {n.gateway && (
-                              <div>
-                                <span className="text-muted">Gateway: </span>
-                                <span className="font-mono text-muted-foreground">{n.gateway}</span>
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </Card>
-              )}
-            </div>
+            <PinnedNotesCard agentId={a.id} onViewAll={() => handleSelectDataTab('notes')} />
           </>
         )}
 
@@ -2338,208 +2327,281 @@ export default function AgentDetail() {
               </div>
             )}
 
-            {activeDataTab === 'listeningPorts' && (
-              <div style={{ maxHeight: 'min(860px, 75vh)' }} className="w-full min-w-0 max-w-full overflow-x-hidden overflow-y-auto overscroll-auto">
-                <>
-                <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <h3 className="text-lg font-semibold text-foreground sm:text-xl">Portas em Escuta</h3>
-                    <p className="text-sm text-muted">{portsTotalCount} porta(s) ativa(s)</p>
-                  </div>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={handleRefreshPorts}
-                    loading={isRefreshingPorts}
-                    title={
-                      !isOnlineNow
-                        ? 'Agente offline — o pedido de coleta entra na fila e roda quando ele reconectar'
-                        : 'Solicitar nova coleta de portas ao agente'
-                    }
-                  >
-                    <RefreshCw className="h-4 w-4" />
-                    Atualizar
-                  </Button>
-                </div>
-                {portsTotalCount >= LISTENING_PORTS_BACKEND_LIMIT && (
-                  <div className="mb-3 flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-400">
-                    <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-                    Lista truncada pelo backend no limite de {LISTENING_PORTS_BACKEND_LIMIT} itens. Podem existir mais portas em escuta.
-                  </div>
-                )}
-                <form className="mb-4 grid gap-3 lg:grid-cols-[1fr_160px_auto_auto]" onSubmit={handleApplyPortsSearch}>
-                  <Input
-                    value={listeningPortsSearchInput}
-                    onChange={(e) => setListeningPortsSearchInput(e.target.value)}
-                    placeholder="Pesquisar por processo, PID, protocolo, endereço ou porta"
-                  />
-                  <Select
-                    value={listeningPortsLimit}
-                    options={pageSizeOptions}
-                    onChange={(e) => handlePortsLimitChange(e.target.value)}
-                  />
-                  <Button type="submit" variant="secondary" size="sm">
-                    <Search className="h-4 w-4" />
-                    Buscar
-                  </Button>
-                  <Button type="button" variant="ghost" size="sm" onClick={handleClearPortsSearch}>
-                    Limpar
-                  </Button>
-                </form>
-                {portsPageItems.length > 0 && (
-                  <div className="mb-4 flex items-center justify-between gap-3">
-                    <p className="text-xs text-muted">
-                      Página {portsPageIndex} de {portsTotalPages} · {portsTotalCount} itens no total
-                      {listeningPortsSearchApplied ? ` | filtro: "${listeningPortsSearchApplied}"` : ''}
-                    </p>
-                    <div className="flex items-center gap-2">
-                      <Button variant="secondary" size="sm" onClick={goToPreviousPortsPage} disabled={!canGoPrevPortsPage}>
-                        Voltar
-                      </Button>
-                      <div className="rounded-md border border-border px-3 py-1 text-xs text-muted-foreground">
-                        {portsPageIndex}
-                      </div>
-                      <Button variant="secondary" size="sm" onClick={goToNextPortsPage} disabled={!canGoNextPortsPage || portsPageQuery.isFetching} loading={portsPageQuery.isFetching}>
-                        Avançar
-                      </Button>
-                    </div>
-                  </div>
-                )}
-                <div style={{ minHeight: '400px' }} className="relative">
-                  <DataTable
-                    columns={listeningPortColumns}
-                    data={portsPageItems}
-                    keyExtractor={item => `${item.protocol}|${item.address}:${item.port}|${item.processId}`}
-                    emptyMessage="Nenhuma porta em escuta encontrada"
-                    showPagination={false}
-                    maxHeight="min(640px, 55vh)"
-                  />
-                </div>
-                {portsPageItems.length > 0 && (
-                  <div className="mt-4 flex items-center justify-between gap-3">
-                    <p className="text-xs text-muted">
-                      Página {portsPageIndex} de {portsTotalPages} · {portsTotalCount} itens no total
-                      {listeningPortsSearchApplied ? ` | filtro: "${listeningPortsSearchApplied}"` : ''}
-                    </p>
-                    <div className="flex items-center gap-2">
-                      <Button variant="secondary" size="sm" onClick={goToPreviousPortsPage} disabled={!canGoPrevPortsPage}>
-                        Voltar
-                      </Button>
-                      <div className="rounded-md border border-border px-3 py-1 text-xs text-muted-foreground">
-                        {portsPageIndex}
-                      </div>
-                      <Button variant="secondary" size="sm" onClick={goToNextPortsPage} disabled={!canGoNextPortsPage || portsPageQuery.isFetching} loading={portsPageQuery.isFetching}>
-                        Avançar
-                      </Button>
-                    </div>
-                  </div>
-                )}
-                </>
-              </div>
-            )}
+            {activeDataTab === 'network' && (
+              <div className="space-y-4">
+                <DetailTabs
+                  tabs={buildAgentNetworkTabs({
+                    adapters: hw.data?.networkAdapters?.length,
+                    listeningPorts: portsTotalCount,
+                    openSockets: socketsTotalCount,
+                  })}
+                  active={activeNetworkView}
+                  onChange={handleSelectNetworkView}
+                  ariaLabel="Seções de rede do agente"
+                  panelIdPrefix="agent-network-tabs"
+                />
 
-            {activeDataTab === 'openSockets' && (
-              <div style={{ maxHeight: 'min(860px, 75vh)' }} className="w-full min-w-0 max-w-full overflow-x-hidden overflow-y-auto overscroll-auto">
-                <>
-                <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <h3 className="text-lg font-semibold text-foreground sm:text-xl">Conexões Abertas</h3>
-                    <p className="text-sm text-muted">{socketsTotalCount} conexão(ões) ativa(s)</p>
-                  </div>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={handleRefreshConnections}
-                    loading={isRefreshingConnections}
-                    title={
-                      !isOnlineNow
-                        ? 'Agente offline — o pedido de coleta entra na fila e roda quando ele reconectar'
-                        : 'Solicitar nova coleta de conexões ao agente'
-                    }
-                  >
-                    <RefreshCw className="h-4 w-4" />
-                    Atualizar
-                  </Button>
-                </div>
-                {socketsTotalCount >= OPEN_SOCKETS_BACKEND_LIMIT && (
-                  <div className="mb-3 flex items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
-                    <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-                    Lista truncada pelo backend no limite de {OPEN_SOCKETS_BACKEND_LIMIT} itens. Podem existir mais conexões abertas.
-                  </div>
-                )}
-                <form className="mb-4 grid gap-3 lg:grid-cols-[1fr_170px_220px_auto_auto]" onSubmit={handleApplySocketsSearch}>
-                  <Input
-                    value={openSocketsSearchInput}
-                    onChange={(e) => setOpenSocketsSearchInput(e.target.value)}
-                    placeholder="Pesquisar por processo, PID, protocolo, endereço, porta ou estado"
-                  />
-                  <Select
-                    value={openSocketsStateFilter}
-                    options={socketStateOptions}
-                    onChange={(e) => handleSocketsStateChange(e.target.value)}
-                  />
-                  <Select
-                    value={openSocketsLimit}
-                    options={pageSizeOptions}
-                    onChange={(e) => handleSocketsLimitChange(e.target.value)}
-                  />
-                  <Button type="submit" variant="secondary" size="sm">
-                    <Search className="h-4 w-4" />
-                    Buscar
-                  </Button>
-                  <Button type="button" variant="ghost" size="sm" onClick={handleClearSocketsSearch}>
-                    Limpar
-                  </Button>
-                </form>
-                {socketsPageItems.length > 0 && (
-                  <div className="mb-4 flex items-center justify-between gap-3">
-                    <p className="text-xs text-muted">
-                      Página {socketsPageIndex} de {socketsTotalPages} · {socketsTotalCount} itens no total
-                      {openSocketsSearchApplied ? ` | filtro: "${openSocketsSearchApplied}"` : ''}
-                    </p>
-                    <div className="flex items-center gap-2">
-                      <Button variant="secondary" size="sm" onClick={goToPreviousSocketsPage} disabled={!canGoPrevSocketsPage}>
-                        Voltar
-                      </Button>
-                      <div className="rounded-md border border-border px-3 py-1 text-xs text-muted-foreground">
-                        {socketsPageIndex}
+                <div
+                  id="agent-network-tabs-panel"
+                  role="tabpanel"
+                  aria-labelledby={`agent-network-tabs-tab-${activeNetworkView}`}
+                >
+                  {activeNetworkView === 'adapters' && (
+                    <>
+                      {hw.data?.networkAdapters && hw.data.networkAdapters.length > 0 ? (
+                        <Card>
+                          <CardHeader title="Adaptadores de Rede" subtitle={`${hw.data.networkAdapters.length} adaptador(es)`} />
+                          <div className="space-y-2">
+                            {hw.data.networkAdapters.map(n => (
+                              <div key={n.id} className="rounded-lg bg-surface-light px-3 py-2.5">
+                                <div className="flex items-center justify-between gap-3">
+                                  <div className="min-w-0 flex-1">
+                                    <p className="truncate text-sm font-medium text-foreground">{n.name}</p>
+                                    {n.macAddress && <p className="font-mono text-xs text-muted">{n.macAddress}</p>}
+                                  </div>
+                                  <Badge color={n.isDhcpEnabled ? 'success' : 'slate'}>{n.isDhcpEnabled ? 'DHCP' : 'Estático'}</Badge>
+                                </div>
+                                {(n.ipAddress || n.ipv6Address || n.gateway) && (
+                                  <div className="mt-1.5 grid grid-cols-2 gap-2 text-xs">
+                                    {n.ipAddress && (
+                                      <div>
+                                        <span className="text-muted">IP: </span>
+                                        <span className="font-mono text-muted-foreground">{n.ipAddress}</span>
+                                        {n.subnetMask && <span className="text-muted"> / {n.subnetMask}</span>}
+                                      </div>
+                                    )}
+                                    {n.ipv6Address && (
+                                      <div className="col-span-full">
+                                        <span className="text-muted">IPv6: </span>
+                                        <span className="font-mono text-xs text-muted-foreground break-all">{n.ipv6Address}</span>
+                                      </div>
+                                    )}
+                                    {n.gateway && (
+                                      <div>
+                                        <span className="text-muted">Gateway: </span>
+                                        <span className="font-mono text-muted-foreground">{n.gateway}</span>
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </Card>
+                      ) : (
+                        <Card>
+                          <CardHeader title="Adaptadores de Rede" />
+                          <p className="text-sm text-muted">Nenhum adaptador de rede coletado para este agente.</p>
+                        </Card>
+                      )}
+                    </>
+                  )}
+
+                  {activeNetworkView === 'listeningPorts' && (
+                    <div style={{ maxHeight: 'min(860px, 75vh)' }} className="w-full min-w-0 max-w-full overflow-x-hidden overflow-y-auto overscroll-auto">
+                      <>
+                      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                          <h3 className="text-lg font-semibold text-foreground sm:text-xl">Portas em Escuta</h3>
+                          <p className="text-sm text-muted">{portsTotalCount} porta(s) ativa(s)</p>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={handleRefreshPorts}
+                          loading={isRefreshingPorts}
+                          title={
+                            !isOnlineNow
+                              ? 'Agente offline — o pedido de coleta entra na fila e roda quando ele reconectar'
+                              : 'Solicitar nova coleta de portas ao agente'
+                          }
+                        >
+                          <RefreshCw className="h-4 w-4" />
+                          Atualizar
+                        </Button>
                       </div>
-                      <Button variant="secondary" size="sm" onClick={goToNextSocketsPage} disabled={!canGoNextSocketsPage || socketsPageQuery.isFetching} loading={socketsPageQuery.isFetching}>
-                        Avançar
-                      </Button>
-                    </div>
-                  </div>
-                )}
-                <div style={{ minHeight: '400px' }} className="relative">
-                  <DataTable
-                    columns={openSocketColumns}
-                    data={socketsPageItems}
-                    keyExtractor={item => `${item.protocol}|${item.family}|${item.localAddress}:${item.localPort}|${item.remoteAddress}:${item.remotePort}|${item.processId}`}
-                    emptyMessage="Nenhuma conexão aberta encontrada"
-                    showPagination={false}
-                    maxHeight="min(640px, 55vh)"
-                  />
-                </div>
-                {socketsPageItems.length > 0 && (
-                  <div className="mt-4 flex items-center justify-between gap-3">
-                    <p className="text-xs text-muted">
-                      Página {socketsPageIndex} de {socketsTotalPages} · {socketsTotalCount} itens no total
-                      {openSocketsSearchApplied ? ` | filtro: "${openSocketsSearchApplied}"` : ''}
-                    </p>
-                    <div className="flex items-center gap-2">
-                      <Button variant="secondary" size="sm" onClick={goToPreviousSocketsPage} disabled={!canGoPrevSocketsPage}>
-                        Voltar
-                      </Button>
-                      <div className="rounded-md border border-border px-3 py-1 text-xs text-muted-foreground">
-                        {socketsPageIndex}
+                      {portsTotalCount >= LISTENING_PORTS_BACKEND_LIMIT && (
+                        <div className="mb-3 flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-400">
+                          <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                          Lista truncada pelo backend no limite de {LISTENING_PORTS_BACKEND_LIMIT} itens. Podem existir mais portas em escuta.
+                        </div>
+                      )}
+                      <form className="mb-4 grid gap-3 lg:grid-cols-[1fr_160px_auto_auto]" onSubmit={handleApplyPortsSearch}>
+                        <Input
+                          value={listeningPortsSearchInput}
+                          onChange={(e) => setListeningPortsSearchInput(e.target.value)}
+                          placeholder="Pesquisar por processo, PID, protocolo, endereço ou porta"
+                        />
+                        <Select
+                          value={listeningPortsLimit}
+                          options={pageSizeOptions}
+                          onChange={(e) => handlePortsLimitChange(e.target.value)}
+                        />
+                        <Button type="submit" variant="secondary" size="sm">
+                          <Search className="h-4 w-4" />
+                          Buscar
+                        </Button>
+                        <Button type="button" variant="ghost" size="sm" onClick={handleClearPortsSearch}>
+                          Limpar
+                        </Button>
+                      </form>
+                      {portsPageItems.length > 0 && (
+                        <div className="mb-4 flex items-center justify-between gap-3">
+                          <p className="text-xs text-muted">
+                            Página {portsPageIndex} de {portsTotalPages} · {portsTotalCount} itens no total
+                            {listeningPortsSearchApplied ? ` | filtro: "${listeningPortsSearchApplied}"` : ''}
+                          </p>
+                          <div className="flex items-center gap-2">
+                            <Button variant="secondary" size="sm" onClick={goToPreviousPortsPage} disabled={!canGoPrevPortsPage}>
+                              Voltar
+                            </Button>
+                            <div className="rounded-md border border-border px-3 py-1 text-xs text-muted-foreground">
+                              {portsPageIndex}
+                            </div>
+                            <Button variant="secondary" size="sm" onClick={goToNextPortsPage} disabled={!canGoNextPortsPage || portsPageQuery.isFetching} loading={portsPageQuery.isFetching}>
+                              Avançar
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                      <div style={{ minHeight: '400px' }} className="relative">
+                        <DataTable
+                          columns={listeningPortColumns}
+                          data={portsPageItems}
+                          keyExtractor={item => `${item.protocol}|${item.address}:${item.port}|${item.processId}`}
+                          emptyMessage="Nenhuma porta em escuta encontrada"
+                          showPagination={false}
+                          maxHeight="min(640px, 55vh)"
+                        />
                       </div>
-                      <Button variant="secondary" size="sm" onClick={goToNextSocketsPage} disabled={!canGoNextSocketsPage || socketsPageQuery.isFetching} loading={socketsPageQuery.isFetching}>
-                        Avançar
-                      </Button>
+                      {portsPageItems.length > 0 && (
+                        <div className="mt-4 flex items-center justify-between gap-3">
+                          <p className="text-xs text-muted">
+                            Página {portsPageIndex} de {portsTotalPages} · {portsTotalCount} itens no total
+                            {listeningPortsSearchApplied ? ` | filtro: "${listeningPortsSearchApplied}"` : ''}
+                          </p>
+                          <div className="flex items-center gap-2">
+                            <Button variant="secondary" size="sm" onClick={goToPreviousPortsPage} disabled={!canGoPrevPortsPage}>
+                              Voltar
+                            </Button>
+                            <div className="rounded-md border border-border px-3 py-1 text-xs text-muted-foreground">
+                              {portsPageIndex}
+                            </div>
+                            <Button variant="secondary" size="sm" onClick={goToNextPortsPage} disabled={!canGoNextPortsPage || portsPageQuery.isFetching} loading={portsPageQuery.isFetching}>
+                              Avançar
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                      </>
                     </div>
-                  </div>
-                )}
-                </>
+                  )}
+
+                  {activeNetworkView === 'openSockets' && (
+                    <div style={{ maxHeight: 'min(860px, 75vh)' }} className="w-full min-w-0 max-w-full overflow-x-hidden overflow-y-auto overscroll-auto">
+                      <>
+                      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                          <h3 className="text-lg font-semibold text-foreground sm:text-xl">Conexões Abertas</h3>
+                          <p className="text-sm text-muted">{socketsTotalCount} conexão(ões) ativa(s)</p>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={handleRefreshConnections}
+                          loading={isRefreshingConnections}
+                          title={
+                            !isOnlineNow
+                              ? 'Agente offline — o pedido de coleta entra na fila e roda quando ele reconectar'
+                              : 'Solicitar nova coleta de conexões ao agente'
+                          }
+                        >
+                          <RefreshCw className="h-4 w-4" />
+                          Atualizar
+                        </Button>
+                      </div>
+                      {socketsTotalCount >= OPEN_SOCKETS_BACKEND_LIMIT && (
+                        <div className="mb-3 flex items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
+                          <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                          Lista truncada pelo backend no limite de {OPEN_SOCKETS_BACKEND_LIMIT} itens. Podem existir mais conexões abertas.
+                        </div>
+                      )}
+                      <form className="mb-4 grid gap-3 lg:grid-cols-[1fr_170px_220px_auto_auto]" onSubmit={handleApplySocketsSearch}>
+                        <Input
+                          value={openSocketsSearchInput}
+                          onChange={(e) => setOpenSocketsSearchInput(e.target.value)}
+                          placeholder="Pesquisar por processo, PID, protocolo, endereço, porta ou estado"
+                        />
+                        <Select
+                          value={openSocketsStateFilter}
+                          options={socketStateOptions}
+                          onChange={(e) => handleSocketsStateChange(e.target.value)}
+                        />
+                        <Select
+                          value={openSocketsLimit}
+                          options={pageSizeOptions}
+                          onChange={(e) => handleSocketsLimitChange(e.target.value)}
+                        />
+                        <Button type="submit" variant="secondary" size="sm">
+                          <Search className="h-4 w-4" />
+                          Buscar
+                        </Button>
+                        <Button type="button" variant="ghost" size="sm" onClick={handleClearSocketsSearch}>
+                          Limpar
+                        </Button>
+                      </form>
+                      {socketsPageItems.length > 0 && (
+                        <div className="mb-4 flex items-center justify-between gap-3">
+                          <p className="text-xs text-muted">
+                            Página {socketsPageIndex} de {socketsTotalPages} · {socketsTotalCount} itens no total
+                            {openSocketsSearchApplied ? ` | filtro: "${openSocketsSearchApplied}"` : ''}
+                          </p>
+                          <div className="flex items-center gap-2">
+                            <Button variant="secondary" size="sm" onClick={goToPreviousSocketsPage} disabled={!canGoPrevSocketsPage}>
+                              Voltar
+                            </Button>
+                            <div className="rounded-md border border-border px-3 py-1 text-xs text-muted-foreground">
+                              {socketsPageIndex}
+                            </div>
+                            <Button variant="secondary" size="sm" onClick={goToNextSocketsPage} disabled={!canGoNextSocketsPage || socketsPageQuery.isFetching} loading={socketsPageQuery.isFetching}>
+                              Avançar
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                      <div style={{ minHeight: '400px' }} className="relative">
+                        <DataTable
+                          columns={openSocketColumns}
+                          data={socketsPageItems}
+                          keyExtractor={item => `${item.protocol}|${item.family}|${item.localAddress}:${item.localPort}|${item.remoteAddress}:${item.remotePort}|${item.processId}`}
+                          emptyMessage="Nenhuma conexão aberta encontrada"
+                          showPagination={false}
+                          maxHeight="min(640px, 55vh)"
+                        />
+                      </div>
+                      {socketsPageItems.length > 0 && (
+                        <div className="mt-4 flex items-center justify-between gap-3">
+                          <p className="text-xs text-muted">
+                            Página {socketsPageIndex} de {socketsTotalPages} · {socketsTotalCount} itens no total
+                            {openSocketsSearchApplied ? ` | filtro: "${openSocketsSearchApplied}"` : ''}
+                          </p>
+                          <div className="flex items-center gap-2">
+                            <Button variant="secondary" size="sm" onClick={goToPreviousSocketsPage} disabled={!canGoPrevSocketsPage}>
+                              Voltar
+                            </Button>
+                            <div className="rounded-md border border-border px-3 py-1 text-xs text-muted-foreground">
+                              {socketsPageIndex}
+                            </div>
+                            <Button variant="secondary" size="sm" onClick={goToNextSocketsPage} disabled={!canGoNextSocketsPage || socketsPageQuery.isFetching} loading={socketsPageQuery.isFetching}>
+                              Avançar
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                      </>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 

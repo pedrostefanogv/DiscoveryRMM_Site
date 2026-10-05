@@ -3,11 +3,16 @@ import {
   AGENT_DETAIL_DEFAULT_TAB,
   AGENT_DETAIL_FALLBACK_ROUTE,
   AGENT_DETAIL_TAB_SLUGS,
+  AGENT_NETWORK_DEFAULT_VIEW,
+  AGENT_NETWORK_VIEW_SLUGS,
   agentDetailBackTarget,
   agentDetailTabFromSlug,
   agentDetailTabSlug,
+  agentNetworkViewFromSlug,
+  agentNetworkViewSlug,
   scheduledTaskLastResultLabel,
   type AgentDetailDataTab,
+  type AgentNetworkView,
 } from "./agentDetailUtils";
 
 /**
@@ -23,8 +28,7 @@ describe("agentDetailTabSlug", () => {
       software: "aplicativos",
       printers: "impressoras",
       tickets: "ultimos-chamados",
-      listeningPorts: "portas-em-escuta",
-      openSockets: "conexoes-abertas",
+      network: "rede",
       startupItems: "inicializacao",
       scheduledTasks: "tarefas-agendadas",
       logs: "logs",
@@ -59,8 +63,42 @@ describe("agentDetailTabFromSlug", () => {
     expect(agentDetailTabFromSlug("historico-de-labels")).toBe("labelHistory");
   });
 
+  it("mantém os slugs legados de portas/conexões apontando para a aba unificada Rede", () => {
+    expect(agentDetailTabFromSlug("portas-em-escuta")).toBe("network");
+    expect(agentDetailTabFromSlug("conexoes-abertas")).toBe("network");
+    expect(agentDetailTabFromSlug("rede")).toBe("network");
+  });
+
   it("cai no padrão para slug desconhecido (URL antiga/inválida)", () => {
     expect(agentDetailTabFromSlug("aba-inexistente")).toBe(AGENT_DETAIL_DEFAULT_TAB);
+  });
+});
+
+/**
+ * Sub-abas de rede: adaptadores, portas em escuta e conexões abertas foram
+ * unificados numa aba só. Os slugs antigos continuam válidos como deep link.
+ */
+describe("sub-abas de rede", () => {
+  it("mapeia cada sub-aba para um slug", () => {
+    expect(AGENT_NETWORK_VIEW_SLUGS).toEqual({
+      adapters: "rede",
+      listeningPorts: "portas-em-escuta",
+      openSockets: "conexoes-abertas",
+    });
+  });
+
+  it("faz round-trip view -> slug -> view", () => {
+    for (const view of Object.keys(AGENT_NETWORK_VIEW_SLUGS) as AgentNetworkView[]) {
+      expect(agentNetworkViewFromSlug(agentNetworkViewSlug(view))).toBe(view);
+    }
+  });
+
+  it("resolve os slugs legados e cai em adapters quando desconhecido", () => {
+    expect(agentNetworkViewFromSlug("portas-em-escuta")).toBe("listeningPorts");
+    expect(agentNetworkViewFromSlug("Conexoes-Abertas")).toBe("openSockets");
+    expect(agentNetworkViewFromSlug("rede")).toBe("adapters");
+    expect(agentNetworkViewFromSlug("nao-existe")).toBe(AGENT_NETWORK_DEFAULT_VIEW);
+    expect(agentNetworkViewFromSlug(null)).toBe(AGENT_NETWORK_DEFAULT_VIEW);
   });
 });
 
