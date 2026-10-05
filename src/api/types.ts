@@ -657,6 +657,10 @@ export interface Ticket {
   templateName?: string | null;
   /** Solicitante (quem abriu). Ausente = legado ou aberto pelo chat/agent. */
   requesterUserId?: string | null;
+  /** SLA violado (vem do TicketListItemDto). */
+  slaBreached?: boolean;
+  /** SLA pausado: chamado está num estado com "desconsiderar SLA". */
+  onHold?: boolean;
 }
 
 export interface DepartmentAiAssignmentSettings {
@@ -1045,6 +1049,11 @@ export interface TicketKpiByDepartment {
   breached: number;
 }
 
+export interface TicketKpiByState {
+  workflowStateId: string | null;
+  count: number;
+}
+
 export interface TicketKpiResult {
   totalOpen: number;
   totalClosed: number;
@@ -1056,6 +1065,8 @@ export interface TicketKpiResult {
   avgAgeOpenHours: number;
   byAssignee: TicketKpiByAssignee[];
   byDepartment: TicketKpiByDepartment[];
+  /** Chamados por estado de workflow (usado em Configurações → Workflow). */
+  byState: TicketKpiByState[];
 }
 
 export interface TicketKpiQuery {
@@ -1282,6 +1293,8 @@ export interface WorkflowState {
   isInitial: boolean;
   isFinal: boolean;
   sortOrder: number;
+  /** Quando true, o SLA fica pausado enquanto o chamado estiver neste estado. */
+  pausesSla: boolean;
 }
 
 export interface WorkflowTransition {
@@ -2160,6 +2173,7 @@ export interface CreateWorkflowStateRequest {
   isInitial: boolean;
   isFinal: boolean;
   sortOrder: number;
+  pausesSla: boolean;
 }
 
 export interface UpdateStateRequest {
@@ -2168,6 +2182,7 @@ export interface UpdateStateRequest {
   isInitial: boolean;
   isFinal: boolean;
   sortOrder: number;
+  pausesSla: boolean;
 }
 
 export interface CreateWorkflowTransitionRequest {

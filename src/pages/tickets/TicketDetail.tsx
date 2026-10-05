@@ -31,6 +31,7 @@ import { AgentPickerModal } from '@/components/tickets/AgentPickerModal';
 import { DepartmentPickerModal } from '@/components/tickets/DepartmentPickerModal';
 import { useDepartments } from '@/hooks/useDepartments';
 import { useAgentsByClient, useAgentsBySite } from '@/hooks/useAgents';
+import { describeSlaPause, hasPausedShift, resolveSlaExpiryDisplay } from './slaDisplay';
 import { useTicketAnswers } from '@/hooks/useTicketAnswers';
 import { useAutomationTasks } from '@/hooks/useAutomation';
 import { useTicketAttachmentSettings } from '@/hooks/useConfigurationApi';
@@ -1450,6 +1451,11 @@ function TicketSummaryPanel({
     }
 
     const d = sla.data;
+    // B1: exibir o prazo EFETIVO (original + tempo pausado). O campo cru
+    // slaExpiresAt ignorava a pausa e contradizia o percentual do servidor.
+    const expiryDisplay = resolveSlaExpiryDisplay(d);
+    const pausedShift = hasPausedShift(d);
+    const pauseText = describeSlaPause(d);
     const pct = Math.min(d.percentUsed ?? 0, 100);
     const isBreached = Boolean(d.breached);
     // Chamado encerrado (ou SLA já marcado como congelado): o relógio parou no
@@ -1458,7 +1464,7 @@ function TicketSummaryPanel({
     const frozenAt = d.closedAt ?? closedAt;
     const barColor = isBreached ? 'bg-danger' : isFrozen ? 'bg-slate-400' : pct >= 75 ? 'bg-warning' : 'bg-success';
 
-    if (d.message && !d.slaExpiresAt) {
+    if (d.message && !expiryDisplay) {
       return <p className="text-sm text-muted">Sem SLA definido para o chamado.</p>;
     }
 
@@ -1478,11 +1484,15 @@ function TicketSummaryPanel({
           <p className="text-xs text-muted">
             SLA congelado no fechamento{frozenAt ? ` em ${new Date(frozenAt).toLocaleString('pt-BR')}` : ''} — o tempo não continua contando.
           </p>
-        ) : d.slaExpiresAt ? (
+        ) : expiryDisplay ? (
           <p className="text-xs text-muted">
-            Expira em {new Date(d.slaExpiresAt).toLocaleString('pt-BR')}
+            Expira em {new Date(expiryDisplay).toLocaleString('pt-BR')}
+            {pausedShift ? ' (já com o tempo pausado)' : ''}
           </p>
         ) : null}
+        {pauseText && (
+          <p className="text-xs text-accent">{pauseText}</p>
+        )}
         {d.percentUsed != null && (
           <div>
             <div className="mb-1 flex justify-between text-xs text-muted">

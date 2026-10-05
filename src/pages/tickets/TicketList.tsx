@@ -670,6 +670,17 @@ export default function TicketList() {
         ticket.closedAt ? <Badge color="slate">Encerrado</Badge> : <Badge color="success">Aberto</Badge>,
     },
     {
+      // M1: chamados em estado com "desconsiderar SLA" ficam visíveis já na lista.
+      key: 'sla',
+      header: 'SLA',
+      render: (ticket) => {
+        if (ticket.closedAt) return <span className="text-muted">—</span>;
+        if (ticket.onHold) return <Badge color="accent">Pausado</Badge>;
+        if (ticket.slaBreached) return <Badge color="danger">Violado</Badge>;
+        return <span className="text-muted">—</span>;
+      },
+    },
+    {
       key: 'createdAt',
       header: 'Criado em',
       render: (ticket) => (

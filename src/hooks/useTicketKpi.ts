@@ -4,6 +4,7 @@ import type {
   CursorPageDto,
   TicketKpiByAssignee,
   TicketKpiByDepartment,
+  TicketKpiByState,
   TicketKpiQuery,
   TicketKpiResult,
 } from "@/api";
@@ -39,6 +40,7 @@ function normalizeKpi(
     avgAgeOpenHours: Number(d.avgAgeOpenHours ?? 0),
     byAssignee: normalizeArrayField<TicketKpiByAssignee>(d.byAssignee),
     byDepartment: normalizeArrayField<TicketKpiByDepartment>(d.byDepartment),
+    byState: normalizeArrayField<TicketKpiByState>(d.byState),
   };
 }
 
