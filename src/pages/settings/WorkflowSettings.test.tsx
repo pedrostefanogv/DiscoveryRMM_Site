@@ -92,6 +92,17 @@ describe('WorkflowSettings', () => {
     expect(toggle.checked).toBe(true);
   });
 
+  it('abre o modal de edição com o toggle de SLA refletindo o estado', () => {
+    render(<WorkflowSettings />);
+
+    fireEvent.click(screen.getAllByLabelText('Editar estado')[1]);
+
+    const toggle = screen.getByLabelText('Desconsiderar SLA neste estado') as HTMLInputElement;
+    expect(toggle.checked).toBe(true);
+    expect(screen.getByText(/Cor do selo do estado/)).toBeTruthy();
+    expect(screen.getByText(/Encerra o chamado/)).toBeTruthy();
+  });
+
   it('explica os campos no modal de nova transição', () => {
     render(<WorkflowSettings />);
 
