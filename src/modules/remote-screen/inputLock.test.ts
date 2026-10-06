@@ -82,6 +82,9 @@ describe('inputLock (bloqueio de entrada do host remoto)', () => {
     expect(describeInputLockEvent({ ...base, reason: 'max_duration' })).toContain(
       'tempo máximo',
     );
+    expect(
+      describeInputLockEvent({ ...base, locked: true, reason: 'unblock_failed: errno=5' }),
+    ).toContain('Falha ao liberar');
     expect(describeInputLockEvent({ ...base, reason: 'viewer_request' })).toBeNull();
     expect(describeInputLockEvent({ ...base, locked: true, reason: 'locked' })).toBeNull();
   });

@@ -72,10 +72,15 @@ export function parseInputLockChanged(
  * Retorna null quando não há nada relevante (ex.: travado com sucesso).
  */
 export function describeInputLockEvent(state: InputLockChangedState): string | null {
-  if (state.locked) return null;
   if (state.reason.startsWith('block_failed')) {
     return `Não foi possível bloquear a entrada: ${state.reason.replace('block_failed: ', '')}`;
   }
+  // unblock_failed mantém o estado TRAVADO (a máquina pode continuar bloqueada):
+  // precisa avisar mesmo com locked=true, para o operador tentar de novo.
+  if (state.reason.startsWith('unblock_failed')) {
+    return `Falha ao liberar a entrada da máquina remota: ${state.reason.replace('unblock_failed: ', '')}`;
+  }
+  if (state.locked) return null;
   if (state.reason === 'lease_expired') {
     return 'A entrada da máquina remota foi liberada automaticamente (o viewer parou de responder).';
   }

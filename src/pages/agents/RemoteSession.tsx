@@ -9,7 +9,16 @@ import { agentsApi } from '@/api/agents';
 import { sitesApi } from '@/api/sites';
 import { clientsApi } from '@/api/clients';
 import { configureApiClient } from '@/api/client';
-import RemoteScreenViewer, { type MonitorInfo } from '@/modules/remote-screen/RemoteScreenViewer';
+import RemoteScreenViewer, {
+  type MonitorInfo,
+  type RemoteScreenViewerHandle,
+} from '@/modules/remote-screen/RemoteScreenViewer';
+import { SPECIAL_KEY_GROUPS } from '@/modules/remote-screen/specialKeys';
+import {
+  inputLockButtonLabel,
+  inputLockButtonTitle,
+  type InputLockChangedState,
+} from '@/modules/remote-screen/inputLock';
 import { fullscreenApi } from '@/utils/fullscreen';
 import RemoteTerminal, { getLastFittedTermDims } from '@/modules/remote-terminal/RemoteTerminal';
 import RemoteFiles from '@/modules/remote-files/RemoteFiles';
@@ -288,6 +297,36 @@ export default function RemoteSession() {
   // Modo do cursor na tela (padrão: somente o cursor local do navegador).
   const [cursorMode, setCursorMode] = useState<'remote' | 'local' | 'both'>('local');
   const screenContainerRef = useRef<HTMLDivElement | null>(null);
+  // ── Controles de entrada da tela (moram no RODAPÉ, junto das outras opções) ──
+  // O envio depende do WebSocket do viewer: o pai usa o handle imperativo e
+  // recebe o estado do bloqueio pelo callback do viewer (fonte: agent).
+  const screenViewerRef = useRef<RemoteScreenViewerHandle | null>(null);
+  const [inputLockState, setInputLockState] = useState<InputLockChangedState | null>(null);
+  const [lockConfirmOpen, setLockConfirmOpen] = useState(false);
+  const [specialKeysOpen, setSpecialKeysOpen] = useState(false);
+  const lockMenuRef = useRef<HTMLDivElement | null>(null);
+  const specialKeysMenuRef = useRef<HTMLDivElement | null>(null);
+
+  // Menus do rodapé: fecham ao clicar fora e ao trocar de aba.
+  useEffect(() => {
+    if (!specialKeysOpen && !lockConfirmOpen) return;
+    const onPointerDown = (e: PointerEvent) => {
+      const target = e.target as Node;
+      if (specialKeysOpen && !specialKeysMenuRef.current?.contains(target)) {
+        setSpecialKeysOpen(false);
+      }
+      if (lockConfirmOpen && !lockMenuRef.current?.contains(target)) {
+        setLockConfirmOpen(false);
+      }
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    return () => document.removeEventListener('pointerdown', onPointerDown);
+  }, [specialKeysOpen, lockConfirmOpen]);
+
+  useEffect(() => {
+    setSpecialKeysOpen(false);
+    setLockConfirmOpen(false);
+  }, [activeTab]);
   // Shell ativo do terminal (powershell | cmd). Trocar reinicia a sessão de terminal.
   const [shell, setShell] = useState('powershell');
   const [shellSwitching, setShellSwitching] = useState(false);
@@ -1122,7 +1161,14 @@ export default function RemoteSession() {
                   onError={(msg) => setErrorMsg(msg)}
                   onLatency={() => {}}
                   onMonitors={(mons) => setMonitors(mons)}
-                  onSessionEnded={(reason) => setErrorMsg(`Sessão encerrada: ${reason}`)}
+                  onSessionEnded={(reason) => {
+                    // Sessão caiu: o agent libera o bloqueio no Stop — o
+                    // indicador do rodapé volta a destravado.
+                    setInputLockState(null);
+                    setErrorMsg(`Sessão encerrada: ${reason}`);
+                  }}
+                  onInputLockStateChange={setInputLockState}
+                  ref={screenViewerRef}
                   scale={screenScale}
                   isFullscreen={screenFullscreen}
                   onToggleFullscreen={toggleScreenFullscreen}
@@ -1370,6 +1416,116 @@ export default function RemoteSession() {
             >
               {screenFullscreen ? '⛶ Exit' : '⛶ Full'}
             </button>
+            <span className="mx-1 h-4 w-px bg-border" />
+            {/* Bloqueio da entrada da MÁQUINA REMOTA (KVM lock). O indicador
+                reflete o estado autoritativo do agent; destrava sozinho se a
+                sessão cair (lease/teardown no agent). */}
+            <div ref={lockMenuRef} className="relative">
+              <button
+                className={`px-2 py-1 rounded ${
+                  inputLockState?.locked
+                    ? 'bg-danger/80 hover:bg-danger text-white'
+                    : 'bg-surface-hover hover:bg-border text-foreground'
+                }`}
+                onClick={() => {
+                  if (inputLockState?.locked) {
+                    screenViewerRef.current?.setInputLock(false);
+                    setLockConfirmOpen(false);
+                    return;
+                  }
+                  setLockConfirmOpen((open) => !open);
+                }}
+                aria-expanded={inputLockState?.locked ? undefined : lockConfirmOpen}
+                aria-haspopup="dialog"
+                title={inputLockButtonTitle(inputLockState)}
+              >
+                {inputLockButtonLabel(inputLockState)}
+              </button>
+              {lockConfirmOpen && !inputLockState?.locked && (
+                <div
+                  role="dialog"
+                  aria-label="Confirmar bloqueio de entrada"
+                  className="absolute bottom-full left-0 z-30 mb-1 w-64 rounded border border-border bg-surface p-2 text-xs shadow-lg"
+                >
+                  <p className="mb-1.5 text-foreground">
+                    Travar o teclado e o mouse da <strong>máquina remota</strong>?
+                  </p>
+                  <p className="mb-2 text-muted-foreground">
+                    O usuário local não poderá interferir. Você continua
+                    controlando; a entrada é liberada sozinha se a sessão cair ou
+                    o viewer parar de responder.
+                  </p>
+                  <div className="flex justify-end gap-1">
+                    <button
+                      className="px-2 py-1 bg-surface-hover hover:bg-border text-foreground rounded"
+                      onClick={() => setLockConfirmOpen(false)}
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      className="px-2 py-1 bg-danger/80 hover:bg-danger text-white rounded"
+                      onClick={() => {
+                        setLockConfirmOpen(false);
+                        screenViewerRef.current?.setInputLock(true);
+                      }}
+                    >
+                      Travar entrada
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+            {/* Teclas especiais: combinações que o SO LOCAL interceptaria se
+                fossem digitadas (Ctrl+Alt+Del, Win+L, Alt+Tab, tecla Win...). */}
+            <div ref={specialKeysMenuRef} className="relative">
+              <button
+                className="px-2 py-1 bg-surface-hover hover:bg-border text-foreground rounded"
+                onClick={() => setSpecialKeysOpen((open) => !open)}
+                aria-expanded={specialKeysOpen}
+                aria-haspopup="menu"
+                title="Enviar uma combinação de teclas ao host remoto (Ctrl+Alt+Del, Win+L, Alt+Tab...)"
+              >
+                ⌨ Teclas
+              </button>
+              {specialKeysOpen && (
+                <div
+                  role="menu"
+                  aria-label="Teclas especiais"
+                  className="absolute bottom-full left-0 z-30 mb-1 max-h-72 w-64 overflow-auto rounded border border-border bg-surface p-1.5 text-xs shadow-lg"
+                >
+                  {SPECIAL_KEY_GROUPS.map((group) => (
+                    <div key={group.title} className="mb-1.5 last:mb-0">
+                      <div className="px-1 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+                        {group.title}
+                      </div>
+                      {group.items.map((item) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          role="menuitem"
+                          className="block w-full rounded px-1.5 py-1 text-left text-foreground hover:bg-surface-hover"
+                          title={item.hint ?? `Enviar ${item.label} ao host remoto`}
+                          onClick={() => {
+                            screenViewerRef.current?.sendSpecialKey(item.id);
+                            setSpecialKeysOpen(false);
+                          }}
+                        >
+                          {item.label}
+                          {item.dedicated && (
+                            <span
+                              className="ml-1 text-[10px] text-warning"
+                              title="Enviada por API dedicada no agent (SAS/bloqueio)"
+                            >
+                              ★
+                            </span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </>
         )}
       </div>
