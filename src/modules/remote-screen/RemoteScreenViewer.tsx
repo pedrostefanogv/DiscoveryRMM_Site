@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import toast from 'react-hot-toast';
 import { fullscreenApi } from '@/utils/fullscreen';
+import { SPECIAL_KEY_GROUPS, buildSpecialKeyInput } from './specialKeys';
 
 interface FrameHeader {
   seq: number;
@@ -61,6 +63,12 @@ interface AgentMetrics {
 
 const CRLF = new Uint8Array([13, 10]);
 
+// Tempo máximo para o agent confirmar uma tecla especial no .event antes de o
+// viewer avisar que o agent pode não suportar o evento "keycombo" (agent
+// antigo). O envio é fire-and-forget, então sem este aviso o clique pareceria
+// simplesmente "não fazer nada".
+const SPECIAL_KEY_ACK_TIMEOUT_MS = 3000;
+
 function appendBytes(left: Uint8Array<ArrayBufferLike>, right: Uint8Array<ArrayBufferLike>): Uint8Array<ArrayBufferLike> {
   const result = new Uint8Array(left.length + right.length);
   result.set(left);
@@ -119,6 +127,15 @@ export default function RemoteScreenViewer({
   // Estado da conexão para UI (conectando/conectado/erro) + botão de reconexão.
   const [connectionState, setConnectionState] = useState<'connecting' | 'connected' | 'error'>('connecting');
   const [reconnectKey, setReconnectKey] = useState(0);
+  // Menu de teclas especiais (Ctrl+Alt+Del, Win+L, Alt+Tab...). As combinações
+  // são enviadas como evento "keycombo" no .input — ver specialKeys.ts.
+  const [specialKeysOpen, setSpecialKeysOpen] = useState(false);
+  const specialKeysPanelRef = useRef<HTMLDivElement | null>(null);
+  // Ponte para o enviar definido dentro do efeito de conexão (onde sendInput e
+  // o WebSocket vivem) — o JSX não enxerga essas variáveis locais.
+  const sendSpecialKeyRef = useRef<(combo: string) => void>(() => {});
+  // Combinação aguardando confirmação do agent (evento special_key em .event).
+  const specialKeyPendingRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const frameCountRef = useRef(0);
   const lastFpsUpdate = useRef(Date.now());
   // Telemetria de rede para a adaptação automática do agent (netstats):
@@ -435,6 +452,24 @@ export default function RemoteScreenViewer({
           setAgentMetrics(null);
           onMetricsRef.current?.(null);
           onSessionEndedRef.current?.(String(reason));
+        } else if (data?.eventType === 'special_key') {
+          // Feedback das teclas especiais: o agent publica este evento para
+          // TODA combinação (ok ou erro), o que também serve de confirmação de
+          // que o agent suporta o evento "keycombo".
+          if (specialKeyPendingRef.current) {
+            clearTimeout(specialKeyPendingRef.current);
+            specialKeyPendingRef.current = null;
+          }
+          // Toast só em falha (o motivo importa) e nas combinações de API
+          // dedicada (SAS/bloqueio), em que não há efeito visual imediato.
+          // Sequências SendInput comuns seguem sem toast.
+          const info = data?.data ?? {};
+          const combo = typeof info.combo === 'string' ? info.combo : 'combinação';
+          if (info.ok === false) {
+            toast.error(`Falha ao enviar ${combo}: ${info.error ?? 'erro desconhecido'}`, { duration: 6000 });
+          } else if (info.method === 'sas' || info.method === 'lock') {
+            toast.success(`${combo} enviado ao host remoto`);
+          }
         }
       } catch {
         // ignora eventos mal formatados
@@ -824,6 +859,33 @@ export default function RemoteScreenViewer({
       wsRef.current.send(`PUB ${natsSubject}.input ${new TextEncoder().encode(payload).length}\r\n${payload}\r\n`);
     };
 
+    // Teclas especiais (Ctrl+Alt+Del, Win+L, Alt+Tab...): valida o id contra a
+    // allow-list do agent e publica o evento "keycombo" no .input. Combinações
+    // digitadas no viewer NÃO servem para estes casos — o SO local as captura
+    // antes do navegador (ver specialKeys.ts).
+    sendSpecialKeyRef.current = (combo: string) => {
+      if (wsRef.current?.readyState !== WebSocket.OPEN || !natsSubject) {
+        toast.error('Sessão de tela não está conectada.');
+        return;
+      }
+      try {
+        sendInput(buildSpecialKeyInput(combo).type, { combo });
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Combinação de teclas não suportada.');
+        return;
+      }
+      // Aguarda a confirmação do agent; sem ela, provavelmente o agent da
+      // máquina é antigo e ignora o evento (o clique "não faz nada").
+      if (specialKeyPendingRef.current) clearTimeout(specialKeyPendingRef.current);
+      specialKeyPendingRef.current = setTimeout(() => {
+        specialKeyPendingRef.current = null;
+        toast(
+          'Sem confirmação do host remoto para a tecla especial. O agent dessa máquina pode estar desatualizado (sem suporte a teclas especiais).',
+          { icon: '⚠️', duration: 5000 },
+        );
+      }, SPECIAL_KEY_ACK_TIMEOUT_MS);
+    };
+
     const onMouseDown = (e: MouseEvent) => { canvas.focus(); sendInput('mousedown', { button: e.button, x: e.clientX, y: e.clientY }, { requireCoords: true }); };
     // mouseup é registrado no DOCUMENT (não no canvas) e enviado SEM coordenadas:
     // ele libera o botão pressionado onde quer que o cursor termine (mesmo se o
@@ -938,6 +1000,11 @@ export default function RemoteScreenViewer({
       document.removeEventListener('keyup', onKeyUp);
       if (moveThrottle) clearTimeout(moveThrottle);
       clearInterval(netstatsTimer);
+      sendSpecialKeyRef.current = () => {};
+      if (specialKeyPendingRef.current) {
+        clearTimeout(specialKeyPendingRef.current);
+        specialKeyPendingRef.current = null;
+      }
     };
   }, [natsSubject]);
 
@@ -1037,6 +1104,19 @@ export default function RemoteScreenViewer({
     setReconnectKey((k) => k + 1);
   }, []);
 
+  // Fecha o menu de teclas especiais ao clicar fora dele (mesmo padrão de
+  // dropdowns do app) — sem isso o painel ficaria aberto sobre a tela remota.
+  useEffect(() => {
+    if (!specialKeysOpen) return;
+    const onPointerDown = (e: PointerEvent) => {
+      if (!specialKeysPanelRef.current?.contains(e.target as Node)) {
+        setSpecialKeysOpen(false);
+      }
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    return () => document.removeEventListener('pointerdown', onPointerDown);
+  }, [specialKeysOpen]);
+
   // Keyboard shortcuts
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -1116,6 +1196,63 @@ export default function RemoteScreenViewer({
           </button>
         </div>
       )}
+
+      {/* Teclas especiais — combinações que o SO LOCAL interceptaria se fossem
+          digitadas (Ctrl+Alt+Del, Win+L, Alt+Tab, tecla Win...). Cada item
+          envia um evento "keycombo" que o agent injeta no host remoto. */}
+      <div ref={specialKeysPanelRef} className="absolute bottom-2 left-2 flex flex-col items-start gap-1">
+        <button
+          type="button"
+          className="rounded bg-slate-700/90 px-2 py-1 text-xs font-medium text-slate-100 backdrop-blur-sm hover:bg-slate-600"
+          onClick={() => setSpecialKeysOpen((open) => !open)}
+          aria-expanded={specialKeysOpen}
+          aria-haspopup="menu"
+          title="Enviar uma combinação de teclas ao host remoto (Ctrl+Alt+Del, Win+L, Alt+Tab...)"
+        >
+          ⌨ Teclas especiais
+        </button>
+        {specialKeysOpen && (
+          <div
+            role="menu"
+            aria-label="Teclas especiais"
+            className="max-h-72 w-64 overflow-auto rounded border border-border bg-surface/95 p-1.5 text-xs shadow-lg backdrop-blur-sm"
+          >
+            {SPECIAL_KEY_GROUPS.map((group) => (
+              <div key={group.title} className="mb-1.5 last:mb-0">
+                <div className="px-1 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+                  {group.title}
+                </div>
+                {group.items.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    role="menuitem"
+                    className="block w-full rounded px-1.5 py-1 text-left text-foreground hover:bg-surface"
+                    title={item.hint ?? `Enviar ${item.label} ao host remoto`}
+                    onClick={() => {
+                      sendSpecialKeyRef.current(item.id);
+                      setSpecialKeysOpen(false);
+                      // Devolve o foco ao canvas: sem isto o foco fica no botão
+                      // e Espaço/Enter reativariam o menu em vez de ir ao remoto.
+                      canvasRef.current?.focus();
+                    }}
+                  >
+                    {item.label}
+                    {item.dedicated && (
+                      <span
+                        className="ml-1 text-[10px] text-warning"
+                        title="Enviada por API dedicada no agent (SAS/bloqueio)"
+                      >
+                        ★
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* Controls — apenas reconexão em caso de erro (Fit/1:1 e Full ficam na barra do pai) */}
       <div className="absolute bottom-2 right-2 flex gap-1">
