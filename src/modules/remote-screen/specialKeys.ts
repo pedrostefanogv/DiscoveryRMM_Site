@@ -58,7 +58,8 @@ export const SPECIAL_KEY_GROUPS: readonly SpecialKeyGroup[] = [
       { id: 'alt+tab', label: 'Alt+Tab (alternar janela)' },
       { id: 'alt+shift+tab', label: 'Alt+Shift+Tab (alternar ao contrário)' },
       { id: 'alt+f4', label: 'Alt+F4 (fechar janela)' },
-      { id: 'ctrl+alt+end', label: 'Ctrl+Alt+End (SAS em sessão RDP)' },
+      // ctrl+alt+end NÃO entra: só é SAS dentro de uma sessão RDP e o worker
+      // injeta sempre na sessão do console — seria um item sem efeito.
     ],
   },
   {

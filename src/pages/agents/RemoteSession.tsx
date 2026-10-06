@@ -1113,6 +1113,7 @@ export default function RemoteSession() {
                 <RemoteScreenViewer
                   key={`screen-${screenSession.sessionId}-${reconnectKeys.screen ?? 0}`}
                   natsSubject={screenSession.natsSubject}
+                  sessionId={screenSession.sessionId}
                   natsUrl={screenSession.natsUrl}
                   jwt={screenSession.jwt}
                   nkeySeed={screenSession.nkeySeed}

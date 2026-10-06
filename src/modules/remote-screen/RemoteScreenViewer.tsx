@@ -1,7 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import { fullscreenApi } from '@/utils/fullscreen';
+import {
+  decodeRemoteControlEnvelope,
+  type RemoteSessionControlEnvelope,
+} from '@/api/remoteSessionControl';
 import { SPECIAL_KEY_GROUPS, buildSpecialKeyInput } from './specialKeys';
+import {
+  buildInputLockCommand,
+  buildInputLockQuery,
+  describeInputLockEvent,
+  inputLockButtonLabel,
+  inputLockButtonTitle,
+  parseInputLockChanged,
+  type InputLockChangedState,
+} from './inputLock';
 
 interface FrameHeader {
   seq: number;
@@ -12,6 +25,8 @@ interface FrameHeader {
 
 interface RemoteScreenViewerProps {
   natsSubject?: string;
+  /** Id da sessão (envelopes tipados do .control exigem sessionId). */
+  sessionId?: string;
   natsUrl?: string;
   jwt?: string;
   nkeySeed?: string;
@@ -96,6 +111,7 @@ function decodeFrameHeader(data: ArrayBuffer): FrameHeader | null {
 
 export default function RemoteScreenViewer({
   natsSubject,
+  sessionId,
   natsUrl,
   jwt,
   nkeySeed: _nkeySeed,
@@ -131,6 +147,13 @@ export default function RemoteScreenViewer({
   // são enviadas como evento "keycombo" no .input — ver specialKeys.ts.
   const [specialKeysOpen, setSpecialKeysOpen] = useState(false);
   const specialKeysPanelRef = useRef<HTMLDivElement | null>(null);
+  // KVM input lock: estado autoritativo vem do agent (inputLockChanged).
+  const [inputLockState, setInputLockState] = useState<InputLockChangedState | null>(null);
+  const [lockConfirmOpen, setLockConfirmOpen] = useState(false);
+  const inputLockPanelRef = useRef<HTMLDivElement | null>(null);
+  const controlSeqRef = useRef(0);
+  // Ponte para o envio definido no efeito de conexão (onde o WebSocket vive).
+  const sendInputLockRef = useRef<(locked: boolean) => void>(() => {});
   // Ponte para o enviar definido dentro do efeito de conexão (onde sendInput e
   // o WebSocket vivem) — o JSX não enxerga essas variáveis locais.
   const sendSpecialKeyRef = useRef<(combo: string) => void>(() => {});
@@ -171,6 +194,20 @@ export default function RemoteScreenViewer({
     ctx.drawImage(snapshot, box.x, box.y, box.w, box.h, box.x, box.y, box.w, box.h);
     cursorBoxRef.current = null;
   };
+
+  // Publica um envelope tipado no .control (mesmo subject do keyframe/PUB).
+  // Fica no escopo do componente porque DOIS efeitos precisam dele: o de
+  // conexão (query de estado no +OK) e o de input (comando do cadeado).
+  const sendControlEnvelope = useCallback(
+    (envelope: RemoteSessionControlEnvelope) => {
+      const ws = wsRef.current;
+      if (!ws || ws.readyState !== WebSocket.OPEN || !natsSubject) return false;
+      const payload = JSON.stringify(envelope);
+      ws.send(`PUB ${natsSubject}.control ${new TextEncoder().encode(payload).length}\r\n${payload}\r\n`);
+      return true;
+    },
+    [natsSubject],
+  );
 
   // Ao trocar o modo do cursor, remove o cursor remoto desenhado no canvas
   // (relevante ao sair de 'remote'/'both' para 'local').
@@ -451,6 +488,16 @@ export default function RemoteScreenViewer({
           setConnectionState('error');
           setAgentMetrics(null);
           onMetricsRef.current?.(null);
+          // Sessão morreu: cancela a espera de confirmação de tecla especial —
+          // senão o aviso "agent desatualizado" apareceria depois do encerramento.
+          if (specialKeyPendingRef.current) {
+            clearTimeout(specialKeyPendingRef.current);
+            specialKeyPendingRef.current = null;
+          }
+          // Sessão morreu: o bloqueio de entrada também caiu (o agent libera no
+          // Stop). Não manter o cadeado "travado" numa sessão inexistente.
+          setInputLockState(null);
+          setLockConfirmOpen(false);
           onSessionEndedRef.current?.(String(reason));
         } else if (data?.eventType === 'special_key') {
           // Feedback das teclas especiais: o agent publica este evento para
@@ -610,6 +657,20 @@ export default function RemoteScreenViewer({
       }
     };
 
+    // ── Estado do bloqueio de entrada (.control → inputLockChanged) ──
+    // O agent é a fonte de verdade: o viewer só reflete o que chega. Uma
+    // liberação automática (lease/sessão) chega aqui e o cadeado volta sozinho.
+    const processControlMessage = (payloadText: string) => {
+      const envelope = decodeRemoteControlEnvelope(payloadText);
+      if (!envelope) return;
+      if (envelope.from === 'viewer') return; // eco do próprio PUB no subject
+      const state = parseInputLockChanged(envelope);
+      if (!state) return;
+      setInputLockState(state);
+      const notice = describeInputLockEvent(state);
+      if (notice) toast(notice, { icon: '🔓', duration: 6000 });
+    };
+
     const processProtocol = () => {
       const decoder = new TextDecoder();
       while (!cancelled) {
@@ -639,6 +700,8 @@ export default function RemoteScreenViewer({
           // Roteia por tipo de subject
           if (subject.endsWith('.event')) {
             processEventMessage(decoder.decode(payload));
+          } else if (subject.endsWith('.control')) {
+            processControlMessage(decoder.decode(payload));
           } else if (subject.endsWith('.frame.frag')) {
             processScreenFrameFrag(payload.buffer);
           } else if (subject.endsWith('.cursor.img')) {
@@ -684,6 +747,13 @@ export default function RemoteScreenViewer({
             sendProtocol(`SUB ${natsSubject}.monitors 6`);
             sendProtocol(`SUB ${natsSubject}.event 2`);
             sendProtocol(`SUB ${natsSubject}.clipboard 7`);
+            // KVM input lock: assina o .control (estado do agent) e consulta o
+            // estado atual — cobre reload/reconexão sem depender de sorte.
+            sendProtocol(`SUB ${natsSubject}.control 8`);
+            if (sessionId) {
+              controlSeqRef.current += 1;
+              sendControlEnvelope(buildInputLockQuery(sessionId, controlSeqRef.current));
+            }
             // Reconexão: o agent já está com dirty-rect ativo (frames parciais)
             // e o canvas local está vazio — pede keyframe para redesenhar tudo.
             // Apenas em reconexões: na 1ª conexão o agent já envia key frame.
@@ -886,6 +956,22 @@ export default function RemoteScreenViewer({
       }, SPECIAL_KEY_ACK_TIMEOUT_MS);
     };
 
+    // Bloqueio de entrada (KVM lock): comando pelo .control; o estado volta pelo
+    // mesmo canal e alimenta o cadeado. O viewer NUNCA assume o estado local.
+    sendInputLockRef.current = (locked: boolean) => {
+      if (!natsSubject || !sessionId) {
+        toast.error('Sessão de tela sem identificador para o bloqueio de entrada.');
+        return;
+      }
+      controlSeqRef.current += 1;
+      const sent = sendControlEnvelope(
+        buildInputLockCommand(sessionId, controlSeqRef.current, locked),
+      );
+      if (!sent) {
+        toast.error('Sessão de tela não está conectada.');
+      }
+    };
+
     const onMouseDown = (e: MouseEvent) => { canvas.focus(); sendInput('mousedown', { button: e.button, x: e.clientX, y: e.clientY }, { requireCoords: true }); };
     // mouseup é registrado no DOCUMENT (não no canvas) e enviado SEM coordenadas:
     // ele libera o botão pressionado onde quer que o cursor termine (mesmo se o
@@ -1001,12 +1087,13 @@ export default function RemoteScreenViewer({
       if (moveThrottle) clearTimeout(moveThrottle);
       clearInterval(netstatsTimer);
       sendSpecialKeyRef.current = () => {};
+      sendInputLockRef.current = () => {};
       if (specialKeyPendingRef.current) {
         clearTimeout(specialKeyPendingRef.current);
         specialKeyPendingRef.current = null;
       }
     };
-  }, [natsSubject]);
+  }, [natsSubject, sessionId, sendControlEnvelope]);
 
   // Pause on visibility change (M11) + request keyframe ao voltar.
   // Quando a aba do navegador fica oculta o browser pode descartar o canvas
@@ -1197,10 +1284,75 @@ export default function RemoteScreenViewer({
         </div>
       )}
 
-      {/* Teclas especiais — combinações que o SO LOCAL interceptaria se fossem
-          digitadas (Ctrl+Alt+Del, Win+L, Alt+Tab, tecla Win...). Cada item
-          envia um evento "keycombo" que o agent injeta no host remoto. */}
-      <div ref={specialKeysPanelRef} className="absolute bottom-2 left-2 flex flex-col items-start gap-1">
+      {/* Controles de entrada no canto inferior esquerdo: bloqueio (KVM lock) e
+          teclas especiais. Ficam na MESMA linha para não competirem por espaço
+          com o indicador de reconexão (canto direito). */}
+      <div className="absolute bottom-2 left-2 flex items-end gap-2">
+        {/* KVM input lock — trava o teclado/mouse da MÁQUINA REMOTA (o usuário
+            local não interfere; o operador continua controlando). O estado vem
+            do agent; se ele liberar sozinho, o cadeado volta a destravado. */}
+        <div ref={inputLockPanelRef} className="flex flex-col items-start gap-1">
+          <button
+            type="button"
+            className={`rounded px-2 py-1 text-xs font-medium backdrop-blur-sm ${
+              inputLockState?.locked
+                ? 'bg-danger/90 text-white hover:bg-danger'
+                : 'bg-slate-700/90 text-slate-100 hover:bg-slate-600'
+            }`}
+            onClick={() => {
+              if (inputLockState?.locked) {
+                sendInputLockRef.current(false);
+                setLockConfirmOpen(false);
+                return;
+              }
+              setLockConfirmOpen((open) => !open);
+            }}
+            aria-expanded={inputLockState?.locked ? undefined : lockConfirmOpen}
+            aria-haspopup="dialog"
+            title={inputLockButtonTitle(inputLockState)}
+          >
+            {inputLockButtonLabel(inputLockState)}
+          </button>
+          {lockConfirmOpen && !inputLockState?.locked && (
+            <div
+              role="dialog"
+              aria-label="Confirmar bloqueio de entrada"
+              className="w-64 rounded border border-border bg-surface/95 p-2 text-xs shadow-lg backdrop-blur-sm"
+            >
+              <p className="mb-1.5 text-foreground">
+                Travar o teclado e o mouse da <strong>máquina remota</strong>?
+              </p>
+              <p className="mb-2 text-muted-foreground">
+                O usuário local não poderá interferir. A entrada é liberada sozinha
+                se a sessão cair ou o viewer parar de responder.
+              </p>
+              <div className="flex justify-end gap-1">
+                <button
+                  type="button"
+                  className="rounded bg-slate-700 px-2 py-1 font-medium text-slate-100 hover:bg-slate-600"
+                  onClick={() => setLockConfirmOpen(false)}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  className="rounded bg-danger/90 px-2 py-1 font-medium text-white hover:bg-danger"
+                  onClick={() => {
+                    setLockConfirmOpen(false);
+                    sendInputLockRef.current(true);
+                  }}
+                >
+                  Travar entrada
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Teclas especiais — combinações que o SO LOCAL interceptaria se fossem
+            digitadas (Ctrl+Alt+Del, Win+L, Alt+Tab, tecla Win...). Cada item
+            envia um evento "keycombo" que o agent injeta no host remoto. */}
+        <div ref={specialKeysPanelRef} className="flex flex-col items-start gap-1">
         <button
           type="button"
           className="rounded bg-slate-700/90 px-2 py-1 text-xs font-medium text-slate-100 backdrop-blur-sm hover:bg-slate-600"
@@ -1252,6 +1404,7 @@ export default function RemoteScreenViewer({
             ))}
           </div>
         )}
+        </div>
       </div>
 
       {/* Controls — apenas reconexão em caso de erro (Fit/1:1 e Full ficam na barra do pai) */}

@@ -10,7 +10,14 @@
 export const REMOTE_SESSION_CONTROL_VERSION = 1;
 export const REMOTE_SESSION_MAX_CONTROL_BYTES = 512;
 
-export type RemoteSessionControlType = "ping" | "pong" | "keyframe" | "closed";
+export type RemoteSessionControlType =
+  | "ping"
+  | "pong"
+  | "keyframe"
+  | "closed"
+  // KVM input lock: comando do viewer e estado autoritativo do agent.
+  | "inputLock"
+  | "inputLockChanged";
 export type RemoteSessionControlRole = "viewer" | "agent" | "server";
 
 export interface RemoteSessionControlEnvelope {
@@ -28,6 +35,8 @@ const ALLOWED_TYPES: readonly RemoteSessionControlType[] = [
   "pong",
   "keyframe",
   "closed",
+  "inputLock",
+  "inputLockChanged",
 ];
 
 const ALLOWED_ROLES = ["viewer", "agent", "server"] as const;
