@@ -1149,12 +1149,10 @@ export default function ServerConfigurationPage() {
                   );
                 }
                 const icons: Record<string, React.ReactNode> = {
-                  autoUpdateSettingsJson: <Zap className="h-4 w-4" />,
                   aiIntegrationSettingsJson: <Bot className="h-4 w-4" />,
                   lockedFieldsJson: <Lock className="h-4 w-4" />,
                 };
                 const colors: Record<string, string> = {
-                  autoUpdateSettingsJson: tintedIcon.blue,
                   aiIntegrationSettingsJson: tintedIcon.purple,
                   lockedFieldsJson: tintedIcon.red,
                 };

@@ -80,7 +80,6 @@ export function ConfigurationFieldEditor({
     fieldKind === "json" &&
     [
       "aiIntegrationSettingsJson",
-      "autoUpdateSettingsJson",
       "brandingSettingsJson",
       "lockedFieldsJson",
     ].includes(fieldKey);
@@ -257,7 +256,6 @@ export function ConfigurationFieldEditor({
 
     if (fieldKind === "json") {
       const isAiIntegrationField = fieldKey === "aiIntegrationSettingsJson";
-      const isAutoUpdateField = fieldKey === "autoUpdateSettingsJson";
       const isBrandingField = fieldKey === "brandingSettingsJson";
       const isLockedFieldsField = fieldKey === "lockedFieldsJson";
 
@@ -471,94 +469,6 @@ export function ConfigurationFieldEditor({
         );
       }
 
-      if (isAutoUpdateField && aiParsedValue && !Array.isArray(aiParsedValue)) {
-        return (
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Select
-              label="Enabled"
-              value={jsonStringValue("enabled")}
-              onChange={(event) =>
-                updateJsonObjectValue("enabled", event.target.value, "boolean")
-              }
-              disabled={inputDisabled}
-              options={[
-                { value: "", label: "Padrão do backend" },
-                { value: "true", label: "Ativado" },
-                { value: "false", label: "Desativado" },
-              ]}
-            />
-            <Input
-              label="Channel"
-              value={jsonStringValue("channel")}
-              onChange={(event) =>
-                updateJsonObjectValue("channel", event.target.value, "string")
-              }
-              disabled={inputDisabled}
-              placeholder="stable, beta..."
-            />
-            <Input
-              label="Check Interval Hours"
-              type="number"
-              min="1"
-              step="1"
-              value={jsonStringValue("checkIntervalHours")}
-              onChange={(event) =>
-                updateJsonObjectValue(
-                  "checkIntervalHours",
-                  event.target.value,
-                  "number",
-                )
-              }
-              disabled={inputDisabled}
-              placeholder="24"
-            />
-            <Input
-              label="Rollout Percentage"
-              type="number"
-              min="0"
-              max="100"
-              step="1"
-              value={jsonStringValue("rolloutPercentage")}
-              onChange={(event) =>
-                updateJsonObjectValue(
-                  "rolloutPercentage",
-                  event.target.value,
-                  "number",
-                )
-              }
-              disabled={inputDisabled}
-              placeholder="100"
-            />
-            <Input
-              label="Maintenance Window Start"
-              value={jsonStringValue("maintenanceWindowStart")}
-              onChange={(event) =>
-                updateJsonObjectValue(
-                  "maintenanceWindowStart",
-                  event.target.value,
-                  "string",
-                )
-              }
-              disabled={inputDisabled}
-              placeholder="02:00"
-            />
-            <Input
-              label="Maintenance Window End"
-              value={jsonStringValue("maintenanceWindowEnd")}
-              onChange={(event) =>
-                updateJsonObjectValue(
-                  "maintenanceWindowEnd",
-                  event.target.value,
-                  "string",
-                )
-              }
-              disabled={inputDisabled}
-              placeholder="05:00"
-            />
-          </div>
-        );
-      }
-
       if (isBrandingField && aiParsedValue && !Array.isArray(aiParsedValue)) {
         return (
           <div className="grid gap-3 sm:grid-cols-2">
@@ -714,11 +624,6 @@ export function ConfigurationFieldEditor({
         {fieldKind === "json" && fieldKey === "aiIntegrationSettingsJson" && (
           <p className="text-xs text-amber-700 dark:text-amber-300">
              ApiKey é write-only: o valor atual não é retornado pela API. Preencha apenas para trocar a chave.
-          </p>
-        )}
-        {fieldKind === "json" && fieldKey === "autoUpdateSettingsJson" && (
-          <p className="text-xs text-muted">
-            Ajuste o comportamento de atualização automática por campos estruturados.
           </p>
         )}
         {fieldKind === "json" && fieldKey === "brandingSettingsJson" && (

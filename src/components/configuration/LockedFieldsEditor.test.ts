@@ -6,7 +6,6 @@ describe("editor de campos bloqueados", () => {
     expect(toApiFieldName("recoveryEnabled")).toBe("RecoveryEnabled");
     expect(toApiFieldName("agentOnlineGraceSeconds")).toBe("AgentOnlineGraceSeconds");
     expect(toApiFieldName("aiIntegrationSettingsJson")).toBe("AIIntegrationSettingsJson");
-    expect(toApiFieldName("autoUpdateSettingsJson")).toBe("AutoUpdateSettingsJson");
     expect(toApiFieldName("agentUpdatePolicyJson")).toBe("AgentUpdatePolicyJson");
     expect(toApiFieldName("backgroundProcessingSettingsJson")).toBe("BackgroundProcessingSettingsJson");
   });

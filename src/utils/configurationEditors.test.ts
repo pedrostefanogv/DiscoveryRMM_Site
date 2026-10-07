@@ -123,6 +123,16 @@ describe("dependências entre funcionalidades", () => {
     ).toBe(false);
   });
 
+  it("não expõe mais as configurações de auto-update de software", () => {
+    // Campo removido do produto: atualizações de software são manuais.
+    for (const [scope, fields] of scopes) {
+      expect(
+        fields.some((field) => field.key === "autoUpdateSettingsJson"),
+        scope,
+      ).toBe(false);
+    }
+  });
+
   it("expõe Zero-Touch em todos os escopos", () => {
     for (const [scope, fields] of scopes) {
       expect(

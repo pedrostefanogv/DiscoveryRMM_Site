@@ -310,14 +310,6 @@ export const serverEditableFields: EditableField[] = [
     unit: "segundos",
   },
   {
-    key: "autoUpdateSettingsJson",
-    label: "Configurações de Atualização Automática",
-    kind: "json",
-    group: "advanced",
-    description:
-      "Janela de manutenção, canal de atualização e outras opções de auto-update.",
-  },
-  {
     key: "brandingSettingsJson",
     label: "Personalização Visual (Branding)",
     kind: "json",
@@ -560,12 +552,6 @@ export const clientEditableFields: EditableField[] = [
       "Com qual frequência (em horas) cada agente coleta e envia o inventário de software instalado. Valores menores = atualizações mais frequentes.",
   },
   {
-    key: "autoUpdateSettingsJson",
-    label: "Configurações de Atualização Automática",
-    kind: "json",
-    group: "advanced",
-  },
-  {
     key: "agentHeartbeatIntervalSeconds",
     label: "Intervalo de Heartbeat",
     kind: "number",
@@ -662,12 +648,6 @@ export const siteEditableFields: EditableField[] = [
     unit: "horas",
     description:
       "Com qual frequência (em horas) cada agente coleta e envia o inventário de software instalado. Valores menores = atualizações mais frequentes.",
-  },
-  {
-    key: "autoUpdateSettingsJson",
-    label: "Configurações de Atualização Automática",
-    kind: "json",
-    group: "advanced",
   },
   {
     key: "timezone",
@@ -948,10 +928,6 @@ export function getEffectiveValue(
 ): ConfigurationValue | null | undefined {
   if (!effective) {
     return undefined;
-  }
-
-  if (fieldKey === "autoUpdateSettingsJson") {
-    return effective.autoUpdate;
   }
 
   if (fieldKey === "aiIntegrationSettingsJson") {

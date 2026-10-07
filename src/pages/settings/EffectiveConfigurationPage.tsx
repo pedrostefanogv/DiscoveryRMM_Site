@@ -25,7 +25,6 @@ const SCALAR_FIELDS = serverEditableFields.filter(
 
 /** Overrides de objeto (chave do mapa de inheritance, não do JSON). */
 const OBJECT_FIELDS: { label: string; inheritanceKey: string }[] = [
-  { label: "Atualização Automática", inheritanceKey: "AutoUpdate" },
   { label: "Atualização do Agente", inheritanceKey: "AgentUpdate" },
   { label: "Integração com IA", inheritanceKey: "AIIntegration" },
   { label: "Processamento em Segundo Plano", inheritanceKey: "BackgroundProcessing" },

@@ -1578,19 +1578,6 @@ export enum AppStorePolicyTypeEnum {
 
 export type AppStorePolicyType = "Disabled" | "PreApproved" | "All" | 0 | 1 | 2;
 
-export interface AutoUpdateSettings {
-  enabled: boolean;
-  checkEveryHours: number;
-  allowUserDelay: boolean;
-  maxDelayHours: number;
-  forceRestartDelay: boolean;
-  restartDelayHours: number;
-  updateOnLogon: boolean;
-  maintenanceWindows?: Record<string, unknown>[];
-  silentInstall: boolean;
-  autoRollbackOnFailure: boolean;
-}
-
 export interface AIIntegrationSettings {
   enabled: boolean;
   chatAIEnabled: boolean;
@@ -1759,7 +1746,6 @@ export interface ServerConfiguration {
   zeroTouchEnabled: boolean;
   appStorePolicy: AppStorePolicyType;
   inventoryIntervalHours: number;
-  autoUpdateSettingsJson: string;
   agentUpdatePolicyJson?: string;
   agentHeartbeatIntervalSeconds: number;
   agentOnlineGraceSeconds: number;
@@ -1818,7 +1804,6 @@ export interface ClientConfiguration {
   /** Override (por cliente/site) dos processamentos em segundo plano. */
   backgroundProcessingSettingsJson?: string | null;
   inventoryIntervalHours?: number | null;
-  autoUpdateSettingsJson?: string | null;
   agentUpdatePolicyJson?: string | null;
   agentHeartbeatIntervalSeconds?: number | null;
   agentOnlineGraceSeconds?: number | null;
@@ -1847,7 +1832,6 @@ export interface SiteConfiguration {
   /** Override (por cliente/site) dos processamentos em segundo plano. */
   backgroundProcessingSettingsJson?: string | null;
   inventoryIntervalHours?: number | null;
-  autoUpdateSettingsJson?: string | null;
   agentUpdatePolicyJson?: string | null;
   agentOnlineGraceSeconds?: number | null;
   timezone?: string | null;
@@ -1878,7 +1862,6 @@ export interface ResolvedConfiguration {
   inventoryIntervalHours: number;
   agentHeartbeatIntervalSeconds: number;
   agentOnlineGraceSeconds: number;
-  autoUpdate: Record<string, unknown>;
   aiIntegration: Record<string, unknown>;
   inheritance?: Record<string, number>;
   blockedFields?: string[];

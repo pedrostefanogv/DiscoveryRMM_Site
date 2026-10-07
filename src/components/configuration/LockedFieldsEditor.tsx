@@ -12,7 +12,6 @@ import { statusSurface, statusText } from "@/theme/statusStyles";
  */
 export function toApiFieldName(fieldKey: string): string {
   if (fieldKey === "aiIntegrationSettingsJson") return "AIIntegrationSettingsJson";
-  if (fieldKey === "autoUpdateSettingsJson") return "AutoUpdateSettingsJson";
   if (fieldKey === "agentUpdatePolicyJson") return "AgentUpdatePolicyJson";
   if (fieldKey === "backgroundProcessingSettingsJson") return "BackgroundProcessingSettingsJson";
   return fieldKey.charAt(0).toUpperCase() + fieldKey.slice(1);

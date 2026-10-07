@@ -1,7 +1,6 @@
 import { api } from "@/api/client";
 import type {
   AIIntegrationSettings,
-  AutoUpdateSettings,
   BrandingSettings,
   ClientConfiguration,
   ConfigurationAuditEntry,
@@ -122,12 +121,6 @@ function parseJsonObject<T>(jsonValue: string | null | undefined): T | null {
   } catch {
     return null;
   }
-}
-
-export function parseAutoUpdateSettings(
-  jsonValue: string | null | undefined,
-): AutoUpdateSettings | null {
-  return parseJsonObject<AutoUpdateSettings>(jsonValue);
 }
 
 export function parseAIIntegrationSettings(
