@@ -10,7 +10,8 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: "autoUpdate",
-      includeAssets: ["favicon.svg"],
+      // favicon.svg nunca existiu no repo; precache dos icones que existem.
+      includeAssets: ["icon.ico", "apple-touch-icon.png"],
       // injectManifest habilita um Service Worker proprio com handler de push
       // (Web Push). O fallback de navegacao da SPA passa a ser declarado em
       // src/sw.ts, com a mesma denylist de API/docs/realtime.
@@ -27,6 +28,8 @@ export default defineConfig({
         theme_color: "#6366f1",
         background_color: "#0f172a",
         display: "standalone",
+        // O console e pt-BR (index.html lang="pt-BR"); o manifest declarava "en".
+        lang: "pt-BR",
         start_url: "/",
         icons: [
           { src: "pwa-192x192.png", sizes: "192x192", type: "image/png" },

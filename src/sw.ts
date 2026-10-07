@@ -62,8 +62,12 @@ self.addEventListener("push", (event) => {
     self.registration.showNotification(title, {
       body,
       tag,
+      // ICON precisa existir em public/ (o build valida isso em verify-build.mjs):
+      // sem o arquivo o navegador exibe a notificacao sem icone.
       icon: ICON,
-      badge: ICON,
+      lang: "pt-BR",
+      // Sem "badge": o Android usa apenas o canal alfa do badge e nossos PNGs
+      // sao opacos — o resultado seria um bloco solido na barra de status.
       data: { url, severity: payload.severity ?? null, eventType: payload.eventType ?? null },
     }),
   );
