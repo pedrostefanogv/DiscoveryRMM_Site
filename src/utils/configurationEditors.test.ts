@@ -5,6 +5,8 @@ import {
   buildServerDraft,
   clientEditableFields,
   formatAppStorePolicyValue,
+  getDependentsToDisable,
+  getFeatureDependencyIssue,
   parseFieldValue,
   serverEditableFields,
   siteEditableFields,
@@ -103,5 +105,94 @@ describe("política da loja de aplicativos", () => {
     expect(formatAppStorePolicyValue("PreApproved")).toBe(APP_STORE_POLICY_LABELS[1]);
     expect(formatAppStorePolicyValue("1")).toBe(APP_STORE_POLICY_LABELS[1]);
     expect(formatAppStorePolicyValue(null)).toBe("");
+  });
+});
+
+describe("dependências entre funcionalidades", () => {
+  it("expõe Bootstrap P2P via Nuvem em servidor e cliente, mas não no site", () => {
+    // O backend não tem override de site para cloud bootstrap: enviar o campo no
+    // PATCH de site retorna 400 ("Campos não reconhecidos em Site").
+    expect(
+      serverEditableFields.some((field) => field.key === "cloudBootstrapEnabled"),
+    ).toBe(true);
+    expect(
+      clientEditableFields.some((field) => field.key === "cloudBootstrapEnabled"),
+    ).toBe(true);
+    expect(
+      siteEditableFields.some((field) => field.key === "cloudBootstrapEnabled"),
+    ).toBe(false);
+  });
+
+  it("expõe Zero-Touch em todos os escopos", () => {
+    for (const [scope, fields] of scopes) {
+      expect(
+        fields.some((field) => field.key === "zeroTouchEnabled"),
+        `${scope} sem zeroTouchEnabled`,
+      ).toBe(true);
+    }
+  });
+
+  it("bloqueia P2P sem descoberta nem cloud bootstrap", () => {
+    expect(
+      getFeatureDependencyIssue("p2PFilesEnabled", {
+        discoveryEnabled: "false",
+        cloudBootstrapEnabled: "false",
+      }),
+    ).toBeTruthy();
+    expect(
+      getFeatureDependencyIssue("p2PFilesEnabled", {
+        discoveryEnabled: "true",
+        cloudBootstrapEnabled: "false",
+      }),
+    ).toBeNull();
+    expect(
+      getFeatureDependencyIssue("p2PFilesEnabled", {
+        discoveryEnabled: "false",
+        cloudBootstrapEnabled: "true",
+      }),
+    ).toBeNull();
+  });
+
+  it("bloqueia zero-touch sem descoberta de rede", () => {
+    expect(
+      getFeatureDependencyIssue("zeroTouchEnabled", { discoveryEnabled: "false" }),
+    ).toBeTruthy();
+    expect(
+      getFeatureDependencyIssue("zeroTouchEnabled", { discoveryEnabled: "true" }),
+    ).toBeNull();
+  });
+
+  it("não bloqueia funcionalidades sem dependência", () => {
+    expect(getFeatureDependencyIssue("chatAIEnabled", {})).toBeNull();
+  });
+
+  it("desativar a descoberta desliga P2P e Zero-Touch ativos", () => {
+    const dependents = getDependentsToDisable("discoveryEnabled", {
+      discoveryEnabled: "true",
+      p2PFilesEnabled: "true",
+      zeroTouchEnabled: "true",
+      cloudBootstrapEnabled: "false",
+    });
+    expect(dependents.sort()).toEqual(["p2PFilesEnabled", "zeroTouchEnabled"]);
+  });
+
+  it("P2P sobrevive quando há cloud bootstrap como caminho alternativo", () => {
+    expect(
+      getDependentsToDisable("discoveryEnabled", {
+        discoveryEnabled: "true",
+        p2PFilesEnabled: "true",
+        cloudBootstrapEnabled: "true",
+      }),
+    ).toEqual([]);
+  });
+
+  it("desativar o cloud desliga P2P quando não há descoberta", () => {
+    expect(
+      getDependentsToDisable("cloudBootstrapEnabled", {
+        discoveryEnabled: "false",
+        cloudBootstrapEnabled: "true",
+        p2PFilesEnabled: "true",
+      }),
+    ).toEqual(["p2PFilesEnabled"]);
   });
 });

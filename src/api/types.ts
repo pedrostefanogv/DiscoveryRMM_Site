@@ -1756,6 +1756,7 @@ export interface ServerConfiguration {
   chatAIEnabled: boolean;
   supportEnabled: boolean;
   knowledgeBaseEnabled: boolean;
+  zeroTouchEnabled: boolean;
   appStorePolicy: AppStorePolicyType;
   inventoryIntervalHours: number;
   autoUpdateSettingsJson: string;
@@ -1811,6 +1812,7 @@ export interface ClientConfiguration {
   chatAIEnabled?: boolean | null;
   supportEnabled?: boolean | null;
   knowledgeBaseEnabled?: boolean | null;
+  zeroTouchEnabled?: boolean | null;
   appStorePolicy?: AppStorePolicyType | null;
   aiIntegrationSettingsJson?: string | null;
   /** Override (por cliente/site) dos processamentos em segundo plano. */
@@ -1836,10 +1838,10 @@ export interface SiteConfiguration {
   recoveryEnabled?: boolean | null;
   discoveryEnabled?: boolean | null;
   p2PFilesEnabled?: boolean | null;
-  cloudBootstrapEnabled?: boolean | null;
   chatAIEnabled?: boolean | null;
   supportEnabled?: boolean | null;
   knowledgeBaseEnabled?: boolean | null;
+  zeroTouchEnabled?: boolean | null;
   appStorePolicy?: AppStorePolicyType | null;
   aiIntegrationSettingsJson?: string | null;
   /** Override (por cliente/site) dos processamentos em segundo plano. */
@@ -1871,6 +1873,7 @@ export interface ResolvedConfiguration {
   chatAIEnabled: boolean;
   supportEnabled: boolean;
   knowledgeBaseEnabled: boolean;
+  zeroTouchEnabled: boolean;
   appStorePolicy: AppStorePolicyType;
   inventoryIntervalHours: number;
   agentHeartbeatIntervalSeconds: number;

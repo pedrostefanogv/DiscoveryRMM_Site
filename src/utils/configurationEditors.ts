@@ -92,6 +92,76 @@ export function formatAppStorePolicyValue(value: unknown): string {
   return String(value);
 }
 
+/**
+ * Dependências entre funcionalidades. Chave = campo dependente; requiresAnyOf =
+ * campos que precisam estar ativos (true) para a funcionalidade fazer sentido.
+ * Espelha a regra aplicada no agent (resolveP2PFileTransferEnabled e o gate de
+ * zero-touch), evitando que o painel permita uma combinação que o agent ignora.
+ */
+export const FEATURE_DEPENDENCIES: Record<
+  string,
+  { requiresAnyOf: string[]; reason: string }
+> = {
+  p2PFilesEnabled: {
+    requiresAnyOf: ["discoveryEnabled", "cloudBootstrapEnabled"],
+    reason:
+      "A Transferência P2P de Arquivos requer Descoberta de Rede ou Bootstrap P2P via Nuvem ativos — sem um caminho de descoberta os agentes não se encontram.",
+  },
+  zeroTouchEnabled: {
+    requiresAnyOf: ["discoveryEnabled"],
+    reason:
+      "O Zero-Touch requer Descoberta de Rede ativa para os agentes se encontrarem na rede.",
+  },
+};
+
+function isFeatureValueTrue(
+  values: Record<string, string | undefined>,
+  key: string,
+): boolean {
+  return String(values[key] ?? "").trim() === "true";
+}
+
+/**
+ * Retorna a razão pela qual a funcionalidade não pode ser ativada com os valores
+ * atuais, ou null quando não há dependência pendente.
+ */
+export function getFeatureDependencyIssue(
+  fieldKey: string,
+  values: Record<string, string | undefined>,
+): string | null {
+  const dependency = FEATURE_DEPENDENCIES[fieldKey];
+  if (!dependency) {
+    return null;
+  }
+
+  const satisfied = dependency.requiresAnyOf.some((key) =>
+    isFeatureValueTrue(values, key),
+  );
+
+  return satisfied ? null : dependency.reason;
+}
+
+/**
+ * Ao desativar `changedKey`, devolve os campos dependentes que estão ativos e
+ * perderiam o caminho de descoberta — devem ser desativados junto para o painel
+ * não ficar num estado que o agent ignora.
+ */
+export function getDependentsToDisable(
+  changedKey: string,
+  values: Record<string, string | undefined>,
+): string[] {
+  const afterChange: Record<string, string | undefined> = {
+    ...values,
+    [changedKey]: "false",
+  };
+
+  return Object.keys(FEATURE_DEPENDENCIES).filter(
+    (key) =>
+      isFeatureValueTrue(values, key) &&
+      getFeatureDependencyIssue(key, afterChange) !== null,
+  );
+}
+
 function sanitizeAiIntegrationObject(
   value: unknown,
 ): Record<string, unknown> | null {
@@ -149,7 +219,7 @@ export const serverEditableFields: EditableField[] = [
     kind: "boolean",
     group: "features",
     description:
-      "Habilita o módulo de recuperação de dispositivos perdidos ou furtados.",
+      "Reinstala e reconfigura dispositivos que perderam a configuração ou foram formatados, reaproveitando a identidade e o histórico do agente.",
   },
   {
     key: "discoveryEnabled",
@@ -163,7 +233,8 @@ export const serverEditableFields: EditableField[] = [
     label: "Transferência P2P de Arquivos",
     kind: "boolean",
     group: "features",
-    description: "Habilita transferência de arquivos entre agentes via P2P.",
+    description:
+      "Habilita o download e o compartilhamento de instaladores entre agentes via P2P. Requer Descoberta de Rede ou Bootstrap P2P via Nuvem ativos — sem um caminho de descoberta os agentes não se encontram e o P2P fica desativado no agent.",
   },
   {
     key: "cloudBootstrapEnabled",
@@ -181,11 +252,11 @@ export const serverEditableFields: EditableField[] = [
   },
   {
     key: "supportEnabled",
-    label: "Suporte Remoto",
+    label: "Chamados e Suporte Remoto",
     kind: "boolean",
     group: "features",
     description:
-      "Permite sessões de suporte remoto aos dispositivos gerenciados.",
+      "Exibe o menu de Chamados/Suporte no agent e permite abrir, consultar, comentar e fechar chamados, além das sessões de suporte remoto.",
   },
   {
     key: "knowledgeBaseEnabled",
@@ -194,6 +265,14 @@ export const serverEditableFields: EditableField[] = [
     group: "features",
     description:
       "Habilita o módulo de base de conhecimento e artigos de suporte.",
+  },
+  {
+    key: "zeroTouchEnabled",
+    label: "Zero-Touch",
+    kind: "boolean",
+    group: "features",
+    description:
+      "Permite que agentes sem credenciais se registrem sozinhos pela rede (P2P onboarding). Requer Descoberta de Rede ativa para os agentes se encontrarem.",
   },
   {
     key: "appStorePolicy",
@@ -404,12 +483,16 @@ export const clientEditableFields: EditableField[] = [
     label: "Transferência P2P de Arquivos",
     kind: "boolean",
     group: "features",
+    description:
+      "Requer Descoberta de Rede neste escopo ou herdada, ou Bootstrap P2P via Nuvem neste escopo ou herdado do servidor.",
   },
   {
     key: "cloudBootstrapEnabled",
     label: "Bootstrap P2P via Nuvem",
     kind: "boolean",
     group: "features",
+    description:
+      "Permite que agentes deste cliente se descubram entre VLANs usando o servidor. Serve como caminho de descoberta alternativo para o P2P.",
   },
   {
     key: "chatAIEnabled",
@@ -419,7 +502,7 @@ export const clientEditableFields: EditableField[] = [
   },
   {
     key: "supportEnabled",
-    label: "Suporte Remoto",
+    label: "Chamados e Suporte Remoto",
     kind: "boolean",
     group: "features",
   },
@@ -428,6 +511,14 @@ export const clientEditableFields: EditableField[] = [
     label: "Base de Conhecimento",
     kind: "boolean",
     group: "features",
+  },
+  {
+    key: "zeroTouchEnabled",
+    label: "Zero-Touch",
+    kind: "boolean",
+    group: "features",
+    description:
+      "Requer Descoberta de Rede ativa neste escopo ou herdada para os agentes se encontrarem.",
   },
   {
     key: "appStorePolicy",
@@ -512,12 +603,8 @@ export const siteEditableFields: EditableField[] = [
     label: "Transferência P2P de Arquivos",
     kind: "boolean",
     group: "features",
-  },
-  {
-    key: "cloudBootstrapEnabled",
-    label: "Bootstrap P2P via Nuvem",
-    kind: "boolean",
-    group: "features",
+    description:
+      "Requer Descoberta de Rede neste escopo ou herdada, ou Bootstrap P2P via Nuvem herdado do cliente/servidor.",
   },
   {
     key: "chatAIEnabled",
@@ -527,7 +614,7 @@ export const siteEditableFields: EditableField[] = [
   },
   {
     key: "supportEnabled",
-    label: "Suporte Remoto",
+    label: "Chamados e Suporte Remoto",
     kind: "boolean",
     group: "features",
   },
@@ -536,6 +623,14 @@ export const siteEditableFields: EditableField[] = [
     label: "Base de Conhecimento",
     kind: "boolean",
     group: "features",
+  },
+  {
+    key: "zeroTouchEnabled",
+    label: "Zero-Touch",
+    kind: "boolean",
+    group: "features",
+    description:
+      "Requer Descoberta de Rede ativa neste escopo ou herdada para os agentes se encontrarem.",
   },
   {
     key: "appStorePolicy",

@@ -12,6 +12,7 @@ import {
   Cloud,
   Download,
   FileStack,
+  Handshake,
   HardDrive,
   Layers,
   Lock,
@@ -57,6 +58,8 @@ import {
 import {
   buildServerDraft,
   formatFieldValue,
+  getDependentsToDisable,
+  getFeatureDependencyIssue,
   parseFieldValue,
   serverEditableFields,
   validateFieldValue,
@@ -87,6 +90,7 @@ const featureIcons: Record<string, React.ReactNode> = {
   chatAIEnabled: <Bot className="h-4 w-4" />,
   supportEnabled: <Activity className="h-4 w-4" />,
   knowledgeBaseEnabled: <ShieldCheck className="h-4 w-4" />,
+  zeroTouchEnabled: <Handshake className="h-4 w-4" />,
 };
 
 export default function ServerConfigurationPage() {
@@ -591,30 +595,88 @@ export default function ServerConfigurationPage() {
     );
   };
 
+  const collectFeatureValues = (): Record<string, string> => {
+    const values: Record<string, string> = {};
+    for (const featureField of serverEditableFields) {
+      values[featureField.key] = String(
+        formValues.values?.[featureField.key] ?? "false",
+      );
+    }
+    return values;
+  };
+
   const renderBooleanToggleCard = (field: EditableField) => {
     const rawValue = formValues.values?.[field.key];
     const isEnabled = String(rawValue ?? "false") === "true";
     const isToggling = togglingKey === field.key;
+    const dependencyIssue = isEnabled
+      ? getFeatureDependencyIssue(field.key, collectFeatureValues())
+      : null;
 
     const toggle = async () => {
       if (isToggling) return;
       const next = isEnabled ? "false" : "true";
+      const currentValues = collectFeatureValues();
+
+      // Não permite ativar uma funcionalidade cuja dependência está desligada:
+      // o agent ignoraria a combinação (ex.: P2P sem caminho de descoberta).
+      if (next === "true") {
+        const issue = getFeatureDependencyIssue(field.key, currentValues);
+        if (issue) {
+          toast.error(issue);
+          return;
+        }
+      }
+
+      // Desativar uma dependência desliga junto as funcionalidades que ficariam
+      // sem caminho de descoberta (ex.: Descoberta de Rede → P2P e Zero-Touch).
+      const dependents =
+        next === "false" ? getDependentsToDisable(field.key, currentValues) : [];
+
       setValue(`values.${field.key}` as never, next as never, {
         shouldDirty: true,
         shouldTouch: true,
       });
       markPending(field.key);
+      for (const dependent of dependents) {
+        setValue(`values.${dependent}` as never, "false" as never, {
+          shouldDirty: true,
+          shouldTouch: true,
+        });
+        markPending(dependent);
+      }
       setTogglingKey(field.key);
       try {
-        await patchMutation.mutateAsync({
+        const payload: Record<string, ConfigurationValue> = {
           [field.key]: parseFieldValue("boolean", next, field.key),
-        });
-        clearPending([field.key]);
-        toast.success(`"${field.label}" ${next === "true" ? "ativado" : "desativado"}.`);
+        };
+        for (const dependent of dependents) {
+          payload[dependent] = false;
+        }
+
+        await patchMutation.mutateAsync(payload);
+        clearPending([field.key, ...dependents]);
+
+        const dependentsSuffix =
+          dependents.length > 0
+            ? ` ${dependents
+                .map(
+                  (key) =>
+                    serverEditableFields.find((item) => item.key === key)?.label ??
+                    key,
+                )
+                .join(", ")} também desativado.`
+            : "";
+        toast.success(
+          `"${field.label}" ${next === "true" ? "ativado" : "desativado"}.${dependentsSuffix}`,
+        );
       } catch (error) {
         toast.error(readApiError(error));
         setValue(`values.${field.key}` as never, String(isEnabled) as never);
-        clearPending([field.key]);
+        for (const dependent of dependents) {
+          setValue(`values.${dependent}` as never, "true" as never);
+        }
+        clearPending([field.key, ...dependents]);
       } finally {
         setTogglingKey(null);
       }
@@ -646,6 +708,12 @@ export default function ServerConfigurationPage() {
           </p>
           {field.description && (
             <p className="mt-0.5 text-xs text-muted">{field.description}</p>
+          )}
+          {dependencyIssue && (
+            <p className="mt-1 flex items-start gap-1 text-xs text-amber-700 dark:text-amber-300">
+              <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
+              <span>{dependencyIssue}</span>
+            </p>
           )}
         </div>
 
