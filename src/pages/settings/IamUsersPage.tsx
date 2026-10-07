@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { KeyRound, Pencil, Plus, Shield, Trash2, UserCog } from "lucide-react";
+import { KeyRound, Pencil, Plus, Shield, Trash2, Unlock, UserCog } from "lucide-react";
 import toast from "react-hot-toast";
 import {
   Badge,
@@ -30,10 +30,12 @@ import {
   useRevokeIamUserMfaAll,
   useRevokeIamUserMfaKey,
   useIamUsers,
+  useUnlockIamUser,
   useUpdateIamUser,
 } from "@/hooks";
 import { ApiError } from "@/api";
 import { useAuthorization } from "@/auth/authorization";
+import { PASSWORD_RULES, validatePassword } from "@/auth/passwordPolicy";
 
 const EMPTY_CREATE_FORM: CreateUserRequest = {
   login: "",
@@ -223,12 +225,25 @@ export default function IamUsersPage() {
         groups={groupsQuery.data ?? []}
         clients={clientsQuery.data ?? []}
         onSubmit={async (payload, groupIds) => {
-          await createUser.mutateAsync({
+          const result = await createUser.mutateAsync({
             user: payload,
             groupIds,
           });
 
-          toast.success("Usuário criado com sucesso.");
+          if (result.groupsFailed.length > 0) {
+            // O usuário FOI criado; apenas alguns vínculos de grupo falharam.
+            toast.error(
+              `Usuário criado, mas ${result.groupsFailed.length} vínculo(s) de grupo falharam: ` +
+                result.groupsFailed.map((failure) => failure.message).join("; "),
+            );
+            return;
+          }
+
+          toast.success(
+            result.groupsAssigned > 0
+              ? `Usuário criado com sucesso (${result.groupsAssigned} grupo(s) vinculado(s)).`
+              : "Usuário criado com sucesso.",
+          );
         }}
         loading={createUser.isPending}
       />
@@ -282,6 +297,7 @@ function UserSecurityModal({
   const revokeMfaAll = useRevokeIamUserMfaAll(user.id);
   const revokeMfaKey = useRevokeIamUserMfaKey(user.id);
   const forcePasswordReset = useForceIamUserPasswordReset(user.id);
+  const unlockUser = useUnlockIamUser();
 
   const keys = userMfaKeys.data ?? [];
 
@@ -317,6 +333,18 @@ function UserSecurityModal({
     }
   };
 
+  const handleUnlock = async () => {
+    if (!canEdit) return;
+    if (!window.confirm(`Remover os bloqueios (senha e MFA) de "${user.fullName}"?`)) return;
+
+    try {
+      await unlockUser.mutateAsync(user.id);
+      toast.success("Bloqueios removidos. O usuário pode autenticar novamente.");
+    } catch (error) {
+      toast.error(getErrorMessage(error, "Não foi possível desbloquear a conta."));
+    }
+  };
+
   const handleForcePasswordReset = async () => {
     if (!canEdit) return;
     const confirmed = window.confirm(
@@ -335,7 +363,7 @@ function UserSecurityModal({
   };
 
   const hasPendingMutation =
-    revokeMfaAll.isPending || revokeMfaKey.isPending || forcePasswordReset.isPending;
+    revokeMfaAll.isPending || revokeMfaKey.isPending || forcePasswordReset.isPending || unlockUser.isPending;
 
   return (
     <Modal open={true} onClose={onClose} title={`Segurança: ${user.fullName}`}>
@@ -419,6 +447,14 @@ function UserSecurityModal({
                 <UserCog className="h-4 w-4" /> Forçar troca de senha
               </Button>
               <Button
+                variant="ghost"
+                onClick={() => void handleUnlock()}
+                loading={unlockUser.isPending}
+                disabled={hasPendingMutation}
+              >
+                <Unlock className="h-4 w-4" /> Desbloquear conta
+              </Button>
+              <Button
                 variant="danger"
                 onClick={() => void handleRevokeAllMfa()}
                 loading={revokeMfaAll.isPending}
@@ -455,7 +491,8 @@ function CreateUserModal({
   const loginValid = form.login.trim().length >= 3;
   const fullNameValid = form.fullName.trim().length >= 3;
   const emailValid = form.email.trim().includes("@");
-  const passwordValid = form.password.length >= 8;
+  // Mesma política aplicada pelo backend (12+ com maiúscula, número e especial).
+  const passwordValid = validatePassword(form.password) === null;
   const valid = loginValid && fullNameValid && emailValid && passwordValid;
 
   const submit = async () => {
@@ -472,7 +509,10 @@ function CreateUserModal({
         toast.error("Informe um e-mail válido.");
         return;
       }
-      toast.error("A senha inicial deve ter pelo menos 8 caracteres.");
+      toast.error(
+        validatePassword(form.password) ??
+          `A senha inicial deve atender à política mínima (mínimo de 12 caracteres).`,
+      );
       return;
     }
 
@@ -620,13 +660,17 @@ function ChangePasswordModal({
 }) {
   const [newPassword, setNewPassword] = useState("");
 
-  const valid = newPassword.length >= 8;
+  const passwordViolation = validatePassword(newPassword);
+  const valid = passwordViolation === null;
 
   const submit = async () => {
-    if (!valid) return;
+    if (!valid) {
+      toast.error(passwordViolation ?? "A senha não atende à política mínima.");
+      return;
+    }
     try {
       await onSubmit(newPassword);
-      toast.success("Senha atualizada com sucesso.");
+      toast.success("Senha atualizada. O usuário deverá trocá-la no próximo login.");
       onClose();
     } catch (error) {
       toast.error(getErrorMessage(error, "Não foi possível alterar a senha."));
@@ -635,13 +679,17 @@ function ChangePasswordModal({
 
   return (
     <Modal open={true} onClose={onClose} title={`Alterar senha: ${user.fullName}`}>
+      <p className="mb-3 text-xs text-muted">
+        A senha definida por um administrador é temporária: o usuário será obrigado a
+        trocá-la no próximo login.
+      </p>
       <div className="space-y-4">
         <Input
           label="Nova senha"
           type="password"
           value={newPassword}
           onChange={(e) => setNewPassword(e.target.value)}
-          hint="Use ao menos 8 caracteres."
+          hint={`Política mínima: ${PASSWORD_RULES.join(" ")}`}
         />
 
         <div className="flex justify-end gap-3 pt-2">

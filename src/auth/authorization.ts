@@ -61,7 +61,65 @@ function collectClaims(payload: JwtPayload | null, keys: string[]): string[] {
   );
 }
 
-function matchesPermission(granted: string, required: string): boolean {
+/** Indica se o token traz explicitamente o claim (mesmo que vazio). */
+function hasClaim(payload: JwtPayload | null, keys: string[]): boolean {
+  if (!payload) return false;
+  return keys.some((key) => payload[key] !== undefined && payload[key] !== null);
+}
+
+/**
+ * Vocabulário dos gates do console → recursos reais do backend (ResourceType).
+ *
+ * O console usa famílias "amigáveis" (settings, identity, groups, software...)
+ * enquanto a API autoriza por recurso (ServerConfig/ClientConfig/SiteConfig, Users,
+ * AppStore/Agents...). Sem esta tradução, um usuário legítimo veria o menu vazio
+ * agora que os gates passaram a ser aplicados de verdade.
+ */
+const PERMISSION_FAMILY_ALIASES: Record<string, string[]> = {
+  settings: ["serverconfig", "clientconfig", "siteconfig"],
+  identity: ["users"],
+  groups: ["users"],
+  roles: ["users"],
+  permissions: ["users"],
+  software: ["appstore", "agents"],
+  inventory: ["appstore", "agents"],
+  deploy: ["deployment"],
+  deployment: ["deployment"],
+};
+
+/** Ações usadas pelos gates → ações reais (ActionType). */
+const ACTION_ALIASES: Record<string, string[]> = {
+  read: ["view"],
+  write: ["edit", "create", "delete", "execute"],
+  manage: ["edit", "create", "delete"],
+};
+
+function expandPermission(permission: string): string[] {
+  const normalized = permission.trim().toLowerCase();
+  if (!normalized) return [];
+
+  const separatorIndex = normalized.indexOf(".");
+  const family = separatorIndex === -1 ? normalized : normalized.slice(0, separatorIndex);
+  const action = separatorIndex === -1 ? "*" : normalized.slice(separatorIndex + 1);
+
+  const families = [family, ...(PERMISSION_FAMILY_ALIASES[family] ?? [])];
+  const actions = action === "*" ? ["*"] : [action, ...(ACTION_ALIASES[action] ?? [])];
+
+  const expanded = new Set<string>();
+  for (const currentFamily of families) {
+    for (const currentAction of actions) {
+      expanded.add(
+        currentAction === "*" ? `${currentFamily}.*` : `${currentFamily}.${currentAction}`,
+      );
+    }
+  }
+
+  // Mantém o literal (permite permissões fora do padrão Recurso.Ação).
+  expanded.add(normalized);
+  return Array.from(expanded);
+}
+
+function matchesSinglePermission(granted: string, required: string): boolean {
   if (granted === "*" || required === "*") return true;
   if (granted === required) return true;
 
@@ -78,6 +136,17 @@ function matchesPermission(granted: string, required: string): boolean {
   return false;
 }
 
+function matchesPermission(granted: string, required: string): boolean {
+  // Case-insensitive: os gates misturam "Users.View", "users.view" e "identity.*".
+  const normalizedGranted = granted.trim().toLowerCase();
+  if (!normalizedGranted) return false;
+  if (normalizedGranted === "*") return true;
+
+  return expandPermission(required).some((candidate) =>
+    matchesSinglePermission(normalizedGranted, candidate),
+  );
+}
+
 export function useAuthorization() {
   const { session } = useAuth();
 
@@ -86,24 +155,34 @@ export function useAuthorization() {
     const permissions = collectClaims(payload, PERMISSION_KEYS);
     const roles = collectClaims(payload, ROLE_KEYS);
 
-    const allowByDefault = permissions.length === 0;
+    /**
+     * FAIL-CLOSED.
+     *
+     * Antes: `allowByDefault = permissions.length === 0` e todo gate retornava true
+     * quando o token não tinha claims — que era SEMPRE o caso, porque o backend não
+     * emitia permissões. Resultado: os gates do console não bloqueavam nada.
+     *
+     * Agora: sem o claim de permissões não há como afirmar o que o usuário pode fazer,
+     * então negamos. O backend passou a emitir `permissions`/`roles` no access token.
+     */
+    const permissionsLoaded = hasClaim(payload, PERMISSION_KEYS);
 
     const hasPermission = (permission: string) => {
-      if (allowByDefault) return true;
+      if (!permissionsLoaded) return false;
       return permissions.some((granted) =>
         matchesPermission(granted, permission),
       );
     };
 
     const hasAnyPermission = (requiredPermissions: string[]) => {
-      if (allowByDefault) return true;
+      if (!permissionsLoaded) return false;
       return requiredPermissions.some((permission) =>
         hasPermission(permission),
       );
     };
 
     const hasAllPermissions = (requiredPermissions: string[]) => {
-      if (allowByDefault) return true;
+      if (!permissionsLoaded) return false;
       return requiredPermissions.every((permission) =>
         hasPermission(permission),
       );
@@ -112,10 +191,10 @@ export function useAuthorization() {
     return {
       permissions,
       roles,
+      permissionsLoaded,
       hasPermission,
       hasAnyPermission,
       hasAllPermissions,
-      allowByDefault,
     };
   }, [session.accessToken]);
 
@@ -149,14 +228,15 @@ export function useAuthorization() {
       "settings.read",
       "admin.*",
     ]),
-    canManageIdentity:
-      authz.hasAnyPermission([
-        "identity.*",
-        "users.*",
-        "groups.*",
-        "roles.*",
-        "permissions.*",
-        "admin.*",
-      ]) || authz.roles.some((role) => role.toLowerCase().includes("admin")),
+    // A heurística anterior liberava "admin" para qualquer role cujo nome contivesse
+    // "admin" (ex.: "AdminReadOnly"). Agora vale apenas a permissão efetiva.
+    canManageIdentity: authz.hasAnyPermission([
+      "identity.*",
+      "users.*",
+      "groups.*",
+      "roles.*",
+      "permissions.*",
+      "admin.*",
+    ]),
   };
 }

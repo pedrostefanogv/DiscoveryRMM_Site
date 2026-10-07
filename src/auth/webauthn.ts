@@ -1,4 +1,4 @@
-﻿type JsonRecord = Record<string, unknown>;
+type JsonRecord = Record<string, unknown>;
 
 interface WebAuthnEnvironmentInfo {
   isSecureContext: boolean;
@@ -322,9 +322,14 @@ export function describeWebAuthnError(error: unknown): string {
       }
       case "NotAllowedError":
         return `A operação WebAuthn foi cancelada, expirou ou foi bloqueada pelo navegador/autenticador.${detail}`;
+      case "AbortError":
         return `A operação WebAuthn foi interrompida antes da conclusão.${detail}`;
+      case "ConstraintError":
         return `O autenticador não conseguiu atender aos requisitos pedidos para esta credencial.${detail}`;
+      case "NotSupportedError":
         return `O autenticador ou o navegador não suportam os parâmetros WebAuthn enviados pelo backend.${detail}`;
+      case "InvalidStateError":
+        return `O autenticador informou um estado inválido (credencial já registrada ou removida).${detail}`;
       default:
         return error.message || "Falha inesperada ao usar WebAuthn.";
     }

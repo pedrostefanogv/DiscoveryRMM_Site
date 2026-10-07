@@ -3,6 +3,7 @@ import { MainLayout } from '@/components/layout/MainLayout';
 import { lazy, Suspense } from 'react';
 import { Loading } from '@/components/ui';
 import { ErrorPage } from '@/components/ErrorPage';
+import { PageErrorBoundary } from '@/components/PageErrorBoundary';
 import { CatchAllRoute } from '@/components/CatchAllRoute';
 import { AuthLayout } from '@/components/auth/AuthLayout';
 import { PermissionGate, PublicOnlyAuth, RequireAuth } from '@/auth/AuthGuards';
@@ -521,6 +522,7 @@ export const router = createBrowserRouter([
       {
         path: 'identity/authentication',
         element: <LazyPage><ProfilePage /></LazyPage>,
+        errorElement: <PageErrorBoundary />,
       },
       {
         path: 'identity/users',
@@ -529,6 +531,7 @@ export const router = createBrowserRouter([
             <LazyPage><IamUsersPage /></LazyPage>
           </PermissionGate>
         ),
+        errorElement: <PageErrorBoundary />,
       },
       {
         path: 'identity/groups',
@@ -537,6 +540,7 @@ export const router = createBrowserRouter([
             <LazyPage><IamGroupsPage /></LazyPage>
           </PermissionGate>
         ),
+        errorElement: <PageErrorBoundary />,
       },
       {
         path: 'identity/roles',
@@ -545,6 +549,7 @@ export const router = createBrowserRouter([
             <LazyPage><IamRolesPage /></LazyPage>
           </PermissionGate>
         ),
+        errorElement: <PageErrorBoundary />,
       },
       {
         path: 'reports/schedules',

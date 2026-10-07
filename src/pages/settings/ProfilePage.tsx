@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
-import { KeyRound, LockKeyhole, ShieldCheck, UserCircle2 } from "lucide-react";
+import { KeyRound, LockKeyhole, Pencil, ShieldCheck, Trash2, UserCircle2 } from "lucide-react";
 import { Badge, Button, Card, CardHeader, ErrorDisplay, Input, Loading, Modal, Select } from "@/components/ui";
 import { ApiError, authApi } from "@/api";
 import { useAuth } from "@/auth/AuthContext";
+import { PASSWORD_RULES, validatePassword } from "@/auth/passwordPolicy";
 import {
   describeWebAuthnError,
   ensureWebAuthnSupport,
@@ -12,9 +13,12 @@ import {
 } from "@/auth/webauthn";
 import {
   useChangeMyPassword,
+  useDeleteMfaKey,
+  useMfaKeys,
   useMyProfile,
   useMySecurity,
   useNowTick,
+  useRenameMfaKey,
   useUpdateMyProfile,
 } from "@/hooks";
 
@@ -31,7 +35,7 @@ function formatDate(value: string | null | undefined) {
 }
 
 function keyTypeLabel(type: 0 | 1) {
-  return type === 0 ? "FIDO2" : "OTP";
+  return type === 0 ? "FIDO2" : "OTP/TOTP";
 }
 
 function formatCountdown(msRemaining: number) {
@@ -51,6 +55,16 @@ function mfaRequirementLabel(value: "None" | "Totp" | "Fido2") {
   return "Nenhum";
 }
 
+/** Visão única para as chaves vindas do endpoint próprio (/mfa/keys) ou do perfil de segurança. */
+interface SecurityKeyView {
+  id?: string;
+  name: string;
+  keyType: 0 | 1;
+  isActive: boolean;
+  createdAt: string;
+  lastUsedAt: string | null;
+}
+
 export default function ProfilePage() {
   const { session } = useAuth();
   const now = useNowTick(1_000);
@@ -58,6 +72,13 @@ export default function ProfilePage() {
   const securityQuery = useMySecurity();
   const updateMyProfile = useUpdateMyProfile();
   const changeMyPassword = useChangeMyPassword();
+
+  // /api/v1/mfa/keys é a fonte preferencial (é o endpoint que sempre existiu e funciona);
+  // /users/me/security é usado como complemento/fallback.
+  const keysQuery = useMfaKeys();
+  const renameMfaKey = useRenameMfaKey();
+  const deleteMfaKey = useDeleteMfaKey();
+
   const [registeringKey, setRegisteringKey] = useState(false);
   const [fido2ModalOpen, setFido2ModalOpen] = useState(false);
   const [fido2KeyName, setFido2KeyName] = useState("Meu dispositivo");
@@ -69,6 +90,17 @@ export default function ProfilePage() {
   } | null>(null);
   const [totpKeyName, setTotpKeyName] = useState("Authenticator OTP");
   const [totpCode, setTotpCode] = useState("");
+  const [renameTarget, setRenameTarget] = useState<SecurityKeyView | null>(null);
+  const [renameValue, setRenameValue] = useState("");
+  const [backupCodes, setBackupCodes] = useState<string[]>([]);
+
+  // Step-up: reautenticação por senha exigida pela API para gerenciar chaves MFA.
+  const [stepUpToken, setStepUpToken] = useState<string | null>(null);
+  const [stepUpExpiresAt, setStepUpExpiresAt] = useState(0);
+  const [stepUpModalOpen, setStepUpModalOpen] = useState(false);
+  const [stepUpPassword, setStepUpPassword] = useState("");
+  const [stepUpSubmitting, setStepUpSubmitting] = useState(false);
+  const [stepUpPending, setStepUpPending] = useState<((token: string) => Promise<void>) | null>(null);
 
   const [form, setForm] = useState({
     fullName: "",
@@ -102,6 +134,20 @@ export default function ProfilePage() {
     );
   }, [form.email, form.fullName, profileQuery.data]);
 
+  /**
+   * Lista de chaves exibida. Nunca assume que `security.keys` existe: o endpoint
+   * /users/me/security já respondeu sem a propriedade e a página quebrava com
+   * "cannot read length of undefined".
+   */
+  const keys = useMemo<SecurityKeyView[]>(() => {
+    const fromKeysEndpoint = keysQuery.data as SecurityKeyView[] | undefined;
+    if (fromKeysEndpoint && fromKeysEndpoint.length > 0) {
+      return fromKeysEndpoint;
+    }
+
+    return (security?.keys ?? []) as SecurityKeyView[];
+  }, [keysQuery.data, security?.keys]);
+
   const saveProfile = async () => {
     const payload = {
       fullName: form.fullName.trim(),
@@ -122,8 +168,10 @@ export default function ProfilePage() {
   };
 
   const savePassword = async () => {
-    if (passwordForm.newPassword.length < 8) {
-      toast.error("A nova senha deve ter pelo menos 8 caracteres.");
+    // Política compartilhada com o backend (12+ com maiúscula, número e especial).
+    const policyError = validatePassword(passwordForm.newPassword);
+    if (policyError) {
+      toast.error(policyError);
       return;
     }
 
@@ -144,12 +192,7 @@ export default function ProfilePage() {
     }
   };
 
-  const registerNewFido2Key = async () => {
-    if (!session.accessToken) {
-      toast.error("Sessão autenticada ausente. Faça login novamente.");
-      return;
-    }
-
+  const registerNewFido2Key = async (authToken: string) => {
     const trimmedName = fido2KeyName.trim();
     if (trimmedName.length < 2 || trimmedName.length > 80) {
       toast.error("Informe um nome entre 2 e 80 caracteres.");
@@ -160,7 +203,7 @@ export default function ProfilePage() {
 
     try {
       ensureWebAuthnSupport();
-      const begin = await authApi.beginRegistrationFido2(session.accessToken);
+      const begin = await authApi.beginRegistrationFido2(authToken);
       const credential = await navigator.credentials.create({
         publicKey: parseRegistrationOptions(begin.options),
       });
@@ -169,7 +212,7 @@ export default function ProfilePage() {
         throw new Error("O navegador não retornou uma credencial válida.");
       }
 
-      const result = await authApi.completeRegistrationFido2(session.accessToken, {
+      const result = await authApi.completeRegistrationFido2(authToken, {
         keyName: trimmedName,
         attestationResponseJson: JSON.stringify(
           serializeRegistrationCredential(credential),
@@ -178,25 +221,21 @@ export default function ProfilePage() {
 
       setFido2ModalOpen(false);
       toast.success(result.message || "Chave cadastrada com sucesso.");
-      await securityQuery.refetch();
+      await Promise.all([keysQuery.refetch(), securityQuery.refetch()]);
     } catch (error) {
+      if (error instanceof ApiError && error.status === 403) setStepUpToken(null);
       toast.error(describeWebAuthnError(error));
     } finally {
       setRegisteringKey(false);
     }
   };
 
-  const registerTotpKey = async () => {
-    if (!session.accessToken) {
-      toast.error("Sessão autenticada ausente. Faça login novamente.");
-      return;
-    }
-
+  const registerTotpKey = async (authToken: string) => {
     setRegisteringKey(true);
 
     try {
       if (!totpSetup) {
-        const begin = await authApi.beginRegistrationTotp(session.accessToken);
+        const begin = await authApi.beginRegistrationTotp(authToken);
         setTotpSetup(begin);
         toast.success(begin.message || "Configuração OTP iniciada.");
         return;
@@ -214,7 +253,7 @@ export default function ProfilePage() {
         return;
       }
 
-      const result = await authApi.completeRegistrationTotp(session.accessToken, {
+      const result = await authApi.completeRegistrationTotp(authToken, {
         secretBase32: totpSetup.secretBase32,
         verificationCode,
         keyName,
@@ -222,12 +261,89 @@ export default function ProfilePage() {
 
       setTotpCode("");
       setTotpSetup(null);
+      // Códigos de backup são exibidos uma única vez (uso único no login por OTP).
+      setBackupCodes(result.backupCodes ?? []);
       toast.success(result.message || "Chave OTP cadastrada com sucesso.");
-      await securityQuery.refetch();
+      await Promise.all([keysQuery.refetch(), securityQuery.refetch()]);
     } catch (error) {
+      if (error instanceof ApiError && error.status === 403) setStepUpToken(null);
       toast.error(getErrorMessage(error, "Não foi possível cadastrar a chave OTP."));
     } finally {
       setRegisteringKey(false);
+    }
+  };
+
+  const submitRename = async (authToken: string) => {
+    if (!renameTarget?.id) return;
+
+    const newName = renameValue.trim();
+    if (newName.length < 2 || newName.length > 80) {
+      toast.error("Informe um nome entre 2 e 80 caracteres.");
+      return;
+    }
+
+    try {
+      await renameMfaKey.mutateAsync({ keyId: renameTarget.id, data: { keyName: newName }, token: authToken });
+      setRenameTarget(null);
+      toast.success("Chave renomeada com sucesso.");
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 403) setStepUpToken(null);
+      toast.error(getErrorMessage(error, "Não foi possível renomear a chave."));
+    }
+  };
+
+  const removeKey = async (key: SecurityKeyView, authToken: string) => {
+    if (!key.id) return;
+    if (!window.confirm(`Remover a chave "${key.name}"? Esta ação não pode ser desfeita.`)) {
+      return;
+    }
+
+    try {
+      if (!key.id) return;
+      await deleteMfaKey.mutateAsync({ keyId: key.id, token: authToken });
+      toast.success("Chave removida com sucesso.");
+      await securityQuery.refetch();
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 403) setStepUpToken(null);
+      toast.error(getErrorMessage(error, "Não foi possível remover a chave de segurança."));
+    }
+  };
+
+  const hasValidStepUp = stepUpToken !== null && stepUpExpiresAt > Date.now();
+
+  /** Executa a operação com step-up: reaproveita o token válido ou pede a senha. */
+  const runWithStepUp = async (action: (token: string) => Promise<void>) => {
+    if (hasValidStepUp) {
+      await action(stepUpToken as string);
+      return;
+    }
+
+    setStepUpPending(() => action);
+    setStepUpPassword("");
+    setStepUpModalOpen(true);
+  };
+
+  const submitStepUp = async () => {
+    if (!stepUpPassword) {
+      toast.error("Informe sua senha para continuar.");
+      return;
+    }
+
+    setStepUpSubmitting(true);
+    try {
+      const result = await authApi.stepUp(stepUpPassword);
+      setStepUpToken(result.stepUpToken);
+      setStepUpExpiresAt(Date.now() + result.expiresInSeconds * 1000);
+      setStepUpModalOpen(false);
+      setStepUpPassword("");
+
+      const action = stepUpPending;
+      setStepUpPending(null);
+      if (action) await action(result.stepUpToken);
+    } catch (error) {
+      toast.error(getErrorMessage(error, "Não foi possível confirmar sua senha."));
+    } finally {
+      setStepUpSubmitting(false);
     }
   };
 
@@ -328,7 +444,7 @@ export default function ProfilePage() {
             </div>
             <div>
               <p className="text-sm text-muted">MFA</p>
-              <p className="mt-1 text-lg font-semibold text-foreground">{security.keys.length} chave(s)</p>
+              <p className="mt-1 text-lg font-semibold text-foreground">{keys.length} chave(s)</p>
               <p className="mt-1 text-xs text-muted">
                 {security.mfaConfigured ? "Configurado" : "Ainda não configurado"}
               </p>
@@ -397,7 +513,7 @@ export default function ProfilePage() {
                 size="sm"
                 onClick={() =>
                   void (activeRegisterMethod === "Totp"
-                    ? registerTotpKey()
+                    ? runWithStepUp((token) => registerTotpKey(token))
                     : setFido2ModalOpen(true))
                 }
                 loading={registeringKey}
@@ -450,16 +566,41 @@ export default function ProfilePage() {
         )}
 
         <div className="space-y-2">
-          {security.keys.map((key) => (
+          {keys.map((key) => (
             <div
               key={key.id ?? `${key.name}-${key.createdAt}`}
               className="rounded-lg border border-border bg-surface-light px-3 py-3"
             >
               <div className="flex items-center justify-between gap-3">
                 <p className="font-medium text-foreground">{key.name}</p>
-                <Badge color={key.keyType === 0 ? "accent" : "warning"}>
-                  {keyTypeLabel(key.keyType)}
-                </Badge>
+                <div className="flex items-center gap-2">
+                  <Badge color={key.keyType === 0 ? "accent" : "warning"}>
+                    {keyTypeLabel(key.keyType)}
+                  </Badge>
+                  {key.isActive === false && <Badge color="slate">Inativa</Badge>}
+                  {key.id && (
+                    <>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setRenameTarget(key);
+                          setRenameValue(key.name);
+                        }}
+                      >
+                        <Pencil className="h-4 w-4" /> Renomear
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => void runWithStepUp((token) => removeKey(key, token))}
+                        disabled={deleteMfaKey.isPending}
+                      >
+                        <Trash2 className="h-4 w-4" /> Remover
+                      </Button>
+                    </>
+                  )}
+                </div>
               </div>
               <p className="mt-1 text-xs text-muted">
                 Criada em: {formatDate(key.createdAt)}
@@ -470,7 +611,7 @@ export default function ProfilePage() {
             </div>
           ))}
 
-          {security.keys.length === 0 && (
+          {keys.length === 0 && (
             <div className="rounded-lg border border-dashed border-border-strong p-4 text-sm text-muted">
               Nenhuma chave de autenticação cadastrada para este usuário.
             </div>
@@ -483,7 +624,14 @@ export default function ProfilePage() {
         <div className="mb-4 rounded-xl border border-border bg-surface-light p-3 text-xs text-muted">
           <div className="flex items-start gap-2">
             <LockKeyhole className="mt-0.5 h-4 w-4 text-primary" />
-            Para manter sua conta protegida, escolha uma senha forte com letras, números e caracteres especiais.
+            <div>
+              <p className="mb-1">A senha precisa atender à política mínima:</p>
+              <ul className="list-inside list-disc space-y-0.5">
+                {PASSWORD_RULES.map((rule) => (
+                  <li key={rule}>{rule}</li>
+                ))}
+              </ul>
+            </div>
           </div>
         </div>
         <div className="grid gap-4 md:grid-cols-3">
@@ -539,8 +687,107 @@ export default function ProfilePage() {
             >
               Cancelar
             </Button>
-            <Button type="button" loading={registeringKey} onClick={() => void registerNewFido2Key()}>
+            <Button type="button" loading={registeringKey} onClick={() => void runWithStepUp((token) => registerNewFido2Key(token))}>
               Confirmar cadastro
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        open={renameTarget !== null}
+        onClose={() => setRenameTarget(null)}
+        title="Renomear chave"
+      >
+        <div className="space-y-4">
+          <Input
+            label="Nome da chave"
+            value={renameValue}
+            onChange={(event) => setRenameValue(event.target.value)}
+            hint="Use um nome entre 2 e 80 caracteres."
+          />
+          <div className="flex justify-end gap-3 pt-2">
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => setRenameTarget(null)}
+              disabled={renameMfaKey.isPending}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              loading={renameMfaKey.isPending}
+              onClick={() => void runWithStepUp((token) => submitRename(token))}
+            >
+              Salvar nome
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        open={stepUpModalOpen}
+        onClose={() => {
+          setStepUpModalOpen(false);
+          setStepUpPending(null);
+        }}
+        title="Confirme sua senha"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-muted">
+            Para cadastrar, renomear ou remover chaves de autenticação é preciso confirmar
+            sua senha. A confirmação vale por alguns minutos.
+          </p>
+          <Input
+            label="Senha atual"
+            type="password"
+            autoComplete="current-password"
+            value={stepUpPassword}
+            onChange={(event) => setStepUpPassword(event.target.value)}
+          />
+          <div className="flex justify-end gap-3 pt-2">
+            <Button
+              type="button"
+              variant="ghost"
+              disabled={stepUpSubmitting}
+              onClick={() => {
+                setStepUpModalOpen(false);
+                setStepUpPending(null);
+              }}
+            >
+              Cancelar
+            </Button>
+            <Button type="button" loading={stepUpSubmitting} onClick={() => void submitStepUp()}>
+              Confirmar
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        open={backupCodes.length > 0}
+        onClose={() => setBackupCodes([])}
+        title="Códigos de backup"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-muted">
+            Cada código serve <strong>uma única vez</strong> para entrar caso você perca o
+            autenticador. Eles não serão exibidos novamente.
+          </p>
+          <div className="grid grid-cols-2 gap-2 font-mono text-sm">
+            {backupCodes.map((code) => (
+              <span
+                key={code}
+                className="rounded-lg border border-border bg-surface-light px-3 py-2 text-center"
+              >
+                {code}
+              </span>
+            ))}
+          </div>
+          <div className="flex justify-end">
+            <Button type="button" onClick={() => setBackupCodes([])}>
+              Já salvei os códigos
             </Button>
           </div>
         </div>

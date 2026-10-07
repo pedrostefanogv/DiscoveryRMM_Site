@@ -33,6 +33,12 @@ export interface CreateUserWithGroupsRequest {
 
 export interface CreateUserWithGroupsResponse extends CreateUserResponse {
   groupsAssigned: number;
+  /**
+   * Vínculos de grupo que falharam depois de o usuário já ter sido criado. A operação é
+   * parcialmente bem-sucedida: antes o erro subia como falha total e a UI dizia que nada
+   * havia sido criado.
+   */
+  groupsFailed: Array<{ groupId: string; message: string }>;
 }
 
 export interface UpdateUserRequest {
@@ -193,21 +199,38 @@ export const iamApi = {
   createUserWithGroups: async (
     payload: CreateUserWithGroupsRequest,
   ): Promise<CreateUserWithGroupsResponse> => {
+    // O usuário é criado primeiro; cada vínculo de grupo é uma operação independente.
+    // Falhas de vínculo são coletadas e devolvidas, em vez de mascarar a criação.
     const created = await api.post<CreateUserResponse>(USERS, payload.user);
 
+    const normalizedGroupIds = payload.groupIds
+      .map((groupId) => groupId.trim())
+      .filter(Boolean);
+
     let groupsAssigned = 0;
-    for (const groupId of payload.groupIds) {
-      const normalizedGroupId = groupId.trim();
-      if (!normalizedGroupId) continue;
-      await api.post<void>(`${GROUPS}/${normalizedGroupId}/members`, {
-        userId: created.id,
-      });
-      groupsAssigned += 1;
+    const groupsFailed: Array<{ groupId: string; message: string }> = [];
+
+    for (const groupId of normalizedGroupIds) {
+      try {
+        await api.post<void>(`${GROUPS}/${groupId}/members`, {
+          userId: created.id,
+        });
+        groupsAssigned += 1;
+      } catch (error) {
+        groupsFailed.push({
+          groupId,
+          message:
+            error instanceof Error && error.message
+              ? error.message
+              : "Falha ao vincular o usuário ao grupo.",
+        });
+      }
     }
 
     return {
       ...created,
       groupsAssigned,
+      groupsFailed,
     };
   },
 
@@ -228,6 +251,9 @@ export const iamApi = {
   forceUserPasswordReset: (id: string) =>
     api.post<void>(`${USERS}/${id}/force-password-reset`),
 
+  /** Libera os bloqueios da conta (lockout de senha e de MFA). */
+  unlockUser: (id: string) => api.post<void>(`${USERS}/${id}/unlock`),
+
   deleteUser: (id: string) => api.del<void>(`${USERS}/${id}`),
 
   getMyProfile: () => api.get<MyProfileDto>(`${USERS}/me`),
@@ -235,7 +261,24 @@ export const iamApi = {
   updateMyProfile: (payload: UpdateMyProfileRequest) =>
     api.put<MyProfileDto>(`${USERS}/me`, payload),
 
-  getMySecurity: () => api.get<MySecurityDto>(`${USERS}/me/security`),
+  /**
+   * Contrato de GET /users/me/security.
+   *
+   * Normaliza a resposta: o endpoint já devolveu um usuário sem a propriedade `keys`
+   * e a ProfilePage quebrava com "cannot read length of undefined". Com o fallback,
+   * uma resposta parcial nunca propaga `undefined` para a UI.
+   */
+  getMySecurity: async (): Promise<MySecurityDto> => {
+    // `?? {}`: uma resposta 204/undefined não pode virar TypeError no acesso às propriedades.
+    const data = (await api.get<Partial<MySecurityDto>>(`${USERS}/me/security`)) ?? {};
+
+    return {
+      mfaRequired: data.mfaRequired ?? false,
+      mfaConfigured: data.mfaConfigured ?? false,
+      roleMfaRequirement: (data.roleMfaRequirement ?? "None") as MfaRequirement,
+      keys: Array.isArray(data.keys) ? data.keys : [],
+    };
+  },
 
   changeMyPassword: (payload: ChangeMyPasswordRequest) =>
     api.post<void>(`${USERS}/me/change-password`, payload),

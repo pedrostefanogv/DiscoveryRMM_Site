@@ -177,6 +177,16 @@ export function useRevokeIamUserMfaKey(userId: string | null) {
   });
 }
 
+export function useUnlockIamUser() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => iamApi.unlockUser(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: IAM_KEYS.users });
+    },
+  });
+}
+
 export function useForceIamUserPasswordReset(userId: string | null) {
   const queryClient = useQueryClient();
   return useMutation({

@@ -1,33 +1,46 @@
 import { useRouteError, isRouteErrorResponse } from 'react-router-dom';
 
+/**
+ * Página de erro do ErrorBoundary raiz do router.
+ *
+ * Correções aplicadas:
+ * - o stack trace só é exibido em desenvolvimento (antes vazava caminhos internos
+ *   do bundle para o usuário final em produção);
+ * - as "possíveis causas" deixam de culpar API/rede quando o erro é de renderização,
+ *   que era exatamente o caso do crash da ProfilePage.
+ */
 export function ErrorPage() {
   const error = useRouteError();
-  
-  const getErrorMessage = () => {
-    if (isRouteErrorResponse(error)) {
-      return {
-        title: `Erro ${error.status}`,
-        message: error.statusText || 'Um erro ocorreu',
-        details: error.data?.message,
-      };
-    }
-    
-    if (error instanceof Error) {
-      return {
-        title: 'Erro ao carregar página',
-        message: error.message,
-        details: error.stack,
-      };
-    }
-    
-    return {
-      title: 'Erro desconhecido',
-      message: 'Um erro inesperado ocorreu',
-      details: String(error),
-    };
-  };
 
-  const { title, message, details } = getErrorMessage();
+  const isRouteResponse = isRouteErrorResponse(error);
+
+  const title = isRouteResponse
+    ? `Erro ${error.status}`
+    : error instanceof Error
+      ? 'Erro ao carregar página'
+      : 'Erro desconhecido';
+
+  const message = isRouteResponse
+    ? error.statusText || 'Um erro ocorreu'
+    : error instanceof Error
+      ? error.message
+      : 'Um erro inesperado ocorreu';
+
+  const details = isRouteResponse
+    ? (error.data as { message?: string } | undefined)?.message
+    : undefined;
+
+  const causes = isRouteResponse
+    ? [
+        'API offline ou indisponível',
+        'Problema na conexão de rede',
+        'Servidor pode estar reiniciando',
+      ]
+    : [
+        'Falha inesperada ao renderizar esta tela',
+        'Erro em um módulo da aplicação',
+        'Incompatibilidade de versão entre build e sessão aberta',
+      ];
 
   const handleReload = () => {
     window.location.href = '/';
@@ -68,14 +81,19 @@ export function ErrorPage() {
           </div>
         )}
 
+        {import.meta.env.DEV && error instanceof Error && error.stack && (
+          <div className="rounded-xl bg-background/80 border border-border p-3 mb-5 font-mono text-xs text-muted break-words">
+            {error.stack}
+          </div>
+        )}
+
         <p className="text-xs text-muted text-center mb-4">
           Possíveis causas:
         </p>
         <ul className="text-xs text-muted space-y-1.5 mb-5 list-disc list-inside">
-          <li>API offline ou indisponível</li>
-          <li>Problema na conexão de rede</li>
-          <li>Servidor pode estar reiniciando</li>
-          <li>Erro ao carregar módulo da aplicação</li>
+          {causes.map((cause) => (
+            <li key={cause}>{cause}</li>
+          ))}
         </ul>
 
         <div className="space-y-2">

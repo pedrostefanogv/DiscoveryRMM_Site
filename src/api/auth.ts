@@ -42,6 +42,10 @@ export interface FirstAccessStatus {
   mustChangeProfile: boolean;
   mfaRequired: boolean;
   mfaConfigured: boolean;
+  /** Perfil atual: permite exibir os dados já cadastrados quando só a senha muda. */
+  login: string;
+  email: string;
+  fullName: string;
 }
 
 export interface CompleteFirstAccessRequest {
@@ -106,6 +110,18 @@ export interface RenameMfaKeyRequest {
 
 export interface ApiMessageResponse {
   message: string;
+}
+
+/** Token de step-up (reautenticação por senha) para operações sensíveis da conta. */
+export interface StepUpToken {
+  stepUpToken: string;
+  expiresInSeconds: number;
+}
+
+function withTokenHeader(token?: string) {
+  return token
+    ? { headers: { Authorization: `Bearer ${token}` } }
+    : {};
 }
 
 function withBearer(token: string) {
@@ -210,8 +226,14 @@ export const authApi = {
 
   listMfaKeys: () => api.get<MfaKey[]>("/api/v1/mfa/keys"),
 
-  renameMfaKey: (keyId: string, request: RenameMfaKeyRequest) =>
-    api.patch<void>(`/api/v1/mfa/keys/${keyId}/name`, request),
+  // Renomear/remover chave exige step-up: o token (5 min) é obtido em stepUp().
+  renameMfaKey: (keyId: string, request: RenameMfaKeyRequest, token?: string) =>
+    api.patch<void>(`/api/v1/mfa/keys/${keyId}/name`, request, withTokenHeader(token)),
 
-  deleteMfaKey: (keyId: string) => api.del<void>(`/api/v1/mfa/keys/${keyId}`),
+  deleteMfaKey: (keyId: string, token?: string) =>
+    api.del<void>(`/api/v1/mfa/keys/${keyId}`, withTokenHeader(token)),
+
+  /** Reautentica por senha e devolve o token de step-up. */
+  stepUp: (password: string) =>
+    api.post<StepUpToken>("/api/v1/auth/step-up", { password }),
 };

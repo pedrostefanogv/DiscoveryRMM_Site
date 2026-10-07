@@ -32,10 +32,13 @@ export function useRenameMfaKey() {
     mutationFn: ({
       keyId,
       data,
+      token,
     }: {
       keyId: string;
       data: RenameMfaKeyRequest;
-    }) => authApi.renameMfaKey(keyId, data),
+      /** Token de step-up (quando a API exige reautenticação). */
+      token?: string;
+    }) => authApi.renameMfaKey(keyId, data, token),
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: AUTH_SECURITY_KEYS.mfaKeys }),
   });
@@ -45,7 +48,8 @@ export function useDeleteMfaKey() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (keyId: string) => authApi.deleteMfaKey(keyId),
+    mutationFn: ({ keyId, token }: { keyId: string; token?: string }) =>
+      authApi.deleteMfaKey(keyId, token),
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: AUTH_SECURITY_KEYS.mfaKeys }),
   });

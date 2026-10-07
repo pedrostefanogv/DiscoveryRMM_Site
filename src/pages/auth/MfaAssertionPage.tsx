@@ -133,8 +133,9 @@ export default function MfaAssertionPage() {
     }
 
     const code = otpCode.trim();
-    if (code.length < 6) {
-      const message = "Informe o código OTP com 6 dígitos.";
+    // Aceita o código TOTP (6 dígitos) ou um código de backup (xxxx-xxxx, hex).
+    if (code.replace(/-/g, "").length < 6) {
+      const message = "Informe o código OTP de 6 dígitos ou um código de backup.";
       setError(message);
       toast.error(message);
       return;
@@ -201,21 +202,21 @@ export default function MfaAssertionPage() {
               <Fingerprint className="mt-0.5 h-5 w-5 text-primary" />
             )}
             {isTotpFlow
-               ? "Seu perfil exige OTP. Digite o código temporário gerado no autenticador."
+               ? "Seu perfil exige OTP. Digite o código do autenticador — ou um código de backup, caso tenha perdido o dispositivo."
                : "Seu perfil exige FIDO2. Use sua passkey, chave física ou autenticador compatível registrado para concluir o login."}
           </div>
         </div>
 
         {isTotpFlow && (
           <Input
-            label="Código OTP"
-            inputMode="numeric"
+            label="Código OTP ou código de backup"
             autoComplete="one-time-code"
-            maxLength={8}
-            placeholder="123456"
+            maxLength={9}
+            placeholder="123456 ou a1b2-c3d4"
             value={otpCode}
             onChange={(event) => {
-              const sanitized = event.target.value.replace(/\D/g, "").slice(0, 8);
+              // Códigos de backup são hex com hífen (a1b2-c3d4); códigos TOTP são só dígitos.
+              const sanitized = event.target.value.replace(/[^0-9a-fA-F-]/g, "").slice(0, 9);
               setOtpCode(sanitized);
             }}
           />

@@ -30,6 +30,7 @@ export default function MfaRegistrationPage() {
     message: string;
   } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [backupCodes, setBackupCodes] = useState<string[]>([]);
 
   const token = session.temporaryMfaToken ?? session.accessToken;
   const roleMfaRequirement = resolveRoleMfaRequirement(
@@ -37,6 +38,18 @@ export default function MfaRegistrationPage() {
       session.loginResponse?.RoleMfaRequirement,
   );
   const isTotpFlow = roleMfaRequirement === "Totp";
+
+  const finishEnrollment = () => {
+    if (session.temporaryMfaToken) {
+      clearTemporarySession();
+      toast.success("MFA registrado. Faça login novamente para concluir a autenticação.");
+      navigate("/auth/login", { replace: true });
+      return;
+    }
+
+    const target = sessionStorage.getItem("discovery.auth.redirectTo") ?? "/";
+    navigate(target, { replace: true });
+  };
 
   const onSubmit = async () => {
     if (!token) {
@@ -80,10 +93,12 @@ export default function MfaRegistrationPage() {
           keyName: trimmedKeyName,
         });
 
-        if (result.backupCodes.length) {
-          toast.success("OTP registrado. Guarde os códigos de backup em local seguro.");
-        } else {
-          toast.success(result.message);
+        toast.success(result.message);
+
+        if (result.backupCodes.length > 0) {
+          // Exibidos uma única vez: a tela passa a mostrar os códigos antes de concluir.
+          setBackupCodes(result.backupCodes);
+          return;
         }
       } else {
         ensureWebAuthnSupport();
@@ -109,15 +124,7 @@ export default function MfaRegistrationPage() {
         toast.success(result.message);
       }
 
-      if (session.temporaryMfaToken) {
-        clearTemporarySession();
-        toast.success("MFA registrado. Faça login novamente para concluir a autenticação.");
-        navigate("/auth/login", { replace: true });
-        return;
-      }
-
-      const target = sessionStorage.getItem("discovery.auth.redirectTo") ?? "/";
-      navigate(target, { replace: true });
+      finishEnrollment();
     } catch (caught) {
       if (caught instanceof ApiError && caught.status === 401) {
         clearTemporarySession();
@@ -147,6 +154,30 @@ export default function MfaRegistrationPage() {
       setIsSubmitting(false);
     }
   };
+
+  if (backupCodes.length > 0) {
+    return (
+      <Card className="border-border bg-surface/80 shadow-2xl backdrop-blur" padding>
+        <CardHeader
+          title="Guarde seus códigos de backup"
+          subtitle="Cada código serve uma única vez para entrar caso você perca o autenticador."
+        />
+        <div className="grid grid-cols-2 gap-2 font-mono text-sm">
+          {backupCodes.map((code) => (
+            <span key={code} className="rounded-lg border border-border bg-surface-light px-3 py-2 text-center">
+              {code}
+            </span>
+          ))}
+        </div>
+        <p className="mt-3 text-xs text-muted">
+          Estes códigos não serão exibidos novamente. Guarde-os em local seguro.
+        </p>
+        <Button className="mt-4 w-full" size="lg" onClick={finishEnrollment}>
+          Já salvei os códigos, continuar
+        </Button>
+      </Card>
+    );
+  }
 
   return (
     <Card className="border-border bg-surface/80 shadow-2xl backdrop-blur" padding>
