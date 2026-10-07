@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { ChevronDown, ChevronUp, GitCompare } from "lucide-react";
 import type { ConfigurationValue } from "@/api";
 import { Button, Input, Modal, Select, TextArea } from "@/components/ui";
+import { APP_STORE_POLICY_OPTIONS } from "@/utils/configurationEditors";
 import { ConfigDiffViewer } from "./ConfigDiffViewer";
 import { InheritableFieldToggle } from "./InheritableFieldToggle";
 import type { ConfigurationOrigin } from "@/api";
@@ -221,15 +222,13 @@ export function ConfigurationFieldEditor({
     if (fieldKind === "policy") {
       return (
         <Select
-          label="Politica"
+          label="Política"
           value={value}
           onChange={(event) => onValueChange(event.target.value)}
           disabled={inputDisabled}
-          options={[
-            { value: "0", label: "?? 0 (Disabled) - Nenhum aplicativo autorizado" },
-            { value: "1", label: "? 1 (PreApproved) - Apenas aplicativos na lista" },
-            { value: "2", label: "?? 2 (All) - Qualquer aplicativo autorizado" },
-          ]}
+          options={APP_STORE_POLICY_OPTIONS}
+          error={error}
+          hint="Controla o que os agentes podem instalar. Em níveis inferiores, deixe herdado para usar a política do servidor."
         />
       );
     }
@@ -310,7 +309,7 @@ export function ConfigurationFieldEditor({
                 }
                 disabled={inputDisabled}
                 options={[
-                  { value: "", label: "Padrao do backend" },
+                  { value: "", label: "Padrão do backend" },
                   { value: "true", label: "Ativado" },
                   { value: "false", label: "Desativado" },
                 ]}
@@ -323,7 +322,7 @@ export function ConfigurationFieldEditor({
                 }
                 disabled={inputDisabled}
                 options={[
-                  { value: "", label: "Padrao do backend" },
+                  { value: "", label: "Padrão do backend" },
                   { value: "true", label: "Ativado" },
                   { value: "false", label: "Desativado" },
                 ]}
@@ -336,7 +335,7 @@ export function ConfigurationFieldEditor({
                 }
                 disabled={inputDisabled}
                 options={[
-                  { value: "", label: "Padrao do backend" },
+                  { value: "", label: "Padrão do backend" },
                   { value: "true", label: "Ativado" },
                   { value: "false", label: "Desativado" },
                 ]}
@@ -360,7 +359,7 @@ export function ConfigurationFieldEditor({
                 onClick={() => setShowAiAdvanced((prev) => !prev)}
                 className="flex w-full items-center justify-between rounded-md px-2 py-1.5 text-xs font-medium text-muted-foreground hover:bg-surface-light"
               >
-                <span>Configuração avancada (Chat)</span>
+                <span>Configuração avançada (Chat)</span>
                 {showAiAdvanced ? (
                   <ChevronUp className="h-4 w-4" />
                 ) : (
@@ -483,7 +482,7 @@ export function ConfigurationFieldEditor({
               }
               disabled={inputDisabled}
               options={[
-                { value: "", label: "Padrao do backend" },
+                { value: "", label: "Padrão do backend" },
                 { value: "true", label: "Ativado" },
                 { value: "false", label: "Desativado" },
               ]}
@@ -719,7 +718,7 @@ export function ConfigurationFieldEditor({
         )}
         {fieldKind === "json" && fieldKey === "autoUpdateSettingsJson" && (
           <p className="text-xs text-muted">
-            Ajuste o comportamento de atualização automatica por campos estruturados.
+            Ajuste o comportamento de atualização automática por campos estruturados.
           </p>
         )}
         {fieldKind === "json" && fieldKey === "brandingSettingsJson" && (
@@ -781,6 +780,7 @@ export function ConfigurationFieldEditor({
           localValue={inherited ? null : value}
           effectiveValue={effectiveValue}
           origin={origin}
+          fieldKey={fieldKey}
         />
       </Modal>
     </div>

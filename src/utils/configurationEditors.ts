@@ -36,6 +36,62 @@ export interface EditableField {
 
 const AI_INTEGRATION_FIELD_KEY = "aiIntegrationSettingsJson";
 
+/**
+ * Política da Loja de Aplicativos (AppStorePolicyType no backend).
+ * Os valores são enviados como 0/1/2 e o backend serializa o enum como número.
+ */
+export const APP_STORE_POLICY_LABELS: Record<number, string> = {
+  0: "Desativado",
+  1: "Pré-aprovados",
+  2: "Todos",
+};
+
+export const APP_STORE_POLICY_OPTIONS: { value: string; label: string }[] = [
+  { value: "0", label: "0 - Desativado (nenhum aplicativo autorizado)" },
+  { value: "1", label: "1 - Pré-aprovados (apenas aplicativos da lista)" },
+  { value: "2", label: "2 - Todos (qualquer aplicativo autorizado)" },
+];
+
+const APP_STORE_POLICY_NAMES: Record<string, number> = {
+  Disabled: 0,
+  PreApproved: 1,
+  All: 2,
+};
+
+/**
+ * Normaliza o valor da política vindo da API (0/1/2 numérico ou o nome do enum
+ * como string, ex.: "PreApproved") para um rótulo legível em pt-BR.
+ */
+export function formatAppStorePolicyValue(value: unknown): string {
+  if (value === null || value === undefined) {
+    return "";
+  }
+
+  if (typeof value === "number") {
+    return APP_STORE_POLICY_LABELS[value] ?? String(value);
+  }
+
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (trimmed === "") {
+      return "";
+    }
+
+    if (trimmed in APP_STORE_POLICY_NAMES) {
+      return APP_STORE_POLICY_LABELS[APP_STORE_POLICY_NAMES[trimmed]];
+    }
+
+    const numeric = Number(trimmed);
+    if (Number.isFinite(numeric)) {
+      return APP_STORE_POLICY_LABELS[numeric] ?? trimmed;
+    }
+
+    return trimmed;
+  }
+
+  return String(value);
+}
+
 function sanitizeAiIntegrationObject(
   value: unknown,
 ): Record<string, unknown> | null {
@@ -726,7 +782,7 @@ export function validateFieldValue(
       return true;
     }
 
-    return "Use 0, 1 ou 2";
+    return "Selecione uma política válida: 0 (Desativado), 1 (Pré-aprovados) ou 2 (Todos)";
   }
 
   return true;
@@ -849,6 +905,8 @@ function fieldDefault(kind: EditableFieldKind): string {
   if (kind === "boolean") return "false";
   if (kind === "number") return "0";
   if (kind === "json") return "{}";
+  // PreApproved: espelha o default de ServerConfiguration.AppStorePolicy no backend.
+  if (kind === "policy") return "1";
   return "";
 }
 

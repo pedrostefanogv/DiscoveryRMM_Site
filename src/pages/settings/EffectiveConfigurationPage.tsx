@@ -8,7 +8,7 @@ import {
   useClientEffectiveConfig,
   useSiteEffectiveConfig,
 } from "@/hooks/useConfigurationApi";
-import { serverEditableFields } from "@/utils/configurationEditors";
+import { formatAppStorePolicyValue, serverEditableFields } from "@/utils/configurationEditors";
 import type { ResolvedConfiguration } from "@/api";
 
 const ORIGIN_LABELS: Record<number, string> = {
@@ -16,12 +16,6 @@ const ORIGIN_LABELS: Record<number, string> = {
   2: "Servidor",
   3: "Cliente",
   4: "Site",
-};
-
-const APP_STORE_LABELS: Record<number, string> = {
-  0: "Desativado",
-  1: "Pré-aprovados",
-  2: "Todos",
 };
 
 /** Campos escalares exibidos no simulador (os objetos aparecem só pela origem). */
@@ -40,7 +34,7 @@ const OBJECT_FIELDS: { label: string; inheritanceKey: string }[] = [
 function formatValue(key: string, value: unknown): string {
   if (value === null || value === undefined) return "—";
   if (typeof value === "boolean") return value ? "Ativado" : "Desativado";
-  if (key === "appStorePolicy") return APP_STORE_LABELS[Number(value)] ?? String(value);
+  if (key === "appStorePolicy") return formatAppStorePolicyValue(value) || "—";
   if (typeof value === "object") return JSON.stringify(value);
   return String(value);
 }
