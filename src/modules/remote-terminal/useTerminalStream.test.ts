@@ -1,7 +1,8 @@
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { TerminalErrorInfo, TerminalReadyInfo } from './useTerminalStream';
+import type { TerminalErrorInfo, TerminalReadyInfo, TerminalStatsInfo } from './useTerminalStream';
 import { chunkUtf8, useTerminalStream } from './useTerminalStream';
+import type { CompletionResponse } from './terminalInput';
 
 /**
  * WebSocket falso: o hook fala o protocolo NATS cru (INFO/CONNECT/+OK/MSG), então
@@ -61,6 +62,9 @@ const SUBJ = NATS_SUBJECT.replace(/-/g, '');
 const TERM_OUT = `${SUBJ}.term.out`;
 const TERM_IN = `${SUBJ}.term.in`;
 const EVENT = `${SUBJ}.event`;
+const STATS = `${SUBJ}.stats`;
+const COMPLETION_REQ = `${SUBJ}.completion.req`;
+const COMPLETION_RES = `${SUBJ}.completion.res`;
 
 function lastSocket(): FakeWebSocket {
     return FakeWebSocket.instances[FakeWebSocket.instances.length - 1];
@@ -100,6 +104,8 @@ function renderTerminal(overrides: Partial<StreamProps> = {}) {
     const onExit = vi.fn<(reason: string) => void>();
     const onReady = vi.fn<(info: TerminalReadyInfo) => void>();
     const onOutput = vi.fn<(data: string) => void>();
+    const onStats = vi.fn<(info: TerminalStatsInfo) => void>();
+    const onCompletion = vi.fn<(res: CompletionResponse) => void>();
     // initialProps permitem trocar natsUrl/subj e reexecutar o efeito NO MESMO
     // componente — exatamente o que o StrictMode (e uma troca de props) faz.
     const utils = renderHook((props: StreamProps) => useTerminalStream(props), {
@@ -111,8 +117,10 @@ function renderTerminal(overrides: Partial<StreamProps> = {}) {
         utils.result.current.onExit(onExit);
         utils.result.current.onReady(onReady);
         utils.result.current.onOutput(onOutput);
+        utils.result.current.onStats(onStats);
+        utils.result.current.onCompletion(onCompletion);
     });
-    return { ...utils, onError, onReset, onExit, onReady, onOutput };
+    return { ...utils, onError, onReset, onExit, onReady, onOutput, onStats, onCompletion };
 }
 
 beforeEach(() => {
@@ -184,6 +192,131 @@ describe('useTerminalStream — handshake e ready', () => {
         });
         expect(onReady).toHaveBeenCalledWith(expect.objectContaining({ shells: ['powershell', 'cmd'], backend: 'conpty' }));
         expect(result.current.isConnected).toBe(true);
+    });
+
+    it('term.ready SEM capabilities não quebra (agente antigo)', () => {
+        const { onReady } = renderTerminal();
+        const socket = lastSocket();
+        act(() => {
+            socket.completeHandshake();
+        });
+        act(() => {
+            socket.emitMessage(TERM_OUT, { shells: ['cmd'], termCols: 80, termRows: 24 });
+        });
+        expect(onReady).toHaveBeenCalledTimes(1);
+        const info = onReady.mock.calls[0][0] as TerminalReadyInfo;
+        expect(info.supportsCompletionQuery).toBeUndefined();
+        expect(info.capabilitiesVersion).toBeUndefined();
+        expect(info.backend).toBeUndefined();
+    });
+
+    it('propaga os campos ADITIVOS do contrato v3 no term.ready', () => {
+        const { onReady } = renderTerminal();
+        const socket = lastSocket();
+        act(() => {
+            socket.completeHandshake();
+        });
+        act(() => {
+            socket.emitMessage(TERM_OUT, {
+                shells: ['powershell', 'cmd', 'bash'],
+                consoleId: 'c1',
+                termCols: 120,
+                termRows: 40,
+                backend: 'conpty',
+                shellPath: 'C:\\pwsh.exe',
+                capabilitiesVersion: 1,
+                shellKind: 'powershell',
+                supportsVt: true,
+                supportsResize: true,
+                supportsCompletionQuery: true,
+                encoding: 'utf-8',
+            });
+        });
+        expect(onReady).toHaveBeenCalledWith(expect.objectContaining({
+            capabilitiesVersion: 1,
+            shellKind: 'powershell',
+            supportsCompletionQuery: true,
+            supportsVt: true,
+            supportsResize: true,
+            encoding: 'utf-8',
+        }));
+    });
+});
+
+describe('useTerminalStream — contrato v3 (stats/completions)', () => {
+    it('assina stats e completion.res e publica completion.req', () => {
+        const { result } = renderTerminal();
+        const socket = lastSocket();
+        act(() => {
+            socket.completeHandshake();
+        });
+        expect(socket.sent.some((m) => m.startsWith(`SUB ${STATS} `))).toBe(true);
+        expect(socket.sent.some((m) => m.startsWith(`SUB ${COMPLETION_RES} `))).toBe(true);
+
+        act(() => {
+            result.current.sendCompletionRequest({
+                reqId: 'r1',
+                input: 'Get-Ch',
+                cursor: 6,
+                forward: null,
+                page: 0,
+                pageSize: 50,
+            });
+        });
+        const frames = pubs(socket, COMPLETION_REQ);
+        expect(frames).toHaveLength(1);
+        expect(pubBody(frames[0])).toMatchObject({ reqId: 'r1', input: 'Get-Ch', cursor: 6, forward: null, page: 0, pageSize: 50 });
+    });
+
+    it('entrega os contadores do subject stats', () => {
+        const { onStats } = renderTerminal();
+        const socket = lastSocket();
+        act(() => {
+            socket.completeHandshake();
+        });
+        act(() => {
+            socket.emitMessage(STATS, {
+                sessionId: 'sess-1',
+                framesOut: 12,
+                bytesOut: 4096,
+                inputRejected: 1,
+                flushHolds: 2,
+                publishErrors: 0,
+                replayResets: 3,
+                uptimeMs: 65000,
+            });
+        });
+        expect(onStats).toHaveBeenCalledWith(expect.objectContaining({ framesOut: 12, bytesOut: 4096, replayResets: 3 }));
+    });
+
+    it('entrega completion.res normalizado para o viewer', () => {
+        const { onCompletion } = renderTerminal();
+        const socket = lastSocket();
+        act(() => {
+            socket.completeHandshake();
+        });
+        act(() => {
+            socket.emitMessage(COMPLETION_RES, {
+                reqId: 'r1',
+                ok: true,
+                replacementIndex: 4,
+                replacementLength: 2,
+                matches: [{ text: 'Get-ChildItem', listItem: 'Get-ChildItem', type: 'Command' }],
+                totalCount: 1,
+                page: 0,
+                pageSize: 50,
+                hasMore: false,
+            });
+        });
+        expect(onCompletion).toHaveBeenCalledWith(expect.objectContaining({
+            reqId: 'r1',
+            ok: true,
+            replacementIndex: 4,
+            replacementLength: 2,
+            totalCount: 1,
+            hasMore: false,
+        }));
+        expect(onCompletion.mock.calls[0][0].matches).toHaveLength(1);
     });
 });
 

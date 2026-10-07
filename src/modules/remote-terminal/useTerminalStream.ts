@@ -1,4 +1,5 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
+import type { CompletionRequest, CompletionResponse } from './terminalInput';
 
 interface UseTerminalStreamOptions {
     natsSubject: string;
@@ -31,6 +32,61 @@ export interface TerminalReadyInfo {
     backend?: string;
     /** Binário resolvido no agente (ex.: caminho do pwsh/powershell). */
     shellPath?: string;
+    // ── Contrato v3 (A): campos ADITIVOS do term.ready ──────────────────────
+    // Ausentes em agentes antigos — o viewer faz feature-detect e mantém o
+    // comportamento legado quando não vêm.
+    /** Presente => agente fala o contrato v3 (capabilitiesVersion >= 1). */
+    capabilitiesVersion?: number;
+    /** Tipo de shell reportado pelo agente (ex.: 'powershell', 'cmd', 'bash'). */
+    shellKind?: string;
+    supportsVt?: boolean;
+    supportsResize?: boolean;
+    /** Habilita completion.req/res (Ctrl+Espaço / Tab). */
+    supportsCompletionQuery?: boolean;
+    encoding?: string;
+}
+
+/** Contadores do subject 'stats' (agent->viewer, a cada ~2s). */
+export interface TerminalStatsInfo {
+    sessionId?: string;
+    timestampMs?: number;
+    framesOut?: number;
+    bytesOut?: number;
+    inputFrames?: number;
+    inputBytes?: number;
+    inputRejected?: number;
+    inputTooLarge?: number;
+    /** R2: mensagens de input descartadas pelo rate limit do agente. */
+    inputRateLimited?: number;
+    /** R2: resizes descartados pelo rate limit do agente. */
+    resizeRateLimited?: number;
+    /** R8: bytes descartados pelo backpressure do dispatcher de saída. */
+    pipeDroppedBytes?: number;
+    flushHolds?: number;
+    flushForcedAtCap?: number;
+    publishErrors?: number;
+    replayResets?: number;
+    replayGapFrames?: number;
+    uptimeMs?: number;
+    avgFlushBytes?: number;
+    lastFlushBytes?: number;
+}
+
+/**
+ * Frame de gravação (agent->API): documentado aqui para alinhar o contrato
+ * (E). O viewer não publica em recording.term — quem grava é o agente.
+ */
+export interface TerminalRecordingFrame {
+    data: string;
+    seq: number;
+    timestampMs: number;
+    /** Ausente é tratado como 'output' (retrocompatibilidade). */
+    kind?: 'output' | 'ready' | 'resize' | 'exit' | 'error';
+    exitCode?: number;
+    cols?: number;
+    rows?: number;
+    backend?: string;
+    shellKind?: string;
 }
 
 export interface TerminalErrorInfo {
@@ -53,6 +109,12 @@ interface UseTerminalStreamReturn {
      * saída nova em saída velha.
      */
     onReset: (callback: () => void) => () => void;
+    /** Contadores de telemetria do agente (subject 'stats'). */
+    onStats: (callback: (info: TerminalStatsInfo) => void) => () => void;
+    /** Respostas de completions (subject 'completion.res'), roteadas por reqId. */
+    onCompletion: (callback: (res: CompletionResponse) => void) => () => void;
+    /** Publica 'completion.req' (viewer->agent) se o contrato v3 suportar. */
+    sendCompletionRequest: (req: CompletionRequest) => void;
     error: string | null;
 }
 
@@ -157,6 +219,8 @@ export function useTerminalStream({
     const readyCallbacksRef = useRef<Set<(info: TerminalReadyInfo) => void>>(new Set());
     const errorCallbacksRef = useRef<Set<(info: TerminalErrorInfo) => void>>(new Set());
     const resetCallbacksRef = useRef<Set<() => void>>(new Set());
+    const statsCallbacksRef = useRef<Set<(info: TerminalStatsInfo) => void>>(new Set());
+    const completionCallbacksRef = useRef<Set<(res: CompletionResponse) => void>>(new Set());
     const reconnectAttemptsRef = useRef(0);
     const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const mountedRef = useRef(true);
@@ -189,6 +253,11 @@ export function useTerminalStream({
     const inSubject = `${subj}.term.in`;
     const readySubject = `${subj}.term.ready`;
     const eventSubject = `${subj}.event`;
+    // Contrato v3: telemetria e completions. Agents antigos não publicam
+    // nesses subjects — o viewer assina e simplesmente não recebe nada.
+    const statsSubject = `${subj}.stats`;
+    const completionReqSubject = `${subj}.completion.req`;
+    const completionResSubject = `${subj}.completion.res`;
 
     useEffect(() => { jwtRef.current = jwt; }, [jwt]);
     useEffect(() => { freshCredsRef.current = getFreshCredentials; }, [getFreshCredentials]);
@@ -292,6 +361,37 @@ export function useTerminalStream({
                 } catch { /* payload de evento inválido — ignora */ }
             };
 
+            const handleStats = (payload: string) => {
+                try {
+                    const parsed = JSON.parse(payload);
+                    if (!parsed || typeof parsed !== 'object') return;
+                    statsCallbacksRef.current.forEach(cb => cb(parsed as TerminalStatsInfo));
+                } catch { /* stats inválido — ignora (telemetria é best-effort) */ }
+            };
+
+            const handleCompletionRes = (payload: string) => {
+                try {
+                    const parsed = JSON.parse(payload);
+                    if (!parsed || typeof parsed !== 'object') return;
+                    if (typeof parsed.reqId !== 'string') return;
+                    const res: CompletionResponse = {
+                        reqId: parsed.reqId,
+                        ok: Boolean(parsed.ok),
+                        error: typeof parsed.error === 'string' ? parsed.error : undefined,
+                        replacementIndex: Number.isFinite(parsed.replacementIndex) ? Number(parsed.replacementIndex) : 0,
+                        replacementLength: Number.isFinite(parsed.replacementLength) ? Number(parsed.replacementLength) : 0,
+                        matches: Array.isArray(parsed.matches)
+                            ? parsed.matches.filter((m: unknown) => !!m && typeof m === 'object')
+                            : [],
+                        totalCount: Number.isFinite(parsed.totalCount) ? Number(parsed.totalCount) : 0,
+                        page: Number.isFinite(parsed.page) ? Number(parsed.page) : 0,
+                        pageSize: Number.isFinite(parsed.pageSize) ? Number(parsed.pageSize) : 0,
+                        hasMore: Boolean(parsed.hasMore),
+                    };
+                    completionCallbacksRef.current.forEach(cb => cb(res));
+                } catch { /* completion.res inválido — ignora */ }
+            };
+
             const decoder = protoDecoder;
 
             // consumePending conclui o corpo de uma MSG já cabeçalhada. Devolve
@@ -308,8 +408,12 @@ export function useTerminalStream({
                 scanFrom = 0;
                 if (subject.endsWith('.event')) {
                     handleSessionEvent(payload);
+                } else if (subject.endsWith('.stats')) {
+                    handleStats(payload);
+                } else if (subject.endsWith('.completion.res')) {
+                    handleCompletionRes(payload);
                 } else {
-                    // .term.out (saída, ready, erro, reset, exit)
+                    // .term.out / .term.ready (saída, ready, erro, reset, exit)
                     handleTermOut(payload);
                 }
                 return true;
@@ -372,6 +476,10 @@ export function useTerminalStream({
                             sendProtocol(`SUB ${outSubject} 1`);
                             sendProtocol(`SUB ${readySubject} 2`);
                             sendProtocol(`SUB ${eventSubject} 3`);
+                            // Contrato v3 (B/D): assina telemetria e respostas de
+                            // completions no MESMO WebSocket NATS.
+                            sendProtocol(`SUB ${statsSubject} 4`);
+                            sendProtocol(`SUB ${completionResSubject} 5`);
                             // Handshake: o ready do agente é publicado UMA vez no
                             // start da sessão; sem o hello, um viewer que assinou
                             // depois (ou reconectou) ficava sem shells/dimensões.
@@ -473,7 +581,7 @@ export function useTerminalStream({
             setError(err instanceof Error ? err.message : 'Falha ao conectar');
             reconnectTimerRef.current = setTimeout(() => connect(), 5000);
         }
-    }, [natsUrl, subj, inSubject, outSubject, readySubject, eventSubject, reportError]);
+    }, [natsUrl, subj, inSubject, outSubject, readySubject, eventSubject, statsSubject, completionResSubject, reportError]);
 
     useEffect(() => {
         mountedRef.current = true;
@@ -553,6 +661,14 @@ export function useTerminalStream({
         }
     }, [inSubject]);
 
+    // Publica 'completion.req' (C). Sem socket autenticado não há resposta
+    // possível: descarta em silêncio (o popup simplesmente não abre).
+    const sendCompletionRequest = useCallback((req: CompletionRequest) => {
+        const ws = wsRef.current;
+        if (!ws || ws.readyState !== WebSocket.OPEN || !authenticatedRef.current) return;
+        ws.send(buildPub(completionReqSubject, JSON.stringify(req)));
+    }, [completionReqSubject]);
+
     const onOutput = useCallback((callback: (data: string) => void) => {
         outputCallbacksRef.current.add(callback);
         return () => { outputCallbacksRef.current.delete(callback); };
@@ -578,5 +694,28 @@ export function useTerminalStream({
         return () => { resetCallbacksRef.current.delete(callback); };
     }, []);
 
-    return { isConnected, sendData, sendResize, onOutput, onExit, onReady, onError, onReset, error };
+    const onStats = useCallback((callback: (info: TerminalStatsInfo) => void) => {
+        statsCallbacksRef.current.add(callback);
+        return () => { statsCallbacksRef.current.delete(callback); };
+    }, []);
+
+    const onCompletion = useCallback((callback: (res: CompletionResponse) => void) => {
+        completionCallbacksRef.current.add(callback);
+        return () => { completionCallbacksRef.current.delete(callback); };
+    }, []);
+
+    return {
+        isConnected,
+        sendData,
+        sendResize,
+        sendCompletionRequest,
+        onOutput,
+        onExit,
+        onReady,
+        onError,
+        onReset,
+        onStats,
+        onCompletion,
+        error,
+    };
 }

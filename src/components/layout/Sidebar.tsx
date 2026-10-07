@@ -74,6 +74,7 @@ const settingsLinks = [
   { to: '/settings/workflow', label: 'Workflow' },
   { to: '/settings/notifications', label: 'Notificações' },
   { to: '/settings/custom-fields', label: 'Campos Personalizados' },
+  { to: '/settings/mcp-tools', label: 'Ferramentas de IA (MCP)' },
   { to: '/settings/agent-updates', label: 'Agent Updates' },
   { to: '/settings/audit', label: 'Auditoria Config' },
   { to: '/settings/branding', label: 'Branding' },

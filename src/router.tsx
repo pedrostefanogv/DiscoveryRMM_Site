@@ -58,6 +58,7 @@ const IamUsersPage = lazy(() => import('@/pages/settings/IamUsersPage'));
 const IamGroupsPage = lazy(() => import('@/pages/settings/IamGroupsPage'));
 const IamRolesPage = lazy(() => import('@/pages/settings/IamRolesPage'));
 const DatabaseMaintenanceSettings = lazy(() => import('@/pages/settings/DatabaseMaintenanceSettings'));
+const McpToolsSettings = lazy(() => import('@/pages/settings/McpToolsSettings'));
 const ReportTemplateList = lazy(() => import('@/pages/reports/ReportTemplateList'));
 const ReportTemplateForm = lazy(() => import('@/pages/reports/ReportTemplateForm'));
 const ReportTemplateWizard = lazy(() => import('@/pages/reports/ReportTemplateWizard'));
@@ -496,6 +497,14 @@ export const router = createBrowserRouter([
         element: (
           <PermissionGate anyOf={['settings.*', 'settings.read', 'admin.*']}>
             <LazyPage><CustomFieldsSettings /></LazyPage>
+          </PermissionGate>
+        ),
+      },
+      {
+        path: 'settings/mcp-tools',
+        element: (
+          <PermissionGate anyOf={['settings.*', 'settings.read', 'admin.*']}>
+            <LazyPage><McpToolsSettings /></LazyPage>
           </PermissionGate>
         ),
       },
