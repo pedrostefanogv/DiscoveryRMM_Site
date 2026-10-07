@@ -103,6 +103,11 @@ vi.mock('@/stores/heartbeatStore', () => ({
 }));
 
 vi.mock('@/hooks/useNowTick', () => ({ useNowTick: () => Date.now() }));
+// Mantém os agentes de teste online para exercitar o submenu "Energia".
+vi.mock('@/utils/agentStatus', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/utils/agentStatus')>();
+  return { ...actual, isAgentOnlineNow: () => true };
+});
 vi.mock('@/auth/authorization', () => ({ useAuthorization: () => ({ hasAnyPermission: () => true }) }));
 vi.mock('@/hooks/useAgentAlerts', () => ({ useSendAgentNotification: () => ({ mutateAsync: vi.fn(), isPending: false }) }));
 vi.mock('./remoteDebugLauncher', () => ({ openRemoteDebugPopup: vi.fn() }));
@@ -123,6 +128,11 @@ function renderPage() {
   );
 }
 
+/** "Excluídos" agora é uma opção do filtro (select), não mais um botão. */
+function selectDeletedView() {
+  fireEvent.change(screen.getByDisplayValue('Todos'), { target: { value: 'deleted' } });
+}
+
 describe('AgentList — lixeira e filtros', () => {
   beforeEach(() => {
     restoreMock.mockReset().mockResolvedValue(undefined);
@@ -139,10 +149,41 @@ describe('AgentList — lixeira e filtros', () => {
     expect(screen.queryByText('EXCLUIDO-01')).toBeNull();
   });
 
+  it('"Todos" não mostra excluídos e a opção "Excluídos" abre a lixeira', async () => {
+    renderPage();
+
+    expect(screen.getByText('ATIVO-01')).toBeTruthy();
+    expect(screen.queryByText('EXCLUIDO-01')).toBeNull();
+    // O botão antigo de excluídos foi removido; agora só existe o select.
+    expect(screen.queryByRole('button', { name: /Excluídos/ })).toBeNull();
+
+    selectDeletedView();
+
+    expect(await screen.findByText('EXCLUIDO-01')).toBeTruthy();
+    expect(screen.queryByText('ATIVO-01')).toBeNull();
+
+    fireEvent.change(screen.getByDisplayValue('Excluídos'), { target: { value: 'all' } });
+
+    expect(screen.getByText('ATIVO-01')).toBeTruthy();
+    expect(screen.queryByText('EXCLUIDO-01')).toBeNull();
+  });
+
+  it('clicar em Online sai da lixeira e volta ao catálogo ativo', async () => {
+    renderPage();
+
+    selectDeletedView();
+    expect(await screen.findByText('EXCLUIDO-01')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: /^Online/ }));
+
+    expect(screen.getByText('ATIVO-01')).toBeTruthy();
+    expect(screen.queryByText('EXCLUIDO-01')).toBeNull();
+  });
+
   it('abre a lixeira, mostra o excluído e restaura', async () => {
     renderPage();
 
-    fireEvent.click(screen.getByRole('button', { name: /Excluídos/ }));
+    selectDeletedView();
 
     expect(await screen.findByText('EXCLUIDO-01')).toBeTruthy();
     expect(screen.queryByText('ATIVO-01')).toBeNull();
@@ -156,7 +197,7 @@ describe('AgentList — lixeira e filtros', () => {
   it('exige digitar o nome e confirma a exclusão definitiva', async () => {
     renderPage();
 
-    fireEvent.click(screen.getByRole('button', { name: /Excluídos/ }));
+    selectDeletedView();
     await screen.findByText('EXCLUIDO-01');
 
     fireEvent.click(screen.getByRole('button', { name: /Excluir definitivamente/ }));
@@ -177,7 +218,7 @@ describe('AgentList — lixeira e filtros', () => {
 
     purgeMock.mockRejectedValueOnce(new ApiError(409, 'Agente vinculado a 1 chamado(s).'));
 
-    fireEvent.click(screen.getByRole('button', { name: /Excluídos/ }));
+    selectDeletedView();
     await screen.findByText('EXCLUIDO-01');
 
     fireEvent.click(screen.getByRole('button', { name: /Excluir definitivamente/ }));
@@ -195,7 +236,7 @@ describe('AgentList — lixeira e filtros', () => {
   it('pagina a lixeira quando há mais de uma página', async () => {
     renderPage();
 
-    fireEvent.click(screen.getByRole('button', { name: /Excluídos/ }));
+    selectDeletedView();
     await screen.findByText('EXCLUIDO-01');
 
     expect(screen.getByText('Página 1 de 2')).toBeTruthy();
@@ -216,5 +257,93 @@ describe('AgentList — lixeira e filtros', () => {
 
     expect(await screen.findByText(/Label "Windows": 2 agente\(s\)/)).toBeTruthy();
     expect(screen.getByText(/2 agentes exibidos/)).toBeTruthy();
+  });
+});
+
+describe('AgentList — menu de contexto e submenu de energia', () => {
+  beforeEach(() => {
+    restoreMock.mockReset().mockResolvedValue(undefined);
+    purgeMock.mockReset().mockResolvedValue(undefined);
+    deleteMock.mockReset().mockResolvedValue(undefined);
+    deletedParamsMock.mockReset();
+  });
+
+  afterEach(() => cleanup());
+
+  function openContextMenuFor(name: string, clientX: number, clientY: number) {
+    const card = screen.getByText(name).closest('[role="button"]');
+    expect(card).not.toBeNull();
+    fireEvent.contextMenu(card as Element, { clientX, clientY });
+    return screen.getByRole('menu');
+  }
+
+  function energyTrigger() {
+    // O rótulo "Energia" é texto direto do <button>, então o wrapper com os
+    // handlers de hover é o elemento pai.
+    const label = screen.getByText('Energia');
+    const wrapper = label.closest('div.relative.flex');
+    expect(wrapper).not.toBeNull();
+    return wrapper as HTMLElement;
+  }
+
+  it('fecha o submenu de energia ao abrir o menu de contexto de outro agente', () => {
+    renderPage();
+
+    openContextMenuFor('ATIVO-01', 40, 40);
+    fireEvent.mouseOver(energyTrigger());
+    expect(screen.getByText('Reiniciar')).toBeTruthy();
+
+    // Botão direito em outro agente: o submenu não deve continuar aberto.
+    openContextMenuFor('ATIVO-02', 120, 80);
+
+    expect(screen.queryByText('Reiniciar')).toBeNull();
+    expect(screen.queryByText('Desligar')).toBeNull();
+  });
+
+  it('fecha o submenu de energia quando o menu de contexto fecha', () => {
+    renderPage();
+
+    openContextMenuFor('ATIVO-01', 40, 40);
+    fireEvent.mouseOver(energyTrigger());
+    expect(screen.getByText('Reiniciar')).toBeTruthy();
+
+    fireEvent.mouseDown(document.body);
+
+    expect(screen.queryByRole('menu')).toBeNull();
+    expect(screen.queryByText('Reiniciar')).toBeNull();
+  });
+
+  it('mantém o menu de contexto dentro da viewport ao abrir junto à borda', () => {
+    renderPage();
+
+    const menu = openContextMenuFor('ATIVO-01', window.innerWidth - 5, window.innerHeight - 5);
+
+    // O clique foi a 5px das bordas; o menu deve ser trazido para dentro com a
+    // margem de 8px (e não para um deslocamento fixo como no código antigo).
+    expect(menu.style.left).toBe(`${window.innerWidth - 8}px`);
+    expect(menu.style.top).toBe(`${window.innerHeight - 8}px`);
+  });
+
+  it('abre o submenu de energia por clique (touch/teclado)', () => {
+    renderPage();
+
+    openContextMenuFor('ATIVO-01', 40, 40);
+    fireEvent.click(screen.getByText('Energia'));
+
+    expect(screen.getByText('Reiniciar')).toBeTruthy();
+  });
+
+  it('posiciona o submenu de energia dentro da viewport', () => {
+    renderPage();
+
+    openContextMenuFor('ATIVO-01', window.innerWidth - 30, window.innerHeight - 30);
+    fireEvent.mouseOver(energyTrigger());
+
+    const submenu = screen.getByRole('menu', { name: 'Opções de energia' });
+    // O submenu agora é posicionado via coordenadas no viewport (position: fixed),
+    // em vez de ficar escondido fora da tela com left-full.
+    expect(submenu.className).toContain('fixed');
+    expect(submenu.style.left).toBe('8px');
+    expect(submenu.style.top).toBe('8px');
   });
 });

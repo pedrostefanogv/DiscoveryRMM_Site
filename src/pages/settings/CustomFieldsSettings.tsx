@@ -20,6 +20,8 @@ import {
 } from '@/hooks';
 import { agentsApi, clientsApi, sitesApi, type Agent, type Client, type Site } from '@/api';
 import { CustomFieldTemplatesSection } from '@/components/configuration/CustomFieldTemplatesSection';
+import { fieldKeyError } from '@/utils/fieldKey';
+import { useAutoKey } from '@/hooks/useAutoKey';
 
 type DefinitionFormState = {
   name: string;
@@ -58,6 +60,9 @@ export default function CustomFieldsSettings() {
   const [selectedScopeFilter, setSelectedScopeFilter] = useState('');
   const [editingDefinitionId, setEditingDefinitionId] = useState<string | null>(null);
   const [definitionForm, setDefinitionForm] = useState<DefinitionFormState>(defaultDefinitionForm);
+  // Chave da definição: derivada do título na criação e imutável depois de
+  // criada (relatórios, automações e valores gravados a referenciam).
+  const { keyForTitle, markTouched, setTouched } = useAutoKey(false);
 
   const [selectedValueScope, setSelectedValueScope] = useState<StringifiedScope>(`${CustomFieldScopeType.Agent}`);
   const [selectedClientId, setSelectedClientId] = useState('');
@@ -70,7 +75,6 @@ export default function CustomFieldsSettings() {
   const [sites, setSites] = useState<Site[]>([]);
   const [agents, setAgents] = useState<Agent[]>([]);
 
-  const scopeFilter = selectedScopeFilter === '' ? undefined : (Number(selectedScopeFilter) as CustomFieldScopeType);
   const valueScope = Number(selectedValueScope) as CustomFieldScopeType;
   const valueEntityId = valueScope === CustomFieldScopeType.Server
     ? undefined
@@ -82,7 +86,10 @@ export default function CustomFieldsSettings() {
           ? selectedAgentId || undefined
           : undefined;
 
-  const definitionsQuery = useCustomFieldDefinitions({ scopeType: scopeFilter, includeInactive });
+  // Sempre busca todas as definições (inclusive inativas): a listagem filtra no
+  // cliente e a detecção de duplicidade não gera falso negativo por causa dos
+  // filtros de escopo/inativos.
+  const definitionsQuery = useCustomFieldDefinitions({ includeInactive: true });
   const valuesQuery = useCustomFieldValues(
     valueScope,
     {
@@ -176,21 +183,48 @@ export default function CustomFieldsSettings() {
 
   const scopedDefinitions = useMemo(() => {
     const items = definitionsQuery.data ?? [];
-    return items.sort((a, b) => a.label.localeCompare(b.label, 'pt-BR'));
-  }, [definitionsQuery.data]);
+    // filter() devolve um novo array; o sort não muta o cache do React Query.
+    return items
+      .filter(
+        item =>
+          (selectedScopeFilter === '' || item.scopeType === Number(selectedScopeFilter)) &&
+          (includeInactive || item.isActive),
+      )
+      .sort((a, b) => a.label.localeCompare(b.label, 'pt-BR'));
+  }, [definitionsQuery.data, selectedScopeFilter, includeInactive]);
 
   const valueDefinitions = useMemo(
     () => scopedDefinitions.filter(item => item.scopeType === valueScope),
     [scopedDefinitions, valueScope],
   );
 
+  // Só exibe erro depois que o usuário digitou algo (formulário novo não nasce "inválido").
+  const keyError = definitionForm.name.trim()
+    ? fieldKeyError(definitionForm.name, { allowHyphen: true })
+    : null;
+  // A API exige chave única por escopo: antecipa o erro em vez de deixar o
+  // usuário tomar um erro só ao salvar.
+  const duplicateKeyError =
+    definitionForm.name.trim() &&
+    (definitionsQuery.data ?? []).some(
+      item =>
+        item.id !== editingDefinitionId &&
+        item.name.trim().toLowerCase() === definitionForm.name.trim().toLowerCase() &&
+        item.scopeType === Number(definitionForm.scopeType),
+    )
+      ? 'Já existe uma definição com esta chave neste escopo.'
+      : null;
+  const effectiveKeyError = keyError ?? duplicateKeyError;
+
   function resetDefinitionForm() {
     setEditingDefinitionId(null);
     setDefinitionForm(defaultDefinitionForm);
+    setTouched(false);
   }
 
   function editDefinition(definition: CustomFieldDefinition) {
     setEditingDefinitionId(definition.id);
+    setTouched(true);
     setDefinitionForm({
       name: definition.name,
       label: definition.label,
@@ -208,8 +242,15 @@ export default function CustomFieldsSettings() {
     const dataType = Number(definitionForm.dataType) as CustomFieldDataType;
     const options = definitionForm.optionsText.split(',').map(item => item.trim()).filter(Boolean);
 
-    if (!name || !label) {
-      toast.error('Nome e label são obrigatórios.');
+    if (!label) {
+      toast.error('Título e chave são obrigatórios.');
+      return;
+    }
+    // Em edição a chave é imutável: não revalidar (definições legadas não
+    // podem travar a edição de título/escopo).
+    const invalidKey = editingDefinitionId ? null : fieldKeyError(name, { allowHyphen: true }) ?? duplicateKeyError;
+    if (invalidKey) {
+      toast.error(invalidKey);
       return;
     }
 
@@ -294,8 +335,35 @@ export default function CustomFieldsSettings() {
       <Card>
         <CardHeader title={editingDefinitionId ? 'Editar Definição' : 'Nova Definição'} subtitle="Cadastre o campo e escolha o escopo e o tipo de dado." />
         <div className="grid gap-4 lg:grid-cols-2">
-          <Input label="Name" value={definitionForm.name} onChange={event => setDefinitionForm(prev => ({ ...prev, name: event.target.value }))} />
-          <Input label="Label" value={definitionForm.label} onChange={event => setDefinitionForm(prev => ({ ...prev, label: event.target.value }))} />
+          <Input
+            label="Título *"
+            value={definitionForm.label}
+            onChange={event => {
+              const label = event.target.value;
+              // Enquanto a chave não for editada à mão, ela acompanha o título.
+              setDefinitionForm(prev => ({
+                ...prev,
+                label,
+                name: keyForTitle(label, prev.name),
+              }));
+            }}
+            placeholder="ex: Tipo de Solicitação"
+            hint="Nome exibido nas telas de valor. A chave é preenchida automaticamente a partir daqui."
+          />
+          <Input
+            label="Chave *"
+            value={definitionForm.name}
+            onChange={event => {
+              markTouched();
+              setDefinitionForm(prev => ({ ...prev, name: event.target.value.toLowerCase() }));
+            }}
+            placeholder="ex: tipo_solicitacao"
+            hint={editingDefinitionId
+              ? 'A chave não pode ser alterada depois de criada (relatórios e automações podem referenciá-la).'
+              : 'Identificador único no escopo ([a-z0-9_-]), preenchido a partir do título.'}
+            error={editingDefinitionId ? undefined : effectiveKeyError ?? undefined}
+            disabled={editingDefinitionId !== null}
+          />
         </div>
         <div className="mt-4">
           <TextArea label="Descrição" rows={3} value={definitionForm.description} onChange={event => setDefinitionForm(prev => ({ ...prev, description: event.target.value }))} />
@@ -337,7 +405,7 @@ export default function CustomFieldsSettings() {
                   <Badge color="accent">{getCustomFieldScopeLabel(definition.scopeType)}</Badge>
                   <Badge color="slate">{getCustomFieldDataTypeLabel(definition.dataType)}</Badge>
                 </div>
-                <p className="mt-2 text-xs text-muted">Name: {definition.name}</p>
+                <p className="mt-2 text-xs text-muted">Chave: {definition.name}</p>
                 {definition.description ? <p className="mt-2 text-sm text-muted-foreground">{definition.description}</p> : null}
                 {definition.options.length > 0 ? <p className="mt-2 text-xs text-muted">Opções: {definition.options.join(', ')}</p> : null}
                 <div className="mt-3 flex flex-wrap gap-2">

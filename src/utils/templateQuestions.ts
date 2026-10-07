@@ -1,4 +1,5 @@
 import { CustomFieldDataType, type TicketSchemaField } from '@/api';
+import { fieldKeyError, slugifyFieldKey } from '@/utils/fieldKey';
 
 /**
  * Pergunta do mini questionário de um template de chamado. NÃO é um campo do
@@ -113,15 +114,9 @@ export function serializeTemplateQuestions(questions: TemplateQuestion[]): strin
   return JSON.stringify(clean);
 }
 
-/** Gera uma chave estável ([a-z0-9_]) a partir do rótulo. */
+/** Gera uma chave estável ([a-z0-9_]) a partir do título da pergunta. */
 export function slugifyQuestionKey(label: string, index: number): string {
-  const slug = label
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '_')
-    .replace(/^_+|_+$/g, '');
-  return slug || `pergunta_${index + 1}`;
+  return slugifyFieldKey(label) || `pergunta_${index + 1}`;
 }
 
 /**
@@ -135,9 +130,15 @@ export function validateTemplateQuestions(questions: TemplateQuestion[]): string
   for (const question of questions) {
     const label = question.label.trim();
     const key = question.key.trim();
-    if (!label || !key) return 'Toda pergunta do modelo precisa de rótulo e chave.';
+    if (!label || !key) return 'Toda pergunta do modelo precisa de título e chave.';
+    // Duplicidade antes do padrão: quando a chave repete, essa é a mensagem
+    // mais acionável (e a checagem ignora maiúsculas).
     if (seen.has(key.toLowerCase())) return `Chave de pergunta duplicada: "${key}".`;
     seen.add(key.toLowerCase());
+    // Mesmo padrão das demais chaves do produto ([a-z0-9_-], com ao menos um
+    // alfanumérico). A chave identifica a resposta no snapshot do chamado.
+    const keyError = fieldKeyError(key, { allowHyphen: true });
+    if (keyError) return `Pergunta "${label}": ${keyError}`;
 
     if (
       (question.dataType === CustomFieldDataType.Dropdown ||

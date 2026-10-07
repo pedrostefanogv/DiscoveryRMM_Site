@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { ChevronRight } from "lucide-react";
 
@@ -19,6 +19,9 @@ interface ContextMenuProps {
   items: ContextMenuItem[];
   onClose: () => void;
 }
+
+/** Distância mínima entre qualquer menu/submenu e a borda da viewport. */
+const VIEWPORT_MARGIN = 8;
 
 export function ContextMenu({ position, items, onClose }: ContextMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null);
@@ -47,26 +50,33 @@ export function ContextMenu({ position, items, onClose }: ContextMenuProps) {
     };
   }, [onClose]);
 
-  // Calcula posição evitando overflow na viewport.
-  useEffect(() => {
+  // Calcula posição evitando overflow na viewport (antes da pintura, sem "pulo").
+  const place = useCallback(() => {
     const el = menuRef.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();
-    let { x, y } = position;
-    if (x + rect.width > window.innerWidth - 8) {
-      x = Math.max(8, window.innerWidth - rect.width - 8);
-    }
-    if (y + rect.height > window.innerHeight - 8) {
-      y = Math.max(8, window.innerHeight - rect.height - 8);
-    }
-    el.style.left = `${x}px`;
-    el.style.top = `${y}px`;
+    const left = Math.max(
+      VIEWPORT_MARGIN,
+      Math.min(position.x, window.innerWidth - rect.width - VIEWPORT_MARGIN),
+    );
+    const top = Math.max(
+      VIEWPORT_MARGIN,
+      Math.min(position.y, window.innerHeight - rect.height - VIEWPORT_MARGIN),
+    );
+    el.style.left = `${left}px`;
+    el.style.top = `${top}px`;
   }, [position]);
+
+  useLayoutEffect(() => {
+    place();
+    window.addEventListener("resize", place);
+    return () => window.removeEventListener("resize", place);
+  }, [place]);
 
   const menu = (
     <div
       ref={menuRef}
-      className="fixed z-[200] min-w-[220px] rounded-lg border border-border bg-surface py-1.5 shadow-2xl"
+      className="fixed z-[200] max-h-[calc(100vh-1rem)] min-w-[220px] overflow-y-auto rounded-lg border border-border bg-surface py-1.5 shadow-2xl"
       style={{ left: position.x, top: position.y }}
       role="menu"
       onContextMenu={(event) => event.preventDefault()}
@@ -124,20 +134,68 @@ function SubmenuItem({
   item: ContextMenuItem;
   onClose: () => void;
 }) {
+  const groupRef = useRef<HTMLDivElement>(null);
+  const submenuRef = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
+
+  // Posiciona o submenu no viewport: abre para a esquerda quando não cabe à
+  // direita e sobe quando passaria da base da tela.
+  useLayoutEffect(() => {
+    if (!open) return;
+    const submenu = submenuRef.current;
+    const trigger = groupRef.current;
+    if (!submenu || !trigger) return;
+
+    const triggerRect = trigger.getBoundingClientRect();
+    const submenuRect = submenu.getBoundingClientRect();
+
+    let left = triggerRect.right;
+    if (left + submenuRect.width > window.innerWidth - VIEWPORT_MARGIN) {
+      left = triggerRect.left - submenuRect.width;
+    }
+    left = Math.max(
+      VIEWPORT_MARGIN,
+      Math.min(left, window.innerWidth - submenuRect.width - VIEWPORT_MARGIN),
+    );
+    const top = Math.max(
+      VIEWPORT_MARGIN,
+      Math.min(triggerRect.top, window.innerHeight - submenuRect.height - VIEWPORT_MARGIN),
+    );
+
+    submenu.style.left = `${left}px`;
+    submenu.style.top = `${top}px`;
+  }, [open]);
+
   return (
-    <div className="group relative">
-      <div
+    <div
+      ref={groupRef}
+      className="relative"
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}
+    >
+      <button
+        type="button"
         className={`flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm transition-colors hover:bg-surface-hover ${
           item.danger ? "text-danger" : "text-foreground"
         }`}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        // Abrir por foco/click (não alternar): o foco do mousedown dispara
+        // primeiro, então um toggle fecharia o submenu no mesmo clique.
+        onFocus={() => setOpen(true)}
+        onClick={() => setOpen(true)}
       >
         {item.icon ? <span className="shrink-0">{item.icon}</span> : null}
         <span className="flex-1 truncate">{item.label}</span>
         <ChevronRight className="h-4 w-4 text-muted" />
-      </div>
+      </button>
       <div
-        className="invisible absolute left-full top-0 z-[210] min-w-[200px] rounded-lg border border-border bg-surface py-1.5 shadow-2xl opacity-0 transition-opacity group-hover:visible group-hover:opacity-100"
+        ref={submenuRef}
         role="menu"
+        className={`fixed z-[210] max-h-[calc(100vh-1rem)] min-w-[200px] overflow-y-auto rounded-lg border border-border bg-surface py-1.5 shadow-2xl transition-opacity ${
+          open ? "visible opacity-100" : "invisible opacity-0"
+        }`}
+        style={{ left: 0, top: 0 }}
         onContextMenu={(event) => event.preventDefault()}
       >
         {item.children?.map((child) => (

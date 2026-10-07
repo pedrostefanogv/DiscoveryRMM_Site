@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Bell, CheckCheck, RefreshCw, Trash2, X } from "lucide-react";
 import toast from "react-hot-toast";
@@ -32,6 +32,7 @@ function getSeverityLabel(severity: string) {
 export function NotificationBell() {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement | null>(null);
   const {
     notifications,
     unreadCount,
@@ -47,6 +48,26 @@ export function NotificationBell() {
     () => notifications.slice(0, 20),
     [notifications],
   );
+
+  // Fecha o card ao clicar fora dele ou pressionar Escape.
+  useEffect(() => {
+    if (!open) return;
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (containerRef.current?.contains(event.target as Node)) return;
+      setOpen(false);
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [open]);
 
   const handleNotificationClick = async (item: AppNotification) => {
     try {
@@ -98,12 +119,13 @@ export function NotificationBell() {
   };
 
   return (
-    <div className="relative">
+    <div className="relative" ref={containerRef}>
       <Button
         variant="ghost"
         size="sm"
         onClick={() => setOpen((prev) => !prev)}
         aria-label="Abrir notificações"
+        aria-expanded={open}
       >
         <Bell className="h-4 w-4" />
         {unreadCount > 0 && (
@@ -151,10 +173,16 @@ export function NotificationBell() {
                 const displayMessage = formatNotificationMessage(item);
 
                 return (
-                  <button
+                  <div
                     key={item.id}
-                    type="button"
+                    role="button"
+                    tabIndex={0}
                     onClick={() => void handleNotificationClick(item)}
+                    onKeyDown={event => {
+                      if (event.key !== "Enter" && event.key !== " ") return;
+                      event.preventDefault();
+                      void handleNotificationClick(item);
+                    }}
                     aria-label={target ? `Abrir ${target.label}: ${item.title}` : item.title}
                     className={`group relative w-full rounded-lg border p-3 text-left transition ${
                       item.isRead
@@ -169,15 +197,17 @@ export function NotificationBell() {
                           {getSeverityLabel(item.severity)}
                         </Badge>
                         {item.isRead ? (
-                          <span
-                            className="inline-flex items-center justify-center rounded p-0.5 text-muted opacity-0 transition-opacity hover:text-danger group-hover:opacity-100"
+                          <button
+                            type="button"
+                            aria-label="Excluir notificação"
+                            className="inline-flex items-center justify-center rounded p-0.5 text-muted opacity-0 transition-opacity hover:text-danger focus:opacity-100 group-hover:opacity-100"
                             onClick={event => {
                               event.stopPropagation();
-                              handleDismissNotification(item.id);
+                              void handleDismissNotification(item.id);
                             }}
                           >
                             <X className="h-3.5 w-3.5" />
-                          </span>
+                          </button>
                         ) : null}
                       </div>
                     </div>
@@ -198,7 +228,7 @@ export function NotificationBell() {
                         {new Date(item.createdAt).toLocaleString("pt-BR")}
                       </span>
                     </div>
-                  </button>
+                  </div>
                 );
               })}
             </div>

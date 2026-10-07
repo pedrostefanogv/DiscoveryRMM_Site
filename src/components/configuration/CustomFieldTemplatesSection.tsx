@@ -28,6 +28,8 @@ import {
 import { useClients } from '@/hooks/useClients';
 import { useDepartments } from '@/hooks/useDepartments';
 import { fieldMaskPlaceholder } from '@/utils/fieldMask';
+import { fieldKeyError } from '@/utils/fieldKey';
+import { useAutoKey } from '@/hooks/useAutoKey';
 
 const DATA_TYPE_OPTIONS = Object.values(CustomFieldDataType)
   .filter((value): value is CustomFieldDataType => typeof value === 'number')
@@ -193,7 +195,7 @@ export function CustomFieldTemplatesSection() {
                   {!template.isActive && <Badge color="danger">Inativo</Badge>}
                 </div>
                 <p className="mt-0.5 text-xs text-muted">
-                  <code className="text-[11px]">{template.name}</code>
+                  Chave: <code className="text-[11px]">{template.name}</code>
                   {template.description && ` — ${template.description}`}
                 </p>
                 <div className="mt-0.5 flex flex-wrap gap-x-3 text-[11px] text-muted">
@@ -225,6 +227,7 @@ export function CustomFieldTemplatesSection() {
         <TemplateModelFormModal
           template={editing}
           clientOptions={(clients.data ?? []).map((client) => ({ value: client.id, label: client.name }))}
+          existingTemplates={templatesQuery.data ?? []}
           onClose={() => setOpen(false)}
         />
       )}
@@ -273,10 +276,12 @@ function toFormState(template: CustomFieldTemplateDto | null): UpsertCustomField
 function TemplateModelFormModal({
   template,
   clientOptions,
+  existingTemplates,
   onClose,
 }: {
   template: CustomFieldTemplateDto | null;
   clientOptions: { value: string; label: string }[];
+  existingTemplates: CustomFieldTemplateDto[];
   onClose: () => void;
 }) {
   const isEdit = template !== null;
@@ -286,6 +291,26 @@ function TemplateModelFormModal({
 
   const [form, setForm] = useState<UpsertCustomFieldTemplateRequest>(() => toFormState(template));
   const [optionsText, setOptionsText] = useState(() => (template?.options ?? []).join(', '));
+  // Chave do modelo: derivada do título na criação e imutável depois de criada
+  // (relatórios/automações podem referenciá-la).
+  const { keyForTitle, markTouched } = useAutoKey(isEdit);
+  // Modelos built-in usam hífen na chave (ex.: "texto-curto") e a API aceita
+  // [a-z0-9_-] para modelos — validar sem hífen bloquearia a edição deles.
+  // Só exibe erro depois que o usuário digitou algo (formulário novo não nasce "inválido").
+  const keyError = form.name.trim() ? fieldKeyError(form.name, { allowHyphen: true }) : null;
+  // Duplicidade é por escopo (cliente + departamento) na API: antecipa o erro.
+  const duplicateKeyError =
+    form.name.trim() &&
+    existingTemplates.some(
+      (item) =>
+        item.id !== template?.id &&
+        item.name.trim().toLowerCase() === form.name.trim().toLowerCase() &&
+        (item.clientId ?? null) === (form.clientId ?? null) &&
+        (item.departmentId ?? null) === (form.departmentId ?? null),
+    )
+      ? 'Já existe um modelo com esta chave neste escopo.'
+      : null;
+  const effectiveKeyError = keyError ?? duplicateKeyError;
 
   // Departamentos do cliente escolhido (+ globais).
   const departments = useDepartments({ clientId: form.clientId ?? undefined, includeGlobal: true });
@@ -306,8 +331,15 @@ function TemplateModelFormModal({
   const handleSubmit = async () => {
     const name = form.name.trim();
     const label = form.label.trim();
-    if (name.length < 2 || !label) {
-      toast.error('Informe nome (mín. 2) e rótulo do modelo.');
+    if (!label) {
+      toast.error('Informe o título do modelo.');
+      return;
+    }
+    // Em edição a chave é imutável: não revalidar (nomes legados não podem
+    // travar a edição de título/máscara).
+    const invalidKey = isEdit ? null : fieldKeyError(name, { allowHyphen: true }) ?? duplicateKeyError;
+    if (invalidKey) {
+      toast.error(invalidKey);
       return;
     }
 
@@ -395,14 +427,34 @@ function TemplateModelFormModal({
 
         <div className="grid grid-cols-2 gap-3">
           <Input
-            label="Nome *"
-            value={form.name}
-            onChange={(e) => set('name', e.target.value)}
-            placeholder="ex: cpf"
-            hint="Identificador único no escopo ([a-z0-9_-])"
-            disabled={template?.isBuiltIn}
+            label="Título *"
+            value={form.label}
+            onChange={(e) => {
+              const label = e.target.value;
+              // Enquanto a chave não for editada à mão, ela acompanha o título.
+              setForm((current) => ({
+                ...current,
+                label,
+                name: keyForTitle(label, current.name),
+              }));
+            }}
+            placeholder="ex: CPF"
+            hint="Nome exibido no catálogo. A chave é preenchida automaticamente a partir daqui."
           />
-          <Input label="Rótulo *" value={form.label} onChange={(e) => set('label', e.target.value)} placeholder="ex: CPF" />
+          <Input
+            label="Chave *"
+            value={form.name}
+            onChange={(e) => {
+              markTouched();
+              set('name', e.target.value.toLowerCase());
+            }}
+            placeholder="ex: cpf"
+            hint={isEdit
+              ? 'A chave não pode ser alterada depois de criada (relatórios e automações podem referenciá-la).'
+              : 'Identificador único no escopo ([a-z0-9_-]), preenchido a partir do título.'}
+            error={isEdit ? undefined : effectiveKeyError ?? undefined}
+            disabled={isEdit}
+          />
         </div>
 
         <Input

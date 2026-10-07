@@ -21,7 +21,8 @@ import {
   type TemplateQuestion,
 } from '@/utils/templateQuestions';
 import { buildTicketCustomFieldValues } from '@/utils/ticketCustomFields';
-import { slugifyTemplateKey, templateKeyError } from '@/utils/templateKey';
+import { templateKeyError } from '@/utils/templateKey';
+import { useAutoKey } from '@/hooks/useAutoKey';
 import toast from 'react-hot-toast';
 
 const EMPTY: UpsertTicketTemplateRequest = {
@@ -177,7 +178,7 @@ function TicketTemplateForm({
   const initialQuestionsRef = useRef(questions);
   // Chave do template: derivada do título até o usuário editá-la à mão (e
   // sempre preservada na edição de um template existente).
-  const keyTouchedRef = useRef(Boolean(editId));
+  const { keyForTitle, markTouched } = useAutoKey(Boolean(editId));
   const keyError = form.name.trim() ? templateKeyError(form.name) : null;
 
   // Snapshot do que está persistido: base para o aviso de alterações não
@@ -327,7 +328,7 @@ function TicketTemplateForm({
               setForm((current) => ({
                 ...current,
                 title,
-                name: keyTouchedRef.current ? current.name : slugifyTemplateKey(title),
+                name: keyForTitle(title, current.name),
               }));
             }}
           />
@@ -338,7 +339,7 @@ function TicketTemplateForm({
             hint="Identificador único no escopo ([a-z0-9_])."
             error={keyError ?? undefined}
             onChange={(e) => {
-              keyTouchedRef.current = true;
+              markTouched();
               set('name', e.target.value.toLowerCase());
             }}
           />

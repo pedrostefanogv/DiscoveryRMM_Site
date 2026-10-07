@@ -88,11 +88,11 @@ describe('validateTemplateQuestions', () => {
     ).toBeNull();
   });
 
-  it('exige rótulo e chave em toda pergunta', () => {
+  it('exige título e chave em toda pergunta', () => {
     expect(validateTemplateQuestions([question({ label: 'Sem chave', key: '' })]))
-      .toBe('Toda pergunta do modelo precisa de rótulo e chave.');
+      .toBe('Toda pergunta do modelo precisa de título e chave.');
     expect(validateTemplateQuestions([question({ label: '  ', key: 'x' })]))
-      .toBe('Toda pergunta do modelo precisa de rótulo e chave.');
+      .toBe('Toda pergunta do modelo precisa de título e chave.');
   });
 
   it('bloqueia chave duplicada ignorando maiúsculas', () => {
@@ -102,6 +102,14 @@ describe('validateTemplateQuestions', () => {
         question({ key: 'Email', label: 'E-mail 2' }),
       ]),
     ).toBe('Chave de pergunta duplicada: "Email".');
+  });
+
+  it('recusa chave fora do padrão ([a-z0-9_-] com alfanumérico)', () => {
+    expect(validateTemplateQuestions([question({ label: 'Nome', key: 'Nome Completo' })]))
+      .toBe('Pergunta "Nome": Use apenas letras minúsculas, números, _ e - (ex.: tipo_solicitacao).');
+    expect(validateTemplateQuestions([question({ label: 'Nome', key: '__' })]))
+      .toBe('Pergunta "Nome": A chave deve conter ao menos uma letra ou número.');
+    expect(validateTemplateQuestions([question({ label: 'Nome', key: 'nome-completo' })])).toBeNull();
   });
 
   it('exige opções para dropdown e listbox', () => {

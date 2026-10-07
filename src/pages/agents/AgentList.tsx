@@ -1,6 +1,6 @@
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { useState, useMemo, useEffect, useLayoutEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Monitor, Wifi, WifiOff, LayoutGrid, List, Bug, Trash2, ShieldCheck, ArrowUp, ArrowDown, RefreshCw, Move, RotateCcw, Power, Zap, ChevronRight, Bell, ArchiveRestore, Undo2 } from 'lucide-react';
+import { Monitor, Wifi, WifiOff, LayoutGrid, List, Bug, Trash2, ShieldCheck, ArrowUp, ArrowDown, RefreshCw, Move, RotateCcw, Power, Zap, ChevronRight, Bell, ArchiveRestore } from 'lucide-react';
 import { useQueries } from '@tanstack/react-query';
 import { useAgentLabelUsage, useAgentIdsByLabel, useAgentLabelsByAgentIds } from '@/hooks/useAgentLabels';
 import toast from 'react-hot-toast';
@@ -26,7 +26,7 @@ import { openRemoteSessionPopup } from './remoteSessionLauncher';
 
 type AgentWithClient = Agent & { clientName: string; clientId: string; siteName?: string };
 type ContextMenuState = { x: number; y: number; agent: AgentWithClient } | null;
-type ProvisioningFilter = 'all' | 'pendingApproval' | 'approved';
+type ProvisioningFilter = 'all' | 'pendingApproval' | 'approved' | 'deleted';
 type AgentSortField = 'name' | 'site' | 'client' | 'lastSeen' | 'status';
 type SortDirection = 'asc' | 'desc';
 const DELETED_PAGE_SIZE = 200;
@@ -138,7 +138,8 @@ export default function AgentList() {
   const [remoteDebugAgentId, setRemoteDebugAgentId] = useState<string | null>(null);
   const [approvingAgentId, setApprovingAgentId] = useState<string | null>(null);
   const [deletingAgentId, setDeletingAgentId] = useState<string | null>(null);
-  const [showDeleted, setShowDeleted] = useState(false);
+  // "Excluídos" agora é uma opção do próprio filtro de autorização.
+  const showDeleted = filterProvisioning === 'deleted';
   const [deletedPage, setDeletedPage] = useState(1);
   // Soft delete (mover para a lixeira) — confirmação simples.
   const [deleteConfirmAgent, setDeleteConfirmAgent] = useState<AgentWithClient | null>(null);
@@ -154,8 +155,11 @@ export default function AgentList() {
   const [wolAgent, setWolAgent] = useState<AgentWithClient | null>(null);
   const [notificationAgent, setNotificationAgent] = useState<AgentWithClient | null>(null);
   const contextMenuRef = useRef<HTMLDivElement | null>(null);
+  const powerSubmenuRef = useRef<HTMLDivElement | null>(null);
   // Submenu de energia ("Ligar / Reiniciar / Desligar") aberto ao lado via hover.
   const [powerSubmenuOpen, setPowerSubmenuOpen] = useState(false);
+  // Retângulo do item "Energia" que ancora o submenu no viewport (position: fixed).
+  const [powerSubmenuAnchor, setPowerSubmenuAnchor] = useState<{ top: number; left: number; right: number } | null>(null);
   const lastKnownIpByAgentRef = useRef<Map<string, string>>(new Map());
 
   // Lixeira: busca somente quando a visão de excluídos está aberta.
@@ -199,13 +203,54 @@ export default function AgentList() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
 
+  // Ao trocar de agente (ou fechar o menu), o submenu de energia não pode permanecer aberto.
   useEffect(() => {
-    if (!contextMenu || !contextMenuRef.current) return;
-    const left = Math.max(8, Math.min(contextMenu.x, window.innerWidth - 220));
-    const top = Math.max(8, Math.min(contextMenu.y, window.innerHeight - 64));
-    contextMenuRef.current.style.left = `${left}px`;
-    contextMenuRef.current.style.top = `${top}px`;
+    setPowerSubmenuOpen(false);
+    setPowerSubmenuAnchor(null);
   }, [contextMenu]);
+
+  // Mantém o menu de contexto inteiro dentro da viewport (bordas direita/inferior).
+  useLayoutEffect(() => {
+    const el = contextMenuRef.current;
+    if (!contextMenu || !el) return;
+
+    const place = () => {
+      const rect = el.getBoundingClientRect();
+      const margin = 8;
+      const left = Math.max(margin, Math.min(contextMenu.x, window.innerWidth - rect.width - margin));
+      const top = Math.max(margin, Math.min(contextMenu.y, window.innerHeight - rect.height - margin));
+      el.style.left = `${left}px`;
+      el.style.top = `${top}px`;
+    };
+
+    place();
+    window.addEventListener('resize', place);
+    return () => window.removeEventListener('resize', place);
+  }, [contextMenu]);
+
+  // Mantém o submenu de energia dentro da viewport: vira para a esquerda
+  // quando não há espaço à direita e sobe quando passaria da base da tela.
+  useLayoutEffect(() => {
+    const el = powerSubmenuRef.current;
+    if (!powerSubmenuOpen || !powerSubmenuAnchor || !el) return;
+
+    const margin = 8;
+    const rect = el.getBoundingClientRect();
+    let left = powerSubmenuAnchor.right;
+    if (left + rect.width > window.innerWidth - margin) {
+      left = powerSubmenuAnchor.left - rect.width;
+    }
+    left = Math.max(margin, Math.min(left, window.innerWidth - rect.width - margin));
+    const top = Math.max(margin, Math.min(powerSubmenuAnchor.top, window.innerHeight - rect.height - margin));
+    el.style.left = `${left}px`;
+    el.style.top = `${top}px`;
+  }, [powerSubmenuOpen, powerSubmenuAnchor]);
+
+  const openPowerSubmenu = (anchor: HTMLElement) => {
+    const rect = anchor.getBoundingClientRect();
+    setPowerSubmenuAnchor({ top: rect.top, left: rect.left, right: rect.right });
+    setPowerSubmenuOpen(true);
+  };
 
   const openRemoteControl = async (agent: AgentWithClient) => {
     setContextMenu(null);
@@ -593,6 +638,8 @@ export default function AgentList() {
     if (filterStatus === 'online' && !online) return false;
     if (filterStatus === 'offline' && online) return false;
     if (filterClient && a.clientId !== filterClient) return false;
+    // "Todos" lista o catálogo ativo (nunca inclui excluídos, que têm visão própria).
+    if (filterProvisioning === 'deleted') return false;
     if (filterProvisioning === 'pendingApproval' && !a.zeroTouchPending) return false;
     if (filterProvisioning === 'approved' && a.zeroTouchPending) return false;
     if (filterLabel && !labelFilterIds.has(a.id)) return false;
@@ -647,9 +694,10 @@ export default function AgentList() {
   ];
 
   const provisioningOptions = [
-    { value: 'all', label: 'Autorização: todos' },
-    { value: 'approved', label: 'Autorização: autorizados' },
-    { value: 'pendingApproval', label: 'Autorização: aguardando aprovação' },
+    { value: 'all', label: 'Todos' },
+    { value: 'approved', label: 'Autorizados' },
+    { value: 'pendingApproval', label: 'Aguardando aprovação' },
+    { value: 'deleted', label: 'Excluídos' },
   ];
 
   const sortOptions: Array<{ value: AgentSortField; label: string }> = [
@@ -687,8 +735,12 @@ export default function AgentList() {
           label="Online"
           value={totalOnline}
           tone="success"
-          onClick={() => setFilterStatus('online')}
-          active={filterStatus === 'online'}
+          onClick={() => {
+            setFilterStatus('online');
+            // Sair da visão de excluídos: o status não se aplica à lixeira.
+            setFilterProvisioning('all');
+          }}
+          active={filterStatus === 'online' && !showDeleted}
           trend={
             agentsWithStableIp.length > 0 ? (
               <span className="text-success text-sm font-medium">
@@ -702,8 +754,12 @@ export default function AgentList() {
           label="Offline"
           value={totalOffline}
           tone="warning"
-          onClick={() => setFilterStatus('offline')}
-          active={filterStatus === 'offline'}
+          onClick={() => {
+            setFilterStatus('offline');
+            // Sair da visão de excluídos: o status não se aplica à lixeira.
+            setFilterProvisioning('all');
+          }}
+          active={filterStatus === 'offline' && !showDeleted}
           trend={
             agentsWithStableIp.length > 0 && totalOffline > 0 ? (
               <span className="text-warning text-sm font-medium">
@@ -756,8 +812,12 @@ export default function AgentList() {
             fullWidth={false}
             options={provisioningOptions}
             value={filterProvisioning}
-            disabled={showDeleted}
-            onChange={e => setFilterProvisioning(e.target.value as ProvisioningFilter)}
+            onChange={e => {
+              const value = e.target.value as ProvisioningFilter;
+              setFilterProvisioning(value);
+              if (value === 'deleted') setDeletedPage(1);
+              setContextMenu(null);
+            }}
           />
           <Select
             fullWidth={false}
@@ -791,20 +851,6 @@ export default function AgentList() {
         </div>
         {/* Lixeira + toggle card / lista */}
         <div className="flex shrink-0 items-center gap-2">
-          <button
-            type="button"
-            onClick={() => {
-              setShowDeleted(current => !current);
-              setDeletedPage(1);
-              setContextMenu(null);
-            }}
-            className={'inline-flex h-9 items-center gap-1.5 rounded-lg border border-border px-3 text-sm transition-colors ' + (showDeleted ? 'bg-primary/20 text-primary' : 'bg-surface-light text-muted hover:text-foreground')}
-            title={showDeleted ? 'Voltar para os agentes ativos' : 'Ver agentes excluídos (lixeira)'}
-            aria-pressed={showDeleted}
-          >
-            {showDeleted ? <Undo2 className="h-4 w-4" /> : <Trash2 className="h-4 w-4" />}
-            {showDeleted ? 'Voltar' : 'Excluídos'}
-          </button>
           {/* O toggle card/lista não se aplica à lixeira (sempre tabela). */}
           {!showDeleted && (
           <div className="flex overflow-hidden rounded-lg border border-border">
@@ -1032,7 +1078,10 @@ export default function AgentList() {
           <div className="fixed inset-0 z-40" onClick={() => setContextMenu(null)} />
           <div
             ref={contextMenuRef}
-            className="fixed z-50 min-w-[200px] rounded-lg border border-border bg-surface shadow-xl"
+            role="menu"
+            aria-label={`Ações do agente ${contextMenu.agent.displayName ?? contextMenu.agent.hostname}`}
+            className="fixed z-50 max-h-[calc(100vh-1rem)] min-w-[200px] overflow-y-auto rounded-lg border border-border bg-surface shadow-xl"
+            style={{ left: contextMenu.x, top: contextMenu.y }}
           >
             <button
               className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-surface-hover"
@@ -1076,18 +1125,29 @@ export default function AgentList() {
             {isAgentOnlineNow(contextMenu.agent, now) && (
               <div
                 className="relative flex w-full"
-                onMouseEnter={() => setPowerSubmenuOpen(true)}
+                onMouseEnter={event => openPowerSubmenu(event.currentTarget)}
                 onMouseLeave={() => setPowerSubmenuOpen(false)}
               >
                 <button
+                  type="button"
+                  aria-haspopup="menu"
+                  aria-expanded={powerSubmenuOpen}
+                  onClick={event => openPowerSubmenu(event.currentTarget)}
+                  onFocus={event => openPowerSubmenu(event.currentTarget)}
                   className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-amber-700 transition-colors hover:bg-amber-50 dark:text-amber-300 dark:hover:bg-amber-500/10"
                 >
                   <Zap className="h-4 w-4" />
                   Energia
                   <ChevronRight className="ml-auto h-4 w-4" />
                 </button>
-                {powerSubmenuOpen && (
-                  <div className="absolute left-full top-0 z-50 min-w-[180px] overflow-hidden rounded-lg border border-border bg-surface shadow-xl">
+                {powerSubmenuOpen && powerSubmenuAnchor && (
+                  <div
+                    ref={powerSubmenuRef}
+                    role="menu"
+                    aria-label="Opções de energia"
+                    className="fixed z-[60] max-h-[calc(100vh-1rem)] min-w-[180px] overflow-y-auto rounded-lg border border-border bg-surface shadow-xl"
+                    style={{ left: powerSubmenuAnchor.right, top: powerSubmenuAnchor.top }}
+                  >
                     <button
                       className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60"
                       onClick={() => handleRestartAgent(contextMenu.agent)}

@@ -27,6 +27,8 @@ import {
 import { useCustomFieldTemplates } from "@/hooks/useCustomFieldTemplates";
 import { applyFieldMask, fieldMaskPlaceholder } from "@/utils/fieldMask";
 import { supportsInputMask } from "@/utils/customFieldMask";
+import { fieldKeyError } from "@/utils/fieldKey";
+import { useAutoKey } from "@/hooks/useAutoKey";
 
 // ── Helpers ──────────────────────────────────────────────
 
@@ -217,7 +219,7 @@ export function DepartmentCustomFieldsSection({
             {inactive > 0 ? `, ${inactive} inativo(s)` : ''}.
           </p>
         </div>
-        <CreateFieldButton departmentId={departmentId} clientId={clientId} />
+        <CreateFieldButton departmentId={departmentId} clientId={clientId} existingKeys={fields.map((field) => field.name)} />
       </div>
 
       {fields.length === 0 ? (
@@ -227,7 +229,13 @@ export function DepartmentCustomFieldsSection({
       ) : (
         <div className="space-y-2">
           {fields.map((field) => (
-            <FieldRow key={field.id} field={field} departmentId={departmentId} clientId={clientId} />
+            <FieldRow
+              key={field.id}
+              field={field}
+              departmentId={departmentId}
+              clientId={clientId}
+              existingKeys={fields.map((item) => item.name)}
+            />
           ))}
         </div>
       )}
@@ -241,10 +249,12 @@ function FieldRow({
   field,
   departmentId,
   clientId,
+  existingKeys,
 }: {
   field: DepartmentCustomFieldDefinition;
   departmentId: string;
   clientId: string | null;
+  existingKeys: string[];
 }) {
   const [editOpen, setEditOpen] = useState(false);
   const deleteMutation = useDeleteDepartmentCustomField();
@@ -285,7 +295,7 @@ function FieldRow({
               {!field.isActive && <Badge color="danger">Inativo</Badge>}
             </div>
             <p className="mt-0.5 text-xs text-muted">
-              <code className="text-[11px]">{field.name}</code>
+              Chave: <code className="text-[11px]">{field.name}</code>
               {field.description && ` — ${field.description}`}
             </p>
             {options.length > 0 && (
@@ -328,6 +338,7 @@ function FieldRow({
           departmentId={departmentId}
           clientId={clientId}
           field={field}
+          existingKeys={existingKeys}
           open={editOpen}
           onClose={() => setEditOpen(false)}
         />
@@ -338,7 +349,15 @@ function FieldRow({
 
 // ── Create Button ────────────────────────────────────────
 
-function CreateFieldButton({ departmentId, clientId }: { departmentId: string; clientId: string | null }) {
+function CreateFieldButton({
+  departmentId,
+  clientId,
+  existingKeys,
+}: {
+  departmentId: string;
+  clientId: string | null;
+  existingKeys: string[];
+}) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -350,6 +369,7 @@ function CreateFieldButton({ departmentId, clientId }: { departmentId: string; c
         <FieldFormModal
           departmentId={departmentId}
           clientId={clientId}
+          existingKeys={existingKeys}
           open={open}
           onClose={() => setOpen(false)}
         />
@@ -381,12 +401,14 @@ function FieldFormModal({
   departmentId,
   clientId,
   field,
+  existingKeys,
   open,
   onClose,
 }: {
   departmentId: string;
   clientId: string | null;
   field?: DepartmentCustomFieldDefinition;
+  existingKeys: string[];
   open: boolean;
   onClose: () => void;
 }) {
@@ -472,8 +494,31 @@ function FieldFormModal({
     return preset ? preset.invalidSamples.join("\n") : "";
   });
 
+  // Chave do campo: derivada do título na criação e imutável depois de criada
+  // (relatórios, automações e valores gravados a referenciam).
+  const { keyForTitle, markTouched } = useAutoKey(isEdit);
+  // Só exibe erro depois que o usuário digitou algo (formulário novo não nasce "inválido").
+  const keyError = form.name.trim() ? fieldKeyError(form.name, { allowHyphen: true }) : null;
+  // A API exige chave única no departamento: antecipa o erro em vez de deixar
+  // o usuário tomar um 400 só ao salvar.
+  const currentKey = (field?.name ?? '').trim().toLowerCase();
+  const duplicateKeyError =
+    form.name.trim() &&
+    existingKeys.some((key) => {
+      const normalized = key.trim().toLowerCase();
+      return normalized === form.name.trim().toLowerCase() && normalized !== currentKey;
+    })
+      ? "Já existe um campo com esta chave neste departamento."
+      : null;
+  const effectiveKeyError = keyError ?? duplicateKeyError;
+
   const isPending = createMutation.isPending || updateMutation.isPending;
-  const isValid = form.name.trim().length >= 2 && form.label.trim().length >= 1;
+  // Em edição a chave é imutável: ela não bloqueia o botão salvar.
+  const isValid = isEdit
+    ? form.label.trim().length >= 1
+    : !fieldKeyError(form.name, { allowHyphen: true }) &&
+      !duplicateKeyError &&
+      form.label.trim().length >= 1;
 
   const needsOptions =
     form.dataType === CustomFieldDataType.Dropdown ||
@@ -564,7 +609,15 @@ function FieldFormModal({
   }
 
   const handleSubmit = async () => {
-    if (!isValid) return;
+    const invalidKey = isEdit ? null : fieldKeyError(form.name, { allowHyphen: true }) ?? duplicateKeyError;
+    if (invalidKey) {
+      toast.error(invalidKey);
+      return;
+    }
+    if (!form.label.trim()) {
+      toast.error("Informe o título do campo.");
+      return;
+    }
     if (needsOptions && parseOptionsFromInput(optionsText).length === 0) {
       toast.error("Dropdown e ListBox exigem pelo menos uma opção.");
       return;
@@ -660,17 +713,33 @@ function FieldFormModal({
 
           <div className="grid grid-cols-2 gap-3">
             <Input
-              label="Nome do Campo *"
-              value={form.name}
-              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-              placeholder="ex: tipo_solicitacao"
-              hint="Identificador único ([a-z0-9_-])"
+              label="Título *"
+              value={form.label}
+              onChange={(e) => {
+                const label = e.target.value;
+                // Enquanto a chave não for editada à mão, ela acompanha o título.
+                setForm((f) => ({
+                  ...f,
+                  label,
+                  name: keyForTitle(label, f.name),
+                }));
+              }}
+              placeholder="ex: Tipo de Solicitação"
+              hint="Nome exibido no formulário do chamado. A chave é preenchida automaticamente a partir daqui."
             />
             <Input
-              label="Label *"
-              value={form.label}
-              onChange={(e) => setForm((f) => ({ ...f, label: e.target.value }))}
-              placeholder="ex: Tipo de Solicitação"
+              label="Chave *"
+              value={form.name}
+              onChange={(e) => {
+                markTouched();
+                setForm((f) => ({ ...f, name: e.target.value.toLowerCase() }));
+              }}
+              placeholder="ex: tipo_solicitacao"
+              hint={isEdit
+                ? "A chave não pode ser alterada depois de criada (relatórios e automações podem referenciá-la)."
+                : "Identificador único ([a-z0-9_-]), preenchido a partir do título."}
+              error={isEdit ? undefined : effectiveKeyError ?? undefined}
+              disabled={isEdit}
             />
           </div>
 

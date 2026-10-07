@@ -4,6 +4,7 @@ import { Badge, Button, Input, Select, TextArea } from '@/components/ui';
 import { CustomFieldDataType, getCustomFieldDataTypeLabel } from '@/api';
 import { useCustomFieldTemplates } from '@/hooks/useCustomFieldTemplates';
 import { fieldMaskPlaceholder } from '@/utils/fieldMask';
+import { fieldKeyError } from '@/utils/fieldKey';
 import {
   EMPTY_TEMPLATE_QUESTION,
   slugifyQuestionKey,
@@ -41,7 +42,7 @@ export function TemplateQuestionsEditor({
   });
   const [modelSelection, setModelSelection] = useState<Record<number, string>>({});
   // Índices em que o usuário editou a chave à mão — enquanto não editar, a chave
-  // é derivada do rótulo a cada digitação.
+  // é derivada do título a cada digitação.
   const [manualKeyIndexes, setManualKeyIndexes] = useState<Record<number, boolean>>({});
   // Perguntas abertas. Com uma única pergunta ela já nasce aberta.
   const [expanded, setExpanded] = useState<Record<number, boolean>>(
@@ -184,7 +185,7 @@ export function TemplateQuestionsEditor({
                       Pergunta {index + 1}
                     </span>
                     <span className={`min-w-0 truncate text-sm ${isIncomplete ? 'text-muted italic' : 'font-medium text-foreground'}`}>
-                      {question.label.trim() || 'sem rótulo'}
+                      {question.label.trim() || 'sem título'}
                     </span>
                     <Badge color="slate">{getCustomFieldDataTypeLabel(question.dataType)}</Badge>
                     {question.isRequired && <Badge color="accent">Obrigatória</Badge>}
@@ -205,12 +206,12 @@ export function TemplateQuestionsEditor({
                   <>
                     <div className="mt-2 grid gap-3 sm:grid-cols-2">
                       <Input
-                        label="Rótulo *"
+                        label="Título *"
                         value={question.label}
                         placeholder="ex: Nome completo"
                         onChange={(e) => {
                           const label = e.target.value;
-                          // Chave manual é preservada; caso contrário, deriva do rótulo
+                          // Chave manual é preservada; caso contrário, deriva do título
                           // a cada digitação (antes ela "congelava" no primeiro caractere).
                           const key = manualKeyIndexes[index]
                             ? question.key
@@ -222,10 +223,14 @@ export function TemplateQuestionsEditor({
                         label="Chave *"
                         value={question.key}
                         placeholder="ex: nome_completo"
-                        hint="Identificador da resposta ([a-z0-9_])"
+                        hint="Identificador da resposta ([a-z0-9_-])"
+                        error={question.key.trim() ? fieldKeyError(question.key, { allowHyphen: true }) ?? undefined : undefined}
                         onChange={(e) => {
                           setManualKeyIndexes((prev) => ({ ...prev, [index]: true }));
-                          update(index, { key: e.target.value });
+                          // Mesma normalização das demais chaves do produto (o
+                          // hint promete [a-z0-9_], então não faz sentido aceitar
+                          //maiúsculas aqui).
+                          update(index, { key: e.target.value.toLowerCase() });
                         }}
                       />
                     </div>
