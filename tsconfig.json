@@ -28,5 +28,11 @@
     },
     "include": [
         "src"
+    ],
+    // O Service Worker (src/sw.ts) e um entry point de worker: roda no escopo
+    // WebWorker (lib propria), incompativel com o lib DOM deste projeto. Ele e
+    // empacotado pelo Vite via injectManifest.
+    "exclude": [
+        "src/sw.ts"
     ]
 }

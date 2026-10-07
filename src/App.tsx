@@ -7,6 +7,7 @@ import { router } from '@/router';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { AuthProvider } from '@/auth/AuthContext';
 import { PwaUpdatePrompt } from '@/components/PwaUpdatePrompt';
+import { BrowserPushManager } from '@/components/notifications/BrowserPushManager';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -80,6 +81,7 @@ export default function App() {
           <AuthProvider>
             <RouterProvider router={router} />
             <PwaUpdatePrompt />
+            <BrowserPushManager />
             <AppToaster />
           </AuthProvider>
         </ThemeProvider>

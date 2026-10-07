@@ -11,15 +11,14 @@ export default defineConfig({
     VitePWA({
       registerType: "autoUpdate",
       includeAssets: ["favicon.svg"],
-      workbox: {
-        // API/docs/realtime routes must bypass SPA navigation fallback.
-        navigateFallbackDenylist: [
-          /^\/api\//,
-          /^\/hubs\//,
-          /^\/nats\//,
-          /^\/openapi(?:\/|$)/,
-          /^\/scalar(?:\/|$)/,
-        ],
+      // injectManifest habilita um Service Worker proprio com handler de push
+      // (Web Push). O fallback de navegacao da SPA passa a ser declarado em
+      // src/sw.ts, com a mesma denylist de API/docs/realtime.
+      strategies: "injectManifest",
+      srcDir: "src",
+      filename: "sw.ts",
+      injectManifest: {
+        globPatterns: ["**/*.{js,css,html,svg,png,ico,webmanifest}"],
       },
       manifest: {
         name: "Discovery RMM",

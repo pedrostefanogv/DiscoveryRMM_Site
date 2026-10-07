@@ -5,6 +5,7 @@ import toast from "react-hot-toast";
 import { Badge, Button, Card, Loading } from "@/components/ui";
 import { useNotifications } from "@/hooks/useNotifications";
 import type { AppNotification } from "@/api/notifications";
+import { BrowserPushToggle } from "@/components/notifications/BrowserPushToggle";
 import {
   formatNotificationMessage,
   parseNavigationTarget,
@@ -158,6 +159,10 @@ export function NotificationBell() {
                   <X className="h-4 w-4" />
                 </Button>
               </div>
+            </div>
+
+            <div className="border-t border-border pt-3">
+              <BrowserPushToggle />
             </div>
 
             <div className="max-h-80 space-y-2 overflow-auto pr-1">
