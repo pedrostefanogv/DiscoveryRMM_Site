@@ -28,6 +28,14 @@ export interface McpToolCatalogItem {
   maxCallsPerMinute: number;
   timeoutSeconds: number;
   lowerScopeOverrides: number;
+  /** Agrupamento exibido/filtrável na tela (ex.: Software, Rede). */
+  category: string;
+  /** Orientação de "quando usar" (o que a ferramenta faz e em que contexto). */
+  whenToUse?: string | null;
+  /** Timeout sugerido pela plataforma para a carga desta ferramenta. */
+  recommendedTimeoutSeconds: number;
+  /** false quando a ferramenta aguarda o usuário e o timeout não é aplicado. */
+  timeoutApplies: boolean;
 }
 
 export interface McpToolCatalog {
