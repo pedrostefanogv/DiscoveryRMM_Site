@@ -36,7 +36,7 @@ describe("AiIntegrationCard - rounds de ferramentas (MCP)", () => {
     const { container } = render(<AiIntegrationCard aiSettings={settings} onSave={onSave} />);
     await waitFor(() => expect(listOpenRouterModels).toHaveBeenCalled());
 
-    fireEvent.click(screen.getByText("Configuracao Avancada (Parametros)"));
+    fireEvent.click(screen.getByText("Configuração Avançada (Parâmetros)"));
 
     const rounds = container.querySelector<HTMLInputElement>(ROUNDS_SELECTOR);
     expect(rounds).not.toBeNull();
@@ -55,7 +55,7 @@ describe("AiIntegrationCard - rounds de ferramentas (MCP)", () => {
     const { container } = render(<AiIntegrationCard aiSettings={settings} onSave={onSave} />);
     await waitFor(() => expect(listOpenRouterModels).toHaveBeenCalled());
 
-    fireEvent.click(screen.getByText("Configuracao Avancada (Parametros)"));
+    fireEvent.click(screen.getByText("Configuração Avançada (Parâmetros)"));
     const rounds = container.querySelector<HTMLInputElement>(ROUNDS_SELECTOR)!;
 
     // 0 (ou campo vazio) é inválido: o servidor cairia no default 10.
@@ -83,7 +83,7 @@ describe("AiIntegrationCard - rounds de ferramentas (MCP)", () => {
       <AiIntegrationCard aiSettings={{ ...settings, maxToolCallIterations: 1 }} onSave={onSave} />,
     );
     await waitFor(() => expect(listOpenRouterModels).toHaveBeenCalled());
-    fireEvent.click(screen.getByText("Configuracao Avancada (Parametros)"));
+    fireEvent.click(screen.getByText("Configuração Avançada (Parâmetros)"));
 
     expect(screen.getByText(/fora da faixa/)).toBeTruthy();
     expect(container.querySelector<HTMLInputElement>(ROUNDS_SELECTOR)!.value).toBe("1");
@@ -105,8 +105,40 @@ describe("AiIntegrationCard - rounds de ferramentas (MCP)", () => {
     );
     await waitFor(() => expect(listOpenRouterModels).toHaveBeenCalled());
 
-    fireEvent.click(screen.getByText("Configuracao Avancada (Parametros)"));
+    fireEvent.click(screen.getByText("Configuração Avançada (Parâmetros)"));
     expect(container.querySelector<HTMLInputElement>(ROUNDS_SELECTOR)!.value).toBe("10");
+  });
+
+  it("mostra as dimensões do vetor como informação (sem campo editável)", async () => {
+    const { container } = render(
+      <AiIntegrationCard
+        aiSettings={{
+          ...settings,
+          embeddingModel: "openai/text-embedding-3-small",
+          embeddingDimensions: 1536,
+        }}
+        onSave={vi.fn()}
+      />,
+    );
+    await waitFor(() => expect(listOpenRouterModels).toHaveBeenCalled());
+
+    expect(screen.getByText("Dimensões do vetor")).toBeTruthy();
+    expect(screen.getByText("1536")).toBeTruthy();
+    // O antigo input livre de dimensões (min=1, step=1) não existe mais:
+    // dimensões são propriedade do modelo de embedding.
+    expect(container.querySelector('input[type="number"][min="1"][step="1"]')).toBeNull();
+  });
+
+  it("explica temperatura, top-p e penalidades", async () => {
+    render(<AiIntegrationCard aiSettings={settings} onSave={vi.fn()} />);
+    await waitFor(() => expect(listOpenRouterModels).toHaveBeenCalled());
+
+    fireEvent.click(screen.getByText("Configuração Avançada (Parâmetros)"));
+
+    expect(screen.getByText(/Quão variada é a resposta/)).toBeTruthy();
+    expect(screen.getByText(/Recorte do vocabulário considerado/)).toBeTruthy();
+    expect(screen.getByText(/Pune a repetição de palavras/)).toBeTruthy();
+    expect(screen.getByText(/Incentiva trazer assuntos novos/)).toBeTruthy();
   });
 
   it("explica que o parâmetro é global e qual o mínimo", async () => {
@@ -114,8 +146,9 @@ describe("AiIntegrationCard - rounds de ferramentas (MCP)", () => {
     render(<AiIntegrationCard aiSettings={settings} onSave={onSave} />);
     await waitFor(() => expect(listOpenRouterModels).toHaveBeenCalled());
 
-    fireEvent.click(screen.getByText("Configuracao Avancada (Parametros)"));
-    expect(screen.getByText(/GLOBAL do servidor/)).toBeTruthy();
+    fireEvent.click(screen.getByText("Configuração Avançada (Parâmetros)"));
+    // "GLOBAL do servidor" aparece no subtítulo do card e na ajuda de rounds.
+    expect(screen.getAllByText(/GLOBAL do servidor/).length).toBeGreaterThan(0);
     expect(screen.getByText(/mínimo 3/)).toBeTruthy();
   });
 });
