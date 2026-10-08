@@ -310,8 +310,7 @@ export type AgentDetailDataTab =
   | "printers"
   | "tickets"
   | "network"
-  | "startupItems"
-  | "scheduledTasks"
+  | "autostart"
   | "logs";
 
 /**
@@ -320,6 +319,15 @@ export type AgentDetailDataTab =
  * não inflar a barra principal de abas.
  */
 export type AgentNetworkView = "adapters" | "listeningPorts" | "openSockets";
+
+/**
+ * Sub-abas da aba unificada "Execução Automática": itens de inicialização
+ * (registro, pastas Startup e serviços automáticos) e tarefas agendadas do
+ * Windows descrevem o mesmo assunto — o que o host executa sozinho, sem
+ * intervenção do operador. Ficam agrupados na mesma aba, como já acontece com
+ * as sub-abas de rede.
+ */
+export type AgentAutostartView = "startupItems" | "scheduledTasks";
 
 /**
  * Aba inicial do detalhe: "Info" concentra os dados cadastrais do host e as
@@ -339,8 +347,7 @@ export const AGENT_DETAIL_TAB_SLUGS: Record<AgentDetailDataTab, string> = {
   printers: "impressoras",
   tickets: "ultimos-chamados",
   network: "rede",
-  startupItems: "inicializacao",
-  scheduledTasks: "tarefas-agendadas",
+  autostart: "execucao-automatica",
   logs: "logs",
 };
 
@@ -362,6 +369,23 @@ const AGENT_NETWORK_VIEW_BY_SLUG = new Map<string, AgentNetworkView>(
   ),
 );
 
+/**
+ * Slugs das sub-abas de "Execução Automática". Os dois eram abas de topo antes
+ * da unificação e continuam válidos como deep link (caem na sub-aba correta).
+ */
+export const AGENT_AUTOSTART_VIEW_SLUGS: Record<AgentAutostartView, string> = {
+  startupItems: "inicializacao",
+  scheduledTasks: "tarefas-agendadas",
+};
+
+export const AGENT_AUTOSTART_DEFAULT_VIEW: AgentAutostartView = "startupItems";
+
+const AGENT_AUTOSTART_VIEW_BY_SLUG = new Map<string, AgentAutostartView>(
+  (Object.entries(AGENT_AUTOSTART_VIEW_SLUGS) as [AgentAutostartView, string][]).map(
+    ([view, slug]) => [slug, view],
+  ),
+);
+
 const AGENT_DETAIL_TAB_BY_SLUG = new Map<string, AgentDetailDataTab>(
   (Object.entries(AGENT_DETAIL_TAB_SLUGS) as [AgentDetailDataTab, string][]).map(
     ([tab, slug]) => [slug, tab],
@@ -378,6 +402,9 @@ export function agentDetailTabFromSlug(
   if (tab) return tab;
   // Slugs legados das abas de rede agora apontam para a aba unificada "Rede".
   if (AGENT_NETWORK_VIEW_BY_SLUG.has(normalized)) return "network";
+  // Idem para "Inicialização" e "Tarefas Agendadas": as duas viraram sub-abas
+  // de "Execução Automática", mas os deep links antigos seguem válidos.
+  if (AGENT_AUTOSTART_VIEW_BY_SLUG.has(normalized)) return "autostart";
   return AGENT_DETAIL_DEFAULT_TAB;
 }
 
@@ -396,6 +423,26 @@ export function agentNetworkViewFromSlug(
 ): AgentNetworkView {
   if (!slug) return AGENT_NETWORK_DEFAULT_VIEW;
   return AGENT_NETWORK_VIEW_BY_SLUG.get(slug.trim().toLowerCase()) ?? AGENT_NETWORK_DEFAULT_VIEW;
+}
+
+/** Slug canônico de uma sub-aba de "Execução Automática" (?tab=...). */
+export function agentAutostartViewSlug(view: AgentAutostartView): string {
+  return AGENT_AUTOSTART_VIEW_SLUGS[view];
+}
+
+/**
+ * Resolve a sub-aba de "Execução Automática" a partir do slug. Aceita o slug
+ * canônico da aba ("execucao-automatica") e os slugs legados "inicializacao" e
+ * "tarefas-agendadas"; desconhecidos caem em "startupItems".
+ */
+export function agentAutostartViewFromSlug(
+  slug: string | null | undefined,
+): AgentAutostartView {
+  if (!slug) return AGENT_AUTOSTART_DEFAULT_VIEW;
+  return (
+    AGENT_AUTOSTART_VIEW_BY_SLUG.get(slug.trim().toLowerCase()) ??
+    AGENT_AUTOSTART_DEFAULT_VIEW
+  );
 }
 
 /** Slug canônico de uma aba — usado ao montar a URL. */

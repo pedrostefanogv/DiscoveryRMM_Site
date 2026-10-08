@@ -59,7 +59,9 @@ vi.mock('@/hooks/useAgents', () => ({
     refetch: vi.fn(),
   }),
   useAgentHardwareComponents: () => ({
-    data: { printers: [], startupItems: [], scheduledTasks: [] },
+    // Contagens distintas de propósito: o badge da aba unificada deve refletir
+    // a sub-aba ativa (não a soma 3).
+    data: { printers: [], startupItems: [{}, {}], scheduledTasks: [{}] },
     isFetching: false,
     refetch: vi.fn(),
   }),
@@ -165,9 +167,9 @@ describe('AgentDetail — abas do agente', () => {
     expect(screen.queryByTestId('notes-panel')).toBeNull();
     // Os contadores por aba foram preservados na nova barra.
     expect(screen.getByRole('tab', { name: /Aplicativos/ }).textContent).toContain('42');
-    expect(screen.getByRole('tab', { name: /Histórico de Labels/ }).textContent).toContain('1');
-    // Portas/Conexões saíram da barra principal: 10 abas de topo.
-    expect(screen.getAllByRole('tab')).toHaveLength(10);
+    expect(screen.getByRole('tab', { name: /^Labels/ }).textContent).toContain('1');
+    // Portas/Conexões e Inicialização/Tarefas saíram da barra principal: 9 abas.
+    expect(screen.getAllByRole('tab')).toHaveLength(9);
   });
 
   it('troca para a aba Anotações ao clicar', async () => {
@@ -177,9 +179,9 @@ describe('AgentDetail — abas do agente', () => {
     expect(screen.queryByTestId('pinned-notes')).toBeNull();
   });
 
-  it('troca para a aba Histórico de Labels ao clicar', async () => {
+  it('troca para a aba Labels ao clicar', async () => {
     await renderPage();
-    fireEvent.click(screen.getByRole('tab', { name: /Histórico de Labels/ }));
+    fireEvent.click(screen.getByRole('tab', { name: /^Labels/ }));
     expect(await screen.findByText('Windows')).toBeTruthy();
   });
 
@@ -225,5 +227,52 @@ describe('AgentDetail — abas do agente', () => {
 
     expect(screen.getByRole('tab', { name: /Conexões Abertas/ }).getAttribute('aria-selected')).toBe('true');
     expect(screen.getByRole('heading', { name: 'Conexões Abertas' })).toBeTruthy();
+  });
+
+  it('unifica inicialização e tarefas agendadas na aba Execução Automática', async () => {
+    await renderPage('?tab=execucao-automatica');
+
+    expect(screen.getByRole('tab', { name: /Execução Automática/ }).getAttribute('aria-selected')).toBe('true');
+    expect(screen.getByRole('tab', { name: /^Inicialização/ }).getAttribute('aria-selected')).toBe('true');
+    expect(screen.getByRole('tab', { name: /Tarefas Agendadas/ })).toBeTruthy();
+  });
+
+  it('abre a sub-aba de tarefas pelo deep link legado ?tab=tarefas-agendadas', async () => {
+    await renderPage('?tab=tarefas-agendadas');
+
+    expect(screen.getByRole('tab', { name: /Execução Automática/ }).getAttribute('aria-selected')).toBe('true');
+    expect(screen.getByRole('tab', { name: /Tarefas Agendadas/ }).getAttribute('aria-selected')).toBe('true');
+    expect(screen.getByRole('tab', { name: /^Inicialização/ }).getAttribute('aria-selected')).toBe('false');
+  });
+
+  it('abre a sub-aba de inicialização pelo deep link legado ?tab=inicializacao', async () => {
+    await renderPage('?tab=inicializacao');
+
+    expect(screen.getByRole('tab', { name: /Execução Automática/ }).getAttribute('aria-selected')).toBe('true');
+    expect(screen.getByRole('tab', { name: /^Inicialização/ }).getAttribute('aria-selected')).toBe('true');
+  });
+
+  it('badge da aba unificada reflete a sub-aba de tarefas quando ativa', async () => {
+    await renderPage('?tab=tarefas-agendadas');
+
+    const badge = screen.getByRole('tab', { name: /Execução Automática/ }).textContent ?? '';
+    expect(badge).toContain('1');
+    expect(badge).not.toContain('2');
+  });
+
+  it('badge da aba unificada reflete a sub-aba de inicialização quando ativa', async () => {
+    await renderPage('?tab=inicializacao');
+
+    const badge = screen.getByRole('tab', { name: /Execução Automática/ }).textContent ?? '';
+    expect(badge).toContain('2');
+    expect(badge).not.toContain('1');
+  });
+
+  it('troca para Tarefas Agendadas dentro da aba Execução Automática', async () => {
+    await renderPage('?tab=execucao-automatica');
+    fireEvent.click(screen.getByRole('tab', { name: /Tarefas Agendadas/ }));
+
+    expect(screen.getByRole('tab', { name: /Tarefas Agendadas/ }).getAttribute('aria-selected')).toBe('true');
+    expect(screen.getByRole('tab', { name: /^Inicialização/ }).getAttribute('aria-selected')).toBe('false');
   });
 });

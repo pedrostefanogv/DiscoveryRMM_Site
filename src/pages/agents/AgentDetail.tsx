@@ -9,6 +9,8 @@ import toast from 'react-hot-toast';
 import { getDeleteAgentErrorMessage, useAgent, useAgentHardware, useAgentHardwareComponents, useAgentListeningPortsPage, useAgentOpenSocketsPage, useAgentSoftwarePage, useAgentSoftwareSnapshot, useApproveZeroTouch, useDeleteAgent, useRestartAgent, useShutdownAgent, useWakeOnLan } from '@/hooks/useAgents';
 import {
   AGENT_DETAIL_DEFAULT_TAB,
+  agentAutostartViewFromSlug,
+  agentAutostartViewSlug,
   agentDetailBackTarget,
   agentDetailTabFromSlug,
   agentDetailTabSlug,
@@ -17,6 +19,7 @@ import {
   formatBytes,
   formatDate,
   formatSocketFamily,
+  type AgentAutostartView,
   type AgentDetailDataTab,
   type AgentNetworkView,
 } from './agentDetailUtils';
@@ -60,8 +63,8 @@ interface AgentTabBadges {
   software?: number;
   printers?: number;
   tickets?: number;
-  startupItems?: number;
-  scheduledTasks?: number;
+  /** Total da sub-aba ATIVA de "Execução Automática" (não a soma das duas). */
+  autostart?: number;
   logs?: number;
 }
 
@@ -72,6 +75,12 @@ interface AgentNetworkBadges {
   openSockets?: number;
 }
 
+/** Contadores das sub-abas de "Execução Automática". */
+interface AgentAutostartBadges {
+  startupItems?: number;
+  scheduledTasks?: number;
+}
+
 /**
  * Abas do detalhe do agente, no mesmo "segmented control" usado em
  * Clientes/Sites (DetailTabs). "Info" é a aba principal e a aba inicial.
@@ -80,14 +89,32 @@ function buildAgentDetailTabs(badges: AgentTabBadges = {}): DetailTab<AgentDetai
   return [
     { id: 'info', label: 'Info', icon: Info },
     { id: 'notes', label: 'Anotações', icon: StickyNote },
-    { id: 'labelHistory', label: 'Histórico de Labels', icon: History, badge: badges.labelHistory },
+    { id: 'labelHistory', label: 'Labels', icon: History, badge: badges.labelHistory },
     { id: 'software', label: 'Aplicativos', icon: AppWindow, badge: badges.software },
     { id: 'printers', label: 'Impressoras', icon: Printer, badge: badges.printers },
-    { id: 'tickets', label: 'Últimos Chamados', icon: TicketIcon, badge: badges.tickets },
+    { id: 'tickets', label: 'Chamados', icon: TicketIcon, badge: badges.tickets },
     { id: 'network', label: 'Rede', icon: Network },
+    {
+      // "Inicialização" e "Tarefas Agendadas" descrevem o mesmo assunto (o que
+      // o host executa sozinho) e ficam agrupadas numa aba só. O contador reflete
+      // a sub-aba ativa (a que abre ao clicar); cada sub-aba mostra o seu total.
+      id: 'autostart',
+      label: 'Execução Automática',
+      icon: Zap,
+      badge: badges.autostart,
+    },
+    { id: 'logs', label: 'Logs', icon: ScrollText, badge: badges.logs },
+  ];
+}
+
+/**
+ * Sub-abas da aba "Execução Automática": itens de inicialização (registro,
+ * pastas Startup e serviços automáticos) e tarefas agendadas do Windows.
+ */
+function buildAgentAutostartTabs(badges: AgentAutostartBadges = {}): DetailTab<AgentAutostartView>[] {
+  return [
     { id: 'startupItems', label: 'Inicialização', icon: Power, badge: badges.startupItems },
     { id: 'scheduledTasks', label: 'Tarefas Agendadas', icon: Clock, badge: badges.scheduledTasks },
-    { id: 'logs', label: 'Logs Recentes', icon: ScrollText, badge: badges.logs },
   ];
 }
 
@@ -236,6 +263,23 @@ export default function AgentDetail() {
     },
     [setSearchParams],
   );
+  // Sub-aba ativa de "Execução Automática". Os slugs legados (?tab=inicializacao
+  // e ?tab=tarefas-agendadas) continuam válidos: a aba de topo resolve para
+  // "autostart" e o slug também define a sub-aba.
+  const activeAutostartView = useMemo(
+    () => agentAutostartViewFromSlug(searchParams.get('tab')),
+    [searchParams],
+  );
+  const handleSelectAutostartView = useCallback(
+    (view: AgentAutostartView) => {
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        next.set('tab', agentAutostartViewSlug(view));
+        return next;
+      }, { replace: true });
+    },
+    [setSearchParams],
+  );
   // Botão "Voltar" do cabeçalho: sai da página de detalhes (listagem de agentes
   // ou página anterior real), nunca percorre as abas internas. Trocar de aba
   // usa `replace`, então o histórico não acumula as abas visitadas; se o
@@ -275,8 +319,7 @@ export default function AgentDetail() {
   // quando uma aba que o consome está ativa (P1.2 — abas sob demanda).
   const dataTabNeedsComponents =
     activeDataTab === 'printers' ||
-    activeDataTab === 'startupItems' ||
-    activeDataTab === 'scheduledTasks';
+    activeDataTab === 'autostart';
   // Portas e conexões têm endpoints próprios paginados por cursor; o payload
   // pesado do /hardware/components é buscado sem as listas de rede.
   const hwComponents = useAgentHardwareComponents(id!, {
@@ -1744,8 +1787,13 @@ export default function AgentDetail() {
           software: softwareTotalCount,
           printers: hwComponents.data ? printers.length : undefined,
           tickets: agentTickets.data ? (agentTickets.data?.items?.length ?? 0) : undefined,
-          startupItems: hwComponents.data ? startupItems.length : undefined,
-          scheduledTasks: hwComponents.data ? scheduledTasks.length : undefined,
+          // O badge da aba unificada segue a sub-aba ativa — a mesma que abre ao
+          // clicar na aba (o slug na querystring define qual).
+          autostart: hwComponents.data
+            ? activeAutostartView === 'startupItems'
+              ? startupItems.length
+              : scheduledTasks.length
+            : undefined,
           logs: agentLogs.data ? logsArray.length : undefined,
         })}
         active={activeDataTab}
@@ -2605,41 +2653,62 @@ export default function AgentDetail() {
               </div>
             )}
 
-            {activeDataTab === 'startupItems' && (
-              // Sem altura/rolagem própria: a tabela do painel já rola por dentro,
-              // evitando a barra de rolagem duplicada (aninhada) em telas pequenas.
-              <div className='w-full min-w-0 max-w-full'>
-                <AgentStartupItemsPanel
-                  agentId={id!}
-                  items={startupItems}
-                  canManage={canManageAgent}
-                  isOnline={isOnlineNow}
-                  isLoading={hwComponents.isLoading}
-                  isError={Boolean(hwComponents.isError)}
-                  onRetry={() => void hwComponents.refetch()}
-                  isRefreshing={isRefreshingStartup || hwComponents.isFetching}
-                  onRefresh={handleRefreshStartup}
-                  onDataRefetch={() => void hwComponents.refetch()}
+            {activeDataTab === 'autostart' && (
+              <div className="space-y-4">
+                <DetailTabs
+                  tabs={buildAgentAutostartTabs({
+                    startupItems: hwComponents.data ? startupItems.length : undefined,
+                    scheduledTasks: hwComponents.data ? scheduledTasks.length : undefined,
+                  })}
+                  active={activeAutostartView}
+                  onChange={handleSelectAutostartView}
+                  ariaLabel="Seções de execução automática do agente"
+                  panelIdPrefix="agent-autostart-tabs"
                 />
-              </div>
-            )}
 
-            {activeDataTab === 'scheduledTasks' && (
-              // Sem altura/rolagem própria: a tabela do painel já rola por dentro,
-              // evitando a barra de rolagem duplicada (aninhada) em telas pequenas.
-              <div className='w-full min-w-0 max-w-full'>
-                <AgentScheduledTasksPanel
-                  agentId={id!}
-                  tasks={scheduledTasks}
-                  canManage={canManageAgent}
-                  isOnline={isOnlineNow}
-                  isLoading={hwComponents.isLoading}
-                  isError={Boolean(hwComponents.isError)}
-                  onRetry={() => void hwComponents.refetch()}
-                  isRefreshing={isRefreshingScheduledTasks || hwComponents.isFetching}
-                  onRefresh={handleRefreshScheduledTasks}
-                  onDataRefetch={() => void hwComponents.refetch()}
-                />
+                <div
+                  id="agent-autostart-tabs-panel"
+                  role="tabpanel"
+                  aria-labelledby={`agent-autostart-tabs-tab-${activeAutostartView}`}
+                >
+                  {activeAutostartView === 'startupItems' && (
+                    // Sem altura/rolagem própria: a tabela do painel já rola por dentro,
+                    // evitando a barra de rolagem duplicada (aninhada) em telas pequenas.
+                    <div className='w-full min-w-0 max-w-full'>
+                      <AgentStartupItemsPanel
+                        agentId={id!}
+                        items={startupItems}
+                        canManage={canManageAgent}
+                        isOnline={isOnlineNow}
+                        isLoading={hwComponents.isLoading}
+                        isError={Boolean(hwComponents.isError)}
+                        onRetry={() => void hwComponents.refetch()}
+                        isRefreshing={isRefreshingStartup || hwComponents.isFetching}
+                        onRefresh={handleRefreshStartup}
+                        onDataRefetch={() => void hwComponents.refetch()}
+                      />
+                    </div>
+                  )}
+
+                  {activeAutostartView === 'scheduledTasks' && (
+                    // Sem altura/rolagem própria: a tabela do painel já rola por dentro,
+                    // evitando a barra de rolagem duplicada (aninhada) em telas pequenas.
+                    <div className='w-full min-w-0 max-w-full'>
+                      <AgentScheduledTasksPanel
+                        agentId={id!}
+                        tasks={scheduledTasks}
+                        canManage={canManageAgent}
+                        isOnline={isOnlineNow}
+                        isLoading={hwComponents.isLoading}
+                        isError={Boolean(hwComponents.isError)}
+                        onRetry={() => void hwComponents.refetch()}
+                        isRefreshing={isRefreshingScheduledTasks || hwComponents.isFetching}
+                        onRefresh={handleRefreshScheduledTasks}
+                        onDataRefetch={() => void hwComponents.refetch()}
+                      />
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 
