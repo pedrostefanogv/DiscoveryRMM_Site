@@ -1601,6 +1601,12 @@ export interface AIIntegrationSettings {
   embeddingTicketAnswersEnabled?: boolean;
   maxHistoryMessages?: number;
   maxKbContextTokens?: number;
+  /**
+   * Orçamento de rounds de ferramentas (tool calls) por turno do chat IA — 1 a 20,
+   * padrão 10. Ao esgotar com uma ação pendente, a IA pergunta ao usuário se pode
+   * continuar; a autorização renova o orçamento com o mesmo valor.
+   */
+  maxToolCallIterations?: number;
   rateLimitPerMinute?: number;
   tokenBudgetDaily?: number;
   costControlEnabled?: boolean;

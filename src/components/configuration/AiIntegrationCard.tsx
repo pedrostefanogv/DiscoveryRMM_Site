@@ -33,6 +33,20 @@ interface Props {
   saving?: boolean;
 }
 
+// ── Orçamento de rounds de ferramentas (MCP) ──────────────────────────────
+// Faixa aceita pelo servidor (AiChatHelpers.ResolveMaxToolIterations): mínimo 3
+// (abaixo disso o turno quase não executa ferramentas) e teto 20, default 10.
+// Valor inválido/fora da faixa é normalizado antes de salvar — senão o JSON
+// guardava NaN/0 e o servidor caía silenciosamente no default.
+const ROUNDS_MIN = 3;
+const ROUNDS_MAX = 20;
+const ROUNDS_DEFAULT = 10;
+
+function clampRounds(value: number): number {
+  if (!Number.isFinite(value)) return ROUNDS_DEFAULT;
+  return Math.min(ROUNDS_MAX, Math.max(ROUNDS_MIN, Math.round(value)));
+}
+
 function fmtPrice(s: string | undefined): string {
   if (!s) return "";
   const n = parseFloat(s);
@@ -73,6 +87,15 @@ export function AiIntegrationCard({ aiSettings, onSave, saving }: Props) {
   const [freqPen, setFreqPen] = useState(aiSettings?.frequencyPenalty ?? 0);
   const [presPen, setPresPen] = useState(aiSettings?.presencePenalty ?? 0);
   const [maxTokens, setMaxTokens] = useState(aiSettings?.maxTokensPerRequest ?? 2000);
+  // Orçamento de rounds de ferramentas por turno (1-20). O default do servidor é
+  // 10; ao esgotar com ação pendente a IA pede autorização e renova no próximo turno.
+  const [maxToolIterations, setMaxToolIterations] = useState(
+    aiSettings?.maxToolCallIterations ?? ROUNDS_DEFAULT,
+  );
+  const roundsOutOfRange =
+    !Number.isFinite(maxToolIterations) ||
+    maxToolIterations < ROUNDS_MIN ||
+    maxToolIterations > ROUNDS_MAX;
 
   const [allChat, setAllChat] = useState<OrModel[]>(FALLBACK_CHAT);
   const [allEmbed, setAllEmbed] = useState<OrModel[]>(FALLBACK_EMBED);
@@ -160,6 +183,7 @@ export function AiIntegrationCard({ aiSettings, onSave, saving }: Props) {
       embeddingTicketAnswersEnabled,
       frequencyPenalty: freqPen, presencePenalty: presPen,
       maxTokensPerRequest: maxTokens,
+      maxToolCallIterations: clampRounds(maxToolIterations),
     };
     if (apiKey.trim()) s.apiKey = apiKey.trim();
     await onSave(JSON.stringify(s));
@@ -372,6 +396,32 @@ export function AiIntegrationCard({ aiSettings, onSave, saving }: Props) {
                       modelo selecionado suporta (ex.: gpt-4o-mini 16.384; gemini-2.5-flash 65.535).
                       Valores acima de 32.768 são limitados pelo produto.
                     </p>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="block text-xs text-muted">
+                      Rounds de ferramentas ({ROUNDS_MIN}-{ROUNDS_MAX})
+                    </label>
+                    <Input
+                      type="number"
+                      min={ROUNDS_MIN}
+                      max={ROUNDS_MAX}
+                      step={1}
+                      value={String(maxToolIterations)}
+                      onChange={(e) => setMaxToolIterations(Number(e.target.value))}
+                    />
+                    <p className="text-[11px] text-muted">
+                      Quantas rodadas de ferramentas (MCP) a IA pode executar em um turno do chat —
+                      cada round executa uma ferramenta, então com 3 a IA executa até 3 por turno.
+                      Padrão 10, mínimo {ROUNDS_MIN}. Ao esgotar com uma ação pendente, a IA pergunta
+                      se pode continuar: se você autorizar, o orçamento é renovado com este mesmo valor.
+                      Configuração GLOBAL do servidor (vale para todos os clientes e sites).
+                    </p>
+                    {roundsOutOfRange && (
+                      <p className="text-[11px] text-amber-600 dark:text-amber-400">
+                        Valor fora da faixa {ROUNDS_MIN}-{ROUNDS_MAX}: será salvo como{" "}
+                        {clampRounds(maxToolIterations)}.
+                      </p>
+                    )}
                   </div>
                   <div className="space-y-1"><label className="block text-xs text-muted">Freq. Penalty (-2 a 2)</label><Input type="number" min={-2} max={2} step={0.1} value={String(freqPen)} onChange={(e) => setFreqPen(Number(e.target.value))} /></div>
                   <div className="space-y-1"><label className="block text-xs text-muted">Pres. Penalty (-2 a 2)</label><Input type="number" min={-2} max={2} step={0.1} value={String(presPen)} onChange={(e) => setPresPen(Number(e.target.value))} /></div>
