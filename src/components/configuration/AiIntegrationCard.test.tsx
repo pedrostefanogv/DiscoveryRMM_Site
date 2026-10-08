@@ -129,6 +129,66 @@ describe("AiIntegrationCard - rounds de ferramentas (MCP)", () => {
     expect(container.querySelector('input[type="number"][min="1"][step="1"]')).toBeNull();
   });
 
+  it("normaliza campos numéricos vazios ao salvar (nunca envia null)", async () => {
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    const { container } = render(<AiIntegrationCard aiSettings={settings} onSave={onSave} />);
+    await waitFor(() => expect(listOpenRouterModels).toHaveBeenCalled());
+    fireEvent.click(screen.getByText("Configuração Avançada (Parâmetros)"));
+
+    const topP = container.querySelector<HTMLInputElement>(
+      'input[type="number"][min="0.01"][max="1"]',
+    )!;
+    const tokens = container.querySelector<HTMLInputElement>(
+      'input[type="number"][min="100"][max="32768"]',
+    )!;
+
+    // Campo limpo vira 0 no input numérico. top-p 0 e 0 tokens são inválidos:
+    // o provedor rejeita top_p=0 e JSON.stringify(NaN/0) já causou reset das
+    // configurações de IA no servidor (null não desserializa para double/int).
+    fireEvent.change(topP, { target: { value: "" } });
+    fireEvent.change(tokens, { target: { value: "" } });
+    expect(screen.getByText(/campo numérico vazio/)).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: /salvar/i }));
+    await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
+
+    const payload = JSON.parse(String(onSave.mock.calls[0][0])) as AIIntegrationSettings;
+    expect(payload.topP).toBe(1);
+    expect(payload.maxTokensPerRequest).toBe(2000);
+    expect(typeof payload.temperature).toBe("number");
+    expect(JSON.stringify(payload)).not.toContain("null");
+  });
+
+  it("libera as dimensões quando o modelo de embedding não está no catálogo", async () => {
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    const { container } = render(
+      <AiIntegrationCard
+        aiSettings={{
+          ...settings,
+          embeddingModel: "meu/embed-custom",
+          embeddingDimensions: 768,
+        }}
+        onSave={onSave}
+      />,
+    );
+    await waitFor(() => expect(listOpenRouterModels).toHaveBeenCalled());
+
+    // Modelo self-hosted: sem catálogo não há como derivar as dimensões, então o
+    // campo volta a ser editável (única situação em que isso é necessário).
+    const dims = container.querySelector<HTMLInputElement>(
+      'input[type="number"][min="1"][max="8192"]',
+    );
+    expect(dims).not.toBeNull();
+    expect(dims!.value).toBe("768");
+
+    fireEvent.change(dims!, { target: { value: "1024" } });
+    fireEvent.click(screen.getByRole("button", { name: /salvar/i }));
+    await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
+    expect(
+      (JSON.parse(String(onSave.mock.calls[0][0])) as AIIntegrationSettings).embeddingDimensions,
+    ).toBe(1024);
+  });
+
   it("explica temperatura, top-p e penalidades", async () => {
     render(<AiIntegrationCard aiSettings={settings} onSave={vi.fn()} />);
     await waitFor(() => expect(listOpenRouterModels).toHaveBeenCalled());

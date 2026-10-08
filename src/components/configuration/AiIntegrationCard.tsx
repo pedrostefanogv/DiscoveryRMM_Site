@@ -221,13 +221,19 @@ export function AiIntegrationCard({ aiSettings, onSave, saving }: Props) {
 
   // Qualquer numérico vazio/ inválido é normalizado no save; avisa o admin para
   // ele conferir os valores em vez de descobrir depois.
+  // Zero não é valor válido para top-p, tokens e dimensões (o provedor rejeita
+  // top_p=0 e não existe vetor de 0 dimensões); esses campos entram como inválidos
+  // quando o input é limpo, e o save usa o padrão.
   const numericFieldsInvalid =
     !Number.isFinite(temperature) ||
     !Number.isFinite(topP) ||
+    topP <= 0 ||
     !Number.isFinite(freqPen) ||
     !Number.isFinite(presPen) ||
     !Number.isFinite(maxTokens) ||
-    !Number.isFinite(embeddingDimensions);
+    maxTokens < 100 ||
+    !Number.isFinite(embeddingDimensions) ||
+    embeddingDimensions < 1;
 
   function getBaseUrl(): string {
     if (provider === "openrouter") return "https://openrouter.ai/api/v1/";
@@ -258,14 +264,19 @@ export function AiIntegrationCard({ aiSettings, onSave, saving }: Props) {
       provider,
       chatModel: chatModel || undefined,
       embeddingModel: embeddingModel || undefined,
-      embeddingDimensions: safeNum(embeddingDimensions, 1536, 1, 8192),
-      temperature: safeNum(temperature, 0.7, 0, 2),
-      topP: safeNum(topP, 1, 0, 1),
+      // Onde zero não faz sentido (top-p, tokens, dimensões) um campo vazio cai no
+      // valor padrão em vez de 0; onde zero é legítimo (temperatura, penalidades)
+      // ele é preservado.
+      embeddingDimensions: embeddingDimensions >= 1
+        ? safeNum(embeddingDimensions, 1536, 1, 8192)
+        : 1536,
+      temperature: Number.isFinite(temperature) ? safeNum(temperature, 0.7, 0, 2) : 0.7,
+      topP: topP > 0 ? safeNum(topP, 1, 0.01, 1) : 1,
       embeddingArticlesEnabled,
       embeddingTicketAnswersEnabled,
-      frequencyPenalty: safeNum(freqPen, 0, -2, 2),
-      presencePenalty: safeNum(presPen, 0, -2, 2),
-      maxTokensPerRequest: safeNum(maxTokens, 2000, 100, 32768),
+      frequencyPenalty: Number.isFinite(freqPen) ? safeNum(freqPen, 0, -2, 2) : 0,
+      presencePenalty: Number.isFinite(presPen) ? safeNum(presPen, 0, -2, 2) : 0,
+      maxTokensPerRequest: maxTokens >= 100 ? safeNum(maxTokens, 2000, 100, 32768) : 2000,
       maxToolCallIterations: clampRounds(maxToolIterations),
     };
     if (apiKey.trim()) s.apiKey = apiKey.trim();
@@ -574,11 +585,12 @@ export function AiIntegrationCard({ aiSettings, onSave, saving }: Props) {
                   </HelpText>
                 </div>
                 <div className="space-y-1">
-                  <label className="block text-xs text-muted">Top P (0 a 1)</label>
-                  <Input type="number" min={0} max={1} step={0.05} value={String(topP)} onChange={(e) => setTopP(Number(e.target.value))} />
+                  <label className="block text-xs text-muted">Top P (0,01 a 1)</label>
+                  <Input type="number" min={0.01} max={1} step={0.05} value={String(topP)} onChange={(e) => setTopP(Number(e.target.value))} />
                   <HelpText>
                     Recorte do vocabulário considerado a cada palavra. 1 = considera todas as opções (padrão);
-                    valores menores (ex.: 0,9) deixam o texto mais previsível. Ajuste temperatura OU top-p — os dois juntos embaralham o efeito.
+                    valores menores (ex.: 0,9) deixam o texto mais previsível; o provedor rejeita 0 — por isso o mínimo é 0,01.
+                    Ajuste temperatura OU top-p — os dois juntos embaralham o efeito.
                   </HelpText>
                 </div>
                 <div className="space-y-1">
