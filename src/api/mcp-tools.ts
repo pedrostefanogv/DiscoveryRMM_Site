@@ -36,6 +36,13 @@ export interface McpToolCatalogItem {
   recommendedTimeoutSeconds: number;
   /** false quando a ferramenta aguarda o usuário e o timeout não é aplicado. */
   timeoutApplies: boolean;
+  /**
+   * true para capacidades governáveis que NÃO são ferramentas executáveis
+   * (ex.: a2ui): não têm rate limit nem timeout — apenas ligar/desligar.
+   * Opcional para tolerar versões da API anteriores à exposição do campo;
+   * quando ausente, a tela infere por maxCallsPerMinute = 0 + timeoutApplies = false.
+   */
+  isCapability?: boolean;
 }
 
 export interface McpToolCatalog {

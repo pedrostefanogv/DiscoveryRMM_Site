@@ -1,8 +1,26 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronDown, ChevronUp, CircleSlash, RotateCcw, Save, ShieldAlert } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronUp,
+  CircleSlash,
+  Pencil,
+  RotateCcw,
+  Save,
+  ShieldAlert,
+} from "lucide-react";
 import toast from "react-hot-toast";
-import { Badge, Button, Card, CardHeader, ConfirmDialog, Input, PageHeader, Select } from "@/components/ui";
+import {
+  Badge,
+  Button,
+  Card,
+  CardHeader,
+  ConfirmDialog,
+  Input,
+  Modal,
+  PageHeader,
+  Select,
+} from "@/components/ui";
 import { mcpToolsApi, type McpToolCatalogItem, type McpToolScopeRef } from "@/api/mcp-tools";
 import { useClients } from "@/hooks/useClients";
 import { useSites } from "@/hooks/useSites";
@@ -20,6 +38,63 @@ interface RowEdit {
 }
 
 /**
+ * Capacidade governável que NÃO é uma ferramenta executável (ex.: A2UI).
+ *
+ * O backend sinaliza esses itens com `maxCallsPerMinute = 0` e
+ * `timeoutApplies = false`, porque não existe chamada a limitar nem execução a
+ * cronometrar — a capacidade só pode ser habilitada/desabilitada (e bloqueada
+ * para os níveis abaixo). Nesses casos a tela esconde "Chamadas/min" e
+ * "Timeout", que só geravam controles desalinhados e expectativa falsa.
+ *
+ * `isCapability` é opcional para tolerar uma API anterior à exposição do campo;
+ * quando ausente, a inferência usa os dois sinais já existentes.
+ */
+function isNonExecutableCapability(tool: McpToolCatalogItem): boolean {
+  if (tool.isCapability !== undefined) return tool.isCapability;
+  return !tool.timeoutApplies && tool.maxCallsPerMinute <= 0;
+}
+
+/** Chip compacto de resumo (largura/altura constante => colunas alinhadas). */
+function SummaryChip({
+  children,
+  title,
+  tone = "slate",
+}: {
+  children: ReactNode;
+  title?: string;
+  tone?: "slate" | "success" | "danger";
+}) {
+  const tones = {
+    slate: "border-border bg-surface-light text-muted-foreground",
+    success: "border-success/30 bg-success/10 text-success",
+    danger: "border-danger/30 bg-danger/10 text-danger",
+  } as const;
+  return (
+    <span
+      title={title}
+      className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[11px] font-medium ${tones[tone]}`}
+    >
+      {children}
+    </span>
+  );
+}
+
+/**
+ * Valida o texto digitado nos campos numéricos do modal.
+ *
+ * Aceita campo vazio durante a digitação: `Number(valor) || 1` forçava "1" a
+ * cada backspace (era impossível apagar o campo) e os atributos min/max nativos
+ * disparavam o balão "Selecione um valor que não seja menor que 1". Os limites
+ * reais da API são 600 chamadas/min e 3600s de timeout (McpToolsController).
+ */
+function parseLimit(text: string, min: number, max: number): number | null {
+  const trimmed = text.trim();
+  if (!/^\d+$/.test(trimmed)) return null;
+  const value = Number(trimmed);
+  return value >= min && value <= max ? value : null;
+}
+
+/**
  * Governança das MCP tools: habilita/desabilita as ferramentas que o LLM pode
  * executar (no servidor e na máquina do cliente), com herança por escopo.
  *
@@ -27,10 +102,10 @@ interface RowEdit {
  *   → Site → Agente).
  * - "Bloquear" impede que níveis inferiores sobrescrevam a política — a mesma
  *   semântica de campos bloqueados para herança das configurações.
- *
- * A busca/filtros trabalham em cima do catálogo já carregado do escopo; cada
- * linha explica o que a ferramenta faz, quando é usada e qual o timeout
- * recomendado para a carga dela.
+ * - A linha mostra apenas o resumo da política; a edição acontece em um modal
+ *   (um único botão "Editar"), o que evita a grade de controles desalinhados.
+ * - Capacidades não executáveis (A2UI) exibem somente ligar/desligar + bloquear:
+ *   não têm limite de chamadas nem timeout.
  */
 export default function McpToolsSettings() {
   const queryClient = useQueryClient();
@@ -39,6 +114,11 @@ export default function McpToolsSettings() {
   const [siteId, setSiteId] = useState("");
   const [agentId, setAgentId] = useState("");
   const [edits, setEdits] = useState<Record<string, RowEdit>>({});
+  const [editingTool, setEditingTool] = useState<string | null>(null);
+  // Texto digitado nos campos numéricos do modal: preserva o que o operador
+  // digitou (inclusive vazio/inválido) enquanto o rascunho numérico só é
+  // atualizado quando o valor é válido.
+  const [limitText, setLimitText] = useState<{ calls: string; timeout: string } | null>(null);
   const [pendingConfirm, setPendingConfirm] = useState<{ tool: McpToolCatalogItem; edit: RowEdit } | null>(null);
 
   // ── Filtros da lista ────────────────────────────────────────────────────
@@ -72,21 +152,25 @@ export default function McpToolsSettings() {
   });
 
   const saveMutation = useMutation({
-    mutationFn: ({ toolName, edit }: { toolName: string; edit: RowEdit }) =>
-      mcpToolsApi.save(toolName, {
+    mutationFn: ({ tool, edit }: { tool: McpToolCatalogItem; edit: RowEdit }) =>
+      mcpToolsApi.save(tool.name, {
         ...scope,
         isEnabled: edit.isEnabled,
-        maxCallsPerMinute: edit.maxCallsPerMinute,
-        timeoutSeconds: edit.timeoutSeconds,
+        // Capacidade não executável: nada de rate limit nem timeout — o backend
+        // também descarta esses valores para esses itens.
+        maxCallsPerMinute: isNonExecutableCapability(tool) ? null : edit.maxCallsPerMinute,
+        timeoutSeconds: isNonExecutableCapability(tool) ? null : edit.timeoutSeconds,
         locked: edit.locked,
       }),
     onSuccess: (_data, variables) => {
-      toast.success(`Política de "${variables.toolName}" salva.`);
+      toast.success(`Política de "${variables.tool.name}" salva.`);
       setEdits((prev) => {
         const next = { ...prev };
-        delete next[variables.toolName];
+        delete next[variables.tool.name];
         return next;
       });
+      setLimitText(null);
+      setEditingTool(null);
       void queryClient.invalidateQueries({ queryKey: ["mcp-tools"] });
     },
     onError: (error) =>
@@ -97,6 +181,13 @@ export default function McpToolsSettings() {
     mutationFn: (toolName: string) => mcpToolsApi.reset(toolName, scope),
     onSuccess: (_data, toolName) => {
       toast.success(`"${toolName}" voltou a herdar do nível acima.`);
+      // A sobrescrita deixou de existir: descartar o rascunho evita a linha
+      // continuar marcada como "Não salvo" com valores que já não valem.
+      setEdits((prev) => {
+        const next = { ...prev };
+        delete next[toolName];
+        return next;
+      });
       void queryClient.invalidateQueries({ queryKey: ["mcp-tools"] });
     },
     onError: (error) =>
@@ -170,11 +261,19 @@ export default function McpToolsSettings() {
     const edit = rowState(tool);
     // Desabilitar/bloquear num nível com sobrescritas abaixo tem impacto em cascata.
     if ((!edit.isEnabled || edit.locked) && tool.lowerScopeOverrides > 0) {
+      // Fecha o modal de edição antes de abrir a confirmação (evita dois
+      // overlays empilhados) e o reabre se o operador cancelar.
+      setEditingTool(null);
       setPendingConfirm({ tool, edit });
       return;
     }
-    saveMutation.mutate({ toolName: tool.name, edit });
+    saveMutation.mutate({ tool, edit });
   };
+
+  const editing = editingTool ? tools.find((tool) => tool.name === editingTool) ?? null : null;
+  const editingEdit = editing ? rowState(editing) : null;
+  const editingLockedByParent = editing ? editing.locked && !editing.overriddenHere : false;
+  const editingCapability = editing ? isNonExecutableCapability(editing) : false;
 
   const scopeOptions = [
     { value: "global", label: "Global (todos)" },
@@ -200,6 +299,7 @@ export default function McpToolsSettings() {
             onChange={(e) => {
               setLevel(e.target.value as ScopeLevel);
               setEdits({});
+              setEditingTool(null);
             }}
           />
           {level === "client" && (
@@ -213,6 +313,7 @@ export default function McpToolsSettings() {
               onChange={(e) => {
                 setClientId(e.target.value);
                 setEdits({});
+                setEditingTool(null);
               }}
             />
           )}
@@ -230,6 +331,7 @@ export default function McpToolsSettings() {
                   setSiteId("");
                   setAgentId("");
                   setEdits({});
+                  setEditingTool(null);
                 }}
               />
               <Select
@@ -243,6 +345,7 @@ export default function McpToolsSettings() {
                   setSiteId(e.target.value);
                   setAgentId("");
                   setEdits({});
+                  setEditingTool(null);
                 }}
               />
             </>
@@ -258,6 +361,7 @@ export default function McpToolsSettings() {
               onChange={(e) => {
                 setAgentId(e.target.value);
                 setEdits({});
+                setEditingTool(null);
               }}
             />
           )}
@@ -360,12 +464,17 @@ export default function McpToolsSettings() {
             {filteredTools.map((tool) => {
               const edit = rowState(tool);
               const dirty = isDirty(tool);
+              const capability = isNonExecutableCapability(tool);
               // Bloqueio de herança: a política vem de um nível superior com
               // Locked=true — este escopo não pode sobrescrevê-la.
               const lockedByParent = tool.locked && !tool.overriddenHere;
               const isExpanded = !!expanded[tool.name];
               return (
-                <div key={tool.name} className="flex flex-col gap-3 p-4 lg:flex-row lg:items-start">
+                <div
+                  key={tool.name}
+                  data-testid={`mcp-tool-${tool.name}`}
+                  className="flex flex-col gap-3 p-4 lg:flex-row lg:items-center lg:justify-between"
+                >
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="font-mono text-sm font-semibold text-foreground">{tool.name}</span>
@@ -422,111 +531,63 @@ export default function McpToolsSettings() {
                     )}
                   </div>
 
-                  <div className="flex flex-wrap items-end gap-3">
-                    <label className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <input
-                        type="checkbox"
-                        checked={edit.isEnabled}
-                        disabled={lockedByParent}
-                        onChange={(e) => patchRow(tool, { isEnabled: e.target.checked })}
-                        className="h-4 w-4 rounded border-border disabled:cursor-not-allowed disabled:opacity-50"
-                      />
-                      Habilitada
-                    </label>
-
-                    <div className="w-24">
-                      <Input
-                        label="Chamadas/min"
-                        type="number"
-                        min={1}
-                        max={600}
-                        disabled={lockedByParent}
-                        value={edit.maxCallsPerMinute}
-                        onChange={(e) =>
-                          patchRow(tool, { maxCallsPerMinute: Number(e.target.value) || 1 })
-                        }
-                      />
-                    </div>
-
-                    <div className="w-32">
-                      {tool.timeoutApplies ? (
-                        <>
-                          <Input
-                            label="Timeout (s)"
-                            type="number"
-                            min={1}
-                            max={3600}
-                            disabled={lockedByParent}
-                            value={edit.timeoutSeconds}
-                            onChange={(e) => patchRow(tool, { timeoutSeconds: Number(e.target.value) || 1 })}
-                          />
-                          <div className="mt-1 flex flex-wrap items-center gap-1 text-[11px] text-muted">
-                            <span>Recomendado: {tool.recommendedTimeoutSeconds}s</span>
-                            {tool.recommendedTimeoutSeconds > 0 &&
-                              edit.timeoutSeconds !== tool.recommendedTimeoutSeconds && (
-                                <button
-                                  type="button"
-                                  className="font-medium text-primary hover:underline"
-                                  disabled={lockedByParent}
-                                  onClick={() =>
-                                    patchRow(tool, { timeoutSeconds: tool.recommendedTimeoutSeconds })
-                                  }
-                                  title="Aplicar o timeout recomendado para esta ferramenta"
-                                >
-                                  usar
-                                </button>
-                              )}
-                          </div>
-                        </>
+                  {/* Coluna de resumo + ação: largura fixa no desktop para que
+                      todas as linhas fiquem alinhadas na mesma vertical. */}
+                  <div className="flex shrink-0 flex-col gap-2 lg:w-80 lg:items-end">
+                    <div className="flex flex-wrap items-center gap-1.5 lg:justify-end">
+                      <SummaryChip tone={edit.isEnabled ? "success" : "danger"}>
+                        {edit.isEnabled ? "Habilitada" : "Desabilitada"}
+                      </SummaryChip>
+                      {capability ? (
+                        <SummaryChip title="Capacidade do chat: não é executada, então não tem limite de chamadas nem timeout.">
+                          Sem limites
+                        </SummaryChip>
                       ) : (
-                        <div className="space-y-1">
-                          <span className="block text-sm font-medium text-muted-foreground">Timeout</span>
-                          <span
-                            className="block text-xs text-muted"
-                            title="Esta ferramenta aguarda resposta/autorização do usuário; o agente ignora o timeout configurado."
-                          >
-                            Não se aplica
-                          </span>
-                        </div>
+                        <>
+                          <SummaryChip title="Limite de chamadas por minuto">{edit.maxCallsPerMinute}/min</SummaryChip>
+                          {tool.timeoutApplies ? (
+                            <SummaryChip title="Timeout aplicado à execução">Timeout {edit.timeoutSeconds}s</SummaryChip>
+                          ) : (
+                            <SummaryChip title="A ferramenta aguarda o usuário; o timeout não é aplicado.">
+                              Sem timeout
+                            </SummaryChip>
+                          )}
+                        </>
                       )}
+                      {dirty && <SummaryChip tone="danger">Não salvo</SummaryChip>}
                     </div>
 
-                    <label className="flex items-center gap-2 text-xs text-muted-foreground" title="Impede que níveis inferiores sobrescrevam esta política.">
-                      <input
-                        type="checkbox"
-                        checked={edit.locked}
-                        disabled={lockedByParent}
-                        onChange={(e) => patchRow(tool, { locked: e.target.checked })}
-                        className="h-4 w-4 rounded border-border disabled:cursor-not-allowed disabled:opacity-50"
-                      />
-                      Bloquear
-                    </label>
-
-                    <Button
-                      size="sm"
-                      onClick={() => requestSave(tool)}
-                      disabled={!dirty || lockedByParent}
-                      title={lockedByParent ? "Bloqueado por um nível superior (herança)" : undefined}
-                      loading={saveMutation.isPending && saveMutation.variables?.toolName === tool.name}
-                    >
-                      <Save className="h-3.5 w-3.5" aria-hidden="true" /> Salvar
-                    </Button>
-
-                    {tool.overriddenHere ? (
+                    <div className="flex flex-wrap items-center gap-2 lg:justify-end">
                       <Button
                         size="sm"
-                        variant="ghost"
-                        onClick={() => resetMutation.mutate(tool.name)}
-                        loading={resetMutation.isPending && resetMutation.variables === tool.name}
-                        title="Remove a sobrescrita local e volta a herdar."
+                        variant="secondary"
+                        data-testid={`mcp-edit-${tool.name}`}
+                        onClick={() => setEditingTool(tool.name)}
+                        title={
+                          lockedByParent
+                            ? "Bloqueado por um nível superior (herança) — somente leitura"
+                            : `Editar a política de ${tool.name}`
+                        }
                       >
-                        <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" /> Herdar
+                        <Pencil className="h-3.5 w-3.5" aria-hidden="true" /> Editar
                       </Button>
-                    ) : (
-                      <span className="flex items-center gap-1 text-xs text-muted">
-                        <CircleSlash className="h-3.5 w-3.5" aria-hidden="true" /> herdando
-                      </span>
-                    )}
+
+                      {tool.overriddenHere ? (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => resetMutation.mutate(tool.name)}
+                          loading={resetMutation.isPending && resetMutation.variables === tool.name}
+                          title="Remove a sobrescrita local e volta a herdar."
+                        >
+                          <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" /> Herdar
+                        </Button>
+                      ) : (
+                        <span className="inline-flex w-[5.5rem] items-center gap-1 text-xs text-muted lg:justify-end">
+                          <CircleSlash className="h-3.5 w-3.5" aria-hidden="true" /> herdando
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
               );
@@ -535,14 +596,199 @@ export default function McpToolsSettings() {
         )}
       </Card>
 
+      {/* ── Modal de edição da política ─────────────────────────────────── */}
+      <Modal
+        open={!!editing}
+        onClose={() => setEditingTool(null)}
+        title={editing ? `Editar política — ${editing.name}` : "Editar política"}
+        maxWidth="max-w-xl"
+      >
+        {editing && editingEdit && (
+          <div className="space-y-5">
+            <div className="space-y-2 rounded-lg border border-border bg-surface-light px-3 py-2.5">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge color={editing.source === "agent" ? "accent" : "primary"}>
+                  {editing.source === "agent" ? "Agente" : "Servidor"}
+                </Badge>
+                {editing.category && <Badge color="slate">{editing.category}</Badge>}
+                {editing.overriddenHere ? (
+                  <Badge color="warning">Sobrescrito aqui</Badge>
+                ) : (
+                  <Badge color="slate">Herdado do nível acima</Badge>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground">{editing.description}</p>
+              {editing.whenToUse && (
+                <p className="text-xs text-muted-foreground">
+                  <strong className="text-foreground">Quando usar:</strong> {editing.whenToUse}
+                </p>
+              )}
+            </div>
+
+            {editingLockedByParent && (
+              <div className="flex items-start gap-2 rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-xs text-foreground">
+                <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-danger" aria-hidden="true" />
+                <span>
+                  Esta política está <strong>bloqueada por um nível superior</strong>. Remova o bloqueio no escopo
+                  de origem para poder editá-la aqui.
+                </span>
+              </div>
+            )}
+
+            {editingCapability && (
+              <p className="rounded-lg border border-border bg-surface-light px-3 py-2 text-xs text-muted-foreground">
+                Esta é uma <strong className="text-foreground">capacidade do chat</strong>, não uma ferramenta
+                executável: não há chamada para limitar nem execução para cronometrar. Por isso só existe{" "}
+                <strong className="text-foreground">habilitar/desabilitar</strong> (e bloquear a herança nos níveis
+                abaixo).
+              </p>
+            )}
+
+            <label
+              htmlFor="mcp-policy-enabled"
+              className="flex cursor-pointer items-start gap-3 rounded-lg border border-border px-3 py-2.5"
+            >
+              <input
+                id="mcp-policy-enabled"
+                type="checkbox"
+                checked={editingEdit.isEnabled}
+                disabled={editingLockedByParent}
+                onChange={(e) => patchRow(editing, { isEnabled: e.target.checked })}
+                className="mt-0.5 h-4 w-4 rounded border-border disabled:cursor-not-allowed disabled:opacity-50"
+              />
+              <span>
+                <span className="block text-sm font-medium text-foreground">Habilitada</span>
+                <span className="block text-xs text-muted">
+                  Desligada, a ferramenta não é oferecida ao modelo neste escopo.
+                </span>
+              </span>
+            </label>
+
+            {!editingCapability && (
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Input
+                  id="mcp-policy-max-calls"
+                  label="Chamadas/min"
+                  type="number"
+                  min={1}
+                  max={600}
+                  disabled={editingLockedByParent}
+                  value={editingEdit.maxCallsPerMinute}
+                  onChange={(e) =>
+                    patchRow(editing, { maxCallsPerMinute: Number(e.target.value) || 1 })
+                  }
+                  hint="Limite de execuções por minuto neste escopo."
+                />
+
+                {editing.timeoutApplies ? (
+                  <div className="space-y-1">
+                    <Input
+                      id="mcp-policy-timeout"
+                      label="Timeout (s)"
+                      type="number"
+                      min={1}
+                      max={3600}
+                      disabled={editingLockedByParent}
+                      value={editingEdit.timeoutSeconds}
+                      onChange={(e) => patchRow(editing, { timeoutSeconds: Number(e.target.value) || 1 })}
+                      hint={`Recomendado: ${editing.recommendedTimeoutSeconds}s`}
+                    />
+                    {editing.recommendedTimeoutSeconds > 0 &&
+                      editingEdit.timeoutSeconds !== editing.recommendedTimeoutSeconds && (
+                        <button
+                          type="button"
+                          className="text-xs font-medium text-primary hover:underline disabled:opacity-50"
+                          disabled={editingLockedByParent}
+                          onClick={() =>
+                            patchRow(editing, { timeoutSeconds: editing.recommendedTimeoutSeconds })
+                          }
+                          title="Aplicar o timeout recomendado para esta ferramenta"
+                        >
+                          Usar o recomendado ({editing.recommendedTimeoutSeconds}s)
+                        </button>
+                      )}
+                  </div>
+                ) : (
+                  <div className="space-y-1">
+                    <span className="block text-sm font-medium text-muted-foreground">Timeout</span>
+                    <p className="text-xs text-muted">Não se aplica</p>
+                    <p className="text-xs text-muted">
+                      Esta ferramenta aguarda resposta/autorização do usuário; o agente ignora o timeout.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <label
+              htmlFor="mcp-policy-locked"
+              className="flex cursor-pointer items-start gap-3 rounded-lg border border-border px-3 py-2.5"
+            >
+              <input
+                id="mcp-policy-locked"
+                type="checkbox"
+                checked={editingEdit.locked}
+                disabled={editingLockedByParent}
+                onChange={(e) => patchRow(editing, { locked: e.target.checked })}
+                className="mt-0.5 h-4 w-4 rounded border-border disabled:cursor-not-allowed disabled:opacity-50"
+              />
+              <span>
+                <span className="block text-sm font-medium text-foreground">Bloquear herança</span>
+                <span className="block text-xs text-muted">
+                  Impede que cliente, site e agente sobrescrevam esta política.
+                  {editing.lowerScopeOverrides > 0 && (
+                    <>
+                      {" "}
+                      Hoje existem <strong className="text-foreground">{editing.lowerScopeOverrides}</strong>{" "}
+                      sobrescrita(s) em níveis mais específicos.
+                    </>
+                  )}
+                </span>
+              </span>
+            </label>
+
+            <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-4">
+              <Button variant="secondary" onClick={() => setEditingTool(null)}>
+                Cancelar
+              </Button>
+              {editing.overriddenHere && (
+                <Button
+                  variant="ghost"
+                  onClick={() => {
+                    setEditingTool(null);
+                    resetMutation.mutate(editing.name);
+                  }}
+                  loading={resetMutation.isPending && resetMutation.variables === editing.name}
+                  title="Remove a sobrescrita local e volta a herdar."
+                >
+                  <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" /> Herdar
+                </Button>
+              )}
+              <Button
+                onClick={() => requestSave(editing)}
+                disabled={!isDirty(editing) || editingLockedByParent}
+                loading={saveMutation.isPending && saveMutation.variables?.tool.name === editing.name}
+              >
+                <Save className="h-3.5 w-3.5" aria-hidden="true" /> Salvar
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
       <ConfirmDialog
         open={!!pendingConfirm}
         title="Confirmar impacto em cascata"
         confirmLabel="Aplicar"
-        onClose={() => setPendingConfirm(null)}
+        onClose={() => {
+          // Cancelou: volta para o modal de edição com o rascunho preservado.
+          const tool = pendingConfirm?.tool;
+          setPendingConfirm(null);
+          if (tool) setEditingTool(tool.name);
+        }}
         onConfirm={() => {
           if (pendingConfirm) {
-            saveMutation.mutate({ toolName: pendingConfirm.tool.name, edit: pendingConfirm.edit });
+            saveMutation.mutate({ tool: pendingConfirm.tool, edit: pendingConfirm.edit });
           }
           setPendingConfirm(null);
         }}
