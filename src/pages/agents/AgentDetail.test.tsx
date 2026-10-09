@@ -79,6 +79,23 @@ vi.mock('@/hooks/useAgents', () => ({
   useWakeOnLan: () => ({ isPending: false, mutate: vi.fn() }),
 }));
 
+vi.mock('@/hooks/useAutomation', () => ({
+  useForceAutomationSync: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useAgentAutomationPolicies: () => ({
+    data: {
+      agentId: 'a1',
+      policyFingerprint: 'abc123def4567890',
+      generatedAt: '2026-10-08T00:00:00Z',
+      taskCount: 3,
+      tasks: [],
+      preloadPackages: [],
+    },
+    isLoading: false,
+    isError: false,
+    isFetching: false,
+    refetch: vi.fn(),
+  }),
+}));
 vi.mock('@/hooks/useTickets', () => ({ useTickets: () => ({ data: { items: [] }, isLoading: false }) }));
 vi.mock('@/hooks/useLogs', () => ({ useLogs: () => ({ data: [], isLoading: false }) }));
 vi.mock('@/hooks/useNowTick', () => ({ useNowTick: () => Date.now() }));
@@ -120,6 +137,7 @@ vi.mock('@/components/agents/AgentNotificationModal', () => ({ default: () => nu
 vi.mock('@/components/agents/WakeOnLanModal', () => ({ default: () => null }));
 vi.mock('@/components/agents/AgentStartupItemsPanel', () => ({ default: () => null }));
 vi.mock('@/components/agents/AgentScheduledTasksPanel', () => ({ default: () => null }));
+vi.mock('@/components/agents/AgentPoliciesPanel', () => ({ default: () => null }));
 vi.mock('@/components/notes/NotesPanel', () => ({
   NotesPanel: () => <div data-testid="notes-panel">Notas</div>,
 }));
@@ -168,8 +186,8 @@ describe('AgentDetail — abas do agente', () => {
     // Os contadores por aba foram preservados na nova barra.
     expect(screen.getByRole('tab', { name: /Aplicativos/ }).textContent).toContain('42');
     expect(screen.getByRole('tab', { name: /^Labels/ }).textContent).toContain('1');
-    // Portas/Conexões e Inicialização/Tarefas saíram da barra principal: 9 abas.
-    expect(screen.getAllByRole('tab')).toHaveLength(9);
+    // Portas/Conexões e Inicialização/Tarefas saíram da barra principal: 10 abas.
+    expect(screen.getAllByRole('tab')).toHaveLength(10);
   });
 
   it('troca para a aba Anotações ao clicar', async () => {
@@ -266,6 +284,14 @@ describe('AgentDetail — abas do agente', () => {
     const badge = screen.getByRole('tab', { name: /Execução Automática/ }).textContent ?? '';
     expect(badge).toContain('2');
     expect(badge).not.toContain('1');
+  });
+
+  it('abre a aba Políticas pelo deep link com o contador de políticas', async () => {
+    await renderPage('?tab=politicas');
+
+    const tab = screen.getByRole('tab', { name: /Políticas/ });
+    expect(tab.getAttribute('aria-selected')).toBe('true');
+    expect(tab.textContent).toContain('3');
   });
 
   it('troca para Tarefas Agendadas dentro da aba Execução Automática', async () => {

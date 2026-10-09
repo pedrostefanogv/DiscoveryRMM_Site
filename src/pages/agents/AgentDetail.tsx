@@ -31,6 +31,7 @@ import PowerActionModal from '@/components/agents/PowerActionModal';
 import AgentNotificationModal, { type AgentNotificationPayload } from '@/components/agents/AgentNotificationModal';
 import AgentStartupItemsPanel from '@/components/agents/AgentStartupItemsPanel';
 import AgentScheduledTasksPanel from '@/components/agents/AgentScheduledTasksPanel';
+import AgentPoliciesPanel from '@/components/agents/AgentPoliciesPanel';
 import WakeOnLanModal from '@/components/agents/WakeOnLanModal';
 import { NotesPanel } from '@/components/notes/NotesPanel';
 import { PinnedNotesCard } from '@/components/notes/PinnedNotesCard';
@@ -54,6 +55,8 @@ import { openRemoteDebugPopup } from './remoteDebugLauncher';
 import { openRemoteSessionPopup } from './remoteSessionLauncher';
 import { useAuthorization } from '@/auth/authorization';
 import { useSendAgentNotification } from '@/hooks/useAgentAlerts';
+import { useAgentAutomationPolicies, useForceAutomationSync } from '@/hooks/useAutomation';
+import { buildCorrelationId } from '@/pages/automation/automationTasksUtils';
 
 // formatBytes, formatDate, formatSocketFamily — importadas de ./agentDetailUtils
 
@@ -65,6 +68,8 @@ interface AgentTabBadges {
   tickets?: number;
   /** Total da sub-aba ATIVA de "Execução Automática" (não a soma das duas). */
   autostart?: number;
+  /** Quantidade de políticas de automação aplicáveis ao agente. */
+  policies?: number;
   logs?: number;
 }
 
@@ -103,6 +108,7 @@ function buildAgentDetailTabs(badges: AgentTabBadges = {}): DetailTab<AgentDetai
       icon: Zap,
       badge: badges.autostart,
     },
+    { id: 'policies', label: 'Políticas', icon: ShieldCheck, badge: badges.policies },
     { id: 'logs', label: 'Logs', icon: ScrollText, badge: badges.logs },
   ];
 }
@@ -306,6 +312,22 @@ export default function AgentDetail() {
   const canManageAgent = hasAnyPermission(['Agents.Edit', 'agents.*', 'admin.*']);
   // Ações de execução no agente (refresh/atualização) exigem Agents.Execute.
   const canExecuteAgent = hasAnyPermission(['Agents.Execute', 'Agents.Edit', 'agents.*', 'admin.*']);
+  // A aba "Políticas" consulta um endpoint que exige Automation.View.
+  const canViewAutomation = hasAnyPermission([
+    'automation.*',
+    'automation.read',
+    'Automation.View',
+    'admin.*',
+  ]);
+  // Equivalente ao RequirePermission(Automation, Execute) do backend — habilita o
+  // "Forçar sincronização" na aba de políticas.
+  const canExecuteAutomation = hasAnyPermission([
+    'Automation.Execute',
+    'automation.execute',
+    'Automation.Edit',
+    'automation.*',
+    'admin.*',
+  ]);
   const deleteAgent = useDeleteAgent();
   const approveZeroTouch = useApproveZeroTouch();
   const restartAgent = useRestartAgent();
@@ -315,6 +337,13 @@ export default function AgentDetail() {
   const agent = useAgent(id!);
   const liveHeartbeat = useAgentHeartbeat(id!);
   const hw = useAgentHardware(id!);
+  // Políticas de automação aplicáveis ao agente. O hook fica sempre montado
+  // (regras de hooks) e o fetch só liga quando a aba "Políticas" está ativa.
+  const agentPolicies = useAgentAutomationPolicies(
+    id!,
+    canViewAutomation && activeDataTab === 'policies',
+  );
+  const forcePolicySync = useForceAutomationSync();
   // Payload pesado (impressoras/portas/conexões/discos) carregado apenas
   // quando uma aba que o consome está ativa (P1.2 — abas sob demanda).
   const dataTabNeedsComponents =
@@ -1212,6 +1241,28 @@ export default function AgentDetail() {
     }
   };
 
+  // Força o agent a re-sincronizar as políticas agora (aba "Políticas"). Útil
+  // quando o badge indica agent desatualizado e não se quer esperar o check-in.
+  const handleForcePolicySync = useCallback(async () => {
+    if (!id) return;
+    try {
+      await forcePolicySync.mutateAsync({
+        agentId: id,
+        request: { policies: true },
+        correlationId: buildCorrelationId('force-policy-sync'),
+      });
+      toast.success('Sincronização de políticas solicitada ao agent.');
+      // O agent responde logo em seguida; recarrega para refletir o que chegou.
+      await new Promise((resolve) => setTimeout(resolve, 2500));
+      await agentPolicies.refetch();
+    } catch (error) {
+      const msg = error instanceof ApiError
+        ? error.message
+        : 'Falha ao solicitar sincronização de políticas.';
+      toast.error(msg);
+    }
+  }, [id, forcePolicySync, agentPolicies]);
+
   const pageSizeOptions = [
     { value: '10', label: '10 por página' },
     { value: '30', label: '30 por página' },
@@ -1794,6 +1845,7 @@ export default function AgentDetail() {
               ? startupItems.length
               : scheduledTasks.length
             : undefined,
+          policies: canViewAutomation ? agentPolicies.data?.taskCount : undefined,
           logs: agentLogs.data ? logsArray.length : undefined,
         })}
         active={activeDataTab}
@@ -2709,6 +2761,25 @@ export default function AgentDetail() {
                     </div>
                   )}
                 </div>
+              </div>
+            )}
+
+            {activeDataTab === 'policies' && (
+              // Sem altura/rolagem própria: a tabela do painel já rola por dentro,
+              // evitando a barra de rolagem duplicada (aninhada) em telas pequenas.
+              <div className='w-full min-w-0 max-w-full'>
+                <AgentPoliciesPanel
+                  canView={canViewAutomation}
+                  canForceSync={canExecuteAutomation}
+                  policies={agentPolicies.data}
+                  isLoading={agentPolicies.isLoading}
+                  isError={Boolean(agentPolicies.isError)}
+                  onRetry={() => void agentPolicies.refetch()}
+                  isRefreshing={agentPolicies.isFetching}
+                  onRefresh={() => void agentPolicies.refetch()}
+                  isForcing={forcePolicySync.isPending}
+                  onForceSync={() => void handleForcePolicySync()}
+                />
               </div>
             )}
 

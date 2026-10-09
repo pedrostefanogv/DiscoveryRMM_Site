@@ -57,6 +57,11 @@ const KEYS = {
     byAgent: (agentId: string, filters: AutomationExecutionFilters) =>
       [...KEYS.executions.all, agentId, filters] as const,
   },
+  agentPolicies: {
+    all: ["agentAutomationPolicies"] as const,
+    byAgent: (agentId: string) =>
+      [...KEYS.agentPolicies.all, agentId] as const,
+  },
 };
 
 export function useAutomationScripts(params: {
@@ -351,6 +356,9 @@ export function useForceAutomationSync() {
     }) => automationApi.forceSync(agentId, request, correlationId),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: KEYS.executions.all });
+      // O force-sync também pode mudar as políticas aplicáveis: mantém a aba
+      // "Políticas" coerente para quem já a abriu.
+      qc.invalidateQueries({ queryKey: KEYS.agentPolicies.all });
     },
   });
 }
@@ -423,6 +431,20 @@ export function useForceAutomationSyncForScope() {
       correlationId?: string;
     }) => automationApi.forceSyncForScope(scope, request, correlationId),
     onSuccess: () => qc.invalidateQueries({ queryKey: KEYS.executions.all }),
+  });
+}
+
+/**
+ * Políticas de automação APLICÁVEIS ao agent (o que ele recebe no policy-sync).
+ * Leitura sob demanda — a aba "Políticas" do detalhe do agente é a única
+ * consumidora, então nada é buscado enquanto ela não está ativa.
+ */
+export function useAgentAutomationPolicies(agentId: string, enabled = true) {
+  return useQuery({
+    queryKey: KEYS.agentPolicies.byAgent(agentId),
+    queryFn: () => automationApi.getAgentPolicies(agentId),
+    enabled: !!agentId && enabled,
+    staleTime: 30_000,
   });
 }
 

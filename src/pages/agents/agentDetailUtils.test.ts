@@ -35,6 +35,7 @@ describe("agentDetailTabSlug", () => {
       tickets: "ultimos-chamados",
       network: "rede",
       autostart: "execucao-automatica",
+      policies: "politicas",
       logs: "logs",
     });
   });

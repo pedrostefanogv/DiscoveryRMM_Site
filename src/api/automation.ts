@@ -16,6 +16,7 @@ import type {
   AutomationScriptDetail,
   AutomationTaskAudit,
   AutomationTaskDetail,
+  AgentAutomationPolicyPreview,
   CreateAutomationScriptRequest,
   CreateAutomationTaskRequest,
   CursorPageDto,
@@ -243,6 +244,15 @@ export const automationApi = {
       `${AGENTS_BASE}/${agentId}/automation/executions/${executionId}/cancel`,
       undefined,
       correlationInit(correlationId),
+    ),
+
+  /**
+   * Políticas de automação APLICÁVEIS ao agent — o mesmo conjunto do
+   * policy-sync, para conferência na aba "Políticas" do detalhe.
+   */
+  getAgentPolicies: (agentId: string) =>
+    api.get<AgentAutomationPolicyPreview>(
+      `${AGENTS_BASE}/${agentId}/automation/policies`,
     ),
 
   getExecutions: (agentId: string, params: ExecutionHistoryParams = {}) =>

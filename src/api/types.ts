@@ -3782,6 +3782,73 @@ export interface AutomationTaskDetail extends AutomationTaskSummary {
   updatedAt: string;
 }
 
+/**
+ * Referência do script que compõe uma política de automação. O conteúdo NÃO é
+ * enviado à UI (a aba "Políticas" mostra só nome/versão/resumo).
+ */
+export interface AgentAutomationScriptRef {
+  scriptId: string;
+  name: string;
+  version: string;
+  summary: string;
+  scriptType: AutomationScriptType | string | number;
+  lastUpdatedAt: string;
+  contentHashSha256: string;
+  parametersSchemaJson?: string | null;
+  metadataJson?: string | null;
+}
+
+/** Política de automação que o agent recebe no policy-sync. */
+export interface AgentAutomationTaskPolicy {
+  taskId: string;
+  name: string;
+  description: string | null;
+  actionType: AutomationTaskActionType | string | number;
+  installationType: AppInstallationType | string | number | null;
+  packageId: string | null;
+  scriptId: string | null;
+  commandPayload: string | null;
+  scopeType: AppApprovalScopeType | string | number;
+  requiresApproval: boolean;
+  allowDefer: boolean;
+  closeProcesses: string[];
+  promptTimeoutSeconds: number;
+  notificationMode: AutomationNotificationMode | string | number;
+  toastTiming: AutomationToastTiming | string | number;
+  triggerImmediate: boolean;
+  triggerRecurring: boolean;
+  triggerOnUserLogin: boolean;
+  triggerOnAgentCheckIn: boolean;
+  scheduleCron: string | null;
+  includeTags: string[];
+  excludeTags: string[];
+  lastUpdatedAt: string;
+  script?: AgentAutomationScriptRef | null;
+}
+
+/** Pacote que o agent pré-carrega no cache P2P a partir das políticas. */
+export interface AgentPreloadPackage {
+  packageId: string;
+  actionType: AutomationTaskActionType | string | number;
+}
+
+/** Prévia das políticas aplicáveis ao agent (aba "Políticas"). */
+export interface AgentAutomationPolicyPreview {
+  agentId: string;
+  /** Fingerprint do que se aplica AGORA ao agent. */
+  policyFingerprint: string;
+  /** Fingerprint entregue no último policy-sync registrado (null = nunca recebeu). */
+  lastSyncedPolicyFingerprint: string | null;
+  /** Quando a policy vigente foi entregue/confirmada. */
+  lastPolicySyncAt: string | null;
+  /** true quando o último fingerprint entregue == o atual. */
+  upToDate: boolean;
+  generatedAt: string;
+  taskCount: number;
+  tasks: AgentAutomationTaskPolicy[];
+  preloadPackages: AgentPreloadPackage[];
+}
+
 export interface CreateAutomationTaskRequest {
   name: string;
   description?: string | null;
