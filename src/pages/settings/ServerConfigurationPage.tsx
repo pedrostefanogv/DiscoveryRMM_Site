@@ -502,6 +502,7 @@ export default function ServerConfigurationPage() {
         description={field.description}
         unit={field.unit}
         hideSaveButton
+        variant="plain"
         secret={field.key === "objectStorageSecretKey"}
         secretConfigured={Boolean(serverQuery.data?.objectStorageSecretKeyConfigured)}
         onValueChange={(next) => {
@@ -517,6 +518,13 @@ export default function ServerConfigurationPage() {
         saving={false}
       />
     );
+  };
+
+  // Campos de texto do storage renderizados na variante compacta ("plain"),
+  // agrupados por assunto nos painéis abaixo.
+  const renderStorageTextField = (key: string) => {
+    const field = storageTextFields.find((item) => item.key === key);
+    return field ? renderStorageFieldEditor(field) : null;
   };
 
   const renderNatsFieldEditor = (field: EditableField) => {
@@ -726,8 +734,8 @@ export default function ServerConfigurationPage() {
             }`}
           >
             <span
-              className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${
-                isEnabled ? "translate-x-4" : "translate-x-0.5"
+              className={`absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${
+                isEnabled ? "translate-x-4" : "translate-x-0"
               }`}
             />
           </div>
@@ -908,8 +916,42 @@ export default function ServerConfigurationPage() {
           />
           {!collapsedSections.storage && (
             <div className="space-y-5">
-              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                {storageTextFields.map((field) => renderStorageFieldEditor(field))}
+              <div className="space-y-4">
+                {/* Conexão — endereço do backend e bucket */}
+                <div className="rounded-lg border border-border bg-surface-light p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted">Conexão</p>
+                  <p className="mt-1 text-[11px] text-muted">
+                    Endereço do servidor S3-compatível, bucket e região onde os arquivos ficam.
+                  </p>
+                  <div className="mt-3 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                    <div className="sm:col-span-2">{renderStorageTextField("objectStorageEndpoint")}</div>
+                    {renderStorageTextField("objectStorageBucketName")}
+                    {renderStorageTextField("objectStorageRegion")}
+                  </div>
+                </div>
+
+                <div className="grid gap-4 lg:grid-cols-2">
+                  {/* Credenciais de acesso */}
+                  <div className="rounded-lg border border-border bg-surface-light p-4">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-muted">Credenciais</p>
+                    <p className="mt-1 text-[11px] text-muted">
+                      Chaves de acesso ao bucket. A Secret Key não é retornada pela API — preencha apenas para trocá-la.
+                    </p>
+                    <div className="mt-3 grid gap-4 sm:grid-cols-2">
+                      {renderStorageTextField("objectStorageAccessKey")}
+                      {renderStorageTextField("objectStorageSecretKey")}
+                    </div>
+                  </div>
+
+                  {/* Validade das URLs geradas pelo servidor */}
+                  <div className="rounded-lg border border-border bg-surface-light p-4">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-muted">URLs assinadas</p>
+                    <p className="mt-1 text-[11px] text-muted">
+                      Validade dos links temporários gerados pelo servidor para download dos arquivos.
+                    </p>
+                    <div className="mt-3">{renderStorageTextField("objectStorageUrlTtlHours")}</div>
+                  </div>
+                </div>
               </div>
 
               {storageToggleFields.length > 0 && (
@@ -1553,8 +1595,8 @@ function TicketAttachmentSettingsCard({
             }`}
           >
             <span
-              className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${
-                form.enabled ? "translate-x-4" : "translate-x-0.5"
+              className={`absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${
+                form.enabled ? "translate-x-4" : "translate-x-0"
               }`}
             />
           </div>

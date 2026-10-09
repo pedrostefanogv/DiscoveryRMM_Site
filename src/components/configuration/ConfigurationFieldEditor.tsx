@@ -35,6 +35,12 @@ interface ConfigurationFieldEditorProps {
   secret?: boolean;
   /** Indica que já existe um valor salvo para o segredo (placeholder). */
   secretConfigured?: boolean;
+  /**
+   * "card" (padrão) embrulha o campo no mini-card próprio (título + descrição +
+   * controle). "plain" renderiza só rótulo + controle, para agrupar vários campos
+   * dentro de um mesmo painel sem repetir caixas.
+   */
+  variant?: "card" | "plain";
 }
 
 export function ConfigurationFieldEditor({
@@ -61,12 +67,17 @@ export function ConfigurationFieldEditor({
   hideSaveButton,
   secret,
   secretConfigured,
+  variant = "card",
 }: ConfigurationFieldEditorProps) {
   const [showDiff, setShowDiff] = useState(false);
   const [showAiAdvanced, setShowAiAdvanced] = useState(false);
   const [showAiEmbedding, setShowAiEmbedding] = useState(false);
   const isReadOnly = !!locked;
   const inputDisabled = isReadOnly || (!!disableInheritance ? false : inherited);
+  const isPlain = variant === "plain";
+  // Na variante "plain" o rótulo do campo (com a unidade) vai acima do controle,
+  // então o controle não repete o genérico "Valor local".
+  const innerLabel = isPlain ? undefined : "Valor local";
 
   const numberRanges: Record<string, { min: number; max: number }> = {
     inventoryIntervalHours: { min: 1, max: 168 },
@@ -206,7 +217,7 @@ export function ConfigurationFieldEditor({
     if (fieldKind === "boolean") {
       return (
         <Select
-          label="Valor local"
+          label={innerLabel}
           value={value}
           onChange={(event) => onValueChange(event.target.value)}
           disabled={inputDisabled}
@@ -237,7 +248,7 @@ export function ConfigurationFieldEditor({
       return (
         <Input
           type="number"
-          label={`Valor local${unitSuffix}`}
+          label={isPlain ? undefined : `Valor local${unitSuffix}`}
           value={value}
           onChange={(event) => onValueChange(event.target.value)}
           disabled={inputDisabled}
@@ -562,7 +573,7 @@ export function ConfigurationFieldEditor({
           <Input
             type="password"
             autoComplete="new-password"
-            label="Valor local"
+            label={innerLabel}
             value={value}
             onChange={(event) => onValueChange(event.target.value)}
             disabled={inputDisabled}
@@ -584,7 +595,7 @@ export function ConfigurationFieldEditor({
 
     return (
       <Input
-        label="Valor local"
+        label={innerLabel}
         value={value}
         onChange={(event) => onValueChange(event.target.value)}
         disabled={inputDisabled}
@@ -593,6 +604,82 @@ export function ConfigurationFieldEditor({
       />
     );
   };
+
+  const saveActions = !hideSaveButton && (
+    <>
+      <Button
+        size="sm"
+        variant="ghost"
+        onClick={() => setShowDiff(true)}
+        title="Comparar valor local com efetivo"
+      >
+        <GitCompare className="h-3.5 w-3.5" />
+        <span className="hidden sm:inline">Comparar</span>
+      </Button>
+      <Button size="sm" onClick={onSavePatch} loading={saving} disabled={isReadOnly}>
+        Salvar
+      </Button>
+      {onResetProperty && (
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={onResetProperty}
+          loading={resetLoading}
+          disabled={isReadOnly}
+        >
+          Reset
+        </Button>
+      )}
+    </>
+  );
+
+  const diffModal = (
+    <Modal
+      open={showDiff}
+      onClose={() => setShowDiff(false)}
+      title={`Comparar: ${fieldLabel}`}
+      maxWidth="max-w-2xl"
+    >
+      <ConfigDiffViewer
+        localValue={inherited ? null : value}
+        effectiveValue={effectiveValue}
+        origin={origin}
+        fieldKey={fieldKey}
+      />
+    </Modal>
+  );
+
+  // Variante compacta: o rótulo do campo vira o label do controle (com a unidade)
+  // e a descrição vira texto de apoio. Serve para agrupar vários campos dentro de
+  // um único painel, em vez de um mini-card por campo.
+  if (isPlain) {
+    return (
+      // h-full + mt-auto alinham os controles pela base quando os campos ficam
+      // lado a lado e as descrições têm alturas diferentes.
+      <div className="flex h-full flex-col gap-2">
+        <div>
+          <p className="text-sm font-medium text-foreground">
+            {fieldLabel}
+            {unit ? <span className="font-normal text-muted"> ({unit})</span> : null}
+          </p>
+          {description && (
+            <p className="mt-0.5 text-xs leading-snug text-muted-foreground">{description}</p>
+          )}
+        </div>
+
+        {isReadOnly && (
+          <p className="text-xs text-warning">
+            Campo bloqueado{lockOwner ? ` por ${lockOwner}` : ""}.
+          </p>
+        )}
+
+        <div className="mt-auto">{renderInput()}</div>
+
+        {saveActions && <div className="flex flex-wrap justify-end gap-2">{saveActions}</div>}
+        {diffModal}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-3 rounded-lg border border-border bg-surface-light p-4">
@@ -645,49 +732,9 @@ export function ConfigurationFieldEditor({
         )}
       </div>
 
-      <div className="flex flex-wrap justify-end gap-2">
-        {!hideSaveButton && (
-          <>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => setShowDiff(true)}
-              title="Comparar valor local com efetivo"
-            >
-              <GitCompare className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Comparar</span>
-            </Button>
-            <Button size="sm" onClick={onSavePatch} loading={saving} disabled={isReadOnly}>
-              Salvar
-            </Button>
-            {onResetProperty && (
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={onResetProperty}
-                loading={resetLoading}
-                disabled={isReadOnly}
-              >
-                Reset
-              </Button>
-            )}
-          </>
-        )}
-      </div>
+      <div className="flex flex-wrap justify-end gap-2">{saveActions}</div>
 
-      <Modal
-        open={showDiff}
-        onClose={() => setShowDiff(false)}
-        title={`Comparar: ${fieldLabel}`}
-        maxWidth="max-w-2xl"
-      >
-        <ConfigDiffViewer
-          localValue={inherited ? null : value}
-          effectiveValue={effectiveValue}
-          origin={origin}
-          fieldKey={fieldKey}
-        />
-      </Modal>
+      {diffModal}
     </div>
   );
 }
