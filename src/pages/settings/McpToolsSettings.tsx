@@ -207,6 +207,34 @@ export default function McpToolsSettings() {
   const patchRow = (tool: McpToolCatalogItem, patch: Partial<RowEdit>) =>
     setEdits((prev) => ({ ...prev, [tool.name]: { ...rowState(tool), ...patch } }));
 
+  /** Abre o editor do modal já com o texto dos campos numéricos normalizado. */
+  const openEditor = (tool: McpToolCatalogItem) => {
+    const state = rowState(tool);
+    setLimitText({
+      calls: String(state.maxCallsPerMinute),
+      timeout: String(state.timeoutSeconds),
+    });
+    setEditingTool(tool.name);
+  };
+
+  /**
+   * Fecha o editor DESCARTANDO o rascunho local (Cancelar / X / clique fora):
+   * sem isso a linha continuava exibindo "Não salvo" com valores abandonados e
+   * o modal reabria já preenchido com eles.
+   */
+  const closeEditor = () => {
+    const toolName = editingTool;
+    if (toolName) {
+      setEdits((prev) => {
+        const next = { ...prev };
+        delete next[toolName];
+        return next;
+      });
+    }
+    setLimitText(null);
+    setEditingTool(null);
+  };
+
   const isDirty = (tool: McpToolCatalogItem) => {
     const edit = edits[tool.name];
     if (!edit) return false;
@@ -274,6 +302,19 @@ export default function McpToolsSettings() {
   const editingEdit = editing ? rowState(editing) : null;
   const editingLockedByParent = editing ? editing.locked && !editing.overriddenHere : false;
   const editingCapability = editing ? isNonExecutableCapability(editing) : false;
+
+  // Texto exibido nos campos numéricos do modal e sua validação: o rascunho
+  // numérico só acompanha valores válidos, mas o texto livre fica visível para
+  // o operador ver o que digitou (inclusive vazio) e receber o erro.
+  const callsText = limitText?.calls ?? (editingEdit ? String(editingEdit.maxCallsPerMinute) : "");
+  const timeoutText = limitText?.timeout ?? (editingEdit ? String(editingEdit.timeoutSeconds) : "");
+  const callsValue = parseLimit(callsText, 1, 600);
+  const timeoutValue = parseLimit(timeoutText, 1, 3600);
+  const editingLimitsInvalid = !editing
+    ? false
+    : editingCapability
+      ? false
+      : callsValue === null || (editing.timeoutApplies && timeoutValue === null);
 
   const scopeOptions = [
     { value: "global", label: "Global (todos)" },
@@ -562,7 +603,7 @@ export default function McpToolsSettings() {
                         size="sm"
                         variant="secondary"
                         data-testid={`mcp-edit-${tool.name}`}
-                        onClick={() => setEditingTool(tool.name)}
+                        onClick={() => openEditor(tool)}
                         title={
                           lockedByParent
                             ? "Bloqueado por um nível superior (herança) — somente leitura"
@@ -599,7 +640,7 @@ export default function McpToolsSettings() {
       {/* ── Modal de edição da política ─────────────────────────────────── */}
       <Modal
         open={!!editing}
-        onClose={() => setEditingTool(null)}
+        onClose={closeEditor}
         title={editing ? `Editar política — ${editing.name}` : "Editar política"}
         maxWidth="max-w-xl"
       >
@@ -670,13 +711,19 @@ export default function McpToolsSettings() {
                   id="mcp-policy-max-calls"
                   label="Chamadas/min"
                   type="number"
-                  min={1}
-                  max={600}
+                  inputMode="numeric"
                   disabled={editingLockedByParent}
-                  value={editingEdit.maxCallsPerMinute}
-                  onChange={(e) =>
-                    patchRow(editing, { maxCallsPerMinute: Number(e.target.value) || 1 })
-                  }
+                  value={callsText}
+                  error={callsValue === null ? "Informe um número entre 1 e 600." : undefined}
+                  onChange={(e) => {
+                    const text = e.target.value;
+                    setLimitText((prev) => ({
+                      calls: text,
+                      timeout: prev?.timeout ?? timeoutText,
+                    }));
+                    const parsed = parseLimit(text, 1, 600);
+                    if (parsed !== null) patchRow(editing, { maxCallsPerMinute: parsed });
+                  }}
                   hint="Limite de execuções por minuto neste escopo."
                 />
 
@@ -686,11 +733,19 @@ export default function McpToolsSettings() {
                       id="mcp-policy-timeout"
                       label="Timeout (s)"
                       type="number"
-                      min={1}
-                      max={3600}
+                      inputMode="numeric"
                       disabled={editingLockedByParent}
-                      value={editingEdit.timeoutSeconds}
-                      onChange={(e) => patchRow(editing, { timeoutSeconds: Number(e.target.value) || 1 })}
+                      value={timeoutText}
+                      error={timeoutValue === null ? "Informe um número entre 1 e 3600." : undefined}
+                      onChange={(e) => {
+                        const text = e.target.value;
+                        setLimitText((prev) => ({
+                          calls: prev?.calls ?? callsText,
+                          timeout: text,
+                        }));
+                        const parsed = parseLimit(text, 1, 3600);
+                        if (parsed !== null) patchRow(editing, { timeoutSeconds: parsed });
+                      }}
                       hint={`Recomendado: ${editing.recommendedTimeoutSeconds}s`}
                     />
                     {editing.recommendedTimeoutSeconds > 0 &&
@@ -699,9 +754,17 @@ export default function McpToolsSettings() {
                           type="button"
                           className="text-xs font-medium text-primary hover:underline disabled:opacity-50"
                           disabled={editingLockedByParent}
-                          onClick={() =>
-                            patchRow(editing, { timeoutSeconds: editing.recommendedTimeoutSeconds })
-                          }
+                          onClick={() => {
+                            const recommended = editing.recommendedTimeoutSeconds;
+                            // O texto do campo precisa acompanhar: sem isso o
+                            // input mostraria o valor antigo enquanto o
+                            // rascunho já valia o recomendado.
+                            setLimitText((prev) => ({
+                              calls: prev?.calls ?? callsText,
+                              timeout: String(recommended),
+                            }));
+                            patchRow(editing, { timeoutSeconds: recommended });
+                          }}
                           title="Aplicar o timeout recomendado para esta ferramenta"
                         >
                           Usar o recomendado ({editing.recommendedTimeoutSeconds}s)
@@ -748,14 +811,14 @@ export default function McpToolsSettings() {
             </label>
 
             <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-4">
-              <Button variant="secondary" onClick={() => setEditingTool(null)}>
+              <Button variant="secondary" onClick={closeEditor}>
                 Cancelar
               </Button>
               {editing.overriddenHere && (
                 <Button
                   variant="ghost"
                   onClick={() => {
-                    setEditingTool(null);
+                    closeEditor();
                     resetMutation.mutate(editing.name);
                   }}
                   loading={resetMutation.isPending && resetMutation.variables === editing.name}
@@ -766,7 +829,7 @@ export default function McpToolsSettings() {
               )}
               <Button
                 onClick={() => requestSave(editing)}
-                disabled={!isDirty(editing) || editingLockedByParent}
+                disabled={!isDirty(editing) || editingLockedByParent || editingLimitsInvalid}
                 loading={saveMutation.isPending && saveMutation.variables?.tool.name === editing.name}
               >
                 <Save className="h-3.5 w-3.5" aria-hidden="true" /> Salvar

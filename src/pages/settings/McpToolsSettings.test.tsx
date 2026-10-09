@@ -327,4 +327,90 @@ describe("McpToolsSettings", () => {
     expect(screen.getAllByText(/Timeout recomendado:/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/30s/).length).toBeGreaterThan(0);
   });
+
+  it("descarta o rascunho ao cancelar o modal", async () => {
+    renderPage();
+    await waitFor(() => expect(screen.getByText("knowledge_search")).toBeTruthy());
+
+    const row = screen.getByTestId("mcp-tool-knowledge_search");
+    openEditor("knowledge_search");
+    fireEvent.change(screen.getByLabelText("Chamadas/min"), { target: { value: "99" } });
+    expect(within(row).getByText("Não salvo")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: /Cancelar/ }));
+
+    // Rascunho descartado: a linha volta ao valor salvo, sem "Não salvo".
+    expect(within(row).queryByText("Não salvo")).toBeNull();
+    expect(within(row).getByText("10/min")).toBeTruthy();
+
+    // Reabrir mostra o valor do servidor, não o abandonado.
+    openEditor("knowledge_search");
+    expect((screen.getByLabelText("Chamadas/min") as HTMLInputElement).value).toBe("10");
+  });
+
+  it("descarta o rascunho quando a sobrescrita é removida pelo Herdar", async () => {
+    vi.mocked(mcpToolsApi.reset).mockResolvedValue(catalog);
+    renderPage();
+    await waitFor(() => expect(screen.getByText("service_control")).toBeTruthy());
+
+    const row = screen.getByTestId("mcp-tool-service_control");
+    openEditor("service_control");
+    fireEvent.change(screen.getByLabelText("Chamadas/min"), { target: { value: "42" } });
+    expect(within(row).getByText("Não salvo")).toBeTruthy();
+
+    // O último "Herdar" é o do modal (o primeiro é o da linha).
+    const resetButtons = screen.getAllByRole("button", { name: /Herdar/ });
+    fireEvent.click(resetButtons[resetButtons.length - 1]);
+
+    await waitFor(() => expect(mcpToolsApi.reset).toHaveBeenCalledTimes(1));
+    expect(within(row).queryByText("Não salvo")).toBeNull();
+    expect(within(row).getByText("10/min")).toBeTruthy();
+  });
+
+  it("valida os campos numéricos sem forçar 1 ao apagar", async () => {
+    renderPage();
+    await waitFor(() => expect(screen.getByText("knowledge_search")).toBeTruthy());
+    openEditor("knowledge_search");
+
+    const calls = screen.getByLabelText("Chamadas/min") as HTMLInputElement;
+    const save = screen.getByRole("button", { name: /Salvar/ }) as HTMLButtonElement;
+
+    // Apagar o campo NÃO força "1": fica vazio, com erro, e o Salvar bloqueia.
+    fireEvent.change(calls, { target: { value: "" } });
+    expect(calls.value).toBe("");
+    expect(screen.getByText("Informe um número entre 1 e 600.")).toBeTruthy();
+    expect(save.disabled).toBe(true);
+
+    // Acima do teto da API (que cortaria em 600) também bloqueia.
+    fireEvent.change(calls, { target: { value: "5000" } });
+    expect(save.disabled).toBe(true);
+
+    // Digitar do zero novamente funciona.
+    fireEvent.change(calls, { target: { value: "3" } });
+    fireEvent.change(calls, { target: { value: "30" } });
+    expect(calls.value).toBe("30");
+    expect(save.disabled).toBe(false);
+  });
+
+  it("'Usar o recomendado' mantém o campo e o rascunho em sincronia", async () => {
+    renderPage();
+    await waitFor(() => expect(screen.getByText("knowledge_search")).toBeTruthy());
+    openEditor("knowledge_search");
+
+    fireEvent.change(screen.getByLabelText("Timeout (s)"), { target: { value: "45" } });
+    // Outra mudança garante que a política continue "suja" ao voltar o timeout
+    // ao valor recomendado (que é igual ao salvo).
+    fireEvent.change(screen.getByLabelText("Chamadas/min"), { target: { value: "25" } });
+    fireEvent.click(screen.getByRole("button", { name: /Usar o recomendado/ }));
+
+    // O texto exibido acompanha o rascunho (antes ficava mostrando 45).
+    expect((screen.getByLabelText("Timeout (s)") as HTMLInputElement).value).toBe("30");
+    fireEvent.click(screen.getByRole("button", { name: /Salvar/ }));
+
+    await waitFor(() => expect(mcpToolsApi.save).toHaveBeenCalledTimes(1));
+    expect(mcpToolsApi.save).toHaveBeenCalledWith(
+      "knowledge_search",
+      expect.objectContaining({ timeoutSeconds: 30, maxCallsPerMinute: 25 }),
+    );
+  });
 });
