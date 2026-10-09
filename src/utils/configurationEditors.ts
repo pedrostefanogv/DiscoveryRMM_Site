@@ -13,7 +13,8 @@ export type EditableFieldKind =
   | "number"
   | "string"
   | "json"
-  | "policy";
+  | "policy"
+  | "select";
 
 export type EditableFieldGroup =
   | "features"
@@ -32,6 +33,8 @@ export interface EditableField {
   group?: EditableFieldGroup;
   description?: string;
   unit?: string;
+  /** Opções para fields do tipo "select" (value = id enviado à API). */
+  options?: { value: string; label: string }[];
 }
 
 const AI_INTEGRATION_FIELD_KEY = "aiIntegrationSettingsJson";
@@ -51,6 +54,49 @@ export const APP_STORE_POLICY_OPTIONS: { value: string; label: string }[] = [
   { value: "1", label: "1 - Pré-aprovados (apenas aplicativos da lista)" },
   { value: "2", label: "2 - Todos (qualquer aplicativo autorizado)" },
 ];
+
+/**
+ * Rótulos (i18n) e fallback local das abas da página inicial do agent.
+ *
+ * NÃO é a fonte de verdade da lista: os valores aceitos vêm do servidor em
+ * `metadata.agentHomeTabOptions` (AgentHomeTabCatalog) e são usados via
+ * `getAgentHomeTabOptions`. Este mapa só fornece os rótulos em pt-BR e cobre o
+ * caso de a metadata não estar disponível (API antiga/offline).
+ */
+export const AGENT_HOME_TAB_OPTIONS: { value: string; label: string }[] = [
+  { value: "status", label: "Status" },
+  { value: "store", label: "Loja" },
+  { value: "updates", label: "Atualizações" },
+  { value: "chat", label: "Chat IA" },
+  { value: "support", label: "Suporte" },
+  { value: "knowledge", label: "Base de Conhecimento" },
+];
+
+/**
+ * Monta as opções de aba a partir dos valores publicados pelo servidor
+ * (`metadata.agentHomeTabOptions`, fonte de verdade = AgentHomeTabCatalog).
+ * Os rótulos continuam locais (i18n); valores sem rótulo conhecido aparecem
+ * com o próprio id. Sem a lista do servidor, usa o fallback local.
+ */
+export function getAgentHomeTabOptions(
+  allowedValues?: string[] | null,
+): { value: string; label: string }[] {
+  if (!allowedValues || allowedValues.length === 0) {
+    return AGENT_HOME_TAB_OPTIONS;
+  }
+
+  const labels = new Map(
+    AGENT_HOME_TAB_OPTIONS.map((option) => [option.value, option.label]),
+  );
+
+  return allowedValues.map((value) => ({
+    value,
+    label: labels.get(value) ?? value,
+  }));
+}
+
+export const AGENT_HOME_TAB_DESCRIPTION =
+  "Define qual aba o agent abre como página inicial. É herdável (servidor → cliente → site): vazio herda do nível acima. Se a aba estiver desativada para o agente, ele abre a aba Status.";
 
 const APP_STORE_POLICY_NAMES: Record<string, number> = {
   Disabled: 0,
@@ -308,6 +354,14 @@ export const serverEditableFields: EditableField[] = [
     description:
       "Tempo (em segundos) sem receber heartbeat antes de considerar o agente offline. Deve ser maior que o intervalo de heartbeat.",
     unit: "segundos",
+  },
+  {
+    key: "agentHomeTab",
+    label: "Página Inicial do Agent",
+    kind: "select",
+    group: "agent",
+    options: AGENT_HOME_TAB_OPTIONS,
+    description: AGENT_HOME_TAB_DESCRIPTION,
   },
   {
     key: "brandingSettingsJson",
@@ -569,6 +623,14 @@ export const clientEditableFields: EditableField[] = [
     description:
       "Tempo (em segundos) sem receber heartbeat antes de considerar o agente offline. Deve ser maior que o intervalo de heartbeat.",
   },
+  {
+    key: "agentHomeTab",
+    label: "Página Inicial do Agent",
+    kind: "select",
+    group: "agent",
+    options: AGENT_HOME_TAB_OPTIONS,
+    description: AGENT_HOME_TAB_DESCRIPTION,
+  },
 ];
 
 export const siteEditableFields: EditableField[] = [
@@ -648,6 +710,14 @@ export const siteEditableFields: EditableField[] = [
     unit: "horas",
     description:
       "Com qual frequência (em horas) cada agente coleta e envia o inventário de software instalado. Valores menores = atualizações mais frequentes.",
+  },
+  {
+    key: "agentHomeTab",
+    label: "Página Inicial do Agent",
+    kind: "select",
+    group: "agent",
+    options: AGENT_HOME_TAB_OPTIONS,
+    description: AGENT_HOME_TAB_DESCRIPTION,
   },
   {
     key: "timezone",
@@ -860,6 +930,12 @@ export function validateFieldValue(
     return "Selecione uma política válida: 0 (Desativado), 1 (Pré-aprovados) ou 2 (Todos)";
   }
 
+  if (kind === "select") {
+    // A lista válida é publicada pelo servidor (agentHomeTabOptions) e a
+    // validação definitiva é dele; aqui só garantimos que algo foi escolhido.
+    return trimmed.length > 0 ? true : "Selecione uma aba para a página inicial do agent";
+  }
+
   return true;
 }
 
@@ -919,6 +995,10 @@ export function parseFieldValue(
     return Number(trimmed);
   }
 
+  if (kind === "select") {
+    return trimmed;
+  }
+
   return value;
 }
 
@@ -972,12 +1052,14 @@ export function resolveSiteOrigin(
   return "Server";
 }
 
-function fieldDefault(kind: EditableFieldKind): string {
+export function fieldDefault(kind: EditableFieldKind): string {
   if (kind === "boolean") return "false";
   if (kind === "number") return "0";
   if (kind === "json") return "{}";
   // PreApproved: espelha o default de ServerConfiguration.AppStorePolicy no backend.
   if (kind === "policy") return "1";
+  // status: espelha o default de ServerConfiguration.AgentHomeTab no backend.
+  if (kind === "select") return "status";
   return "";
 }
 

@@ -1,5 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import { AGENT_HOME_TAB_OPTIONS } from "@/utils/configurationEditors";
 import { ConfigurationFieldEditor } from "./ConfigurationFieldEditor";
 
 const baseProps = {
@@ -51,5 +52,68 @@ describe("ConfigurationFieldEditor - Política da Loja de Aplicativos", () => {
     fireEvent.click(screen.getByText("Comparar"));
 
     expect(screen.getAllByText("Pré-aprovados").length).toBeGreaterThan(0);
+  });
+});
+
+describe("ConfigurationFieldEditor - Página Inicial do Agent", () => {
+  const selectProps = {
+    ...baseProps,
+    fieldLabel: "Página Inicial do Agent",
+    fieldKey: "agentHomeTab",
+    fieldKind: "select" as const,
+    value: "status",
+    effectiveValue: "status",
+  };
+
+  it("renderiza as opções de aba usando os ids exatos da API", () => {
+    render(<ConfigurationFieldEditor {...selectProps} />);
+
+    const select = screen.getByRole("combobox") as HTMLSelectElement;
+    expect(select.value).toBe("status");
+    expect(Array.from(select.options).map((option) => option.value)).toEqual(
+      AGENT_HOME_TAB_OPTIONS.map((option) => option.value),
+    );
+  });
+
+  it("propaga o id escolhido pelo usuário", () => {
+    const onValueChange = vi.fn();
+    render(
+      <ConfigurationFieldEditor {...selectProps} onValueChange={onValueChange} />,
+    );
+
+    const select = screen.getByRole("combobox") as HTMLSelectElement;
+    fireEvent.change(select, { target: { value: "support" } });
+
+    expect(onValueChange).toHaveBeenCalledWith("support");
+  });
+
+  it("mantém visível um valor salvo fora do catálogo para o admin corrigir", () => {
+    render(<ConfigurationFieldEditor {...selectProps} value="logs" />);
+
+    const select = screen.getByRole("combobox") as HTMLSelectElement;
+    expect(select.value).toBe("logs");
+    expect(Array.from(select.options).map((option) => option.value)).toEqual([
+      ...AGENT_HOME_TAB_OPTIONS.map((option) => option.value),
+      "logs",
+    ]);
+  });
+
+  it("prioriza as opções publicadas pelo servidor", () => {
+    render(
+      <ConfigurationFieldEditor
+        {...selectProps}
+        value="chat"
+        options={[
+          { value: "chat", label: "Chat IA" },
+          { value: "futureTab", label: "futureTab" },
+        ]}
+      />,
+    );
+
+    const select = screen.getByRole("combobox") as HTMLSelectElement;
+    expect(Array.from(select.options).map((option) => option.value)).toEqual([
+      "chat",
+      "futureTab",
+    ]);
   });
 });

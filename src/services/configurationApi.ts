@@ -108,7 +108,13 @@ function normalizeMetadata(payload: unknown): ConfigurationMetadataResponse {
     ? (record.blockedFields as string[])
     : undefined;
 
-  return { fields, blockedFields };
+  const agentHomeTabOptions = Array.isArray(record.agentHomeTabOptions)
+    ? (record.agentHomeTabOptions as unknown[]).filter(
+        (value): value is string => typeof value === "string" && value.length > 0,
+      )
+    : undefined;
+
+  return { fields, blockedFields, agentHomeTabOptions };
 }
 
 function parseJsonObject<T>(jsonValue: string | null | undefined): T | null {
@@ -218,6 +224,12 @@ export function deleteClientConfig(clientId: string) {
 export function resetClientProperty(clientId: string, propertyName: string) {
   return api.post<void>(
     `${CONFIG_BASE}/clients/${clientId}/reset/${encodeURIComponent(toCanonicalConfigurationFieldName(propertyName))}`,
+  );
+}
+
+export async function getServerMetadata() {
+  return normalizeMetadata(
+    await api.get<unknown>(`${CONFIG_BASE}/server/metadata`),
   );
 }
 

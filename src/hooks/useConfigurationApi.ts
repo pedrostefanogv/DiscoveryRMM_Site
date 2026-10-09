@@ -14,6 +14,7 @@ import {
   exportServerConfig,
   getServerConfig,
   getServerLocksImpact,
+  getServerMetadata,
   getSiteConfig,
   getSiteEffectiveConfig,
   getSiteMetadata,
@@ -40,6 +41,7 @@ import {
 
 export const configurationQueryKeys = {
   server: ["config", "server"] as const,
+  serverMetadata: ["config", "server-metadata"] as const,
   client: (clientId: string) => ["config", "client", clientId] as const,
   clientEffective: (clientId: string) =>
     ["config", "client-effective", clientId] as const,
@@ -86,6 +88,18 @@ export function useServerConfig() {
   return useQuery({
     queryKey: configurationQueryKeys.server,
     queryFn: getServerConfig,
+  });
+}
+
+/**
+ * Metadados de edição do escopo do servidor (origem + locks + catálogo
+ * agentHomeTabOptions). Serve para o editor renderizar as opções vindas do
+ * servidor sem duplicar o contrato no console.
+ */
+export function useServerMetadata() {
+  return useQuery({
+    queryKey: configurationQueryKeys.serverMetadata,
+    queryFn: getServerMetadata,
   });
 }
 

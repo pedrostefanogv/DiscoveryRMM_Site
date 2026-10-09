@@ -8,7 +8,11 @@ import {
   useClientEffectiveConfig,
   useSiteEffectiveConfig,
 } from "@/hooks/useConfigurationApi";
-import { formatAppStorePolicyValue, serverEditableFields } from "@/utils/configurationEditors";
+import {
+  AGENT_HOME_TAB_OPTIONS,
+  formatAppStorePolicyValue,
+  serverEditableFields,
+} from "@/utils/configurationEditors";
 import type { ResolvedConfiguration } from "@/api";
 
 const ORIGIN_LABELS: Record<number, string> = {
@@ -20,7 +24,11 @@ const ORIGIN_LABELS: Record<number, string> = {
 
 /** Campos escalares exibidos no simulador (os objetos aparecem só pela origem). */
 const SCALAR_FIELDS = serverEditableFields.filter(
-  (field) => field.kind === "boolean" || field.kind === "number" || field.kind === "policy",
+  (field) =>
+    field.kind === "boolean" ||
+    field.kind === "number" ||
+    field.kind === "policy" ||
+    field.kind === "select",
 );
 
 /** Overrides de objeto (chave do mapa de inheritance, não do JSON). */
@@ -34,6 +42,11 @@ function formatValue(key: string, value: unknown): string {
   if (value === null || value === undefined) return "—";
   if (typeof value === "boolean") return value ? "Ativado" : "Desativado";
   if (key === "appStorePolicy") return formatAppStorePolicyValue(value) || "—";
+  if (key === "agentHomeTab") {
+    const raw = String(value).trim();
+    if (!raw) return "—";
+    return AGENT_HOME_TAB_OPTIONS.find((option) => option.value === raw)?.label ?? raw;
+  }
   if (typeof value === "object") return JSON.stringify(value);
   return String(value);
 }

@@ -1749,6 +1749,8 @@ export interface ServerConfiguration {
   chatAIEnabled: boolean;
   supportEnabled: boolean;
   knowledgeBaseEnabled: boolean;
+  /** Aba inicial do agent (herdável servidor → cliente → site); default "status". */
+  agentHomeTab: string;
   zeroTouchEnabled: boolean;
   appStorePolicy: AppStorePolicyType;
   inventoryIntervalHours: number;
@@ -1804,6 +1806,8 @@ export interface ClientConfiguration {
   chatAIEnabled?: boolean | null;
   supportEnabled?: boolean | null;
   knowledgeBaseEnabled?: boolean | null;
+  /** Aba inicial do agent; null/vazio herda do servidor. */
+  agentHomeTab?: string | null;
   zeroTouchEnabled?: boolean | null;
   appStorePolicy?: AppStorePolicyType | null;
   aiIntegrationSettingsJson?: string | null;
@@ -1832,6 +1836,8 @@ export interface SiteConfiguration {
   chatAIEnabled?: boolean | null;
   supportEnabled?: boolean | null;
   knowledgeBaseEnabled?: boolean | null;
+  /** Aba inicial do agent; null/vazio herda do cliente/servidor. */
+  agentHomeTab?: string | null;
   zeroTouchEnabled?: boolean | null;
   appStorePolicy?: AppStorePolicyType | null;
   aiIntegrationSettingsJson?: string | null;
@@ -1863,6 +1869,7 @@ export interface ResolvedConfiguration {
   chatAIEnabled: boolean;
   supportEnabled: boolean;
   knowledgeBaseEnabled: boolean;
+  agentHomeTab: string;
   zeroTouchEnabled: boolean;
   appStorePolicy: AppStorePolicyType;
   inventoryIntervalHours: number;
@@ -1891,6 +1898,11 @@ export interface ConfigurationFieldMetadata {
 export interface ConfigurationMetadataResponse {
   fields: Record<string, ConfigurationFieldMetadata>;
   blockedFields?: string[];
+  /**
+   * Valores aceitos para `agentHomeTab`, publicados pelo servidor
+   * (AgentHomeTabCatalog) — evita lista duplicada no console.
+   */
+  agentHomeTabOptions?: string[];
 }
 
 export interface EffectiveConfiguration {

@@ -2,12 +2,21 @@ import { useMemo, useState } from "react";
 import { ChevronDown, ChevronUp, GitCompare } from "lucide-react";
 import type { ConfigurationValue } from "@/api";
 import { Button, Input, Modal, Select, TextArea } from "@/components/ui";
-import { APP_STORE_POLICY_OPTIONS } from "@/utils/configurationEditors";
+import {
+  AGENT_HOME_TAB_OPTIONS,
+  APP_STORE_POLICY_OPTIONS,
+} from "@/utils/configurationEditors";
 import { ConfigDiffViewer } from "./ConfigDiffViewer";
 import { InheritableFieldToggle } from "./InheritableFieldToggle";
 import type { ConfigurationOrigin } from "@/api";
 
-type FieldKind = "boolean" | "number" | "string" | "json" | "policy";
+type FieldKind =
+  | "boolean"
+  | "number"
+  | "string"
+  | "json"
+  | "policy"
+  | "select";
 
 interface ConfigurationFieldEditorProps {
   fieldLabel: string;
@@ -35,6 +44,11 @@ interface ConfigurationFieldEditorProps {
   secret?: boolean;
   /** Indica que já existe um valor salvo para o segredo (placeholder). */
   secretConfigured?: boolean;
+  /**
+   * Opções para campos do tipo "select". Quando informadas (ex.: catálogo
+   * publicado pelo servidor), têm precedência sobre o fallback local.
+   */
+  options?: { value: string; label: string }[];
   /**
    * "card" (padrão) embrulha o campo no mini-card próprio (título + descrição +
    * controle). "plain" renderiza só rótulo + controle, para agrupar vários campos
@@ -67,6 +81,7 @@ export function ConfigurationFieldEditor({
   hideSaveButton,
   secret,
   secretConfigured,
+  options,
   variant = "card",
 }: ConfigurationFieldEditorProps) {
   const [showDiff, setShowDiff] = useState(false);
@@ -239,6 +254,37 @@ export function ConfigurationFieldEditor({
           options={APP_STORE_POLICY_OPTIONS}
           error={error}
           hint="Controla o que os agentes podem instalar. Em níveis inferiores, deixe herdado para usar a política do servidor."
+        />
+      );
+    }
+
+    if (fieldKind === "select") {
+      // Catálogo preferencial vem do servidor (metadata.agentHomeTabOptions);
+      // sem ele, usa o fallback local.
+      const baseOptions =
+        options && options.length > 0 ? options : AGENT_HOME_TAB_OPTIONS;
+      // Valor salvo fora do catálogo (ex.: opção removida em uma versão anterior):
+      // mantém o item visível para o admin perceber e corrigir; a validação
+      // definitiva do valor é do servidor.
+      const isKnownValue = baseOptions.some(
+        (option) => option.value === value,
+      );
+      const selectOptions =
+        !value || isKnownValue
+          ? baseOptions
+          : [
+              ...baseOptions,
+              { value, label: `${value} (valor atual, não aceito)` },
+            ];
+      return (
+        <Select
+          label={innerLabel}
+          value={value}
+          onChange={(event) => onValueChange(event.target.value)}
+          disabled={inputDisabled}
+          options={selectOptions}
+          error={error}
+          hint="Aba aberta pelo agent ao iniciar. Se a aba escolhida estiver desativada para o agente, ele abre a aba Status."
         />
       );
     }

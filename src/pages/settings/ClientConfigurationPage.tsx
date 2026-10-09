@@ -36,6 +36,7 @@ import {
   canEditFieldAtScope,
   clientEditableFields,
   formatFieldValue,
+  getAgentHomeTabOptions,
   getFieldMetadata,
   getEffectiveValue,
   getLockOwnerForScope,
@@ -56,6 +57,11 @@ export default function ClientConfigurationPage() {
   const localQuery = useClientConfig(clientId);
   const effectiveQuery = useClientEffectiveConfig(clientId);
   const metadataQuery = useClientMetadata(clientId);
+  // Catálogo de abas (agentHomeTab) publicado pelo servidor na metadata.
+  const agentHomeTabOptions = useMemo(
+    () => getAgentHomeTabOptions(metadataQuery.data?.agentHomeTabOptions),
+    [metadataQuery.data],
+  );
 
   const putMutation = useUpsertClientConfig();
   const patchMutation = usePatchClientConfig();
@@ -192,7 +198,7 @@ export default function ClientConfigurationPage() {
   const renderFieldEditor = (
     fieldKey: string,
     fieldLabel: string,
-    fieldKind: "boolean" | "number" | "string" | "json" | "policy",
+    fieldKind: "boolean" | "number" | "string" | "json" | "policy" | "select",
   ) => {
     const value = String(watch(`values.${fieldKey}` as never) ?? "");
     const inherited = !!inherits[fieldKey];
@@ -235,6 +241,9 @@ export default function ClientConfigurationPage() {
         resetLoading={resetPropertyMutation.isPending}
         description={fieldDef?.description}
         unit={fieldDef?.unit}
+        options={
+          fieldKey === "agentHomeTab" ? agentHomeTabOptions : fieldDef?.options
+        }
         onValueChange={(next) => {
           setValue(`values.${fieldKey}` as never, next as never, {
             shouldDirty: true,

@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+  AGENT_HOME_TAB_OPTIONS,
   APP_STORE_POLICY_LABELS,
   APP_STORE_POLICY_OPTIONS,
   buildServerDraft,
   clientEditableFields,
+  fieldDefault,
   formatAppStorePolicyValue,
+  getAgentHomeTabOptions,
   getDependentsToDisable,
   getFeatureDependencyIssue,
   parseFieldValue,
@@ -204,5 +207,60 @@ describe("dependências entre funcionalidades", () => {
         p2PFilesEnabled: "true",
       }),
     ).toEqual(["p2PFilesEnabled"]);
+  });
+});
+
+describe("página inicial do agent (agentHomeTab)", () => {
+  it("expõe exatamente os ids aceitos pela API, em ordem", () => {
+    expect(AGENT_HOME_TAB_OPTIONS.map((option) => option.value)).toEqual([
+      "status",
+      "store",
+      "updates",
+      "chat",
+      "support",
+      "knowledge",
+    ]);
+  });
+
+  it("declara o campo agentHomeTab como select nas três listas", () => {
+    for (const [scope, fields] of scopes) {
+      const field = fields.find((item) => item.key === "agentHomeTab");
+      expect(field, `${scope} sem agentHomeTab`).toBeDefined();
+      expect(field?.kind, `${scope} agentHomeTab não é select`).toBe("select");
+      expect(field?.options).toBe(AGENT_HOME_TAB_OPTIONS);
+    }
+  });
+
+  it("exige que uma aba tenha sido escolhida (a lista válida é do servidor)", () => {
+    expect(validateFieldValue("select", "support")).toBe(true);
+    expect(validateFieldValue("select", "chat")).toBe(true);
+    // Um id fora da lista local ainda é aceito aqui: o servidor é a autoridade
+    // e a lista publicada na metadata pode evoluir sem release do console.
+    expect(validateFieldValue("select", "futureTab")).toBe(true);
+    expect(validateFieldValue("select", "")).not.toBe(true);
+    expect(typeof validateFieldValue("select", "")).toBe("string");
+  });
+
+  it("monta as opções a partir do catálogo publicado pelo servidor", () => {
+    expect(getAgentHomeTabOptions(["knowledge", "chat"])).toEqual([
+      { value: "knowledge", label: "Base de Conhecimento" },
+      { value: "chat", label: "Chat IA" },
+    ]);
+  });
+
+  it("usa o id como rótulo para valor novo e cai no fallback local sem lista", () => {
+    expect(getAgentHomeTabOptions(["futureTab"])).toEqual([
+      { value: "futureTab", label: "futureTab" },
+    ]);
+    expect(getAgentHomeTabOptions([])).toEqual(AGENT_HOME_TAB_OPTIONS);
+    expect(getAgentHomeTabOptions(undefined)).toEqual(AGENT_HOME_TAB_OPTIONS);
+  });
+
+  it("normaliza o id escolhido no payload", () => {
+    expect(parseFieldValue("select", " chat ")).toBe("chat");
+  });
+
+  it("usa status como default", () => {
+    expect(fieldDefault("select")).toBe("status");
   });
 });

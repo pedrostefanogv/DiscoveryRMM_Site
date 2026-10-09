@@ -36,6 +36,7 @@ import { useSites } from "@/hooks/useSites";
 import {
   canEditFieldAtScope,
   formatFieldValue,
+  getAgentHomeTabOptions,
   getFieldMetadata,
   getEffectiveValue,
   getLockOwnerForScope,
@@ -67,6 +68,11 @@ export default function SiteConfigurationPage() {
   const localClientQuery = useClientConfig(clientId);
   const clientMetadataQuery = useClientMetadata(clientId);
   const siteMetadataQuery = useSiteMetadata(siteId);
+  // Catálogo de abas (agentHomeTab) publicado pelo servidor na metadata.
+  const agentHomeTabOptions = useMemo(
+    () => getAgentHomeTabOptions(siteMetadataQuery.data?.agentHomeTabOptions),
+    [siteMetadataQuery.data],
+  );
 
   const putMutation = useUpsertSiteConfig();
   const patchMutation = usePatchSiteConfig();
@@ -216,7 +222,7 @@ export default function SiteConfigurationPage() {
   const renderFieldEditor = (
     fieldKey: string,
     fieldLabel: string,
-    fieldKind: "boolean" | "number" | "string" | "json" | "policy",
+    fieldKind: "boolean" | "number" | "string" | "json" | "policy" | "select",
   ) => {
     const value = String(watch(`values.${fieldKey}` as never) ?? "");
     const inherited = !!inherits[fieldKey];
@@ -246,6 +252,9 @@ export default function SiteConfigurationPage() {
         resetLoading={resetPropertyMutation.isPending}
         description={fieldDef?.description}
         unit={fieldDef?.unit}
+        options={
+          fieldKey === "agentHomeTab" ? agentHomeTabOptions : fieldDef?.options
+        }
         onValueChange={(next) => {
           setValue(`values.${fieldKey}` as never, next as never, {
             shouldDirty: true,

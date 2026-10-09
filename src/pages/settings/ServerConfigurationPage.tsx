@@ -50,6 +50,7 @@ import {
   usePatchServerConfig,
   useResetServerConfig,
   useServerConfig,
+  useServerMetadata,
   useTestNatsServer,
   useTestObjectStorage,
   useTicketAttachmentSettings,
@@ -58,6 +59,7 @@ import {
 import {
   buildServerDraft,
   formatFieldValue,
+  getAgentHomeTabOptions,
   getDependentsToDisable,
   getFeatureDependencyIssue,
   parseFieldValue,
@@ -95,6 +97,12 @@ const featureIcons: Record<string, React.ReactNode> = {
 
 export default function ServerConfigurationPage() {
   const serverQuery = useServerConfig();
+  // Metadados do servidor: origem/locks + catálogo de abas do agent (agentHomeTab).
+  const serverMetadataQuery = useServerMetadata();
+  const agentHomeTabOptions = useMemo(
+    () => getAgentHomeTabOptions(serverMetadataQuery.data?.agentHomeTabOptions),
+    [serverMetadataQuery.data],
+  );
   const patchMutation = usePatchServerConfig();
   const patchNatsMutation = usePatchServerNatsConfig();
   const resetMutation = useResetServerConfig();
@@ -578,6 +586,7 @@ export default function ServerConfigurationPage() {
         disableInheritance
         description={field.description}
         unit={field.unit}
+        options={field.kind === "select" ? agentHomeTabOptions : undefined}
         onValueChange={(next) => {
           markPending(field.key);
           setValue(`values.${field.key}` as never, next as never, {
