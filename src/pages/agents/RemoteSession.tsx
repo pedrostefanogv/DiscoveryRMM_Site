@@ -883,16 +883,6 @@ export default function RemoteSession() {
     { key: 'proxy', label: 'Proxy' },
   ];
 
-  if (!agentId) {
-    return (
-      <div className="flex items-center justify-center h-screen bg-background">
-        <Card className="p-6 text-center">
-          <p className="text-danger">Parâmetros inválidos. Feche esta janela e tente novamente.</p>
-        </Card>
-      </div>
-    );
-  }
-
   const activeSession = sessions[activeTab];
   const isActiveConnected = !!activeSession;
 
@@ -923,6 +913,19 @@ export default function RemoteSession() {
     // nunca criaria uma sessao nova.
     await startTabSession(tab, true);
   }, [startTabSession]);
+
+  // Guard de parâmetro DEPOIS de todos os hooks: um return antecipado aqui em
+  // cima mudava a contagem de hooks entre renders (React error #310).
+  if (!agentId) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-background">
+        <Card className="p-6 text-center">
+          <p className="text-danger">Parâmetros inválidos. Feche esta janela e tente novamente.</p>
+        </Card>
+      </div>
+    );
+  }
+
 
   // Badges de liveness: um por sessao REAL. Processos/Servicos compartilham a
   // mesma sessao, entao renderiza so a aba "processes".

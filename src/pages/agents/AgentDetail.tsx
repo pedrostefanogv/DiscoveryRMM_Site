@@ -344,6 +344,34 @@ export default function AgentDetail() {
     canViewAutomation && activeDataTab === 'policies',
   );
   const forcePolicySync = useForceAutomationSync();
+  // Força o agent a re-sincronizar as políticas agora (aba "Políticas"), útil
+  // quando o badge indica agent desatualizado e não se quer esperar o check-in.
+  // ATENÇÃO: este useCallback precisa ficar ACIMA dos early returns de
+  // carregamento/erro (mais abaixo). Chamá-lo depois deles faz a contagem de
+  // hooks mudar entre o primeiro render (loading) e o render com dados, o que
+  // derruba a página inteira com "Rendered more hooks than during the previous
+  // render" (React error #310) — era o erro ao abrir um agent pela listagem,
+  // que sumia no F5 porque nesse caso o primeiro render já vinha com dados.
+  const handleForcePolicySync = useCallback(async () => {
+    if (!id) return;
+    try {
+      await forcePolicySync.mutateAsync({
+        agentId: id,
+        request: { policies: true },
+        correlationId: buildCorrelationId('force-policy-sync'),
+      });
+      toast.success('Sincronização de políticas solicitada ao agent.');
+      // O agent responde logo em seguida; recarrega para refletir o que chegou.
+      await new Promise((resolve) => setTimeout(resolve, 2500));
+      await agentPolicies.refetch();
+    } catch (error) {
+      const msg = error instanceof ApiError
+        ? error.message
+        : 'Falha ao solicitar sincronização de políticas.';
+      toast.error(msg);
+    }
+  }, [id, forcePolicySync, agentPolicies]);
+
   // Payload pesado (impressoras/portas/conexões/discos) carregado apenas
   // quando uma aba que o consome está ativa (P1.2 — abas sob demanda).
   const dataTabNeedsComponents =
@@ -1240,28 +1268,6 @@ export default function AgentDetail() {
       setIsRefreshingScheduledTasks(false);
     }
   };
-
-  // Força o agent a re-sincronizar as políticas agora (aba "Políticas"). Útil
-  // quando o badge indica agent desatualizado e não se quer esperar o check-in.
-  const handleForcePolicySync = useCallback(async () => {
-    if (!id) return;
-    try {
-      await forcePolicySync.mutateAsync({
-        agentId: id,
-        request: { policies: true },
-        correlationId: buildCorrelationId('force-policy-sync'),
-      });
-      toast.success('Sincronização de políticas solicitada ao agent.');
-      // O agent responde logo em seguida; recarrega para refletir o que chegou.
-      await new Promise((resolve) => setTimeout(resolve, 2500));
-      await agentPolicies.refetch();
-    } catch (error) {
-      const msg = error instanceof ApiError
-        ? error.message
-        : 'Falha ao solicitar sincronização de políticas.';
-      toast.error(msg);
-    }
-  }, [id, forcePolicySync, agentPolicies]);
 
   const pageSizeOptions = [
     { value: '10', label: '10 por página' },

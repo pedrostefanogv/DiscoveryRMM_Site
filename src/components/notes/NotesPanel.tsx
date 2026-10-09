@@ -56,11 +56,15 @@ export function NotesPanel({
   const LIMIT = 20;
   const singularCap = singular.charAt(0).toUpperCase() + singular.slice(1);
 
-  const notesQuery = entityType === "client"
-    ? useClientNotesPage(entityId, LIMIT)
-    : entityType === "site"
-      ? useSiteNotesPage(entityId, LIMIT)
-      : useAgentNotesPage(entityId, LIMIT);
+  // REGRA DOS HOOKS: os três hooks são chamados SEMPRE, na mesma ordem. O id
+  // vazio desliga a query inativa (enabled: !!id em useNotes), então não há
+  // request extra. A versão anterior escolhia o hook por ternário, o que muda a
+  // ORDEM/quantidade de hooks quando entityType muda (React error #310).
+  const clientNotesQuery = useClientNotesPage(entityType === "client" ? entityId : "", LIMIT);
+  const siteNotesQuery = useSiteNotesPage(entityType === "site" ? entityId : "", LIMIT);
+  const agentNotesQuery = useAgentNotesPage(entityType === "agent" ? entityId : "", LIMIT);
+  const notesQuery =
+    entityType === "client" ? clientNotesQuery : entityType === "site" ? siteNotesQuery : agentNotesQuery;
 
   // Flatten all pages into a single array
   const allNotes = useMemo(() => {
