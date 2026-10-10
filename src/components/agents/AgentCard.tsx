@@ -140,21 +140,18 @@ export function AgentCard({
           <span className="h-3.5 w-3.5 shrink-0 pt-px text-center font-mono text-[10px] leading-none text-muted">IP</span>
           <span className="font-mono">{agent.lastIpAddress ?? 'IP indisponível'}</span>
         </div>
-        {(showClient || (showSite && agent.siteName)) && (
-          <div className="flex items-center gap-2 text-muted">
-            {showClient && <Building2 className="h-3.5 w-3.5 shrink-0 text-muted" />}
-            {showClient && <span className="truncate">{agent.clientName}</span>}
-            {showClient && showSite && agent.siteName && <span className="text-muted/50">·</span>}
-            {showSite && agent.siteName && (
-              <>
-                <MapPin className="h-3 w-3 shrink-0 text-muted" />
-                <span className="truncate">{agent.siteName}</span>
-              </>
-            )}
-          </div>
-        )}
-        {/* Usuário logado no Windows reportado pelo agent (ao lado do Cliente/Site). */}
-        <div className="flex items-center gap-2 text-muted">
+        {/* Cliente → Site → Usuário logado, na mesma linha. */}
+        <div className="flex min-w-0 items-center gap-2 text-muted">
+          {showClient && <Building2 className="h-3.5 w-3.5 shrink-0 text-muted" />}
+          {showClient && <span className="truncate">{agent.clientName}</span>}
+          {showClient && showSite && agent.siteName && <span className="text-muted/50">·</span>}
+          {showSite && agent.siteName && (
+            <>
+              <MapPin className="h-3 w-3 shrink-0 text-muted" />
+              <span className="truncate">{agent.siteName}</span>
+            </>
+          )}
+          {(showClient || (showSite && agent.siteName)) && <span className="text-muted/50">·</span>}
           <User className="h-3.5 w-3.5 shrink-0 text-muted" />
           <span
             className="truncate"
