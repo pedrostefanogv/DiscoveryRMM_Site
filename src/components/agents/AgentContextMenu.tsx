@@ -21,7 +21,7 @@ import WakeOnLanModal from '@/components/agents/WakeOnLanModal';
 import { useApproveZeroTouch, useDeleteAgent, useRestartAgent, useShutdownAgent, useWakeOnLan } from '@/hooks/useAgents';
 import { useSendAgentNotification } from '@/hooks/useAgentAlerts';
 import { useAuthorization } from '@/auth/authorization';
-import { isAgentOnlineNow } from '@/utils/agentStatus';
+import { isAgentOnlineNow, isAgentPossiblyOnline } from '@/utils/agentStatus';
 import { openRemoteDebugPopup } from '@/pages/agents/remoteDebugLauncher';
 import { openRemoteSessionPopup } from '@/pages/agents/remoteSessionLauncher';
 import type { AgentCardAgent } from './AgentCard';
@@ -50,6 +50,10 @@ export function AgentContextMenu({ agent, now, position, onClose }: AgentContext
   const canManageAgent = hasAnyPermission(['Agents.Edit', 'agents.*', 'admin.*']);
   const canExecuteAgent = hasAnyPermission(['Agents.Execute', 'Agents.Edit', 'agents.*', 'admin.*']);
   const online = isAgentOnlineNow(agent, now);
+  // Sinal mais conservador, só para a confirmação destrutiva de exclusão: o
+  // servidor ainda pode considerar o agente online (status no banco) depois de
+  // a UI já o tratar como offline.
+  const deleteConfirmOnline = isAgentPossiblyOnline(agent, now);
 
   const [remoteDebugAgentId, setRemoteDebugAgentId] = useState<string | null>(null);
   const [updatingAgentId, setUpdatingAgentId] = useState<string | null>(null);
@@ -119,7 +123,7 @@ export function AgentContextMenu({ agent, now, position, onClose }: AgentContext
     try {
       await deleteAgent.mutateAsync(agent.id);
       toast.success(
-        online
+        deleteConfirmOnline
           ? `Agente ${agent.displayName ?? agent.hostname} movido para a lixeira. Comando de desinstalação enviado.`
           : `Agente ${agent.displayName ?? agent.hostname} movido para a lixeira (offline — não foi desinstalado).`,
       );
@@ -251,9 +255,9 @@ export function AgentContextMenu({ agent, now, position, onClose }: AgentContext
 
       <ConfirmDialog
         open={deleteConfirmOpen}
-        title={online ? 'Mover para a lixeira e desinstalar do PC' : 'Mover agente para a lixeira'}
+        title={deleteConfirmOnline ? 'Mover para a lixeira e desinstalar do PC' : 'Mover agente para a lixeira'}
         message={
-          online ? (
+          deleteConfirmOnline ? (
             <>
               O agente <span className="font-semibold">{agent.displayName ?? agent.hostname}</span> será movido para a lixeira e, como está <span className="font-semibold">online</span>, receberá um comando para se <span className="font-semibold">desinstalar deste computador</span> (serviço, binários e dados locais). Essa desinstalação é <span className="font-semibold">irreversível</span>: restaurar o agente da lixeira não o reinstala na máquina.
             </>
@@ -263,8 +267,8 @@ export function AgentContextMenu({ agent, now, position, onClose }: AgentContext
             </>
           )
         }
-        confirmLabel={online ? 'Mover e desinstalar' : 'Mover para a lixeira'}
-        requireText={online ? (agent.displayName ?? agent.hostname) : undefined}
+        confirmLabel={deleteConfirmOnline ? 'Mover e desinstalar' : 'Mover para a lixeira'}
+        requireText={deleteConfirmOnline ? (agent.displayName ?? agent.hostname) : undefined}
         isLoading={deleteAgent.isPending}
         onClose={() => { if (!deleteAgent.isPending) setDeleteConfirmOpen(false); }}
         onConfirm={() => { void handleDeleteAgent(); }}

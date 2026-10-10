@@ -16,7 +16,7 @@ import PowerActionModal from '@/components/agents/PowerActionModal';
 import AgentNotificationModal, { type AgentNotificationPayload } from '@/components/agents/AgentNotificationModal';
 import WakeOnLanModal from '@/components/agents/WakeOnLanModal';
 import type { Agent } from '@/api';
-import { getAgentLastSeen, isAgentOnlineNow } from '@/utils/agentStatus';
+import { getAgentLastSeen, isAgentOnlineNow, isAgentPossiblyOnline } from '@/utils/agentStatus';
 import { useNowTick } from '@/hooks/useNowTick';
 import { isHeartbeatTimestampFresh, useAllAgentHeartbeats } from '@/stores/heartbeatStore';
 import { useAuthorization } from '@/auth/authorization';
@@ -145,7 +145,10 @@ export default function AgentList() {
   // está online o backend também manda ele se desinstalar do PC: a confirmação
   // fica destrutiva e exige digitar o nome.
   const [deleteConfirmAgent, setDeleteConfirmAgent] = useState<AgentWithClient | null>(null);
-  const deleteConfirmOnline = deleteConfirmAgent !== null && isAgentOnlineNow(deleteConfirmAgent, now);
+  // isAgentPossiblyOnline (e não isAgentOnlineNow): o servidor decide o
+  // descomissionamento pelo status Online dele, que pode ficar obsoleto por até
+  // ~3min. Nessa janela a confirmação destrutiva não pode ser pulada.
+  const deleteConfirmOnline = deleteConfirmAgent !== null && isAgentPossiblyOnline(deleteConfirmAgent, now);
   const deleteConfirmName = deleteConfirmAgent?.displayName ?? deleteConfirmAgent?.hostname ?? '';
   // Hard delete (exclusão definitiva) — exige digitar o nome do agente.
   const [purgeTarget, setPurgeTarget] = useState<AgentWithClient | null>(null);
@@ -309,7 +312,7 @@ export default function AgentList() {
     const agent = deleteConfirmAgent;
     setDeletingAgentId(agent.id);
     try {
-      const wasOnline = isAgentOnlineNow(agent, now);
+      const wasOnline = isAgentPossiblyOnline(agent, now);
       await deleteAgent.mutateAsync(agent.id);
       toast.success(
         wasOnline
