@@ -141,8 +141,12 @@ export default function AgentList() {
   // "Excluídos" agora é uma opção do próprio filtro de autorização.
   const showDeleted = filterProvisioning === 'deleted';
   const [deletedPage, setDeletedPage] = useState(1);
-  // Soft delete (mover para a lixeira) — confirmação simples.
+  // Soft delete (mover para a lixeira) — confirmação simples. Quando o agente
+  // está online o backend também manda ele se desinstalar do PC: a confirmação
+  // fica destrutiva e exige digitar o nome.
   const [deleteConfirmAgent, setDeleteConfirmAgent] = useState<AgentWithClient | null>(null);
+  const deleteConfirmOnline = deleteConfirmAgent !== null && isAgentOnlineNow(deleteConfirmAgent, now);
+  const deleteConfirmName = deleteConfirmAgent?.displayName ?? deleteConfirmAgent?.hostname ?? '';
   // Hard delete (exclusão definitiva) — exige digitar o nome do agente.
   const [purgeTarget, setPurgeTarget] = useState<AgentWithClient | null>(null);
   const [purgeConfirmName, setPurgeConfirmName] = useState('');
@@ -305,8 +309,13 @@ export default function AgentList() {
     const agent = deleteConfirmAgent;
     setDeletingAgentId(agent.id);
     try {
+      const wasOnline = isAgentOnlineNow(agent, now);
       await deleteAgent.mutateAsync(agent.id);
-      toast.success(`Agente ${agent.displayName ?? agent.hostname} movido para a lixeira.`);
+      toast.success(
+        wasOnline
+          ? `Agente ${agent.displayName ?? agent.hostname} movido para a lixeira. Comando de desinstalação enviado.`
+          : `Agente ${agent.displayName ?? agent.hostname} movido para a lixeira (offline — não foi desinstalado).`,
+      );
       setDeleteConfirmAgent(null);
     } catch (error) {
       toast.error(getDeleteAgentErrorMessage(error));
@@ -1224,16 +1233,24 @@ export default function AgentList() {
         </>
       )}
 
-      {/* Soft delete: mover para a lixeira (restaurável) */}
+      {/* Soft delete: mover para a lixeira (restaurável). Agente online também
+          é desinstalado deste computador — irreversível. */}
       <ConfirmDialog
         open={deleteConfirmAgent !== null}
-        title="Mover agente para a lixeira"
+        title={deleteConfirmOnline ? 'Mover para a lixeira e desinstalar do PC' : 'Mover agente para a lixeira'}
         message={
-          <>
-            O agente <span className="font-semibold">{deleteConfirmAgent?.displayName ?? deleteConfirmAgent?.hostname}</span> será movido para a lixeira e poderá ser restaurado depois. Os dados (hardware, software, comandos, tokens) são mantidos.
-          </>
+          deleteConfirmOnline ? (
+            <>
+              O agente <span className="font-semibold">{deleteConfirmName}</span> será movido para a lixeira e, como está <span className="font-semibold">online</span>, receberá um comando para se <span className="font-semibold">desinstalar deste computador</span> (serviço, binários e dados locais). Essa desinstalação é <span className="font-semibold">irreversível</span>: restaurar o agente da lixeira não o reinstala na máquina.
+            </>
+          ) : (
+            <>
+              O agente <span className="font-semibold">{deleteConfirmName}</span> será movido para a lixeira e poderá ser restaurado depois. Os dados (hardware, software, comandos, tokens) são mantidos. Ele está <span className="font-semibold">offline</span>, então <span className="font-semibold">não será desinstalado</span> do computador.
+            </>
+          )
         }
-        confirmLabel="Mover para a lixeira"
+        confirmLabel={deleteConfirmOnline ? 'Mover e desinstalar' : 'Mover para a lixeira'}
+        requireText={deleteConfirmOnline ? deleteConfirmName : undefined}
         isLoading={deleteAgent.isPending}
         onClose={closeDeleteAgentModal}
         onConfirm={() => { void handleDeleteAgent(); }}

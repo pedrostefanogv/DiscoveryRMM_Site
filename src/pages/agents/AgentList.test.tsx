@@ -346,4 +346,23 @@ describe('AgentList — menu de contexto e submenu de energia', () => {
     expect(submenu.style.left).toBe('8px');
     expect(submenu.style.top).toBe('8px');
   });
+
+  it('exige digitar o nome antes de mover um agente ONLINE para a lixeira', async () => {
+    renderPage();
+
+    openContextMenuFor('ATIVO-01', 40, 40);
+    fireEvent.click(screen.getByText('Mover para a lixeira'));
+
+    // isAgentOnlineNow está mockado para true neste arquivo: a confirmação vira
+    // destrutiva (o backend também desinstala o agente do PC).
+    const confirmButton = await screen.findByRole('button', { name: 'Mover e desinstalar' });
+    expect((confirmButton as HTMLButtonElement).disabled).toBe(true);
+
+    fireEvent.change(screen.getByLabelText(/ATIVO-01/), { target: { value: 'ATIVO-01' } });
+    expect((confirmButton as HTMLButtonElement).disabled).toBe(false);
+
+    fireEvent.click(confirmButton);
+
+    await waitFor(() => expect(deleteMock).toHaveBeenCalledWith('a1'));
+  });
 });

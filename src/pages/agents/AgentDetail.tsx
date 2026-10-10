@@ -696,6 +696,9 @@ export default function AgentDetail() {
   if (agent.isError || !a || !aWithHeartbeat) return <ErrorDisplay onRetry={() => agent.refetch()} />;
 
   const isOnlineNow = isAgentOnlineNow(aWithHeartbeat, now);
+  // Nome usado na confirmação destrutiva (mover para a lixeira de um agente
+  // online também dispara a desinstalação remota).
+  const deleteConfirmName = a.displayName ?? a.hostname;
 
   // Ações que passam pelo dispatcher de comandos NÃO exigem mais agente online:
   // o comando é persistido e a reentrega do servidor o entrega no reconhecimento.
@@ -984,8 +987,13 @@ export default function AgentDetail() {
     if (!id) return;
 
     try {
+      const wasOnline = isAgentOnlineNow(aWithHeartbeat ?? a, now);
       await deleteAgent.mutateAsync(id);
-      toast.success('Agente movido para a lixeira.');
+      toast.success(
+        wasOnline
+          ? 'Agente movido para a lixeira. Comando de desinstalação enviado.'
+          : 'Agente movido para a lixeira (offline — não foi desinstalado).',
+      );
       setDeleteConfirmOpen(false);
       navigate('/agents', { replace: true });
     } catch (error) {
@@ -2820,13 +2828,20 @@ export default function AgentDetail() {
 
       <ConfirmDialog
         open={deleteConfirmOpen}
-        title="Mover agente para a lixeira"
+        title={isOnlineNow ? 'Mover para a lixeira e desinstalar do PC' : 'Mover agente para a lixeira'}
         message={
-          <>
-            O agente <span className="font-semibold">{a.displayName ?? a.hostname}</span> será movido para a lixeira e poderá ser restaurado depois. Os dados (hardware, software, comandos, tokens) são mantidos.
-          </>
+          isOnlineNow ? (
+            <>
+              O agente <span className="font-semibold">{deleteConfirmName}</span> será movido para a lixeira e, como está <span className="font-semibold">online</span>, receberá um comando para se <span className="font-semibold">desinstalar deste computador</span> (serviço, binários e dados locais). Essa desinstalação é <span className="font-semibold">irreversível</span>: restaurar o agente da lixeira não o reinstala na máquina.
+            </>
+          ) : (
+            <>
+              O agente <span className="font-semibold">{deleteConfirmName}</span> será movido para a lixeira e poderá ser restaurado depois. Os dados (hardware, software, comandos, tokens) são mantidos. Ele está <span className="font-semibold">offline</span>, então <span className="font-semibold">não será desinstalado</span> do computador.
+            </>
+          )
         }
-        confirmLabel="Mover para a lixeira"
+        confirmLabel={isOnlineNow ? 'Mover e desinstalar' : 'Mover para a lixeira'}
+        requireText={isOnlineNow ? deleteConfirmName : undefined}
         isLoading={deleteAgent.isPending}
         onClose={closeDeleteAgentModal}
         onConfirm={() => { void confirmDeleteAgent(); }}
