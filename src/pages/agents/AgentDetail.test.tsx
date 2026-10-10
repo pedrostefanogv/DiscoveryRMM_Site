@@ -32,6 +32,8 @@ vi.mock('@/hooks/useAgents', () => ({
       agentVersion: '1.2.1',
       commitHash: '1b1b344',
       lastIpAddress: '192.168.10.77',
+      loggedUser: 'CORP\\pedro',
+      loggedUserSince: '2026-04-10T20:48:36Z',
       lastSeen: '2026-04-10T20:48:36Z',
       lastSeenAt: '2026-04-10T20:48:36Z',
       isOnline: true,
@@ -188,6 +190,15 @@ describe('AgentDetail — abas do agente', () => {
     expect(screen.getByRole('tab', { name: /^Labels/ }).textContent).toContain('1');
     // Portas/Conexões e Inicialização/Tarefas saíram da barra principal: 10 abas.
     expect(screen.getAllByRole('tab')).toHaveLength(10);
+  });
+
+  it('mostra o usuário logado no card Informações', async () => {
+    await renderPage();
+
+    expect(screen.getByText('Usuário logado')).toBeTruthy();
+    expect(screen.getByText('CORP\\pedro')).toBeTruthy();
+    // Início da sessão também aparece ("· desde ...").
+    expect(screen.getByText(/desde/)).toBeTruthy();
   });
 
   it('troca para a aba Anotações ao clicar', async () => {

@@ -17,6 +17,13 @@ export interface AgentHeartbeat {
   agentVersion?: string;
   commitHash?: string;
   timestampUtc?: string;
+  /**
+   * Usuário da sessão interativa (console) reportado no heartbeat.
+   * "" = agent novo sem sessão; ausente = agent antigo (campo não reportado).
+   */
+  loggedUser?: string;
+  /** Início da sessão interativa atual (ISO 8601), quando reportado. */
+  loggedUserSince?: string;
 
   // Métricas percentuais (0-100)
   cpuPercent?: number;

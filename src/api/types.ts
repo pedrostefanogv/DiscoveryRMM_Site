@@ -176,6 +176,14 @@ export interface Agent {
   status?: "Online" | "Offline";
   lastSeenAt?: string | null;
   lastIpAddress?: string | null;
+  /**
+   * Usuário logado no Windows: valor ao vivo do heartbeat; quando o agente está
+   * offline (ou é um agent antigo) cai para o último valor persistido.
+   * "" = agent novo sem sessão interativa (a UI mostra "—").
+   */
+  loggedUser?: string | null;
+  /** Início da sessão interativa atual (ISO 8601); só com heartbeat ao vivo. */
+  loggedUserSince?: string | null;
   heartbeatMetrics?: AgentHeartbeatMetrics;
   createdAt: string;
   updatedAt: string;

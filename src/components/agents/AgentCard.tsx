@@ -13,6 +13,7 @@ import {
   Server,
   ShieldCheck,
   Thermometer,
+  User,
   Wifi,
   WifiOff,
 } from 'lucide-react';
@@ -152,6 +153,28 @@ export function AgentCard({
             )}
           </div>
         )}
+        {/* Usuário logado no Windows reportado pelo agent (ao lado do Cliente/Site). */}
+        <div className="flex items-center gap-2 text-muted">
+          <User className="h-3.5 w-3.5 shrink-0 text-muted" />
+          <span
+            className="truncate"
+            title={
+              agent.loggedUser?.trim()
+                ? `Usuário logado: ${agent.loggedUser}`
+                : 'Sem usuário logado reportado'
+            }
+          >
+            {agent.loggedUser?.trim() || '\u2014'}
+          </span>
+          {agent.loggedUser?.trim() && agent.loggedUserSince && (
+            <span
+              className="shrink-0 text-[10px] text-muted/70"
+              title={`Sessão iniciada em ${formatRelative(agent.loggedUserSince, now).fullDate ?? agent.loggedUserSince}`}
+            >
+              {formatRelative(agent.loggedUserSince, now).text}
+            </span>
+          )}
+        </div>
         <div className="flex items-center gap-3 text-muted pt-0.5">
           {agent.heartbeatMetrics?.p2pPeers != null && (
             <span className="flex items-center gap-1 text-[10px]">

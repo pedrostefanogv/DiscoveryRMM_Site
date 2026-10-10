@@ -37,6 +37,7 @@ export function AgentListView({
             {showClient && (
               <th className="hidden px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted sm:table-cell">Cliente</th>
             )}
+            <th className="hidden px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted lg:table-cell">Usuário</th>
             <th className="px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted">Status</th>
             <th className="hidden px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted 2xl:table-cell">CPU</th>
             <th className="hidden px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted 2xl:table-cell">RAM</th>
@@ -82,6 +83,11 @@ export function AgentListView({
                     {a.clientName}
                   </td>
                 )}
+                <td className="hidden px-4 py-3 text-muted lg:table-cell">
+                  <span className="block max-w-[14rem] truncate" title={a.loggedUser ?? undefined}>
+                    {a.loggedUser?.trim() || '\u2014'}
+                  </span>
+                </td>
                 <td className="px-4 py-3">
                   {isZeroTouchPending && canApprove && onApprove ? (
                     <button

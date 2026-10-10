@@ -25,7 +25,7 @@ vi.mock("@/api/nats", () => ({
   getNatsService: getNatsServiceMock,
 }));
 
-import { useAgentStatusNats, type AgentRealtimeScope } from "./useAgentStatusNats";
+import { toHeartbeatPayload, useAgentStatusNats, type AgentRealtimeScope } from "./useAgentStatusNats";
 
 function createWrapper() {
   const queryClient = new QueryClient({
@@ -299,5 +299,39 @@ describe("useAgentStatusNats invalidação de queries", () => {
     expect(detailInvalidations).toHaveLength(1);
 
     unmount();
+  });
+});
+
+describe("toHeartbeatPayload — usuário logado", () => {
+  it("extrai loggedUser do evento de heartbeat", () => {
+    const payload = toHeartbeatPayload({
+      agentId: "agent-1",
+      status: "Online",
+      loggedUser: String.raw`CORP\pedro`,
+    });
+
+    expect(payload?.loggedUser).toBe(String.raw`CORP\pedro`);
+  });
+
+  it("omite loggedUser quando não reportado", () => {
+    const payload = toHeartbeatPayload({ agentId: "agent-1", status: "Online" });
+    expect(payload?.loggedUser).toBeUndefined();
+  });
+
+  it("preserva loggedUser vazio (agent novo sem sessão)", () => {
+    const payload = toHeartbeatPayload({ agentId: "agent-1", status: "Online", loggedUser: "" });
+    expect(payload?.loggedUser).toBe("");
+  });
+
+  it("extrai loggedUserSince junto com o usuário", () => {
+    const payload = toHeartbeatPayload({
+      agentId: "agent-1",
+      status: "Online",
+      loggedUser: String.raw`CORP\pedro`,
+      loggedUserSince: "2026-01-02T03:04:05Z",
+    });
+
+    expect(payload?.loggedUser).toBe(String.raw`CORP\pedro`);
+    expect(payload?.loggedUserSince).toBe("2026-01-02T03:04:05Z");
   });
 });

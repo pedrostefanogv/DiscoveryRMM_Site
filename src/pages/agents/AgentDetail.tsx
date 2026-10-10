@@ -574,6 +574,14 @@ export default function AgentDetail() {
 
     return {
       ...a,
+      // Usuário logado ao vivo. "" = sem sessão (mostra "—"); undefined = agent
+      // antigo (mantém o último conhecido vindo do REST).
+      loggedUser:
+        liveHeartbeat.loggedUser !== undefined ? liveHeartbeat.loggedUser : a.loggedUser,
+      loggedUserSince:
+        liveHeartbeat.loggedUserSince !== undefined
+          ? liveHeartbeat.loggedUserSince
+          : a.loggedUserSince,
       heartbeatMetrics: {
         cpuPercent: liveHeartbeat.cpuPercent,
         memoryPercent: liveHeartbeat.memoryPercent,
@@ -1886,6 +1894,17 @@ export default function AgentDetail() {
                   <div>
                     <dt className="text-muted">Hostname</dt>
                     <dd className="mt-0.5 font-mono text-foreground">{a.hostname}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-muted">Usuário logado</dt>
+                    <dd className="mt-0.5 text-foreground">
+                      {(aWithHeartbeat ?? a).loggedUser?.trim() || '\u2014'}
+                      {(aWithHeartbeat ?? a).loggedUserSince && (
+                        <span className="ml-2 text-xs text-muted">
+                          · desde {formatDate((aWithHeartbeat ?? a).loggedUserSince!)}
+                        </span>
+                      )}
+                    </dd>
                   </div>
                   <div>
                     <dt className="text-muted">Sistema Operacional</dt>

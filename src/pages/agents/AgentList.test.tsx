@@ -7,11 +7,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
  * confirmação por digitação e coerência da contagem de labels com a lista.
  */
 
-const { restoreMock, purgeMock, deleteMock, deletedParamsMock } = vi.hoisted(() => ({
+const { restoreMock, purgeMock, deleteMock, deletedParamsMock, heartbeatsMock } = vi.hoisted(() => ({
   restoreMock: vi.fn(),
   purgeMock: vi.fn(),
   deleteMock: vi.fn(),
   deletedParamsMock: vi.fn(),
+  heartbeatsMock: new Map<string, unknown>(),
 }));
 
 const activeAgent = {
@@ -28,11 +29,12 @@ const activeAgent = {
   lastSeen: '2026-01-01T00:00:00Z',
   lastSeenAt: '2026-01-01T00:00:00Z',
   lastIpAddress: '10.0.0.1',
+  loggedUser: 'pedro.silva',
   createdAt: '2026-01-01T00:00:00Z',
   updatedAt: '2026-01-01T00:00:00Z',
 };
 
-const secondAgent = { ...activeAgent, id: 'a2', hostname: 'ATIVO-02', displayName: 'ATIVO-02', lastIpAddress: '10.0.0.2' };
+const secondAgent = { ...activeAgent, id: 'a2', hostname: 'ATIVO-02', displayName: 'ATIVO-02', lastIpAddress: '10.0.0.2', loggedUser: 'maria.souza' };
 
 const deletedAgent = {
   ...activeAgent,
@@ -98,7 +100,7 @@ vi.mock('@/hooks/useAgentLabels', () => ({
 }));
 
 vi.mock('@/stores/heartbeatStore', () => ({
-  useAllAgentHeartbeats: () => new Map(),
+  useAllAgentHeartbeats: () => heartbeatsMock,
   isHeartbeatTimestampFresh: () => true,
 }));
 
@@ -141,12 +143,60 @@ describe('AgentList — lixeira e filtros', () => {
     deletedParamsMock.mockReset();
   });
 
-  afterEach(() => cleanup());
+  afterEach(() => {
+    heartbeatsMock.clear();
+    cleanup();
+  });
 
   it('no catálogo não mostra o agente excluído', () => {
     renderPage();
     expect(screen.getByText('ATIVO-01')).toBeTruthy();
     expect(screen.queryByText('EXCLUIDO-01')).toBeNull();
+  });
+
+  it('busca agentes pelo usuário logado reportado', () => {
+    renderPage();
+
+    fireEvent.change(screen.getByPlaceholderText(/usuário logado/), { target: { value: 'pedro.silva' } });
+
+    expect(screen.getByText('ATIVO-01')).toBeTruthy();
+    expect(screen.queryByText('ATIVO-02')).toBeNull();
+  });
+
+  it('mostra no card o usuário logado ao vivo (heartbeat) e o inclui na busca', () => {
+    heartbeatsMock.set('a2', {
+      agentId: 'a2',
+      status: 'Online',
+      loggedUser: 'maria.souza',
+      timestampUtc: new Date().toISOString(),
+    });
+
+    renderPage();
+
+    expect(screen.getByText('maria.souza')).toBeTruthy();
+
+    fireEvent.change(screen.getByPlaceholderText(/usuário logado/), { target: { value: 'maria.souza' } });
+
+    expect(screen.getByText('ATIVO-02')).toBeTruthy();
+    expect(screen.queryByText('ATIVO-01')).toBeNull();
+
+    heartbeatsMock.clear();
+  });
+
+  it('heartbeat sem sessão (loggedUser vazio) prevalece sobre o último conhecido', () => {
+    heartbeatsMock.set('a1', {
+      agentId: 'a1',
+      status: 'Online',
+      loggedUser: '',
+      timestampUtc: new Date().toISOString(),
+    });
+
+    renderPage();
+
+    // ATIVO-01 tem "pedro.silva" no REST, mas o heartbeat diz que não há sessão.
+    expect(screen.queryByText('pedro.silva')).toBeNull();
+    // ATIVO-02 (sem heartbeat fresco) mantém o último usuário conhecido.
+    expect(screen.getByText('maria.souza')).toBeTruthy();
   });
 
   it('"Todos" não mostra excluídos e a opção "Excluídos" abre a lixeira', async () => {

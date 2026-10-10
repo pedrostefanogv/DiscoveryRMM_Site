@@ -568,6 +568,11 @@ export default function AgentList() {
 
       return {
         ...agent,
+        // Usuário logado acompanha o heartbeat. "" = agent novo sem sessão
+        // (mostra "—"); undefined = agent antigo (mantém o último conhecido).
+        loggedUser: live.loggedUser !== undefined ? live.loggedUser : agent.loggedUser,
+        loggedUserSince:
+          live.loggedUserSince !== undefined ? live.loggedUserSince : agent.loggedUserSince,
         heartbeatMetrics: {
           cpuPercent: live.cpuPercent,
           memoryPercent: live.memoryPercent,
@@ -663,6 +668,8 @@ export default function AgentList() {
         a.hostname.toLowerCase().includes(q) ||
         (a.operatingSystem ?? '').toLowerCase().includes(q) ||
         (a.lastIpAddress ?? '').includes(q) ||
+        // Busca pelo usuário logado reportado pelo agent (DOMINIO\usuario).
+        (a.loggedUser ?? '').toLowerCase().includes(q) ||
         a.clientName.toLowerCase().includes(q) ||
         agentLabels.includes(q)
       );
@@ -802,7 +809,7 @@ export default function AgentList() {
         <div className="flex min-w-0 flex-1 flex-wrap items-start gap-3">
           <div className="min-w-[240px] flex-1">
             <Input
-              placeholder="Buscar por nome, hostname, OS, IP ou cliente..."
+              placeholder="Buscar por nome, hostname, OS, IP, cliente ou usuário logado..."
               value={search}
               onChange={e => setSearch(e.target.value)}
             />

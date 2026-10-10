@@ -94,6 +94,24 @@ function getStringField(
   return null;
 }
 
+/**
+ * Como getStringField, mas preserva string vazia: "" é um valor válido
+ * ("agent novo, sem sessão") e não pode ser confundido com campo ausente
+ * ("agent antigo"), que cai para o último usuário conhecido.
+ */
+function getStringFieldAllowEmpty(
+  data: Record<string, unknown>,
+  keys: string[],
+): string | null {
+  for (const key of keys) {
+    for (const [candidateKey, candidateValue] of Object.entries(data)) {
+      if (candidateKey.toLowerCase() !== key.toLowerCase()) continue;
+      if (typeof candidateValue === "string") return candidateValue;
+    }
+  }
+  return null;
+}
+
 function getNumberField(
   data: Record<string, unknown>,
   keys: string[],
@@ -308,7 +326,7 @@ function invalidateDashboardQueries(
   invalidateThrottled(["realtime", "stats"]);
 }
 
-function toHeartbeatPayload(
+export function toHeartbeatPayload(
   data: Record<string, unknown>,
   envelope?: Record<string, unknown>,
 ): AgentHeartbeat | null {
@@ -362,6 +380,16 @@ function toHeartbeatPayload(
       ? getStringField(envelope, ["timestampUtc", "timestamp_utc", "timestamp"])
       : null);
 
+  // loggedUser: "" = agent novo sem sessão (mostra "—"); ausente = agent antigo
+  // (cai para o último usuário conhecido).
+  const loggedUserRaw =
+    getStringFieldAllowEmpty(source, ["loggedUser", "logged_user"]) ??
+    getStringFieldAllowEmpty(data, ["loggedUser", "logged_user"]);
+  const loggedUserSince =
+    getStringField(source, ["loggedUserSince", "logged_user_since"]) ??
+    getStringField(data, ["loggedUserSince", "logged_user_since"]) ??
+    undefined;
+
   return {
     agentId,
     status: "Online",
@@ -376,6 +404,8 @@ function toHeartbeatPayload(
       getStringField(source, ["agentVersion", "agent_version", "version"]) ??
       getStringField(data, ["agentVersion", "agent_version", "version"]) ??
       undefined,
+    loggedUser: loggedUserRaw === null ? undefined : loggedUserRaw.trim(),
+    loggedUserSince,
     cpuPercent: getMetric(["cpuPercent", "cpu_percent", "cpu"]),
     memoryPercent: getMetric([
       "memoryPercent",
@@ -523,6 +553,14 @@ export function useAgentStatusNats(
           lastSeen: nowIso,
           updatedAt: nowIso,
           lastIpAddress: heartbeatIp ?? agent.lastIpAddress,
+          loggedUser:
+            heartbeatData.loggedUser !== undefined
+              ? heartbeatData.loggedUser
+              : agent.loggedUser,
+          loggedUserSince:
+            heartbeatData.loggedUserSince !== undefined
+              ? heartbeatData.loggedUserSince
+              : agent.loggedUserSince,
           heartbeatMetrics: metrics,
         };
       };
@@ -539,6 +577,14 @@ export function useAgentStatusNats(
             lastSeenAt: nowIso,
             lastSeen: nowIso,
             updatedAt: nowIso,
+            loggedUser:
+              heartbeatData.loggedUser !== undefined
+                ? heartbeatData.loggedUser
+                : current.loggedUser,
+            loggedUserSince:
+              heartbeatData.loggedUserSince !== undefined
+                ? heartbeatData.loggedUserSince
+                : current.loggedUserSince,
             heartbeatMetrics: metrics,
           };
           if (heartbeatIp && !updated.lastIpAddress) {
