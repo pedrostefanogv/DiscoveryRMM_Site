@@ -40,7 +40,9 @@ export default defineConfig({
   ],
   resolve: {
     alias: {
-      "@": resolve(__dirname, "src"),
+      // import.meta.dirname (ESM) — __dirname não é suportado pelo
+      // configLoader "native" do Vite 8 (aviso de deprecação no build).
+      "@": resolve(import.meta.dirname, "src"),
     },
   },
   server: {
@@ -73,6 +75,11 @@ export default defineConfig({
   },
   build: {
     target: "es2022",
+    // O chunk "markdown" (react-markdown + remark/rehype/micromark) tem ~1,1 MB
+    // (≈381 kB gzip) e é carregado SOB DEMANDA via LazyMarkdown — não entra no
+    // bundle inicial nem no das rotas. O limite é ajustado para esse caso
+    // conhecido; qualquer outro chunk que passe de 1,2 MB volta a avisar.
+    chunkSizeWarningLimit: 1200,
     rolldownOptions: {
       output: {
         // Rolldown-native chunking (substitui o advancedChunks/manualChunks legado).
@@ -90,6 +97,10 @@ export default defineConfig({
               priority: 55,
             },
             {
+              // Ecossistema de markdown (react-markdown + remark/rehype/hast/micromark
+              // + helpers do preview do editor). Fica num chunk vendor único
+              // porque tudo é carregado junto quando um markdown é renderizado;
+              // o download é sob demanda via LazyMarkdown (components/ui/LazyMarkdown.tsx).
               name: "markdown",
               test: /node_modules[\\/](react-markdown|remark-gfm|remark-parse|remark-rehype|remark-stringify|unified|vfile|vfile-message|decode-named-character-reference|property-information|space-separated-tokens|comma-separated-tokens|character-entities|character-entities-html4|character-entities-legacy|character-reference-invalid|stringify-entities|parse-entities|longest-streak|markdown-table|escape-string-regexp|extend|is-plain-obj|is-alphabetical|is-alphanumerical|is-decimal|is-hexadecimal|zwitch|ccount|trim-lines|ms|debug|bail|trough|devlop|dequal|inline-style-parser|style-to-js|style-to-object|estree-util-is-identifier-name|html-url-attributes|@ungap[\\/]structured-clone)[\\/]|node_modules[\\/](micromark|mdast-util-|hast-util-|unist-util-|remark-|rehype-)/,
               priority: 58,

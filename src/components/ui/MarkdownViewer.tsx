@@ -1,7 +1,6 @@
 import { memo } from 'react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 import { useTheme } from '@/theme/ThemeContext';
+import { LazyMarkdown } from './LazyMarkdown';
 
 interface MarkdownViewerProps {
   source: string;
@@ -40,7 +39,7 @@ export const MarkdownViewer = memo(function MarkdownViewer({ source, className }
         + (className ?? '')
       }
     >
-      <ReactMarkdown remarkPlugins={[remarkGfm]}>{source}</ReactMarkdown>
+      <LazyMarkdown source={source} fallback={<span className="text-xs text-muted">Carregando…</span>} />
     </div>
   );
 });

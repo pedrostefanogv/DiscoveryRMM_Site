@@ -1,5 +1,4 @@
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
+import { LazyMarkdown } from '@/components/ui/LazyMarkdown';
 
 interface MarkdownDescriptionProps {
   content?: string | null;
@@ -37,9 +36,7 @@ export function MarkdownDescription({
 
   return (
     <article className={`${baseClass} ${variantClass}`}>
-      <ReactMarkdown remarkPlugins={[remarkGfm]} skipHtml>
-        {normalized}
-      </ReactMarkdown>
+      <LazyMarkdown source={normalized} skipHtml />
     </article>
   );
 }

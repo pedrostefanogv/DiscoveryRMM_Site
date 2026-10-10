@@ -1,7 +1,6 @@
 import { useMemo, useState, useCallback, useEffect } from "react";
 import { createPortal } from "react-dom";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+import { LazyMarkdown } from "@/components/ui/LazyMarkdown";
 import { useReportPreview } from "@/hooks/useReportPreview";
 import { useClients } from "@/hooks/useClients";
 import { useSites } from "@/hooks/useSites";
@@ -228,7 +227,7 @@ export function LiveMarkdownPreview({ wizard }: Props) {
       >
         {mode === "structure" && (
           <div className="prose prose-sm prose-invert max-w-none">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>{markdown}</ReactMarkdown>
+            <LazyMarkdown source={markdown} />
           </div>
         )}
         {mode === "data" && previewMutation.isPending && (
