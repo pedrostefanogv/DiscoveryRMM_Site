@@ -98,10 +98,18 @@ describe('TicketFieldsSection', () => {
   });
 
   it('mostra os campos do departamento editáveis, com tipo e obrigatoriedade', () => {
-    render(<TicketFieldsSection ticketId="t1" departmentId="dep1" />);
+    const { container } = render(<TicketFieldsSection ticketId="t1" departmentId="dep1" />);
 
-    expect(screen.getByText('Campos do departamento')).toBeTruthy();
-    expect(screen.getByText('Ramal')).toBeTruthy();
+    // Sem cabeçalho de seção: os campos entram na mesma grade do resumo.
+    expect(screen.queryByText('Campos do departamento')).toBeNull();
+    expect(screen.queryByText('Campos adicionais do chamado')).toBeNull();
+    expect(container.querySelector('dl')).toBeTruthy();
+    // O rótulo aparece UMA vez (no dt); o controle usa aria-label, não repete.
+    // (regex: o rótulo antigo do controle era "Ramal *", então um match exato
+    // por 'Ramal' não pegaria a duplicação de volta)
+    expect(screen.getAllByText(/Ramal/)).toHaveLength(1);
+    // O controle continua acessível pelo nome do campo.
+    expect(screen.getByLabelText(/Ramal/)).toBeTruthy();
     expect(screen.getByText('Texto')).toBeTruthy();
     expect(screen.getByText('Obrigatório')).toBeTruthy();
     expect(screen.getByDisplayValue('1024')).toBeTruthy();

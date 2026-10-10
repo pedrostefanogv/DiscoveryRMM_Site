@@ -25,11 +25,17 @@ import toast from 'react-hot-toast';
 /**
  * Campos do chamado dentro do Resumo geral, logo após o SLA.
  *
- * - "Campos do departamento": definidos para o departamento do chamado. Públicos
+ * Sem cabeçalho de seção e sem card por campo: entram na mesma grade `dt/dd` do
+ * resumo (rótulo muted em cima, controle embaixo), alinhados aos demais dados.
+ *
+ * - Campos do departamento: definidos para o departamento do chamado. Públicos
  *   são cobrados na abertura; internos não aparecem lá. Nesta tela (atendente)
  *   ambos são editáveis, e os internos recebem o selo "Interno".
- * - "Campos adicionais do chamado": campos de escopo do próprio chamado,
+ * - Campos adicionais do chamado: campos de escopo do próprio chamado,
  *   editáveis.
+ *
+ * O nome do campo fica no `dt`; o controle é renderizado com `hideLabel` para
+ * não repetir o rótulo (o nome continua acessível via `aria-label`).
  */
 export function TicketFieldsSection({
   ticketId,
@@ -165,74 +171,86 @@ export function TicketFieldsSection({
 
   return (
     <div className="space-y-3">
-      <div>
-        <p className="text-xs font-medium uppercase tracking-wider text-muted">
-          Campos do departamento
-        </p>
-        <p className="text-xs text-muted">Definidos para o departamento deste chamado.</p>
-        {isLoading ? (
-          <Loading />
-        ) : schemaQuery.isError ? (
-          // Falha do schema (403/500) não pode virar fallback silencioso de
-          // somente leitura: sem a definição não há input nem validação.
-          <div className="mt-2 flex flex-wrap items-center gap-3 rounded-xl border border-border bg-surface-light px-4 py-3">
-            <AlertTriangle className="h-4 w-4 text-danger" />
-            <p className="text-sm text-muted">
-              Não foi possível carregar os campos deste departamento.
-            </p>
-            <Button size="sm" variant="ghost" onClick={() => schemaQuery.refetch()}>
-              Tentar novamente
-            </Button>
-          </div>
-        ) : rows.length === 0 ? (
-          <p className="mt-2 text-sm text-muted">
-            {departmentId
-              ? 'Este departamento não possui campos configurados.'
-              : 'Chamado sem departamento — não há campos do departamento.'}
+      {isLoading ? (
+        <Loading />
+      ) : schemaQuery.isError ? (
+        // Falha do schema (403/500) não pode virar fallback silencioso de
+        // somente leitura: sem a definição não há input nem validação.
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-surface-light px-4 py-3">
+          <AlertTriangle className="h-4 w-4 text-danger" />
+          <p className="text-sm text-muted">
+            Não foi possível carregar os campos deste departamento.
           </p>
-        ) : (
-          <ul className="mt-2 divide-y divide-white/5 rounded-lg border border-border">
-            {rows.map((row) => {
-              const text = formatValue(row.dataType, row.value);
-              const missing = !text.trim();
+          <Button size="sm" variant="ghost" onClick={() => schemaQuery.refetch()}>
+            Tentar novamente
+          </Button>
+        </div>
+      ) : rows.length === 0 ? (
+        <p className="text-sm text-muted">
+          {departmentId
+            ? 'Este departamento não possui campos configurados.'
+            : 'Chamado sem departamento — não há campos do departamento.'}
+        </p>
+      ) : (
+        // Mesma grade do "Resumo geral" (dt = rótulo, dd = controle): sem
+        // cabeçalho de seção e sem card por campo. O rótulo do controle fica no
+        // dt, então o input é renderizado com hideLabel (aria-label preservado).
+        <dl className="grid gap-3 text-sm sm:grid-cols-2">
+          {rows.map((row) => {
+            const text = formatValue(row.dataType, row.value);
+            const missing = !text.trim();
 
-              // Sem schema (chamado antigo) não há como editar com validação.
-              if (!row.field) {
-                return (
-                  <li key={row.id} className="flex items-start justify-between gap-3 px-3 py-2 text-sm">
-                    <span className="text-muted-foreground">{row.label}</span>
-                    <span className="min-w-0 break-words text-right text-foreground">
-                      {missing ? <span className="text-xs text-muted italic">Não informado</span> : text}
-                    </span>
-                  </li>
-                );
-              }
-
-              const draft = draftOf(row);
-              const fieldError = draft.trim() ? validateTicketSchemaField(row.field, draft).error : undefined;
-              const dirty = isDirty(row);
-
+            // Sem schema (chamado antigo) não há como editar com validação.
+            if (!row.field) {
               return (
-                <li key={row.id} className="px-3 py-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <span className="flex min-w-0 flex-wrap items-center gap-1.5 text-sm text-foreground">
-                      {row.label}
-                      {row.dataType !== null && (
-                        <Badge color="slate">{getCustomFieldDataTypeLabel(row.dataType)}</Badge>
-                      )}
-                      {row.isRequired && <Badge color="accent">Obrigatório</Badge>}
-                      {row.field?.isInternal && (
-                        <Badge color="accent">
-                          <Shield className="mr-0.5 inline h-3 w-3" />
-                          Interno
-                        </Badge>
-                      )}
-                      {!dirty && missing && <span className="text-xs text-muted italic">Não informado</span>}
-                    </span>
+                <div key={row.id} className="sm:col-span-2">
+                  <dt className="text-muted">{row.label}</dt>
+                  <dd className="text-foreground">
+                    {missing ? <span className="text-xs text-muted italic">Não informado</span> : text}
+                  </dd>
+                </div>
+              );
+            }
+
+            const draft = draftOf(row);
+            const fieldError = draft.trim() ? validateTicketSchemaField(row.field, draft).error : undefined;
+            const dirty = isDirty(row);
+
+            return (
+              <div key={row.id} className="sm:col-span-2">
+                <dt className="text-muted">
+                  <span className="flex flex-wrap items-center gap-1.5">
+                    {row.label}
+                    {row.dataType !== null && (
+                      <Badge color="slate">{getCustomFieldDataTypeLabel(row.dataType)}</Badge>
+                    )}
+                    {row.isRequired && <Badge color="accent">Obrigatório</Badge>}
+                    {row.field?.isInternal && (
+                      <Badge color="accent">
+                        <Shield className="mr-0.5 inline h-3 w-3" />
+                        Interno
+                      </Badge>
+                    )}
+                    {!dirty && missing && <span className="text-xs text-muted italic">Não informado</span>}
+                  </span>
+                </dt>
+                <dd className="text-foreground">
+                  <div className="flex items-start gap-2">
+                    <div className="min-w-0 flex-1">
+                      <TicketSchemaFieldInput
+                        field={row.field}
+                        value={draft}
+                        error={fieldError}
+                        hideLabel
+                        onChange={(value) => setDrafts((prev) => ({ ...prev, [row.id]: value }))}
+                      />
+                    </div>
                     {dirty && (
                       <Button
+                        type="button"
                         size="sm"
                         variant="secondary"
+                        className="shrink-0"
                         onClick={() => void saveRow(row)}
                         loading={savingId === row.id}
                       >
@@ -240,20 +258,12 @@ export function TicketFieldsSection({
                       </Button>
                     )}
                   </div>
-                  <div className="mt-2">
-                    <TicketSchemaFieldInput
-                      field={row.field}
-                      value={draft}
-                      error={fieldError}
-                      onChange={(value) => setDrafts((prev) => ({ ...prev, [row.id]: value }))}
-                    />
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </div>
+                </dd>
+              </div>
+            );
+          })}
+        </dl>
+      )}
 
       <AdditionalTicketFields ticketId={ticketId} />
     </div>
@@ -416,69 +426,45 @@ function AdditionalTicketFields({ ticketId }: { ticketId: string }) {
   };
 
   // Grupo opcional: sem campos de escopo do chamado ele não aparece no Resumo.
-  if (!definitionsQuery.isLoading && !valuesQuery.isLoading && definitions.length === 0) {
+  if (definitionsQuery.isLoading || valuesQuery.isLoading) {
+    return <Loading />;
+  }
+  if (definitionsQuery.isError || valuesQuery.isError) {
+    return (
+      <p className="text-sm text-danger">
+        Erro ao carregar os campos adicionais do chamado.
+      </p>
+    );
+  }
+  if (definitions.length === 0) {
     return null;
   }
 
+  // Mesma grade do "Resumo geral"; sem cabeçalho de seção e sem card por campo.
   return (
-    <div className="space-y-3">
-      <p className="text-xs font-medium uppercase tracking-wider text-muted">
-        Campos adicionais do chamado
-      </p>
-      <p className="text-xs text-muted">
-        Campos extras cadastrados direto no chamado (não vêm do departamento).
-      </p>
-      <div className="space-y-3">
-        {definitionsQuery.isLoading || valuesQuery.isLoading ? (
-          <Loading />
-        ) : definitionsQuery.isError || valuesQuery.isError ? (
-          <p className="text-sm text-danger">
-            Erro ao carregar os campos adicionais do chamado.
-          </p>
-        ) : (
-          definitions.map((definition) => {
-            const valueItem = valuesByDefinitionId.get(definition.id);
+    <dl className="grid gap-3 text-sm sm:grid-cols-2">
+      {definitions.map((definition) => {
+        const valueItem = valuesByDefinitionId.get(definition.id);
 
-            return (
-              <div
-                key={definition.id}
-                className="rounded-lg border border-border bg-surface-light px-3 py-3"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="truncate text-sm font-medium text-foreground">
-                        {definition.label}
-                      </p>
-                      <Badge color="slate">
-                        {getCustomFieldDataTypeLabel(definition.dataType)}
-                      </Badge>
-                    </div>
-                    {definition.description && (
-                      <p className="mt-1 text-xs text-muted">
-                        {definition.description}
-                      </p>
-                    )}
-                    {valueItem?.updatedAt && (
-                      <p className="mt-2 text-[11px] text-muted">
-                        Atualizado em{' '}
-                        {new Date(valueItem.updatedAt).toLocaleString('pt-BR')}
-                      </p>
-                    )}
-                  </div>
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    onClick={() => void handleSaveValue(definition)}
-                    loading={savingDefinitionId === definition.id}
-                  >
-                    Salvar
-                  </Button>
-                </div>
-
-                <div className="mt-3">
+        return (
+          <div key={definition.id} className="sm:col-span-2">
+            <dt className="text-muted">
+              <span className="flex flex-wrap items-center gap-1.5">
+                {definition.label}
+                <Badge color="slate">
+                  {getCustomFieldDataTypeLabel(definition.dataType)}
+                </Badge>
+              </span>
+              {definition.description && (
+                <p className="mt-1 text-xs">{definition.description}</p>
+              )}
+            </dt>
+            <dd className="text-foreground">
+              <div className="flex items-start gap-2">
+                <div className="min-w-0 flex-1">
                   <TicketCustomFieldInput
                     definition={definition}
+                    hideLabel
                     value={drafts[definition.id] ?? ''}
                     onChange={(value) => {
                       dirtyDefinitionIdsRef.current.add(definition.id);
@@ -489,12 +475,28 @@ function AdditionalTicketFields({ ticketId }: { ticketId: string }) {
                     }}
                   />
                 </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  className="shrink-0"
+                  onClick={() => void handleSaveValue(definition)}
+                  loading={savingDefinitionId === definition.id}
+                >
+                  Salvar
+                </Button>
               </div>
-            );
-          })
-        )}
-      </div>
-    </div>
+              {valueItem?.updatedAt && (
+                <p className="mt-1 text-[11px] text-muted">
+                  Atualizado em{' '}
+                  {new Date(valueItem.updatedAt).toLocaleString('pt-BR')}
+                </p>
+              )}
+            </dd>
+          </div>
+        );
+      })}
+    </dl>
   );
 }
 
@@ -502,16 +504,26 @@ function TicketCustomFieldInput({
   definition,
   value,
   onChange,
+  hideLabel = false,
 }: {
   definition: CustomFieldDefinition;
   value: string;
   onChange: (value: string) => void;
+  /**
+   * Não repete o nome do campo no controle: o rótulo já é exibido no `dt` do
+   * resumo. O nome continua acessível via `aria-label`.
+   */
+  hideLabel?: boolean;
 }) {
+  const label = hideLabel ? undefined : 'Valor';
+  const ariaLabel = hideLabel ? definition.label : undefined;
+
   switch (definition.dataType) {
     case CustomFieldDataType.Boolean:
       return (
         <Select
-          label="Valor"
+          label={label}
+          aria-label={ariaLabel}
           value={value}
           options={[
             { value: '', label: 'Não definido' },
@@ -524,7 +536,8 @@ function TicketCustomFieldInput({
     case CustomFieldDataType.Dropdown:
       return (
         <Select
-          label="Valor"
+          label={label}
+          aria-label={ariaLabel}
           value={value}
           options={[
             { value: '', label: 'Selecione...' },
@@ -539,7 +552,8 @@ function TicketCustomFieldInput({
     case CustomFieldDataType.ListBox:
       return (
         <TextArea
-          label="Valor"
+          label={label}
+          aria-label={ariaLabel}
           rows={2}
           value={value}
           hint={
@@ -553,7 +567,8 @@ function TicketCustomFieldInput({
     case CustomFieldDataType.Integer:
       return (
         <Input
-          label="Valor"
+          label={label}
+          aria-label={ariaLabel}
           type="number"
           step="1"
           value={value}
@@ -563,7 +578,8 @@ function TicketCustomFieldInput({
     case CustomFieldDataType.Decimal:
       return (
         <Input
-          label="Valor"
+          label={label}
+          aria-label={ariaLabel}
           type="number"
           step="any"
           value={value}
@@ -573,7 +589,8 @@ function TicketCustomFieldInput({
     case CustomFieldDataType.Date:
       return (
         <Input
-          label="Valor"
+          label={label}
+          aria-label={ariaLabel}
           type="date"
           value={value}
           onChange={(event) => onChange(event.target.value)}
@@ -582,7 +599,8 @@ function TicketCustomFieldInput({
     case CustomFieldDataType.DateTime:
       return (
         <Input
-          label="Valor"
+          label={label}
+          aria-label={ariaLabel}
           type="datetime-local"
           value={value}
           onChange={(event) => onChange(event.target.value)}
@@ -591,7 +609,8 @@ function TicketCustomFieldInput({
     default:
       return (
         <Input
-          label="Valor"
+          label={label}
+          aria-label={ariaLabel}
           value={value}
           onChange={(event) => onChange(event.target.value)}
         />

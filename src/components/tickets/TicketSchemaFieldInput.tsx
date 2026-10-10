@@ -25,6 +25,7 @@ export function TicketSchemaFieldInput({
   disabled = false,
   error,
   id,
+  hideLabel = false,
 }: {
   field: TicketSchemaField;
   value: string;
@@ -34,8 +35,15 @@ export function TicketSchemaFieldInput({
   error?: string;
   /** id do controle, usado para focar/rolar até o primeiro campo inválido. */
   id?: string;
+  /**
+   * Não repete o rótulo do campo no controle. Usado quando o rótulo já é
+   * exibido fora (ex.: na linha `dt/dd` do resumo do chamado): o nome do campo
+   * continua acessível via `aria-label`.
+   */
+  hideLabel?: boolean;
 }) {
-  const label = `${field.label}${field.isRequired ? ' *' : ''}`;
+  const label = hideLabel ? undefined : `${field.label}${field.isRequired ? ' *' : ''}`;
+  const ariaLabel = hideLabel ? field.label : undefined;
   // Defensivo: se a definição carregar máscara num tipo que não a usa (ex.:
   // veio de um modelo antigo), o render a ignora em vez de aplicar parcialmente.
   const mask = supportsInputMask(field.dataType) ? (field.inputMask ?? null) : null;
@@ -51,6 +59,7 @@ export function TicketSchemaFieldInput({
       return (
         <Select
           label={label}
+          aria-label={ariaLabel}
           id={id}
           value={value}
           disabled={disabled}
@@ -67,6 +76,7 @@ export function TicketSchemaFieldInput({
       return (
         <Select
           label={label}
+          aria-label={ariaLabel}
           id={id}
           value={value}
           disabled={disabled}
@@ -84,7 +94,8 @@ export function TicketSchemaFieldInput({
       if (field.options.length > 0) {
         return (
           <CheckboxGroupInput
-            label={label}
+            label={label ?? ''}
+            ariaLabel={ariaLabel}
             id={id}
             options={field.options}
             value={value}
@@ -98,6 +109,7 @@ export function TicketSchemaFieldInput({
       return (
         <TextArea
           label={label}
+          aria-label={ariaLabel}
           id={id}
           rows={2}
           value={value}
@@ -115,6 +127,7 @@ export function TicketSchemaFieldInput({
         return (
           <MaskedNumericInput
             label={label}
+            ariaLabel={ariaLabel}
             id={id}
             mask={mask}
             value={value}
@@ -126,17 +139,18 @@ export function TicketSchemaFieldInput({
         );
       }
       return field.dataType === CustomFieldDataType.Integer
-        ? <Input label={label} id={id} type="number" step="1" value={value} disabled={disabled} onChange={(e) => onChange(e.target.value)} hint={hint} error={error} />
-        : <Input label={label} id={id} type="number" step="any" value={value} disabled={disabled} onChange={(e) => onChange(e.target.value)} hint={hint} error={error} />;
+        ? <Input label={label} aria-label={ariaLabel} id={id} type="number" step="1" value={value} disabled={disabled} onChange={(e) => onChange(e.target.value)} hint={hint} error={error} />
+        : <Input label={label} aria-label={ariaLabel} id={id} type="number" step="any" value={value} disabled={disabled} onChange={(e) => onChange(e.target.value)} hint={hint} error={error} />;
     }
     case CustomFieldDataType.Date:
-      return <Input label={label} id={id} type="date" value={value} disabled={disabled} onChange={(e) => onChange(e.target.value)} hint={hint} error={error} />;
+      return <Input label={label} aria-label={ariaLabel} id={id} type="date" value={value} disabled={disabled} onChange={(e) => onChange(e.target.value)} hint={hint} error={error} />;
     case CustomFieldDataType.DateTime:
-      return <Input label={label} id={id} type="datetime-local" value={value} disabled={disabled} onChange={(e) => onChange(e.target.value)} hint={hint} error={error} />;
+      return <Input label={label} aria-label={ariaLabel} id={id} type="datetime-local" value={value} disabled={disabled} onChange={(e) => onChange(e.target.value)} hint={hint} error={error} />;
     default:
       return (
         <Input
           label={label}
+          aria-label={ariaLabel}
           id={id}
           value={value}
           disabled={disabled}
@@ -158,6 +172,7 @@ export function TicketSchemaFieldInput({
  */
 function CheckboxGroupInput({
   label,
+  ariaLabel,
   id,
   options,
   value,
@@ -167,6 +182,7 @@ function CheckboxGroupInput({
   disabled,
 }: {
   label: string;
+  ariaLabel?: string;
   id?: string;
   options: string[];
   value: string;
@@ -196,7 +212,7 @@ function CheckboxGroupInput({
       <div
         id={id}
         role="group"
-        aria-label={label}
+        aria-label={ariaLabel ?? label}
         aria-invalid={Boolean(error)}
         tabIndex={-1}
         className={`space-y-1.5 rounded-xl border bg-surface-light px-3 py-2 ${error ? 'border-danger/50' : 'border-border'}`}
@@ -230,6 +246,7 @@ function CheckboxGroupInput({
  */
 function MaskedNumericInput({
   label,
+  ariaLabel,
   id,
   mask,
   value,
@@ -238,7 +255,8 @@ function MaskedNumericInput({
   error,
   disabled,
 }: {
-  label: string;
+  label?: string;
+  ariaLabel?: string;
   id?: string;
   mask: string;
   value: string;
@@ -258,6 +276,7 @@ function MaskedNumericInput({
   return (
     <Input
       label={label}
+      aria-label={ariaLabel}
       id={id}
       inputMode="decimal"
       value={text}
