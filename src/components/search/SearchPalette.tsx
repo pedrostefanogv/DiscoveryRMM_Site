@@ -134,37 +134,46 @@ export function SearchPalette({
                 </div>
 
                 {/* Items */}
-                {group.items.map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => handleItemClick(item.url, item.entityType)}
-                    className="flex w-full items-start gap-3 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-surface-light"
-                  >
-                    <div
-                      className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-border bg-surface-light ${color}`}
-                    >
-                      <Icon className="h-3.5 w-3.5" strokeWidth={1.5} />
-                    </div>
+                {group.items.map((item) => {
+                  // Cliente · site · usuário logado na máquina. O usuário só vem
+                  // nos resultados de agente (mesmo valor exibido no card do agent).
+                  const metaParts = [
+                    item.clientName,
+                    item.siteName,
+                    item.entityType === "agent" ? item.loggedUser : null,
+                  ].filter((part): part is string => Boolean(part));
 
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-foreground">
-                        {item.title}
-                      </p>
-                      {item.subtitle && (
-                        <p className="truncate text-xs text-muted">
-                          {item.subtitle}
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => handleItemClick(item.url, item.entityType)}
+                      className="flex w-full items-start gap-3 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-surface-light"
+                    >
+                      <div
+                        className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-border bg-surface-light ${color}`}
+                      >
+                        <Icon className="h-3.5 w-3.5" strokeWidth={1.5} />
+                      </div>
+
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-foreground">
+                          {item.title}
                         </p>
-                      )}
-                      {item.clientName && (
-                        <p className="truncate text-xs text-muted">
-                          {item.clientName}
-                          {item.siteName ? ` · ${item.siteName}` : ""}
-                        </p>
-                      )}
-                    </div>
-                  </button>
-                ))}
+                        {item.subtitle && (
+                          <p className="truncate text-xs text-muted">
+                            {item.subtitle}
+                          </p>
+                        )}
+                        {metaParts.length > 0 && (
+                          <p className="truncate text-xs text-muted">
+                            {metaParts.join(" · ")}
+                          </p>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             );
           })}

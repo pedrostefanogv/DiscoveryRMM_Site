@@ -26,6 +26,8 @@ export interface SearchResultItem {
   siteId: string | null;
   siteName: string | null;
   url: string;
+  /** Usuário logado na máquina — presente apenas em resultados de agente. */
+  loggedUser?: string | null;
 }
 
 // ── API ────────────────────────────────────────────────
