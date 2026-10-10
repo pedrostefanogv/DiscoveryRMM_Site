@@ -46,4 +46,33 @@ if (missingIcons.length > 0) {
   process.exit(1);
 }
 
-console.log("[verify-build] Build artifacts verified (" + referencedIcons.length + " icone(s) conferido(s)).");
+// O vite-plugin-pwa monta o Service Worker com
+// `rollupOptions.output.inlineDynamicImports: true` — opcao ainda aceita, mas
+// DEPRECIADA pelo rolldown/Vite 8, que avisa no build:
+//   "inlineDynamicImports option is deprecated, please use codeSplitting: false"
+// O aviso e inofensivo enquanto a inlining valer, mas o motivo dela nao e
+// cosmetico: um Service Worker PRECISA ser um unico arquivo autocontido. Se um
+// dia o bundler parar de inlinar, o sw.js passaria a referenciar um chunk
+// externo e install/offline/Web Push quebrariam de forma silenciosa (o
+// navegador so registra o erro no console do cliente). Este check transforma o
+// aviso em invariante verificada.
+const swDynamicImports = swSource.match(/\bimport\s*\(/g) ?? [];
+const swStaticImports = swSource.match(/(?:^|[;{}\n])\s*import\s*[{*"']/g) ?? [];
+
+if (swDynamicImports.length > 0 || swStaticImports.length > 0) {
+  console.error("[verify-build] dist/sw.js nao esta autocontido:");
+  console.error(
+    " - imports dinamicos: " +
+      swDynamicImports.length +
+      ", imports estaticos: " +
+      swStaticImports.length,
+  );
+  console.error("  (Service Worker precisa ser um unico arquivo — ver inlineDynamicImports/codeSplitting)");
+  process.exit(1);
+}
+
+console.log(
+  "[verify-build] Build artifacts verified (" +
+    referencedIcons.length +
+    " icone(s) conferido(s), SW autocontido).",
+);
