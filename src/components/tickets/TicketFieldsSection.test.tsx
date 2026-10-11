@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { TicketSchemaField } from '@/api';
+import type { CustomFieldDefinition, TicketSchemaField } from '@/api';
 
 const { valuesState, definitionsState, schemaState, upsertMock } = vi.hoisted(() => ({
   upsertMock: vi.fn().mockResolvedValue({}),
@@ -19,7 +19,7 @@ const { valuesState, definitionsState, schemaState, upsertMock } = vi.hoisted(()
     ],
     isLoading: false,
   },
-  definitionsState: { data: [], isLoading: false, isError: false },
+  definitionsState: { data: [] as CustomFieldDefinition[], isLoading: false, isError: false },
   schemaState: {
     data: [
       {
@@ -94,6 +94,7 @@ describe('TicketFieldsSection', () => {
         currentValueJson: null,
       },
     ] as TicketSchemaField[];
+    definitionsState.data = [];
     cleanup();
   });
 
@@ -110,7 +111,8 @@ describe('TicketFieldsSection', () => {
     expect(screen.getAllByText(/Ramal/)).toHaveLength(1);
     // O controle continua acessível pelo nome do campo.
     expect(screen.getByLabelText(/Ramal/)).toBeTruthy();
-    expect(screen.getByText('Texto')).toBeTruthy();
+    // Selo de tipo removido da apresentação (aparecia "Texto" após o rótulo).
+    expect(screen.queryByText('Texto')).toBeNull();
     expect(screen.getByText('Obrigatório')).toBeTruthy();
     expect(screen.getByDisplayValue('1024')).toBeTruthy();
   });
@@ -177,5 +179,38 @@ describe('TicketFieldsSection', () => {
     expect(screen.getByLabelText('Aprovador por')).toBeTruthy();
     // Marcado como interno.
     expect(screen.getByText('Interno')).toBeTruthy();
+  });
+
+  it('campos adicionais: rótulo sem selo de tipo e Salvar só aparece com alteração', () => {
+    schemaState.data = [];
+    valuesState.data = [];
+    definitionsState.data = [
+      {
+        id: 'd9',
+        name: 'interno',
+        label: 'Interno',
+        description: 'Observação interna',
+        scopeType: 4, // Ticket
+        dataType: 0, // Text
+        isActive: true,
+        options: [],
+        createdAt: null,
+        updatedAt: null,
+      },
+    ];
+
+    render(<TicketFieldsSection ticketId="t1" departmentId="dep1" />);
+
+    expect(screen.getByText('Interno')).toBeTruthy();
+    expect(screen.getByText('Observação interna')).toBeTruthy();
+    // Selo de tipo removido da apresentação ("Texto" ao lado do rótulo).
+    expect(screen.queryByText('Texto')).toBeNull();
+    // Nada alterado: sem botão Salvar.
+    expect(screen.queryByRole('button', { name: 'Salvar' })).toBeNull();
+
+    fireEvent.change(screen.getByLabelText('Interno'), { target: { value: 'oi' } });
+
+    // Com alteração pendente o botão aparece.
+    expect(screen.getByRole('button', { name: 'Salvar' })).toBeTruthy();
   });
 });

@@ -7,7 +7,6 @@ import {
   CustomFieldDataType,
   CustomFieldScopeType,
   formatCustomFieldValue,
-  getCustomFieldDataTypeLabel,
   parseCustomFieldValue,
 } from '@/api';
 import type { CustomFieldDefinition } from '@/api';
@@ -221,9 +220,6 @@ export function TicketFieldsSection({
                 <dt className="text-muted">
                   <span className="flex flex-wrap items-center gap-1.5">
                     {row.label}
-                    {row.dataType !== null && (
-                      <Badge color="slate">{getCustomFieldDataTypeLabel(row.dataType)}</Badge>
-                    )}
                     {row.isRequired && <Badge color="accent">Obrigatório</Badge>}
                     {row.field?.isInternal && (
                       <Badge color="accent">
@@ -363,6 +359,22 @@ function AdditionalTicketFields({ ticketId }: { ticketId: string }) {
     [valuesQuery.data],
   );
 
+  // Valor do servidor no mesmo formato do rascunho: é a base para saber se o
+  // campo foi alterado (o botão Salvar só aparece quando há alteração).
+  const savedDrafts = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const definition of definitions) {
+      map[definition.id] = formatTicketCustomFieldDraftValue(
+        definition.dataType,
+        valuesByDefinitionId.get(definition.id)?.value,
+      );
+    }
+    return map;
+  }, [definitions, valuesByDefinitionId]);
+
+  const isDirty = (definition: CustomFieldDefinition) =>
+    (drafts[definition.id] ?? '') !== (savedDrafts[definition.id] ?? '');
+
   // Assinatura do conjunto de campos (muda quando muda o ticket/definições).
   const definitionsSignature = useMemo(
     () => `${ticketId}::${definitions.map((definition) => definition.id).join('|')}`,
@@ -445,20 +457,11 @@ function AdditionalTicketFields({ ticketId }: { ticketId: string }) {
     <dl className="grid gap-3 text-sm sm:grid-cols-2">
       {definitions.map((definition) => {
         const valueItem = valuesByDefinitionId.get(definition.id);
+        const dirty = isDirty(definition);
 
         return (
           <div key={definition.id} className="sm:col-span-2">
-            <dt className="text-muted">
-              <span className="flex flex-wrap items-center gap-1.5">
-                {definition.label}
-                <Badge color="slate">
-                  {getCustomFieldDataTypeLabel(definition.dataType)}
-                </Badge>
-              </span>
-              {definition.description && (
-                <p className="mt-1 text-xs">{definition.description}</p>
-              )}
-            </dt>
+            <dt className="text-muted">{definition.label}</dt>
             <dd className="text-foreground">
               <div className="flex items-start gap-2">
                 <div className="min-w-0 flex-1">
@@ -475,17 +478,22 @@ function AdditionalTicketFields({ ticketId }: { ticketId: string }) {
                     }}
                   />
                 </div>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="secondary"
-                  className="shrink-0"
-                  onClick={() => void handleSaveValue(definition)}
-                  loading={savingDefinitionId === definition.id}
-                >
-                  Salvar
-                </Button>
+                {dirty && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    className="shrink-0"
+                    onClick={() => void handleSaveValue(definition)}
+                    loading={savingDefinitionId === definition.id}
+                  >
+                    Salvar
+                  </Button>
+                )}
               </div>
+              {definition.description && (
+                <p className="mt-1 text-xs text-muted">{definition.description}</p>
+              )}
               {valueItem?.updatedAt && (
                 <p className="mt-1 text-[11px] text-muted">
                   Atualizado em{' '}
