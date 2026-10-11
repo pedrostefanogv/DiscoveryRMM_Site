@@ -23,6 +23,7 @@ const TicketAlertsPage = lazy(() => import('@/pages/tickets/TicketAlertsPage'));
 const AutoTicketRulesPage = lazy(() => import('@/pages/tickets/AutoTicketRulesPage'));
 const TicketSlaPage = lazy(() => import('@/pages/tickets/TicketSlaPage'));
 const TicketDetail = lazy(() => import('@/pages/tickets/TicketDetail'));
+const TicketChatWindow = lazy(() => import('@/pages/tickets/TicketChatWindow'));
 const TicketCsatPage = lazy(() => import('@/pages/tickets/TicketCsatPage'));
 const TicketMacrosPage = lazy(() => import('@/pages/tickets/TicketMacrosPage'));
 const TicketTemplatesPage = lazy(() => import('@/pages/tickets/TicketTemplatesPage'));
@@ -160,6 +161,14 @@ export const router = createBrowserRouter([
       {
         path: 'agents/remote-session',
         element: <LazyPage><RemoteSession /></LazyPage>,
+      },
+      {
+        // Janela DEDICADA do chat do chamado (window.open). Fica fora do
+        // MainLayout de propósito — é uma janela própria, como o acesso remoto
+        // e o console de remote debug: a conversa continua viva mesmo que o
+        // atendente feche ou navegue no detalhe do chamado.
+        path: 'tickets/:id/chat',
+        element: <LazyPage><TicketChatWindow /></LazyPage>,
       },
       {
         element: <MainLayout />,

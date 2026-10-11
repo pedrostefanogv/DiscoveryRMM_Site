@@ -14,6 +14,7 @@ import {
   useTicketChatMessages,
 } from "@/hooks/useTicketChat";
 import { useTicketChatRealtime } from "@/hooks/useTicketChatRealtime";
+import { openTicketChatWindow, PopupBlockedError } from "./ticketChatLauncher";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Aba "Chat" do detalhe do chamado.
@@ -115,11 +116,49 @@ export default function TicketChatPanel({ ticketId, agentId, clientId, siteId, c
     ? "O chamado não está vinculado a uma máquina."
     : null;
 
+  /**
+   * A conversa vive em uma JANELA separada (como o acesso remoto): assim o
+   * atendente pode sair do chamado que o chat continua funcionando.
+   *
+   * A janela é aberta ANTES de qualquer await — bloqueadores de popup barram
+   * window.open depois de chamadas de rede.
+   */
   function handleStart() {
+    let popup: Window | null = null;
+    try {
+      popup = openTicketChatWindow(ticketId, sessionId ?? null);
+    } catch (error) {
+      toast.error(
+        error instanceof PopupBlockedError
+          ? error.message
+          : "Não foi possível abrir a janela do chat.",
+      );
+      return;
+    }
+
     start.mutate(undefined, {
-      onSuccess: () => toast.success("Convite de chat enviado para a máquina."),
-      onError: (error: unknown) => toast.error(extractConflictMessage(error) ?? "Não foi possível iniciar o chat."),
+      onSuccess: () => toast.success("Convite de chat enviado. A conversa está na janela do chat."),
+      onError: (error: unknown) => {
+        try {
+          popup?.close();
+        } catch {
+          // janela já fechada
+        }
+        toast.error(extractConflictMessage(error) ?? "Não foi possível iniciar o chat.");
+      },
     });
+  }
+
+  function handleOpenWindow() {
+    try {
+      openTicketChatWindow(ticketId, sessionId ?? null);
+    } catch (error) {
+      toast.error(
+        error instanceof PopupBlockedError
+          ? error.message
+          : "Não foi possível abrir a janela do chat.",
+      );
+    }
   }
 
   function handleRetry() {
@@ -242,6 +281,11 @@ export default function TicketChatPanel({ ticketId, agentId, clientId, siteId, c
           <Button size="sm" variant="ghost" onClick={() => setHistoryOpen((open) => !open)}>
             Conversas anteriores
           </Button>
+          {sessionForUi && canManage && (
+            <Button size="sm" onClick={handleOpenWindow} title="Mantém o chat aberto mesmo saindo do chamado">
+              Abrir janela do chat
+            </Button>
+          )}
           {sessionForUi?.status === "Pending" && canManage && (
             <Button size="sm" variant="ghost" onClick={handleRetry} disabled={retry.isPending}>
               <RefreshCw className="h-4 w-4" /> Reenviar convite
