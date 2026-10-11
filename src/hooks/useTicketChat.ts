@@ -28,13 +28,24 @@ function refreshChat(queryClient: ReturnType<typeof useQueryClient>) {
   void queryClient.invalidateQueries({ queryKey: TICKET_CHAT_QUERY_ROOT });
 }
 
-/** Sessão pendente/ativa do chamado. */
-export function useCurrentTicketChat(ticketId: string | undefined, enabled = true) {
+/**
+ * Sessão pendente/ativa do chamado.
+ *
+ * `refetchInterval` só é usado como REDE DE SEGURANÇA quando o NATS do
+ * navegador está fora (ver useRealtimeStatus): com o realtime de pé o sinal
+ * `TicketChatActivity` invalida a consulta e não há polling.
+ */
+export function useCurrentTicketChat(
+  ticketId: string | undefined,
+  enabled = true,
+  refetchInterval: number | false = false,
+) {
   return useQuery({
     queryKey: KEYS.state(ticketId ?? ""),
     queryFn: () => ticketChatApi.getCurrent(ticketId!),
     enabled: !!ticketId && enabled,
     staleTime: 5_000,
+    refetchInterval,
   });
 }
 
@@ -43,12 +54,14 @@ export function useTicketChatMessages(
   ticketId: string | undefined,
   sessionId: string | undefined,
   enabled = true,
+  refetchInterval: number | false = false,
 ) {
   return useQuery({
     queryKey: KEYS.messages(ticketId ?? "", sessionId ?? ""),
     queryFn: () => ticketChatApi.listMessages(ticketId!, sessionId!, 0, 300),
     enabled: !!ticketId && !!sessionId && enabled,
     staleTime: 2_000,
+    refetchInterval,
   });
 }
 
@@ -64,6 +77,16 @@ export function useTicketChatHistory(ticketId: string | undefined, enabled = tru
     queryFn: () => ticketChatApi.history(ticketId!, 0, take),
     enabled: !!ticketId && enabled,
     staleTime: 30_000,
+
+    // "Carregar mais" troca o `take`, e o take faz parte da CHAVE da consulta:
+    // sem placeholder a lista ficaria vazia durante o fetch e a conversa que o
+    // atendente estava lendo sairia da tela (o efeito de seleção caía para a
+    // sessão corrente/mais recente).
+    //
+    // Só reaproveita dados do MESMO chamado — trocar de chamado não pode
+    // exibir as conversas do anterior por um instante.
+    placeholderData: (previousData, previousQuery) =>
+      previousQuery?.queryKey?.[2] === (ticketId ?? "") ? previousData : undefined,
   });
 }
 

@@ -319,7 +319,18 @@ export default function TicketChatHistory({ ticketId, agentId, clientId, siteId,
                   <p className="text-sm text-muted">Nenhuma mensagem nesta conversa.</p>
                 )}
 
-                {(messages.data ?? []).map((message) => (
+                {(messages.data ?? []).map((message) => {
+                  if (String(message.authorKind).toLowerCase() === "system") {
+                    return (
+                      <p
+                        key={message.id || String(message.sequenceNumber)}
+                        className="mx-auto max-w-[85%] rounded-full border border-border bg-surface-light px-3 py-1 text-center text-[11px] text-muted"
+                      >
+                        {message.body}
+                      </p>
+                    );
+                  }
+                  return (
                   <div
                     key={message.id || String(message.sequenceNumber)}
                     className={"flex flex-col " + (isOwnMessage(message) ? "items-end" : "items-start")}
@@ -353,7 +364,8 @@ export default function TicketChatHistory({ ticketId, agentId, clientId, siteId,
                         (message.createdAt ? " · " + formatDateTime(message.createdAt) : "")}
                     </span>
                   </div>
-                ))}
+                  );
+                })}
               </div>
 
               <p className="border-t border-border px-4 py-2 text-xs text-muted">

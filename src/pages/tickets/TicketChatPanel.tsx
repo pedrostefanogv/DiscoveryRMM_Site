@@ -13,6 +13,7 @@ import {
   useTicketChatMessages,
 } from "@/hooks/useTicketChat";
 import { useTicketChatRealtime } from "@/hooks/useTicketChatRealtime";
+import { useRealtimeStatus } from "@/hooks/useRealtimeStatus";
 import { openTicketChatWindow, PopupBlockedError } from "./ticketChatLauncher";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -85,16 +86,60 @@ function statusMessage(session: TicketChatSession | null | undefined): string | 
 
 export default function TicketChatPanel({ ticketId, agentId, clientId, siteId, canManage }: TicketChatPanelProps) {
   const [draft, setDraft] = useState("");
-  const [pendingUploads, setPendingUploads] = useState<Array<{ key: string; fileName: string; attachmentId?: string }>>([]);
+  // previewUrl: miniatura do arquivo local ANTES de enviar (imagens).
+  const [pendingUploads, setPendingUploads] = useState<
+    Array<{ key: string; fileName: string; attachmentId?: string; previewUrl?: string }>
+  >([]);
   const [lightbox, setLightbox] = useState<{ url: string; fileName: string } | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  const current = useCurrentTicketChat(ticketId);
-  const activeSession = current.data?.session ?? null;
-  const sessionId = activeSession?.id;
+  // Rede de segurança da conversa ao vivo.
+  //
+  // O caminho normal é o NATS: o servidor publica `TicketChatActivity` e o sinal
+  // invalida as consultas. Isso falha em dois cenários:
+  //   1. o NATS do navegador está fora (queda/reconexão);
+  //   2. o NATS está CONECTADO mas o subject do chamado não está na allow-list do
+  //      token — o `subscribe` é ignorado em silêncio e nenhum evento chega.
+  // No (2) não há erro para detectar, então a única garantia é reconciliar por
+  // REST. A conversa é o único lugar em que isso importa, então o intervalo é
+  // curto quando o realtime está fora e LENTO quando está de pé (rede de
+  // segurança, não polling de verdade).
+  // Medição no servidor: o agent envia as mensagens uma a uma (created_at com
+  // 2–3s de intervalo). Quando o operador via "duas ou três de uma vez", o que
+  // atrasava era a ATUALIZAÇÃO da tela, não o envio — o sinal NATS
+  // (`TicketChatActivity`) não estava chegando a tempo, e sem sinal o único
+  // gatilho era o foco da janela.
+  //
+  // Com o intervalo abaixo a conversa converge em no máximo alguns segundos em
+  // QUALQUER modo de falha (NATS fora, subject fora da allow-list do token,
+  // reconexão). Com o realtime de pé o sinal continua sendo o caminho rápido —
+  // isto é rede de segurança, não substituição.
+  const realtime = useRealtimeStatus();
+  const messagesIntervalMs = realtime.natsConnected ? 5_000 : 3_000;
 
-  const messagesQuery = useTicketChatMessages(ticketId, sessionId, Boolean(sessionId));
+  const current = useCurrentTicketChat(ticketId, true, realtime.natsConnected ? 10_000 : 5_000);
+  const activeSession = current.data?.session ?? null;
+
+  // Quando a conversa termina a sessão sai da consulta (`hasSession` = false) e
+  // a thread desaparecia da tela. Guardamos a última sessão para MANTER a
+  // conversa visível em leitura: o operador continua lendo o histórico, vê quem
+  // encerrou e a janela não "esvazia" sozinha.
+  const [lastSession, setLastSession] = useState<TicketChatSession | null>(null);
+  useEffect(() => {
+    if (activeSession) setLastSession(activeSession);
+  }, [activeSession]);
+
+  const session = activeSession ?? lastSession;
+  const sessionId = session?.id;
+  const sessionEnded = !activeSession && Boolean(lastSession);
+
+  const messagesQuery = useTicketChatMessages(
+    ticketId,
+    sessionId,
+    Boolean(sessionId),
+    messagesIntervalMs,
+  );
 
   const start = useStartTicketChat(ticketId);
   const retry = useRetryTicketChatInvite(ticketId);
@@ -172,7 +217,12 @@ export default function TicketChatPanel({ ticketId, agentId, clientId, siteId, c
       {
         onSuccess: () => {
           setDraft("");
-          setPendingUploads([]);
+          setPendingUploads((prev) => {
+            prev.forEach((item) => {
+              if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
+            });
+            return [];
+          });
         },
         onError: () => toast.error("Falha ao enviar a mensagem."),
       },
@@ -184,7 +234,8 @@ export default function TicketChatPanel({ ticketId, agentId, clientId, siteId, c
 
     for (const file of Array.from(files)) {
       const key = file.name + ":" + file.size + ":" + Date.now();
-      setPendingUploads((prev) => [...prev, { key, fileName: file.name }]);
+      const previewUrl = file.type.startsWith("image/") ? URL.createObjectURL(file) : undefined;
+      setPendingUploads((prev) => [...prev, { key, fileName: file.name, previewUrl }]);
 
       try {
         const prepared = await ticketChatApi.prepareUpload(ticketId, sessionId, {
@@ -212,7 +263,11 @@ export default function TicketChatPanel({ ticketId, agentId, clientId, siteId, c
           prev.map((item) => (item.key === key ? { ...item, attachmentId: attachment.id } : item)),
         );
       } catch (error) {
-        setPendingUploads((prev) => prev.filter((item) => item.key !== key));
+        setPendingUploads((prev) => {
+          const item = prev.find((entry) => entry.key === key);
+          if (item?.previewUrl) URL.revokeObjectURL(item.previewUrl);
+          return prev.filter((entry) => entry.key !== key);
+        });
         console.error("[ticket-chat] falha no upload", error);
         toast.error("Falha ao anexar " + file.name);
       }
@@ -236,13 +291,16 @@ export default function TicketChatPanel({ ticketId, agentId, clientId, siteId, c
     setLightbox(null);
   }
 
-  const sessionForUi = activeSession;
+  const sessionForUi = session;
   const notice = statusMessage(sessionForUi);
   const canSend = sessionForUi?.status === "Active" && canManage;
   const canStart = canManage && !disabledReason && (!sessionForUi || sessionForUi.status === "Ended" || sessionForUi.status === "Declined" || sessionForUi.status === "Expired");
 
   return (
-    <div className="space-y-4">
+    // Coluna flex de altura cheia: cabeçalho/estado no topo, conversa rolando no
+    // meio e o compositor ANCORADO no rodapé (antes ele rolava junto com as
+    // mensagens e ficava cortado).
+    <div className="flex min-h-0 flex-1 flex-col gap-4">
       {/* Barra de estado e ações */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
@@ -282,12 +340,18 @@ export default function TicketChatPanel({ ticketId, agentId, clientId, siteId, c
       </div>
 
       {disabledReason && !sessionForUi && <p className="text-sm text-muted">{disabledReason}</p>}
+
+      {sessionEnded && (
+        <p className="rounded-lg border border-border bg-surface-light px-3 py-2 text-xs text-muted">
+          Conversa encerrada. A janela continua aberta para leitura — o histórico fica no chamado.
+        </p>
+      )}
       {notice && <p className="text-sm text-muted">{notice}</p>}
 
       {/* Conversa ativa */}
       {sessionForUi && (
-        <div className="rounded-xl border border-border">
-          <div className="max-h-96 space-y-3 overflow-y-auto p-4">
+        <div className="flex min-h-0 flex-1 flex-col rounded-xl border border-border">
+          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
             {messagesQuery.isLoading && <p className="text-sm text-muted">Carregando mensagens…</p>}
             {!messagesQuery.isLoading && messages.length === 0 && (
               <p className="text-sm text-muted">
@@ -297,7 +361,18 @@ export default function TicketChatPanel({ ticketId, agentId, clientId, siteId, c
               </p>
             )}
 
-            {messages.map((message) => (
+            {messages.map((message) => {
+              if (String(message.authorKind).toLowerCase() === "system") {
+                return (
+                  <p
+                    key={message.id || String(message.sequenceNumber)}
+                    className="self-center max-w-[85%] rounded-full border border-border bg-surface-light px-3 py-1 text-center text-[11px] text-muted"
+                  >
+                    {message.body}
+                  </p>
+                );
+              }
+              return (
               <div
                 key={message.id || String(message.sequenceNumber)}
                 className={"flex flex-col " + (isOwnMessage(message) ? "items-end" : "items-start")}
@@ -315,14 +390,12 @@ export default function TicketChatPanel({ ticketId, agentId, clientId, siteId, c
                 {message.attachments?.length > 0 && (
                   <div className="mt-1 flex flex-wrap gap-2">
                     {message.attachments.map((attachment) => (
-                      <button
+                      <MessageAttachmentPreview
                         key={attachment.id}
-                        type="button"
-                        onClick={() => openAttachment(attachment)}
-                        className="flex items-center gap-1 rounded-lg border border-border bg-surface-light px-2 py-1 text-xs text-foreground hover:border-primary/60"
-                      >
-                        <Paperclip className="h-3 w-3" /> {attachment.fileName}
-                      </button>
+                        ticketId={ticketId}
+                        attachment={attachment}
+                        onOpen={openAttachment}
+                      />
                     ))}
                   </div>
                 )}
@@ -331,18 +404,31 @@ export default function TicketChatPanel({ ticketId, agentId, clientId, siteId, c
                     (message.createdAt ? " · " + formatDateTime(message.createdAt) : "")}
                 </span>
               </div>
-            ))}
+              );
+            })}
             <div ref={bottomRef} />
           </div>
 
           {/* Composer */}
-          <div className="border-t border-border p-3">
+          <div className="shrink-0 border-t border-border p-3">
             {pendingUploads.length > 0 && (
               <div className="mb-2 flex flex-wrap gap-2">
                 {pendingUploads.map((item) => (
-                  <span key={item.key} className="rounded-lg border border-border bg-surface-light px-2 py-1 text-xs">
-                    {item.fileName}
-                    {!item.attachmentId ? " (enviando…)" : ""}
+                  <span
+                    key={item.key}
+                    className="flex items-center gap-2 rounded-lg border border-border bg-surface-light px-2 py-1 text-xs"
+                  >
+                    {item.previewUrl ? (
+                      <img
+                        src={item.previewUrl}
+                        alt={item.fileName}
+                        className="h-10 w-10 rounded object-cover"
+                      />
+                    ) : (
+                      <Paperclip className="h-3 w-3" />
+                    )}
+                    <span className="max-w-[180px] truncate">{item.fileName}</span>
+                    {!item.attachmentId ? <span className="text-muted">enviando…</span> : null}
                   </span>
                 ))}
               </div>
@@ -369,8 +455,8 @@ export default function TicketChatPanel({ ticketId, agentId, clientId, siteId, c
                 <Paperclip className="h-4 w-4" />
               </Button>
               <textarea
-                className="min-h-[38px] flex-1 resize-none rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground"
-                rows={1}
+                className="min-h-[52px] flex-1 resize-none rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground"
+                rows={2}
                 placeholder={canSend ? "Escreva para o usuário… (Enter envia, Shift+Enter quebra linha)" : "A conversa não está ativa."}
                 value={draft}
                 disabled={!canSend}
@@ -406,6 +492,78 @@ export default function TicketChatPanel({ ticketId, agentId, clientId, siteId, c
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * Anexo já enviado: miniatura para imagens, chip para os demais tipos.
+ *
+ * A imagem vem do endpoint autenticado do chat (o blob é baixado e vira object
+ * URL) — é o que dá o preview ANTES de abrir o lightbox, inclusive para prints
+ * enviados pelo usuário. O object URL é revogado no unmount.
+ */
+function MessageAttachmentPreview({
+  ticketId,
+  attachment,
+  onOpen,
+}: {
+  ticketId: string;
+  attachment: TicketChatAttachment;
+  onOpen: (attachment: TicketChatAttachment) => void;
+}) {
+  const isImage = (attachment.contentType ?? "").startsWith("image/");
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const urlRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!isImage) return undefined;
+
+    let disposed = false;
+
+    void (async () => {
+      try {
+        const response = await apiFetchResponse(ticketChatApi.attachmentUrl(ticketId, attachment.id));
+        if (!response.ok) return;
+
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        urlRef.current = url;
+        if (!disposed) setPreviewUrl(url);
+      } catch {
+        // Sem miniatura o chip continua clicável — nunca quebra a conversa.
+      }
+    })();
+
+    return () => {
+      disposed = true;
+      if (urlRef.current) {
+        URL.revokeObjectURL(urlRef.current);
+        urlRef.current = null;
+      }
+    };
+  }, [attachment.id, isImage, ticketId]);
+
+  if (isImage && previewUrl) {
+    return (
+      <button
+        type="button"
+        onClick={() => onOpen(attachment)}
+        title={attachment.fileName}
+        className="overflow-hidden rounded-lg border border-border hover:border-primary/60"
+      >
+        <img src={previewUrl} alt={attachment.fileName} className="h-24 w-32 object-cover" />
+      </button>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => onOpen(attachment)}
+      className="flex items-center gap-1 rounded-lg border border-border bg-surface-light px-2 py-1 text-xs text-foreground hover:border-primary/60"
+    >
+      <Paperclip className="h-3 w-3" /> {attachment.fileName}
+    </button>
   );
 }
 
