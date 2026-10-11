@@ -20,6 +20,8 @@ import {
   useDeleteTicket,
 } from '@/hooks/useTickets';
 import { useTicketMacros } from '@/hooks/useSupportProductivity';
+import { useAuthorization } from '@/auth/authorization';
+import TicketChatPanel from './TicketChatPanel';
 import { TicketRatingCard } from '@/components/tickets/TicketRatingCard';
 import { TicketStateBadge } from '@/components/tickets/TicketStateBadge';
 import { WatchersSection } from '@/components/tickets/WatchersSection';
@@ -73,7 +75,10 @@ import {
   timelineMetaFor,
 } from '@/utils/ticketTimeline';
 
-type Tab = 'comments' | 'timeline' | 'attachments' | 'automation' | 'ai';
+type Tab = 'comments' | 'timeline' | 'attachments' | 'automation' | 'ai' | 'chat';
+
+/** Permissões que habilitam iniciar/responder o chat do chamado. */
+const TICKET_CHAT_PERMISSIONS = ['tickets.chat', 'tickets.*', 'tickets.edit', 'admin.*'];
 
 type CommentSeed = {
   nonce: number;
@@ -120,7 +125,12 @@ export default function TicketDetail() {
   const comments = useTicketComments(id!);
   const states   = useWorkflowStates();
   const iamUsers = useIamUsers();
-  const [tab, setTab] = useState<Tab>('comments');
+  // ?tab=chat permite deep-link (notificação de nova mensagem no chat).
+  const [tab, setTab] = useState<Tab>(() => {
+    if (typeof window === 'undefined') return 'comments';
+    const requested = new URLSearchParams(window.location.search).get('tab');
+    return requested === 'chat' ? 'chat' : 'comments';
+  });
   const [commentSeed, setCommentSeed] = useState<CommentSeed | null>(null);
   const iamUsersData = useMemo(
     () => (Array.isArray(iamUsers.data) ? iamUsers.data : []),
@@ -154,6 +164,10 @@ export default function TicketDetail() {
   );
 
   const attachmentsEnabled = attachmentSettings.data?.enabled !== false;
+
+  // Chat do chamado: só o atendente com permissão de edição pode iniciar/responder.
+  const authz = useAuthorization();
+  const canManageChat = authz.hasAnyPermission(TICKET_CHAT_PERMISSIONS);
 
   // Effect registrado ANTES dos returns condicionais: chamá-lo depois do
   // "if (ticket.isLoading) return" mudava a ORDEM de hooks entre o render de
@@ -281,6 +295,13 @@ export default function TicketDetail() {
               >
                 IA
               </button>
+              <button
+                className={`px-4 py-3 text-sm font-medium transition-colors ${tab === 'chat' ? 'border-b-2 border-primary text-foreground' : 'text-muted hover:text-foreground'}`}
+                onClick={() => setTab('chat')}
+              >
+                <Monitor className="inline h-4 w-4 mr-1" />
+                Chat
+              </button>
             </div>
             <div className="p-4">
               {tab === 'comments' ? (
@@ -309,6 +330,14 @@ export default function TicketDetail() {
                     setTab('comments');
                     toast.success('Resposta sugerida enviada para o rascunho do comentario.');
                   }}
+                />
+              ) : tab === 'chat' ? (
+                <TicketChatPanel
+                  ticketId={id!}
+                  agentId={t.agentId}
+                  clientId={t.clientId}
+                  siteId={t.siteId}
+                  canManage={canManageChat}
                 />
               ) : attachmentsEnabled ? (
                 <AttachmentsPanel
