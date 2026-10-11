@@ -213,4 +213,49 @@ describe('TicketFieldsSection', () => {
     // Com alteração pendente o botão aparece.
     expect(screen.getByRole('button', { name: 'Salvar' })).toBeTruthy();
   });
+
+  it('campos do chamado usam o mesmo controle dos campos do departamento', () => {
+    schemaState.data = [];
+    valuesState.data = [];
+    definitionsState.data = [
+      {
+        id: 'd-lista',
+        name: 'sistemas',
+        label: 'Sistemas',
+        description: null,
+        scopeType: 4, // Ticket
+        dataType: 7, // ListBox
+        isActive: true,
+        options: ['ERP', 'CRM'],
+        createdAt: null,
+        updatedAt: null,
+      },
+      {
+        id: 'd-bool',
+        name: 'aceite',
+        label: 'Aceite',
+        description: null,
+        scopeType: 4,
+        dataType: 3, // Boolean
+        isActive: true,
+        options: [],
+        createdAt: null,
+        updatedAt: null,
+      },
+    ];
+
+    render(<TicketFieldsSection ticketId="t1" departmentId="dep1" />);
+
+    // ListBox com opções = checkboxes (igual aos campos do departamento/agent).
+    const erp = screen.getByLabelText('ERP') as HTMLInputElement;
+    expect(erp.type).toBe('checkbox');
+
+    // Boolean usa Selecione.../Sim/Não (antes: "Não definido/Verdadeiro/Falso").
+    const aceite = screen.getByLabelText('Aceite') as HTMLSelectElement;
+    expect(Array.from(aceite.options).map((option) => option.textContent)).toEqual([
+      'Selecione...',
+      'Sim',
+      'Não',
+    ]);
+  });
 });

@@ -2,14 +2,14 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { AlertTriangle, Shield } from 'lucide-react';
 
-import { Badge, Button, Input, Loading, Select, TextArea } from '@/components/ui';
+import { Badge, Button, Loading } from '@/components/ui';
 import {
   CustomFieldDataType,
   CustomFieldScopeType,
   formatCustomFieldValue,
   parseCustomFieldValue,
 } from '@/api';
-import type { CustomFieldDefinition } from '@/api';
+import type { CustomFieldDefinition, TicketSchemaField } from '@/api';
 import { TicketSchemaFieldInput } from '@/components/tickets/TicketSchemaFieldInput';
 import { draftFromCustomFieldValue } from '@/utils/ticketTemplateDefaults';
 import { parseCustomFieldDraft, validateTicketSchemaField } from '@/utils/ticketCustomFields';
@@ -465,8 +465,8 @@ function AdditionalTicketFields({ ticketId }: { ticketId: string }) {
             <dd className="text-foreground">
               <div className="flex items-start gap-2">
                 <div className="min-w-0 flex-1">
-                  <TicketCustomFieldInput
-                    definition={definition}
+                  <TicketSchemaFieldInput
+                    field={schemaFieldFromDefinition(definition)}
                     hideLabel
                     value={drafts[definition.id] ?? ''}
                     onChange={(value) => {
@@ -491,9 +491,8 @@ function AdditionalTicketFields({ ticketId }: { ticketId: string }) {
                   </Button>
                 )}
               </div>
-              {definition.description && (
-                <p className="mt-1 text-xs text-muted">{definition.description}</p>
-              )}
+              {/* A descrição do campo é exibida pelo próprio controle (dica do
+                  schema), igual aos campos do departamento — sem duplicar. */}
               {valueItem?.updatedAt && (
                 <p className="mt-1 text-[11px] text-muted">
                   Atualizado em{' '}
@@ -508,120 +507,28 @@ function AdditionalTicketFields({ ticketId }: { ticketId: string }) {
   );
 }
 
-function TicketCustomFieldInput({
-  definition,
-  value,
-  onChange,
-  hideLabel = false,
-}: {
-  definition: CustomFieldDefinition;
-  value: string;
-  onChange: (value: string) => void;
-  /**
-   * Não repete o nome do campo no controle: o rótulo já é exibido no `dt` do
-   * resumo. O nome continua acessível via `aria-label`.
-   */
-  hideLabel?: boolean;
-}) {
-  const label = hideLabel ? undefined : 'Valor';
-  const ariaLabel = hideLabel ? definition.label : undefined;
-
-  switch (definition.dataType) {
-    case CustomFieldDataType.Boolean:
-      return (
-        <Select
-          label={label}
-          aria-label={ariaLabel}
-          value={value}
-          options={[
-            { value: '', label: 'Não definido' },
-            { value: 'true', label: 'Verdadeiro' },
-            { value: 'false', label: 'Falso' },
-          ]}
-          onChange={(event) => onChange(event.target.value)}
-        />
-      );
-    case CustomFieldDataType.Dropdown:
-      return (
-        <Select
-          label={label}
-          aria-label={ariaLabel}
-          value={value}
-          options={[
-            { value: '', label: 'Selecione...' },
-            ...definition.options.map((option) => ({
-              value: option,
-              label: option,
-            })),
-          ]}
-          onChange={(event) => onChange(event.target.value)}
-        />
-      );
-    case CustomFieldDataType.ListBox:
-      return (
-        <TextArea
-          label={label}
-          aria-label={ariaLabel}
-          rows={2}
-          value={value}
-          hint={
-            definition.options.length > 0
-              ? `Opções permitidas: ${definition.options.join(', ')}`
-              : 'Separe múltiplos valores por vírgula.'
-          }
-          onChange={(event) => onChange(event.target.value)}
-        />
-      );
-    case CustomFieldDataType.Integer:
-      return (
-        <Input
-          label={label}
-          aria-label={ariaLabel}
-          type="number"
-          step="1"
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-        />
-      );
-    case CustomFieldDataType.Decimal:
-      return (
-        <Input
-          label={label}
-          aria-label={ariaLabel}
-          type="number"
-          step="any"
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-        />
-      );
-    case CustomFieldDataType.Date:
-      return (
-        <Input
-          label={label}
-          aria-label={ariaLabel}
-          type="date"
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-        />
-      );
-    case CustomFieldDataType.DateTime:
-      return (
-        <Input
-          label={label}
-          aria-label={ariaLabel}
-          type="datetime-local"
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-        />
-      );
-    default:
-      return (
-        <Input
-          label={label}
-          aria-label={ariaLabel}
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-        />
-      );
-  }
+/**
+ * Campo do chamado (escopo do ticket) convertido para o formato do render de
+ * schema: assim o MESMO tipo de campo tem o MESMO controle em qualquer lugar
+ * (campos do departamento, perguntas do modelo e campos do chamado).
+ */
+function schemaFieldFromDefinition(definition: CustomFieldDefinition): TicketSchemaField {
+  return {
+    definitionId: definition.id,
+    name: definition.name,
+    label: definition.label,
+    description: definition.description,
+    dataType: definition.dataType,
+    isRequired: false,
+    isInternal: false,
+    isActive: definition.isActive,
+    options: Array.isArray(definition.options) ? definition.options : [],
+    validationRegex: null,
+    inputMask: null,
+    minLength: null,
+    maxLength: null,
+    minValue: null,
+    maxValue: null,
+    currentValueJson: null,
+  };
 }
