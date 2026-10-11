@@ -25,6 +25,8 @@ export interface TicketChatAttachment {
 export interface TicketChatMessage {
   id: string;
   sequenceNumber: number;
+  /** Chave de idempotência do emissor (casa a bolha otimista com a canônica). */
+  clientMessageId?: string;
   authorKind: TicketChatAuthorKind | string;
   authorUserId?: string | null;
   authorName?: string | null;

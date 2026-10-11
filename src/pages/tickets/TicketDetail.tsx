@@ -21,7 +21,7 @@ import {
 } from '@/hooks/useTickets';
 import { useTicketMacros } from '@/hooks/useSupportProductivity';
 import { useAuthorization } from '@/auth/authorization';
-import TicketChatPanel from './TicketChatPanel';
+import TicketChatHistory from './TicketChatHistory';
 import { TicketRatingCard } from '@/components/tickets/TicketRatingCard';
 import { TicketStateBadge } from '@/components/tickets/TicketStateBadge';
 import { WatchersSection } from '@/components/tickets/WatchersSection';
@@ -332,7 +332,9 @@ export default function TicketDetail() {
                   }}
                 />
               ) : tab === 'chat' ? (
-                <TicketChatPanel
+                // Lista + histórico (somente leitura): a conversa ao vivo fica
+                // na janela separada, para sobreviver à navegação do atendente.
+                <TicketChatHistory
                   ticketId={id!}
                   agentId={t.agentId}
                   clientId={t.clientId}
