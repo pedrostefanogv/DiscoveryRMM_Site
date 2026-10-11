@@ -2007,6 +2007,65 @@ function CommentForm({
   const [content, setContent] = useState('');
   const [isInternal, setIsInternal] = useState(false);
 
+  // Anexos do comentario: o backend guarda o anexo no CHAMADO (EntityType
+  // "Ticket"), entao o arquivo/print entra no mesmo fluxo pre-assinado do painel
+  // de anexos — a diferenca e poder anexar direto do composer, junto com o
+  // comentario (antes so existia o painel "Anexos").
+  const prepareUpload = usePrepareTicketUpload();
+  const completeUpload = useCompleteTicketUpload();
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [pending, setPending] = useState<
+    Array<{ key: string; fileName: string; status: 'uploading' | 'done' | 'error'; error?: string }>
+  >([]);
+  const uploading = pending.some((item) => item.status === 'uploading');
+
+  const uploadOne = async (file: File) => {
+    const key = `${file.name}:${file.size}:${Date.now()}:${Math.random().toString(16).slice(2)}`;
+    setPending((prev) => [...prev, { key, fileName: file.name, status: 'uploading' }]);
+
+    const contentType = file.type || 'application/octet-stream';
+    try {
+      const prepared = await prepareUpload.mutateAsync({
+        ticketId,
+        data: { fileName: file.name, contentType, sizeBytes: file.size },
+      });
+
+      const response = await fetch(prepared.uploadUrl, {
+        method: prepared.httpMethod || 'PUT',
+        headers: { 'Content-Type': contentType },
+        body: file,
+      });
+      if (!response.ok) throw new Error(`upload HTTP ${response.status}`);
+
+      await completeUpload.mutateAsync({
+        ticketId,
+        data: {
+          attachmentId: prepared.attachmentId,
+          objectKey: prepared.objectKey,
+          fileName: file.name,
+          contentType,
+          sizeBytes: file.size,
+          // Ignorado pelo backend (autoria vem do token), mas exigido pelo tipo.
+          uploadedBy: '',
+        },
+      });
+
+      setPending((prev) => prev.map((item) => (item.key === key ? { ...item, status: 'done' } : item)));
+      toast.success(`Anexo enviado: ${file.name}`);
+    } catch (error) {
+      const detail = error instanceof Error && error.message ? error.message : 'falha no anexo';
+      setPending((prev) =>
+        prev.map((item) => (item.key === key ? { ...item, status: 'error', error: detail } : item)),
+      );
+      toast.error(`Não foi possível anexar ${file.name} — ${detail}`);
+    }
+  };
+
+  const handleFiles = (files: FileList | File[] | null) => {
+    if (!files) return;
+    Array.from(files).forEach((file) => { void uploadOne(file); });
+  };
+
   const macroOptions = [
     { value: '', label: 'Inserir macro...' },
     ...(macrosQuery.data ?? []).map((m) => ({ value: m.id, label: m.name })),
@@ -2033,6 +2092,10 @@ function CommentForm({
   const handleSubmit = () => {
     const trimmed = content.trim();
     if (trimmed.length < 3) return;
+    if (uploading) {
+      toast.error('Aguarde o envio dos anexos terminar.');
+      return;
+    }
     addComment.mutate(
       // Autoria é derivada do token no backend — não enviar author.
       { id: ticketId, data: { content: trimmed, isInternal } },
@@ -2040,6 +2103,8 @@ function CommentForm({
         onSuccess: () => {
           setContent('');
           setIsInternal(false);
+          // Anexos enviados ja estao no chamado (ver painel "Anexos").
+          setPending((prev) => prev.filter((item) => item.status !== 'done'));
           // Garante que o comentário recém-criado apareça sem F5.
           onAdded?.();
           toast.success('Comentário adicionado');
@@ -2059,14 +2124,64 @@ function CommentForm({
           onChange={(event) => applyMacro(event.target.value)}
         />
       )}
-      <TextArea placeholder="Escreva um comentário... (mín. 3 chars)" value={content} onChange={e => setContent(e.target.value)} />
+      {/* O print colado (Ctrl+V) da ferramenta de captura entra como anexo. */}
+      <div
+        onPaste={(event) => {
+          const files = event.clipboardData?.files;
+          if (files && files.length > 0) {
+            event.preventDefault();
+            handleFiles(files);
+          }
+        }}
+      >
+        <TextArea placeholder="Escreva um comentário... (mín. 3 chars)" value={content} onChange={e => setContent(e.target.value)} />
+      </div>
+      {pending.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {pending.map((item) => (
+            <span key={item.key} className="flex items-center gap-2 rounded-lg border border-border bg-surface-light px-2 py-1 text-xs">
+              <Paperclip className="h-3 w-3" />
+              <span className="max-w-[180px] truncate">{item.fileName}</span>
+              {item.status === 'uploading' && <Loader2 className="h-3 w-3 animate-spin" />}
+              {item.status === 'done' && <CheckCircle className="h-3 w-3 text-success" />}
+              {item.status === 'error' && (
+                <>
+                  <XCircle className="h-3 w-3 text-danger" />
+                  <span className="text-danger" title={item.error}>falhou</span>
+                </>
+              )}
+            </span>
+          ))}
+        </div>
+      )}
       <div className="flex items-center justify-between">
-        <label className="flex items-center gap-2 text-sm text-muted">
-          <input type="checkbox" checked={isInternal} onChange={e => setIsInternal(e.target.checked)} className="rounded bg-surface-light border-border" />
-          {isInternal ? <Lock className="h-3.5 w-3.5" /> : <Unlock className="h-3.5 w-3.5" />}
-          Nota interna
-        </label>
-        <Button size="sm" onClick={handleSubmit} loading={addComment.isPending} disabled={content.trim().length < 3}>
+        <div className="flex items-center gap-3">
+          <input
+            ref={fileRef}
+            type="file"
+            multiple
+            hidden
+            onChange={(event) => {
+              handleFiles(event.target.files);
+              event.target.value = '';
+            }}
+          />
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => fileRef.current?.click()}
+            disabled={uploading}
+            title="Anexar arquivo ou print (ou cole com Ctrl+V)"
+          >
+            <Paperclip className="h-4 w-4" /> Anexar
+          </Button>
+          <label className="flex items-center gap-2 text-sm text-muted">
+            <input type="checkbox" checked={isInternal} onChange={e => setIsInternal(e.target.checked)} className="rounded bg-surface-light border-border" />
+            {isInternal ? <Lock className="h-3.5 w-3.5" /> : <Unlock className="h-3.5 w-3.5" />}
+            Nota interna
+          </label>
+        </div>
+        <Button size="sm" onClick={handleSubmit} loading={addComment.isPending} disabled={content.trim().length < 3 || uploading}>
           <Send className="h-4 w-4" /> Enviar
         </Button>
       </div>

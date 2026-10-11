@@ -183,6 +183,15 @@ describe("TicketDetail comentarios em baloes", () => {
     expect(screen.getAllByText("Interno").length).toBeGreaterThan(0);
   });
 
+  it("permite anexar arquivo/print direto do composer de comentario", () => {
+    render(<TicketDetail />, { wrapper: createWrapper() });
+
+    // Antes só havia o painel "Anexos": quem comentava precisava sair do
+    // composer. Agora o comentário aceita arquivo (seletor) e print (Ctrl+V).
+    expect(screen.getByRole("button", { name: /anexar/i })).toBeTruthy();
+    expect(screen.getByTitle(/Anexar arquivo ou print/i)).toBeTruthy();
+  });
+
   it("usa o login do IAM quando o JWT nao traz unique_name", async () => {
     // Token sem unique_name: so o fallback pelo IAM pode identificar o autor.
     CURRENT_TOKEN = makeToken({ sub: "user-2" });
