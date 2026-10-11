@@ -32,6 +32,22 @@ describe("chat do chamado — mensagens de sistema e fim de conversa", () => {
     expect(panel).toContain('toLowerCase() === "system"');
   });
 
+  it("desabilita o campo de texto e o Enviar quando a conversa termina", () => {
+    const panel = source("TicketChatPanel.tsx");
+    // O último snapshot da sessão chega com status "Active": sem normalizar para
+    // "Ended", o compositor continuava utilizável numa conversa encerrada.
+    expect(panel).toContain('session?.status === "Active"');
+    expect(panel).toContain("const sessionForUi = sessionEnded");
+    expect(panel).toContain('status: "Ended"');
+    expect(panel).toContain("const canSend = sessionForUi?.status");
+  });
+
+  it("mostra a causa devolvida pela API nas falhas de anexo/envio", () => {
+    const panel = source("TicketChatPanel.tsx");
+    expect(panel).toContain("function describeError(");
+    expect(panel).toContain("describeError(error");
+  });
+
   it("o histórico somente-leitura também renderiza a nota de sistema", () => {
     const history = source("TicketChatHistory.tsx");
     expect(history).toContain('toLowerCase() === "system"');

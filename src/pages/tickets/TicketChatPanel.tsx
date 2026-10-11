@@ -60,6 +60,22 @@ function isOwnMessage(message: TicketChatMessage): boolean {
   return String(message.authorKind).toLowerCase() === "support";
 }
 
+/**
+ * Junta o texto amigável com a mensagem devolvida pela API.
+ *
+ * O servidor é quem sabe o motivo (ex.: object storage não configurado em
+ * Configurações > Servidor). Antes o anexo falhava só com "Falha ao anexar X",
+ * sem a causa — o operador não tinha como saber que era configuração do
+ * servidor.
+ */
+function describeError(error: unknown, fallback: string): string {
+  const candidate = error as { message?: unknown } | null;
+  const raw = candidate && typeof candidate.message === "string" ? candidate.message.trim() : "";
+  if (!raw) return fallback;
+  const detail = raw.length > 220 ? raw.slice(0, 220) + "…" : raw;
+  return fallback + " — " + detail;
+}
+
 function statusMessage(session: TicketChatSession | null | undefined): string | null {
   if (!session) return null;
   switch (session.status) {
@@ -132,7 +148,12 @@ export default function TicketChatPanel({ ticketId, agentId, clientId, siteId, c
 
   const session = activeSession ?? lastSession;
   const sessionId = session?.id;
-  const sessionEnded = !activeSession && Boolean(lastSession);
+  // A consulta da sessão corrente devolve null quando a conversa termina, mas o
+  // último snapshot (lastSession) ainda diz "Active". Normalizar aqui é o que
+  // desabilita o compositor e esconde o "Encerrar" numa conversa já encerrada —
+  // antes o campo de texto e o botão Enviar continuavam ativos.
+  const sessionEnded = !activeSession && session?.status === "Active";
+  const sessionForUi = sessionEnded && session ? { ...session, status: "Ended" as const } : session;
 
   const messagesQuery = useTicketChatMessages(
     ticketId,
@@ -224,7 +245,8 @@ export default function TicketChatPanel({ ticketId, agentId, clientId, siteId, c
             return [];
           });
         },
-        onError: () => toast.error("Falha ao enviar a mensagem."),
+        onError: (error: unknown) =>
+          toast.error(describeError(error, "Não foi possível enviar a mensagem.")),
       },
     );
   }
@@ -269,7 +291,7 @@ export default function TicketChatPanel({ ticketId, agentId, clientId, siteId, c
           return prev.filter((entry) => entry.key !== key);
         });
         console.error("[ticket-chat] falha no upload", error);
-        toast.error("Falha ao anexar " + file.name);
+        toast.error(describeError(error, "Não foi possível anexar " + file.name));
       }
     }
   }
@@ -291,7 +313,6 @@ export default function TicketChatPanel({ ticketId, agentId, clientId, siteId, c
     setLightbox(null);
   }
 
-  const sessionForUi = session;
   const notice = statusMessage(sessionForUi);
   const canSend = sessionForUi?.status === "Active" && canManage;
   const canStart = canManage && !disabledReason && (!sessionForUi || sessionForUi.status === "Ended" || sessionForUi.status === "Declined" || sessionForUi.status === "Expired");
