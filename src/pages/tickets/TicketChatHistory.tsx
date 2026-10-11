@@ -78,8 +78,10 @@ function buildSessionList(
 }
 
 export default function TicketChatHistory({ ticketId, agentId, clientId, siteId, canManage }: TicketChatHistoryProps) {
+  const [historyTake, setHistoryTake] = useState(20);
+
   const current = useCurrentTicketChat(ticketId);
-  const history = useTicketChatHistory(ticketId);
+  const history = useTicketChatHistory(ticketId, true, historyTake);
   const start = useStartTicketChat(ticketId);
   const retry = useRetryTicketChatInvite(ticketId);
   const end = useEndTicketChat(ticketId);
@@ -267,6 +269,20 @@ export default function TicketChatHistory({ ticketId, agentId, clientId, siteId,
                 </button>
               );
             })}
+
+            {(history.data?.length ?? 0) >= historyTake && (
+              <div className="border-t border-border p-2">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="w-full"
+                  onClick={() => setHistoryTake((value) => value + 20)}
+                  disabled={history.isFetching}
+                >
+                  {history.isFetching ? "Carregando…" : "Carregar mais conversas"}
+                </Button>
+              </div>
+            )}
           </div>
         </div>
 

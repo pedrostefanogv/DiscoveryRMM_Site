@@ -32,6 +32,13 @@ const KEYS = {
   relations: (id: string) => [...KEYS.all, "relations", id] as const,
 };
 
+/**
+ * Chave da timeline do chamado. Exportada porque o realtime do chat também
+ * precisa invalidá-la: o encerramento de um chat grava um evento na linha do
+ * tempo, e o operador deve vê-lo sem recarregar a página.
+ */
+export const ticketTimelineQueryKey = (ticketId: string) => KEYS.timeline(ticketId);
+
 export function useTickets(params: TicketsQuery = {}, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: KEYS.list(params),

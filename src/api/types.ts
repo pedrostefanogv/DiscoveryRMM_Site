@@ -103,7 +103,9 @@ export type TicketActivityType =
   | "RequesterChanged"
   | "AgentChanged"
   | "AiAssigned"
-  | "AiAssignmentSuggested";
+  | "AiAssignmentSuggested"
+  | "ChatStarted"
+  | "ChatEnded";
 
 // ── Base Entities (response shapes) ────────────────────
 

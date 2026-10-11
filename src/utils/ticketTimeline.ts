@@ -18,6 +18,8 @@ import {
   Link,
   Link2,
   MessageSquare,
+  MessageSquareOff,
+  MessagesSquare,
   Monitor,
   PlusCircle,
   RotateCcw,
@@ -70,6 +72,8 @@ export const TIMELINE_META: Record<TicketActivityType, TimelineMeta> = {
   AgentChanged: { label: 'Máquina alterada', icon: Cpu, tone: 'neutral' },
   AiAssigned: { label: 'Atribuído pela IA', icon: Bot, tone: 'accent' },
   AiAssignmentSuggested: { label: 'Sugestão da IA', icon: Sparkles, tone: 'accent' },
+  ChatStarted: { label: 'Chat de suporte iniciado', icon: MessagesSquare, tone: 'accent' },
+  ChatEnded: { label: 'Chat de suporte encerrado', icon: MessageSquareOff, tone: 'neutral' },
 };
 
 /** Fallback para tipos que a API venha a adicionar antes do front. */

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "react-hot-toast";
-import { Paperclip, RefreshCw, Send, Square, X } from "lucide-react";
+import { Paperclip, RefreshCw, Send, Square } from "lucide-react";
 import { apiFetchResponse } from "@/api/client";
 import { ticketChatApi, type TicketChatAttachment, type TicketChatMessage, type TicketChatSession } from "@/api/ticket-chat";
 import { Button } from "@/components/ui";
@@ -10,7 +10,6 @@ import {
   useRetryTicketChatInvite,
   useSendTicketChatMessage,
   useStartTicketChat,
-  useTicketChatHistory,
   useTicketChatMessages,
 } from "@/hooks/useTicketChat";
 import { useTicketChatRealtime } from "@/hooks/useTicketChatRealtime";
@@ -88,7 +87,6 @@ export default function TicketChatPanel({ ticketId, agentId, clientId, siteId, c
   const [draft, setDraft] = useState("");
   const [pendingUploads, setPendingUploads] = useState<Array<{ key: string; fileName: string; attachmentId?: string }>>([]);
   const [lightbox, setLightbox] = useState<{ url: string; fileName: string } | null>(null);
-  const [historyOpen, setHistoryOpen] = useState(false);
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -97,7 +95,6 @@ export default function TicketChatPanel({ ticketId, agentId, clientId, siteId, c
   const sessionId = activeSession?.id;
 
   const messagesQuery = useTicketChatMessages(ticketId, sessionId, Boolean(sessionId));
-  const history = useTicketChatHistory(ticketId, historyOpen);
 
   const start = useStartTicketChat(ticketId);
   const retry = useRetryTicketChatInvite(ticketId);
@@ -147,18 +144,6 @@ export default function TicketChatPanel({ ticketId, agentId, clientId, siteId, c
         toast.error(extractConflictMessage(error) ?? "Não foi possível iniciar o chat.");
       },
     });
-  }
-
-  function handleOpenWindow() {
-    try {
-      openTicketChatWindow(ticketId, sessionId ?? null);
-    } catch (error) {
-      toast.error(
-        error instanceof PopupBlockedError
-          ? error.message
-          : "Não foi possível abrir a janela do chat.",
-      );
-    }
   }
 
   function handleRetry() {
@@ -278,14 +263,6 @@ export default function TicketChatPanel({ ticketId, agentId, clientId, siteId, c
         </div>
 
         <div className="flex items-center gap-2">
-          <Button size="sm" variant="ghost" onClick={() => setHistoryOpen((open) => !open)}>
-            Conversas anteriores
-          </Button>
-          {sessionForUi && canManage && (
-            <Button size="sm" onClick={handleOpenWindow} title="Mantém o chat aberto mesmo saindo do chamado">
-              Abrir janela do chat
-            </Button>
-          )}
           {sessionForUi?.status === "Pending" && canManage && (
             <Button size="sm" variant="ghost" onClick={handleRetry} disabled={retry.isPending}>
               <RefreshCw className="h-4 w-4" /> Reenviar convite
@@ -413,45 +390,6 @@ export default function TicketChatPanel({ ticketId, agentId, clientId, siteId, c
         </div>
       )}
 
-      {/* Conversas anteriores (somente leitura) */}
-      {historyOpen && (
-        <div className="rounded-xl border border-border p-4">
-          <div className="mb-2 flex items-center justify-between">
-            <h4 className="text-sm font-medium text-foreground">Conversas anteriores do chamado</h4>
-            <button type="button" onClick={() => setHistoryOpen(false)} className="text-muted hover:text-foreground">
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-
-          {history.isLoading && <p className="text-sm text-muted">Carregando histórico…</p>}
-          {!history.isLoading && (history.data?.length ?? 0) === 0 && (
-            <p className="text-sm text-muted">Nenhuma conversa encerrada para este chamado.</p>
-          )}
-
-          <ul className="space-y-2">
-            {(history.data ?? []).map((item) => (
-              <li key={item.id} className="rounded-lg border border-border bg-surface-light px-3 py-2 text-sm">
-                <div className="flex items-center justify-between">
-                  <span className="font-medium text-foreground">
-                    {STATUS_LABEL[item.status] ?? item.status}
-                    {item.startedByName ? " · " + item.startedByName : ""}
-                  </span>
-                  <span className="text-xs text-muted">{formatDateTime(item.startedAt)}</span>
-                </div>
-                <div className="text-xs text-muted">
-                  {item.messageCount} mensagem(ns)
-                  {item.endedAt ? " · encerrada em " + formatDateTime(item.endedAt) : ""}
-                  {item.endReason ? " · " + item.endReason : ""}
-                </div>
-              </li>
-            ))}
-          </ul>
-
-          <p className="mt-3 text-xs text-muted">
-            O conteúdo das conversas anteriores fica registrado no chamado e é consultável apenas aqui no console.
-          </p>
-        </div>
-      )}
 
       {/* Lightbox de imagem */}
       {lightbox && (

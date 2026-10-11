@@ -20,7 +20,8 @@ const KEYS = {
   state: (ticketId: string) => [...TICKET_CHAT_QUERY_ROOT, "state", ticketId] as const,
   messages: (ticketId: string, sessionId: string) =>
     [...TICKET_CHAT_QUERY_ROOT, "messages", ticketId, sessionId] as const,
-  history: (ticketId: string) => [...TICKET_CHAT_QUERY_ROOT, "history", ticketId] as const,
+  history: (ticketId: string, take: number) =>
+    [...TICKET_CHAT_QUERY_ROOT, "history", ticketId, take] as const,
 };
 
 function refreshChat(queryClient: ReturnType<typeof useQueryClient>) {
@@ -51,11 +52,16 @@ export function useTicketChatMessages(
   });
 }
 
-/** Conversas anteriores do chamado (somente leitura). */
-export function useTicketChatHistory(ticketId: string | undefined, enabled = true) {
+/**
+ * Conversas anteriores do chamado (somente leitura).
+ *
+ * `take` é paginado pela própria tela ("Carregar mais") e entra na chave da
+ * consulta — sem isso aumentar o take não refaria o fetch.
+ */
+export function useTicketChatHistory(ticketId: string | undefined, enabled = true, take = 20) {
   return useQuery({
-    queryKey: KEYS.history(ticketId ?? ""),
-    queryFn: () => ticketChatApi.history(ticketId!),
+    queryKey: KEYS.history(ticketId ?? "", take),
+    queryFn: () => ticketChatApi.history(ticketId!, 0, take),
     enabled: !!ticketId && enabled,
     staleTime: 30_000,
   });

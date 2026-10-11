@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { getNatsService, type DashboardEvent } from "@/api/nats";
 import { realtimeConfig } from "@/config/realtime";
 import { buildDashboardNatsSubjects, type DashboardNatsScope } from "@/utils/natsSubjects";
+import { ticketTimelineQueryKey } from "./useTickets";
 
 const NATS_ENABLED = realtimeConfig.useNats && realtimeConfig.natsEnabled;
 
@@ -94,7 +95,13 @@ export function useTicketChatRealtime(
     const onEvent = (event: DashboardEvent | Record<string, unknown>) => {
       if (disposed) return;
       if (!isTicketChatEventForTicket(event, ticketId)) return;
+
+      // Estado/lista do chat...
       void queryClient.invalidateQueries({ queryKey: TICKET_CHAT_QUERY_ROOT });
+
+      // ...e a linha do tempo: cada chat iniciado/encerrado grava um evento lá,
+      // então o operador acompanha a movimentação sem recarregar a página.
+      void queryClient.invalidateQueries({ queryKey: ticketTimelineQueryKey(ticketId) });
     };
 
     void (async () => {

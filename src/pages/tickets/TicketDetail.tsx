@@ -311,7 +311,11 @@ export default function TicketDetail() {
                   currentUserLogin={currentUserLogin}
                 />
               ) : tab === 'timeline' ? (
-                <TimelinePanel ticketId={id!} onOpenComments={() => setTab('comments')} />
+                <TimelinePanel
+                  ticketId={id!}
+                  onOpenComments={() => setTab('comments')}
+                  onOpenChat={() => setTab('chat')}
+                />
               ) : tab === 'automation' ? (
                 <AutomationLinksPanel
                   ticketId={id!}
@@ -1886,9 +1890,11 @@ function CommentsPanel({
 function TimelinePanel({
   ticketId,
   onOpenComments,
+  onOpenChat,
 }: {
   ticketId: string;
   onOpenComments?: () => void;
+  onOpenChat?: () => void;
 }) {
   const timeline = useTicketTimeline(ticketId);
 
@@ -1964,6 +1970,16 @@ function TimelinePanel({
                         className="mt-1 text-[11px] text-primary hover:underline"
                       >
                         Ver comentários
+                      </button>
+                    )}
+
+                    {(entry.activityType === 'ChatStarted' || entry.activityType === 'ChatEnded') && onOpenChat && (
+                      <button
+                        type="button"
+                        onClick={onOpenChat}
+                        className="mt-1 text-[11px] text-primary hover:underline"
+                      >
+                        Ver conversa
                       </button>
                     )}
                   </div>
