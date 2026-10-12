@@ -18,6 +18,7 @@ const AgentList = lazy(() => import('@/pages/agents/AgentList'));
 const AgentDetail = lazy(() => import('@/pages/agents/AgentDetail'));
 const RemoteDebugConsole = lazy(() => import('@/pages/agents/RemoteDebugConsole'));
 const RemoteSession = lazy(() => import('@/pages/agents/RemoteSession'));
+const AgentSupportChatWindow = lazy(() => import('@/pages/agents/AgentSupportChatWindow'));
 const TicketList = lazy(() => import('@/pages/tickets/TicketList'));
 const TicketAlertsPage = lazy(() => import('@/pages/tickets/TicketAlertsPage'));
 const AutoTicketRulesPage = lazy(() => import('@/pages/tickets/AutoTicketRulesPage'));
@@ -169,6 +170,12 @@ export const router = createBrowserRouter([
         // atendente feche ou navegue no detalhe do chamado.
         path: 'tickets/:id/chat',
         element: <LazyPage><TicketChatWindow /></LazyPage>,
+      },
+      {
+        // Janela DEDICADA do chat de suporte da MÁQUINA (sem chamado), aberta
+        // pela lista/detalhe do agent. Mesmo padrão das demais janelas.
+        path: 'agents/:id/support-chat',
+        element: <LazyPage><AgentSupportChatWindow /></LazyPage>,
       },
       {
         element: <MainLayout />,

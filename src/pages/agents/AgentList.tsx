@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useLayoutEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Monitor, Wifi, WifiOff, LayoutGrid, List, Bug, Trash2, ShieldCheck, ArrowUp, ArrowDown, RefreshCw, Move, RotateCcw, Power, Zap, ChevronRight, Bell, ArchiveRestore } from 'lucide-react';
+import { Monitor, Wifi, WifiOff, LayoutGrid, List, Bug, Trash2, ShieldCheck, ArrowUp, ArrowDown, RefreshCw, Move, RotateCcw, Power, Zap, ChevronRight, Bell, ArchiveRestore, MessageSquare } from 'lucide-react';
 import { useQueries } from '@tanstack/react-query';
 import { useAgentLabelUsage, useAgentIdsByLabel, useAgentLabelsByAgentIds } from '@/hooks/useAgentLabels';
 import { useAgentCustomFieldMap } from '@/hooks/useCustomFields';
@@ -30,6 +30,7 @@ import { useAuthorization } from '@/auth/authorization';
 import { useSendAgentNotification } from '@/hooks/useAgentAlerts';
 import { openRemoteDebugPopup } from './remoteDebugLauncher';
 import { openRemoteSessionPopup } from './remoteSessionLauncher';
+import { openAgentSupportChatWindow } from './agentSupportChatLauncher';
 
 type AgentWithClient = Agent & { clientName: string; clientId: string; siteName?: string };
 type ContextMenuState = { x: number; y: number; agent: AgentWithClient } | null;
@@ -278,6 +279,18 @@ export default function AgentList() {
       return;
     } catch (error) {
       // Erros são tratados internamente pelo openRemoteSessionPopup (toast/notificação)
+    }
+  };
+
+  // Chat de suporte com a MÁQUINA (conversa avulsa, sem chamado) numa janela
+  // dedicada. window.open é síncrono: bloqueadores de popup barram a abertura
+  // depois de um await.
+  const openSupportChat = (agent: AgentWithClient) => {
+    setContextMenu(null);
+    try {
+      openAgentSupportChatWindow(agent.id, true);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Falha ao abrir o chat de suporte.');
     }
   };
 
@@ -1185,6 +1198,15 @@ export default function AgentList() {
             >
               <Monitor className="h-4 w-4" />
               Acesso remoto
+            </button>
+            <button
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60"
+              onClick={() => openSupportChat(contextMenu.agent)}
+              disabled={!isAgentPossiblyOnline(contextMenu.agent, now)}
+              title={isAgentPossiblyOnline(contextMenu.agent, now) ? undefined : 'Máquina offline'}
+            >
+              <MessageSquare className="h-4 w-4" />
+              Abrir chat
             </button>
             <button
               className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-surface-hover"

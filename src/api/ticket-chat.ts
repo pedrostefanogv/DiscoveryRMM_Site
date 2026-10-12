@@ -37,7 +37,8 @@ export interface TicketChatMessage {
 
 export interface TicketChatSession {
   id: string;
-  ticketId: string;
+  /** Nulo em conversa AVULSA (sem chamado), aberta pela lista/detalhe do agent. */
+  ticketId: string | null;
   agentId?: string | null;
   status: TicketChatSessionStatus | string;
   startedByUserId?: string | null;

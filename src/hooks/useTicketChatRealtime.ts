@@ -23,20 +23,43 @@ function asRecord(value: unknown): Record<string, unknown> | null {
  * sinal apenas para invalidar as queries do chat — o conteúdo é buscado por REST
  * autenticado e escopado pelo chamado.
  */
+/** Ids publicados no sinal de atividade do chat (ticket e/ou sessão). */
+export function ticketChatEventIds(
+  event: DashboardEvent | Record<string, unknown> | null | undefined,
+): { ticketId?: string; sessionId?: string } | null {
+  const record = asRecord(event);
+  if (!record) return null;
+
+  const eventType = typeof record.eventType === "string" ? record.eventType : "";
+  if (eventType !== TICKET_CHAT_EVENT_TYPE) return null;
+
+  const data = asRecord(record.data) ?? record;
+  const ticketId = typeof data.ticketId === "string" ? data.ticketId : undefined;
+  const sessionId = typeof data.sessionId === "string" ? data.sessionId : undefined;
+
+  return { ticketId, sessionId };
+}
+
 export function isTicketChatEventForTicket(
   event: DashboardEvent | Record<string, unknown> | null | undefined,
   ticketId: string,
 ): boolean {
-  const record = asRecord(event);
-  if (!record) return false;
+  const ids = ticketChatEventIds(event);
+  return !!ids?.ticketId && ids.ticketId === ticketId;
+}
 
-  const eventType = typeof record.eventType === "string" ? record.eventType : "";
-  if (eventType !== TICKET_CHAT_EVENT_TYPE) return false;
-
-  const data = asRecord(record.data) ?? record;
-  const eventTicketId = typeof data.ticketId === "string" ? data.ticketId : undefined;
-
-  return !!eventTicketId && eventTicketId === ticketId;
+/**
+ * Sinal de atividade de uma SESSÃO específica.
+ *
+ * Usado pela conversa avulsa (sem chamado), que se identifica pelo id da sessão
+ * — o sinal de dashboard não carrega o agentId.
+ */
+export function isTicketChatEventForSession(
+  event: DashboardEvent | Record<string, unknown> | null | undefined,
+  sessionId: string,
+): boolean {
+  const ids = ticketChatEventIds(event);
+  return !!ids?.sessionId && ids.sessionId === sessionId;
 }
 
 export interface TicketChatRealtimeScope {

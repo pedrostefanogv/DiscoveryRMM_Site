@@ -3,7 +3,7 @@ import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft, Bell, Cpu, MemoryStick, Ticket as TicketIcon,
   Monitor, Wifi, WifiOff, AppWindow, Search, Clock, HardDrive, Printer, Bug, AlertTriangle, Trash2, ShieldCheck, Plus, Gauge, Power, RotateCcw, Zap, ChevronDown, ChevronRight, RefreshCw, ArrowUpCircle, Info, Copy,
-  Cable, EthernetPort, History, Network, Radio, ScrollText, StickyNote,
+  Cable, EthernetPort, History, Network, Radio, ScrollText, StickyNote, MessageSquare,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getDeleteAgentErrorMessage, useAgent, useAgentHardware, useAgentHardwareComponents, useAgentListeningPortsPage, useAgentOpenSocketsPage, useAgentSoftwarePage, useAgentSoftwareSnapshot, useApproveZeroTouch, useDeleteAgent, useRestartAgent, useShutdownAgent, useWakeOnLan } from '@/hooks/useAgents';
@@ -53,6 +53,7 @@ import { agentLabelsApi } from '@/modules/agent-labels/api';
 import type { AgentLabelChangeLog } from '@/modules/agent-labels/types';
 import { AgentLabelApplyMode, AgentLabelSourceType, type AgentLabel } from '@/modules/agent-labels/types';
 import { openRemoteDebugPopup } from './remoteDebugLauncher';
+import { openAgentSupportChatWindow } from './agentSupportChatLauncher';
 import { openRemoteSessionPopup } from './remoteSessionLauncher';
 import { useAuthorization } from '@/auth/authorization';
 import { useSendAgentNotification } from '@/hooks/useAgentAlerts';
@@ -985,6 +986,18 @@ export default function AgentDetail() {
     }
   };
 
+  // Abre o chat de suporte com a MÁQUINA (conversa avulsa, sem chamado) numa
+  // janela dedicada. window.open é síncrono: bloqueadores de popup barram a
+  // abertura depois de um await.
+  const handleOpenSupportChat = () => {
+    if (!id) return;
+    try {
+      openAgentSupportChatWindow(id, true);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Falha ao abrir o chat de suporte.');
+    }
+  };
+
   const closeDeleteAgentModal = () => {
     if (deleteAgent.isPending) return;
     setDeleteConfirmOpen(false);
@@ -1461,6 +1474,18 @@ export default function AgentDetail() {
               >
                 <Monitor className="h-4 w-4" />
                 {isOpeningRemoteControl ? 'Abrindo remoto...' : 'Controle remoto'}
+              </button>
+              <button
+                type="button"
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60"
+                onClick={() => {
+                  setIsPowerMenuOpen(false);
+                  handleOpenSupportChat();
+                }}
+                disabled={!isAgentPossiblyOnline(a, now)}
+              >
+                <MessageSquare className="h-4 w-4" />
+                Abrir chat
               </button>
               <button
                 type="button"

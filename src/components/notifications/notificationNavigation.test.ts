@@ -22,6 +22,19 @@ describe('parseNavigationTarget', () => {
     });
   });
 
+  it('conversa avulsa (sem chamado) leva ao chat da máquina', () => {
+    const target = parseNavigationTarget(
+      JSON.stringify({
+        ticketId: null,
+        sessionId: '9d2c1f4a-1111-4b2c-8d3e-222233334444',
+        agentId: 'a9',
+        tab: 'chat',
+      }),
+    );
+
+    expect(target).toEqual({ path: '/agents/a9/support-chat', label: 'chat de suporte' });
+  });
+
   it('aceita as chaves em snake_case', () => {
     const target = parseNavigationTarget(
       JSON.stringify({ ticket_id: TICKET_ID, ticket_title: 'Servidor fora' }),

@@ -41,9 +41,14 @@ export function parseNavigationTarget(
     const agentId = readText(parsed, "agentId", "agent_id");
     const clientId = readText(parsed, "clientId", "client_id");
     const ticketTitle = readText(parsed, "ticketTitle", "ticket_title");
+    const sessionId = readText(parsed, "sessionId", "session_id");
 
     if (ticketId) {
       return { path: `/tickets/${ticketId}`, label: "chamado", ticketId, ticketTitle };
+    }
+    // Conversa AVULSA (sem chamado): a notificação leva ao chat da máquina.
+    if (sessionId && agentId) {
+      return { path: `/agents/${agentId}/support-chat`, label: "chat de suporte" };
     }
     if (agentId) return { path: `/agents/${agentId}`, label: "agente" };
     if (clientId) return { path: `/clients/${clientId}`, label: "cliente" };

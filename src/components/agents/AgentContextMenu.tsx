@@ -2,6 +2,7 @@ import { useState } from 'react';
 import {
   Bell,
   Bug,
+  MessageSquare,
   Monitor,
   Move,
   Power,
@@ -24,6 +25,7 @@ import { useAuthorization } from '@/auth/authorization';
 import { isAgentOnlineNow, isAgentPossiblyOnline } from '@/utils/agentStatus';
 import { openRemoteDebugPopup } from '@/pages/agents/remoteDebugLauncher';
 import { openRemoteSessionPopup } from '@/pages/agents/remoteSessionLauncher';
+import { openAgentSupportChatWindow } from '@/pages/agents/agentSupportChatLauncher';
 import type { AgentCardAgent } from './AgentCard';
 
 interface AgentContextMenuProps {
@@ -66,6 +68,17 @@ export function AgentContextMenu({ agent, now, position, onClose }: AgentContext
 
   const openRemoteControl = () => {
     openRemoteSessionPopup({ agentId: agent.id, kind: 'screen', transport: 'nats' });
+  };
+
+  // Chat de suporte com a MÁQUINA (conversa avulsa, sem chamado) numa janela
+  // dedicada. window.open é síncrono: bloqueadores de popup barram a abertura
+  // depois de um await.
+  const openSupportChat = () => {
+    try {
+      openAgentSupportChatWindow(agent.id, true);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Falha ao abrir o chat de suporte.');
+    }
   };
 
   const openRemoteDebug = async () => {
@@ -158,6 +171,16 @@ export function AgentContextMenu({ agent, now, position, onClose }: AgentContext
       label: 'Acesso remoto',
       icon: <Monitor className="h-4 w-4" />,
       onClick: openRemoteControl,
+    },
+    {
+      key: 'chat',
+      label: 'Abrir chat',
+      icon: <MessageSquare className="h-4 w-4" />,
+      // Conversa avulsa exige a máquina online no servidor. Usa o sinal
+      // conservador: o status do banco pode ficar defasado da UI por ~3min.
+      disabled: !isAgentPossiblyOnline(agent, now),
+      hint: isAgentPossiblyOnline(agent, now) ? undefined : 'agente offline',
+      onClick: openSupportChat,
     },
     {
       key: 'debug',
