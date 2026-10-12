@@ -175,14 +175,3 @@ export function validateScriptSyntax(content: string, language: ScriptLanguage):
   return issues.sort((a, b) => a.line - b.line || (a.severity === b.severity ? 0 : a.severity === 'error' ? -1 : 1));
 }
 
-/** Valida um campo JSON opcional (parametersSchemaJson/metadataJson). */
-export function validateJsonField(label: string, text: string): ScriptIssue | null {
-  const value = text.trim();
-  if (!value) return null;
-  try {
-    JSON.parse(value);
-    return null;
-  } catch (error) {
-    return { line: 1, message: `${label}: JSON inválido (${(error as Error).message}).`, severity: 'error' };
-  }
-}

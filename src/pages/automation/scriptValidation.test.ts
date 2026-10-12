@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { SCRIPT_LANGUAGES } from './scriptLanguages';
-import { validateJsonField, validateScriptSyntax } from './scriptValidation';
+import { validateScriptSyntax } from './scriptValidation';
 
 const ps = SCRIPT_LANGUAGES.powershell;
 const py = SCRIPT_LANGUAGES.python;
@@ -94,15 +94,3 @@ describe('validateScriptSyntax - Shell', () => {
   });
 });
 
-describe('validateJsonField', () => {
-  it('aceita JSON válido e vazio', () => {
-    expect(validateJsonField('MetadataJson', '')).toBeNull();
-    expect(validateJsonField('MetadataJson', '{"a":1}')).toBeNull();
-  });
-
-  it('acusa JSON inválido', () => {
-    const issue = validateJsonField('MetadataJson', '{a:1}');
-    expect(issue?.severity).toBe('error');
-    expect(issue?.message).toContain('JSON inválido');
-  });
-});
