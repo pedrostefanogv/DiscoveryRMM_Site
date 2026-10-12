@@ -170,9 +170,9 @@ export default function TicketChatPanel({ ticketId, agentId, clientId, siteId, c
 
   useTicketChatRealtime(ticketId, { clientId: clientId ?? undefined, siteId: siteId ?? undefined }, Boolean(ticketId));
 
-  // Esta janela e a conversa AO VIVO: enquanto ela estiver montada e visivel, o
-  // servidor nao cria notificacao de mensagem para este atendente — a mensagem
-  // esta na frente dele. Fechar/ocultar a janela libera o aviso de novo.
+  // Esta janela e a conversa AO VIVO: enquanto ela estiver aberta, visivel e em
+  // foco, o servidor nao cria notificacao de mensagem para este atendente — a
+  // mensagem esta na frente dele. Fechar, ocultar ou tirar o foco libera o aviso.
   useTicketChatPresence(ticketId, Boolean(ticketId));
 
   const messages = useMemo(() => messagesQuery.data ?? [], [messagesQuery.data]);

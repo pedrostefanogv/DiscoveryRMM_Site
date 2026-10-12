@@ -154,8 +154,10 @@ export const ticketChatApi = {
    * NAO cria notificacao de nova mensagem para ele (sino + Web Push), porque a
    * mensagem ja esta na frente dele. `active=false` limpa na hora (janela fechada).
    */
-  setPresence: (ticketId: string, active: boolean) =>
-    active
-      ? api.post<void>(BASE + "/" + ticketId + "/chat/presence")
-      : api.del<void>(BASE + "/" + ticketId + "/chat/presence"),
+  setPresence: (ticketId: string, active: boolean, clientId: string) => {
+    const url =
+      BASE + "/" + ticketId + "/chat/presence?clientId=" + encodeURIComponent(clientId);
+
+    return active ? api.post<void>(url) : api.del<void>(url);
+  },
 };
