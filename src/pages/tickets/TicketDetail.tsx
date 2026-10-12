@@ -1,4 +1,5 @@
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Send, Lock, Unlock, Clock, Activity, BookOpen, Paperclip, Upload, File, CheckCircle, XCircle, Loader2, Wrench, Copy, RotateCcw, ClipboardList, UserCog, UserCheck, RefreshCw, Monitor, Building2, Trash2 } from 'lucide-react';
 import { MarkdownViewer } from '@/components/ui/MarkdownViewer';
@@ -14,6 +15,7 @@ import {
   useTicketTimeline,
   useSlaDetails,
   useTicketAttachments,
+  useAllTicketAttachments,
   usePrepareTicketUpload,
   useCompleteTicketUpload,
   usePrepareCommentUpload,
@@ -56,7 +58,7 @@ import {
   useTicketAiSummary,
   useTicketAiTriage,
 } from '@/hooks/useTicketAi';
-import { Button, Card, CardHeader, Badge, Loading, ErrorDisplay, TextArea, Select, Input } from '@/components/ui';
+import { Button, Card, CardHeader, Badge, Loading, ErrorDisplay, TextArea, Select, Input, ImageLightbox } from '@/components/ui';
 import { ticketsApi } from '@/api';
 import type {
   AutomationTaskSummary,
@@ -1795,6 +1797,12 @@ type CommentItem = {
   }> | null;
 };
 
+/** Ordem cronológica da conversa: (createdAt, id) crescente. */
+function compareCommentsAsc(a: CommentItem, b: CommentItem) {
+  const byDate = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+  return byDate !== 0 ? byDate : a.id.localeCompare(b.id);
+}
+
 /** Dispara o download de um blob já autenticado (same-origin). */
 function triggerBlobDownload(blob: Blob, fileName: string) {
   const objectUrl = URL.createObjectURL(blob);
@@ -1823,12 +1831,27 @@ function CommentsPanel({
   // Rolagem do histórico: ao chegar no fim, o restante do delta vai para a
   // página (mesmo comportamento do agent desktop).
   const commentsListRef = useWheelScrollChaining<HTMLDivElement>();
-  // Paginação por cursor: acumula páginas (antes crescia o limit, refazendo a
-  // 1ª página e sem teto).
-  const [pages, setPages] = useState<CommentPage<CommentItem>[]>([]);
+  // Paginação por cursor. Os itens são acumulados por ID, não por página: a
+  // janela da página 0 muda quando entra comentário novo, e antes o item que
+  // saía dela sumia (gap) e a página seguinte (sobreposta) gerava duplicatas e
+  // desordem. Com o mapa, item que sai da janela permanece e páginas
+  // sobrepostas só atualizam a mesma chave.
+  const [itemsById, setItemsById] = useState<Map<string, CommentItem>>(new Map());
   const [cursor, setCursor] = useState<string | undefined>(undefined);
   const comments = useTicketComments(ticketId, { cursor });
-  const items = pages.flatMap(page => page.items);
+
+  // A conversa é lida em ordem CRONOLÓGICA (mais antigo primeiro). A API pagina
+  // do mais novo para o mais antigo; a ordenação é feita aqui.
+  const items = useMemo(
+    () => [...itemsById.values()].sort(compareCommentsAsc),
+    [itemsById],
+  );
+
+  // Preserva a posição de leitura quando histórico MAIS ANTIGO é prependado.
+  // Ancora por ELEMENTO (offsetTop), não por altura: o botão do topo e o
+  // "carregando" aparecem/somem e tornavam a conta por altura imprecisa.
+  const scrollAnchorRef = useRef<{ id: string; top: number; scrollTop: number } | null>(null);
+  const scrollToBottomRef = useRef(false);
   const removeComment = useDeleteComment();
 
   const handleDeleteComment = (commentId: string) => {
@@ -1849,20 +1872,71 @@ function CommentsPanel({
     Boolean(currentUserLogin) &&
     (author ?? '').trim().toLowerCase() === currentUserLogin;
 
-  // Troca de ticket reinicia a paginação.
+  // Troca de ticket reinicia a paginação (e zera âncoras pendentes).
   useEffect(() => {
-    setPages([]);
+    setItemsById(new Map());
     setCursor(undefined);
+    scrollAnchorRef.current = null;
+    scrollToBottomRef.current = false;
   }, [ticketId]);
 
-  // Registra/atualiza cada página carregada. `upsertCommentPage` SUBSTITUI os
-  // itens quando a mesma página é refeita (ex.: após adicionar comentário);
-  // antes o refetch era ignorado e o comentário só aparecia após um F5.
+  // Falha ao carregar o histórico não pode deixar uma âncora pendente: o
+  // próximo crescimento da lista a aplicaria por engano.
+  useEffect(() => {
+    if (comments.isError) scrollAnchorRef.current = null;
+  }, [comments.isError]);
+
+  // Mescla cada página carregada por id. O refetch da página 0 (comentário novo)
+  // ATUALIZA os itens e ADICIONA o novo sem remover os que saíram da janela; o
+  // comentário novo aparece sem F5.
   useEffect(() => {
     const data = comments.data;
-    if (!data) return;
-    setPages(prev => upsertCommentPage(prev, cursor, data.items ?? []));
-  }, [comments.data, cursor]);
+    if (!data?.items) return;
+    setItemsById(prev => {
+      const next = new Map(prev);
+      for (const item of data.items ?? []) next.set(item.id, item);
+      return next;
+    });
+  }, [comments.data]);
+
+  // "Carregar mais" traz a página MAIS ANTIGA (cursor da API), que entra no topo.
+  const loadOlderComments = () => {
+    const el = commentsListRef.current;
+    if (el) {
+      // Primeiro comentário visível vira a âncora da rolagem.
+      const first = el.querySelector<HTMLElement>('[data-comment-id]');
+      if (first?.dataset.commentId) {
+        scrollAnchorRef.current = {
+          id: first.dataset.commentId,
+          top: first.offsetTop,
+          scrollTop: el.scrollTop,
+        };
+      }
+    }
+    // Histórico antigo entra no TOPO: não pode herdar o "descer até o fim"
+    // deixado por um comentário recém-enviado.
+    scrollToBottomRef.current = false;
+    setCursor(comments.data?.nextCursor ?? undefined);
+  };
+
+  // Roda depois do DOM: ancora o scroll no MESMO comentário ao prepender
+  // histórico e desce até o fim quando um comentário novo foi enviado.
+  useLayoutEffect(() => {
+    const el = commentsListRef.current;
+    if (!el) return;
+    if (scrollToBottomRef.current) {
+      scrollToBottomRef.current = false;
+      // Uma âncora pendente de outro fluxo não deve ser aplicada depois.
+      scrollAnchorRef.current = null;
+      el.scrollTop = el.scrollHeight;
+      return;
+    }
+    const anchor = scrollAnchorRef.current;
+    if (!anchor) return;
+    scrollAnchorRef.current = null;
+    const node = el.querySelector<HTMLElement>(`[data-comment-id="${anchor.id}"]`);
+    if (node) el.scrollTop = anchor.scrollTop + (node.offsetTop - anchor.top);
+  }, [items.length]);
 
   return (
     <>
@@ -1873,6 +1947,19 @@ function CommentsPanel({
             <span>Erro ao carregar comentários.</span>
             <Button size="sm" variant="ghost" onClick={() => void comments.refetch()}>
               Tentar novamente
+            </Button>
+          </div>
+        )}
+        {!comments.isError && comments.data?.hasMore && (
+          <div className="flex justify-center pb-1">
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={comments.isFetching}
+              onClick={loadOlderComments}
+              title="Carregar os comentários anteriores a estes"
+            >
+              Carregar comentários mais antigos
             </Button>
           </div>
         )}
@@ -1893,7 +1980,11 @@ function CommentsPanel({
                   : 'bg-surface-light text-foreground rounded-bl-md border border-border';
             const commentAttachments = Array.isArray(c.attachments) ? c.attachments : [];
             return (
-              <div key={c.id} className={`flex flex-col ${own ? 'items-end' : 'items-start'}`}>
+              <div
+                key={c.id}
+                data-comment-id={c.id}
+                className={`flex flex-col ${own ? 'items-end' : 'items-start'}`}
+              >
                 <div
                   className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm whitespace-pre-wrap break-words ${bubbleTone}`}
                 >
@@ -1903,21 +1994,12 @@ function CommentsPanel({
                   {commentAttachments.length > 0 && (
                     <div className={`mt-2 flex flex-wrap gap-2 ${deleted ? 'opacity-60' : ''}`}>
                       {commentAttachments.map((attachment) => (
-                        <button
+                        <AttachmentPreviewButton
                           key={attachment.id}
-                          type="button"
-                          onClick={() => {
-                            void ticketsApi
-                              .downloadCommentAttachment(ticketId, c.id, attachment.id)
-                              .then(({ blob, fileName }) => triggerBlobDownload(blob, fileName || attachment.fileName))
-                              .catch(() => toast.error('Não foi possível abrir o anexo.'));
-                          }}
-                          title={`${attachment.fileName} — ${formatBytes(attachment.sizeBytes ?? 0)}`}
-                          className="flex items-center gap-2 rounded-lg border border-border bg-background/60 px-2 py-1 text-left hover:border-primary/60"
-                        >
-                          <AttachmentThumb ticketId={ticketId} commentId={c.id} attachment={attachment} size="sm" />
-                          <span className="max-w-[160px] truncate text-xs">{attachment.fileName}</span>
-                        </button>
+                          ticketId={ticketId}
+                          commentId={c.id}
+                          attachment={attachment}
+                        />
                       ))}
                     </div>
                   )}
@@ -1950,18 +2032,6 @@ function CommentsPanel({
         {!comments.isError && !comments.isLoading && items.length === 0 && (
           <p className="text-sm text-muted py-4 text-center">Sem comentários ainda</p>
         )}
-        {!comments.isError && comments.data?.hasMore && (
-          <div className="flex justify-center pt-1">
-            <Button
-              size="sm"
-              variant="ghost"
-              disabled={comments.isFetching}
-              onClick={() => setCursor(comments.data?.nextCursor ?? undefined)}
-            >
-              Carregar mais
-            </Button>
-          </div>
-        )}
       </div>
       <TicketAttachmentsStrip ticketId={ticketId} />
       <CommentForm
@@ -1970,8 +2040,11 @@ function CommentsPanel({
         onOpenAttachments={onOpenAttachments}
         onAdded={() => {
           // Garante que a 1ª página esteja ativa: a invalidação da mutation só
-          // refaz queries ativas, e o comentário novo entra no topo dela.
+          // refaz queries ativas.
           setCursor(undefined);
+          // A conversa é cronológica e o comentário novo entra no FIM: desce
+          // até lá para o autor ver o que acabou de enviar.
+          scrollToBottomRef.current = true;
         }}
       />
     </>
@@ -2428,6 +2501,161 @@ function AttachmentThumb({ ticketId, commentId, attachment, size = 'md' }: {
 }
 
 /**
+ * Anexo (de comentário ou do chamado) cujo conteúdo é imagem. A imagem NÃO
+ * baixa ao clicar: abre no modal (lightbox) usando o mesmo blob autenticado da
+ * miniatura, e um preview maior aparece no hover. Arquivos que não são imagem
+ * continuam baixando.
+ */
+function AttachmentPreviewButton({
+  ticketId,
+  commentId,
+  attachment,
+  buttonClassName = 'flex items-center gap-2 rounded-lg border border-border bg-background/60 px-2 py-1 text-left hover:border-primary/60',
+  fileNameClassName = 'max-w-[160px] truncate text-xs',
+}: {
+  ticketId: string;
+  /** Quando presente, o anexo pertence ao COMENTÁRIO (conversa). */
+  commentId?: string | null;
+  attachment: { id: string; fileName: string; contentType?: string | null; sizeBytes?: number };
+  /** Classes do botão (o bloco "Anexos do chamado" usa o tom surface). */
+  buttonClassName?: string;
+  fileNameClassName?: string;
+}) {
+  const [url, setUrl] = useState<string | null>(null);
+  const [hover, setHover] = useState<{ top: number; left: number; below: boolean } | null>(null);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  // URL do blob: criada sob demanda e revogada UMA vez, no unmount.
+  const objectUrlRef = useRef<string | null>(null);
+  const aliveRef = useRef(true);
+  const isImage = String(attachment.contentType ?? '').toLowerCase().startsWith('image/');
+
+  // Um único download autenticado serve miniatura, hover e modal. O anexo é do
+  // COMENTÁRIO quando há commentId; senão, do repositório do chamado.
+  const loadAttachment = () =>
+    commentId
+      ? ticketsApi.downloadCommentAttachment(ticketId, commentId, attachment.id)
+      : ticketsApi.downloadAttachment(ticketId, attachment.id);
+
+  /** Garante a URL do blob mesmo quando o clique chega ANTES do load terminar. */
+  const ensureImageUrl = async (): Promise<string | null> => {
+    if (objectUrlRef.current) return objectUrlRef.current;
+    try {
+      const { blob } = await loadAttachment();
+      const created = URL.createObjectURL(blob);
+      if (!aliveRef.current) {
+        URL.revokeObjectURL(created);
+        return null;
+      }
+      // Corrida: outro caminho já criou a URL enquanto esta buscava.
+      if (objectUrlRef.current) {
+        URL.revokeObjectURL(created);
+        return objectUrlRef.current;
+      }
+      objectUrlRef.current = created;
+      setUrl(created);
+      return created;
+    } catch {
+      return null;
+    }
+  };
+
+  useEffect(() => {
+    aliveRef.current = true;
+    if (isImage) void ensureImageUrl();
+    return () => {
+      aliveRef.current = false;
+      if (objectUrlRef.current) {
+        URL.revokeObjectURL(objectUrlRef.current);
+        objectUrlRef.current = null;
+      }
+    };
+    // ensureImageUrl é recriada a cada render; as dependências reais são as de
+    // identidade do anexo abaixo.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ticketId, commentId, attachment.id, isImage]);
+
+  const download = () => {
+    void loadAttachment()
+      .then(({ blob, fileName }) => triggerBlobDownload(blob, fileName || attachment.fileName))
+      .catch(() => toast.error('Não foi possível abrir o anexo.'));
+  };
+
+  const showHoverPreview = () => {
+    if (!isImage || !url) return;
+    const rect = buttonRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    // Abaixo quando não houver espaço para o preview (até 288px) acima do botão.
+    const below = rect.top < 300;
+    setHover({ top: below ? rect.bottom + 8 : rect.top - 8, left: rect.left + rect.width / 2, below });
+  };
+
+  return (
+    <>
+      <button
+        ref={buttonRef}
+        type="button"
+        onClick={() => {
+          if (!isImage) {
+            download();
+            return;
+          }
+          setHover(null);
+          if (url) {
+            setLightboxOpen(true);
+            return;
+          }
+          // Rede lenta/falha: busca o blob e abre o modal — não baixa o arquivo.
+          void ensureImageUrl().then(created => {
+            if (created) setLightboxOpen(true);
+            else if (aliveRef.current) toast.error('Não foi possível abrir a imagem.');
+          });
+        }}
+        onMouseEnter={showHoverPreview}
+        onMouseLeave={() => setHover(null)}
+        title={`${attachment.fileName} — ${formatBytes(attachment.sizeBytes ?? 0)}${isImage ? ' (clique para ampliar)' : ''}`}
+        className={buttonClassName}
+      >
+        {isImage && url ? (
+          <img
+            src={url}
+            alt={attachment.fileName}
+            className="h-8 w-8 shrink-0 rounded border border-border object-cover"
+          />
+        ) : (
+          <File className="h-4 w-4 shrink-0 text-muted" />
+        )}
+        <span className={fileNameClassName}>{attachment.fileName}</span>
+      </button>
+      {hover && url &&
+        createPortal(
+          <div
+            className="pointer-events-none fixed z-[120]"
+            style={{
+              top: hover.top,
+              left: hover.left,
+              transform: `translate(-50%, ${hover.below ? '0' : '-100%'})`,
+            }}
+          >
+            <img
+              src={url}
+              alt={attachment.fileName}
+              className="max-h-72 max-w-[min(420px,80vw)] rounded-lg border border-border bg-surface object-contain p-1 shadow-2xl"
+            />
+          </div>,
+          document.body,
+        )}
+      <ImageLightbox
+        open={lightboxOpen}
+        src={url}
+        alt={attachment.fileName}
+        onClose={() => setLightboxOpen(false)}
+      />
+    </>
+  );
+}
+
+/**
  * Anexos do CHAMADO logo abaixo dos comentários. A API guarda o anexo no
  * chamado (não vinculado ao comentário), então a lista aparece no mesmo lugar
  * do composer — com miniatura quando for imagem.
@@ -2436,22 +2664,6 @@ function TicketAttachmentsStrip({ ticketId }: { ticketId: string }) {
   const attachments = useTicketAttachments(ticketId);
   const items = Array.isArray(attachments.data?.items) ? attachments.data.items : [];
 
-  async function open(attachmentId: string, fileName: string) {
-    try {
-      const { blob, fileName: returnedName } = await ticketsApi.downloadAttachment(ticketId, attachmentId);
-      const objectUrl = URL.createObjectURL(blob);
-      const anchor = document.createElement('a');
-      anchor.href = objectUrl;
-      anchor.download = returnedName || fileName || 'anexo';
-      document.body.appendChild(anchor);
-      anchor.click();
-      anchor.remove();
-      URL.revokeObjectURL(objectUrl);
-    } catch {
-      toast.error('Não foi possível abrir o anexo.');
-    }
-  }
-
   if (items.length === 0) return null;
 
   return (
@@ -2459,16 +2671,13 @@ function TicketAttachmentsStrip({ ticketId }: { ticketId: string }) {
       <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">Anexos do chamado</p>
       <div className="flex flex-wrap gap-2">
         {items.map((a) => (
-          <button
+          <AttachmentPreviewButton
             key={a.id}
-            type="button"
-            onClick={() => void open(a.id, a.fileName)}
-            title={a.fileName}
-            className="flex items-center gap-2 rounded-lg border border-border bg-surface-light px-2 py-1 text-left hover:border-primary/60"
-          >
-            <AttachmentThumb ticketId={ticketId} attachment={a} size="sm" />
-            <span className="max-w-[180px] truncate text-xs text-foreground">{a.fileName}</span>
-          </button>
+            ticketId={ticketId}
+            attachment={a}
+            buttonClassName="flex items-center gap-2 rounded-lg border border-border bg-surface-light px-2 py-1 text-left hover:border-primary/60"
+            fileNameClassName="max-w-[180px] truncate text-xs text-foreground"
+          />
         ))}
       </div>
     </div>
@@ -2505,14 +2714,29 @@ function AttachmentsPanel({
     serverSettings,
   ]);
 
-  const attachments = useTicketAttachments(ticketId);
   const prepare = usePrepareTicketUpload();
   const complete = useCompleteTicketUpload();
 
-  // Aba consolidada: repositório do chamado (EntityType "Ticket") + anexos da
-  // conversa (EntityType "TicketComment"). Os de comentário vêm com os
-  // comentários já carregados, numa página grande, em vez de N requisições.
-  const comments = useTicketComments(ticketId, { limit: 200 });
+  // Aba consolidada: repositório (EntityType "Ticket") + conversa
+  // (EntityType "TicketComment"), paginada NO SERVIDOR por /attachments/all.
+  // Antes os anexos de conversa vinham dos comentários da primeira página:
+  // num chamado com muitos comentários, os anexos antigos desapareciam.
+  const [attachmentCursor, setAttachmentCursor] = useState<string | undefined>(undefined);
+  const [attachmentPages, setAttachmentPages] = useState<
+    CommentPage<import('@/api').TicketAttachmentEntry>[]
+  >([]);
+  const allAttachments = useAllTicketAttachments(ticketId, { cursor: attachmentCursor });
+
+  useEffect(() => {
+    setAttachmentPages([]);
+    setAttachmentCursor(undefined);
+  }, [ticketId]);
+
+  useEffect(() => {
+    const data = allAttachments.data;
+    if (!data) return;
+    setAttachmentPages(prev => upsertCommentPage(prev, attachmentCursor, data.items ?? []));
+  }, [allAttachments.data, attachmentCursor]);
   const [originFilter, setOriginFilter] = useState<'all' | 'repository' | 'comment'>('all');
   const [typeFilter, setTypeFilter] = useState<'all' | 'image' | 'document' | 'other'>('all');
   const [periodFilter, setPeriodFilter] = useState<'all' | '7' | '30'>('all');
@@ -2532,38 +2756,24 @@ function AttachmentsPanel({
     deletedComment?: boolean;
   };
 
-  const unified = useMemo<UnifiedAttachment[]>(() => {
-    const repository: UnifiedAttachment[] = (
-      Array.isArray(attachments.data?.items) ? attachments.data.items : []
-    ).map((a) => ({
-      id: a.id,
-      fileName: a.fileName,
-      contentType: a.contentType ?? '',
-      sizeBytes: a.sizeBytes ?? 0,
-      createdAt: a.createdAt,
-      uploadedBy: a.uploadedBy,
-      origin: 'repository' as const,
-    }));
-
-    const fromComments: UnifiedAttachment[] = (comments.data?.items ?? []).flatMap((comment) =>
-      (Array.isArray(comment.attachments) ? comment.attachments : []).map((a) => ({
-        id: a.id,
-        fileName: a.fileName,
-        contentType: a.contentType ?? '',
-        sizeBytes: a.sizeBytes ?? 0,
-        createdAt: a.createdAt,
-        uploadedBy: a.uploadedBy ?? comment.author,
-        origin: 'comment' as const,
-        commentId: comment.id,
-        author: comment.author,
-        deletedComment: Boolean(comment.deletedAt),
-      })),
-    );
-
-    return [...repository, ...fromComments].sort(
-      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-    );
-  }, [attachments.data, comments.data]);
+  const unified = useMemo<UnifiedAttachment[]>(
+    () =>
+      attachmentPages
+        .flatMap(page => page.items)
+        .map(a => ({
+          id: a.id,
+          fileName: a.fileName,
+          contentType: a.contentType ?? '',
+          sizeBytes: a.sizeBytes ?? 0,
+          createdAt: a.createdAt,
+          uploadedBy: a.uploadedBy,
+          origin: a.origin === 'comment' ? ('comment' as const) : ('repository' as const),
+          commentId: a.commentId ?? undefined,
+          author: a.commentAuthor ?? undefined,
+          deletedComment: Boolean(a.commentDeleted),
+        })),
+    [attachmentPages],
+  );
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -2886,33 +3096,23 @@ function AttachmentsPanel({
           </div>
         </div>
 
-        {(attachments.isLoading || comments.isLoading) && <Loading />}
-        {(attachments.isError || comments.isError) && !attachments.isLoading && (
+        {allAttachments.isLoading && <Loading />}
+        {allAttachments.isError && !allAttachments.isLoading && (
           <div className="flex flex-col items-center gap-2 py-4 text-center text-sm text-danger">
             <span>Não foi possível carregar os anexos.</span>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => {
-                void attachments.refetch();
-                void comments.refetch();
-              }}
-            >
+            <Button size="sm" variant="ghost" onClick={() => void allAttachments.refetch()}>
               Tentar novamente
             </Button>
           </div>
         )}
-        {!attachments.isError &&
-          !comments.isError &&
+        {!allAttachments.isError &&
           filtered.length === 0 &&
-          !attachments.isLoading &&
-          !comments.isLoading && (
+          !allAttachments.isLoading && (
             <p className="py-4 text-center text-sm text-muted">
               {unified.length === 0 ? 'Nenhum anexo ainda.' : 'Nenhum anexo para os filtros atuais.'}
             </p>
           )}
-        {!attachments.isError &&
-          !comments.isError &&
+        {!allAttachments.isError &&
           filtered.map((item) => (
             <div key={`${item.origin}:${item.id}`} className="flex items-center gap-3 rounded-lg border border-border bg-surface-light px-3 py-2">
               <AttachmentThumb
@@ -2947,6 +3147,18 @@ function AttachmentsPanel({
               {item.uploadedBy && <Badge color="slate">{item.uploadedBy}</Badge>}
             </div>
           ))}
+        {!allAttachments.isError && allAttachments.data?.hasMore && (
+          <div className="flex justify-center pt-1">
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={allAttachments.isFetching}
+              onClick={() => setAttachmentCursor(allAttachments.data?.nextCursor ?? undefined)}
+            >
+              Carregar mais anexos
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   );

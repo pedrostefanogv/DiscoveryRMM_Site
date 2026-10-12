@@ -170,6 +170,18 @@ export function useAddComment() {
   });
 }
 
+/** Anexos consolidados do chamado (repositório + conversa), paginados. */
+export function useAllTicketAttachments(
+  ticketId: string,
+  params?: { cursor?: string; limit?: number },
+) {
+  return useQuery({
+    queryKey: [...KEYS.attachments(ticketId), "all", params],
+    queryFn: () => ticketsApi.listAllAttachments(ticketId, params),
+    enabled: !!ticketId,
+  });
+}
+
 export function useDeleteComment() {
   const qc = useQueryClient();
   return useMutation({

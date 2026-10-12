@@ -1288,6 +1288,25 @@ export interface TicketCommentAttachment {
   createdAt: string;
 }
 
+/**
+ * Anexo do chamado na lista CONSOLIDADA (repositório + conversa), com a origem
+ * explícita. Vem paginado por cursor do endpoint /tickets/{id}/attachments/all —
+ * é o que a aba Anexos usa (antes só via os anexos dos primeiros comentários).
+ */
+export interface TicketAttachmentEntry {
+  id: string;
+  fileName: string;
+  description?: string | null;
+  contentType: string;
+  sizeBytes: number;
+  uploadedBy?: string | null;
+  createdAt: string;
+  origin: 'repository' | 'comment';
+  commentId?: string | null;
+  commentAuthor?: string | null;
+  commentDeleted?: boolean;
+}
+
 export interface TicketComment {
   id: string;
   ticketId: string;

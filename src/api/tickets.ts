@@ -264,6 +264,19 @@ export const ticketsApi = {
   listAttachments: (ticketId: string) =>
     api.get<CursorPageDto<TicketAttachment>>(`${BASE}/${ticketId}/attachments`),
 
+  /**
+   * Lista consolidada e paginada (repositório + conversa). Paginada no servidor:
+   * a alternativa (comentários da 1ª página) omitia anexos de conversas antigas.
+   */
+  listAllAttachments: (
+    ticketId: string,
+    params?: { cursor?: string; limit?: number },
+  ) =>
+    api.get<CursorPageDto<import("./types").TicketAttachmentEntry>>(
+      `${BASE}/${ticketId}/attachments/all`,
+      params ?? {},
+    ),
+
   prepareUpload: (ticketId: string, data: PresignedUploadRequest) =>
     api.post<PresignedUploadResponse>(
       `${BASE}/${ticketId}/attachments/presigned-upload`,

@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
-import { describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import type { ReactNode } from "react";
 
 /**
@@ -38,6 +38,11 @@ const IAM_USERS = [
 // MUTAVEL: cada teste escolhe o token da sessao (o mock de useAuth le daqui).
 let CURRENT_TOKEN = makeToken({ unique_name: "pedro.stefano", sub: "user-1" });
 
+// Quando definido, segura a resolucao do blob do anexo (teste de clique antes
+// de a imagem carregar). null = resolve imediatamente.
+let blobGate: Promise<void> | null = null;
+let releaseBlobGate: (() => void) | null = null;
+
 const COMMENTS = [
   {
     id: "c-1",
@@ -46,6 +51,9 @@ const COMMENTS = [
     content: "Comentario proprio",
     isInternal: false,
     createdAt: "2026-09-27T21:52:00.000Z",
+    attachments: [
+      { id: "att-1", fileName: "print.png", contentType: "image/png", sizeBytes: 1024 },
+    ],
   },
   {
     id: "c-2",
@@ -64,6 +72,20 @@ const COMMENTS = [
     createdAt: "2026-09-26T10:00:00.000Z",
   },
 ];
+
+// jsdom não implementa Object URLs; o componente cria a miniatura com elas.
+beforeAll(() => {
+  Object.defineProperty(URL, "createObjectURL", {
+    configurable: true,
+    writable: true,
+    value: vi.fn(() => "blob:mock-image"),
+  });
+  Object.defineProperty(URL, "revokeObjectURL", {
+    configurable: true,
+    writable: true,
+    value: vi.fn(),
+  });
+});
 
 function makeTicket() {
   return {
@@ -107,6 +129,11 @@ vi.mock("@/api", async (importOriginal) => {
     ticketsApi: {
       ...actual.ticketsApi,
       get: () => Promise.resolve(makeTicket()),
+      // Anexo de conversao: devolve um blob local (sem rede) para o preview.
+      downloadCommentAttachment: async () => {
+        if (blobGate) await blobGate;
+        return { blob: new Blob(["fake"], { type: "image/png" }), fileName: "print.png" };
+      },
     },
     departmentsApi: {
       ...actual.departmentsApi,
@@ -164,8 +191,10 @@ function createWrapper() {
 }
 
 describe("TicketDetail comentarios em baloes", () => {
-  it("alinha proprio a direita e os demais a esquerda, com autor + data/hora", () => {
+  it("alinha proprio a direita e os demais a esquerda, com autor + data/hora", async () => {
     render(<TicketDetail />, { wrapper: createWrapper() });
+    // Espera o blob da miniatura resolver: sem isso o setState fica fora do act.
+    await screen.findByAltText("print.png");
 
     const ownBubble = screen.getByText("Comentario proprio");
     expect(ownBubble.className).toContain("bg-primary");
@@ -183,8 +212,9 @@ describe("TicketDetail comentarios em baloes", () => {
     expect(screen.getAllByText("Interno").length).toBeGreaterThan(0);
   });
 
-  it("permite anexar arquivo/print direto do composer de comentario", () => {
+  it("permite anexar arquivo/print direto do composer de comentario", async () => {
     render(<TicketDetail />, { wrapper: createWrapper() });
+    await screen.findByAltText("print.png");
 
     // Antes só havia o painel "Anexos": quem comentava precisava sair do
     // composer. Agora o comentário aceita arquivo (seletor) e print (Ctrl+V).
@@ -197,6 +227,7 @@ describe("TicketDetail comentarios em baloes", () => {
     CURRENT_TOKEN = makeToken({ sub: "user-2" });
 
     render(<TicketDetail />, { wrapper: createWrapper() });
+    await screen.findByAltText("print.png");
 
     await waitFor(() => {
       const ownBubble = screen.getByText("Comentario proprio");
@@ -206,5 +237,43 @@ describe("TicketDetail comentarios em baloes", () => {
 
     const agentBubble = screen.getByText("Comentario do agent");
     expect(agentBubble.parentElement?.className).toContain("items-start");
+  });
+
+  it("abre a imagem do comentario em modal, sem baixar o arquivo", async () => {
+    render(<TicketDetail />, { wrapper: createWrapper() });
+
+    // Espera o blob autenticado virar a miniatura antes de clicar.
+    const thumb = await screen.findByAltText("print.png");
+    fireEvent.click(thumb.closest("button") as HTMLButtonElement);
+
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog.querySelector("img")?.getAttribute("src")).toBe("blob:mock-image");
+  });
+
+  it("abre o modal mesmo clicando antes de a imagem carregar", async () => {
+    blobGate = new Promise<void>((resolve) => {
+      releaseBlobGate = resolve;
+    });
+
+    render(<TicketDetail />, { wrapper: createWrapper() });
+
+    // O blob ainda nao chegou: antes isso baixava o arquivo em vez de abrir.
+    fireEvent.click(screen.getByRole("button", { name: /print\.png/i }));
+    releaseBlobGate?.();
+    expect(await screen.findByRole("dialog")).toBeTruthy();
+
+    blobGate = null;
+    releaseBlobGate = null;
+  });
+
+  it("exibe uma miniatura maior no hover do anexo de imagem", async () => {
+    render(<TicketDetail />, { wrapper: createWrapper() });
+
+    const thumb = await screen.findByAltText("print.png");
+    fireEvent.mouseEnter(thumb.closest("button") as HTMLButtonElement);
+
+    await waitFor(() => {
+      expect(document.querySelectorAll("img.max-h-72").length).toBe(1);
+    });
   });
 });
