@@ -164,6 +164,8 @@ type TaskFormState = {
   promptTimeoutSeconds: number;
   /** Campo customizado que recebe a saída da execução (tarefa coletora). */
   collectorFieldDefinitionId: string;
+  /** Grava a saída da execução como nota no agent. */
+  writeOutputToNote: boolean;
   isActive: boolean;
 };
 
@@ -189,6 +191,7 @@ const defaultForm: TaskFormState = {
   closeProcesses: [],
   promptTimeoutSeconds: 60,
   collectorFieldDefinitionId: "",
+  writeOutputToNote: false,
   isActive: true,
 };
 
@@ -404,6 +407,7 @@ export default function AutomationTasksPage() {
       closeProcesses: detail.closeProcesses ?? [],
       promptTimeoutSeconds: detail.promptTimeoutSeconds ?? 60,
       collectorFieldDefinitionId: detail.collectorFieldDefinitionId ?? "",
+      writeOutputToNote: detail.writeOutputToNote ?? false,
       isActive: detail.isActive,
     });
 
@@ -606,6 +610,7 @@ export default function AutomationTasksPage() {
       closeProcesses: item.closeProcesses ?? [],
       promptTimeoutSeconds: item.promptTimeoutSeconds ?? 60,
       collectorFieldDefinitionId: item.collectorFieldDefinitionId ?? "",
+      writeOutputToNote: item.writeOutputToNote ?? false,
       isActive: item.isActive,
     });
     applyScopeCascade(normalizedScopeType, item);
@@ -1046,7 +1051,11 @@ export default function AutomationTasksPage() {
       allowDefer: promptMode ? form.allowDefer : true,
       closeProcesses: promptMode ? closeProcesses : [],
       promptTimeoutSeconds: promptMode ? promptTimeoutSeconds : 60,
-      collectorFieldDefinitionId: form.collectorFieldDefinitionId || null,
+      // Coletor só existe em tarefa de script: ao trocar o ActionType, o valor
+      // antigo não pode continuar sendo enviado.
+      collectorFieldDefinitionId:
+        actionType === AutomationTaskActionType.RunScript ? form.collectorFieldDefinitionId || null : null,
+      writeOutputToNote: form.writeOutputToNote,
       isActive: form.isActive,
     };
 
@@ -1618,43 +1627,6 @@ export default function AutomationTasksPage() {
               />
             </>
           )}
-          {(selectedActionType === AutomationTaskActionType.InstallPackage ||
-            selectedActionType === AutomationTaskActionType.UpdatePackage ||
-            selectedActionType === AutomationTaskActionType.RemovePackage ||
-            selectedActionType === AutomationTaskActionType.UpdateOrInstallPackage) && (
-            <>
-              <div className="space-y-1">
-                <label className="block text-sm font-medium text-muted-foreground">Nome do pacote</label>
-                <div className="flex gap-2">
-                  <Input
-                    value={selectedPackageLabel}
-                    readOnly
-                    placeholder="Nenhum pacote selecionado"
-                    className="flex-1"
-                  />
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    onClick={() => setPackagePickerOpen(true)}
-                    aria-label="Pesquisar pacote"
-                    title="Pesquisar pacote"
-                  >
-                    <Search className="h-4 w-4" />
-                  </Button>
-                </div>
-                <p className="text-xs text-muted">PackageId: {form.packageId || "-"}</p>
-              </div>
-            </>
-          )}
-
-          {selectedActionType === AutomationTaskActionType.RunScript && (
-            <Select
-              label="ScriptId"
-              options={scriptOptions}
-              value={form.scriptId}
-              onChange={(e) => setForm((p) => ({ ...p, scriptId: e.target.value }))}
-            />
-          )}
         </div>
 
         {selectedActionType === AutomationTaskActionType.CustomCommand && (
@@ -1669,7 +1641,44 @@ export default function AutomationTasksPage() {
         )}
 
         <div className="mt-3 grid gap-3 md:grid-cols-2">
-          <div className="space-y-2 md:col-span-2">
+          {isPackageAction && (
+            <div className="space-y-1">
+              <label className="block text-sm font-medium text-muted-foreground">Nome do pacote</label>
+              <div className="flex gap-2">
+                <Input
+                  value={selectedPackageLabel}
+                  readOnly
+                  placeholder="Nenhum pacote selecionado"
+                  className="flex-1"
+                />
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => setPackagePickerOpen(true)}
+                  aria-label="Pesquisar pacote"
+                  title="Pesquisar pacote"
+                >
+                  <Search className="h-4 w-4" />
+                </Button>
+              </div>
+              <p className="text-xs text-muted">PackageId: {form.packageId || "-"}</p>
+            </div>
+          )}
+          {selectedActionType === AutomationTaskActionType.RunScript && (
+            <Select
+              label="ScriptId"
+              options={scriptOptions}
+              value={form.scriptId}
+              onChange={(e) => setForm((p) => ({ ...p, scriptId: e.target.value }))}
+            />
+          )}
+          <div
+            className={
+              isPackageAction || selectedActionType === AutomationTaskActionType.RunScript
+                ? "space-y-2"
+                : "space-y-2 md:col-span-2"
+            }
+          >
             <p className="text-sm font-medium text-muted-foreground">Tags (IncludeTags)</p>
             <div className="space-y-1">
               <label className="block text-sm font-medium text-muted-foreground">Selecionar tags</label>
@@ -1885,28 +1894,49 @@ export default function AutomationTasksPage() {
 
         <div className="mt-4 space-y-3 rounded-xl border border-border bg-surface-light p-3">
           <div>
-            <p className="text-sm font-medium text-foreground">Notificação ao usuário</p>
+            <p className="text-sm font-medium text-foreground">Coleta de dados (opcional)</p>
             <p className="text-xs text-muted">
-              Escolha como o usuário da máquina é avisado. O{" "}
-              <span className="font-medium">Prompt</span> exibe o Welcome do PSADT (Continuar / Adiar), sem ser
-              aprovação: se o usuário não responder, a ação padrão é continuar. O{" "}
-              <span className="font-medium">Toast</span> é um aviso informativo simples, sem exigir interação. Em{" "}
-              <span className="font-medium">Silencioso</span> nenhuma notificação é exibida.
+              Guarde o resultado da execução no cadastro do agente: em um campo customizado e/ou como
+              nota no histórico dele.
             </p>
           </div>
 
-          <div className="mt-3">
-            <Select
-              label="Gravar saída em campo (tarefa coletora)"
-              options={collectorFieldOptions}
-              value={form.collectorFieldDefinitionId}
-              onChange={(e) => setForm((p) => ({ ...p, collectorFieldDefinitionId: e.target.value }))}
-            />
-            <p className="mt-1 text-xs text-muted">
-              Quando escolhido, a última linha da saída da execução é gravada neste campo do agente
-              (o campo precisa permitir gravação pelo agente e estar liberado para a execução).
-              Evite coletar o mesmo campo pelo <span className="font-mono">MDZ_COLLECT</span> do script:
-              o coletor sobrescreveria o valor com a última linha.
+          <div className="grid gap-3 md:grid-cols-2">
+            {form.actionType === String(AutomationTaskActionType.RunScript) && (
+              <div className="space-y-1">
+                <Select
+                  label="Gravar saída em campo (tarefa coletora)"
+                  options={collectorFieldOptions}
+                  value={form.collectorFieldDefinitionId}
+                  onChange={(e) => setForm((p) => ({ ...p, collectorFieldDefinitionId: e.target.value }))}
+                  hint="Última linha da saída. Só campos que permitem gravação pelo agente; não use o mesmo campo via MDZ_COLLECT."
+                />
+              </div>
+            )}
+            <div className="space-y-1">
+              <label className="flex items-start gap-2 text-sm text-foreground">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 h-4 w-4 rounded border-border"
+                  checked={form.writeOutputToNote}
+                  onChange={(e) => setForm((p) => ({ ...p, writeOutputToNote: e.target.checked }))}
+                />
+                <span>
+                  Gravar saída como nota no agent
+                  <span className="block text-xs text-muted">
+                    Nota no histórico do agente (tarefa, resultado e saída até 4000 caracteres).
+                  </span>
+                </span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-4 space-y-3 rounded-xl border border-border bg-surface-light p-3">
+          <div>
+            <p className="text-sm font-medium text-foreground">Notificação ao usuário</p>
+            <p className="text-xs text-muted">
+              Como o usuário da máquina é avisado durante a execução.
             </p>
           </div>
 
@@ -1932,6 +1962,12 @@ export default function AutomationTasksPage() {
                 onChange={(e) => setForm((p) => ({ ...p, toastTiming: e.target.value }))}
               />
             )}
+            <Select
+              label="Status"
+              options={[{ value: "true", label: "Ativa" }, { value: "false", label: "Inativa" }]}
+              value={String(form.isActive)}
+              onChange={(e) => setForm((p) => ({ ...p, isActive: e.target.value === "true" }))}
+            />
           </div>
 
           {formNotificationMode === AutomationNotificationMode.Toast && (
@@ -1946,6 +1982,12 @@ export default function AutomationTasksPage() {
 
           {formNotificationMode === AutomationNotificationMode.Silent && (
             <p className="text-xs text-muted">A tarefa executa sem exibir nada ao usuário.</p>
+          )}
+
+          {formNotificationMode === AutomationNotificationMode.Prompt && (
+            <p className="text-xs text-muted">
+              Welcome do PSADT (Continuar / Adiar), sem ser aprovação: sem resposta, a ação padrão é continuar.
+            </p>
           )}
 
           {formNotificationMode === AutomationNotificationMode.Prompt && (
@@ -2021,14 +2063,6 @@ export default function AutomationTasksPage() {
             </>
           )}
 
-          <div className="grid gap-3 md:grid-cols-3">
-            <Select
-              label="Status"
-              options={[{ value: "true", label: "Ativa" }, { value: "false", label: "Inativa" }]}
-              value={String(form.isActive)}
-              onChange={(e) => setForm((p) => ({ ...p, isActive: e.target.value === "true" }))}
-            />
-          </div>
         </div>
 
         {editing && editingId ? <CustomFieldsUsedByPanel taskId={editingId} /> : null}

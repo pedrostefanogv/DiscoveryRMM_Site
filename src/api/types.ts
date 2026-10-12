@@ -3830,6 +3830,8 @@ export interface AutomationTaskSummary {
   toastTiming?: AutomationToastTiming | string | number;
   /** Campo customizado de agente que recebe a saída (tarefa coletora). */
   collectorFieldDefinitionId?: string | null;
+  /** Grava a saída da execução como nota no agent. */
+  writeOutputToNote?: boolean;
   lastUpdatedAt: string;
 }
 
@@ -3947,6 +3949,8 @@ export interface CreateAutomationTaskRequest {
   toastTiming?: AutomationToastTiming;
   /** Campo customizado de agente que recebe a saída (tarefa coletora). */
   collectorFieldDefinitionId?: string | null;
+  /** Grava a saída da execução como nota no agent. */
+  writeOutputToNote?: boolean;
   isActive?: boolean;
 }
 
