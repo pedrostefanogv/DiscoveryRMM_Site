@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import {
   Badge,
@@ -17,32 +18,18 @@ import {
 import {
   AutomationScriptType,
   type AutomationScriptConsume,
-  type CreateAutomationScriptRequest,
-  type UpdateAutomationScriptRequest,
   type AutomationScriptSummary,
 } from "@/api";
 import { CustomFieldsUsedByPanel } from "@/components/custom-fields/CustomFieldsUsedByPanel";
 import { ScriptContentEditor } from "./ScriptContentEditor";
-import { languageForScriptType } from "./scriptLanguages";
-import { validateJsonField, validateScriptSyntax } from "./scriptValidation";
 import { useClients } from "@/hooks/useClients";
 import {
   useAutomationScriptAudit,
   useAutomationScript,
   useAutomationScripts,
   useConsumeAutomationScript,
-  useCreateAutomationScript,
   useDeleteAutomationScript,
-  useUpdateAutomationScript,
 } from "@/hooks/useAutomation";
-
-const scriptTypeOptions = [
-  { value: String(AutomationScriptType.PowerShell), label: "PowerShell" },
-  { value: String(AutomationScriptType.Shell), label: "Shell" },
-  { value: String(AutomationScriptType.Python), label: "Python" },
-  { value: String(AutomationScriptType.Batch), label: "Batch" },
-  { value: String(AutomationScriptType.Custom), label: "Custom" },
-];
 
 function scriptTypeLabel(value: unknown): string {
   if (value === AutomationScriptType.PowerShell || value === "PowerShell") return "PowerShell";
@@ -86,35 +73,15 @@ function buildCorrelationId(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
 }
 
-type ScriptFormState = {
-  clientId: string;
-  name: string;
-  summary: string;
-  scriptType: string;
-  version: string;
-  executionFrequency: string;
-  triggerModesCsv: string;
-  content: string;
-  parametersSchemaJson: string;
-  metadataJson: string;
-  isActive: boolean;
-};
-
-const defaultForm: ScriptFormState = {
-  clientId: "",
-  name: "",
-  summary: "",
-  scriptType: String(AutomationScriptType.PowerShell),
-  version: "1.0.0",
-  executionFrequency: "manual",
-  triggerModesCsv: "manual",
-  content: "",
-  parametersSchemaJson: "",
-  metadataJson: "",
-  isActive: true,
-};
-
+/**
+ * Catálogo de scripts de automação.
+ *
+ * Criar/editar acontece em página dedicada (/automation/scripts/new e
+ * /automation/scripts/:id/edit): o formulário tem editor de conteúdo e JSONs
+ * opcionais e não cabia bem em modal. Consulta e auditoria continuam em modal.
+ */
 export default function AutomationScriptsPage() {
+  const navigate = useNavigate();
   const clients = useClients();
   const [activeOnly, setActiveOnly] = useState(true);
   const [clientId, setClientId] = useState("");
@@ -122,13 +89,9 @@ export default function AutomationScriptsPage() {
   const [page, setPage] = useState(1);
   const [pageCursors, setPageCursors] = useState<Array<string | undefined>>([undefined]);
 
-  const [formOpen, setFormOpen] = useState(false);
   const [auditScriptId, setAuditScriptId] = useState<string | null>(null);
   const [viewScriptId, setViewScriptId] = useState<string | null>(null);
   const [consumedPayload, setConsumedPayload] = useState<AutomationScriptConsume | null>(null);
-  const [editing, setEditing] = useState<AutomationScriptSummary | null>(null);
-  const [editingId, setEditingId] = useState("");
-  const [form, setForm] = useState<ScriptFormState>(defaultForm);
 
   const cursor = pageCursors[page - 1];
   const list = useAutomationScripts({
@@ -138,31 +101,10 @@ export default function AutomationScriptsPage() {
     limit,
   });
 
-  const createMutation = useCreateAutomationScript();
-  const updateMutation = useUpdateAutomationScript();
   const deleteMutation = useDeleteAutomationScript();
   const consumeMutation = useConsumeAutomationScript();
   const auditQuery = useAutomationScriptAudit(auditScriptId ?? "", 50, !!auditScriptId);
-  const scriptDetail = useAutomationScript(editingId);
   const viewScript = useAutomationScript(viewScriptId ?? "");
-
-  useEffect(() => {
-    if (!editingId || !scriptDetail.data) return;
-    const detail = scriptDetail.data;
-    setForm({
-      clientId: detail.clientId ?? "",
-      name: detail.name,
-      summary: detail.summary,
-      scriptType: String(detail.scriptType),
-      version: detail.version,
-      executionFrequency: detail.executionFrequency,
-      triggerModesCsv: detail.triggerModes.join(", "),
-      content: detail.content,
-      parametersSchemaJson: detail.parametersSchemaJson ?? "",
-      metadataJson: detail.metadataJson ?? "",
-      isActive: detail.isActive,
-    });
-  }, [editingId, scriptDetail.data]);
 
   const canPrev = page > 1 && !list.isFetching;
   const canNext = Boolean(list.data?.hasMore && list.data?.nextCursor) && !list.isFetching;
@@ -236,22 +178,7 @@ export default function AutomationScriptsPage() {
             <Button
               size="sm"
               variant="ghost"
-              onClick={() => {
-                setEditing(item);
-                setEditingId(item.id);
-                setForm({
-                  ...defaultForm,
-                  clientId: item.clientId ?? "",
-                  name: item.name,
-                  summary: item.summary,
-                  scriptType: String(item.scriptType),
-                  version: item.version,
-                  executionFrequency: item.executionFrequency,
-                  triggerModesCsv: item.triggerModes.join(", "),
-                  isActive: item.isActive,
-                });
-                setFormOpen(true);
-              }}
+              onClick={() => navigate(`/automation/scripts/${item.id}/edit`)}
             >
               Editar
             </Button>
@@ -291,7 +218,7 @@ export default function AutomationScriptsPage() {
         ),
       },
     ],
-    [deleteMutation],
+    [deleteMutation, navigate],
   );
 
   const clientOptions = [
@@ -313,100 +240,6 @@ export default function AutomationScriptsPage() {
   const clientLabel = (id: string | null | undefined) =>
     id ? clients.data?.find((c) => c.id === id)?.name ?? id : "Global";
 
-  const handleSubmit = () => {
-    const name = form.name.trim();
-    const summary = form.summary.trim();
-    const content = form.content.trim();
-    const triggerModes = Array.from(
-      new Set(
-        form.triggerModesCsv
-          .split(",")
-          .map((x) => x.trim())
-          .filter(Boolean),
-      ),
-    );
-
-    if (!name) return toast.error("Nome obrigatorio");
-    if (name.length > 200) return toast.error("Nome deve ter no máximo 200 caracteres");
-    if (!summary) return toast.error("Resumo obrigatorio");
-    if (summary.length > 2000) return toast.error("Resumo deve ter no máximo 2000 caracteres");
-    if (!content) return toast.error("Conteudo obrigatorio");
-    if (content.length > 200000) return toast.error("Conteudo acima do limite");
-    if (!triggerModes.length) return toast.error("Informe ao menos um trigger mode");
-
-    // Validacao de sintaxe do conteudo conforme o tipo selecionado.
-    const language = languageForScriptType(form.scriptType);
-    const syntaxErrors = validateScriptSyntax(form.content, language).filter(
-      (issue) => issue.severity === "error",
-    );
-    if (syntaxErrors.length) {
-      return toast.error(
-        `Corrija ${syntaxErrors.length} erro(s) de sintaxe (linha ${syntaxErrors[0].line}): ${syntaxErrors[0].message}`,
-      );
-    }
-
-    // JSONs opcionais tambem precisam estar bem formados.
-    const jsonIssue =
-      validateJsonField("ParametersSchemaJson", form.parametersSchemaJson) ??
-      validateJsonField("MetadataJson", form.metadataJson);
-    if (jsonIssue) return toast.error(jsonIssue.message);
-
-    const basePayload: CreateAutomationScriptRequest = {
-      clientId: form.clientId || null,
-      name,
-      summary,
-      scriptType: Number(form.scriptType) as AutomationScriptType,
-      version: form.version.trim() || "1.0.0",
-      executionFrequency: form.executionFrequency.trim() || "manual",
-      triggerModes,
-      content,
-      parametersSchemaJson: form.parametersSchemaJson.trim() || null,
-      metadataJson: form.metadataJson.trim() || null,
-      isActive: form.isActive,
-    };
-
-    if (editing) {
-      const payload: UpdateAutomationScriptRequest = {
-        ...basePayload,
-        content,
-      };
-      updateMutation.mutate(
-        {
-          id: editing.id,
-          data: payload,
-          correlationId: buildCorrelationId("script-update"),
-        },
-        {
-          onSuccess: () => {
-            toast.success("Script atualizado");
-            setFormOpen(false);
-            setEditing(null);
-            setEditingId("");
-            setForm(defaultForm);
-          },
-          onError: () => toast.error("Falha ao atualizar script"),
-        },
-      );
-      return;
-    }
-
-    createMutation.mutate(
-      {
-        data: basePayload,
-        correlationId: buildCorrelationId("script-create"),
-      },
-      {
-        onSuccess: () => {
-          toast.success("Script criado");
-          setFormOpen(false);
-          setEditingId("");
-          setForm(defaultForm);
-        },
-        onError: () => toast.error("Falha ao criar script"),
-      },
-    );
-  };
-
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-3">
@@ -414,16 +247,7 @@ export default function AutomationScriptsPage() {
           <h1 className="text-2xl font-bold text-foreground">Scripts de Automação</h1>
           <p className="text-sm text-muted">Catálogo de scripts reutilizaveis.</p>
         </div>
-        <Button
-          onClick={() => {
-            setEditing(null);
-            setEditingId("");
-            setForm(defaultForm);
-            setFormOpen(true);
-          }}
-        >
-          Novo script
-        </Button>
+        <Button onClick={() => navigate("/automation/scripts/new")}>Novo script</Button>
       </div>
 
       <Card>
@@ -494,111 +318,6 @@ export default function AutomationScriptsPage() {
       </Card>
 
       <Modal
-        open={formOpen}
-        onClose={() => {
-          setFormOpen(false);
-          setEditing(null);
-          setEditingId("");
-        }}
-        title={editing ? "Editar script" : "Novo script"}
-        maxWidth="max-w-4xl"
-      >
-        {editing && scriptDetail.isLoading && (
-          <div className="mb-3">
-            <Loading message="Carregando detalhes do script..." />
-          </div>
-        )}
-        {editing && scriptDetail.isError && (
-          <div className="mb-3">
-            <ErrorDisplay onRetry={() => scriptDetail.refetch()} />
-          </div>
-        )}
-        <div className="grid gap-3 md:grid-cols-2">
-          <Select
-            label="Cliente"
-            options={[{ value: "", label: "Global" }, ...clientOptions.slice(1)]}
-            value={form.clientId}
-            onChange={(e) => setForm((p) => ({ ...p, clientId: e.target.value }))}
-          />
-          <Input
-            label="Nome"
-            value={form.name}
-            onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
-          />
-          <Input
-            label="Resumo"
-            value={form.summary}
-            onChange={(e) => setForm((p) => ({ ...p, summary: e.target.value }))}
-          />
-          <Select
-            label="ScriptType"
-            options={scriptTypeOptions}
-            value={form.scriptType}
-            onChange={(e) => setForm((p) => ({ ...p, scriptType: e.target.value }))}
-          />
-          <Input
-            label="Versao"
-            value={form.version}
-            onChange={(e) => setForm((p) => ({ ...p, version: e.target.value }))}
-          />
-          <Input
-            label="ExecutionFrequency"
-            value={form.executionFrequency}
-            onChange={(e) => setForm((p) => ({ ...p, executionFrequency: e.target.value }))}
-            hint="Frequência declarada no catálogo (ex.: manual, diária). É informativa: quem agenda a execução é a tarefa de automação, não este campo."
-          />
-          <Input
-            label="TriggerModes (csv)"
-            value={form.triggerModesCsv}
-            onChange={(e) => setForm((p) => ({ ...p, triggerModesCsv: e.target.value }))}
-            hint="Como o script é disparado, separado por vírgula (ex.: manual, agent-checkin). Também é metadado: o disparo real vem dos gatilhos da tarefa."
-          />
-          <Select
-            label="Status"
-            options={[
-              { value: "true", label: "Ativo" },
-              { value: "false", label: "Inativo" },
-            ]}
-            value={String(form.isActive)}
-            onChange={(e) => setForm((p) => ({ ...p, isActive: e.target.value === "true" }))}
-          />
-        </div>
-        <div className="mt-3 space-y-3">
-          <ScriptContentEditor
-            label="Conteudo do script"
-            scriptType={form.scriptType}
-            value={form.content}
-            onChange={(content) => setForm((p) => ({ ...p, content }))}
-            hint="A apresentacao (sintaxe, indentacao e modelo) acompanha o tipo de script selecionado."
-          />
-          <TextArea
-            label="ParametersSchemaJson"
-            className="font-mono"
-            value={form.parametersSchemaJson}
-            onChange={(e) => setForm((p) => ({ ...p, parametersSchemaJson: e.target.value }))}
-            hint="Opcional. JSON Schema dos parâmetros do script. É repassado ao agente junto do conteúdo; deixe vazio quando o script não recebe parâmetros."
-          />
-          <TextArea
-            label="MetadataJson"
-            className="font-mono"
-            value={form.metadataJson}
-            onChange={(e) => setForm((p) => ({ ...p, metadataJson: e.target.value }))}
-            hint="Opcional. JSON livre para anotações do script (autor, origem, tags). É repassado ao agente sem interpretação."
-          />
-          {editing && editingId ? <CustomFieldsUsedByPanel scriptId={editingId} /> : null}
-          <div className="flex justify-end gap-2">
-            <Button variant="secondary" onClick={() => setFormOpen(false)}>Cancelar</Button>
-            <Button
-              onClick={handleSubmit}
-              loading={createMutation.isPending || updateMutation.isPending}
-            >
-              {editing ? "Salvar" : "Criar"}
-            </Button>
-          </div>
-        </div>
-      </Modal>
-
-      <Modal
         open={!!viewScriptId}
         onClose={() => {
           setViewScriptId(null);
@@ -650,7 +369,7 @@ export default function AutomationScriptsPage() {
               scriptType={viewScript.data.scriptType}
               value={viewScript.data.content}
               onChange={() => {}}
-              hint="Somente leitura — use 'Editar' na lista para alterar o conteúdo."
+              hint="Somente leitura — use 'Editar' para abrir a tela dedicada de edição."
             />
 
             <TextArea
@@ -667,7 +386,7 @@ export default function AutomationScriptsPage() {
               rows={5}
               value={prettyJson(viewScript.data.metadataJson)}
               readOnly
-              hint="Anotações livres do script (autor, origem, tags)."
+              hint="Anotações livres do script (autor, origem, tags) e chaves interpretadas pelo agente (ex.: psadtWelcome)."
             />
 
             <div className="space-y-2 rounded-lg border border-border bg-surface-light p-3">
@@ -693,6 +412,8 @@ export default function AutomationScriptsPage() {
                 </pre>
               )}
             </div>
+
+            <CustomFieldsUsedByPanel scriptId={viewScriptId ?? undefined} />
           </div>
         )}
       </Modal>

@@ -38,6 +38,7 @@ const SoftwareInventory = lazy(() => import('@/pages/software/SoftwareInventory'
 const SoftwareStore = lazy(() => import('@/pages/software/SoftwareStore'));
 const AutomationHome = lazy(() => import('@/pages/automation/AutomationHome'));
 const AutomationScriptsPage = lazy(() => import('@/pages/automation/AutomationScriptsPage'));
+const AutomationScriptFormPage = lazy(() => import('@/pages/automation/AutomationScriptFormPage'));
 const AutomationTasksPage = lazy(() => import('@/pages/automation/AutomationTasksPage'));
 const AutomationOperationsPage = lazy(() => import('@/pages/automation/AutomationOperationsPage'));
 const AutomationAuditPage = lazy(() => import('@/pages/automation/AutomationAuditPage'));
@@ -373,6 +374,22 @@ export const router = createBrowserRouter([
         element: (
           <PermissionGate anyOf={['automation.*', 'automation.read', 'admin.*']}>
             <LazyPage><AutomationScriptsPage /></LazyPage>
+          </PermissionGate>
+        ),
+      },
+      {
+        path: 'automation/scripts/new',
+        element: (
+          <PermissionGate anyOf={['automation.*', 'automation.read', 'admin.*']}>
+            <LazyPage><AutomationScriptFormPage /></LazyPage>
+          </PermissionGate>
+        ),
+      },
+      {
+        path: 'automation/scripts/:id/edit',
+        element: (
+          <PermissionGate anyOf={['automation.*', 'automation.read', 'admin.*']}>
+            <LazyPage><AutomationScriptFormPage /></LazyPage>
           </PermissionGate>
         ),
       },
