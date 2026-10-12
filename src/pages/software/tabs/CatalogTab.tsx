@@ -3,9 +3,10 @@ import toast from 'react-hot-toast';
 import {
   Search, ShieldCheck, ChevronLeft, ChevronRight,
   Package, RefreshCw, RotateCcw, X, LayoutGrid, LayoutList, Info, ExternalLink,
+  Plus, Pencil, Trash2,
 } from 'lucide-react';
-import { Badge, Button, Card, ErrorDisplay, Input, Loading, Modal, Select } from '@/components/ui';
-import { useAppStoreCatalog, useSyncCatalog } from '@/hooks/useAppStore';
+import { Badge, Button, Card, ConfirmDialog, ErrorDisplay, Input, Loading, Modal, Select } from '@/components/ui';
+import { useAppStoreCatalog, useDeleteCustomPackage, useSyncCatalog } from '@/hooks/useAppStore';
 import { appStoreApi } from '@/api/app-store';
 import {
   AppInstallationType,
@@ -16,6 +17,7 @@ import { PackageIcon } from '../components/PackageIcon';
 import { MarkdownDescription } from '../components/MarkdownDescription';
 import { Highlight } from '../components/Highlight';
 import { ApprovalFormModal } from '../components/ApprovalFormModal';
+import { CustomPackageFormModal } from '../components/CustomPackageFormModal';
 import { PackageDetailsModal } from '../components/PackageDetailsModal';
 import {
   installationTypeOptions, limitOptions, APP_STORE_LAST_SYNC_STORAGE_KEY,
@@ -35,6 +37,10 @@ export function CatalogTab() {
   const [syncConfirmOpen, setSyncConfirmOpen] = useState(false);
   const [syncConfirmValue, setSyncConfirmValue] = useState('');
   const [syncConfirmTouched, setSyncConfirmTouched] = useState(false);
+  const [customFormOpen, setCustomFormOpen] = useState(false);
+  const [editingCustom, setEditingCustom] = useState<AppStoreCatalogPackage | null>(null);
+  const [deletingCustom, setDeletingCustom] = useState<AppStoreCatalogPackage | null>(null);
+  const deleteCustomPackage = useDeleteCustomPackage();
   const [lastSyncByType, setLastSyncByType] = useState<
     Partial<Record<AppInstallationType, SyncChocolateyCatalogResponse>>
   >(() => {
@@ -157,6 +163,7 @@ export function CatalogTab() {
   const hasMore = query.data?.hasMore ?? false;
   const isChocolatey = installationType === AppInstallationType.Chocolatey;
   const isWinget = installationType === AppInstallationType.Winget;
+  const isCustom = installationType === AppInstallationType.Custom;
   const isCatalogEmpty = (query.data?.totalPackagesInSource ?? 0) === 0;
   const syncLabel = isChocolatey ? 'Chocolatey' : 'Winget';
   const lastSyncInfo = lastSyncByType[installationType];
@@ -264,6 +271,15 @@ export function CatalogTab() {
             </div>
           </div>
           <Button variant="ghost" onClick={resetFilters} title="Limpar filtros"><RotateCcw className="h-4 w-4" /></Button>
+          {isCustom && (
+            <Button
+              variant="primary"
+              onClick={() => { setEditingCustom(null); setCustomFormOpen(true); }}
+              title="Cadastrar um novo modelo custom na loja"
+            >
+              <Plus className="h-4 w-4" /> Novo modelo custom
+            </Button>
+          )}
           {(isChocolatey || isWinget) && (
             <Button variant="primary" onClick={handleSyncRequest} loading={isSyncingThis} disabled={syncingType !== null && !isSyncingThis} title={`Sincronizar catálogo ${syncLabel}`}>
               <RefreshCw className="h-4 w-4" /> {isSyncingThis ? 'Sincronizando...' : 'Sincronizar Catálogo'}
@@ -309,6 +325,11 @@ export function CatalogTab() {
             {(isChocolatey || isWinget) && isCatalogEmpty && (
               <Button className="mt-3" onClick={handleSyncRequest} loading={syncCatalog.isPending}><RefreshCw className="h-4 w-4" /> Sincronizar catálogo agora</Button>
             )}
+            {isCustom && (
+              <Button className="mt-3" onClick={() => { setEditingCustom(null); setCustomFormOpen(true); }}>
+                <Plus className="h-4 w-4" /> Cadastrar primeiro modelo custom
+              </Button>
+            )}
             {searchApplied && <button type="button" onClick={resetFilters} className="mt-3 text-xs text-primary hover:underline">Limpar busca</button>}
           </div>
         )}
@@ -336,6 +357,16 @@ export function CatalogTab() {
                 </div>
                 <div className="flex flex-shrink-0 items-center gap-2">
                   <Button variant="ghost" size="sm" onClick={() => setDetailsTarget(pkg)}><Info className="h-4 w-4" /> Detalhes</Button>
+                  {pkg.installationType === AppInstallationType.Custom && (
+                    <>
+                      <Button variant="ghost" size="sm" onClick={() => { setEditingCustom(pkg); setCustomFormOpen(true); }} title="Editar pacote custom">
+                        <Pencil className="h-4 w-4" /> Editar
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => setDeletingCustom(pkg)} title="Excluir pacote custom">
+                        <Trash2 className="h-4 w-4" /> Excluir
+                      </Button>
+                    </>
+                  )}
                   <Button size="sm" onClick={() => setApprovalTarget(pkg)}><ShieldCheck className="h-4 w-4" /> Aprovar / Negar</Button>
                 </div>
               </div>
@@ -364,6 +395,16 @@ export function CatalogTab() {
                 </div>
                 <div className="flex items-center gap-2 pt-1">
                   <Button variant="ghost" size="sm" className="flex-1" onClick={() => setDetailsTarget(pkg)}><Info className="h-4 w-4" /> Detalhes</Button>
+                  {pkg.installationType === AppInstallationType.Custom && (
+                    <Button variant="ghost" size="sm" onClick={() => { setEditingCustom(pkg); setCustomFormOpen(true); }} title="Editar pacote custom">
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                  )}
+                  {pkg.installationType === AppInstallationType.Custom && (
+                    <Button variant="ghost" size="sm" onClick={() => setDeletingCustom(pkg)} title="Excluir pacote custom">
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  )}
                   <Button size="sm" className="flex-1" onClick={() => setApprovalTarget(pkg)}><ShieldCheck className="h-4 w-4" /> Aprovar</Button>
                 </div>
               </div>
@@ -375,6 +416,38 @@ export function CatalogTab() {
       <ApprovalFormModal open={!!approvalTarget} onClose={() => setApprovalTarget(null)}
         prefillPackageId={approvalTarget?.packageId ?? ''} prefillInstallationType={installationType} lockPackageId />
       <PackageDetailsModal open={!!detailsTarget} onClose={() => setDetailsTarget(null)} pkg={detailsTarget} installationType={installationType} />
+
+      <CustomPackageFormModal
+        open={customFormOpen}
+        onClose={() => { setCustomFormOpen(false); setEditingCustom(null); }}
+        editing={editingCustom}
+      />
+
+      <ConfirmDialog
+        open={!!deletingCustom}
+        title="Excluir pacote custom"
+        message={
+          <span>
+            Remover <strong>{deletingCustom?.name ?? deletingCustom?.packageId}</strong> da loja? O instalador e o ícone são
+            apagados do object storage. Regras de aprovação existentes deixam de ter efeito.
+          </span>
+        }
+        confirmLabel="Excluir"
+        tone="danger"
+        isLoading={deleteCustomPackage.isPending}
+        onClose={() => setDeletingCustom(null)}
+        onConfirm={async () => {
+          if (!deletingCustom) return;
+          try {
+            await deleteCustomPackage.mutateAsync(deletingCustom.packageId);
+            toast.success('Pacote custom excluído.');
+            setDeletingCustom(null);
+            void query.refetch();
+          } catch (err) {
+            toast.error(err instanceof Error ? err.message : 'Falha ao excluir o pacote custom.');
+          }
+        }}
+      />
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Badge, Button, Card, CardHeader, ErrorDisplay, Input, Loading, Select, TextArea } from '@/components/ui';
+import { Badge, Button, Card, CardHeader, ErrorDisplay, Input, Loading, Modal, Select, TextArea } from '@/components/ui';
 import {
   CustomFieldDataType,
   CustomFieldRuntimeAccessMode,
@@ -71,6 +71,7 @@ export default function CustomFieldsSettings() {
   const [includeInactive, setIncludeInactive] = useState(false);
   const [selectedScopeFilter, setSelectedScopeFilter] = useState('');
   const [editingDefinitionId, setEditingDefinitionId] = useState<string | null>(null);
+  const [definitionModalOpen, setDefinitionModalOpen] = useState(false);
   const [definitionForm, setDefinitionForm] = useState<DefinitionFormState>(defaultDefinitionForm);
   // Chave da definição: derivada do título na criação e imutável depois de
   // criada (relatórios, automações e valores gravados a referenciam).
@@ -265,7 +266,14 @@ export default function CustomFieldsSettings() {
     setTouched(false);
   }
 
-  function editDefinition(definition: CustomFieldDefinition) {
+  /** Abre o modal em modo de criação, sempre com o formulário limpo. */
+  function openCreateDefinition() {
+    resetDefinitionForm();
+    setDefinitionModalOpen(true);
+  }
+
+  /** Abre o modal em modo de edição carregando a definição escolhida. */
+  function openEditDefinition(definition: CustomFieldDefinition) {
     setEditingDefinitionId(definition.id);
     setTouched(true);
     setDefinitionForm({
@@ -289,6 +297,14 @@ export default function CustomFieldsSettings() {
         canWrite: binding.canWrite,
       })),
     });
+    setDefinitionModalOpen(true);
+  }
+
+  /** Fecha o modal descartando o rascunho (bloqueado durante o salvamento). */
+  function closeDefinitionModal() {
+    if (createDefinition.isPending || updateDefinition.isPending) return;
+    resetDefinitionForm();
+    setDefinitionModalOpen(false);
   }
 
   async function handleSaveDefinition() {
@@ -380,6 +396,7 @@ export default function CustomFieldsSettings() {
         toast.success('Definição criada.');
       }
       resetDefinitionForm();
+      setDefinitionModalOpen(false);
     } catch (error) {
       toast.error(getApiErrorMessage(error, 'Falha ao salvar definição.'));
     }
@@ -430,13 +447,20 @@ export default function CustomFieldsSettings() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Custom Fields</h1>
-        <p className="text-sm text-muted">Gerencie definições por escopo e os valores por Servidor, Cliente, Site e Agente. Campos de Ticket sao preenchidos dentro do chamado.</p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Custom Fields</h1>
+          <p className="text-sm text-muted">Gerencie definições por escopo e os valores por Servidor, Cliente, Site e Agente. Campos de Ticket sao preenchidos dentro do chamado.</p>
+        </div>
+        <Button onClick={openCreateDefinition}>Novo Campo</Button>
       </div>
 
-      <Card>
-        <CardHeader title={editingDefinitionId ? 'Editar Definição' : 'Nova Definição'} subtitle="Cadastre o campo e escolha o escopo e o tipo de dado." />
+      <Modal
+        open={definitionModalOpen}
+        onClose={closeDefinitionModal}
+        title={editingDefinitionId ? 'Editar Campo Personalizado' : 'Novo Campo Personalizado'}
+        maxWidth="max-w-4xl"
+      >
         <div className="grid gap-4 lg:grid-cols-2">
           <Input
             label="Título *"
@@ -496,11 +520,11 @@ export default function CustomFieldsSettings() {
           bindingOptions={automationBindingOptions}
         />
 
-        <div className="mt-4 flex justify-end gap-2">
-          <Button variant="ghost" onClick={resetDefinitionForm}>Cancelar</Button>
+        <div className="mt-6 flex justify-end gap-2">
+          <Button variant="ghost" onClick={closeDefinitionModal}>Cancelar</Button>
           <Button onClick={() => void handleSaveDefinition()} loading={createDefinition.isPending || updateDefinition.isPending}>{editingDefinitionId ? 'Salvar Definição' : 'Criar Definição'}</Button>
         </div>
-      </Card>
+      </Modal>
 
       <Card>
         <CardHeader title="Definições" subtitle="Liste, filtre e desative custom fields." />
@@ -543,7 +567,7 @@ export default function CustomFieldsSettings() {
                 {definition.description ? <p className="mt-2 text-sm text-muted-foreground">{definition.description}</p> : null}
                 {definition.options.length > 0 ? <p className="mt-2 text-xs text-muted">Opções: {definition.options.join(', ')}</p> : null}
                 <div className="mt-3 flex flex-wrap gap-2">
-                  <Button size="sm" variant="secondary" onClick={() => editDefinition(definition)}>Editar</Button>
+                  <Button size="sm" variant="secondary" onClick={() => openEditDefinition(definition)}>Editar</Button>
                   <Button size="sm" variant="danger" onClick={() => void handleDeleteDefinition(definition)}>Desativar</Button>
                 </div>
               </div>

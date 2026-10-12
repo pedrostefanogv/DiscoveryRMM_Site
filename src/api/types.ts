@@ -3529,6 +3529,11 @@ export interface AppStoreCatalogPackage {
   architecture: string | null;
   installationType: AppInstallationType;
   installCommand?: string | null;
+  uninstallCommand?: string | null;
+  extractZip?: boolean;
+  fileName?: string | null;
+  fileSizeBytes?: number | null;
+  hasFile?: boolean;
   lastUpdated?: string | null;
   installerUrlsByArch?: Record<string, string>;
   icon?: string | null;
@@ -3536,6 +3541,40 @@ export interface AppStoreCatalogPackage {
   license?: string | null;
   category?: string | null;
   tags?: string[] | null;
+}
+
+/** Asset (instalador ou ícone) enviado ao object storage para um pacote custom. */
+export interface CustomPackageAsset {
+  objectKey: string;
+  bucket: string;
+  contentType: string;
+  fileName: string;
+  sizeBytes: number;
+  checksum?: string | null;
+  url?: string | null;
+}
+
+/** Payload de criação/edição de um pacote custom da loja. */
+export interface UpsertCustomPackageRequest {
+  packageId: string;
+  name: string;
+  publisher?: string | null;
+  version?: string | null;
+  description?: string | null;
+  iconUrl?: string | null;
+  iconObjectKey?: string | null;
+  siteUrl?: string | null;
+  installCommand?: string | null;
+  uninstallCommand?: string | null;
+  extractZip?: boolean;
+  fileName?: string | null;
+  metadataJson?: string | null;
+  fileObjectKey?: string | null;
+  fileBucket?: string | null;
+  filePublicUrl?: string | null;
+  fileContentType?: string | null;
+  fileSizeBytes?: number | null;
+  fileChecksum?: string | null;
 }
 
 export interface AppStoreCatalogPage {
@@ -3832,6 +3871,8 @@ export interface AutomationTaskSummary {
   collectorFieldDefinitionId?: string | null;
   /** Grava a saída da execução como nota no agent. */
   writeOutputToNote?: boolean;
+  /** Chave padronizada (normalizada [a-z0-9_-]) da tarefa. */
+  key?: string | null;
   lastUpdatedAt: string;
 }
 
@@ -3951,6 +3992,8 @@ export interface CreateAutomationTaskRequest {
   collectorFieldDefinitionId?: string | null;
   /** Grava a saída da execução como nota no agent. */
   writeOutputToNote?: boolean;
+  /** Chave padronizada (normalizada [a-z0-9_-]). Ausente = derivada do nome. */
+  key?: string | null;
   isActive?: boolean;
 }
 

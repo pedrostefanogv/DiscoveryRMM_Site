@@ -1,7 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { appStoreApi } from "@/api/app-store";
 import { AppInstallationType } from "@/api/types";
-import type { CreateAppApprovalRuleRequest } from "@/api/types";
+import type {
+  CreateAppApprovalRuleRequest,
+  UpsertCustomPackageRequest,
+} from "@/api/types";
 import type {
   CatalogParams,
   ApprovalsParams,
@@ -84,6 +87,33 @@ export function useDeleteApproval() {
         qc.invalidateQueries({ queryKey: ["appStore", "approvals"] }),
         qc.invalidateQueries({ queryKey: ["appStore", "audit"] }),
         qc.invalidateQueries({ queryKey: ["appStore", "effective"] }),
+      ]),
+  });
+}
+
+export function useUpsertCustomPackage() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: UpsertCustomPackageRequest) =>
+      appStoreApi.upsertCustomPackage(data),
+    onSuccess: () =>
+      Promise.all([
+        qc.invalidateQueries({ queryKey: ["appStore", "catalog"] }),
+        qc.invalidateQueries({ queryKey: ["appStore", "effective"] }),
+      ]),
+  });
+}
+
+export function useDeleteCustomPackage() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (packageId: string) =>
+      appStoreApi.deleteCustomPackage(packageId),
+    onSuccess: () =>
+      Promise.all([
+        qc.invalidateQueries({ queryKey: ["appStore", "catalog"] }),
+        qc.invalidateQueries({ queryKey: ["appStore", "effective"] }),
+        qc.invalidateQueries({ queryKey: ["appStore", "approvals"] }),
       ]),
   });
 }

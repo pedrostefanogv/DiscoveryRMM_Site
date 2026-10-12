@@ -1,4 +1,4 @@
-﻿import { api } from "./client";
+import { api } from "./client";
 import { AppInstallationType } from "./types";
 import type {
   AppApprovalScopeType,
@@ -13,6 +13,8 @@ import type {
   AppDiffEntry,
   AppDiffPage,
   SyncChocolateyCatalogResponse,
+  CustomPackageAsset,
+  UpsertCustomPackageRequest,
 } from "./types";
 
 const BASE = "/api/v1/app-store";
@@ -96,6 +98,11 @@ function normalizeCatalogPackage(
     architecture: item.architecture ?? null,
     installationType,
     installCommand: item.installCommand ?? null,
+    uninstallCommand: item.uninstallCommand ?? null,
+    extractZip: Boolean(item.extractZip),
+    fileName: item.fileName ?? null,
+    fileSizeBytes: item.fileSizeBytes ?? null,
+    hasFile: Boolean(item.hasFile),
     lastUpdated: item.lastUpdated ?? null,
     installerUrlsByArch: item.installerUrlsByArch ?? {},
     icon: iconFromApi ?? fallbackIcon,
@@ -328,4 +335,28 @@ export const appStoreApi = {
       `${BASE}/diff/effective`,
       params as unknown as Record<string, unknown>,
     ),
+
+  // ── Pacotes custom (cadastro manual) ──────────────────────────────
+
+  /** Envia instalador (kind=installer) ou ícone/capa (kind=icon) para o object storage. */
+  uploadCustomAsset: (
+    file: File,
+    kind: "installer" | "icon" = "installer",
+  ) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    return api.post<CustomPackageAsset>(
+      `${BASE}/custom/assets?kind=${kind}`,
+      formData,
+      { timeoutMs: 0 },
+    );
+  },
+
+  /** Cria ou atualiza um pacote custom. */
+  upsertCustomPackage: (data: UpsertCustomPackageRequest) =>
+    api.post<AppStoreCatalogPackage>(`${BASE}/custom`, data),
+
+  /** Remove um pacote custom. */
+  deleteCustomPackage: (packageId: string) =>
+    api.del<void>(`${BASE}/custom/${encodeURIComponent(packageId)}`),
 };

@@ -51,6 +51,8 @@ import { useSites } from "@/hooks/useSites";
 import { useAgentsBySite } from "@/hooks/useAgents";
 import { useAppStoreCatalog } from "@/hooks/useAppStore";
 import { useAgentCustomFieldMap } from "@/hooks/useCustomFields";
+import { useAutoKey } from "@/hooks/useAutoKey";
+import { fieldKeyError } from "@/utils/fieldKey";
 import { Search, LayoutGrid, List, Eye, Pencil, ScrollText, Trash2, RotateCcw, Info, CalendarClock } from "lucide-react";
 
 function buildCorrelationId(prefix: string) {
@@ -166,6 +168,8 @@ type TaskFormState = {
   collectorFieldDefinitionId: string;
   /** Grava a saída da execução como nota no agent. */
   writeOutputToNote: boolean;
+  /** Chave padronizada derivada do nome. */
+  key: string;
   isActive: boolean;
 };
 
@@ -192,6 +196,7 @@ const defaultForm: TaskFormState = {
   promptTimeoutSeconds: 60,
   collectorFieldDefinitionId: "",
   writeOutputToNote: false,
+  key: "",
   isActive: true,
 };
 
@@ -259,6 +264,8 @@ export default function AutomationTasksPage() {
   const [editingId, setEditingId] = useState("");
   // Campos de agente que podem receber a saída (tarefa coletora). O mapa só é
   // buscado com o formulário aberto.
+  // Chave padronizada: derivada do nome até ser editada à mão (padrão dos campos customizados).
+  const { keyForTitle, markTouched, setTouched } = useAutoKey(editing !== null);
   const agentFieldMap = useAgentCustomFieldMap(formOpen);
   const collectorFieldOptions = useMemo(
     () => [
@@ -408,6 +415,7 @@ export default function AutomationTasksPage() {
       promptTimeoutSeconds: detail.promptTimeoutSeconds ?? 60,
       collectorFieldDefinitionId: detail.collectorFieldDefinitionId ?? "",
       writeOutputToNote: detail.writeOutputToNote ?? false,
+      key: detail.key ?? "",
       isActive: detail.isActive,
     });
 
@@ -597,6 +605,8 @@ export default function AutomationTasksPage() {
     const normalizedScopeType = normalizeScopeType(item.scopeType);
     setEditing(item);
     setEditingId(item.id);
+    // Em edição a chave já existe: não deve ser redigerada a partir do nome.
+    setTouched(true);
     setForm({
       ...defaultForm,
       name: item.name,
@@ -611,6 +621,7 @@ export default function AutomationTasksPage() {
       promptTimeoutSeconds: item.promptTimeoutSeconds ?? 60,
       collectorFieldDefinitionId: item.collectorFieldDefinitionId ?? "",
       writeOutputToNote: item.writeOutputToNote ?? false,
+      key: item.key ?? "",
       isActive: item.isActive,
     });
     applyScopeCascade(normalizedScopeType, item);
@@ -1056,6 +1067,7 @@ export default function AutomationTasksPage() {
       collectorFieldDefinitionId:
         actionType === AutomationTaskActionType.RunScript ? form.collectorFieldDefinitionId || null : null,
       writeOutputToNote: form.writeOutputToNote,
+      key: form.key.trim() || null,
       isActive: form.isActive,
     };
 
@@ -1519,15 +1531,40 @@ export default function AutomationTasksPage() {
         )}
         <div className="grid gap-3 md:grid-cols-2">
           <Input
-            label="Nome"
+            label="Nome *"
             value={form.name}
-            onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
+            hint="Título exibido nas listagens."
+            onChange={(e) => {
+              const name = e.target.value;
+              // Enquanto a chave não for editada à mão, ela acompanha o nome.
+              setForm((p) => ({ ...p, name, key: keyForTitle(name, p.key) }));
+            }}
           />
           <Input
-            label="Descrição"
-            value={form.description}
-            onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
+            label="Chave *"
+            value={form.key}
+            placeholder="ex: coletar_anydesk"
+            hint="Identificador padronizado ([a-z0-9_-]) usado por relatórios e automações."
+            error={
+              !editing && form.key.trim()
+                ? fieldKeyError(form.key, { allowHyphen: true }) ?? undefined
+                : undefined
+            }
+            onChange={(e) => {
+              markTouched();
+              setForm((p) => ({ ...p, key: e.target.value.toLowerCase() }));
+            }}
           />
+          <div className="md:col-span-2">
+            <TextArea
+              label="Observação geral"
+              rows={3}
+              value={form.description}
+              placeholder="Descreva o objetivo da tarefa, o que ela coleta e qualquer observação relevante."
+              hint="Texto livre para documentar a tarefa (aparece no detalhe e na auditoria)."
+              onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
+            />
+          </div>
           <Select
             label="ActionType"
             options={[
@@ -1912,6 +1949,13 @@ export default function AutomationTasksPage() {
                   hint="Última linha da saída. Só campos que permitem gravação pelo agente; não use o mesmo campo via MDZ_COLLECT."
                 />
               </div>
+            )}
+            {form.actionType !== String(AutomationTaskActionType.RunScript) && (
+              <p className="text-xs text-muted">
+                O coletor em campo está disponível apenas para tarefas de{" "}
+                <span className="font-medium">Executar script</span>. Nos outros tipos, use a nota no
+                agent para guardar a saída.
+              </p>
             )}
             <div className="space-y-1">
               <label className="flex items-start gap-2 text-sm text-foreground">
