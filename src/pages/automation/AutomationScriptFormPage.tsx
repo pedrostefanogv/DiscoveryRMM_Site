@@ -30,7 +30,7 @@ import {
 import { buildCorrelationId } from './automationTasksUtils';
 import { ScriptContentEditor } from './ScriptContentEditor';
 import { languageForScriptType } from './scriptLanguages';
-import { validateJsonField, validateScriptSyntax } from './scriptValidation';
+import { validateScriptSyntax } from './scriptValidation';
 
 export const scriptTypeOptions = [
   { value: String(AutomationScriptType.PowerShell), label: 'PowerShell' },
@@ -46,11 +46,7 @@ type ScriptFormState = {
   summary: string;
   scriptType: string;
   version: string;
-  executionFrequency: string;
-  triggerModesCsv: string;
   content: string;
-  parametersSchemaJson: string;
-  metadataJson: string;
   isActive: boolean;
 };
 
@@ -60,26 +56,47 @@ const emptyForm: ScriptFormState = {
   summary: '',
   scriptType: String(AutomationScriptType.PowerShell),
   version: '1.0.0',
-  executionFrequency: 'manual',
-  triggerModesCsv: 'manual',
   content: '',
-  parametersSchemaJson: '',
-  metadataJson: '',
   isActive: true,
 };
+
+/**
+ * Normaliza o ScriptType para o valor usado pelo <Select> ("0".."4").
+ *
+ * A API serializa enums como NOME ("PowerShell") por causa do
+ * JsonStringEnumConverter, enquanto as opções do select são numéricas. Sem esta
+ * normalização o payload saía com `Number("PowerShell")` = NaN, o JSON virava
+ * `"scriptType": null` e o PUT respondia 400.
+ */
+const SCRIPT_TYPE_OPTION_VALUES = scriptTypeOptions.map((option) => option.value);
+
+function scriptTypeOptionValue(value: unknown): string {
+  const text = typeof value === 'number' ? String(value) : String(value ?? '').trim();
+  if (SCRIPT_TYPE_OPTION_VALUES.includes(text)) return text;
+
+  const numeric = Number(text);
+  if (!Number.isNaN(numeric) && SCRIPT_TYPE_OPTION_VALUES.includes(String(numeric))) {
+    return String(numeric);
+  }
+
+  const named = Object.entries(AutomationScriptType).find(
+    ([name]) => name.toLowerCase() === text.toLowerCase(),
+  );
+  if (named && SCRIPT_TYPE_OPTION_VALUES.includes(String(named[1]))) return String(named[1]);
+
+  // Valor desconhecido (enum novo no backend): preserva como Custom em vez de
+  // trocar o tipo silenciosamente para PowerShell no próximo save.
+  return String(AutomationScriptType.Custom);
+}
 
 function formFromDetail(detail: AutomationScriptDetail): ScriptFormState {
   return {
     clientId: detail.clientId ?? '',
     name: detail.name,
     summary: detail.summary,
-    scriptType: String(detail.scriptType),
+    scriptType: scriptTypeOptionValue(detail.scriptType),
     version: detail.version,
-    executionFrequency: detail.executionFrequency,
-    triggerModesCsv: detail.triggerModes.join(', '),
     content: detail.content,
-    parametersSchemaJson: detail.parametersSchemaJson ?? '',
-    metadataJson: detail.metadataJson ?? '',
     isActive: detail.isActive,
   };
 }
@@ -87,17 +104,29 @@ function formFromDetail(detail: AutomationScriptDetail): ScriptFormState {
 /**
  * Página dedicada de criação/edição de script de automação.
  *
- * Antes era um modal: com o editor de conteúdo + os JSONs opcionais o formulário
- * estourava a viewport e o botão salvar ficava fora de alcance. Aqui a própria
- * página rola no <main> do layout, a barra de ações fica fixa no rodapé e o
- * formulário tem URL própria (deep link e refresh preservam o contexto).
+ * Antes era um modal: com o editor de conteúdo o formulário estourava a viewport
+ * e o botão salvar ficava fora de alcance. Aqui a própria página rola no <main>
+ * do layout, a barra de ações fica fixa no rodapé e o formulário tem URL própria
+ * (deep link e refresh preservam o contexto).
+ *
+ * O script é só escopo + tipo + conteúdo: os metadados declarativos
+ * (ExecutionFrequency/TriggerModes) e os JSONs de contrato (ParametersSchemaJson/
+ * MetadataJson) foram removidos do produto — agendamento e comportamento vêm da
+ * tarefa de automação (gatilhos e CommandPayload).
  */
 export default function AutomationScriptFormPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const isEdit = Boolean(id);
-  const detail = useAutomationScript(id ?? '');
+  // Em edição sempre revalida na montagem: montar o form a partir do cache e
+  // salvar por cima descartaria uma alteração feita por outro usuário.
+  const detail = useAutomationScript(id ?? '', { refetchOnMount: 'always' });
+  const mountedAtRef = useRef(Date.now());
   const backToList = () => navigate('/automation/scripts');
+  // Refetches posteriores (foco/reconexão) não bloqueiam o form para não
+  // descartar o que está sendo digitado.
+  const awaitingFreshDetail =
+    isEdit && detail.isFetching && detail.dataUpdatedAt < mountedAtRef.current;
 
   if (isEdit && detail.isError) {
     return (
@@ -112,7 +141,7 @@ export default function AutomationScriptFormPage() {
     );
   }
 
-  if (isEdit && (detail.isLoading || !detail.data)) {
+  if (isEdit && (detail.isLoading || awaitingFreshDetail || !detail.data)) {
     return (
       <div className="space-y-6">
         <PageHeader title="Editar script" onBack={backToList} />
@@ -176,14 +205,6 @@ function ScriptForm({ editId, initial }: { editId: string | null; initial: Scrip
     const name = form.name.trim();
     const summary = form.summary.trim();
     const content = form.content.trim();
-    const triggerModes = Array.from(
-      new Set(
-        form.triggerModesCsv
-          .split(',')
-          .map((item) => item.trim())
-          .filter(Boolean),
-      ),
-    );
 
     if (!name) return toast.error('Nome obrigatorio');
     if (name.length > 200) return toast.error('Nome deve ter no máximo 200 caracteres');
@@ -191,7 +212,6 @@ function ScriptForm({ editId, initial }: { editId: string | null; initial: Scrip
     if (summary.length > 2000) return toast.error('Resumo deve ter no máximo 2000 caracteres');
     if (!content) return toast.error('Conteudo obrigatorio');
     if (content.length > 200000) return toast.error('Conteudo acima do limite');
-    if (!triggerModes.length) return toast.error('Informe ao menos um trigger mode');
 
     // Validacao de sintaxe do conteudo conforme o tipo selecionado.
     const language = languageForScriptType(form.scriptType);
@@ -204,23 +224,13 @@ function ScriptForm({ editId, initial }: { editId: string | null; initial: Scrip
       );
     }
 
-    // JSONs opcionais tambem precisam estar bem formados.
-    const jsonIssue =
-      validateJsonField('ParametersSchemaJson', form.parametersSchemaJson) ??
-      validateJsonField('MetadataJson', form.metadataJson);
-    if (jsonIssue) return toast.error(jsonIssue.message);
-
-    const basePayload: CreateAutomationScriptRequest = {
+    const payload: CreateAutomationScriptRequest = {
       clientId: form.clientId || null,
       name,
       summary,
-      scriptType: Number(form.scriptType) as AutomationScriptType,
+      scriptType: Number(scriptTypeOptionValue(form.scriptType)) as AutomationScriptType,
       version: form.version.trim() || '1.0.0',
-      executionFrequency: form.executionFrequency.trim() || 'manual',
-      triggerModes,
       content,
-      parametersSchemaJson: form.parametersSchemaJson.trim() || null,
-      metadataJson: form.metadataJson.trim() || null,
       isActive: form.isActive,
     };
 
@@ -236,11 +246,11 @@ function ScriptForm({ editId, initial }: { editId: string | null; initial: Scrip
     const onError = () => toast.error(editId ? 'Falha ao atualizar script' : 'Falha ao criar script');
 
     if (editId) {
-      const payload: UpdateAutomationScriptRequest = { ...basePayload, content };
+      const updatePayload: UpdateAutomationScriptRequest = payload;
       update.mutate(
         {
           id: editId,
-          data: payload,
+          data: updatePayload,
           correlationId: buildCorrelationId('script-update'),
         },
         { onSuccess: () => onSuccess('Script atualizado'), onError },
@@ -250,7 +260,7 @@ function ScriptForm({ editId, initial }: { editId: string | null; initial: Scrip
 
     create.mutate(
       {
-        data: basePayload,
+        data: payload,
         correlationId: buildCorrelationId('script-create'),
       },
       { onSuccess: () => onSuccess('Script criado'), onError },
@@ -267,7 +277,7 @@ function ScriptForm({ editId, initial }: { editId: string | null; initial: Scrip
     >
       <PageHeader
         title={editId ? 'Editar script' : 'Novo script'}
-        description="Catálogo de scripts reutilizáveis. Escolha o escopo, o tipo e o conteúdo; os JSONs opcionais descrevem o contrato do script com o agente."
+        description="Escolha o escopo, o tipo e o conteúdo. Quem agenda e parametriza a execução é a tarefa de automação."
         onBack={backToList}
       />
 
@@ -281,8 +291,13 @@ function ScriptForm({ editId, initial }: { editId: string | null; initial: Scrip
             label="Cliente"
             options={clientOptions}
             value={form.clientId}
+            disabled={Boolean(editId)}
             onChange={(event) => set('clientId', event.target.value)}
-            hint="Global = disponível para todos os clientes."
+            hint={
+              editId
+                ? 'O escopo não muda em um script existente (a API ignora ClientId no update): crie um novo script para outro cliente.'
+                : 'Global = disponível para todos os clientes.'
+            }
           />
           <Select
             label="Status"
@@ -304,7 +319,14 @@ function ScriptForm({ editId, initial }: { editId: string | null; initial: Scrip
             label="Versão"
             value={form.version}
             onChange={(event) => set('version', event.target.value)}
-            hint="Rótulo de versão exibido no catálogo e no payload (ex.: 1.0.0)."
+            hint="Rótulo de versão exibido no catálogo (ex.: 1.0.0)."
+          />
+          <Select
+            label="ScriptType"
+            options={scriptTypeOptions}
+            value={form.scriptType}
+            onChange={(event) => set('scriptType', event.target.value)}
+            hint="Define a linguagem executada pelo agente e o editor (realce, indentação e modelo)."
           />
           <div className="md:col-span-2">
             <TextArea
@@ -314,42 +336,6 @@ function ScriptForm({ editId, initial }: { editId: string | null; initial: Scrip
               onChange={(event) => set('summary', event.target.value)}
               hint="Obrigatório (até 2000 caracteres). É o texto que o operador lê ao escolher o script na tarefa."
             />
-          </div>
-        </div>
-      </Card>
-
-      <Card>
-        <CardHeader
-          title="Execução declarada"
-          subtitle="Metadados de catálogo: descrevem o script e viajam no payload de consumo/auditoria. Quem agenda de fato é a tarefa de automação."
-        />
-        <div className="grid gap-3 md:grid-cols-2">
-          <Select
-            label="ScriptType"
-            options={scriptTypeOptions}
-            value={form.scriptType}
-            onChange={(event) => set('scriptType', event.target.value)}
-            hint="Define a linguagem executada pelo agente e o editor (realce, indentação e modelo)."
-          />
-          <Input
-            label="ExecutionFrequency"
-            value={form.executionFrequency}
-            onChange={(event) => set('executionFrequency', event.target.value)}
-            hint="Rótulo de frequência esperada (ex.: manual, diária, semanal). Informativo: não cria agendamento — o cron/recorrência vem do gatilho da tarefa."
-          />
-          <Input
-            label="TriggerModes (csv)"
-            value={form.triggerModesCsv}
-            onChange={(event) => set('triggerModesCsv', event.target.value)}
-            hint="Lista de rótulos separados por vírgula (ex.: manual, agent-checkin, user-login). Declarativo: ajuda a filtrar/entender o catálogo; o disparo real está nos gatilhos da tarefa."
-          />
-          <div className="rounded-lg border border-border bg-surface-light p-3 text-xs text-muted md:col-span-2">
-            <p className="font-medium text-foreground">Onde o disparo real é configurado</p>
-            <p className="mt-1">
-              Em <strong>Tarefas de automação</strong>: TriggerImmediate, TriggerRecurring (ScheduleCron),
-              TriggerOnUserLogin e TriggerOnAgentCheckIn. O script é apenas o conteúdo executado —
-              ExecutionFrequency e TriggerModes aqui servem para documentar e organizar o catálogo.
-            </p>
           </div>
         </div>
       </Card>
@@ -366,31 +352,6 @@ function ScriptForm({ editId, initial }: { editId: string | null; initial: Scrip
           onChange={(content) => set('content', content)}
           hint="Sintaxe validada antes de salvar; erros de sintaxe bloqueiam o envio."
         />
-      </Card>
-
-      <Card>
-        <CardHeader
-          title="Contrato com o agente (opcional)"
-          subtitle="Estes dois JSONs são gravados no script e entregues ao agente no policy-sync e no payload de consumo. Preencha só quando houver necessidade."
-        />
-        <div className="space-y-3">
-          <TextArea
-            label="ParametersSchemaJson"
-            className="font-mono"
-            rows={6}
-            value={form.parametersSchemaJson}
-            onChange={(event) => set('parametersSchemaJson', event.target.value)}
-            hint="JSON Schema dos parâmetros aceitos pelo script (nome, tipo, default, enum, required). Útil quando o mesmo script é reutilizado com valores diferentes, quando você documenta/valida o que a tarefa deve enviar em CommandPayload, e quando o script é exposto como ferramenta para IA/automação externa. Deixe vazio quando o script não recebe parâmetros."
-          />
-          <TextArea
-            label="MetadataJson"
-            className="font-mono"
-            rows={6}
-            value={form.metadataJson}
-            onChange={(event) => set('metadataJson', event.target.value)}
-            hint="JSON livre entregue ao agente junto do conteúdo. Chaves conhecidas são interpretadas: o bloco psadtWelcome/welcome (allowDefer, deferTimes, deferDeadline, forceCountdownSeconds, closeProcesses...) sobrescreve as opções do prompt PSADT. Também é o lugar de anotações (autor, origem, tags, changelog)."
-          />
-        </div>
       </Card>
 
       {editId ? (

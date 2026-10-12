@@ -77,11 +77,15 @@ export function useAutomationScripts(params: {
   });
 }
 
-export function useAutomationScript(id: string) {
+export function useAutomationScript(
+  id: string,
+  options?: { refetchOnMount?: boolean | "always" },
+) {
   return useQuery({
     queryKey: KEYS.scripts.detail(id),
     queryFn: () => automationApi.getScript(id),
     enabled: !!id,
+    ...options,
   });
 }
 

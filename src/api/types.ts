@@ -3789,8 +3789,6 @@ export interface AutomationScriptSummary {
   summary: string;
   scriptType: AutomationScriptType | string | number;
   version: string;
-  executionFrequency: string;
-  triggerModes: string[];
   isActive: boolean;
   lastUpdatedAt: string;
   createdAt: string;
@@ -3799,8 +3797,6 @@ export interface AutomationScriptSummary {
 export interface AutomationScriptDetail extends AutomationScriptSummary {
   content: string;
   contentHashSha256: string;
-  parametersSchemaJson: string | null;
-  metadataJson: string | null;
   updatedAt: string;
 }
 
@@ -3814,11 +3810,7 @@ export interface CreateAutomationScriptRequest {
   summary: string;
   scriptType: AutomationScriptType;
   version?: string | null;
-  executionFrequency?: string | null;
-  triggerModes: string[];
   content: string;
-  parametersSchemaJson?: string | null;
-  metadataJson?: string | null;
   isActive?: boolean;
 }
 
@@ -3906,8 +3898,6 @@ export interface AgentAutomationScriptRef {
   scriptType: AutomationScriptType | string | number;
   lastUpdatedAt: string;
   contentHashSha256: string;
-  parametersSchemaJson?: string | null;
-  metadataJson?: string | null;
 }
 
 /** Política de automação que o agent recebe no policy-sync. */

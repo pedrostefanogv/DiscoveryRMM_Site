@@ -7,8 +7,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
  *
  * Regressões cobertas:
  *  - /automation/scripts/new monta o formulário vazio e envia o payload completo;
- *  - /automation/scripts/:id/edit hidrata o formulário a partir do detalhe
- *    (incluindo ParametersSchemaJson/MetadataJson).
+ *  - /automation/scripts/:id/edit hidrata o formulário a partir do detalhe.
  */
 const { createMutate, updateMutate, detail } = vi.hoisted(() => ({
   createMutate: vi.fn(),
@@ -20,15 +19,11 @@ const { createMutate, updateMutate, detail } = vi.hoisted(() => ({
     summary: "Remove arquivos temporarios",
     scriptType: "PowerShell",
     version: "2.0.0",
-    executionFrequency: "semanal",
-    triggerModes: ["manual", "agent-checkin"],
     isActive: true,
     lastUpdatedAt: "2026-01-01T00:00:00Z",
     createdAt: "2026-01-01T00:00:00Z",
     content: 'Write-Output "ok"',
     contentHashSha256: "abc",
-    parametersSchemaJson: '{"type":"object"}',
-    metadataJson: '{"author":"ti"}',
     updatedAt: "2026-01-01T00:00:00Z",
   },
 }));
@@ -68,6 +63,7 @@ function renderAt(entry: string) {
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  detail.scriptType = "PowerShell";
 });
 
 describe("AutomationScriptFormPage", () => {
@@ -92,12 +88,12 @@ describe("AutomationScriptFormPage", () => {
       name: "Meu script",
       summary: "Faz alguma coisa",
       content: 'Write-Output "ok"',
-      triggerModes: ["manual"],
-      executionFrequency: "manual",
       version: "1.0.0",
       isActive: true,
     });
     expect(vars.correlationId).toContain("script-create");
+    // Na criação o escopo é escolhido pelo operador.
+    expect((screen.getByLabelText("Cliente") as HTMLSelectElement).disabled).toBe(false);
   });
 
   it("hidrata o formulário a partir do detalhe ao editar", () => {
@@ -105,15 +101,9 @@ describe("AutomationScriptFormPage", () => {
 
     expect(screen.getByText("Editar script")).toBeTruthy();
     expect((screen.getByLabelText("Nome *") as HTMLInputElement).value).toBe("Limpar temporarios");
-    expect(
-      (screen.getByLabelText("TriggerModes (csv)") as HTMLInputElement).value,
-    ).toBe("manual, agent-checkin");
-    expect((screen.getByLabelText("ExecutionFrequency") as HTMLInputElement).value).toBe("semanal");
-    expect(
-      (screen.getByLabelText("ParametersSchemaJson") as HTMLTextAreaElement).value,
-    ).toBe('{"type":"object"}');
-    expect((screen.getByLabelText("MetadataJson") as HTMLTextAreaElement).value).toBe(
-      '{"author":"ti"}',
+    expect((screen.getByLabelText("Versão") as HTMLInputElement).value).toBe("2.0.0");
+    expect((screen.getByLabelText("Conteudo do script *") as HTMLTextAreaElement).value).toBe(
+      'Write-Output "ok"',
     );
 
     fireEvent.click(screen.getByRole("button", { name: /salvar/i }));
@@ -122,6 +112,20 @@ describe("AutomationScriptFormPage", () => {
     const [vars] = updateMutate.mock.calls[0];
     expect(vars.id).toBe("s1");
     expect(vars.data.version).toBe("2.0.0");
-    expect(vars.data.triggerModes).toEqual(["manual", "agent-checkin"]);
+    // A API devolve scriptType como NOME ("PowerShell"): o payload precisa voltar
+    // como enum numérico, senão o PUT recebe null e responde 400.
+    expect(vars.data.scriptType).toBe(0);
+    // A API ignora ClientId no update: o select de escopo fica travado na edição.
+    expect((screen.getByLabelText("Cliente") as HTMLSelectElement).disabled).toBe(true);
+  });
+
+  it("trata ScriptType desconhecido como Custom em vez de trocar para PowerShell", () => {
+    detail.scriptType = "Bash";
+    renderAt("/automation/scripts/s1/edit");
+
+    fireEvent.click(screen.getByRole("button", { name: /salvar/i }));
+
+    const [vars] = updateMutate.mock.calls[0];
+    expect(vars.data.scriptType).toBe(4);
   });
 });
