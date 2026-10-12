@@ -30,6 +30,10 @@ export interface CustomFieldDefinition {
   dataType: CustomFieldDataType;
   isActive: boolean;
   options: string[];
+  /** Departamento vinculado (apenas escopo Departamento). null = todos. */
+  departmentId: string | null;
+  /** Nome do departamento resolvido pela API (evita depender de outra listagem). */
+  departmentName: string | null;
   createdAt: string | null;
   updatedAt: string | null;
 }
@@ -523,6 +527,12 @@ function normalizeDefinition(
     options: normalizeOptions(
       raw.options ?? raw.Options ?? raw.allowedValues ?? raw.AllowedValues,
     ),
+    departmentId: normalizeNullableId(
+      raw.departmentId ?? raw.DepartmentId,
+    ),
+    departmentName: normalizeNullableText(
+      raw.departmentName ?? raw.DepartmentName,
+    ),
     createdAt:
       raw.createdAt === null || raw.createdAt === undefined
         ? null
@@ -532,6 +542,18 @@ function normalizeDefinition(
         ? null
         : String(raw.updatedAt),
   };
+}
+
+function normalizeNullableId(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  const id = String(value);
+  return id ? id : null;
+}
+
+function normalizeNullableText(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  const text = String(value).trim();
+  return text ? text : null;
 }
 
 function normalizeOptions(value: unknown): string[] {

@@ -21,6 +21,7 @@ import {
 import { agentsApi, clientsApi, sitesApi, type Agent, type Client, type Site } from '@/api';
 import { CustomFieldTemplatesSection } from '@/components/configuration/CustomFieldTemplatesSection';
 import { fieldKeyError } from '@/utils/fieldKey';
+import { describeCustomFieldBinding } from '@/utils/customFieldBinding';
 import { useAutoKey } from '@/hooks/useAutoKey';
 
 type DefinitionFormState = {
@@ -406,6 +407,7 @@ export default function CustomFieldsSettings() {
                   <Badge color="slate">{getCustomFieldDataTypeLabel(definition.dataType)}</Badge>
                 </div>
                 <p className="mt-2 text-xs text-muted">Chave: {definition.name}</p>
+                <DefinitionBinding definition={definition} />
                 {definition.description ? <p className="mt-2 text-sm text-muted-foreground">{definition.description}</p> : null}
                 {definition.options.length > 0 ? <p className="mt-2 text-xs text-muted">Opções: {definition.options.join(', ')}</p> : null}
                 <div className="mt-3 flex flex-wrap gap-2">
@@ -466,6 +468,22 @@ export default function CustomFieldsSettings() {
         )}
       </Card>
     </div>
+  );
+}
+
+/**
+ * Mostra a qual entidade o campo está vinculado (ou "todos") — os campos de
+ * departamento apareciam só com o selo "Departamento", sem dizer qual era.
+ */
+function DefinitionBinding({ definition }: { definition: CustomFieldDefinition }) {
+  const binding = describeCustomFieldBinding(definition);
+  return (
+    <p className="mt-1 text-xs text-muted">
+      Vínculo:{' '}
+      <span className={binding.isSpecific ? 'font-medium text-foreground' : 'text-muted-foreground'}>
+        {binding.label}
+      </span>
+    </p>
   );
 }
 

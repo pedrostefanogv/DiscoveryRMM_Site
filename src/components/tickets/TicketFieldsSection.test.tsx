@@ -194,6 +194,8 @@ describe('TicketFieldsSection', () => {
         dataType: 0, // Text
         isActive: true,
         options: [],
+        departmentId: null,
+        departmentName: null,
         createdAt: null,
         updatedAt: null,
       },
@@ -227,6 +229,8 @@ describe('TicketFieldsSection', () => {
         dataType: 7, // ListBox
         isActive: true,
         options: ['ERP', 'CRM'],
+        departmentId: null,
+        departmentName: null,
         createdAt: null,
         updatedAt: null,
       },
@@ -239,6 +243,8 @@ describe('TicketFieldsSection', () => {
         dataType: 3, // Boolean
         isActive: true,
         options: [],
+        departmentId: null,
+        departmentName: null,
         createdAt: null,
         updatedAt: null,
       },
