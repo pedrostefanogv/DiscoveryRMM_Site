@@ -465,6 +465,45 @@ export const serverEditableFields: EditableField[] = [
     description:
       "Valida o certificado TLS do endpoint. Desative apenas em ambientes de desenvolvimento com certificados autoassinados.",
   },
+  // ── Anexos por nível (comentário x repositório do chamado) ─────────────
+  // Comentário = conversa (pequeno, com miniatura); chamado = repositório de
+  // arquivos grandes (upload resumível). Os limites ficam no servidor e são
+  // herdados por cliente/site.
+  {
+    key: "attachmentCommentMaxFileSizeBytes",
+    label: "Anexo de comentário — tamanho máx. (bytes)",
+    kind: "number",
+    group: "storage",
+    description: "Limite por arquivo no fluxo de comentários. Padrão: 10485760 (10 MB). Acima disso a UI avisa e sugere enviar em Anexos do chamado.",
+  },
+  {
+    key: "attachmentCommentAllowedContentTypes",
+    label: "Anexo de comentário — tipos permitidos",
+    kind: "string",
+    group: "storage",
+    description: "Lista separada por vírgula (ex.: image/jpeg,image/png,image/webp,application/pdf).",
+  },
+  {
+    key: "attachmentTicketMaxFileSizeBytes",
+    label: "Anexo do chamado — tamanho máx. (bytes)",
+    kind: "number",
+    group: "storage",
+    description: "Repositório de arquivos grandes do chamado. Padrão: 2147483648 (2 GB). Máximo: 10737418240 (10 GB) — mesmo teto do nginx. Acima de ~64 MB o upload usa multipart com retomada.",
+  },
+  {
+    key: "attachmentTicketAllowedContentTypes",
+    label: "Anexo do chamado — tipos permitidos",
+    kind: "string",
+    group: "storage",
+    description: "Lista separada por vírgula (imagens, PDF, zip/7z, exe/msi, log/txt/csv, octet-stream...).",
+  },
+  {
+    key: "attachmentTicketTotalQuotaBytes",
+    label: "Anexos do chamado — cota total (bytes)",
+    kind: "number",
+    group: "storage",
+    description: "Soma máxima de anexos por chamado. 0 = sem cota.",
+  },
   // ── NATS (Server-only) ───────────────────────────────
   {
     key: "natsEnabled",

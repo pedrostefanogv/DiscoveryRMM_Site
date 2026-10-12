@@ -170,6 +170,51 @@ export function useAddComment() {
   });
 }
 
+export function useDeleteComment() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ ticketId, commentId }: { ticketId: string; commentId: string }) =>
+      ticketsApi.deleteComment(ticketId, commentId),
+    onSuccess: (_d, vars) => {
+      qc.invalidateQueries({ queryKey: KEYS.comments(vars.ticketId) });
+      // A exclusão entra na timeline (TicketActivityType.CommentDeleted).
+      qc.invalidateQueries({ queryKey: KEYS.timeline(vars.ticketId) });
+    },
+  });
+}
+
+/** Anexo de comentário (nível conversa) — exige o comentário já criado. */
+export function usePrepareCommentUpload() {
+  return useMutation({
+    mutationFn: ({
+      ticketId,
+      commentId,
+      data,
+    }: {
+      ticketId: string;
+      commentId: string;
+      data: PresignedUploadRequest;
+    }) => ticketsApi.prepareCommentUpload(ticketId, commentId, data),
+  });
+}
+
+export function useCompleteCommentUpload() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      ticketId,
+      commentId,
+      data,
+    }: {
+      ticketId: string;
+      commentId: string;
+      data: CompleteUploadRequest;
+    }) => ticketsApi.completeCommentUpload(ticketId, commentId, data),
+    onSuccess: (_d, vars) =>
+      qc.invalidateQueries({ queryKey: KEYS.comments(vars.ticketId) }),
+  });
+}
+
 export function useAddTicketWatcher() {
   const qc = useQueryClient();
   return useMutation({

@@ -21,6 +21,39 @@ import type {
 
 const BASE = "/api/v1/tickets";
 
+/**
+ * Baixa um anexo como blob pela API autenticada (same-origin, com
+ * Authorization). Um <a href> direto não envia o header e o endpoint antigo
+ * redirecionava para o storage (bloqueado por CORS).
+ */
+async function downloadAttachmentBlob(
+  url: string,
+): Promise<{ blob: Blob; fileName: string }> {
+  const response = await apiFetchResponse(url, { method: "GET" });
+
+  if (!response.ok) {
+    const message = await parseErrorMessage(response);
+    throw new ApiError(response.status, message);
+  }
+
+  const blob = await response.blob();
+  const disposition = response.headers.get("content-disposition") ?? "";
+  const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+  const quotedMatch = disposition.match(/filename="([^"]+)"/i);
+  let fileName = "anexo";
+  if (utf8Match?.[1]) {
+    try {
+      fileName = decodeURIComponent(utf8Match[1]);
+    } catch {
+      fileName = utf8Match[1];
+    }
+  } else if (quotedMatch?.[1]) {
+    fileName = quotedMatch[1];
+  }
+
+  return { blob, fileName };
+}
+
 export interface ReopenTicketRequest {
   reason?: string | null;
 }
@@ -137,8 +170,46 @@ export const ticketsApi = {
       params ?? {},
     ),
 
+  // O backend devolve AddTicketCommentResult({ commentId, createdAt }) — não o
+  // TicketComment completo. O tipo aceita as duas grafias para o chamador
+  // conseguir o id do comentário novo (necessário para anexar arquivos a ele).
   addComment: (id: string, data: AddCommentRequest) =>
-    api.post<TicketComment>(`${BASE}/${id}/comments`, data),
+    api.post<TicketComment & { commentId?: string }>(`${BASE}/${id}/comments`, data),
+
+  /** Exclui (soft delete) um comentário: ele continua legível, marcado. */
+  deleteComment: (id: string, commentId: string) =>
+    api.del<TicketComment>(`${BASE}/${id}/comments/${commentId}`),
+
+  // Anexos de COMENTÁRIO (conversa): mesmas duas etapas do anexo do chamado,
+  // porém escopados ao comentário (EntityType "TicketComment" no backend).
+  prepareCommentUpload: (
+    id: string,
+    commentId: string,
+    data: PresignedUploadRequest,
+  ) =>
+    api.post<PresignedUploadResponse>(
+      `${BASE}/${id}/comments/${commentId}/attachments/presigned-upload`,
+      data,
+    ),
+
+  completeCommentUpload: (
+    id: string,
+    commentId: string,
+    data: CompleteUploadRequest,
+  ) =>
+    api.post<TicketAttachment>(
+      `${BASE}/${id}/comments/${commentId}/attachments/complete-upload`,
+      data,
+    ),
+
+  downloadCommentAttachment: (
+    id: string,
+    commentId: string,
+    attachmentId: string,
+  ): Promise<{ blob: Blob; fileName: string }> =>
+    downloadAttachmentBlob(
+      `${BASE}/${id}/comments/${commentId}/attachments/${attachmentId}/download`,
+    ),
 
   // Watchers
   listWatchers: (ticketId: string) =>
@@ -209,37 +280,10 @@ export const ticketsApi = {
    * Baixa o anexo como blob (same-origin, com Authorization). O <a href> direto
    * não envia o header e o endpoint redirecionava para o storage (CORS).
    */
-  downloadAttachment: async (
-    ticketId: string,
-    attachmentId: string,
-  ): Promise<{ blob: Blob; fileName: string }> => {
-    const response = await apiFetchResponse(
+  downloadAttachment: (ticketId: string, attachmentId: string) =>
+    downloadAttachmentBlob(
       `${BASE}/${ticketId}/attachments/${attachmentId}/download`,
-      { method: "GET" },
-    );
-
-    if (!response.ok) {
-      const message = await parseErrorMessage(response);
-      throw new ApiError(response.status, message);
-    }
-
-    const blob = await response.blob();
-    const disposition = response.headers.get("content-disposition") ?? "";
-    const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i);
-    const quotedMatch = disposition.match(/filename="([^"]+)"/i);
-    let fileName = "anexo";
-    if (utf8Match?.[1]) {
-      try {
-        fileName = decodeURIComponent(utf8Match[1]);
-      } catch {
-        fileName = utf8Match[1];
-      }
-    } else if (quotedMatch?.[1]) {
-      fileName = quotedMatch[1];
-    }
-
-    return { blob, fileName };
-  },
+    ),
 
   // Lifecycle: reopen / rating (CSAT)
   reopen: (id: string, data: ReopenTicketRequest) =>

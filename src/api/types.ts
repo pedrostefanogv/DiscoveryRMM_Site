@@ -1274,6 +1274,20 @@ export interface UpdateEscalationRuleRequest {
   escalationCooldownMinutes?: number;
 }
 
+/**
+ * Anexo de COMENTÁRIO (nível conversa): pequeno (10 MB por padrão), imagens e
+ * PDF, com miniatura. Diferente do anexo do chamado (repositório de arquivos
+ * grandes), ele fica ligado ao comentário e é soft-deletado junto com ele.
+ */
+export interface TicketCommentAttachment {
+  id: string;
+  fileName: string;
+  contentType: string;
+  sizeBytes: number;
+  uploadedBy?: string | null;
+  createdAt: string;
+}
+
 export interface TicketComment {
   id: string;
   ticketId: string;
@@ -1281,6 +1295,10 @@ export interface TicketComment {
   content: string;
   isInternal: boolean;
   createdAt: string;
+  /** Soft delete: comentário excluído continua legível, apenas marcado. */
+  deletedAt?: string | null;
+  deletedBy?: string | null;
+  attachments?: TicketCommentAttachment[] | null;
 }
 
 export interface TicketWatcher {

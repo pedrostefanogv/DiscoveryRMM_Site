@@ -16,6 +16,9 @@ import {
   useTicketAttachments,
   usePrepareTicketUpload,
   useCompleteTicketUpload,
+  usePrepareCommentUpload,
+  useCompleteCommentUpload,
+  useDeleteComment,
   useReopenTicket,
   useDeleteTicket,
 } from '@/hooks/useTickets';
@@ -36,7 +39,7 @@ import { useAgentsByClient, useAgentsBySite } from '@/hooks/useAgents';
 import { describeSlaPause, hasPausedShift, resolveSlaExpiryDisplay } from './slaDisplay';
 import { useTicketAnswers } from '@/hooks/useTicketAnswers';
 import { useAutomationTasks } from '@/hooks/useAutomation';
-import { useTicketAttachmentSettings } from '@/hooks/useConfigurationApi';
+import { useTicketAttachmentSettings, useServerConfig } from '@/hooks/useConfigurationApi';
 import { useSiteTicketAttachmentSettings, useClientTicketAttachmentSettings } from '@/hooks/useConfigurationApi';
 import { useWorkflowStates } from '@/hooks/useWorkflow';
 import { useIamUsers } from '@/hooks/useIdentity';
@@ -309,6 +312,7 @@ export default function TicketDetail() {
                   ticketId={id!}
                   draftSeed={commentSeed}
                   currentUserLogin={currentUserLogin}
+                  onOpenAttachments={() => setTab('attachments')}
                 />
               ) : tab === 'timeline' ? (
                 <TimelinePanel
@@ -357,6 +361,7 @@ export default function TicketDetail() {
                   ticketId={id!}
                   draftSeed={commentSeed}
                   currentUserLogin={currentUserLogin}
+                  onOpenAttachments={() => setTab('attachments')}
                 />
               )}
             </div>
@@ -1778,17 +1783,42 @@ type CommentItem = {
   content: string;
   isInternal: boolean;
   createdAt: string;
+  /** Soft delete: o comentário continua legível e marcado como excluído. */
+  deletedAt?: string | null;
+  deletedBy?: string | null;
+  /** Anexos do nível conversa (pequenos, com miniatura). */
+  attachments?: Array<{
+    id: string;
+    fileName: string;
+    contentType?: string | null;
+    sizeBytes?: number;
+  }> | null;
 };
+
+/** Dispara o download de um blob já autenticado (same-origin). */
+function triggerBlobDownload(blob: Blob, fileName: string) {
+  const objectUrl = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = objectUrl;
+  anchor.download = fileName || 'anexo';
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(objectUrl);
+}
 
 function CommentsPanel({
   ticketId,
   draftSeed,
   currentUserLogin,
+  onOpenAttachments,
 }: {
   ticketId: string;
   draftSeed?: CommentSeed | null;
   /** Login do usuário logado já em minúsculas; vazio quando não resolvido. */
   currentUserLogin: string;
+  /** Atalho para a aba Anexos (repositório) quando o arquivo da conversa é grande. */
+  onOpenAttachments?: () => void;
 }) {
   // Rolagem do histórico: ao chegar no fim, o restante do delta vai para a
   // página (mesmo comportamento do agent desktop).
@@ -1799,6 +1829,21 @@ function CommentsPanel({
   const [cursor, setCursor] = useState<string | undefined>(undefined);
   const comments = useTicketComments(ticketId, { cursor });
   const items = pages.flatMap(page => page.items);
+  const removeComment = useDeleteComment();
+
+  const handleDeleteComment = (commentId: string) => {
+    if (!window.confirm('Excluir este comentário? Ele continua visível no histórico, marcado como excluído.')) {
+      return;
+    }
+    removeComment.mutate(
+      { ticketId, commentId },
+      {
+        onSuccess: () => toast.success('Comentário excluído'),
+        onError: (error) =>
+          toast.error(error instanceof Error && error.message ? error.message : 'Erro ao excluir comentário'),
+      },
+    );
+  };
 
   const isOwnComment = (author: string | null | undefined) =>
     Boolean(currentUserLogin) &&
@@ -1836,24 +1881,68 @@ function CommentsPanel({
             const own = isOwnComment(c.author);
             // Classe por combinação (proprio/suporte x publico/interno): uma única
             // classe de cor de borda por balão, sem depender da ordem do Tailwind.
-            const bubbleTone = own
-              ? c.isInternal
-                ? 'bg-primary text-white rounded-br-md border border-warning/40'
-                : 'bg-primary text-white rounded-br-md'
-              : c.isInternal
-                ? 'bg-surface-light text-foreground rounded-bl-md border border-warning/40'
-                : 'bg-surface-light text-foreground rounded-bl-md border border-border';
+            const deleted = Boolean(c.deletedAt);
+            const bubbleTone = deleted
+              ? 'bg-surface-light/60 text-muted rounded-bl-md border border-dashed border-danger/50'
+              : own
+                ? c.isInternal
+                  ? 'bg-primary text-white rounded-br-md border border-warning/40'
+                  : 'bg-primary text-white rounded-br-md'
+                : c.isInternal
+                  ? 'bg-surface-light text-foreground rounded-bl-md border border-warning/40'
+                  : 'bg-surface-light text-foreground rounded-bl-md border border-border';
+            const commentAttachments = Array.isArray(c.attachments) ? c.attachments : [];
             return (
               <div key={c.id} className={`flex flex-col ${own ? 'items-end' : 'items-start'}`}>
                 <div
                   className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm whitespace-pre-wrap break-words ${bubbleTone}`}
                 >
-                  {c.content}
+                  {/* Excluído continua LEGÍVEL: o conteúdo não é apagado, só marcado. */}
+                  {deleted ? <em className="opacity-80">{c.content}</em> : c.content}
+
+                  {commentAttachments.length > 0 && (
+                    <div className={`mt-2 flex flex-wrap gap-2 ${deleted ? 'opacity-60' : ''}`}>
+                      {commentAttachments.map((attachment) => (
+                        <button
+                          key={attachment.id}
+                          type="button"
+                          onClick={() => {
+                            void ticketsApi
+                              .downloadCommentAttachment(ticketId, c.id, attachment.id)
+                              .then(({ blob, fileName }) => triggerBlobDownload(blob, fileName || attachment.fileName))
+                              .catch(() => toast.error('Não foi possível abrir o anexo.'));
+                          }}
+                          title={`${attachment.fileName} — ${formatBytes(attachment.sizeBytes ?? 0)}`}
+                          className="flex items-center gap-2 rounded-lg border border-border bg-background/60 px-2 py-1 text-left hover:border-primary/60"
+                        >
+                          <AttachmentThumb ticketId={ticketId} commentId={c.id} attachment={attachment} size="sm" />
+                          <span className="max-w-[160px] truncate text-xs">{attachment.fileName}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <div className="mt-1 flex items-center gap-2 text-xs text-muted">
                   <span className="text-sm font-medium text-foreground">{c.author}</span>
                   <span className="text-xs text-muted">{new Date(c.createdAt).toLocaleString('pt-BR')}</span>
                   {c.isInternal && <Badge color="warning"><Lock className="mr-1 h-3 w-3" />Interno</Badge>}
+                  {deleted && (
+                    <Badge color="danger">
+                      <Trash2 className="mr-1 h-3 w-3" />
+                      Excluído{c.deletedBy ? ` por ${c.deletedBy}` : ''}
+                    </Badge>
+                  )}
+                  {!deleted && (
+                    <button
+                      type="button"
+                      className="inline-flex items-center gap-1 rounded px-1 text-xs text-muted hover:text-danger"
+                      onClick={() => handleDeleteComment(c.id)}
+                      title="Excluir comentário"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                      Excluir
+                    </button>
+                  )}
                 </div>
               </div>
             );
@@ -1874,9 +1963,11 @@ function CommentsPanel({
           </div>
         )}
       </div>
+      <TicketAttachmentsStrip ticketId={ticketId} />
       <CommentForm
         ticketId={ticketId}
         draftSeed={draftSeed}
+        onOpenAttachments={onOpenAttachments}
         onAdded={() => {
           // Garante que a 1ª página esteja ativa: a invalidação da mutation só
           // refaz queries ativas, e o comentário novo entra no topo dela.
@@ -1997,36 +2088,68 @@ function CommentForm({
   ticketId,
   draftSeed,
   onAdded,
+  onOpenAttachments,
 }: {
   ticketId: string;
   draftSeed?: CommentSeed | null;
   onAdded?: () => void;
+  /** Atalho para a aba Anexos quando o arquivo excede o limite da conversa. */
+  onOpenAttachments?: () => void;
 }) {
   const addComment = useAddComment();
   const macrosQuery = useTicketMacros({ includeGlobal: true });
   const [content, setContent] = useState('');
   const [isInternal, setIsInternal] = useState(false);
 
-  // Anexos do comentario: o backend guarda o anexo no CHAMADO (EntityType
-  // "Ticket"), entao o arquivo/print entra no mesmo fluxo pre-assinado do painel
-  // de anexos — a diferenca e poder anexar direto do composer, junto com o
-  // comentario (antes so existia o painel "Anexos").
-  const prepareUpload = usePrepareTicketUpload();
-  const completeUpload = useCompleteTicketUpload();
+  // Anexos do comentário = nível CONVERSA (EntityType "TicketComment"): o
+  // arquivo pertence ao COMENTÁRIO, com limite próprio do servidor (10 MB por
+  // padrão, imagens + PDF). O repositório do chamado (aba Anexos) é outra
+  // família e continua sendo o destino de arquivos grandes/resumíveis.
+  //
+  // O comentário precisa existir antes do anexo (o pai é o comentário), então o
+  // envio acontece depois do POST do comentário, com o id devolvido.
+  const prepareCommentUpload = usePrepareCommentUpload();
+  const completeCommentUpload = useCompleteCommentUpload();
+  const serverConfig = useServerConfig();
   const fileRef = useRef<HTMLInputElement>(null);
-  const [pending, setPending] = useState<
-    Array<{ key: string; fileName: string; status: 'uploading' | 'done' | 'error'; error?: string }>
-  >([]);
+  type PendingFile = {
+    key: string;
+    file: File;
+    fileName: string;
+    status: 'queued' | 'uploading' | 'done' | 'error';
+    error?: string;
+  };
+  const [pending, setPending] = useState<PendingFile[]>([]);
   const uploading = pending.some((item) => item.status === 'uploading');
 
-  const uploadOne = async (file: File) => {
-    const key = `${file.name}:${file.size}:${Date.now()}:${Math.random().toString(16).slice(2)}`;
-    setPending((prev) => [...prev, { key, fileName: file.name, status: 'uploading' }]);
+  // Limite/tipos do nível conversa vêm da configuração do servidor
+  // (ServerConfiguration.AttachmentComment*), editável no console.
+  const commentLimitBytes = useMemo(() => {
+    const raw = (serverConfig.data as { attachmentCommentMaxFileSizeBytes?: number } | undefined)
+      ?.attachmentCommentMaxFileSizeBytes;
+    return typeof raw === 'number' && raw > 0 ? raw : 10 * 1024 * 1024;
+  }, [serverConfig.data]);
+
+  const commentAllowedTypes = useMemo(() => {
+    const raw = (serverConfig.data as { attachmentCommentAllowedContentTypes?: string } | undefined)
+      ?.attachmentCommentAllowedContentTypes;
+    return (raw ?? 'image/jpeg,image/png,image/webp,application/pdf')
+      .split(',')
+      .map((value) => value.trim().toLowerCase())
+      .filter(Boolean);
+  }, [serverConfig.data]);
+
+  const uploadOne = async (commentId: string, entry: PendingFile) => {
+    const { file } = entry;
+    setPending((prev) =>
+      prev.map((item) => (item.key === entry.key ? { ...item, status: 'uploading' } : item)),
+    );
 
     const contentType = file.type || 'application/octet-stream';
     try {
-      const prepared = await prepareUpload.mutateAsync({
+      const prepared = await prepareCommentUpload.mutateAsync({
         ticketId,
+        commentId,
         data: { fileName: file.name, contentType, sizeBytes: file.size },
       });
 
@@ -2037,8 +2160,9 @@ function CommentForm({
       });
       if (!response.ok) throw new Error(`upload HTTP ${response.status}`);
 
-      await completeUpload.mutateAsync({
+      await completeCommentUpload.mutateAsync({
         ticketId,
+        commentId,
         data: {
           attachmentId: prepared.attachmentId,
           objectKey: prepared.objectKey,
@@ -2050,12 +2174,14 @@ function CommentForm({
         },
       });
 
-      setPending((prev) => prev.map((item) => (item.key === key ? { ...item, status: 'done' } : item)));
+      setPending((prev) =>
+        prev.map((item) => (item.key === entry.key ? { ...item, status: 'done' } : item)),
+      );
       toast.success(`Anexo enviado: ${file.name}`);
     } catch (error) {
       const detail = error instanceof Error && error.message ? error.message : 'falha no anexo';
       setPending((prev) =>
-        prev.map((item) => (item.key === key ? { ...item, status: 'error', error: detail } : item)),
+        prev.map((item) => (item.key === entry.key ? { ...item, status: 'error', error: detail } : item)),
       );
       toast.error(`Não foi possível anexar ${file.name} — ${detail}`);
     }
@@ -2063,7 +2189,31 @@ function CommentForm({
 
   const handleFiles = (files: FileList | File[] | null) => {
     if (!files) return;
-    Array.from(files).forEach((file) => { void uploadOne(file); });
+    Array.from(files).forEach((file) => {
+      const contentType = (file.type || '').toLowerCase();
+      const key = `${file.name}:${file.size}:${Date.now()}:${Math.random().toString(16).slice(2)}`;
+
+      if (contentType && !commentAllowedTypes.includes(contentType)) {
+        toast.error(
+          `Tipo não permitido na conversa: ${file.name}. Para outros formatos use a aba Anexos.`,
+        );
+        return;
+      }
+
+      if (file.size > commentLimitBytes) {
+        // Aviso com o limite — o arquivo NÃO é movido automaticamente para o
+        // repositório: mostramos o atalho e o usuário decide (o repositório tem
+        // fluxo próprio, com outros limites e upload resumível).
+        toast.error(
+          `${file.name} (${formatBytes(file.size)}) excede o limite de anexo de comentário ` +
+            `(${formatBytes(commentLimitBytes)}). Envie pela aba Anexos (repositório do chamado).`,
+        );
+        onOpenAttachments?.();
+        return;
+      }
+
+      setPending((prev) => [...prev, { key, file, fileName: file.name, status: 'queued' }]);
+    });
   };
 
   const macroOptions = [
@@ -2096,15 +2246,37 @@ function CommentForm({
       toast.error('Aguarde o envio dos anexos terminar.');
       return;
     }
+    const queued = pending.filter((item) => item.status === 'queued');
     addComment.mutate(
       // Autoria é derivada do token no backend — não enviar author.
       { id: ticketId, data: { content: trimmed, isInternal } },
       {
-        onSuccess: () => {
+        onSuccess: (created) => {
           setContent('');
           setIsInternal(false);
-          // Anexos enviados ja estao no chamado (ver painel "Anexos").
-          setPending((prev) => prev.filter((item) => item.status !== 'done'));
+          // O comentário nasce ANTES dos anexos: o anexo de conversa é filho do
+          // comentário (EntityType "TicketComment"), não do chamado.
+          const createdId =
+            (created as { commentId?: string } | undefined)?.commentId ??
+            (created as { id?: string } | undefined)?.id;
+          if (createdId && queued.length > 0) {
+            void (async () => {
+              for (const entry of queued) {
+                // Sequencial de propósito: o backend rejeita complete-upload em
+                // paralelo com o mesmo comentário em alguns providers.
+                await uploadOne(createdId, entry);
+              }
+            })();
+          } else if (queued.length > 0) {
+            setPending((prev) =>
+              prev.map((item) =>
+                item.status === 'queued'
+                  ? { ...item, status: 'error', error: 'comentário não devolveu id' }
+                  : item,
+              ),
+            );
+            toast.error('Comentário criado, mas não foi possível anexar os arquivos.');
+          }
           // Garante que o comentário recém-criado apareça sem F5.
           onAdded?.();
           toast.success('Comentário adicionado');
@@ -2205,6 +2377,103 @@ function formatBytes(bytes: number) {
   return `${(bytes / 1048576).toFixed(1)} MB`;
 }
 
+/**
+ * Miniatura do anexo: imagens são baixadas pela API autenticada (blob) e
+ * exibidas como preview; qualquer outro tipo cai no ícone de arquivo.
+ */
+function AttachmentThumb({ ticketId, commentId, attachment, size = 'md' }: {
+  ticketId: string;
+  /** Quando presente, o anexo pertence ao COMENTÁRIO (conversa), não ao chamado. */
+  commentId?: string | null;
+  attachment: { id: string; fileName: string; contentType?: string | null };
+  size?: 'sm' | 'md';
+}) {
+  const [url, setUrl] = useState<string | null>(null);
+  const isImage = String(attachment.contentType ?? '').toLowerCase().startsWith('image/');
+  const dimension = size === 'sm' ? 'h-8 w-8' : 'h-12 w-12';
+
+  useEffect(() => {
+    if (!isImage) return;
+    let cancelled = false;
+    let objectUrl: string | null = null;
+    const request = commentId
+      ? ticketsApi.downloadCommentAttachment(ticketId, commentId, attachment.id)
+      : ticketsApi.downloadAttachment(ticketId, attachment.id);
+    request
+      .then(({ blob }) => {
+        if (cancelled) return;
+        objectUrl = URL.createObjectURL(blob);
+        setUrl(objectUrl);
+      })
+      .catch(() => {
+        /* sem preview: mantém o ícone */
+      });
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [ticketId, commentId, attachment.id, isImage]);
+
+  if (!isImage || !url) {
+    return <File className="h-4 w-4 shrink-0 text-muted" />;
+  }
+
+  return (
+    <img
+      src={url}
+      alt={attachment.fileName}
+      className={`${dimension} shrink-0 rounded border border-border object-cover`}
+    />
+  );
+}
+
+/**
+ * Anexos do CHAMADO logo abaixo dos comentários. A API guarda o anexo no
+ * chamado (não vinculado ao comentário), então a lista aparece no mesmo lugar
+ * do composer — com miniatura quando for imagem.
+ */
+function TicketAttachmentsStrip({ ticketId }: { ticketId: string }) {
+  const attachments = useTicketAttachments(ticketId);
+  const items = Array.isArray(attachments.data?.items) ? attachments.data.items : [];
+
+  async function open(attachmentId: string, fileName: string) {
+    try {
+      const { blob, fileName: returnedName } = await ticketsApi.downloadAttachment(ticketId, attachmentId);
+      const objectUrl = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = objectUrl;
+      anchor.download = returnedName || fileName || 'anexo';
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(objectUrl);
+    } catch {
+      toast.error('Não foi possível abrir o anexo.');
+    }
+  }
+
+  if (items.length === 0) return null;
+
+  return (
+    <div className="mt-3">
+      <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">Anexos do chamado</p>
+      <div className="flex flex-wrap gap-2">
+        {items.map((a) => (
+          <button
+            key={a.id}
+            type="button"
+            onClick={() => void open(a.id, a.fileName)}
+            title={a.fileName}
+            className="flex items-center gap-2 rounded-lg border border-border bg-surface-light px-2 py-1 text-left hover:border-primary/60"
+          >
+            <AttachmentThumb ticketId={ticketId} attachment={a} size="sm" />
+            <span className="max-w-[180px] truncate text-xs text-foreground">{a.fileName}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
 function AttachmentsPanel({
   ticketId,
   siteId,
@@ -2239,6 +2508,111 @@ function AttachmentsPanel({
   const attachments = useTicketAttachments(ticketId);
   const prepare = usePrepareTicketUpload();
   const complete = useCompleteTicketUpload();
+
+  // Aba consolidada: repositório do chamado (EntityType "Ticket") + anexos da
+  // conversa (EntityType "TicketComment"). Os de comentário vêm com os
+  // comentários já carregados, numa página grande, em vez de N requisições.
+  const comments = useTicketComments(ticketId, { limit: 200 });
+  const [originFilter, setOriginFilter] = useState<'all' | 'repository' | 'comment'>('all');
+  const [typeFilter, setTypeFilter] = useState<'all' | 'image' | 'document' | 'other'>('all');
+  const [periodFilter, setPeriodFilter] = useState<'all' | '7' | '30'>('all');
+  const [search, setSearch] = useState('');
+  const [downloadingCommentId, setDownloadingCommentId] = useState<string | null>(null);
+
+  type UnifiedAttachment = {
+    id: string;
+    fileName: string;
+    contentType: string;
+    sizeBytes: number;
+    createdAt: string;
+    uploadedBy?: string | null;
+    origin: 'repository' | 'comment';
+    commentId?: string;
+    author?: string;
+    deletedComment?: boolean;
+  };
+
+  const unified = useMemo<UnifiedAttachment[]>(() => {
+    const repository: UnifiedAttachment[] = (
+      Array.isArray(attachments.data?.items) ? attachments.data.items : []
+    ).map((a) => ({
+      id: a.id,
+      fileName: a.fileName,
+      contentType: a.contentType ?? '',
+      sizeBytes: a.sizeBytes ?? 0,
+      createdAt: a.createdAt,
+      uploadedBy: a.uploadedBy,
+      origin: 'repository' as const,
+    }));
+
+    const fromComments: UnifiedAttachment[] = (comments.data?.items ?? []).flatMap((comment) =>
+      (Array.isArray(comment.attachments) ? comment.attachments : []).map((a) => ({
+        id: a.id,
+        fileName: a.fileName,
+        contentType: a.contentType ?? '',
+        sizeBytes: a.sizeBytes ?? 0,
+        createdAt: a.createdAt,
+        uploadedBy: a.uploadedBy ?? comment.author,
+        origin: 'comment' as const,
+        commentId: comment.id,
+        author: comment.author,
+        deletedComment: Boolean(comment.deletedAt),
+      })),
+    );
+
+    return [...repository, ...fromComments].sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    );
+  }, [attachments.data, comments.data]);
+
+  const filtered = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    const cutoff =
+      periodFilter === 'all' ? 0 : Date.now() - Number(periodFilter) * 24 * 60 * 60 * 1000;
+
+    return unified.filter((item) => {
+      if (originFilter !== 'all' && item.origin !== originFilter) return false;
+
+      const mime = item.contentType.toLowerCase();
+      const isImage = mime.startsWith('image/');
+      const isDocument = mime === 'application/pdf' || mime.startsWith('text/');
+      if (typeFilter === 'image' && !isImage) return false;
+      if (typeFilter === 'document' && !isDocument) return false;
+      if (typeFilter === 'other' && (isImage || isDocument)) return false;
+
+      if (cutoff > 0 && new Date(item.createdAt).getTime() < cutoff) return false;
+
+      if (
+        term &&
+        !item.fileName.toLowerCase().includes(term) &&
+        !String(item.uploadedBy ?? '').toLowerCase().includes(term)
+      ) {
+        return false;
+      }
+      return true;
+    });
+  }, [unified, originFilter, typeFilter, periodFilter, search]);
+
+  const openUnified = async (item: UnifiedAttachment) => {
+    if (item.origin === 'comment' && item.commentId) {
+      setDownloadingCommentId(item.id);
+      try {
+        const { blob, fileName } = await ticketsApi.downloadCommentAttachment(
+          ticketId,
+          item.commentId,
+          item.id,
+        );
+        triggerBlobDownload(blob, fileName || item.fileName);
+      } catch {
+        toast.error('Não foi possível abrir o anexo.');
+      } finally {
+        setDownloadingCommentId(null);
+      }
+      return;
+    }
+    await handleDownload(item.id, item.fileName);
+  };
+
   const [queue, setQueue] = useState<FileEntry[]>([]);
   const [uploading, setUploading] = useState(false);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
@@ -2464,42 +2838,113 @@ function AttachmentsPanel({
         </>
       )}
 
-      {/* Existing attachments list */}
+      {/* Aba consolidada: os DOIS níveis de anexo, com origem e filtros. */}
       <div className="space-y-2">
-        <p className="text-xs font-medium uppercase tracking-wide text-muted">Arquivos anexados</p>
-        {attachments.isLoading && <Loading />}
-        {attachments.isError && !attachments.isLoading && (
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted">
+            Arquivos anexados ({filtered.length} de {unified.length})
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              aria-label="Filtrar por origem"
+              value={originFilter}
+              onChange={(e) => setOriginFilter(e.target.value as typeof originFilter)}
+              className="rounded-lg border border-border bg-surface-light px-2 py-1 text-xs text-foreground"
+            >
+              <option value="all">Todas as origens</option>
+              <option value="repository">Repositório do chamado</option>
+              <option value="comment">Conversa (comentários)</option>
+            </select>
+            <select
+              aria-label="Filtrar por tipo"
+              value={typeFilter}
+              onChange={(e) => setTypeFilter(e.target.value as typeof typeFilter)}
+              className="rounded-lg border border-border bg-surface-light px-2 py-1 text-xs text-foreground"
+            >
+              <option value="all">Todos os tipos</option>
+              <option value="image">Imagens</option>
+              <option value="document">Documentos</option>
+              <option value="other">Outros</option>
+            </select>
+            <select
+              aria-label="Filtrar por período"
+              value={periodFilter}
+              onChange={(e) => setPeriodFilter(e.target.value as typeof periodFilter)}
+              className="rounded-lg border border-border bg-surface-light px-2 py-1 text-xs text-foreground"
+            >
+              <option value="all">Todo o período</option>
+              <option value="7">Últimos 7 dias</option>
+              <option value="30">Últimos 30 dias</option>
+            </select>
+            <Input
+              aria-label="Buscar anexo por nome ou autor"
+              placeholder="Buscar por nome/autor"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-48"
+            />
+          </div>
+        </div>
+
+        {(attachments.isLoading || comments.isLoading) && <Loading />}
+        {(attachments.isError || comments.isError) && !attachments.isLoading && (
           <div className="flex flex-col items-center gap-2 py-4 text-center text-sm text-danger">
             <span>Não foi possível carregar os anexos.</span>
-            <Button size="sm" variant="ghost" onClick={() => void attachments.refetch()}>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                void attachments.refetch();
+                void comments.refetch();
+              }}
+            >
               Tentar novamente
             </Button>
           </div>
         )}
         {!attachments.isError &&
-          (Array.isArray(attachments.data?.items) ? attachments.data.items : []).length === 0 &&
-          !attachments.isLoading && (
-            <p className="py-4 text-center text-sm text-muted">Nenhum anexo ainda.</p>
+          !comments.isError &&
+          filtered.length === 0 &&
+          !attachments.isLoading &&
+          !comments.isLoading && (
+            <p className="py-4 text-center text-sm text-muted">
+              {unified.length === 0 ? 'Nenhum anexo ainda.' : 'Nenhum anexo para os filtros atuais.'}
+            </p>
           )}
         {!attachments.isError &&
-          (Array.isArray(attachments.data?.items) ? attachments.data.items : []).map((a) => (
-            <div key={a.id} className="flex items-center gap-3 rounded-lg border border-border bg-surface-light px-3 py-2">
-              <File className="h-4 w-4 shrink-0 text-muted" />
+          !comments.isError &&
+          filtered.map((item) => (
+            <div key={`${item.origin}:${item.id}`} className="flex items-center gap-3 rounded-lg border border-border bg-surface-light px-3 py-2">
+              <AttachmentThumb
+                ticketId={ticketId}
+                commentId={item.origin === 'comment' ? item.commentId ?? null : undefined}
+                attachment={item}
+              />
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm text-foreground">{a.fileName}</p>
+                <p className="truncate text-sm text-foreground">{item.fileName}</p>
                 <p className="text-xs text-muted">
-                  {formatBytes(a.sizeBytes)} · {a.contentType} · {new Date(a.createdAt).toLocaleString('pt-BR')}
+                  {formatBytes(item.sizeBytes)} · {item.contentType || 'desconhecido'} ·{' '}
+                  {new Date(item.createdAt).toLocaleString('pt-BR')}
                 </p>
               </div>
+              {/* Origem: distingue repositório (arquivo grande) de conversa. */}
+              <Badge color={item.origin === 'repository' ? 'slate' : 'accent'}>
+                {item.origin === 'repository' ? 'Repositório' : 'Conversa'}
+              </Badge>
+              {item.origin === 'comment' && item.author && (
+                <span className="text-xs text-muted" title={`Comentário de ${item.author}`}>
+                  {item.deletedComment ? 'comentário excluído' : item.author}
+                </span>
+              )}
               <button
                 type="button"
-                onClick={() => void handleDownload(a.id, a.fileName)}
-                disabled={downloadingId === a.id}
+                onClick={() => void openUnified(item)}
+                disabled={downloadingId === item.id || downloadingCommentId === item.id}
                 className="text-xs font-medium text-primary underline hover:text-primary/80 disabled:opacity-50"
               >
-                {downloadingId === a.id ? 'Baixando...' : 'Baixar'}
+                {downloadingId === item.id || downloadingCommentId === item.id ? 'Baixando...' : 'Baixar'}
               </button>
-              <Badge color="slate">{a.uploadedBy}</Badge>
+              {item.uploadedBy && <Badge color="slate">{item.uploadedBy}</Badge>}
             </div>
           ))}
       </div>
