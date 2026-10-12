@@ -30,6 +30,7 @@ export * from "./useWorkflow";
 export * from "./useDepartments";
 export * from "./useWorkflowProfiles";
 export * from "./useDatabaseSanitization";
+export * from "./useDatabaseMaintenance";
 export * from "./useDeployTokens";
 
 // Reports

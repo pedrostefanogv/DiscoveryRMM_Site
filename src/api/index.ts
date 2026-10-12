@@ -56,6 +56,14 @@ export {
   type SanitizationCheckResult,
   type SanitizationReport,
 } from "./database-sanitization";
+export {
+  databaseMaintenanceApi,
+  type DatabaseHealthIssue,
+  type DatabaseHealthReport,
+  type DatabaseHealthSeverity,
+  type DatabaseMaintenanceRun,
+  type DatabaseTableStat,
+} from "./database-maintenance";
 export { jobsApi } from "./jobs";
 export { softwareInventoryApi } from "./software-inventory";
 export { appStoreApi } from "./app-store";
