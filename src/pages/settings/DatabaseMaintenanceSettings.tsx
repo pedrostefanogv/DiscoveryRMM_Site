@@ -240,11 +240,19 @@ export default function DatabaseMaintenanceSettings() {
                 {issue.count === 0 ? (
                   <p className="mt-1 text-xs text-success">Nada a reportar.</p>
                 ) : (
-                  <ul className="mt-2 space-y-0.5 font-mono text-[11px] text-muted">
-                    {issue.samples.slice(0, 6).map((sample, index) => (
-                      <li key={index}>{sample}</li>
-                    ))}
-                  </ul>
+                  <>
+                    <ul className="mt-2 space-y-0.5 font-mono text-[11px] text-muted">
+                      {issue.samples.slice(0, 6).map((sample, index) => (
+                        <li key={index}>{sample}</li>
+                      ))}
+                    </ul>
+                    {issue.key === "foreign-keys-without-index" && (
+                      <p className="mt-2 text-[11px] text-muted">
+                        A manutenção pode criar esses índices (CONCURRENTLY, idempotente)
+                        com <code>databaseMaintenance.createMissingForeignKeyIndexes = true</code>.
+                      </p>
+                    )}
+                  </>
                 )}
               </div>
             ))}
