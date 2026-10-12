@@ -117,6 +117,22 @@ describe('ScriptContentEditor - modelo inicial', () => {
   });
 });
 
+describe('ScriptContentEditor - modo consulta', () => {
+  it('bloqueia edição e esconde as ações de escrita', () => {
+    setup({ value: 'Write-Output 1', readOnly: true });
+    expect(textarea().readOnly).toBe(true);
+    expect(screen.queryByRole('button', { name: 'Formatar' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Inserir modelo' })).toBeNull();
+    expect(screen.getByText('Somente leitura')).toBeTruthy();
+  });
+
+  it('continua exibindo a linguagem e as métricas do script', () => {
+    setup({ value: 'Write-Output 1', readOnly: true });
+    expect(screen.getByText('PowerShell')).toBeTruthy();
+    expect(screen.getByText('Sintaxe OK')).toBeTruthy();
+  });
+});
+
 describe('ScriptContentEditor - validação de sintaxe', () => {
   it('mostra Sintaxe OK para um script consistente', () => {
     setup({ value: 'Write-Output \"ola\"' });

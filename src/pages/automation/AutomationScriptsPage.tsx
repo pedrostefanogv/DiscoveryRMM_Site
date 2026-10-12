@@ -16,6 +16,7 @@ import {
 } from "@/components/ui";
 import {
   AutomationScriptType,
+  type AutomationScriptConsume,
   type CreateAutomationScriptRequest,
   type UpdateAutomationScriptRequest,
   type AutomationScriptSummary,
@@ -50,6 +51,35 @@ function scriptTypeLabel(value: unknown): string {
   if (value === AutomationScriptType.Batch || value === "Batch") return "Batch";
   if (value === AutomationScriptType.Custom || value === "Custom") return "Custom";
   return String(value ?? "-");
+}
+
+function scriptChangeTypeLabel(value: unknown): string {
+  switch (String(value)) {
+    case "Created":
+      return "Criado";
+    case "Updated":
+      return "Atualizado";
+    case "Deleted":
+      return "Excluído";
+    case "Consumed":
+      return "Consumido";
+    case "Activated":
+      return "Ativado";
+    case "Deactivated":
+      return "Desativado";
+    default:
+      return String(value ?? "-");
+  }
+}
+
+function prettyJson(value: string | null | undefined): string {
+  const text = (value ?? "").trim();
+  if (!text) return "";
+  try {
+    return JSON.stringify(JSON.parse(text), null, 2);
+  } catch {
+    return text;
+  }
 }
 
 function buildCorrelationId(prefix: string) {
@@ -94,6 +124,8 @@ export default function AutomationScriptsPage() {
 
   const [formOpen, setFormOpen] = useState(false);
   const [auditScriptId, setAuditScriptId] = useState<string | null>(null);
+  const [viewScriptId, setViewScriptId] = useState<string | null>(null);
+  const [consumedPayload, setConsumedPayload] = useState<AutomationScriptConsume | null>(null);
   const [editing, setEditing] = useState<AutomationScriptSummary | null>(null);
   const [editingId, setEditingId] = useState("");
   const [form, setForm] = useState<ScriptFormState>(defaultForm);
@@ -112,6 +144,7 @@ export default function AutomationScriptsPage() {
   const consumeMutation = useConsumeAutomationScript();
   const auditQuery = useAutomationScriptAudit(auditScriptId ?? "", 50, !!auditScriptId);
   const scriptDetail = useAutomationScript(editingId);
+  const viewScript = useAutomationScript(viewScriptId ?? "");
 
   useEffect(() => {
     if (!editingId || !scriptDetail.data) return;
@@ -225,16 +258,12 @@ export default function AutomationScriptsPage() {
             <Button
               size="sm"
               variant="ghost"
-              onClick={async () => {
-                try {
-                  const data = await consumeMutation.mutateAsync(item.id);
-                  toast.success(`Payload consumido (${data.contentHashSha256.slice(0, 10)}...)`);
-                } catch {
-                  toast.error("Falha ao consumir script");
-                }
+              onClick={() => {
+                setConsumedPayload(null);
+                setViewScriptId(item.id);
               }}
             >
-              Consumir
+              Consultar
             </Button>
             <Button size="sm" variant="ghost" onClick={() => setAuditScriptId(item.id)}>
               Auditoria
@@ -262,13 +291,27 @@ export default function AutomationScriptsPage() {
         ),
       },
     ],
-    [consumeMutation, deleteMutation],
+    [deleteMutation],
   );
 
   const clientOptions = [
     { value: "", label: "Todos os clientes" },
     ...(clients.data ?? []).map((c) => ({ value: c.id, label: c.name })),
   ];
+
+  const handleConsume = async () => {
+    if (!viewScriptId) return;
+    try {
+      const data = await consumeMutation.mutateAsync(viewScriptId);
+      setConsumedPayload(data);
+      toast.success(`Consumo registrado na auditoria (hash ${data.contentHashSha256.slice(0, 10)}...)`);
+    } catch {
+      toast.error("Falha ao registrar o consumo do script");
+    }
+  };
+
+  const clientLabel = (id: string | null | undefined) =>
+    id ? clients.data?.find((c) => c.id === id)?.name ?? id : "Global";
 
   const handleSubmit = () => {
     const name = form.name.trim();
@@ -502,11 +545,13 @@ export default function AutomationScriptsPage() {
             label="ExecutionFrequency"
             value={form.executionFrequency}
             onChange={(e) => setForm((p) => ({ ...p, executionFrequency: e.target.value }))}
+            hint="Frequência declarada no catálogo (ex.: manual, diária). É informativa: quem agenda a execução é a tarefa de automação, não este campo."
           />
           <Input
             label="TriggerModes (csv)"
             value={form.triggerModesCsv}
             onChange={(e) => setForm((p) => ({ ...p, triggerModesCsv: e.target.value }))}
+            hint="Como o script é disparado, separado por vírgula (ex.: manual, agent-checkin). Também é metadado: o disparo real vem dos gatilhos da tarefa."
           />
           <Select
             label="Status"
@@ -531,12 +576,14 @@ export default function AutomationScriptsPage() {
             className="font-mono"
             value={form.parametersSchemaJson}
             onChange={(e) => setForm((p) => ({ ...p, parametersSchemaJson: e.target.value }))}
+            hint="Opcional. JSON Schema dos parâmetros do script. É repassado ao agente junto do conteúdo; deixe vazio quando o script não recebe parâmetros."
           />
           <TextArea
             label="MetadataJson"
             className="font-mono"
             value={form.metadataJson}
             onChange={(e) => setForm((p) => ({ ...p, metadataJson: e.target.value }))}
+            hint="Opcional. JSON livre para anotações do script (autor, origem, tags). É repassado ao agente sem interpretação."
           />
           {editing && editingId ? <CustomFieldsUsedByPanel scriptId={editingId} /> : null}
           <div className="flex justify-end gap-2">
@@ -552,23 +599,146 @@ export default function AutomationScriptsPage() {
       </Modal>
 
       <Modal
+        open={!!viewScriptId}
+        onClose={() => {
+          setViewScriptId(null);
+          setConsumedPayload(null);
+        }}
+        title="Consultar script"
+        maxWidth="max-w-4xl"
+      >
+        {viewScript.isLoading && <Loading message="Carregando script..." />}
+        {viewScript.isError && <ErrorDisplay onRetry={() => viewScript.refetch()} />}
+        {!viewScript.isLoading && !viewScript.isError && viewScript.data && (
+          <div className="space-y-4">
+            <p className="text-xs text-muted">
+              Modo consulta: o script aparece exatamente como está salvo. Nada é executado nem
+              alterado nesta tela.
+            </p>
+
+            <div className="grid gap-3 md:grid-cols-2">
+              <Input label="Cliente" value={clientLabel(viewScript.data.clientId)} readOnly />
+              <Input label="Nome" value={viewScript.data.name} readOnly />
+              <Input label="Resumo" value={viewScript.data.summary} readOnly />
+              <Input
+                label="ScriptType"
+                value={scriptTypeLabel(viewScript.data.scriptType)}
+                readOnly
+              />
+              <Input label="Versão" value={viewScript.data.version} readOnly />
+              <Input
+                label="ExecutionFrequency"
+                value={viewScript.data.executionFrequency || "manual"}
+                readOnly
+              />
+              <Input
+                label="TriggerModes"
+                value={viewScript.data.triggerModes.join(", ") || "-"}
+                readOnly
+              />
+              <Input label="Status" value={viewScript.data.isActive ? "Ativo" : "Inativo"} readOnly />
+            </div>
+
+            <div className="grid gap-1 text-xs text-muted md:grid-cols-2">
+              <p>Atualizado em: {new Date(viewScript.data.lastUpdatedAt).toLocaleString("pt-BR")}</p>
+              <p className="break-all font-mono">SHA-256: {viewScript.data.contentHashSha256}</p>
+            </div>
+
+            <ScriptContentEditor
+              readOnly
+              label="Conteúdo do script"
+              scriptType={viewScript.data.scriptType}
+              value={viewScript.data.content}
+              onChange={() => {}}
+              hint="Somente leitura — use 'Editar' na lista para alterar o conteúdo."
+            />
+
+            <TextArea
+              label="ParametersSchemaJson"
+              className="font-mono"
+              rows={5}
+              value={prettyJson(viewScript.data.parametersSchemaJson)}
+              readOnly
+              hint="Parâmetros aceitos pelo script (JSON Schema). Vazio quando o script não recebe parâmetros."
+            />
+            <TextArea
+              label="MetadataJson"
+              className="font-mono"
+              rows={5}
+              value={prettyJson(viewScript.data.metadataJson)}
+              readOnly
+              hint="Anotações livres do script (autor, origem, tags)."
+            />
+
+            <div className="space-y-2 rounded-lg border border-border bg-surface-light p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm font-medium text-foreground">Payload de consumo</p>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  loading={consumeMutation.isPending}
+                  onClick={handleConsume}
+                >
+                  Registrar consumo
+                </Button>
+              </div>
+              <p className="text-xs text-muted">
+                "Consumir" monta o payload que o agente recebe (conteúdo + hash SHA-256 +
+                ParametersSchemaJson + MetadataJson) e grava um evento <strong>Consumido</strong> na
+                auditoria. Abrir esta consulta não gera auditoria; somente o botão ao lado gera.
+              </p>
+              {consumedPayload && (
+                <pre className="max-h-48 overflow-auto rounded border border-border bg-background/40 p-2 text-xs text-foreground">
+                  {JSON.stringify({ scriptId: consumedPayload.scriptId, name: consumedPayload.name, version: consumedPayload.version, contentHashSha256: consumedPayload.contentHashSha256, triggerModes: consumedPayload.triggerModes, executionFrequency: consumedPayload.executionFrequency }, null, 2)}
+                </pre>
+              )}
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      <Modal
         open={!!auditScriptId}
         onClose={() => setAuditScriptId(null)}
         title="Auditoria do script"
         maxWidth="max-w-3xl"
       >
+        <p className="mb-3 text-xs text-muted">
+          Cada evento mostra o tipo de mudança, quem alterou e os snapshots antes/depois.
+        </p>
         {auditQuery.isLoading && <Loading message="Carregando auditoria..." />}
-        {auditQuery.isError && <ErrorDisplay onRetry={() => auditQuery.refetch()} />}
+        {auditQuery.isError && (
+          <ErrorDisplay
+            message="Não foi possível carregar a trilha de auditoria deste script."
+            onRetry={() => auditQuery.refetch()}
+          />
+        )}
         {!auditQuery.isLoading && !auditQuery.isError && (
           <div className="space-y-3">
             {(auditQuery.data ?? []).map((entry) => (
               <div key={entry.id} className="rounded-lg border border-border bg-surface-light p-3">
                 <div className="mb-2 flex items-center justify-between gap-2">
-                  <Badge color="accent">{String(entry.changeType)}</Badge>
+                  <Badge color="accent">{scriptChangeTypeLabel(entry.changeType)}</Badge>
                   <p className="text-xs text-muted">{new Date(entry.changedAt).toLocaleString("pt-BR")}</p>
                 </div>
                 <p className="text-sm text-muted-foreground">Motivo: {entry.reason || "-"}</p>
-                <p className="text-xs text-muted">Correlation: {entry.correlationId || "-"}</p>
+                <p className="text-sm text-muted-foreground">Alterado por: {entry.changedBy || "-"}</p>
+                <p className="text-xs text-muted">
+                  IP: {entry.ipAddress || "-"} · Correlation: {entry.correlationId || "-"}
+                </p>
+                {(entry.oldValueJson || entry.newValueJson) && (
+                  <details className="mt-2 rounded border border-border bg-background/40 p-2">
+                    <summary className="cursor-pointer text-xs text-muted">Snapshots (antes/depois)</summary>
+                    <div className="mt-2 grid gap-2 md:grid-cols-2">
+                      <pre className="max-h-56 overflow-auto rounded border border-border bg-surface/60 p-2 text-xs text-foreground">
+                        {prettyJson(entry.oldValueJson) || "null"}
+                      </pre>
+                      <pre className="max-h-56 overflow-auto rounded border border-border bg-surface/60 p-2 text-xs text-foreground">
+                        {prettyJson(entry.newValueJson) || "null"}
+                      </pre>
+                    </div>
+                  </details>
+                )}
               </div>
             ))}
             {!auditQuery.data?.length && (

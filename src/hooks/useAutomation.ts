@@ -149,8 +149,12 @@ export function useDeleteAutomationScript() {
 }
 
 export function useConsumeAutomationScript() {
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => automationApi.consumeScript(id),
+    // O consumo grava um evento "Consumed": invalida a trilha de auditoria
+    // (chave ...scripts.all) para o modal refletir o novo registro.
+    onSuccess: () => qc.invalidateQueries({ queryKey: KEYS.scripts.all }),
   });
 }
 

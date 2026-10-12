@@ -45,6 +45,8 @@ export interface ScriptContentEditorProps {
   hint?: string;
   error?: string;
   heightPx?: number;
+  /** Modo consulta: sem edição, sem formatação e sem inserção de modelo. */
+  readOnly?: boolean;
 }
 
 /**
@@ -60,6 +62,7 @@ export function ScriptContentEditor({
   hint,
   error,
   heightPx = 300,
+  readOnly = false,
 }: ScriptContentEditorProps) {
   const editorId = useId();
   const language = languageForScriptType(scriptType);
@@ -209,20 +212,22 @@ export function ScriptContentEditor({
             <span aria-hidden>·</span>
             <span className={syntaxClass}>{syntaxLabel}</span>
           </div>
-          <div className="flex items-center gap-2">
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={insertTemplate}
-              disabled={value.trim().length > 0}
-              title={value.trim().length > 0 ? 'Limpe o conteúdo para inserir o modelo' : 'Inserir o modelo do tipo selecionado'}
-            >
-              Inserir modelo
-            </Button>
-            <Button size="sm" variant="secondary" onClick={applyFormat} disabled={value.length === 0}>
-              Formatar
-            </Button>
-          </div>
+          {!readOnly && (
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={insertTemplate}
+                disabled={value.trim().length > 0}
+                title={value.trim().length > 0 ? 'Limpe o conteúdo para inserir o modelo' : 'Inserir o modelo do tipo selecionado'}
+              >
+                Inserir modelo
+              </Button>
+              <Button size="sm" variant="secondary" onClick={applyFormat} disabled={value.length === 0}>
+                Formatar
+              </Button>
+            </div>
+          )}
         </div>
 
         <div className="relative flex" style={{ height: heightPx }}>
@@ -259,9 +264,10 @@ export function ScriptContentEditor({
               ref={textareaRef}
               aria-label={label}
               value={value}
-              onChange={(event) => applyChange(event.target.value)}
-              onKeyDown={handleKeyDown}
-              onPaste={handlePaste}
+              readOnly={readOnly}
+              onChange={readOnly ? undefined : (event) => applyChange(event.target.value)}
+              onKeyDown={readOnly ? undefined : handleKeyDown}
+              onPaste={readOnly ? undefined : handlePaste}
               onScroll={syncScroll}
               spellCheck={false}
               autoCapitalize="off"
@@ -275,7 +281,9 @@ export function ScriptContentEditor({
 
         <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border bg-surface px-3 py-1.5 text-[11px] text-muted">
           <span>{language.hint}</span>
-          <span>Tab indenta · Shift+Tab remove · Enter mantém a indentação</span>
+          <span>
+            {readOnly ? 'Somente leitura' : 'Tab indenta · Shift+Tab remove · Enter mantém a indentação'}
+          </span>
         </div>
 
         {issues.length > 0 && (
