@@ -248,8 +248,16 @@ export default function DatabaseMaintenanceSettings() {
                     </ul>
                     {issue.key === "foreign-keys-without-index" && (
                       <p className="mt-2 text-[11px] text-muted">
-                        A manutenção pode criar esses índices (CONCURRENTLY, idempotente)
-                        com <code>databaseMaintenance.createMissingForeignKeyIndexes = true</code>.
+                        A manutenção cria esses índices automaticamente
+                        (<code>CONCURRENTLY IF NOT EXISTS</code>, idempotente). Pode ser
+                        desligado com <code>databaseMaintenance.createMissingForeignKeyIndexes = false</code>.
+                      </p>
+                    )}
+                    {issue.key === "foreign-keys-without-leading-index" && (
+                      <p className="mt-2 text-[11px] text-muted">
+                        Existe índice contendo a coluna, mas ela não é a primeira — o lookup
+                        do FK não o aproveita. Criar outro índice pode ser redundante; avalie
+                        caso a caso.
                       </p>
                     )}
                   </>
