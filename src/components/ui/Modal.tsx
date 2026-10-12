@@ -2,6 +2,11 @@ import { useEffect, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 
+// Contador de modais abertos: com modais aninhados (ex.: formulário aberto
+// dentro de outro modal), fechar o interno não pode liberar o scroll do body
+// enquanto o externo continua aberto.
+let openModalCount = 0;
+
 interface ModalProps {
   open: boolean;
   onClose: () => void;
@@ -14,12 +19,13 @@ export function Modal({ open, onClose, title, children, maxWidth = 'max-w-lg' }:
   const overlayRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (open) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
-    }
-    return () => { document.body.style.overflow = ''; };
+    if (!open) return;
+    openModalCount += 1;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      openModalCount = Math.max(0, openModalCount - 1);
+      if (openModalCount === 0) document.body.style.overflow = '';
+    };
   }, [open]);
 
   if (!open) return null;

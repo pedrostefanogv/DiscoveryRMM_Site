@@ -108,6 +108,17 @@ describe('CustomFieldTemplatesSection — Título/Chave', () => {
     expect(call.data.label).toBe('Texto curto editado');
   });
 
+  it('em modo embutido (modal) não repete o cabeçalho do painel e mantém o cadastro', () => {
+    render(<CustomFieldTemplatesSection embedded />);
+
+    // O título já é do modal externo; o painel embutido não duplica o cabeçalho.
+    expect(screen.queryByText('Modelos de campos')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: /Novo modelo/ }));
+    expect(screen.getByLabelText(/Título/)).toBeTruthy();
+    expect(screen.getByLabelText(/Chave/)).toBeTruthy();
+  });
+
   it('avisa quando a chave já existe no mesmo escopo', () => {
     templatesRef.current = [template({ id: 'c2', name: 'cpf', label: 'CPF', isBuiltIn: false })];
     render(<CustomFieldTemplatesSection />);

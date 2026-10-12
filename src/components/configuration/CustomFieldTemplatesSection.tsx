@@ -59,7 +59,7 @@ const EMPTY: UpsertCustomFieldTemplateRequest = {
  * escopo global, por cliente e por departamento. Modelos built-in vêm semeados
  * pelo servidor e não podem ser excluídos — apenas desativados.
  */
-export function CustomFieldTemplatesSection() {
+export function CustomFieldTemplatesSection({ embedded = false }: { embedded?: boolean } = {}) {
   // allScopes: a gestão precisa enxergar modelos de cliente/departamento.
   const templatesQuery = useCustomFieldTemplates({ allScopes: true, includeInactive: true });
   const clients = useClients();
@@ -129,13 +129,8 @@ export function CustomFieldTemplatesSection() {
     );
   };
 
-  return (
-    <Card>
-      <CardHeader
-        title="Modelos de campos"
-        subtitle="Modelos pré-configurados (tipo, máscara, validador e limites) usados ao criar um campo personalizado. Podem ser globais, de um cliente ou de um departamento."
-      />
-
+  const body = (
+    <>
       <div className="mb-4 grid gap-3 md:grid-cols-3">
         <Select
           label="Filtrar por cliente"
@@ -247,6 +242,22 @@ export function CustomFieldTemplatesSection() {
           <Button variant="danger" loading={deleteMutation.isPending} onClick={handleDelete}>Desativar</Button>
         </div>
       </Modal>
+    </>
+  );
+
+  // Embutido (ex.: dentro de um modal da tela de Configurações) o título já vem
+  // do modal externo; fora dele, o painel traz o próprio cabeçalho.
+  if (embedded) {
+    return <div className="space-y-2">{body}</div>;
+  }
+
+  return (
+    <Card>
+      <CardHeader
+        title="Modelos de campos"
+        subtitle="Modelos pré-configurados (tipo, máscara, validador e limites) usados ao criar um campo personalizado. Podem ser globais, de um cliente ou de um departamento."
+      />
+      {body}
     </Card>
   );
 }

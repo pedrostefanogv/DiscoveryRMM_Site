@@ -1,4 +1,4 @@
-import { api } from "./client";
+import { api, type UploadProgress } from "./client";
 import { AppInstallationType } from "./types";
 import type {
   AppApprovalScopeType,
@@ -102,6 +102,8 @@ function normalizeCatalogPackage(
     extractZip: Boolean(item.extractZip),
     fileName: item.fileName ?? null,
     fileSizeBytes: item.fileSizeBytes ?? null,
+    fileContentType: item.fileContentType ?? null,
+    fileChecksum: item.fileChecksum ?? null,
     hasFile: Boolean(item.hasFile),
     lastUpdated: item.lastUpdated ?? null,
     installerUrlsByArch: item.installerUrlsByArch ?? {},
@@ -342,13 +344,14 @@ export const appStoreApi = {
   uploadCustomAsset: (
     file: File,
     kind: "installer" | "icon" = "installer",
+    onProgress?: (progress: UploadProgress) => void,
   ) => {
     const formData = new FormData();
     formData.append("file", file);
-    return api.post<CustomPackageAsset>(
+    return api.upload<CustomPackageAsset>(
       `${BASE}/custom/assets?kind=${kind}`,
       formData,
-      { timeoutMs: 0 },
+      { timeoutMs: 0, onProgress },
     );
   },
 

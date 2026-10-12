@@ -3533,6 +3533,8 @@ export interface AppStoreCatalogPackage {
   extractZip?: boolean;
   fileName?: string | null;
   fileSizeBytes?: number | null;
+  fileContentType?: string | null;
+  fileChecksum?: string | null;
   hasFile?: boolean;
   lastUpdated?: string | null;
   installerUrlsByArch?: Record<string, string>;

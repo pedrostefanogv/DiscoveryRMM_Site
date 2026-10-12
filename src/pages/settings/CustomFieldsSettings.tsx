@@ -72,6 +72,7 @@ export default function CustomFieldsSettings() {
   const [selectedScopeFilter, setSelectedScopeFilter] = useState('');
   const [editingDefinitionId, setEditingDefinitionId] = useState<string | null>(null);
   const [definitionModalOpen, setDefinitionModalOpen] = useState(false);
+  const [templatesModalOpen, setTemplatesModalOpen] = useState(false);
   const [definitionForm, setDefinitionForm] = useState<DefinitionFormState>(defaultDefinitionForm);
   // Chave da definição: derivada do título na criação e imutável depois de
   // criada (relatórios, automações e valores gravados a referenciam).
@@ -452,7 +453,10 @@ export default function CustomFieldsSettings() {
           <h1 className="text-2xl font-bold text-foreground">Custom Fields</h1>
           <p className="text-sm text-muted">Gerencie definições por escopo e os valores por Servidor, Cliente, Site e Agente. Campos de Ticket sao preenchidos dentro do chamado.</p>
         </div>
-        <Button onClick={openCreateDefinition}>Novo Campo</Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="secondary" onClick={() => setTemplatesModalOpen(true)}>Modelos</Button>
+          <Button onClick={openCreateDefinition}>Novo Campo</Button>
+        </div>
       </div>
 
       <Modal
@@ -576,7 +580,15 @@ export default function CustomFieldsSettings() {
         </div>
       </Card>
 
-      <CustomFieldTemplatesSection />
+      {/* Modelos saem do fluxo da página: só montam (e consultam a API) quando o modal abre. */}
+      <Modal
+        open={templatesModalOpen}
+        onClose={() => setTemplatesModalOpen(false)}
+        title="Modelos de campos"
+        maxWidth="max-w-3xl"
+      >
+        <CustomFieldTemplatesSection embedded />
+      </Modal>
 
       <Card>
         <CardHeader title="Valores por Escopo" subtitle="Selecione a entidade e edite os valores das definições correspondentes. Valores de Ticket sao gerenciados no detalhe do chamado." />

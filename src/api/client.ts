@@ -381,6 +381,99 @@ function qs(params: Record<string, unknown>): string {
   return s ? `?${s}` : "";
 }
 
+export interface UploadProgress {
+  loaded: number;
+  total: number;
+  /** 0–100; 0 quando o total é desconhecido. */
+  percent: number;
+}
+
+export interface UploadOptions {
+  /** Callback chamado a cada avanço do envio (progresso real do XHR). */
+  onProgress?: (progress: UploadProgress) => void;
+  /** Timeout do upload em ms. Default: 0 (sem timeout — arquivos grandes). */
+  timeoutMs?: number;
+  signal?: AbortSignal;
+}
+
+/**
+ * Upload multipart com progresso real. `fetch` não expõe progresso de envio,
+ * por isso usamos XMLHttpRequest — mesma autenticação e normalização de rota
+ * do restante do client.
+ */
+function uploadWithProgress<T>(
+  path: string,
+  formData: FormData,
+  options: UploadOptions = {},
+): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const normalizedPath = normalizeApiPath(path);
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", `${API_BASE_URL}${normalizedPath}`, true);
+
+    const token = getApiAccessToken();
+    if (token) {
+      xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+    }
+    xhr.setRequestHeader("Accept", "application/json");
+    // Content-Type NÃO é definido aqui: o browser adiciona o boundary do FormData.
+
+    const timeoutMs = options.timeoutMs ?? 0;
+    if (timeoutMs > 0) {
+      xhr.timeout = timeoutMs;
+    }
+
+    if (options.signal) {
+      if (options.signal.aborted) {
+        reject(new ApiError(0, "Upload cancelado."));
+        return;
+      }
+      options.signal.addEventListener("abort", () => xhr.abort(), { once: true });
+    }
+
+    xhr.upload.onprogress = (event) => {
+      if (!options.onProgress) return;
+      const total = event.lengthComputable ? event.total : 0;
+      options.onProgress({
+        loaded: event.loaded,
+        total,
+        percent: total > 0 ? Math.min(100, Math.round((event.loaded / total) * 100)) : 0,
+      });
+    };
+
+    xhr.onload = () => {
+      void (async () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          const text = xhr.responseText;
+          if (!text) {
+            resolve(undefined as T);
+            return;
+          }
+          try {
+            resolve(JSON.parse(text) as T);
+          } catch {
+            resolve(undefined as T);
+          }
+          return;
+        }
+
+        const synthetic = new Response(xhr.responseText, {
+          status: xhr.status,
+          statusText: xhr.statusText,
+        });
+        const message = await parseErrorMessage(synthetic);
+        reject(new ApiError(xhr.status, message));
+      })();
+    };
+
+    xhr.onerror = () => reject(new ApiError(0, "Falha de rede durante o upload."));
+    xhr.ontimeout = () => reject(new ApiError(0, "Tempo de upload excedido."));
+    xhr.onabort = () => reject(new ApiError(0, "Upload cancelado."));
+
+    xhr.send(formData);
+  });
+}
+
 export const api = {
   get: <T>(
     path: string,
@@ -408,6 +501,10 @@ export const api = {
           : "{}",
     });
   },
+
+  /** Upload multipart com progresso real (XMLHttpRequest). */
+  upload: <T>(path: string, formData: FormData, options?: UploadOptions) =>
+    uploadWithProgress<T>(path, formData, options),
 
   put: <T>(path: string, body: unknown, init?: ApiRequestInit) =>
     request<T>(path, {
