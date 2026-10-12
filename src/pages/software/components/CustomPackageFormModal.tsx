@@ -228,6 +228,7 @@ export function CustomPackageFormModal({ open, onClose, editing }: CustomPackage
             value={form.name}
             error={errors.name}
             disabled={submitting}
+            maxLength={500}
             placeholder="Ex.: Sistema de Gestão XPTO"
             onChange={(e) => update('name', e.target.value)}
           />
@@ -236,6 +237,7 @@ export function CustomPackageFormModal({ open, onClose, editing }: CustomPackage
             value={form.packageId}
             error={errors.packageId}
             disabled={isEditing || submitting}
+            maxLength={300}
             placeholder="Ex.: xpto-gestao"
             hint={isEditing ? 'O ID não pode ser alterado.' : 'Identificador único (sem espaços).'}
             onChange={(e) => update('packageId', e.target.value)}
@@ -243,8 +245,8 @@ export function CustomPackageFormModal({ open, onClose, editing }: CustomPackage
               if (!form.packageId.trim() && form.name.trim()) update('packageId', slugify(form.name));
             }}
           />
-          <Input label="Versão" value={form.version} disabled={submitting} placeholder="Ex.: 1.4.2" onChange={(e) => update('version', e.target.value)} />
-          <Input label="Fabricante" value={form.publisher} disabled={submitting} placeholder="Ex.: XPTO Software" onChange={(e) => update('publisher', e.target.value)} />
+          <Input label="Versão" value={form.version} disabled={submitting} maxLength={100} placeholder="Ex.: 1.4.2" onChange={(e) => update('version', e.target.value)} />
+          <Input label="Fabricante" value={form.publisher} disabled={submitting} maxLength={500} placeholder="Ex.: XPTO Software" onChange={(e) => update('publisher', e.target.value)} />
         </div>
 
         <TextArea
@@ -261,6 +263,7 @@ export function CustomPackageFormModal({ open, onClose, editing }: CustomPackage
           value={form.installCommand}
           error={errors.installCommand}
           disabled={submitting}
+          maxLength={1000}
           rows={3}
           placeholder='Ex.: {{installerDir}}\\setup.exe /S   ou   msiexec /i "{{installer}}" /qn'
           onChange={(e) => update('installCommand', e.target.value)}
@@ -271,6 +274,7 @@ export function CustomPackageFormModal({ open, onClose, editing }: CustomPackage
             label="Comando de desinstalação (opcional)"
             value={form.uninstallCommand}
             disabled={submitting}
+            maxLength={1000}
             rows={2}
             placeholder='Ex.: "C:\\Program Files\\XPTO\\uninstall.exe" /S'
             onChange={(e) => update('uninstallCommand', e.target.value)}
@@ -279,6 +283,7 @@ export function CustomPackageFormModal({ open, onClose, editing }: CustomPackage
             label="Site / homepage (opcional)"
             value={form.siteUrl}
             disabled={submitting}
+            maxLength={2000}
             placeholder="https://fornecedor.com.br"
             onChange={(e) => update('siteUrl', e.target.value)}
           />
@@ -359,6 +364,7 @@ export function CustomPackageFormModal({ open, onClose, editing }: CustomPackage
                 value={form.iconUrl}
                 placeholder="https://.../logo.png"
                 disabled={Boolean(iconFile) || submitting}
+                maxLength={2000}
                 onChange={(e) => update('iconUrl', e.target.value)}
               />
               <div className="flex flex-wrap items-center gap-3">
@@ -379,7 +385,7 @@ export function CustomPackageFormModal({ open, onClose, editing }: CustomPackage
                   />
                 </label>
                 {iconFile && (
-                  <button type="button" disabled={submitting} className="inline-flex items-center gap-1 text-xs text-muted hover:text-foreground" onClick={() => setIconFile(null)}>
+                  <button type="button" disabled={submitting} className="inline-flex items-center gap-1 text-xs text-muted hover:text-foreground" onClick={() => { setIconFile(null); setIconAsset(null); }}>
                     <X className="h-3.5 w-3.5" /> Remover seleção
                   </button>
                 )}

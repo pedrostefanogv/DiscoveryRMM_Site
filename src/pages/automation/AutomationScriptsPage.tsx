@@ -21,6 +21,9 @@ import {
   type AutomationScriptSummary,
 } from "@/api";
 import { CustomFieldsUsedByPanel } from "@/components/custom-fields/CustomFieldsUsedByPanel";
+import { ScriptContentEditor } from "./ScriptContentEditor";
+import { languageForScriptType } from "./scriptLanguages";
+import { validateJsonField, validateScriptSyntax } from "./scriptValidation";
 import { useClients } from "@/hooks/useClients";
 import {
   useAutomationScriptAudit,
@@ -288,6 +291,23 @@ export default function AutomationScriptsPage() {
     if (content.length > 200000) return toast.error("Conteudo acima do limite");
     if (!triggerModes.length) return toast.error("Informe ao menos um trigger mode");
 
+    // Validacao de sintaxe do conteudo conforme o tipo selecionado.
+    const language = languageForScriptType(form.scriptType);
+    const syntaxErrors = validateScriptSyntax(form.content, language).filter(
+      (issue) => issue.severity === "error",
+    );
+    if (syntaxErrors.length) {
+      return toast.error(
+        `Corrija ${syntaxErrors.length} erro(s) de sintaxe (linha ${syntaxErrors[0].line}): ${syntaxErrors[0].message}`,
+      );
+    }
+
+    // JSONs opcionais tambem precisam estar bem formados.
+    const jsonIssue =
+      validateJsonField("ParametersSchemaJson", form.parametersSchemaJson) ??
+      validateJsonField("MetadataJson", form.metadataJson);
+    if (jsonIssue) return toast.error(jsonIssue.message);
+
     const basePayload: CreateAutomationScriptRequest = {
       clientId: form.clientId || null,
       name,
@@ -499,11 +519,12 @@ export default function AutomationScriptsPage() {
           />
         </div>
         <div className="mt-3 space-y-3">
-          <TextArea
-            label="Conteudo"
-            className="min-h-40 font-mono"
+          <ScriptContentEditor
+            label="Conteudo do script"
+            scriptType={form.scriptType}
             value={form.content}
-            onChange={(e) => setForm((p) => ({ ...p, content: e.target.value }))}
+            onChange={(content) => setForm((p) => ({ ...p, content }))}
+            hint="A apresentacao (sintaxe, indentacao e modelo) acompanha o tipo de script selecionado."
           />
           <TextArea
             label="ParametersSchemaJson"
