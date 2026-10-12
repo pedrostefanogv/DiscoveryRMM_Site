@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { AppWindow, Monitor, Pencil, Ticket as TicketIcon, Trash2, Bell, BookOpen, ScrollText, Users } from 'lucide-react';
+import { SiteCustomFieldsCard } from '@/components/custom-fields/SiteCustomFieldsCard';
 import { useClient } from '@/hooks/useClients';
 import { useSite, useDeleteSite } from '@/hooks/useSites';
 import { useAgentsBySite } from '@/hooks/useAgents';
@@ -78,6 +79,7 @@ export default function SiteDetail() {
   const { hasAnyPermission } = useAuthorization();
   // Enviar notificação é uma ação de execução no endpoint (Agents.Execute).
   const canNotifyAgents = hasAnyPermission(['Agents.Execute', 'Agents.Edit', 'agents.*', 'admin.*']);
+  const canEditSite = hasAnyPermission(['Sites.Edit', 'sites.*', 'admin.*']);
 
   useDashboardRealtime(
     { clientId: clientId!, siteId: siteId! },
@@ -394,6 +396,8 @@ export default function SiteDetail() {
           </dl>
         </Card>
       </div>
+
+      <SiteCustomFieldsCard clientId={currentClient.id} siteId={currentSite.id} canEdit={canEditSite} />
 
       {/* Abas de recursos: Chamados · Logs · Agentes */}
       <DetailTabs

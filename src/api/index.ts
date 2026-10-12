@@ -125,6 +125,8 @@ export type {
   CreateCustomFieldDefinitionRequest,
   UpdateCustomFieldDefinitionRequest,
   CustomFieldValueItem,
+  CustomFieldAccessBinding,
+  CustomFieldSchemaItem,
   UpsertCustomFieldValueRequest,
   DepartmentCustomFieldDefinition,
   CreateDepartmentCustomFieldRequest,
@@ -134,8 +136,10 @@ export type {
 export {
   CustomFieldScopeType,
   CustomFieldDataType,
+  CustomFieldRuntimeAccessMode,
   getCustomFieldScopeLabel,
   getCustomFieldDataTypeLabel,
+  getCustomFieldRuntimeAccessModeLabel,
   formatCustomFieldValue,
   parseCustomFieldValue,
 } from "./custom-fields";

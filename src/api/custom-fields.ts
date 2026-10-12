@@ -21,6 +21,25 @@ export enum CustomFieldDataType {
   ListBox = 7,
 }
 
+/** Espelha Discovery.Core.Enums.CustomFieldRuntimeAccessMode. */
+export enum CustomFieldRuntimeAccessMode {
+  Disabled = 0,
+  Public = 1,
+  RestrictedTaskScript = 2,
+}
+
+/**
+ * Vínculo de execução (tarefa ou script) que libera leitura/escrita do campo
+ * quando o modo de acesso é "Restrito a tarefas e scripts".
+ */
+export interface CustomFieldAccessBinding {
+  taskId: string | null;
+  scriptId: string | null;
+  canRead: boolean;
+  canWrite: boolean;
+}
+
+
 export interface CustomFieldDefinition {
   id: string;
   name: string;
@@ -29,7 +48,21 @@ export interface CustomFieldDefinition {
   scopeType: CustomFieldScopeType;
   dataType: CustomFieldDataType;
   isActive: boolean;
+  isSecret: boolean;
   options: string[];
+  /** Capacidades de automação (lido/gravado pelo agente e modo de execução). */
+  allowRuntimeRead: boolean;
+  allowAgentWrite: boolean;
+  runtimeAccessMode: CustomFieldRuntimeAccessMode;
+  accessBindings: CustomFieldAccessBinding[];
+  /** Portal/suporte enxerga o valor no card do detalhe. */
+  allowWebRead: boolean;
+  /** Portal/suporte pode editar o valor (exige allowWebRead). */
+  allowWebEdit: boolean;
+  /** Aparece primeiro no card do detalhe. */
+  isPinned: boolean;
+  /** Valor padrão em JSON (usado quando a entidade ainda não tem valor). */
+  defaultValueJson: string | null;
   /** Departamento vinculado (apenas escopo Departamento). null = todos. */
   departmentId: string | null;
   /** Nome do departamento resolvido pela API (evita depender de outra listagem). */
@@ -45,6 +78,48 @@ export interface CreateCustomFieldDefinitionRequest {
   scopeType: CustomFieldScopeType;
   dataType: CustomFieldDataType;
   options?: string[];
+  allowRuntimeRead?: boolean;
+  allowAgentWrite?: boolean;
+  runtimeAccessMode?: CustomFieldRuntimeAccessMode;
+  accessBindings?: CustomFieldAccessBinding[];
+  allowWebRead?: boolean;
+  allowWebEdit?: boolean;
+  isPinned?: boolean;
+  defaultValueJson?: string | null;
+}
+
+/**
+ * Item de schema devolvido por GET /Agents/{id}/custom-fields/schema — traz o
+ * tipo, as opções, as capacidades e o valor atual (segredo mascarado por padrão).
+ */
+export interface CustomFieldSchemaItem {
+  definitionId: string;
+  name: string;
+  label: string;
+  description: string | null;
+  scopeType: CustomFieldScopeType;
+  dataType: CustomFieldDataType;
+  isRequired: boolean;
+  isActive: boolean;
+  isSecret: boolean;
+  options: string[];
+  inputMask: string | null;
+  minLength: number | null;
+  maxLength: number | null;
+  minValue: number | null;
+  maxValue: number | null;
+  allowRuntimeRead: boolean;
+  allowAgentWrite: boolean;
+  runtimeAccessMode: CustomFieldRuntimeAccessMode;
+  accessBindings: CustomFieldAccessBinding[];
+  allowWebRead: boolean;
+  allowWebEdit: boolean;
+  isPinned: boolean;
+  entityId: string | null;
+  /** Valor atual em JSON serializado (a API devolve string). */
+  valueJson: string;
+  valueUpdatedAt: string | null;
+  valueUpdatedBy: string | null;
 }
 
 // ── Department-scoped custom field types ──────────────
@@ -136,6 +211,16 @@ export interface UpdateCustomFieldDefinitionRequest {
   dataType: CustomFieldDataType;
   options?: string[];
   isActive?: boolean;
+  allowRuntimeRead?: boolean;
+  allowAgentWrite?: boolean;
+  runtimeAccessMode?: CustomFieldRuntimeAccessMode;
+  /** [] remove todos os vínculos; undefined preserva os atuais. */
+  accessBindings?: CustomFieldAccessBinding[];
+  allowWebRead?: boolean;
+  allowWebEdit?: boolean;
+  isPinned?: boolean;
+  /** null/undefined preserva; string vazia limpa. */
+  defaultValueJson?: string | null;
 }
 
 export interface CustomFieldValueItem {
@@ -181,16 +266,32 @@ async function upsertEntityValue(
   scopeType: CustomFieldScopeType,
   entityId: string,
   definitionId: string,
-  value: unknown,
+  body: Record<string, unknown>,
 ): Promise<CustomFieldValueItem> {
-  const raw = await api.put<Record<string, unknown>>(path, { value });
+  const raw = await api.put<Record<string, unknown>>(path, body);
   return normalizeValueItem(raw, scopeType, entityId, definitionId);
+}
+
+/**
+ * A API não é uniforme no corpo do PUT de valor:
+ * - Clients/Sites/Tickets aceitam { value };
+ * - Agents e o endpoint genérico (/custom-fields/values/{id}) exigem { valueJson }
+ *   (string JSON), senão o valor chega nulo e a gravação falha.
+ */
+function valueBody(scopeType: CustomFieldScopeType, value: unknown): Record<string, unknown> {
+  return scopeType === CustomFieldScopeType.Agent
+    ? { valueJson: JSON.stringify(value ?? null) }
+    : { value };
 }
 
 export const customFieldsApi = {
   async listDefinitions(params?: {
     scopeType?: CustomFieldScopeType;
     includeInactive?: boolean;
+    /** Visão reversa: só os campos vinculados a esta tarefa. */
+    taskId?: string;
+    /** Visão reversa: só os campos vinculados a este script. */
+    scriptId?: string;
   }): Promise<CustomFieldDefinition[]> {
     const raw = await api.get<unknown>(`${BASE}`, params ?? {});
     if (Array.isArray(raw))
@@ -234,6 +335,66 @@ export const customFieldsApi = {
     await api.del<void>(`${BASE}/${id}`);
   },
 
+  /**
+   * Schema dos campos do agente para o card do detalhe (tipo, opções,
+   * capacidades, destaque e valor atual). Só campos visíveis no portal e,
+   * por padrão, com segredos mascarados.
+   */
+  /**
+   * Schema de uma entidade (Agente, Cliente ou Site) para o card do detalhe.
+   * Cada escopo tem a sua rota; o filtro de visibilidade no portal é do servidor.
+   */
+  async getEntitySchema(
+    scopeType: CustomFieldScopeType,
+    params: { entityId?: string; clientId?: string; includeSecrets?: boolean },
+  ): Promise<CustomFieldSchemaItem[]> {
+    const includeSecrets = params.includeSecrets ?? false;
+    let path: string;
+
+    switch (scopeType) {
+      case CustomFieldScopeType.Agent:
+        if (!params.entityId) return [];
+        path = `/api/v1/Agents/${params.entityId}/custom-fields/schema`;
+        break;
+      case CustomFieldScopeType.Client:
+        if (!params.entityId) return [];
+        path = `/api/v1/Clients/${params.entityId}/custom-fields/schema`;
+        break;
+      case CustomFieldScopeType.Site:
+        if (!params.entityId || !params.clientId) return [];
+        path = `/api/v1/clients/${params.clientId}/Sites/${params.entityId}/custom-fields/schema`;
+        break;
+      default:
+        return [];
+    }
+
+    const raw = await api.get<unknown>(path, { includeSecrets });
+    if (!Array.isArray(raw)) return [];
+    return (raw as Array<Record<string, unknown>>).map(normalizeSchemaItem);
+  },
+
+  async getAgentSchema(
+    agentId: string,
+    includeSecrets = false,
+  ): Promise<CustomFieldSchemaItem[]> {
+    return customFieldsApi.getEntitySchema(CustomFieldScopeType.Agent, {
+      entityId: agentId,
+      includeSecrets,
+    });
+  },
+
+  /** Grava o valor de um campo do agente pelo portal (body esperado: valueJson). */
+  async upsertAgentValue(
+    agentId: string,
+    definitionId: string,
+    value: unknown,
+  ): Promise<void> {
+    await api.put<unknown>(
+      `/api/v1/Agents/${agentId}/custom-fields/${definitionId}`,
+      { valueJson: JSON.stringify(value ?? null) },
+    );
+  },
+
   async getValues(
     scopeType: CustomFieldScopeType,
     params?: { entityId?: string; includeSecrets?: boolean },
@@ -249,9 +410,14 @@ export const customFieldsApi = {
     definitionId: string,
     payload: UpsertCustomFieldValueRequest,
   ): Promise<CustomFieldValueItem> {
+    // O endpoint genérico (escopo Servidor) também espera { valueJson }.
     const raw = await api.put<Record<string, unknown>>(
       `${BASE}/values/${definitionId}`,
-      payload,
+      {
+        scopeType: payload.scopeType,
+        entityId: payload.entityId ?? null,
+        valueJson: JSON.stringify(payload.value ?? null),
+      },
     );
     return normalizeValueItem(
       raw,
@@ -321,7 +487,7 @@ export const customFieldsApi = {
           payload.scopeType,
           payload.entityId,
           definitionId,
-          payload.value,
+          valueBody(payload.scopeType, payload.value),
         );
       case CustomFieldScopeType.Site:
         if (!payload.entityId || !params?.clientId) {
@@ -332,7 +498,7 @@ export const customFieldsApi = {
           payload.scopeType,
           payload.entityId,
           definitionId,
-          payload.value,
+          valueBody(payload.scopeType, payload.value),
         );
       case CustomFieldScopeType.Agent:
         if (!payload.entityId) {
@@ -343,7 +509,7 @@ export const customFieldsApi = {
           payload.scopeType,
           payload.entityId,
           definitionId,
-          payload.value,
+          valueBody(payload.scopeType, payload.value),
         );
       case CustomFieldScopeType.Ticket:
         if (!payload.entityId) {
@@ -354,7 +520,7 @@ export const customFieldsApi = {
           payload.scopeType,
           payload.entityId,
           definitionId,
-          payload.value,
+          valueBody(payload.scopeType, payload.value),
         );
       default:
         return customFieldsApi.upsertValue(definitionId, payload);
@@ -524,9 +690,22 @@ function normalizeDefinition(
     scopeType: normalizeCustomFieldScopeType(raw.scopeType ?? raw.ScopeType),
     dataType: normalizeCustomFieldDataType(raw.dataType ?? raw.DataType),
     isActive: Boolean(raw.isActive ?? raw.IsActive ?? true),
+    isSecret: Boolean(raw.isSecret ?? raw.IsSecret ?? false),
     options: normalizeOptions(
       raw.options ?? raw.Options ?? raw.allowedValues ?? raw.AllowedValues,
     ),
+    allowRuntimeRead: Boolean(raw.allowRuntimeRead ?? raw.AllowRuntimeRead ?? false),
+    allowAgentWrite: Boolean(raw.allowAgentWrite ?? raw.AllowAgentWrite ?? false),
+    runtimeAccessMode: normalizeRuntimeAccessMode(
+      raw.runtimeAccessMode ?? raw.RuntimeAccessMode,
+    ),
+    accessBindings: normalizeAccessBindings(
+      raw.accessBindings ?? raw.AccessBindings,
+    ),
+    allowWebRead: Boolean(raw.allowWebRead ?? raw.AllowWebRead ?? true),
+    allowWebEdit: Boolean(raw.allowWebEdit ?? raw.AllowWebEdit ?? true),
+    isPinned: Boolean(raw.isPinned ?? raw.IsPinned ?? false),
+    defaultValueJson: normalizeNullableText(raw.defaultValueJson ?? raw.DefaultValueJson),
     departmentId: normalizeNullableId(
       raw.departmentId ?? raw.DepartmentId,
     ),
@@ -542,6 +721,90 @@ function normalizeDefinition(
         ? null
         : String(raw.updatedAt),
   };
+}
+
+export function normalizeRuntimeAccessMode(
+  value: unknown,
+): CustomFieldRuntimeAccessMode {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value as CustomFieldRuntimeAccessMode;
+  }
+  if (typeof value === "string") {
+    const numeric = Number(value);
+    if (!Number.isNaN(numeric)) {
+      return numeric as CustomFieldRuntimeAccessMode;
+    }
+    if (value === "Public") return CustomFieldRuntimeAccessMode.Public;
+    if (value === "RestrictedTaskScript")
+      return CustomFieldRuntimeAccessMode.RestrictedTaskScript;
+  }
+  return CustomFieldRuntimeAccessMode.Disabled;
+}
+
+function normalizeAccessBindings(value: unknown): CustomFieldAccessBinding[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((item): item is Record<string, unknown> => typeof item === "object" && item !== null)
+    .map(item => ({
+      taskId: normalizeNullableId(item.taskId ?? item.TaskId),
+      scriptId: normalizeNullableId(item.scriptId ?? item.ScriptId),
+      canRead: Boolean(item.canRead ?? item.CanRead ?? false),
+      canWrite: Boolean(item.canWrite ?? item.CanWrite ?? false),
+    }))
+    .filter(binding => Boolean(binding.taskId || binding.scriptId));
+}
+
+export function getCustomFieldRuntimeAccessModeLabel(
+  value: CustomFieldRuntimeAccessMode,
+): string {
+  switch (value) {
+    case CustomFieldRuntimeAccessMode.Public:
+      return "Público (qualquer execução)";
+    case CustomFieldRuntimeAccessMode.RestrictedTaskScript:
+      return "Restrito a tarefas e scripts";
+    default:
+      return "Desabilitado";
+  }
+}
+
+function normalizeSchemaItem(raw: Record<string, unknown>): CustomFieldSchemaItem {
+  return {
+    definitionId: String(raw.definitionId ?? raw.DefinitionId ?? ""),
+    name: String(raw.name ?? raw.Name ?? ""),
+    label: String(raw.label ?? raw.Label ?? raw.name ?? ""),
+    description: normalizeNullableText(raw.description ?? raw.Description),
+    scopeType: normalizeCustomFieldScopeType(raw.scopeType ?? raw.ScopeType),
+    dataType: normalizeCustomFieldDataType(raw.dataType ?? raw.DataType),
+    isRequired: Boolean(raw.isRequired ?? raw.IsRequired ?? false),
+    isActive: Boolean(raw.isActive ?? raw.IsActive ?? true),
+    isSecret: Boolean(raw.isSecret ?? raw.IsSecret ?? false),
+    options: normalizeOptions(raw.options ?? raw.Options),
+    inputMask: normalizeNullableText(raw.inputMask ?? raw.InputMask),
+    minLength: normalizeNullableNumber(raw.minLength ?? raw.MinLength),
+    maxLength: normalizeNullableNumber(raw.maxLength ?? raw.MaxLength),
+    minValue: normalizeNullableNumber(raw.minValue ?? raw.MinValue),
+    maxValue: normalizeNullableNumber(raw.maxValue ?? raw.MaxValue),
+    allowRuntimeRead: Boolean(raw.allowRuntimeRead ?? raw.AllowRuntimeRead ?? false),
+    allowAgentWrite: Boolean(raw.allowAgentWrite ?? raw.AllowAgentWrite ?? false),
+    runtimeAccessMode: normalizeRuntimeAccessMode(raw.runtimeAccessMode ?? raw.RuntimeAccessMode),
+    accessBindings: normalizeAccessBindings(raw.accessBindings ?? raw.AccessBindings),
+    allowWebRead: Boolean(raw.allowWebRead ?? raw.AllowWebRead ?? true),
+    allowWebEdit: Boolean(raw.allowWebEdit ?? raw.AllowWebEdit ?? true),
+    isPinned: Boolean(raw.isPinned ?? raw.IsPinned ?? false),
+    entityId: normalizeNullableId(raw.entityId ?? raw.EntityId),
+    valueJson: typeof raw.valueJson === "string" ? raw.valueJson : String(raw.valueJson ?? raw.ValueJson ?? "null"),
+    valueUpdatedAt:
+      raw.valueUpdatedAt === null || raw.valueUpdatedAt === undefined
+        ? null
+        : String(raw.valueUpdatedAt ?? raw.ValueUpdatedAt),
+    valueUpdatedBy: normalizeNullableText(raw.valueUpdatedBy ?? raw.ValueUpdatedBy),
+  };
+}
+
+function normalizeNullableNumber(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") return null;
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : null;
 }
 
 function normalizeNullableId(value: unknown): string | null {
@@ -622,11 +885,34 @@ function normalizeValueItem(
     scopeType: normalizeCustomFieldScopeType(
       raw.scopeType ?? raw.ScopeType ?? scopeType,
     ),
-    value: raw.value ?? raw.Value ?? null,
+    // A API devolve "valueJson" (JSON serializado); ler só "value" deixava os
+    // valores salvos em branco na tela de Configurações.
+    value: parseValueJson(raw.value ?? raw.Value, raw.valueJson ?? raw.ValueJson),
+    name:
+      raw.name === undefined && raw.Name === undefined
+        ? undefined
+        : String(raw.name ?? raw.Name),
+    label:
+      raw.label === undefined && raw.Label === undefined
+        ? undefined
+        : String(raw.label ?? raw.Label),
     isSecret: Boolean(raw.isSecret ?? raw.IsSecret ?? false),
     updatedAt:
       raw.updatedAt === null || raw.UpdatedAt === null
         ? null
         : String(raw.updatedAt ?? raw.UpdatedAt ?? "") || null,
   };
+}
+
+/** Converte "valueJson" da API no valor utilizável pelo formulário. */
+function parseValueJson(rawValue: unknown, rawJson: unknown): unknown {
+  if (rawValue !== undefined && rawValue !== null) return rawValue;
+  if (typeof rawJson !== "string") return rawJson ?? null;
+  const text = rawJson.trim();
+  if (!text || text === "null") return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return rawJson;
+  }
 }

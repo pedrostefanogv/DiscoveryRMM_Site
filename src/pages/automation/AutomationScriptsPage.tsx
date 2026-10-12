@@ -20,6 +20,7 @@ import {
   type UpdateAutomationScriptRequest,
   type AutomationScriptSummary,
 } from "@/api";
+import { CustomFieldsUsedByPanel } from "@/components/custom-fields/CustomFieldsUsedByPanel";
 import { useClients } from "@/hooks/useClients";
 import {
   useAutomationScriptAudit,
@@ -516,6 +517,7 @@ export default function AutomationScriptsPage() {
             value={form.metadataJson}
             onChange={(e) => setForm((p) => ({ ...p, metadataJson: e.target.value }))}
           />
+          {editing && editingId ? <CustomFieldsUsedByPanel scriptId={editingId} /> : null}
           <div className="flex justify-end gap-2">
             <Button variant="secondary" onClick={() => setFormOpen(false)}>Cancelar</Button>
             <Button

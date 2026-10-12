@@ -15,6 +15,7 @@ import {
   Users,
   ScrollText,
 } from 'lucide-react';
+import { ClientCustomFieldsCard } from '@/components/custom-fields/ClientCustomFieldsCard';
 import { useClient, useDeleteClient } from '@/hooks/useClients';
 import { useSites } from '@/hooks/useSites';
 import { useAgentsByClient } from '@/hooks/useAgents';
@@ -92,6 +93,7 @@ export default function ClientDetail() {
   const { hasAnyPermission } = useAuthorization();
   // Enviar notificação é uma ação de execução no endpoint (Agents.Execute).
   const canNotifyAgents = hasAnyPermission(['Agents.Execute', 'Agents.Edit', 'agents.*', 'admin.*']);
+  const canEditClient = hasAnyPermission(['Clients.Edit', 'clients.*', 'admin.*']);
   const clientDashboard = useDashboardSummary({ clientId: id! }, range, { enabled: !!id });
 
   // Subscribe to client-scoped NATS dashboard events for targeted refetch.
@@ -386,6 +388,8 @@ export default function ClientDetail() {
           </dl>
         </Card>
       </div>
+
+      <ClientCustomFieldsCard clientId={c.id} canEdit={canEditClient} />
 
       {/* Abas de recursos: Sites · Chamados · Logs · Agentes */}
       <DetailTabs

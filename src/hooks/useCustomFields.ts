@@ -7,6 +7,7 @@ import {
   type UpdateCustomFieldDefinitionRequest,
   type UpsertCustomFieldValueRequest,
   type CustomFieldDefinition,
+  type CustomFieldSchemaItem,
   type CustomFieldValueItem,
 } from "@/api/custom-fields";
 import type { CursorPageDto } from "@/api";
@@ -16,6 +17,8 @@ const KEYS = {
   definitions: (params?: {
     scopeType?: CustomFieldScopeType;
     includeInactive?: boolean;
+    taskId?: string;
+    scriptId?: string;
   }) => [...KEYS.all, "definitions", params ?? {}] as const,
   definition: (id: string) => [...KEYS.all, "definition", id] as const,
   values: (
@@ -40,6 +43,10 @@ function normalizeArray<T>(data: CursorPageDto<T> | T[]): T[] {
 export function useCustomFieldDefinitions(params?: {
   scopeType?: CustomFieldScopeType;
   includeInactive?: boolean;
+  /** Visão reversa: só os campos vinculados a esta tarefa. */
+  taskId?: string;
+  /** Visão reversa: só os campos vinculados a este script. */
+  scriptId?: string;
 }) {
   return useQuery({
     queryKey: KEYS.definitions(params),
@@ -48,6 +55,32 @@ export function useCustomFieldDefinitions(params?: {
       normalizeArray(
         data as CursorPageDto<CustomFieldDefinition> | CustomFieldDefinition[],
       ),
+  });
+}
+
+/**
+ * Visão reversa: quais campos customizados esta tarefa/script pode ler/gravar.
+ * Usada dentro da página da tarefa/script. Silenciosa em 403 (quem não tem
+ * permissão de configuração não vê o painel).
+ */
+export function useCustomFieldsBoundToExecution(params: {
+  taskId?: string;
+  scriptId?: string;
+  enabled?: boolean;
+}) {
+  const hasTarget = Boolean(params.taskId || params.scriptId);
+  return useQuery({
+    queryKey: KEYS.definitions({
+      taskId: params.taskId,
+      scriptId: params.scriptId,
+    }),
+    queryFn: () =>
+      customFieldsApi.listDefinitions({
+        taskId: params.taskId,
+        scriptId: params.scriptId,
+      }),
+    enabled: hasTarget && (params.enabled ?? true),
+    retry: false,
   });
 }
 
@@ -140,3 +173,73 @@ export function useUpsertCustomFieldValue() {
     },
   });
 }
+
+// ── Cards de detalhe (agente, cliente, site): schema + edição pelo portal ──
+
+const ENTITY_SCHEMA_KEYS = {
+  all: ["customFields", "entitySchema"] as const,
+  entity: (scopeType: CustomFieldScopeType, entityId?: string, clientId?: string) =>
+    [...ENTITY_SCHEMA_KEYS.all, scopeType, entityId ?? null, clientId ?? null] as const,
+};
+
+export interface EntityCustomFieldTarget {
+  entityId?: string;
+  clientId?: string;
+}
+
+/**
+ * Schema dos campos de uma entidade para o card do detalhe. Só campos com
+ * visibilidade no portal; segredos voltam mascarados por padrão.
+ */
+export function useEntityCustomFieldSchema(
+  scopeType: CustomFieldScopeType,
+  target: EntityCustomFieldTarget,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: ENTITY_SCHEMA_KEYS.entity(scopeType, target.entityId, target.clientId),
+    queryFn: () => customFieldsApi.getEntitySchema(scopeType, target),
+    enabled: Boolean(target.entityId) && enabled,
+  });
+}
+
+/** Grava o valor de um campo da entidade pelo portal e recarrega o schema. */
+export function useUpsertEntityCustomFieldValue(
+  scopeType: CustomFieldScopeType,
+  target: EntityCustomFieldTarget,
+) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      definitionId,
+      value,
+    }: {
+      definitionId: string;
+      value: unknown;
+    }) =>
+      customFieldsApi.upsertScopedValue(
+        definitionId,
+        { scopeType, entityId: target.entityId ?? null, value },
+        { clientId: target.clientId },
+      ),
+    onSuccess: () => {
+      qc.invalidateQueries({
+        queryKey: ENTITY_SCHEMA_KEYS.entity(scopeType, target.entityId, target.clientId),
+      });
+      // A tela de Configurações usa outra chave; mantém as duas coerentes.
+      qc.invalidateQueries({ queryKey: KEYS.all });
+    },
+  });
+}
+
+/** Card da aba Info do agente. */
+export function useAgentCustomFieldSchema(agentId: string, enabled = true) {
+  return useEntityCustomFieldSchema(CustomFieldScopeType.Agent, { entityId: agentId }, enabled);
+}
+
+/** Grava um valor de campo do agente pelo portal. */
+export function useUpsertAgentCustomFieldValue(agentId: string) {
+  return useUpsertEntityCustomFieldValue(CustomFieldScopeType.Agent, { entityId: agentId });
+}
+
+export type { CustomFieldSchemaItem };

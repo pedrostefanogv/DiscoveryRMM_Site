@@ -81,6 +81,12 @@ vi.mock('@/hooks/useAgents', () => ({
   useWakeOnLan: () => ({ isPending: false, mutate: vi.fn() }),
 }));
 
+// O card de campos customizados tem teste próprio e depende de react-query/API;
+// aqui ele é substituído para o teste da página continuar focado nas abas.
+vi.mock('@/components/custom-fields/AgentCustomFieldsCard', () => ({
+  AgentCustomFieldsCard: () => null,
+}));
+
 vi.mock('@/hooks/useAutomation', () => ({
   useForceAutomationSync: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useAgentAutomationPolicies: () => ({

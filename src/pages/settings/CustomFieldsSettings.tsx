@@ -3,13 +3,21 @@ import toast from 'react-hot-toast';
 import { Badge, Button, Card, CardHeader, ErrorDisplay, Input, Loading, Select, TextArea } from '@/components/ui';
 import {
   CustomFieldDataType,
+  CustomFieldRuntimeAccessMode,
   CustomFieldScopeType,
+  automationApi,
   formatCustomFieldValue,
   getCustomFieldDataTypeLabel,
   getCustomFieldScopeLabel,
   parseCustomFieldValue,
   type CustomFieldDefinition,
 } from '@/api';
+import {
+  CustomFieldCapabilitiesEditor,
+  defaultCapabilitiesValue,
+  type AutomationBindingOption,
+  type CustomFieldCapabilitiesValue,
+} from '@/components/custom-fields/CustomFieldCapabilitiesEditor';
 import {
   useCreateCustomFieldDefinition,
   useCustomFieldDefinitions,
@@ -31,7 +39,8 @@ type DefinitionFormState = {
   scopeType: string;
   dataType: string;
   optionsText: string;
-};
+  defaultValueText: string;
+} & CustomFieldCapabilitiesValue;
 
 const defaultDefinitionForm: DefinitionFormState = {
   name: '',
@@ -40,6 +49,8 @@ const defaultDefinitionForm: DefinitionFormState = {
   scopeType: String(CustomFieldScopeType.Agent),
   dataType: String(CustomFieldDataType.Text),
   optionsText: '',
+  defaultValueText: '',
+  ...defaultCapabilitiesValue,
 };
 
 const scopeOptions = Object.values(CustomFieldScopeType)
@@ -75,6 +86,8 @@ export default function CustomFieldsSettings() {
   const [clients, setClients] = useState<Client[]>([]);
   const [sites, setSites] = useState<Site[]>([]);
   const [agents, setAgents] = useState<Agent[]>([]);
+  // Tarefas e scripts disponíveis para a tabela de vínculos da automação.
+  const [automationBindingOptions, setAutomationBindingOptions] = useState<AutomationBindingOption[]>([]);
 
   const valueScope = Number(selectedValueScope) as CustomFieldScopeType;
   const valueEntityId = valueScope === CustomFieldScopeType.Server
@@ -177,6 +190,33 @@ export default function CustomFieldsSettings() {
     return () => { cancelled = true; };
   }, [selectedSiteId]);
 
+  // Tarefas e scripts para os vínculos de automação. Falha silenciosa: quem não
+  // tem permissão de automação continua conseguindo criar/editar o campo.
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadAutomationTargets() {
+      try {
+        const [scripts, tasks] = await Promise.all([
+          automationApi.listScripts({ limit: 200 }),
+          automationApi.listTasks({ limit: 200 }),
+        ]);
+        if (cancelled) return;
+        const options: AutomationBindingOption[] = [
+          ...(scripts.items ?? []).map(script => ({ value: `script:${script.id}`, label: `Script: ${script.name}` })),
+          ...(tasks.items ?? []).map(task => ({ value: `task:${task.id}`, label: `Tarefa: ${task.name}` })),
+        ];
+        setAutomationBindingOptions(options);
+      } catch {
+        if (cancelled) return;
+        setAutomationBindingOptions([]);
+      }
+    }
+
+    void loadAutomationTargets();
+    return () => { cancelled = true; };
+  }, []);
+
   useEffect(() => {
     const nextDrafts = Object.fromEntries((valuesQuery.data ?? []).map(item => [item.definitionId, formatCustomFieldValue(item.value)]));
     setValueDrafts(nextDrafts);
@@ -233,6 +273,19 @@ export default function CustomFieldsSettings() {
       scopeType: String(definition.scopeType),
       dataType: String(definition.dataType),
       optionsText: definition.options.join(', '),
+      defaultValueText: formatDefaultValueText(definition.defaultValueJson),
+      allowRuntimeRead: definition.allowRuntimeRead,
+      allowAgentWrite: definition.allowAgentWrite,
+      runtimeAccessMode: definition.runtimeAccessMode,
+      allowWebRead: definition.allowWebRead,
+      allowWebEdit: definition.allowWebEdit,
+      isPinned: definition.isPinned,
+      accessBindings: definition.accessBindings.map(binding => ({
+        taskId: binding.taskId ?? '',
+        scriptId: binding.scriptId ?? '',
+        canRead: binding.canRead,
+        canWrite: binding.canWrite,
+      })),
     });
   }
 
@@ -260,6 +313,42 @@ export default function CustomFieldsSettings() {
       return;
     }
 
+    // Vínculos sem alvo (linha adicionada e não preenchida) não vão para a API.
+    const accessBindings = definitionForm.accessBindings
+      .filter(binding => binding.taskId || binding.scriptId)
+      .map(binding => ({
+        taskId: binding.taskId || null,
+        scriptId: binding.scriptId || null,
+        canRead: binding.canRead,
+        canWrite: binding.canWrite,
+      }));
+
+    // Gravação pelo agente só existe em escopo Agente (regra do servidor).
+    const effectiveAgentWrite =
+      scopeType === CustomFieldScopeType.Agent ? definitionForm.allowAgentWrite : false;
+    const wantsRuntimeAccess = definitionForm.allowRuntimeRead || effectiveAgentWrite;
+    const runtimeAccessMode = wantsRuntimeAccess
+      ? definitionForm.runtimeAccessMode
+      : CustomFieldRuntimeAccessMode.Disabled;
+
+    if (wantsRuntimeAccess && runtimeAccessMode === CustomFieldRuntimeAccessMode.Disabled) {
+      toast.error('Escolha um escopo de execução (Público ou Restrito) para o acesso do agente.');
+      return;
+    }
+
+    if (
+      runtimeAccessMode === CustomFieldRuntimeAccessMode.RestrictedTaskScript &&
+      accessBindings.length === 0
+    ) {
+      toast.error('O modo restrito exige ao menos um vínculo de tarefa ou script.');
+      return;
+    }
+
+    if (definitionForm.allowWebEdit && !definitionForm.allowWebRead) {
+      toast.error('Um campo não pode ser editável no portal sem ser visível nele.');
+      return;
+    }
+
     const payload = {
       name,
       label,
@@ -267,6 +356,17 @@ export default function CustomFieldsSettings() {
       scopeType,
       dataType,
       options,
+      allowRuntimeRead: definitionForm.allowRuntimeRead,
+      allowAgentWrite: effectiveAgentWrite,
+      runtimeAccessMode,
+      accessBindings,
+      allowWebRead: definitionForm.allowWebRead,
+      allowWebEdit: definitionForm.allowWebEdit,
+      isPinned: definitionForm.isPinned,
+      // Vazio limpa o padrão (o servidor trata "" e "null" como NULL).
+      defaultValueJson: definitionForm.defaultValueText.trim()
+        ? JSON.stringify(parseCustomFieldValue(dataType, definitionForm.defaultValueText))
+        : '',
     };
 
     try {
@@ -376,6 +476,24 @@ export default function CustomFieldsSettings() {
         <div className="mt-4">
           <TextArea label="Opções (vírgula separada)" rows={2} hint="Obrigatório para Dropdown e ListBox." value={definitionForm.optionsText} onChange={event => setDefinitionForm(prev => ({ ...prev, optionsText: event.target.value }))} />
         </div>
+
+        <div className="mt-4">
+          <Input
+            label="Valor padrão"
+            value={definitionForm.defaultValueText}
+            placeholder="Usado quando a entidade ainda não tem valor"
+            hint="Fica vazio se não houver padrão. O valor é convertido pelo tipo do campo (ex.: Sim/Não, números, listas por vírgula)."
+            onChange={event => setDefinitionForm(prev => ({ ...prev, defaultValueText: event.target.value }))}
+          />
+        </div>
+
+        <CustomFieldCapabilitiesEditor
+          value={definitionForm}
+          onChange={patch => setDefinitionForm(prev => ({ ...prev, ...patch }))}
+          scopeType={Number(definitionForm.scopeType) as CustomFieldScopeType}
+          bindingOptions={automationBindingOptions}
+        />
+
         <div className="mt-4 flex justify-end gap-2">
           <Button variant="ghost" onClick={resetDefinitionForm}>Cancelar</Button>
           <Button onClick={() => void handleSaveDefinition()} loading={createDefinition.isPending || updateDefinition.isPending}>{editingDefinitionId ? 'Salvar Definição' : 'Criar Definição'}</Button>
@@ -405,6 +523,18 @@ export default function CustomFieldsSettings() {
                   <Badge color={definition.isActive ? 'success' : 'warning'}>{definition.isActive ? 'Ativo' : 'Inativo'}</Badge>
                   <Badge color="accent">{getCustomFieldScopeLabel(definition.scopeType)}</Badge>
                   <Badge color="slate">{getCustomFieldDataTypeLabel(definition.dataType)}</Badge>
+                  {definition.isSecret ? <Badge color="warning">Segredo</Badge> : null}
+                  {definition.isPinned ? <Badge color="accent">Destaque</Badge> : null}
+                  {definition.allowRuntimeRead ? <Badge color="accent">Lido pelo agente</Badge> : null}
+                  {definition.allowAgentWrite ? <Badge color="accent">Gravado pelo agente</Badge> : null}
+                  {definition.runtimeAccessMode === CustomFieldRuntimeAccessMode.RestrictedTaskScript ? (
+                    <Badge color="slate">Restrito ({definition.accessBindings.length})</Badge>
+                  ) : null}
+                  {!definition.allowWebRead ? (
+                    <Badge color="warning">Oculto no portal</Badge>
+                  ) : definition.allowWebEdit ? null : (
+                    <Badge color="slate">Portal: só leitura</Badge>
+                  )}
                 </div>
                 <p className="mt-2 text-xs text-muted">Chave: {definition.name}</p>
                 <DefinitionBinding definition={definition} />
@@ -485,6 +615,18 @@ function DefinitionBinding({ definition }: { definition: CustomFieldDefinition }
       </span>
     </p>
   );
+}
+
+/** Valor padrão em JSON -> texto do formulário (vazio quando não há padrão). */
+function formatDefaultValueText(defaultValueJson: string | null): string {
+  if (!defaultValueJson) return '';
+  const text = defaultValueJson.trim();
+  if (!text || text === 'null') return '';
+  try {
+    return formatCustomFieldValue(JSON.parse(text));
+  } catch {
+    return defaultValueJson;
+  }
 }
 
 function getApiErrorMessage(error: unknown, fallback: string): string {

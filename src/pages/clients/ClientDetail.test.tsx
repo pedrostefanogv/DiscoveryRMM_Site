@@ -14,6 +14,11 @@ vi.mock('@/api', () => ({
   AlertScopeType: { Agent: 0, Site: 1, Client: 2, Label: 3 },
 }));
 
+// O card de campos customizados tem teste próprio e depende de react-query/API.
+vi.mock('@/components/custom-fields/ClientCustomFieldsCard', () => ({
+  ClientCustomFieldsCard: () => null,
+}));
+
 vi.mock('@/hooks/useClients', () => ({
   useClient: () => ({
     data: {

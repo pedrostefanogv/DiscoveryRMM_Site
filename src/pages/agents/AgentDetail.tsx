@@ -35,6 +35,7 @@ import AgentPoliciesPanel from '@/components/agents/AgentPoliciesPanel';
 import WakeOnLanModal from '@/components/agents/WakeOnLanModal';
 import { NotesPanel } from '@/components/notes/NotesPanel';
 import { PinnedNotesCard } from '@/components/notes/PinnedNotesCard';
+import { AgentCustomFieldsCard } from '@/components/custom-fields/AgentCustomFieldsCard';
 import { DetailTabs, type DetailTab } from '@/components/entity/DetailTabs';
 import type { AgentSoftwareInventoryItem, ListeningPortInfo, LogEntry, OpenSocketInfo, ScheduledTaskInfo, StartupItemInfo } from '@/api';
 import { ApiError, agentUpdatesApi, agentsApi } from '@/api';
@@ -2115,6 +2116,8 @@ export default function AgentDetail() {
                 )}
               </Card>
             </div>
+
+            <AgentCustomFieldsCard agentId={a.id} canEdit={canManageAgent} />
 
             <PinnedNotesCard agentId={a.id} onViewAll={() => handleSelectDataTab('notes')} />
           </>

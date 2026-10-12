@@ -16,6 +16,7 @@ import {
   ContextMenu,
   type ContextMenuItem,
 } from "@/components/ui";
+import { CustomFieldsUsedByPanel } from "@/components/custom-fields/CustomFieldsUsedByPanel";
 import {
   AppApprovalScopeType,
   AppInstallationType,
@@ -1995,6 +1996,8 @@ export default function AutomationTasksPage() {
             />
           </div>
         </div>
+
+        {editing && editingId ? <CustomFieldsUsedByPanel taskId={editingId} /> : null}
 
         <div className="mt-4 flex justify-end gap-2">
           <Button variant="secondary" onClick={closeFormModal}>Cancelar</Button>
