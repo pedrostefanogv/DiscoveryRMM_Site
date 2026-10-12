@@ -491,6 +491,12 @@ export default function ServerConfigurationPage() {
   // servidor; o Endpoint S3 do formulario passa a ser a URL publica das URLs
   // pre-assinadas entregues ao agent e ao navegador.
   const storageInternal = Boolean(formValues.values?.objectStorageInternal);
+  // Endpoint de loopback NUNCA serve para as URLs pré-assinadas: o cliente
+  // (agent/navegador) tentaria o SEU próprio localhost. Avisa no lugar onde o
+  // admin configura, em vez de deixar o anexo falhar depois.
+  const storageEndpointRaw = String(formValues.values?.objectStorageEndpoint ?? "").trim().toLowerCase();
+  const storageEndpointIsLoopback =
+    /(^|:\/\/)(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])(:|\/|$)/.test(storageEndpointRaw);
   const storageConfigured =
     String(formValues.values?.objectStorageEndpoint ?? "").trim().length > 0 &&
     String(formValues.values?.objectStorageBucketName ?? "").trim().length > 0;
@@ -938,6 +944,16 @@ export default function ServerConfigurationPage() {
                     acessam o loopback: eles recebem URLs pré-assinadas com o <strong>Endpoint S3</strong> acima
                     (URL pública, ex.: https://tngplacas.com.br), e o nginx encaminha /&lt;bucket&gt;/ para o storage
                     preservando o Host da assinatura.
+                  </p>
+                </div>
+              )}
+              {storageEndpointIsLoopback && (
+                <div className="rounded-lg border border-danger/40 bg-danger/10 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-danger">Endpoint inválido (loopback)</p>
+                  <p className="mt-1 text-[11px] text-muted">
+                    Não use <strong>localhost/127.0.0.1</strong> aqui: agentes e navegadores não alcançam o loopback do
+                    servidor e o anexo falha. Informe a <strong>URL pública</strong> que os clientes acessam
+                    (ex.: https://tngplacas.com.br) — o caminho do bucket (/&lt;bucket&gt;/) é publicado pelo nginx.
                   </p>
                 </div>
               )}
