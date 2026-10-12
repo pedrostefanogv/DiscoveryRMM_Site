@@ -396,12 +396,20 @@ export const serverEditableFields: EditableField[] = [
   },
   // ── Object Storage (S3-compatible / MinIO) ─────────────────
   {
+    key: "objectStorageInternal",
+    label: "Usar RustFS interno (servidor)",
+    kind: "boolean",
+    group: "storage",
+    description:
+      "Liga o armazenamento interno deste servidor (RustFS). Nesse modo as credenciais e o endpoint de loopback vem da configuração do servidor (ObjectStorage__* no env) e o campo Endpoint S3 abaixo passa a ser a URL PUBLICA usada nas URLs pré-assinadas entregues ao agent e ao navegador.",
+  },
+  {
     key: "objectStorageEndpoint",
     label: "Endpoint S3",
     kind: "string",
     group: "storage",
     description:
-      "URL base do servidor S3-compatível (ex.: https://s3.us-east-1.amazonaws.com). Deixe em branco para desabilitar o armazenamento.",
+      "URL base do servidor S3-compatível (ex.: https://s3.us-east-1.amazonaws.com). Com o RustFS interno ligado, informe aqui a URL PUBLICA do servidor (ex.: https://tngplacas.com.br) — o anexo entra por /<bucket>/. Deixe em branco para desabilitar o armazenamento.",
   },
   {
     key: "objectStorageBucketName",

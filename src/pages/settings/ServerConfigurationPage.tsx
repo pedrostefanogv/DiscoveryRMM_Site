@@ -487,6 +487,10 @@ export default function ServerConfigurationPage() {
     (field) => String(formValues.values?.[field.key] ?? "false") === "true",
   ).length;
   const natsEnabled = String(formValues.values?.natsEnabled ?? "false") === "true";
+  // Modo interno (RustFS do servidor): as credenciais/loopback vem do env do
+  // servidor; o Endpoint S3 do formulario passa a ser a URL publica das URLs
+  // pre-assinadas entregues ao agent e ao navegador.
+  const storageInternal = Boolean(formValues.values?.objectStorageInternal);
   const storageConfigured =
     String(formValues.values?.objectStorageEndpoint ?? "").trim().length > 0 &&
     String(formValues.values?.objectStorageBucketName ?? "").trim().length > 0;
@@ -925,6 +929,18 @@ export default function ServerConfigurationPage() {
           />
           {!collapsedSections.storage && (
             <div className="space-y-5">
+              {storageInternal && (
+                <div className="rounded-lg border border-border bg-surface-light p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted">Modo interno (RustFS)</p>
+                  <p className="mt-1 text-[11px] text-muted">
+                    O servidor fala com o RustFS por <strong>loopback</strong> usando as chaves do env do servidor
+                    (ObjectStorage__AccessKey/__SecretKey/__InternalEndpoint). Os agentes e o navegador NÃO
+                    acessam o loopback: eles recebem URLs pré-assinadas com o <strong>Endpoint S3</strong> acima
+                    (URL pública, ex.: https://tngplacas.com.br), e o nginx encaminha /&lt;bucket&gt;/ para o storage
+                    preservando o Host da assinatura.
+                  </p>
+                </div>
+              )}
               <div className="space-y-4">
                 {/* Conexão — endereço do backend e bucket */}
                 <div className="rounded-lg border border-border bg-surface-light p-4">
@@ -940,7 +956,8 @@ export default function ServerConfigurationPage() {
                 </div>
 
                 <div className="grid gap-4 lg:grid-cols-2">
-                  {/* Credenciais de acesso */}
+                  {/* Credenciais de acesso (no modo interno vêm do env do servidor) */}
+                  {!storageInternal && (
                   <div className="rounded-lg border border-border bg-surface-light p-4">
                     <p className="text-xs font-semibold uppercase tracking-wider text-muted">Credenciais</p>
                     <p className="mt-1 text-[11px] text-muted">
@@ -951,6 +968,7 @@ export default function ServerConfigurationPage() {
                       {renderStorageTextField("objectStorageSecretKey")}
                     </div>
                   </div>
+                  )}
 
                   {/* Validade das URLs geradas pelo servidor */}
                   <div className="rounded-lg border border-border bg-surface-light p-4">

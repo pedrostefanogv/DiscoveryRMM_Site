@@ -1790,6 +1790,12 @@ export interface ServerConfiguration {
   objectStorageSecretKey?: string;
   objectStorageUrlTtlHours?: number;
   objectStorageUsePathStyle?: boolean;
+  /**
+   * Usa o storage interno deste servidor (RustFS). Nesse modo as credenciais e o
+   * endpoint de loopback vem do env do servidor e o "Endpoint S3" abaixo define a
+   * URL PUBLICA usada nas URLs pre-assinadas (agente/navegador).
+   */
+  objectStorageInternal?: boolean;
   objectStorageSslVerify?: boolean;
   natsEnabled?: boolean;
   natsAuthEnabled?: boolean;
