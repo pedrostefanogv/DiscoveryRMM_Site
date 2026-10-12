@@ -40,6 +40,35 @@ export interface AutomationBindingOption {
   label: string;
 }
 
+/** Combinações prontas (o usuário ajusta depois, se quiser). */
+const CAPABILITY_PRESETS: Array<{ label: string; hint: string; value: Partial<CustomFieldCapabilitiesValue> }> = [
+  {
+    label: 'Só script',
+    hint: 'O agente lê, o suporte não vê no portal',
+    value: { allowRuntimeRead: true, allowAgentWrite: false, runtimeAccessMode: CustomFieldRuntimeAccessMode.Public, allowWebRead: false, allowWebEdit: false },
+  },
+  {
+    label: 'Coletor puro',
+    hint: 'O agente grava; o suporte só consulta',
+    value: { allowRuntimeRead: false, allowAgentWrite: true, runtimeAccessMode: CustomFieldRuntimeAccessMode.Public, allowWebRead: true, allowWebEdit: false },
+  },
+  {
+    label: 'Bidirecional do agente',
+    hint: 'O agente lê e grava; o suporte só consulta',
+    value: { allowRuntimeRead: true, allowAgentWrite: true, runtimeAccessMode: CustomFieldRuntimeAccessMode.Public, allowWebRead: true, allowWebEdit: false },
+  },
+  {
+    label: 'Manual do suporte',
+    hint: 'Invisível aos scripts; o suporte edita',
+    value: { allowRuntimeRead: false, allowAgentWrite: false, runtimeAccessMode: CustomFieldRuntimeAccessMode.Disabled, allowWebRead: true, allowWebEdit: true },
+  },
+  {
+    label: 'Completo',
+    hint: 'Agente lê/grava e o suporte vê/edita',
+    value: { allowRuntimeRead: true, allowAgentWrite: true, runtimeAccessMode: CustomFieldRuntimeAccessMode.Public, allowWebRead: true, allowWebEdit: true },
+  },
+];
+
 interface Props {
   value: CustomFieldCapabilitiesValue;
   onChange: (patch: Partial<CustomFieldCapabilitiesValue>) => void;
@@ -119,6 +148,23 @@ export function CustomFieldCapabilitiesEditor({ value, onChange, scopeType, bind
       <p className="mt-1 text-xs text-muted">
         Defina o que o agente remoto (scripts e tarefas) e o portal (suporte) podem fazer com este campo.
       </p>
+
+      {isAgentScope && (
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <span className="text-xs text-muted">Combinações prontas:</span>
+          {CAPABILITY_PRESETS.map(preset => (
+            <Button
+              key={preset.label}
+              size="sm"
+              variant="secondary"
+              title={preset.hint}
+              onClick={() => onChange({ ...preset.value, isPinned: value.isPinned })}
+            >
+              {preset.label}
+            </Button>
+          ))}
+        </div>
+      )}
 
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
         <fieldset className="rounded-lg border border-border p-3">

@@ -93,6 +93,11 @@ vi.mock('@/hooks/useSites', () => ({
   useAllSites: () => ({ data: [{ id: 's1', name: 'Site Matriz' }] }),
 }));
 
+vi.mock('@/hooks/useCustomFields', () => ({
+  // O filtro por campo customizado é opcional; sem campo selecionado não busca.
+  useAgentCustomFieldMap: () => ({ data: undefined, isLoading: false, isError: false }),
+}));
+
 vi.mock('@/hooks/useAgentLabels', () => ({
   useAgentLabelUsage: () => ({ data: [{ label: 'Windows', agentCount: 2 }] }),
   useAgentIdsByLabel: () => ({ data: { ids: ['a1', 'a2'], total: 2, truncated: false }, isLoading: false }),

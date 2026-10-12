@@ -3,6 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import { Monitor, Wifi, WifiOff, LayoutGrid, List, Bug, Trash2, ShieldCheck, ArrowUp, ArrowDown, RefreshCw, Move, RotateCcw, Power, Zap, ChevronRight, Bell, ArchiveRestore } from 'lucide-react';
 import { useQueries } from '@tanstack/react-query';
 import { useAgentLabelUsage, useAgentIdsByLabel, useAgentLabelsByAgentIds } from '@/hooks/useAgentLabels';
+import { useAgentCustomFieldMap } from '@/hooks/useCustomFields';
+import {
+  agentCustomFieldOptions,
+  agentMatchesCustomFieldValue,
+  buildAgentCustomFieldIndex,
+  getAgentCustomFieldValue,
+} from '@/utils/agentCustomFieldMap';
 import toast from 'react-hot-toast';
 import { useClients } from '@/hooks/useClients';
 import { useAllSites } from '@/hooks/useSites';
@@ -131,6 +138,9 @@ export default function AgentList() {
   const [filterStatus, setFilterStatus] = useState<'all' | 'online' | 'offline'>('all');
   const [filterProvisioning, setFilterProvisioning] = useState<ProvisioningFilter>('all');
   const [filterLabel, setFilterLabel] = useState('');
+  // Filtro/coluna por campo customizado do agente (campos visíveis no portal).
+  const [filterCustomField, setFilterCustomField] = useState('');
+  const [filterCustomFieldValue, setFilterCustomFieldValue] = useState('');
   const [sortBy, setSortBy] = useState<AgentSortField>('client');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
   const [viewMode, setViewMode] = useState<'card' | 'list'>('card');
@@ -630,6 +640,28 @@ export default function AgentList() {
   // das labels já carregadas, o que quebrava em frotas maiores que o limite de 500.
   const labelUsage = useAgentLabelUsage();
   const agentsWithFilterLabel = useAgentIdsByLabel(filterLabel || null);
+  // O mapa só é buscado quando há campo selecionado (filtro/coluna).
+  const customFieldMap = useAgentCustomFieldMap(Boolean(filterCustomField));
+  const customFieldIndex = useMemo(
+    () => buildAgentCustomFieldIndex(customFieldMap.data),
+    [customFieldMap.data],
+  );
+  const customFieldFilterOptions = useMemo(
+    () => agentCustomFieldOptions(customFieldMap.data?.definitions, customFieldIndex),
+    [customFieldMap.data, customFieldIndex],
+  );
+  const selectedCustomField = customFieldMap.data?.definitions.find(
+    definition => definition.definitionId === filterCustomField,
+  );
+  const customFieldValuesByAgentId = useMemo(() => {
+    if (!filterCustomField) return undefined;
+    const values = new Map<string, string>();
+    for (const agentId of customFieldIndex.keys()) {
+      const value = getAgentCustomFieldValue(customFieldIndex, agentId, filterCustomField);
+      if (value) values.set(agentId, value);
+    }
+    return values;
+  }, [customFieldIndex, filterCustomField]);
 
   const distinctLabels = useMemo(() => {
     const set = new Set<string>();
@@ -660,6 +692,13 @@ export default function AgentList() {
     if (filterProvisioning === 'pendingApproval' && !a.zeroTouchPending) return false;
     if (filterProvisioning === 'approved' && a.zeroTouchPending) return false;
     if (filterLabel && !labelFilterIds.has(a.id)) return false;
+    if (
+      filterCustomField
+      && filterCustomFieldValue.trim()
+      && !agentMatchesCustomFieldValue(customFieldIndex, a.id, filterCustomField, filterCustomFieldValue)
+    ) {
+      return false;
+    }
     if (search) {
       const q = search.toLowerCase();
       const agentLabels = (labelsByAgentId.get(a.id) ?? []).join(' ').toLowerCase();
@@ -671,11 +710,15 @@ export default function AgentList() {
         // Busca pelo usuário logado reportado pelo agent (DOMINIO\usuario).
         (a.loggedUser ?? '').toLowerCase().includes(q) ||
         a.clientName.toLowerCase().includes(q) ||
-        agentLabels.includes(q)
+        agentLabels.includes(q) ||
+        // Com um campo selecionado, a busca também considera o valor dele.
+        (filterCustomField
+          ? getAgentCustomFieldValue(customFieldIndex, a.id, filterCustomField).toLowerCase().includes(q)
+          : false)
       );
     }
     return true;
-  }), [agentsWithStableIp, filterStatus, filterClient, filterProvisioning, search, filterLabel, labelFilterIds, labelsByAgentId, now]);
+  }), [agentsWithStableIp, filterStatus, filterClient, filterProvisioning, search, filterLabel, labelFilterIds, labelsByAgentId, filterCustomField, filterCustomFieldValue, customFieldIndex, now]);
 
   const filtered = useMemo(
     () => [...baseFiltered].sort((a, b) => compareAgentsBySort(a, b, sortBy, sortDirection, now)),
@@ -853,6 +896,22 @@ export default function AgentList() {
           />
           <Select
             fullWidth={false}
+            options={[{ value: '', label: 'Todos os campos' }, ...customFieldFilterOptions]}
+            value={filterCustomField}
+            onChange={e => {
+              setFilterCustomField(e.target.value);
+              setFilterCustomFieldValue('');
+            }}
+            disabled={showDeleted}
+          />
+          <Input
+            placeholder="Valor do campo..."
+            value={filterCustomFieldValue}
+            onChange={e => setFilterCustomFieldValue(e.target.value)}
+            disabled={!filterCustomField || showDeleted}
+          />
+          <Select
+            fullWidth={false}
             options={sortOptions}
             value={sortBy}
             disabled={showDeleted}
@@ -891,6 +950,14 @@ export default function AgentList() {
           )}
         </div>
       </div>
+
+      {!showDeleted && filterCustomField ? (
+        <p className="text-xs text-muted">
+          Campo "{selectedCustomField?.label ?? filterCustomField}"
+          {filterCustomFieldValue.trim() ? ` = "${filterCustomFieldValue.trim()}"` : ''}: {filtered.length} agente(s).
+          {customFieldMap.isLoading ? ' Carregando valores...' : ''}
+        </p>
+      ) : null}
 
       {!showDeleted && filterLabel ? (
         <p className="text-xs text-muted">
@@ -1034,7 +1101,7 @@ export default function AgentList() {
           icon={Monitor}
           title={agentsWithStableIp.length === 0 ? 'Nenhum agente encontrado' : 'Nenhum agente corresponde aos filtros'}
           description={agentsWithStableIp.length === 0 ? 'Nenhum dispositivo registrado no sistema.' : 'Tente ajustar os filtros de busca.'}
-          action={(search || filterClient || filterStatus !== 'all' || filterProvisioning !== 'all' || filterLabel) ? {
+          action={(search || filterClient || filterStatus !== 'all' || filterProvisioning !== 'all' || filterLabel || filterCustomField) ? {
             label: 'Limpar filtros',
             onClick: () => {
               setSearch('');
@@ -1087,6 +1154,14 @@ export default function AgentList() {
               canApprove={canManageAgent}
               isApprovingId={approvingAgentId}
               onApprove={handleApproveZeroTouch}
+              customField={
+                filterCustomField && selectedCustomField
+                  ? {
+                      label: selectedCustomField.label,
+                      valuesByAgentId: customFieldValuesByAgentId ?? new Map<string, string>(),
+                    }
+                  : undefined
+              }
             />
           )}
         </>

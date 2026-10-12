@@ -32,6 +32,7 @@ const KEYS = {
       params.entityId ?? null,
       params.clientId ?? null,
       Boolean(params.includeSecrets),
+      Boolean(params.includeHidden),
     ] as const,
 };
 
@@ -75,7 +76,7 @@ export function useCustomFieldsBoundToExecution(params: {
       scriptId: params.scriptId,
     }),
     queryFn: () =>
-      customFieldsApi.listDefinitions({
+      customFieldsApi.listCustomFieldsBoundToExecution({
         taskId: params.taskId,
         scriptId: params.scriptId,
       }),
@@ -229,6 +230,16 @@ export function useUpsertEntityCustomFieldValue(
       // A tela de Configurações usa outra chave; mantém as duas coerentes.
       qc.invalidateQueries({ queryKey: KEYS.all });
     },
+  });
+}
+
+/** Mapa de campos/valores de agente para a lista (usado só quando há filtro). */
+export function useAgentCustomFieldMap(enabled = true) {
+  return useQuery({
+    queryKey: [...KEYS.all, 'agentFieldMap'],
+    queryFn: () => customFieldsApi.getAgentFieldMap(),
+    enabled,
+    staleTime: 30_000,
   });
 }
 

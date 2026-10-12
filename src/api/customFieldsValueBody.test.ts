@@ -59,6 +59,19 @@ describe('customFieldsApi — corpo do PUT de valor por escopo', () => {
     ]);
   });
 
+  it('visão reversa usa os endpoints de automação (sem exigir ServerConfig)', async () => {
+    getMock.mockClear();
+    getMock.mockResolvedValue([] as unknown[]);
+
+    await customFieldsApi.listCustomFieldsBoundToExecution({ taskId: 't1' });
+    await customFieldsApi.listCustomFieldsBoundToExecution({ scriptId: 's1' });
+
+    expect(getMock.mock.calls.map(call => call[0])).toEqual([
+      '/api/v1/automation/tasks/t1/custom-fields',
+      '/api/v1/automation/scripts/s1/custom-fields',
+    ]);
+  });
+
   it('escopo Servidor (endpoint genérico) envia valueJson com escopo e entityId', async () => {
     await customFieldsApi.upsertValue('d1', {
       scopeType: CustomFieldScopeType.Server,

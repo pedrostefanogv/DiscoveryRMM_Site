@@ -71,7 +71,11 @@ import {
   formatDuration,
   summarizeExecutions,
 } from "@/modules/automation/executionUtils";
-import { buildCorrelationId, wingetDecisionFromMetadata } from "./automationTasksUtils";
+import {
+  buildCorrelationId,
+  customFieldsFromMetadata,
+  wingetDecisionFromMetadata,
+} from "./automationTasksUtils";
 
 const STATUS_OPTIONS = [
   { value: "", label: "Todos os status" },
@@ -646,10 +650,22 @@ export default function AutomationOperationsPage() {
         header: "Resultado",
         render: (item) => {
           const decision = wingetDecisionFromMetadata(item.resultMetadataJson);
+          const customFields = customFieldsFromMetadata(item.resultMetadataJson);
           return (
             <div className="text-xs">
               <p className="text-foreground">ExitCode: {item.exitCode ?? "-"}</p>
               <p className="text-muted [overflow-wrap:anywhere]">{item.errorMessage || "Sem erro"}</p>
+              {customFields && (customFields.read.length > 0 || customFields.collected.length > 0) && (
+                <p className="text-muted" title={customFields.collectorField ?? undefined}>
+                  Campos: {customFields.read.length > 0 ? `lidos: ${customFields.read.join(", ")}` : ""}
+                  {customFields.read.length > 0 && customFields.collected.length > 0 ? " · " : ""}
+                  {customFields.collected.length > 0
+                    ? `coletados: ${customFields.collected
+                        .map(item => (item.value ? `${item.name} = ${item.value}` : item.name))
+                        .join(", ")}`
+                    : ""}
+                </p>
+              )}
               {decision?.skip && (
                 <p className="text-warning" title={decision.reason ?? undefined}>
                   Sem instalação: {decision.reason ?? "pacote já em estado final"}

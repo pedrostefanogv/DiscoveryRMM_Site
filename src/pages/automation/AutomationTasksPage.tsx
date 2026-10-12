@@ -50,6 +50,7 @@ import { useClients } from "@/hooks/useClients";
 import { useSites } from "@/hooks/useSites";
 import { useAgentsBySite } from "@/hooks/useAgents";
 import { useAppStoreCatalog } from "@/hooks/useAppStore";
+import { useAgentCustomFieldMap } from "@/hooks/useCustomFields";
 import { Search, LayoutGrid, List, Eye, Pencil, ScrollText, Trash2, RotateCcw, Info, CalendarClock } from "lucide-react";
 
 function buildCorrelationId(prefix: string) {
@@ -161,6 +162,8 @@ type TaskFormState = {
   allowDefer: boolean;
   closeProcesses: string[];
   promptTimeoutSeconds: number;
+  /** Campo customizado que recebe a saída da execução (tarefa coletora). */
+  collectorFieldDefinitionId: string;
   isActive: boolean;
 };
 
@@ -185,6 +188,7 @@ const defaultForm: TaskFormState = {
   allowDefer: true,
   closeProcesses: [],
   promptTimeoutSeconds: 60,
+  collectorFieldDefinitionId: "",
   isActive: true,
 };
 
@@ -250,6 +254,18 @@ export default function AutomationTasksPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<AutomationTaskSummary | null>(null);
   const [editingId, setEditingId] = useState("");
+  // Campos de agente que podem receber a saída (tarefa coletora). O mapa só é
+  // buscado com o formulário aberto.
+  const agentFieldMap = useAgentCustomFieldMap(formOpen);
+  const collectorFieldOptions = useMemo(
+    () => [
+      { value: "", label: "Não coletar (tarefa comum)" },
+      ...(agentFieldMap.data?.definitions ?? [])
+        .filter(definition => definition.allowAgentWrite)
+        .map(definition => ({ value: definition.definitionId, label: definition.label })),
+    ],
+    [agentFieldMap.data],
+  );
   const [auditTaskId, setAuditTaskId] = useState<string | null>(null);
   const [detailTaskId, setDetailTaskId] = useState<string | null>(null);
   const [deleteTask, setDeleteTask] = useState<AutomationTaskSummary | null>(null);
@@ -387,6 +403,7 @@ export default function AutomationTasksPage() {
       allowDefer: detail.allowDefer ?? true,
       closeProcesses: detail.closeProcesses ?? [],
       promptTimeoutSeconds: detail.promptTimeoutSeconds ?? 60,
+      collectorFieldDefinitionId: detail.collectorFieldDefinitionId ?? "",
       isActive: detail.isActive,
     });
 
@@ -588,6 +605,7 @@ export default function AutomationTasksPage() {
       allowDefer: item.allowDefer ?? true,
       closeProcesses: item.closeProcesses ?? [],
       promptTimeoutSeconds: item.promptTimeoutSeconds ?? 60,
+      collectorFieldDefinitionId: item.collectorFieldDefinitionId ?? "",
       isActive: item.isActive,
     });
     applyScopeCascade(normalizedScopeType, item);
@@ -1028,6 +1046,7 @@ export default function AutomationTasksPage() {
       allowDefer: promptMode ? form.allowDefer : true,
       closeProcesses: promptMode ? closeProcesses : [],
       promptTimeoutSeconds: promptMode ? promptTimeoutSeconds : 60,
+      collectorFieldDefinitionId: form.collectorFieldDefinitionId || null,
       isActive: form.isActive,
     };
 
@@ -1873,6 +1892,21 @@ export default function AutomationTasksPage() {
               aprovação: se o usuário não responder, a ação padrão é continuar. O{" "}
               <span className="font-medium">Toast</span> é um aviso informativo simples, sem exigir interação. Em{" "}
               <span className="font-medium">Silencioso</span> nenhuma notificação é exibida.
+            </p>
+          </div>
+
+          <div className="mt-3">
+            <Select
+              label="Gravar saída em campo (tarefa coletora)"
+              options={collectorFieldOptions}
+              value={form.collectorFieldDefinitionId}
+              onChange={(e) => setForm((p) => ({ ...p, collectorFieldDefinitionId: e.target.value }))}
+            />
+            <p className="mt-1 text-xs text-muted">
+              Quando escolhido, a última linha da saída da execução é gravada neste campo do agente
+              (o campo precisa permitir gravação pelo agente e estar liberado para a execução).
+              Evite coletar o mesmo campo pelo <span className="font-mono">MDZ_COLLECT</span> do script:
+              o coletor sobrescreveria o valor com a última linha.
             </p>
           </div>
 

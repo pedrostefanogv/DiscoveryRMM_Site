@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { AutomationNotificationMode, AutomationToastTiming } from '@/api/types';
 import {
+  customFieldsFromMetadata,
   describeCron,
   normalizeNotificationMode,
   normalizeToastTiming,
@@ -121,5 +122,45 @@ describe('modo de notificação', () => {
     expect(notificationModeLabel('Silent')).toBe('Silencioso');
     expect(toastTimingLabel('Before')).toBe('Antes de executar');
     expect(toastTimingLabel('After')).toBe('Após a conclusão');
+  });
+});
+
+describe('customFieldsFromMetadata', () => {
+  it('lê o bloco customFields do relatório (nome + valor truncado)', () => {
+    const info = customFieldsFromMetadata(
+      JSON.stringify({
+        customFields: {
+          read: ['anydesk', 'ativo'],
+          collected: [{ name: 'anydesk', value: '123 456' }],
+          collectorField: 'def-9',
+        },
+      }),
+    );
+    expect(info).toEqual({
+      read: ['anydesk', 'ativo'],
+      collected: [{ name: 'anydesk', value: '123 456' }],
+      collectorField: 'def-9',
+    });
+  });
+
+  it('tolera o formato antigo (somente nomes)', () => {
+    const info = customFieldsFromMetadata(
+      JSON.stringify({ customFields: { read: [], collected: ['anydesk'] } }),
+    );
+    expect(info?.collected).toEqual([{ name: 'anydesk', value: '' }]);
+  });
+
+  it('retorna null sem bloco, com JSON inválido ou vazio', () => {
+    expect(customFieldsFromMetadata(JSON.stringify({ wingetDecision: { skip: true } }))).toBeNull();
+    expect(customFieldsFromMetadata('{nao-json')).toBeNull();
+    expect(customFieldsFromMetadata(null)).toBeNull();
+  });
+
+  it('tolera listas ausentes', () => {
+    expect(customFieldsFromMetadata(JSON.stringify({ customFields: {} }))).toEqual({
+      read: [],
+      collected: [],
+      collectorField: null,
+    });
   });
 });

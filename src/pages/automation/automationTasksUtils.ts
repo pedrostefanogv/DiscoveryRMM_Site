@@ -350,6 +350,58 @@ export interface WingetDecisionInfo {
  * uma execução não instalou nada (ex.: pacote já instalado) e qual fonte decidiu
  * ("winget" ou "inventory-cache" quando o winget está indisponível).
  */
+/**
+ * Campos customizados que a execução leu/coletou (bloco "customFields" do
+ * relatório enviado pelo agent). Só nomes — os valores não vão para o histórico.
+ */
+export interface CustomFieldsCollectedInfo {
+  name: string;
+  value: string;
+}
+
+export interface CustomFieldsReportInfo {
+  read: string[];
+  collected: CustomFieldsCollectedInfo[];
+  collectorField: string | null;
+}
+
+export function customFieldsFromMetadata(
+  metadataJson: string | null | undefined,
+): CustomFieldsReportInfo | null {
+  if (!metadataJson) return null;
+  try {
+    const parsed = JSON.parse(metadataJson) as { customFields?: unknown } | null;
+    const block = parsed?.customFields;
+    if (!block || typeof block !== "object") return null;
+    const record = block as Record<string, unknown>;
+    const toStringList = (value: unknown): string[] =>
+      Array.isArray(value) ? value.map(item => String(item ?? "")).filter(Boolean) : [];
+    // Aceita o formato novo ({name,value}) e o antigo (só nomes).
+    const toCollectedList = (value: unknown): CustomFieldsCollectedInfo[] =>
+      Array.isArray(value)
+        ? value
+            .map(item => {
+              if (typeof item === "string") return { name: item, value: "" };
+              if (!item || typeof item !== "object") return null;
+              const entry = item as Record<string, unknown>;
+              const name = String(entry.name ?? "").trim();
+              return name ? { name, value: String(entry.value ?? "") } : null;
+            })
+            .filter((item): item is CustomFieldsCollectedInfo => item !== null)
+        : [];
+    return {
+      read: toStringList(record.read),
+      collected: toCollectedList(record.collected),
+      collectorField:
+        typeof record.collectorField === "string" && record.collectorField
+          ? record.collectorField
+          : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export function wingetDecisionFromMetadata(
   metadataJson: string | null | undefined,
 ): WingetDecisionInfo | null {

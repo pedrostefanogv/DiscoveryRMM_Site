@@ -245,6 +245,8 @@ export interface CustomFieldValueQueryParams {
   entityId?: string;
   clientId?: string;
   includeSecrets?: boolean;
+  /** Só a gestão (Configurações) vê campos com webRead=false. */
+  includeHidden?: boolean;
 }
 
 const BASE = "/api/v1/custom-fields";
@@ -253,10 +255,11 @@ async function listEntityValues(
   path: string,
   scopeType: CustomFieldScopeType,
   entityId: string,
-  params?: { includeSecrets?: boolean },
+  params?: { includeSecrets?: boolean; includeHidden?: boolean },
 ): Promise<CustomFieldValueItem[]> {
   const raw = await api.get<unknown>(path, {
     includeSecrets: params?.includeSecrets,
+    includeHidden: params?.includeHidden,
   });
   return normalizeValues(raw, scopeType, entityId);
 }
@@ -282,6 +285,27 @@ function valueBody(scopeType: CustomFieldScopeType, value: unknown): Record<stri
   return scopeType === CustomFieldScopeType.Agent
     ? { valueJson: JSON.stringify(value ?? null) }
     : { value };
+}
+
+export interface AgentCustomFieldMapDefinition {
+  definitionId: string;
+  name: string;
+  label: string;
+  dataType: CustomFieldDataType;
+  /** Só campos com gravação pelo agente podem ser destino de uma tarefa coletora. */
+  allowAgentWrite: boolean;
+}
+
+export interface AgentCustomFieldMapValue {
+  definitionId: string;
+  agentId: string;
+  valueJson: string;
+}
+
+/** Campos de agente visíveis no portal + valores por agente (lista de agentes). */
+export interface AgentCustomFieldMap {
+  definitions: AgentCustomFieldMapDefinition[];
+  values: AgentCustomFieldMapValue[];
 }
 
 export const customFieldsApi = {
@@ -371,6 +395,62 @@ export const customFieldsApi = {
     const raw = await api.get<unknown>(path, { includeSecrets });
     if (!Array.isArray(raw)) return [];
     return (raw as Array<Record<string, unknown>>).map(normalizeSchemaItem);
+  },
+
+  /**
+   * Mapa dos campos de agente visíveis no portal (webRead, não secretos) com os
+   * valores por agente — alimenta a coluna/filtro da lista de agentes.
+   */
+  /**
+   * Visão reversa (campos vinculados a uma tarefa/script). Usa os endpoints de
+   * automação: quem tem permissão de automação não precisa de ServerConfig.
+   */
+  async listCustomFieldsBoundToExecution(params: {
+    taskId?: string;
+    scriptId?: string;
+  }): Promise<CustomFieldDefinition[]> {
+    const path = params.taskId
+      ? `/api/v1/automation/tasks/${params.taskId}/custom-fields`
+      : params.scriptId
+        ? `/api/v1/automation/scripts/${params.scriptId}/custom-fields`
+        : '';
+    if (!path) return [];
+
+    const raw = await api.get<unknown>(path);
+    if (Array.isArray(raw)) {
+      return (raw as Array<Record<string, unknown>>).map(normalizeDefinition);
+    }
+    if (raw && typeof raw === 'object' && Array.isArray((raw as Record<string, unknown>).items)) {
+      return ((raw as Record<string, unknown>).items as Array<Record<string, unknown>>).map(normalizeDefinition);
+    }
+    return [];
+  },
+
+  async getAgentFieldMap(includeInactive = false): Promise<AgentCustomFieldMap> {
+    const raw = await api.get<Record<string, unknown>>(
+      `/api/v1/agents/custom-fields/map`,
+      { includeInactive },
+    );
+
+    const definitions = Array.isArray(raw?.definitions)
+      ? (raw.definitions as Array<Record<string, unknown>>).map(definition => ({
+          definitionId: String(definition.definitionId ?? ''),
+          name: String(definition.name ?? ''),
+          label: String(definition.label ?? definition.name ?? ''),
+          dataType: normalizeCustomFieldDataType(definition.dataType),
+          allowAgentWrite: Boolean(definition.allowAgentWrite ?? definition.AllowAgentWrite ?? false),
+        }))
+      : [];
+
+    const values = Array.isArray(raw?.values)
+      ? (raw.values as Array<Record<string, unknown>>).map(value => ({
+          definitionId: String(value.definitionId ?? ''),
+          agentId: String(value.agentId ?? ''),
+          valueJson: typeof value.valueJson === 'string' ? value.valueJson : String(value.valueJson ?? 'null'),
+        }))
+      : [];
+
+    return { definitions, values };
   },
 
   async getAgentSchema(

@@ -3828,6 +3828,8 @@ export interface AutomationTaskSummary {
   notificationMode?: AutomationNotificationMode | string | number;
   /** Momento do toast informativo (Before/After); só se aplica ao modo Toast. */
   toastTiming?: AutomationToastTiming | string | number;
+  /** Campo customizado de agente que recebe a saída (tarefa coletora). */
+  collectorFieldDefinitionId?: string | null;
   lastUpdatedAt: string;
 }
 
@@ -3943,6 +3945,8 @@ export interface CreateAutomationTaskRequest {
   notificationMode?: AutomationNotificationMode;
   /** Momento do toast informativo. Ausente = After. */
   toastTiming?: AutomationToastTiming;
+  /** Campo customizado de agente que recebe a saída (tarefa coletora). */
+  collectorFieldDefinitionId?: string | null;
   isActive?: boolean;
 }
 

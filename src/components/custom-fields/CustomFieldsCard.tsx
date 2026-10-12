@@ -159,7 +159,7 @@ export function CustomFieldsCard({ items, isLoading, isError, canEdit, subtitle,
 
                 <p className="mt-1 text-[11px] text-muted">
                   {item.valueUpdatedAt
-                    ? `Atualizado em ${formatDateTime(item.valueUpdatedAt)}${item.valueUpdatedBy ? ` · ${item.valueUpdatedBy}` : ''}`
+                    ? `Atualizado em ${formatDateTime(item.valueUpdatedAt)}${item.valueUpdatedBy ? ` · ${describeUpdatedBy(item.valueUpdatedBy)}` : ''}`
                     : 'Sem valor registrado'}
                 </p>
               </div>
@@ -180,6 +180,14 @@ export function CustomFieldsCard({ items, isLoading, isError, canEdit, subtitle,
       )}
     </Card>
   );
+}
+
+/** "task:<guid>"/"script:<guid>" viram um rótulo legível (id completo no title). */
+function describeUpdatedBy(updatedBy: string): string {
+  if (updatedBy.startsWith('task:')) return `tarefa ${updatedBy.slice(5, 13)}…`;
+  if (updatedBy.startsWith('script:')) return `script ${updatedBy.slice(7, 15)}…`;
+  if (updatedBy === 'agent') return 'agente';
+  return updatedBy;
 }
 
 function parseSchemaValue(item: CustomFieldSchemaItem): unknown {

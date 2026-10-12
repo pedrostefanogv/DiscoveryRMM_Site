@@ -110,6 +110,8 @@ export default function CustomFieldsSettings() {
       entityId: valueEntityId,
       clientId: valueScope === CustomFieldScopeType.Site ? selectedClientId || undefined : undefined,
       includeSecrets,
+      // Gestão: enxerga também os campos com webRead=false.
+      includeHidden: true,
     },
     valueScope === CustomFieldScopeType.Server || Boolean(valueEntityId),
   );

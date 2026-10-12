@@ -13,6 +13,14 @@ interface AgentListViewProps {
   canApprove?: boolean;
   isApprovingId?: string | null;
   onApprove?: (agent: AgentCardAgent) => void;
+  /**
+   * Coluna opcional de campo customizado: rótulo + valor por agente. Só aparece
+   * quando a lista tem um campo selecionado para filtro/coluna.
+   */
+  customField?: {
+    label: string;
+    valuesByAgentId: Map<string, string>;
+  };
 }
 
 /** Tabela de agentes no mesmo estilo da visualização em lista de /agents. */
@@ -25,6 +33,7 @@ export function AgentListView({
   canApprove = false,
   isApprovingId,
   onApprove,
+  customField,
 }: AgentListViewProps) {
   return (
     <div className="overflow-hidden rounded-xl border border-border bg-surface">
@@ -38,6 +47,11 @@ export function AgentListView({
               <th className="hidden px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted sm:table-cell">Cliente</th>
             )}
             <th className="hidden px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted lg:table-cell">Usuário</th>
+            {customField && (
+              <th className="hidden px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted xl:table-cell">
+                {customField.label}
+              </th>
+            )}
             <th className="px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted">Status</th>
             <th className="hidden px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted 2xl:table-cell">CPU</th>
             <th className="hidden px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted 2xl:table-cell">RAM</th>
@@ -88,6 +102,13 @@ export function AgentListView({
                     {a.loggedUser?.trim() || '\u2014'}
                   </span>
                 </td>
+                {customField && (
+                  <td className="hidden px-4 py-3 text-muted-foreground xl:table-cell">
+                    <span className="block max-w-[14rem] truncate" title={customField.valuesByAgentId.get(a.id) ?? undefined}>
+                      {customField.valuesByAgentId.get(a.id) || '\u2014'}
+                    </span>
+                  </td>
+                )}
                 <td className="px-4 py-3">
                   {isZeroTouchPending && canApprove && onApprove ? (
                     <button
