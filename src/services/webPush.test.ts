@@ -125,6 +125,18 @@ describe("webPush — deteccao de estado", () => {
     expect(webPush.getWebPushSnapshot().status).toBe("prompt");
     expect(subscribeMock).not.toHaveBeenCalled();
   });
+  it("recria a inscricao sozinho quando a permissao ja foi concedida", async () => {
+    // Cenario do bug: o logout remove a inscricao local (teardownWebPush), mas a
+    // permissao do navegador continua "granted". Sem recriar, o console pedia
+    // "Ativar" a cada login mesmo com a notificacao ja liberada.
+    enableEnvironment({ supported: true, permission: "granted", hasSubscription: false });
+    const webPush = await loadWebPush();
+
+    await webPush.refreshWebPushState();
+
+    expect(webPush.getWebPushSnapshot().status).toBe("subscribed");
+    expect(subscribeMock).toHaveBeenCalledTimes(1);
+  });
 
   it("sincroniza (upsert) uma inscricao ja existente", async () => {
     enableEnvironment({ supported: true, permission: "granted" });

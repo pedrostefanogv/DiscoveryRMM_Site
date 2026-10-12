@@ -44,6 +44,7 @@ export * from "./useReportLayoutSchema";
 export * from "./useReportPreview";
 export * from "./useReportAutocomplete";
 export * from "./useNotifications";
+export * from "./useTicketChatPresence";
 export * from "./useTicketAlertRules";
 export * from "./useSlaCalendars";
 export * from "./useEscalationRules";

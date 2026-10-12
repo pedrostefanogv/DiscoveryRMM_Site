@@ -147,4 +147,15 @@ export const ticketChatApi = {
   /** URL autenticada do anexo (o componente baixa como blob). */
   attachmentUrl: (ticketId: string, attachmentId: string) =>
     BASE + "/" + ticketId + "/chat/attachments/" + attachmentId,
+
+  /**
+   * Presenca: avisa o servidor que o atendente esta com a janela desta
+   * conversa aberta e visivel. Enquanto a presenca estiver valida o servidor
+   * NAO cria notificacao de nova mensagem para ele (sino + Web Push), porque a
+   * mensagem ja esta na frente dele. `active=false` limpa na hora (janela fechada).
+   */
+  setPresence: (ticketId: string, active: boolean) =>
+    active
+      ? api.post<void>(BASE + "/" + ticketId + "/chat/presence")
+      : api.del<void>(BASE + "/" + ticketId + "/chat/presence"),
 };

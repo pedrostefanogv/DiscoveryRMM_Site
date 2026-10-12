@@ -147,7 +147,23 @@ async function doRefresh(): Promise<void> {
     }
 
     const registration = await getReadyRegistration();
-    const subscription = registration ? await registration.pushManager.getSubscription() : null;
+    let subscription = registration ? await registration.pushManager.getSubscription() : null;
+
+    // Permissao JA concedida + sem inscricao local (o logout remove a inscricao
+    // deste navegador em teardownWebPush): recria e registra SEM exigir novo
+    // clique em "Ativar". Sem isso o console pedia "Ativar" a cada login mesmo
+    // com a permissao ja liberada no navegador.
+    if (!subscription && registration && Notification.permission === "granted") {
+      try {
+        subscription = await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(config.vapidPublicKey),
+        });
+      } catch {
+        // O navegador pode exigir um gesto do usuario: cai no botao "Ativar".
+        subscription = null;
+      }
+    }
 
     if (!subscription) {
       setState({ status: "prompt", subscriptionCount: config.subscriptionCount, error: null });

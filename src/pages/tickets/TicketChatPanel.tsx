@@ -13,6 +13,7 @@ import {
   useTicketChatMessages,
 } from "@/hooks/useTicketChat";
 import { useTicketChatRealtime } from "@/hooks/useTicketChatRealtime";
+import { useTicketChatPresence } from "@/hooks/useTicketChatPresence";
 import { useRealtimeStatus } from "@/hooks/useRealtimeStatus";
 import { openTicketChatWindow, PopupBlockedError } from "./ticketChatLauncher";
 
@@ -168,6 +169,11 @@ export default function TicketChatPanel({ ticketId, agentId, clientId, siteId, c
   const end = useEndTicketChat(ticketId);
 
   useTicketChatRealtime(ticketId, { clientId: clientId ?? undefined, siteId: siteId ?? undefined }, Boolean(ticketId));
+
+  // Esta janela e a conversa AO VIVO: enquanto ela estiver montada e visivel, o
+  // servidor nao cria notificacao de mensagem para este atendente — a mensagem
+  // esta na frente dele. Fechar/ocultar a janela libera o aviso de novo.
+  useTicketChatPresence(ticketId, Boolean(ticketId));
 
   const messages = useMemo(() => messagesQuery.data ?? [], [messagesQuery.data]);
 
