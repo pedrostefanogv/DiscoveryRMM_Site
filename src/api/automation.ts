@@ -71,6 +71,10 @@ export interface ListAutomationTasksParams {
   actionTypes?: Array<AutomationTaskActionType | string>;
   labels?: string[];
   scopeId?: string;
+  /** Trigger da tarefa: Immediate | Recurring | OnUserLogin | OnAgentCheckIn (OR). */
+  triggers?: string[];
+  /** Status: true = somente ativas, false = somente inativas. */
+  isActive?: boolean;
   activeOnly?: boolean;
   deletedOnly?: boolean;
   includeDeleted?: boolean;

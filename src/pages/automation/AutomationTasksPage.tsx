@@ -37,6 +37,21 @@ import {
   toastTimingLabel,
 } from "./automationTasksUtils";
 import {
+  TASK_ACTION_FILTERS,
+  TASK_STATUS_FILTERS,
+  TASK_TRIGGER_FILTERS,
+  statusFilterToIsActive,
+  toggleFilterValue,
+  type TaskStatusFilterValue,
+} from "./automationTaskFilters";
+import {
+  DEFAULT_EXECUTION_ORDER_BY_ACTION,
+  MAX_EXECUTION_ORDER,
+  MIN_EXECUTION_ORDER,
+  defaultExecutionOrderForAction,
+  executionOrderError,
+} from "./automationTaskExecutionOrder";
+import {
   useAutomationKnownTags,
   useAutomationScripts,
   useAutomationTask,
@@ -88,6 +103,45 @@ function actionLabel(value: unknown): string {
   if (value === AutomationTaskActionType.RemovePackage || value === "RemovePackage") return "RemovePackage";
   if (value === AutomationTaskActionType.UpdateOrInstallPackage || value === "UpdateOrInstallPackage") return "UpdateOrInstallPackage";
   return String(value ?? "-");
+}
+
+/** Grupo de chips de seleção múltipla usado nos filtros rápidos. */
+function FilterChipGroup({
+  label,
+  options,
+  selected,
+  onToggle,
+}: {
+  label: string;
+  options: ReadonlyArray<{ value: string; label: string }>;
+  selected: string[];
+  onToggle: (value: string) => void;
+}) {
+  return (
+    <div className="space-y-1">
+      <p className="text-xs font-medium text-muted-foreground">{label}</p>
+      <div className="flex flex-wrap gap-2">
+        {options.map((option) => {
+          const active = selected.includes(option.value);
+          return (
+            <button
+              key={option.value}
+              type="button"
+              aria-pressed={active}
+              className={`rounded-full border px-3 py-1 text-xs transition-colors ${
+                active
+                  ? "border-primary/60 bg-primary/20 text-primary-100"
+                  : "border-border bg-surface-light text-muted hover:bg-surface-hover hover:text-foreground"
+              }`}
+              onClick={() => onToggle(option.value)}
+            >
+              {option.label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 function scopeDisplayName(item: Pick<AutomationTaskSummary, "scopeType" | "scopeId" | "scopeName" | "clientName" | "siteName" | "agentName">): string {
@@ -171,6 +225,8 @@ type TaskFormState = {
   writeOutputToNote: boolean;
   /** Chave padronizada derivada do nome. */
   key: string;
+  /** Ordem de execução (0-99) como string para casar com os Input do form. */
+  executionOrder: string;
   isActive: boolean;
 };
 
@@ -198,6 +254,8 @@ const defaultForm: TaskFormState = {
   collectorFieldDefinitionId: "",
   writeOutputToNote: false,
   key: "",
+  // O form começa em RunScript: a ordem inicial é o default desse tipo (40).
+  executionOrder: String(DEFAULT_EXECUTION_ORDER_BY_ACTION.RunScript ?? 50),
   isActive: true,
 };
 
@@ -253,7 +311,9 @@ export default function AutomationTasksPage() {
   const [filterClientId, setFilterClientId] = useState("");
   const [filterSiteId, setFilterSiteId] = useState("");
   const [filterAgentId, setFilterAgentId] = useState("");
-  const [filterActionType, setFilterActionType] = useState("");
+  const [filterActionTypes, setFilterActionTypes] = useState<string[]>([]);
+  const [filterTriggers, setFilterTriggers] = useState<string[]>([]);
+  const [filterStatus, setFilterStatus] = useState<TaskStatusFilterValue>("");
   const [filterLabels, setFilterLabels] = useState<string[]>([]);
   const [filterLabelSearch, setFilterLabelSearch] = useState("");
   const [limit, setLimit] = useState(20);
@@ -284,6 +344,10 @@ export default function AutomationTasksPage() {
   const [restoreTask, setRestoreTask] = useState<AutomationTaskSummary | null>(null);
   const [restoreConfirmationText, setRestoreConfirmationText] = useState("");
   const [form, setForm] = useState<TaskFormState>(defaultForm);
+  // Enquanto o usuário não editar a ordem à mão, trocar o ActionType aplica o
+  // default do novo tipo. Depois da primeira edição (ou ao carregar a edição),
+  // o valor digitado é preservado.
+  const [executionOrderTouched, setExecutionOrderTouched] = useState(false);
   const [scopeClientId, setScopeClientId] = useState("");
   const [scopeSiteId, setScopeSiteId] = useState("");
   const [scopeAgentId, setScopeAgentId] = useState("");
@@ -315,7 +379,9 @@ export default function AutomationTasksPage() {
     clientId: filterClientId || undefined,
     siteId: filterSiteId || undefined,
     agentId: filterAgentId || undefined,
-    actionTypes: filterActionType ? [filterActionType] : undefined,
+    actionTypes: filterActionTypes.length ? filterActionTypes : undefined,
+    triggers: filterTriggers.length ? filterTriggers : undefined,
+    isActive: statusFilterToIsActive(filterStatus),
     labels: filterLabels.length ? filterLabels : undefined,
     scopeType: scopeTypeFilter ? (Number(scopeTypeFilter) as AppApprovalScopeType) : undefined,
     scopeId: scopeIdFilter || undefined,
@@ -418,8 +484,11 @@ export default function AutomationTasksPage() {
       collectorFieldDefinitionId: detail.collectorFieldDefinitionId ?? "",
       writeOutputToNote: detail.writeOutputToNote ?? false,
       key: detail.key ?? "",
+      // A ordem já existe: ao trocar o ActionType não pode ser sobrescrita.
+      executionOrder: String(detail.executionOrder ?? 50),
       isActive: detail.isActive,
     });
+    setExecutionOrderTouched(true);
 
     applyScopeCascade(normalizedScopeType, detail);
   }, [editingId, taskDetail.data]);
@@ -459,6 +528,7 @@ export default function AutomationTasksPage() {
     setPackageSearch("");
     setTagSearch("");
     setCloseProcessInput("");
+    setExecutionOrderTouched(false);
     setForm(defaultForm);
   };
 
@@ -483,6 +553,36 @@ export default function AutomationTasksPage() {
     setPage(1);
     setPageCursors([undefined]);
   };
+
+  const clearFilters = () => {
+    setSearchFilter("");
+    setScopeTypeFilter("");
+    setScopeIdFilter("");
+    setFilterScopeClientId("");
+    setFilterScopeSiteId("");
+    setFilterScopeAgentId("");
+    setFilterClientId("");
+    setFilterSiteId("");
+    setFilterAgentId("");
+    setFilterActionTypes([]);
+    setFilterTriggers([]);
+    setFilterStatus("");
+    setFilterLabels([]);
+    setFilterLabelSearch("");
+    resetPagination();
+  };
+
+  const hasActiveFilters = Boolean(
+    searchFilter.trim() ||
+      scopeTypeFilter ||
+      filterClientId ||
+      filterSiteId ||
+      filterAgentId ||
+      filterActionTypes.length ||
+      filterTriggers.length ||
+      filterStatus ||
+      filterLabels.length,
+  );
 
   const closeDeleteModal = () => {
     if (deleteMutation.isPending) return;
@@ -624,8 +724,10 @@ export default function AutomationTasksPage() {
       collectorFieldDefinitionId: item.collectorFieldDefinitionId ?? "",
       writeOutputToNote: item.writeOutputToNote ?? false,
       key: item.key ?? "",
+      executionOrder: String(item.executionOrder ?? 50),
       isActive: item.isActive,
     });
+    setExecutionOrderTouched(true);
     applyScopeCascade(normalizedScopeType, item);
     setFormOpen(true);
   };
@@ -695,6 +797,11 @@ export default function AutomationTasksPage() {
         key: "action",
         header: "Ação",
         render: (item) => <Badge color="primary">{actionLabel(item.actionType)}</Badge>,
+      },
+      {
+        key: "executionOrder",
+        header: "Ordem",
+        render: (item) => <Badge color="slate">{item.executionOrder}</Badge>,
       },
       {
         key: "scope",
@@ -826,16 +933,6 @@ export default function AutomationTasksPage() {
       value: item.id,
       label: item.displayName ?? item.hostname,
     })),
-  ];
-
-  const actionFilterOptions = [
-    { value: "", label: "Todas" },
-    { value: "InstallPackage", label: "Instalar pacote" },
-    { value: "UpdatePackage", label: "Atualizar pacote" },
-    { value: "RemovePackage", label: "Remover pacote" },
-    { value: "UpdateOrInstallPackage", label: "Atualizar/Instalar pacote" },
-    { value: "RunScript", label: "Executar script" },
-    { value: "CustomCommand", label: "Comando personalizado" },
   ];
 
   const packageOptions = [
@@ -1030,6 +1127,10 @@ export default function AutomationTasksPage() {
       return toast.error("CommandPayload obrigatorio para CustomCommand");
     }
 
+    const executionOrderMessage = executionOrderError(form.executionOrder);
+    if (executionOrderMessage) return toast.error(executionOrderMessage);
+    const executionOrder = Number(form.executionOrder);
+
     const payload: CreateAutomationTaskRequest = {
       name,
       description: form.description.trim() || null,
@@ -1078,6 +1179,7 @@ export default function AutomationTasksPage() {
         actionType === AutomationTaskActionType.RunScript ? form.collectorFieldDefinitionId || null : null,
       writeOutputToNote: form.writeOutputToNote,
       key: form.key.trim() || null,
+      executionOrder,
       isActive: form.isActive,
     };
 
@@ -1156,6 +1258,7 @@ export default function AutomationTasksPage() {
               setScopeAgentId("");
               setPackageSearch("");
               setTagSearch("");
+              setExecutionOrderTouched(false);
               setForm(defaultForm);
               setFormOpen(true);
           }}
@@ -1230,6 +1333,46 @@ export default function AutomationTasksPage() {
             value={String(limit)}
             onChange={(e) => {
               setLimit(Number(e.target.value));
+              resetPagination();
+            }}
+          />
+          <Select
+            label="Status"
+            options={[...TASK_STATUS_FILTERS]}
+            value={filterStatus}
+            onChange={(e) => {
+              setFilterStatus(e.target.value as TaskStatusFilterValue);
+              resetPagination();
+            }}
+          />
+        </div>
+
+        <div className="mt-3 space-y-3 rounded-xl border border-border bg-surface-light p-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs text-muted">
+              Filtros por tipo de ação e trigger são aplicados no servidor (valem para todas as páginas).
+            </p>
+            {hasActiveFilters && (
+              <Button type="button" size="sm" variant="secondary" onClick={clearFilters}>
+                Limpar filtros
+              </Button>
+            )}
+          </div>
+          <FilterChipGroup
+            label="Tipo de ação"
+            options={TASK_ACTION_FILTERS}
+            selected={filterActionTypes}
+            onToggle={(value) => {
+              setFilterActionTypes((prev) => toggleFilterValue(prev, value));
+              resetPagination();
+            }}
+          />
+          <FilterChipGroup
+            label="Trigger"
+            options={TASK_TRIGGER_FILTERS}
+            selected={filterTriggers}
+            onToggle={(value) => {
+              setFilterTriggers((prev) => toggleFilterValue(prev, value));
               resetPagination();
             }}
           />
@@ -1359,15 +1502,6 @@ export default function AutomationTasksPage() {
                 disabled={!filterSiteId}
                 onChange={(e) => {
                   setFilterAgentId(e.target.value);
-                  resetPagination();
-                }}
-              />
-              <Select
-                label="Tipo de ação"
-                options={actionFilterOptions}
-                value={filterActionType}
-                onChange={(e) => {
-                  setFilterActionType(e.target.value);
                   resetPagination();
                 }}
               />
@@ -1586,7 +1720,31 @@ export default function AutomationTasksPage() {
               { value: String(AutomationTaskActionType.CustomCommand), label: "Comando personalizado" },
             ]}
             value={form.actionType}
-            onChange={(e) => setForm((p) => ({ ...p, actionType: e.target.value }))}
+            onChange={(e) => {
+              const nextActionType = e.target.value;
+              setForm((p) => ({
+                ...p,
+                actionType: nextActionType,
+                // Só acompanha o default do tipo se o usuário não editou à mão.
+                executionOrder: executionOrderTouched
+                  ? p.executionOrder
+                  : String(defaultExecutionOrderForAction(nextActionType)),
+              }));
+            }}
+          />
+          <Input
+            label="Ordem de execução (0–99)"
+            type="number"
+            min={MIN_EXECUTION_ORDER}
+            max={MAX_EXECUTION_ORDER}
+            step={1}
+            value={form.executionOrder}
+            error={executionOrderError(form.executionOrder) ?? undefined}
+            hint="O agent executa as tarefas da menor ordem para a maior. Em empate, roda primeiro a tarefa atualizada há mais tempo."
+            onChange={(e) => {
+              setExecutionOrderTouched(true);
+              setForm((p) => ({ ...p, executionOrder: e.target.value }));
+            }}
           />
           <Select
             label="ScopeType"
@@ -2416,6 +2574,7 @@ export default function AutomationTasksPage() {
                 <div className="rounded-lg bg-surface-light border border-border p-3">
                   <p className="text-xs text-muted mb-1">Ação</p>
                   <Badge color="primary">{actionLabel(d.actionType)}</Badge>
+                  <p className="text-xs text-muted mt-1">Ordem de execução: {d.executionOrder}</p>
                   {d.installationType !== null && d.installationType !== undefined && (
                     <p className="text-xs text-muted mt-1">{d.installationType === 0 ? "Winget" : d.installationType === 1 ? "Chocolatey" : "Custom"}</p>
                   )}
@@ -2536,6 +2695,7 @@ export default function AutomationTasksPage() {
                           requiresApproval: d.requiresApproval,
                           notificationMode: d.notificationMode,
                           toastTiming: d.toastTiming,
+                          executionOrder: d.executionOrder,
                           lastUpdatedAt: d.lastUpdatedAt,
                         },
                       );

@@ -42,6 +42,8 @@ const KEYS = {
       actionTypes?: Array<AutomationTaskActionType | string>;
       labels?: string[];
       scopeId?: string;
+      triggers?: string[];
+      isActive?: boolean;
       activeOnly?: boolean;
       deletedOnly?: boolean;
       includeDeleted?: boolean;
@@ -172,6 +174,8 @@ export function useAutomationTasks(params: {
   actionTypes?: Array<AutomationTaskActionType | string>;
   labels?: string[];
   scopeId?: string;
+  triggers?: string[];
+  isActive?: boolean;
   activeOnly?: boolean;
   deletedOnly?: boolean;
   includeDeleted?: boolean;

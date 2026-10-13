@@ -3869,6 +3869,11 @@ export interface AutomationTaskSummary {
   writeOutputToNote?: boolean;
   /** Chave padronizada (normalizada [a-z0-9_-]) da tarefa. */
   key?: string | null;
+  /**
+   * Ordem de execução da tarefa (inteiro 0-99). O agent executa a fila da menor
+   * para a maior; empate desempata pela tarefa atualizada há mais tempo.
+   */
+  executionOrder: number;
   lastUpdatedAt: string;
 }
 
@@ -3988,6 +3993,12 @@ export interface CreateAutomationTaskRequest {
   writeOutputToNote?: boolean;
   /** Chave padronizada (normalizada [a-z0-9_-]). Ausente = derivada do nome. */
   key?: string | null;
+  /**
+   * Ordem de execução (inteiro 0-99). O agent executa da menor para a maior e,
+   * em empate, primeiro a tarefa atualizada há mais tempo. Ausente/null = o
+   * servidor aplica o default do ActionType.
+   */
+  executionOrder?: number | null;
   isActive?: boolean;
 }
 
