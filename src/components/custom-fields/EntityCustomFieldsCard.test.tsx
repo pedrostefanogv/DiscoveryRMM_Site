@@ -71,7 +71,7 @@ describe('cards de campos por entidade', () => {
     render(<ClientCustomFieldsCard clientId="c1" canEdit />);
 
     expect(screen.getByText('••••••')).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Copiar' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Copiar/ })).toBeNull();
   });
 
   it('campo editável sem valor não mostra botão copiar (nada a copiar)', () => {
@@ -79,7 +79,7 @@ describe('cards de campos por entidade', () => {
     render(<ClientCustomFieldsCard clientId="c1" canEdit />);
 
     expect(screen.getByRole('button', { name: 'Salvar' })).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Copiar' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Copiar/ })).toBeNull();
   });
 
   it('segredo editável não mostra botão copiar (a máscara não é o valor)', () => {
@@ -87,7 +87,7 @@ describe('cards de campos por entidade', () => {
     render(<ClientCustomFieldsCard clientId="c1" canEdit />);
 
     expect(screen.getByRole('button', { name: 'Salvar' })).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Copiar' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Copiar/ })).toBeNull();
   });
 
   it('segredo sem valor mostra "Não informado" em vez de máscara', () => {

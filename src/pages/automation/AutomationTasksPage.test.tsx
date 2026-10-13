@@ -11,9 +11,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
  *  - o status vira `isActive` (true/false/undefined);
  *  - "Limpar filtros" zera os parâmetros.
  */
-const { listCalls, task } = vi.hoisted(() => ({
-  listCalls: [] as Record<string, unknown>[],
-  task: {
+const { listCalls, tasks, task } = vi.hoisted(() => {
+  const task = {
     id: "t1",
     name: "Instalar Brave",
     description: "Rollout do navegador",
@@ -27,14 +26,15 @@ const { listCalls, task } = vi.hoisted(() => ({
     toastTiming: "After",
     executionOrder: 77,
     lastUpdatedAt: "2026-01-01T00:00:00Z",
-  },
-}));
+  };
+  return { listCalls: [] as Record<string, unknown>[], task, tasks: [task] };
+});
 
 vi.mock("@/hooks/useAutomation", () => ({
   useAutomationTasks: (params: Record<string, unknown>) => {
     listCalls.push(params);
     return {
-      data: { items: [task], hasMore: false, nextCursor: null },
+      data: { items: tasks, hasMore: false, nextCursor: null },
       isLoading: false,
       isError: false,
       isFetching: false,
@@ -71,8 +71,14 @@ const lastListParams = () => listCalls[listCalls.length - 1];
 afterEach(() => {
   cleanup();
   listCalls.length = 0;
+  tasks.length = 0;
+  tasks.push(task);
   vi.clearAllMocks();
 });
+
+/** Linhas do corpo da tabela (sem o cabeçalho). */
+const bodyRows = () =>
+  screen.getAllByRole("row").filter((row) => row.querySelector("td"));
 
 describe("AutomationTasksPage — filtros por ação, trigger e status", () => {
   it("mostra os filtros de tipo de ação, trigger e status", () => {
@@ -170,6 +176,64 @@ describe("AutomationTasksPage — filtros por ação, trigger e status", () => {
 
     const field = screen.getByLabelText("Ordem de execução (0–99)") as HTMLInputElement;
     expect(field.value).toBe("10");
+  });
+
+  it("ordena pela coluna Ordem (crescente) por padrão", () => {
+    tasks.length = 0;
+    tasks.push(
+      { ...task, id: "t40", name: "Tarefa 40", executionOrder: 40 },
+      { ...task, id: "t10", name: "Tarefa 10", executionOrder: 10 },
+    );
+    render(<AutomationTasksPage />);
+
+    const primeiros = bodyRows().map((row) => row.textContent ?? "");
+    expect(primeiros[0]).toContain("Tarefa 10");
+    expect(primeiros[1]).toContain("Tarefa 40");
+  });
+
+  it("clicar em AÇÃO ordena pela ação (lê actionType, não o campo 'action')", () => {
+    tasks.length = 0;
+    tasks.push(
+      { ...task, id: "t1", name: "Zeta", executionOrder: 10, actionType: "RunScript" },
+      { ...task, id: "t2", name: "Alfa", executionOrder: 40, actionType: "InstallPackage" },
+    );
+    render(<AutomationTasksPage />);
+
+    // Ordem crescente (padrão): RunScript antes de InstallPackage.
+    expect(bodyRows()[0].textContent).toContain("RunScript");
+
+    fireEvent.click(screen.getByText("Ação"));
+
+    const ordenados = bodyRows().map((row) => row.textContent ?? "");
+    expect(ordenados[0]).toContain("InstallPackage");
+    expect(ordenados[1]).toContain("RunScript");
+  });
+
+  it("mantém só Busca e Status visíveis e abre o resto no filtro avançado", () => {
+    render(<AutomationTasksPage />);
+
+    expect(screen.getByLabelText("Busca")).toBeTruthy();
+    expect(screen.getByLabelText("Status")).toBeTruthy();
+    expect(screen.queryByLabelText("Visão")).toBeNull();
+    expect(screen.queryByLabelText("Escopo")).toBeNull();
+    expect(screen.queryByLabelText("Itens por página")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: /Filtros avançados/ }));
+
+    expect(screen.getByLabelText("Visão")).toBeTruthy();
+    expect(screen.getByLabelText("Escopo")).toBeTruthy();
+    expect(screen.getByLabelText("Itens por página")).toBeTruthy();
+  });
+
+  it("conta no botão os filtros avançados ativos", () => {
+    render(<AutomationTasksPage />);
+
+    fireEvent.click(screen.getByRole("button", { name: /Filtros avançados/ }));
+    fireEvent.change(screen.getByLabelText("Visão"), { target: { value: "all" } });
+    fireEvent.click(screen.getByRole("button", { name: "Ocultar filtros avançados" }));
+
+    expect(screen.getByRole("button", { name: "Filtros avançados (1)" })).toBeTruthy();
+    expect(lastListParams().includeDeleted).toBe(true);
   });
 
   it("preserva a ordem digitada ao trocar o ActionType", () => {

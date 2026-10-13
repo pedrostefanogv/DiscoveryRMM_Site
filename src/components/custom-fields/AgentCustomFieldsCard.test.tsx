@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { CustomFieldSchemaItem } from '@/api';
+import { CustomFieldDataType, type CustomFieldSchemaItem } from '@/api';
 
 const { schemaState, upsertMock } = vi.hoisted(() => ({
   upsertMock: vi.fn().mockResolvedValue(undefined),
@@ -60,12 +60,23 @@ describe('AgentCustomFieldsCard', () => {
 
   afterEach(() => cleanup());
 
-  it('lista os campos visíveis e informa origem da última alteração', () => {
+  it('lista os campos visíveis e esconde os metadados atrás do ícone de informação', () => {
     render(<AgentCustomFieldsCard agentId="a1" canEdit />);
     expect(screen.getByText('ID do anydesk')).toBeTruthy();
-    expect(screen.getByText('Lido por scripts')).toBeTruthy();
-    expect(screen.getByText('Atualizado pelo agente')).toBeTruthy();
-    expect(screen.getByText(/Atualizado em .*· agent/)).toBeTruthy();
+
+    // Chave, tipo, permissões e última atualização ficam no aria-label do ⓘ —
+    // não são mais renderizados como texto solto (nem no DOM antes do hover).
+    const info = screen.getByRole('button', { name: /Chave: anydesk/ });
+    expect(info.getAttribute('aria-label')).toContain('Tipo: Texto');
+    expect(info.getAttribute('aria-label')).toContain('Lido por scripts');
+    expect(info.getAttribute('aria-label')).toContain('Atualizado pelo agente');
+    expect(info.getAttribute('aria-label')).toMatch(/Atualizado em .*· agent/);
+
+    expect(screen.queryByText('Chave: anydesk')).toBeNull();
+    expect(screen.queryByText('Lido por scripts')).toBeNull();
+    expect(screen.queryByText('Atualizado pelo agente')).toBeNull();
+    // O rótulo "Valor" repetido acima de cada input saiu de cena.
+    expect(screen.queryByText('Valor')).toBeNull();
   });
 
   it('usa o título compacto "Extras" (não "Campos customizados")', () => {
@@ -77,7 +88,7 @@ describe('AgentCustomFieldsCard', () => {
   it('campo com allowWebEdit=false aparece somente leitura', () => {
     schemaState.data = [item({ allowWebEdit: false })];
     render(<AgentCustomFieldsCard agentId="a1" canEdit />);
-    expect(screen.getByText('Somente leitura')).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Somente leitura no portal/ })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Salvar' })).toBeNull();
   });
 
@@ -100,5 +111,57 @@ describe('AgentCustomFieldsCard', () => {
     schemaState.data = [];
     render(<AgentCustomFieldsCard agentId="a1" canEdit />);
     expect(screen.getByText(/Nenhum campo customizado visível/)).toBeTruthy();
+  });
+
+  it('o ícone de informação revela os metadados no hover (chave, tipo, permissões e data)', async () => {
+    render(<AgentCustomFieldsCard agentId="a1" canEdit />);
+    const info = screen.getByRole('button', { name: /Chave: anydesk/ });
+
+    expect(screen.queryByRole('tooltip')).toBeNull();
+    fireEvent.mouseEnter(info.parentElement as Element);
+
+    const tooltip = await screen.findByRole('tooltip');
+    expect(tooltip.textContent).toContain('anydesk');
+    expect(tooltip.textContent).toContain('Texto');
+    expect(tooltip.textContent).toContain('Atualizado em');
+  });
+
+  it('campo de lista expõe as opções na descrição do ícone ⓘ', () => {
+    schemaState.data = [item({ dataType: CustomFieldDataType.ListBox, options: ['A', 'B'] })];
+    render(<AgentCustomFieldsCard agentId="a1" canEdit />);
+    expect(screen.getByRole('button', { name: /Opções: A, B/ })).toBeTruthy();
+  });
+
+  it('campo DateTime com valor abre o input já preenchido (sem segundos)', () => {
+    schemaState.data = [
+      item({ dataType: CustomFieldDataType.DateTime, valueJson: JSON.stringify('2026-10-13T20:37:25') }),
+    ];
+    render(<AgentCustomFieldsCard agentId="a1" canEdit />);
+
+    const input = screen.getByLabelText('ID do anydesk') as HTMLInputElement;
+    expect(input.value).toBe('2026-10-13T20:37');
+    // Sem alteração real, "Salvar" continua desabilitado (comparação normalizada).
+    expect((screen.getByRole('button', { name: 'Salvar' }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('campo Date somente leitura é exibido em pt-BR, sem deslocar o dia', () => {
+    schemaState.data = [
+      item({ dataType: CustomFieldDataType.Date, allowWebEdit: false, valueJson: JSON.stringify('2026-10-13') }),
+    ];
+    render(<AgentCustomFieldsCard agentId="a1" canEdit />);
+    expect(screen.getByText('13/10/2026')).toBeTruthy();
+    expect(screen.queryByText('2026-10-13')).toBeNull();
+  });
+
+  it('inputs de campos diferentes não compartilham o mesmo id (sem rótulo "Valor" duplicado)', () => {
+    schemaState.data = [
+      item({ definitionId: 'd1', label: 'Campo A' }),
+      item({ definitionId: 'd2', label: 'Campo B' }),
+    ];
+    const { container } = render(<AgentCustomFieldsCard agentId="a1" canEdit />);
+    const ids = Array.from(container.querySelectorAll<HTMLElement>('input, select')).map(el => el.id);
+    expect(ids.length).toBeGreaterThan(1);
+    expect(ids.every(Boolean)).toBe(true);
+    expect(new Set(ids).size).toBe(ids.length);
   });
 });

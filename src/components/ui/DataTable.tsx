@@ -10,6 +10,13 @@ interface Column<T> {
   sortable?: boolean;
   sortKey?: string;
   /**
+   * Valor usado na ordenação. Sem ele, o DataTable tenta `item[sortKey ?? key]` —
+   * o que falha silenciosamente quando a coluna renderiza um campo com outro
+   * nome (ex.: coluna "action" que lê `actionType`). Devolver `null`/`undefined`
+   * trata o item como vazio.
+   */
+  sortValue?: (item: T) => string | number | Date | null | undefined;
+  /**
    * Largura CSS da coluna (ex.: '30%'). Só tem efeito com `fixedLayout`, quando
    * a tabela respeita as larguras e trunca o conteúdo em vez de crescer para os
    * lados com valores longos (caminhos de registro, gatilhos etc.).
@@ -48,6 +55,8 @@ interface DataTableProps<T> {
    * cabeçalho alinha com as linhas em vez de ficar com os cantos "soltos".
    */
   flush?: boolean;
+  /** Ordenação inicial da tabela (o usuário pode trocar clicando no cabeçalho). */
+  defaultSort?: { key: string; direction: 'asc' | 'desc' };
 }
 
 type SortDirection = 'asc' | 'desc' | null;
@@ -72,8 +81,11 @@ export function DataTable<T>({
   maxHeight,
   fixedLayout = false,
   flush = false,
+  defaultSort,
 }: DataTableProps<T>) {
-  const [sort, setSort] = useState<SortState | null>(null);
+  const [sort, setSort] = useState<SortState | null>(
+    defaultSort ? { key: defaultSort.key, direction: defaultSort.direction } : null,
+  );
   const [page, setPage] = useState(1);
   const [activeHover, setActiveHover] = useState<{ key: string; item: T } | null>(null);
   const [popoverPosition, setPopoverPosition] = useState<{ top: number; left: number; width: number } | null>(null);
@@ -84,12 +96,26 @@ export function DataTable<T>({
 
   const sorted = useMemo(() => {
     if (!sort || !sort.key || !sort.direction) return data;
+    const col = columns.find(c => (c.sortKey ?? c.key) === sort.key);
+    if (!col) return data;
+
+    const valueOf = (item: T): string | number => {
+      if (col.sortValue) {
+        const raw = col.sortValue(item);
+        if (raw === null || raw === undefined) return '';
+        if (raw instanceof Date) return raw.getTime();
+        return typeof raw === 'number' ? raw : String(raw);
+      }
+      return String((item as Record<string, unknown>)[col.sortKey ?? col.key] ?? '');
+    };
+
     return [...data].sort((a, b) => {
-      const col = columns.find(c => (c.sortKey ?? c.key) === sort.key);
-      if (!col) return 0;
-      const valA = String((a as Record<string, unknown>)[col.sortKey ?? col.key] ?? '');
-      const valB = String((b as Record<string, unknown>)[col.sortKey ?? col.key] ?? '');
-      const cmp = valA.localeCompare(valB, 'pt-BR', { sensitivity: 'base', numeric: true });
+      const valA = valueOf(a);
+      const valB = valueOf(b);
+      const cmp =
+        typeof valA === 'number' && typeof valB === 'number'
+          ? valA - valB
+          : String(valA).localeCompare(String(valB), 'pt-BR', { sensitivity: 'base', numeric: true });
       return sort.direction === 'asc' ? cmp : -cmp;
     });
   }, [data, sort, columns]);

@@ -105,6 +105,15 @@ function actionLabel(value: unknown): string {
   return String(value ?? "-");
 }
 
+/** Texto usado para ordenar a coluna Notificação (igual ao badge renderizado). */
+function notificationSortLabel(item: AutomationTaskSummary): string {
+  const mode = notificationModeFromTask(item.notificationMode, item.requiresApproval);
+  if (mode === AutomationNotificationMode.Prompt) return "Prompt PSADT";
+  if (mode === AutomationNotificationMode.Toast) return "Toast (agent)";
+  if (mode === AutomationNotificationMode.NativeToast) return "Toast nativo";
+  return "Silenciosa";
+}
+
 /** Grupo de chips de seleção múltipla usado nos filtros rápidos. */
 function FilterChipGroup({
   label,
@@ -584,6 +593,18 @@ export default function AutomationTasksPage() {
       filterLabels.length,
   );
 
+  // Filtros que vivem no painel avançado: o contador avisa que há algo ativo
+  // mesmo com o painel recolhido.
+  const advancedFilterCount = [
+    listMode !== "default",
+    Boolean(scopeTypeFilter),
+    limit !== 20,
+    Boolean(filterClientId),
+    Boolean(filterSiteId),
+    Boolean(filterAgentId),
+    filterLabels.length > 0,
+  ].filter(Boolean).length;
+
   const closeDeleteModal = () => {
     if (deleteMutation.isPending) return;
     setDeleteTask(null);
@@ -786,6 +807,7 @@ export default function AutomationTasksPage() {
       {
         key: "name",
         header: "Nome",
+        sortValue: (item) => item.name,
         render: (item) => (
           <div>
             <p className="font-medium text-foreground">{item.name}</p>
@@ -796,16 +818,19 @@ export default function AutomationTasksPage() {
       {
         key: "action",
         header: "Ação",
+        sortValue: (item) => actionLabel(item.actionType),
         render: (item) => <Badge color="primary">{actionLabel(item.actionType)}</Badge>,
       },
       {
         key: "executionOrder",
         header: "Ordem",
+        sortValue: (item) => item.executionOrder,
         render: (item) => <Badge color="slate">{item.executionOrder}</Badge>,
       },
       {
         key: "scope",
         header: "Escopo",
+        sortValue: (item) => `${scopeLabel(item.scopeType)} ${scopeDisplayName(item)}`,
         render: (item) => (
           <div>
             <p className="text-sm text-foreground">{scopeLabel(item.scopeType)}</p>
@@ -818,6 +843,7 @@ export default function AutomationTasksPage() {
       {
         key: "notify",
         header: "Notificação",
+        sortValue: (item) => notificationSortLabel(item),
         render: (item) => {
           const mode = notificationModeFromTask(item.notificationMode, item.requiresApproval);
           if (mode === AutomationNotificationMode.Prompt) {
@@ -852,6 +878,8 @@ export default function AutomationTasksPage() {
       {
         key: "status",
         header: "Status",
+        // Ativa (0) < Inativa (1) < Excluída (2), em vez de ordem alfabética.
+        sortValue: (item) => (isTaskDeleted(item) ? 2 : item.isActive ? 0 : 1),
         render: (item) => {
           const deleted = isTaskDeleted(item);
           return (
@@ -864,6 +892,7 @@ export default function AutomationTasksPage() {
       {
         key: "updated",
         header: "Atualizado",
+        sortValue: (item) => Date.parse(item.lastUpdatedAt) || 0,
         render: (item) => new Date(item.lastUpdatedAt).toLocaleString("pt-BR"),
       },
     ],
@@ -1268,71 +1297,14 @@ export default function AutomationTasksPage() {
       </div>
 
       <Card>
-        <CardHeader title="Filtros" subtitle="Busca rápida, escopo e filtros avançados" />
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-          <p className="text-xs text-muted">Use o modo simples para a maioria dos casos e abra o avançado para filtros combinados.</p>
-          <Button
-            type="button"
-            size="sm"
-            variant="secondary"
-            onClick={() => setShowAdvancedFilters((prev) => !prev)}
-          >
-            {showAdvancedFilters ? "Ocultar filtro avançado" : "Mostrar filtro avançado"}
-          </Button>
-        </div>
-
-        <div className="grid gap-3 md:grid-cols-4">
+        <CardHeader title="Filtros" subtitle="Busca por texto, status e filtros avançados" />
+        <div className="grid gap-3 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_auto] md:items-end">
           <Input
             label="Busca"
             value={searchFilter}
             placeholder="Nome, descrição, packageId ou comando"
             onChange={(e) => {
               setSearchFilter(e.target.value);
-              resetPagination();
-            }}
-          />
-          <Select
-            label="Visao"
-            options={[
-              { value: "default", label: "Padrao (sem excluidas)" },
-              { value: "all", label: "Todas (inclui excluidas)" },
-              { value: "deleted", label: "Somente excluidas" },
-            ]}
-            value={listMode}
-            onChange={(e) => {
-              setListMode(e.target.value as "default" | "all" | "deleted");
-              resetPagination();
-            }}
-          />
-          <Select
-            label="ScopeType"
-            options={[
-              { value: "", label: "Todos" },
-              { value: String(AppApprovalScopeType.Global), label: "Global" },
-              { value: String(AppApprovalScopeType.Client), label: "Client" },
-              { value: String(AppApprovalScopeType.Site), label: "Site" },
-              { value: String(AppApprovalScopeType.Agent), label: "Agent" },
-            ]}
-            value={scopeTypeFilter}
-            onChange={(e) => {
-              setScopeTypeFilter(e.target.value);
-              setScopeIdFilter("");
-              setFilterScopeClientId("");
-              setFilterScopeSiteId("");
-              setFilterScopeAgentId("");
-              resetPagination();
-            }}
-          />
-          <Select
-            label="Limite"
-            options={[
-              { value: "20", label: "20" },
-              { value: "50", label: "50" },
-              { value: "100", label: "100" },
-            ]}
-            value={String(limit)}
-            onChange={(e) => {
-              setLimit(Number(e.target.value));
               resetPagination();
             }}
           />
@@ -1345,6 +1317,20 @@ export default function AutomationTasksPage() {
               resetPagination();
             }}
           />
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            aria-expanded={showAdvancedFilters}
+            aria-controls="automation-advanced-filters"
+            onClick={() => setShowAdvancedFilters((prev) => !prev)}
+          >
+            {showAdvancedFilters
+              ? "Ocultar filtros avançados"
+              : advancedFilterCount > 0
+                ? `Filtros avançados (${advancedFilterCount})`
+                : "Filtros avançados"}
+          </Button>
         </div>
 
         <div className="mt-3 space-y-3 rounded-xl border border-border bg-surface-light p-3">
@@ -1378,100 +1364,151 @@ export default function AutomationTasksPage() {
           />
         </div>
 
-        {scopeTypeFilter === String(AppApprovalScopeType.Client) && (
-          <div className="mt-3 grid gap-3 md:grid-cols-2">
-            <Select
-              label="Cliente do ScopeId"
-              options={filterScopeClientOptions}
-              value={filterScopeClientId}
-              onChange={(e) => {
-                setFilterScopeClientId(e.target.value);
-                setScopeIdFilter(e.target.value);
-                resetPagination();
-              }}
-            />
-            <Input label="ScopeId selecionado" value={scopeIdFilter} readOnly />
-          </div>
-        )}
-
-        {scopeTypeFilter === String(AppApprovalScopeType.Site) && (
-          <div className="mt-3 grid gap-3 md:grid-cols-3">
-            <Select
-              label="Cliente do site"
-              options={filterScopeClientOptions}
-              value={filterScopeClientId}
-              onChange={(e) => {
-                setFilterScopeClientId(e.target.value);
-                setFilterScopeSiteId("");
-                setFilterScopeAgentId("");
-                setScopeIdFilter("");
-                resetPagination();
-              }}
-            />
-            <Select
-              label="Site do ScopeId"
-              options={filterScopeSiteOptions}
-              value={filterScopeSiteId}
-              disabled={!filterScopeClientId}
-              onChange={(e) => {
-                setFilterScopeSiteId(e.target.value);
-                setScopeIdFilter(e.target.value);
-                resetPagination();
-              }}
-            />
-            <Input label="ScopeId selecionado" value={scopeIdFilter} readOnly />
-          </div>
-        )}
-
-        {scopeTypeFilter === String(AppApprovalScopeType.Agent) && (
-          <div className="mt-3 grid gap-3 md:grid-cols-4">
-            <Select
-              label="Cliente do agent"
-              options={filterScopeClientOptions}
-              value={filterScopeClientId}
-              onChange={(e) => {
-                setFilterScopeClientId(e.target.value);
-                setFilterScopeSiteId("");
-                setFilterScopeAgentId("");
-                setScopeIdFilter("");
-                resetPagination();
-              }}
-            />
-            <Select
-              label="Site do agent"
-              options={filterScopeSiteOptions}
-              value={filterScopeSiteId}
-              disabled={!filterScopeClientId}
-              onChange={(e) => {
-                setFilterScopeSiteId(e.target.value);
-                setFilterScopeAgentId("");
-                setScopeIdFilter("");
-                resetPagination();
-              }}
-            />
-            <Select
-              label="Agent do ScopeId"
-              options={filterScopeAgentOptions}
-              value={filterScopeAgentId}
-              disabled={!filterScopeSiteId}
-              onChange={(e) => {
-                setFilterScopeAgentId(e.target.value);
-                setScopeIdFilter(e.target.value);
-                resetPagination();
-              }}
-            />
-            <Input label="ScopeId selecionado" value={scopeIdFilter} readOnly />
-          </div>
-        )}
-
-        {scopeTypeFilter === String(AppApprovalScopeType.Global) && (
-          <div className="mt-3 rounded-lg border border-border bg-surface-light px-3 py-2 text-sm text-muted">
-            Escopo global não exige ScopeId.
-          </div>
-        )}
-
         {showAdvancedFilters && (
-          <div className="mt-4 space-y-3 rounded-xl border border-border bg-surface-light p-4">
+          <div
+            id="automation-advanced-filters"
+            className="mt-4 space-y-3 rounded-xl border border-border bg-surface-light p-4"
+          >
+            <div className="grid gap-3 md:grid-cols-3">
+              <Select
+                label="Visão"
+                options={[
+                  { value: "default", label: "Padrão (sem excluídas)" },
+                  { value: "all", label: "Todas (inclui excluídas)" },
+                  { value: "deleted", label: "Somente excluídas" },
+                ]}
+                value={listMode}
+                onChange={(e) => {
+                  setListMode(e.target.value as "default" | "all" | "deleted");
+                  resetPagination();
+                }}
+              />
+              <Select
+                label="Escopo"
+                options={[
+                  { value: "", label: "Todos" },
+                  { value: String(AppApprovalScopeType.Global), label: "Global" },
+                  { value: String(AppApprovalScopeType.Client), label: "Client" },
+                  { value: String(AppApprovalScopeType.Site), label: "Site" },
+                  { value: String(AppApprovalScopeType.Agent), label: "Agent" },
+                ]}
+                value={scopeTypeFilter}
+                onChange={(e) => {
+                  setScopeTypeFilter(e.target.value);
+                  setScopeIdFilter("");
+                  setFilterScopeClientId("");
+                  setFilterScopeSiteId("");
+                  setFilterScopeAgentId("");
+                  resetPagination();
+                }}
+              />
+              <Select
+                label="Itens por página"
+                options={[
+                  { value: "20", label: "20" },
+                  { value: "50", label: "50" },
+                  { value: "100", label: "100" },
+                ]}
+                value={String(limit)}
+                onChange={(e) => {
+                  setLimit(Number(e.target.value));
+                  resetPagination();
+                }}
+              />
+            </div>
+
+            {scopeTypeFilter === String(AppApprovalScopeType.Client) && (
+              <div className="mt-3 grid gap-3 md:grid-cols-2">
+                <Select
+                  label="Cliente do ScopeId"
+                  options={filterScopeClientOptions}
+                  value={filterScopeClientId}
+                  onChange={(e) => {
+                    setFilterScopeClientId(e.target.value);
+                    setScopeIdFilter(e.target.value);
+                    resetPagination();
+                  }}
+                />
+                <Input label="ScopeId selecionado" value={scopeIdFilter} readOnly />
+              </div>
+            )}
+
+            {scopeTypeFilter === String(AppApprovalScopeType.Site) && (
+              <div className="mt-3 grid gap-3 md:grid-cols-3">
+                <Select
+                  label="Cliente do site"
+                  options={filterScopeClientOptions}
+                  value={filterScopeClientId}
+                  onChange={(e) => {
+                    setFilterScopeClientId(e.target.value);
+                    setFilterScopeSiteId("");
+                    setFilterScopeAgentId("");
+                    setScopeIdFilter("");
+                    resetPagination();
+                  }}
+                />
+                <Select
+                  label="Site do ScopeId"
+                  options={filterScopeSiteOptions}
+                  value={filterScopeSiteId}
+                  disabled={!filterScopeClientId}
+                  onChange={(e) => {
+                    setFilterScopeSiteId(e.target.value);
+                    setScopeIdFilter(e.target.value);
+                    resetPagination();
+                  }}
+                />
+                <Input label="ScopeId selecionado" value={scopeIdFilter} readOnly />
+              </div>
+            )}
+
+            {scopeTypeFilter === String(AppApprovalScopeType.Agent) && (
+              <div className="mt-3 grid gap-3 md:grid-cols-4">
+                <Select
+                  label="Cliente do agent"
+                  options={filterScopeClientOptions}
+                  value={filterScopeClientId}
+                  onChange={(e) => {
+                    setFilterScopeClientId(e.target.value);
+                    setFilterScopeSiteId("");
+                    setFilterScopeAgentId("");
+                    setScopeIdFilter("");
+                    resetPagination();
+                  }}
+                />
+                <Select
+                  label="Site do agent"
+                  options={filterScopeSiteOptions}
+                  value={filterScopeSiteId}
+                  disabled={!filterScopeClientId}
+                  onChange={(e) => {
+                    setFilterScopeSiteId(e.target.value);
+                    setFilterScopeAgentId("");
+                    setScopeIdFilter("");
+                    resetPagination();
+                  }}
+                />
+                <Select
+                  label="Agent do ScopeId"
+                  options={filterScopeAgentOptions}
+                  value={filterScopeAgentId}
+                  disabled={!filterScopeSiteId}
+                  onChange={(e) => {
+                    setFilterScopeAgentId(e.target.value);
+                    setScopeIdFilter(e.target.value);
+                    resetPagination();
+                  }}
+                />
+                <Input label="ScopeId selecionado" value={scopeIdFilter} readOnly />
+              </div>
+            )}
+
+            {scopeTypeFilter === String(AppApprovalScopeType.Global) && (
+              <div className="mt-3 rounded-lg border border-border bg-surface-light px-3 py-2 text-sm text-muted">
+                Escopo global não exige ScopeId.
+              </div>
+            )}
+
             <div className="grid gap-3 md:grid-cols-4">
               <Select
                 label="Cliente"
@@ -1584,6 +1621,7 @@ export default function AutomationTasksPage() {
               data={list.data?.items ?? []}
               keyExtractor={(item) => item.id}
               showPagination={false}
+              defaultSort={{ key: "executionOrder", direction: "asc" }}
               onRowContextMenu={(event, item) => {
                 event.preventDefault();
                 setContextMenu({ x: event.clientX, y: event.clientY, item });

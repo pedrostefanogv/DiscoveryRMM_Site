@@ -1,15 +1,20 @@
 import { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Copy, Pin } from 'lucide-react';
+import { Copy, Info, Pin } from 'lucide-react';
 import {
   CustomFieldDataType,
-  formatCustomFieldValue,
   getCustomFieldDataTypeLabel,
   parseCustomFieldValue,
   type CustomFieldSchemaItem,
 } from '@/api';
-import { Badge, Button, Card, CardHeader, Input, Select } from '@/components/ui';
-import { isSchemaValueCopyable, parseSchemaValue, schemaValueText } from './customFieldSchemaValue';
+import { Badge, Button, Card, CardHeader, Input, Select, Tooltip } from '@/components/ui';
+import {
+  isSchemaValueCopyable,
+  parseSchemaValue,
+  schemaValueDisplay,
+  schemaValueDraft,
+  schemaValueText,
+} from './customFieldSchemaValue';
 
 const COLLAPSED_COUNT = 6;
 
@@ -31,6 +36,10 @@ interface Props {
  * Apresentação do card de campos customizados (agente, cliente ou site).
  * Só recebe itens com visibilidade no portal (webRead) — o filtro é do endpoint
  * de schema. Respeita a capacidade de edição pelo portal (webEdit).
+ *
+ * A linha de cada campo mostra apenas o essencial (rótulo + valor/edição).
+ * Chave, tipo, permissões e última atualização ficam no ícone ⓘ (hover/foco),
+ * para não poluir a leitura da aba.
  */
 export function CustomFieldsCard({ items, isLoading, isError, canEdit, title, subtitle, emptyMessage, onSave }: Props) {
   const [drafts, setDrafts] = useState<Record<string, string>>({});
@@ -51,7 +60,7 @@ export function CustomFieldsCard({ items, isLoading, isError, canEdit, title, su
   useEffect(() => {
     const next: Record<string, string> = {};
     for (const item of items) {
-      next[item.definitionId] = item.isSecret ? '' : formatCustomFieldValue(parseSchemaValue(item));
+      next[item.definitionId] = schemaValueDraft(item, parseSchemaValue(item));
     }
     setDrafts(next);
   }, [items]);
@@ -110,70 +119,87 @@ export function CustomFieldsCard({ items, isLoading, isError, canEdit, title, su
       ) : sorted.length === 0 ? (
         <p className="text-sm text-muted">{emptyMessage}</p>
       ) : (
-        <div className="space-y-4">
-          {visibleItems.map(item => {
-            const currentValue = parseSchemaValue(item);
-            const display = item.isSecret ? schemaValueText(item) : formatCustomFieldValue(currentValue);
-            const draft = drafts[item.definitionId] ?? '';
-            const editable = canEdit && item.allowWebEdit;
-            const changed = !item.isSecret && draft !== formatCustomFieldValue(currentValue);
+        <div className="space-y-3">
+          <div className="overflow-hidden rounded-xl border border-border">
+            <div className="divide-y divide-border">
+              {visibleItems.map(item => {
+                const currentValue = parseSchemaValue(item);
+                const display = schemaValueDisplay(item, currentValue);
+                const draft = drafts[item.definitionId] ?? '';
+                const editable = canEdit && item.allowWebEdit;
+                const changed = !item.isSecret && draft !== schemaValueDraft(item, currentValue);
+                const copyable = isSchemaValueCopyable(item);
 
-            return (
-              <div key={item.definitionId} className="rounded-lg border border-border bg-surface-light p-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  {item.isPinned ? <Pin className="h-3.5 w-3.5 text-accent" /> : null}
-                  <span className="font-medium text-foreground">{item.label}</span>
-                  <Badge color="slate">{getCustomFieldDataTypeLabel(item.dataType)}</Badge>
-                  {item.isSecret ? <Badge color="warning">Segredo</Badge> : null}
-                  {item.allowRuntimeRead ? <Badge color="accent">Lido por scripts</Badge> : null}
-                  {item.allowAgentWrite ? <Badge color="accent">Atualizado pelo agente</Badge> : null}
-                  {!item.allowWebEdit ? <Badge color="slate">Somente leitura</Badge> : null}
-                </div>
-                <p className="mt-1 font-mono text-[11px] text-muted">Chave: {item.name}</p>
+                return (
+                  <div key={item.definitionId} className="bg-surface-light px-3 py-2.5">
+                    <div className="flex min-w-0 items-center gap-1.5">
+                      {item.isPinned ? (
+                        <Tooltip content="Campo destacado — aparece também no resumo do cadastro.">
+                          <span
+                            role="img"
+                            aria-label="Campo destacado"
+                            className="inline-flex text-accent"
+                          >
+                            <Pin className="h-3.5 w-3.5" />
+                          </span>
+                        </Tooltip>
+                      ) : null}
+                      <span className="min-w-0 truncate font-medium text-foreground">{item.label}</span>
+                      {item.isSecret ? <Badge color="warning">Segredo</Badge> : null}
+                      <FieldInfoButton item={item} />
+                    </div>
 
-                {editable ? (
-                  <div className="mt-2 grid gap-2 sm:grid-cols-[1fr_auto_auto]">
-                    <SchemaValueInput
-                      item={item}
-                      draft={draft}
-                      placeholder={item.isSecret ? 'Defina um novo valor para substituir' : undefined}
-                      onChange={value => setDrafts(prev => ({ ...prev, [item.definitionId]: value }))}
-                    />
-                    <Button
-                      size="sm"
-                      disabled={item.isSecret ? !draft.trim() : !changed}
-                      loading={savingId === item.definitionId}
-                      onClick={() => void handleSave(item)}
-                    >
-                      Salvar
-                    </Button>
-                    {isSchemaValueCopyable(item) ? (
-                      <Button size="sm" variant="ghost" onClick={() => void handleCopy(item)}>
-                        <Copy className="h-4 w-4" />
-                        Copiar
-                      </Button>
-                    ) : null}
+                    {editable ? (
+                      <div className="mt-2 grid items-center gap-2 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
+                        <SchemaValueInput
+                          item={item}
+                          draft={draft}
+                          placeholder={item.isSecret ? 'Defina um novo valor para substituir' : undefined}
+                          onChange={value => setDrafts(prev => ({ ...prev, [item.definitionId]: value }))}
+                        />
+                        <Button
+                          size="sm"
+                          disabled={item.isSecret ? !draft.trim() : !changed}
+                          loading={savingId === item.definitionId}
+                          onClick={() => void handleSave(item)}
+                        >
+                          Salvar
+                        </Button>
+                        {copyable ? (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            aria-label={`Copiar valor de ${item.label}`}
+                            title="Copiar valor"
+                            onClick={() => void handleCopy(item)}
+                          >
+                            <Copy className="h-4 w-4" />
+                          </Button>
+                        ) : null}
+                      </div>
+                    ) : (
+                      <div className="mt-1 flex items-center gap-2">
+                        <span className="min-w-0 flex-1 truncate text-sm text-foreground" title={display || undefined}>
+                          {display || 'Não informado'}
+                        </span>
+                        {copyable ? (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            aria-label={`Copiar valor de ${item.label}`}
+                            title="Copiar valor"
+                            onClick={() => void handleCopy(item)}
+                          >
+                            <Copy className="h-4 w-4" />
+                          </Button>
+                        ) : null}
+                      </div>
+                    )}
                   </div>
-                ) : (
-                  <div className="mt-2 flex flex-wrap items-center gap-2">
-                    <span className="text-sm text-foreground">{display || 'Não informado'}</span>
-                    {isSchemaValueCopyable(item) ? (
-                      <Button size="sm" variant="ghost" onClick={() => void handleCopy(item)}>
-                        <Copy className="h-4 w-4" />
-                        Copiar
-                      </Button>
-                    ) : null}
-                  </div>
-                )}
-
-                <p className="mt-1 text-[11px] text-muted">
-                  {item.valueUpdatedAt
-                    ? `Atualizado em ${formatDateTime(item.valueUpdatedAt)}${item.valueUpdatedBy ? ` · ${describeUpdatedBy(item.valueUpdatedBy)}` : ''}`
-                    : 'Sem valor registrado'}
-                </p>
-              </div>
-            );
-          })}
+                );
+              })}
+            </div>
+          </div>
 
           {hiddenCount > 0 ? (
             <Button size="sm" variant="secondary" onClick={() => setExpanded(true)}>
@@ -188,6 +214,69 @@ export function CustomFieldsCard({ items, isLoading, isError, canEdit, title, su
         </div>
       )}
     </Card>
+  );
+}
+
+/**
+ * Metadados do campo (chave, tipo, permissões e última atualização) atrás do
+ * ícone ⓘ. O texto também vai no aria-label para leitores de tela — o balão só
+ * existe no hover/foco.
+ */
+function FieldInfoButton({ item }: { item: CustomFieldSchemaItem }) {
+  const capabilities = [
+    item.allowRuntimeRead ? 'Lido por scripts' : null,
+    item.allowAgentWrite ? 'Atualizado pelo agente' : null,
+    !item.allowWebEdit ? 'Somente leitura no portal' : null,
+  ].filter((value): value is string => Boolean(value));
+
+  const updated = item.valueUpdatedAt
+    ? `Atualizado em ${formatDateTime(item.valueUpdatedAt)}${item.valueUpdatedBy ? ` · ${describeUpdatedBy(item.valueUpdatedBy)}` : ''}`
+    : 'Sem valor registrado';
+
+  const summary = [
+    `Chave: ${item.name}`,
+    `Tipo: ${getCustomFieldDataTypeLabel(item.dataType)}`,
+    ...(item.options.length > 0 ? [`Opções: ${item.options.join(', ')}`] : []),
+    ...capabilities,
+    updated,
+  ].join(' · ');
+
+  return (
+    <Tooltip
+      position="top"
+      variant="hover-card"
+      content={
+        <div className="space-y-2">
+          {item.description ? <p className="text-muted">{item.description}</p> : null}
+          <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1">
+            <dt className="text-muted">Chave</dt>
+            <dd className="font-mono text-foreground">{item.name}</dd>
+            <dt className="text-muted">Tipo</dt>
+            <dd className="text-foreground">{getCustomFieldDataTypeLabel(item.dataType)}</dd>
+            {item.options.length > 0 ? (
+              <>
+                <dt className="text-muted">Opções</dt>
+                <dd className="text-foreground">{item.options.join(', ')}</dd>
+              </>
+            ) : null}
+            <dt className="text-muted">Permissões</dt>
+            <dd className="text-foreground">
+              {capabilities.length > 0 ? capabilities.join(' · ') : 'Editável no portal'}
+            </dd>
+            <dt className="text-muted">Última atualização</dt>
+            <dd className="text-foreground">{updated}</dd>
+          </dl>
+        </div>
+      }
+    >
+      <button
+        type="button"
+        aria-label={summary}
+        className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-muted transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+      >
+        <Info className="h-3.5 w-3.5" />
+      </button>
+    </Tooltip>
   );
 }
 
@@ -222,7 +311,6 @@ function SchemaValueInput({
     case CustomFieldDataType.Boolean:
       return (
         <Select
-          label="Valor"
           aria-label={ariaLabel}
           value={draft}
           options={[
@@ -236,7 +324,6 @@ function SchemaValueInput({
     case CustomFieldDataType.Dropdown:
       return (
         <Select
-          label="Valor"
           aria-label={ariaLabel}
           value={draft}
           options={[
@@ -249,22 +336,21 @@ function SchemaValueInput({
     case CustomFieldDataType.ListBox:
       return (
         <Input
-          label="Valor (vírgula separado)"
           aria-label={ariaLabel}
           value={draft}
-          hint={item.options.length > 0 ? `Opções: ${item.options.join(', ')}` : undefined}
+          placeholder={placeholder}
           onChange={event => onChange(event.target.value)}
         />
       );
     case CustomFieldDataType.Integer:
-      return <Input label="Valor" aria-label={ariaLabel} type="number" step="1" value={draft} placeholder={placeholder} onChange={event => onChange(event.target.value)} />;
+      return <Input aria-label={ariaLabel} type="number" step="1" value={draft} placeholder={placeholder} onChange={event => onChange(event.target.value)} />;
     case CustomFieldDataType.Decimal:
-      return <Input label="Valor" aria-label={ariaLabel} type="number" step="any" value={draft} placeholder={placeholder} onChange={event => onChange(event.target.value)} />;
+      return <Input aria-label={ariaLabel} type="number" step="any" value={draft} placeholder={placeholder} onChange={event => onChange(event.target.value)} />;
     case CustomFieldDataType.Date:
-      return <Input label="Valor" aria-label={ariaLabel} type="date" value={draft} onChange={event => onChange(event.target.value)} />;
+      return <Input aria-label={ariaLabel} type="date" value={draft} onChange={event => onChange(event.target.value)} />;
     case CustomFieldDataType.DateTime:
-      return <Input label="Valor" aria-label={ariaLabel} type="datetime-local" value={draft} onChange={event => onChange(event.target.value)} />;
+      return <Input aria-label={ariaLabel} type="datetime-local" value={draft} onChange={event => onChange(event.target.value)} />;
     default:
-      return <Input label="Valor" aria-label={ariaLabel} value={draft} placeholder={placeholder} onChange={event => onChange(event.target.value)} />;
+      return <Input aria-label={ariaLabel} value={draft} placeholder={placeholder} onChange={event => onChange(event.target.value)} />;
   }
 }
