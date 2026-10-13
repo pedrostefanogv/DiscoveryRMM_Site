@@ -14,6 +14,9 @@ vi.mock('@/api', () => ({
   ApiError: class ApiError extends Error {},
   agentUpdatesApi: {},
   agentsApi: {},
+  // Usado pelo resumo de campos customizados (customFieldSchemaValue).
+  formatCustomFieldValue: (value: unknown) =>
+    value === null || value === undefined ? '' : String(value),
 }));
 
 vi.mock('@/utils/labels', () => ({
@@ -85,6 +88,34 @@ vi.mock('@/hooks/useAgents', () => ({
 // aqui ele é substituído para o teste da página continuar focado nas abas.
 vi.mock('@/components/custom-fields/AgentCustomFieldsCard', () => ({
   AgentCustomFieldsCard: () => null,
+}));
+
+// Schema dos campos do agente: um destacado (aparece no card "Informações") e um
+// comum (aparece somente na aba "Campos customizados").
+vi.mock('@/hooks/useCustomFields', () => ({
+  useAgentCustomFieldSchema: () => ({
+    data: [
+      {
+        definitionId: 'd1',
+        name: 'anydesk',
+        label: 'ID do anydesk',
+        isPinned: true,
+        isSecret: false,
+        valueJson: JSON.stringify('1602799292'),
+      },
+      {
+        definitionId: 'd2',
+        name: 'teamviewer_id',
+        label: 'TeamViewer ID',
+        isPinned: false,
+        isSecret: false,
+        valueJson: 'null',
+      },
+    ],
+    isLoading: false,
+    isError: false,
+  }),
+  useUpsertAgentCustomFieldValue: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }));
 
 vi.mock('@/hooks/useAutomation', () => ({
@@ -194,8 +225,9 @@ describe('AgentDetail — abas do agente', () => {
     // Os contadores por aba foram preservados na nova barra.
     expect(screen.getByRole('tab', { name: /Aplicativos/ }).textContent).toContain('42');
     expect(screen.getByRole('tab', { name: /^Labels/ }).textContent).toContain('1');
-    // Portas/Conexões e Inicialização/Tarefas saíram da barra principal: 10 abas.
-    expect(screen.getAllByRole('tab')).toHaveLength(10);
+    // Portas/Conexões e Inicialização/Tarefas saíram da barra principal: 11 abas
+    // (incluindo a nova "Campos customizados").
+    expect(screen.getAllByRole('tab')).toHaveLength(11);
   });
 
   it('mostra o usuário logado no card Informações', async () => {
@@ -317,5 +349,45 @@ describe('AgentDetail — abas do agente', () => {
 
     expect(screen.getByRole('tab', { name: /Tarefas Agendadas/ }).getAttribute('aria-selected')).toBe('true');
     expect(screen.getByRole('tab', { name: /^Inicialização/ }).getAttribute('aria-selected')).toBe('false');
+  });
+
+  it('resume no card Informações apenas os campos customizados destacados', async () => {
+    await renderPage();
+
+    expect(screen.getByText('ID do anydesk:')).toBeTruthy();
+    expect(screen.getByText('1602799292')).toBeTruthy();
+    // Campo sem destaque fica fora do card (aparece na aba completa).
+    expect(screen.queryByText('TeamViewer ID:')).toBeNull();
+  });
+
+  it('abre a aba Campos customizados pelo deep link, com o contador de campos', async () => {
+    await renderPage('?tab=campos-customizados');
+
+    const tab = screen.getByRole('tab', { name: /Campos customizados/ });
+    expect(tab.getAttribute('aria-selected')).toBe('true');
+    expect(tab.textContent).toContain('2');
+    expect(screen.queryByTestId('pinned-notes')).toBeNull();
+  });
+
+  it('a aba Campos customizados não deixa card vazio pendurado', async () => {
+    const { container } = await renderPage('?tab=campos-customizados');
+
+    expect(screen.getByRole('tab', { name: /Campos customizados/ }).getAttribute('aria-selected')).toBe('true');
+    // O wrapper ".surface-card" das abas de tabela não deve ser montado nesta aba.
+    expect(container.querySelector('#agent-tabs-panel .surface-card')).toBeNull();
+
+    // Controle: nas abas de tabela o wrapper existe — garante que o seletor
+    // acima realmente detectaria o card vazio (regressão pega de verdade).
+    cleanup();
+    const tableTab = await renderPage('?tab=aplicativos');
+    expect(tableTab.container.querySelector('#agent-tabs-panel .surface-card')).not.toBeNull();
+  });
+
+  it('navega para a aba Campos customizados e atualiza a URL', async () => {
+    await renderPage();
+    fireEvent.click(screen.getByRole('tab', { name: /Campos customizados/ }));
+
+    expect(screen.getByRole('tab', { name: /Campos customizados/ }).getAttribute('aria-selected')).toBe('true');
+    expect(screen.getByTestId('location').textContent).toContain('tab=campos-customizados');
   });
 });

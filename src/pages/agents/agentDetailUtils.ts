@@ -304,6 +304,7 @@ export function nodeLinkStatusColor(
 
 export type AgentDetailDataTab =
   | "info"
+  | "customFields"
   | "notes"
   | "labelHistory"
   | "software"
@@ -342,6 +343,7 @@ export const AGENT_DETAIL_DEFAULT_TAB: AgentDetailDataTab = "info";
  */
 export const AGENT_DETAIL_TAB_SLUGS: Record<AgentDetailDataTab, string> = {
   info: "info",
+  customFields: "campos-customizados",
   notes: "anotacoes",
   labelHistory: "historico-de-labels",
   software: "aplicativos",

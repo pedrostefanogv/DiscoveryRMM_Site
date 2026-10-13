@@ -60,6 +60,22 @@ describe('CustomFieldCapabilitiesEditor', () => {
     });
   });
 
+  it('escopo Agente: o destaque explica que o campo fica no card Informações', () => {
+    setup();
+    expect(screen.getByText(/card Informações do agente/)).toBeTruthy();
+    expect(screen.getByText(/aparece apenas na aba Campos customizados/)).toBeTruthy();
+  });
+
+  it('escopo Agente sem "Pode ver" avisa que o destaque não tem efeito', () => {
+    setup({ allowWebRead: false, allowWebEdit: false });
+    expect(screen.getByText(/O destaque só tem efeito com "Pode ver" ligado/)).toBeTruthy();
+  });
+
+  it('fora do escopo Agente, mantém o texto original de ordenação', () => {
+    setup({}, CustomFieldScopeType.Client);
+    expect(screen.getByText('O campo aparece antes dos demais.')).toBeTruthy();
+  });
+
   it('gravação pelo agente fica indisponível fora do escopo Agente', () => {
     setup({}, CustomFieldScopeType.Client);
     expect((screen.getByLabelText(/Pode gravar/) as HTMLInputElement).disabled).toBe(true);

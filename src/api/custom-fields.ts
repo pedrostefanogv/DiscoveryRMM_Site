@@ -59,7 +59,10 @@ export interface CustomFieldDefinition {
   allowWebRead: boolean;
   /** Portal/suporte pode editar o valor (exige allowWebRead). */
   allowWebEdit: boolean;
-  /** Aparece primeiro no card do detalhe. */
+  /**
+   * Destaque no card "Informações" do detalhe. Sem a opção, o campo não aparece
+   * nesse resumo — fica somente na aba/lista completa de campos customizados.
+   */
   isPinned: boolean;
   /** Valor padrão em JSON (usado quando a entidade ainda não tem valor). */
   defaultValueJson: string | null;

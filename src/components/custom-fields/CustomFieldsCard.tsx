@@ -9,6 +9,7 @@ import {
   type CustomFieldSchemaItem,
 } from '@/api';
 import { Badge, Button, Card, CardHeader, Input, Select } from '@/components/ui';
+import { isSchemaValueCopyable, parseSchemaValue, schemaValueText } from './customFieldSchemaValue';
 
 const COLLAPSED_COUNT = 6;
 
@@ -75,9 +76,13 @@ export function CustomFieldsCard({ items, isLoading, isError, canEdit, subtitle,
   }
 
   async function handleCopy(item: CustomFieldSchemaItem) {
-    const text = formatCustomFieldValue(parseSchemaValue(item));
+    // Segredo e campo sem valor não são copiados: a máscara não é o valor real.
+    if (!isSchemaValueCopyable(item)) {
+      toast.error('Este campo não tem valor para copiar.');
+      return;
+    }
     try {
-      await navigator.clipboard.writeText(text);
+      await navigator.clipboard.writeText(schemaValueText(item));
       toast.success('Valor copiado.');
     } catch {
       toast.error('Não foi possível copiar.');
@@ -106,7 +111,7 @@ export function CustomFieldsCard({ items, isLoading, isError, canEdit, subtitle,
         <div className="space-y-4">
           {visibleItems.map(item => {
             const currentValue = parseSchemaValue(item);
-            const display = item.isSecret ? '••••••' : formatCustomFieldValue(currentValue);
+            const display = item.isSecret ? schemaValueText(item) : formatCustomFieldValue(currentValue);
             const draft = drafts[item.definitionId] ?? '';
             const editable = canEdit && item.allowWebEdit;
             const changed = !item.isSecret && draft !== formatCustomFieldValue(currentValue);
@@ -140,15 +145,17 @@ export function CustomFieldsCard({ items, isLoading, isError, canEdit, subtitle,
                     >
                       Salvar
                     </Button>
-                    <Button size="sm" variant="ghost" onClick={() => void handleCopy(item)}>
-                      <Copy className="h-4 w-4" />
-                      Copiar
-                    </Button>
+                    {isSchemaValueCopyable(item) ? (
+                      <Button size="sm" variant="ghost" onClick={() => void handleCopy(item)}>
+                        <Copy className="h-4 w-4" />
+                        Copiar
+                      </Button>
+                    ) : null}
                   </div>
                 ) : (
                   <div className="mt-2 flex flex-wrap items-center gap-2">
                     <span className="text-sm text-foreground">{display || 'Não informado'}</span>
-                    {display ? (
+                    {isSchemaValueCopyable(item) ? (
                       <Button size="sm" variant="ghost" onClick={() => void handleCopy(item)}>
                         <Copy className="h-4 w-4" />
                         Copiar
@@ -188,19 +195,6 @@ function describeUpdatedBy(updatedBy: string): string {
   if (updatedBy.startsWith('script:')) return `script ${updatedBy.slice(7, 15)}…`;
   if (updatedBy === 'agent') return 'agente';
   return updatedBy;
-}
-
-function parseSchemaValue(item: CustomFieldSchemaItem): unknown {
-  const raw = item.valueJson;
-  if (raw === undefined || raw === null || raw === 'null') return null;
-  if (typeof raw !== 'string') return raw;
-  const text = raw.trim();
-  if (!text || text === 'null') return null;
-  try {
-    return JSON.parse(text);
-  } catch {
-    return text;
-  }
 }
 
 function formatDateTime(value: string): string {

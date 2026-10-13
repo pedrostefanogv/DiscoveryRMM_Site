@@ -3,7 +3,7 @@ import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft, Bell, Cpu, MemoryStick, Ticket as TicketIcon,
   Monitor, Wifi, WifiOff, AppWindow, Search, Clock, HardDrive, Printer, Bug, AlertTriangle, Trash2, ShieldCheck, Plus, Gauge, Power, RotateCcw, Zap, ChevronDown, ChevronRight, RefreshCw, ArrowUpCircle, Info, Copy,
-  Cable, EthernetPort, History, Network, Radio, ScrollText, StickyNote, MessageSquare,
+  Cable, EthernetPort, History, Network, Radio, ScrollText, StickyNote, MessageSquare, Tags,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getDeleteAgentErrorMessage, useAgent, useAgentHardware, useAgentHardwareComponents, useAgentListeningPortsPage, useAgentOpenSocketsPage, useAgentSoftwarePage, useAgentSoftwareSnapshot, useApproveZeroTouch, useDeleteAgent, useRestartAgent, useShutdownAgent, useWakeOnLan } from '@/hooks/useAgents';
@@ -36,6 +36,8 @@ import WakeOnLanModal from '@/components/agents/WakeOnLanModal';
 import { NotesPanel } from '@/components/notes/NotesPanel';
 import { PinnedNotesCard } from '@/components/notes/PinnedNotesCard';
 import { AgentCustomFieldsCard } from '@/components/custom-fields/AgentCustomFieldsCard';
+import { AgentPinnedCustomFields } from '@/components/custom-fields/AgentPinnedCustomFields';
+import { useAgentCustomFieldSchema } from '@/hooks/useCustomFields';
 import { DetailTabs, type DetailTab } from '@/components/entity/DetailTabs';
 import type { AgentSoftwareInventoryItem, ListeningPortInfo, LogEntry, OpenSocketInfo, ScheduledTaskInfo, StartupItemInfo } from '@/api';
 import { ApiError, agentUpdatesApi, agentsApi } from '@/api';
@@ -64,6 +66,8 @@ import { buildCorrelationId } from '@/pages/automation/automationTasksUtils';
 
 /** Contadores exibidos ao lado do rótulo de cada aba (undefined = sem contador). */
 interface AgentTabBadges {
+  /** Campos customizados visíveis no portal (webRead) para este agente. */
+  customFields?: number;
   labelHistory?: number;
   software?: number;
   printers?: number;
@@ -95,6 +99,15 @@ interface AgentAutostartBadges {
 function buildAgentDetailTabs(badges: AgentTabBadges = {}): DetailTab<AgentDetailDataTab>[] {
   return [
     { id: 'info', label: 'Info', icon: Info },
+    {
+      // Visão completa dos campos customizados: o card "Informações" mostra só
+      // os destaques (isPinned) de forma resumida; aqui aparece tudo, com tipo,
+      // capacidades, auditoria e edição pelo portal.
+      id: 'customFields',
+      label: 'Campos customizados',
+      icon: Tags,
+      badge: badges.customFields,
+    },
     { id: 'notes', label: 'Anotações', icon: StickyNote },
     { id: 'labelHistory', label: 'Labels', icon: History, badge: badges.labelHistory },
     { id: 'software', label: 'Aplicativos', icon: AppWindow, badge: badges.software },
@@ -339,6 +352,10 @@ export default function AgentDetail() {
   const agent = useAgent(id!);
   const liveHeartbeat = useAgentHeartbeat(id!);
   const hw = useAgentHardware(id!);
+  // Campos customizados visíveis no portal (webRead): alimenta o resumo do card
+  // "Informações" (somente os destacados) e o contador da aba "Campos
+  // customizados". O fetch é o mesmo do card detalhado (chave de cache única).
+  const agentCustomFields = useAgentCustomFieldSchema(id!);
   // Políticas de automação aplicáveis ao agente. O hook fica sempre montado
   // (regras de hooks) e o fetch só liga quando a aba "Políticas" está ativa.
   const agentPolicies = useAgentAutomationPolicies(
@@ -1885,6 +1902,7 @@ export default function AgentDetail() {
       {/* Abas do agente: Info (principal) · Anotações · Histórico de labels · dados */}
       <DetailTabs
         tabs={buildAgentDetailTabs({
+          customFields: agentCustomFields.data?.length,
           labelHistory: labelHistory.length,
           software: softwareTotalCount,
           printers: hwComponents.data ? printers.length : undefined,
@@ -2003,6 +2021,9 @@ export default function AgentDetail() {
                       <dd className="mt-0.5 font-mono text-foreground">{hw.data.hardware.serialNumber}</dd>
                     </div>
                   )}
+                  {/* Resumo dos campos DESTACADOS, depois do bloco de fabricante/
+                      modelo (e série). Sem campo destacado, a seção não aparece. */}
+                  <AgentPinnedCustomFields items={agentCustomFields.data ?? []} />
                 </dl>
               </Card>
               {/* Disk */}
@@ -2142,10 +2163,14 @@ export default function AgentDetail() {
               </Card>
             </div>
 
-            <AgentCustomFieldsCard agentId={a.id} canEdit={canManageAgent} />
-
             <PinnedNotesCard agentId={a.id} onViewAll={() => handleSelectDataTab('notes')} />
           </>
+        )}
+
+        {activeDataTab === 'customFields' && (
+          /* Visão completa: todos os campos visíveis no portal, com detalhe,
+             edição conforme webEdit e auditoria da última alteração. */
+          <AgentCustomFieldsCard agentId={a.id} canEdit={canManageAgent} />
         )}
 
         {activeDataTab === 'notes' && (
@@ -2201,7 +2226,9 @@ export default function AgentDetail() {
           </Card>
         )}
 
-        {activeDataTab !== 'info' && activeDataTab !== 'notes' && activeDataTab !== 'labelHistory' && (
+        {/* Wrapper das abas "de dados" (tabelas/painéis). As abas com painel próprio
+            ficam fora dele — inclusive "customFields", cujo card já traz o seu. */}
+        {activeDataTab !== 'info' && activeDataTab !== 'customFields' && activeDataTab !== 'notes' && activeDataTab !== 'labelHistory' && (
           <Card className="surface-card">
             {activeDataTab === 'software' && (
               <div style={{ maxHeight: 'min(860px, 75vh)' }} className="w-full min-w-0 max-w-full overflow-x-hidden overflow-y-auto overscroll-auto">

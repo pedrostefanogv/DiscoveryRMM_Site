@@ -28,6 +28,7 @@ describe("agentDetailTabSlug", () => {
   it("mapeia cada aba para um slug legível e estável", () => {
     expect(AGENT_DETAIL_TAB_SLUGS).toEqual({
       info: "info",
+      customFields: "campos-customizados",
       notes: "anotacoes",
       labelHistory: "historico-de-labels",
       software: "aplicativos",
@@ -64,6 +65,7 @@ describe("agentDetailTabFromSlug", () => {
 
   it("resolve os deep links das abas de anotações e histórico de labels", () => {
     expect(agentDetailTabFromSlug("info")).toBe("info");
+    expect(agentDetailTabFromSlug("campos-customizados")).toBe("customFields");
     expect(agentDetailTabFromSlug("anotacoes")).toBe("notes");
     expect(agentDetailTabFromSlug("historico-de-labels")).toBe("labelHistory");
   });

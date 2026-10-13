@@ -64,6 +64,38 @@ describe('cards de campos por entidade', () => {
     expect(schemaCalls[0]).toEqual({ scope: 1, target: { entityId: 'c1' } });
   });
 
+  it('segredo com valor aparece mascarado e sem botão copiar', () => {
+    schemaState.data = [item({ isSecret: true, valueJson: JSON.stringify('***') })];
+    render(<ClientCustomFieldsCard clientId="c1" canEdit />);
+
+    expect(screen.getByText('••••••')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Copiar' })).toBeNull();
+  });
+
+  it('campo editável sem valor não mostra botão copiar (nada a copiar)', () => {
+    schemaState.data = [item({ allowWebEdit: true, valueJson: 'null' })];
+    render(<ClientCustomFieldsCard clientId="c1" canEdit />);
+
+    expect(screen.getByRole('button', { name: 'Salvar' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Copiar' })).toBeNull();
+  });
+
+  it('segredo editável não mostra botão copiar (a máscara não é o valor)', () => {
+    schemaState.data = [item({ allowWebEdit: true, isSecret: true, valueJson: JSON.stringify('***') })];
+    render(<ClientCustomFieldsCard clientId="c1" canEdit />);
+
+    expect(screen.getByRole('button', { name: 'Salvar' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Copiar' })).toBeNull();
+  });
+
+  it('segredo sem valor mostra "Não informado" em vez de máscara', () => {
+    schemaState.data = [item({ isSecret: true, valueJson: 'null' })];
+    render(<ClientCustomFieldsCard clientId="c1" canEdit />);
+
+    expect(screen.getByText('Não informado')).toBeTruthy();
+    expect(screen.queryByText('••••••')).toBeNull();
+  });
+
   it('site usa o escopo Site com siteId e clientId juntos', () => {
     schemaCalls.length = 0;
     schemaState.data = [];
