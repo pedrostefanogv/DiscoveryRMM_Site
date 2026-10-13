@@ -63,7 +63,7 @@ describe('CustomFieldCapabilitiesEditor', () => {
   it('escopo Agente: o destaque explica que o campo fica no card Informações', () => {
     setup();
     expect(screen.getByText(/card Informações do agente/)).toBeTruthy();
-    expect(screen.getByText(/aparece apenas na aba Campos customizados/)).toBeTruthy();
+    expect(screen.getByText(/aparece apenas na aba Extras/)).toBeTruthy();
   });
 
   it('escopo Agente sem "Pode ver" avisa que o destaque não tem efeito', () => {

@@ -68,6 +68,12 @@ describe('AgentCustomFieldsCard', () => {
     expect(screen.getByText(/Atualizado em .*· agent/)).toBeTruthy();
   });
 
+  it('usa o título compacto "Extras" (não "Campos customizados")', () => {
+    render(<AgentCustomFieldsCard agentId="a1" canEdit />);
+    expect(screen.getByText('Extras')).toBeTruthy();
+    expect(screen.queryByText('Campos customizados')).toBeNull();
+  });
+
   it('campo com allowWebEdit=false aparece somente leitura', () => {
     schemaState.data = [item({ allowWebEdit: false })];
     render(<AgentCustomFieldsCard agentId="a1" canEdit />);

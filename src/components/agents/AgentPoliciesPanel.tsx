@@ -9,12 +9,12 @@ import {
   type Column,
 } from '@/components/ui';
 import {
-  AutomationNotificationMode,
   type AgentAutomationPolicyPreview,
   type AgentAutomationTaskPolicy,
 } from '@/api';
 import {
   describeCron,
+  isToastNotificationMode,
   notificationModeFromTask,
   notificationModeLabel,
   toastTimingLabel,
@@ -217,7 +217,7 @@ export default function AgentPoliciesPanel({
         <DetailItem label='Alvo' value={actionTarget(policy)} />
         <DetailItem label='Gatilhos' value={triggerSummary(policy)} />
         <DetailItem label='Notificação' value={notificationModeLabel(mode)} />
-        {mode === AutomationNotificationMode.Toast ? (
+        {isToastNotificationMode(mode) ? (
           <DetailItem label='Momento do toast' value={toastTimingLabel(policy.toastTiming)} />
         ) : null}
         <DetailItem label='Permite adiar' value={policy.allowDefer ? 'Sim' : 'Não'} />

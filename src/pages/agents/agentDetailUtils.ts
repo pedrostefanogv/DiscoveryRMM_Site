@@ -323,7 +323,7 @@ export type AgentDetailDataTab =
 export type AgentNetworkView = "adapters" | "listeningPorts" | "openSockets";
 
 /**
- * Sub-abas da aba unificada "Execução Automática": itens de inicialização
+ * Sub-abas da aba unificada "Autoruns": itens de inicialização
  * (registro, pastas Startup e serviços automáticos) e tarefas agendadas do
  * Windows descrevem o mesmo assunto — o que o host executa sozinho, sem
  * intervenção do operador. Ficam agrupados na mesma aba, como já acontece com
@@ -374,7 +374,7 @@ const AGENT_NETWORK_VIEW_BY_SLUG = new Map<string, AgentNetworkView>(
 );
 
 /**
- * Slugs das sub-abas de "Execução Automática". Os dois eram abas de topo antes
+ * Slugs das sub-abas de "Autoruns". Os dois eram abas de topo antes
  * da unificação e continuam válidos como deep link (caem na sub-aba correta).
  */
 export const AGENT_AUTOSTART_VIEW_SLUGS: Record<AgentAutostartView, string> = {
@@ -407,7 +407,7 @@ export function agentDetailTabFromSlug(
   // Slugs legados das abas de rede agora apontam para a aba unificada "Rede".
   if (AGENT_NETWORK_VIEW_BY_SLUG.has(normalized)) return "network";
   // Idem para "Inicialização" e "Tarefas Agendadas": as duas viraram sub-abas
-  // de "Execução Automática", mas os deep links antigos seguem válidos.
+  // de "Autoruns", mas os deep links antigos seguem válidos.
   if (AGENT_AUTOSTART_VIEW_BY_SLUG.has(normalized)) return "autostart";
   return AGENT_DETAIL_DEFAULT_TAB;
 }
@@ -429,13 +429,13 @@ export function agentNetworkViewFromSlug(
   return AGENT_NETWORK_VIEW_BY_SLUG.get(slug.trim().toLowerCase()) ?? AGENT_NETWORK_DEFAULT_VIEW;
 }
 
-/** Slug canônico de uma sub-aba de "Execução Automática" (?tab=...). */
+/** Slug canônico de uma sub-aba de "Autoruns" (?tab=...). */
 export function agentAutostartViewSlug(view: AgentAutostartView): string {
   return AGENT_AUTOSTART_VIEW_SLUGS[view];
 }
 
 /**
- * Resolve a sub-aba de "Execução Automática" a partir do slug. Aceita o slug
+ * Resolve a sub-aba de "Autoruns" a partir do slug. Aceita o slug
  * canônico da aba ("execucao-automatica") e os slugs legados "inicializacao" e
  * "tarefas-agendadas"; desconhecidos caem em "startupItems".
  */

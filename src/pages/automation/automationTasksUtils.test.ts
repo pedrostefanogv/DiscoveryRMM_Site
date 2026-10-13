@@ -4,6 +4,7 @@ import { AutomationNotificationMode, AutomationToastTiming } from '@/api/types';
 import {
   customFieldsFromMetadata,
   describeCron,
+  isToastNotificationMode,
   normalizeNotificationMode,
   normalizeToastTiming,
   notificationModeFromTask,
@@ -90,9 +91,12 @@ describe('modo de notificação', () => {
   it('normaliza nome (string do servidor), número e valores inválidos', () => {
     expect(normalizeNotificationMode('Prompt')).toBe(AutomationNotificationMode.Prompt);
     expect(normalizeNotificationMode('Toast')).toBe(AutomationNotificationMode.Toast);
+    expect(normalizeNotificationMode('NativeToast')).toBe(AutomationNotificationMode.NativeToast);
     expect(normalizeNotificationMode('Silent')).toBe(AutomationNotificationMode.Silent);
     expect(normalizeNotificationMode(2)).toBe(AutomationNotificationMode.Toast);
+    expect(normalizeNotificationMode(3)).toBe(AutomationNotificationMode.NativeToast);
     expect(normalizeNotificationMode('2')).toBe(AutomationNotificationMode.Toast);
+    expect(normalizeNotificationMode('3')).toBe(AutomationNotificationMode.NativeToast);
     expect(normalizeNotificationMode('qualquer')).toBe(AutomationNotificationMode.Silent);
     expect(normalizeNotificationMode(undefined)).toBe(AutomationNotificationMode.Silent);
   });
@@ -118,10 +122,20 @@ describe('modo de notificação', () => {
 
   it('gera rótulos amigáveis', () => {
     expect(notificationModeLabel('Prompt')).toBe('Prompt PSADT (Continuar/Adiar)');
-    expect(notificationModeLabel('Toast')).toBe('Toast simples');
+    expect(notificationModeLabel('Toast')).toBe('Toast na interface do agent');
+    expect(notificationModeLabel('NativeToast')).toBe('Toast nativo do app');
     expect(notificationModeLabel('Silent')).toBe('Silencioso');
     expect(toastTimingLabel('Before')).toBe('Antes de executar');
     expect(toastTimingLabel('After')).toBe('Após a conclusão');
+  });
+
+  it('identifica os modos de toast informativo (agent e nativo)', () => {
+    expect(isToastNotificationMode(AutomationNotificationMode.Toast)).toBe(true);
+    expect(isToastNotificationMode(AutomationNotificationMode.NativeToast)).toBe(true);
+    expect(isToastNotificationMode('NativeToast')).toBe(true);
+    expect(isToastNotificationMode(AutomationNotificationMode.Prompt)).toBe(false);
+    expect(isToastNotificationMode(AutomationNotificationMode.Silent)).toBe(false);
+    expect(isToastNotificationMode(undefined)).toBe(false);
   });
 });
 

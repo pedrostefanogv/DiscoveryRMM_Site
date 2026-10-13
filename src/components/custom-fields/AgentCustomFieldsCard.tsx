@@ -7,7 +7,7 @@ interface Props {
   canEdit: boolean;
 }
 
-/** Card "Campos customizados" da aba Info do agente. */
+/** Card "Extras" (campos customizados) da aba Info do agente. */
 export function AgentCustomFieldsCard({ agentId, canEdit }: Props) {
   const schemaQuery = useAgentCustomFieldSchema(agentId);
   const upsertValue = useUpsertAgentCustomFieldValue(agentId);
@@ -18,6 +18,7 @@ export function AgentCustomFieldsCard({ agentId, canEdit }: Props) {
       isLoading={schemaQuery.isLoading}
       isError={schemaQuery.isError}
       canEdit={canEdit}
+      title="Extras"
       emptyMessage="Nenhum campo customizado visível para este agente. Os campos são criados em Configurações → Campos customizados."
       onSave={(item, value) =>
         upsertValue.mutateAsync({ definitionId: item.definitionId, value }).then(() => undefined)

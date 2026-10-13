@@ -3726,8 +3726,10 @@ export enum AutomationNotificationMode {
   Silent = 0,
   /** Prompt Welcome do PSADT (Continuar/Adiar) — sem autorização, ação padrão continuar. */
   Prompt = 1,
-  /** Toast informativo do PSADT, sem interação. */
+  /** Toast informativo desenhado pela interface do agent, sem interação. */
   Toast = 2,
+  /** Toast nativo do sistema (Action Center), enviado pelo próprio app — mesmo caminho do Chat IA. */
+  NativeToast = 3,
 }
 
 /** Momento do toast informativo (modo Toast). */

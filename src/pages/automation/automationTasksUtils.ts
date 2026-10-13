@@ -110,6 +110,7 @@ export function normalizeNotificationMode(
     if (value === "Silent") return AutomationNotificationMode.Silent;
     if (value === "Prompt") return AutomationNotificationMode.Prompt;
     if (value === "Toast") return AutomationNotificationMode.Toast;
+    if (value === "NativeToast") return AutomationNotificationMode.NativeToast;
   }
   return AutomationNotificationMode.Silent;
 }
@@ -147,10 +148,21 @@ export function notificationModeLabel(value: unknown): string {
     case AutomationNotificationMode.Prompt:
       return "Prompt PSADT (Continuar/Adiar)";
     case AutomationNotificationMode.Toast:
-      return "Toast simples";
+      return "Toast na interface do agent";
+    case AutomationNotificationMode.NativeToast:
+      return "Toast nativo do app";
     default:
       return "Silencioso";
   }
+}
+
+/** Toast informativo: interface do agent (Toast) ou nativo do sistema (NativeToast). */
+export function isToastNotificationMode(value: unknown): boolean {
+  const mode = normalizeNotificationMode(value);
+  return (
+    mode === AutomationNotificationMode.Toast ||
+    mode === AutomationNotificationMode.NativeToast
+  );
 }
 
 export function toastTimingLabel(value: unknown): string {

@@ -19,6 +19,8 @@ interface Props {
   isError: boolean;
   /** false = somente leitura (sem permissão de edição da entidade). */
   canEdit: boolean;
+  /** Título do card; o padrão é o nome da tela de definições. */
+  title?: string;
   subtitle?: string;
   emptyMessage: string;
   /** Persiste o valor do campo; deve rejeitar em caso de erro. */
@@ -30,7 +32,7 @@ interface Props {
  * Só recebe itens com visibilidade no portal (webRead) — o filtro é do endpoint
  * de schema. Respeita a capacidade de edição pelo portal (webEdit).
  */
-export function CustomFieldsCard({ items, isLoading, isError, canEdit, subtitle, emptyMessage, onSave }: Props) {
+export function CustomFieldsCard({ items, isLoading, isError, canEdit, title, subtitle, emptyMessage, onSave }: Props) {
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [expanded, setExpanded] = useState(false);
   const [savingId, setSavingId] = useState<string | null>(null);
@@ -92,7 +94,7 @@ export function CustomFieldsCard({ items, isLoading, isError, canEdit, subtitle,
   return (
     <Card>
       <CardHeader
-        title="Campos customizados"
+        title={title ?? 'Campos customizados'}
         subtitle={
           subtitle ??
           (sorted.length === 0

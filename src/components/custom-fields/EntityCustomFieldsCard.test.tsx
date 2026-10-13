@@ -61,6 +61,8 @@ describe('cards de campos por entidade', () => {
     schemaState.data = [item()];
     render(<ClientCustomFieldsCard clientId="c1" canEdit />);
     expect(screen.getByText('Contrato')).toBeTruthy();
+    // Cliente/site mantêm o título original: a renomeação é só do agente.
+    expect(screen.getByText('Campos customizados')).toBeTruthy();
     expect(schemaCalls[0]).toEqual({ scope: 1, target: { entityId: 'c1' } });
   });
 

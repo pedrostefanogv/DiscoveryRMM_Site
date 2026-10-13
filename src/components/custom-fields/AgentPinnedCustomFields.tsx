@@ -13,7 +13,7 @@ interface Props {
  * Resumo enxuto dos campos customizados DESTACADOS (`isPinned`) dentro do card
  * "Informações" do agente: uma linha por campo no formato "Rótulo: valor", com
  * o botão de copiar quando há valor textual. Campos sem destaque continuam
- * acessíveis (com o detalhe completo) na aba "Campos customizados".
+ * acessíveis (com o detalhe completo) na aba "Extras".
  */
 export function AgentPinnedCustomFields({ items }: Props) {
   const pinned = items
@@ -37,7 +37,7 @@ export function AgentPinnedCustomFields({ items }: Props) {
 
   return (
     <div className="border-t border-border pt-3">
-      <dt className="text-xs font-semibold uppercase tracking-wide text-muted">Campos customizados</dt>
+      <dt className="text-xs font-semibold uppercase tracking-wide text-muted">Extras</dt>
       <dd className="mt-2 space-y-2">
         {pinned.map(item => {
           const text = schemaValueText(item);

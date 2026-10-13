@@ -91,7 +91,7 @@ vi.mock('@/components/custom-fields/AgentCustomFieldsCard', () => ({
 }));
 
 // Schema dos campos do agente: um destacado (aparece no card "Informações") e um
-// comum (aparece somente na aba "Campos customizados").
+// comum (aparece somente na aba "Extras").
 vi.mock('@/hooks/useCustomFields', () => ({
   useAgentCustomFieldSchema: () => ({
     data: [
@@ -217,7 +217,7 @@ afterEach(() => cleanup());
 describe('AgentDetail — abas do agente', () => {
   it('abre na aba principal Info com os dados do host e as anotações fixadas', async () => {
     await renderPage();
-    const infoTab = screen.getByRole('tab', { name: /Info/ });
+    const infoTab = screen.getByRole('tab', { name: /^Info$/ });
     expect(infoTab.getAttribute('aria-selected')).toBe('true');
     expect(screen.getByText('192.168.10.77')).toBeTruthy();
     expect(screen.getByTestId('pinned-notes')).toBeTruthy();
@@ -226,7 +226,7 @@ describe('AgentDetail — abas do agente', () => {
     expect(screen.getByRole('tab', { name: /Aplicativos/ }).textContent).toContain('42');
     expect(screen.getByRole('tab', { name: /^Labels/ }).textContent).toContain('1');
     // Portas/Conexões e Inicialização/Tarefas saíram da barra principal: 11 abas
-    // (incluindo a nova "Campos customizados").
+    // (incluindo a nova "Extras").
     expect(screen.getAllByRole('tab')).toHaveLength(11);
   });
 
@@ -260,7 +260,7 @@ describe('AgentDetail — abas do agente', () => {
 
   it('cai na aba Info quando o ?tab= é inválido', async () => {
     await renderPage('?tab=nao-existe');
-    expect(screen.getByRole('tab', { name: /Info/ }).getAttribute('aria-selected')).toBe('true');
+    expect(screen.getByRole('tab', { name: /^Info$/ }).getAttribute('aria-selected')).toBe('true');
     expect(screen.getByTestId('pinned-notes')).toBeTruthy();
   });
 
@@ -296,10 +296,10 @@ describe('AgentDetail — abas do agente', () => {
     expect(screen.getByRole('heading', { name: 'Conexões Abertas' })).toBeTruthy();
   });
 
-  it('unifica inicialização e tarefas agendadas na aba Execução Automática', async () => {
+  it('unifica inicialização e tarefas agendadas na aba Autoruns', async () => {
     await renderPage('?tab=execucao-automatica');
 
-    expect(screen.getByRole('tab', { name: /Execução Automática/ }).getAttribute('aria-selected')).toBe('true');
+    expect(screen.getByRole('tab', { name: /Autoruns/ }).getAttribute('aria-selected')).toBe('true');
     expect(screen.getByRole('tab', { name: /^Inicialização/ }).getAttribute('aria-selected')).toBe('true');
     expect(screen.getByRole('tab', { name: /Tarefas Agendadas/ })).toBeTruthy();
   });
@@ -307,7 +307,7 @@ describe('AgentDetail — abas do agente', () => {
   it('abre a sub-aba de tarefas pelo deep link legado ?tab=tarefas-agendadas', async () => {
     await renderPage('?tab=tarefas-agendadas');
 
-    expect(screen.getByRole('tab', { name: /Execução Automática/ }).getAttribute('aria-selected')).toBe('true');
+    expect(screen.getByRole('tab', { name: /Autoruns/ }).getAttribute('aria-selected')).toBe('true');
     expect(screen.getByRole('tab', { name: /Tarefas Agendadas/ }).getAttribute('aria-selected')).toBe('true');
     expect(screen.getByRole('tab', { name: /^Inicialização/ }).getAttribute('aria-selected')).toBe('false');
   });
@@ -315,14 +315,14 @@ describe('AgentDetail — abas do agente', () => {
   it('abre a sub-aba de inicialização pelo deep link legado ?tab=inicializacao', async () => {
     await renderPage('?tab=inicializacao');
 
-    expect(screen.getByRole('tab', { name: /Execução Automática/ }).getAttribute('aria-selected')).toBe('true');
+    expect(screen.getByRole('tab', { name: /Autoruns/ }).getAttribute('aria-selected')).toBe('true');
     expect(screen.getByRole('tab', { name: /^Inicialização/ }).getAttribute('aria-selected')).toBe('true');
   });
 
   it('badge da aba unificada reflete a sub-aba de tarefas quando ativa', async () => {
     await renderPage('?tab=tarefas-agendadas');
 
-    const badge = screen.getByRole('tab', { name: /Execução Automática/ }).textContent ?? '';
+    const badge = screen.getByRole('tab', { name: /Autoruns/ }).textContent ?? '';
     expect(badge).toContain('1');
     expect(badge).not.toContain('2');
   });
@@ -330,7 +330,7 @@ describe('AgentDetail — abas do agente', () => {
   it('badge da aba unificada reflete a sub-aba de inicialização quando ativa', async () => {
     await renderPage('?tab=inicializacao');
 
-    const badge = screen.getByRole('tab', { name: /Execução Automática/ }).textContent ?? '';
+    const badge = screen.getByRole('tab', { name: /Autoruns/ }).textContent ?? '';
     expect(badge).toContain('2');
     expect(badge).not.toContain('1');
   });
@@ -343,7 +343,7 @@ describe('AgentDetail — abas do agente', () => {
     expect(tab.textContent).toContain('3');
   });
 
-  it('troca para Tarefas Agendadas dentro da aba Execução Automática', async () => {
+  it('troca para Tarefas Agendadas dentro da aba Autoruns', async () => {
     await renderPage('?tab=execucao-automatica');
     fireEvent.click(screen.getByRole('tab', { name: /Tarefas Agendadas/ }));
 
@@ -360,19 +360,19 @@ describe('AgentDetail — abas do agente', () => {
     expect(screen.queryByText('TeamViewer ID:')).toBeNull();
   });
 
-  it('abre a aba Campos customizados pelo deep link, com o contador de campos', async () => {
+  it('abre a aba Extras pelo deep link, com o contador de campos', async () => {
     await renderPage('?tab=campos-customizados');
 
-    const tab = screen.getByRole('tab', { name: /Campos customizados/ });
+    const tab = screen.getByRole('tab', { name: /Extras/ });
     expect(tab.getAttribute('aria-selected')).toBe('true');
     expect(tab.textContent).toContain('2');
     expect(screen.queryByTestId('pinned-notes')).toBeNull();
   });
 
-  it('a aba Campos customizados não deixa card vazio pendurado', async () => {
+  it('a aba Extras não deixa card vazio pendurado', async () => {
     const { container } = await renderPage('?tab=campos-customizados');
 
-    expect(screen.getByRole('tab', { name: /Campos customizados/ }).getAttribute('aria-selected')).toBe('true');
+    expect(screen.getByRole('tab', { name: /Extras/ }).getAttribute('aria-selected')).toBe('true');
     // O wrapper ".surface-card" das abas de tabela não deve ser montado nesta aba.
     expect(container.querySelector('#agent-tabs-panel .surface-card')).toBeNull();
 
@@ -383,11 +383,11 @@ describe('AgentDetail — abas do agente', () => {
     expect(tableTab.container.querySelector('#agent-tabs-panel .surface-card')).not.toBeNull();
   });
 
-  it('navega para a aba Campos customizados e atualiza a URL', async () => {
+  it('navega para a aba Extras e atualiza a URL', async () => {
     await renderPage();
-    fireEvent.click(screen.getByRole('tab', { name: /Campos customizados/ }));
+    fireEvent.click(screen.getByRole('tab', { name: /Extras/ }));
 
-    expect(screen.getByRole('tab', { name: /Campos customizados/ }).getAttribute('aria-selected')).toBe('true');
+    expect(screen.getByRole('tab', { name: /Extras/ }).getAttribute('aria-selected')).toBe('true');
     expect(screen.getByTestId('location').textContent).toContain('tab=campos-customizados');
   });
 });

@@ -259,7 +259,7 @@ export function CustomFieldCapabilitiesEditor({ value, onChange, scopeType, bind
             <span className="block text-xs text-muted">
               {isAgentScope
                 ? value.allowWebRead
-                  ? 'O campo aparece no card Informações do agente. Sem esta opção, ele aparece apenas na aba Campos customizados.'
+                  ? 'O campo aparece no card Informações do agente. Sem esta opção, ele aparece apenas na aba Extras.'
                   : 'O destaque só tem efeito com "Pode ver" ligado: sem a leitura no portal, o campo não aparece em nenhum card.'
                 : 'O campo aparece antes dos demais.'}
             </span>

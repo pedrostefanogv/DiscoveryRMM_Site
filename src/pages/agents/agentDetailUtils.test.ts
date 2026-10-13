@@ -76,7 +76,7 @@ describe("agentDetailTabFromSlug", () => {
     expect(agentDetailTabFromSlug("rede")).toBe("network");
   });
 
-  it("mantém os slugs legados de inicialização/tarefas apontando para Execução Automática", () => {
+  it("mantém os slugs legados de inicialização/tarefas apontando para Autoruns", () => {
     expect(agentDetailTabFromSlug("inicializacao")).toBe("autostart");
     expect(agentDetailTabFromSlug("tarefas-agendadas")).toBe("autostart");
     expect(agentDetailTabFromSlug("execucao-automatica")).toBe("autostart");
@@ -116,7 +116,7 @@ describe("sub-abas de rede", () => {
 });
 
 /**
- * Sub-abas de "Execução Automática": itens de inicialização e tarefas agendadas
+ * Sub-abas de "Autoruns": itens de inicialização e tarefas agendadas
  * foram unificados numa aba só. Os slugs antigos continuam válidos como deep
  * link e selecionam a sub-aba correspondente.
  */

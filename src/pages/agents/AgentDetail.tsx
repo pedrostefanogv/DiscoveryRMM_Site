@@ -72,7 +72,7 @@ interface AgentTabBadges {
   software?: number;
   printers?: number;
   tickets?: number;
-  /** Total da sub-aba ATIVA de "Execução Automática" (não a soma das duas). */
+  /** Total da sub-aba ATIVA de "Autoruns" (não a soma das duas). */
   autostart?: number;
   /** Quantidade de políticas de automação aplicáveis ao agente. */
   policies?: number;
@@ -86,7 +86,7 @@ interface AgentNetworkBadges {
   openSockets?: number;
 }
 
-/** Contadores das sub-abas de "Execução Automática". */
+/** Contadores das sub-abas de "Autoruns". */
 interface AgentAutostartBadges {
   startupItems?: number;
   scheduledTasks?: number;
@@ -102,9 +102,10 @@ function buildAgentDetailTabs(badges: AgentTabBadges = {}): DetailTab<AgentDetai
     {
       // Visão completa dos campos customizados: o card "Informações" mostra só
       // os destaques (isPinned) de forma resumida; aqui aparece tudo, com tipo,
-      // capacidades, auditoria e edição pelo portal.
+      // capacidades, auditoria e edição pelo portal. Título compacto: "Informações
+      // adicionais".
       id: 'customFields',
-      label: 'Campos customizados',
+      label: 'Extras',
       icon: Tags,
       badge: badges.customFields,
     },
@@ -116,10 +117,12 @@ function buildAgentDetailTabs(badges: AgentTabBadges = {}): DetailTab<AgentDetai
     { id: 'network', label: 'Rede', icon: Network },
     {
       // "Inicialização" e "Tarefas Agendadas" descrevem o mesmo assunto (o que
-      // o host executa sozinho) e ficam agrupadas numa aba só. O contador reflete
-      // a sub-aba ativa (a que abre ao clicar); cada sub-aba mostra o seu total.
+      // o host executa sozinho) e ficam agrupadas numa aba só. O rótulo é
+      // compacto ("Autoruns") para não alargar a barra; o slug da URL segue
+      // "execucao-automatica" (contrato de deep link). O contador reflete a
+      // sub-aba ativa (a que abre ao clicar); cada sub-aba mostra o seu total.
       id: 'autostart',
-      label: 'Execução Automática',
+      label: 'Autoruns',
       icon: Zap,
       badge: badges.autostart,
     },
@@ -129,7 +132,7 @@ function buildAgentDetailTabs(badges: AgentTabBadges = {}): DetailTab<AgentDetai
 }
 
 /**
- * Sub-abas da aba "Execução Automática": itens de inicialização (registro,
+ * Sub-abas da aba "Autoruns": itens de inicialização (registro,
  * pastas Startup e serviços automáticos) e tarefas agendadas do Windows.
  */
 function buildAgentAutostartTabs(badges: AgentAutostartBadges = {}): DetailTab<AgentAutostartView>[] {
@@ -284,7 +287,7 @@ export default function AgentDetail() {
     },
     [setSearchParams],
   );
-  // Sub-aba ativa de "Execução Automática". Os slugs legados (?tab=inicializacao
+  // Sub-aba ativa de "Autoruns". Os slugs legados (?tab=inicializacao
   // e ?tab=tarefas-agendadas) continuam válidos: a aba de topo resolve para
   // "autostart" e o slug também define a sub-aba.
   const activeAutostartView = useMemo(
@@ -353,8 +356,8 @@ export default function AgentDetail() {
   const liveHeartbeat = useAgentHeartbeat(id!);
   const hw = useAgentHardware(id!);
   // Campos customizados visíveis no portal (webRead): alimenta o resumo do card
-  // "Informações" (somente os destacados) e o contador da aba "Campos
-  // customizados". O fetch é o mesmo do card detalhado (chave de cache única).
+  // "Informações" (somente os destacados) e o contador da aba "Informações
+  // adicionais". O fetch é o mesmo do card detalhado (chave de cache única).
   const agentCustomFields = useAgentCustomFieldSchema(id!);
   // Políticas de automação aplicáveis ao agente. O hook fica sempre montado
   // (regras de hooks) e o fetch só liga quando a aba "Políticas" está ativa.

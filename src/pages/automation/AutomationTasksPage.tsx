@@ -29,6 +29,7 @@ import {
 } from "@/api";
 import {
   describeCron,
+  isToastNotificationMode,
   normalizeNotificationMode,
   normalizeToastTiming,
   notificationModeFromTask,
@@ -346,6 +347,7 @@ export default function AutomationTasksPage() {
   const selectedActionType = normalizeActionType(form.actionType);
   const selectedScopeType = normalizeScopeType(form.scopeType);
   const formNotificationMode = normalizeNotificationMode(form.notificationMode);
+  const formIsToast = isToastNotificationMode(formNotificationMode);
   const isPackageAction =
     selectedActionType === AutomationTaskActionType.InstallPackage ||
     selectedActionType === AutomationTaskActionType.UpdatePackage ||
@@ -724,7 +726,15 @@ export default function AutomationTasksPage() {
           if (mode === AutomationNotificationMode.Toast) {
             return (
               <div className="space-y-0.5">
-                <Badge color="accent">Toast</Badge>
+                <Badge color="accent">Toast (agent)</Badge>
+                <p className="text-xs text-muted">{toastTimingLabel(item.toastTiming)}</p>
+              </div>
+            );
+          }
+          if (mode === AutomationNotificationMode.NativeToast) {
+            return (
+              <div className="space-y-0.5">
+                <Badge color="accent">Toast nativo</Badge>
                 <p className="text-xs text-muted">{toastTimingLabel(item.toastTiming)}</p>
               </div>
             );
@@ -1990,12 +2000,13 @@ export default function AutomationTasksPage() {
               options={[
                 { value: String(AutomationNotificationMode.Silent), label: "Silencioso (sem notificação)" },
                 { value: String(AutomationNotificationMode.Prompt), label: "Prompt PSADT (Continuar / Adiar)" },
-                { value: String(AutomationNotificationMode.Toast), label: "Toast simples (sem interação)" },
+                { value: String(AutomationNotificationMode.Toast), label: "Toast na interface do agent (sem interação)" },
+                { value: String(AutomationNotificationMode.NativeToast), label: "Toast nativo do app (igual ao Chat IA)" },
               ]}
               value={form.notificationMode}
               onChange={(e) => setForm((p) => ({ ...p, notificationMode: e.target.value }))}
             />
-            {formNotificationMode === AutomationNotificationMode.Toast && (
+            {formIsToast && (
               <Select
                 label="Quando notificar"
                 options={[
@@ -2016,7 +2027,20 @@ export default function AutomationTasksPage() {
 
           {formNotificationMode === AutomationNotificationMode.Toast && (
             <p className="text-xs text-muted">
-              O toast não exige autorização do usuário: ele apenas informa{" "}
+              O toast aparece na interface do agent e não exige autorização do usuário: ele apenas
+              informa{" "}
+              {form.toastTiming === String(AutomationToastTiming.Before)
+                ? "antes de iniciar a execução"
+                : "após a conclusão da tarefa"}
+              . Se o agent estiver rodando como serviço sem interface, o aviso sai como toast do
+              Windows.
+            </p>
+          )}
+
+          {formNotificationMode === AutomationNotificationMode.NativeToast && (
+            <p className="text-xs text-muted">
+              O toast é uma notificação nativa do sistema (Windows/Action Center), enviada pelo
+              próprio app — o mesmo caminho do Chat IA. Não exige autorização do usuário e informa{" "}
               {form.toastTiming === String(AutomationToastTiming.Before)
                 ? "antes de iniciar a execução"
                 : "após a conclusão da tarefa"}
@@ -2445,9 +2469,16 @@ export default function AutomationTasksPage() {
                     </div>
                   ) : detailNotificationMode === AutomationNotificationMode.Toast ? (
                     <div className="space-y-1">
-                      <p className="text-sm text-foreground">Toast simples (PSADT)</p>
+                      <p className="text-sm text-foreground">Toast na interface do agent</p>
                       <p className="text-xs text-muted">
                         {toastTimingLabel(d.toastTiming)} · sem interação do usuário
+                      </p>
+                    </div>
+                  ) : detailNotificationMode === AutomationNotificationMode.NativeToast ? (
+                    <div className="space-y-1">
+                      <p className="text-sm text-foreground">Toast nativo do app (igual ao Chat IA)</p>
+                      <p className="text-xs text-muted">
+                        {toastTimingLabel(d.toastTiming)} · notificação do Windows/Action Center
                       </p>
                     </div>
                   ) : (

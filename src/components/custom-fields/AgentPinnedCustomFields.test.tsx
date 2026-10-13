@@ -59,10 +59,10 @@ describe('AgentPinnedCustomFields', () => {
       />,
     );
 
-    expect(screen.getByText('Campos customizados')).toBeTruthy();
+    expect(screen.getByText('Extras')).toBeTruthy();
     expect(screen.getByText('ID do anydesk:')).toBeTruthy();
     expect(screen.getByText('1602799292')).toBeTruthy();
-    // Campo sem destaque fica fora do card (aparece na aba Campos customizados).
+    // Campo sem destaque fica fora do card (aparece na aba Extras).
     expect(screen.queryByText('TeamViewer ID:')).toBeNull();
     expect(screen.queryByText('999')).toBeNull();
   });
