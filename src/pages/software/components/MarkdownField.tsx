@@ -36,8 +36,9 @@ interface Edit {
 
 /**
  * Envolve a seleção com `before`/`after` (negrito, itálico, código, link).
- * Sem seleção, insere `placeholder` e deixa o cursor em `cursorAtEnd` (fim) ou
- * sobre o placeholder (início) — ex.: no link o usuário digita o texto antes.
+ * Sem seleção, insere `placeholder` e o deixa **selecionado** para o usuário
+ * digitar por cima — antes o cursor ficava apenas ao lado do placeholder e o
+ * texto de exemplo permanecia no resultado (ex.: `**textoNegrito**`).
  */
 function wrapInline(
   text: string,
@@ -46,7 +47,6 @@ function wrapInline(
   before: string,
   after: string,
   placeholder: string,
-  cursorAtEnd = true,
 ): Edit {
   const selected = text.slice(start, end);
   const hasSelection = selected.length > 0;
@@ -54,20 +54,28 @@ function wrapInline(
   const nextValue = text.slice(0, start) + before + body + after + text.slice(end);
   const bodyStart = start + before.length;
   const bodyEnd = bodyStart + body.length;
-  const cursor = hasSelection || cursorAtEnd ? bodyEnd : bodyStart;
-  return { value: nextValue, start: cursor, end: cursor };
+  return { value: nextValue, start: bodyStart, end: bodyEnd };
 }
 
 /** Aplica um prefixo em cada linha da seleção (listas com marcadores/numeradas). */
 function prefixLines(text: string, start: number, end: number, prefix: string): Edit {
-  const selected = text.slice(start, end);
-  const body = selected.length > 0 ? selected : '';
+  const hasSelection = end > start;
+  // Sem seleção o prefixo vai para a LINHA do cursor: inserir no ponto do cursor
+  // gerava markdown quebrado no meio da linha (ex.: "a- bc" em vez de "- abc").
+  const lineStart = hasSelection ? start : text.lastIndexOf('\n', Math.max(0, start - 1)) + 1;
+  let lineEnd = end;
+  if (!hasSelection) {
+    const nextBreak = text.indexOf('\n', start);
+    lineEnd = nextBreak === -1 ? text.length : nextBreak;
+  }
+  const body = text.slice(lineStart, lineEnd);
   const withPrefix = body
     .split('\n')
     .map((line) => (line.length > 0 ? `${prefix}${line}` : prefix.trimEnd()))
     .join('\n');
-  const nextValue = text.slice(0, start) + withPrefix + text.slice(end);
-  return { value: nextValue, start: start + withPrefix.length, end: start + withPrefix.length };
+  const nextValue = text.slice(0, lineStart) + withPrefix + text.slice(lineEnd);
+  const caret = lineStart + withPrefix.length;
+  return { value: nextValue, start: caret, end: caret };
 }
 
 /**
@@ -97,13 +105,20 @@ function blockLines(
 function codeBlock(text: string, start: number, end: number): Edit {
   const selected = text.slice(start, end);
   const fence = selected.includes('```') ? '````' : '```';
-  const body = selected.length > 0 ? `\n${selected}\n` : '\n';
-  const block = `${fence}${body}${fence}`;
+  const hasSelection = selected.length > 0;
+  const inner = hasSelection ? `\n${selected}\n` : '\ncódigo\n';
+  const block = `${fence}${inner}${fence}`;
   const needsLeadingNewline = start > 0 && text[start - 1] !== '\n';
   const prefix = needsLeadingNewline ? '\n' : '';
   const nextValue = text.slice(0, start) + prefix + block + text.slice(end);
   const contentStart = start + prefix.length + fence.length;
-  return { value: nextValue, start: contentStart, end: contentStart + body.length };
+  if (hasSelection) {
+    return { value: nextValue, start: contentStart, end: contentStart + inner.length };
+  }
+  // Sem seleção: seleciona o placeholder "código". Antes o cursor caía sobre a
+  // quebra de linha e digitar colava o texto nas cercas ("```meu código```").
+  const placeholderStart = contentStart + 1;
+  return { value: nextValue, start: placeholderStart, end: placeholderStart + 'código'.length };
 }
 
 /** Título: alterna `#` → `##` → `###` → sem título conforme o prefixo atual. */
@@ -129,7 +144,7 @@ const TOOLBAR: {
   { key: 'heading', label: 'Título', icon: Heading, run: toggleHeading },
   { key: 'bullet-list', label: 'Lista com marcadores', icon: List, run: (t, s, e) => prefixLines(t, s, e, '- ') },
   { key: 'ordered-list', label: 'Lista numerada', icon: ListOrdered, run: (t, s, e) => prefixLines(t, s, e, '1. ') },
-  { key: 'link', label: 'Link', icon: Link2, run: (t, s, e) => wrapInline(t, s, e, '[', '](https://)', 'texto do link', false) },
+  { key: 'link', label: 'Link', icon: Link2, run: (t, s, e) => wrapInline(t, s, e, '[', '](https://)', 'texto do link') },
   { key: 'inline-code', label: 'Código inline', icon: Code, run: (t, s, e) => wrapInline(t, s, e, '`', '`', 'código') },
   { key: 'code-block', label: 'Bloco de código', icon: SquareCode, run: codeBlock },
 ];
