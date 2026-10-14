@@ -88,7 +88,7 @@ export default function TicketChatHistory({ ticketId, agentId, clientId, siteId,
   const end = useEndTicketChat(ticketId);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [lightbox, setLightbox] = useState<{ url: string; fileName: string } | null>(null);
+  const [lightbox, setLightbox] = useState<{ url: string; fileName: string; blob: Blob } | null>(null);
   // Dona do object URL do lightbox: revogado ao trocar de imagem, ao fechar e no
   // unmount — antes o blob ficava vivo ao abrir outra imagem ou sair da aba.
   const lightboxUrlRef = useRef<string | null>(null);
@@ -190,7 +190,7 @@ export default function TicketChatHistory({ ticketId, agentId, clientId, siteId,
       if (lightboxUrlRef.current) URL.revokeObjectURL(lightboxUrlRef.current);
       const url = URL.createObjectURL(blob);
       lightboxUrlRef.current = url;
-      setLightbox({ url, fileName: attachment.fileName });
+      setLightbox({ url, fileName: attachment.fileName, blob });
     } catch {
       toast.error("Não foi possível abrir o anexo.");
     }
@@ -434,6 +434,15 @@ export default function TicketChatHistory({ ticketId, agentId, clientId, siteId,
               src={lightbox.url}
               alt={lightbox.fileName}
               className="max-h-[85vh] max-w-[90vw] rounded-lg border border-border bg-surface"
+              onError={() => {
+                // Arquivo que se diz imagem mas não renderiza (corrompido ou
+                // formato sem suporte): entrega o arquivo em vez de deixar a
+                // tela em branco, como acontecia com o PDF.
+                const pending = lightbox;
+                toast.error("Não foi possível exibir o anexo. Baixando o arquivo…");
+                triggerBlobDownload(pending.blob, pending.fileName);
+                closeLightbox();
+              }}
             />
           </div>
         </div>

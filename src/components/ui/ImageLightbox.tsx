@@ -8,13 +8,19 @@ interface ImageLightboxProps {
   src?: string | null;
   alt?: string;
   onClose: () => void;
+  /**
+   * Chamado quando o navegador NÃO consegue renderizar a imagem (arquivo
+   * corrompido/renomeado). Sem isso o modal fica em branco — o mesmo sintoma do
+   * PDF que ia parar dentro de um `<img>`.
+   */
+  onError?: () => void;
 }
 
 /**
  * Modal de imagem (lightbox) para anexos de conversa: amplia a imagem SEM
  * baixar o arquivo. Fecha com Esc, clique no fundo ou no botão X.
  */
-export function ImageLightbox({ open, src, alt, onClose }: ImageLightboxProps) {
+export function ImageLightbox({ open, src, alt, onClose, onError }: ImageLightboxProps) {
   // onClose via ref: o efeito depende só de "open", senão cada re-render do
   // anexo re-registra o listener e alterna o lock de scroll do body.
   const onCloseRef = useRef(onClose);
@@ -71,6 +77,7 @@ export function ImageLightbox({ open, src, alt, onClose }: ImageLightboxProps) {
       <img
         src={src}
         alt={alt ?? ''}
+        onError={onError}
         className="max-h-[calc(100dvh-4rem)] max-w-[calc(100vw-4rem)] rounded-lg object-contain shadow-2xl"
       />
     </div>,

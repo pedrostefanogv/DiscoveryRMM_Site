@@ -114,7 +114,7 @@ export default function SupportChatPanel({ client, canManage, autoStart = false 
   >([]);
   // Só IMAGEM abre no lightbox: um PDF dentro de <img> não renderiza e o
   // navegador mostra apenas o texto do alt no meio da tela.
-  const [lightbox, setLightbox] = useState<{ url: string; fileName: string } | null>(null);
+  const [lightbox, setLightbox] = useState<{ url: string; fileName: string; blob: Blob } | null>(null);
   // Dona do object URL do lightbox: revogado ao trocar de imagem, ao fechar e no
   // unmount (antes, abrir outra imagem ou fechar a janela com o lightbox aberto
   // deixava o blob vivo).
@@ -343,7 +343,7 @@ export default function SupportChatPanel({ client, canManage, autoStart = false 
       if (lightboxUrlRef.current) URL.revokeObjectURL(lightboxUrlRef.current);
       const url = URL.createObjectURL(blob);
       lightboxUrlRef.current = url;
-      setLightbox({ url, fileName: attachment.fileName });
+      setLightbox({ url, fileName: attachment.fileName, blob });
     } catch {
       toast.error("Não foi possível abrir o anexo.");
     }
@@ -575,6 +575,15 @@ export default function SupportChatPanel({ client, canManage, autoStart = false 
             src={lightbox.url}
             alt={lightbox.fileName}
             className="max-h-[85vh] max-w-[90vw] rounded-lg border border-border bg-surface"
+            onError={() => {
+              // Última rede: um arquivo que se diz imagem mas não renderiza
+              // (corrompido ou formato sem suporte) cairia no MESMO vazio do PDF.
+              // Nesse caso entrega o arquivo em vez de deixar a tela em branco.
+              const pending = lightbox;
+              toast.error("Não foi possível exibir o anexo. Baixando o arquivo…");
+              triggerBlobDownload(pending.blob, pending.fileName);
+              closeLightbox();
+            }}
           />
         </div>
       )}

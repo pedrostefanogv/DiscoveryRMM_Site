@@ -2639,6 +2639,13 @@ function AttachmentPreviewButton({
         src={url}
         alt={attachment.fileName}
         onClose={() => setLightboxOpen(false)}
+        onError={() => {
+          // Arquivo que se diz imagem mas não renderiza (corrompido/renomeado):
+          // entrega o arquivo em vez de deixar o modal em branco.
+          toast.error('Não foi possível exibir o anexo. Baixando o arquivo…');
+          setLightboxOpen(false);
+          download();
+        }}
       />
     </>
   );
