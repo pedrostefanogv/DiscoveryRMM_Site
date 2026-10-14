@@ -942,7 +942,7 @@ export default function ServerConfigurationPage() {
                     O servidor fala com o RustFS por <strong>loopback</strong> usando as chaves do env do servidor
                     (ObjectStorage__AccessKey/__SecretKey/__InternalEndpoint). Os agentes e o navegador NÃO
                     acessam o loopback: eles recebem URLs pré-assinadas com o <strong>Endpoint S3</strong> acima
-                    (URL pública, ex.: https://tngplacas.com.br), e o nginx encaminha /&lt;bucket&gt;/ para o storage
+                    (URL pública, ex.: https://portal.suaempresa.com.br), e o nginx encaminha /&lt;bucket&gt;/ para o storage
                     preservando o Host da assinatura.
                   </p>
                 </div>
@@ -953,7 +953,7 @@ export default function ServerConfigurationPage() {
                   <p className="mt-1 text-[11px] text-muted">
                     Não use <strong>localhost/127.0.0.1</strong> aqui: agentes e navegadores não alcançam o loopback do
                     servidor e o anexo falha. Informe a <strong>URL pública</strong> que os clientes acessam
-                    (ex.: https://tngplacas.com.br) — o caminho do bucket (/&lt;bucket&gt;/) é publicado pelo nginx.
+                    (ex.: https://portal.suaempresa.com.br) — o caminho do bucket (/&lt;bucket&gt;/) é publicado pelo nginx.
                   </p>
                 </div>
               )}

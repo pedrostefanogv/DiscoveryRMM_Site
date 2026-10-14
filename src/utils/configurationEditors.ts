@@ -409,7 +409,7 @@ export const serverEditableFields: EditableField[] = [
     kind: "string",
     group: "storage",
     description:
-      "URL base do servidor S3-compatível (ex.: https://s3.us-east-1.amazonaws.com). Com o RustFS interno ligado, informe aqui a URL PUBLICA do servidor (ex.: https://tngplacas.com.br) — o anexo entra por /<bucket>/. Deixe em branco para desabilitar o armazenamento.",
+      "URL base do servidor S3-compatível (ex.: https://s3.us-east-1.amazonaws.com). Com o RustFS interno ligado, informe aqui a URL PUBLICA do servidor (ex.: https://portal.suaempresa.com.br) — o anexo entra por /<bucket>/. Deixe em branco para desabilitar o armazenamento.",
   },
   {
     key: "objectStorageBucketName",
