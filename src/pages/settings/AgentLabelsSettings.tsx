@@ -1203,7 +1203,7 @@ export default function AgentLabelsSettings() {
 
             {previewResults.length > 0 ? (
               <div className="mt-4 overflow-x-auto rounded-lg border border-border">
-                <table className="min-w-full divide-y divide-white/10 text-sm">
+                <table className="min-w-full divide-y divide-black/15 dark:divide-white/10 text-sm">
                   <thead className="bg-surface-light">
                     <tr>
                       <th className="px-3 py-2 text-left font-medium text-muted-foreground">Agente</th>
@@ -1215,7 +1215,7 @@ export default function AgentLabelsSettings() {
                       <th className="px-3 py-2 text-left font-medium text-muted-foreground">Motivo (condição falsa)</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-white/5">
+                  <tbody className="divide-y divide-black/10 dark:divide-white/5">
                     {previewResults.map(result => (
                       <tr key={result.agentId} className="bg-surface/20">
                         <td className="px-3 py-2 text-foreground">{result.agentName}</td>
@@ -1473,7 +1473,7 @@ export default function AgentLabelsSettings() {
 
             {previewResults.length > 0 ? (
               <div className="mt-4 overflow-x-auto rounded-lg border border-border">
-                <table className="min-w-full divide-y divide-white/10 text-sm">
+                <table className="min-w-full divide-y divide-black/15 dark:divide-white/10 text-sm">
                   <thead className="bg-surface-light">
                     <tr>
                       <th className="px-3 py-2 text-left font-medium text-muted-foreground">Agente</th>
@@ -1485,7 +1485,7 @@ export default function AgentLabelsSettings() {
                       <th className="px-3 py-2 text-left font-medium text-muted-foreground">Motivo (condição falsa)</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-white/5">
+                  <tbody className="divide-y divide-black/10 dark:divide-white/5">
                     {previewResults.map(result => (
                       <tr key={result.agentId} className="bg-surface/20">
                         <td className="px-3 py-2 text-foreground">{result.agentName}</td>
@@ -1884,7 +1884,7 @@ export default function AgentLabelsSettings() {
 
                 {appliedResults.length > 0 ? (
                   <div className="overflow-x-auto rounded-lg border border-border">
-                    <table className="min-w-full divide-y divide-white/10 text-sm">
+                    <table className="min-w-full divide-y divide-black/15 dark:divide-white/10 text-sm">
                       <thead className="bg-surface-light">
                         <tr>
                           <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Agente</th>
@@ -1893,7 +1893,7 @@ export default function AgentLabelsSettings() {
                           <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Última avaliação</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-white/5">
+                      <tbody className="divide-y divide-black/10 dark:divide-white/5">
                         {appliedResults.map(item => (
                           <tr key={item.agentId} className="bg-surface/20">
                             <td className="px-4 py-2.5 text-foreground font-medium">{item.agentName}</td>
@@ -2027,7 +2027,7 @@ function ExpressionNodeEditor({ node, path, isRoot = false, insideDiskGroup = fa
     const isDisk = node.nodeType === AgentLabelNodeType.DiskGroup;
 
     return (
-      <div className={`space-y-3 rounded-lg border ${nodeAccent ? `${nodeAccent.border} border-t-white/10 border-r-white/10 border-b-white/10` : 'border-border'} bg-surface/40 p-3`}>
+      <div className={`space-y-3 rounded-lg border ${nodeAccent ? `${nodeAccent.border} border-t-black/10 border-r-black/10 border-b-black/10 dark:border-t-white/10 dark:border-r-white/10 dark:border-b-white/10` : 'border-border'} bg-surface/40 p-3`}>
         <div className="flex flex-wrap items-center gap-2">
           {nodeAccent ? <span className={`inline-block h-2 w-2 rounded-full ${nodeAccent.dot} shrink-0`} /> : null}
           <Badge color={isDisk ? 'warning' : 'primary'}>{isDisk ? 'Disco' : 'Grupo'}</Badge>
@@ -2152,7 +2152,7 @@ function ExpressionNodeEditor({ node, path, isRoot = false, insideDiskGroup = fa
   })();
 
     return (
-      <div className={`space-y-3 rounded-lg border ${nodeAccent ? `${nodeAccent.border} border-t-white/10 border-r-white/10 border-b-white/10` : 'border-border'} bg-surface/40 p-3`}>
+      <div className={`space-y-3 rounded-lg border ${nodeAccent ? `${nodeAccent.border} border-t-black/10 border-r-black/10 border-b-black/10 dark:border-t-white/10 dark:border-r-white/10 dark:border-b-white/10` : 'border-border'} bg-surface/40 p-3`}>
         <div className="flex flex-wrap items-center gap-2">
           {nodeAccent ? <span className={`inline-block h-2 w-2 rounded-full ${nodeAccent.dot} shrink-0`} /> : null}
           <Badge color="accent">Condição</Badge>

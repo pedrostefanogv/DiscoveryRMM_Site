@@ -1041,7 +1041,7 @@ export default function AgentList() {
                     <th className="px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted">Ações</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-white/5">
+                <tbody className="divide-y divide-black/10 dark:divide-white/5">
                   {deletedItems.map(agent => {
                     const displayName = agent.displayName ?? agent.hostname;
                     const clientName = clients.data?.find(c => c.id === agent.clientId)?.name ?? '—';

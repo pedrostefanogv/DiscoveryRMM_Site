@@ -83,7 +83,7 @@ export function ApprovalsTab() {
           <div className="flex flex-col items-center py-16 text-muted"><ShieldCheck className="mb-3 h-10 w-10 opacity-30" /><p className="text-sm">Nenhuma regra encontrada para este escopo.</p></div>
         )}
         {query.data && query.data.items.length > 0 && (
-          <div className="divide-y divide-white/5">
+          <div className="divide-y divide-black/10 dark:divide-white/5">
             {query.data.items.map((rule) => (
               <div key={rule.ruleId ?? rule.id} className="flex items-center justify-between px-5 py-3 hover:bg-surface-light transition-colors">
                 <div className="flex-1 min-w-0">

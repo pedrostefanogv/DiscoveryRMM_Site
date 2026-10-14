@@ -30,7 +30,7 @@ export const StatCard = memo(function StatCard({ icon: Icon, label, value, trend
         aria-pressed={active}
         className={`${baseClassName} cursor-pointer text-left transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:bg-surface-light/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${active ? 'border-primary/40 bg-surface-light/80 ring-1 ring-primary/30' : ''}`}
       >
-        <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${styles.bg} ring-1 ring-white/5`}>
+        <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${styles.bg} ring-1 ring-black/10 dark:ring-white/5`}>
           <Icon className={`h-6 w-6 ${styles.icon}`} />
         </div>
         <div className="min-w-0 flex-1">

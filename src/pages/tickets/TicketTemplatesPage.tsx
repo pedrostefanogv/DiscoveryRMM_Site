@@ -140,7 +140,7 @@ export default function TicketTemplatesPage() {
         />
         {templates.isLoading && <Loading />}
         {templates.isError && <ErrorDisplay onRetry={() => templates.refetch()} />}
-        <div className="divide-y divide-white/5">
+        <div className="divide-y divide-black/10 dark:divide-white/5">
           {visibleTemplates.map((t) => {
             const fieldCount = countDefaultFields(t.customFieldDefaultsJson);
             const questionCount = parseTemplateQuestions(t.questionsJson).length;

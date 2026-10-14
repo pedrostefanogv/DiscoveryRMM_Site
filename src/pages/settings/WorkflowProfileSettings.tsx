@@ -100,7 +100,7 @@ export default function WorkflowProfileSettings() {
 
       <Card>
         <CardHeader title="Perfis" subtitle={`${profiles.data?.length ?? 0} perfis`} />
-        <div className="divide-y divide-white/5">
+        <div className="divide-y divide-black/10 dark:divide-white/5">
           {(profiles.data ?? []).map(p => (
             <ProfileRow
               key={p.id}

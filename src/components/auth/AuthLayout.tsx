@@ -31,14 +31,28 @@ function pickRandomOption(options: string[]) {
   return options[Math.floor(Math.random() * options.length)];
 }
 
+// O gradiente de fundo fica ABAIXO das partículas (e mais discreto no tema
+// claro) para não "lavar" o efeito de constelação sobre a tela branca.
+const backgroundGlow = {
+  light:
+    "bg-[radial-gradient(circle_at_top_left,rgba(99,102,241,0.16),transparent_42%),radial-gradient(circle_at_bottom_right,rgba(6,182,212,0.12),transparent_36%)]",
+  dark:
+    "bg-[radial-gradient(circle_at_top_left,rgba(99,102,241,0.28),transparent_42%),radial-gradient(circle_at_bottom_right,rgba(6,182,212,0.18),transparent_36%)]",
+} as const;
+
 export function AuthLayout() {
-  const { branding } = useTheme();
+  const { branding, mode } = useTheme();
   const authCards = useMemo(() => authCardsOptions.map(pickRandomOption), []);
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-background text-foreground">
-      <ParticlesBackground />
-      <div className="absolute inset-0 z-[1] bg-[radial-gradient(circle_at_top_left,rgba(99,102,241,0.28),transparent_42%),radial-gradient(circle_at_bottom_right,rgba(6,182,212,0.18),transparent_36%)]" />
+      <div
+        aria-hidden
+        className={`pointer-events-none absolute inset-0 z-0 ${backgroundGlow[mode] ?? backgroundGlow.dark}`}
+      />
+      <div aria-hidden className="absolute inset-0 z-[1]">
+        <ParticlesBackground />
+      </div>
       
       {/* Theme toggle — fixed top-right */}
       <div className="absolute right-4 top-4 z-20">

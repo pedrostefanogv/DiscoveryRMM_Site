@@ -50,7 +50,7 @@ export default function TicketMacrosPage() {
         <CardHeader title="Macros" subtitle={`${macros.data?.length ?? 0} macro(s)`} />
         {macros.isLoading && <Loading />}
         {macros.isError && <ErrorDisplay onRetry={() => macros.refetch()} />}
-        <div className="divide-y divide-white/5">
+        <div className="divide-y divide-black/10 dark:divide-white/5">
           {(macros.data ?? []).map((m) => (
             <div key={m.id} className="flex items-start gap-3 py-3">
               <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-surface-light">

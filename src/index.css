@@ -247,6 +247,12 @@ select optgroup {
   border-radius: 9999px;
   transition: width 300ms ease;
 }
+/* Track do progress bar precisa de tinta escura no tema claro — branco 10%
+   sobre fundo branco era invisível. */
+:root:not(.dark) .status-bar,
+:root:not(.dark) .status-bar::-webkit-progress-bar {
+  background: rgb(15 23 42 / 0.10);
+}
 .status-bar-success::-webkit-progress-value { background: var(--color-success); }
 .status-bar-success::-moz-progress-bar       { background: var(--color-success); }
 .status-bar-danger::-webkit-progress-value  { background: var(--color-danger); }
@@ -331,4 +337,11 @@ select optgroup {
   transform: translateY(-1px);
   box-shadow: 0 8px 30px rgb(2 6 23 / 0.4), inset 0 1px 0 rgb(255 255 255 / 0.06);
   border-color: rgb(255 255 255 / 0.12);
+}
+
+/* No tema claro a sombra/borda claras do hover davam a impressão de card
+   "sumindo" (borda branca sobre fundo branco). */
+:root:not(.dark) .glass-card:hover {
+  box-shadow: 0 8px 24px rgb(15 23 42 / 0.12), inset 0 1px 0 rgb(255 255 255 / 0.7);
+  border-color: var(--color-border-strong);
 }

@@ -543,7 +543,7 @@ export default function CustomPackageEditorPage() {
 
             {stage.fileName && <p className="mt-1 truncate text-xs text-muted-foreground">{stage.fileName}</p>}
 
-            <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-white/10">
+            <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-black/10 dark:bg-white/10">
               {stage.total > 0 ? (
                 <div
                   className="h-full rounded-full bg-primary transition-[width] duration-200 ease-out"

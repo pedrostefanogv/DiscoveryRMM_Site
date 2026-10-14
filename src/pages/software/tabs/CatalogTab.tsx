@@ -335,7 +335,7 @@ export function CatalogTab() {
         )}
 
         {query.data && query.data.items.length > 0 && viewMode === 'list' && (
-          <div className={`divide-y divide-white/5 transition-opacity ${query.isFetching ? 'opacity-60' : ''}`}>
+          <div className={`divide-y divide-black/10 dark:divide-white/5 transition-opacity ${query.isFetching ? 'opacity-60' : ''}`}>
             {query.data.items.map((pkg) => (
               <div key={pkg.packageId} className="flex items-center gap-4 px-5 py-3 hover:bg-surface-light transition-colors">
                 <PackageIcon url={pkg.icon} homepage={pkg.homepage}
@@ -377,7 +377,7 @@ export function CatalogTab() {
         {query.data && query.data.items.length > 0 && viewMode === 'card' && (
           <div className={`grid grid-cols-1 gap-3 p-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 transition-opacity ${query.isFetching ? 'opacity-60' : ''}`}>
             {query.data.items.map((pkg) => (
-              <div key={pkg.packageId} className="flex flex-col gap-3 rounded-xl border border-border bg-surface-light p-4 transition-colors hover:bg-white/[0.08]">
+              <div key={pkg.packageId} className="flex flex-col gap-3 rounded-xl border border-border bg-surface-light p-4 transition-colors hover:bg-black/[0.05] dark:hover:bg-white/[0.08]">
                 <div className="flex items-start gap-3">
                   <PackageIcon url={pkg.icon} homepage={pkg.homepage}
                     downloadUrl={pkg.installerUrlsByArch ? Object.values(pkg.installerUrlsByArch).find((value) => Boolean(value)) ?? null : null}

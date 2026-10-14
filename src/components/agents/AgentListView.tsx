@@ -59,7 +59,7 @@ export function AgentListView({
             <th className="hidden px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted lg:table-cell">Ping</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-white/5">
+        <tbody className="divide-y divide-black/10 dark:divide-white/5">
           {agents.map(a => {
             const online = isAgentOnlineNow(a, now);
             const lastSeen = getAgentLastSeen(a);

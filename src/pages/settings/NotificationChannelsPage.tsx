@@ -59,7 +59,7 @@ export default function NotificationChannelsPage() {
         <CardHeader title="Canais" subtitle={`${channels.data?.length ?? 0} canal(is)`} />
         {channels.isLoading && <Loading />}
         {channels.isError && <ErrorDisplay onRetry={() => channels.refetch()} />}
-        <div className="divide-y divide-white/5">
+        <div className="divide-y divide-black/10 dark:divide-white/5">
           {(channels.data ?? []).map((c) => (
             <div key={c.id} className="flex items-start gap-3 py-3">
               <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-surface-light">

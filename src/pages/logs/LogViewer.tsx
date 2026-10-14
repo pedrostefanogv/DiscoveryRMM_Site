@@ -645,7 +645,7 @@ export default function LogViewer() {
                 Nenhum log encontrado
               </div>
             ) : (
-              <div className="divide-y divide-white/5">
+              <div className="divide-y divide-black/10 dark:divide-white/5">
                 {allLogs.map(log => (
                   <LogRow
                     key={log.id}

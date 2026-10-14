@@ -185,7 +185,7 @@ export default function DepartmentSettings() {
                 onClick={() => navigate(`/tickets/departments/${department.id}`)}
                 className="group flex w-full items-center gap-4 rounded-xl border border-border bg-surface-light px-4 py-3 text-left transition-colors hover:border-primary/40 hover:bg-surface-hover"
               >
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-surface/60 ring-1 ring-white/10">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-surface/60 ring-1 ring-black/15 dark:ring-white/10">
                   {department.clientId ? (
                     <Building2 className="h-5 w-5 text-accent" />
                   ) : (

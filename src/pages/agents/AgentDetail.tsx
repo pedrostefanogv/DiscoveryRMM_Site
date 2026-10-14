@@ -1683,7 +1683,7 @@ export default function AgentDetail() {
           )}
         >
           <div className="glass-card flex h-full items-center gap-4 rounded-xl border border-border bg-surface p-5">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary/15 ring-1 ring-white/5">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary/15 ring-1 ring-black/10 dark:ring-white/5">
               <Cpu className="h-6 w-6 text-primary" />
             </div>
             <div className="min-w-0 flex-1">
@@ -1892,7 +1892,7 @@ export default function AgentDetail() {
           )}
         >
           <div className="glass-card flex h-full items-center gap-4 rounded-xl border border-border bg-surface p-5">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-success/15 ring-1 ring-white/5">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-success/15 ring-1 ring-black/10 dark:ring-white/5">
               <AppWindow className="h-6 w-6 text-success" />
             </div>
             <div className="min-w-0 flex-1">
