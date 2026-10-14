@@ -132,9 +132,15 @@ function escapeRegExp(value: string): string {
 /** Regex de TODAS as ocorrências do token daquele anexo (com ou sem tamanho). */
 function kbImageTokenPattern(attachmentId: string): RegExp {
   const id = escapeRegExp(attachmentId.toLowerCase());
-  // Grupo 1 = alt; grupo 2 = título opcional (tamanho).
+  // Grupo 1 = alt; grupo 2/3 = título opcional (tamanho) em aspas duplas/simples.
+  // O `[^)\r\n]*` final tolera qualquer sufixo antes do ")" (título malformado
+  // escrito à mão) — sem ele a imagem sumia da contagem e da limpeza de tamanho.
+  //
+  // TODAS as classes evitam \r e \n: um "![" órfão antes do token (sem fechar)
+  // fazia o match atravessar linhas e engolir texto alheio — o replace posterior
+  // apagava prosa do artigo.
   return new RegExp(
-    `!\\[([^\\]]*)\\]\\(\\s*kbimage:\\s*${id}(?:\\s+("[^"]*"|'[^']*'))?\\s*\\)`,
+    `!\\[([^\\]\\r\\n]*)\\]\\(\\s*kbimage:\\s*${id}(?:\\s+(?:"([^"\\r\\n]*)"|'([^'\\r\\n]*)'))?[^)\\r\\n]*\\)`,
     "gi",
   );
 }
@@ -152,7 +158,7 @@ export function kbImageSizeInMarkdown(
   const match = kbImageTokenPattern(attachmentId).exec(markdown);
   if (!match) return null;
 
-  const title = (match[2] ?? "").trim().replace(/^["']|["']$/g, "");
+  const title = String(match[2] ?? match[3] ?? "").trim();
   return normalizeKbImageSize(title);
 }
 
@@ -186,9 +192,9 @@ export function removeKbImageFromMarkdown(
   return markdown
     .replace(
       new RegExp(
-        `^[ \\t]*!\\[[^\\]]*\\]\\(\\s*kbimage:\\s*${escapeRegExp(
+        `^[ \\t]*(?:[-*+]|\\d+\\.)\\s+!\\[[^\\]\\r\\n]*\\]\\(\\s*kbimage:\\s*${escapeRegExp(
           attachmentId.toLowerCase(),
-        )}(?:\\s+(?:"[^"]*"|'[^']*'))?\\s*\\)[ \\t]*(?:\\r?\\n|$)`,
+        )}(?:\\s+(?:"[^"\\r\\n]*"|'[^'\\r\\n]*'))?[^)\\r\\n]*\\)[ \\t]*(?:\\r?\\n|$)`,
         "gim",
       ),
       "",

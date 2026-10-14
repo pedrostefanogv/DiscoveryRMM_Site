@@ -18,6 +18,7 @@ import {
   KB_IMAGE_ACCEPT,
   KB_IMAGE_SIZE_MAX_PX,
   KB_IMAGE_SIZE_PRESETS,
+  kbImageSizeStyle,
   kbUrlTransform,
   normalizeKbImageSize,
   parseKbImageSrc,
@@ -265,7 +266,7 @@ export function MarkdownEditor({
           ),
         }
       : {
-          img: ({ src, alt }: ComponentProps<'img'>) => {
+          img: ({ src, alt, title }: ComponentProps<'img'>) => {
             if (parseKbImageSrc(src)) {
               return (
                 <span className="text-xs text-muted">
@@ -273,7 +274,10 @@ export function MarkdownEditor({
                 </span>
               );
             }
-            return src ? <img src={src} alt={alt ?? ''} /> : null;
+            // Imagem externa: aplica o mesmo tamanho do título por coerência.
+            return src ? (
+              <img src={src} alt={alt ?? ''} style={kbImageSizeStyle(title)} />
+            ) : null;
           },
         };
 
@@ -312,6 +316,16 @@ export function MarkdownEditor({
             max={KB_IMAGE_SIZE_MAX_PX}
             value={customPx}
             onChange={(event) => setCustomPx(event.target.value)}
+            onBlur={() => {
+              // Fora de 1..4000 o valor era descartado em silêncio e a imagem
+              // saía no preset/natural: avisa em vez de enganar.
+              const raw = customPx.trim();
+              if (!raw) return;
+              if (!normalizeKbImageSize(raw)) {
+                toast.error(`Largura inválida: use 1–${KB_IMAGE_SIZE_MAX_PX}px.`);
+                setCustomPx('');
+              }
+            }}
             placeholder="px"
             aria-label="Largura em pixels"
             className="w-20 rounded-lg border border-border bg-background px-2 py-1 text-xs text-foreground"

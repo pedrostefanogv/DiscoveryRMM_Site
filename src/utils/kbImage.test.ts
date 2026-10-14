@@ -61,12 +61,53 @@ describe("kbImage — tamanho no título do token", () => {
     expect(countKbImageOccurrences(natural, GUID)).toBe(2);
   });
 
+  it("tolera título malformado (sufixo antes do parêntese)", () => {
+    const malformed = `![a](kbimage:${GUID} "w=50%" extra)`;
+
+    expect(countKbImageOccurrences(malformed, GUID)).toBe(1);
+    expect(kbImageSizeInMarkdown(malformed, GUID)).toBe("50%");
+    // Reescrever normaliza o token (o lixo do título sai).
+    expect(updateKbImageSizeInMarkdown(malformed, GUID, "25%")).toBe(
+      `![a](kbimage:${GUID} "w=25%")`,
+    );
+    expect(removeKbImageFromMarkdown(malformed, GUID)).not.toContain("kbimage");
+  });
+
+  it("lê o tamanho com aspas simples e ignora valor inválido no título", () => {
+    expect(kbImageSizeInMarkdown(`![a](kbimage:${GUID} 'w=420')`, GUID)).toBe("420");
+    expect(kbImageSizeInMarkdown(`![a](kbimage:${GUID} "w=999%")`, GUID)).toBeNull();
+  });
+
   it("lê o tamanho atual do markdown", () => {
     expect(kbImageSizeInMarkdown(`![a](kbimage:${GUID} "w=75%")`, GUID)).toBe(
       "75%",
     );
     expect(kbImageSizeInMarkdown(`![a](kbimage:${GUID})`, GUID)).toBeNull();
     expect(kbImageSizeInMarkdown("", GUID)).toBeNull();
+  });
+
+  it("token sem fechar NÃO engole texto alheio (regressão de over-match)", () => {
+    // O "![" órfão antes do token fazia o match atravessar linhas e o replace
+    // apagava prosa inteira do artigo (perda silenciosa ao salvar).
+    const content =
+      `Texto ![ com colchete aberto\n\n![print](kbimage:${GUID}) e mais texto\n\nFim.`;
+
+    const removed = removeKbImageFromMarkdown(content, GUID);
+    expect(removed).toContain("com colchete aberto");
+    expect(removed).toContain("e mais texto");
+    expect(removed).toContain("Fim.");
+    expect(countKbImageOccurrences(removed, GUID)).toBe(0);
+
+    const stillThere = `![incompleto\nlinha 2\n![print](kbimage:${GUID}) fim`;
+    expect(removeKbImageFromMarkdown(stillThere, GUID)).toContain("linha 2");
+  });
+
+  it("remove token sozinho em item de lista (bullet não fica vazio)", () => {
+    const content = `- ![a](kbimage:${GUID})\n- outro item`;
+    const removed = removeKbImageFromMarkdown(content, GUID);
+    expect(removed).not.toContain("kbimage");
+    expect(removed).toContain("- outro item");
+    expect(removed).not.toMatch(/^-\s*$/m);
   });
 
   it("remove o token (com ou sem tamanho) sem tocar no resto", () => {

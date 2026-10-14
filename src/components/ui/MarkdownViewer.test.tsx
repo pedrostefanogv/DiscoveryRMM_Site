@@ -35,6 +35,18 @@ describe("MarkdownViewer urlTransform", () => {
     expect(img.getAttribute("src")).toBe("https://storage.local/signed.png");
   });
 
+  it("aplica o tamanho do título no viewer (regressão: title era descartado)", async () => {
+    // O tamanho vive no TÍTULO do markdown: se o MarkdownViewer não repassar
+    // `title` ao componente de imagem, a PÁGINA do artigo mostra a imagem em
+    // tamanho natural enquanto o preview do editor e o agente a mostram pequena.
+    render(
+      <MarkdownViewer source={`![foto](kbimage:${GUID} "w=20%")`} articleId="art-1" />,
+    );
+
+    const img = await screen.findByAltText("foto", {}, { timeout: 5000 });
+    expect((img as HTMLImageElement).style.width).toBe("20%");
+  });
+
   it("continua bloqueando javascript: e mantém links http(s)", async () => {
     render(
       <MarkdownViewer

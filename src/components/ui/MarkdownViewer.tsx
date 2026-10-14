@@ -35,8 +35,15 @@ export const MarkdownViewer = memo(function MarkdownViewer({
     if (!articleId) return undefined;
 
     return {
-      img: ({ src, alt }: ComponentProps<'img'>) => (
-        <KbMarkdownImage articleId={articleId} src={src} alt={alt} />
+      // O TÍTULO carrega o tamanho da imagem ("w=50%"): sem repassá-lo o viewer
+      // mostrava a imagem em tamanho natural mesmo com tamanho definido no editor.
+      img: ({ src, alt, title }: ComponentProps<'img'>) => (
+        <KbMarkdownImage
+          articleId={articleId}
+          src={src}
+          alt={alt}
+          title={title}
+        />
       ),
     };
   }, [articleId]);

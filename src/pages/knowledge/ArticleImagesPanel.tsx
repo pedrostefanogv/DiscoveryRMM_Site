@@ -191,7 +191,9 @@ function ImageRow({
                 </option>
               ))}
               {isCustom && (
-                <option value="__custom__">Personalizado ({currentSize}px)</option>
+                <option value="__custom__">
+                  Personalizado ({currentSize?.endsWith('%') ? currentSize : `${currentSize}px`})
+                </option>
               )}
             </select>
 
@@ -248,9 +250,17 @@ function ImageRow({
           <Button
             variant="ghost"
             size="sm"
-            onClick={() =>
-              onInsert(buildKbImageToken(image.id, image.fileName, currentSize))
-            }
+            onClick={() => {
+              if (
+                occurrencesHere > 0 &&
+                !window.confirm(
+                  `"${image.fileName}" já está neste texto. Inserir de novo (vai duplicar a referência)?`,
+                )
+              ) {
+                return;
+              }
+              onInsert(buildKbImageToken(image.id, image.fileName, currentSize));
+            }}
             title={`Inserir "${image.fileName}" no fim de ${activeLabel}`}
           >
             <ImagePlus className="h-4 w-4" />

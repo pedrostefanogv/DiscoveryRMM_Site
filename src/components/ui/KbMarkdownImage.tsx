@@ -45,6 +45,9 @@ export function KbMarkdownImage({
 
   const [fallbackUrl, setFallbackUrl] = useState<string | null>(null);
   const [fallbackFailed, setFallbackFailed] = useState(false);
+  // A URL pré-assinada pode resolver e AINDA falhar ao carregar (expirou entre o
+  // fetch e o load, CORS/rede): o onError da <img> cai no mesmo fallback.
+  const [imageFailed, setImageFailed] = useState(false);
   // Ref, não state: o efeito de reset precisa rodar antes do de download quando
   // o `src` muda (troca de imagem no mesmo componente).
   const fallbackStarted = useRef(false);
@@ -52,12 +55,20 @@ export function KbMarkdownImage({
 
   useEffect(() => {
     fallbackStarted.current = false;
+    // Troca de imagem no MESMO componente: revoga o blob anterior, senão ele
+    // ficaria vazando até o unmount (a ref é sobrescrita pelo próximo download).
+    if (objectUrlRef.current) {
+      URL.revokeObjectURL(objectUrlRef.current);
+      objectUrlRef.current = null;
+    }
     setFallbackUrl(null);
     setFallbackFailed(false);
+    setImageFailed(false);
   }, [attachmentId]);
 
   useEffect(() => {
-    if (!attachmentId || !isError || fallbackStarted.current) return;
+    if (!attachmentId || fallbackStarted.current) return;
+    if (!isError && !imageFailed) return;
     fallbackStarted.current = true;
 
     let alive = true;
@@ -76,7 +87,7 @@ export function KbMarkdownImage({
     return () => {
       alive = false;
     };
-  }, [articleId, attachmentId, isError]);
+  }, [articleId, attachmentId, isError, imageFailed]);
 
   useEffect(
     () => () => {
@@ -99,12 +110,17 @@ export function KbMarkdownImage({
           loading="lazy"
           style={sizeStyle}
           className="max-w-full rounded-lg"
+          onError={() => {
+            // Falha ao CARREGAR a URL resolvida: tenta o stream autenticado.
+            if (fallbackUrl) setFallbackFailed(true);
+            else setImageFailed(true);
+          }}
         />
       );
     }
 
     // Só considera falha quando o presign E o stream autenticado falharam.
-    if (isError && fallbackFailed) {
+    if (fallbackFailed) {
       return (
         <span
           data-testid="kb-image-error"

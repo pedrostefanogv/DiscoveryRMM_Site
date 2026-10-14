@@ -294,7 +294,10 @@ export default function KnowledgeEditor() {
 
     const walk = (nodes: ArticlePageTreeNode[]) => {
       for (const node of nodes) {
-        if (countKbImageOccurrences(node.content ?? '', attachmentId) > 0) {
+        // Página ATIVA usa o conteúdo em memória: sem isso o painel dizia "não
+        // usada em nenhum texto" logo após "Inserir no texto" numa sub-página.
+        const content = node.id === activePageId ? pageContent : (node.content ?? '');
+        if (countKbImageOccurrences(content, attachmentId) > 0) {
           places.push({ id: node.id, label: node.title || 'Página' });
         }
         walk(node.children ?? []);
