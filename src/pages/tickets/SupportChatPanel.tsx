@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "react-hot-toast";
-import { Paperclip, RefreshCw, Send, Square } from "lucide-react";
+import { Paperclip, RefreshCw, Send, X } from "lucide-react";
 import { apiFetchResponse } from "@/api/client";
 import type { TicketChatAttachment, TicketChatMessage, TicketChatSession } from "@/api/ticket-chat";
 import { Button } from "@/components/ui";
@@ -16,6 +16,7 @@ import {
 } from "@/hooks/useSupportChat";
 import type { SupportChatClient } from "@/hooks/supportChatClient";
 import { useRealtimeStatus } from "@/hooks/useRealtimeStatus";
+import { isImageAttachment, triggerBlobDownload } from "@/utils/chatAttachment";
 import { PopupBlockedError } from "./ticketChatLauncher";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -111,7 +112,13 @@ export default function SupportChatPanel({ client, canManage, autoStart = false 
   const [pendingUploads, setPendingUploads] = useState<
     Array<{ key: string; fileName: string; attachmentId?: string; previewUrl?: string }>
   >([]);
+  // Só IMAGEM abre no lightbox: um PDF dentro de <img> não renderiza e o
+  // navegador mostra apenas o texto do alt no meio da tela.
   const [lightbox, setLightbox] = useState<{ url: string; fileName: string } | null>(null);
+  // Dona do object URL do lightbox: revogado ao trocar de imagem, ao fechar e no
+  // unmount (antes, abrir outra imagem ou fechar a janela com o lightbox aberto
+  // deixava o blob vivo).
+  const lightboxUrlRef = useRef<string | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -184,6 +191,15 @@ export default function SupportChatPanel({ client, canManage, autoStart = false 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ block: "end" });
   }, [messages.length]);
+
+  // Unmount (janela do chat fechada): revoga o blob do lightbox que ainda
+  // estiver aberto.
+  useEffect(() => () => {
+    if (lightboxUrlRef.current) {
+      URL.revokeObjectURL(lightboxUrlRef.current);
+      lightboxUrlRef.current = null;
+    }
+  }, []);
 
   const disabledReason = client.startBlockedReason ?? null;
 
@@ -306,12 +322,27 @@ export default function SupportChatPanel({ client, canManage, autoStart = false 
     }
   }
 
+  /**
+   * Clique no anexo: IMAGEM abre ampliada (lightbox); qualquer outro arquivo
+   * (PDF, log, certificado…) é BAIXADO com o nome original.
+   *
+   * Antes todo anexo ia para o lightbox de `<img>`: no PDF o navegador não tem
+   * o que renderizar e sobrava só o nome do arquivo no centro da tela escura.
+   */
   async function openAttachment(attachment: TicketChatAttachment) {
     try {
       const response = await apiFetchResponse(client.attachmentUrl(sessionId!, attachment.id));
       if (!response.ok) throw new Error("HTTP " + response.status);
       const blob = await response.blob();
+
+      if (!isImageAttachment(attachment.contentType, attachment.fileName)) {
+        triggerBlobDownload(blob, attachment.fileName);
+        return;
+      }
+
+      if (lightboxUrlRef.current) URL.revokeObjectURL(lightboxUrlRef.current);
       const url = URL.createObjectURL(blob);
+      lightboxUrlRef.current = url;
       setLightbox({ url, fileName: attachment.fileName });
     } catch {
       toast.error("Não foi possível abrir o anexo.");
@@ -319,7 +350,10 @@ export default function SupportChatPanel({ client, canManage, autoStart = false 
   }
 
   function closeLightbox() {
-    if (lightbox) URL.revokeObjectURL(lightbox.url);
+    if (lightboxUrlRef.current) {
+      URL.revokeObjectURL(lightboxUrlRef.current);
+      lightboxUrlRef.current = null;
+    }
     setLightbox(null);
   }
 
@@ -377,8 +411,10 @@ export default function SupportChatPanel({ client, canManage, autoStart = false 
             </Button>
           )}
           {sessionForUi?.status === "Active" && canManage && (
-            <Button size="sm" variant="ghost" onClick={handleEnd} disabled={end.isPending}>
-              <Square className="h-4 w-4" /> Encerrar
+            // Botão de verdade (sólido, vermelho): antes era um Button ghost com
+            // ícone de quadrado vazio e parecia um checkbox desmarcado.
+            <Button size="sm" variant="danger" onClick={handleEnd} disabled={end.isPending}>
+              <X className="h-4 w-4" /> Encerrar
             </Button>
           )}
           {canStart && (
@@ -552,6 +588,9 @@ export default function SupportChatPanel({ client, canManage, autoStart = false 
  * A imagem vem do endpoint autenticado do chat (o blob é baixado e vira object
  * URL) — é o que dá o preview ANTES de abrir o lightbox, inclusive para prints
  * enviados pelo usuário. O object URL é revogado no unmount.
+ *
+ * Nos demais tipos o clique BAIXA o arquivo (nome original), nunca abre o
+ * lightbox — é o caso do PDF que só mostrava o nome no centro da tela.
  */
 function MessageAttachmentPreview({
   client,
@@ -564,7 +603,7 @@ function MessageAttachmentPreview({
   attachment: TicketChatAttachment;
   onOpen: (attachment: TicketChatAttachment) => void;
 }) {
-  const isImage = (attachment.contentType ?? "").startsWith("image/");
+  const isImage = isImageAttachment(attachment.contentType, attachment.fileName);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const urlRef = useRef<string | null>(null);
 
@@ -601,7 +640,7 @@ function MessageAttachmentPreview({
       <button
         type="button"
         onClick={() => onOpen(attachment)}
-        title={attachment.fileName}
+        title={attachment.fileName + " (clique para ampliar)"}
         className="overflow-hidden rounded-lg border border-border hover:border-primary/60"
       >
         <img src={previewUrl} alt={attachment.fileName} className="h-24 w-32 object-cover" />
@@ -613,6 +652,7 @@ function MessageAttachmentPreview({
     <button
       type="button"
       onClick={() => onOpen(attachment)}
+      title={attachment.fileName + (isImage ? " (clique para ampliar)" : " (clique para baixar)")}
       className="flex items-center gap-1 rounded-lg border border-border bg-surface-light px-2 py-1 text-xs text-foreground hover:border-primary/60"
     >
       <Paperclip className="h-3 w-3" /> {attachment.fileName}

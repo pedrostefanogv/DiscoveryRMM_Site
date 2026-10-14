@@ -223,13 +223,19 @@ export default function KnowledgeViewer() {
           <Card padding={false} className="overflow-hidden">
             <div className="px-5 py-6 sm:px-7">
               {showHome || !activePage ? (
-                <MarkdownViewer source={article.content || '_Conteudo vazio._'} />
+                <MarkdownViewer
+                  source={article.content || '_Conteudo vazio._'}
+                  articleId={article.id}
+                />
               ) : (
                 <>
                   <h3 className="mb-3 text-lg font-bold text-foreground">
                     {activePage.title}
                   </h3>
-                  <MarkdownViewer source={activePage.content || '_Conteudo vazio._'} />
+                  <MarkdownViewer
+                    source={activePage.content || '_Conteudo vazio._'}
+                    articleId={article.id}
+                  />
                 </>
               )}
             </div>

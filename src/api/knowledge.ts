@@ -1,4 +1,4 @@
-import { api } from "./client";
+import { ApiError, api, apiFetchResponse, parseErrorMessage } from "./client";
 import type {
   ArticleListPage,
   ArticlePage,
@@ -12,7 +12,13 @@ import type {
   KnowledgeArticle,
   KnowledgeListQuery,
   KnowledgeSearchQuery,
+  KbImage,
+  KbImageCompleteUploadRequest,
+  KbImageListItem,
+  KbImageUploadRequest,
+  KbImageUrlResponse,
   LinkTicketKnowledgeRequest,
+  PresignedUploadResponse,
   PublishArticleRequest,
   TicketKnowledgeLinkResponse,
   TicketKnowledgeSuggestQuery,
@@ -21,6 +27,32 @@ import type {
 } from "./types";
 
 const BASE = "/api/v1/knowledge";
+
+/** Base das imagens privadas de um artigo. */
+function imagesBase(articleId: string): string {
+  return `${BASE}/${articleId}/images`;
+}
+
+/**
+ * Baixa o binário da imagem pela API autenticada (Bearer, same-origin).
+ * Fallback de leitura quando a URL pré-assinada não é utilizável.
+ */
+async function downloadImageBlob(
+  articleId: string,
+  attachmentId: string,
+): Promise<Blob> {
+  const response = await apiFetchResponse(
+    `${imagesBase(articleId)}/${attachmentId}`,
+    { method: "GET" },
+  );
+
+  if (!response.ok) {
+    const message = await parseErrorMessage(response);
+    throw new ApiError(response.status, message);
+  }
+
+  return response.blob();
+}
 
 export const knowledgeApi = {
   // GET /knowledge sempre devolve ArticleListPage (listagem unificada,
@@ -76,6 +108,33 @@ export const knowledgeApi = {
 
   getVersion: (id: string, versionNumber: number) =>
     api.get<ArticleVersion>(`${BASE}/${id}/versions/${versionNumber}`),
+
+  // ── Imagens privadas do artigo (upload em 2 passos) ──────────
+  // 1) presign (PUT com TTL 15 min) -> 2) PUT direto no storage ->
+  // 3) complete-upload. A leitura usa URL pré-assinada via getImageUrl; o
+  // download autenticado é o fallback.
+  prepareImageUpload: (articleId: string, data: KbImageUploadRequest) =>
+    api.post<PresignedUploadResponse>(
+      `${imagesBase(articleId)}/presigned-upload`,
+      data,
+    ),
+
+  completeImageUpload: (articleId: string, data: KbImageCompleteUploadRequest) =>
+    api.post<KbImage>(`${imagesBase(articleId)}/complete-upload`, data),
+
+  listImages: (articleId: string) =>
+    api.get<KbImageListItem[]>(imagesBase(articleId)),
+
+  getImageUrl: (articleId: string, attachmentId: string) =>
+    api.get<KbImageUrlResponse>(
+      `${imagesBase(articleId)}/${attachmentId}/url`,
+    ),
+
+  downloadImage: (articleId: string, attachmentId: string) =>
+    downloadImageBlob(articleId, attachmentId),
+
+  deleteImage: (articleId: string, attachmentId: string) =>
+    api.del<void>(`${imagesBase(articleId)}/${attachmentId}`),
 
   chatSearch: (data: KbSearchRequest) =>
     api.post<KbSuggestResult>(`${BASE}/chat-search`, data),

@@ -16,5 +16,6 @@ export { ConfirmDialog } from "./ConfirmDialog";
 export { MetricBar } from "./MetricBar";
 export { AgentHeartbeatCard } from "./AgentHeartbeatCard";
 export { MarkdownEditor } from "./MarkdownEditor";
+export { KbMarkdownImage } from "./KbMarkdownImage";
 export { ErrorBoundary } from "../ErrorBoundary";
 export { ErrorPage } from "../ErrorPage";

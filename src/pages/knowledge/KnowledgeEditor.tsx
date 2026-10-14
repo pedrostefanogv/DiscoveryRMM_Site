@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, FileText, History, Home, Save, Send } from 'lucide-react';
 import {
@@ -11,7 +11,7 @@ import {
   MarkdownEditor,
   Select,
 } from '@/components/ui';
-import { useArticlePages, useClients, useCreateKnowledgeArticle, useCreateArticlePage, useDepartments, useKnowledgeArticle, useKnowledgeArticleVersions, usePublishKnowledgeArticle, useSites, useUpdateArticlePage, useUpdateKnowledgeArticle } from '@/hooks';
+import { useArticlePages, useClients, useCreateKnowledgeArticle, useCreateArticlePage, useDepartments, useKnowledgeArticle, useKnowledgeArticleVersions, usePublishKnowledgeArticle, useSites, useUpdateArticlePage, useUpdateKnowledgeArticle, useUploadArticleImage } from '@/hooks';
 import type { ArticlePageTreeNode, ArticleStatus, ArticleVersion, CreateKnowledgeArticleRequest, PublishArticleRequest, UpdateKnowledgeArticleRequest } from '@/api';
 import toast from 'react-hot-toast';
 import ArticlePagesManager from './ArticlePagesManager';
@@ -90,6 +90,23 @@ export default function KnowledgeEditor() {
   const createMutation = useCreateKnowledgeArticle();
   const updateMutation = useUpdateKnowledgeArticle();
   const publishMutation = usePublishKnowledgeArticle();
+  const uploadImageMutation = useUploadArticleImage(id ?? '');
+  // mutateAsync é estável no react-query v5: evita recriar o handler (e o
+  // despacho interno de commandos do MDEditor) a cada render.
+
+
+  // Delega o envio em 2 passos ao hook. Validação de tipo/tamanho e mensagem de
+  // erro ficam no MarkdownEditor (ponto único, usado por toolbar/colar/soltar) —
+  // repetir aqui gerava toast duplicado.
+  const { mutateAsync: uploadImage } = uploadImageMutation;
+  const handleImageUpload = useCallback(
+    async (file: File): Promise<string | null> => {
+      // Sem id o comando já fica desabilitado; retorno defensivo apenas.
+      if (!id) return null;
+      return await uploadImage(file);
+    },
+    [id, uploadImage],
+  );
 
   useEffect(() => {
     if (!isEdit || !detailQuery.data) return;
@@ -640,6 +657,11 @@ export default function KnowledgeEditor() {
                     value={pageContent}
                     onChange={setPageContent}
                     height={360}
+                    articleId={id}
+                    onImageUpload={id ? handleImageUpload : undefined}
+                    imageDisabledReason={
+                      id ? undefined : 'Salve o artigo como rascunho para anexar imagens.'
+                    }
                   />
                   <div className="flex justify-end gap-2">
                     <Button
@@ -664,6 +686,11 @@ export default function KnowledgeEditor() {
                   value={form.content}
                   onChange={(value) => setField('content', value)}
                   height={460}
+                  articleId={id}
+                  onImageUpload={id ? handleImageUpload : undefined}
+                  imageDisabledReason={
+                    id ? undefined : 'Salve o artigo como rascunho para anexar imagens.'
+                  }
                   hint="Editor avançado com atalhos e toolbar para títulos, listas, links, tabelas e blocos de código."
                 />
               )}

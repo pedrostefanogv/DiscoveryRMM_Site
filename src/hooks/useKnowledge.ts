@@ -1,8 +1,11 @@
+import { useEffect, useRef } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { knowledgeApi } from "@/api";
+import { buildKbImageToken, isPresignedUrlValid } from "@/utils/kbImage";
 import type {
   CreateArticlePageRequest,
   CreateKnowledgeArticleRequest,
+  KbImageListItem,
   KbSearchRequest,
   KnowledgeSearchQuery,
   LinkTicketKnowledgeRequest,
@@ -19,6 +22,9 @@ const KEYS = {
   versions: (id: string) => [...KEYS.all, "versions", id] as const,
   version: (id: string, versionNumber: number) =>
     [...KEYS.all, "version", id, versionNumber] as const,
+  images: (articleId: string) => [...KEYS.all, "images", articleId] as const,
+  imageUrl: (articleId: string, attachmentId: string) =>
+    [...KEYS.all, "image-url", articleId, attachmentId] as const,
   pages: (articleId: string) => [...KEYS.all, "pages", articleId] as const,
   page: (articleId: string, pageId: string) => [...KEYS.all, "page", articleId, pageId] as const,
   search: (params: KnowledgeSearchQuery) =>
@@ -126,6 +132,148 @@ export function useDeleteArticlePage(articleId: string) {
       qc.invalidateQueries({ queryKey: KEYS.pages(articleId) });
     },
   });
+}
+
+// ── Imagens privadas do artigo ────────────────────────────────
+
+/** Lista as imagens registradas no artigo (com URL pré-assinada). */
+export function useArticleImages(articleId: string) {
+  return useQuery({
+    queryKey: KEYS.images(articleId),
+    queryFn: () => knowledgeApi.listImages(articleId),
+    enabled: !!articleId,
+  });
+}
+
+/**
+ * Envia uma imagem em 2 passos e devolve o token Markdown pronto:
+ * presign -> PUT direto na URL absoluta (sem Bearer e sem o client da API)
+ * -> complete-upload.
+ */
+export function useUploadArticleImage(articleId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (file: File): Promise<string> => {
+      const contentType = (file.type || "").toLowerCase();
+
+      const prepared = await knowledgeApi.prepareImageUpload(articleId, {
+        fileName: file.name,
+        contentType,
+        sizeBytes: file.size,
+      });
+
+      // O PUT vai direto no storage: a URL é absoluta e NÃO leva Authorization.
+      const response = await fetch(prepared.uploadUrl, {
+        method: prepared.httpMethod || "PUT",
+        headers: { "Content-Type": contentType },
+        body: file,
+      });
+
+      if (!response.ok) {
+        throw new Error(`Falha no envio da imagem (HTTP ${response.status}).`);
+      }
+
+      const image = await knowledgeApi.completeImageUpload(articleId, {
+        attachmentId: prepared.attachmentId,
+        objectKey: prepared.objectKey,
+        fileName: file.name,
+        contentType,
+        sizeBytes: file.size,
+      });
+
+      return buildKbImageToken(image.id, image.fileName);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: KEYS.images(articleId) });
+    },
+  });
+}
+
+/** Exclui uma imagem do artigo (DELETE /images/{attachmentId}). */
+export function useDeleteArticleImage(articleId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (attachmentId: string) =>
+      knowledgeApi.deleteImage(articleId, attachmentId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: KEYS.images(articleId) });
+    },
+  });
+}
+
+export interface KnowledgeImageUrlState {
+  url: string | null;
+  isLoading: boolean;
+  isError: boolean;
+}
+
+/**
+ * Resolve a URL pré-assinada de leitura de uma imagem privada.
+ *
+ * Usa a URL da lista de imagens em cache quando ainda válida (TTL 4h); se
+ * estiver ausente/expirada, busca em GET /images/{attachmentId}/url. URLs
+ * pré-assinadas nunca são tratadas como cache permanente.
+ */
+export function useKnowledgeImageUrl(
+  articleId: string,
+  attachmentId: string,
+  enabled = true,
+): KnowledgeImageUrlState {
+  const qc = useQueryClient();
+  const active = enabled && !!articleId && !!attachmentId;
+
+  // Leitura do cache da lista sem disparar o fetch dela: a resolução pontual
+  // usa o endpoint de URL. Quando o painel já carregou a lista, aproveitamos.
+  const cachedList = active
+    ? qc.getQueryData<KbImageListItem[]>(KEYS.images(articleId))
+    : undefined;
+  const cachedImage = cachedList?.find((item) => item.id === attachmentId);
+  const cachedUrl =
+    cachedImage && isPresignedUrlValid(cachedImage.urlExpiresAtUtc)
+      ? cachedImage.url
+      : null;
+
+  const query = useQuery({
+    queryKey: KEYS.imageUrl(articleId, attachmentId),
+    queryFn: () => knowledgeApi.getImageUrl(articleId, attachmentId),
+    enabled: active && !cachedUrl,
+    // URL pré-assinada é efêmera: sempre revalida ao montar.
+    staleTime: 0,
+  });
+
+  const fetchedUrl =
+    query.data && isPresignedUrlValid(query.data.expiresAtUtc)
+      ? query.data.url
+      : null;
+
+  // URL expirada com a tela JÁ aberta: o react-query não refaz sozinho só porque
+  // o dado venceu (staleTime 0 revalida em mount/focus), então a imagem ficaria
+  // "indisponível" até o usuário sair e voltar. Refaz uma vez por expiração
+  // diferente (guarda anti-loop caso o servidor devolva a mesma URL).
+  const refetchRef = useRef(query.refetch);
+  refetchRef.current = query.refetch;
+  const refetchedExpiryRef = useRef<string | null>(null);
+  const expiredExpiry =
+    query.data && !isPresignedUrlValid(query.data.expiresAtUtc)
+      ? query.data.expiresAtUtc
+      : null;
+
+  useEffect(() => {
+    if (!active || !expiredExpiry) return;
+    if (refetchedExpiryRef.current === expiredExpiry) return;
+    refetchedExpiryRef.current = expiredExpiry;
+    void refetchRef.current();
+  }, [active, expiredExpiry]);
+
+  const url = cachedUrl ?? fetchedUrl;
+
+  return {
+    url,
+    // Sem URL utilizável, um refetch em andamento (ex.: URL de 4h vencida com a
+    // tela aberta) precisa mostrar placeholder — não "Imagem indisponível".
+    isLoading: active && !cachedUrl && !url && (query.isLoading || query.isFetching),
+    isError: active && !cachedUrl && !url && query.isError,
+  };
 }
 
 export function useKnowledgeArticleVersions(id: string) {

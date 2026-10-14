@@ -1,15 +1,22 @@
 import { lazy, Suspense, type ReactNode } from 'react';
+import type { Components, UrlTransform } from 'react-markdown';
 
 interface LazyMarkdownProps {
   source: string;
   /** Repassa skipHtml do react-markdown (usado no preview de descrições). */
   skipHtml?: boolean;
   fallback?: ReactNode;
+  /** Componentes customizados do react-markdown (ex.: img -> imagem de KB). */
+  components?: Components;
+  /** Transformação de URL (ex.: preservar o esquema kbimage:). */
+  urlTransform?: UrlTransform;
 }
 
 interface MarkdownRendererProps {
   source: string;
   skipHtml?: boolean;
+  components?: Components;
+  urlTransform?: UrlTransform;
 }
 
 /**
@@ -26,9 +33,14 @@ const MarkdownRenderer = lazy(async () => {
     import('remark-gfm'),
   ]);
 
-  function Renderer({ source, skipHtml }: MarkdownRendererProps) {
+  function Renderer({ source, skipHtml, components, urlTransform }: MarkdownRendererProps) {
     return (
-      <ReactMarkdown remarkPlugins={[remarkGfm]} skipHtml={skipHtml}>
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        skipHtml={skipHtml}
+        components={components}
+        urlTransform={urlTransform}
+      >
         {source}
       </ReactMarkdown>
     );
@@ -37,10 +49,21 @@ const MarkdownRenderer = lazy(async () => {
   return { default: Renderer };
 });
 
-export function LazyMarkdown({ source, skipHtml, fallback = null }: LazyMarkdownProps) {
+export function LazyMarkdown({
+  source,
+  skipHtml,
+  fallback = null,
+  components,
+  urlTransform,
+}: LazyMarkdownProps) {
   return (
     <Suspense fallback={fallback}>
-      <MarkdownRenderer source={source} skipHtml={skipHtml} />
+      <MarkdownRenderer
+        source={source}
+        skipHtml={skipHtml}
+        components={components}
+        urlTransform={urlTransform}
+      />
     </Suspense>
   );
 }

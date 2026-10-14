@@ -2514,6 +2514,60 @@ export interface TicketKnowledgeSuggestQuery {
   maxResults?: number;
 }
 
+// ── Imagens privadas dos artigos (Base de Conhecimento) ─────────
+// O Markdown persiste o token ![<alt>](kbimage:<attachmentId>). O binário não
+// tem URL pública: o upload é um PUT pré-assinado (TTL 15 min) e a leitura usa
+// URL pré-assinada de curta duração (TTL 4h) obtida por endpoint autenticado.
+
+/** Body de POST /knowledge/{articleId}/images/presigned-upload. */
+export interface KbImageUploadRequest {
+  fileName: string;
+  contentType: string;
+  sizeBytes: number;
+}
+
+/**
+ * Body de POST /knowledge/{articleId}/images/complete-upload.
+ * Diferente de CompleteUploadRequest (anexos de chamado), não exige uploadedBy:
+ * a autoria da imagem vem do token autenticado.
+ */
+export interface KbImageCompleteUploadRequest {
+  attachmentId: string;
+  objectKey: string;
+  fileName: string;
+  contentType: string;
+  sizeBytes: number;
+}
+
+/** Imagem registrada no artigo, sem URL de leitura. */
+export interface KbImage {
+  id: string;
+  fileName: string;
+  contentType: string;
+  sizeBytes: number;
+  createdAt: string;
+  /** Autor do upload (a API devolve null quando não houver). */
+  uploadedBy: string | null;
+}
+
+/**
+ * Item de GET /knowledge/{articleId}/images.
+ * url/urlExpiresAtUtc são nulos quando o storage está indisponível no momento da
+ * listagem (a API devolve o item sem URL em vez de derrubar a galeria).
+ */
+export interface KbImageListItem extends KbImage {
+  url: string | null;
+  urlExpiresAtUtc: string | null;
+  /** true quando o token aparece no conteúdo do artigo ou de alguma sub-página. */
+  inUse?: boolean;
+}
+
+/** Resposta de GET /knowledge/{articleId}/images/{attachmentId}/url. */
+export interface KbImageUrlResponse {
+  url: string;
+  expiresAtUtc: string;
+}
+
 export interface KbSearchResult {
   articleId: string;
   articleTitle: string;

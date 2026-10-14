@@ -72,6 +72,7 @@ import type {
 } from '@/api';
 import toast from 'react-hot-toast';
 import { getTicketPriorityMeta } from '@/utils/labels';
+import { triggerBlobDownload, isImageAttachment } from '@/utils/chatAttachment';
 import { upsertCommentPage, type CommentPage } from '@/utils/commentPages';
 import {
   formatRelativeTime,
@@ -1803,18 +1804,6 @@ function compareCommentsAsc(a: CommentItem, b: CommentItem) {
   return byDate !== 0 ? byDate : a.id.localeCompare(b.id);
 }
 
-/** Dispara o download de um blob já autenticado (same-origin). */
-function triggerBlobDownload(blob: Blob, fileName: string) {
-  const objectUrl = URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
-  anchor.href = objectUrl;
-  anchor.download = fileName || 'anexo';
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-  URL.revokeObjectURL(objectUrl);
-}
-
 function CommentsPanel({
   ticketId,
   draftSeed,
@@ -2462,7 +2451,7 @@ function AttachmentThumb({ ticketId, commentId, attachment, size = 'md' }: {
   size?: 'sm' | 'md';
 }) {
   const [url, setUrl] = useState<string | null>(null);
-  const isImage = String(attachment.contentType ?? '').toLowerCase().startsWith('image/');
+  const isImage = isImageAttachment(attachment.contentType, attachment.fileName);
   const dimension = size === 'sm' ? 'h-8 w-8' : 'h-12 w-12';
 
   useEffect(() => {
@@ -2528,7 +2517,7 @@ function AttachmentPreviewButton({
   // URL do blob: criada sob demanda e revogada UMA vez, no unmount.
   const objectUrlRef = useRef<string | null>(null);
   const aliveRef = useRef(true);
-  const isImage = String(attachment.contentType ?? '').toLowerCase().startsWith('image/');
+  const isImage = isImageAttachment(attachment.contentType, attachment.fileName);
 
   // Um único download autenticado serve miniatura, hover e modal. O anexo é do
   // COMENTÁRIO quando há commentId; senão, do repositório do chamado.

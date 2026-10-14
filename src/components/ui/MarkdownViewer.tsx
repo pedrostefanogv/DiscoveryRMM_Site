@@ -1,10 +1,19 @@
-import { memo } from 'react';
+import { memo, useMemo, type ComponentProps } from 'react';
+import type { Components } from 'react-markdown';
 import { useTheme } from '@/theme/ThemeContext';
+import { kbUrlTransform } from '@/utils/kbImage';
+import { KbMarkdownImage } from './KbMarkdownImage';
 import { LazyMarkdown } from './LazyMarkdown';
 
 interface MarkdownViewerProps {
   source: string;
   className?: string;
+  /**
+   * Quando presente, resolve imagens privadas `kbimage:` do artigo através da
+   * API. Sem articleId o comportamento é idêntico ao anterior (tickets, loja,
+   * relatórios continuam usando apenas URLs normais).
+   */
+  articleId?: string;
 }
 
 /**
@@ -13,8 +22,24 @@ interface MarkdownViewerProps {
  * @uiw/react-md-editor (1.2 MB) só é carregado sob demanda no editor.
  * Segue o tema claro/escuro do projeto (como o editor).
  */
-export const MarkdownViewer = memo(function MarkdownViewer({ source, className }: MarkdownViewerProps) {
+export const MarkdownViewer = memo(function MarkdownViewer({
+  source,
+  className,
+  articleId,
+}: MarkdownViewerProps) {
   const { mode } = useTheme();
+
+  // O defaultUrlTransform do react-markdown APAGA o src de kbimage:; sem este
+  // transform as imagens privadas não seriam renderizadas.
+  const imageComponents = useMemo<Components | undefined>(() => {
+    if (!articleId) return undefined;
+
+    return {
+      img: ({ src, alt }: ComponentProps<'img'>) => (
+        <KbMarkdownImage articleId={articleId} src={src} alt={alt} />
+      ),
+    };
+  }, [articleId]);
 
   return (
     <div
@@ -39,7 +64,12 @@ export const MarkdownViewer = memo(function MarkdownViewer({ source, className }
         + (className ?? '')
       }
     >
-      <LazyMarkdown source={source} fallback={<span className="text-xs text-muted">Carregando…</span>} />
+      <LazyMarkdown
+        source={source}
+        components={imageComponents}
+        urlTransform={articleId ? kbUrlTransform : undefined}
+        fallback={<span className="text-xs text-muted">Carregando…</span>}
+      />
     </div>
   );
 });

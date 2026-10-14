@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "react-hot-toast";
-import { ExternalLink, Paperclip, RefreshCw, Square, X } from "lucide-react";
+import { ExternalLink, Paperclip, RefreshCw, X } from "lucide-react";
 import { apiFetchResponse } from "@/api/client";
 import { ticketChatApi, type TicketChatAttachment, type TicketChatMessage, type TicketChatSession } from "@/api/ticket-chat";
 import { Button } from "@/components/ui";
@@ -13,6 +13,7 @@ import {
   useTicketChatMessages,
 } from "@/hooks/useTicketChat";
 import { useTicketChatRealtime } from "@/hooks/useTicketChatRealtime";
+import { isImageAttachment, triggerBlobDownload } from "@/utils/chatAttachment";
 import { openTicketChatWindow, PopupBlockedError } from "./ticketChatLauncher";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -88,6 +89,9 @@ export default function TicketChatHistory({ ticketId, agentId, clientId, siteId,
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [lightbox, setLightbox] = useState<{ url: string; fileName: string } | null>(null);
+  // Dona do object URL do lightbox: revogado ao trocar de imagem, ao fechar e no
+  // unmount — antes o blob ficava vivo ao abrir outra imagem ou sair da aba.
+  const lightboxUrlRef = useRef<string | null>(null);
 
   const currentSession = current.data?.session ?? null;
   const sessions = useMemo(
@@ -100,6 +104,15 @@ export default function TicketChatHistory({ ticketId, agentId, clientId, siteId,
     if (selectedId && sessions.some((session) => session.id === selectedId)) return;
     setSelectedId(currentSession?.id ?? sessions[0]?.id ?? null);
   }, [currentSession?.id, sessions, selectedId]);
+
+  // Unmount (saiu da aba/janela): revoga o blob do lightbox que ainda estiver
+  // aberto.
+  useEffect(() => () => {
+    if (lightboxUrlRef.current) {
+      URL.revokeObjectURL(lightboxUrlRef.current);
+      lightboxUrlRef.current = null;
+    }
+  }, []);
 
   const selected = sessions.find((session) => session.id === selectedId) ?? null;
 
@@ -157,19 +170,37 @@ export default function TicketChatHistory({ ticketId, agentId, clientId, siteId,
     });
   }
 
+  /**
+   * No histórico somente leitura: IMAGEM abre ampliada (lightbox); qualquer
+   * outro arquivo (PDF, log, certificado…) é BAIXADO com o nome original. Antes
+   * todo anexo ia para o lightbox de `<img>` e o PDF não renderizava — sobrava
+   * só o nome do arquivo no centro da tela escura.
+   */
   async function openAttachment(attachment: TicketChatAttachment) {
     try {
       const response = await apiFetchResponse(ticketChatApi.attachmentUrl(ticketId, attachment.id));
       if (!response.ok) throw new Error("HTTP " + response.status);
       const blob = await response.blob();
-      setLightbox({ url: URL.createObjectURL(blob), fileName: attachment.fileName });
+
+      if (!isImageAttachment(attachment.contentType, attachment.fileName)) {
+        triggerBlobDownload(blob, attachment.fileName);
+        return;
+      }
+
+      if (lightboxUrlRef.current) URL.revokeObjectURL(lightboxUrlRef.current);
+      const url = URL.createObjectURL(blob);
+      lightboxUrlRef.current = url;
+      setLightbox({ url, fileName: attachment.fileName });
     } catch {
       toast.error("Não foi possível abrir o anexo.");
     }
   }
 
   function closeLightbox() {
-    if (lightbox) URL.revokeObjectURL(lightbox.url);
+    if (lightboxUrlRef.current) {
+      URL.revokeObjectURL(lightboxUrlRef.current);
+      lightboxUrlRef.current = null;
+    }
     setLightbox(null);
   }
 
@@ -210,8 +241,10 @@ export default function TicketChatHistory({ ticketId, agentId, clientId, siteId,
             </Button>
           )}
           {currentSession?.status === "Active" && canManage && (
-            <Button size="sm" variant="ghost" onClick={() => handleEnd(currentSession.id)} disabled={end.isPending}>
-              <Square className="h-4 w-4" /> Encerrar
+            // Botão de verdade (sólido, vermelho): o Button ghost com ícone de
+            // quadrado vazio parecia um checkbox desmarcado.
+            <Button size="sm" variant="danger" onClick={() => handleEnd(currentSession.id)} disabled={end.isPending}>
+              <X className="h-4 w-4" /> Encerrar
             </Button>
           )}
           {canStart && (
@@ -352,6 +385,12 @@ export default function TicketChatHistory({ ticketId, agentId, clientId, siteId,
                             key={attachment.id}
                             type="button"
                             onClick={() => openAttachment(attachment)}
+                            title={
+                              attachment.fileName +
+                              (isImageAttachment(attachment.contentType, attachment.fileName)
+                                ? " (clique para ampliar)"
+                                : " (clique para baixar)")
+                            }
                             className="flex items-center gap-1 rounded-lg border border-border bg-surface-light px-2 py-1 text-xs text-foreground hover:border-primary/60"
                           >
                             <Paperclip className="h-3 w-3" /> {attachment.fileName}
