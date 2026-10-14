@@ -235,7 +235,7 @@ export default function SoftwareInventory() {
           <Input
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
-              placeholder="Buscar por nome, publisher ou source"
+              placeholder="Buscar por nome, fabricante ou origem (todos os termos)"
           />
           <Button type="submit" variant="secondary" size="sm">
             <Search className="h-4 w-4" />
