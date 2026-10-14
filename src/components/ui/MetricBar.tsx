@@ -62,17 +62,23 @@ export const MetricBar = memo(function MetricBar({
 
   if (compact) {
     return (
-      <div className={`flex items-center gap-2 ${className}`} title={`${label}: ${displayValue}${suffix}`}>
+      <div
+        className={`flex items-center gap-2 ${className}`}
+        title={label ? `${label}: ${displayValue}${suffix}` : `${displayValue}${suffix}`}
+      >
         {icon && <span className="shrink-0 text-muted">{icon}</span>}
-        <span className="shrink-0 text-xs text-muted min-w-[2rem]">{label}</span>
-        <div className={`h-1.5 flex-1 overflow-hidden rounded-full ${styles.bg}`}>
+        {/* Sem rótulo (uso em colunas de tabela) o span vazio reservava 2rem e
+            empurrava a barra: só renderiza quando há texto. */}
+        {label ? <span className="shrink-0 text-xs text-muted min-w-[2rem]">{label}</span> : null}
+        <div className={`h-1.5 min-w-[2.5rem] flex-1 overflow-hidden rounded-full ${styles.bg}`}>
           <div
             className={`h-full rounded-full ${styles.bar} transition-all duration-500`}
             style={{ width: `${barWidth}%` }}
           />
         </div>
         {!hideValue && (
-          <span className={`shrink-0 text-xs font-medium tabular-nums ${styles.text}`}>
+          // Largura fixa: mantém a trilha com o mesmo tamanho em todas as linhas.
+          <span className={`w-8 shrink-0 text-right text-xs font-medium tabular-nums ${styles.text}`}>
             {displayValue}{suffix}
           </span>
         )}

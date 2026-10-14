@@ -53,9 +53,9 @@ export function AgentListView({
               </th>
             )}
             <th className="px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted">Status</th>
-            <th className="hidden px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted 2xl:table-cell">CPU</th>
-            <th className="hidden px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted 2xl:table-cell">RAM</th>
-            <th className="hidden px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted 2xl:table-cell">Leitura</th>
+            <th className="hidden w-[7rem] px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted 2xl:table-cell">CPU</th>
+            <th className="hidden w-[7rem] px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted 2xl:table-cell">RAM</th>
+            <th className="hidden w-[7rem] px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted 2xl:table-cell">Leitura</th>
             <th className="hidden px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted lg:table-cell">Ping</th>
           </tr>
         </thead>
@@ -136,21 +136,21 @@ export function AgentListView({
                 </td>
                 <td className="hidden px-4 py-3 2xl:table-cell">
                   {a.heartbeatMetrics?.cpuPercent != null ? (
-                    <MetricBar label="" value={a.heartbeatMetrics.cpuPercent} compact hideValue />
+                    <MetricBar label="" value={a.heartbeatMetrics.cpuPercent} compact />
                   ) : (
                     <span className="text-xs text-muted">—</span>
                   )}
                 </td>
                 <td className="hidden px-4 py-3 2xl:table-cell">
                   {a.heartbeatMetrics?.memoryPercent != null ? (
-                    <MetricBar label="" value={a.heartbeatMetrics.memoryPercent} compact hideValue />
+                    <MetricBar label="" value={a.heartbeatMetrics.memoryPercent} compact />
                   ) : (
                     <span className="text-xs text-muted">—</span>
                   )}
                 </td>
                 <td className="hidden px-4 py-3 2xl:table-cell">
                   {a.heartbeatMetrics?.diskReadPercent != null ? (
-                    <MetricBar label="" value={a.heartbeatMetrics.diskReadPercent} compact hideValue color="primary" />
+                    <MetricBar label="" value={a.heartbeatMetrics.diskReadPercent} compact color="primary" />
                   ) : (
                     <span className="text-xs text-muted">—</span>
                   )}
