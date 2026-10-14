@@ -196,12 +196,24 @@ export function useUploadArticleImage(articleId: string) {
   });
 }
 
-/** Exclui uma imagem do artigo (DELETE /images/{attachmentId}). */
+/**
+ * Exclui uma imagem do artigo.
+ * `permanent: false` (padrão) = soft delete com janela de 30 dias;
+ * `permanent: true` = remove o objeto do storage agora (sem recuperação).
+ */
 export function useDeleteArticleImage(articleId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (attachmentId: string) =>
-      knowledgeApi.deleteImage(articleId, attachmentId),
+    mutationFn: ({
+      attachmentId,
+      permanent = false,
+    }: {
+      attachmentId: string;
+      permanent?: boolean;
+    }) =>
+      permanent
+        ? knowledgeApi.permanentDeleteImage(articleId, attachmentId)
+        : knowledgeApi.deleteImage(articleId, attachmentId),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: KEYS.images(articleId) });
       // O backend remove a referência do artigo E das sub-páginas: recarrega a

@@ -18,6 +18,7 @@ import {
   updateKbImageSizeInMarkdown,
 } from '@/utils/kbImage';
 import type { ArticlePageTreeNode, ArticleStatus, ArticleVersion, CreateKnowledgeArticleRequest, PublishArticleRequest, UpdateKnowledgeArticleRequest } from '@/api';
+import { useAuthorization } from '@/auth/authorization';
 import toast from 'react-hot-toast';
 import ArticleImagesPanel from './ArticleImagesPanel';
 import ArticlePagesManager from './ArticlePagesManager';
@@ -88,6 +89,16 @@ export default function KnowledgeEditor() {
   // Painel de imagens: lista, tamanho e exclusão (o Markdown não tem largura).
   const imagesQuery = useArticleImages(id ?? '');
   const deleteImageMutation = useDeleteArticleImage(id ?? '');
+  // Exclusão definitiva (hard delete) exige permissão de exclusão na KB; o soft
+  // delete continua disponível para quem tem permissão de edição.
+  const { hasAnyPermission } = useAuthorization();
+  const canDeletePermanently = hasAnyPermission([
+    'KnowledgeBase.Delete',
+    'KnowledgeBase.*',
+    'knowledgebase.delete',
+    'knowledgebase.*',
+    'admin.*',
+  ]);
   const createPageMutation = useCreateArticlePage(id ?? '');
   const updatePageMutation = useUpdateArticlePage(id ?? '');
 
@@ -294,22 +305,59 @@ export default function KnowledgeEditor() {
     return places;
   };
 
+  const stripImageReferences = (attachmentId: string) => {
+    // O backend remove a referência do artigo E das sub-páginas; espelha no
+    // estado local para o editor não manter token órfão.
+    setForm((prev) => ({
+      ...prev,
+      content: removeKbImageFromMarkdown(prev.content, attachmentId),
+    }));
+    setPageContent((content) =>
+      removeKbImageFromMarkdown(content, attachmentId),
+    );
+  };
+
   const handleDeleteImage = (attachmentId: string) => {
-    deleteImageMutation.mutate(attachmentId, {
-      onSuccess: () => {
-        // O backend remove a referência do artigo E das sub-páginas; espelha no
-        // estado local para o editor não manter token órfão.
-        setForm((prev) => ({
-          ...prev,
-          content: removeKbImageFromMarkdown(prev.content, attachmentId),
-        }));
-        setPageContent((content) =>
-          removeKbImageFromMarkdown(content, attachmentId),
-        );
-        toast.success('Imagem excluída.');
+    deleteImageMutation.mutate(
+      { attachmentId },
+      {
+        onSuccess: () => {
+          stripImageReferences(attachmentId);
+          toast.success('Imagem excluída (recuperável por 30 dias).');
+        },
+        onError: () => toast.error('Não foi possível excluir a imagem.'),
       },
-      onError: () => toast.error('Não foi possível excluir a imagem.'),
-    });
+    );
+  };
+
+  const handlePermanentDeleteImage = (attachmentId: string) => {
+    deleteImageMutation.mutate(
+      { attachmentId, permanent: true },
+      {
+        onSuccess: () => {
+          stripImageReferences(attachmentId);
+          toast.success('Imagem excluída definitivamente.');
+        },
+        onError: () =>
+          toast.error('Não foi possível excluir definitivamente a imagem.'),
+      },
+    );
+  };
+
+  // Insere/reinsere o token no FIM do conteúdo aberto: é o único ponto previsível
+  // sem acesso ao cursor do editor (o painel é irmão do MarkdownEditor).
+  const handleInsertImageToken = (token: string) => {
+    const append = (content: string) =>
+      `${content.trimEnd() ? `${content.trimEnd()}\n\n` : ''}${token}\n`;
+
+    if (isEditingPage) {
+      setPageContent(append);
+      toast.success('Imagem inserida no fim desta página — salve para aplicar.');
+      return;
+    }
+
+    setForm((prev) => ({ ...prev, content: append(prev.content) }));
+    toast.success('Imagem inserida no fim do artigo — salve para aplicar.');
   };
 
   const handleOpenImageLocation = (pageId: string | null) => {
@@ -680,13 +728,23 @@ export default function KnowledgeEditor() {
                 isError={imagesQuery.isError}
                 activeContent={activeImageContent}
                 activeLabel={activeImageLabel}
+                canDeletePermanently={canDeletePermanently}
                 locationsOf={imageLocationsOf}
                 onChangeSize={handleChangeImageSize}
                 onOpenLocation={handleOpenImageLocation}
+                onInsert={handleInsertImageToken}
                 onDelete={handleDeleteImage}
+                onPermanentDelete={handlePermanentDeleteImage}
                 deletingId={
-                  deleteImageMutation.isPending
-                    ? deleteImageMutation.variables
+                  deleteImageMutation.isPending &&
+                  !deleteImageMutation.variables?.permanent
+                    ? (deleteImageMutation.variables?.attachmentId ?? null)
+                    : null
+                }
+                permanentDeletingId={
+                  deleteImageMutation.isPending &&
+                  deleteImageMutation.variables?.permanent
+                    ? (deleteImageMutation.variables?.attachmentId ?? null)
                     : null
                 }
                 onRetry={() => void imagesQuery.refetch()}

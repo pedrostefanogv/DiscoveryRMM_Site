@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { ImageOff, MapPin, Trash2 } from 'lucide-react';
+import { Eraser, ImageOff, ImagePlus, MapPin, Trash2 } from 'lucide-react';
 import { Badge, Button, Card, ErrorDisplay, Loading } from '@/components/ui';
 import type { KbImageListItem } from '@/api';
 import {
   KB_IMAGE_SIZE_MAX_PX,
   KB_IMAGE_SIZE_PRESETS,
+  buildKbImageToken,
   countKbImageOccurrences,
   kbImageSizeInMarkdown,
   normalizeKbImageSize,
@@ -24,21 +25,29 @@ interface ArticleImagesPanelProps {
   activeContent: string;
   /** Rótulo do conteúdo aberto ("Home" ou título da sub-página). */
   activeLabel: string;
+  /** Permissão de exclusão (KnowledgeBase.Delete) — controla o hard delete. */
+  canDeletePermanently: boolean;
   locationsOf: (attachmentId: string) => KbImageLocation[];
   onChangeSize: (attachmentId: string, size: string | null) => void;
   onOpenLocation: (pageId: string | null) => void;
+  /** Insere/reinsere o token no conteúdo aberto. */
+  onInsert: (token: string) => void;
   onDelete: (attachmentId: string) => void;
+  onPermanentDelete: (attachmentId: string) => void;
   deletingId?: string | null;
+  permanentDeletingId?: string | null;
   onRetry: () => void;
 }
 
 /**
  * Painel de imagens do artigo (lado do editor).
  *
- * Resolve a lacuna do Markdown: não há atributo de largura, então cada imagem
- * tem um seletor de tamanho que reescreve o token no conteúdo; a alteração vale
- * para o conteúdo ABERTO no editor (home ou sub-página) e é persistida quando o
- * autor salva — por isso o painel mostra em quais páginas a imagem aparece.
+ * Resolve duas lacunas do Markdown:
+ * - não há atributo de largura → cada imagem tem seletor de tamanho que reescreve
+ *   o token no conteúdo ABERTO (a gravação ocorre no "Salvar" normal);
+ * - remover o token do texto NÃO apaga o anexo → a imagem continua listada (com
+ *   as páginas onde aparece) e pode ser reinserida com um clique, ou excluída
+ *   (soft delete de 30 dias) / excluída definitivamente (remove do storage).
  */
 export default function ArticleImagesPanel({
   images,
@@ -46,21 +55,30 @@ export default function ArticleImagesPanel({
   isError,
   activeContent,
   activeLabel,
+  canDeletePermanently,
   locationsOf,
   onChangeSize,
   onOpenLocation,
+  onInsert,
   onDelete,
+  onPermanentDelete,
   deletingId,
+  permanentDeletingId,
   onRetry,
 }: ArticleImagesPanelProps) {
+  const unused = images.filter(
+    (image) => locationsOf(image.id).length === 0,
+  ).length;
+
   return (
     <Card>
-      <div className="mb-3 flex items-center justify-between gap-3">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <h3 className="text-sm font-semibold text-foreground">
           Imagens do artigo
         </h3>
         <span className="text-xs text-muted">
           {images.length} imagem{images.length === 1 ? '' : 's'}
+          {unused > 0 && ` · ${unused} fora do texto`}
         </span>
       </div>
 
@@ -81,11 +99,15 @@ export default function ArticleImagesPanel({
               image={image}
               activeContent={activeContent}
               activeLabel={activeLabel}
+              canDeletePermanently={canDeletePermanently}
               locations={locationsOf(image.id)}
               onChangeSize={onChangeSize}
               onOpenLocation={onOpenLocation}
+              onInsert={onInsert}
               onDelete={onDelete}
+              onPermanentDelete={onPermanentDelete}
               deleting={deletingId === image.id}
+              permanentDeleting={permanentDeletingId === image.id}
             />
           ))}
         </ul>
@@ -98,20 +120,28 @@ function ImageRow({
   image,
   activeContent,
   activeLabel,
+  canDeletePermanently,
   locations,
   onChangeSize,
   onOpenLocation,
+  onInsert,
   onDelete,
+  onPermanentDelete,
   deleting,
+  permanentDeleting,
 }: {
   image: KbImageListItem;
   activeContent: string;
   activeLabel: string;
+  canDeletePermanently: boolean;
   locations: KbImageLocation[];
   onChangeSize: (attachmentId: string, size: string | null) => void;
   onOpenLocation: (pageId: string | null) => void;
+  onInsert: (token: string) => void;
   onDelete: (attachmentId: string) => void;
+  onPermanentDelete: (attachmentId: string) => void;
   deleting: boolean;
+  permanentDeleting: boolean;
 }) {
   const occurrencesHere = countKbImageOccurrences(activeContent, image.id);
   const currentSize = kbImageSizeInMarkdown(activeContent, image.id);
@@ -208,30 +238,71 @@ function ImageRow({
 
           {occurrencesHere === 0 && (
             <p className="text-[11px] text-muted">
-              O tamanho é aplicado no texto aberto ({activeLabel}). Abra uma das
-              páginas acima para ajustar lá.
+              O tamanho é aplicado no texto aberto ({activeLabel}). Use “Inserir
+              no texto” para recolocar a imagem aqui.
             </p>
           )}
         </div>
 
-        <Button
-          variant="ghost"
-          size="sm"
-          loading={deleting}
-          onClick={() => {
-            if (
-              !window.confirm(
-                `Excluir "${image.fileName}"? A referência sai do artigo e das sub-páginas.`,
-              )
-            ) {
-              return;
+        <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() =>
+              onInsert(buildKbImageToken(image.id, image.fileName, currentSize))
             }
-            onDelete(image.id);
-          }}
-          title="Excluir imagem"
-        >
-          <Trash2 className="h-4 w-4" />
-        </Button>
+            title={`Inserir "${image.fileName}" no fim de ${activeLabel}`}
+          >
+            <ImagePlus className="h-4 w-4" />
+          </Button>
+
+          <Button
+            variant="ghost"
+            size="sm"
+            loading={deleting}
+            onClick={() => {
+              if (
+                !window.confirm(
+                  `Excluir "${image.fileName}"? A referência sai do texto e a imagem fica 30 dias recuperável.`,
+                )
+              ) {
+                return;
+              }
+              onDelete(image.id);
+            }}
+            title="Excluir (recuperável por 30 dias)"
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+
+          {canDeletePermanently && (
+            <Button
+              variant="ghost"
+              size="sm"
+              loading={permanentDeleting}
+              onClick={() => {
+                if (
+                  !window.confirm(
+                    `Excluir DEFINITIVAMENTE "${image.fileName}"? O arquivo sai do storage agora e links pré-assinados já emitidos deixam de funcionar. Não há recuperação.`,
+                  )
+                ) {
+                  return;
+                }
+                if (
+                  !window.confirm(
+                    'Confirmar exclusão permanente? Esta ação não pode ser desfeita.',
+                  )
+                ) {
+                  return;
+                }
+                onPermanentDelete(image.id);
+              }}
+              title="Excluir definitivamente (sem recuperação)"
+            >
+              <Eraser className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
       </div>
 
       {occurrencesHere > 1 && (

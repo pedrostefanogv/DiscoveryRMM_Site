@@ -136,6 +136,14 @@ export const knowledgeApi = {
   deleteImage: (articleId: string, attachmentId: string) =>
     api.del<void>(`${imagesBase(articleId)}/${attachmentId}`),
 
+  /**
+   * Exclusão DEFINITIVA: remove o objeto do storage agora (sem os 30 dias do
+   * soft delete) e revoga links pré-assinados vigentes. Exige permissão de
+   * exclusão na KB.
+   */
+  permanentDeleteImage: (articleId: string, attachmentId: string) =>
+    api.del<void>(`${imagesBase(articleId)}/${attachmentId}/permanent`),
+
   chatSearch: (data: KbSearchRequest) =>
     api.post<KbSuggestResult>(`${BASE}/chat-search`, data),
 

@@ -12,7 +12,21 @@ function jsonResponse(body: unknown, status = 200): Response {
 function firstCall(mock: {
   mock: { calls: unknown[][] };
 }): [string, RequestInit | undefined] {
-  const call = mock.mock.calls[0] as unknown as [
+  return callAt(mock, 0);
+}
+
+/** Última chamada do spy (spyOn no mesmo alvo devolve o MESMO mock). */
+function lastCall(mock: {
+  mock: { calls: unknown[][] };
+}): [string, RequestInit | undefined] {
+  return callAt(mock, mock.mock.calls.length - 1);
+}
+
+function callAt(
+  mock: { mock: { calls: unknown[][] } },
+  index: number,
+): [string, RequestInit | undefined] {
+  const call = mock.mock.calls[index] as unknown as [
     RequestInfo | URL,
     RequestInit | undefined,
   ];
@@ -83,6 +97,26 @@ describe("knowledgeApi imagens privadas", () => {
       contentType: "image/png",
       sizeBytes: 1234,
     });
+  });
+
+  it("deleteImage e permanentDeleteImage usam rotas distintas (soft x definitiva)", async () => {
+    const softMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+    await knowledgeApi.deleteImage("art-1", "att-1");
+    const [softUrl, softInit] = firstCall(softMock);
+    expect(softUrl).toContain("/api/v1/knowledge/art-1/images/att-1");
+    expect(softUrl).not.toContain("/permanent");
+    expect(softInit?.method).toBe("DELETE");
+
+    const hardMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+    await knowledgeApi.permanentDeleteImage("art-1", "att-1");
+    const [hardUrl, hardInit] = lastCall(hardMock);
+    // Sufixo distinto: o endpoint permanente exige permissão de exclusão.
+    expect(hardUrl).toContain("/api/v1/knowledge/art-1/images/att-1/permanent");
+    expect(hardInit?.method).toBe("DELETE");
   });
 
   it("downloadImage usa fetch autenticado e devolve o blob", async () => {
