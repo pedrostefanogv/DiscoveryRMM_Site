@@ -466,6 +466,9 @@ export default function AgentScheduledTasksPanel({
     {
       key: 'trigger',
       header: 'Gatilho',
+      sortValue: (task) =>
+        normalizeScheduledTaskTriggerDesc(task.triggerDesc) ||
+        scheduledTaskTriggerLabel(task.triggerType),
       width: '30%',
       render: (task) => {
         const label =

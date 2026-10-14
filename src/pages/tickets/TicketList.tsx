@@ -657,6 +657,7 @@ export default function TicketList() {
     {
       key: 'client',
       header: 'Cliente',
+      sortValue: (ticket) => clientMap.get(ticket.clientId)?.name ?? '',
       render: (ticket) => (
         <span className="text-sm text-muted-foreground">
           {clientMap.get(ticket.clientId)?.name ?? '-'}
@@ -673,6 +674,8 @@ export default function TicketList() {
       // M1: chamados em estado com "desconsiderar SLA" ficam visíveis já na lista.
       key: 'sla',
       header: 'SLA',
+      // Violado (0) < Pausado (1) < Encerrado (2) < sem informação (3).
+      sortValue: (ticket) => (ticket.slaBreached ? 0 : ticket.onHold ? 1 : ticket.closedAt ? 2 : 3),
       render: (ticket) => {
         if (ticket.closedAt) return <span className="text-muted">—</span>;
         if (ticket.onHold) return <Badge color="accent">Pausado</Badge>;

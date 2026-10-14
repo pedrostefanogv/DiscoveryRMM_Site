@@ -96,6 +96,7 @@ export default function SiteList() {
     {
       key: 'site',
       header: 'Site',
+      sortValue: (site) => site.name,
       render: (site) => (
         <div className="flex items-center gap-3">
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-accent/20">
@@ -111,6 +112,7 @@ export default function SiteList() {
     {
       key: 'client',
       header: 'Cliente',
+      sortValue: (site) => site.clientName ?? '',
       render: (site) => (
         <div>
           <p className="text-foreground">{site.clientName}</p>
@@ -134,6 +136,7 @@ export default function SiteList() {
     {
       key: 'agents',
       header: 'Agentes',
+      sortValue: (site) => site.agentCount ?? 0,
       render: (site) => {
         const total = site.agentCount ?? 0;
         const online = site.agentOnlineCount ?? 0;

@@ -83,9 +83,18 @@ export function DataTable<T>({
   flush = false,
   defaultSort,
 }: DataTableProps<T>) {
-  const [sort, setSort] = useState<SortState | null>(
-    defaultSort ? { key: defaultSort.key, direction: defaultSort.direction } : null,
-  );
+  const [sort, setSort] = useState<SortState | null>(() => {
+    if (!defaultSort) return null;
+    // Aceita tanto a `key` da coluna quanto o `sortKey` resolvido: sem isso, um
+    // defaultSort apontando para uma coluna com sortKey diferente era ignorado.
+    const col = columns.find(
+      (c) => c.key === defaultSort.key || (c.sortKey ?? c.key) === defaultSort.key,
+    );
+    return {
+      key: col ? col.sortKey ?? col.key : defaultSort.key,
+      direction: defaultSort.direction,
+    };
+  });
   const [page, setPage] = useState(1);
   const [activeHover, setActiveHover] = useState<{ key: string; item: T } | null>(null);
   const [popoverPosition, setPopoverPosition] = useState<{ top: number; left: number; width: number } | null>(null);
@@ -119,6 +128,22 @@ export function DataTable<T>({
       return sort.direction === 'asc' ? cmp : -cmp;
     });
   }, [data, sort, columns]);
+
+  /**
+   * Uma coluna só oferece ordenação se conseguir resolver um valor: sem
+   * `sortValue`, a chave (`sortKey ?? key`) precisa existir no item. Sem isso,
+   * colunas que renderizam valor derivado (ex.: "Ação" lendo `actionType`)
+   * ficavam clicáveis e não ordenavam nada.
+   */
+  const canSortColumn = useCallback(
+    (col: Column<T>) => {
+      if (col.sortable === false) return false;
+      if (col.sortValue) return true;
+      const key = col.sortKey ?? col.key;
+      return data.some((item) => (item as Record<string, unknown>)[key] !== undefined);
+    },
+    [data],
+  );
 
   const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
   const safePage = Math.min(page, totalPages);
@@ -283,21 +308,24 @@ export function DataTable<T>({
             <caption className="sr-only">Tabela de dados</caption>
             <thead>
               <tr className="border-b border-border bg-surface-light">
-                {columns.map(col => (
-                  <th
-                    key={col.key}
-                    style={col.width ? { width: col.width } : undefined}
-                    className={`whitespace-nowrap px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted ${fixedLayout ? 'overflow-hidden' : ''} ${col.className ?? ''} ${col.sortable !== false ? 'cursor-pointer select-none hover:text-foreground transition-colors' : ''}`}
-                    onClick={() => col.sortable !== false && handleSort(col)}
-                  >
-                    <span className="inline-flex items-center gap-1">
-                      {col.header}
-                      {col.sortable !== false && sort?.key === (col.sortKey ?? col.key) && (
-                        sort.direction === 'asc' ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />
-                      )}
-                    </span>
-                  </th>
-                ))}
+                {columns.map(col => {
+                  const sortable = canSortColumn(col);
+                  const active = sortable && !!sort && sort.key === (col.sortKey ?? col.key) && sort.direction !== null;
+                  return (
+                    <th
+                      key={col.key}
+                      style={col.width ? { width: col.width } : undefined}
+                      aria-sort={active ? (sort?.direction === 'asc' ? 'ascending' : 'descending') : undefined}
+                      className={`whitespace-nowrap px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted ${fixedLayout ? 'overflow-hidden' : ''} ${col.className ?? ''} ${sortable ? 'cursor-pointer select-none hover:text-foreground transition-colors' : ''}`}
+                      onClick={() => sortable && handleSort(col)}
+                    >
+                      <span className="inline-flex items-center gap-1">
+                        {col.header}
+                        {active && (sort?.direction === 'asc' ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />)}
+                      </span>
+                    </th>
+                  );
+                })}
               </tr>
             </thead>
             <tbody onMouseLeave={handleBodyMouseLeave}>

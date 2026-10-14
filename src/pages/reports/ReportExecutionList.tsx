@@ -217,6 +217,7 @@ export default function ReportExecutionList() {
     {
       key: "size",
       header: "Tamanho",
+      sortValue: (e) => e.resultSizeBytes ?? 0,
       render: (e) => (
         <span className="text-muted-foreground">
           {formatBytes(e.resultSizeBytes)}

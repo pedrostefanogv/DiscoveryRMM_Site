@@ -156,12 +156,14 @@ export default function AutomationScriptsPage() {
       {
         key: "type",
         header: "Tipo",
+        sortValue: (item) => scriptTypeLabel(item.scriptType),
         width: "12%",
         render: (item) => <Badge color="primary">{scriptTypeLabel(item.scriptType)}</Badge>,
       },
       {
         key: "scope",
         header: "Escopo",
+        sortValue: (item) => clientLabel(item.clientId),
         width: "18%",
         render: (item) => (
           <span className="block truncate" title={clientLabel(item.clientId)}>
@@ -179,6 +181,7 @@ export default function AutomationScriptsPage() {
       {
         key: "status",
         header: "Status",
+        sortValue: (item) => (item.isActive ? 0 : 1),
         width: "12%",
         render: (item) => (
           <Badge color={item.isActive ? "success" : "slate"}>
@@ -189,6 +192,7 @@ export default function AutomationScriptsPage() {
       {
         key: "updated",
         header: "Atualizado",
+        sortValue: (item) => Date.parse(item.lastUpdatedAt) || 0,
         width: "18%",
         render: (item) => new Date(item.lastUpdatedAt).toLocaleString("pt-BR"),
       },

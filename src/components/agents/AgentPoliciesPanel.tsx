@@ -298,6 +298,7 @@ export default function AgentPoliciesPanel({
       {
         key: 'trigger',
         header: 'Disparo',
+        sortValue: (policy) => triggerSummary(policy),
         width: '20%',
         render: (policy) => {
           const label = triggerSummary(policy);

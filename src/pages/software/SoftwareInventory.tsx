@@ -1,4 +1,4 @@
-﻿import { useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AppWindow, Eye, Search } from "lucide-react";
 import { Card, CardHeader, DataTable, ErrorDisplay, Input, Loading, Select, StatCard, Button, Modal, Badge, type Column } from "@/components/ui";
@@ -143,6 +143,7 @@ export default function SoftwareInventory() {
     {
       key: "lastSeen",
       header: "Última coleta",
+      sortValue: (item) => Date.parse(item.lastCollectedAt ?? item.lastSeenAt ?? "") || 0,
       render: (item) => formatDate(item.lastCollectedAt ?? item.lastSeenAt),
     },
     {

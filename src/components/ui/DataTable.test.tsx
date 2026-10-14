@@ -55,6 +55,38 @@ describe('DataTable — ordenação', () => {
     expect(bodyOrder()[0]).toContain('InstallPackage');
   });
 
+  it('usa sortKey quando a coluna tem nome diferente da propriedade', () => {
+    const cols: Column<Row>[] = [
+      { key: 'pesoKg', header: 'Peso kg', sortKey: 'weight', render: (r) => String(r.weight) },
+    ];
+    render(
+      <DataTable
+        columns={cols}
+        data={rows}
+        keyExtractor={(r) => r.id}
+        showPagination={false}
+        defaultSort={{ key: 'pesoKg', direction: 'asc' }}
+      />,
+    );
+    expect(bodyOrder()).toEqual(['2', '10']);
+  });
+
+  it('não oferece ordenação em coluna sem accessor (evita clique morto)', () => {
+    const cols: Column<Row>[] = [
+      { key: 'label', header: 'Label', render: (r) => r.label, sortValue: (r) => r.label },
+      { key: 'weight', header: 'Peso', render: (r) => String(r.weight), sortValue: (r) => r.weight },
+      { key: 'missing', header: 'Inexistente', render: () => '—' },
+    ];
+    render(<DataTable columns={cols} data={rows} keyExtractor={(r) => r.id} showPagination={false} />);
+
+    const th = screen.getByText('Inexistente').closest('th') as HTMLTableCellElement;
+    expect(th.className).not.toContain('cursor-pointer');
+    expect(th.getAttribute('aria-sort')).toBeNull();
+
+    fireEvent.click(th);
+    expect(bodyOrder()).toEqual(['Dez10—', 'Dois2—']);
+  });
+
   it('clicar no cabeçalho alterna asc → desc → sem ordenação', () => {
     renderTable();
     expect(bodyOrder()).toEqual(['Dez10RunScript', 'Dois2InstallPackage']);
