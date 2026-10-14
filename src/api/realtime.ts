@@ -49,6 +49,9 @@ export interface RealtimeStatsResponse {
   checkedAtUtc?: string;
   application: {
     environment?: string | null;
+    version?: string | null;
+    runtime?: string | null;
+    os?: string | null;
     machineName?: string | null;
     processId?: number | null;
     startedAtUtc?: string | null;
@@ -56,11 +59,20 @@ export interface RealtimeStatsResponse {
     uptimeSeconds?: number | null;
   };
   realtime: {
-    realtimeConnectedAgents?: number;
-    signalrConnectedAgents?: number;
     natsConnected: boolean;
+    /** Indica se ha URL do NATS configurada (a URL em si nao e exposta). */
+    natsConfigured?: boolean;
     natsConnectionState?: string | null;
+    /**
+     * Probe TCP cacheado do backend. null/ausente = "nao verificado" — a UI
+     * NUNCA deve tratar ausencia como "fora do ar".
+     */
     natsTcpReachable?: boolean | null;
+    natsTcpLatencyMs?: number | null;
+    natsTcpCheckedAtUtc?: string | null;
+    natsRttMs?: number | null;
+    natsRttCheckedAtUtc?: string | null;
+    natsLastError?: string | null;
     redisConnected: boolean;
     redisConnectionState?: string | null;
     redisPingMs?: number | null;
@@ -146,15 +158,15 @@ export async function sendAgentCommand(
 }
 
 /**
- * Get realtime status from backend
+ * Endpoint resumido/legado do backend (`GET /api/v1/realtime`).
+ * Contagens de conexoes/fila nao tem fonte barata — use getRealtimeStats.
  */
 export async function getRealtimeStatus() {
   return api.get<{
-    natsConnected: boolean;
-    realtimeConnectedAgents?: number;
-    signalrConnectedAgents?: number;
-    checkedAtUtc: string;
-  }>("/api/v1/realtime/status");
+    activeConnections: number;
+    queuedMessages: number;
+    lastHeartbeat: string | null;
+  }>("/api/v1/realtime");
 }
 
 /**

@@ -12,6 +12,7 @@ import {
   XCircle,
   Clock,
   Zap,
+  Network,
   RefreshCw,
 } from 'lucide-react';
 import type { ComponentType } from 'react';
@@ -19,14 +20,18 @@ import { memo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useIsFetching, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useDashboardSummary } from '@/hooks/useDashboardSummary';
+import { useDashboardRealtime } from '@/hooks/useDashboardRealtime';
 import { P2PMetricsCard } from '@/components/agents/P2PMetricsCard';
+import { ObjectStorageCard } from '@/components/platform/ObjectStorageCard';
 import { StatCard, Card, CardHeader, Badge, Button, SkeletonDashboard, ErrorDisplay } from '@/components/ui';
 import { getRealtimeStats } from '@/api';
 import { useSoftwareInventorySnapshot } from '@/hooks/useSoftwareInventory';
 import type { DashboardWindow } from '@/api/dashboard';
 
 function formatBytes(value?: number | null): string {
-  if (!value || value <= 0) return '\u2014';
+  if (value == null) return '\u2014';
+  // 0 e um valor observavel (nenhum uso), nao "sem dado".
+  if (value <= 0) return '0 B';
   const gb = value / (1024 ** 3);
   if (gb >= 1) return `${gb.toFixed(2)} GB`;
   const mb = value / (1024 ** 2);
@@ -48,7 +53,8 @@ function formatUptime(uptime?: string | number | null): string {
 }
 
 function formatMegabytes(value?: number | null): string {
-  if (!value || value <= 0) return '\u2014';
+  if (value == null) return '\u2014';
+  if (value <= 0) return '0 MB';
   if (value >= 1024) return `${(value / 1024).toFixed(2)} GB`;
   return `${value.toFixed(2)} MB`;
 }
@@ -78,6 +84,32 @@ const WINDOWS: { value: DashboardWindow; label: string }[] = [
   { value: '30d', label: 'Últimos 30 dias' },
 ];
 
+/**
+ * Estado de saude de 3 valores. Ausencia de dado (ainda carregando, campo nao
+ * enviado pelo backend) e "unknown" — JAMAIS "fora do ar". Foi exatamente esse
+ * default que fazia o card mostrar "NATS TCP Unreachable" e "Desconectado"
+ * durante o primeiro render.
+ */
+type HealthState = 'unknown' | 'up' | 'down';
+
+function healthState(value?: boolean | null): HealthState {
+  if (value === true) return 'up';
+  if (value === false) return 'down';
+  return 'unknown';
+}
+
+const HEALTH_BADGE: Record<HealthState, { color: 'success' | 'danger' | 'slate'; label: string }> = {
+  up: { color: 'success', label: 'Conectado' },
+  down: { color: 'danger', label: 'Desconectado' },
+  unknown: { color: 'slate', label: 'verificando…' },
+};
+
+const TCP_BADGE: Record<HealthState, { color: 'success' | 'danger' | 'slate'; label: string }> = {
+  up: { color: 'success', label: 'Reachable' },
+  down: { color: 'danger', label: 'Unreachable' },
+  unknown: { color: 'slate', label: 'não verificado' },
+};
+
 export default function Dashboard() {
   const navigate = useNavigate();
   // "range" (e não "window") para não sombrear o objeto global window.
@@ -85,6 +117,9 @@ export default function Dashboard() {
   const [isManualRefreshing, setIsManualRefreshing] = useState(false);
 
   const dashboard = useDashboardSummary('global', range);
+  // Invalida o summary quando eventos NATS chegam: o dashboard global estava
+  // so com polling de 5 min, enquanto cliente/site ja atualizavam em tempo real.
+  useDashboardRealtime('global', range);
   const softwareSnapshot = useSoftwareInventorySnapshot('global', undefined, undefined, {
     refetchInterval: 300_000,
   });
@@ -171,10 +206,13 @@ export default function Dashboard() {
     alerts.push({ id: 'agents', tone: 'danger', message: agentsError + ' agente(s) em erro', onClick: () => navigate('/agents') });
   }
   if ((logs?.error ?? 0) > 0) {
-    alerts.push({ id: 'logs', tone: 'warning', message: (logs?.error ?? 0) + ' erro(s) de log na janela', onClick: () => navigate('/logs') });
+    alerts.push({ id: 'logs', tone: 'warning', message: (logs?.error ?? 0) + ' erro(s)/fatal de log na janela', onClick: () => navigate('/logs') });
   }
   if (realtime && !realtime.natsConnected) {
     alerts.push({ id: 'nats', tone: 'danger', message: 'NATS desconectado' });
+  }
+  if (realtime?.natsConnected && realtime.natsTcpReachable === false) {
+    alerts.push({ id: 'nats-tcp', tone: 'warning', message: 'NATS: conexão lógica ativa, mas TCP inacessível' });
   }
   if (realtime && !realtime.redisConnected) {
     alerts.push({ id: 'redis', tone: 'warning', message: 'Redis desconectado' });
@@ -189,7 +227,9 @@ export default function Dashboard() {
       : 'bg-warning/20 text-warning hover:bg-warning/30';
 
   // Composição de status dos agentes: usada no gráfico de barras empilhadas e
-  // como denominador das barras individuais (garante soma coerente com os erros).
+  // como denominador das barras individuais.
+  // agentsOffline já vem sem os "stale" (que tem barra própria), garantindo que
+  // a soma dos segmentos bata com o total de agentes.
   const agentSegments = [
     { label: 'Online', value: agentsOnline, bg: 'bg-success' },
     { label: 'Offline', value: agentsOffline, bg: 'bg-danger' },
@@ -208,7 +248,16 @@ export default function Dashboard() {
           <p className="text-sm text-muted">
             Visão geral do ambiente
             {ds?.generatedAtUtc && (
-              <span className="ml-2">· Atualizado em {formatDateTime(ds.generatedAtUtc)}</span>
+              <span
+                className="ml-2"
+                title={
+                  ds.period
+                    ? `Janela: ${formatDateTime(ds.period.fromUtc)} → ${formatDateTime(ds.period.toUtc)} (${ds.period.windowHours}h)`
+                    : undefined
+                }
+              >
+                · Atualizado em {formatDateTime(ds.generatedAtUtc)}
+              </span>
             )}
             {isAnyFetching && <span className="ml-2 text-primary">· atualizando…</span>}
           </p>
@@ -255,21 +304,25 @@ export default function Dashboard() {
         >
           <AlertTriangle className={'h-4 w-4 shrink-0 ' + (hasDangerAlert ? 'text-danger' : 'text-warning')} />
           <span className="font-medium text-foreground">Atenção:</span>
-          {alerts.map((alert) => (
-            <button
-              key={alert.id}
-              type="button"
-              onClick={alert.onClick}
-              disabled={!alert.onClick}
-              className={
-                'rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors ' +
-                alertToneClass(alert.tone) +
-                (alert.onClick ? ' cursor-pointer' : ' cursor-default')
-              }
-            >
-              {alert.message}
-            </button>
-          ))}
+          {alerts.map((alert) =>
+            alert.onClick ? (
+              <button
+                key={alert.id}
+                type="button"
+                onClick={alert.onClick}
+                className={'cursor-pointer rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors ' + alertToneClass(alert.tone)}
+              >
+                {alert.message}
+              </button>
+            ) : (
+              <span
+                key={alert.id}
+                className={'rounded-full px-2.5 py-0.5 text-xs font-medium ' + alertToneClass(alert.tone)}
+              >
+                {alert.message}
+              </span>
+            ),
+          )}
         </div>
       ) : (
         <div role="status" className="flex items-center gap-2 rounded-xl border border-success/30 bg-success/10 px-4 py-2 text-sm text-success">
@@ -378,12 +431,12 @@ export default function Dashboard() {
             </div>
           )}
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <StatusBar label="Online" value={agentsOnline} total={agentSegmentTotal} color="text-success" bg="bg-success" />
-            <StatusBar label="Offline" value={agentsOffline} total={agentSegmentTotal} color="text-danger" bg="bg-danger" />
-            <StatusBar label="Stale" value={agentsStale} total={agentSegmentTotal} color="text-warning" bg="bg-warning" />
-            <StatusBar label="Manutenção" value={agentsMaintenance} total={agentSegmentTotal} color="text-primary" bg="bg-primary" />
+            <StatusBar label="Online" value={agentsOnline} total={agentTotalForBars(ds)} color="text-success" bg="bg-success" />
+            <StatusBar label="Offline" value={agentsOffline} total={agentTotalForBars(ds)} color="text-danger" bg="bg-danger" />
+            <StatusBar label="Stale" value={agentsStale} total={agentTotalForBars(ds)} color="text-warning" bg="bg-warning" />
+            <StatusBar label="Manutenção" value={agentsMaintenance} total={agentTotalForBars(ds)} color="text-primary" bg="bg-primary" />
             {agentsError > 0 && (
-              <StatusBar label="Erro" value={agentsError} total={agentSegmentTotal} color="text-danger" bg="bg-danger" />
+              <StatusBar label="Erro" value={agentsError} total={agentTotalForBars(ds)} color="text-danger" bg="bg-danger" />
             )}
           </div>
         </Card>
@@ -395,9 +448,15 @@ export default function Dashboard() {
           />
           <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
             <MetricTile label="Pending" value={cmds?.pending ?? 0} icon={Clock} />
+            <MetricTile label="Sent" value={cmds?.sent ?? 0} icon={Zap} />
             <MetricTile label="Running" value={cmds?.running ?? 0} icon={Activity} />
             <MetricTile label="Completed" value={cmds?.completed ?? 0} icon={CheckCircle2} />
-            <MetricTile label="Failed" value={cmds?.failed ?? 0} icon={XCircle} />
+            <MetricTile
+              label="Falhas*"
+              value={cmds?.failed ?? 0}
+              icon={XCircle}
+              title="Falhas agregam Failed + Timeout + Canceladas (por isso o total fecha)."
+            />
             <MetricTile label="Total" value={cmds?.total ?? 0} icon={Cpu} />
             <div className="rounded-lg bg-surface-light px-3 py-2 text-sm">
               <div className="flex items-center gap-1.5 text-muted">
@@ -424,6 +483,12 @@ export default function Dashboard() {
             <MetricTile label="Acknowledged" value={auto?.acknowledged ?? 0} icon={Activity} />
             <MetricTile label="Completed" value={auto?.completed ?? 0} icon={CheckCircle2} />
             <MetricTile label="Failed" value={auto?.failed ?? 0} icon={XCircle} />
+            <MetricTile
+              label="Canceladas"
+              value={auto?.cancelled ?? 0}
+              icon={XCircle}
+              title="Canceladas contam no total, mas ficam fora da taxa de sucesso."
+            />
             <MetricTile label="Total" value={auto?.total ?? 0} icon={Cpu} />
             <div className="rounded-lg bg-surface-light px-3 py-2 text-sm">
               <div className="flex items-center gap-1.5 text-muted">
@@ -443,10 +508,10 @@ export default function Dashboard() {
             subtitle={`Entradas na janela • ${rangeLabel}`}
           />
           <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
-            <div className="rounded-lg bg-danger/10 px-3 py-2">
+            <div className="rounded-lg bg-danger/10 px-3 py-2" title="Erros agregam Error + Fatal.">
               <div className="flex items-center gap-1.5">
                 <AlertTriangle className="h-3.5 w-3.5 text-danger" />
-                <span className="text-muted">Erros</span>
+                <span className="text-muted">Erros/Fatal</span>
               </div>
               <p className="mt-1 text-2xl font-bold text-foreground">{logs?.error ?? 0}</p>
             </div>
@@ -457,10 +522,10 @@ export default function Dashboard() {
               </div>
               <p className="mt-1 text-2xl font-bold text-foreground">{logs?.warn ?? 0}</p>
             </div>
-            <div className="rounded-lg bg-surface-light px-3 py-2">
+            <div className="rounded-lg bg-surface-light px-3 py-2" title="Info agregar Info + Debug + Trace.">
               <div className="flex items-center gap-1.5 text-muted">
                 <Activity className="h-3.5 w-3.5" />
-                <span>Info</span>
+                <span>Info/Debug</span>
               </div>
               <p className="mt-1 text-2xl font-bold text-foreground">{logs?.info ?? 0}</p>
             </div>
@@ -491,59 +556,48 @@ export default function Dashboard() {
             </div>
           )}
           <div className="space-y-3 text-sm">
-            <div className="flex items-center justify-between rounded-lg bg-surface-light px-3 py-2">
-              <span className="flex items-center gap-2 text-muted-foreground">
-                <Activity className="h-4 w-4" /> NATS
-              </span>
-              <div className="flex items-center gap-2">
-                <Badge color={realtime?.natsConnected ? 'success' : 'danger'}>
-                  {realtime?.natsConnected ? 'Conectado' : 'Desconectado'}
-                </Badge>
-                {realtime?.natsConnectionState && (
-                  <span className="text-xs text-muted">{realtime.natsConnectionState}</span>
-                )}
-              </div>
-            </div>
+            <HealthRow
+              icon={Activity}
+              label="NATS"
+              state={healthState(realtime?.natsConnected)}
+              detail={realtime?.natsConnectionState}
+            />
 
-            <div className="flex items-center justify-between rounded-lg bg-surface-light px-3 py-2">
-              <span className="flex items-center gap-2 text-muted-foreground">
-                <Database className="h-4 w-4" /> Redis
-              </span>
-              <div className="flex items-center gap-2">
-                <Badge color={realtime?.redisConnected ? 'success' : 'danger'}>
-                  {realtime?.redisConnected ? 'Conectado' : 'Desconectado'}
-                </Badge>
-                {typeof realtime?.redisPingMs === 'number' && (
-                  <span className="text-xs text-muted">{realtime.redisPingMs} ms</span>
-                )}
-              </div>
-            </div>
+            <HealthRow
+              icon={Network}
+              label="NATS TCP"
+              state={healthState(realtime?.natsTcpReachable)}
+              labels={TCP_BADGE}
+              detail={
+                realtime?.natsTcpLatencyMs != null
+                  ? `${realtime.natsTcpLatencyMs} ms`
+                  : realtime?.natsLastError ?? undefined
+              }
+            />
 
-            <div className="flex items-center justify-between rounded-lg bg-surface-light px-3 py-2">
-              <span className="flex items-center gap-2 text-muted-foreground">
-                <Server className="h-4 w-4" /> Banco de dados
-              </span>
-              <div className="flex items-center gap-2">
-                <Badge color={database?.connected ? 'success' : 'danger'}>
-                  {database?.connected ? 'Conectado' : 'Desconectado'}
-                </Badge>
-                {database?.provider && (
-                  <span className="text-xs text-muted">{database.provider}</span>
-                )}
-              </div>
-            </div>
+            <HealthRow
+              icon={Database}
+              label="Redis"
+              state={healthState(realtime?.redisConnected)}
+              detail={typeof realtime?.redisPingMs === 'number' ? `${realtime.redisPingMs} ms` : undefined}
+            />
+
+            <HealthRow
+              icon={Server}
+              label="Banco de dados"
+              state={healthState(database?.connected)}
+              detail={database?.provider ?? undefined}
+            />
 
             <div className="grid grid-cols-2 gap-2 pt-1 text-xs text-muted">
               <div className="rounded-lg bg-surface-light px-3 py-2">
-                <p className="text-muted">Realtime agents</p>
-                <p className="mt-0.5 text-sm font-semibold text-foreground">
-                  {realtime?.realtimeConnectedAgents ?? realtime?.signalrConnectedAgents ?? 0}
-                </p>
+                <p className="text-muted">Agentes online</p>
+                <p className="mt-0.5 text-sm font-semibold text-foreground">{agentsOnline}</p>
               </div>
               <div className="rounded-lg bg-surface-light px-3 py-2">
-                <p className="text-muted">NATS TCP</p>
+                <p className="text-muted">NATS RTT</p>
                 <p className="mt-0.5 text-sm font-semibold text-foreground">
-                  {realtime?.natsTcpReachable ? 'Reachable' : 'Unreachable'}
+                  {typeof realtime?.natsRttMs === 'number' ? `${realtime.natsRttMs} ms` : '\u2014'}
                 </p>
               </div>
             </div>
@@ -580,6 +634,9 @@ export default function Dashboard() {
         </Card>
       </div>
 
+      {/* Linha 5 – Object Storage (S3): métricas passivas + probe cacheado */}
+      <ObjectStorageCard />
+
       {/* Linha 6 – Métricas P2P */}
       <P2PMetricsCard window={range} />
     </div>
@@ -587,6 +644,15 @@ export default function Dashboard() {
 }
 
 // ─── Sub-components ─────────────────────────────────────────────────────────
+
+// Denominador das barras de status: soma dos segmentos (sem duplicar stale).
+// Cai no total de agentes quando os segmentos nao cobrem o total (ex.: erro
+// contado separadamente pelo backend legado).
+function agentTotalForBars(ds?: { agents: { total: number; online: number; offline: number; stale: number; maintenance: number; error: number } }): number {
+  if (!ds) return 0;
+  const sum = ds.agents.online + ds.agents.offline + ds.agents.stale + ds.agents.maintenance + ds.agents.error;
+  return sum > 0 ? sum : ds.agents.total;
+}
 
 // tone maps the bg-* prop to a CSS class suffix (e.g. "bg-success" → "success")
 const BG_TO_TONE: Record<string, string> = {
@@ -627,17 +693,46 @@ const StatusBar = memo(function StatusBar({
   );
 });
 
+const HealthRow = memo(function HealthRow({
+  icon: Icon,
+  label,
+  state,
+  detail,
+  labels = HEALTH_BADGE,
+}: {
+  icon: ComponentType<{ className?: string }>;
+  label: string;
+  state: HealthState;
+  detail?: string | null;
+  labels?: Record<HealthState, { color: 'success' | 'danger' | 'slate'; label: string }>;
+}) {
+  const badge = labels[state];
+  return (
+    <div className="flex items-center justify-between rounded-lg bg-surface-light px-3 py-2">
+      <span className="flex items-center gap-2 text-muted-foreground">
+        <Icon className="h-4 w-4" /> {label}
+      </span>
+      <div className="flex items-center gap-2">
+        <Badge color={badge.color}>{badge.label}</Badge>
+        {detail && <span className="max-w-[16rem] truncate text-xs text-muted">{detail}</span>}
+      </div>
+    </div>
+  );
+});
+
 const MetricTile = memo(function MetricTile({
   label,
   value,
   icon: Icon,
+  title,
 }: {
   label: string;
   value: string | number;
   icon: ComponentType<{ className?: string }>;
+  title?: string;
 }) {
   return (
-    <div className="rounded-lg bg-surface-light px-3 py-2">
+    <div className="rounded-lg bg-surface-light px-3 py-2" title={title}>
       <div className="flex items-center gap-1.5 text-muted">
         <Icon className="h-3.5 w-3.5" />
         <span>{label}</span>

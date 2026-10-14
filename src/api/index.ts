@@ -114,8 +114,10 @@ export type {
   AgentHeartbeat,
   RealtimeStatsResponse,
 } from "./realtime";
-export { dashboardApi } from "./dashboard";
+export { dashboardApi, DASHBOARD_WINDOW_HOURS } from "./dashboard";
 export { p2pApi } from "./p2p";
+export { objectStorageApi } from "./object-storage";
+export type { ObjectStorageTelemetryDto, ObjectStorageTrafficDto, ObjectStorageMode } from "./object-storage";
 export { remoteSessionsApi } from "./remote-sessions";
 export { authApi } from "./auth";
 export { iamApi } from "./iam";

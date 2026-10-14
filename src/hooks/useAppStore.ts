@@ -118,6 +118,19 @@ export function useDeleteCustomPackage() {
   });
 }
 
+export function useDeleteCustomPackageFile() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (packageId: string) =>
+      appStoreApi.deleteCustomPackageFile(packageId),
+    onSuccess: (_data, packageId) =>
+      Promise.all([
+        qc.invalidateQueries({ queryKey: ["appStore", "catalog"] }),
+        qc.invalidateQueries({ queryKey: ["appStore", "package", packageId] }),
+      ]),
+  });
+}
+
 export function useSyncCatalog() {
   const qc = useQueryClient();
   return useMutation({

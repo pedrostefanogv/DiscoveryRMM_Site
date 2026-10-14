@@ -66,3 +66,4 @@ export { useDashboardSummary } from "./useDashboardSummary";
 export { useDashboardRealtime } from "./useDashboardRealtime";
 export type { DashboardRealtimeScope } from "./useDashboardRealtime";
 export { useP2POverview } from "./useP2POverview";
+export { useObjectStorageTelemetry } from "./useObjectStorageTelemetry";

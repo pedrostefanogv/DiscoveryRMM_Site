@@ -14,16 +14,10 @@ import {
 import { useP2POverview } from '@/hooks/useP2POverview';
 import { Badge, Button, Card, CardHeader, Skeleton } from '@/components/ui';
 import type { P2PScope } from '@/api/p2p';
-import type { DashboardWindow } from '@/api/dashboard';
+import { DASHBOARD_WINDOW_HOURS, type DashboardWindow } from '@/api/dashboard';
 
 type Tone = 'slate' | 'primary' | 'success' | 'warning' | 'danger' | 'accent';
 type BadgeColor = Tone;
-
-const WINDOW_HOURS: Record<DashboardWindow, number> = {
-  '24h': 24,
-  '7d': 168,
-  '30d': 720,
-};
 
 function formatBytes(value?: number | null): string {
   if (value == null) return '\u2014';
@@ -96,15 +90,21 @@ interface P2PMetricsCardProps {
 }
 
 export function P2PMetricsCard({ scope = 'global', window = '24h' }: P2PMetricsCardProps) {
-  const overview = useP2POverview({ scope, windowHours: WINDOW_HOURS[window] });
+  const overview = useP2POverview({ scope, windowHours: DASHBOARD_WINDOW_HOURS[window] });
   const kpis = overview.data?.kpis;
 
   const windowLabel = overview.data?.window ?? window;
   const hasTelemetry = Boolean(kpis?.lastTelemetryAtUtc);
   const replicationsStarted = kpis?.replicationsStartedDelta ?? 0;
   const health = healthMeta(overview.data?.health);
+  // Mesmo formato do header do dashboard (dd/mm hh:mm) para evitar leitura ambigua.
   const lastTelemetry = kpis?.lastTelemetryAtUtc
-    ? new Date(kpis.lastTelemetryAtUtc).toLocaleString('pt-BR')
+    ? new Date(kpis.lastTelemetryAtUtc).toLocaleString('pt-BR', {
+        day: '2-digit',
+        month: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+      })
     : null;
 
   const retryButton = (

@@ -1,5 +1,9 @@
 import { api, type UploadProgress } from "./client";
-import { AppInstallationType } from "./types";
+import {
+  AppCommandKind,
+  AppDetectionMode,
+  AppInstallationType,
+} from "./types";
 import type {
   AppApprovalScopeType,
   AppApprovalAuditChangeType,
@@ -69,6 +73,38 @@ function normalizeInstallationType(
   return fallback ?? AppInstallationType.Winget;
 }
 
+/** Coage um valor cru (número ou string numérica) num enum numérico conhecido. */
+function normalizeNumericEnum<T extends number>(
+  value: unknown,
+  values: readonly T[],
+  fallback: T,
+): T {
+  if (value === undefined || value === null || value === "") return fallback;
+  const numeric = typeof value === "number" ? value : Number(value);
+  if (Number.isFinite(numeric) && values.includes(numeric as T)) {
+    return numeric as T;
+  }
+  return fallback;
+}
+
+const APP_COMMAND_KIND_VALUES = [
+  AppCommandKind.Command,
+  AppCommandKind.CmdScript,
+  AppCommandKind.PowerShellScript,
+] as const;
+
+const APP_DETECTION_MODE_VALUES = [
+  AppDetectionMode.None,
+  AppDetectionMode.InventoryLink,
+  AppDetectionMode.Command,
+] as const;
+
+/** String opcional do JSON: `undefined`/vazio viram `null` (nunca `undefined`). */
+function normalizeOptionalText(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  return value.trim().length > 0 ? value.trim() : null;
+}
+
 function normalizeCatalogPackage(
   item: RawCatalogPackage,
   fallbackInstallationType?: AppInstallationType,
@@ -112,6 +148,28 @@ function normalizeCatalogPackage(
     license: item.license ?? null,
     category: item.category ?? null,
     tags: item.tags ?? null,
+    // Tipo de comando e detecção/inventário dos pacotes custom. Registros
+    // antigos (sem os campos) caem em Command/None, como no servidor.
+    installCommandKind: normalizeNumericEnum(
+      item.installCommandKind,
+      APP_COMMAND_KIND_VALUES,
+      AppCommandKind.Command,
+    ),
+    uninstallCommandKind: normalizeNumericEnum(
+      item.uninstallCommandKind,
+      APP_COMMAND_KIND_VALUES,
+      AppCommandKind.Command,
+    ),
+    detectionMode: normalizeNumericEnum(
+      item.detectionMode,
+      APP_DETECTION_MODE_VALUES,
+      AppDetectionMode.None,
+    ),
+    inventorySoftwareId: normalizeOptionalText(item.inventorySoftwareId),
+    detectionName: normalizeOptionalText(item.detectionName),
+    detectionPublisher: normalizeOptionalText(item.detectionPublisher),
+    detectionMinVersion: normalizeOptionalText(item.detectionMinVersion),
+    detectionCommand: normalizeOptionalText(item.detectionCommand),
   };
 }
 
@@ -362,4 +420,11 @@ export const appStoreApi = {
   /** Remove um pacote custom. */
   deleteCustomPackage: (packageId: string) =>
     api.del<void>(`${BASE}/custom/${encodeURIComponent(packageId)}`),
+
+  /**
+   * Apaga APENAS o instalador publicado do pacote custom (metadados continuam).
+   * O objeto é removido do object storage no servidor.
+   */
+  deleteCustomPackageFile: (packageId: string) =>
+    api.del<void>(`${BASE}/custom/${encodeURIComponent(packageId)}/file`),
 };

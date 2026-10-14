@@ -1,10 +1,30 @@
 import { Badge, Button, ErrorDisplay, Loading, Modal } from '@/components/ui';
-import { ExternalLink, FileArchive, FileBox, Hash, Terminal } from 'lucide-react';
+import { ExternalLink, FileArchive, FileBox, Hash, Search, Terminal } from 'lucide-react';
 import { useAppStorePackage } from '@/hooks/useAppStore';
-import { AppInstallationType, type AppStoreCatalogPackage } from '@/api/types';
+import {
+  AppCommandKind, AppDetectionMode, AppInstallationType, type AppStoreCatalogPackage,
+} from '@/api/types';
 import { PackageIcon } from './PackageIcon';
 import { MarkdownDescription } from './MarkdownDescription';
 import { normalizeInstallationType } from '../softwareStoreUtils';
+
+/** Rótulo curto do tipo de comando gravado no pacote custom. */
+function commandKindLabel(kind: number | undefined): string {
+  switch (kind) {
+    case AppCommandKind.CmdScript:
+      return 'Script CMD/BAT';
+    case AppCommandKind.PowerShellScript:
+      return 'Script PowerShell';
+    default:
+      return 'Comando único';
+  }
+}
+
+/** Comando longo (script) exibido com corte para não dominar o modal. */
+function truncateCommand(value: string, max = 400): string {
+  return value.length > max ? `${value.slice(0, max)}…` : value;
+}
+
 
 function formatBytes(value?: number | null): string {
   if (!value || value <= 0) return '—';
@@ -45,6 +65,13 @@ export function PackageDetailsModal({ open, onClose, pkg, installationType }: Pa
         ? 'Chocolatey'
         : 'Custom';
   const isCustomPackage = installationLabel === 'Custom';
+  const detectionMode = details?.detectionMode ?? AppDetectionMode.None;
+  const detectionSummary =
+    detectionMode === AppDetectionMode.InventoryLink
+      ? `Vinculado a ${details?.detectionName?.trim() || 'app do inventário'}`
+      : detectionMode === AppDetectionMode.Command
+        ? 'Comando PowerShell (exit 0 = instalado)'
+        : 'Nenhuma';
 
   return (
     <Modal
@@ -158,15 +185,40 @@ export function PackageDetailsModal({ open, onClose, pkg, installationType }: Pa
             {isCustomPackage && (
               <div className="rounded-xl border border-border bg-surface-light p-3">
                 <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted">
+                  <Search className="h-3.5 w-3.5" /> Detecção
+                </div>
+                <div className="mt-2 space-y-1 text-sm text-foreground">
+                  <p>{detectionSummary}</p>
+                  {detectionMode === AppDetectionMode.InventoryLink && (
+                    <p className="text-xs text-muted-foreground">
+                      {details.detectionPublisher?.trim() || 'Fabricante não informado'}
+                      {details.detectionMinVersion?.trim() ? ` · versão mínima ${details.detectionMinVersion}` : ''}
+                    </p>
+                  )}
+                  {detectionMode === AppDetectionMode.Command && details.detectionCommand?.trim() && (
+                    <pre className="overflow-x-auto whitespace-pre-wrap break-all rounded-lg border border-border/60 bg-black/20 px-2.5 py-2 font-mono text-xs text-foreground">
+                      {truncateCommand(details.detectionCommand)}
+                    </pre>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {isCustomPackage && (
+              <div className="rounded-xl border border-border bg-surface-light p-3">
+                <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted">
                   <Terminal className="h-3.5 w-3.5" /> Comandos
                 </div>
 
                 <div className="mt-2 space-y-2">
                   <div>
-                    <div className="text-xs text-muted">Instalação</div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-xs text-muted">Instalação</span>
+                      <Badge color="slate">{commandKindLabel(details.installCommandKind)}</Badge>
+                    </div>
                     {details.installCommand?.trim() ? (
                       <pre className="mt-1 overflow-x-auto whitespace-pre-wrap break-all rounded-lg border border-border/60 bg-black/20 px-2.5 py-2 font-mono text-xs text-foreground">
-                        {details.installCommand}
+                        {truncateCommand(details.installCommand)}
                       </pre>
                     ) : (
                       <p className="mt-1 text-sm text-muted-foreground">Nenhum comando de instalação registrado.</p>
@@ -174,10 +226,13 @@ export function PackageDetailsModal({ open, onClose, pkg, installationType }: Pa
                   </div>
 
                   <div>
-                    <div className="text-xs text-muted">Desinstalação</div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-xs text-muted">Desinstalação</span>
+                      <Badge color="slate">{commandKindLabel(details.uninstallCommandKind)}</Badge>
+                    </div>
                     {details.uninstallCommand?.trim() ? (
                       <pre className="mt-1 overflow-x-auto whitespace-pre-wrap break-all rounded-lg border border-border/60 bg-black/20 px-2.5 py-2 font-mono text-xs text-foreground">
-                        {details.uninstallCommand}
+                        {truncateCommand(details.uninstallCommand)}
                       </pre>
                     ) : (
                       <p className="mt-1 text-sm text-muted-foreground">Sem comando de desinstalação.</p>

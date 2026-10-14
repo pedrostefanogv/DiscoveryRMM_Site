@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
   Search, ShieldCheck, ChevronLeft, ChevronRight,
@@ -17,7 +18,6 @@ import { PackageIcon } from '../components/PackageIcon';
 import { MarkdownDescription } from '../components/MarkdownDescription';
 import { Highlight } from '../components/Highlight';
 import { ApprovalFormModal } from '../components/ApprovalFormModal';
-import { CustomPackageFormModal } from '../components/CustomPackageFormModal';
 import { PackageDetailsModal } from '../components/PackageDetailsModal';
 import {
   installationTypeOptions, limitOptions, APP_STORE_LAST_SYNC_STORAGE_KEY,
@@ -37,10 +37,10 @@ export function CatalogTab() {
   const [syncConfirmOpen, setSyncConfirmOpen] = useState(false);
   const [syncConfirmValue, setSyncConfirmValue] = useState('');
   const [syncConfirmTouched, setSyncConfirmTouched] = useState(false);
-  const [customFormOpen, setCustomFormOpen] = useState(false);
-  const [editingCustom, setEditingCustom] = useState<AppStoreCatalogPackage | null>(null);
   const [deletingCustom, setDeletingCustom] = useState<AppStoreCatalogPackage | null>(null);
   const deleteCustomPackage = useDeleteCustomPackage();
+  // Cadastro/edição de pacotes custom acontece na tela dedicada (rota própria).
+  const navigate = useNavigate();
   const [lastSyncByType, setLastSyncByType] = useState<
     Partial<Record<AppInstallationType, SyncChocolateyCatalogResponse>>
   >(() => {
@@ -274,7 +274,7 @@ export function CatalogTab() {
           {isCustom && (
             <Button
               variant="primary"
-              onClick={() => { setEditingCustom(null); setCustomFormOpen(true); }}
+              onClick={() => navigate('/software/store/custom/new')}
               title="Cadastrar um novo modelo custom na loja"
             >
               <Plus className="h-4 w-4" /> Novo modelo custom
@@ -326,7 +326,7 @@ export function CatalogTab() {
               <Button className="mt-3" onClick={handleSyncRequest} loading={syncCatalog.isPending}><RefreshCw className="h-4 w-4" /> Sincronizar catálogo agora</Button>
             )}
             {isCustom && (
-              <Button className="mt-3" onClick={() => { setEditingCustom(null); setCustomFormOpen(true); }}>
+              <Button className="mt-3" onClick={() => navigate('/software/store/custom/new')}>
                 <Plus className="h-4 w-4" /> Cadastrar primeiro modelo custom
               </Button>
             )}
@@ -359,7 +359,7 @@ export function CatalogTab() {
                   <Button variant="ghost" size="sm" onClick={() => setDetailsTarget(pkg)}><Info className="h-4 w-4" /> Detalhes</Button>
                   {pkg.installationType === AppInstallationType.Custom && (
                     <>
-                      <Button variant="ghost" size="sm" onClick={() => { setEditingCustom(pkg); setCustomFormOpen(true); }} title="Editar pacote custom">
+                      <Button variant="ghost" size="sm" onClick={() => navigate(`/software/store/custom/${encodeURIComponent(pkg.packageId)}/edit`)} title="Editar pacote custom">
                         <Pencil className="h-4 w-4" /> Editar
                       </Button>
                       <Button variant="ghost" size="sm" onClick={() => setDeletingCustom(pkg)} title="Excluir pacote custom">
@@ -396,7 +396,7 @@ export function CatalogTab() {
                 <div className="flex items-center gap-2 pt-1">
                   <Button variant="ghost" size="sm" className="flex-1" onClick={() => setDetailsTarget(pkg)}><Info className="h-4 w-4" /> Detalhes</Button>
                   {pkg.installationType === AppInstallationType.Custom && (
-                    <Button variant="ghost" size="sm" onClick={() => { setEditingCustom(pkg); setCustomFormOpen(true); }} title="Editar pacote custom">
+                    <Button variant="ghost" size="sm" onClick={() => navigate(`/software/store/custom/${encodeURIComponent(pkg.packageId)}/edit`)} title="Editar pacote custom">
                       <Pencil className="h-4 w-4" />
                     </Button>
                   )}
@@ -416,12 +416,6 @@ export function CatalogTab() {
       <ApprovalFormModal open={!!approvalTarget} onClose={() => setApprovalTarget(null)}
         prefillPackageId={approvalTarget?.packageId ?? ''} prefillInstallationType={installationType} lockPackageId />
       <PackageDetailsModal open={!!detailsTarget} onClose={() => setDetailsTarget(null)} pkg={detailsTarget} installationType={installationType} />
-
-      <CustomPackageFormModal
-        open={customFormOpen}
-        onClose={() => { setCustomFormOpen(false); setEditingCustom(null); }}
-        editing={editingCustom}
-      />
 
       <ConfirmDialog
         open={!!deletingCustom}

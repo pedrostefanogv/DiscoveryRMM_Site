@@ -2,6 +2,17 @@ import { api, type ApiRequestInit } from "./client";
 
 export type DashboardWindow = "24h" | "7d" | "30d";
 
+/**
+ * Horas por janela do dashboard. Fonte unica da verdade para o seletor e para
+ * os cards que consultam por horas (ex.: P2P). Deve espelhar o backend
+ * (DashboardCacheKeys.NormalizeWindowHours / OpsP2pController.MaxWindowHours).
+ */
+export const DASHBOARD_WINDOW_HOURS: Record<DashboardWindow, number> = {
+  "24h": 24,
+  "7d": 168,
+  "30d": 720,
+};
+
 export interface DashboardScopeDto {
   level: "global" | "client" | "site";
   clientId: string | null;

@@ -36,6 +36,7 @@ const DeployTokens = lazy(() => import('@/pages/deploy/DeployTokens'));
 const SoftwareHome = lazy(() => import('@/pages/software/SoftwareHome'));
 const SoftwareInventory = lazy(() => import('@/pages/software/SoftwareInventory'));
 const SoftwareStore = lazy(() => import('@/pages/software/SoftwareStore'));
+const CustomPackageEditorPage = lazy(() => import('@/pages/software/CustomPackageEditorPage'));
 const AutomationHome = lazy(() => import('@/pages/automation/AutomationHome'));
 const AutomationScriptsPage = lazy(() => import('@/pages/automation/AutomationScriptsPage'));
 const AutomationScriptFormPage = lazy(() => import('@/pages/automation/AutomationScriptFormPage'));
@@ -355,6 +356,22 @@ export const router = createBrowserRouter([
         element: (
           <PermissionGate anyOf={['software.*', 'software.read', 'inventory.*', 'inventory.read', 'admin.*']}>
             <LazyPage><SoftwareStore /></LazyPage>
+          </PermissionGate>
+        ),
+      },
+      {
+        path: 'software/store/custom/new',
+        element: (
+          <PermissionGate anyOf={['software.*', 'software.read', 'inventory.*', 'inventory.read', 'admin.*']}>
+            <LazyPage><CustomPackageEditorPage /></LazyPage>
+          </PermissionGate>
+        ),
+      },
+      {
+        path: 'software/store/custom/:packageId/edit',
+        element: (
+          <PermissionGate anyOf={['software.*', 'software.read', 'inventory.*', 'inventory.read', 'admin.*']}>
+            <LazyPage><CustomPackageEditorPage /></LazyPage>
           </PermissionGate>
         ),
       },

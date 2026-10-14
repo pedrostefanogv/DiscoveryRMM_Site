@@ -108,6 +108,30 @@ export function formatDate(d: string | null) {
   return date.toLocaleString("pt-BR");
 }
 
+/** Tamanho em bytes no formato curto (ex.: "12,3 MB"). Vazio quando inválido. */
+export function formatBytes(value?: number | null): string {
+  if (!value || value <= 0) return "";
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  let size = value;
+  let unit = 0;
+  while (size >= 1024 && unit < units.length - 1) {
+    size /= 1024;
+    unit++;
+  }
+  return `${size.toFixed(size >= 10 || unit === 0 ? 0 : 1)} ${units[unit]}`;
+}
+
+/** Sugere um ID de pacote a partir do título (sem acentos/espaços). */
+export function slugifyPackageId(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 120);
+}
+
 export function normalizeInstallationType(value: unknown): AppInstallationType {
   if (value === AppInstallationType.Winget || value === 0 || value === "0") {
     return AppInstallationType.Winget;

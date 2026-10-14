@@ -3556,6 +3556,26 @@ export enum AppInstallationType {
   Custom = 2,
 }
 
+/** Como o texto do comando de instalação/desinstalação é executado pelo agent. */
+export enum AppCommandKind {
+  /** Comando único executado via `cmd /C` (comportamento histórico). */
+  Command = 0,
+  /** Script CMD/BAT gravado num `.cmd` temporário e executado. */
+  CmdScript = 1,
+  /** Script PowerShell gravado num `.ps1` temporário e executado. */
+  PowerShellScript = 2,
+}
+
+/** Como o agent descobre se o pacote custom já está instalado no host. */
+export enum AppDetectionMode {
+  /** Sem detecção (comportamento histórico). */
+  None = 0,
+  /** Vincula o pacote a um app do inventário (nome/fabricante/versão mínima). */
+  InventoryLink = 1,
+  /** Executa um comando PowerShell de detecção (exit 0 = instalado). */
+  Command = 2,
+}
+
 export enum AppApprovalScopeType {
   Global = 0,
   Client = 1,
@@ -3597,6 +3617,18 @@ export interface AppStoreCatalogPackage {
   license?: string | null;
   category?: string | null;
   tags?: string[] | null;
+  // ── Pacotes custom: tipo de comando e detecção (§1.2 do plano) ──
+  installCommandKind?: number;
+  uninstallCommandKind?: number;
+  detectionMode?: number;
+  /** `softwareId` do catálogo de inventário (sem FK no servidor). */
+  inventorySoftwareId?: string | null;
+  /** Snapshot do nome do app no inventário (o agent casa pelo inventário local). */
+  detectionName?: string | null;
+  detectionPublisher?: string | null;
+  detectionMinVersion?: string | null;
+  /** Comando PowerShell de detecção; exit 0 = já instalado. */
+  detectionCommand?: string | null;
 }
 
 /** Asset (instalador ou ícone) enviado ao object storage para um pacote custom. */
@@ -3631,6 +3663,15 @@ export interface UpsertCustomPackageRequest {
   fileContentType?: string | null;
   fileSizeBytes?: number | null;
   fileChecksum?: string | null;
+  // ── Tipo de comando e detecção/inventário (§1.2 do plano) ──
+  installCommandKind?: number;
+  uninstallCommandKind?: number;
+  detectionMode?: number;
+  inventorySoftwareId?: string | null;
+  detectionName?: string | null;
+  detectionPublisher?: string | null;
+  detectionMinVersion?: string | null;
+  detectionCommand?: string | null;
 }
 
 export interface AppStoreCatalogPage {
