@@ -1,13 +1,18 @@
 import { useEffect, useRef, useState } from "react";
 import { knowledgeApi } from "@/api";
 import { useKnowledgeImageUrl } from "@/hooks";
-import { parseKbImageSrc } from "@/utils/kbImage";
+import { kbImageSizeStyle, parseKbImageSrc } from "@/utils/kbImage";
 
 interface KbMarkdownImageProps {
   /** Artigo ao qual a imagem pertence (necessário para resolver kbimage:). */
   articleId: string;
   src?: string;
   alt?: string;
+  /**
+   * Título do Markdown: carrega o tamanho opcional da imagem ("w=50%" / "w=420").
+   * Não é repassado ao DOM (evita tooltip com o valor bruto).
+   */
+  title?: string;
 }
 
 /**
@@ -19,7 +24,16 @@ interface KbMarkdownImageProps {
  *   (blob same-origin) antes de desistir: a imagem continua sem URL pública.
  * - `http(s)`, `data:`, `blob:` e demais esquemas: `<img>` normal.
  */
-export function KbMarkdownImage({ articleId, src, alt }: KbMarkdownImageProps) {
+export function KbMarkdownImage({
+  articleId,
+  src,
+  alt,
+  title,
+}: KbMarkdownImageProps) {
+  // Largura vinda do token; sem título válido a imagem usa a largura natural
+  // limitada a 100% do container (comportamento anterior).
+  const sizeStyle = kbImageSizeStyle(title);
+
   const attachmentId = parseKbImageSrc(src);
   // isLoading não é usado aqui: enquanto não houver URL resolvida mostramos o
   // placeholder (o mesmo estado cobre "carregando" e "refazendo após expirar").
@@ -83,6 +97,7 @@ export function KbMarkdownImage({ articleId, src, alt }: KbMarkdownImageProps) {
           src={resolved}
           alt={alt ?? ""}
           loading="lazy"
+          style={sizeStyle}
           className="max-w-full rounded-lg"
         />
       );
@@ -119,6 +134,7 @@ export function KbMarkdownImage({ articleId, src, alt }: KbMarkdownImageProps) {
       src={src}
       alt={alt ?? ""}
       loading="lazy"
+      style={sizeStyle}
       className="max-w-full rounded-lg"
     />
   );

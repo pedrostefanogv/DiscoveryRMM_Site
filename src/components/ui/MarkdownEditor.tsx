@@ -51,7 +51,11 @@ interface MarkdownEditorProps {
    * Envia uma imagem e devolve o token Markdown a inserir. Sem este handler a
    * inserção de imagens (toolbar, colar e arrastar/soltar) fica desabilitada.
    */
-  onImageUpload?: (file: File) => Promise<string | null>;
+  /**
+   * Envia uma imagem e devolve o token Markdown a inserir. `size` é o tamanho
+   * escolhido no seletor da barra do editor (null = natural).
+   */
+  onImageUpload?: (file: File, size: string | null) => Promise<string | null>;
   /** Explicação exibida quando o upload de imagem está indisponível. */
   imageDisabledReason?: string;
 }
@@ -83,9 +87,15 @@ export function MarkdownEditor({
   const imagesDisabled = !onImageUpload;
   const disabledReason = imageDisabledReason ?? 'Envio de imagens indisponível.';
 
+  // Tamanho aplicado nas PRÓXIMAS imagens inseridas (toolbar/colar/soltar).
+  // O ajuste do que já está no texto é feito pelo painel de imagens do artigo.
+  const [imageSize, setImageSize] = useState<string | null>(null);
+  const [customPx, setCustomPx] = useState('');
+  const effectiveSize = normalizeKbImageSize(customPx) ?? imageSize;
+
   // Envia os arquivos em sequência; `insert` decide onde o token entra.
   const processFiles = useCallback(
-    async (files: File[], insert: (token: string) => void) => {
+    async (files: File[], insert: (token: string) => void, size: string | null) => {
       if (!onImageUpload || files.length === 0) return;
 
       for (const file of files) {
@@ -97,7 +107,7 @@ export function MarkdownEditor({
 
         const toastId = toast.loading(`Enviando ${file.name}...`);
         try {
-          const token = await onImageUpload(file);
+          const token = await onImageUpload(file, size);
           if (!token) {
             toast.error(`Não foi possível enviar ${file.name}.`, { id: toastId });
             continue;
@@ -112,6 +122,13 @@ export function MarkdownEditor({
       }
     },
     [onImageUpload],
+  );
+
+  // Atalho local: usa o tamanho atual do seletor em toolbar/colar/soltar.
+  const runUpload = useCallback(
+    (files: File[], insert: (token: string) => void) =>
+      processFiles(files, insert, effectiveSize),
+    [effectiveSize, processFiles],
   );
 
   // Toolbar: o `<input type="file">` escondido resolve o diálogo do sistema.

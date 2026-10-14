@@ -45,12 +45,146 @@ export function parseKbImageSrc(src: string | null | undefined): string | null {
   return match ? match[1] : null;
 }
 
-/** Monta o token Markdown de uma imagem privada. */
-export function buildKbImageToken(attachmentId: string, alt = "imagem"): string {
+// ── Tamanho da imagem ─────────────────────────────────────────
+// O Markdown não tem atributo de largura, então o tamanho vai no TÍTULO do
+// token: ![alt](kbimage:<id> "w=50%"). HTML cru não serve: o react-markdown do
+// viewer só renderiza HTML com rehype-raw (o preview do editor renderizaria e a
+// leitura não — pior que não ter tamanho).
+
+/** Presets do seletor (valor null = largura natural). */
+export const KB_IMAGE_SIZE_PRESETS: ReadonlyArray<{
+  label: string;
+  value: string | null;
+}> = [
+  { label: "Natural", value: null },
+  { label: "25%", value: "25%" },
+  { label: "50%", value: "50%" },
+  { label: "75%", value: "75%" },
+  { label: "100%", value: "100%" },
+];
+
+/** Limites aceitos (espelham KnowledgeImageMarkdown.NormalizeSize no backend). */
+export const KB_IMAGE_SIZE_MAX_PERCENT = 100;
+export const KB_IMAGE_SIZE_MAX_PX = 4000;
+
+/**
+ * Normaliza "w=50%" / "50%" / " 420 " para o valor canônico do token.
+ * Fora do padrão devolve null (o renderizador usa a largura natural).
+ */
+export function normalizeKbImageSize(
+  raw: string | null | undefined,
+): string | null {
+  if (!raw) return null;
+
+  let value = raw.trim();
+  if (/^w=/i.test(value)) value = value.slice(2).trim();
+
+  const isPercent = value.endsWith("%");
+  const digits = isPercent ? value.slice(0, -1) : value;
+
+  if (!/^\d{1,4}$/.test(digits)) return null;
+
+  const amount = Number(digits);
+  if (isPercent) {
+    return amount >= 1 && amount <= KB_IMAGE_SIZE_MAX_PERCENT
+      ? `${amount}%`
+      : null;
+  }
+
+  return amount >= 1 && amount <= KB_IMAGE_SIZE_MAX_PX ? String(amount) : null;
+}
+
+/** Título do token para um tamanho (vazio quando natural/inválido). */
+export function buildKbImageTitle(size: string | null | undefined): string {
+  const normalized = normalizeKbImageSize(size);
+  return normalized ? ` "w=${normalized}"` : "";
+}
+
+/** Estilo CSS do tamanho (undefined = largura natural limitada a 100%). */
+export function kbImageSizeStyle(
+  raw: string | null | undefined,
+): { width: string } | undefined {
+  const normalized = normalizeKbImageSize(raw);
+  if (!normalized) return undefined;
+
+  return {
+    width: normalized.endsWith("%") ? normalized : `${normalized}px`,
+  };
+}
+
+/** Monta o token Markdown de uma imagem privada (tamanho opcional). */
+export function buildKbImageToken(
+  attachmentId: string,
+  alt = "imagem",
+  size?: string | null,
+): string {
   const label = alt.replace(/[\[\]()]/g, "").trim() || "imagem";
   // GUID canônico em minúsculas (igual ao Guid:D do backend): mantém o token
   // idêntico ao gravado pela API e evita duas entradas de cache por caixa.
-  return `![${label}](${KBIMAGE_SCHEME}${attachmentId.toLowerCase()})`;
+  return `![${label}](${KBIMAGE_SCHEME}${attachmentId.toLowerCase()}${buildKbImageTitle(size)})`;
+}
+
+/** Escapa o id para uso em RegExp (evita injeção de padrão). */
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** Regex de TODAS as ocorrências do token daquele anexo (com ou sem tamanho). */
+function kbImageTokenPattern(attachmentId: string): RegExp {
+  const id = escapeRegExp(attachmentId.toLowerCase());
+  return new RegExp(
+    `!\\[([^\\]]*)\\]\\(\\s*kbimage:\\s*${id}(?:\\s+(?:"[^"]*"|'[^']*'))?\\s*\\)`,
+    "gi",
+  );
+}
+
+/**
+ * Reescreve TODAS as ocorrências do token daquele anexo aplicando o novo
+ * tamanho (null = natural, remove o título). Preserva alt e o resto do texto.
+ */
+export function updateKbImageSizeInMarkdown(
+  markdown: string,
+  attachmentId: string,
+  size: string | null | undefined,
+): string {
+  if (!markdown) return markdown;
+
+  const title = buildKbImageTitle(size);
+  const id = attachmentId.toLowerCase();
+
+  return markdown.replace(
+    kbImageTokenPattern(attachmentId),
+    (_match, alt: string) => `![${alt}](${KBIMAGE_SCHEME}${id}${title})`,
+  );
+}
+
+/** Remove TODAS as ocorrências do token (espelha o RemoveToken do backend). */
+export function removeKbImageFromMarkdown(
+  markdown: string,
+  attachmentId: string,
+): string {
+  if (!markdown) return markdown;
+
+  return markdown
+    .replace(
+      new RegExp(
+        `^[ \\t]*!\\[[^\\]]*\\]\\(\\s*kbimage:\\s*${escapeRegExp(
+          attachmentId.toLowerCase(),
+        )}(?:\\s+(?:"[^"]*"|'[^']*'))?\\s*\\)[ \\t]*(?:\\r?\\n|$)`,
+        "gim",
+      ),
+      "",
+    )
+    .replace(kbImageTokenPattern(attachmentId), "");
+}
+
+/** Quantas vezes o anexo aparece no markdown (para o painel de imagens). */
+export function countKbImageOccurrences(
+  markdown: string,
+  attachmentId: string,
+): number {
+  if (!markdown) return 0;
+  return markdown.match(kbImageTokenPattern(attachmentId))?.length ?? 0;
 }
 
 /**

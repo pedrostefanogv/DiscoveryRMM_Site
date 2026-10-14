@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { ArrowDown, ArrowUp, ClipboardPaste, Copy, Download, FileArchive, FolderPlus, PackageOpen, Pencil, RefreshCw, Scissors, Trash, Upload, X } from 'lucide-react';
 import { useFilesStream, decodeFileData, type FilesResponse, type FilesReadyInfo } from './useFilesStream';
+import { FileIcon } from './fileIcons';
 
 interface FileEntry {
   name: string;
@@ -702,7 +704,7 @@ export default function RemoteFiles({
     <div className="flex flex-col h-full bg-background text-foreground">
       {/* Toolbar */}
       <div className="flex items-center gap-1 px-3 py-1.5 bg-surface border-b border-border text-xs">
-        <span className="text-muted">📁</span>
+        <FileIcon isDir />
         <input
           value={pathInput}
           onChange={(e) => setPathInput(e.target.value)}
@@ -716,28 +718,31 @@ export default function RemoteFiles({
           title="Caminho atual — pressione Enter para navegar"
         />
         <button
-          className="px-2 py-0.5 bg-surface-hover text-muted-foreground rounded hover:bg-border hover:text-foreground disabled:opacity-50"
+          className="inline-flex items-center justify-center px-2 py-1 bg-surface-hover text-muted-foreground rounded hover:bg-border hover:text-foreground disabled:opacity-50"
           onClick={handleRefresh}
           disabled={loading || !isConnected}
           title="Atualizar"
+          aria-label="Atualizar"
         >
-          ↻
+          <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
         </button>
         <button
-          className="px-2 py-0.5 bg-surface-hover text-muted-foreground rounded hover:bg-border hover:text-foreground disabled:opacity-50"
+          className="inline-flex items-center gap-1 px-2 py-1 bg-surface-hover text-muted-foreground rounded hover:bg-border hover:text-foreground disabled:opacity-50"
           onClick={handleMkdir}
           disabled={busy !== null || !isConnected}
           title="Nova pasta"
         >
-          + Pasta
+          <FolderPlus className="h-3.5 w-3.5" aria-hidden="true" />
+          Pasta
         </button>
         <button
-          className="px-2 py-0.5 bg-surface-hover text-muted-foreground rounded hover:bg-border hover:text-foreground disabled:opacity-50"
+          className="inline-flex items-center gap-1 px-2 py-1 bg-surface-hover text-muted-foreground rounded hover:bg-border hover:text-foreground disabled:opacity-50"
           onClick={() => fileInputRef.current?.click()}
           disabled={busy !== null || !isConnected}
           title="Enviar arquivo para o PC remoto"
         >
-          ↑ Upload
+          <Upload className="h-3.5 w-3.5" aria-hidden="true" />
+          Upload
         </button>
         <input
           ref={fileInputRef}
@@ -751,12 +756,13 @@ export default function RemoteFiles({
         />
         {clipboard && (
           <button
-            className="px-2 py-0.5 bg-accent/20 text-accent rounded hover:bg-accent/30 disabled:opacity-50"
+            className="inline-flex items-center gap-1 px-2 py-1 bg-accent/20 text-accent rounded hover:bg-accent/30 disabled:opacity-50"
             onClick={handlePaste}
             disabled={busy !== null || !isConnected}
             title={`Colar ${clipboard.cut ? '(recortado)' : '(copiado)'}: ${clipboard.path}`}
           >
-            📋 Colar {clipboard.cut ? '(mover)' : ''}
+            <ClipboardPaste className="h-3.5 w-3.5" aria-hidden="true" />
+            Colar {clipboard.cut ? '(mover)' : ''}
           </button>
         )}
       </div>
@@ -812,7 +818,7 @@ export default function RemoteFiles({
                   onClick={() => navigateTo('..')}
                   onContextMenu={(e) => openContextMenu(e, null)}
                 >
-                  <td className="px-3 py-2">📁</td>
+                  <td className="px-3 py-2"><FileIcon parent /></td>
                   <td className="px-3 py-2 text-muted-foreground">..</td>
                   <td></td><td></td>
                 </tr>
@@ -824,7 +830,7 @@ export default function RemoteFiles({
                   onClick={(e) => handleRowClick(f, e)}
                   onContextMenu={(e) => openContextMenu(e, f)}
                 >
-                  <td className="px-3 py-2 whitespace-nowrap">{f.isDir ? (f.isLink ? '📁↗' : '📁') : (f.isLink ? '🔗' : '📄')}</td>
+                  <td className="px-3 py-2 whitespace-nowrap"><FileIcon name={f.name} isDir={f.isDir} isLink={f.isLink} /></td>
                   <td className="px-3 py-2 font-mono whitespace-nowrap" title={f.isLink && f.linkTarget ? `${f.name} → ${f.linkTarget}` : f.name}>
                     {f.name}
                     {f.isLink && f.linkTarget && (
@@ -857,83 +863,94 @@ export default function RemoteFiles({
             <>
               {selectedPaths.size <= 1 && !ctxMenu.entry.isDir && (
                 <button
-                  className="w-full text-left px-3 py-1.5 text-foreground hover:bg-surface-hover"
+                  className="inline-flex items-center gap-2 w-full px-3 py-1.5 text-foreground hover:bg-surface-hover"
                   onClick={() => runCtx(() => handleDownload(ctxMenu.entry!))}
                 >
-                  ⬇ Baixar
+                  <Download className="h-3.5 w-3.5" aria-hidden="true" />
+                  Baixar
                 </button>
               )}
               <button
-                className="w-full text-left px-3 py-1.5 text-foreground hover:bg-surface-hover"
+                className="inline-flex items-center gap-2 w-full px-3 py-1.5 text-foreground hover:bg-surface-hover"
                 onClick={() => runCtx(() => { selectedPaths.size > 1 ? handleCopySelection() : handleCopy(ctxMenu.entry!); })}
               >
-                📄 {selectedPaths.size > 1 ? `Copiar (${selectedPaths.size})` : 'Copiar'}
+                <Copy className="h-3.5 w-3.5" aria-hidden="true" />
+                {selectedPaths.size > 1 ? `Copiar (${selectedPaths.size})` : 'Copiar'}
               </button>
               <button
-                className="w-full text-left px-3 py-1.5 text-foreground hover:bg-surface-hover"
+                className="inline-flex items-center gap-2 w-full px-3 py-1.5 text-foreground hover:bg-surface-hover"
                 onClick={() => runCtx(() => { selectedPaths.size > 1 ? handleCutSelection() : handleCut(ctxMenu.entry!); })}
               >
-                ✂ {selectedPaths.size > 1 ? `Recortar (${selectedPaths.size})` : 'Recortar'}
+                <Scissors className="h-3.5 w-3.5" aria-hidden="true" />
+                {selectedPaths.size > 1 ? `Recortar (${selectedPaths.size})` : 'Recortar'}
               </button>
               {selectedPaths.size <= 1 && (
                 <>
                   <button
-                    className="w-full text-left px-3 py-1.5 text-foreground hover:bg-surface-hover"
+                    className="inline-flex items-center gap-2 w-full px-3 py-1.5 text-foreground hover:bg-surface-hover"
                     onClick={() => runCtx(() => handleRename(ctxMenu.entry!))}
                   >
-                    ✎ Renomear
+                    <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+                    Renomear
                   </button>
                   {!ctxMenu.entry.isDir && ctxMenu.entry.name.toLowerCase().endsWith('.zip') && (
                     <button
-                      className="w-full text-left px-3 py-1.5 text-foreground hover:bg-surface-hover"
+                      className="inline-flex items-center gap-2 w-full px-3 py-1.5 text-foreground hover:bg-surface-hover"
                       onClick={() => runCtx(() => handleUnzip(ctxMenu.entry!))}
                     >
-                      📂 Descompactar
+                      <PackageOpen className="h-3.5 w-3.5" aria-hidden="true" />
+                      Descompactar
                     </button>
                   )}
                 </>
               )}
               <button
-                className="w-full text-left px-3 py-1.5 text-foreground hover:bg-surface-hover"
+                className="inline-flex items-center gap-2 w-full px-3 py-1.5 text-foreground hover:bg-surface-hover"
                 onClick={() => runCtx(() => { selectedPaths.size > 1 ? handleZipSelection() : handleZip(ctxMenu.entry!); })}
               >
-                🗜 {selectedPaths.size > 1 ? `Compactar (${selectedPaths.size})` : 'Compactar (.zip)'}
+                <FileArchive className="h-3.5 w-3.5" aria-hidden="true" />
+                {selectedPaths.size > 1 ? `Compactar (${selectedPaths.size})` : 'Compactar (.zip)'}
               </button>
               <div className="my-1 border-t border-border" />
               <button
-                className="w-full text-left px-3 py-1.5 text-danger hover:bg-danger/20"
+                className="inline-flex items-center gap-2 w-full px-3 py-1.5 text-danger hover:bg-danger/20"
                 onClick={() => runCtx(() => { selectedPaths.size > 1 ? handleDeleteSelection() : handleDelete(ctxMenu.entry!); })}
               >
-                🗑 {selectedPaths.size > 1 ? `Apagar (${selectedPaths.size})` : 'Apagar'}
+                <Trash className="h-3.5 w-3.5" aria-hidden="true" />
+                {selectedPaths.size > 1 ? `Apagar (${selectedPaths.size})` : 'Apagar'}
               </button>
             </>
           )}
           {!ctxMenu.entry && (
             <>
               <button
-                className="w-full text-left px-3 py-1.5 text-foreground hover:bg-surface-hover"
+                className="inline-flex items-center gap-2 w-full px-3 py-1.5 text-foreground hover:bg-surface-hover"
                 onClick={() => runCtx(handleMkdir)}
               >
-                + Nova pasta
+                <FolderPlus className="h-3.5 w-3.5" aria-hidden="true" />
+                Nova pasta
               </button>
               <button
-                className="w-full text-left px-3 py-1.5 text-foreground hover:bg-surface-hover"
+                className="inline-flex items-center gap-2 w-full px-3 py-1.5 text-foreground hover:bg-surface-hover"
                 onClick={() => runCtx(() => fileInputRef.current?.click())}
               >
-                ↑ Upload
+                <Upload className="h-3.5 w-3.5" aria-hidden="true" />
+                Upload
               </button>
               <button
-                className="w-full text-left px-3 py-1.5 text-foreground hover:bg-surface-hover"
+                className="inline-flex items-center gap-2 w-full px-3 py-1.5 text-foreground hover:bg-surface-hover"
                 onClick={() => runCtx(handleRefresh)}
               >
-                ↻ Atualizar
+                <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
+                Atualizar
               </button>
               {clipboard && (
                 <button
-                  className="w-full text-left px-3 py-1.5 text-accent hover:bg-surface-hover"
+                  className="inline-flex items-center gap-2 w-full px-3 py-1.5 text-accent hover:bg-surface-hover"
                   onClick={() => runCtx(handlePaste)}
                 >
-                  📋 Colar {clipboard.cut ? '(mover)' : ''}
+                  <ClipboardPaste className="h-3.5 w-3.5" aria-hidden="true" />
+                  Colar {clipboard.cut ? '(mover)' : ''}
                 </button>
               )}
             </>
@@ -993,18 +1010,20 @@ function TransferProgressBar({ transfer, onCancel }: { transfer: TransferState; 
   return (
     <div className="px-3 py-2 bg-surface border-b border-border text-xs">
       <div className="flex items-center justify-between gap-2 mb-1">
-        <span className="text-foreground truncate">
-          {isUpload ? '⬆' : '⬇'} {transfer.name}
+        <span className="flex min-w-0 items-center gap-1 text-foreground">
+          {isUpload ? <ArrowUp className="h-3.5 w-3.5 shrink-0" aria-hidden="true" /> : <ArrowDown className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />}
+          <span className="truncate">{transfer.name}</span>
         </span>
         <span className="text-muted-foreground whitespace-nowrap">
           {formatSize(transfer.loadedBytes)} / {formatSize(transfer.totalBytes)} ({pct.toFixed(0)}%)
         </span>
         <button
-          className="px-2 py-0.5 rounded bg-danger/70 hover:bg-danger text-white disabled:opacity-50"
+          className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-danger/70 hover:bg-danger text-white disabled:opacity-50"
           onClick={onCancel}
           title={`Cancelar ${isUpload ? 'upload' : 'download'}`}
         >
-          ✕ Cancelar
+          <X className="h-3.5 w-3.5" aria-hidden="true" />
+          Cancelar
         </button>
       </div>
       <div className="w-full h-2 bg-surface-hover rounded overflow-hidden">
