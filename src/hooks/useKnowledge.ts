@@ -153,7 +153,14 @@ export function useArticleImages(articleId: string) {
 export function useUploadArticleImage(articleId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (file: File): Promise<string> => {
+    mutationFn: async ({
+      file,
+      size,
+    }: {
+      file: File;
+      /** Tamanho opcional ("50%" / "420"); null = largura natural. */
+      size?: string | null;
+    }): Promise<string> => {
       const contentType = (file.type || "").toLowerCase();
 
       const prepared = await knowledgeApi.prepareImageUpload(articleId, {
@@ -181,7 +188,7 @@ export function useUploadArticleImage(articleId: string) {
         sizeBytes: file.size,
       });
 
-      return buildKbImageToken(image.id, image.fileName);
+      return buildKbImageToken(image.id, image.fileName, size);
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: KEYS.images(articleId) });
@@ -197,6 +204,9 @@ export function useDeleteArticleImage(articleId: string) {
       knowledgeApi.deleteImage(articleId, attachmentId),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: KEYS.images(articleId) });
+      // O backend remove a referência do artigo E das sub-páginas: recarrega a
+      // árvore para o painel/editor não mostrarem o token de uma imagem excluída.
+      qc.invalidateQueries({ queryKey: KEYS.pages(articleId) });
     },
   });
 }

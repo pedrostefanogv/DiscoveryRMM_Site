@@ -4,6 +4,7 @@ import {
   useCallback,
   useMemo,
   useRef,
+  useState,
   type ChangeEvent,
   type ClipboardEvent,
   type ComponentProps,
@@ -15,7 +16,10 @@ import type { Components } from 'react-markdown';
 import { useTheme } from '@/theme/ThemeContext';
 import {
   KB_IMAGE_ACCEPT,
+  KB_IMAGE_SIZE_MAX_PX,
+  KB_IMAGE_SIZE_PRESETS,
   kbUrlTransform,
+  normalizeKbImageSize,
   parseKbImageSrc,
   validateKbImageFile,
 } from '@/utils/kbImage';
@@ -140,9 +144,9 @@ export function MarkdownEditor({
       // mesmo api.replaceSelection insere cada token em sequência.
       const insert = insertTokenRef.current;
       insertTokenRef.current = null;
-      void processFiles(files, (token) => insert?.(token));
+      void runUpload(files, (token) => insert?.(token));
     },
-    [processFiles],
+    [runUpload],
   );
 
   const handlePaste = useCallback(
@@ -163,7 +167,7 @@ export function MarkdownEditor({
       // Acumula os tokens e insere UMA vez, preservando a ordem e evitando que
       // inserções sucessivas sobrescrevam umas às outras (o value é imutável).
       const tokens: string[] = [];
-      void processFiles(files, (token) => {
+      void runUpload(files, (token) => {
         tokens.push(token);
       }).then(() => {
         if (tokens.length === 0) return;
@@ -177,7 +181,7 @@ export function MarkdownEditor({
         );
       });
     },
-    [disabledReason, onChange, onImageUpload, processFiles, value],
+    [disabledReason, onChange, onImageUpload, runUpload, value],
   );
 
   const handleDrop = useCallback(
@@ -204,7 +208,7 @@ export function MarkdownEditor({
       const end = textarea.selectionEnd;
       const snapshot = value;
       const tokens: string[] = [];
-      void processFiles(files, (token) => {
+      void runUpload(files, (token) => {
         tokens.push(token);
       }).then(() => {
         if (tokens.length === 0) return;
@@ -216,7 +220,7 @@ export function MarkdownEditor({
         );
       });
     },
-    [disabledReason, onChange, onImageUpload, processFiles, value],
+    [disabledReason, onChange, onImageUpload, runUpload, value],
   );
 
   const extraCommands = useMemo<MdCommand[]>(
@@ -251,8 +255,13 @@ export function MarkdownEditor({
   const previewOptions = useMemo<MdPreviewOptions>(() => {
     const components: Components = articleId
       ? {
-          img: ({ src, alt }: ComponentProps<'img'>) => (
-            <KbMarkdownImage articleId={articleId} src={src} alt={alt} />
+          img: ({ src, alt, title }: ComponentProps<'img'>) => (
+            <KbMarkdownImage
+              articleId={articleId}
+              src={src}
+              alt={alt}
+              title={title}
+            />
           ),
         }
       : {
@@ -277,6 +286,41 @@ export function MarkdownEditor({
         <label className="mb-1.5 block text-sm font-medium text-muted-foreground">
           {label}
         </label>
+      )}
+      {onImageUpload && (
+        <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-muted">
+          <span>Tamanho das próximas imagens</span>
+          <select
+            value={imageSize ?? ''}
+            onChange={(event) => {
+              setImageSize(event.target.value || null);
+              setCustomPx('');
+            }}
+            aria-label="Tamanho padrão das imagens inseridas"
+            className="rounded-lg border border-border bg-background px-2 py-1 text-xs text-foreground"
+          >
+            {KB_IMAGE_SIZE_PRESETS.map((preset) => (
+              <option key={preset.label} value={preset.value ?? ''}>
+                {preset.label}
+              </option>
+            ))}
+          </select>
+          <span>ou</span>
+          <input
+            type="number"
+            min={1}
+            max={KB_IMAGE_SIZE_MAX_PX}
+            value={customPx}
+            onChange={(event) => setCustomPx(event.target.value)}
+            placeholder="px"
+            aria-label="Largura em pixels"
+            className="w-20 rounded-lg border border-border bg-background px-2 py-1 text-xs text-foreground"
+          />
+          <span>
+            — para mudar uma imagem já inserida, use o painel “Imagens do
+            artigo”.
+          </span>
+        </div>
       )}
       <div
         data-color-mode={mode}

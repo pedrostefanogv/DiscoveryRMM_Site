@@ -11,9 +11,15 @@ import {
   MarkdownEditor,
   Select,
 } from '@/components/ui';
-import { useArticlePages, useClients, useCreateKnowledgeArticle, useCreateArticlePage, useDepartments, useKnowledgeArticle, useKnowledgeArticleVersions, usePublishKnowledgeArticle, useSites, useUpdateArticlePage, useUpdateKnowledgeArticle, useUploadArticleImage } from '@/hooks';
+import { useArticleImages, useArticlePages, useClients, useCreateKnowledgeArticle, useCreateArticlePage, useDeleteArticleImage, useDepartments, useKnowledgeArticle, useKnowledgeArticleVersions, usePublishKnowledgeArticle, useSites, useUpdateArticlePage, useUpdateKnowledgeArticle, useUploadArticleImage } from '@/hooks';
+import {
+  countKbImageOccurrences,
+  removeKbImageFromMarkdown,
+  updateKbImageSizeInMarkdown,
+} from '@/utils/kbImage';
 import type { ArticlePageTreeNode, ArticleStatus, ArticleVersion, CreateKnowledgeArticleRequest, PublishArticleRequest, UpdateKnowledgeArticleRequest } from '@/api';
 import toast from 'react-hot-toast';
+import ArticleImagesPanel from './ArticleImagesPanel';
 import ArticlePagesManager from './ArticlePagesManager';
 
 type FormState = {
@@ -79,6 +85,9 @@ export default function KnowledgeEditor() {
   const [pageParentId, setPageParentId] = useState('');
   const pageEditorRef = useRef<HTMLDivElement>(null);
   const pagesQuery = useArticlePages(id ?? '');
+  // Painel de imagens: lista, tamanho e exclusão (o Markdown não tem largura).
+  const imagesQuery = useArticleImages(id ?? '');
+  const deleteImageMutation = useDeleteArticleImage(id ?? '');
   const createPageMutation = useCreateArticlePage(id ?? '');
   const updatePageMutation = useUpdateArticlePage(id ?? '');
 
@@ -100,10 +109,10 @@ export default function KnowledgeEditor() {
   // repetir aqui gerava toast duplicado.
   const { mutateAsync: uploadImage } = uploadImageMutation;
   const handleImageUpload = useCallback(
-    async (file: File): Promise<string | null> => {
+    async (file: File, size: string | null): Promise<string | null> => {
       // Sem id o comando já fica desabilitado; retorno defensivo apenas.
       if (!id) return null;
-      return await uploadImage(file);
+      return await uploadImage({ file, size });
     },
     [id, uploadImage],
   );
@@ -247,6 +256,70 @@ export default function KnowledgeEditor() {
     }
   };
 
+  // ── Imagens do artigo (tamanho e exclusão) ───────────────────
+  // O tamanho vive no título do token (![alt](kbimage:<id> "w=50%")) e é
+  // aplicado ao texto ABERTO no editor; a gravação ocorre no "Salvar" normal.
+  const handleChangeImageSize = (attachmentId: string, size: string | null) => {
+    if (isEditingPage) {
+      setPageContent((content) =>
+        updateKbImageSizeInMarkdown(content, attachmentId, size),
+      );
+      toast.success('Tamanho atualizado — salve a página para aplicar.');
+      return;
+    }
+
+    setForm((prev) => ({
+      ...prev,
+      content: updateKbImageSizeInMarkdown(prev.content, attachmentId, size),
+    }));
+    toast.success('Tamanho atualizado — salve o artigo para aplicar.');
+  };
+
+  const imageLocationsOf = (attachmentId: string) => {
+    const places: Array<{ id: string | null; label: string }> = [];
+    if (countKbImageOccurrences(form.content, attachmentId) > 0) {
+      places.push({ id: null, label: 'Home' });
+    }
+
+    const walk = (nodes: ArticlePageTreeNode[]) => {
+      for (const node of nodes) {
+        if (countKbImageOccurrences(node.content ?? '', attachmentId) > 0) {
+          places.push({ id: node.id, label: node.title || 'Página' });
+        }
+        walk(node.children ?? []);
+      }
+    };
+    walk(pagesQuery.data ?? []);
+
+    return places;
+  };
+
+  const handleDeleteImage = (attachmentId: string) => {
+    deleteImageMutation.mutate(attachmentId, {
+      onSuccess: () => {
+        // O backend remove a referência do artigo E das sub-páginas; espelha no
+        // estado local para o editor não manter token órfão.
+        setForm((prev) => ({
+          ...prev,
+          content: removeKbImageFromMarkdown(prev.content, attachmentId),
+        }));
+        setPageContent((content) =>
+          removeKbImageFromMarkdown(content, attachmentId),
+        );
+        toast.success('Imagem excluída.');
+      },
+      onError: () => toast.error('Não foi possível excluir a imagem.'),
+    });
+  };
+
+  const handleOpenImageLocation = (pageId: string | null) => {
+    if (pageId) {
+      handleSelectPage(pageId);
+      return;
+    }
+    handleSelectHome();
+  };
+
   // Opções de "página pai" para criar/mover sub-página (limite de 3 níveis).
   const pageParentOptions = useMemo(() => {
     const options: Array<{ value: string; label: string; disabled?: boolean }> = [
@@ -271,6 +344,10 @@ export default function KnowledgeEditor() {
 
   const isEditingPage = activePageId !== null;
   const isCreatingPage = activePageId === '__new__';
+
+  // Conteúdo aberto no editor (home ou sub-página) — base do painel de imagens.
+  const activeImageContent = isEditingPage ? pageContent : form.content;
+  const activeImageLabel = isEditingPage ? pageTitle.trim() || 'Página' : 'Home';
 
   const clientOptions = useMemo(
     () => [
@@ -594,6 +671,26 @@ export default function KnowledgeEditor() {
                   </div>
                 )}
               </div>
+            )}
+
+            {isEdit && id && (
+              <ArticleImagesPanel
+                images={imagesQuery.data ?? []}
+                isLoading={imagesQuery.isLoading}
+                isError={imagesQuery.isError}
+                activeContent={activeImageContent}
+                activeLabel={activeImageLabel}
+                locationsOf={imageLocationsOf}
+                onChangeSize={handleChangeImageSize}
+                onOpenLocation={handleOpenImageLocation}
+                onDelete={handleDeleteImage}
+                deletingId={
+                  deleteImageMutation.isPending
+                    ? deleteImageMutation.variables
+                    : null
+                }
+                onRetry={() => void imagesQuery.refetch()}
+              />
             )}
 
             {isEdit && id && (

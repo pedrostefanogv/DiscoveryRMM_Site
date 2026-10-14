@@ -132,10 +132,28 @@ function escapeRegExp(value: string): string {
 /** Regex de TODAS as ocorrências do token daquele anexo (com ou sem tamanho). */
 function kbImageTokenPattern(attachmentId: string): RegExp {
   const id = escapeRegExp(attachmentId.toLowerCase());
+  // Grupo 1 = alt; grupo 2 = título opcional (tamanho).
   return new RegExp(
-    `!\\[([^\\]]*)\\]\\(\\s*kbimage:\\s*${id}(?:\\s+(?:"[^"]*"|'[^']*'))?\\s*\\)`,
+    `!\\[([^\\]]*)\\]\\(\\s*kbimage:\\s*${id}(?:\\s+("[^"]*"|'[^']*'))?\\s*\\)`,
     "gi",
   );
+}
+
+/**
+ * Tamanho atual da PRIMEIRA ocorrência do anexo no markdown (null = natural).
+ * Usado pelo painel para mostrar/editar o tamanho de cada imagem.
+ */
+export function kbImageSizeInMarkdown(
+  markdown: string,
+  attachmentId: string,
+): string | null {
+  if (!markdown) return null;
+
+  const match = kbImageTokenPattern(attachmentId).exec(markdown);
+  if (!match) return null;
+
+  const title = (match[2] ?? "").trim().replace(/^["']|["']$/g, "");
+  return normalizeKbImageSize(title);
 }
 
 /**

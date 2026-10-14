@@ -66,6 +66,38 @@ describe("KbMarkdownImage", () => {
     expect(screen.getByTestId("kb-image-loading")).toBeTruthy();
   });
 
+  it("aplica a largura vinda do título do markdown (tamanho da imagem)", () => {
+    mockedUrl.mockReturnValue({
+      url: "https://storage.local/signed.png",
+      isLoading: false,
+      isError: false,
+    });
+
+    render(
+      <KbMarkdownImage
+        articleId="art-1"
+        src={`kbimage:${GUID}`}
+        alt="Print"
+        title="w=50%"
+      />,
+    );
+    expect((screen.getByAltText("Print") as HTMLImageElement).style.width).toBe(
+      "50%",
+    );
+
+    render(
+      <KbMarkdownImage
+        articleId="art-1"
+        src={`kbimage:${GUID}`}
+        alt="PrintPx"
+        title="w=420"
+      />,
+    );
+    expect(
+      (screen.getByAltText("PrintPx") as HTMLImageElement).style.width,
+    ).toBe("420px");
+  });
+
   it("usa o stream autenticado quando o presign falha", async () => {
     mockedUrl.mockReturnValue({ url: null, isLoading: false, isError: true });
     mockedDownload.mockResolvedValue(new Blob(["png"], { type: "image/png" }));
