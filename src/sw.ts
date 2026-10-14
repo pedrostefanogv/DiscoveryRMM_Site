@@ -42,11 +42,20 @@ precacheAndRoute(self.__WB_MANIFEST);
 registerRoute(
   new NavigationRoute(createHandlerBoundToURL("/index.html"), {
     denylist: [
-      /^\/api\//,
-      /^\/hubs\//,
-      /^\/nats\//,
+      /^\/api(?:\/|$)/,
+      /^\/hubs(?:\/|$)/,
+      /^\/nats(?:\/|$)/,
       /^\/openapi(?:\/|$)/,
       /^\/scalar(?:\/|$)/,
+      // Endpoint de saude da API: com o SW interceptando, abrir /health no
+      // navegador servia o index.html da SPA (que redireciona para o login) em
+      // vez do JSON da API. Monitoracao por curl nao sente, mas a verificacao
+      // manual no navegador ficava impossivel.
+      /^\/health(?:\/|$)/,
+      // URLs pre-assinadas do storage saem no MESMO host (/<bucket>/...): sao
+      // navegacoes de download (abrir em nova aba). Sem negar aqui, o SW
+      // devolvia o index.html e o arquivo nunca era baixado.
+      /^\/discovery-files(?:\/|$)/,
     ],
   }),
 );
