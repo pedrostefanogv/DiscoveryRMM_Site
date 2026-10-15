@@ -474,6 +474,76 @@ function uploadWithProgress<T>(
   });
 }
 
+/**
+ * PUT binário com progresso real (XMLHttpRequest). Usado pelo upload em partes
+ * de assets grandes (blocos de 50 MiB): um corpo único de vários GiB é recusado
+ * no edge do Cloudflare com 413, então o arquivo é fatiado e remontado na API.
+ */
+function putBinaryWithProgress<T>(
+  path: string,
+  body: Blob,
+  options: UploadOptions = {},
+): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const normalizedPath = normalizeApiPath(path);
+    const xhr = new XMLHttpRequest();
+    xhr.open("PUT", `${API_BASE_URL}${normalizedPath}`, true);
+
+    const token = getApiAccessToken();
+    if (token) {
+      xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+    }
+    xhr.setRequestHeader("Accept", "application/json");
+    xhr.setRequestHeader("Content-Type", "application/octet-stream");
+
+    const timeoutMs = options.timeoutMs ?? 0;
+    if (timeoutMs > 0) {
+      xhr.timeout = timeoutMs;
+    }
+
+    if (options.signal) {
+      if (options.signal.aborted) {
+        reject(new ApiError(0, "Upload cancelado."));
+        return;
+      }
+      options.signal.addEventListener("abort", () => xhr.abort(), { once: true });
+    }
+
+    xhr.upload.onprogress = (event) => {
+      if (!options.onProgress) return;
+      const total = event.lengthComputable ? event.total : 0;
+      options.onProgress({
+        loaded: event.loaded,
+        total,
+        percent: total > 0 ? Math.min(100, Math.round((event.loaded / total) * 100)) : 0,
+      });
+    };
+
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        const text = xhr.responseText;
+        if (!text) {
+          resolve(undefined as T);
+          return;
+        }
+        try {
+          resolve(JSON.parse(text) as T);
+        } catch {
+          resolve(undefined as T);
+        }
+        return;
+      }
+      reject(new ApiError(xhr.status, xhr.responseText || `Erro ${xhr.status}`));
+    };
+
+    xhr.onerror = () => reject(new ApiError(0, "Falha de rede no upload."));
+    xhr.onabort = () => reject(new ApiError(0, "Upload cancelado."));
+    xhr.ontimeout = () => reject(new ApiError(0, "Upload excedeu o tempo limite."));
+
+    xhr.send(body);
+  });
+}
+
 export const api = {
   get: <T>(
     path: string,
@@ -505,6 +575,10 @@ export const api = {
   /** Upload multipart com progresso real (XMLHttpRequest). */
   upload: <T>(path: string, formData: FormData, options?: UploadOptions) =>
     uploadWithProgress<T>(path, formData, options),
+
+  /** PUT binário (bloco de upload em partes) com progresso real. */
+  putBinary: <T>(path: string, body: Blob, options?: UploadOptions) =>
+    putBinaryWithProgress<T>(path, body, options),
 
   put: <T>(path: string, body: unknown, init?: ApiRequestInit) =>
     request<T>(path, {

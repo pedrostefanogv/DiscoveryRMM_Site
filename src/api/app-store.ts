@@ -398,19 +398,79 @@ export const appStoreApi = {
 
   // ── Pacotes custom (cadastro manual) ──────────────────────────────
 
-  /** Envia instalador (kind=installer) ou ícone/capa (kind=icon) para o object storage. */
-  uploadCustomAsset: (
+  /**
+   * Envia instalador (kind=installer) ou ícone/capa (kind=icon) para o object
+   * storage.
+   *
+   * Arquivos grandes vão em BLOCOS de 50 MiB (padronizado): um corpo único de
+   * vários GiB é recusado pelo Cloudflare no edge com 413, então a API abre uma
+   * sessão, recebe os blocos e remonta o arquivo no servidor.
+   */
+  uploadCustomAsset: async (
     file: File,
     kind: "installer" | "icon" = "installer",
     onProgress?: (progress: UploadProgress) => void,
   ) => {
-    const formData = new FormData();
-    formData.append("file", file);
-    return api.upload<CustomPackageAsset>(
-      `${BASE}/custom/assets?kind=${kind}`,
-      formData,
-      { timeoutMs: 0, onProgress },
+    const PART_SIZE = 50 * 1024 * 1024;
+
+    // Arquivos pequenos: caminho direto (1 requisição multipart).
+    if (file.size <= PART_SIZE) {
+      const formData = new FormData();
+      formData.append("file", file);
+      return api.upload<CustomPackageAsset>(
+        `${BASE}/custom/assets?kind=${kind}`,
+        formData,
+        { timeoutMs: 0, onProgress },
+      );
+    }
+
+    const session = await api.post<{ uploadId: string; partSizeBytes: number; totalParts: number }>(
+      `${BASE}/custom/assets/session`,
+      {
+        kind,
+        fileName: file.name,
+        contentType: file.type || "application/octet-stream",
+        sizeBytes: file.size,
+      },
     );
+
+    const partSize = session.partSizeBytes > 0 ? session.partSizeBytes : PART_SIZE;
+    const totalParts = Math.max(1, Math.ceil(file.size / partSize));
+
+    try {
+      for (let index = 0; index < totalParts; index++) {
+        const start = index * partSize;
+        const end = Math.min(start + partSize, file.size);
+        const blob = file.slice(start, end);
+        await api.putBinary(
+          `${BASE}/custom/assets/session/${session.uploadId}/part/${index}`,
+          blob,
+          {
+            timeoutMs: 0,
+            onProgress: onProgress
+              ? (p) => {
+                  const inPart = p.total > 0 ? Math.min(p.loaded, end - start) : 0;
+                  const sent = start + inPart;
+                  onProgress({
+                    loaded: sent,
+                    total: file.size,
+                    percent: Math.round((sent / file.size) * 100),
+                  });
+                }
+              : undefined,
+          },
+        );
+      }
+
+      return await api.post<CustomPackageAsset>(
+        `${BASE}/custom/assets/session/${session.uploadId}/complete`,
+        {},
+      );
+    } catch (error) {
+      // best-effort: libera a sessão/arquivo temporário no servidor.
+      void api.del(`${BASE}/custom/assets/session/${session.uploadId}`).catch(() => undefined);
+      throw error;
+    }
   },
 
   /** Cria ou atualiza um pacote custom. */
