@@ -13,7 +13,7 @@ import {
   decodeControlEnvelope,
 } from "@/api/sessionLiveness";
 import { useSessionLiveness } from "@/hooks/useSessionLiveness";
-import { realtimeConfig } from "@/config/realtime";
+import { realtimeConfig, resolveNatsWsUrl } from "@/config/realtime";
 import { useAuth } from "@/auth/AuthContext";
 import { Badge, Button, ErrorDisplay } from "@/components/ui";
 import { ThemeToggle } from "@/components/auth/ThemeToggle";
@@ -164,7 +164,9 @@ export default function RemoteDebugConsole() {
   const agentId = searchParams.get("agentId") ?? "";
   const subject = searchParams.get("subject") ?? "";
   const expiresAt = searchParams.get("expiresAt") ?? "";
-  const natsUrl = searchParams.get("natsUrl") ?? realtimeConfig.natsUrl;
+  // Fallback para o próprio endpoint do site quando o painel não define a URL
+  // externa do NATS (campo vazio na configuração do servidor).
+  const natsUrl = resolveNatsWsUrl(searchParams.get("natsUrl") ?? realtimeConfig.natsUrl);
   const jwtParam = searchParams.get("jwt");
   const nkeySeedParam = searchParams.get("nkeySeed");
   // Subject único de controle (ping/pong/setLevel). Vem do launcher; se a

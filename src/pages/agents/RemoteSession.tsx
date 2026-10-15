@@ -32,6 +32,7 @@ import {
   startActivityPing,
   type CrossTabMessage,
 } from '@/auth/crossTabSync';
+import { realtimeConfig, resolveNatsWsUrl } from '@/config/realtime';
 
 type Tab = 'screen' | 'terminal' | 'files' | 'proxy' | 'processes' | 'services';
 
@@ -477,7 +478,9 @@ export default function RemoteSession() {
         const creds = await remoteSessionsApi.getSessionCredentials(agentId, session.sessionId);
         jwt = creds.jwt;
         nkeySeed = creds.nkeySeed;
-        natsUrl = creds.natsWssUrl;
+        // Ordem: URL da sessão (painel) → URL do build do site (VITE_NATS_URL,
+        // a mesma que o chat/dashboard usam) → derivada da própria origem.
+        natsUrl = resolveNatsWsUrl(creds.natsWssUrl ?? realtimeConfig.natsUrl);
       } catch {
         throw new Error('Falha ao obter credenciais de streaming.');
       }
@@ -578,7 +581,7 @@ export default function RemoteSession() {
             if (!cur || cur.sessionId !== s.sessionId) return prev;
             return {
               ...prev,
-              [tab]: { ...cur, jwt: creds.jwt, nkeySeed: creds.nkeySeed, natsUrl: creds.natsWssUrl ?? cur.natsUrl },
+              [tab]: { ...cur, jwt: creds.jwt, nkeySeed: creds.nkeySeed, natsUrl: resolveNatsWsUrl(creds.natsWssUrl ?? cur.natsUrl) },
             };
           });
         } catch { /* melhor esforço: segue com as credenciais atuais */ }
@@ -652,7 +655,9 @@ export default function RemoteSession() {
         const creds = await remoteSessionsApi.getSessionCredentials(agentId, session.sessionId);
         jwt = creds.jwt;
         nkeySeed = creds.nkeySeed;
-        natsUrl = creds.natsWssUrl;
+        // Ordem: URL da sessão (painel) → URL do build do site (VITE_NATS_URL,
+        // a mesma que o chat/dashboard usam) → derivada da própria origem.
+        natsUrl = resolveNatsWsUrl(creds.natsWssUrl ?? realtimeConfig.natsUrl);
       } catch {
         throw new Error('Falha ao obter credenciais de streaming.');
       }
@@ -805,7 +810,9 @@ export default function RemoteSession() {
         const creds = await remoteSessionsApi.getSessionCredentials(agentId, session.sessionId);
         jwt = creds.jwt;
         nkeySeed = creds.nkeySeed;
-        natsUrl = creds.natsWssUrl;
+        // Ordem: URL da sessão (painel) → URL do build do site (VITE_NATS_URL,
+        // a mesma que o chat/dashboard usam) → derivada da própria origem.
+        natsUrl = resolveNatsWsUrl(creds.natsWssUrl ?? realtimeConfig.natsUrl);
       } catch { /* sem credenciais */ }
       setSessions((prev) => ({
         ...prev,
