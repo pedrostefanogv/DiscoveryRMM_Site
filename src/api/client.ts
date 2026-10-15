@@ -386,6 +386,51 @@ export interface UploadProgress {
   total: number;
   /** 0–100; 0 quando o total é desconhecido. */
   percent: number;
+  /** Velocidade medida (média móvel), em bytes/s. 0 enquanto não há amostra. */
+  bytesPerSecond?: number;
+  /** Estimativa de segundos restantes; undefined quando não dá para estimar. */
+  etaSeconds?: number;
+}
+
+/**
+ * Medidor de velocidade dos uploads com progresso (XMLHttpRequest).
+ *
+ * Usa média móvel exponencial para o número não oscilar a cada evento — é o que
+ * alimenta a estimativa de tempo restante mostrada no card do instalador, onde o
+ * envio pode levar minutos.
+ */
+function createSpeedTracker(): (loaded: number, total: number) => {
+  bytesPerSecond: number;
+  etaSeconds?: number;
+} {
+  let lastLoaded = 0;
+  let lastAt = 0;
+  let rate = 0;
+
+  return (loaded, total) => {
+    const now = performance.now();
+
+    if (lastAt > 0) {
+      const elapsed = (now - lastAt) / 1000;
+      const delta = loaded - lastLoaded;
+
+      // Só reamostra em janelas úteis: eventos em rajada distorceriam a média.
+      if (elapsed >= 0.4 && delta > 0) {
+        const instant = delta / elapsed;
+        rate = rate > 0 ? rate * 0.7 + instant * 0.3 : instant;
+        lastAt = now;
+        lastLoaded = loaded;
+      }
+    } else {
+      lastAt = now;
+      lastLoaded = loaded;
+    }
+
+    const remaining = total > 0 ? Math.max(0, total - loaded) : 0;
+    const etaSeconds = rate > 0 && remaining > 0 ? remaining / rate : undefined;
+
+    return { bytesPerSecond: rate, etaSeconds };
+  };
 }
 
 export interface UploadOptions {
@@ -431,13 +476,17 @@ function uploadWithProgress<T>(
       options.signal.addEventListener("abort", () => xhr.abort(), { once: true });
     }
 
+    const tracker = createSpeedTracker();
     xhr.upload.onprogress = (event) => {
       if (!options.onProgress) return;
       const total = event.lengthComputable ? event.total : 0;
+      const { bytesPerSecond, etaSeconds } = tracker(event.loaded, total);
       options.onProgress({
         loaded: event.loaded,
         total,
         percent: total > 0 ? Math.min(100, Math.round((event.loaded / total) * 100)) : 0,
+        bytesPerSecond,
+        etaSeconds,
       });
     };
 
@@ -509,13 +558,17 @@ function putBinaryWithProgress<T>(
       options.signal.addEventListener("abort", () => xhr.abort(), { once: true });
     }
 
+    const tracker = createSpeedTracker();
     xhr.upload.onprogress = (event) => {
       if (!options.onProgress) return;
       const total = event.lengthComputable ? event.total : 0;
+      const { bytesPerSecond, etaSeconds } = tracker(event.loaded, total);
       options.onProgress({
         loaded: event.loaded,
         total,
         percent: total > 0 ? Math.min(100, Math.round((event.loaded / total) * 100)) : 0,
+        bytesPerSecond,
+        etaSeconds,
       });
     };
 
@@ -579,13 +632,17 @@ export function putPresignedPart(
       options.signal.addEventListener("abort", () => xhr.abort(), { once: true });
     }
 
+    const tracker = createSpeedTracker();
     xhr.upload.onprogress = (event) => {
       if (!options.onProgress) return;
       const total = event.lengthComputable ? event.total : 0;
+      const { bytesPerSecond, etaSeconds } = tracker(event.loaded, total);
       options.onProgress({
         loaded: event.loaded,
         total,
         percent: total > 0 ? Math.min(100, Math.round((event.loaded / total) * 100)) : 0,
+        bytesPerSecond,
+        etaSeconds,
       });
     };
 

@@ -80,6 +80,9 @@ export default function AgentSupportChatWindow() {
           client={client}
           canManage={authz.hasAnyPermission(SUPPORT_CHAT_PERMISSIONS)}
           autoStart={searchParams.get("start") === "1"}
+          // Ícone de controle remoto no compositor: a janela do chat da MÁQUINA
+          // é o lugar natural para abrir o acesso remoto sem voltar à listagem.
+          remoteControlAgentId={id}
         />
       </div>
     </div>

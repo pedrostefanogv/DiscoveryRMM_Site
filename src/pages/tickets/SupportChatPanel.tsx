@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "react-hot-toast";
-import { Paperclip, RefreshCw, Send, X } from "lucide-react";
+import { Monitor, Paperclip, RefreshCw, Send, X } from "lucide-react";
 import { apiFetchResponse } from "@/api/client";
 import type { TicketChatAttachment, TicketChatMessage, TicketChatSession } from "@/api/ticket-chat";
 import { Button } from "@/components/ui";
@@ -16,6 +16,8 @@ import {
 } from "@/hooks/useSupportChat";
 import type { SupportChatClient } from "@/hooks/supportChatClient";
 import { useRealtimeStatus } from "@/hooks/useRealtimeStatus";
+import { useAuthorization } from "@/auth/authorization";
+import { openRemoteSessionPopup } from "@/pages/agents/remoteSessionLauncher";
 import { isImageAttachment, triggerBlobDownload } from "@/utils/chatAttachment";
 import { PopupBlockedError } from "./ticketChatLauncher";
 
@@ -37,7 +39,19 @@ interface SupportChatPanelProps {
   canManage: boolean;
   /** Abre a conversa automaticamente ao montar (janela aberta pela listagem). */
   autoStart?: boolean;
+  /**
+   * Agent (máquina) desta conversa. Quando informado — e o usuário tendo
+   * permissão de execução no agent — o compositor mostra o ícone de CONTROLE
+   * REMOTO, que abre a janela de acesso remoto da máquina.
+   */
+  remoteControlAgentId?: string | null;
 }
+
+/**
+ * Mesmo gate do botão "Controle remoto" do detalhe/listagem do agent: o
+ * backend exige Agents.Execute nas rotas de sessão remota.
+ */
+const REMOTE_CONTROL_PERMISSIONS = ['Agents.Execute', 'Agents.Edit', 'agents.*', 'admin.*'];
 
 const STATUS_LABEL: Record<string, string> = {
   Pending: "Aguardando confirmação",
@@ -106,7 +120,18 @@ function statusMessage(session: TicketChatSession | null | undefined): string | 
   }
 }
 
-export default function SupportChatPanel({ client, canManage, autoStart = false }: SupportChatPanelProps) {
+export default function SupportChatPanel({
+  client,
+  canManage,
+  autoStart = false,
+  remoteControlAgentId = null,
+}: SupportChatPanelProps) {
+  const authz = useAuthorization();
+  // Independe do estado da conversa: o acesso remoto é da MÁQUINA, não do chat
+  // (por isso continua clicável numa conversa encerrada).
+  const canRemoteControl =
+    Boolean(remoteControlAgentId) && authz.hasAnyPermission(REMOTE_CONTROL_PERMISSIONS);
+  const [openingRemote, setOpeningRemote] = useState(false);
   const [draft, setDraft] = useState("");
   // previewUrl: miniatura do arquivo local ANTES de enviar (imagens).
   const [pendingUploads, setPendingUploads] = useState<
@@ -275,6 +300,27 @@ export default function SupportChatPanel({ client, canManage, autoStart = false 
           toast.error(describeError(error, "Não foi possível enviar a mensagem.")),
       },
     );
+  }
+
+  /**
+   * Abre a JANELA de controle remoto da máquina — o mesmo caminho do botão
+   * "Controle remoto" do detalhe/listagem do agent.
+   *
+   * O window.open precisa nascer de um gesto do usuário: o launcher abre a
+   * janela de forma síncrona no clique e só depois devolve a promise.
+   */
+  function handleOpenRemoteControl() {
+    if (!remoteControlAgentId || openingRemote) return;
+    setOpeningRemote(true);
+    void openRemoteSessionPopup({ agentId: remoteControlAgentId, kind: 'screen', transport: 'nats' })
+      .catch((error: unknown) => {
+        toast.error(
+          error instanceof Error && error.message
+            ? error.message
+            : "Falha ao abrir o controle remoto.",
+        );
+      })
+      .finally(() => setOpeningRemote(false));
   }
 
   async function handleFiles(files: FileList | null) {
@@ -496,7 +542,11 @@ export default function SupportChatPanel({ client, canManage, autoStart = false 
             <div ref={bottomRef} />
           </div>
 
-          {/* Composer */}
+          {/* Composer — mesma linguagem do Chat IA e do comentário do agent:
+              uma caixa única arredondada com o textarea como corpo e os
+              ícones de ANEXAR e ENVIAR flutuando no canto inferior direito
+              (antes o clipe ficava isolado à esquerda e o botão "Enviar" com
+              rótulo ocupava uma linha própria). */}
           <div className="shrink-0 border-t border-border p-3">
             {pendingUploads.length > 0 && (
               <div className="mb-2 flex flex-wrap gap-2">
@@ -521,28 +571,31 @@ export default function SupportChatPanel({ client, canManage, autoStart = false 
               </div>
             )}
 
-            <div className="flex items-end gap-2">
-              <input
-                ref={fileInputRef}
-                type="file"
-                multiple
-                hidden
-                onChange={(event) => {
-                  void handleFiles(event.target.files);
-                  event.target.value = "";
-                }}
-              />
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={!canSend || send.isPending}
-                title="Anexar arquivo ou print"
-              >
-                <Paperclip className="h-4 w-4" />
-              </Button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              hidden
+              onChange={(event) => {
+                void handleFiles(event.target.files);
+                event.target.value = "";
+              }}
+            />
+
+            {/* Caixa única (mesmo padrão do composer do agent): o textarea é o
+                corpo do box e os ícones ficam sobrepostos no canto inferior
+                direito. O padding direito do textarea reserva a faixa dos
+                botões (controle remoto, anexar e enviar) para o texto nunca
+                passar por baixo deles. O foco é indicado pela caixa
+                (:focus-within), sem borda própria no campo. */}
+            <div className="relative rounded-xl border border-border bg-surface px-3 py-2 transition-colors focus-within:border-primary/60 focus-within:ring-2 focus-within:ring-primary/20">
               <textarea
-                className="min-h-[52px] flex-1 resize-none rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground"
+                className={
+                  "block min-h-[52px] w-full resize-none border-0 bg-transparent py-1 text-sm text-foreground outline-none placeholder:text-muted disabled:cursor-not-allowed disabled:opacity-60 " +
+                  // Três ícones (controle remoto + anexar + enviar) exigem 112px
+                  // de reserva; com dois, 80px bastam.
+                  (canRemoteControl ? "pr-28" : "pr-20")
+                }
                 rows={2}
                 placeholder={canSend ? "Escreva para o usuário… (Enter envia, Shift+Enter quebra linha)" : "A conversa não está ativa."}
                 value={draft}
@@ -555,9 +608,41 @@ export default function SupportChatPanel({ client, canManage, autoStart = false 
                   }
                 }}
               />
-              <Button size="sm" onClick={handleSend} disabled={!canSend || send.isPending}>
-                <Send className="h-4 w-4" /> Enviar
-              </Button>
+
+              <div className="absolute right-2 bottom-2 z-[1] flex items-center gap-1">
+                {canRemoteControl && (
+                  <button
+                    type="button"
+                    onClick={handleOpenRemoteControl}
+                    disabled={openingRemote}
+                    title="Abrir o controle remoto desta máquina"
+                    aria-label="Abrir o controle remoto desta máquina"
+                    className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 disabled:cursor-not-allowed disabled:opacity-45"
+                  >
+                    <Monitor className="h-4 w-4" />
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={!canSend || send.isPending}
+                  title="Anexar arquivo ou print"
+                  aria-label="Anexar arquivo ou print"
+                  className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 disabled:cursor-not-allowed disabled:opacity-45"
+                >
+                  <Paperclip className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSend}
+                  disabled={!canSend || send.isPending}
+                  title="Enviar (Enter)"
+                  aria-label="Enviar mensagem"
+                  className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary text-white transition-all hover:bg-primary/90 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 disabled:cursor-not-allowed disabled:opacity-45"
+                >
+                  <Send className="h-4 w-4" />
+                </button>
+              </div>
             </div>
           </div>
         </div>

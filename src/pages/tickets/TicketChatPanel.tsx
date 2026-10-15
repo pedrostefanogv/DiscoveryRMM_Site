@@ -22,5 +22,13 @@ export default function TicketChatPanel({ ticketId, agentId, clientId, siteId, c
     [ticketId, agentId, clientId, siteId],
   );
 
-  return <SupportChatPanel client={client} canManage={canManage} />;
+  // O agent do chamado habilita o ícone de controle remoto no compositor
+  // (quando o chamado não tem máquina vinculada, o ícone não aparece).
+  return (
+    <SupportChatPanel
+      client={client}
+      canManage={canManage}
+      remoteControlAgentId={agentId ?? null}
+    />
+  );
 }

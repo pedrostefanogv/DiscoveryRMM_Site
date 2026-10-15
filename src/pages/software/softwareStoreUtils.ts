@@ -121,6 +121,32 @@ export function formatBytes(value?: number | null): string {
   return `${size.toFixed(size >= 10 || unit === 0 ? 0 : 1)} ${units[unit]}`;
 }
 
+/**
+ * Duração curta para a estimativa de tempo restante do upload ("45 s", "12 min",
+ * "1 h 5 min"). Devolve null quando não há estimativa confiável.
+ */
+export function formatEta(seconds?: number | null): string | null {
+  if (seconds == null || !Number.isFinite(seconds) || seconds <= 0) return null;
+
+  // floor (não round) para nunca exibir "60 s"/"60 min" — arredondaria para a
+  // unidade seguinte sem trocar o rótulo.
+  if (seconds < 60) return `${Math.max(1, Math.floor(seconds))} s`;
+
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes} min`;
+
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+
+  // Link muito lento pode estimar dias: mostra em dias para não exibir "50 h".
+  if (hours >= 24) {
+    const days = Math.round(hours / 24);
+    return `${days} ${days === 1 ? 'dia' : 'dias'}`;
+  }
+
+  return rest > 0 ? `${hours} h ${rest} min` : `${hours} h`;
+}
+
 /** Sugere um ID de pacote a partir do título (sem acentos/espaços). */
 export function slugifyPackageId(value: string): string {
   return value

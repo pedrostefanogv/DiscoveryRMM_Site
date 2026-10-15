@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
@@ -6,7 +6,12 @@ import {
   Terminal, Trash2, Upload, X,
 } from 'lucide-react';
 import { Button, Card, ConfirmDialog, ErrorDisplay, Input, Loading, Select, TextArea } from '@/components/ui';
-import { appStoreApi, discardUnlinkedAsset, forgetUploadedAsset } from '@/api/app-store';
+import {
+  ASSET_MULTIPART_MIN_BYTES,
+  appStoreApi,
+  discardUnlinkedAsset,
+  forgetUploadedAsset,
+} from '@/api/app-store';
 import type { UploadProgress } from '@/api/client';
 import {
   AppCommandKind, AppDetectionMode, AppInstallationType,
@@ -14,7 +19,7 @@ import {
 import { useAppStorePackage, useDeleteCustomPackageFile, useUpsertCustomPackage } from '@/hooks/useAppStore';
 import { MarkdownField } from './components/MarkdownField';
 import { SoftwareInventoryPicker, type InventorySoftwareSelection } from './components/SoftwareInventoryPicker';
-import { formatBytes, slugifyPackageId } from './softwareStoreUtils';
+import { formatBytes, formatEta, slugifyPackageId } from './softwareStoreUtils';
 
 const STORE_PATH = '/software/store';
 
@@ -123,12 +128,16 @@ interface AssetState {
  * progresso, estado e retentativa próprios — e o Salvar fica só com os metadados.
  */
 type AssetUpload = {
-  status: 'uploading' | 'done' | 'error';
+  status: 'uploading' | 'done' | 'error' | 'canceled';
   fileName: string;
   loaded: number;
   total: number;
   percent: number;
   error?: string;
+  /** Velocidade medida pelo XHR (bytes/s) — alimenta a estimativa de tempo. */
+  bytesPerSecond?: number;
+  /** Segundos restantes estimados; undefined enquanto não dá para estimar. */
+  etaSeconds?: number;
 };
 
 const ASSET_UPLOAD_LABEL: Record<'installer' | 'icon', string> = {
@@ -261,20 +270,35 @@ function AssetUploadPanel({
   kind,
   upload,
   onRetry,
+  onCancel,
+  onDiscard,
 }: {
   kind: 'installer' | 'icon';
   upload: AssetUpload | null;
   onRetry: () => void;
+  onCancel: () => void;
+  onDiscard: () => void;
 }) {
   if (!upload) return null;
 
+  // A retomada só preserva progresso no caminho multipart (arquivos grandes).
+  const resumable = upload.total > ASSET_MULTIPART_MIN_BYTES;
+
   const isUploading = upload.status === 'uploading';
   const isError = upload.status === 'error';
+  const isCanceled = upload.status === 'canceled';
+  const eta = formatEta(upload.etaSeconds);
+  const speed = upload.bytesPerSecond && upload.bytesPerSecond > 0
+    ? `${formatBytes(upload.bytesPerSecond)}/s`
+    : null;
+
   const tone = isError
     ? 'border-danger/40 bg-danger/10'
     : isUploading
       ? 'border-primary/40 bg-primary/10'
-      : 'border-success/40 bg-success/10';
+      : isCanceled
+        ? 'border-warning/40 bg-warning/10'
+        : 'border-success/40 bg-success/10';
 
   return (
     <div className={`mt-3 rounded-xl border p-3 ${tone}`} role="status" aria-live="polite">
@@ -284,6 +308,8 @@ function AssetUploadPanel({
             <AlertCircle className="h-4 w-4 shrink-0 text-danger" />
           ) : isUploading ? (
             <Loader2 className="h-4 w-4 shrink-0 animate-spin text-primary" />
+          ) : isCanceled ? (
+            <AlertCircle className="h-4 w-4 shrink-0 text-warning" />
           ) : (
             <CheckCircle2 className="h-4 w-4 shrink-0 text-success" />
           )}
@@ -292,7 +318,9 @@ function AssetUploadPanel({
               ? 'Falha ao enviar o arquivo'
               : isUploading
                 ? ASSET_UPLOAD_LABEL[kind]
-                : 'Arquivo publicado no object storage'}
+                : isCanceled
+                  ? 'Envio cancelado'
+                  : 'Arquivo publicado no object storage'}
           </span>
         </span>
 
@@ -318,20 +346,50 @@ function AssetUploadPanel({
               <div className="h-full w-1/3 animate-pulse rounded-full bg-primary" />
             )}
           </div>
-          <p className="mt-1 text-xs text-muted-foreground">
-            {upload.total > 0
-              ? `${formatBytes(upload.loaded)} de ${formatBytes(upload.total)} enviados`
-              : 'Aguarde a conclusão…'}
-          </p>
+          <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs text-muted-foreground">
+              {upload.total > 0
+                ? `${formatBytes(upload.loaded)} de ${formatBytes(upload.total)} enviados`
+                : 'Aguarde a conclusão…'}
+              {speed ? ` · ${speed}` : ''}
+              {eta ? ` · ≈ ${eta} restantes` : ''}
+            </p>
+            <Button variant="ghost" size="sm" onClick={onCancel} title="Cancelar o envio (o progresso é preservado)">
+              <X className="h-3.5 w-3.5" /> Cancelar
+            </Button>
+          </div>
         </>
       )}
 
       {isError && (
         <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
           <p className="min-w-0 flex-1 text-xs text-danger">{upload.error}</p>
-          <Button variant="ghost" size="sm" onClick={onRetry} disabled={!isError}>
-            <RotateCcw className="h-3.5 w-3.5" /> Tentar novamente
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" onClick={onDiscard} title="Descartar as partes já enviadas">
+              <Trash2 className="h-3.5 w-3.5" /> Descartar
+            </Button>
+            <Button variant="ghost" size="sm" onClick={onRetry} disabled={!isError}>
+              <RotateCcw className="h-3.5 w-3.5" /> Tentar novamente
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {isCanceled && (
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+          <p className="min-w-0 flex-1 text-xs text-warning">
+            {resumable
+              ? `O envio parou em ${upload.percent}% — os blocos já enviados continuam no storage e a retomada começa de onde parou.`
+              : `O envio parou em ${upload.percent}% — neste tamanho o arquivo vai numa requisição única, então continuar reenvia desde o começo.`}
+          </p>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" onClick={onDiscard} title="Descartar as partes já enviadas">
+              <Trash2 className="h-3.5 w-3.5" /> Descartar
+            </Button>
+            <Button variant="ghost" size="sm" onClick={onRetry}>
+              <RotateCcw className="h-3.5 w-3.5" /> Continuar envio
+            </Button>
+          </div>
         </div>
       )}
 
@@ -367,6 +425,25 @@ export default function CustomPackageEditorPage() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [installerUpload, setInstallerUpload] = useState<AssetUpload | null>(null);
   const [iconUpload, setIconUpload] = useState<AssetUpload | null>(null);
+  // Aborta o XHR em voo quando o usuário cancela (o progresso no storage fica).
+  const installerAbortRef = useRef<AbortController | null>(null);
+  const iconAbortRef = useRef<AbortController | null>(null);
+  // Sequência de envio por arquivo: um upload cancelado pode emitir um último
+  // evento (ou cair no catch) DEPOIS de outro upload já ter assumido o painel —
+  // sem esta guarda o estado do novo apareceria misturado/atrasado.
+  const installerSeqRef = useRef(0);
+  const iconSeqRef = useRef(0);
+
+  // Sair da página no meio de um envio de vários GiB: aborta em vez de deixar o
+  // XHR terminar "invisível" (poderia publicar um objeto sem vínculo). O abort
+  // com motivo 'cancel' preserva as partes no storage e o estado para retomar.
+  useEffect(
+    () => () => {
+      installerAbortRef.current?.abort('cancel');
+      iconAbortRef.current?.abort('cancel');
+    },
+    [],
+  );
   const [saving, setSaving] = useState(false);
   const [baseline, setBaseline] = useState<FormState>({ ...EMPTY_FORM });
   const [confirmDeleteFileOpen, setConfirmDeleteFileOpen] = useState(false);
@@ -435,31 +512,58 @@ export default function CustomPackageEditorPage() {
     if (!canAttachFiles) return;
 
     // Descartar o arquivo ANTERIOR só quando ele é realmente outro arquivo: o
-    // "Tentar novamente" chama esta função com o MESMO arquivo e precisa RETOMAR
+    // "Continuar envio" chama esta função com o MESMO arquivo e precisa RETOMAR
     // (o descarte apagaria as partes já enviadas ou o objeto já publicado).
     if (installerFile && installerFile !== file && installerUpload?.status !== 'uploading') {
       void discardUnlinkedAsset(installerFile, 'installer');
     }
 
+    installerAbortRef.current?.abort();
+    const controller = new AbortController();
+    installerAbortRef.current = controller;
+    const seq = ++installerSeqRef.current;
+
+    // Preserva o que já foi enviado apenas no caminho RETOMÁVEL (multipart): no
+    // envio em requisição única o progresso não existe no servidor, então herdar
+    // o percentual antigo mostraria uma retomada que não aconteceu.
+    const resumeFrom =
+      installerFile === file && file.size > ASSET_MULTIPART_MIN_BYTES ? installerUpload : null;
+    const startLoaded = resumeFrom?.loaded ?? 0;
+    const startPercent = resumeFrom?.percent ?? 0;
+
     setInstallerFile(file);
     setInstallerAsset(null);
-    setInstallerUpload({ status: 'uploading', fileName: file.name, loaded: 0, total: file.size, percent: 0 });
+    setInstallerUpload({
+      status: 'uploading',
+      fileName: file.name,
+      loaded: startLoaded,
+      total: file.size,
+      percent: startPercent,
+    });
 
     try {
       const asset = await appStoreApi.uploadCustomAsset(
         file,
         'installer',
         (progress: UploadProgress) => {
+          if (controller.signal.aborted || seq !== installerSeqRef.current) return;
+
           setInstallerUpload({
             status: 'uploading',
             fileName: file.name,
             loaded: progress.loaded,
             total: progress.total || file.size,
             percent: progress.percent,
+            bytesPerSecond: progress.bytesPerSecond,
+            etaSeconds: progress.etaSeconds,
           });
         },
+        controller.signal,
       );
 
+      if (seq !== installerSeqRef.current) return;
+
+      installerAbortRef.current = null;
       setInstallerAsset(asset);
       setInstallerUpload({
         status: 'done',
@@ -470,16 +574,71 @@ export default function CustomPackageEditorPage() {
       });
       toast.success(`Instalador enviado ao object storage (${formatBytes(asset.sizeBytes)}).`);
     } catch (error) {
+      // Um upload mais novo já assumiu o painel: este erro não é mais relevante.
+      if (seq !== installerSeqRef.current) return;
+
+      installerAbortRef.current = null;
+
+      if (controller.signal.aborted) {
+        // Descartado: o estado já foi limpo e o objeto/partes foram apagados no
+        // storage — não recriar o painel.
+        if (String(controller.signal.reason) === 'discard') return;
+
+        // Cancelado: nada é descartado — o storage guarda os blocos e o
+        // "Continuar envio" retoma exatamente de onde parou.
+        setInstallerUpload((current) => ({
+          status: 'canceled',
+          fileName: file.name,
+          loaded: current?.loaded ?? 0,
+          total: file.size,
+          percent: current?.percent ?? 0,
+        }));
+        toast('Envio cancelado. O progresso foi preservado.', { icon: '⏸️' });
+        return;
+      }
+
       const message = error instanceof Error ? error.message : 'Falha ao enviar o instalador.';
+      // Com blocos já confirmados no storage, o progresso não pode ser zerado: o
+      // "Tentar novamente" retoma dali.
+      const resumable = file.size > ASSET_MULTIPART_MIN_BYTES;
       setInstallerUpload({
         status: 'error',
         fileName: file.name,
-        loaded: 0,
+        loaded: resumable ? (installerUpload?.loaded ?? 0) : 0,
         total: file.size,
-        percent: 0,
+        percent: resumable ? (installerUpload?.percent ?? 0) : 0,
         error: message,
       });
       toast.error(message);
+    }
+  }
+
+  /** Cancela o envio em voo (o storage mantém os blocos; o estado local fica). */
+  function cancelUpload(kind: 'installer' | 'icon') {
+    const ref = kind === 'installer' ? installerAbortRef : iconAbortRef;
+    // O motivo distingue "cancelar" (mantém o progresso) de "descartar" (apaga).
+    ref.current?.abort('cancel');
+  }
+
+  /** Descarta o envio: apaga as partes/objeto no storage e limpa o estado local. */
+  function discardUpload(kind: 'installer' | 'icon') {
+    const file = kind === 'installer' ? installerFile : iconFile;
+    if (file) void discardUnlinkedAsset(file, kind);
+
+    if (kind === 'installer') {
+      installerSeqRef.current++;
+      installerAbortRef.current?.abort('discard');
+      installerAbortRef.current = null;
+      setInstallerFile(null);
+      setInstallerAsset(null);
+      setInstallerUpload(null);
+    } else {
+      iconSeqRef.current++;
+      iconAbortRef.current?.abort('discard');
+      iconAbortRef.current = null;
+      setIconFile(null);
+      setIconAsset(null);
+      setIconUpload(null);
     }
   }
 
@@ -491,21 +650,38 @@ export default function CustomPackageEditorPage() {
       void discardUnlinkedAsset(iconFile, 'icon');
     }
 
+    iconAbortRef.current?.abort();
+    const controller = new AbortController();
+    iconAbortRef.current = controller;
+    const seq = ++iconSeqRef.current;
+
     setIconFile(file);
     setIconAsset(null);
     setIconUpload({ status: 'uploading', fileName: file.name, loaded: 0, total: file.size, percent: 0 });
 
     try {
-      const asset = await appStoreApi.uploadCustomAsset(file, 'icon', (progress: UploadProgress) => {
-        setIconUpload({
-          status: 'uploading',
-          fileName: file.name,
-          loaded: progress.loaded,
-          total: progress.total || file.size,
-          percent: progress.percent,
-        });
-      });
+      const asset = await appStoreApi.uploadCustomAsset(
+        file,
+        'icon',
+        (progress: UploadProgress) => {
+          if (controller.signal.aborted || seq !== iconSeqRef.current) return;
 
+          setIconUpload({
+            status: 'uploading',
+            fileName: file.name,
+            loaded: progress.loaded,
+            total: progress.total || file.size,
+            percent: progress.percent,
+            bytesPerSecond: progress.bytesPerSecond,
+            etaSeconds: progress.etaSeconds,
+          });
+        },
+        controller.signal,
+      );
+
+      if (seq !== iconSeqRef.current) return;
+
+      iconAbortRef.current = null;
       setIconAsset(asset);
       setIconUpload({
         status: 'done',
@@ -516,13 +692,32 @@ export default function CustomPackageEditorPage() {
       });
       toast.success('Ícone/capa enviado ao object storage.');
     } catch (error) {
+      if (seq !== iconSeqRef.current) return;
+
+      iconAbortRef.current = null;
+
+      if (controller.signal.aborted) {
+        if (String(controller.signal.reason) === 'discard') return;
+
+        setIconUpload((current) => ({
+          status: 'canceled',
+          fileName: file.name,
+          loaded: current?.loaded ?? 0,
+          total: file.size,
+          percent: current?.percent ?? 0,
+        }));
+        toast('Envio cancelado. O progresso foi preservado.', { icon: '⏸️' });
+        return;
+      }
+
       const message = error instanceof Error ? error.message : 'Falha ao enviar o ícone.';
+      const resumableIcon = file.size > ASSET_MULTIPART_MIN_BYTES;
       setIconUpload({
         status: 'error',
         fileName: file.name,
-        loaded: 0,
+        loaded: resumableIcon ? (iconUpload?.loaded ?? 0) : 0,
         total: file.size,
-        percent: 0,
+        percent: resumableIcon ? (iconUpload?.percent ?? 0) : 0,
         error: message,
       });
       toast.error(message);
@@ -591,7 +786,18 @@ export default function CustomPackageEditorPage() {
       return;
     }
     if ((installerFile && !installerAsset) || (iconFile && !iconAsset)) {
-      toast.error('O envio do arquivo não foi concluído. Use "Tentar novamente" antes de salvar.');
+      const canceled = installerUpload?.status === 'canceled' || iconUpload?.status === 'canceled';
+      const resumable =
+        (installerFile?.size ?? 0) > ASSET_MULTIPART_MIN_BYTES ||
+        (iconFile?.size ?? 0) > ASSET_MULTIPART_MIN_BYTES;
+
+      toast.error(
+        canceled
+          ? resumable
+            ? 'O envio está cancelado. Use "Continuar envio" (retoma de onde parou) antes de salvar.'
+            : 'O envio está cancelado. Use "Continuar envio" (reenvia o arquivo) antes de salvar.'
+          : 'O envio do arquivo não foi concluído. Use "Tentar novamente" antes de salvar.',
+      );
       return;
     }
     if (!hasPendingChanges) {
@@ -925,6 +1131,8 @@ export default function CustomPackageEditorPage() {
           onRetry={() => {
             if (installerFile) void uploadInstaller(installerFile);
           }}
+          onCancel={() => cancelUpload('installer')}
+          onDiscard={() => discardUpload('installer')}
         />
       </Card>
 
@@ -1007,6 +1215,8 @@ export default function CustomPackageEditorPage() {
               onRetry={() => {
                 if (iconFile) void uploadIcon(iconFile);
               }}
+              onCancel={() => cancelUpload('icon')}
+              onDiscard={() => discardUpload('icon')}
             />
           </div>
         </div>

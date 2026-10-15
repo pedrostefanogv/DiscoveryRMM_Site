@@ -332,6 +332,14 @@ const ASSET_PART_SIZE = 10 * 1024 * 1024;
  * atrás do Cloudflare (o edge corta requisições longas em ~100 s).
  */
 const SINGLE_REQUEST_MAX_BYTES = ASSET_PART_SIZE;
+
+/**
+ * Acima deste tamanho o envio é MULTIPART (retomável: cancelar não perde o que já
+ * subiu). Até ele o arquivo vai numa requisição única — cancelar nesse caminho
+ * não preserva progresso e continuar reenvia desde o começo.
+ */
+export const ASSET_MULTIPART_MIN_BYTES = SINGLE_REQUEST_MAX_BYTES;
+
 const MULTIPART_STATE_PREFIX = "discovery:asset-multipart:";
 const PART_MAX_ATTEMPTS = 4;
 /** URLs assinadas pedidas por requisição (valem 60 min cada). */
@@ -435,9 +443,15 @@ function clearMultipartState(key: string): void {
  * por CORS, e o ETag do PUT não é. Sem este fallback o envio falharia mesmo com
  * o bloco corretamente armazenado.
  */
-async function fetchPartEtagFromStorage(uploadId: string, partNumber: number): Promise<string> {
+async function fetchPartEtagFromStorage(
+  uploadId: string,
+  partNumber: number,
+  signal?: AbortSignal,
+): Promise<string> {
   const status = await api.get<MultipartStatusResponse>(
     `${BASE}/custom/assets/multipart/${uploadId}`,
+    {},
+    { signal },
   );
 
   const received = normalizeReceivedParts(status.receivedParts);
@@ -448,10 +462,12 @@ async function fetchPartEtagFromStorage(uploadId: string, partNumber: number): P
 async function requestPartUrls(
   uploadId: string,
   partNumbers: number[],
+  signal?: AbortSignal,
 ): Promise<Map<number, string>> {
   const response = await api.post<{ parts: { partNumber: number; url: string }[] }>(
     `${BASE}/custom/assets/multipart/${uploadId}/parts`,
     { partNumbers },
+    { signal },
   );
 
   return new Map(response.parts.map((part) => [part.partNumber, part.url]));
@@ -467,7 +483,9 @@ async function uploadPartWithRetry(
   url: string,
   blob: Blob,
   refreshUrl: (partNumber: number) => Promise<string>,
-  onProgress?: (loaded: number, total: number) => void,
+  /** Recebe também a velocidade medida, para o ETA do ARQUIVO (não do bloco). */
+  onProgress?: (loaded: number, total: number, bytesPerSecond?: number) => void,
+  signal?: AbortSignal,
 ): Promise<MultipartPart> {
   let lastError: unknown = null;
   let currentUrl = url;
@@ -476,8 +494,9 @@ async function uploadPartWithRetry(
     try {
       const { etag } = await api.putPresignedPart(currentUrl, blob, {
         timeoutMs: 0,
+        signal,
         onProgress: onProgress
-          ? (progress) => onProgress(progress.loaded, progress.total)
+          ? (progress) => onProgress(progress.loaded, progress.total, progress.bytesPerSecond)
           : undefined,
       });
 
@@ -487,6 +506,10 @@ async function uploadPartWithRetry(
       return { partNumber, etag, sizeBytes: blob.size };
     } catch (error) {
       lastError = error;
+
+      // Cancelado pelo usuário: não gasta novas requisições nem esperas — o
+      // painel precisa sair do "enviando" na hora.
+      if (signal?.aborted) break;
       if (attempt === PART_MAX_ATTEMPTS) break;
 
       // 403/expiração: a URL assinada venceu (upload longo) — pede outra.
@@ -506,6 +529,7 @@ async function uploadCustomAssetDirect(
   file: File,
   kind: "installer" | "icon",
   onProgress?: (progress: UploadProgress) => void,
+  signal?: AbortSignal,
 ): Promise<CustomPackageAsset> {
   const fingerprint = multipartFingerprint(file, kind);
   const stateKey = MULTIPART_STATE_PREFIX + fingerprint;
@@ -571,15 +595,31 @@ async function uploadCustomAssetDirect(
   const completed = new Set(state.parts.map((part) => part.partNumber));
   let uploadedBytes = state.parts.reduce((sum, part) => sum + (part.sizeBytes ?? 0), 0);
 
-  const report = (inFlight = 0) => {
+  const report = (inFlight = 0, bytesPerSecond?: number) => {
     if (!onProgress) return;
+
     const sent = Math.min(file.size, uploadedBytes + inFlight);
+    const remaining = Math.max(0, file.size - sent);
+
+    // O ETA do BLOCO não serve para o arquivo: aqui a velocidade medida num bloco
+    // (válida como taxa) é aplicada ao total restante do arquivo.
+    const etaSeconds =
+      bytesPerSecond && bytesPerSecond > 0 && remaining > 0
+        ? remaining / bytesPerSecond
+        : undefined;
+
     onProgress({
       loaded: sent,
       total: file.size,
       percent: file.size > 0 ? Math.min(100, Math.round((sent / file.size) * 100)) : 0,
+      bytesPerSecond: bytesPerSecond && bytesPerSecond > 0 ? bytesPerSecond : undefined,
+      etaSeconds,
     });
   };
+
+  // Velocidade da última amostra: mantém o ETA estável entre blocos (cada bloco
+  // cria um medidor novo, então no início dele ainda não há taxa medida).
+  let lastMeasuredRate: number | undefined;
 
   report();
 
@@ -590,7 +630,7 @@ async function uploadCustomAssetDirect(
   // 3) Envia bloco a bloco direto na URL pré-assinada do storage.
   if (!alreadyCompleted && pending.length > 0) {
     const refreshUrl = async (partNumber: number): Promise<string> => {
-      const refreshed = await requestPartUrls(state!.uploadId, [partNumber]);
+      const refreshed = await requestPartUrls(state!.uploadId, [partNumber], signal);
       const url = refreshed.get(partNumber);
       if (!url) throw new Error(`Não foi possível renovar a URL do bloco ${partNumber}.`);
       return url;
@@ -601,7 +641,7 @@ async function uploadCustomAssetDirect(
     try {
     for (let offset = 0; offset < pending.length; offset += PART_URL_BATCH) {
       const chunk = pending.slice(offset, offset + PART_URL_BATCH);
-      const urls = await requestPartUrls(state.uploadId, chunk);
+      const urls = await requestPartUrls(state.uploadId, chunk, signal);
 
       for (const partNumber of chunk) {
         const start = (partNumber - 1) * partSize;
@@ -613,20 +653,23 @@ async function uploadCustomAssetDirect(
         // Progresso do bloco não pode REGREDIR numa retentativa (nova tentativa
         // recomeça em 0): guarda o máximo já enviado deste bloco.
         let partSent = 0;
+
         const uploaded = await uploadPartWithRetry(
           partNumber,
           url,
           blob,
           refreshUrl,
-          (loaded) => {
+          (loaded, _total, bytesPerSecond) => {
             partSent = Math.max(partSent, loaded);
-            report(partSent);
+            if (bytesPerSecond && bytesPerSecond > 0) lastMeasuredRate = bytesPerSecond;
+            report(partSent, lastMeasuredRate);
           },
+          signal,
         );
 
         // Sem ETag na resposta (storage externo atrás de CORS): busca no storage.
         if (!uploaded.etag) {
-          uploaded.etag = await fetchPartEtagFromStorage(state.uploadId, partNumber);
+          uploaded.etag = await fetchPartEtagFromStorage(state.uploadId, partNumber, signal);
           if (!uploaded.etag) {
             throw new Error(
               `O bloco ${partNumber} subiu, mas não foi possível confirmar o ETag no storage. Tente novamente.`,
@@ -639,7 +682,7 @@ async function uploadCustomAssetDirect(
         uploadedBytes += uploaded.sizeBytes;
         // Gravado a CADA bloco: se a página cair, o próximo envio retoma daqui.
         writeMultipartState(stateKey, state);
-        report();
+        report(0, lastMeasuredRate);
       }
     }
     } catch (error) {
@@ -658,14 +701,17 @@ async function uploadCustomAssetDirect(
     asset = await api.post<CustomPackageAsset>(
       `${BASE}/custom/assets/multipart/${state.uploadId}/complete`,
       { parts: state.parts },
-      { timeoutMs: 0 },
+      { timeoutMs: 0, signal },
     );
   } catch (error) {
+    // Cancelamento do usuário não deve virar retentativa.
+    if (signal?.aborted) throw error;
+
     await delay(2000);
     asset = await api.post<CustomPackageAsset>(
       `${BASE}/custom/assets/multipart/${state.uploadId}/complete`,
       { parts: state.parts },
-      { timeoutMs: 0 },
+      { timeoutMs: 0, signal },
     );
   }
 
@@ -821,6 +867,7 @@ export const appStoreApi = {
     file: File,
     kind: "installer" | "icon" = "installer",
     onProgress?: (progress: UploadProgress) => void,
+    signal?: AbortSignal,
   ) => {
     // Arquivos pequenos: caminho direto (1 requisição multipart).
     if (file.size <= SINGLE_REQUEST_MAX_BYTES) {
@@ -829,12 +876,12 @@ export const appStoreApi = {
       return api.upload<CustomPackageAsset>(
         `${BASE}/custom/assets?kind=${kind}`,
         formData,
-        { timeoutMs: 0, onProgress },
+        { timeoutMs: 0, onProgress, signal },
       );
     }
 
     // Arquivos grandes: multipart DIRETO no storage, com retomada.
-    return uploadCustomAssetDirect(file, kind, onProgress);
+    return uploadCustomAssetDirect(file, kind, onProgress, signal);
   },
 
   /** Cria ou atualiza um pacote custom. */

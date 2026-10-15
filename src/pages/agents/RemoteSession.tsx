@@ -1,7 +1,8 @@
 import { useSearchParams } from 'react-router-dom';
 import { Button, Card } from '@/components/ui';
 import { ThemeToggle } from '@/components/auth/ThemeToggle';
-import { Film, Image, Gauge, Monitor } from 'lucide-react';
+import { Film, Image, Gauge, MessageSquare, Monitor } from 'lucide-react';
+import { toast } from 'react-hot-toast';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { remoteSessionsApi, type ChangeQualityRequest, type StartRemoteSessionRequest } from '@/api/remote-sessions';
 import { useRemoteSessionLiveness } from '@/hooks/useRemoteSessionLiveness';
@@ -33,6 +34,7 @@ import {
   type CrossTabMessage,
 } from '@/auth/crossTabSync';
 import { realtimeConfig, resolveNatsWsUrl } from '@/config/realtime';
+import { openAgentSupportChatWindow } from './agentSupportChatLauncher';
 
 type Tab = 'screen' | 'terminal' | 'files' | 'proxy' | 'processes' | 'services';
 
@@ -865,6 +867,24 @@ export default function RemoteSession() {
     window.close();
   };
 
+  /**
+   * Abre a JANELA do chat de suporte com a MESMA máquina desta sessão remota —
+   * o atendente conversa com o usuário final sem largar o controle remoto nem
+   * voltar à listagem/detalhe do agent.
+   *
+   * Usa o mesmo launcher do "Abrir chat" da listagem (janela dedicada do chat,
+   * que já retoma a conversa existente). O window.open precisa nascer de um
+   * gesto do usuário: a chamada é síncrona no clique.
+   */
+  const handleOpenSupportChat = () => {
+    if (!agentId) return;
+    try {
+      openAgentSupportChatWindow(agentId, true);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Falha ao abrir o chat de suporte.');
+    }
+  };
+
   // Alterna o fullscreen da tela (barra de rodapé + Ctrl+F no viewer).
   // O estado é sincronizado pelo listener `fullscreenchange` (cobre Esc/API).
   const toggleScreenFullscreen = useCallback(async () => {
@@ -1537,6 +1557,24 @@ export default function RemoteSession() {
               )}
             </div>
           </>
+        )}
+
+        {/* Chat de suporte com a MESMA máquina desta sessão remota. Fica
+            ancorado à direita da barra (ml-auto) para não competir com os
+            controles da aba ativa. O gate de permissão fica no próprio painel
+            do chat (como nas demais janelas dedicadas): aqui o lançador só
+            precisa do agent. */}
+        {agentId && (
+          <button
+            type="button"
+            className="ml-auto inline-flex items-center gap-1 px-2 py-1 bg-surface-hover hover:bg-border text-foreground rounded"
+            onClick={handleOpenSupportChat}
+            title="Abrir o chat de suporte com esta máquina"
+            aria-label="Abrir o chat de suporte com esta máquina"
+          >
+            <MessageSquare className="h-3.5 w-3.5" />
+            Chat
+          </button>
         )}
       </div>
 
