@@ -307,6 +307,272 @@ export interface EffectiveParams {
   cursor?: string;
 }
 
+// ═══════════════════════════════════════════════════════════════════════
+// Upload multipart DIRETO no object storage (RustFS/S3)
+// ═══════════════════════════════════════════════════════════════════════
+//
+// Instaladores grandes não podem subir num corpo único pela API: o Cloudflare
+// recusa o corpo no edge (413). O fluxo correto é multipart DIRETO no storage —
+// a API cria o multipart e só pré-assina cada bloco de 50 MiB; o navegador faz
+// PUT na URL assinada. Como as partes ficam no storage até o complete, o envio
+// é RETOMÁVEL: guardamos o uploadId + ETags em localStorage por impressão do
+// arquivo (nome+tamanho+data), então um novo envio do mesmo arquivo continua
+// exatamente de onde parou (inclusive depois de fechar/reabrir a página).
+
+const ASSET_PART_SIZE = 50 * 1024 * 1024;
+const MULTIPART_STATE_PREFIX = "discovery:asset-multipart:";
+const PART_MAX_ATTEMPTS = 4;
+
+interface MultipartPart {
+  partNumber: number;
+  etag: string;
+  sizeBytes: number;
+}
+
+interface MultipartUploadState {
+  uploadId: string;
+  objectKey: string;
+  partSizeBytes: number;
+  totalParts: number;
+  fingerprint: string;
+  parts: MultipartPart[];
+}
+
+interface MultipartStatusResponse {
+  uploadId: string;
+  objectKey: string;
+  partSizeBytes: number;
+  totalParts: number;
+  receivedBytes: number;
+  receivedParts: MultipartPart[];
+  pendingParts: number[];
+}
+
+interface MultipartSessionResponse {
+  uploadId: string;
+  objectKey: string;
+  partSizeBytes: number;
+  totalParts: number;
+}
+
+function multipartFingerprint(file: File, kind: string): string {
+  return `${kind}:${file.name}:${file.size}:${file.lastModified}`;
+}
+
+function readMultipartState(key: string): MultipartUploadState | null {
+  try {
+    const raw = window.localStorage.getItem(key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as MultipartUploadState;
+    return parsed?.uploadId ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeMultipartState(key: string, state: MultipartUploadState): void {
+  try {
+    window.localStorage.setItem(key, JSON.stringify(state));
+  } catch {
+    // Modo privado / quota cheia: o envio continua, só perde a retomada.
+  }
+}
+
+function clearMultipartState(key: string): void {
+  try {
+    window.localStorage.removeItem(key);
+  } catch {
+    // ignorado
+  }
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+/** Envia um bloco direto ao storage, renovando a URL assinada se ela expirar. */
+async function uploadPartWithRetry(
+  partNumber: number,
+  url: string,
+  blob: Blob,
+  refreshUrl: (partNumber: number) => Promise<string>,
+  onProgress?: (loaded: number, total: number) => void,
+): Promise<MultipartPart> {
+  let lastError: unknown = null;
+  let currentUrl = url;
+
+  for (let attempt = 1; attempt <= PART_MAX_ATTEMPTS; attempt++) {
+    try {
+      const { etag } = await api.putPresignedPart(currentUrl, blob, {
+        timeoutMs: 0,
+        onProgress: onProgress
+          ? (progress) => onProgress(progress.loaded, progress.total)
+          : undefined,
+      });
+
+      if (!etag) {
+        throw new Error("O storage não devolveu o ETag do bloco.");
+      }
+
+      return { partNumber, etag, sizeBytes: blob.size };
+    } catch (error) {
+      lastError = error;
+      if (attempt === PART_MAX_ATTEMPTS) break;
+
+      // 403/expiração: a URL assinada venceu (upload longo) — pede outra.
+      currentUrl = await refreshUrl(partNumber).catch(() => currentUrl);
+      await delay(500 * attempt);
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error("Falha ao enviar o bloco ao storage.");
+}
+
+/**
+ * Upload multipart direto no storage com retomada. Devolve o asset publicado
+ * (mesmo formato do upload único) já finalizado pelo storage.
+ */
+async function uploadCustomAssetDirect(
+  file: File,
+  kind: "installer" | "icon",
+  onProgress?: (progress: UploadProgress) => void,
+): Promise<CustomPackageAsset> {
+  const fingerprint = multipartFingerprint(file, kind);
+  const stateKey = MULTIPART_STATE_PREFIX + fingerprint;
+
+  let state = readMultipartState(stateKey);
+
+  // 1) Tenta RETOMAR: o storage é a fonte de verdade das partes recebidas.
+  if (state) {
+    const status = await api
+      .get<MultipartStatusResponse>(`${BASE}/custom/assets/multipart/${state.uploadId}`)
+      .catch(() => null);
+
+    if (status) {
+      state = {
+        ...state,
+        objectKey: status.objectKey,
+        partSizeBytes: status.partSizeBytes,
+        totalParts: status.totalParts,
+        parts: status.receivedParts ?? [],
+      };
+    } else {
+      clearMultipartState(stateKey);
+      state = null;
+    }
+  }
+
+  // 2) Abre um novo multipart no storage.
+  if (!state) {
+    const session = await api.post<MultipartSessionResponse>(`${BASE}/custom/assets/multipart`, {
+      kind,
+      fileName: file.name,
+      contentType: file.type || "application/octet-stream",
+      sizeBytes: file.size,
+    });
+
+    state = {
+      uploadId: session.uploadId,
+      objectKey: session.objectKey,
+      partSizeBytes: session.partSizeBytes || ASSET_PART_SIZE,
+      totalParts: session.totalParts || Math.max(1, Math.ceil(file.size / ASSET_PART_SIZE)),
+      fingerprint,
+      parts: [],
+    };
+    writeMultipartState(stateKey, state);
+  }
+
+  const partSize = state.partSizeBytes > 0 ? state.partSizeBytes : ASSET_PART_SIZE;
+  const totalParts = state.totalParts > 0 ? state.totalParts : Math.max(1, Math.ceil(file.size / partSize));
+  const completed = new Set(state.parts.map((part) => part.partNumber));
+  let uploadedBytes = state.parts.reduce((sum, part) => sum + (part.sizeBytes ?? 0), 0);
+
+  const report = (inFlight = 0) => {
+    if (!onProgress) return;
+    const sent = Math.min(file.size, uploadedBytes + inFlight);
+    onProgress({
+      loaded: sent,
+      total: file.size,
+      percent: file.size > 0 ? Math.min(100, Math.round((sent / file.size) * 100)) : 0,
+    });
+  };
+
+  report();
+
+  const pending = Array.from({ length: totalParts }, (_, index) => index + 1).filter(
+    (partNumber) => !completed.has(partNumber),
+  );
+
+  // 3) Envia bloco a bloco direto na URL pré-assinada do storage.
+  if (pending.length > 0) {
+    const batch = await api.post<{ parts: { partNumber: number; url: string }[] }>(
+      `${BASE}/custom/assets/multipart/${state.uploadId}/parts`,
+      { partNumbers: pending },
+    );
+
+    const urls = new Map(batch.parts.map((part) => [part.partNumber, part.url]));
+
+    const refreshUrl = async (partNumber: number): Promise<string> => {
+      const refreshed = await api.post<{ parts: { partNumber: number; url: string }[] }>(
+        `${BASE}/custom/assets/multipart/${state!.uploadId}/parts`,
+        { partNumbers: [partNumber] },
+      );
+      const url = refreshed.parts.find((part) => part.partNumber === partNumber)?.url;
+      if (!url) throw new Error(`Não foi possível renovar a URL do bloco ${partNumber}.`);
+      return url;
+    };
+
+    for (const partNumber of pending) {
+      const start = (partNumber - 1) * partSize;
+      const end = Math.min(start + partSize, file.size);
+      const blob = file.slice(start, end);
+
+      let url = urls.get(partNumber);
+      if (!url) {
+        url = await refreshUrl(partNumber);
+      }
+
+      const uploaded = await uploadPartWithRetry(
+        partNumber,
+        url,
+        blob,
+        refreshUrl,
+        (loaded) => report(loaded),
+      );
+
+      state.parts.push(uploaded);
+      state.parts.sort((a, b) => a.partNumber - b.partNumber);
+      uploadedBytes += uploaded.sizeBytes;
+      // Gravado a CADA bloco: se a página cair, o próximo envio retoma daqui.
+      writeMultipartState(stateKey, state);
+      report();
+    }
+  }
+
+  // 4) Finaliza no storage (a API só envia os ETags e publica o asset).
+  // Sem timeout no cliente: a API ainda calcula o SHA-256 do arquivo montado
+  // (passada de leitura no loopback) e um instalador de vários GiB demora.
+  // A API é idempotente, então uma resposta perdida pode ser reconferida.
+  let asset: CustomPackageAsset;
+  try {
+    asset = await api.post<CustomPackageAsset>(
+      `${BASE}/custom/assets/multipart/${state.uploadId}/complete`,
+      { parts: state.parts },
+      { timeoutMs: 0 },
+    );
+  } catch (error) {
+    await delay(2000);
+    asset = await api.post<CustomPackageAsset>(
+      `${BASE}/custom/assets/multipart/${state.uploadId}/complete`,
+      { parts: state.parts },
+      { timeoutMs: 0 },
+    );
+  }
+
+  clearMultipartState(stateKey);
+  return asset;
+}
+
 export const appStoreApi = {
   syncCatalog: async (installationType: AppInstallationType) => {
     // Dispara o job em background (202). O resultado é obtido via polling
@@ -402,16 +668,17 @@ export const appStoreApi = {
    * Envia instalador (kind=installer) ou ícone/capa (kind=icon) para o object
    * storage.
    *
-   * Arquivos grandes vão em BLOCOS de 50 MiB (padronizado): um corpo único de
-   * vários GiB é recusado pelo Cloudflare no edge com 413, então a API abre uma
-   * sessão, recebe os blocos e remonta o arquivo no servidor.
+   * Até 50 MiB: uma requisição multipart para a API. Acima disso: MULTIPART
+   * DIRETO no storage (RustFS/S3) em blocos de 50 MiB — o arquivo não passa pela
+   * API (o Cloudflare recusa corpo único de vários GiB com 413) e o envio é
+   * retomável (partes ficam no storage entre tentativas).
    */
   uploadCustomAsset: async (
     file: File,
     kind: "installer" | "icon" = "installer",
     onProgress?: (progress: UploadProgress) => void,
   ) => {
-    const PART_SIZE = 50 * 1024 * 1024;
+    const PART_SIZE = ASSET_PART_SIZE;
 
     // Arquivos pequenos: caminho direto (1 requisição multipart).
     if (file.size <= PART_SIZE) {
@@ -424,53 +691,8 @@ export const appStoreApi = {
       );
     }
 
-    const session = await api.post<{ uploadId: string; partSizeBytes: number; totalParts: number }>(
-      `${BASE}/custom/assets/session`,
-      {
-        kind,
-        fileName: file.name,
-        contentType: file.type || "application/octet-stream",
-        sizeBytes: file.size,
-      },
-    );
-
-    const partSize = session.partSizeBytes > 0 ? session.partSizeBytes : PART_SIZE;
-    const totalParts = Math.max(1, Math.ceil(file.size / partSize));
-
-    try {
-      for (let index = 0; index < totalParts; index++) {
-        const start = index * partSize;
-        const end = Math.min(start + partSize, file.size);
-        const blob = file.slice(start, end);
-        await api.putBinary(
-          `${BASE}/custom/assets/session/${session.uploadId}/part/${index}`,
-          blob,
-          {
-            timeoutMs: 0,
-            onProgress: onProgress
-              ? (p) => {
-                  const inPart = p.total > 0 ? Math.min(p.loaded, end - start) : 0;
-                  const sent = start + inPart;
-                  onProgress({
-                    loaded: sent,
-                    total: file.size,
-                    percent: Math.round((sent / file.size) * 100),
-                  });
-                }
-              : undefined,
-          },
-        );
-      }
-
-      return await api.post<CustomPackageAsset>(
-        `${BASE}/custom/assets/session/${session.uploadId}/complete`,
-        {},
-      );
-    } catch (error) {
-      // best-effort: libera a sessão/arquivo temporário no servidor.
-      void api.del(`${BASE}/custom/assets/session/${session.uploadId}`).catch(() => undefined);
-      throw error;
-    }
+    // Arquivos grandes: multipart DIRETO no storage, com retomada.
+    return uploadCustomAssetDirect(file, kind, onProgress);
   },
 
   /** Cria ou atualiza um pacote custom. */

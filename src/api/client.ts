@@ -544,6 +544,75 @@ function putBinaryWithProgress<T>(
   });
 }
 
+/**
+ * PUT binário DIRETO numa URL pré-assinada do object storage (RustFS/S3).
+ *
+ * Diferença crucial em relação a `putBinaryWithProgress`: não passa pela API —
+ * a URL é absoluta e já carrega a assinatura SigV4, então não há Authorization
+ * nem prefixo de base. É o caminho do upload multipart direto: cada bloco de
+ * 50 MiB vai do navegador ao storage, atravessando o Cloudflare sem 413.
+ *
+ * Devolve o ETag exigido para finalizar o multipart no storage.
+ */
+export function putPresignedPart(
+  url: string,
+  body: Blob,
+  options: UploadOptions = {},
+): Promise<{ etag: string }> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("PUT", url, true);
+    xhr.setRequestHeader("Content-Type", "application/octet-stream");
+    // NUNCA enviar Authorization aqui: a assinatura já está na query string e
+    // um header extra invalidaria a requisição no storage.
+
+    const timeoutMs = options.timeoutMs ?? 0;
+    if (timeoutMs > 0) {
+      xhr.timeout = timeoutMs;
+    }
+
+    if (options.signal) {
+      if (options.signal.aborted) {
+        reject(new ApiError(0, "Upload cancelado."));
+        return;
+      }
+      options.signal.addEventListener("abort", () => xhr.abort(), { once: true });
+    }
+
+    xhr.upload.onprogress = (event) => {
+      if (!options.onProgress) return;
+      const total = event.lengthComputable ? event.total : 0;
+      options.onProgress({
+        loaded: event.loaded,
+        total,
+        percent: total > 0 ? Math.min(100, Math.round((event.loaded / total) * 100)) : 0,
+      });
+    };
+
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        const etag = xhr.getResponseHeader("ETag") ?? xhr.getResponseHeader("etag") ?? "";
+        resolve({ etag: etag.replace(/"/g, "") });
+        return;
+      }
+      reject(
+        new ApiError(
+          xhr.status,
+          xhr.responseText
+            ? xhr.responseText.slice(0, 300)
+            : `O storage recusou o bloco (HTTP ${xhr.status}).`,
+        ),
+      );
+    };
+
+    xhr.onerror = () => reject(new ApiError(0, "Falha de rede ao enviar o bloco direto ao storage."));
+    xhr.onabort = () => reject(new ApiError(0, "Upload cancelado."));
+    xhr.ontimeout = () => reject(new ApiError(0, "O bloco excedeu o tempo limite."));
+
+    xhr.send(body);
+  });
+}
+
 export const api = {
   get: <T>(
     path: string,
@@ -579,6 +648,10 @@ export const api = {
   /** PUT binário (bloco de upload em partes) com progresso real. */
   putBinary: <T>(path: string, body: Blob, options?: UploadOptions) =>
     putBinaryWithProgress<T>(path, body, options),
+
+  /** PUT direto numa URL pré-assinada do storage (upload multipart resumível). */
+  putPresignedPart: (url: string, body: Blob, options?: UploadOptions) =>
+    putPresignedPart(url, body, options),
 
   put: <T>(path: string, body: unknown, init?: ApiRequestInit) =>
     request<T>(path, {
