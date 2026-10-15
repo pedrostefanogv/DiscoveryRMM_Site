@@ -3707,7 +3707,8 @@ export interface AppApprovalRule {
   installationType: AppInstallationType;
   packageId: string;
   packageName: string | null;
-  action: AppApprovalActionType;
+  /** null quando a API devolve um valor não reconhecido. */
+  action: AppApprovalActionType | null;
   autoUpdateEnabled: boolean | null;
   reason: string | null;
   createdAt: string;
@@ -3765,7 +3766,8 @@ export interface AppApprovalAuditEntry {
   scopeType: AppApprovalScopeType;
   scopeId: string | null;
   installationType: AppInstallationType;
-  action: AppApprovalActionType;
+  /** Ação resultante do evento; null quando o evento não registra ação (ex.: remoção). */
+  action: AppApprovalActionType | null;
   autoUpdateEnabled: boolean | null;
   reason: string | null;
   changeType: AppApprovalAuditChangeType;

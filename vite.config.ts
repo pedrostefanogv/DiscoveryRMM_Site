@@ -8,6 +8,36 @@ export default defineConfig({
   plugins: [
     react(),
     tailwindcss(),
+    {
+      // ── Opt-out do Rocket Loader (Cloudflare) no script de entrada ─────────
+      // O Rocket Loader reescrevia o <script type="module"> do entry para um
+      // type="<hash>-module" inexistente — que o navegador IGNORA — e o
+      // re-injetava via rocket-loader.min.js. Efeitos: quebra da semantica de
+      // module script e o warning do Chrome
+      //   "was preloaded using link preload but not used within a few seconds"
+      // (o edge pre-carrega o entry adiado e o navegador nao o consome).
+      //
+      // O atributo NAO pode ser escrito direto no index.html: o vite:build-html
+      // reconstroi a tag do entry e DESCARTA atributos que nao conhece —
+      // verificado, o data-cfasync sumia do HTML final. Por isso reinjetamos
+      // aqui, depois da transformacao nativa (order: "post").
+      //
+      // data-cfasync="false" faz o Cloudflare deixar ESTE script intacto. Se o
+      // Rocket Loader for desligado na zona, o atributo vira inerte.
+      name: "discovery:cloudflare-rocket-loader-optout",
+      transformIndexHtml: {
+        order: "post",
+        handler(html: string) {
+          return html.replace(
+            /<script\b[^>]*\bsrc="[^"]*\/assets\/[^"]*\.js"[^>]*><\/script>/g,
+            (tag) =>
+              tag.includes("data-cfasync")
+                ? tag
+                : tag.replace("<script", '<script data-cfasync="false"'),
+          );
+        },
+      },
+    },
     VitePWA({
       registerType: "autoUpdate",
       // favicon.svg nunca existiu no repo; precache dos icones que existem.

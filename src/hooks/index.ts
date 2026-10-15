@@ -31,6 +31,7 @@ export * from "./useDepartments";
 export * from "./useWorkflowProfiles";
 export * from "./useDatabaseSanitization";
 export * from "./useDatabaseMaintenance";
+export * from "./useObjectStorageSanitization";
 export * from "./useDeployTokens";
 
 // Reports

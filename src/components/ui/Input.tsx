@@ -9,7 +9,10 @@ interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
 
 export function Input({ label, error, hint, className = '', id, ...props }: InputProps) {
   const generatedId = useId();
-  const inputId = id ?? label?.toLowerCase().replace(/\s+/g, '-') ?? generatedId;
+  // Id único por instância: derivar do rótulo criava ids duplicados quando dois
+  // formulários com o mesmo rótulo ficavam montados ao mesmo tempo (ex.: aba +
+  // modal), e o `<label>` de um focava o campo do outro.
+  const inputId = id ?? generatedId;
   const helpId = `${inputId}-help`;
   return (
     <div className="space-y-1">
@@ -48,7 +51,8 @@ interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
 
 export function Select({ label, options, className = '', id, hint, error, fullWidth = true, ...props }: SelectProps) {
   const generatedId = useId();
-  const selectId = id ?? label?.toLowerCase().replace(/\s+/g, '-') ?? generatedId;
+  // Ver comentário em Input: id único por instância, nunca derivado do rótulo.
+  const selectId = id ?? generatedId;
   const helpId = `${selectId}-help`;
   return (
     <div className={fullWidth ? 'space-y-1' : 'w-auto shrink-0 space-y-1'}>
@@ -91,7 +95,8 @@ interface TextAreaProps extends TextareaHTMLAttributes<HTMLTextAreaElement> {
 
 export function TextArea({ label, error, hint, className = '', id, ...props }: TextAreaProps) {
   const generatedId = useId();
-  const textId = id ?? label?.toLowerCase().replace(/\s+/g, '-') ?? generatedId;
+  // Ver comentário em Input: id único por instância, nunca derivado do rótulo.
+  const textId = id ?? generatedId;
   const helpId = `${textId}-help`;
   return (
     <div className="space-y-1">

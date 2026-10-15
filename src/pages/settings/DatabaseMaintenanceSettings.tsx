@@ -1,23 +1,42 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Activity, Database, Play, RefreshCw, Search, ShieldAlert, Wrench } from "lucide-react";
+import { Activity, Database, Play, RefreshCw, Search, ShieldAlert, Trash2, Wrench } from "lucide-react";
 import toast from "react-hot-toast";
-import { Badge, Button, Card, CardHeader, ConfirmDialog } from "@/components/ui";
+import { Badge, Button, Card, CardHeader, ConfirmDialog, Select } from "@/components/ui";
 import {
   useDatabaseHealth,
   useDatabaseMaintenanceRuns,
+  useObjectStorageSanitizationChecks,
   useRunDatabaseMaintenance,
+  useRunObjectStorageSanitization,
   useRunSanitization,
   useSanitizationChecks,
 } from "@/hooks";
 import { useAuthorization } from "@/auth/authorization";
-import type { DatabaseHealthSeverity, SanitizationReport } from "@/api";
+import type {
+  DatabaseHealthSeverity,
+  ObjectStorageSanitizationReport,
+  SanitizationReport,
+} from "@/api";
 
 /**
  * Manutenção do banco: sanitização de inconsistências que impedem a operação
  * (ex.: chamado sem estado de workflow), diagnóstico físico (índices inválidos,
  * bloat, wraparound) e histórico/disparo da manutenção VACUUM/REINDEX/ANALYZE.
  */
+/** Tamanho em bytes no formato curto (inventário do object storage). */
+function formatStorageBytes(bytes: number): string {
+  if (!bytes || bytes <= 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  let value = bytes;
+  let unit = 0;
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024;
+    unit++;
+  }
+  return value.toLocaleString("pt-BR", { maximumFractionDigits: 2 }) + " " + units[unit];
+}
+
 export default function DatabaseMaintenanceSettings() {
   const { hasAnyPermission } = useAuthorization();
   const canManage = hasAnyPermission(["settings.*", "admin.*"]);
@@ -29,8 +48,16 @@ export default function DatabaseMaintenanceSettings() {
   const runsQuery = useDatabaseMaintenanceRuns();
   const runMaintenance = useRunDatabaseMaintenance();
 
+  const storageChecksQuery = useObjectStorageSanitizationChecks();
+  const runStorageSanitization = useRunObjectStorageSanitization();
+
   const [report, setReport] = useState<SanitizationReport | null>(null);
+  const [storageReport, setStorageReport] = useState<ObjectStorageSanitizationReport | null>(null);
+  // Idade mínima do órfão: evita apagar um arquivo que acabou de subir e ainda
+  // está a caminho do vínculo com o pacote.
+  const [storageMinAgeHours, setStorageMinAgeHours] = useState("24");
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmStorageOpen, setConfirmStorageOpen] = useState(false);
   const [confirmMaintenanceOpen, setConfirmMaintenanceOpen] = useState(false);
 
   const run = (dryRun: boolean) => {
@@ -63,8 +90,37 @@ export default function DatabaseMaintenanceSettings() {
     );
   };
 
+  const runStorage = (dryRun: boolean) => {
+    runStorageSanitization.mutate(
+      { dryRun, minAgeHours: Number(storageMinAgeHours) || 24 },
+      {
+        onSuccess: (data) => {
+          setStorageReport(data);
+          if (dryRun) {
+            toast.success("Inventário do object storage atualizado (nada foi apagado).");
+            return;
+          }
+          toast.success(
+            data.totalFixed > 0
+              ? data.totalFixed + " objeto(s) órfão(s) removido(s) do object storage."
+              : "Nenhum objeto órfão elegível para remover.",
+          );
+        },
+        onError: (error) =>
+          toast.error(
+            error instanceof Error ? error.message : "Falha ao executar a limpeza do object storage.",
+          ),
+      },
+    );
+  };
+
   const isDryRunPending = runSanitization.isPending && runSanitization.variables?.dryRun === true;
   const isApplyPending = runSanitization.isPending && runSanitization.variables?.dryRun === false;
+  const isStorageDryRunPending =
+    runStorageSanitization.isPending && runStorageSanitization.variables?.dryRun === true;
+  const isStorageApplyPending =
+    runStorageSanitization.isPending && runStorageSanitization.variables?.dryRun === false;
+  const availableStorageChecks = storageChecksQuery.data ?? [];
   const availableChecks = checksQuery.data ?? [];
   const health = healthQuery.data;
 
@@ -194,6 +250,180 @@ export default function DatabaseMaintenanceSettings() {
           </div>
         </Card>
       )}
+
+      <Card>
+        <CardHeader
+          title="Object storage (S3)"
+          subtitle="Quanto existe no bucket e quais assets da loja ficaram sem vínculo com um pacote. A limpeza apaga SOMENTE app-store/custom/ — anexos de chamados, relatórios e imagens de KB (clients/) não são tocados."
+        />
+
+        <div className="space-y-4">
+          <div className="rounded-lg border border-border bg-surface-light p-3 text-sm">
+            <div className="mb-2 flex items-center gap-2 font-medium text-foreground">
+              <ShieldAlert className="h-4 w-4 text-warning" />
+              Verificações executadas
+            </div>
+            {storageChecksQuery.isLoading ? (
+              <p className="text-xs text-muted">Carregando verificações...</p>
+            ) : availableStorageChecks.length === 0 ? (
+              <p className="text-xs text-muted">Nenhuma verificação disponível.</p>
+            ) : (
+              <ul className="space-y-1 text-xs text-muted">
+                {availableStorageChecks.map((check) => (
+                  <li key={check.key}>
+                    <span className="font-medium text-foreground">{check.title}</span> — {check.description}
+                    {check.reportOnly && (
+                      <Badge color="slate" className="ml-2">
+                        somente relatório
+                      </Badge>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          <div className="w-64">
+            <Select
+              label="Idade mínima para considerar órfão"
+              options={[
+                { value: "1", label: "1 hora" },
+                { value: "6", label: "6 horas" },
+                { value: "24", label: "24 horas (padrão)" },
+                { value: "168", label: "7 dias" },
+              ]}
+              value={storageMinAgeHours}
+              disabled={!canManage || runStorageSanitization.isPending}
+              onChange={(event) => setStorageMinAgeHours(event.target.value)}
+            />
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="secondary"
+              disabled={!canManage || runStorageSanitization.isPending}
+              loading={isStorageDryRunPending}
+              onClick={() => runStorage(true)}
+            >
+              <Search className="h-4 w-4" />
+              Analisar (sem apagar)
+            </Button>
+            <Button
+              variant="danger"
+              disabled={!canManage || runStorageSanitization.isPending}
+              loading={isStorageApplyPending}
+              onClick={() => setConfirmStorageOpen(true)}
+            >
+              <Trash2 className="h-4 w-4" />
+              Limpar órfãos
+            </Button>
+          </div>
+
+          {!canManage && (
+            <p className="text-xs text-muted">
+              Você não tem permissão para executar a limpeza do object storage (é necessário
+              permissão de configuração do servidor).
+            </p>
+          )}
+        </div>
+      </Card>
+
+      {storageReport && (
+        <Card>
+          <CardHeader
+            title={
+              storageReport.dryRun
+                ? "Object storage — pré-visualização (nada foi alterado)"
+                : "Object storage — limpeza aplicada"
+            }
+            subtitle={
+              "Objetos no bucket: " + storageReport.totalObjects + " (" + formatStorageBytes(storageReport.totalBytes) + ")" +
+              " · órfãos: " + storageReport.totalFound + " (" + formatStorageBytes(storageReport.totalFoundBytes) + ")" +
+              " · removidos: " + storageReport.totalFixed + " (" + formatStorageBytes(storageReport.totalFixedBytes) + ")" +
+              " · idade mínima: " + storageReport.minAgeHours + " h"
+            }
+            action={
+              <Badge color={storageReport.dryRun ? "warning" : "success"}>
+                {storageReport.dryRun ? "dry-run" : "aplicado"}
+              </Badge>
+            }
+          />
+
+          {storageReport.truncated && (
+            <p className="mb-3 rounded-lg border border-warning/40 bg-warning/10 p-2 text-xs text-warning">
+              A varredura do bucket foi truncada: os totais acima são parciais. Rode novamente para continuar.
+            </p>
+          )}
+
+          {storageReport.inventory.length > 0 && (
+            <div className="mb-4 rounded-lg border border-border p-3">
+              <p className="mb-2 text-sm font-medium text-foreground">Inventário por prefixo</p>
+              <ul className="space-y-0.5 font-mono text-[11px] text-muted">
+                {storageReport.inventory.map((entry) => (
+                  <li key={entry.prefix}>
+                    {entry.prefix} — {entry.objects} objeto(s), {formatStorageBytes(entry.bytes)}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          <div className="space-y-3">
+            {storageReport.checks.map((check) => (
+              <div key={check.key} className="rounded-lg border border-border p-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-sm font-medium text-foreground">{check.title}</span>
+                  <div className="flex flex-wrap items-center gap-2 text-xs">
+                    <Badge color="slate">avaliados {check.examined}</Badge>
+                    <Badge color={check.found > 0 ? "warning" : "slate"}>
+                      órfãos {check.found} ({formatStorageBytes(check.foundBytes)})
+                    </Badge>
+                    <Badge color={check.fixed > 0 ? "success" : "slate"}>
+                      removidos {check.fixed} ({formatStorageBytes(check.fixedBytes)})
+                    </Badge>
+                    {check.skipped > 0 && <Badge color="warning">preservados {check.skipped}</Badge>}
+                    {check.hasMore && <Badge color="danger">truncado</Badge>}
+                  </div>
+                </div>
+
+                {check.error && <p className="mt-1 text-xs text-danger">{check.error}</p>}
+
+                {check.samples.length > 0 && (
+                  <ul className="mt-2 space-y-0.5 font-mono text-[11px] text-muted">
+                    {check.samples.slice(0, 10).map((sample, index) => (
+                      <li key={index}>{sample}</li>
+                    ))}
+                  </ul>
+                )}
+
+                {check.found === 0 && !check.error && (
+                  <p className="mt-1 text-xs text-success">Nada para limpar nesta verificação.</p>
+                )}
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      <ConfirmDialog
+        open={confirmStorageOpen}
+        title="Limpar assets sem vínculo"
+        message={
+          <span>
+            Os objetos de <strong>app-store/custom/</strong> que nenhum pacote referencia e que estão sem
+            alteração há mais de <strong>{storageMinAgeHours} hora(s)</strong> serão apagados do object
+            storage. É irreversível — rode <strong>Analisar (sem apagar)</strong> antes para ver a lista.
+          </span>
+        }
+        confirmLabel="Limpar órfãos"
+        tone="danger"
+        isLoading={isStorageApplyPending}
+        onClose={() => setConfirmStorageOpen(false)}
+        onConfirm={() => {
+          setConfirmStorageOpen(false);
+          runStorage(false);
+        }}
+      />
 
       <Card>
         <CardHeader

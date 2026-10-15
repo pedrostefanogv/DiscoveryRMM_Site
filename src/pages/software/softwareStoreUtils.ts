@@ -33,6 +33,49 @@ export const limitOptions = [
 export const APP_STORE_LAST_SYNC_STORAGE_KEY =
   "discovery.appStore.lastSyncByType.v1";
 
+/** Rota base da Loja de Softwares. */
+export const STORE_PATH = "/software/store";
+
+/**
+ * Query param que preserva a aba (tipo de catálogo) na URL da loja. Sem ele o
+ * `CatalogTab` remontava com o padrão Winget ao voltar do editor de pacote
+ * custom — o operador salvava um custom e caía na listagem do Winget.
+ */
+export const STORE_TYPE_QUERY_PARAM = "tipo";
+
+/** Slug estável do tipo de instalação usado na URL da loja. */
+export function installationTypeSlug(type: AppInstallationType): string {
+  switch (type) {
+    case AppInstallationType.Chocolatey:
+      return "chocolatey";
+    case AppInstallationType.Custom:
+      return "custom";
+    default:
+      return "winget";
+  }
+}
+
+/** Rota da loja já abrindo no tipo informado (ex.: custom ao voltar do editor). */
+export function buildStorePath(
+  type: AppInstallationType = AppInstallationType.Winget,
+): string {
+  // O padrão (Winget) fica implícito: `/software/store` limpo, sem `?tipo=winget`.
+  if (type === AppInstallationType.Winget) return STORE_PATH;
+  return `${STORE_PATH}?${STORE_TYPE_QUERY_PARAM}=${installationTypeSlug(type)}`;
+}
+
+/**
+ * Lê o tipo da URL da loja. Valor ausente ou desconhecido cai no padrão
+ * Winget, o mesmo comportamento anterior ao uso do query param.
+ */
+export function installationTypeFromStoreSearch(
+  search: string | URLSearchParams,
+): AppInstallationType {
+  const params =
+    typeof search === "string" ? new URLSearchParams(search) : search;
+  return normalizeInstallationType(params.get(STORE_TYPE_QUERY_PARAM));
+}
+
 export function extractDomain(raw?: string | null): string | null {
   if (!raw?.trim()) return null;
   const value = raw.trim();
@@ -93,8 +136,10 @@ export function buildIconCandidates(
   return [...new Set(candidates)];
 }
 
-export function actionBadge(action: AppApprovalActionType) {
-  return action === AppApprovalActionType.Allow ? "Permitido" : "Negado";
+export function actionBadge(action: AppApprovalActionType | null) {
+  if (action === AppApprovalActionType.Allow) return "Permitido";
+  if (action === AppApprovalActionType.Deny) return "Negado";
+  return "\u2014";
 }
 
 export function scopeLabel(s: AppApprovalScopeType) {

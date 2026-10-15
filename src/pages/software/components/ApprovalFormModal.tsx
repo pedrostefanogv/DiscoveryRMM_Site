@@ -13,6 +13,16 @@ interface ApprovalFormModalProps {
   prefillPackageId?: string;
   prefillInstallationType?: AppInstallationType;
   lockPackageId?: boolean;
+  /**
+   * Trava o "Tipo de instalação" quando ele vem do catálogo: sem isso dá para
+   * montar uma regra Winget para um pacote Custom e a API só devolve 400.
+   */
+  lockInstallationType?: boolean;
+  /** Escopo/ids já filtrados na aba, para não obrigar a escolher de novo. */
+  prefillScopeType?: AppApprovalScopeType;
+  prefillClientId?: string;
+  prefillSiteId?: string;
+  prefillAgentId?: string;
 }
 
 export function ApprovalFormModal({
@@ -21,8 +31,14 @@ export function ApprovalFormModal({
   prefillPackageId = '',
   prefillInstallationType = AppInstallationType.Winget,
   lockPackageId = false,
+  lockInstallationType = false,
+  prefillScopeType,
+  prefillClientId = '',
+  prefillSiteId = '',
+  prefillAgentId = '',
 }: ApprovalFormModalProps) {
   const isPackageIdLocked = lockPackageId || Boolean(prefillPackageId.trim());
+  const isInstallationTypeLocked = lockInstallationType || isPackageIdLocked;
   const clients = useClients();
   const [scopeType, setScopeType] = useState(AppApprovalScopeType.Global);
   const [selectedClientId, setSelectedClientId] = useState('');
@@ -61,7 +77,25 @@ export function ApprovalFormModal({
     if (!open) return;
     setPackageId(prefillPackageId);
     setInstallationType(prefillInstallationType);
-  }, [open, prefillPackageId, prefillInstallationType]);
+    // Repõe o escopo/ids que a aba já tinha filtrado (senão o operador escolhe
+    // cliente/site/agente duas vezes para a mesma regra).
+    if (prefillScopeType !== undefined) setScopeType(prefillScopeType);
+    setSelectedClientId(prefillClientId);
+    setSelectedSiteId(prefillSiteId);
+    setSelectedAgentId(prefillAgentId);
+    // Motivo/erro são por abertura: sem isto, cancelar e reabrir reaproveitava o
+    // motivo da tentativa anterior sem o operador perceber.
+    setReason('');
+    setError(null);
+  }, [
+    open,
+    prefillPackageId,
+    prefillInstallationType,
+    prefillScopeType,
+    prefillClientId,
+    prefillSiteId,
+    prefillAgentId,
+  ]);
 
   async function handleSubmit() {
     if (!packageId.trim()) {
@@ -105,6 +139,8 @@ export function ApprovalFormModal({
             label="Tipo de instalação"
             options={installationTypeOptions}
             value={String(installationType)}
+            disabled={isInstallationTypeLocked}
+            title={isInstallationTypeLocked ? 'Definido pelo pacote selecionado no catálogo' : undefined}
             onChange={(e) => setInstallationType(Number(e.target.value) as AppInstallationType)}
           />
           <Select
@@ -149,9 +185,14 @@ export function ApprovalFormModal({
         )}
         {scopeType === AppApprovalScopeType.Agent && (
           <AgentPicker
+            // key: remonta o picker quando o contexto vindo da aba muda, para os
+            // selects de cliente/site abrirem já preenchidos.
+            key={`${prefillClientId}-${prefillSiteId}`}
             value={selectedAgentId}
             onChange={setSelectedAgentId}
             label="Agente"
+            initialClientId={prefillClientId}
+            initialSiteId={prefillSiteId}
           />
         )}
 
@@ -199,6 +240,9 @@ export function ApprovalFormModal({
           label="Motivo (opcional)"
           placeholder="Ex: Aprovado pela TI"
           value={reason}
+          // Mesmo limite da coluna app_approval_rules.reason (varchar(500)):
+          // sem isto a API devolvia 400 depois de o operador escrever o texto.
+          maxLength={500}
           onChange={(e) => setReason(e.target.value)}
         />
 

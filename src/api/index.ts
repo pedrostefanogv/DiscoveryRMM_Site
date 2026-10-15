@@ -57,6 +57,14 @@ export {
   type SanitizationReport,
 } from "./database-sanitization";
 export {
+  objectStorageSanitizationApi,
+  type ObjectStorageSanitizationCheckDescriptor,
+  type ObjectStorageSanitizationCheckResult,
+  type ObjectStorageInventoryEntry,
+  type ObjectStorageSanitizationReport,
+  type ObjectStorageSanitizationRequest,
+} from "./object-storage-sanitization";
+export {
   databaseMaintenanceApi,
   type DatabaseHealthIssue,
   type DatabaseHealthReport,

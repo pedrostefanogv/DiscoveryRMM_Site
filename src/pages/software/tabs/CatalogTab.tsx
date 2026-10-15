@@ -1,12 +1,15 @@
-import { useState, useRef, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useRef, useEffect, type MouseEvent as ReactMouseEvent } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
   Search, ShieldCheck, ChevronLeft, ChevronRight,
   Package, RefreshCw, RotateCcw, X, LayoutGrid, LayoutList, Info, ExternalLink,
-  Plus, Pencil, Trash2,
+  Plus, Pencil, Trash2, MoreVertical,
 } from 'lucide-react';
-import { Badge, Button, Card, ConfirmDialog, ErrorDisplay, Input, Loading, Modal, Select } from '@/components/ui';
+import {
+  Badge, Button, Card, ConfirmDialog, ContextMenu, ErrorDisplay, Input, Loading, Modal, Select,
+  type ContextMenuItem,
+} from '@/components/ui';
 import { useAppStoreCatalog, useDeleteCustomPackage, useSyncCatalog } from '@/hooks/useAppStore';
 import { appStoreApi } from '@/api/app-store';
 import {
@@ -21,11 +24,20 @@ import { ApprovalFormModal } from '../components/ApprovalFormModal';
 import { PackageDetailsModal } from '../components/PackageDetailsModal';
 import {
   installationTypeOptions, limitOptions, APP_STORE_LAST_SYNC_STORAGE_KEY,
-  formatDate,
+  formatDate, installationTypeSlug, installationTypeFromStoreSearch, STORE_TYPE_QUERY_PARAM,
 } from '../softwareStoreUtils';
 
+interface PackageContextMenuState {
+  x: number;
+  y: number;
+  pkg: AppStoreCatalogPackage;
+}
+
 export function CatalogTab() {
-  const [installationType, setInstallationType] = useState(AppInstallationType.Winget);
+  // O tipo fica na URL: ao voltar do editor de pacote custom a loja reabre na
+  // mesma listagem (antes o componente remontava sempre no padrão Winget).
+  const [searchParams, setSearchParams] = useSearchParams();
+  const installationType = installationTypeFromStoreSearch(searchParams);
   const [searchInput, setSearchInput] = useState('');
   const [searchApplied, setSearchApplied] = useState('');
   const [limit, setLimit] = useState(20);
@@ -34,6 +46,7 @@ export function CatalogTab() {
   const [viewMode, setViewMode] = useState<'card' | 'list'>('list');
   const [approvalTarget, setApprovalTarget] = useState<AppStoreCatalogPackage | null>(null);
   const [detailsTarget, setDetailsTarget] = useState<AppStoreCatalogPackage | null>(null);
+  const [contextMenu, setContextMenu] = useState<PackageContextMenuState | null>(null);
   const [syncConfirmOpen, setSyncConfirmOpen] = useState(false);
   const [syncConfirmValue, setSyncConfirmValue] = useState('');
   const [syncConfirmTouched, setSyncConfirmTouched] = useState(false);
@@ -160,6 +173,84 @@ export function CatalogTab() {
     setCursors([undefined]);
   }
 
+  /** Troca o tipo do catálogo gravando-o na URL (preserva outros params). */
+  function changeInstallationType(next: AppInstallationType) {
+    const params = new URLSearchParams(searchParams);
+    params.set(STORE_TYPE_QUERY_PARAM, installationTypeSlug(next));
+    setSearchParams(params, { replace: true });
+    resetFilters();
+  }
+
+  function isCustomPackage(pkg: AppStoreCatalogPackage) {
+    return pkg.installationType === AppInstallationType.Custom;
+  }
+
+  function openEditPackage(pkg: AppStoreCatalogPackage) {
+    navigate(`/software/store/custom/${encodeURIComponent(pkg.packageId)}/edit`);
+  }
+
+  function openPackageContextMenu(event: ReactMouseEvent, pkg: AppStoreCatalogPackage) {
+    event.preventDefault();
+    // A tecla Menu/Shift+F10 entrega clientX/clientY = 0; sem o fallback o menu
+    // abriria no canto superior esquerdo, longe da linha.
+    const rect = event.currentTarget.getBoundingClientRect();
+    setContextMenu({
+      x: event.clientX || rect.left + 16,
+      y: event.clientY || rect.bottom - 4,
+      pkg,
+    });
+  }
+
+  /** Abre (ou fecha) o mesmo menu a partir do botão "⋯" — caminho por teclado. */
+  function togglePackageMenuFromButton(rect: DOMRect, pkg: AppStoreCatalogPackage) {
+    setContextMenu((current) =>
+      current && current.pkg.packageId === pkg.packageId
+        ? null
+        : { x: rect.right, y: rect.bottom + 4, pkg },
+    );
+  }
+
+  function openDetailsEdit() {
+    const pkg = detailsTarget;
+    setDetailsTarget(null);
+    if (pkg) openEditPackage(pkg);
+  }
+
+  function openDetailsDelete() {
+    const pkg = detailsTarget;
+    setDetailsTarget(null);
+    if (pkg) setDeletingCustom(pkg);
+  }
+
+  const packageContextMenuItems: ContextMenuItem[] = contextMenu
+    ? [
+        {
+          key: 'details',
+          label: 'Detalhes',
+          icon: <Info className="h-4 w-4" />,
+          onClick: () => setDetailsTarget(contextMenu.pkg),
+        },
+        ...(isCustomPackage(contextMenu.pkg)
+          ? [
+              {
+                key: 'edit',
+                label: 'Editar',
+                icon: <Pencil className="h-4 w-4" />,
+                separatorBefore: true,
+                onClick: () => openEditPackage(contextMenu.pkg),
+              } satisfies ContextMenuItem,
+              {
+                key: 'delete',
+                label: 'Excluir',
+                icon: <Trash2 className="h-4 w-4" />,
+                danger: true,
+                onClick: () => setDeletingCustom(contextMenu.pkg),
+              } satisfies ContextMenuItem,
+            ]
+          : []),
+      ]
+    : [];
+
   const hasMore = query.data?.hasMore ?? false;
   const isChocolatey = installationType === AppInstallationType.Chocolatey;
   const isWinget = installationType === AppInstallationType.Winget;
@@ -237,7 +328,7 @@ export function CatalogTab() {
         <div className="flex flex-wrap items-end gap-3">
           <div className="w-40">
             <Select label="Tipo" options={installationTypeOptions} value={String(installationType)}
-              onChange={(e) => { setInstallationType(Number(e.target.value) as AppInstallationType); resetFilters(); }} />
+              onChange={(e) => changeInstallationType(Number(e.target.value) as AppInstallationType)} />
           </div>
           <div className="flex-1 min-w-48">
             <div>
@@ -337,7 +428,10 @@ export function CatalogTab() {
         {query.data && query.data.items.length > 0 && viewMode === 'list' && (
           <div className={`divide-y divide-black/10 dark:divide-white/5 transition-opacity ${query.isFetching ? 'opacity-60' : ''}`}>
             {query.data.items.map((pkg) => (
-              <div key={pkg.packageId} className="flex items-center gap-4 px-5 py-3 hover:bg-surface-light transition-colors">
+              <div key={pkg.packageId}
+                onContextMenu={isCustomPackage(pkg) ? (event) => openPackageContextMenu(event, pkg) : undefined}
+                title={isCustomPackage(pkg) ? 'Clique com o botão direito para editar ou excluir.' : undefined}
+                className="flex items-center gap-4 px-5 py-3 hover:bg-surface-light transition-colors">
                 <PackageIcon url={pkg.icon} homepage={pkg.homepage}
                   downloadUrl={pkg.installerUrlsByArch ? Object.values(pkg.installerUrlsByArch).find((value) => Boolean(value)) ?? null : null}
                   name={pkg.name} />
@@ -357,15 +451,17 @@ export function CatalogTab() {
                 </div>
                 <div className="flex flex-shrink-0 items-center gap-2">
                   <Button variant="ghost" size="sm" onClick={() => setDetailsTarget(pkg)}><Info className="h-4 w-4" /> Detalhes</Button>
-                  {pkg.installationType === AppInstallationType.Custom && (
-                    <>
-                      <Button variant="ghost" size="sm" onClick={() => navigate(`/software/store/custom/${encodeURIComponent(pkg.packageId)}/edit`)} title="Editar pacote custom">
-                        <Pencil className="h-4 w-4" /> Editar
-                      </Button>
-                      <Button variant="ghost" size="sm" onClick={() => setDeletingCustom(pkg)} title="Excluir pacote custom">
-                        <Trash2 className="h-4 w-4" /> Excluir
-                      </Button>
-                    </>
+                  {isCustomPackage(pkg) && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      title="Mais ações"
+                      aria-label={`Mais ações de ${pkg.name ?? pkg.packageId}`}
+                      onMouseDown={(event) => event.stopPropagation()}
+                      onClick={(event) => togglePackageMenuFromButton(event.currentTarget.getBoundingClientRect(), pkg)}
+                    >
+                      <MoreVertical className="h-4 w-4" />
+                    </Button>
                   )}
                   <Button size="sm" onClick={() => setApprovalTarget(pkg)}><ShieldCheck className="h-4 w-4" /> Aprovar / Negar</Button>
                 </div>
@@ -377,7 +473,10 @@ export function CatalogTab() {
         {query.data && query.data.items.length > 0 && viewMode === 'card' && (
           <div className={`grid grid-cols-1 gap-3 p-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 transition-opacity ${query.isFetching ? 'opacity-60' : ''}`}>
             {query.data.items.map((pkg) => (
-              <div key={pkg.packageId} className="flex flex-col gap-3 rounded-xl border border-border bg-surface-light p-4 transition-colors hover:bg-black/[0.05] dark:hover:bg-white/[0.08]">
+              <div key={pkg.packageId}
+                onContextMenu={isCustomPackage(pkg) ? (event) => openPackageContextMenu(event, pkg) : undefined}
+                title={isCustomPackage(pkg) ? 'Clique com o botão direito para editar ou excluir.' : undefined}
+                className="flex flex-col gap-3 rounded-xl border border-border bg-surface-light p-4 transition-colors hover:bg-black/[0.05] dark:hover:bg-white/[0.08]">
                 <div className="flex items-start gap-3">
                   <PackageIcon url={pkg.icon} homepage={pkg.homepage}
                     downloadUrl={pkg.installerUrlsByArch ? Object.values(pkg.installerUrlsByArch).find((value) => Boolean(value)) ?? null : null}
@@ -395,14 +494,16 @@ export function CatalogTab() {
                 </div>
                 <div className="flex items-center gap-2 pt-1">
                   <Button variant="ghost" size="sm" className="flex-1" onClick={() => setDetailsTarget(pkg)}><Info className="h-4 w-4" /> Detalhes</Button>
-                  {pkg.installationType === AppInstallationType.Custom && (
-                    <Button variant="ghost" size="sm" onClick={() => navigate(`/software/store/custom/${encodeURIComponent(pkg.packageId)}/edit`)} title="Editar pacote custom">
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                  )}
-                  {pkg.installationType === AppInstallationType.Custom && (
-                    <Button variant="ghost" size="sm" onClick={() => setDeletingCustom(pkg)} title="Excluir pacote custom">
-                      <Trash2 className="h-4 w-4" />
+                  {isCustomPackage(pkg) && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      title="Mais ações"
+                      aria-label={`Mais ações de ${pkg.name ?? pkg.packageId}`}
+                      onMouseDown={(event) => event.stopPropagation()}
+                      onClick={(event) => togglePackageMenuFromButton(event.currentTarget.getBoundingClientRect(), pkg)}
+                    >
+                      <MoreVertical className="h-4 w-4" />
                     </Button>
                   )}
                   <Button size="sm" className="flex-1" onClick={() => setApprovalTarget(pkg)}><ShieldCheck className="h-4 w-4" /> Aprovar</Button>
@@ -413,9 +514,24 @@ export function CatalogTab() {
         )}
       </Card>
 
+      {contextMenu && (
+        <ContextMenu
+          position={{ x: contextMenu.x, y: contextMenu.y }}
+          items={packageContextMenuItems}
+          onClose={() => setContextMenu(null)}
+        />
+      )}
+
       <ApprovalFormModal open={!!approvalTarget} onClose={() => setApprovalTarget(null)}
-        prefillPackageId={approvalTarget?.packageId ?? ''} prefillInstallationType={installationType} lockPackageId />
-      <PackageDetailsModal open={!!detailsTarget} onClose={() => setDetailsTarget(null)} pkg={detailsTarget} installationType={installationType} />
+        prefillPackageId={approvalTarget?.packageId ?? ''} prefillInstallationType={installationType} lockPackageId lockInstallationType />
+      <PackageDetailsModal
+        open={!!detailsTarget}
+        onClose={() => setDetailsTarget(null)}
+        pkg={detailsTarget}
+        installationType={installationType}
+        onEdit={openDetailsEdit}
+        onDelete={openDetailsDelete}
+      />
 
       <ConfirmDialog
         open={!!deletingCustom}

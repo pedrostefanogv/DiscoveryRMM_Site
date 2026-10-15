@@ -3,10 +3,12 @@ import {
   AppCommandKind,
   AppDetectionMode,
   AppInstallationType,
+  AppApprovalScopeType,
+  AppApprovalActionType,
+  AppApprovalAuditChangeType,
 } from "./types";
 import type {
-  AppApprovalScopeType,
-  AppApprovalAuditChangeType,
+  AppApprovalAuditEntry,
   AppStoreCatalogPage,
   AppStoreCatalogPackage,
   AppApprovalRule,
@@ -41,6 +43,29 @@ type RawApprovalRule = Partial<AppApprovalRule> & {
 
 type RawApprovalRulesResponse = Omit<AppApprovalRulesResponse, "items"> & {
   items?: RawApprovalRule[];
+};
+
+/**
+ * Formato aceito em `GET /app-store/approvals`: a API responde a lista direto
+ * (array JSON), mas o envelope `{ items, count }` também é tolerado.
+ */
+type RawApprovalRulesPayload = RawApprovalRulesResponse | RawApprovalRule[];
+
+/**
+ * Entrada de auditoria como a API responde (`AppApprovalAuditEntryDto`):
+ * `id`, `oldAction`/`newAction` e `oldAutoUpdateEnabled`/`newAutoUpdateEnabled`,
+ * em vez de `auditId`/`action`/`autoUpdateEnabled` do contrato do front.
+ */
+type RawApprovalAuditEntry = Partial<AppApprovalAuditEntry> & {
+  id?: string;
+  oldAction?: AppApprovalActionType | null;
+  newAction?: AppApprovalActionType | null;
+  oldAutoUpdateEnabled?: boolean | null;
+  newAutoUpdateEnabled?: boolean | null;
+};
+
+type RawApprovalAuditPage = Partial<Omit<AppApprovalAuditPage, "items">> & {
+  items?: RawApprovalAuditEntry[];
 };
 
 function normalizeInstallationType(
@@ -103,6 +128,70 @@ const APP_DETECTION_MODE_VALUES = [
 function normalizeOptionalText(value: unknown): string | null {
   if (typeof value !== "string") return null;
   return value.trim().length > 0 ? value.trim() : null;
+}
+
+/**
+ * Normaliza enum que a API serializa pelo NOME: `Program.cs` registra
+ * `JsonStringEnumConverter`, então `Allow`/`Global`/`Created` chegam como string.
+ * Aceita também o código numérico (compatibilidade) e devolve `fallback` quando
+ * não reconhece.
+ */
+function normalizeNamedEnum<T extends number>(
+  value: unknown,
+  byName: Record<string, T>,
+  fallback: T | null,
+): T | null {
+  const known = Object.values(byName);
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return known.includes(value as T) ? (value as T) : fallback;
+  }
+  if (typeof value === "string") {
+    const raw = value.trim();
+    const byNameMatch = byName[raw.toLowerCase()];
+    if (byNameMatch !== undefined) return byNameMatch;
+    const numeric = Number(raw);
+    if (Number.isFinite(numeric)) {
+      return known.includes(numeric as T) ? (numeric as T) : fallback;
+    }
+  }
+  return fallback;
+}
+
+const APPROVAL_SCOPE_BY_NAME: Record<string, AppApprovalScopeType> = {
+  global: AppApprovalScopeType.Global,
+  client: AppApprovalScopeType.Client,
+  site: AppApprovalScopeType.Site,
+  agent: AppApprovalScopeType.Agent,
+};
+
+const APPROVAL_ACTION_BY_NAME: Record<string, AppApprovalActionType> = {
+  allow: AppApprovalActionType.Allow,
+  deny: AppApprovalActionType.Deny,
+};
+
+const APPROVAL_CHANGE_BY_NAME: Record<string, AppApprovalAuditChangeType> = {
+  created: AppApprovalAuditChangeType.Created,
+  updated: AppApprovalAuditChangeType.Updated,
+  deleted: AppApprovalAuditChangeType.Deleted,
+};
+
+function normalizeApprovalScopeType(value: unknown): AppApprovalScopeType {
+  return (
+    normalizeNamedEnum(value, APPROVAL_SCOPE_BY_NAME, AppApprovalScopeType.Global) ??
+    AppApprovalScopeType.Global
+  );
+}
+
+/** Ação do enum do wire; `null` quando o valor não é reconhecido (nunca "chuta"). */
+function normalizeApprovalActionType(value: unknown): AppApprovalActionType | null {
+  return normalizeNamedEnum(value, APPROVAL_ACTION_BY_NAME, null);
+}
+
+function normalizeApprovalChangeType(value: unknown): AppApprovalAuditChangeType {
+  return (
+    normalizeNamedEnum(value, APPROVAL_CHANGE_BY_NAME, AppApprovalAuditChangeType.Created) ??
+    AppApprovalAuditChangeType.Created
+  );
 }
 
 function normalizeCatalogPackage(
@@ -201,12 +290,15 @@ function normalizeApprovalRule(item: RawApprovalRule): AppApprovalRule {
   return {
     ruleId,
     id: ruleId,
-    scopeType: item.scopeType ?? 0,
+    // `scopeType`/`action` vêm como string ("Global"/"Allow"): sem normalizar, o
+    // badge caía em `String(valor)` em inglês e a comparação numérica de ação
+    // marcava TODA regra como "Negado".
+    scopeType: normalizeApprovalScopeType(item.scopeType),
     scopeId: item.scopeId ?? null,
     installationType: normalizeInstallationType(item.installationType),
     packageId: item.packageId ?? "",
     packageName: item.packageName ?? null,
-    action: item.action ?? 0,
+    action: normalizeApprovalActionType(item.action),
     autoUpdateEnabled: item.autoUpdateEnabled ?? null,
     reason: item.reason ?? null,
     createdAt: item.createdAt ?? "",
@@ -215,18 +307,69 @@ function normalizeApprovalRule(item: RawApprovalRule): AppApprovalRule {
 }
 
 function normalizeApprovalsResponse(
-  response: RawApprovalRulesResponse,
-  fallbackInstallationType?: AppInstallationType,
+  response: RawApprovalRulesPayload,
+  params: ApprovalsParams,
 ): AppApprovalRulesResponse {
+  // A API devolve a lista direto (`OkObjectResult(IReadOnlyList<...>)`). O
+  // normalizador assumia o envelope { items, count }, então `items` ficava
+  // undefined e a aba Aprovações mostrava "nenhuma regra" mesmo com regras
+  // criadas — Winget e Custom. Aceita os dois formatos.
+  const envelope: Partial<RawApprovalRulesResponse> = Array.isArray(response)
+    ? { items: response }
+    : (response ?? {});
+  const items = (envelope.items ?? []).map(normalizeApprovalRule);
   return {
-    scopeType: response.scopeType,
-    scopeId: response.scopeId ?? null,
+    scopeType: envelope.scopeType ?? params.scopeType,
+    scopeId: envelope.scopeId ?? params.scopeId ?? null,
     installationType:
-      response.installationType !== undefined
-        ? normalizeInstallationType(response.installationType)
-        : normalizeInstallationType(fallbackInstallationType),
-    count: response.count ?? response.items?.length ?? 0,
-    items: (response.items ?? []).map(normalizeApprovalRule),
+      envelope.installationType !== undefined
+        ? normalizeInstallationType(envelope.installationType)
+        : normalizeInstallationType(params.installationType),
+    count: envelope.count ?? items.length,
+    items,
+  };
+}
+
+function normalizeApprovalAuditEntry(item: RawApprovalAuditEntry): AppApprovalAuditEntry {
+  return {
+    auditId: item.auditId ?? item.id ?? "",
+    packageId: item.packageId ?? "",
+    scopeType: normalizeApprovalScopeType(item.scopeType),
+    scopeId: item.scopeId ?? null,
+    installationType: normalizeInstallationType(item.installationType),
+    // A coluna "Ação" mostra o estado do evento: a API manda newAction em
+    // criação/edição e só oldAction na remoção (a UI marca esse caso como
+    // "anterior").
+    action:
+      normalizeApprovalActionType(item.action) ??
+      normalizeApprovalActionType(item.newAction) ??
+      normalizeApprovalActionType(item.oldAction),
+    autoUpdateEnabled:
+      item.autoUpdateEnabled ?? item.newAutoUpdateEnabled ?? item.oldAutoUpdateEnabled ?? null,
+    reason: item.reason ?? null,
+    changeType: normalizeApprovalChangeType(item.changeType),
+    changedBy: item.changedBy ?? null,
+    changedAt: item.changedAt ?? "",
+  };
+}
+
+function normalizeApprovalAuditPage(page: RawApprovalAuditPage | null | undefined): AppApprovalAuditPage {
+  // `request()` devolve undefined em 204/content-length 0 — não derrubar a aba.
+  const items = (page?.items ?? []).map(normalizeApprovalAuditEntry);
+  return {
+    items,
+    installationType:
+      page?.installationType !== undefined
+        ? normalizeInstallationType(page.installationType)
+        : undefined,
+    packageId: page?.packageId ?? null,
+    scopeType: page?.scopeType,
+    scopeId: page?.scopeId ?? null,
+    returnedItems: page?.returnedItems ?? items.length,
+    limit: page?.limit ?? 0,
+    cursor: page?.cursor ?? null,
+    nextCursor: page?.nextCursor ?? null,
+    hasMore: page?.hasMore ?? Boolean(page?.nextCursor),
   };
 }
 
@@ -318,6 +461,13 @@ export interface EffectiveParams {
 // é RETOMÁVEL: guardamos o uploadId + ETags em localStorage por impressão do
 // arquivo (nome+tamanho+data), então um novo envio do mesmo arquivo continua
 // exatamente de onde parou (inclusive depois de fechar/reabrir a página).
+//
+// O envio é um PIPELINE: PART_CONCURRENCY workers puxam o próximo bloco no
+// instante em que um termina. O bloco seguinte só espera o LINK — nunca a
+// confirmação da parte anterior no storage (ETag) nem a assinatura da próxima
+// URL: as URLs saem pré-assinadas em lotes (validade de 1 h) e os ETags que o PUT
+// não devolve (CORS) são confirmados UMA vez, no fim. Era essa espera por bloco
+// que prendia os workers e fazia o envio andar em lotes com pausa entre eles.
 
 /**
  * Bloco do multipart direto: 10 MiB. O Cloudflare corta requisições em ~100 s,
@@ -343,13 +493,22 @@ export const ASSET_MULTIPART_MIN_BYTES = SINGLE_REQUEST_MAX_BYTES;
 const MULTIPART_STATE_PREFIX = "discovery:asset-multipart:";
 const PART_MAX_ATTEMPTS = 4;
 /**
+ * Tentativas da confirmação de ETags em BLOCO no fim do envio (storage atrás de
+ * CORS pode demorar um instante para listar a última parte recebida).
+ */
+const ETAG_CONFIRM_ATTEMPTS = 3;
+/**
  * Blocos enviados SIMULTANEAMENTE. O envio era sequencial e o gargalo não era o
  * link: era o "buraco" entre blocos (abrir XHR novo, esperar o storage confirmar
- * a parte, pedir a próxima URL). Com 3 blocos encadeados o link fica ocupado e o
- * tempo por arquivo cai bastante; mais que isso costuma competir com o próprio
- * storage/CPU do navegador sem ganho.
+ * a parte, pedir a próxima URL).
+ *
+ * 5 blocos de 10 MiB = 50 MiB em voo: esconde a latência do storage/edge sem
+ * estourar o que o navegador aguenta (6 conexões por host no HTTP/1.1; no HTTP/2
+ * o teto é por streams, bem acima disso). Como o pipeline repõe o bloco no
+ * instante em que um termina, a vazão passa a ser limitada pelo LINK — subir
+ * muito além disso só disputa conexões/CPU sem ganho real de tempo.
  */
-const PART_CONCURRENCY = 3;
+const PART_CONCURRENCY = 5;
 
 /**
  * Janela mínima entre atualizações de progresso na UI. Conclusões de bloco e
@@ -459,27 +618,31 @@ function clearMultipartState(key: string): void {
 }
 
 /**
- * ETag de um bloco já enviado, perguntando ao storage (via API) quando o header
+ * ETags dos blocos já recebidos, perguntando ao storage (via API) quando o header
  * não veio na resposta do PUT.
  *
  * Isso acontece quando o endpoint pré-assinado NÃO é same-origin com a SPA
  * (S3/MinIO externo configurado no console): o navegador só lê headers expostos
- * por CORS, e o ETag do PUT não é. Sem este fallback o envio falharia mesmo com
- * o bloco corretamente armazenado.
+ * por CORS, e o ETag do PUT não é. O GET de estado devolve o ETag de TODAS as
+ * partes de uma vez, então a confirmação passou a ser UMA chamada no fim do
+ * envio — antes era um GET por bloco, e essa espera segurava o worker na virada
+ * de cada bloco (o envio andava em lotes e dava uma pausa entre eles).
  */
-async function fetchPartEtagFromStorage(
+async function fetchReceivedPartEtags(
   uploadId: string,
-  partNumber: number,
   signal?: AbortSignal,
-): Promise<string> {
+): Promise<Map<number, string>> {
   const status = await api.get<MultipartStatusResponse>(
     `${BASE}/custom/assets/multipart/${uploadId}`,
     {},
     { signal },
   );
 
-  const received = normalizeReceivedParts(status.receivedParts);
-  return received.find((part) => part.partNumber === partNumber)?.etag ?? '';
+  const etags = new Map<number, string>();
+  for (const part of normalizeReceivedParts(status.receivedParts)) {
+    if (part.etag) etags.set(part.partNumber, part.etag);
+  }
+  return etags;
 }
 
 /** Pede URLs pré-assinadas de blocos específicos e devolve por número. */
@@ -776,15 +939,26 @@ async function uploadCustomAssetDirect(
       const cached = urlCache.get(partNumber);
       if (cached) return cached;
 
+      // Cache miss (o prefetch em segundo plano ainda não chegou): assina um
+      // LOTE a partir deste bloco, não só ele. Um POST cobre os próximos blocos
+      // e o pipeline segue cheio, em vez de reabrir o "buraco" por bloco.
+      const from = pendingRanges.findIndex((range) => range.partNumber === partNumber);
+      if (from >= 0) await prefetchUrls(from, URL_PREFETCH_BATCH);
+
+      const prefetched = urlCache.get(partNumber);
+      if (prefetched) return prefetched;
+
       const url = await refreshUrl(partNumber);
       urlCache.set(partNumber, url);
       return url;
     };
 
-    // Duas levas prontas antes de começar (para o 1º bloco não esperar) e o resto
-    // sendo assinado em segundo plano, à frente dos workers.
-    await prefetchUrls(0, URL_PREFETCH_BATCH * 2);
-    let feedIndex = URL_PREFETCH_BATCH * 2;
+    // Só o necessário para os workers começarem é assinado de forma síncrona: a
+    // leva inteira antes do 1º PUT atrasaria o início do envio. O resto é
+    // assinado em segundo plano, à frente dos workers (um POST cobre dezenas de
+    // blocos, e a URL pré-assinada vale 1 h).
+    await prefetchUrls(0, PART_CONCURRENCY + 1);
+    let feedIndex = PART_CONCURRENCY + 1;
 
     const queue = [...pendingRanges];
     const workerCount = Math.max(1, Math.min(PART_CONCURRENCY, queue.length));
@@ -832,28 +1006,23 @@ async function uploadCustomAssetDirect(
           throw error;
         }
 
-        // Sem ETag na resposta (storage externo atrás de CORS): busca no storage.
-        if (!uploaded.etag) {
-          uploaded.etag = await fetchPartEtagFromStorage(state.uploadId, range.partNumber, runSignal);
-          if (!uploaded.etag) {
-            inFlightBytes.delete(range.partNumber);
-            throw new Error(
-              `O bloco ${range.partNumber} subiu, mas não foi possível confirmar o ETag no storage. Tente novamente.`,
-            );
-          }
-        }
-
         state.parts.push(uploaded);
         state.parts.sort((a, b) => a.partNumber - b.partNumber);
 
         // IMPORTANTE: somar aos concluídos ANTES de remover o em-voo. Se remover
-        // primeiro, o progresso cai (barra volta) durante a confirmação do ETag.
+        // primeiro, o progresso cai (barra volta) na virada do bloco.
         uploadedBytes += uploaded.sizeBytes;
         inFlightBytes.delete(range.partNumber);
 
         // Gravado a CADA bloco: se a página cair, o próximo envio retoma daqui.
         writeMultipartState(stateKey, state);
         report(true);
+
+        // O ETag (quando o PUT não devolve o header por CORS) NÃO é confirmado
+        // aqui de propósito: essa espera segurava o worker e o bloco seguinte só
+        // saía depois dela — era o que fazia o envio andar em lotes de N blocos
+        // e dar uma pausa entre os lotes. A confirmação é feita UMA vez, no fim
+        // do envio (passo 3.5 abaixo), já com todos os blocos no storage.
       }
     };
 
@@ -877,15 +1046,52 @@ async function uploadCustomAssetDirect(
     }
   }
 
+  // 3.5) Confirma em UMA chamada os ETags que o PUT não devolveu (CORS). O GET
+  // de estado lista as partes uma única vez; antes era um GET por bloco, cada um
+  // segurando um worker na virada do bloco.
+  const partsWithoutEtag = state.parts.filter((part) => !part.etag);
+  if (!alreadyCompleted && partsWithoutEtag.length > 0) {
+    for (let attempt = 1; attempt <= ETAG_CONFIRM_ATTEMPTS; attempt++) {
+      try {
+        const etags = await fetchReceivedPartEtags(state.uploadId, signal);
+        for (const part of partsWithoutEtag) {
+          const etag = etags.get(part.partNumber);
+          if (etag) part.etag = etag;
+        }
+      } catch (error) {
+        if (signal?.aborted) throw error;
+        // 404 = a sessão não existe mais (expirou/abortada): o complete abaixo
+        // devolve o erro com contexto, em vez de insistir aqui.
+        if (error instanceof ApiError && error.status === 404) break;
+      }
+
+      if (partsWithoutEtag.every((part) => part.etag)) break;
+      if (attempt < ETAG_CONFIRM_ATTEMPTS) await delay(500 * attempt);
+    }
+
+    writeMultipartState(stateKey, state);
+  }
+
   // 4) Finaliza no storage (a API só envia os ETags e publica o asset).
   // Sem timeout no cliente: a API ainda calcula o SHA-256 do arquivo montado
   // (passada de leitura no loopback) e um instalador de vários GiB demora.
   // A API é idempotente, então uma resposta perdida pode ser reconferida.
+  //
+  // O complete exige o ETag de TODAS as partes. No caminho normal ele veio no
+  // PUT (same-origin) ou na confirmação em bloco acima; se ainda faltar algum
+  // (storage atrás de CORS que não lista o bloco na hora), a lista vai VAZIA e a
+  // API resolve as partes direto do storage (ListParts) — a mesma fonte de
+  // verdade usada na retomada. Falhar com "parte sem ETag" depois de o arquivo
+  // inteiro ter subido é o pior desfecho possível.
+  const partsForComplete: MultipartPart[] = state.parts.some((part) => !part.etag)
+    ? []
+    : state.parts;
+
   let asset: CustomPackageAsset;
   try {
     asset = await api.post<CustomPackageAsset>(
       `${BASE}/custom/assets/multipart/${state.uploadId}/complete`,
-      { parts: state.parts },
+      { parts: partsForComplete },
       { timeoutMs: 0, signal },
     );
   } catch (error) {
@@ -895,7 +1101,7 @@ async function uploadCustomAssetDirect(
     await delay(2000);
     asset = await api.post<CustomPackageAsset>(
       `${BASE}/custom/assets/multipart/${state.uploadId}/complete`,
-      { parts: state.parts },
+      { parts: partsForComplete },
       { timeoutMs: 0, signal },
     );
   }
@@ -995,26 +1201,32 @@ export const appStoreApi = {
   },
 
   getApprovals: async (params: ApprovalsParams) => {
-    const response = await api.get<RawApprovalRulesResponse>(
+    const response = await api.get<RawApprovalRulesPayload>(
       `${BASE}/approvals`,
       params as unknown as Record<string, unknown>,
     );
-    return normalizeApprovalsResponse(response, params.installationType);
+    return normalizeApprovalsResponse(response, params);
   },
 
-  createApproval: (data: CreateAppApprovalRuleRequest) =>
-    api.post<AppApprovalRule>(`${BASE}/approvals`, data),
+  createApproval: async (data: CreateAppApprovalRuleRequest) => {
+    // O corpo volta no formato do wire (enums por NOME): normalizar aqui evita
+    // que o consumidor receba "Allow"/"Global" num tipo que promete números.
+    const response = await api.post<RawApprovalRule>(`${BASE}/approvals`, data);
+    return normalizeApprovalRule(response);
+  },
 
   deleteApproval: (ruleId: string, reason?: string) => {
     const q = reason ? `?reason=${encodeURIComponent(reason)}` : "";
     return api.del<void>(`${BASE}/approvals/${ruleId}${q}`);
   },
 
-  getAudit: (params: AuditParams = {}) =>
-    api.get<AppApprovalAuditPage>(
+  getAudit: async (params: AuditParams = {}) => {
+    const response = await api.get<RawApprovalAuditPage>(
       `${BASE}/approvals/audit`,
       params as unknown as Record<string, unknown>,
-    ),
+    );
+    return normalizeApprovalAuditPage(response);
+  },
 
   getEffective: (params: EffectiveParams) =>
     api.get<AppEffectivePage>(
@@ -1081,6 +1293,13 @@ export const appStoreApi = {
    * Apaga APENAS o instalador publicado do pacote custom (metadados continuam).
    * O objeto é removido do object storage no servidor.
    */
+  /**
+   * Apaga APENAS o ícone/capa publicado do pacote custom (metadados e instalador
+   * continuam). O objeto é removido do object storage no servidor.
+   */
+  deleteCustomPackageIcon: (packageId: string) =>
+    api.del<void>(`${BASE}/custom/${encodeURIComponent(packageId)}/icon`),
+
   deleteCustomPackageFile: (packageId: string) =>
     api.del<void>(`${BASE}/custom/${encodeURIComponent(packageId)}/file`),
 };

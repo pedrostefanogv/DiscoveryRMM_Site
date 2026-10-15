@@ -101,17 +101,28 @@ export function AuditTab() {
                 <th className="px-5 py-2 text-left font-medium">Motivo</th>
               </tr></thead>
               <tbody>
-                {query.data.items.map((entry) => (
-                  <tr key={entry.auditId} className="border-b border-border hover:bg-surface-light transition-colors">
-                    <td className="whitespace-nowrap px-5 py-2 text-xs text-muted">{formatDate(entry.changedAt)}</td>
-                    <td className="px-5 py-2"><div className="font-mono text-xs text-muted-foreground">{entry.packageId}</div></td>
-                    <td className="px-5 py-2"><Badge color={changeTypeBadgeColor[entry.changeType]}>{changeTypeLabel[entry.changeType] ?? String(entry.changeType)}</Badge></td>
-                    <td className="px-5 py-2">{entry.action === AppApprovalActionType.Allow ? <Badge color="success">Permitido</Badge> : <Badge color="danger">Negado</Badge>}</td>
-                    <td className="px-5 py-2 text-xs text-muted">{scopeLabel(entry.scopeType)}{entry.scopeId && <div className="font-mono text-muted truncate max-w-[6rem]" title={entry.scopeId}>{entry.scopeId.slice(0, 8)}…</div>}</td>
-                    <td className="px-5 py-2 text-xs text-muted">{entry.changedBy ?? '\u2014'}</td>
-                    <td className="max-w-[12rem] px-5 py-2 text-xs text-muted truncate">{entry.reason ?? '\u2014'}</td>
-                  </tr>
-                ))}
+                {query.data.items.map((entry) => {
+                  // Em uma remoção a API manda só a ação ANTERIOR: o rótulo deixa
+                  // claro que ela não é o resultado do evento.
+                  const previous = entry.changeType === AppApprovalAuditChangeType.Deleted;
+                  return (
+                    <tr key={entry.auditId} className="border-b border-border hover:bg-surface-light transition-colors">
+                      <td className="whitespace-nowrap px-5 py-2 text-xs text-muted">{formatDate(entry.changedAt)}</td>
+                      <td className="px-5 py-2"><div className="font-mono text-xs text-muted-foreground">{entry.packageId}</div></td>
+                      <td className="px-5 py-2"><Badge color={changeTypeBadgeColor[entry.changeType]}>{changeTypeLabel[entry.changeType] ?? String(entry.changeType)}</Badge></td>
+                      <td className="px-5 py-2">
+                        {entry.action === AppApprovalActionType.Allow
+                          ? <Badge color="success">Permitido{previous ? ' (anterior)' : ''}</Badge>
+                          : entry.action === AppApprovalActionType.Deny
+                            ? <Badge color="danger">Negado{previous ? ' (anterior)' : ''}</Badge>
+                            : <span className="text-xs text-muted">{'\u2014'}</span>}
+                      </td>
+                      <td className="px-5 py-2 text-xs text-muted">{scopeLabel(entry.scopeType)}{entry.scopeId && <div className="font-mono text-muted truncate max-w-[6rem]" title={entry.scopeId}>{entry.scopeId.slice(0, 8)}…</div>}</td>
+                      <td className="px-5 py-2 text-xs text-muted">{entry.changedBy ?? '\u2014'}</td>
+                      <td className="max-w-[12rem] px-5 py-2 text-xs text-muted truncate">{entry.reason ?? '\u2014'}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

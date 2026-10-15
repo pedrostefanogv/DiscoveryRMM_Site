@@ -1,5 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { formatBytes, formatEta, slugifyPackageId } from './softwareStoreUtils';
+import { AppApprovalActionType, AppInstallationType } from '@/api/types';
+import {
+  actionBadge,
+  buildStorePath,
+  formatBytes,
+  formatEta,
+  installationTypeFromStoreSearch,
+  installationTypeSlug,
+  slugifyPackageId,
+  STORE_PATH,
+  STORE_TYPE_QUERY_PARAM,
+} from './softwareStoreUtils';
 
 /**
  * formatEta alimenta a estimativa de tempo restante do envio no card do
@@ -57,5 +68,53 @@ describe('formatBytes', () => {
 describe('slugifyPackageId', () => {
   it('remove acentos e espaços', () => {
     expect(slugifyPackageId('Sistema de Gestão XPTO')).toBe('sistema-de-gestao-xpto');
+  });
+});
+
+describe('actionBadge', () => {
+  it('não rotula ação desconhecida como Negado', () => {
+    expect(actionBadge(AppApprovalActionType.Allow)).toBe('Permitido');
+    expect(actionBadge(AppApprovalActionType.Deny)).toBe('Negado');
+    expect(actionBadge(null)).toBe('—');
+  });
+});
+
+/**
+ * O tipo do catálogo vive na URL da loja. Sem round-trip correto, salvar um
+ * pacote custom devolvia o operador para a listagem Winget.
+ */
+describe('navegação da loja por tipo', () => {
+  it('gera a rota da loja já no tipo informado', () => {
+    expect(buildStorePath(AppInstallationType.Custom)).toBe(`${STORE_PATH}?${STORE_TYPE_QUERY_PARAM}=custom`);
+    expect(buildStorePath(AppInstallationType.Chocolatey)).toBe(`${STORE_PATH}?${STORE_TYPE_QUERY_PARAM}=chocolatey`);
+    // Winget é o padrão implícito: rota limpa, sem query.
+    expect(buildStorePath(AppInstallationType.Winget)).toBe(STORE_PATH);
+    expect(buildStorePath()).toBe(STORE_PATH);
+  });
+
+  it('lê o tipo do round-trip da URL', () => {
+    for (const type of [
+      AppInstallationType.Chocolatey,
+      AppInstallationType.Custom,
+    ]) {
+      const search = buildStorePath(type).split('?')[1];
+      expect(installationTypeFromStoreSearch(search)).toBe(type);
+      expect(installationTypeFromStoreSearch(new URLSearchParams(search))).toBe(type);
+    }
+    // Winget não vai na URL — o round-trip é a rota limpa.
+    expect(installationTypeFromStoreSearch(buildStorePath(AppInstallationType.Winget).split('?')[1] ?? '')).toBe(AppInstallationType.Winget);
+  });
+
+  it('cai no padrão Winget quando o param está ausente ou inválido', () => {
+    expect(installationTypeFromStoreSearch('')).toBe(AppInstallationType.Winget);
+    expect(installationTypeFromStoreSearch('?outro=1')).toBe(AppInstallationType.Winget);
+    expect(installationTypeFromStoreSearch('?tipo=desconhecido')).toBe(AppInstallationType.Winget);
+    expect(installationTypeFromStoreSearch('tipo')).toBe(AppInstallationType.Winget);
+  });
+
+  it('usa slugs estáveis e minúsculos', () => {
+    expect(installationTypeSlug(AppInstallationType.Winget)).toBe('winget');
+    expect(installationTypeSlug(AppInstallationType.Chocolatey)).toBe('chocolatey');
+    expect(installationTypeSlug(AppInstallationType.Custom)).toBe('custom');
   });
 });

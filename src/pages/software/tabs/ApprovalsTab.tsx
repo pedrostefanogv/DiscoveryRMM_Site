@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import toast from 'react-hot-toast';
 import { ShieldCheck, Plus, Trash2 } from 'lucide-react';
 import { Badge, Button, Card, ErrorDisplay, Loading, Modal, Select } from '@/components/ui';
 import { useClients } from '@/hooks/useClients';
@@ -15,6 +16,10 @@ export function ApprovalsTab() {
   const [selectedClientId, setSelectedClientId] = useState('');
   const [selectedSiteId, setSelectedSiteId] = useState('');
   const [agentId, setAgentId] = useState('');
+  // Contexto (cliente/site) escolhido dentro do AgentPicker: o picker guarda isso
+  // internamente, então a aba espelha aqui para repassar ao modal de nova regra.
+  const [agentClientId, setAgentClientId] = useState('');
+  const [agentSiteId, setAgentSiteId] = useState('');
   const [newRuleOpen, setNewRuleOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<AppApprovalRule | null>(null);
 
@@ -43,8 +48,20 @@ export function ApprovalsTab() {
   ];
 
   async function handleDelete(rule: AppApprovalRule) {
-    await deleteApproval.mutateAsync({ ruleId: rule.ruleId ?? rule.id ?? '' });
-    setDeleteTarget(null);
+    const ruleId = rule.ruleId ?? rule.id ?? '';
+    if (!ruleId) {
+      toast.error('Regra sem identificador — recarregue a lista.');
+      return;
+    }
+    try {
+      await deleteApproval.mutateAsync({ ruleId });
+      toast.success('Regra removida.');
+      setDeleteTarget(null);
+    } catch (err) {
+      // Sem tratamento, a falha virava promise rejeitada silenciosa e o modal
+      // ficava aberto sem indicação nenhuma de erro.
+      toast.error(err instanceof Error ? err.message : 'Falha ao remover a regra.');
+    }
   }
 
   return (
@@ -68,9 +85,27 @@ export function ApprovalsTab() {
               <div className="w-48"><Select label="Site" options={siteOptions} value={selectedSiteId} onChange={(e) => setSelectedSiteId(e.target.value)} /></div>
             </>
           )}
-          {scopeType === AppApprovalScopeType.Agent && <div className="flex-1 min-w-72"><AgentPicker value={agentId} onChange={setAgentId} /></div>}
           <div className="ml-auto"><Button onClick={() => setNewRuleOpen(true)}><Plus className="h-4 w-4" /> Nova Regra</Button></div>
         </div>
+        {/* O seletor de agente é um bloco próprio: dentro da barra de filtros ele
+            esticava a linha (itens alinhados pela base) e quebrava o card. */}
+        {scopeType === AppApprovalScopeType.Agent && (
+          <div className="mt-4 border-t border-border pt-4">
+            <AgentPicker
+              value={agentId}
+              onChange={setAgentId}
+              // O contexto espelhado volta como valor inicial: trocar o escopo e
+              // voltar para "Agente" remonta o picker e, sem isto, ele apareceria
+              // vazio enquanto o modal recebia o contexto antigo.
+              initialClientId={agentClientId}
+              initialSiteId={agentSiteId}
+              onContextChange={(clientId, siteId) => {
+                setAgentClientId(clientId);
+                setAgentSiteId(siteId);
+              }}
+            />
+          </div>
+        )}
       </Card>
 
       <Card padding={false}>
@@ -90,12 +125,13 @@ export function ApprovalsTab() {
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-sm font-medium text-foreground font-mono">{rule.packageId}</span>
                     {rule.packageName && <span className="text-xs text-muted">{rule.packageName}</span>}
-                    {rule.action === AppApprovalActionType.Allow ? <Badge color="success">Permitido</Badge> : <Badge color="danger">Negado</Badge>}
+                    {rule.action === AppApprovalActionType.Allow ? <Badge color="success">Permitido</Badge> : rule.action === AppApprovalActionType.Deny ? <Badge color="danger">Negado</Badge> : <span className="text-xs text-muted">{'\u2014'}</span>}
                     {rule.autoUpdateEnabled && <Badge color="primary">Auto-update</Badge>}
                     <Badge color="slate">{scopeLabel(rule.scopeType)}</Badge>
                   </div>
                   {rule.reason && <p className="mt-0.5 text-xs text-muted">{rule.reason}</p>}
-                  <p className="mt-0.5 text-xs text-muted">Criado em {formatDate(rule.createdAt)}</p>
+                  {/* `createdAt` é exposto pela API; `updatedAt` cobre respostas antigas. */}
+                  <p className="mt-0.5 text-xs text-muted">Criado em {formatDate(rule.createdAt || rule.updatedAt)}</p>
                 </div>
                 <Button variant="danger" size="sm" onClick={() => setDeleteTarget(rule)}><Trash2 className="h-4 w-4" /></Button>
               </div>
@@ -104,7 +140,17 @@ export function ApprovalsTab() {
         )}
       </Card>
 
-      <ApprovalFormModal open={newRuleOpen} onClose={() => setNewRuleOpen(false)} prefillInstallationType={installationType} />
+      <ApprovalFormModal
+        open={newRuleOpen}
+        onClose={() => setNewRuleOpen(false)}
+        prefillInstallationType={installationType}
+        prefillScopeType={scopeType}
+        prefillClientId={
+          scopeType === AppApprovalScopeType.Agent ? agentClientId : selectedClientId
+        }
+        prefillSiteId={scopeType === AppApprovalScopeType.Agent ? agentSiteId : selectedSiteId}
+        prefillAgentId={scopeType === AppApprovalScopeType.Agent ? agentId : ''}
+      />
 
       <Modal open={!!deleteTarget} onClose={() => setDeleteTarget(null)} title="Remover Regra" maxWidth="max-w-sm">
         {deleteTarget && (

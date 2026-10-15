@@ -1,5 +1,5 @@
 import { Badge, Button, ErrorDisplay, Loading, Modal } from '@/components/ui';
-import { ExternalLink, FileArchive, FileBox, Hash, Search, Terminal } from 'lucide-react';
+import { ExternalLink, FileArchive, FileBox, Hash, Pencil, Search, Terminal, Trash2 } from 'lucide-react';
 import { useAppStorePackage } from '@/hooks/useAppStore';
 import {
   AppCommandKind, AppDetectionMode, AppInstallationType, type AppStoreCatalogPackage,
@@ -49,9 +49,12 @@ interface PackageDetailsModalProps {
   onClose: () => void;
   pkg: AppStoreCatalogPackage | null;
   installationType: AppInstallationType;
+  /** Presente apenas quando o pacote custom pode ser editado/excluído. */
+  onEdit?: () => void;
+  onDelete?: () => void;
 }
 
-export function PackageDetailsModal({ open, onClose, pkg, installationType }: PackageDetailsModalProps) {
+export function PackageDetailsModal({ open, onClose, pkg, installationType, onEdit, onDelete }: PackageDetailsModalProps) {
   const detailsQuery = useAppStorePackage(pkg?.packageId, installationType);
   const details = detailsQuery.data ?? pkg;
   const detailsDownloadUrl =
@@ -253,7 +256,7 @@ export function PackageDetailsModal({ open, onClose, pkg, installationType }: Pa
               </div>
             )}
 
-            <div className="flex justify-end gap-2 pt-1">
+            <div className="flex flex-wrap justify-end gap-2 pt-1">
               {details.homepage && (
                 <a
                   href={details.homepage}
@@ -263,6 +266,16 @@ export function PackageDetailsModal({ open, onClose, pkg, installationType }: Pa
                 >
                   <ExternalLink className="h-4 w-4" /> Site do app
                 </a>
+              )}
+              {isCustomPackage && onEdit && (
+                <Button variant="ghost" onClick={onEdit}>
+                  <Pencil className="h-4 w-4" /> Editar
+                </Button>
+              )}
+              {isCustomPackage && onDelete && (
+                <Button variant="danger" onClick={onDelete}>
+                  <Trash2 className="h-4 w-4" /> Excluir
+                </Button>
               )}
               <Button variant="ghost" onClick={onClose}>Fechar</Button>
             </div>

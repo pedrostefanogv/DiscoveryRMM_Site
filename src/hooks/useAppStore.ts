@@ -123,6 +123,19 @@ export function useDeleteCustomPackage() {
   });
 }
 
+export function useDeleteCustomPackageIcon() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (packageId: string) =>
+      appStoreApi.deleteCustomPackageIcon(packageId),
+    onSuccess: (_data, packageId) =>
+      Promise.all([
+        qc.invalidateQueries({ queryKey: ["appStore", "catalog"] }),
+        qc.invalidateQueries({ queryKey: ["appStore", "package", packageId] }),
+      ]),
+  });
+}
+
 export function useDeleteCustomPackageFile() {
   const qc = useQueryClient();
   return useMutation({

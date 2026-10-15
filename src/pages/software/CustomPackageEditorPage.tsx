@@ -5,7 +5,7 @@ import {
   AlertCircle, ArrowLeft, CheckCircle2, FileArchive, Image as ImageIcon, Loader2, Package, RotateCcw, Save, Search,
   Terminal, Trash2, Upload, X,
 } from 'lucide-react';
-import { Button, Card, ConfirmDialog, ErrorDisplay, Input, Loading, Select, TextArea } from '@/components/ui';
+import { Button, Card, ConfirmDialog, ErrorDisplay, Input, Loading, Modal, Select, TextArea } from '@/components/ui';
 import {
   ASSET_MULTIPART_MIN_BYTES,
   appStoreApi,
@@ -16,12 +16,21 @@ import type { UploadProgress } from '@/api/client';
 import {
   AppCommandKind, AppDetectionMode, AppInstallationType,
 } from '@/api/types';
-import { useAppStorePackage, useDeleteCustomPackageFile, useUpsertCustomPackage } from '@/hooks/useAppStore';
+import {
+  useAppStorePackage,
+  useDeleteCustomPackageFile,
+  useDeleteCustomPackageIcon,
+  useUpsertCustomPackage,
+} from '@/hooks/useAppStore';
 import { MarkdownField } from './components/MarkdownField';
 import { SoftwareInventoryPicker, type InventorySoftwareSelection } from './components/SoftwareInventoryPicker';
-import { formatBytes, formatEta, slugifyPackageId } from './softwareStoreUtils';
+import { STORE_PATH, buildStorePath, formatBytes, formatEta, slugifyPackageId } from './softwareStoreUtils';
 
-const STORE_PATH = '/software/store';
+/**
+ * Volta para a loja já na listagem Custom: o editor só trata pacotes custom e,
+ * sem o param, a loja reabria na listagem Winget depois de salvar.
+ */
+const BACK_TO_STORE_PATH = buildStorePath(AppInstallationType.Custom);
 
 /** Limite do servidor para o comando de detecção (varchar(2000)). */
 const DETECTION_COMMAND_MAX = 2000;
@@ -416,6 +425,7 @@ export default function CustomPackageEditorPage() {
   const packageQuery = useAppStorePackage(packageId, AppInstallationType.Custom);
   const upsert = useUpsertCustomPackage();
   const deleteFile = useDeleteCustomPackageFile();
+  const deleteIcon = useDeleteCustomPackageIcon();
 
   const [form, setForm] = useState<FormState>({ ...EMPTY_FORM });
   const [installerFile, setInstallerFile] = useState<File | null>(null);
@@ -433,6 +443,9 @@ export default function CustomPackageEditorPage() {
   // sem esta guarda o estado do novo apareceria misturado/atrasado.
   const installerSeqRef = useRef(0);
   const iconSeqRef = useRef(0);
+  // objectKeys dos assets cujo vínculo automático pós-upload já foi tentado: uma
+  // tentativa por asset (uma falha não entra em laço, e o "Salvar" continua lá).
+  const autoLinkAttemptedRef = useRef<Set<string>>(new Set());
 
   // Sair da página no meio de um envio de vários GiB: aborta em vez de deixar o
   // XHR terminar "invisível" (poderia publicar um objeto sem vínculo). O abort
@@ -445,6 +458,14 @@ export default function CustomPackageEditorPage() {
     [],
   );
   const [saving, setSaving] = useState(false);
+  // Instalador que ESTA sessão enviou e já foi vinculado automaticamente ao
+  // pacote. Enquanto ele existir, o "Cancelar" oferece desfazer o vínculo —
+  // excluindo o arquivo do pacote E do object storage.
+  const [linkedInstallerName, setLinkedInstallerName] = useState<string | null>(null);
+  // Mesmo papel para o ícone: "Cancelar" também pode desfazer o vínculo dele.
+  const [linkedIconName, setLinkedIconName] = useState<string | null>(null);
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+  const [confirmDeleteIconOpen, setConfirmDeleteIconOpen] = useState(false);
   const [baseline, setBaseline] = useState<FormState>({ ...EMPTY_FORM });
   const [confirmDeleteFileOpen, setConfirmDeleteFileOpen] = useState(false);
   const [initializedPackageId, setInitializedPackageId] = useState<string | null>(null);
@@ -800,45 +821,21 @@ export default function CustomPackageEditorPage() {
     return Object.keys(next).length === 0;
   }
 
-  async function handleSave() {
-    if (!validate()) return;
+  /**
+   * Grava o pacote: metadados do formulário + os assets publicados nesta edição.
+   * Base comum do "Salvar" e do vínculo automático pós-upload (que não navega).
+   */
+  async function persistPackage(auto = false): Promise<boolean> {
+    // Asset só existe quando o usuário enviou um arquivo NOVO nesta edição;
+    // sem arquivo novo o backend preserva o instalador/ícone já publicado.
+    const fileAsset: AssetState | null = installerAsset;
+    const iconAssetState: AssetState | null = iconAsset;
+    const iconObjectKey = iconAssetState?.objectKey ?? null;
+    const iconUrl = iconObjectKey ? null : form.iconUrl.trim() || null;
 
-    // O envio acontece no card, ao escolher o arquivo. Salvar só grava o que
-    // mudou — nunca reenvia um instalador já publicado.
-    if (uploading) {
-      toast.error('Aguarde o envio do arquivo terminar para salvar.');
-      return;
-    }
-    if ((installerFile && !installerAsset) || (iconFile && !iconAsset)) {
-      const canceled = installerUpload?.status === 'canceled' || iconUpload?.status === 'canceled';
-      const resumable =
-        (installerFile?.size ?? 0) > ASSET_MULTIPART_MIN_BYTES ||
-        (iconFile?.size ?? 0) > ASSET_MULTIPART_MIN_BYTES;
-
-      toast.error(
-        canceled
-          ? resumable
-            ? 'O envio está cancelado. Use "Continuar envio" (retoma de onde parou) antes de salvar.'
-            : 'O envio está cancelado. Use "Continuar envio" (reenvia o arquivo) antes de salvar.'
-          : 'O envio do arquivo não foi concluído. Use "Tentar novamente" antes de salvar.',
-      );
-      return;
-    }
-    if (!hasPendingChanges) {
-      toast('Nenhuma alteração para salvar.', { icon: 'ℹ️' });
-      return;
-    }
+    setSaving(true);
 
     try {
-      // Asset só existe quando o usuário enviou um arquivo NOVO nesta edição;
-      // sem arquivo novo o backend preserva o instalador/ícone já publicado.
-      const fileAsset: AssetState | null = installerAsset;
-      const iconAssetState: AssetState | null = iconAsset;
-      const iconObjectKey = iconAssetState?.objectKey ?? null;
-      const iconUrl = iconObjectKey ? null : form.iconUrl.trim() || null;
-
-      setSaving(true);
-
       await upsert.mutateAsync({
         packageId: form.packageId.trim(),
         name: form.name.trim(),
@@ -890,26 +887,240 @@ export default function CustomPackageEditorPage() {
       if (installerFile && installerAsset) forgetUploadedAsset(installerFile, 'installer');
       if (iconFile && iconAsset) forgetUploadedAsset(iconFile, 'icon');
 
-      if (isEditing) {
-        toast.success(`Alterações salvas (${changedFields.length} ${changedFields.length === 1 ? 'campo' : 'campos'}).`);
-        navigate(STORE_PATH);
-      } else {
-        // Cadastro criado: o anexo do instalador só é habilitado com o pacote
-        // existindo, então segue direto para a edição em vez de voltar à loja.
-        toast.success('Pacote criado. Agora você pode anexar o instalador.');
-        navigate(`${STORE_PATH}/custom/${encodeURIComponent(form.packageId.trim())}/edit`, { replace: true });
-      }
+      // O que acabou de ser gravado vira a nova referência do "alterado".
+      setBaseline({ ...form });
+      return true;
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Falha ao salvar o pacote custom.');
+      const message = err instanceof Error ? err.message : 'Falha ao salvar o pacote custom.';
+      // No vínculo automático o operador não clicou em nada: a mensagem precisa
+      // dizer que o ARQUIVO subiu e que o Salvar continua valendo como saída.
+      toast.error(
+        auto
+          ? `O arquivo foi publicado, mas o vínculo automático falhou: ${message} Use "Salvar" para tentar de novo.`
+          : message,
+      );
+      return false;
     } finally {
       setSaving(false);
     }
   }
 
+  async function handleSave() {
+    if (!validate()) return;
+
+    // Guarda extra contra duplo envio: o botão só desabilita por estados, e uma
+    // gravação (manual ou automática) já em curso não pode ser duplicada.
+    if (saving) return;
+
+    // O envio acontece no card, ao escolher o arquivo. Salvar só grava o que
+    // mudou — nunca reenvia um instalador já publicado.
+    if (uploading) {
+      toast.error('Aguarde o envio do arquivo terminar para salvar.');
+      return;
+    }
+    if ((installerFile && !installerAsset) || (iconFile && !iconAsset)) {
+      const canceled = installerUpload?.status === 'canceled' || iconUpload?.status === 'canceled';
+      const resumable =
+        (installerFile?.size ?? 0) > ASSET_MULTIPART_MIN_BYTES ||
+        (iconFile?.size ?? 0) > ASSET_MULTIPART_MIN_BYTES;
+
+      toast.error(
+        canceled
+          ? resumable
+            ? 'O envio está cancelado. Use "Continuar envio" (retoma de onde parou) antes de salvar.'
+            : 'O envio está cancelado. Use "Continuar envio" (reenvia o arquivo) antes de salvar.'
+          : 'O envio do arquivo não foi concluído. Use "Tentar novamente" antes de salvar.',
+      );
+      return;
+    }
+    if (!hasPendingChanges) {
+      toast('Nenhuma alteração para salvar.', { icon: 'ℹ️' });
+      return;
+    }
+
+    if (!(await persistPackage())) return;
+
+    if (isEditing) {
+      toast.success(`Alterações salvas (${changedFields.length} ${changedFields.length === 1 ? 'campo' : 'campos'}).`);
+      // replace: o Voltar do navegador não deve reabrir o pacote recém-salvo.
+      navigate(BACK_TO_STORE_PATH, { replace: true });
+    } else {
+      // Cadastro criado: o anexo do instalador só é habilitado com o pacote
+      // existindo, então segue direto para a edição em vez de voltar à loja.
+      toast.success('Pacote criado. Agora você pode anexar o instalador.');
+      navigate(`${STORE_PATH}/custom/${encodeURIComponent(form.packageId.trim())}/edit`, { replace: true });
+    }
+  }
+
+  /**
+   * Vincula o arquivo recém-publicado ao pacote SEM esperar o "Salvar".
+   *
+   * O envio termina e o vínculo é gravado na hora (mesma gravação do Salvar),
+   * mas o operador CONTINUA na tela — pode enviar o ícone, marcar "é um ZIP" ou
+   * ajustar metadados. O que ficar pendente aparece no próprio botão Salvar, que
+   * segue funcionando normalmente.
+   */
+  async function autoLinkUploadedAssets(): Promise<void> {
+    if (!validate()) {
+      toast.error('Arquivo publicado, mas o pacote tem campos a corrigir: ajuste e clique em Salvar para vinculá-lo.');
+      return;
+    }
+
+    // Os assets deste envio fazem parte da gravação que vai acontecer agora.
+    const linkedInstaller =
+      installerAsset && installerUpload?.status === 'done' ? installerAsset.fileName : null;
+    const linkedIcon =
+      iconAsset && iconUpload?.status === 'done' ? iconAsset.fileName : null;
+
+    if (!(await persistPackage(true))) return;
+
+    // Recarrega o pacote ANTES de limpar o estado de upload: assim o card passa
+    // direto de "enviado agora" para "publicado" (sem um instante mostrando
+    // "Nenhum instalador publicado", que seria falso logo após o vínculo).
+    let refreshedIcon: string | null | undefined;
+    try {
+      const refreshed = await packageQuery.refetch();
+      refreshedIcon = refreshed.data?.icon;
+    } catch {
+      // O vínculo já está gravado; a tela se atualiza no próximo fetch.
+    }
+
+    setInstallerFile(null);
+    setInstallerAsset(null);
+    setInstallerUpload(null);
+    setIconFile(null);
+    setIconAsset(null);
+    setIconUpload(null);
+
+    // O ícone publicado ganha URL derivada pela API (/custom/{id}/icon). Sem
+    // sincronizar o formulário, a pré-visualização sumiria ao limpar o arquivo
+    // (o card mostra `iconPreview ?? form.iconUrl`).
+    if (refreshedIcon && refreshedIcon !== form.iconUrl) {
+      const synced = { ...form, iconUrl: refreshedIcon };
+      setForm(synced);
+      setBaseline(synced);
+    }
+
+    if (linkedInstaller) setLinkedInstallerName(linkedInstaller);
+    if (linkedIcon) setLinkedIconName(linkedIcon);
+
+    toast.success('Arquivo vinculado ao pacote automaticamente.');
+  }
+
+  // Dispara o vínculo assim que um envio termina e ainda não há outro em curso.
+  // Uma tentativa por asset: se a API recusar, não entra em laço — o operador
+  // resolve com o "Salvar", que continua disponível.
+  useEffect(() => {
+    if (!canAttachFiles || saving || uploading) return;
+
+    const published: AssetState[] = [];
+    if (installerAsset && installerUpload?.status === 'done') published.push(installerAsset);
+    if (iconAsset && iconUpload?.status === 'done') published.push(iconAsset);
+    if (published.length === 0) return;
+
+    // Arquivo escolhido e ainda não publicado (envio falhou/cancelado): gravar
+    // agora deixaria o pacote sem ele.
+    if ((installerFile && !installerAsset) || (iconFile && !iconAsset)) return;
+
+    if (published.some((asset) => autoLinkAttemptedRef.current.has(asset.objectKey))) return;
+    for (const asset of published) autoLinkAttemptedRef.current.add(asset.objectKey);
+
+    void autoLinkUploadedAssets();
+    // Depende do STATUS do upload (e não do objeto inteiro, que troca a cada
+    // evento de progresso) — o efeito não precisa rodar no meio do envio.
+  }, [canAttachFiles, saving, uploading, installerAsset, installerUpload?.status, iconAsset, iconUpload?.status, installerFile, iconFile]);
+
+  /**
+   * "Cancelar": sai da edição.
+   *
+   * Com um instalador vinculado automaticamente nesta sessão, o vínculo já está
+   * gravado — sair não o desfaz. Então o operador escolhe: manter o arquivo ou
+   * excluí-lo (do pacote e do object storage) antes de sair.
+   */
+  function handleCancel() {
+    if (linkedInstallerName || linkedIconName) {
+      setCancelDialogOpen(true);
+      return;
+    }
+
+    navigate(BACK_TO_STORE_PATH);
+  }
+
+  /**
+   * Exclui os arquivos vinculados NESTA sessão (instalador e/ou ícone) — do pacote
+   * e do object storage — e sai da edição. Só mexe no que o vínculo automático
+   * acabou de gravar; o que existia antes não é tocado.
+   */
+  async function handleCancelAndDelete() {
+    if (!packageId) {
+      navigate(BACK_TO_STORE_PATH);
+      return;
+    }
+
+    const removed: string[] = [];
+
+    try {
+      // Mesmos endpoints dos botões do card: o servidor limpa o vínculo e apaga o
+      // objeto no object storage.
+      if (linkedInstallerName) {
+        await deleteFile.mutateAsync(packageId);
+        removed.push('instalador');
+      }
+
+      if (linkedIconName) {
+        await deleteIcon.mutateAsync(packageId);
+        removed.push('ícone');
+      }
+    } catch (err) {
+      // Não sai da tela: sair agora deixaria o arquivo vinculado sem o operador
+      // saber que a exclusão falhou.
+      toast.error(err instanceof Error ? err.message : 'Falha ao excluir o arquivo do object storage.');
+      return;
+    }
+
+    setCancelDialogOpen(false);
+    setLinkedInstallerName(null);
+    setLinkedIconName(null);
+    toast.success(
+      removed.length > 0
+        ? `${removed.join(' e ')} excluído do pacote e do object storage.`
+        : 'Nada para excluir.',
+    );
+    navigate(BACK_TO_STORE_PATH);
+  }
+
+  /** Exclui o ícone publicado (pacote + object storage). */
+  async function handleDeleteIcon() {
+    if (!packageId) return;
+    try {
+      await deleteIcon.mutateAsync(packageId);
+      setLinkedIconName(null);
+      setConfirmDeleteIconOpen(false);
+      // A URL do ícone no formulário sai junto: o objeto não existe mais.
+      const synced = { ...form, iconUrl: '' };
+      setForm(synced);
+      setBaseline(synced);
+      toast.success('Ícone excluído do pacote e do object storage.');
+      await packageQuery.refetch();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Falha ao excluir o ícone.');
+    }
+  }
+
+  /** Resumo dos assets vinculados NESTA sessão (texto do diálogo de saída). */
+  const linkedAssetsSummary = [
+    linkedInstallerName ? `o instalador ${linkedInstallerName}` : null,
+    linkedIconName ? `o ícone ${linkedIconName}` : null,
+  ]
+    .filter((part): part is string => Boolean(part))
+    .join(' e ');
+
   async function handleDeleteInstaller() {
     if (!packageId) return;
     try {
       await deleteFile.mutateAsync(packageId);
+      // O arquivo não existe mais: o "Cancelar" não tem mais o que oferecer.
+      setLinkedInstallerName(null);
       // NÃO limpa installerFile/installerAsset: se o usuário já escolheu (ou já
       // enviou) um substituto, apagar o publicado não pode descartar a seleção
       // nem orfanizar um asset recém-enviado ao S3. O substituto entra no próximo
@@ -945,7 +1156,7 @@ export default function CustomPackageEditorPage() {
           message="Não foi possível carregar o pacote custom."
           onRetry={() => packageQuery.refetch()}
         />
-        <Button variant="ghost" onClick={() => navigate(STORE_PATH)}>
+        <Button variant="ghost" onClick={() => navigate(BACK_TO_STORE_PATH)}>
           <ArrowLeft className="h-4 w-4" /> Voltar para a loja
         </Button>
       </div>
@@ -987,7 +1198,7 @@ export default function CustomPackageEditorPage() {
             Cadastro manual de um instalador próprio, com script de instalação e detecção para o agent.
           </p>
         </div>
-        <Button variant="ghost" onClick={() => navigate(STORE_PATH)} disabled={submitting}>
+        <Button variant="ghost" onClick={handleCancel} disabled={submitting}>
           <ArrowLeft className="h-4 w-4" /> Voltar para a loja
         </Button>
       </div>
@@ -1201,7 +1412,7 @@ export default function CustomPackageEditorPage() {
                 title={canAttachFiles ? undefined : 'Salve o cadastro do pacote antes de enviar a imagem'}
               >
                 <Upload className="h-4 w-4" />
-                {iconFile || iconAsset ? 'Trocar imagem' : 'Enviar imagem'}
+                {iconFile || iconAsset || loaded?.icon ? 'Trocar imagem' : 'Enviar imagem'}
                 <input
                   type="file"
                   accept="image/*"
@@ -1230,6 +1441,18 @@ export default function CustomPackageEditorPage() {
                 >
                   <X className="h-3.5 w-3.5" /> Remover seleção
                 </button>
+              )}
+
+              {!iconFile && !iconAsset && loaded?.icon && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={submitting || deleteIcon.isPending}
+                  onClick={() => setConfirmDeleteIconOpen(true)}
+                  title="Excluir o ícone publicado no object storage"
+                >
+                  <Trash2 className="h-4 w-4" /> Excluir ícone
+                </Button>
               )}
             </div>
 
@@ -1387,13 +1610,13 @@ export default function CustomPackageEditorPage() {
                 : 'Preencha o cadastro para salvar.'}
         </p>
         <div className="flex items-center gap-2">
-          <Button variant="ghost" onClick={() => navigate(STORE_PATH)} disabled={submitting}>
+          <Button variant="ghost" onClick={handleCancel} disabled={submitting}>
             Cancelar
           </Button>
           <Button
             onClick={handleSave}
             loading={submitting || upsert.isPending}
-            disabled={uploading || (isEditing && !hasPendingChanges)}
+            disabled={submitting || (isEditing && !hasPendingChanges)}
             title={
               isEditing && !hasPendingChanges
                 ? 'Nenhuma alteração pendente para salvar'
@@ -1421,6 +1644,62 @@ export default function CustomPackageEditorPage() {
         onClose={() => setConfirmDeleteFileOpen(false)}
         onConfirm={handleDeleteInstaller}
       />
+
+      <ConfirmDialog
+        open={confirmDeleteIconOpen}
+        title="Excluir ícone publicado"
+        message={
+          <span>
+            O ícone publicado será apagado do object storage e o pacote fica sem imagem. O instalador e os
+            comandos do pacote continuam cadastrados.
+          </span>
+        }
+        confirmLabel="Excluir ícone"
+        tone="danger"
+        isLoading={deleteIcon.isPending}
+        onClose={() => setConfirmDeleteIconOpen(false)}
+        onConfirm={handleDeleteIcon}
+      />
+
+      {/* Sair com um instalador recém-vinculado: o vínculo já está gravado, então
+          a saída oferece desfazê-lo (excluindo do pacote e do object storage). */}
+      <Modal
+        open={cancelDialogOpen}
+        onClose={() => setCancelDialogOpen(false)}
+        title="Sair da edição"
+        maxWidth="max-w-lg"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            O envio terminou e já vinculou {linkedAssetsSummary || 'o arquivo'} ao pacote{' '}
+            <strong className="text-foreground">automaticamente</strong>. Sair agora mantém o vínculo — nada é apagado do
+            object storage.
+          </p>
+          <p className="text-sm text-muted-foreground">
+            Para desfazer, use <strong className="text-foreground">Excluir e sair</strong>: o que foi enviado agora sai do pacote
+            e o arquivo é apagado do object storage.
+          </p>
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button variant="ghost" onClick={() => setCancelDialogOpen(false)} disabled={deleteFile.isPending}>
+              Voltar a editar
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => navigate(BACK_TO_STORE_PATH)}
+              disabled={deleteFile.isPending}
+            >
+              Manter e sair
+            </Button>
+            <Button
+              variant="danger"
+              onClick={handleCancelAndDelete}
+              loading={deleteFile.isPending || deleteIcon.isPending}
+            >
+              Excluir e sair
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
