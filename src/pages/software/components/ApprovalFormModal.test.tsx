@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 /**
@@ -9,11 +9,17 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
  *    dava para montar uma regra Winget para um pacote Custom e a API devolvia
  *    400);
  *  - o escopo/agente já filtrados na aba chegam prontos, e o seletor de agente
- *    reencontra o agente escolhido (antes a confirmação só mostrava o UUID).
+ *    reencontra o agente escolhido (antes a confirmação só mostrava o UUID);
+ *  - ao salvar, a aba é avisada do tipo da regra criada (senão a regra Custom
+ *    criada com o filtro em Winget "desaparecia" da lista).
  */
 
+const mocks = vi.hoisted(() => ({
+  createApproval: vi.fn(),
+}));
+
 vi.mock('@/hooks/useAppStore', () => ({
-  useCreateApproval: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useCreateApproval: () => ({ mutateAsync: mocks.createApproval, isPending: false }),
 }));
 
 vi.mock('@/hooks/useClients', () => ({
@@ -99,5 +105,31 @@ describe('ApprovalFormModal', () => {
     render(<ApprovalFormModal open onClose={vi.fn()} />);
 
     expect(screen.getByLabelText('Motivo (opcional)').getAttribute('maxlength')).toBe('500');
+  });
+
+  it('avisa a lista com o tipo de instalação da regra salva', async () => {
+    mocks.createApproval.mockReset();
+    mocks.createApproval.mockResolvedValue({
+      ruleId: 'r1',
+      scopeType: AppApprovalScopeType.Global,
+      scopeId: null,
+      installationType: AppInstallationType.Custom,
+      packageId: 'foxit_editor',
+      action: 0,
+      autoUpdateEnabled: false,
+      reason: null,
+      createdAt: '2026-10-13T10:00:00Z',
+      updatedAt: '2026-10-13T10:00:00Z',
+    });
+    const onSaved = vi.fn();
+
+    render(<ApprovalFormModal open onClose={vi.fn()} onSaved={onSaved} />);
+
+    fireEvent.change(screen.getByLabelText('ID do Pacote'), {
+      target: { value: 'foxit_editor' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Salvar Regra' }));
+
+    await waitFor(() => expect(onSaved).toHaveBeenCalledWith(AppInstallationType.Custom));
   });
 });

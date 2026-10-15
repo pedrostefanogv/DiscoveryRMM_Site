@@ -5,6 +5,7 @@ import { Badge, Button, Card, ErrorDisplay, Loading, Modal, Select } from '@/com
 import { useClients } from '@/hooks/useClients';
 import { useSites } from '@/hooks/useSites';
 import { useAppStoreApprovals, useDeleteApproval } from '@/hooks/useAppStore';
+import { ApiError } from '@/api/client';
 import { AppApprovalActionType, AppApprovalScopeType, AppInstallationType, type AppApprovalRule } from '@/api/types';
 import { AgentPicker } from '../components/AgentPicker';
 import { ApprovalFormModal } from '../components/ApprovalFormModal';
@@ -58,6 +59,14 @@ export function ApprovalsTab() {
       toast.success('Regra removida.');
       setDeleteTarget(null);
     } catch (err) {
+      // 404 = a regra já não existia (duplo clique / lista velha). Não é falha
+      // de remoção: fecha o modal, recarrega a lista e diz o que aconteceu.
+      if (err instanceof ApiError && err.status === 404) {
+        toast('Regra já não existia. Lista atualizada.', { icon: 'ℹ️' });
+        setDeleteTarget(null);
+        void query.refetch();
+        return;
+      }
       // Sem tratamento, a falha virava promise rejeitada silenciosa e o modal
       // ficava aberto sem indicação nenhuma de erro.
       toast.error(err instanceof Error ? err.message : 'Falha ao remover a regra.');
@@ -115,7 +124,16 @@ export function ApprovalsTab() {
         {query.isLoading && <Loading />}
         {query.isError && <ErrorDisplay message="Erro ao carregar regras." onRetry={() => query.refetch()} />}
         {query.data && query.data.items.length === 0 && (
-          <div className="flex flex-col items-center py-16 text-muted"><ShieldCheck className="mb-3 h-10 w-10 opacity-30" /><p className="text-sm">Nenhuma regra encontrada para este escopo.</p></div>
+          <div className="flex flex-col items-center py-16 text-muted">
+            <ShieldCheck className="mb-3 h-10 w-10 opacity-30" />
+            <p className="text-sm">Nenhuma regra encontrada para este escopo.</p>
+            {/* A regra criada para um pacote Custom não aparece com "Tipo" Winget —
+                era exatamente a dúvida de quem criou a regra. */}
+            <p className="mt-1 max-w-md text-center text-xs text-muted">
+              O filtro &quot;Tipo&quot; ({installationTypeOptions.find((o) => o.value === String(installationType))?.label ?? ''}) mostra
+              só regras desse tipo de instalação. Mude o tipo para ver regras de Winget, Chocolatey ou Custom.
+            </p>
+          </div>
         )}
         {query.data && query.data.items.length > 0 && (
           <div className="divide-y divide-black/10 dark:divide-white/5">
@@ -133,7 +151,14 @@ export function ApprovalsTab() {
                   {/* `createdAt` é exposto pela API; `updatedAt` cobre respostas antigas. */}
                   <p className="mt-0.5 text-xs text-muted">Criado em {formatDate(rule.createdAt || rule.updatedAt)}</p>
                 </div>
-                <Button variant="danger" size="sm" onClick={() => setDeleteTarget(rule)}><Trash2 className="h-4 w-4" /></Button>
+                <Button
+                  variant="danger"
+                  size="sm"
+                  aria-label={`Remover regra ${rule.packageId}`}
+                  onClick={() => setDeleteTarget(rule)}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
               </div>
             ))}
           </div>
@@ -150,6 +175,9 @@ export function ApprovalsTab() {
         }
         prefillSiteId={scopeType === AppApprovalScopeType.Agent ? agentSiteId : selectedSiteId}
         prefillAgentId={scopeType === AppApprovalScopeType.Agent ? agentId : ''}
+        // Criar uma regra Custom com o filtro em Winget deixava a lista vazia
+        // logo depois de salvar: a aba passa a seguir o tipo da regra criada.
+        onSaved={setInstallationType}
       />
 
       <Modal open={!!deleteTarget} onClose={() => setDeleteTarget(null)} title="Remover Regra" maxWidth="max-w-sm">

@@ -23,6 +23,11 @@ interface ApprovalFormModalProps {
   prefillClientId?: string;
   prefillSiteId?: string;
   prefillAgentId?: string;
+  /**
+   * Avisa o dono da lista com o tipo de instalação da regra salva: criar uma
+   * regra Custom com o filtro em Winget deixava a lista vazia logo após salvar.
+   */
+  onSaved?: (installationType: AppInstallationType) => void;
 }
 
 export function ApprovalFormModal({
@@ -36,6 +41,7 @@ export function ApprovalFormModal({
   prefillClientId = '',
   prefillSiteId = '',
   prefillAgentId = '',
+  onSaved,
 }: ApprovalFormModalProps) {
   const isPackageIdLocked = lockPackageId || Boolean(prefillPackageId.trim());
   const isInstallationTypeLocked = lockInstallationType || isPackageIdLocked;
@@ -117,7 +123,8 @@ export function ApprovalFormModal({
       reason: reason.trim() || undefined,
     };
     try {
-      await createApproval.mutateAsync(req);
+      const saved = await createApproval.mutateAsync(req);
+      onSaved?.(saved?.installationType ?? installationType);
       onClose();
       setPackageId('');
       setReason('');

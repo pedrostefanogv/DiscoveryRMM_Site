@@ -89,7 +89,14 @@ export function AuditTab() {
         {query.isLoading && <Loading />}
         {query.isError && <ErrorDisplay message="Erro ao carregar auditoria." onRetry={() => query.refetch()} />}
         {query.data && query.data.items.length === 0 && (
-          <div className="flex flex-col items-center py-16 text-muted"><ClipboardList className="mb-3 h-10 w-10 opacity-30" /><p className="text-sm">Nenhum evento encontrado.</p></div>
+          <div className="flex flex-col items-center py-16 text-muted">
+            <ClipboardList className="mb-3 h-10 w-10 opacity-30" />
+            <p className="text-sm">Nenhum evento encontrado.</p>
+            <p className="mt-1 max-w-md text-center text-xs text-muted">
+              O filtro &quot;Tipo&quot; mostra só eventos do tipo de instalação selecionado — eventos de Winget, Chocolatey e Custom
+              ficam em listas separadas.
+            </p>
+          </div>
         )}
         {query.data && query.data.items.length > 0 && (
           <div className="overflow-x-auto">
@@ -118,7 +125,12 @@ export function AuditTab() {
                             : <span className="text-xs text-muted">{'\u2014'}</span>}
                       </td>
                       <td className="px-5 py-2 text-xs text-muted">{scopeLabel(entry.scopeType)}{entry.scopeId && <div className="font-mono text-muted truncate max-w-[6rem]" title={entry.scopeId}>{entry.scopeId.slice(0, 8)}…</div>}</td>
-                      <td className="px-5 py-2 text-xs text-muted">{entry.changedBy ?? '\u2014'}</td>
+                      <td
+                        className="px-5 py-2 text-xs text-muted"
+                        title={entry.changedBy ? undefined : 'Evento anterior ao registro do autor na auditoria'}
+                      >
+                        {entry.changedBy ?? '\u2014'}
+                      </td>
                       <td className="max-w-[12rem] px-5 py-2 text-xs text-muted truncate">{entry.reason ?? '\u2014'}</td>
                     </tr>
                   );
