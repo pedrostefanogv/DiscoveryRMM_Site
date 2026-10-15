@@ -7,10 +7,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#0b1220" />
     <meta name="color-scheme" content="dark light" />
-    <meta
-      http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https: wss:; frame-src 'self' blob:;"
-    />
+    <!--
+      A CSP do painel saiu daqui: agora vem como HEADER do nginx
+      (scripts/linux/templates/nginx-discovery.conf.tpl). Como header ela vale
+      para todas as respostas e suporta frame-ancestors/base-uri/object-src, que a
+      <meta> nao suporta. Duplicar as duas politicas so aumentaria o risco de
+      divergirem.
+    -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <title>Discovery RMM</title>

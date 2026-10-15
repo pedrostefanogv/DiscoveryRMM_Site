@@ -576,6 +576,19 @@ async function uploadCustomAssetDirect(
       if (status.completed) {
         // Já foi finalizado (resposta anterior se perdeu): só falta devolver o asset.
         alreadyCompleted = true;
+      } else if (
+        // O plano persistido PRECISA representar a mesma divisão do arquivo que a
+        // sessão do servidor: se o tamanho do bloco ou o total mudou (config
+        // alterada, SPA antiga servida pelo service worker), as coordenadas
+        // gravadas apontariam para faixas erradas — enviar assim corromperia o
+        // arquivo. Nesse caso a sessão antiga é descartada e começa do zero.
+        Array.isArray(state.ranges) &&
+        state.ranges.length > 0 &&
+        (state.partSizeBytes !== status.partSizeBytes || state.ranges.length !== status.totalParts)
+      ) {
+        void api.del(`${BASE}/custom/assets/multipart/${state.uploadId}`).catch(() => undefined);
+        clearMultipartState(stateKey);
+        state = null;
       } else {
         state = {
           ...state,
@@ -702,11 +715,29 @@ async function uploadCustomAssetDirect(
     // XHRs em voo quando um bloco falha. Sem isso os workers sobreviventes
     // continuariam emitindo progresso e "ressuscitariam" o painel depois do erro.
     const run = new AbortController();
-    if (signal) {
-      if (signal.aborted) run.abort(signal.reason);
-      else signal.addEventListener('abort', () => run.abort(signal.reason), { once: true });
-    }
+
+    // Herda o cancelamento do usuário e devolve o "unlink": o listener precisa
+    // sair quando o envio termina (sem isso fica preso ao signal até ele ser
+    // abortado — vazamento latente se o signal for reutilizado).
+    const linkAbort = (outer?: AbortSignal): (() => void) => {
+      if (!outer) return () => undefined;
+
+      const onAbort = () => run.abort(outer.reason);
+      if (outer.aborted) {
+        run.abort(outer.reason);
+        return () => undefined;
+      }
+
+      outer.addEventListener('abort', onAbort);
+      return () => outer.removeEventListener('abort', onAbort);
+    };
+
+    const unlinkAbort = linkAbort(signal);
     const runSignal = run.signal;
+
+    // Sessão concluída por outra aba: o /parts responde 409 e o envio deve cair
+    // no complete idempotente em vez de insistir.
+    let sessionCompletedElsewhere = false;
 
     const refreshUrl = async (partNumber: number): Promise<string> => {
       const refreshed = await requestPartUrls(state!.uploadId, [partNumber], runSignal);
@@ -733,9 +764,11 @@ async function uploadCustomAssetDirect(
       try {
         const urls = await requestPartUrls(state.uploadId, chunk, runSignal);
         urls.forEach((url, partNumber) => urlCache.set(partNumber, url));
-      } catch {
-        // Pré-assinar não é crítico: getUrl busca sob demanda (e um 409 de
-        // "sessão já concluída" continua subindo pelo fluxo principal).
+      } catch (error) {
+        // Pré-assinar não é crítico: getUrl busca sob demanda. Mas o 409
+        // ("sessão já concluída" em outra aba) é registrado para o fluxo cair no
+        // complete idempotente.
+        if (error instanceof ApiError && error.status === 409) sessionCompletedElsewhere = true;
       }
     };
 
@@ -835,7 +868,12 @@ async function uploadCustomAssetDirect(
 
       // 409 = outra aba/fluxo já concluiu este upload: não é erro, o complete
       // abaixo é idempotente e devolve o asset.
-      if (!(error instanceof ApiError && error.status === 409)) throw error;
+      if (!(sessionCompletedElsewhere || (error instanceof ApiError && error.status === 409))) throw error;
+    } finally {
+      // Terminou (sucesso, erro ou cancelamento): solta o listener do signal do
+      // usuário e para o pré-assinador que ainda estivesse rodando.
+      unlinkAbort();
+      run.abort('finished');
     }
   }
 

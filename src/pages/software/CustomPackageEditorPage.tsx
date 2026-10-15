@@ -605,17 +605,19 @@ export default function CustomPackageEditorPage() {
       }
 
       const message = error instanceof Error ? error.message : 'Falha ao enviar o instalador.';
-      // Com blocos já confirmados no storage, o progresso não pode ser zerado: o
-      // "Tentar novamente" retoma dali.
+      // Com blocos já confirmados no storage o progresso não pode ser zerado (o
+      // "Tentar novamente" retoma dali). Forma FUNCIONAL: a variável do closure
+      // estaria desatualizada — no 1º envio ela é null e o painel de erro
+      // apareceria em 0% mesmo com blocos enviados.
       const resumable = file.size > ASSET_MULTIPART_MIN_BYTES;
-      setInstallerUpload({
+      setInstallerUpload((current) => ({
         status: 'error',
         fileName: file.name,
-        loaded: resumable ? (installerUpload?.loaded ?? 0) : 0,
+        loaded: resumable ? (current?.loaded ?? 0) : 0,
         total: file.size,
-        percent: resumable ? (installerUpload?.percent ?? 0) : 0,
+        percent: resumable ? (current?.percent ?? 0) : 0,
         error: message,
-      });
+      }));
       toast.error(message);
     }
   }
@@ -734,14 +736,14 @@ export default function CustomPackageEditorPage() {
 
       const message = error instanceof Error ? error.message : 'Falha ao enviar o ícone.';
       const resumableIcon = file.size > ASSET_MULTIPART_MIN_BYTES;
-      setIconUpload({
+      setIconUpload((current) => ({
         status: 'error',
         fileName: file.name,
-        loaded: resumableIcon ? (iconUpload?.loaded ?? 0) : 0,
+        loaded: resumableIcon ? (current?.loaded ?? 0) : 0,
         total: file.size,
-        percent: resumableIcon ? (iconUpload?.percent ?? 0) : 0,
+        percent: resumableIcon ? (current?.percent ?? 0) : 0,
         error: message,
-      });
+      }));
       toast.error(message);
     }
   }
