@@ -2,10 +2,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
-  ArrowLeft, CheckCircle2, FileArchive, Image as ImageIcon, Loader2, Package, Save, Search, Terminal, Trash2, Upload, X,
+  AlertCircle, ArrowLeft, CheckCircle2, FileArchive, Image as ImageIcon, Loader2, Package, RotateCcw, Save, Search,
+  Terminal, Trash2, Upload, X,
 } from 'lucide-react';
 import { Button, Card, ConfirmDialog, ErrorDisplay, Input, Loading, Select, TextArea } from '@/components/ui';
-import { appStoreApi } from '@/api/app-store';
+import { appStoreApi, discardUnlinkedAsset, forgetUploadedAsset } from '@/api/app-store';
 import type { UploadProgress } from '@/api/client';
 import {
   AppCommandKind, AppDetectionMode, AppInstallationType,
@@ -116,19 +117,232 @@ interface AssetState {
   checksum?: string | null;
 }
 
-type UploadStage = {
-  kind: 'installer' | 'icon' | 'saving';
-  fileName?: string;
+/**
+ * Envio de um asset iniciado NO PRÓPRIO CARD do arquivo (ao selecionar), e não
+ * no "Salvar": o upload de um instalador de vários GiB demora, então ele tem
+ * progresso, estado e retentativa próprios — e o Salvar fica só com os metadados.
+ */
+type AssetUpload = {
+  status: 'uploading' | 'done' | 'error';
+  fileName: string;
   loaded: number;
   total: number;
   percent: number;
+  error?: string;
 };
 
-const UPLOAD_STAGE_LABEL: Record<UploadStage['kind'], string> = {
-  installer: 'Enviando instalador para o S3…',
-  icon: 'Enviando ícone/capa para o S3…',
-  saving: 'Salvando cadastro na API…',
+const ASSET_UPLOAD_LABEL: Record<'installer' | 'icon', string> = {
+  installer: 'Enviando o instalador para o object storage…',
+  icon: 'Enviando o ícone/capa para o object storage…',
 };
+
+/** Campos comparados para saber o que realmente mudou antes de salvar. */
+type ChangeKey =
+  | 'name' | 'version' | 'publisher' | 'description' | 'iconUrl'
+  | 'installCommand' | 'installCommandKind'
+  | 'uninstallCommand' | 'uninstallCommandKind'
+  | 'extractZip' | 'detection' | 'installer' | 'icon';
+
+const CHANGE_LABEL: Record<ChangeKey, string> = {
+  name: 'título',
+  version: 'versão',
+  publisher: 'fabricante',
+  description: 'descrição',
+  iconUrl: 'URL do ícone',
+  installCommand: 'comando de instalação',
+  installCommandKind: 'tipo do comando de instalação',
+  uninstallCommand: 'comando de desinstalação',
+  uninstallCommandKind: 'tipo do comando de desinstalação',
+  extractZip: 'arquivo ZIP',
+  detection: 'detecção',
+  installer: 'novo instalador',
+  icon: 'novo ícone',
+};
+
+/**
+ * Resumo do instalador vinculado ao pacote (ou enviado agora nesta edição).
+ * Antes era uma linha solta ("Instalador publicado: arquivo.exe (49 MB)") — a
+ * informação curta escondia tipo, ZIP e checksum, que são o que o operador
+ * confere antes de aprovar a instalação.
+ */
+function PublishedAssetInfo({
+  fileName,
+  sizeBytes,
+  contentType,
+  checksum,
+  extractZip,
+  isNew,
+}: {
+  fileName: string;
+  sizeBytes: number | null;
+  contentType?: string | null;
+  checksum?: string | null;
+  extractZip: boolean;
+  isNew: boolean;
+}) {
+  const [copied, setCopied] = useState(false);
+
+  async function copyChecksum() {
+    if (!checksum) return;
+    try {
+      await navigator.clipboard.writeText(checksum);
+      setCopied(true);
+      toast.success('Checksum copiado.');
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      toast.error('Não foi possível copiar o checksum.');
+    }
+  }
+
+  return (
+    <div className="mt-3 rounded-xl border border-border bg-surface-light p-3">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            {isNew ? 'Novo instalador (enviado agora)' : 'Instalador publicado'}
+          </p>
+          <p className="mt-0.5 flex items-center gap-2 text-sm font-medium text-foreground">
+            <Package className="h-4 w-4 shrink-0 text-primary" />
+            <span className="truncate" title={fileName}>
+              {fileName}
+            </span>
+          </p>
+        </div>
+        <span
+          className={
+            isNew
+              ? 'shrink-0 rounded-full border border-warning/40 bg-warning/10 px-2 py-0.5 text-[11px] text-warning'
+              : 'shrink-0 rounded-full border border-success/40 bg-success/10 px-2 py-0.5 text-[11px] text-success'
+          }
+        >
+          {isNew ? 'será vinculado ao salvar' : 'no object storage'}
+        </span>
+      </div>
+
+      <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs sm:grid-cols-3">
+        <div>
+          <dt className="text-muted-foreground">Tamanho</dt>
+          <dd className="font-mono text-foreground">
+            {sizeBytes != null ? `${formatBytes(sizeBytes)} (${sizeBytes.toLocaleString('pt-BR')} bytes)` : '—'}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-muted-foreground">Tipo</dt>
+          <dd className="truncate font-mono text-foreground" title={contentType ?? undefined}>
+            {contentType || '—'}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-muted-foreground">ZIP</dt>
+          <dd className="text-foreground">{extractZip ? 'Sim — extrai antes de instalar' : 'Não'}</dd>
+        </div>
+      </dl>
+
+      <div className="mt-2">
+        <p className="text-xs text-muted-foreground">SHA-256 (usado pelo agent para validar o download)</p>
+        <div className="mt-0.5 flex items-center gap-2">
+          <code className="min-w-0 flex-1 truncate font-mono text-xs text-foreground" title={checksum ?? undefined}>
+            {checksum || '—'}
+          </code>
+          {checksum && (
+            <Button variant="ghost" size="sm" onClick={copyChecksum} title="Copiar o SHA-256">
+              {copied ? <CheckCircle2 className="h-3.5 w-3.5" /> : null}
+              {copied ? 'Copiado' : 'Copiar'}
+            </Button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Painel de progresso/estado do envio do arquivo, exibido dentro do card. */
+function AssetUploadPanel({
+  kind,
+  upload,
+  onRetry,
+}: {
+  kind: 'installer' | 'icon';
+  upload: AssetUpload | null;
+  onRetry: () => void;
+}) {
+  if (!upload) return null;
+
+  const isUploading = upload.status === 'uploading';
+  const isError = upload.status === 'error';
+  const tone = isError
+    ? 'border-danger/40 bg-danger/10'
+    : isUploading
+      ? 'border-primary/40 bg-primary/10'
+      : 'border-success/40 bg-success/10';
+
+  return (
+    <div className={`mt-3 rounded-xl border p-3 ${tone}`} role="status" aria-live="polite">
+      <div className="flex items-center justify-between gap-3">
+        <span className="flex min-w-0 items-center gap-2 text-sm font-medium text-foreground">
+          {isError ? (
+            <AlertCircle className="h-4 w-4 shrink-0 text-danger" />
+          ) : isUploading ? (
+            <Loader2 className="h-4 w-4 shrink-0 animate-spin text-primary" />
+          ) : (
+            <CheckCircle2 className="h-4 w-4 shrink-0 text-success" />
+          )}
+          <span className="truncate">
+            {isError
+              ? 'Falha ao enviar o arquivo'
+              : isUploading
+                ? ASSET_UPLOAD_LABEL[kind]
+                : 'Arquivo publicado no object storage'}
+          </span>
+        </span>
+
+        {isUploading && upload.total > 0 && (
+          <span className="shrink-0 font-mono text-xs text-muted-foreground">{upload.percent}%</span>
+        )}
+      </div>
+
+      <p className="mt-1 truncate text-xs text-muted-foreground">
+        {upload.fileName}
+        {upload.status === 'done' ? ` · ${formatBytes(upload.total)}` : ''}
+      </p>
+
+      {isUploading && (
+        <>
+          <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-black/10 dark:bg-white/10">
+            {upload.total > 0 ? (
+              <div
+                className="h-full rounded-full bg-primary transition-[width] duration-200 ease-out"
+                style={{ width: `${Math.max(upload.percent, 2)}%` }}
+              />
+            ) : (
+              <div className="h-full w-1/3 animate-pulse rounded-full bg-primary" />
+            )}
+          </div>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {upload.total > 0
+              ? `${formatBytes(upload.loaded)} de ${formatBytes(upload.total)} enviados`
+              : 'Aguarde a conclusão…'}
+          </p>
+        </>
+      )}
+
+      {isError && (
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+          <p className="min-w-0 flex-1 text-xs text-danger">{upload.error}</p>
+          <Button variant="ghost" size="sm" onClick={onRetry} disabled={!isError}>
+            <RotateCcw className="h-3.5 w-3.5" /> Tentar novamente
+          </Button>
+        </div>
+      )}
+
+      {upload.status === 'done' && (
+        <p className="mt-1 text-xs text-success">
+          O arquivo será vinculado ao pacote quando você salvar.
+        </p>
+      )}
+    </div>
+  );
+}
 
 /**
  * Editor dedicado (não modal) de pacotes custom da loja.
@@ -151,12 +365,23 @@ export default function CustomPackageEditorPage() {
   const [iconFile, setIconFile] = useState<File | null>(null);
   const [iconAsset, setIconAsset] = useState<AssetState | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [stage, setStage] = useState<UploadStage | null>(null);
+  const [installerUpload, setInstallerUpload] = useState<AssetUpload | null>(null);
+  const [iconUpload, setIconUpload] = useState<AssetUpload | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [baseline, setBaseline] = useState<FormState>({ ...EMPTY_FORM });
   const [confirmDeleteFileOpen, setConfirmDeleteFileOpen] = useState(false);
   const [initializedPackageId, setInitializedPackageId] = useState<string | null>(null);
 
   const loaded = packageQuery.data;
-  const submitting = stage !== null;
+
+  // Anexar arquivo só depois do cadastro existir: o asset é publicado no storage
+  // no momento da seleção, então num pacote ainda não salvo o operador poderia
+  // trocar/apagar o arquivo e deixar GiBs órfãos (e não haveria onde vinculá-lo).
+  const canAttachFiles = isEditing && Boolean(loaded);
+
+  const uploading =
+    installerUpload?.status === 'uploading' || iconUpload?.status === 'uploading';
+  const submitting = saving || upsert.isPending || uploading;
 
   // Blob URL criado uma única vez por arquivo e revogado ao trocar/desmontar.
   const iconPreview = useMemo(
@@ -172,7 +397,7 @@ export default function CustomPackageEditorPage() {
   useEffect(() => {
     if (!loaded || initializedPackageId === loaded.packageId) return;
     setInitializedPackageId(loaded.packageId);
-    setForm({
+    const filled: FormState = {
       packageId: loaded.packageId ?? '',
       name: loaded.name ?? '',
       version: loaded.version ?? '',
@@ -190,24 +415,153 @@ export default function CustomPackageEditorPage() {
       detectionPublisher: loaded.detectionPublisher ?? '',
       detectionMinVersion: loaded.detectionMinVersion ?? '',
       detectionCommand: loaded.detectionCommand ?? '',
-    });
+    };
+    setForm(filled);
+    // Guarda o estado carregado: o "Salvar" compara com ele para gravar apenas o
+    // que o usuário realmente alterou.
+    setBaseline(filled);
   }, [loaded, initializedPackageId]);
 
   function update<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
-  function reportProgress(stageKind: UploadStage['kind'], fileName?: string) {
-    return (progress: UploadProgress) => {
-      setStage({
-        kind: stageKind,
-        fileName,
-        loaded: progress.loaded,
-        total: progress.total,
-        percent: progress.percent,
+  /**
+   * Envia o instalador assim que o arquivo é escolhido, mostrando o progresso
+   * dentro do próprio card. O Salvar NÃO reenvia nada: ele só grava os metadados
+   * e vincula o asset já publicado.
+   */
+  async function uploadInstaller(file: File) {
+    if (!canAttachFiles) return;
+
+    // Descartar o arquivo ANTERIOR só quando ele é realmente outro arquivo: o
+    // "Tentar novamente" chama esta função com o MESMO arquivo e precisa RETOMAR
+    // (o descarte apagaria as partes já enviadas ou o objeto já publicado).
+    if (installerFile && installerFile !== file && installerUpload?.status !== 'uploading') {
+      void discardUnlinkedAsset(installerFile, 'installer');
+    }
+
+    setInstallerFile(file);
+    setInstallerAsset(null);
+    setInstallerUpload({ status: 'uploading', fileName: file.name, loaded: 0, total: file.size, percent: 0 });
+
+    try {
+      const asset = await appStoreApi.uploadCustomAsset(
+        file,
+        'installer',
+        (progress: UploadProgress) => {
+          setInstallerUpload({
+            status: 'uploading',
+            fileName: file.name,
+            loaded: progress.loaded,
+            total: progress.total || file.size,
+            percent: progress.percent,
+          });
+        },
+      );
+
+      setInstallerAsset(asset);
+      setInstallerUpload({
+        status: 'done',
+        fileName: asset.fileName,
+        loaded: asset.sizeBytes,
+        total: asset.sizeBytes,
+        percent: 100,
       });
-    };
+      toast.success(`Instalador enviado ao object storage (${formatBytes(asset.sizeBytes)}).`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Falha ao enviar o instalador.';
+      setInstallerUpload({
+        status: 'error',
+        fileName: file.name,
+        loaded: 0,
+        total: file.size,
+        percent: 0,
+        error: message,
+      });
+      toast.error(message);
+    }
   }
+
+  /** Mesmo fluxo para o ícone/capa (arquivo pequeno, mas com o estado no card). */
+  async function uploadIcon(file: File) {
+    if (!canAttachFiles) return;
+
+    if (iconFile && iconFile !== file && iconUpload?.status !== 'uploading') {
+      void discardUnlinkedAsset(iconFile, 'icon');
+    }
+
+    setIconFile(file);
+    setIconAsset(null);
+    setIconUpload({ status: 'uploading', fileName: file.name, loaded: 0, total: file.size, percent: 0 });
+
+    try {
+      const asset = await appStoreApi.uploadCustomAsset(file, 'icon', (progress: UploadProgress) => {
+        setIconUpload({
+          status: 'uploading',
+          fileName: file.name,
+          loaded: progress.loaded,
+          total: progress.total || file.size,
+          percent: progress.percent,
+        });
+      });
+
+      setIconAsset(asset);
+      setIconUpload({
+        status: 'done',
+        fileName: asset.fileName,
+        loaded: asset.sizeBytes,
+        total: asset.sizeBytes,
+        percent: 100,
+      });
+      toast.success('Ícone/capa enviado ao object storage.');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Falha ao enviar o ícone.';
+      setIconUpload({
+        status: 'error',
+        fileName: file.name,
+        loaded: 0,
+        total: file.size,
+        percent: 0,
+        error: message,
+      });
+      toast.error(message);
+    }
+  }
+
+  // O que realmente mudou em relação ao pacote carregado (ou ao vazio, no
+  // cadastro novo). Salvar sem alteração não deve chamar a API.
+  const changedFields = useMemo<ChangeKey[]>(() => {
+    const changed: ChangeKey[] = [];
+    const differs = (current: string, initial: string) => current.trim() !== initial.trim();
+
+    if (differs(form.name, baseline.name)) changed.push('name');
+    if (differs(form.version, baseline.version)) changed.push('version');
+    if (differs(form.publisher, baseline.publisher)) changed.push('publisher');
+    if (differs(form.description, baseline.description)) changed.push('description');
+    if (differs(form.iconUrl, baseline.iconUrl)) changed.push('iconUrl');
+    if (differs(form.installCommand, baseline.installCommand)) changed.push('installCommand');
+    if (form.installCommandKind !== baseline.installCommandKind) changed.push('installCommandKind');
+    if (differs(form.uninstallCommand, baseline.uninstallCommand)) changed.push('uninstallCommand');
+    if (form.uninstallCommandKind !== baseline.uninstallCommandKind) changed.push('uninstallCommandKind');
+    if (form.extractZip !== baseline.extractZip) changed.push('extractZip');
+
+    const detectionChanged =
+      form.detectionMode !== baseline.detectionMode ||
+      differs(form.inventorySoftwareId, baseline.inventorySoftwareId) ||
+      differs(form.detectionName, baseline.detectionName) ||
+      differs(form.detectionPublisher, baseline.detectionPublisher) ||
+      differs(form.detectionMinVersion, baseline.detectionMinVersion) ||
+      differs(form.detectionCommand, baseline.detectionCommand);
+    if (detectionChanged) changed.push('detection');
+
+    if (installerAsset && installerUpload?.status === 'done') changed.push('installer');
+    if (iconAsset && iconUpload?.status === 'done') changed.push('icon');
+
+    return changed;
+  }, [form, baseline, installerAsset, installerUpload, iconAsset, iconUpload]);
+
+  const hasPendingChanges = !isEditing || changedFields.length > 0;
 
   function validate(): boolean {
     const next: Record<string, string> = {};
@@ -229,44 +583,31 @@ export default function CustomPackageEditorPage() {
 
   async function handleSave() {
     if (!validate()) return;
-    try {
-      // Só envia o arquivo uma vez: se a gravação falhar, o retry reaproveita o
-      // asset já publicado no S3 em vez de subir de novo.
-      let fileAsset: AssetState | null = installerAsset;
-      if (installerFile && !installerAsset) {
-        setStage({
-          kind: 'installer',
-          fileName: installerFile.name,
-          loaded: 0,
-          total: installerFile.size,
-          percent: 0,
-        });
-        const uploaded = await appStoreApi.uploadCustomAsset(
-          installerFile,
-          'installer',
-          reportProgress('installer', installerFile.name),
-        );
-        setInstallerAsset(uploaded);
-        fileAsset = uploaded;
-      }
 
-      // Ícone/capa: só sobe quando há arquivo novo; sem arquivo novo preserva
-      // o asset já publicado (o backend mantém o IconObjectKey da edição).
-      let iconAssetState: AssetState | null = iconAsset;
-      if (iconFile && !iconAsset) {
-        setStage({ kind: 'icon', fileName: iconFile.name, loaded: 0, total: iconFile.size, percent: 0 });
-        const uploaded = await appStoreApi.uploadCustomAsset(
-          iconFile,
-          'icon',
-          reportProgress('icon', iconFile.name),
-        );
-        setIconAsset(uploaded);
-        iconAssetState = uploaded;
-      }
+    // O envio acontece no card, ao escolher o arquivo. Salvar só grava o que
+    // mudou — nunca reenvia um instalador já publicado.
+    if (uploading) {
+      toast.error('Aguarde o envio do arquivo terminar para salvar.');
+      return;
+    }
+    if ((installerFile && !installerAsset) || (iconFile && !iconAsset)) {
+      toast.error('O envio do arquivo não foi concluído. Use "Tentar novamente" antes de salvar.');
+      return;
+    }
+    if (!hasPendingChanges) {
+      toast('Nenhuma alteração para salvar.', { icon: 'ℹ️' });
+      return;
+    }
+
+    try {
+      // Asset só existe quando o usuário enviou um arquivo NOVO nesta edição;
+      // sem arquivo novo o backend preserva o instalador/ícone já publicado.
+      const fileAsset: AssetState | null = installerAsset;
+      const iconAssetState: AssetState | null = iconAsset;
       const iconObjectKey = iconAssetState?.objectKey ?? null;
       const iconUrl = iconObjectKey ? null : form.iconUrl.trim() || null;
 
-      setStage({ kind: 'saving', loaded: 0, total: 0, percent: 0 });
+      setSaving(true);
 
       await upsert.mutateAsync({
         packageId: form.packageId.trim(),
@@ -309,15 +650,29 @@ export default function CustomPackageEditorPage() {
         fileContentType: fileAsset?.contentType ?? null,
         fileSizeBytes: fileAsset?.sizeBytes ?? null,
         fileChecksum: fileAsset?.checksum ?? null,
-        fileName: installerFile?.name ?? fileAsset?.fileName ?? null,
+        // Nome do asset (sanitizado pelo backend), não o nome cru do navegador:
+        // o objeto no storage usa a versão sanitizada e os dois precisam bater.
+        fileName: fileAsset?.fileName ?? installerFile?.name ?? null,
       });
 
-      toast.success(isEditing ? 'Pacote custom atualizado.' : 'Pacote custom cadastrado.');
-      navigate(STORE_PATH);
+      // Assets vinculados: o estado de upload não é mais necessário (e não pode
+      // permitir descartar um objeto que agora está em uso).
+      if (installerFile && installerAsset) forgetUploadedAsset(installerFile, 'installer');
+      if (iconFile && iconAsset) forgetUploadedAsset(iconFile, 'icon');
+
+      if (isEditing) {
+        toast.success(`Alterações salvas (${changedFields.length} ${changedFields.length === 1 ? 'campo' : 'campos'}).`);
+        navigate(STORE_PATH);
+      } else {
+        // Cadastro criado: o anexo do instalador só é habilitado com o pacote
+        // existindo, então segue direto para a edição em vez de voltar à loja.
+        toast.success('Pacote criado. Agora você pode anexar o instalador.');
+        navigate(`${STORE_PATH}/custom/${encodeURIComponent(form.packageId.trim())}/edit`, { replace: true });
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Falha ao salvar o pacote custom.');
     } finally {
-      setStage(null);
+      setSaving(false);
     }
   }
 
@@ -367,9 +722,29 @@ export default function CustomPackageEditorPage() {
     );
   }
 
-  const publishedFileSize = installerFile?.size ?? installerAsset?.sizeBytes ?? loaded?.fileSizeBytes ?? null;
   const hasPublishedFile = Boolean(loaded?.hasFile);
   const publishedFileName = installerAsset?.fileName ?? loaded?.fileName ?? null;
+
+  // O que exibir no resumo do card: o asset enviado agora tem prioridade sobre o
+  // que já estava publicado (nome, tamanho, tipo e checksum vêm dele).
+  const shownFile: { fileName: string; sizeBytes: number | null; contentType?: string | null; checksum?: string | null; isNew: boolean } | null =
+    installerAsset
+      ? {
+          fileName: installerAsset.fileName,
+          sizeBytes: installerAsset.sizeBytes,
+          contentType: installerAsset.contentType,
+          checksum: installerAsset.checksum,
+          isNew: true,
+        }
+      : hasPublishedFile && publishedFileName
+        ? {
+            fileName: publishedFileName,
+            sizeBytes: loaded?.fileSizeBytes ?? null,
+            contentType: loaded?.fileContentType,
+            checksum: loaded?.fileChecksum,
+            isNew: false,
+          }
+        : null;
 
   return (
     <div className="space-y-4">
@@ -455,18 +830,25 @@ export default function CustomPackageEditorPage() {
         </h2>
 
         <div className="flex flex-wrap items-center gap-3">
-          <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-border bg-surface-light px-3 py-2 text-sm text-foreground hover:border-primary/50">
+          <label
+            className={
+              canAttachFiles
+                ? 'inline-flex cursor-pointer items-center gap-2 rounded-lg border border-border bg-surface-light px-3 py-2 text-sm text-foreground hover:border-primary/50'
+                : 'inline-flex cursor-not-allowed items-center gap-2 rounded-lg border border-border bg-surface-light px-3 py-2 text-sm text-muted opacity-60'
+            }
+            title={canAttachFiles ? undefined : 'Salve o cadastro do pacote antes de anexar o arquivo'}
+          >
             <Upload className="h-4 w-4" />
             {hasPublishedFile || installerFile ? 'Trocar instalador' : 'Selecionar instalador'}
             <input
               type="file"
               className="hidden"
-              disabled={submitting}
+              disabled={submitting || !canAttachFiles}
               onChange={(event) => {
                 const file = event.target.files?.[0] ?? null;
-                setInstallerFile(file);
-                setInstallerAsset(null);
                 event.target.value = '';
+                // O envio começa aqui, no card — não no "Salvar".
+                if (file) void uploadInstaller(file);
               }}
             />
           </label>
@@ -483,22 +865,38 @@ export default function CustomPackageEditorPage() {
             </Button>
           )}
 
-          {installerAsset ? (
-            <span className="inline-flex items-center gap-1 text-xs text-success">
-              <CheckCircle2 className="h-3.5 w-3.5" />
-              {installerAsset.fileName} · {formatBytes(installerAsset.sizeBytes)} — enviado ao S3
-            </span>
-          ) : installerFile ? (
-            <span className="text-xs text-muted-foreground">
-              {installerFile.name} · {formatBytes(installerFile.size)} · será enviado ao salvar
-            </span>
-          ) : hasPublishedFile ? (
-            <span className="text-xs text-success">
-              Instalador publicado{publishedFileName ? `: ${publishedFileName}` : ''} ({formatBytes(publishedFileSize) || '—'}).
-            </span>
-          ) : (
-            <span className="text-xs text-muted-foreground">Nenhum instalador publicado.</span>
+          {(installerFile || installerAsset) && installerUpload?.status !== 'uploading' && (
+            <button
+              type="button"
+              disabled={submitting}
+              className="inline-flex items-center gap-1 text-xs text-muted hover:text-foreground"
+              onClick={() => {
+                if (installerFile && installerUpload?.status !== 'uploading') {
+                  void discardUnlinkedAsset(installerFile, 'installer');
+                }
+                setInstallerFile(null);
+                setInstallerAsset(null);
+                setInstallerUpload(null);
+              }}
+            >
+              <X className="h-3.5 w-3.5" /> Remover seleção
+            </button>
           )}
+
+          {installerUpload?.status === 'uploading' ? (
+            <span className="inline-flex items-center gap-1 text-xs text-primary">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              enviando {installerUpload.percent}%…
+            </span>
+          ) : installerUpload?.status === 'error' ? (
+            <span className="text-xs text-danger">envio não concluído — use "Tentar novamente"</span>
+          ) : !canAttachFiles ? (
+            <span className="text-xs text-muted-foreground">
+              Salve o cadastro primeiro para poder anexar o instalador.
+            </span>
+          ) : !shownFile ? (
+            <span className="text-xs text-muted-foreground">Nenhum instalador publicado.</span>
+          ) : null}
         </div>
 
         <label className="mt-3 flex items-start gap-2 text-sm text-foreground">
@@ -519,50 +917,15 @@ export default function CustomPackageEditorPage() {
           </span>
         </label>
 
-        {publishedFileSize ? (
-          <p className="mt-2 text-xs text-muted">Tamanho: {formatBytes(publishedFileSize)}</p>
-        ) : null}
+        {shownFile && <PublishedAssetInfo {...shownFile} extractZip={form.extractZip} />}
 
-        {loaded?.fileChecksum && !installerFile && (
-          <p className="mt-1 text-xs text-muted">
-            Checksum: <span className="font-mono">{loaded.fileChecksum}</span>
-          </p>
-        )}
-
-        {submitting && stage && (
-          <div className="mt-3 rounded-xl border border-primary/40 bg-primary/10 p-3" role="status" aria-live="polite">
-            <div className="flex items-center justify-between gap-3">
-              <span className="flex min-w-0 items-center gap-2 text-sm font-medium text-foreground">
-                <Loader2 className="h-4 w-4 shrink-0 animate-spin text-primary" />
-                <span className="truncate">{UPLOAD_STAGE_LABEL[stage.kind]}</span>
-              </span>
-              {stage.kind !== 'saving' && stage.total > 0 && (
-                <span className="shrink-0 font-mono text-xs text-muted-foreground">{stage.percent}%</span>
-              )}
-            </div>
-
-            {stage.fileName && <p className="mt-1 truncate text-xs text-muted-foreground">{stage.fileName}</p>}
-
-            <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-black/10 dark:bg-white/10">
-              {stage.total > 0 ? (
-                <div
-                  className="h-full rounded-full bg-primary transition-[width] duration-200 ease-out"
-                  style={{ width: `${Math.max(stage.percent, 2)}%` }}
-                />
-              ) : (
-                <div className="h-full w-1/3 animate-pulse rounded-full bg-primary" />
-              )}
-            </div>
-
-            {stage.total > 0 ? (
-              <p className="mt-1 text-xs text-muted-foreground">
-                {formatBytes(stage.loaded)} de {formatBytes(stage.total)} enviados
-              </p>
-            ) : (
-              <p className="mt-1 text-xs text-muted-foreground">Aguarde a conclusão…</p>
-            )}
-          </div>
-        )}
+        <AssetUploadPanel
+          kind="installer"
+          upload={installerUpload}
+          onRetry={() => {
+            if (installerFile) void uploadInstaller(installerFile);
+          }}
+        />
       </Card>
 
       {/* Ícone / capa */}
@@ -587,23 +950,35 @@ export default function CustomPackageEditorPage() {
               placeholder="https://.../logo.png"
               disabled={Boolean(iconFile) || Boolean(iconAsset) || submitting}
               maxLength={2000}
-              hint={iconAsset ? 'Arquivo enviado ao S3 — o ícone será o da imagem enviada.' : undefined}
+              hint={
+                canAttachFiles
+                  ? iconAsset
+                    ? 'Arquivo enviado ao S3 — o ícone será o da imagem enviada.'
+                    : undefined
+                  : 'Salve o cadastro primeiro para poder enviar a imagem.'
+              }
               onChange={(event) => update('iconUrl', event.target.value)}
             />
             <div className="flex flex-wrap items-center gap-3">
-              <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-border bg-surface-light px-3 py-2 text-sm text-foreground hover:border-primary/50">
+              <label
+                className={
+                  canAttachFiles
+                    ? 'inline-flex cursor-pointer items-center gap-2 rounded-lg border border-border bg-surface-light px-3 py-2 text-sm text-foreground hover:border-primary/50'
+                    : 'inline-flex cursor-not-allowed items-center gap-2 rounded-lg border border-border bg-surface-light px-3 py-2 text-sm text-muted opacity-60'
+                }
+                title={canAttachFiles ? undefined : 'Salve o cadastro do pacote antes de enviar a imagem'}
+              >
                 <Upload className="h-4 w-4" />
                 {iconFile || iconAsset ? 'Trocar imagem' : 'Enviar imagem'}
                 <input
                   type="file"
                   accept="image/*"
                   className="hidden"
-                  disabled={submitting}
+                  disabled={submitting || !canAttachFiles}
                   onChange={(event) => {
                     const file = event.target.files?.[0] ?? null;
-                    setIconFile(file);
-                    setIconAsset(null);
                     event.target.value = '';
+                    if (file) void uploadIcon(file);
                   }}
                 />
               </label>
@@ -612,12 +987,27 @@ export default function CustomPackageEditorPage() {
                   type="button"
                   disabled={submitting}
                   className="inline-flex items-center gap-1 text-xs text-muted hover:text-foreground"
-                  onClick={() => { setIconFile(null); setIconAsset(null); }}
+                  onClick={() => {
+                    if (iconFile && iconUpload?.status !== 'uploading') {
+                      void discardUnlinkedAsset(iconFile, 'icon');
+                    }
+                    setIconFile(null);
+                    setIconAsset(null);
+                    setIconUpload(null);
+                  }}
                 >
                   <X className="h-3.5 w-3.5" /> Remover seleção
                 </button>
               )}
             </div>
+
+            <AssetUploadPanel
+              kind="icon"
+              upload={iconUpload}
+              onRetry={() => {
+                if (iconFile) void uploadIcon(iconFile);
+              }}
+            />
           </div>
         </div>
       </Card>
@@ -752,14 +1142,34 @@ export default function CustomPackageEditorPage() {
         </div>
       </Card>
 
-      <div className="flex items-center justify-end gap-2">
-        <Button variant="ghost" onClick={() => navigate(STORE_PATH)} disabled={submitting}>
-          Cancelar
-        </Button>
-        <Button onClick={handleSave} loading={submitting || upsert.isPending}>
-          <Save className="h-4 w-4" />
-          {isEditing ? 'Salvar alterações' : 'Cadastrar pacote'}
-        </Button>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-xs text-muted-foreground">
+          {uploading
+            ? 'Enviando o arquivo… o salvamento libera quando o envio terminar.'
+            : !hasPendingChanges
+              ? 'Nenhuma alteração pendente — nada será enviado à API.'
+              : changedFields.length > 0
+                ? `Será salvo: ${changedFields.map((key) => CHANGE_LABEL[key]).join(', ')}.`
+                : 'Preencha o cadastro para salvar.'}
+        </p>
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" onClick={() => navigate(STORE_PATH)} disabled={submitting}>
+            Cancelar
+          </Button>
+          <Button
+            onClick={handleSave}
+            loading={submitting || upsert.isPending}
+            disabled={uploading || (isEditing && !hasPendingChanges)}
+            title={
+              isEditing && !hasPendingChanges
+                ? 'Nenhuma alteração pendente para salvar'
+                : undefined
+            }
+          >
+            <Save className="h-4 w-4" />
+            {isEditing ? 'Salvar alterações' : 'Cadastrar pacote'}
+          </Button>
+        </div>
       </div>
 
       <ConfirmDialog

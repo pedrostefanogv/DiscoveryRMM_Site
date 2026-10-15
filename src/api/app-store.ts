@@ -1,4 +1,4 @@
-import { api, type UploadProgress } from "./client";
+import { ApiError, api, type UploadProgress } from "./client";
 import {
   AppCommandKind,
   AppDetectionMode,
@@ -313,18 +313,33 @@ export interface EffectiveParams {
 //
 // Instaladores grandes não podem subir num corpo único pela API: o Cloudflare
 // recusa o corpo no edge (413). O fluxo correto é multipart DIRETO no storage —
-// a API cria o multipart e só pré-assina cada bloco de 50 MiB; o navegador faz
+// a API cria o multipart e só pré-assina cada bloco de 10 MiB; o navegador faz
 // PUT na URL assinada. Como as partes ficam no storage até o complete, o envio
 // é RETOMÁVEL: guardamos o uploadId + ETags em localStorage por impressão do
 // arquivo (nome+tamanho+data), então um novo envio do mesmo arquivo continua
 // exatamente de onde parou (inclusive depois de fechar/reabrir a página).
 
-const ASSET_PART_SIZE = 50 * 1024 * 1024;
+/**
+ * Bloco do multipart direto: 10 MiB. O Cloudflare corta requisições em ~100 s,
+ * então 50 MiB falhavam em links abaixo de ~5 Mbps; 10 MiB mantém folga (e segue
+ * acima do mínimo de 5 MiB que o S3 exige para todas as partes menos a última).
+ */
+const ASSET_PART_SIZE = 10 * 1024 * 1024;
+
+/**
+ * Até este tamanho o arquivo vai numa requisição única para a API. Igual ao
+ * bloco padrão (10 MiB): acima disso o multipart direto é sempre mais seguro
+ * atrás do Cloudflare (o edge corta requisições longas em ~100 s).
+ */
+const SINGLE_REQUEST_MAX_BYTES = ASSET_PART_SIZE;
 const MULTIPART_STATE_PREFIX = "discovery:asset-multipart:";
 const PART_MAX_ATTEMPTS = 4;
+/** URLs assinadas pedidas por requisição (valem 60 min cada). */
+const PART_URL_BATCH = 25;
 
 interface MultipartPart {
   partNumber: number;
+  /** Pode chegar depois, via ListParts, quando o storage não expõe o header. */
   etag: string;
   sizeBytes: number;
 }
@@ -336,6 +351,21 @@ interface MultipartUploadState {
   totalParts: number;
   fingerprint: string;
   parts: MultipartPart[];
+  /** Upload já finalizado no storage (aguardando vínculo com o pacote). */
+  completed?: boolean;
+}
+
+/**
+ * Parte devolvida pelo storage via API. O ETag chega como `eTag` (o serializador
+ * usa camelCase: "ETag" -> "eTag"), então os dois nomes são aceitos — ler só
+ * `etag` fazia a retomada perder os ETags e o complete falhar com "parte sem
+ * ETag" mesmo com todos os blocos já enviados.
+ */
+interface MultipartReceivedPart {
+  partNumber: number;
+  eTag?: string;
+  etag?: string;
+  sizeBytes: number;
 }
 
 interface MultipartStatusResponse {
@@ -343,9 +373,19 @@ interface MultipartStatusResponse {
   objectKey: string;
   partSizeBytes: number;
   totalParts: number;
+  /** true = o storage já finalizou o objeto (basta devolver o asset). */
+  completed?: boolean;
   receivedBytes: number;
-  receivedParts: MultipartPart[];
+  receivedParts: MultipartReceivedPart[];
   pendingParts: number[];
+}
+
+function normalizeReceivedParts(parts: MultipartReceivedPart[] | undefined): MultipartPart[] {
+  return (parts ?? []).map((part) => ({
+    partNumber: part.partNumber,
+    etag: part.eTag ?? part.etag ?? '',
+    sizeBytes: part.sizeBytes ?? 0,
+  }));
 }
 
 interface MultipartSessionResponse {
@@ -386,6 +426,37 @@ function clearMultipartState(key: string): void {
   }
 }
 
+/**
+ * ETag de um bloco já enviado, perguntando ao storage (via API) quando o header
+ * não veio na resposta do PUT.
+ *
+ * Isso acontece quando o endpoint pré-assinado NÃO é same-origin com a SPA
+ * (S3/MinIO externo configurado no console): o navegador só lê headers expostos
+ * por CORS, e o ETag do PUT não é. Sem este fallback o envio falharia mesmo com
+ * o bloco corretamente armazenado.
+ */
+async function fetchPartEtagFromStorage(uploadId: string, partNumber: number): Promise<string> {
+  const status = await api.get<MultipartStatusResponse>(
+    `${BASE}/custom/assets/multipart/${uploadId}`,
+  );
+
+  const received = normalizeReceivedParts(status.receivedParts);
+  return received.find((part) => part.partNumber === partNumber)?.etag ?? '';
+}
+
+/** Pede URLs pré-assinadas de blocos específicos e devolve por número. */
+async function requestPartUrls(
+  uploadId: string,
+  partNumbers: number[],
+): Promise<Map<number, string>> {
+  const response = await api.post<{ parts: { partNumber: number; url: string }[] }>(
+    `${BASE}/custom/assets/multipart/${uploadId}/parts`,
+    { partNumbers },
+  );
+
+  return new Map(response.parts.map((part) => [part.partNumber, part.url]));
+}
+
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
@@ -410,10 +481,9 @@ async function uploadPartWithRetry(
           : undefined,
       });
 
-      if (!etag) {
-        throw new Error("O storage não devolveu o ETag do bloco.");
-      }
-
+      // ETag vazio NÃO é erro aqui: quando o storage não é same-origin o
+      // navegador não lê o header (CORS) e o ETag é buscado no storage logo
+      // depois, pelo fluxo principal.
       return { partNumber, etag, sizeBytes: blob.size };
     } catch (error) {
       lastError = error;
@@ -441,24 +511,35 @@ async function uploadCustomAssetDirect(
   const stateKey = MULTIPART_STATE_PREFIX + fingerprint;
 
   let state = readMultipartState(stateKey);
+  let alreadyCompleted = false;
 
   // 1) Tenta RETOMAR: o storage é a fonte de verdade das partes recebidas.
   if (state) {
-    const status = await api
-      .get<MultipartStatusResponse>(`${BASE}/custom/assets/multipart/${state.uploadId}`)
-      .catch(() => null);
+    try {
+      const status = await api.get<MultipartStatusResponse>(
+        `${BASE}/custom/assets/multipart/${state.uploadId}`,
+      );
 
-    if (status) {
-      state = {
-        ...state,
-        objectKey: status.objectKey,
-        partSizeBytes: status.partSizeBytes,
-        totalParts: status.totalParts,
-        parts: status.receivedParts ?? [],
-      };
-    } else {
-      clearMultipartState(stateKey);
-      state = null;
+      if (status.completed) {
+        // Já foi finalizado (resposta anterior se perdeu): só falta devolver o asset.
+        alreadyCompleted = true;
+      } else {
+        state = {
+          ...state,
+          objectKey: status.objectKey,
+          partSizeBytes: status.partSizeBytes,
+          totalParts: status.totalParts,
+          parts: normalizeReceivedParts(status.receivedParts),
+        };
+      }
+    } catch (error) {
+      // 404 = a sessão não existe mais (expirou/abortada): recomeça do zero.
+      // Qualquer outro erro é transitório; o estado local é a melhor informação
+      // disponível e a API é idempotente no complete.
+      if (error instanceof ApiError && error.status === 404) {
+        clearMultipartState(stateKey);
+        state = null;
+      }
     }
   }
 
@@ -504,48 +585,64 @@ async function uploadCustomAssetDirect(
   );
 
   // 3) Envia bloco a bloco direto na URL pré-assinada do storage.
-  if (pending.length > 0) {
-    const batch = await api.post<{ parts: { partNumber: number; url: string }[] }>(
-      `${BASE}/custom/assets/multipart/${state.uploadId}/parts`,
-      { partNumbers: pending },
-    );
-
-    const urls = new Map(batch.parts.map((part) => [part.partNumber, part.url]));
-
+  if (!alreadyCompleted && pending.length > 0) {
     const refreshUrl = async (partNumber: number): Promise<string> => {
-      const refreshed = await api.post<{ parts: { partNumber: number; url: string }[] }>(
-        `${BASE}/custom/assets/multipart/${state!.uploadId}/parts`,
-        { partNumbers: [partNumber] },
-      );
-      const url = refreshed.parts.find((part) => part.partNumber === partNumber)?.url;
+      const refreshed = await requestPartUrls(state!.uploadId, [partNumber]);
+      const url = refreshed.get(partNumber);
       if (!url) throw new Error(`Não foi possível renovar a URL do bloco ${partNumber}.`);
       return url;
     };
 
-    for (const partNumber of pending) {
-      const start = (partNumber - 1) * partSize;
-      const end = Math.min(start + partSize, file.size);
-      const blob = file.slice(start, end);
+    // As URLs assinadas valem 60 min: pedir em LOTE pouco antes de enviar evita
+    // que uma parte no fim de um arquivo de vários GiB pegue URL expirada.
+    try {
+    for (let offset = 0; offset < pending.length; offset += PART_URL_BATCH) {
+      const chunk = pending.slice(offset, offset + PART_URL_BATCH);
+      const urls = await requestPartUrls(state.uploadId, chunk);
 
-      let url = urls.get(partNumber);
-      if (!url) {
-        url = await refreshUrl(partNumber);
+      for (const partNumber of chunk) {
+        const start = (partNumber - 1) * partSize;
+        const end = Math.min(start + partSize, file.size);
+        const blob = file.slice(start, end);
+
+        const url = urls.get(partNumber) ?? (await refreshUrl(partNumber));
+
+        // Progresso do bloco não pode REGREDIR numa retentativa (nova tentativa
+        // recomeça em 0): guarda o máximo já enviado deste bloco.
+        let partSent = 0;
+        const uploaded = await uploadPartWithRetry(
+          partNumber,
+          url,
+          blob,
+          refreshUrl,
+          (loaded) => {
+            partSent = Math.max(partSent, loaded);
+            report(partSent);
+          },
+        );
+
+        // Sem ETag na resposta (storage externo atrás de CORS): busca no storage.
+        if (!uploaded.etag) {
+          uploaded.etag = await fetchPartEtagFromStorage(state.uploadId, partNumber);
+          if (!uploaded.etag) {
+            throw new Error(
+              `O bloco ${partNumber} subiu, mas não foi possível confirmar o ETag no storage. Tente novamente.`,
+            );
+          }
+        }
+
+        state.parts.push(uploaded);
+        state.parts.sort((a, b) => a.partNumber - b.partNumber);
+        uploadedBytes += uploaded.sizeBytes;
+        // Gravado a CADA bloco: se a página cair, o próximo envio retoma daqui.
+        writeMultipartState(stateKey, state);
+        report();
       }
-
-      const uploaded = await uploadPartWithRetry(
-        partNumber,
-        url,
-        blob,
-        refreshUrl,
-        (loaded) => report(loaded),
-      );
-
-      state.parts.push(uploaded);
-      state.parts.sort((a, b) => a.partNumber - b.partNumber);
-      uploadedBytes += uploaded.sizeBytes;
-      // Gravado a CADA bloco: se a página cair, o próximo envio retoma daqui.
-      writeMultipartState(stateKey, state);
-      report();
+    }
+    } catch (error) {
+      // 409 = outra aba/fluxo já concluiu este upload: não é erro, o complete
+      // abaixo é idempotente e devolve o asset.
+      if (!(error instanceof ApiError && error.status === 409)) throw error;
     }
   }
 
@@ -569,8 +666,52 @@ async function uploadCustomAssetDirect(
     );
   }
 
-  clearMultipartState(stateKey);
+  // O estado NÃO é apagado aqui: enquanto o asset não for vinculado ao pacote
+  // (salvar o cadastro), ele é a única forma de o site reencontrar o uploadId e
+  // DESCARTAR o objeto quando o operador troca o arquivo. É limpo por
+  // forgetUploadedAsset() após salvar ou por discardUnlinkedAsset() ao descartar.
+  writeMultipartState(stateKey, { ...state, completed: true });
+
   return asset;
+}
+
+/**
+ * O asset deste arquivo já foi vinculado ao pacote (salvamento concluído):
+ * esquece o estado do upload. Sem isso o site continuaria "achando" o upload e
+ * poderia tentar descartar um objeto que está em uso (a API responde 409).
+ */
+export function forgetUploadedAsset(file: File, kind: "installer" | "icon"): void {
+  clearMultipartState(MULTIPART_STATE_PREFIX + multipartFingerprint(file, kind));
+}
+
+/**
+ * Descarta um asset JÁ PUBLICADO (upload concluído) que ainda não foi vinculado
+ * ao pacote — usado quando o operador troca o arquivo antes de salvar ou remove a
+ * seleção. Sem isso, cada troca deixaria um objeto de vários GiB órfão no storage
+ * (a limpeza automática só age depois de 24 h).
+ *
+ * Melhor esforço: falha aqui não pode impedir a troca do arquivo.
+ */
+export async function discardUnlinkedAsset(
+  file: File,
+  kind: "installer" | "icon",
+): Promise<void> {
+  const stateKey = MULTIPART_STATE_PREFIX + multipartFingerprint(file, kind);
+  const state = readMultipartState(stateKey);
+  if (!state) return;
+
+  try {
+    await api.del(`${BASE}/custom/assets/multipart/${state.uploadId}`);
+    clearMultipartState(stateKey);
+  } catch (error) {
+    // 404 = sessão expirada; 409 = já vinculado ao pacote (a API se recusa a
+    // apagar, e o handle local não serve mais).
+    if (error instanceof ApiError && (error.status === 404 || error.status === 409)) {
+      clearMultipartState(stateKey);
+    }
+    // Outros erros (5xx/rede): MANTÉM o estado — é o único handle para tentar o
+    // descarte de novo (e o índice do lado servidor também ficou).
+  }
 }
 
 export const appStoreApi = {
@@ -668,8 +809,8 @@ export const appStoreApi = {
    * Envia instalador (kind=installer) ou ícone/capa (kind=icon) para o object
    * storage.
    *
-   * Até 50 MiB: uma requisição multipart para a API. Acima disso: MULTIPART
-   * DIRETO no storage (RustFS/S3) em blocos de 50 MiB — o arquivo não passa pela
+   * Até 10 MiB: uma requisição multipart para a API. Acima disso: MULTIPART
+   * DIRETO no storage (RustFS/S3) em blocos de 10 MiB — o arquivo não passa pela
    * API (o Cloudflare recusa corpo único de vários GiB com 413) e o envio é
    * retomável (partes ficam no storage entre tentativas).
    */
@@ -678,10 +819,8 @@ export const appStoreApi = {
     kind: "installer" | "icon" = "installer",
     onProgress?: (progress: UploadProgress) => void,
   ) => {
-    const PART_SIZE = ASSET_PART_SIZE;
-
     // Arquivos pequenos: caminho direto (1 requisição multipart).
-    if (file.size <= PART_SIZE) {
+    if (file.size <= SINGLE_REQUEST_MAX_BYTES) {
       const formData = new FormData();
       formData.append("file", file);
       return api.upload<CustomPackageAsset>(

@@ -476,7 +476,7 @@ function uploadWithProgress<T>(
 
 /**
  * PUT binário com progresso real (XMLHttpRequest). Usado pelo upload em partes
- * de assets grandes (blocos de 50 MiB): um corpo único de vários GiB é recusado
+ * de assets grandes (blocos de 10 MiB): um corpo único de vários GiB é recusado
  * no edge do Cloudflare com 413, então o arquivo é fatiado e remontado na API.
  */
 function putBinaryWithProgress<T>(
@@ -550,7 +550,7 @@ function putBinaryWithProgress<T>(
  * Diferença crucial em relação a `putBinaryWithProgress`: não passa pela API —
  * a URL é absoluta e já carrega a assinatura SigV4, então não há Authorization
  * nem prefixo de base. É o caminho do upload multipart direto: cada bloco de
- * 50 MiB vai do navegador ao storage, atravessando o Cloudflare sem 413.
+ * 10 MiB vai do navegador ao storage, atravessando o Cloudflare sem 413.
  *
  * Devolve o ETag exigido para finalizar o multipart no storage.
  */

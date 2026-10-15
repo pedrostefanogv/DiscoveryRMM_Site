@@ -100,6 +100,10 @@ export function useUpsertCustomPackage() {
       Promise.all([
         qc.invalidateQueries({ queryKey: ["appStore", "catalog"] }),
         qc.invalidateQueries({ queryKey: ["appStore", "effective"] }),
+        // O DETALHE do pacote (["appStore","package",…]) é outra chave e tem
+        // staleTime de 60s: sem invalidar, o modal/editor continuava mostrando
+        // "sem instalador" logo depois de o arquivo ser enviado e vinculado.
+        qc.invalidateQueries({ queryKey: ["appStore", "package"] }),
       ]),
   });
 }
@@ -114,6 +118,7 @@ export function useDeleteCustomPackage() {
         qc.invalidateQueries({ queryKey: ["appStore", "catalog"] }),
         qc.invalidateQueries({ queryKey: ["appStore", "effective"] }),
         qc.invalidateQueries({ queryKey: ["appStore", "approvals"] }),
+        qc.invalidateQueries({ queryKey: ["appStore", "package"] }),
       ]),
   });
 }
