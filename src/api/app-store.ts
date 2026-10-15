@@ -545,7 +545,10 @@ async function uploadCustomAssetDirect(
 
   // 2) Abre um novo multipart no storage.
   if (!state) {
-    const session = await api.post<MultipartSessionResponse>(`${BASE}/custom/assets/multipart`, {
+    // Barra final de propósito: um nginx com "location .../multipart/" responde
+    // 301 de /multipart para /multipart/ e o navegador transforma o POST em GET
+    // (405). A API aceita a rota nas duas formas, então a barra elimina o redirect.
+    const session = await api.post<MultipartSessionResponse>(`${BASE}/custom/assets/multipart/`, {
       kind,
       fileName: file.name,
       contentType: file.type || "application/octet-stream",
