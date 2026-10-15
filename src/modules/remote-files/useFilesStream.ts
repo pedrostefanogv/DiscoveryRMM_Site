@@ -98,6 +98,10 @@ export function useFilesStream({ natsSubject, natsUrl, jwt }: UseFilesStreamOpti
     const reconnectAttemptsRef = useRef(0);
     const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const mountedRef = useRef(true);
+    // Waiters resolvidos quando o handshake NATS completa (+OK): permite
+    // enfileirar envios feitos antes do socket estar pronto em vez de falhar
+    // com "WebSocket offline" (a lista nunca carregava).
+    const readyWaitersRef = useRef<Array<{ resolve: () => void; reject: (e: Error) => void }>>([]);
 
     // Normaliza UUIDs (remove hífens) para bater com o Agent (stripHyphens)
     const subj = natsSubject.replace(/-/g, '');
@@ -105,6 +109,17 @@ export function useFilesStream({ natsSubject, natsUrl, jwt }: UseFilesStreamOpti
     const respSubject = `${subj}.files.resp`;
     const readySubject = `${subj}.files.ready`;
     const progressSubject = `${subj}.files.progress`;
+
+    const waitForReady = useCallback((timeoutMs = 10000) => new Promise<void>((resolve, reject) => {
+        const timer = setTimeout(() => {
+            readyWaitersRef.current = readyWaitersRef.current.filter((w) => w.resolve !== resolve);
+            reject(new Error('Timeout aguardando conexão NATS'));
+        }, timeoutMs);
+        readyWaitersRef.current.push({
+            resolve: () => { clearTimeout(timer); resolve(); },
+            reject: (e: Error) => { clearTimeout(timer); reject(e); },
+        });
+    }), []);
 
     const connect = useCallback(() => {
         if (!mountedRef.current || !subj || !natsUrl || !jwt) return;
@@ -185,6 +200,9 @@ export function useFilesStream({ natsSubject, natsUrl, jwt }: UseFilesStreamOpti
                             reconnectAttemptsRef.current = 0;
                             setIsConnected(true);
                             setError(null);
+                            const waiters = readyWaitersRef.current;
+                            readyWaitersRef.current = [];
+                            waiters.forEach((w) => w.resolve());
                             sendProtocol(`SUB ${respSubject} 1`);
                             sendProtocol(`SUB ${readySubject} 2`);
                             sendProtocol(`SUB ${progressSubject} 3`);
@@ -220,6 +238,9 @@ export function useFilesStream({ natsSubject, natsUrl, jwt }: UseFilesStreamOpti
             ws.onclose = () => {
                 if (!mountedRef.current) return;
                 setIsConnected(false);
+                const lost = readyWaitersRef.current;
+                readyWaitersRef.current = [];
+                lost.forEach((w) => w.reject(new Error('Conexão NATS perdida')));
                 // Rejeita pendentes para não deixar promises presas
                 pendingRef.current.forEach((pend) => pend.reject(new Error('Conexão NATS perdida')));
                 pendingRef.current.clear();
@@ -250,7 +271,12 @@ export function useFilesStream({ natsSubject, natsUrl, jwt }: UseFilesStreamOpti
         };
     }, [connect]);
 
-    const sendRequest = useCallback((action: string, path: string, data?: Uint8Array, extra?: Record<string, unknown>): Promise<FilesResponse> => {
+    const sendRequest = useCallback(async (action: string, path: string, data?: Uint8Array, extra?: Record<string, unknown>): Promise<FilesResponse> => {
+        // Aguarda o handshake NATS em vez de falhar quando o socket ainda nao
+        // abriu (load disparado no mount).
+        if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+            await waitForReady();
+        }
         return new Promise((resolve, reject) => {
             if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) { reject(new Error('WebSocket offline')); return; }
             const rid = nextReqId();
@@ -279,7 +305,7 @@ export function useFilesStream({ natsSubject, natsUrl, jwt }: UseFilesStreamOpti
             const bytes = new TextEncoder().encode(pl);
             wsRef.current.send(`PUB ${reqSubject} ${bytes.length}\r\n${pl}\r\n`);
         });
-    }, [reqSubject]);
+    }, [reqSubject, waitForReady]);
 
     const onReady = useCallback((callback: (info: FilesReadyInfo) => void) => {
         readyCallbacksRef.current.add(callback);

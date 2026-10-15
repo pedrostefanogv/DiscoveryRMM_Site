@@ -89,12 +89,27 @@ export function useProcessesStream({ natsSubject, natsUrl, jwt }: UseProcessesSt
     const reconnectAttemptsRef = useRef(0);
     const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const mountedRef = useRef(true);
+    // Waiters resolvidos quando o handshake NATS completa (+OK). Permite
+    // enfileirar envios disparados antes do socket estar pronto, em vez de
+    // falhar com "WebSocket offline" (era a causa de a lista nunca carregar).
+    const readyWaitersRef = useRef<Array<{ resolve: () => void; reject: (e: Error) => void }>>([]);
 
     // Normaliza UUIDs (remove hífens) para bater com o Agent (stripHyphens)
     const subj = natsSubject.replace(/-/g, '');
     const reqSubject = `${subj}.proc.req`;
     const respSubject = `${subj}.proc.resp`;
     const readySubject = `${subj}.proc.ready`;
+
+    const waitForReady = useCallback((timeoutMs = 10000) => new Promise<void>((resolve, reject) => {
+        const timer = setTimeout(() => {
+            readyWaitersRef.current = readyWaitersRef.current.filter((w) => w.resolve !== resolve);
+            reject(new Error('Timeout aguardando conexão NATS'));
+        }, timeoutMs);
+        readyWaitersRef.current.push({
+            resolve: () => { clearTimeout(timer); resolve(); },
+            reject: (e: Error) => { clearTimeout(timer); reject(e); },
+        });
+    }), []);
 
     const connect = useCallback(() => {
         if (!mountedRef.current || !subj || !natsUrl || !jwt) return;
@@ -169,6 +184,11 @@ export function useProcessesStream({ natsSubject, natsUrl, jwt }: UseProcessesSt
                             reconnectAttemptsRef.current = 0;
                             setIsConnected(true);
                             setError(null);
+                            // Libera quem ficou esperando o socket: sem isso o load
+                            // inicial feito no mount morria com "WebSocket offline".
+                            const waiters = readyWaitersRef.current;
+                            readyWaitersRef.current = [];
+                            waiters.forEach((w) => w.resolve());
                             sendProtocol(`SUB ${respSubject} 1`);
                             sendProtocol(`SUB ${readySubject} 2`);
                         }
@@ -204,6 +224,9 @@ export function useProcessesStream({ natsSubject, natsUrl, jwt }: UseProcessesSt
                 if (!mountedRef.current) return;
                 setIsConnected(false);
                 setIsReady(false);
+                const lost = readyWaitersRef.current;
+                readyWaitersRef.current = [];
+                lost.forEach((w) => w.reject(new Error('Conexão NATS perdida')));
                 pendingRef.current.forEach((pend) => pend.reject(new Error('Conexão NATS perdida')));
                 pendingRef.current.clear();
                 if (reconnectAttemptsRef.current < MAX_RECONNECT_ATTEMPTS) {
@@ -235,7 +258,12 @@ export function useProcessesStream({ natsSubject, natsUrl, jwt }: UseProcessesSt
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [connect]);
 
-    const send = useCallback((action: string, extra?: Record<string, unknown>): Promise<ProcResponse> => {
+    const send = useCallback(async (action: string, extra?: Record<string, unknown>): Promise<ProcResponse> => {
+        // Se o socket ainda nao esta OPEN (mount antes do +OK), espera o
+        // handshake em vez de falhar — era isso que fazia a lista nunca carregar.
+        if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+            await waitForReady();
+        }
         return new Promise((resolve, reject) => {
             if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) { reject(new Error('WebSocket offline')); return; }
             const rid = nextReqId();
@@ -258,7 +286,7 @@ export function useProcessesStream({ natsSubject, natsUrl, jwt }: UseProcessesSt
             const bytes = new TextEncoder().encode(pl);
             wsRef.current.send(`PUB ${reqSubject} ${bytes.length}\r\n${pl}\r\n`);
         });
-    }, [reqSubject]);
+    }, [reqSubject, waitForReady]);
 
     const onReady = useCallback((callback: () => void) => {
         readyCallbacksRef.current.add(callback);
