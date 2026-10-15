@@ -17,6 +17,7 @@ import {
   languageForScriptType,
   normalizeEol,
   tokenizeLine,
+  type ScriptLanguage,
   type TokenKind,
 } from './scriptLanguages';
 import { validateScriptSyntax } from './scriptValidation';
@@ -40,7 +41,14 @@ export interface ScriptContentEditorProps {
   value: string;
   onChange: (value: string) => void;
   /** AutomationScriptType (número ou nome) — define realce, indentação e modelo. */
-  scriptType: unknown;
+  scriptType?: unknown;
+  /**
+   * Linguagem explícita, quando quem usa o editor NÃO fala em AutomationScriptType
+   * (ex.: os tipos de comando do pacote custom). Sobrepõe scriptType.
+   */
+  language?: ScriptLanguage;
+  /** Teto de caracteres do conteúdo: o excedente não entra (com aviso). */
+  maxLength?: number;
   label?: string;
   hint?: string;
   error?: string;
@@ -58,6 +66,8 @@ export function ScriptContentEditor({
   value,
   onChange,
   scriptType,
+  language: languageOverride,
+  maxLength,
   label = 'Conteudo do script',
   hint,
   error,
@@ -65,7 +75,7 @@ export function ScriptContentEditor({
   readOnly = false,
 }: ScriptContentEditorProps) {
   const editorId = useId();
-  const language = languageForScriptType(scriptType);
+  const language = languageOverride ?? languageForScriptType(scriptType);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const highlightRef = useRef<HTMLPreElement>(null);
   const gutterRef = useRef<HTMLDivElement>(null);
@@ -92,6 +102,10 @@ export function ScriptContentEditor({
   }, [value]);
 
   const applyChange = (next: string, selection?: { start: number; end: number }) => {
+    if (maxLength !== undefined && next.length > maxLength) {
+      setNotice(`Limite de ${maxLength} caracteres: nada foi inserido (o texto veio maior que o teto do campo).`);
+      return;
+    }
     if (selection) pendingSelection.current = selection;
     setNotice(null);
     onChange(next);
@@ -170,6 +184,11 @@ export function ScriptContentEditor({
   const applyFormat = () => {
     const skippedReindent = language.blockStyle !== 'none' && hasMultiLineString(value, language);
     const formatted = formatScriptContent(value, language);
+    // Reindentar pode AUMENTAR o texto: não deixa a formatação furar o teto.
+    if (maxLength !== undefined && formatted.length > maxLength) {
+      setNotice(`Formatação cancelada: o resultado passa do limite de ${maxLength} caracteres.`);
+      return;
+    }
     if (formatted === value) {
       setNotice('O documento já está normalizado.');
       return;
@@ -206,7 +225,7 @@ export function ScriptContentEditor({
           <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
             <span>{lines.length} linha(s)</span>
             <span aria-hidden>·</span>
-            <span>{value.length} caractere(s)</span>
+            <span>{maxLength !== undefined ? `${value.length} / ${maxLength}` : value.length} caractere(s)</span>
             <span aria-hidden>·</span>
             <span>indentação: {language.indentUnit} espaços</span>
             <span aria-hidden>·</span>

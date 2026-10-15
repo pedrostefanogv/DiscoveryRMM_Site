@@ -28,9 +28,9 @@ import {
   useUpdateAutomationScript,
 } from '@/hooks/useAutomation';
 import { buildCorrelationId } from './automationTasksUtils';
-import { ScriptContentEditor } from './ScriptContentEditor';
-import { languageForScriptType } from './scriptLanguages';
-import { validateScriptSyntax } from './scriptValidation';
+import { ScriptContentEditor } from '@/components/script/ScriptContentEditor';
+import { languageForScriptType } from '@/components/script/scriptLanguages';
+import { validateScriptSyntax } from '@/components/script/scriptValidation';
 
 export const scriptTypeOptions = [
   { value: String(AutomationScriptType.PowerShell), label: 'PowerShell' },

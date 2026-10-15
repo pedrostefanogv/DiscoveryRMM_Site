@@ -13,7 +13,7 @@ import {
 } from "@/components/ui";
 import { type AutomationScriptConsume } from "@/api";
 import { CustomFieldsUsedByPanel } from "@/components/custom-fields/CustomFieldsUsedByPanel";
-import { ScriptContentEditor } from "./ScriptContentEditor";
+import { ScriptContentEditor } from "@/components/script/ScriptContentEditor";
 import { AutomationScriptAuditTrail } from "./AutomationScriptAuditTrail";
 import { scriptTypeLabel } from "./automationScriptUtils";
 import { useClients } from "@/hooks/useClients";

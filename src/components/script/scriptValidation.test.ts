@@ -43,6 +43,18 @@ describe('validateScriptSyntax - PowerShell', () => {
     expect(validateScriptSyntax('$email = "contato@"', ps)).toEqual([]);
   });
 
+  it('aceita crase escapando aspas duplas (escape do PowerShell)', () => {
+    // Regressão: o validador lia a aspa escapada como fim da string e reprovava
+    // um script válido, bloqueando o salvamento do pacote custom.
+    const script = "Write-Host \"a `\" b\"";
+    expect(validateScriptSyntax(script, ps)).toEqual([]);
+  });
+
+  it('mantém a crase literal dentro de aspas simples', () => {
+    const script = "Write-Host 'a `\" b'";
+    expect(validateScriptSyntax(script, ps)).toEqual([]);
+  });
+
   it('reconhece here-string fechada e acusa a não fechada', () => {
     const closed = ['$x = @"', 'conteudo', '"@'].join('\n');
     expect(validateScriptSyntax(closed, ps)).toEqual([]);

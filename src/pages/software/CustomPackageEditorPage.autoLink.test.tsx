@@ -115,15 +115,20 @@ function renderEditor() {
   return router;
 }
 
-/** 0 = instalador, 1 = ícone (ordem dos cards na página). */
-function fileInput(index: number): HTMLInputElement {
-  const input = document.querySelectorAll('input[type="file"]')[index];
-  if (!input) throw new Error(`input de arquivo ${index} não encontrado`);
+/**
+ * Ordem dos inputs de arquivo na página: o Ícone/capa fica no card unificado do
+ * topo (coluna direita) e o Instalador vem no card seguinte.
+ */
+const FILE_INPUT_INDEX = { icon: 0, installer: 1 } as const;
+
+function fileInput(kind: keyof typeof FILE_INPUT_INDEX): HTMLInputElement {
+  const input = document.querySelectorAll('input[type="file"]')[FILE_INPUT_INDEX[kind]];
+  if (!input) throw new Error(`input de arquivo de ${kind} não encontrado`);
   return input as HTMLInputElement;
 }
 
-function choose(index: number, name: string, type: string) {
-  fireEvent.change(fileInput(index), { target: { files: [new File(["conteudo"], name, { type })] } });
+function choose(kind: keyof typeof FILE_INPUT_INDEX, name: string, type: string) {
+  fireEvent.change(fileInput(kind), { target: { files: [new File(["conteudo"], name, { type })] } });
 }
 
 beforeEach(() => {
@@ -133,7 +138,10 @@ beforeEach(() => {
   URL.revokeObjectURL = vi.fn();
   mocks.loadedPackage.name = "Setup ZIP";
   mocks.loadedPackage.icon = "";
-  // O mesmo mock serve os dois cards: instalador (0) e ícone (1).
+  // Comando único por padrão: os testes de script sobrescrevem estes dois.
+  mocks.loadedPackage.installCommand = "setup.exe /silent";
+  mocks.loadedPackage.installCommandKind = 0;
+  // O mesmo mock serve os dois inputs: ícone e instalador.
   mocks.uploadCustomAsset.mockImplementation(async (_file: File, kind: string) =>
     kind === "icon" ? iconAsset : installerAsset,
   );
@@ -147,7 +155,7 @@ describe("editor de pacote custom — vínculo automático pós-upload", () => {
   it("vincula o instalador ao pacote quando o envio termina, sem sair da tela", async () => {
     const router = renderEditor();
 
-    choose(0, "Setup.zip", "application/zip");
+    choose("installer", "Setup.zip", "application/zip");
 
     await waitFor(() => expect(mocks.upsert).toHaveBeenCalledTimes(1));
 
@@ -185,7 +193,7 @@ describe("editor de pacote custom — vínculo automático pós-upload", () => {
     mocks.uploadCustomAsset.mockResolvedValue(iconAsset);
 
     renderEditor();
-    choose(1, "logo.png", "image/png");
+    choose("icon", "logo.png", "image/png");
 
     await waitFor(() => expect(mocks.upsert).toHaveBeenCalledTimes(1));
     expect(mocks.upsert.mock.calls[0][0]).toMatchObject({
@@ -202,7 +210,7 @@ describe("editor de pacote custom — vínculo automático pós-upload", () => {
   it("Cancelar após o vínculo automático oferece excluir o arquivo (pacote + object storage)", async () => {
     const router = renderEditor();
 
-    choose(0, "Setup.zip", "application/zip");
+    choose("installer", "Setup.zip", "application/zip");
     await waitFor(() =>
       expect(mocks.toastSuccess).toHaveBeenCalledWith("Arquivo vinculado ao pacote automaticamente."),
     );
@@ -247,9 +255,9 @@ describe("editor de pacote custom — vínculo automático pós-upload", () => {
   it("Cancelar com instalador E ícone enviados oferece excluir os dois", async () => {
     const router = renderEditor();
 
-    choose(0, "Setup.zip", "application/zip");
+    choose("installer", "Setup.zip", "application/zip");
     await waitFor(() => expect(mocks.upsert).toHaveBeenCalledTimes(1));
-    choose(1, "logo.png", "image/png");
+    choose("icon", "logo.png", "image/png");
     await waitFor(() => expect(mocks.upsert).toHaveBeenCalledTimes(2));
 
     fireEvent.click(screen.getAllByRole("button", { name: "Cancelar" })[0]);
@@ -267,10 +275,41 @@ describe("editor de pacote custom — vínculo automático pós-upload", () => {
     mocks.loadedPackage.name = "";
 
     renderEditor();
-    choose(0, "Setup.zip", "application/zip");
+    choose("installer", "Setup.zip", "application/zip");
 
     await waitFor(() => expect(mocks.toastError).toHaveBeenCalled());
     expect(mocks.toastError).toHaveBeenCalledWith(expect.stringContaining("campos a corrigir"));
     expect(mocks.upsert).not.toHaveBeenCalled();
+  });
+
+  it("bloqueia o salvamento quando o script PowerShell tem erro de sintaxe", async () => {
+    mocks.loadedPackage.installCommandKind = 2; // AppCommandKind.PowerShellScript
+    mocks.loadedPackage.installCommand = "Write-Output 'ok'";
+    renderEditor();
+
+    // Chave aberta e não fechada: o texto iria inteiro para o agent.
+    const editor = screen.getByLabelText("Script de instalação");
+    fireEvent.change(editor, { target: { value: "if ($true) {\n  Write-Output 'quebrado'" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "Salvar alterações" }));
+
+    await waitFor(() => expect(screen.getByText(/Erro de sintaxe na linha/)).toBeTruthy());
+    expect(mocks.upsert).not.toHaveBeenCalled();
+  });
+
+  it("aceita script PowerShell longo (mais de 9 mil caracteres)", async () => {
+    mocks.loadedPackage.installCommandKind = 2; // AppCommandKind.PowerShellScript
+    mocks.loadedPackage.installCommand = "Write-Output 'ok'";
+    renderEditor();
+
+    // Sem newline no fim: o editor salva com trim(), então o tamanho bate exato.
+    const longScript = Array.from({ length: 600 }, (_, index) => '# linha de teste ' + index).join('\n');
+    const editor = screen.getByLabelText("Script de instalação");
+    fireEvent.change(editor, { target: { value: longScript } });
+
+    fireEvent.click(screen.getByRole("button", { name: "Salvar alterações" }));
+
+    await waitFor(() => expect(mocks.upsert).toHaveBeenCalledTimes(1));
+    expect(mocks.upsert.mock.calls[0][0].installCommand).toHaveLength(longScript.length);
   });
 });

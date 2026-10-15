@@ -19,6 +19,13 @@ function closingQuoteIndex(line: string, start: number, quote: string, language:
       i += 2;
       continue;
     }
+    // PowerShell escapa com crase (aspas simples são literais): sem isto um
+    // " com crase dentro de aspas duplas era lido como fim de string e o
+    // script válido era reprovado como "aspas não fechadas".
+    if (ch === String.fromCharCode(96) && language.id === 'powershell' && quote === '"') {
+      i += 2;
+      continue;
+    }
     if (ch === quote) {
       if (line[i + 1] === quote) {
         i += 2;

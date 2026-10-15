@@ -269,6 +269,11 @@ function scanString(line: string, start: number, quote: string, language: Script
       i += 2;
       continue;
     }
+    // Mesma regra do validador: crase foge do próximo caractere no PowerShell.
+    if (ch === String.fromCharCode(96) && language.id === 'powershell' && quote === '"') {
+      i += 2;
+      continue;
+    }
     if (ch === quote) {
       if (line[i + 1] === quote) {
         i += 2;

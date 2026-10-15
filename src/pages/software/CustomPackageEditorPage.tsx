@@ -22,6 +22,9 @@ import {
   useDeleteCustomPackageIcon,
   useUpsertCustomPackage,
 } from '@/hooks/useAppStore';
+import { ScriptContentEditor } from '@/components/script/ScriptContentEditor';
+import { SCRIPT_LANGUAGES, type ScriptLanguage } from '@/components/script/scriptLanguages';
+import { validateScriptSyntax } from '@/components/script/scriptValidation';
 import { MarkdownField } from './components/MarkdownField';
 import { SoftwareInventoryPicker, type InventorySoftwareSelection } from './components/SoftwareInventoryPicker';
 import { STORE_PATH, buildStorePath, formatBytes, formatEta, slugifyPackageId } from './softwareStoreUtils';
@@ -34,14 +37,41 @@ const BACK_TO_STORE_PATH = buildStorePath(AppInstallationType.Custom);
 
 /** Limite do servidor para o comando de detecção (varchar(2000)). */
 const DETECTION_COMMAND_MAX = 2000;
-/** Limite do servidor para os comandos de instalação/desinstalação. */
-const COMMAND_MAX = 1000;
+/**
+ * Limite do servidor para os comandos de instalação/desinstalação.
+ *
+ * Scripts PowerShell/CMD são textos longos (um instalador real passa de 9 mil
+ * caracteres): a coluna na API virou `text` e o teto acompanha o do editor de
+ * scripts da automação. O mesmo valor existe na API (AppStoreService) — os dois
+ * lados precisam mudar juntos.
+ */
+const COMMAND_MAX = 200000;
 
 const commandKindOptions = [
   { value: String(AppCommandKind.Command), label: 'Comando único (cmd /C)' },
   { value: String(AppCommandKind.CmdScript), label: 'Script CMD/BAT (.cmd)' },
   { value: String(AppCommandKind.PowerShellScript), label: 'Script PowerShell (.ps1)' },
 ];
+
+/**
+ * Linguagem usada pelo validador/realce para o tipo de comando do pacote custom.
+ * "Comando único" (cmd /C) é uma linha só e não passa pelo validador de script.
+ */
+function scriptLanguageForCommandKind(kind: number): ScriptLanguage | null {
+  if (kind === AppCommandKind.PowerShellScript) return SCRIPT_LANGUAGES.powershell;
+  if (kind === AppCommandKind.CmdScript) return SCRIPT_LANGUAGES.batch;
+  return null;
+}
+
+/** Primeiro erro de sintaxe do script, já formatado para o campo `errors`. */
+function syntaxErrorFor(content: string, language: ScriptLanguage | null): string | null {
+  if (!language || !content.trim()) return null;
+  const errors = validateScriptSyntax(content, language).filter((issue) => issue.severity === 'error');
+  if (errors.length === 0) return null;
+  const [first] = errors;
+  const rest = errors.length > 1 ? ' (+' + (errors.length - 1) + ' outro(s))' : '';
+  return 'Erro de sintaxe na linha ' + first.line + ': ' + first.message + rest;
+}
 
 const detectionModeOptions = [
   { value: String(AppDetectionMode.None), label: 'Nenhuma' },
@@ -808,6 +838,24 @@ export default function CustomPackageEditorPage() {
     if (!form.name.trim()) next.name = 'Informe o título exibido na loja.';
     if (!form.packageId.trim()) next.packageId = 'Informe o ID do pacote.';
     if (!form.installCommand.trim()) next.installCommand = 'Informe o comando de instalação.';
+    if (form.installCommand.length > COMMAND_MAX) {
+      next.installCommand = 'O comando de instalação deve ter no máximo ' + COMMAND_MAX + ' caracteres.';
+    }
+    // O texto do script vai inteiro para o agent: sem esta checagem um script
+    // quebrado só apareceria na instalação, já no host.
+    const installSyntax = syntaxErrorFor(
+      form.installCommand,
+      scriptLanguageForCommandKind(form.installCommandKind),
+    );
+    if (installSyntax) next.installCommand = installSyntax;
+    if (form.uninstallCommand.length > COMMAND_MAX) {
+      next.uninstallCommand = 'O comando de desinstalação deve ter no máximo ' + COMMAND_MAX + ' caracteres.';
+    }
+    const uninstallSyntax = syntaxErrorFor(
+      form.uninstallCommand,
+      scriptLanguageForCommandKind(form.uninstallCommandKind),
+    );
+    if (uninstallSyntax) next.uninstallCommand = uninstallSyntax;
     if (form.detectionMode === AppDetectionMode.InventoryLink && !form.detectionName.trim()) {
       next.detectionName = 'Escolha o app do inventário (ou informe o nome a ser procurado no host).';
     }
@@ -815,7 +863,12 @@ export default function CustomPackageEditorPage() {
       next.detectionCommand = 'Informe o comando PowerShell de detecção.';
     }
     if (form.detectionCommand.length > DETECTION_COMMAND_MAX) {
-      next.detectionCommand = `O comando de detecção deve ter no máximo ${DETECTION_COMMAND_MAX} caracteres.`;
+      next.detectionCommand = 'O comando de detecção deve ter no máximo ' + DETECTION_COMMAND_MAX + ' caracteres.';
+    }
+    // A detecção roda PowerShell mesmo quando o modo é comando.
+    if (form.detectionMode === AppDetectionMode.Command) {
+      const detectionSyntax = syntaxErrorFor(form.detectionCommand, SCRIPT_LANGUAGES.powershell);
+      if (detectionSyntax) next.detectionCommand = detectionSyntax;
     }
     setErrors(next);
     return Object.keys(next).length === 0;
@@ -1187,6 +1240,11 @@ export default function CustomPackageEditorPage() {
           }
         : null;
 
+  // Tipo de comando define se o campo vira o editor de script (com realce,
+  // numeração e aviso de sintaxe) ou um textarea de uma linha só.
+  const installScriptLanguage = scriptLanguageForCommandKind(form.installCommandKind);
+  const uninstallScriptLanguage = scriptLanguageForCommandKind(form.uninstallCommandKind);
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -1203,65 +1261,169 @@ export default function CustomPackageEditorPage() {
         </Button>
       </div>
 
-      {/* Identificação */}
+      {/* Cadastro: identificação + ícone/capa + descrição */}
       <Card>
-        <h2 className="mb-3 text-sm font-semibold text-foreground">Identificação</h2>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <Input
-            label="Título"
-            value={form.name}
-            error={errors.name}
-            disabled={submitting}
-            maxLength={500}
-            placeholder="Ex.: Sistema de Gestão XPTO"
-            onChange={(event) => update('name', event.target.value)}
-          />
-          <Input
-            label="ID do pacote"
-            value={form.packageId}
-            error={errors.packageId}
-            disabled={isEditing || submitting}
-            maxLength={300}
-            placeholder="Ex.: xpto-gestao"
-            hint={isEditing ? 'O ID não pode ser alterado.' : 'Identificador único (sem espaços).'}
-            onChange={(event) => update('packageId', event.target.value)}
-            onBlur={() => {
-              if (!form.packageId.trim() && form.name.trim()) {
-                update('packageId', slugifyPackageId(form.name));
-              }
-            }}
-          />
-          <Input
-            label="Versão"
-            value={form.version}
-            disabled={submitting}
-            maxLength={100}
-            placeholder="Ex.: 1.4.2"
-            onChange={(event) => update('version', event.target.value)}
-          />
-          <Input
-            label="Fabricante"
-            value={form.publisher}
-            disabled={submitting}
-            maxLength={500}
-            placeholder="Ex.: XPTO Software"
-            onChange={(event) => update('publisher', event.target.value)}
-          />
-        </div>
-      </Card>
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 lg:gap-0 lg:divide-x lg:divide-border">
+          {/* Coluna esquerda: identificação */}
+          <div className="lg:pr-6">
+            <h2 className="mb-3 text-sm font-semibold text-foreground">Identificação</h2>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <Input
+                label="Título"
+                value={form.name}
+                error={errors.name}
+                disabled={submitting}
+                maxLength={500}
+                placeholder="Ex.: Sistema de Gestão XPTO"
+                onChange={(event) => update('name', event.target.value)}
+              />
+              <Input
+                label="ID do pacote"
+                value={form.packageId}
+                error={errors.packageId}
+                disabled={isEditing || submitting}
+                maxLength={300}
+                placeholder="Ex.: xpto-gestao"
+                hint={isEditing ? 'O ID não pode ser alterado.' : 'Identificador único (sem espaços).'}
+                onChange={(event) => update('packageId', event.target.value)}
+                onBlur={() => {
+                  if (!form.packageId.trim() && form.name.trim()) {
+                    update('packageId', slugifyPackageId(form.name));
+                  }
+                }}
+              />
+              <Input
+                label="Versão"
+                value={form.version}
+                disabled={submitting}
+                maxLength={100}
+                placeholder="Ex.: 1.4.2"
+                onChange={(event) => update('version', event.target.value)}
+              />
+              <Input
+                label="Fabricante"
+                value={form.publisher}
+                disabled={submitting}
+                maxLength={500}
+                placeholder="Ex.: XPTO Software"
+                onChange={(event) => update('publisher', event.target.value)}
+              />
+            </div>
+          </div>
 
-      {/* Descrição */}
-      <Card>
-        <h2 className="mb-3 text-sm font-semibold text-foreground">Descrição</h2>
-        <MarkdownField
-          label="Descrição exibida na loja"
-          value={form.description}
-          onChange={(next) => update('description', next)}
-          disabled={submitting}
-          rows={6}
-          placeholder="Descreva o aplicativo. Aceita Markdown (negrito, listas, links, código)."
-          hint="O preview abaixo do alternador usa o mesmo renderizador da loja."
-        />
+          {/* Coluna direita: ícone/capa primeiro e a descrição logo abaixo */}
+          <div className="space-y-6 lg:pl-6">
+            <div>
+              <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground">
+                <ImageIcon className="h-4 w-4" /> Ícone / capa
+              </h2>
+              <div className="flex flex-wrap items-start gap-3">
+                {(iconFile || form.iconUrl) && (
+                  <div className="h-14 w-14 shrink-0 overflow-hidden rounded-lg border border-border bg-surface-light">
+                    <img
+                      src={iconPreview ?? form.iconUrl}
+                      alt="Pré-visualização do ícone"
+                      className="h-full w-full object-contain"
+                    />
+                  </div>
+                )}
+                <div className="min-w-48 flex-1 space-y-2">
+                  <Input
+                    label="URL do ícone (ou envie um arquivo)"
+                    value={form.iconUrl}
+                    placeholder="https://.../logo.png"
+                    disabled={Boolean(iconFile) || Boolean(iconAsset) || submitting}
+                    maxLength={2000}
+                    hint={
+                      canAttachFiles
+                        ? iconAsset
+                          ? 'Arquivo enviado ao S3 — o ícone será o da imagem enviada.'
+                          : undefined
+                        : 'Salve o cadastro primeiro para poder enviar a imagem.'
+                    }
+                    onChange={(event) => update('iconUrl', event.target.value)}
+                  />
+                  <div className="flex flex-wrap items-center gap-3">
+                    <label
+                      className={
+                        canAttachFiles
+                          ? 'inline-flex cursor-pointer items-center gap-2 rounded-lg border border-border bg-surface-light px-3 py-2 text-sm text-foreground hover:border-primary/50'
+                          : 'inline-flex cursor-not-allowed items-center gap-2 rounded-lg border border-border bg-surface-light px-3 py-2 text-sm text-muted opacity-60'
+                      }
+                      title={canAttachFiles ? undefined : 'Salve o cadastro do pacote antes de enviar a imagem'}
+                    >
+                      <Upload className="h-4 w-4" />
+                      {iconFile || iconAsset || loaded?.icon ? 'Trocar imagem' : 'Enviar imagem'}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        disabled={submitting || !canAttachFiles}
+                        onChange={(event) => {
+                          const file = event.target.files?.[0] ?? null;
+                          event.target.value = '';
+                          if (file) void uploadIcon(file);
+                        }}
+                      />
+                    </label>
+                    {(iconFile || iconAsset) && (
+                      <button
+                        type="button"
+                        disabled={submitting}
+                        className="inline-flex items-center gap-1 text-xs text-muted hover:text-foreground"
+                        onClick={() => {
+                          if (iconFile && iconUpload?.status !== 'uploading') {
+                            void discardUnlinkedAsset(iconFile, 'icon');
+                          }
+                          setIconFile(null);
+                          setIconAsset(null);
+                          setIconUpload(null);
+                        }}
+                      >
+                        <X className="h-3.5 w-3.5" /> Remover seleção
+                      </button>
+                    )}
+
+                    {!iconFile && !iconAsset && loaded?.icon && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        disabled={submitting || deleteIcon.isPending}
+                        onClick={() => setConfirmDeleteIconOpen(true)}
+                        title="Excluir o ícone publicado no object storage"
+                      >
+                        <Trash2 className="h-4 w-4" /> Excluir ícone
+                      </Button>
+                    )}
+                  </div>
+
+                  <AssetUploadPanel
+                    kind="icon"
+                    upload={iconUpload}
+                    onRetry={() => {
+                      if (iconFile) void uploadIcon(iconFile);
+                    }}
+                    onCancel={() => cancelUpload('icon')}
+                    onDiscard={() => discardUpload('icon')}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <h2 className="mb-3 text-sm font-semibold text-foreground">Descrição</h2>
+              <MarkdownField
+                label="Descrição exibida na loja"
+                value={form.description}
+                onChange={(next) => update('description', next)}
+                disabled={submitting}
+                rows={6}
+                placeholder="Descreva o aplicativo. Aceita Markdown (negrito, listas, links, código)."
+                hint="O preview abaixo do alternador usa o mesmo renderizador da loja."
+              />
+            </div>
+          </div>
+        </div>
       </Card>
 
       {/* Instalador */}
@@ -1371,104 +1533,6 @@ export default function CustomPackageEditorPage() {
         />
       </Card>
 
-      {/* Ícone / capa */}
-      <Card>
-        <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground">
-          <ImageIcon className="h-4 w-4" /> Ícone / capa
-        </h2>
-        <div className="flex flex-wrap items-start gap-3">
-          {(iconFile || form.iconUrl) && (
-            <div className="h-14 w-14 shrink-0 overflow-hidden rounded-lg border border-border bg-surface-light">
-              <img
-                src={iconPreview ?? form.iconUrl}
-                alt="Pré-visualização do ícone"
-                className="h-full w-full object-contain"
-              />
-            </div>
-          )}
-          <div className="min-w-48 flex-1 space-y-2">
-            <Input
-              label="URL do ícone (ou envie um arquivo)"
-              value={form.iconUrl}
-              placeholder="https://.../logo.png"
-              disabled={Boolean(iconFile) || Boolean(iconAsset) || submitting}
-              maxLength={2000}
-              hint={
-                canAttachFiles
-                  ? iconAsset
-                    ? 'Arquivo enviado ao S3 — o ícone será o da imagem enviada.'
-                    : undefined
-                  : 'Salve o cadastro primeiro para poder enviar a imagem.'
-              }
-              onChange={(event) => update('iconUrl', event.target.value)}
-            />
-            <div className="flex flex-wrap items-center gap-3">
-              <label
-                className={
-                  canAttachFiles
-                    ? 'inline-flex cursor-pointer items-center gap-2 rounded-lg border border-border bg-surface-light px-3 py-2 text-sm text-foreground hover:border-primary/50'
-                    : 'inline-flex cursor-not-allowed items-center gap-2 rounded-lg border border-border bg-surface-light px-3 py-2 text-sm text-muted opacity-60'
-                }
-                title={canAttachFiles ? undefined : 'Salve o cadastro do pacote antes de enviar a imagem'}
-              >
-                <Upload className="h-4 w-4" />
-                {iconFile || iconAsset || loaded?.icon ? 'Trocar imagem' : 'Enviar imagem'}
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  disabled={submitting || !canAttachFiles}
-                  onChange={(event) => {
-                    const file = event.target.files?.[0] ?? null;
-                    event.target.value = '';
-                    if (file) void uploadIcon(file);
-                  }}
-                />
-              </label>
-              {(iconFile || iconAsset) && (
-                <button
-                  type="button"
-                  disabled={submitting}
-                  className="inline-flex items-center gap-1 text-xs text-muted hover:text-foreground"
-                  onClick={() => {
-                    if (iconFile && iconUpload?.status !== 'uploading') {
-                      void discardUnlinkedAsset(iconFile, 'icon');
-                    }
-                    setIconFile(null);
-                    setIconAsset(null);
-                    setIconUpload(null);
-                  }}
-                >
-                  <X className="h-3.5 w-3.5" /> Remover seleção
-                </button>
-              )}
-
-              {!iconFile && !iconAsset && loaded?.icon && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  disabled={submitting || deleteIcon.isPending}
-                  onClick={() => setConfirmDeleteIconOpen(true)}
-                  title="Excluir o ícone publicado no object storage"
-                >
-                  <Trash2 className="h-4 w-4" /> Excluir ícone
-                </Button>
-              )}
-            </div>
-
-            <AssetUploadPanel
-              kind="icon"
-              upload={iconUpload}
-              onRetry={() => {
-                if (iconFile) void uploadIcon(iconFile);
-              }}
-              onCancel={() => cancelUpload('icon')}
-              onDiscard={() => discardUpload('icon')}
-            />
-          </div>
-        </div>
-      </Card>
-
       {/* Comandos */}
       <Card>
         <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground">
@@ -1486,17 +1550,31 @@ export default function CustomPackageEditorPage() {
               disabled={submitting}
               onChange={(event) => update('installCommandKind', Number(event.target.value) as AppCommandKind)}
             />
-            <TextArea
-              label="Comando de instalação"
-              className="font-mono text-xs"
-              value={form.installCommand}
-              error={errors.installCommand}
-              disabled={submitting}
-              maxLength={COMMAND_MAX}
-              rows={8}
-              placeholder='Ex.: "{{installer}}" /S   ou   msiexec /i "{{installer}}" /qn'
-              onChange={(event) => update('installCommand', event.target.value)}
-            />
+            {installScriptLanguage ? (
+              <ScriptContentEditor
+                label="Script de instalação"
+                value={form.installCommand}
+                onChange={(next) => update('installCommand', next)}
+                language={installScriptLanguage}
+                maxLength={COMMAND_MAX}
+                heightPx={260}
+                error={errors.installCommand}
+                readOnly={submitting}
+                hint="Cole o script inteiro. O agent grava este texto num arquivo e executa; {{installerDir}} aponta para a pasta extraída do ZIP."
+              />
+            ) : (
+              <TextArea
+                label="Comando de instalação"
+                className="font-mono text-xs"
+                value={form.installCommand}
+                error={errors.installCommand}
+                disabled={submitting}
+                maxLength={COMMAND_MAX}
+                rows={8}
+                placeholder='Ex.: "{{installer}}" /S   ou   msiexec /i "{{installer}}" /qn'
+                onChange={(event) => update('installCommand', event.target.value)}
+              />
+            )}
           </div>
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,14rem)_minmax(0,1fr)]">
@@ -1507,16 +1585,31 @@ export default function CustomPackageEditorPage() {
               disabled={submitting}
               onChange={(event) => update('uninstallCommandKind', Number(event.target.value) as AppCommandKind)}
             />
-            <TextArea
-              label="Comando de desinstalação (opcional)"
-              className="font-mono text-xs"
-              value={form.uninstallCommand}
-              disabled={submitting}
-              maxLength={COMMAND_MAX}
-              rows={8}
-              placeholder={'Ex.: "C:\\Program Files\\XPTO\\uninstall.exe" /S'}
-              onChange={(event) => update('uninstallCommand', event.target.value)}
-            />
+            {uninstallScriptLanguage ? (
+              <ScriptContentEditor
+                label="Script de desinstalação (opcional)"
+                value={form.uninstallCommand}
+                onChange={(next) => update('uninstallCommand', next)}
+                language={uninstallScriptLanguage}
+                maxLength={COMMAND_MAX}
+                heightPx={220}
+                error={errors.uninstallCommand}
+                readOnly={submitting}
+                hint="Opcional. O agent grava este texto num arquivo e executa na desinstalação."
+              />
+            ) : (
+              <TextArea
+                label="Comando de desinstalação (opcional)"
+                className="font-mono text-xs"
+                value={form.uninstallCommand}
+                error={errors.uninstallCommand}
+                disabled={submitting}
+                maxLength={COMMAND_MAX}
+                rows={8}
+                placeholder={'Ex.: "C:\\Program Files\\XPTO\\uninstall.exe" /S'}
+                onChange={(event) => update('uninstallCommand', event.target.value)}
+              />
+            )}
           </div>
         </div>
       </Card>
