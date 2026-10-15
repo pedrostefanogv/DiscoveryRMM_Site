@@ -247,6 +247,20 @@ function buildRequestSignal(init: ApiRequestInit): AbortSignal | undefined {
   return anyFn ? anyFn(signals) : signals[0];
 }
 
+/**
+ * Liga o abort do XHR ao signal — e DESLIGA no fim do XHR.
+ *
+ * Sem o cleanup, um upload grande (milhares de blocos encadeados no MESMO
+ * AbortSignal) acumularia um listener por bloco.
+ */
+function bindXhrAbort(xhr: XMLHttpRequest, signal?: AbortSignal): void {
+  if (!signal) return;
+
+  const onAbort = () => xhr.abort();
+  signal.addEventListener("abort", onAbort, { once: true });
+  xhr.addEventListener("loadend", () => signal.removeEventListener("abort", onAbort), { once: true });
+}
+
 function normalizeApiPath(path: string): string {
   if (!path.startsWith("/")) {
     return path;
@@ -473,7 +487,7 @@ function uploadWithProgress<T>(
         reject(new ApiError(0, "Upload cancelado."));
         return;
       }
-      options.signal.addEventListener("abort", () => xhr.abort(), { once: true });
+      bindXhrAbort(xhr, options.signal);
     }
 
     const tracker = createSpeedTracker();
@@ -555,7 +569,7 @@ function putBinaryWithProgress<T>(
         reject(new ApiError(0, "Upload cancelado."));
         return;
       }
-      options.signal.addEventListener("abort", () => xhr.abort(), { once: true });
+      bindXhrAbort(xhr, options.signal);
     }
 
     const tracker = createSpeedTracker();
@@ -629,7 +643,7 @@ export function putPresignedPart(
         reject(new ApiError(0, "Upload cancelado."));
         return;
       }
-      options.signal.addEventListener("abort", () => xhr.abort(), { once: true });
+      bindXhrAbort(xhr, options.signal);
     }
 
     const tracker = createSpeedTracker();

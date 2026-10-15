@@ -523,6 +523,11 @@ export default function CustomPackageEditorPage() {
     installerAbortRef.current = controller;
     const seq = ++installerSeqRef.current;
 
+    // Este envio ainda "manda" no painel? Um worker/XHR sobrevivente NÃO pode
+    // ressuscitar o estado depois do fim (senão a UI trava em "enviando": some o
+    // "Tentar novamente", o "Cancelar" vira no-op e o Salvar fica bloqueado).
+    let active = true;
+
     // Preserva o que já foi enviado apenas no caminho RETOMÁVEL (multipart): no
     // envio em requisição única o progresso não existe no servidor, então herdar
     // o percentual antigo mostraria uma retomada que não aconteceu.
@@ -546,7 +551,7 @@ export default function CustomPackageEditorPage() {
         file,
         'installer',
         (progress: UploadProgress) => {
-          if (controller.signal.aborted || seq !== installerSeqRef.current) return;
+          if (!active || controller.signal.aborted || seq !== installerSeqRef.current) return;
 
           setInstallerUpload({
             status: 'uploading',
@@ -563,6 +568,7 @@ export default function CustomPackageEditorPage() {
 
       if (seq !== installerSeqRef.current) return;
 
+      active = false;
       installerAbortRef.current = null;
       setInstallerAsset(asset);
       setInstallerUpload({
@@ -577,6 +583,7 @@ export default function CustomPackageEditorPage() {
       // Um upload mais novo já assumiu o painel: este erro não é mais relevante.
       if (seq !== installerSeqRef.current) return;
 
+      active = false;
       installerAbortRef.current = null;
 
       if (controller.signal.aborted) {
@@ -655,16 +662,29 @@ export default function CustomPackageEditorPage() {
     iconAbortRef.current = controller;
     const seq = ++iconSeqRef.current;
 
+    // Mesma guarda do instalador (nenhum callback atrasado ressuscita o painel).
+    let active = true;
+
+    // [B4] Retomada: preserva o progresso exibido no caminho retomável.
+    const resumeFrom =
+      iconFile === file && file.size > ASSET_MULTIPART_MIN_BYTES ? iconUpload : null;
+
     setIconFile(file);
     setIconAsset(null);
-    setIconUpload({ status: 'uploading', fileName: file.name, loaded: 0, total: file.size, percent: 0 });
+    setIconUpload({
+      status: 'uploading',
+      fileName: file.name,
+      loaded: resumeFrom?.loaded ?? 0,
+      total: file.size,
+      percent: resumeFrom?.percent ?? 0,
+    });
 
     try {
       const asset = await appStoreApi.uploadCustomAsset(
         file,
         'icon',
         (progress: UploadProgress) => {
-          if (controller.signal.aborted || seq !== iconSeqRef.current) return;
+          if (!active || controller.signal.aborted || seq !== iconSeqRef.current) return;
 
           setIconUpload({
             status: 'uploading',
@@ -681,6 +701,7 @@ export default function CustomPackageEditorPage() {
 
       if (seq !== iconSeqRef.current) return;
 
+      active = false;
       iconAbortRef.current = null;
       setIconAsset(asset);
       setIconUpload({
@@ -694,6 +715,7 @@ export default function CustomPackageEditorPage() {
     } catch (error) {
       if (seq !== iconSeqRef.current) return;
 
+      active = false;
       iconAbortRef.current = null;
 
       if (controller.signal.aborted) {

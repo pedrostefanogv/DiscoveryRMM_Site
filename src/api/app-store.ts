@@ -342,8 +342,20 @@ export const ASSET_MULTIPART_MIN_BYTES = SINGLE_REQUEST_MAX_BYTES;
 
 const MULTIPART_STATE_PREFIX = "discovery:asset-multipart:";
 const PART_MAX_ATTEMPTS = 4;
-/** URLs assinadas pedidas por requisição (valem 60 min cada). */
-const PART_URL_BATCH = 25;
+/**
+ * Blocos enviados SIMULTANEAMENTE. O envio era sequencial e o gargalo não era o
+ * link: era o "buraco" entre blocos (abrir XHR novo, esperar o storage confirmar
+ * a parte, pedir a próxima URL). Com 3 blocos encadeados o link fica ocupado e o
+ * tempo por arquivo cai bastante; mais que isso costuma competir com o próprio
+ * storage/CPU do navegador sem ganho.
+ */
+const PART_CONCURRENCY = 3;
+
+/**
+ * Janela mínima entre atualizações de progresso na UI. Conclusões de bloco e
+ * erros ignoram o throttle (report(true)).
+ */
+const PROGRESS_THROTTLE_MS = 200;
 
 interface MultipartPart {
   partNumber: number;
@@ -352,13 +364,25 @@ interface MultipartPart {
   sizeBytes: number;
 }
 
+/**
+ * Coordenadas de um bloco no arquivo. Guardadas no estado porque com blocos em
+ * paralelo eles terminam fora de ordem — e numa retomada "partNumber × tamanho
+ * fixo" não reconstruiria os intervalos.
+ */
+interface PartRange {
+  partNumber: number;
+  start: number;
+  end: number;
+}
+
 interface MultipartUploadState {
   uploadId: string;
   objectKey: string;
   partSizeBytes: number;
-  totalParts: number;
   fingerprint: string;
   parts: MultipartPart[];
+  /** Plano de blocos (coordenadas) — permite retomar com blocos fora de ordem. */
+  ranges?: PartRange[];
   /** Upload já finalizado no storage (aguardando vínculo com o pacote). */
   completed?: boolean;
 }
@@ -513,7 +537,12 @@ async function uploadPartWithRetry(
       if (attempt === PART_MAX_ATTEMPTS) break;
 
       // 403/expiração: a URL assinada venceu (upload longo) — pede outra.
-      currentUrl = await refreshUrl(partNumber).catch(() => currentUrl);
+      currentUrl = await refreshUrl(partNumber).catch((refreshError) => {
+        // 409 = a sessão já foi concluída (outra aba): deixe subir para o fluxo
+        // cair no complete idempotente em vez de insistir com a URL morta.
+        if (refreshError instanceof ApiError && refreshError.status === 409) throw refreshError;
+        return currentUrl;
+      });
       await delay(500 * attempt);
     }
   }
@@ -552,7 +581,6 @@ async function uploadCustomAssetDirect(
           ...state,
           objectKey: status.objectKey,
           partSizeBytes: status.partSizeBytes,
-          totalParts: status.totalParts,
           parts: normalizeReceivedParts(status.receivedParts),
         };
       }
@@ -583,109 +611,228 @@ async function uploadCustomAssetDirect(
       uploadId: session.uploadId,
       objectKey: session.objectKey,
       partSizeBytes: session.partSizeBytes || ASSET_PART_SIZE,
-      totalParts: session.totalParts || Math.max(1, Math.ceil(file.size / ASSET_PART_SIZE)),
       fingerprint,
       parts: [],
     };
     writeMultipartState(stateKey, state);
   }
 
-  const partSize = state.partSizeBytes > 0 ? state.partSizeBytes : ASSET_PART_SIZE;
-  const totalParts = state.totalParts > 0 ? state.totalParts : Math.max(1, Math.ceil(file.size / partSize));
-  const completed = new Set(state.parts.map((part) => part.partNumber));
-  let uploadedBytes = state.parts.reduce((sum, part) => sum + (part.sizeBytes ?? 0), 0);
+  const sessionPartSize = state.partSizeBytes > 0 ? state.partSizeBytes : ASSET_PART_SIZE;
 
-  const report = (inFlight = 0, bytesPerSecond?: number) => {
+  // ── Progresso e ETA AGREGADOS ─────────────────────────────────────────
+  // Medido no total (e não por bloco): com blocos encadeados, a taxa de um bloco
+  // isolado subestima o envio e o tempo restante sairia irreal.
+  let uploadedBytes = state.parts.reduce((sum, part) => sum + (part.sizeBytes ?? 0), 0);
+  const inFlightBytes = new Map<number, number>();
+
+  let aggLastAt = 0;
+  let aggLastLoaded = 0;
+  let aggRate = 0;
+
+  let lastEmitAt = 0;
+
+  /**
+   * `force` emite mesmo dentro da janela de throttle (conclusão de bloco, erro) —
+   * assim o painel sempre vê o fecho de cada bloco.
+   *
+   * Com blocos encadeados os eventos de progresso chegam 3× mais rápido; sem
+   * throttle isso vira uma enxurrada de setState do React durante o envio.
+   */
+  const report = (force = false) => {
     if (!onProgress) return;
 
+    const inFlight = [...inFlightBytes.values()].reduce((sum, value) => sum + value, 0);
     const sent = Math.min(file.size, uploadedBytes + inFlight);
-    const remaining = Math.max(0, file.size - sent);
+    const now = performance.now();
 
-    // O ETA do BLOCO não serve para o arquivo: aqui a velocidade medida num bloco
-    // (válida como taxa) é aplicada ao total restante do arquivo.
-    const etaSeconds =
-      bytesPerSecond && bytesPerSecond > 0 && remaining > 0
-        ? remaining / bytesPerSecond
-        : undefined;
+    if (aggLastAt > 0) {
+      const elapsed = (now - aggLastAt) / 1000;
+      const delta = sent - aggLastLoaded;
+
+      // Só reamostra em janelas úteis: eventos em rajada distorceriam a média.
+      if (elapsed >= 0.4 && delta > 0) {
+        const instant = delta / elapsed;
+        aggRate = aggRate > 0 ? aggRate * 0.7 + instant * 0.3 : instant;
+        aggLastAt = now;
+        aggLastLoaded = sent;
+      }
+    } else {
+      aggLastAt = now;
+      aggLastLoaded = sent;
+    }
+
+    if (!force && lastEmitAt > 0 && now - lastEmitAt < PROGRESS_THROTTLE_MS) return;
+    lastEmitAt = now;
+
+    const remaining = Math.max(0, file.size - sent);
+    const etaSeconds = aggRate > 0 && remaining > 0 ? remaining / aggRate : undefined;
 
     onProgress({
       loaded: sent,
       total: file.size,
       percent: file.size > 0 ? Math.min(100, Math.round((sent / file.size) * 100)) : 0,
-      bytesPerSecond: bytesPerSecond && bytesPerSecond > 0 ? bytesPerSecond : undefined,
+      bytesPerSecond: aggRate > 0 ? aggRate : undefined,
       etaSeconds,
     });
   };
 
-  // Velocidade da última amostra: mantém o ETA estável entre blocos (cada bloco
-  // cria um medidor novo, então no início dele ainda não há taxa medida).
-  let lastMeasuredRate: number | undefined;
+  report(true);
 
-  report();
+  // ── Plano de blocos (persistido) ──────────────────────────────────────
+  const ranges: PartRange[] =
+    Array.isArray(state.ranges) && state.ranges.length > 0 ? [...state.ranges] : [];
 
-  const pending = Array.from({ length: totalParts }, (_, index) => index + 1).filter(
-    (partNumber) => !completed.has(partNumber),
-  );
+  if (ranges.length === 0) {
+    for (let start = 0, partNumber = 1; start < file.size; partNumber++) {
+      const end = Math.min(start + sessionPartSize, file.size);
+      ranges.push({ partNumber, start, end });
+      start = end;
+    }
 
-  // 3) Envia bloco a bloco direto na URL pré-assinada do storage.
-  if (!alreadyCompleted && pending.length > 0) {
+    state.ranges = ranges;
+    writeMultipartState(stateKey, state);
+  }
+
+  const uploadedNumbers = new Set(state.parts.map((part) => part.partNumber));
+  const pendingRanges = ranges.filter((range) => !uploadedNumbers.has(range.partNumber));
+
+  // 3) Envia os blocos ENCADEADOS (N em paralelo) direto nas URLs assinadas.
+  if (!alreadyCompleted && pendingRanges.length > 0) {
+    // AbortController PRÓPRIO do envio: herda o cancelamento do usuário E corta os
+    // XHRs em voo quando um bloco falha. Sem isso os workers sobreviventes
+    // continuariam emitindo progresso e "ressuscitariam" o painel depois do erro.
+    const run = new AbortController();
+    if (signal) {
+      if (signal.aborted) run.abort(signal.reason);
+      else signal.addEventListener('abort', () => run.abort(signal.reason), { once: true });
+    }
+    const runSignal = run.signal;
+
     const refreshUrl = async (partNumber: number): Promise<string> => {
-      const refreshed = await requestPartUrls(state!.uploadId, [partNumber], signal);
+      const refreshed = await requestPartUrls(state!.uploadId, [partNumber], runSignal);
       const url = refreshed.get(partNumber);
       if (!url) throw new Error(`Não foi possível renovar a URL do bloco ${partNumber}.`);
       return url;
     };
 
-    // As URLs assinadas valem 60 min: pedir em LOTE pouco antes de enviar evita
-    // que uma parte no fim de um arquivo de vários GiB pegue URL expirada.
-    try {
-    for (let offset = 0; offset < pending.length; offset += PART_URL_BATCH) {
-      const chunk = pending.slice(offset, offset + PART_URL_BATCH);
-      const urls = await requestPartUrls(state.uploadId, chunk, signal);
+    // As URLs assinadas valem 1 HORA e são REAPROVEITADAS: o envio do arquivo
+    // inteiro usa a mesma leva, pré-assinada em LOTES de 50 — em vez de uma
+    // chamada por bloco. Numa rede rápida esse era um custo por bloco; e como a
+    // validade é de 1 h, o lote cobre o envio inteiro. Se um bloco falhar por
+    // expiração, o retry assina só aquele de novo.
+    const URL_PREFETCH_BATCH = 50;
+    const urlCache = new Map<number, string>();
 
-      for (const partNumber of chunk) {
-        const start = (partNumber - 1) * partSize;
-        const end = Math.min(start + partSize, file.size);
-        const blob = file.slice(start, end);
+    const prefetchUrls = async (from: number, count: number): Promise<void> => {
+      const chunk = pendingRanges
+        .slice(from, from + count)
+        .map((range) => range.partNumber)
+        .filter((partNumber) => !urlCache.has(partNumber));
+      if (chunk.length === 0) return;
 
-        const url = urls.get(partNumber) ?? (await refreshUrl(partNumber));
+      try {
+        const urls = await requestPartUrls(state.uploadId, chunk, runSignal);
+        urls.forEach((url, partNumber) => urlCache.set(partNumber, url));
+      } catch {
+        // Pré-assinar não é crítico: getUrl busca sob demanda (e um 409 de
+        // "sessão já concluída" continua subindo pelo fluxo principal).
+      }
+    };
+
+    const getUrl = async (partNumber: number): Promise<string> => {
+      const cached = urlCache.get(partNumber);
+      if (cached) return cached;
+
+      const url = await refreshUrl(partNumber);
+      urlCache.set(partNumber, url);
+      return url;
+    };
+
+    // Duas levas prontas antes de começar (para o 1º bloco não esperar) e o resto
+    // sendo assinado em segundo plano, à frente dos workers.
+    await prefetchUrls(0, URL_PREFETCH_BATCH * 2);
+    let feedIndex = URL_PREFETCH_BATCH * 2;
+
+    const queue = [...pendingRanges];
+    const workerCount = Math.max(1, Math.min(PART_CONCURRENCY, queue.length));
+    let failed = false;
+
+    const feedUrls = async (): Promise<void> => {
+      while (!failed && !runSignal.aborted && feedIndex < pendingRanges.length) {
+        await prefetchUrls(feedIndex, URL_PREFETCH_BATCH);
+        feedIndex += URL_PREFETCH_BATCH;
+      }
+    };
+
+    void feedUrls();
+
+    const runWorker = async (): Promise<void> => {
+      while (!failed && !runSignal.aborted) {
+        const range = queue.shift();
+        if (!range) return;
+
+        const blob = file.slice(range.start, range.end);
 
         // Progresso do bloco não pode REGREDIR numa retentativa (nova tentativa
         // recomeça em 0): guarda o máximo já enviado deste bloco.
         let partSent = 0;
 
-        const uploaded = await uploadPartWithRetry(
-          partNumber,
-          url,
-          blob,
-          refreshUrl,
-          (loaded, _total, bytesPerSecond) => {
-            partSent = Math.max(partSent, loaded);
-            if (bytesPerSecond && bytesPerSecond > 0) lastMeasuredRate = bytesPerSecond;
-            report(partSent, lastMeasuredRate);
-          },
-          signal,
-        );
+        let uploaded;
+        try {
+          uploaded = await uploadPartWithRetry(
+            range.partNumber,
+            await getUrl(range.partNumber),
+            blob,
+            refreshUrl,
+            (loaded) => {
+              partSent = Math.max(partSent, loaded);
+              inFlightBytes.set(range.partNumber, partSent);
+              report();
+            },
+            runSignal,
+          );
+        } catch (error) {
+          // Bloco falhou/cancelado: some com o "em voo" dele, senão o progresso
+          // fica inflado e o painel parece travado num total que não existe.
+          inFlightBytes.delete(range.partNumber);
+          report(true);
+          throw error;
+        }
 
         // Sem ETag na resposta (storage externo atrás de CORS): busca no storage.
         if (!uploaded.etag) {
-          uploaded.etag = await fetchPartEtagFromStorage(state.uploadId, partNumber, signal);
+          uploaded.etag = await fetchPartEtagFromStorage(state.uploadId, range.partNumber, runSignal);
           if (!uploaded.etag) {
+            inFlightBytes.delete(range.partNumber);
             throw new Error(
-              `O bloco ${partNumber} subiu, mas não foi possível confirmar o ETag no storage. Tente novamente.`,
+              `O bloco ${range.partNumber} subiu, mas não foi possível confirmar o ETag no storage. Tente novamente.`,
             );
           }
         }
 
         state.parts.push(uploaded);
         state.parts.sort((a, b) => a.partNumber - b.partNumber);
+
+        // IMPORTANTE: somar aos concluídos ANTES de remover o em-voo. Se remover
+        // primeiro, o progresso cai (barra volta) durante a confirmação do ETag.
         uploadedBytes += uploaded.sizeBytes;
+        inFlightBytes.delete(range.partNumber);
+
         // Gravado a CADA bloco: se a página cair, o próximo envio retoma daqui.
         writeMultipartState(stateKey, state);
-        report(0, lastMeasuredRate);
+        report(true);
       }
-    }
+    };
+
+    try {
+      await Promise.all(Array.from({ length: workerCount }, () => runWorker()));
     } catch (error) {
+      // Um bloco falhou: para de puxar novos blocos e CORTA os XHRs em voo, para
+      // nenhum progresso atrasado mexer no painel depois do erro.
+      failed = true;
+      queue.length = 0;
+      run.abort('failed');
+
       // 409 = outra aba/fluxo já concluiu este upload: não é erro, o complete
       // abaixo é idempotente e devolve o asset.
       if (!(error instanceof ApiError && error.status === 409)) throw error;
