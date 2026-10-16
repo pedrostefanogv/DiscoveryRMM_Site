@@ -319,22 +319,25 @@ describe('AgentList — lixeira e filtros', () => {
     expect(screen.getByText('Página 2 de 2')).toBeTruthy();
   });
 
-  it('recolhe campo customizado e ordenação na barra principal', () => {
+  it('recolhe labels, campo customizado e ordenação na barra principal', () => {
     renderPage();
 
-    // Barra principal: sem "Todos os campos" e sem seletor de ordenação.
+    // Barra principal: só busca e filtros de uso frequente.
+    expect(screen.queryByDisplayValue('Todas as labels')).toBeNull();
     expect(screen.queryByDisplayValue('Todos os campos')).toBeNull();
     expect(screen.queryByDisplayValue('Cliente')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Ordenação crescente' })).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: /Mais filtros/ }));
 
+    expect(screen.getByDisplayValue('Todas as labels')).toBeTruthy();
     expect(screen.getByDisplayValue('Todos os campos')).toBeTruthy();
     expect(screen.getByDisplayValue('Cliente')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Ordenação crescente' })).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: /Mais filtros/ }));
 
+    expect(screen.queryByDisplayValue('Todas as labels')).toBeNull();
     expect(screen.queryByDisplayValue('Todos os campos')).toBeNull();
     expect(screen.queryByDisplayValue('Cliente')).toBeNull();
   });
@@ -383,11 +386,23 @@ describe('AgentList — lixeira e filtros', () => {
   it('a contagem da label bate com a lista exibida', async () => {
     renderPage();
 
+    // A label agora vive no painel de filtros avançados.
+    fireEvent.click(screen.getByRole('button', { name: /Mais filtros/ }));
     const labelSelect = screen.getByDisplayValue('Todas as labels');
     fireEvent.change(labelSelect, { target: { value: 'Windows' } });
 
+    // O filtro vale mesmo com o painel recolhido e conta no badge.
+    fireEvent.click(screen.getByRole('button', { name: /Mais filtros/ }));
+    expect(screen.queryByDisplayValue('Todas as labels')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Mais filtros (1 ativo)' })).toBeTruthy();
+
     expect(await screen.findByText(/Label "Windows": 2 agente\(s\)/)).toBeTruthy();
     expect(screen.getByText(/2 agentes exibidos/)).toBeTruthy();
+
+    // "Limpar avançados" também limpa a label (e some o resumo).
+    fireEvent.click(screen.getByRole('button', { name: /Mais filtros/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Limpar avançados' }));
+    expect(screen.queryByText(/Label "Windows"/)).toBeNull();
   });
 });
 

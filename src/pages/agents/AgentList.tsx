@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useLayoutEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Monitor, Wifi, WifiOff, LayoutGrid, List, Bug, Trash2, ShieldCheck, ArrowUp, ArrowDown, RefreshCw, Move, RotateCcw, Power, Zap, ChevronRight, ChevronDown, Bell, ArchiveRestore, MessageSquare, SlidersHorizontal } from 'lucide-react';
+import { Monitor, Wifi, WifiOff, LayoutGrid, List, Bug, Trash2, ShieldCheck, ArrowUp, ArrowDown, RefreshCw, Move, RotateCcw, Power, Zap, ChevronRight, Bell, ArchiveRestore, MessageSquare, Filter } from 'lucide-react';
 import { useQueries } from '@tanstack/react-query';
 import { useAgentLabelUsage, useAgentIdsByLabel, useAgentLabelsByAgentIds } from '@/hooks/useAgentLabels';
 import { useAgentCustomFieldMap } from '@/hooks/useCustomFields';
@@ -787,8 +787,9 @@ export default function AgentList() {
   ];
 
   const activeSortLabel = sortOptions.find((option) => option.value === sortBy)?.label ?? 'Cliente';
-  // Badge do botão "Mais filtros": conta só filtros avançados ativos.
-  const advancedFilterCount = filterCustomField ? 1 : 0;
+  // Badge do botão de filtros avançados: conta os filtros ativos do painel
+  // (campo customizado + label).
+  const advancedFilterCount = (filterCustomField ? 1 : 0) + (filterLabel ? 1 : 0);
 
   const isLoadingAgents = clients.isLoading || agentQueries.some(q => q.isLoading && !q.data);
 
@@ -899,40 +900,30 @@ export default function AgentList() {
               setContextMenu(null);
             }}
           />
-          <Select
-            fullWidth={false}
-            options={[
-              { value: '', label: 'Todas as labels' },
-              ...distinctLabels.map(label => {
-                const count = labelUsage.data?.find(usage => usage.label === label)?.agentCount;
-                return { value: label, label: count ? `${label} (${count})` : label };
-              }),
-            ]}
-            value={filterLabel}
-            onChange={e => setFilterLabel(e.target.value)}
-            disabled={showDeleted}
-          />
           {!showDeleted && (
-            /* aria-label com a contagem: sem ele o badge colado ao texto vira
-               "Mais filtros1" para leitores de tela. */
+            /* Botão só com ícone de funil: o título/aria-label carregam o
+               significado e o badge indica quantos filtros avançados estão ativos. */
             <button
               type="button"
               onClick={() => setShowAdvancedFilters(current => !current)}
               aria-expanded={showAdvancedFilters}
               aria-controls="agent-advanced-filters"
+              title="Mais filtros"
               aria-label={advancedFilterCount > 0
                 ? `Mais filtros (${advancedFilterCount} ativo${advancedFilterCount > 1 ? 's' : ''})`
                 : 'Mais filtros'}
-              className={`flex h-10 shrink-0 items-center gap-2 rounded-xl border px-3 text-sm transition-colors ${
+              className={`relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border transition-colors ${
                 showAdvancedFilters
                   ? 'border-primary/40 bg-primary/10 text-primary'
                   : 'border-border bg-surface-light text-foreground hover:bg-surface-hover'
               }`}
             >
-              <SlidersHorizontal className="h-4 w-4" />
-              Mais filtros
-              {advancedFilterCount > 0 && <Badge>{advancedFilterCount}</Badge>}
-              <ChevronDown className={`h-4 w-4 transition-transform ${showAdvancedFilters ? 'rotate-180' : ''}`} />
+              <Filter className="h-4 w-4" />
+              {advancedFilterCount > 0 && (
+                <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold leading-none text-white">
+                  {advancedFilterCount}
+                </span>
+              )}
             </button>
           )}
         </div>
@@ -960,13 +951,25 @@ export default function AgentList() {
         </div>
       </div>
 
-      {/* Filtros avançados (recolhidos por padrão): campo customizado e
+      {/* Filtros avançados (recolhidos por padrão): labels, campo customizado e
           ordenação só aparecem aqui, liberando espaço na barra principal. */}
       {!showDeleted && showAdvancedFilters && (
         <div
           id="agent-advanced-filters"
           className="flex flex-wrap items-start gap-3 rounded-xl border border-border bg-surface-light/60 p-3"
         >
+          <Select
+            fullWidth={false}
+            options={[
+              { value: '', label: 'Todas as labels' },
+              ...distinctLabels.map(label => {
+                const count = labelUsage.data?.find(usage => usage.label === label)?.agentCount;
+                return { value: label, label: count ? `${label} (${count})` : label };
+              }),
+            ]}
+            value={filterLabel}
+            onChange={e => setFilterLabel(e.target.value)}
+          />
           <Select
             fullWidth={false}
             options={[{ value: '', label: 'Todos os campos' }, ...customFieldFilterOptions]}
@@ -1000,6 +1003,7 @@ export default function AgentList() {
           <button
             type="button"
             onClick={() => {
+              setFilterLabel('');
               setFilterCustomField('');
               setFilterCustomFieldValue('');
               setSortBy('client');
