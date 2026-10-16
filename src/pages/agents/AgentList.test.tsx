@@ -7,12 +7,25 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
  * confirmação por digitação e coerência da contagem de labels com a lista.
  */
 
-const { restoreMock, purgeMock, deleteMock, deletedParamsMock, heartbeatsMock } = vi.hoisted(() => ({
+const { restoreMock, purgeMock, deleteMock, deletedParamsMock, heartbeatsMock, statusFlag, customFieldMapMock } = vi.hoisted(() => ({
   restoreMock: vi.fn(),
   purgeMock: vi.fn(),
   deleteMock: vi.fn(),
   deletedParamsMock: vi.fn(),
   heartbeatsMock: new Map<string, unknown>(),
+  // Controla o status online dos cards/menu em cada teste.
+  statusFlag: { online: true },
+  // Mapa de campos customizados real: permite exercitar o filtro avançado.
+  customFieldMapMock: {
+    definitions: [
+      { definitionId: 'd1', name: 'anydesk', label: 'ID do anydesk', dataType: 0, allowAgentWrite: true },
+      { definitionId: 'd2', name: 'ativo', label: 'Ativo', dataType: 3, allowAgentWrite: false },
+    ],
+    values: [
+      { definitionId: 'd1', agentId: 'a1', valueJson: '"123 456 789"' },
+      { definitionId: 'd1', agentId: 'a2', valueJson: '"999 888 777"' },
+    ],
+  },
 }));
 
 const activeAgent = {
@@ -94,8 +107,8 @@ vi.mock('@/hooks/useSites', () => ({
 }));
 
 vi.mock('@/hooks/useCustomFields', () => ({
-  // O filtro por campo customizado é opcional; sem campo selecionado não busca.
-  useAgentCustomFieldMap: () => ({ data: undefined, isLoading: false, isError: false }),
+  // Mapa disponível para exercitar o filtro por campo customizado (avançado).
+  useAgentCustomFieldMap: () => ({ data: customFieldMapMock, isLoading: false, isError: false }),
 }));
 
 vi.mock('@/hooks/useAgentLabels', () => ({
@@ -110,10 +123,11 @@ vi.mock('@/stores/heartbeatStore', () => ({
 }));
 
 vi.mock('@/hooks/useNowTick', () => ({ useNowTick: () => Date.now() }));
-// Mantém os agentes de teste online para exercitar o submenu "Energia".
+// Online por padrão (exercita o submenu "Energia"); os testes de Wake-on-LAN
+// ligam statusFlag.online = false para ver o ramo offline do menu.
 vi.mock('@/utils/agentStatus', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/utils/agentStatus')>();
-  return { ...actual, isAgentOnlineNow: () => true };
+  return { ...actual, isAgentOnlineNow: () => statusFlag.online };
 });
 vi.mock('@/auth/authorization', () => ({ useAuthorization: () => ({ hasAnyPermission: () => true }) }));
 vi.mock('@/hooks/useAgentAlerts', () => ({ useSendAgentNotification: () => ({ mutateAsync: vi.fn(), isPending: false }) }));
@@ -150,6 +164,7 @@ describe('AgentList — lixeira e filtros', () => {
 
   afterEach(() => {
     heartbeatsMock.clear();
+    statusFlag.online = true;
     cleanup();
   });
 
@@ -304,6 +319,67 @@ describe('AgentList — lixeira e filtros', () => {
     expect(screen.getByText('Página 2 de 2')).toBeTruthy();
   });
 
+  it('recolhe campo customizado e ordenação na barra principal', () => {
+    renderPage();
+
+    // Barra principal: sem "Todos os campos" e sem seletor de ordenação.
+    expect(screen.queryByDisplayValue('Todos os campos')).toBeNull();
+    expect(screen.queryByDisplayValue('Cliente')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Ordenação crescente' })).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: /Mais filtros/ }));
+
+    expect(screen.getByDisplayValue('Todos os campos')).toBeTruthy();
+    expect(screen.getByDisplayValue('Cliente')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Ordenação crescente' })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: /Mais filtros/ }));
+
+    expect(screen.queryByDisplayValue('Todos os campos')).toBeNull();
+    expect(screen.queryByDisplayValue('Cliente')).toBeNull();
+  });
+
+  it('aplica o filtro avançado por campo mesmo com o painel recolhido', () => {
+    renderPage();
+
+    fireEvent.click(screen.getByRole('button', { name: /Mais filtros/ }));
+    fireEvent.change(screen.getByDisplayValue('Todos os campos'), { target: { value: 'd1' } });
+    fireEvent.change(screen.getByPlaceholderText('Valor do campo...'), { target: { value: '123 456' } });
+
+    // Só ATIVO-01 tem o valor "123 456 789" no campo d1.
+    expect(screen.getByText('ATIVO-01')).toBeTruthy();
+    expect(screen.queryByText('ATIVO-02')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Mais filtros (1 ativo)' })).toBeTruthy();
+
+    // Recolher o painel não pode desligar o filtro.
+    fireEvent.click(screen.getByRole('button', { name: /Mais filtros/ }));
+
+    expect(screen.queryByPlaceholderText('Valor do campo...')).toBeNull();
+    expect(screen.getByText(/Campo "ID do anydesk" = "123 456"/)).toBeTruthy();
+    expect(screen.getByText('ATIVO-01')).toBeTruthy();
+    expect(screen.queryByText('ATIVO-02')).toBeNull();
+  });
+
+  it('mantém a ordenação aplicada ao recolher o painel avançado', () => {
+    renderPage();
+
+    expect(screen.getByText(/Ordenação: Cliente \(crescente\)/)).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: /Mais filtros/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Ordenação crescente' }));
+    expect(screen.getByText(/Ordenação: Cliente \(decrescente\)/)).toBeTruthy();
+
+    // Recolhe: o botão some, mas a ordenação escolhida continua valendo.
+    fireEvent.click(screen.getByRole('button', { name: /Mais filtros/ }));
+    expect(screen.queryByRole('button', { name: 'Ordenação decrescente' })).toBeNull();
+    expect(screen.getByText(/Ordenação: Cliente \(decrescente\)/)).toBeTruthy();
+
+    // Reabre e "Limpar avançados" volta ao padrão.
+    fireEvent.click(screen.getByRole('button', { name: /Mais filtros/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Limpar avançados' }));
+    expect(screen.getByText(/Ordenação: Cliente \(crescente\)/)).toBeTruthy();
+  });
+
   it('a contagem da label bate com a lista exibida', async () => {
     renderPage();
 
@@ -323,7 +399,10 @@ describe('AgentList — menu de contexto e submenu de energia', () => {
     deletedParamsMock.mockReset();
   });
 
-  afterEach(() => cleanup());
+  afterEach(() => {
+    statusFlag.online = true;
+    cleanup();
+  });
 
   function openContextMenuFor(name: string, clientX: number, clientY: number) {
     const card = screen.getByText(name).closest('[role="button"]');
@@ -353,6 +432,28 @@ describe('AgentList — menu de contexto e submenu de energia', () => {
 
     expect(screen.queryByText('Reiniciar')).toBeNull();
     expect(screen.queryByText('Desligar')).toBeNull();
+  });
+
+  it('não oferece "Ligar" com o agente online (só Reiniciar/Desligar)', () => {
+    renderPage();
+
+    openContextMenuFor('ATIVO-01', 40, 40);
+    fireEvent.mouseOver(energyTrigger());
+
+    expect(screen.getByText('Reiniciar')).toBeTruthy();
+    expect(screen.getByText('Desligar')).toBeTruthy();
+    expect(screen.queryByText('Ligar')).toBeNull();
+  });
+
+  it('com o agente offline oferece Wake-on-LAN e nenhuma ação de energia', () => {
+    statusFlag.online = false;
+    renderPage();
+
+    openContextMenuFor('ATIVO-01', 40, 40);
+
+    expect(screen.getByText('Wake-on-LAN')).toBeTruthy();
+    expect(screen.queryByText('Energia')).toBeNull();
+    expect(screen.queryByText('Ligar')).toBeNull();
   });
 
   it('fecha o submenu de energia quando o menu de contexto fecha', () => {

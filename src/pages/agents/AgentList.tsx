@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useLayoutEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Monitor, Wifi, WifiOff, LayoutGrid, List, Bug, Trash2, ShieldCheck, ArrowUp, ArrowDown, RefreshCw, Move, RotateCcw, Power, Zap, ChevronRight, Bell, ArchiveRestore, MessageSquare } from 'lucide-react';
+import { Monitor, Wifi, WifiOff, LayoutGrid, List, Bug, Trash2, ShieldCheck, ArrowUp, ArrowDown, RefreshCw, Move, RotateCcw, Power, Zap, ChevronRight, ChevronDown, Bell, ArchiveRestore, MessageSquare, SlidersHorizontal } from 'lucide-react';
 import { useQueries } from '@tanstack/react-query';
 import { useAgentLabelUsage, useAgentIdsByLabel, useAgentLabelsByAgentIds } from '@/hooks/useAgentLabels';
 import { useAgentCustomFieldMap } from '@/hooks/useCustomFields';
@@ -144,6 +144,9 @@ export default function AgentList() {
   const [filterCustomFieldValue, setFilterCustomFieldValue] = useState('');
   const [sortBy, setSortBy] = useState<AgentSortField>('client');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
+  // Filtros avançados (campo customizado + ordenação) ficam recolhidos por
+  // padrão: a barra principal mostra só busca e filtros de uso frequente.
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [viewMode, setViewMode] = useState<'card' | 'list'>('card');
   const [contextMenu, setContextMenu] = useState<ContextMenuState>(null);
   const [remoteDebugAgentId, setRemoteDebugAgentId] = useState<string | null>(null);
@@ -174,7 +177,7 @@ export default function AgentList() {
   const [notificationAgent, setNotificationAgent] = useState<AgentWithClient | null>(null);
   const contextMenuRef = useRef<HTMLDivElement | null>(null);
   const powerSubmenuRef = useRef<HTMLDivElement | null>(null);
-  // Submenu de energia ("Ligar / Reiniciar / Desligar") aberto ao lado via hover.
+  // Submenu de energia ("Reiniciar / Desligar") aberto ao lado via hover.
   const [powerSubmenuOpen, setPowerSubmenuOpen] = useState(false);
   // Retângulo do item "Energia" que ancora o submenu no viewport (position: fixed).
   const [powerSubmenuAnchor, setPowerSubmenuAnchor] = useState<{ top: number; left: number; right: number } | null>(null);
@@ -784,6 +787,8 @@ export default function AgentList() {
   ];
 
   const activeSortLabel = sortOptions.find((option) => option.value === sortBy)?.label ?? 'Cliente';
+  // Badge do botão "Mais filtros": conta só filtros avançados ativos.
+  const advancedFilterCount = filterCustomField ? 1 : 0;
 
   const isLoadingAgents = clients.isLoading || agentQueries.some(q => q.isLoading && !q.data);
 
@@ -907,38 +912,29 @@ export default function AgentList() {
             onChange={e => setFilterLabel(e.target.value)}
             disabled={showDeleted}
           />
-          <Select
-            fullWidth={false}
-            options={[{ value: '', label: 'Todos os campos' }, ...customFieldFilterOptions]}
-            value={filterCustomField}
-            onChange={e => {
-              setFilterCustomField(e.target.value);
-              setFilterCustomFieldValue('');
-            }}
-            disabled={showDeleted}
-          />
-          <Input
-            placeholder="Valor do campo..."
-            value={filterCustomFieldValue}
-            onChange={e => setFilterCustomFieldValue(e.target.value)}
-            disabled={!filterCustomField || showDeleted}
-          />
-          <Select
-            fullWidth={false}
-            options={sortOptions}
-            value={sortBy}
-            disabled={showDeleted}
-            onChange={e => setSortBy(e.target.value as AgentSortField)}
-          />
-          <button
-            type="button"
-            onClick={() => setSortDirection((current) => (current === 'asc' ? 'desc' : 'asc'))}
-            className="flex h-10 w-12 shrink-0 items-center justify-center rounded-xl border border-border bg-surface-light text-foreground transition-colors hover:bg-surface-hover"
-            title={sortDirection === 'asc' ? 'Ordenação crescente' : 'Ordenação decrescente'}
-            aria-label={sortDirection === 'asc' ? 'Ordenação crescente' : 'Ordenação decrescente'}
-          >
-            {sortDirection === 'asc' ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />}
-          </button>
+          {!showDeleted && (
+            /* aria-label com a contagem: sem ele o badge colado ao texto vira
+               "Mais filtros1" para leitores de tela. */
+            <button
+              type="button"
+              onClick={() => setShowAdvancedFilters(current => !current)}
+              aria-expanded={showAdvancedFilters}
+              aria-controls="agent-advanced-filters"
+              aria-label={advancedFilterCount > 0
+                ? `Mais filtros (${advancedFilterCount} ativo${advancedFilterCount > 1 ? 's' : ''})`
+                : 'Mais filtros'}
+              className={`flex h-10 shrink-0 items-center gap-2 rounded-xl border px-3 text-sm transition-colors ${
+                showAdvancedFilters
+                  ? 'border-primary/40 bg-primary/10 text-primary'
+                  : 'border-border bg-surface-light text-foreground hover:bg-surface-hover'
+              }`}
+            >
+              <SlidersHorizontal className="h-4 w-4" />
+              Mais filtros
+              {advancedFilterCount > 0 && <Badge>{advancedFilterCount}</Badge>}
+              <ChevronDown className={`h-4 w-4 transition-transform ${showAdvancedFilters ? 'rotate-180' : ''}`} />
+            </button>
+          )}
         </div>
         {/* Lixeira + toggle card / lista */}
         <div className="flex shrink-0 items-center gap-2">
@@ -963,6 +959,58 @@ export default function AgentList() {
           )}
         </div>
       </div>
+
+      {/* Filtros avançados (recolhidos por padrão): campo customizado e
+          ordenação só aparecem aqui, liberando espaço na barra principal. */}
+      {!showDeleted && showAdvancedFilters && (
+        <div
+          id="agent-advanced-filters"
+          className="flex flex-wrap items-start gap-3 rounded-xl border border-border bg-surface-light/60 p-3"
+        >
+          <Select
+            fullWidth={false}
+            options={[{ value: '', label: 'Todos os campos' }, ...customFieldFilterOptions]}
+            value={filterCustomField}
+            onChange={e => {
+              setFilterCustomField(e.target.value);
+              setFilterCustomFieldValue('');
+            }}
+          />
+          <Input
+            placeholder="Valor do campo..."
+            value={filterCustomFieldValue}
+            onChange={e => setFilterCustomFieldValue(e.target.value)}
+            disabled={!filterCustomField}
+          />
+          <Select
+            fullWidth={false}
+            options={sortOptions}
+            value={sortBy}
+            onChange={e => setSortBy(e.target.value as AgentSortField)}
+          />
+          <button
+            type="button"
+            onClick={() => setSortDirection((current) => (current === 'asc' ? 'desc' : 'asc'))}
+            className="flex h-10 w-12 shrink-0 items-center justify-center rounded-xl border border-border bg-surface-light text-foreground transition-colors hover:bg-surface-hover"
+            title={sortDirection === 'asc' ? 'Ordenação crescente' : 'Ordenação decrescente'}
+            aria-label={sortDirection === 'asc' ? 'Ordenação crescente' : 'Ordenação decrescente'}
+          >
+            {sortDirection === 'asc' ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setFilterCustomField('');
+              setFilterCustomFieldValue('');
+              setSortBy('client');
+              setSortDirection('asc');
+            }}
+            className="flex h-10 shrink-0 items-center rounded-xl px-3 text-sm text-muted transition-colors hover:bg-surface-hover hover:text-foreground"
+          >
+            Limpar avançados
+          </button>
+        </div>
+      )}
 
       {!showDeleted && filterCustomField ? (
         <p className="text-xs text-muted">
@@ -1122,6 +1170,8 @@ export default function AgentList() {
               setFilterStatus('all');
               setFilterProvisioning('all');
               setFilterLabel('');
+              setFilterCustomField('');
+              setFilterCustomFieldValue('');
             },
           } : undefined}
         />
@@ -1277,15 +1327,6 @@ export default function AgentList() {
                     >
                       <Power className="h-4 w-4" />
                       Desligar
-                    </button>
-                    <button
-                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-success transition-colors hover:bg-success/10 disabled:cursor-not-allowed disabled:opacity-40"
-                      disabled
-                      title="Disponível em breve"
-                    >
-                      <Zap className="h-4 w-4" />
-                      Ligar
-                      <Badge>em breve</Badge>
                     </button>
                   </div>
                 )}

@@ -320,7 +320,7 @@ export default function AgentDetail() {
     navigate(fallback, { replace: true });
   }, [navigate]);
   const [isPowerMenuOpen, setIsPowerMenuOpen] = useState(false);
-  // Submenu de energia ("Ligar / Reiniciar / Desligar") aberto ao lado via hover.
+  // Submenu de energia ("Reiniciar / Desligar") aberto ao lado via hover.
   const [powerSubmenuOpen, setPowerSubmenuOpen] = useState(false);
   const [powerAction, setPowerAction] = useState<'restart' | 'shutdown' | null>(null);
   const [wakeOnLanModalOpen, setWakeOnLanModalOpen] = useState(false);
@@ -1592,16 +1592,9 @@ export default function AgentDetail() {
                         <Power className="h-4 w-4" />
                         Desligar
                       </button>
-                      <button
-                        type="button"
-                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-success transition-colors hover:bg-success/10 disabled:cursor-not-allowed disabled:opacity-40"
-                        disabled
-                        title="Disponível em breve"
-                      >
-                        <Zap className="h-4 w-4" />
-                        Ligar
-                        <span className="ml-auto rounded bg-surface-hover px-1.5 py-0.5 text-[10px] text-muted-foreground">em breve</span>
-                      </button>
+                      {/* "Ligar" não aparece com o agente online: o despertar
+                          só faz sentido desligado, onde o item Wake-on-LAN é
+                          oferecido no lugar do submenu de energia. */}
                     </div>
                   )}
                 </div>

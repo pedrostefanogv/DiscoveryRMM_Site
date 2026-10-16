@@ -225,13 +225,8 @@ export function AgentContextMenu({ agent, now, position, onClose }: AgentContext
           danger: true,
           onClick: () => setPowerActionAgent({ agent, action: 'shutdown' }),
         },
-        {
-          key: 'wake',
-          label: 'Ligar',
-          icon: <Zap className="h-4 w-4" />,
-          disabled: true,
-          hint: 'em breve',
-        },
+        // "Ligar" não aparece com o agente online: o despertar só faz sentido
+        // com a máquina desligada, onde o item "Wake-on-LAN" é oferecido abaixo.
       ],
     });
   } else {

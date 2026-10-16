@@ -163,7 +163,8 @@ export default function RemoteFiles({
   const refreshDrives = useCallback(async () => {
     try {
       const resp = await sendRequest('drives', '');
-      if (resp.success && Array.isArray(resp.drives)) setDrives(resp.drives);
+      if (!resp.success) return;
+      setDrives(Array.isArray(resp.drives) ? resp.drives : []);
     } catch { /* noop */ }
   }, [sendRequest]);
 
@@ -245,8 +246,10 @@ export default function RemoteFiles({
           setCurrentPath(isRootPath.current); // dispara o load do caminho correto
         }
       }
-      // Unidades lógicas para o seletor de disco (ausente em sandbox restrito).
-      if (Array.isArray(info?.drives)) setDrives(info.drives);
+      // Unidades lógicas para o seletor de disco. Campo ausente = agent
+      // antigo (não mexe no que já existe); null/[] explícito = sessão sem
+      // troca de disco (limpa para não oferecer unidade bloqueada).
+      if (info && 'drives' in info) setDrives(Array.isArray(info.drives) ? info.drives : []);
     });
     return off;
   }, [onReady, currentPath]);
