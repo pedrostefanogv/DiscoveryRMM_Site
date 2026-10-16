@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { ArrowDown, ArrowUp, ClipboardPaste, Copy, Download, FileArchive, FolderPlus, PackageOpen, Pencil, RefreshCw, Scissors, Trash, Upload, X } from 'lucide-react';
-import { useFilesStream, decodeFileData, type FilesResponse, type FilesReadyInfo } from './useFilesStream';
+import { ArrowDown, ArrowUp, ChevronDown, ClipboardPaste, Copy, Download, FileArchive, FolderPlus, HardDrive, PackageOpen, Pencil, RefreshCw, Scissors, Trash, Upload, X } from 'lucide-react';
+import { useFilesStream, decodeFileData, type DriveInfo, type FilesResponse, type FilesReadyInfo } from './useFilesStream';
 import { FileIcon } from './fileIcons';
 
 interface FileEntry {
@@ -13,6 +13,22 @@ interface FileEntry {
   isLink?: boolean;
   /** Alvo do link quando legível. */
   linkTarget?: string;
+  /** True se o item tem atributo HIDDEN no Windows (linha/ícone esmaecidos). */
+  isHidden?: boolean;
+}
+
+/** Rótulo amigável do tipo de unidade devolvido pelo agent. */
+const DRIVE_TYPE_LABEL: Record<string, string> = {
+  fixed: 'Disco local',
+  removable: 'Removível',
+  network: 'Unidade de rede',
+  cdrom: 'CD/DVD',
+  ramdisk: 'RAM disk',
+  unknown: 'Unidade',
+};
+
+function driveTypeLabel(type?: string): string {
+  return DRIVE_TYPE_LABEL[type ?? ''] ?? DRIVE_TYPE_LABEL.unknown;
 }
 
 interface RemoteFilesProps {
@@ -110,6 +126,12 @@ export default function RemoteFiles({
   } | null>(null);
   const [modalInput, setModalInput] = useState('');
 
+  // Unidades lógicas oferecidas pelo agent (C:, D:, ...). Vazio quando a
+  // sessão tem sandbox em subpasta — nesse caso não há seletor de disco.
+  const [drives, setDrives] = useState<DriveInfo[]>([]);
+  const [driveMenuOpen, setDriveMenuOpen] = useState(false);
+  const driveMenuRef = useRef<HTMLDivElement | null>(null);
+
   const openPrompt = (title: string, inputLabel: string, initial: string, onConfirm: (value?: string) => void) => {
     setModalInput(initial);
     setModal({ title, inputLabel, inputValue: initial, confirmLabel: 'OK', onConfirm });
@@ -133,6 +155,17 @@ export default function RemoteFiles({
     natsUrl: natsUrl || '',
     jwt: jwt || '',
   });
+
+  // Atualiza a lista de unidades lógicas. Usada no files.ready, no fallback de
+  // reconexão e ao abrir/manter o seletor de disco (cobre pendrive/hd externo
+  // plugado depois do início da sessão). Falha é silenciosa: o seletor é
+  // opcional e não deve poluir o banner de erro da listagem.
+  const refreshDrives = useCallback(async () => {
+    try {
+      const resp = await sendRequest('drives', '');
+      if (resp.success && Array.isArray(resp.drives)) setDrives(resp.drives);
+    } catch { /* noop */ }
+  }, [sendRequest]);
 
   // Progresso de operações longas (copy/move/zip/unzip) via files.progress.
   // O agent publica {requestId, loaded, total}; correlacionamos com a ação
@@ -212,17 +245,48 @@ export default function RemoteFiles({
           setCurrentPath(isRootPath.current); // dispara o load do caminho correto
         }
       }
+      // Unidades lógicas para o seletor de disco (ausente em sandbox restrito).
+      if (Array.isArray(info?.drives)) setDrives(info.drives);
     });
     return off;
   }, [onReady, currentPath]);
 
+  // Fallback do seletor de disco: se o files.ready foi perdido (reconexão NATS),
+  // consulta a ação "drives" assim que a conexão sobe.
+  useEffect(() => {
+    if (!isConnected) return;
+    void refreshDrives();
+  }, [isConnected, refreshDrives]);
+
+  // Fecha o menu de discos ao clicar fora ou pressionar Esc.
+  useEffect(() => {
+    if (!driveMenuOpen) return;
+    const onMouseDown = (e: MouseEvent) => {
+      if (driveMenuRef.current && !driveMenuRef.current.contains(e.target as Node)) {
+        setDriveMenuOpen(false);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setDriveMenuOpen(false); };
+    window.addEventListener('mousedown', onMouseDown);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('mousedown', onMouseDown);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [driveMenuOpen]);
+
   const normalizePath = (p: string) => p.replace(/[\\/]+$/, '').toLowerCase();
 
   // Raiz = final de volume Windows (C:\, D:\) OU o rootPath informado pelo agent
-  // (que pode ser customizado, ex.: C:\Users\Admin\Documents).
-  const isRoot = isRootPath.current
+  // (que pode ser customizado, ex.: C:\Users\Admin\Documents). Qualquer raiz
+  // de volume também é raiz de navegação: não mostra ".." nem sobe acima dela.
+  const isVolumeRoot = /^[A-Za-z]:[\\/]$/.test(currentPath);
+  const isRoot = isVolumeRoot || (isRootPath.current
     ? normalizePath(currentPath) === normalizePath(isRootPath.current)
-    : /^[A-Za-z]:\\$/.test(currentPath);
+    : false);
+
+  // Letra da unidade atual (para o botão do seletor de disco).
+  const currentDrive = currentPath.match(/^([A-Za-z]:)/)?.[1] ?? '';
 
   const goTo = (path: string) => {
     setCurrentPath(path.endsWith('\\') || path.endsWith('/') ? path : path + '\\');
@@ -488,7 +552,10 @@ export default function RemoteFiles({
     });
   };
 
-  const handleRefresh = () => loadFiles(currentPath);
+  const handleRefresh = () => {
+    loadFiles(currentPath);
+    void refreshDrives(); // ex.: pendrive plugado depois do início da sessão
+  };
 
   // ── Clipboard (copiar/recortar/colar) ──
   const [clipboard, setClipboard] = useState<{ path: string; cut: boolean; paths?: string[] } | null>(null);
@@ -717,6 +784,68 @@ export default function RemoteFiles({
           className="flex-1 min-w-0 bg-transparent font-mono text-foreground text-xs px-1 py-0.5 rounded border border-transparent focus:border-accent focus:outline-none"
           title="Caminho atual — pressione Enter para navegar"
         />
+        {/* Seletor de disco: só aparece quando o agent oferece outras unidades
+            (rootPath em raiz de volume). Sem ele, o operador precisaria digitar
+            D:\ na mão — e o sandbox bloqueava. */}
+        {drives.length > 0 && (
+          <div className="relative" ref={driveMenuRef}>
+            <button
+              className="inline-flex items-center gap-1 px-2 py-1 bg-surface-hover text-muted-foreground rounded hover:bg-border hover:text-foreground disabled:opacity-50"
+              onClick={() => {
+                setDriveMenuOpen((open) => !open);
+                void refreshDrives();
+              }}
+              disabled={!isConnected}
+              title="Selecionar disco"
+              aria-label="Selecionar disco"
+              aria-haspopup="menu"
+              aria-expanded={driveMenuOpen}
+            >
+              <HardDrive className="h-3.5 w-3.5" aria-hidden="true" />
+              <span className="font-mono">{currentDrive || 'Disco'}</span>
+              <ChevronDown className="h-3 w-3" aria-hidden="true" />
+            </button>
+            {driveMenuOpen && (
+              <div
+                role="menu"
+                aria-label="Discos disponíveis"
+                className="absolute right-0 top-full mt-1 z-50 w-72 max-h-80 overflow-y-auto bg-surface border border-border rounded-lg shadow-xl py-1 text-xs"
+              >
+                {drives.map((d) => {
+                  const isCurrent = currentDrive.toLowerCase() === d.name.toLowerCase();
+                  return (
+                    <button
+                      key={d.root || d.name}
+                      role="menuitem"
+                      aria-current={isCurrent ? 'true' : undefined}
+                      disabled={!d.ready}
+                      onClick={() => {
+                        setDriveMenuOpen(false);
+                        setSelectedPaths(new Set());
+                        goTo(d.root);
+                      }}
+                      className={`w-full px-3 py-1.5 text-left hover:bg-surface-hover disabled:opacity-50 disabled:cursor-not-allowed ${isCurrent ? 'bg-surface-hover' : ''}`}
+                      title={d.ready ? `Abrir ${d.root}` : `${d.root} sem mídia`}
+                    >
+                      <span className="flex items-center gap-2">
+                        <HardDrive className={`h-3.5 w-3.5 shrink-0 ${isCurrent ? 'text-accent' : 'text-muted-foreground'}`} aria-hidden="true" />
+                        <span className={`font-mono ${isCurrent ? 'text-accent' : 'text-foreground'}`}>{d.root}</span>
+                        <span className="min-w-0 flex-1 truncate text-muted-foreground">
+                          {d.label || driveTypeLabel(d.type)}
+                        </span>
+                      </span>
+                      <span className="mt-0.5 ml-5 block text-[11px] text-muted">
+                        {d.ready
+                          ? `${driveTypeLabel(d.type)}${typeof d.freeBytes === 'number' && d.freeBytes > 0 ? ` · ${formatSize(d.freeBytes)} livres` : ''}`
+                          : 'sem mídia'}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
         <button
           className="inline-flex items-center justify-center px-2 py-1 bg-surface-hover text-muted-foreground rounded hover:bg-border hover:text-foreground disabled:opacity-50"
           onClick={handleRefresh}
@@ -826,13 +955,21 @@ export default function RemoteFiles({
               {files.map((f) => (
                 <tr
                   key={f.path || f.name}
-                  className={`hover:bg-surface-hover border-b border-border ${f.isDir ? 'cursor-pointer' : 'cursor-default'} ${isSelected(f.path) ? 'bg-surface-hover' : ''}`}
+                  className={`hover:bg-surface-hover border-b border-border ${f.isDir ? 'cursor-pointer' : 'cursor-default'} ${isSelected(f.path) ? 'bg-surface-hover' : ''} ${f.isHidden ? 'opacity-70' : ''}`}
                   onClick={(e) => handleRowClick(f, e)}
                   onContextMenu={(e) => openContextMenu(e, f)}
                 >
-                  <td className="px-3 py-2 whitespace-nowrap"><FileIcon name={f.name} isDir={f.isDir} isLink={f.isLink} /></td>
-                  <td className="px-3 py-2 font-mono whitespace-nowrap" title={f.isLink && f.linkTarget ? `${f.name} → ${f.linkTarget}` : f.name}>
+                  <td className="px-3 py-2 whitespace-nowrap"><FileIcon name={f.name} isDir={f.isDir} isLink={f.isLink} isHidden={f.isHidden} /></td>
+                  <td className="px-3 py-2 font-mono whitespace-nowrap" title={f.isLink && f.linkTarget ? `${f.name} → ${f.linkTarget}` : f.isHidden ? `${f.name} (oculto)` : f.name}>
                     {f.name}
+                    {f.isHidden && (
+                      <span
+                        className="ml-2 px-1.5 py-0.5 rounded bg-surface-hover text-muted text-[11px] align-middle inline-block"
+                        title="Item oculto no Windows"
+                      >
+                        oculto
+                      </span>
+                    )}
                     {f.isLink && f.linkTarget && (
                       <span
                         className="ml-2 px-1.5 py-0.5 rounded bg-surface-hover text-muted-foreground text-[11px] align-middle inline-block max-w-[40ch] overflow-hidden text-ellipsis whitespace-nowrap"

@@ -31,4 +31,16 @@ describe('FileIcon', () => {
     const { container } = render(<FileIcon name="comum.txt" />);
     expect(container.querySelectorAll('svg').length).toBe(1);
   });
+
+  it('esmaece o icone e anuncia "(oculto)" para item oculto', () => {
+    render(<FileIcon name="pasta-oculta" isDir isHidden />);
+    const img = screen.getByRole('img', { name: 'Pasta (oculto)' });
+    expect(img.className).toContain('opacity-40');
+  });
+
+  it('nao aplica opacidade em item visivel', () => {
+    render(<FileIcon name="visivel.txt" />);
+    const img = screen.getByRole('img', { name: 'Arquivo de texto' });
+    expect(img.className).not.toContain('opacity-40');
+  });
 });

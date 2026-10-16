@@ -19,6 +19,25 @@ interface UseFilesStreamReturn {
 export interface FilesReadyInfo {
     rootPath?: string;
     status?: string;
+    /** Unidades lógicas do host remoto (C:, D:, ...). Ausente/null quando a
+     *  sessão tem sandbox restrito a uma subpasta (sem troca de disco). */
+    drives?: DriveInfo[] | null;
+}
+
+/** Unidade lógica devolvida pelo agent na ação "drives"/files.ready. */
+export interface DriveInfo {
+    /** Letra da unidade, ex.: "C:". */
+    name: string;
+    /** Raiz navegável, ex.: "C:\\". */
+    root: string;
+    label?: string;
+    fileSystem?: string;
+    /** fixed | removable | network | cdrom | ramdisk | unknown */
+    type?: string;
+    totalBytes?: number;
+    freeBytes?: number;
+    /** false para unidades sem mídia (ex.: leitor de CD vazio). */
+    ready?: boolean;
 }
 
 export interface FilesProgressInfo {
@@ -30,7 +49,9 @@ export interface FilesProgressInfo {
 export interface FilesResponse {
     success: boolean;
     error?: string;
-    entries?: { name: string; path: string; isDir: boolean; size: number; modTime: string; isLink?: boolean; linkTarget?: string }[];
+    entries?: { name: string; path: string; isDir: boolean; size: number; modTime: string; isLink?: boolean; linkTarget?: string; isHidden?: boolean }[];
+    /** Presente na resposta da ação "drives". */
+    drives?: DriveInfo[];
     /** Dados binários do chunk. O agent Go serializa []byte como base64 string;
      *  mantém number[] como fallback para compatibilidade legada. */
     data?: string | number[];

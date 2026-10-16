@@ -142,21 +142,25 @@ interface FileIconProps {
   isLink?: boolean;
   /** Renderiza o icone de "pasta superior" (linha ..). */
   parent?: boolean;
+  /** Esmaece o icone quando o item tem atributo HIDDEN no Windows. */
+  isHidden?: boolean;
   className?: string;
 }
 
 /**
  * Icone quadrado (16px) com cor por tipo. Links ganham um selo de atalho no
- * canto, no lugar do antigo emoji colado ao nome.
+ * canto, no lugar do antigo emoji colado ao nome. Itens ocultos ficam com
+ * opacidade reduzida e o rotulo ganha o sufixo "(oculto)".
  */
-export function FileIcon({ name = '', isDir = false, isLink = false, parent = false, className }: FileIconProps) {
+export function FileIcon({ name = '', isDir = false, isLink = false, parent = false, isHidden = false, className }: FileIconProps) {
   const visual = parent ? KIND_VISUALS.parent : KIND_VISUALS[fileKindOf(name, isDir)];
   const Icon = visual.Icon;
+  const label = isHidden ? `${visual.label} (oculto)` : visual.label;
   return (
     <span
-      className={'relative inline-flex h-4 w-4 shrink-0 items-center justify-center ' + (className ?? '')}
-      title={visual.label}
-      aria-label={visual.label}
+      className={'relative inline-flex h-4 w-4 shrink-0 items-center justify-center ' + (isHidden ? 'opacity-40 ' : '') + (className ?? '')}
+      title={label}
+      aria-label={label}
       role="img"
     >
       <Icon className={'h-4 w-4 ' + visual.className} strokeWidth={1.75} aria-hidden="true" />
