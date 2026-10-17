@@ -52,6 +52,13 @@ export function AgentContextMenu({ agent, now, position, onClose }: AgentContext
   const canManageAgent = hasAnyPermission(['Agents.Edit', 'agents.*', 'admin.*']);
   const canExecuteAgent = hasAnyPermission(['Agents.Execute', 'Agents.Edit', 'agents.*', 'admin.*']);
   const online = isAgentOnlineNow(agent, now);
+  // Sessões AO VIVO (acesso remoto, chat, debug) exigem a máquina acessível.
+  // Já update e notificação passam pelo dispatcher de comandos: são persistidos
+  // e reentregues quando o agent reconectar, então seguem habilitados offline
+  // (apenas com aviso de fila).
+  const canReachAgent = isAgentPossiblyOnline(agent, now);
+  const offlineLiveHint = 'agente offline';
+  const offlineQueueHint = 'agente offline — o comando entra na fila e é entregue quando ele reconectar';
   // Sinal mais conservador, só para a confirmação destrutiva de exclusão: o
   // servidor ainda pode considerar o agente online (status no banco) depois de
   // a UI já o tratar como offline.
@@ -170,6 +177,9 @@ export function AgentContextMenu({ agent, now, position, onClose }: AgentContext
       key: 'remote',
       label: 'Acesso remoto',
       icon: <Monitor className="h-4 w-4" />,
+      // Sessão ao vivo: sem o agent online a sessão não conecta.
+      disabled: !canReachAgent,
+      hint: canReachAgent ? undefined : offlineLiveHint,
       onClick: openRemoteControl,
     },
     {
@@ -178,30 +188,35 @@ export function AgentContextMenu({ agent, now, position, onClose }: AgentContext
       icon: <MessageSquare className="h-4 w-4" />,
       // Conversa avulsa exige a máquina online no servidor. Usa o sinal
       // conservador: o status do banco pode ficar defasado da UI por ~3min.
-      disabled: !isAgentPossiblyOnline(agent, now),
-      hint: isAgentPossiblyOnline(agent, now) ? undefined : 'agente offline',
+      disabled: !canReachAgent,
+      hint: canReachAgent ? undefined : offlineLiveHint,
       onClick: openSupportChat,
     },
     {
       key: 'debug',
       label: remoteDebugAgentId === agent.id ? 'Abrindo debug...' : 'Ver debug',
       icon: <Bug className="h-4 w-4" />,
-      disabled: remoteDebugAgentId === agent.id,
+      // Console de debug é uma sessão ao vivo (stream NATS + liveness).
+      disabled: remoteDebugAgentId === agent.id || !canReachAgent,
+      hint: canReachAgent ? undefined : offlineLiveHint,
       onClick: () => { void openRemoteDebug(); },
     },
     {
       key: 'update',
       label: updatingAgentId === agent.id ? 'Disparando update...' : 'Atualizar agente',
       icon: <RefreshCw className="h-4 w-4" />,
+      // Comando persistido pelo dispatcher: funciona offline (entrega depois).
       disabled: updatingAgentId === agent.id,
+      hint: canReachAgent ? undefined : offlineQueueHint,
       onClick: () => { void handleTriggerAgentUpdate(); },
     },
     {
       key: 'notify',
       label: 'Enviar notificação',
       icon: <Bell className="h-4 w-4" />,
+      // Comando persistido: só a permissão bloqueia; offline entra na fila.
       disabled: !canExecuteAgent,
-      hint: canExecuteAgent ? undefined : 'sem permissão',
+      hint: !canExecuteAgent ? 'sem permissão' : canReachAgent ? undefined : offlineQueueHint,
       onClick: () => setNotificationAgent(agent),
     },
   ];

@@ -123,11 +123,17 @@ vi.mock('@/stores/heartbeatStore', () => ({
 }));
 
 vi.mock('@/hooks/useNowTick', () => ({ useNowTick: () => Date.now() }));
-// Online por padrão (exercita o submenu "Energia"); os testes de Wake-on-LAN
-// ligam statusFlag.online = false para ver o ramo offline do menu.
+// Online por padrão (exercita o submenu "Energia"); os testes de offline ligam
+// statusFlag.online = false. Os dois predicados são controlados juntos porque o
+// menu usa isAgentPossiblyOnline para gatear ações e isAgentOnlineNow para o
+// ramo de energia/Wake-on-LAN.
 vi.mock('@/utils/agentStatus', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/utils/agentStatus')>();
-  return { ...actual, isAgentOnlineNow: () => statusFlag.online };
+  return {
+    ...actual,
+    isAgentOnlineNow: () => statusFlag.online,
+    isAgentPossiblyOnline: () => statusFlag.online,
+  };
 });
 vi.mock('@/auth/authorization', () => ({ useAuthorization: () => ({ hasAnyPermission: () => true }) }));
 vi.mock('@/hooks/useAgentAlerts', () => ({ useSendAgentNotification: () => ({ mutateAsync: vi.fn(), isPending: false }) }));
@@ -458,6 +464,35 @@ describe('AgentList — menu de contexto e submenu de energia', () => {
     expect(screen.getByText('Reiniciar')).toBeTruthy();
     expect(screen.getByText('Desligar')).toBeTruthy();
     expect(screen.queryByText('Ligar')).toBeNull();
+  });
+
+  it('offline: bloqueia sessões ao vivo e mantém comandos enfileirados', () => {
+    statusFlag.online = false;
+    renderPage();
+
+    openContextMenuFor('ATIVO-01', 40, 40);
+
+    // Sessões ao vivo não conectam sem o agent: ficam desabilitadas.
+    const remote = screen.getByRole('button', { name: 'Acesso remoto' }) as HTMLButtonElement;
+    const chat = screen.getByRole('button', { name: 'Abrir chat' }) as HTMLButtonElement;
+    const debug = screen.getByRole('button', { name: 'Ver debug' }) as HTMLButtonElement;
+    expect(remote.disabled).toBe(true);
+    expect(chat.disabled).toBe(true);
+    expect(debug.disabled).toBe(true);
+    expect(remote.getAttribute('title')).toMatch(/sessão ao vivo indisponível/i);
+
+    // Comandos persistidos pelo dispatcher continuam disponíveis, com aviso de fila.
+    const update = screen.getByRole('button', { name: 'Atualizar agente' }) as HTMLButtonElement;
+    const notify = screen.getByRole('button', { name: 'Enviar notificação' }) as HTMLButtonElement;
+    expect(update.disabled).toBe(false);
+    expect(notify.disabled).toBe(false);
+    expect(update.getAttribute('title')).toMatch(/entra na fila/i);
+    expect(notify.getAttribute('title')).toMatch(/entra na fila/i);
+    // Os itens habilitados mostram o selo "na fila" (não dependem de tooltip).
+    expect(screen.getAllByText('na fila')).toHaveLength(2);
+
+    // Cabeçalho explica o estado ao usuário.
+    expect(screen.getByText('Agente offline')).toBeTruthy();
   });
 
   it('com o agente offline oferece Wake-on-LAN e nenhuma ação de energia', () => {

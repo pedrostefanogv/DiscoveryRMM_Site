@@ -732,6 +732,11 @@ export default function AgentDetail() {
   // União com o status do servidor: ele pode considerar o agente online por até
   // ~3min depois de a UI já o tratar como offline (TTL do heartbeat + varredura).
   const deleteConfirmOnline = isOnlineNow || isAgentPossiblyOnline(a, now);
+  // Sessões AO VIVO (controle remoto, chat, debug) exigem o agent acessível.
+  // Update/notificação são comandos persistidos pelo dispatcher e funcionam
+  // offline (entram na fila) — esses seguem habilitados.
+  const canReachAgent = isAgentPossiblyOnline(a, now);
+  const offlineLiveHint = 'Agente offline — sessão ao vivo indisponível';
 
   // Ações que passam pelo dispatcher de comandos NÃO exigem mais agente online:
   // o comando é persistido e a reentrega do servidor o entrega no reconhecimento.
@@ -1490,10 +1495,12 @@ export default function AgentDetail() {
                   setIsPowerMenuOpen(false);
                   void handleOpenRemoteControl();
                 }}
-                disabled={isOpeningRemoteControl}
+                disabled={isOpeningRemoteControl || !canReachAgent}
+                title={canReachAgent ? undefined : offlineLiveHint}
               >
                 <Monitor className="h-4 w-4" />
                 {isOpeningRemoteControl ? 'Abrindo remoto...' : 'Controle remoto'}
+                {!canReachAgent && <span aria-hidden="true" className="ml-auto rounded bg-surface-hover px-1.5 py-0.5 text-[10px] text-muted-foreground">offline</span>}
               </button>
               <button
                 type="button"
@@ -1502,19 +1509,25 @@ export default function AgentDetail() {
                   setIsPowerMenuOpen(false);
                   handleOpenSupportChat();
                 }}
-                disabled={!isAgentPossiblyOnline(a, now)}
+                disabled={!canReachAgent}
+                title={canReachAgent ? undefined : offlineLiveHint}
               >
                 <MessageSquare className="h-4 w-4" />
                 Abrir chat
+                {!canReachAgent && <span aria-hidden="true" className="ml-auto rounded bg-surface-hover px-1.5 py-0.5 text-[10px] text-muted-foreground">offline</span>}
               </button>
               <button
                 type="button"
                 className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60"
                 onClick={handleOpenNotification}
                 disabled={!canExecuteAgent}
+                title={!canExecuteAgent
+                  ? 'Sem permissão para executar ações no agente'
+                  : canReachAgent ? undefined : offlineQueueHint}
               >
                 <Bell className="h-4 w-4" />
                 Enviar notificação
+                {!canReachAgent && <span aria-hidden="true" className="ml-auto rounded bg-surface-hover px-1.5 py-0.5 text-[10px] text-muted-foreground">na fila</span>}
               </button>
 
               <div className="border-t border-border" />
@@ -1526,10 +1539,12 @@ export default function AgentDetail() {
                   setIsPowerMenuOpen(false);
                   void handleOpenRemoteDebug();
                 }}
-                disabled={isOpeningRemoteDebug}
+                disabled={isOpeningRemoteDebug || !canReachAgent}
+                title={canReachAgent ? undefined : offlineLiveHint}
               >
                 <Bug className="h-4 w-4" />
                 {isOpeningRemoteDebug ? 'Abrindo debug...' : 'Ver Debug'}
+                {!canReachAgent && <span aria-hidden="true" className="ml-auto rounded bg-surface-hover px-1.5 py-0.5 text-[10px] text-muted-foreground">offline</span>}
               </button>
               <button
                 type="button"
@@ -1539,9 +1554,11 @@ export default function AgentDetail() {
                   void handleTriggerAgentUpdate();
                 }}
                 disabled={isTriggeringAgentUpdate}
+                title={canReachAgent ? undefined : offlineQueueHint}
               >
                 <RefreshCw className="h-4 w-4" />
                 {isTriggeringAgentUpdate ? 'Atualizando...' : 'Atualizar agente'}
+                {!canReachAgent && <span aria-hidden="true" className="ml-auto rounded bg-surface-hover px-1.5 py-0.5 text-[10px] text-muted-foreground">na fila</span>}
               </button>
               <button
                 type="button"

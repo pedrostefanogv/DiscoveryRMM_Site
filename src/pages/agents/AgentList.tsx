@@ -49,6 +49,21 @@ function compareText(a: string, b: string): number {
   return a.localeCompare(b, 'pt-BR', { sensitivity: 'base' });
 }
 
+/** Selo de estado dos itens do menu de contexto ("offline" nos itens que
+ *  exigem sessão ao vivo; "na fila" nos comandos que serão reentregues).
+ *  aria-hidden para não poluir o nome acessível do botão — o motivo completo
+ *  aparece no atributo title e no cabeçalho do menu. */
+function MenuTag({ label }: { label: string }) {
+  return (
+    <span
+      aria-hidden="true"
+      className="ml-auto rounded bg-surface-hover px-1.5 py-0.5 text-[10px] text-muted-foreground"
+    >
+      {label}
+    </span>
+  );
+}
+
 function getAgentDisplayName(agent: AgentWithClient): string {
   return (agent.displayName ?? agent.hostname).trim();
 }
@@ -164,6 +179,17 @@ export default function AgentList() {
   // ~3min. Nessa janela a confirmação destrutiva não pode ser pulada.
   const deleteConfirmOnline = deleteConfirmAgent !== null && isAgentPossiblyOnline(deleteConfirmAgent, now);
   const deleteConfirmName = deleteConfirmAgent?.displayName ?? deleteConfirmAgent?.hostname ?? '';
+  // Menu de contexto de um agente. Só as AÇÕES DE SESSÃO AO VIVO (acesso
+  // remoto, chat, debug) exigem a máquina acessível: elas falham na hora se o
+  // agent estiver offline. Já update/notificação passam pelo dispatcher e são
+  // persistidos/reentregues quando o agent reconectar — ficam habilitados com
+  // um aviso. Usa o sinal conservador (UI + status do servidor) para o gate.
+  const contextAgentOnline = contextMenu
+    ? isAgentPossiblyOnline(contextMenu.agent, now)
+    : false;
+  const contextAgentOffline = contextMenu !== null && !contextAgentOnline;
+  const offlineHint = 'Máquina offline — sessão ao vivo indisponível';
+  const offlineQueueHint = 'Máquina offline — o comando entra na fila e é entregue quando o agente reconectar';
   // Hard delete (exclusão definitiva) — exige digitar o nome do agente.
   const [purgeTarget, setPurgeTarget] = useState<AgentWithClient | null>(null);
   const [purgeConfirmName, setPurgeConfirmName] = useState('');
@@ -1244,33 +1270,48 @@ export default function AgentList() {
             className="fixed z-50 max-h-[calc(100vh-1rem)] min-w-[200px] overflow-y-auto rounded-lg border border-border bg-surface shadow-xl"
             style={{ left: contextMenu.x, top: contextMenu.y }}
           >
+            {contextAgentOffline && (
+              <div className="border-b border-border bg-surface-hover/60 px-3 py-1.5 text-[11px] leading-snug text-muted">
+                <span className="flex items-center gap-2">
+                  <WifiOff className="h-3.5 w-3.5 shrink-0" />
+                  Agente offline
+                </span>
+                <span className="mt-0.5 block">Sessões ao vivo indisponíveis; comandos entram na fila.</span>
+              </div>
+            )}
             <button
-              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-surface-hover"
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60"
               onClick={() => {
                 void openRemoteControl(contextMenu.agent);
               }}
+              disabled={!contextAgentOnline}
+              title={contextAgentOnline ? undefined : offlineHint}
             >
               <Monitor className="h-4 w-4" />
               Acesso remoto
+              {!contextAgentOnline && <MenuTag label="offline" />}
             </button>
             <button
               className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60"
               onClick={() => openSupportChat(contextMenu.agent)}
-              disabled={!isAgentPossiblyOnline(contextMenu.agent, now)}
-              title={isAgentPossiblyOnline(contextMenu.agent, now) ? undefined : 'Máquina offline'}
+              disabled={!contextAgentOnline}
+              title={contextAgentOnline ? undefined : offlineHint}
             >
               <MessageSquare className="h-4 w-4" />
               Abrir chat
+              {!contextAgentOnline && <MenuTag label="offline" />}
             </button>
             <button
-              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-surface-hover"
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60"
               onClick={() => {
                 void openRemoteDebug(contextMenu.agent);
               }}
-              disabled={remoteDebugAgentId === contextMenu.agent.id}
+              disabled={!contextAgentOnline || remoteDebugAgentId === contextMenu.agent.id}
+              title={contextAgentOnline ? undefined : offlineHint}
             >
               <Bug className="h-4 w-4" />
               {remoteDebugAgentId === contextMenu.agent.id ? 'Abrindo debug...' : 'Ver debug'}
+              {!contextAgentOnline && <MenuTag label="offline" />}
             </button>
             <button
               className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60"
@@ -1278,19 +1319,24 @@ export default function AgentList() {
                 void handleTriggerAgentUpdate(contextMenu.agent);
               }}
               disabled={updatingAgentId === contextMenu.agent.id}
+              title={contextAgentOnline ? undefined : offlineQueueHint}
             >
               <RefreshCw className="h-4 w-4" />
               {updatingAgentId === contextMenu.agent.id ? 'Disparando update...' : 'Atualizar agente'}
+              {!contextAgentOnline && <MenuTag label="na fila" />}
             </button>
             <button
-              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60"
               onClick={() => openNotificationModal(contextMenu.agent)}
               disabled={!canExecuteAgent}
-              title={canExecuteAgent ? undefined : 'Sem permissão para executar ações no agente'}
+              title={!canExecuteAgent
+                ? 'Sem permissão para executar ações no agente'
+                : contextAgentOnline ? undefined : offlineQueueHint}
             >
               <Bell className="h-4 w-4" />
               Enviar notificação
               {!canExecuteAgent && <Badge>sem permissão</Badge>}
+              {canExecuteAgent && !contextAgentOnline && <MenuTag label="na fila" />}
             </button>
             {isAgentOnlineNow(contextMenu.agent, now) && (
               <div
