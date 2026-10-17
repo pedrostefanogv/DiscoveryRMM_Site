@@ -54,6 +54,18 @@ export function buildDepartmentScopeOptions(
   ];
 }
 
+/**
+ * Parâmetros da listagem que alimenta o filtro de escopo.
+ *
+ * `allClients` é obrigatório aqui: sem ele a API devolve apenas os globais e
+ * qualquer filtro por cliente apareceria vazio (D11).
+ */
+export const DEPARTMENT_LIST_PARAMS = {
+  includeGlobal: true,
+  activeOnly: false,
+  allClients: true,
+} as const;
+
 /** Aplica o filtro de escopo sobre a lista já carregada. */
 export function filterDepartmentsByScope<T extends { clientId: string | null }>(
   departments: T[],
@@ -74,9 +86,10 @@ export default function DepartmentSettings() {
   const [searchTerm, setSearchTerm] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
 
-  // Uma única consulta (sem clientId) devolve globais + clientes; o filtro de
-  // escopo é aplicado sobre a lista, então o rótulo sempre bate com o exibido.
-  const depts = useDepartments({ includeGlobal: true, activeOnly: false });
+  // Uma única consulta pede TODOS os escopos (allClients) e o filtro é aplicado
+  // sobre a lista, então o rótulo sempre bate com o exibido. Sem allClients a
+  // API devolveria apenas os globais (D11).
+  const depts = useDepartments(DEPARTMENT_LIST_PARAMS);
   const clients = useClients();
 
   const clientsById = useMemo(

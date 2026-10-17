@@ -333,11 +333,19 @@ export const departmentsApi = {
     }
   },
 
+  /**
+   * Listagem de departamentos.
+   *
+   * Sem `clientId` a API devolve apenas os GLOBAIS; para o filtro de escopo
+   * "todos" do console é preciso pedir `allClients: true` (D11).
+   */
   list: (
     params: {
       clientId?: string;
       includeGlobal?: boolean;
       activeOnly?: boolean;
+      /** Todos os escopos (globais + de todos os clientes). */
+      allClients?: boolean;
     } = {},
   ) => api.get<Department[]>(BASE, params as Record<string, unknown>),
 

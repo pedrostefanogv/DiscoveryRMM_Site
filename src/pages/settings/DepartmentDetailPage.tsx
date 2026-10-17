@@ -376,7 +376,11 @@ export function TriageInheritableField({
   onInherit: () => void;
 }) {
   const inherited = origin === "inherited-global";
-  const text = fieldText(inherited ? effectiveValue : ownValue, def.defaultValue);
+  // Só "inherited-global" usa o valor efetivo. Origem "default" (sem override e
+  // sem pai) é o valor-base do PRÓPRIO departamento — quando o form não tem o
+  // valor (null), o efetivo da API manda, em vez do padrão de fábrica.
+  const ownOrEffective = ownValue ?? (origin === "default" ? effectiveValue : ownValue);
+  const text = fieldText(inherited ? effectiveValue : ownOrEffective, def.defaultValue);
   const disabled = inherited;
   const controlId = "triage-" + def.key;
 
@@ -461,15 +465,19 @@ export function TriageInheritableField({
   );
 }
 
-/** Form inicial: campos herdados viram null (= herdar) quando a API informa a origem. */
+/**
+ * Form inicial a partir do departamento + configuração efetiva.
+ *
+ * Só a origem "inherited-global" vira null (= herdar). A origem "default" NÃO é
+ * herança: é o valor-base do próprio departamento quando não há pai utilizável —
+ * tratá-la como null fazia a tela exibir o padrão de fábrica no lugar do valor
+ * real (override null vs base, D11/B2).
+ */
 export function buildDepartmentForm(
   department: Department,
   effective: DepartmentEffectiveView | null,
 ): UpdateDepartmentRequest {
-  const inheritedOrDefault = (key: string) => {
-    const origin = effective?.origins?.[key];
-    return origin === "inherited-global" || origin === "default";
-  };
+  const inheritedOrDefault = (key: string) => effective?.origins?.[key] === "inherited-global";
 
   const decor = <T,>(key: string, value: T | null | undefined, fallback: T): T | null =>
     inheritedOrDefault(key) ? null : value ?? fallback;

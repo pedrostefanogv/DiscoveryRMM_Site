@@ -19,6 +19,7 @@ const KEYS = {
     clientId?: string;
     includeGlobal?: boolean;
     activeOnly?: boolean;
+    allClients?: boolean;
   }) => [...KEYS.all, "list", params] as const,
   global: [...["departments"], "global"] as const,
   detail: (id: string) => [...KEYS.all, "detail", id] as const,
@@ -35,6 +36,8 @@ export function useDepartments(
     clientId?: string;
     includeGlobal?: boolean;
     activeOnly?: boolean;
+    /** Todos os escopos (globais + de todos os clientes) — filtro "todos" (D11). */
+    allClients?: boolean;
     /** Permite adiar a consulta (ex.: modal de transferência ainda fechado). */
     enabled?: boolean;
   } = {},

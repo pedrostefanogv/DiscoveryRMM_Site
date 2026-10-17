@@ -56,6 +56,7 @@ import {
 } from './DepartmentDetailPage';
 import {
   ALL_DEPARTMENTS_SCOPE,
+  DEPARTMENT_LIST_PARAMS,
   GLOBAL_DEPARTMENTS_SCOPE,
   buildDepartmentScopeOptions,
   filterDepartmentsByScope,
@@ -180,6 +181,34 @@ describe('campo de triagem herdado', () => {
     expect(onChange).toHaveBeenCalledWith(1);
   });
 
+  it('origem "default" mostra o valor efetivo, não o padrão de fábrica', () => {
+    // Sem override e sem pai utilizável a origem é "default": o valor efetivo é
+    // o do próprio departamento. Antes a tela mostrava o padrão (1200).
+    render(
+      <TriageInheritableField
+        def={{
+          key: 'aiAssignmentMaxOutputTokens',
+          label: 'Teto de tokens da triagem',
+          kind: 'number',
+          min: 200,
+          max: 32768,
+          defaultValue: '1200',
+          group: 'triage',
+        }}
+        ownValue={null}
+        effectiveValue={3000}
+        origin="default"
+        canInherit={false}
+        onChange={() => {}}
+        onInherit={() => {}}
+      />,
+    );
+
+    const control = screen.getByLabelText('Teto de tokens da triagem') as HTMLInputElement;
+    expect(control.value).toBe('3000');
+    expect(control.disabled).toBe(false);
+  });
+
   it('marcar "Herdar" volta a herdar (override = null)', () => {
     const onInherit = vi.fn();
     render(
@@ -232,14 +261,34 @@ describe('desfazer herança no update', () => {
       effective,
     );
 
-    // Herdado/padrão vira null no formulário (null = herdar).
+    // Herdado vira null no formulário (null = herdar); "default" NÃO é herança,
+    // é o valor-base do próprio departamento e permanece.
     expect(form.aiAssignmentMode).toBeNull();
-    expect(form.aiSkillMinEvidence).toBeNull();
+    expect(form.aiSkillMinEvidence).toBe(3);
 
     const payload = buildDepartmentUpdatePayload(form) as unknown as Record<string, unknown>;
     expect('aiAssignmentModeOverride' in payload).toBe(true);
     expect(payload.aiAssignmentModeOverride).toBeNull();
-    expect(payload.aiSkillMinEvidenceOverride).toBeNull();
+    expect(payload.aiSkillMinEvidenceOverride).toBe(3);
+  });
+
+  it('origem "default" mantém o valor-base do departamento (não vira null)', () => {
+    // "default" = nem herdado nem sobrescrito: é o valor-base do próprio
+    // departamento. Tratá-lo como null exibia o padrão de fábrica.
+    const effective = normalizeDepartmentEffective({
+      origins: { aiAssignmentMaxOutputTokens: 'default' },
+      config: { aiAssignmentMaxOutputTokens: 3000 },
+    });
+
+    const form = buildDepartmentForm(
+      department({ clientId: 'client-1', aiAssignmentMaxOutputTokens: 3000 }),
+      effective,
+    );
+
+    expect(form.aiAssignmentMaxOutputTokens).toBe(3000);
+
+    const payload = buildDepartmentUpdatePayload(form) as unknown as Record<string, unknown>;
+    expect(payload.aiAssignmentMaxOutputTokensOverride).toBe(3000);
   });
 
   it('sem o endpoint efetivo mantém os valores próprios do departamento', () => {
@@ -339,6 +388,19 @@ describe('filtro de escopo da listagem', () => {
     });
     expect(options.some((option) => option.value === GLOBAL_DEPARTMENTS_SCOPE)).toBe(true);
     expect(options.some((option) => option.value === 'a')).toBe(true);
+  });
+
+  it('a listagem pede allClients para o filtro "todos" funcionar', async () => {
+    // Sem clientId a API devolve apenas os globais; o filtro por cliente ficaria
+    // vazio. DEPARTMENT_LIST_PARAMS pede todos os escopos (D11).
+    expect(DEPARTMENT_LIST_PARAMS.allClients).toBe(true);
+
+    const { departmentsApi } = await import('@/api');
+    mocks.apiGet.mockResolvedValueOnce([]);
+
+    await departmentsApi.list(DEPARTMENT_LIST_PARAMS);
+
+    expect(mocks.apiGet).toHaveBeenCalledWith('/api/v1/departments', DEPARTMENT_LIST_PARAMS);
   });
 
   it('escopo vazio mostra globais + clientes; "somente globais" mostra só globais', () => {
