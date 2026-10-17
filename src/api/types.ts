@@ -673,39 +673,47 @@ export interface Ticket {
   onHold?: boolean;
 }
 
+/**
+ * Configuração de triagem por IA do departamento.
+ *
+ * Herança: exceto em departamento global, cada campo aceita `null` no update
+ * para significar "não definir aqui — herdar do departamento global pai"
+ * (ver `UpdateDepartmentRequest`). Por isso os tipos são anuláveis: a tela usa
+ * `null` como "override ausente" e precisa distinguir de "valor 0/false".
+ */
 export interface DepartmentAiAssignmentSettings {
   /** Modo da triagem por IA: 0 = sugerir, 1 = atribuir automaticamente. */
-  aiAssignmentMode?: number;
+  aiAssignmentMode?: number | null;
   /** Confiança mínima da IA (0..1) para aceitar a escolha. */
-  aiAssignmentMinConfidence?: number;
+  aiAssignmentMinConfidence?: number | null;
   /** Estratégia determinística de fallback (1 = round-robin, 2 = menos abertos). */
-  aiAssignmentFallbackStrategy?: number;
+  aiAssignmentFallbackStrategy?: number | null;
   /** Quantidade máxima de candidatos enviados ao modelo. */
-  aiAssignmentMaxCandidates?: number;
+  aiAssignmentMaxCandidates?: number | null;
   /** Pesos do score por dimensão (JSON de AiAssignmentWeights). */
   aiAssignmentWeightsJson?: string | null;
   /** Orientações livres do gestor anexadas ao prompt de triagem. */
   aiAssignmentInstructions?: string | null;
   /** Usa afinidade com chamados semelhantes já resolvidos. */
-  aiAssignmentUseAffinity?: boolean;
+  aiAssignmentUseAffinity?: boolean | null;
   /** Teto de tokens de saída da triagem (combinado com a capacidade do modelo). */
-  aiAssignmentMaxOutputTokens?: number;
+  aiAssignmentMaxOutputTokens?: number | null;
   /** Aprendizado de competências: 0=Off, 1=Sugerir, 2=Automático. */
-  aiSkillLearningMode?: number;
+  aiSkillLearningMode?: number | null;
   /** Mínimo de chamados resolvidos para sugerir uma competência. */
-  aiSkillMinEvidence?: number;
+  aiSkillMinEvidence?: number | null;
   /** Máximo de competências por atendente. */
-  aiSkillMaxTags?: number;
+  aiSkillMaxTags?: number | null;
   /** Recalibração de pesos: 0=Off, 1=Sugerir, 2=Automático. */
-  aiWeightLearningMode?: number;
+  aiWeightLearningMode?: number | null;
   /** Ajuste máximo por dimensão em cada ciclo. */
-  aiWeightMaxDeltaPerCycle?: number;
+  aiWeightMaxDeltaPerCycle?: number | null;
   /** Duração do ciclo de calibração em dias. */
-  aiWeightCycleDays?: number;
+  aiWeightCycleDays?: number | null;
   /** Peso mínimo por dimensão. */
-  aiWeightMin?: number;
+  aiWeightMin?: number | null;
   /** Peso máximo por dimensão. */
-  aiWeightMax?: number;
+  aiWeightMax?: number | null;
 }
 
 /** Pesos do score determinístico da triagem por IA (somados e normalizados no servidor). */
@@ -834,10 +842,61 @@ export interface Department extends DepartmentAiAssignmentSettings {
   clientId: string | null;
   name: string;
   description: string | null;
+  /** Departamento GLOBAL pai (null/ausente = sem herança). */
   inheritFromGlobalId: string | null;
+  /** Nome do global pai, quando a API já devolve resolvido (opcional). */
+  inheritFromGlobalName?: string | null;
+  /** Avisos de herança emitidos pela API (ciclo, pai inativo, escopo...). */
+  inheritanceWarnings?: string[] | null;
   sortOrder: number;
   isActive: boolean;
   assignmentStrategy?: number;
+}
+
+/**
+ * Origem de um valor na configuração efetiva do departamento:
+ * - `own`: definido neste departamento;
+ * - `inherited-global`: herdado do departamento global pai;
+ * - `default`: nem próprio nem herdado (padrão do sistema).
+ */
+export type DepartmentEffectiveOrigin = "own" | "inherited-global" | "default";
+
+/** Membro da equipe efetiva: próprios + herdados do departamento global pai. */
+export interface DepartmentEffectiveMemberDto {
+  userId: string;
+  userName?: string | null;
+  isActive?: boolean;
+  /** true quando o vínculo vem do departamento global pai. */
+  inherited?: boolean;
+  /** Departamento dono do vínculo (o próprio ou o global pai). */
+  sourceDepartmentId?: string | null;
+  sourceDepartmentName?: string | null;
+  /** Alternativa a `inherited` quando a API devolve a origem explícita. */
+  origin?: DepartmentEffectiveOrigin;
+}
+
+/**
+ * Configuração efetiva do departamento
+ * (GET /api/v1/departments/{id}/effective).
+ *
+ * Todos os campos são opcionais de propósito: a tela precisa continuar
+ * funcionando contra um backend que ainda não publicou o endpoint (404).
+ */
+export interface DepartmentEffectiveDto {
+  departmentId?: string;
+  inheritFromGlobalId?: string | null;
+  /** Nome do global pai (variações aceitas pelo normalizador do client). */
+  inheritFromGlobalName?: string | null;
+  globalDepartmentName?: string | null;
+  /** Config resolvida campo a campo. */
+  config?: Record<string, unknown> | null;
+  /** Origem por campo (aceita string ou enum numérico). */
+  origins?: Record<string, DepartmentEffectiveOrigin | string | number> | null;
+  /** Equipe efetiva (próprios + herdados). */
+  team?: DepartmentEffectiveMemberDto[] | null;
+  /** Avisos de herança (ciclo, auto-herança, pai inativo, escopo). */
+  warnings?: string[] | null;
+  resolvedAt?: string | null;
 }
 
 /** Métricas históricas de um atendente usadas pela triagem por IA. */
@@ -2176,13 +2235,23 @@ export interface CreateDepartmentRequest extends DepartmentAiAssignmentSettings 
   assignmentStrategy?: number;
 }
 
+/**
+ * Update do departamento.
+ *
+ * Herança (patch semântico): `inheritFromGlobalId` SEMPRE precisa ser enviado
+ * explicitamente — `null` desfaz a herança (volta a ser independente). O mesmo
+ * vale para os campos de override herdados de `DepartmentAiAssignmentSettings`:
+ * `null` = "não definir aqui, herdar do global"; por isso a tela nunca remove
+ * esses campos do payload.
+ */
 export interface UpdateDepartmentRequest extends DepartmentAiAssignmentSettings {
   name: string;
   description: string | null;
   inheritFromGlobalId: string | null;
   sortOrder: number;
   isActive: boolean;
-  assignmentStrategy?: number;
+  /** Idem: null = herdar a estratégia do global (quando o backend suportar). */
+  assignmentStrategy?: number | null;
 }
 
 export interface CreateWorkflowProfileRequest {

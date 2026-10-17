@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { TerminalErrorInfo, TerminalReadyInfo, TerminalStatsInfo } from './useTerminalStream';
 import { chunkUtf8, useTerminalStream } from './useTerminalStream';
 import type { CompletionResponse } from './terminalInput';
+import { POOL_DISPOSE_DEBOUNCE_MS, resetNatsSocketPool } from '../remote-nats/natsSocketPool';
 
 /**
  * WebSocket falso: o hook fala o protocolo NATS cru (INFO/CONNECT/+OK/MSG), então
@@ -49,11 +50,15 @@ class FakeWebSocket {
         this.emitRaw('+OK\r\n');
     }
 
-    /** Entrega um MSG do NATS (subject + payload JSON). */
+    /** Entrega um MSG do NATS (subject + payload JSON), com o SID real do SUB. */
     emitMessage(subject: string, payload: unknown) {
         const body = JSON.stringify(payload);
         const len = new TextEncoder().encode(body).length;
-        this.emitRaw(`MSG ${subject} 1 ${len}\r\n${body}\r\n`);
+        // O roteamento é por SID (protocolo): o fake descobre o SID no frame
+        // SUB que o pool enviou para aquele subject.
+        const subFrame = this.sent.find((frame) => frame.startsWith(`SUB ${subject} `));
+        const sid = subFrame ? subFrame.split(' ')[2] : '1';
+        this.emitRaw(`MSG ${subject} ${sid} ${len}\r\n${body}\r\n`);
     }
 }
 
@@ -124,11 +129,15 @@ function renderTerminal(overrides: Partial<StreamProps> = {}) {
 }
 
 beforeEach(() => {
+    // O pool de sockets é singleton de MÓDULO: sem reset entre casos a
+    // conexão (e o WebSocket falso) de um teste vazaria para o próximo.
+    resetNatsSocketPool();
     FakeWebSocket.instances = [];
     vi.stubGlobal('WebSocket', FakeWebSocket);
 });
 
 afterEach(() => {
+    resetNatsSocketPool();
     vi.unstubAllGlobals();
     vi.useRealTimers();
 });
@@ -609,6 +618,64 @@ describe('useTerminalStream — socket obsoleto', () => {
             first.onclose?.();
         });
         expect(result.current.isConnected).toBe(true);
+    });
+});
+
+describe('useTerminalStream — pool NATS compartilhado (WP5)', () => {
+    it('duas instâncias com as MESMAS credenciais compartilham 1 WebSocket', () => {
+        const a = renderTerminal();
+        const b = renderTerminal();
+
+        // Refcount: um único WebSocket para a mesma url + credenciais.
+        expect(FakeWebSocket.instances).toHaveLength(1);
+        const socket = lastSocket();
+        act(() => {
+            socket.completeHandshake();
+        });
+
+        expect(a.result.current.isConnected).toBe(true);
+        expect(b.result.current.isConnected).toBe(true);
+        // As duas instâncias fizeram o SEU hello (o agente reenvia o que falta
+        // para cada viewer), mas o SUB do subject é UM só.
+        expect(pubs(socket, TERM_IN).filter((m) => m.includes('"hello":true'))).toHaveLength(2);
+        expect(socket.sent.filter((m) => m.startsWith(`SUB ${TERM_OUT} `))).toHaveLength(1);
+    });
+
+    it('não compartilha conexão entre credenciais diferentes', () => {
+        renderTerminal();
+        renderTerminal({ jwt: 'jwt-outro' });
+
+        expect(FakeWebSocket.instances).toHaveLength(2);
+        expect(FakeWebSocket.instances[0].url).toContain('jwt-1');
+        expect(FakeWebSocket.instances[1].url).toContain('jwt-outro');
+    });
+
+    it('mantém o WebSocket aberto até a ÚLTIMA instância desmontar', async () => {
+        vi.useFakeTimers();
+        const a = renderTerminal();
+        const b = renderTerminal();
+        const socket = lastSocket();
+        act(() => {
+            socket.completeHandshake();
+        });
+
+        act(() => { a.unmount(); });
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(POOL_DISPOSE_DEBOUNCE_MS + 10);
+        });
+        expect(socket.readyState).toBe(FakeWebSocket.OPEN);
+
+        // A instância remanescente continua recebendo a saída (MSG roteada).
+        act(() => {
+            socket.emitMessage(TERM_OUT, { data: btoa('ok'), seq: 1 });
+        });
+        expect(b.onOutput).toHaveBeenCalledWith('ok');
+
+        act(() => { b.unmount(); });
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(POOL_DISPOSE_DEBOUNCE_MS + 10);
+        });
+        expect(socket.readyState).toBe(FakeWebSocket.CLOSED);
     });
 });
 

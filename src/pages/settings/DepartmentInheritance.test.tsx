@@ -1,0 +1,392 @@
+import {
+  cleanup,
+  fireEvent,
+  render,
+  renderHook,
+  screen,
+  waitFor,
+} from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import type { ReactNode } from 'react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+/**
+ * Regressão da herança de departamento no console:
+ * - select "Herdar de" lista apenas departamentos GLOBAIS (+ "Nenhum");
+ * - desfazer a herança envia null EXPLÍCITO no PUT (ausente ≠ null);
+ * - selo de origem por campo/equipe conforme GET /departments/{id}/effective;
+ * - erro de validação (422) do backend aparece no formulário;
+ * - filtro de escopo da listagem bate com o rótulo.
+ */
+const mocks = vi.hoisted(() => ({
+  effective: vi.fn(),
+  apiGet: vi.fn(),
+}));
+
+vi.mock('@/api/client', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/api/client')>();
+  return {
+    ...actual,
+    api: { ...actual.api, get: mocks.apiGet },
+  };
+});
+
+vi.mock('@/api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/api')>();
+  return {
+    ...actual,
+    departmentsApi: { ...actual.departmentsApi, effective: mocks.effective },
+  };
+});
+
+import {
+  ApiError,
+  buildDepartmentUpdatePayload,
+  buildInheritanceOptions,
+  normalizeDepartmentEffective,
+  parseDepartmentValidationErrors,
+} from '@/api';
+import type { Department } from '@/api';
+import {
+  buildDepartmentForm,
+  DepartmentInheritanceAlerts,
+  InheritedOriginBadge,
+  isInheritedMember,
+  TriageInheritableField,
+} from './DepartmentDetailPage';
+import {
+  ALL_DEPARTMENTS_SCOPE,
+  GLOBAL_DEPARTMENTS_SCOPE,
+  buildDepartmentScopeOptions,
+  filterDepartmentsByScope,
+} from './DepartmentSettings';
+import { useDepartmentEffective } from '@/hooks/useDepartments';
+
+function department(overrides: Partial<Department> = {}): Department {
+  return {
+    id: 'd1',
+    clientId: null,
+    name: 'Departamento',
+    description: null,
+    inheritFromGlobalId: null,
+    sortOrder: 0,
+    isActive: true,
+    ...overrides,
+  };
+}
+
+beforeEach(() => {
+  mocks.effective.mockReset();
+  mocks.apiGet.mockReset();
+});
+
+afterEach(() => cleanup());
+
+describe('select "Herdar de"', () => {
+  const globals = [
+    department({ id: 'g1', name: 'Suporte Global', clientId: null }),
+    department({ id: 'g2', name: 'NOC', clientId: null }),
+    department({ id: 'c1', name: 'Cliente X', clientId: 'client-1' }),
+  ];
+
+  it('lista apenas departamentos globais, com "Nenhum" para desfazer', () => {
+    const options = buildInheritanceOptions(globals, 'd2');
+
+    expect(options[0]).toEqual({ value: '', label: 'Nenhum (sem herança)' });
+    expect(options.map((option) => option.value)).toEqual(['', 'g2', 'g1']);
+
+    const byId = new Map(globals.map((item) => [item.id, item]));
+    for (const option of options) {
+      if (!option.value) continue;
+      expect(byId.get(option.value)?.clientId ?? null).toBeNull();
+    }
+  });
+
+  it('não oferece o próprio departamento (auto-herança)', () => {
+    const options = buildInheritanceOptions(globals, 'g1');
+    expect(options.some((option) => option.value === 'g1')).toBe(false);
+  });
+
+  it('mostra "herdado de <global>" só quando a origem é herdada', () => {
+    render(<InheritedOriginBadge origin="inherited-global" inheritedFrom="Suporte Global" />);
+    expect(screen.getByText('herdado de Suporte Global')).toBeTruthy();
+    cleanup();
+
+    render(<InheritedOriginBadge origin="own" />);
+    expect(screen.getByText('definido aqui')).toBeTruthy();
+    cleanup();
+
+    const { container } = render(<InheritedOriginBadge origin={undefined} />);
+    expect(container.textContent).toBe('');
+  });
+});
+
+describe('campo de triagem herdado', () => {
+  const def = {
+    key: 'aiAssignmentMode' as const,
+    label: 'Como aplicar a decisão',
+    kind: 'select' as const,
+    // Enums da API são numéricos: o select devolve "1", o payload precisa de 1.
+    valueType: 'number' as const,
+    options: [
+      { value: '0', label: 'Sugerir' },
+      { value: '1', label: 'Atribuir automaticamente' },
+    ],
+    defaultValue: '0',
+    group: 'triage' as const,
+  };
+
+  it('mostra o selo, exibe o valor efetivo e bloqueia o controle', () => {
+    render(
+      <TriageInheritableField
+        def={def}
+        ownValue={null}
+        effectiveValue={1}
+        origin="inherited-global"
+        inheritedFrom="Suporte Global"
+        canInherit
+        onChange={() => {}}
+        onInherit={() => {}}
+      />,
+    );
+
+    expect(screen.getByText('herdado de Suporte Global')).toBeTruthy();
+
+    const control = screen.getByLabelText('Como aplicar a decisão') as HTMLSelectElement;
+    expect(control.disabled).toBe(true);
+    expect(control.value).toBe('1');
+
+    const toggle = screen.getByLabelText('Herdar') as HTMLInputElement;
+    expect(toggle.checked).toBe(true);
+  });
+
+  it('desmarcar "Herdar" sobrescreve com o valor efetivo', () => {
+    const onChange = vi.fn();
+    render(
+      <TriageInheritableField
+        def={def}
+        ownValue={null}
+        effectiveValue={1}
+        origin="inherited-global"
+        inheritedFrom="Suporte Global"
+        canInherit
+        onChange={onChange}
+        onInherit={() => {}}
+      />,
+    );
+
+    fireEvent.click(screen.getByLabelText('Herdar'));
+
+    expect(onChange).toHaveBeenCalledWith(1);
+  });
+
+  it('marcar "Herdar" volta a herdar (override = null)', () => {
+    const onInherit = vi.fn();
+    render(
+      <TriageInheritableField
+        def={def}
+        ownValue={1}
+        origin="own"
+        inheritedFrom="Suporte Global"
+        canInherit
+        onChange={() => {}}
+        onInherit={onInherit}
+      />,
+    );
+
+    fireEvent.click(screen.getByLabelText('Herdar'));
+
+    expect(onInherit).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('desfazer herança no update', () => {
+  it('envia inheritFromGlobalId null explícito (não remove a propriedade)', () => {
+    const form = buildDepartmentForm(
+      department({ inheritFromGlobalId: 'g1', assignmentStrategy: 3 }),
+      null,
+    );
+
+    const payload = buildDepartmentUpdatePayload({ ...form, inheritFromGlobalId: null });
+    const json = JSON.parse(JSON.stringify(payload)) as Record<string, unknown>;
+
+    expect('inheritFromGlobalId' in payload).toBe(true);
+    expect(payload.inheritFromGlobalId).toBeNull();
+    expect(json.inheritFromGlobalId).toBeNull();
+  });
+
+  it('campos de override herdados viram null (voltar a herdar) e ficam no payload', () => {
+    const effective = normalizeDepartmentEffective({
+      origins: { aiAssignmentMode: 'inherited-global', aiSkillMinEvidence: 'default' },
+      config: { aiAssignmentMode: 1 },
+    });
+    expect(effective).not.toBeNull();
+
+    const form = buildDepartmentForm(
+      department({
+        clientId: 'client-1',
+        inheritFromGlobalId: 'g1',
+        aiAssignmentMode: 1,
+        aiSkillMinEvidence: 3,
+      }),
+      effective,
+    );
+
+    // Herdado/padrão vira null no formulário (null = herdar).
+    expect(form.aiAssignmentMode).toBeNull();
+    expect(form.aiSkillMinEvidence).toBeNull();
+
+    const payload = buildDepartmentUpdatePayload(form) as unknown as Record<string, unknown>;
+    expect('aiAssignmentModeOverride' in payload).toBe(true);
+    expect(payload.aiAssignmentModeOverride).toBeNull();
+    expect(payload.aiSkillMinEvidenceOverride).toBeNull();
+  });
+
+  it('sem o endpoint efetivo mantém os valores próprios do departamento', () => {
+    const form = buildDepartmentForm(
+      department({ clientId: 'client-1', aiAssignmentMode: 2, aiSkillMinEvidence: 9 }),
+      null,
+    );
+
+    expect(form.aiAssignmentMode).toBe(2);
+    expect(form.aiSkillMinEvidence).toBe(9);
+    expect(form.aiWeightMax).toBe(0.5);
+  });});
+
+describe('erro de validação (422)', () => {
+  it('renderiza a mensagem do backend no formulário', () => {
+    const parsed = parseDepartmentValidationErrors(
+      new ApiError(422, 'Não é possível herdar de si mesmo.'),
+    );
+
+    expect(parsed.status).toBe(422);
+    render(<DepartmentInheritanceAlerts messages={parsed.messages} />);
+
+    const alert = screen.getByRole('alert');
+    expect(alert.textContent).toContain('Não é possível herdar de si mesmo.');
+  });
+
+  it('quebra múltiplos erros de campo em linhas', () => {
+    const parsed = parseDepartmentValidationErrors(
+      new ApiError(422, 'InheritFromGlobalId: ciclo detectado; InheritFromGlobalId: pai inativo'),
+    );
+
+    expect(parsed.messages).toHaveLength(2);
+  });
+
+  it('não renderiza nada sem avisos', () => {
+    const { container } = render(<DepartmentInheritanceAlerts messages={[]} />);
+    expect(container.textContent).toBe('');
+  });
+});
+
+describe('config efetiva', () => {
+  it('normaliza origem, equipe e avisos', () => {
+    const view = normalizeDepartmentEffective({
+      departmentId: 'd2',
+      inheritFromGlobalId: 'g1',
+      inheritFromGlobalName: 'Suporte Global',
+      config: { aiAssignmentModeOverride: 1 },
+      origins: { aiAssignmentModeOverride: 'inherited-global', assignmentStrategy: 'own' },
+      team: [
+        { userId: 'u1', userName: 'Ana', inherited: true, sourceDepartmentName: 'Suporte Global' },
+        { userId: 'u2', userName: 'Bia', inherited: false },
+      ],
+      warnings: ['Departamento pai inativo.'],
+    });
+
+    expect(view?.parentName).toBe('Suporte Global');
+    expect(view?.origins.aiAssignmentModeOverride).toBe('inherited-global');
+    expect(view?.origins.assignmentStrategy).toBe('own');
+    expect(view?.team.map((member) => member.userId)).toEqual(['u1', 'u2']);
+    expect(isInheritedMember(view?.team[0])).toBe(true);
+    expect(isInheritedMember(view?.team[1])).toBe(false);
+    expect(view?.warnings).toEqual(['Departamento pai inativo.']);
+  });
+
+  it('aceita aliases e enum numérico sem quebrar', () => {
+    const view = normalizeDepartmentEffective({
+      config: {},
+      fieldOrigins: { aiAssignmentModeOverride: 2, aiWeightMin: 'inherited' },
+      members: [{ id: 'u1', isInherited: true }],
+    } as unknown as Parameters<typeof normalizeDepartmentEffective>[0]);
+
+    expect(view?.origins.aiAssignmentModeOverride).toBe('inherited-global');
+    expect(view?.origins.aiWeightMin).toBe('inherited-global');
+    expect(view?.team[0].userId).toBe('u1');
+    expect(view?.team[0].inherited).toBe(true);
+  });
+
+  it('devolve null quando não há payload (404)', () => {
+    expect(normalizeDepartmentEffective(null)).toBeNull();
+    expect(normalizeDepartmentEffective(undefined)).toBeNull();
+  });
+});
+
+describe('filtro de escopo da listagem', () => {
+  const list = [
+    department({ id: 'g1', name: 'Global 1', clientId: null }),
+    department({ id: 'd1', name: 'Cliente A', clientId: 'a' }),
+    department({ id: 'd2', name: 'Cliente B', clientId: 'b' }),
+  ];
+
+  it('rótulo do filtro descreve o que a lista devolve', () => {
+    const options = buildDepartmentScopeOptions([{ id: 'a', name: 'Cliente A' }]);
+
+    expect(options[0]).toEqual({
+      value: ALL_DEPARTMENTS_SCOPE,
+      label: 'Todos os departamentos (globais + clientes)',
+    });
+    expect(options.some((option) => option.value === GLOBAL_DEPARTMENTS_SCOPE)).toBe(true);
+    expect(options.some((option) => option.value === 'a')).toBe(true);
+  });
+
+  it('escopo vazio mostra globais + clientes; "somente globais" mostra só globais', () => {
+    expect(filterDepartmentsByScope(list, ALL_DEPARTMENTS_SCOPE).map((item) => item.id)).toEqual([
+      'g1',
+      'd1',
+      'd2',
+    ]);
+    expect(
+      filterDepartmentsByScope(list, GLOBAL_DEPARTMENTS_SCOPE).map((item) => item.id),
+    ).toEqual(['g1']);
+    expect(filterDepartmentsByScope(list, 'a').map((item) => item.id)).toEqual(['d1']);
+  });
+});
+
+describe('GET /departments/global e /effective', () => {
+  it('cai para a listagem filtrando globais quando /global responde 404', async () => {
+    const { departmentsApi } = await import('@/api');
+
+    mocks.apiGet
+      .mockRejectedValueOnce(new ApiError(404, 'Recurso não encontrado'))
+      .mockResolvedValueOnce([
+        department({ id: 'g1', clientId: null }),
+        department({ id: 'c1', clientId: 'client-1' }),
+      ]);
+
+    const globals = await departmentsApi.listGlobal();
+
+    expect(globals.map((item) => item.id)).toEqual(['g1']);
+    expect(mocks.apiGet).toHaveBeenLastCalledWith('/api/v1/departments', {
+      includeGlobal: true,
+    });
+  });
+
+  it('useDepartmentEffective trata 404 como endpoint ausente (sem erro na tela)', async () => {
+    mocks.effective.mockRejectedValue(new ApiError(404, 'Recurso não encontrado'));
+
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+
+    const { result } = renderHook(() => useDepartmentEffective('d1'), { wrapper });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data).toBeNull();
+    expect(result.current.isError).toBe(false);
+  });
+});

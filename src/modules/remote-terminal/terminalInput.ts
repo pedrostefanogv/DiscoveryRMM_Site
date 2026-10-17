@@ -20,6 +20,10 @@ export interface CompletionMatch {
 export interface CompletionRequest {
     reqId: string;
     input: string;
+    /**
+     * Posição do cursor em RUNAS (code points), NÃO em unidades UTF-16: é a
+     * unidade que o agente (Go) usa. Use utf16IndexToRuneIndex antes de enviar.
+     */
     cursor: number;
     /** null = lista paginada; true = próximo (Tab); false = anterior (Shift+Tab). */
     forward: boolean | null;
@@ -31,7 +35,9 @@ export interface CompletionResponse {
     reqId: string;
     ok: boolean;
     error?: string;
+    /** Início da substituição em RUNAS na linha (não em UTF-16). */
     replacementIndex: number;
+    /** Tamanho da substituição em RUNAS (não em UTF-16). */
     replacementLength: number;
     matches: CompletionMatch[];
     totalCount: number;
@@ -111,9 +117,58 @@ function safeText(res: CompletionResponse | null | undefined, matchIndex: number
 }
 
 /**
+ * Converte um índice em UNIDADES UTF-16 (o que `string.length`/`slice` usam)
+ * para o índice em RUNAS (code points) que o agente usa no contrato de
+ * completion.
+ *
+ * Emoji/astral (ex.: 😀 U+1F600) ocupam 2 unidades UTF-16 e 1 runa: enviar o
+ * cursor em UTF-16 fazia o agente cortar a linha no meio de um par substituto
+ * e devolver replacementIndex/replacementLength adiantados, corrompendo o
+ * texto ao aplicar o match.
+ *
+ * Aproximação: um índice que caia NO MEIO de um par substituto é arredondado
+ * para baixo (o code point só conta quando cabe inteiro até o limite), então
+ * o cursor nunca aponta para o meio de um caractere.
+ */
+export function utf16IndexToRuneIndex(text: string, index: number): number {
+    if (!text || !Number.isFinite(index) || index <= 0) return 0;
+    const limit = Math.min(text.length, Math.floor(index));
+    let units = 0;
+    let runes = 0;
+    for (const ch of text) {
+        if (units + ch.length > limit) break;
+        units += ch.length;
+        runes += 1;
+    }
+    return runes;
+}
+
+/**
+ * Converte um índice em RUNAS (o que o agente devolve em
+ * replacementIndex/replacementLength) para o índice em UNIDADES UTF-16 usado
+ * por `slice`/cursor local. Índices fora da faixa são limitados às bordas.
+ */
+export function runeIndexToUtf16Index(text: string, runeIndex: number): number {
+    if (!text || !Number.isFinite(runeIndex) || runeIndex <= 0) return 0;
+    const limit = Math.floor(runeIndex);
+    let units = 0;
+    let runes = 0;
+    for (const ch of text) {
+        if (runes >= limit) break;
+        units += ch.length;
+        runes += 1;
+    }
+    return units;
+}
+
+/**
  * Aplica um match substituindo [replacementIndex, replacementIndex+length) na
  * linha atual. Devolve a linha/cursor resultantes e o match aplicado (null se
  * o índice não existe).
+ *
+ * CONTRATO DE UNIDADES: `res.replacementIndex`/`replacementLength` chegam em
+ * RUNAS (é o que o agente conta); `line`/`cursor` são UTF-16. A conversão
+ * runas→UTF-16 acontece aqui, antes de fatiar a string.
  */
 export function applyCompletion(
     line: string,
@@ -126,12 +181,14 @@ export function applyCompletion(
         return { line, cursor, match: null };
     }
     const text = safeText(res, matchIndex);
-    const rawIndex = Number.isFinite(res?.replacementIndex) ? Number(res!.replacementIndex) : cursor;
+    const rawIndex = Number.isFinite(res?.replacementIndex)
+        ? Number(res!.replacementIndex)
+        : utf16IndexToRuneIndex(line, cursor);
     const rawLength = Number.isFinite(res?.replacementLength) ? Number(res!.replacementLength) : 0;
-    const start = Math.max(0, Math.min(line.length, rawIndex));
-    const end = Math.max(start, Math.min(line.length, start + Math.max(0, rawLength)));
+    const start = runeIndexToUtf16Index(line, Math.max(0, rawIndex));
+    const end = runeIndexToUtf16Index(line, Math.max(0, rawIndex) + Math.max(0, rawLength));
     const before = line.slice(0, start);
-    const after = line.slice(end);
+    const after = line.slice(Math.max(start, end));
     return { line: before + text + after, cursor: before.length + text.length, match: matches[matchIndex] };
 }
 
@@ -144,17 +201,32 @@ const KEY_DELETE = ESC + '[3~';
  * Keystrokes equivalentes para aplicar um match no shell (caminho ConPTY):
  * posiciona o cursor no início da substituição, apaga o trecho e digita o
  * texto. O shell (readline/PSReadLine) é quem edita o buffer remoto.
+ *
+ * `line` é a linha (UTF-16) para converter o replacementIndex em RUNAS de
+ * volta para a coordenada do cursor. `length` (runas) vira a quantidade de
+ * DELETEs.
+ *
+ * APROXIMAÇÃO DOCUMENTADA: no ConPTY o cursor vem de `buffer.cursorX` do
+ * xterm, que é COLUNA (célula do terminal) e não índice de string. Cada
+ * caractere largo (CJK/emoji) ocupa 2 células mas 1 runa; a conversão daqui
+ * usa o comprimento UTF-16 do texto como proxy, o que acerta o caso ASCII (o
+ * usual em prompt de shell) e pode errar por ±1 célula por caractere largo
+ * antes do cursor. Preferimos essa aproximação à ausência de correção, que
+ * corrompia o buffer no primeiro emoji.
  */
 export function completionKeystrokes(
+    line: string,
     cursor: number,
     res: CompletionResponse | null | undefined,
     matchIndex: number,
 ): string {
     const text = safeText(res, matchIndex);
-    const rawIndex = Number.isFinite(res?.replacementIndex) ? Number(res!.replacementIndex) : cursor;
+    const rawIndex = Number.isFinite(res?.replacementIndex)
+        ? Number(res!.replacementIndex)
+        : utf16IndexToRuneIndex(line, cursor);
     const rawLength = Number.isFinite(res?.replacementLength) ? Number(res!.replacementLength) : 0;
-    const start = Math.max(0, rawIndex);
-    const length = Math.max(0, rawLength);
+    const start = runeIndexToUtf16Index(line, Math.max(0, rawIndex));
+    const length = Math.max(0, Math.floor(rawLength));
     let keys = '';
     if (cursor > start) keys += KEY_LEFT.repeat(cursor - start);
     else if (cursor < start) keys += KEY_RIGHT.repeat(start - cursor);

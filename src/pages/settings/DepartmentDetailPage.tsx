@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { ChangeEvent } from "react";
 import {
+  AlertTriangle,
   ArrowLeft,
   Building2,
   Globe,
@@ -11,6 +13,7 @@ import {
 import { useNavigate, useParams } from "react-router-dom";
 import toast from "react-hot-toast";
 import { DepartmentCustomFieldsSection } from "@/components/configuration/DepartmentCustomFieldsSection";
+import { InheritableFieldToggle } from "@/components/configuration/InheritableFieldToggle";
 import {
   Badge,
   Button,
@@ -36,17 +39,28 @@ import {
   useApplyWeightSuggestion,
   useDeleteDepartment,
   useDepartment,
+  useDepartmentEffective,
   useDepartmentLearningSuggestions,
   useDepartmentTeamMetrics,
   useDiscardSkillSuggestion,
   useDiscardWeightSuggestion,
+  useGlobalDepartments,
   useRefreshDepartmentTeamMetrics,
   useRunLearningCycle,
   useUpdateDepartment,
   useUpdateDepartmentMemberProfile,
 } from "@/hooks/useDepartments";
+import {
+  buildDepartmentUpdatePayload,
+  buildInheritanceOptions,
+  normalizeDepartmentEffective,
+  parseDepartmentValidationErrors,
+} from "@/api";
 import type {
   AiAssignmentWeights,
+  Department,
+  DepartmentEffectiveView,
+  DepartmentFieldOrigin,
   DepartmentMemberProfileDto,
   UpdateDepartmentMemberProfileRequest,
   UpdateDepartmentRequest,
@@ -76,6 +90,450 @@ const LEARNING_MODE_OPTIONS = [
   { value: "1", label: "Sugerir (gestor aprova)" },
   { value: "2", label: "Aplicar automaticamente" },
 ];
+
+// ── Herança do departamento global ────────────────────────────────────────
+
+const ORIGIN_LABELS: Record<DepartmentFieldOrigin, string> = {
+  own: "definido aqui",
+  "inherited-global": "herdado",
+  default: "padrão",
+};
+
+/**
+ * Selo de origem de um valor na configuração de triagem.
+ *
+ * Só é renderizado quando a API devolve a origem
+ * (GET /api/v1/departments/{id}/effective). Sem esse endpoint a tela continua
+ * funcionando como antes, sem selos.
+ */
+export function InheritedOriginBadge({
+  origin,
+  inheritedFrom,
+}: {
+  origin?: DepartmentFieldOrigin;
+  inheritedFrom?: string | null;
+}) {
+  if (!origin) return null;
+
+  if (origin === "inherited-global") {
+    return (
+      <Badge color="accent">herdado de {inheritedFrom || "departamento global"}</Badge>
+    );
+  }
+
+  return (
+    <Badge color={origin === "own" ? "primary" : "slate"}>{ORIGIN_LABELS[origin]}</Badge>
+  );
+}
+
+/**
+ * Avisos de herança devolvidos pelo backend (ciclo, auto-herança, pai inativo,
+ * pai de outro escopo) e erros de validação do save (422/400).
+ */
+export function DepartmentInheritanceAlerts({
+  messages,
+}: {
+  messages: string[];
+}) {
+  if (messages.length === 0) return null;
+
+  return (
+    <div role="alert" className="rounded-xl border border-warning/40 bg-warning/10 p-3 text-sm">
+      <p className="flex items-center gap-2 font-medium text-warning">
+        <AlertTriangle className="h-4 w-4" />
+        Herança do departamento
+      </p>
+      <ul className="mt-1 list-disc space-y-1 pl-5 text-muted-foreground">
+        {messages.map((message) => (
+          <li key={message}>{message}</li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+type TriageFieldKey =
+  | "aiAssignmentMode"
+  | "aiAssignmentMinConfidence"
+  | "aiAssignmentFallbackStrategy"
+  | "aiAssignmentMaxCandidates"
+  | "aiAssignmentInstructions"
+  | "aiAssignmentUseAffinity"
+  | "aiAssignmentMaxOutputTokens"
+  | "aiSkillLearningMode"
+  | "aiSkillMinEvidence"
+  | "aiSkillMaxTags"
+  | "aiWeightLearningMode"
+  | "aiWeightMaxDeltaPerCycle"
+  | "aiWeightCycleDays"
+  | "aiWeightMin"
+  | "aiWeightMax";
+
+interface TriageFieldDef {
+  key: TriageFieldKey;
+  label: string;
+  kind: "select" | "number" | "boolean" | "text";
+  /**
+   * Tipo gravado no payload. Selects usam o value do <option> (string), mas os
+   * enums da API são numéricos — sem isso o JSON iria com "1" em vez de 1.
+   */
+  valueType?: "number" | "boolean" | "string";
+  options?: { value: string; label: string }[];
+  min?: number;
+  max?: number;
+  step?: string;
+  /** Valor exibido quando herdado e a API ainda não devolveu o efetivo. */
+  defaultValue: string;
+  group: "triage" | "learning";
+}
+
+const TRIAGE_FIELD_DEFS: TriageFieldDef[] = [
+  {
+    key: "aiAssignmentMode",
+    label: "Como aplicar a decisão",
+    kind: "select",
+    valueType: "number",
+    options: AI_MODE_OPTIONS,
+    defaultValue: "0",
+    group: "triage",
+  },
+  {
+    key: "aiAssignmentFallbackStrategy",
+    label: "Fallback quando a IA não decide",
+    kind: "select",
+    valueType: "number",
+    options: AI_FALLBACK_OPTIONS,
+    defaultValue: "1",
+    group: "triage",
+  },
+  {
+    key: "aiAssignmentMinConfidence",
+    label: "Confiança mínima (0 a 1)",
+    kind: "number",
+    min: 0,
+    max: 1,
+    step: "0.05",
+    defaultValue: "0.6",
+    group: "triage",
+  },
+  {
+    key: "aiAssignmentMaxCandidates",
+    label: "Máximo de candidatos",
+    kind: "number",
+    min: 1,
+    max: 20,
+    defaultValue: "8",
+    group: "triage",
+  },
+  {
+    key: "aiAssignmentUseAffinity",
+    label: "Usar afinidade com chamados semelhantes já resolvidos",
+    kind: "boolean",
+    defaultValue: "true",
+    group: "triage",
+  },
+  {
+    key: "aiAssignmentMaxOutputTokens",
+    label: "Teto de tokens da triagem",
+    kind: "number",
+    min: 200,
+    max: 32768,
+    step: "100",
+    defaultValue: "1200",
+    group: "triage",
+  },
+  {
+    key: "aiAssignmentInstructions",
+    label: "Orientações para a IA (opcional)",
+    kind: "text",
+    defaultValue: "",
+    group: "triage",
+  },
+  {
+    key: "aiSkillLearningMode",
+    label: "Competências: modo",
+    kind: "select",
+    valueType: "number",
+    options: LEARNING_MODE_OPTIONS,
+    defaultValue: "1",
+    group: "learning",
+  },
+  {
+    key: "aiWeightLearningMode",
+    label: "Pesos: modo",
+    kind: "select",
+    valueType: "number",
+    options: LEARNING_MODE_OPTIONS,
+    defaultValue: "1",
+    group: "learning",
+  },
+  {
+    key: "aiSkillMinEvidence",
+    label: "Evidência mínima (chamados)",
+    kind: "number",
+    min: 1,
+    max: 100,
+    defaultValue: "3",
+    group: "learning",
+  },
+  {
+    key: "aiSkillMaxTags",
+    label: "Máx. competências por atendente",
+    kind: "number",
+    min: 1,
+    max: 30,
+    defaultValue: "12",
+    group: "learning",
+  },
+  {
+    key: "aiWeightCycleDays",
+    label: "Ciclo de calibração (dias)",
+    kind: "number",
+    min: 1,
+    max: 90,
+    defaultValue: "7",
+    group: "learning",
+  },
+  {
+    key: "aiWeightMaxDeltaPerCycle",
+    label: "Ajuste máx. por ciclo",
+    kind: "number",
+    min: 0.01,
+    max: 0.5,
+    step: "0.01",
+    defaultValue: "0.1",
+    group: "learning",
+  },
+  {
+    key: "aiWeightMin",
+    label: "Peso mínimo",
+    kind: "number",
+    min: 0.01,
+    max: 1,
+    step: "0.01",
+    defaultValue: "0.05",
+    group: "learning",
+  },
+  {
+    key: "aiWeightMax",
+    label: "Peso máximo",
+    kind: "number",
+    min: 0.01,
+    max: 1,
+    step: "0.01",
+    defaultValue: "0.5",
+    group: "learning",
+  },
+];
+
+const TRIAGE_FIELDS_BY_KEY = new Map(TRIAGE_FIELD_DEFS.map((def) => [def.key, def]));
+
+/** Converte o valor cru da API/form em texto para o controle. */
+function fieldText(value: unknown, fallback: string): string {
+  if (value === null || value === undefined || value === "") return fallback;
+  if (typeof value === "boolean") return value ? "true" : "false";
+  return String(value);
+}
+
+/** Converte o texto do controle de volta para o tipo gravado no payload. */
+function fieldValueFromText(
+  def: TriageFieldDef,
+  text: string,
+): number | boolean | string | null {
+  const valueType = def.valueType ?? (def.kind === "text" ? "string" : def.kind);
+  if (valueType === "number") {
+    const numeric = Number(text);
+    return Number.isFinite(numeric) ? numeric : Number(def.defaultValue);
+  }
+  if (valueType === "boolean") return text === "true";
+  return text.trim() ? text : null;
+}
+
+/**
+ * Campo da configuração de triagem com herança: mostra a origem, bloqueia a
+ * edição enquanto o valor vem do global e permite sobrescrever (ou voltar a
+ * herdar, enviando null no update).
+ */
+export function TriageInheritableField({
+  def,
+  ownValue,
+  effectiveValue,
+  origin,
+  inheritedFrom,
+  canInherit,
+  onChange,
+  onInherit,
+}: {
+  def: TriageFieldDef;
+  /** Valor próprio do departamento (null = herdando). */
+  ownValue: unknown;
+  /** Valor efetivo devolvido pela API (usado quando herdado). */
+  effectiveValue?: unknown;
+  origin?: DepartmentFieldOrigin;
+  inheritedFrom?: string | null;
+  canInherit: boolean;
+  onChange: (value: number | boolean | string | null) => void;
+  onInherit: () => void;
+}) {
+  const inherited = origin === "inherited-global";
+  const text = fieldText(inherited ? effectiveValue : ownValue, def.defaultValue);
+  const disabled = inherited;
+  const controlId = "triage-" + def.key;
+
+  const handleChange = (
+    event: ChangeEvent<HTMLInputElement | HTMLSelectElement>,
+  ) => onChange(fieldValueFromText(def, event.target.value));
+
+  // Valor salvo/efetivo fora do catálogo (ex.: opção removida): mantém visível
+  // para o admin perceber e corrigir — mesmo padrão do ConfigurationFieldEditor.
+  const baseOptions = def.options ?? [];
+  const selectOptions =
+    !text || baseOptions.some((option) => option.value === text)
+      ? baseOptions
+      : [...baseOptions, { value: text, label: text + " (valor atual)" }];
+
+  const control =
+    def.kind === "select" ? (
+      <Select
+        id={controlId}
+        value={text}
+        options={selectOptions}
+        disabled={disabled}
+        onChange={(event) => onChange(fieldValueFromText(def, event.target.value))}
+      />
+    ) : def.kind === "boolean" ? (
+      <Select
+        id={controlId}
+        value={text}
+        options={[
+          { value: "true", label: "Sim" },
+          { value: "false", label: "Não" },
+        ]}
+        disabled={disabled}
+        onChange={(event) => onChange(fieldValueFromText(def, event.target.value))}
+      />
+    ) : def.kind === "number" ? (
+      <Input
+        id={controlId}
+        type="number"
+        min={def.min}
+        max={def.max}
+        step={def.step}
+        value={text}
+        disabled={disabled}
+        onChange={handleChange}
+      />
+    ) : (
+      <Input
+        id={controlId}
+        value={text}
+        disabled={disabled}
+        onChange={handleChange}
+        placeholder="Ex.: priorize quem domina rede para chamados do cliente X"
+      />
+    );
+
+  return (
+    <div className="flex h-full flex-col gap-2">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <label htmlFor={controlId} className="text-sm font-medium text-foreground">
+          {def.label}
+        </label>
+        <div className="flex flex-wrap items-center gap-2">
+          <InheritedOriginBadge origin={origin} inheritedFrom={inheritedFrom} />
+          {canInherit && (
+            <InheritableFieldToggle
+              checked={inherited}
+              onChange={(next) => {
+                if (next) {
+                  onInherit();
+                  return;
+                }
+                // Sobrescrever: parte do valor efetivo exibido.
+                onChange(fieldValueFromText(def, text));
+              }}
+            />
+          )}
+        </div>
+      </div>
+      <div className="mt-auto">{control}</div>
+    </div>
+  );
+}
+
+/** Form inicial: campos herdados viram null (= herdar) quando a API informa a origem. */
+export function buildDepartmentForm(
+  department: Department,
+  effective: DepartmentEffectiveView | null,
+): UpdateDepartmentRequest {
+  const inheritedOrDefault = (key: string) => {
+    const origin = effective?.origins?.[key];
+    return origin === "inherited-global" || origin === "default";
+  };
+
+  const decor = <T,>(key: string, value: T | null | undefined, fallback: T): T | null =>
+    inheritedOrDefault(key) ? null : value ?? fallback;
+
+  return {
+    name: department.name,
+    description: department.description,
+    inheritFromGlobalId: department.inheritFromGlobalId ?? null,
+    sortOrder: department.sortOrder,
+    isActive: department.isActive,
+    // null = herdar a estratégia do global (o form mostra o valor efetivo).
+    assignmentStrategy: inheritedOrDefault("assignmentStrategy")
+      ? null
+      : department.assignmentStrategy ?? 0,
+    aiAssignmentMode: decor("aiAssignmentMode", department.aiAssignmentMode, 0),
+    aiAssignmentMinConfidence: decor(
+      "aiAssignmentMinConfidence",
+      department.aiAssignmentMinConfidence,
+      0.6,
+    ),
+    aiAssignmentFallbackStrategy: decor(
+      "aiAssignmentFallbackStrategy",
+      department.aiAssignmentFallbackStrategy,
+      1,
+    ),
+    aiAssignmentMaxCandidates: decor(
+      "aiAssignmentMaxCandidates",
+      department.aiAssignmentMaxCandidates,
+      8,
+    ),
+    aiAssignmentWeightsJson: decor(
+      "aiAssignmentWeightsJson",
+      department.aiAssignmentWeightsJson,
+      null as string | null,
+    ),
+    aiAssignmentInstructions: decor(
+      "aiAssignmentInstructions",
+      department.aiAssignmentInstructions,
+      null as string | null,
+    ),
+    aiAssignmentUseAffinity: decor(
+      "aiAssignmentUseAffinity",
+      department.aiAssignmentUseAffinity,
+      true,
+    ),
+    aiAssignmentMaxOutputTokens: decor(
+      "aiAssignmentMaxOutputTokens",
+      department.aiAssignmentMaxOutputTokens,
+      1200,
+    ),
+    aiSkillLearningMode: decor("aiSkillLearningMode", department.aiSkillLearningMode, 1),
+    aiSkillMinEvidence: decor("aiSkillMinEvidence", department.aiSkillMinEvidence, 3),
+    aiSkillMaxTags: decor("aiSkillMaxTags", department.aiSkillMaxTags, 12),
+    aiWeightLearningMode: decor("aiWeightLearningMode", department.aiWeightLearningMode, 1),
+    aiWeightMaxDeltaPerCycle: decor(
+      "aiWeightMaxDeltaPerCycle",
+      department.aiWeightMaxDeltaPerCycle,
+      0.1,
+    ),
+    aiWeightCycleDays: decor("aiWeightCycleDays", department.aiWeightCycleDays, 7),
+    aiWeightMin: decor("aiWeightMin", department.aiWeightMin, 0.05),
+    aiWeightMax: decor("aiWeightMax", department.aiWeightMax, 0.5),
+  };
+}
 
 function describeWeights(weights: AiAssignmentWeights): string {
   return [
@@ -197,18 +655,50 @@ function formatDecimal(value?: number | null, digits = 1): string {
   return value.toFixed(digits);
 }
 
-function DepartmentMembersCard({ departmentId }: { departmentId: string }) {
+/** Membro efetivo herdado do departamento global pai. */
+export function isInheritedMember(
+  member: { inherited?: boolean; origin?: DepartmentFieldOrigin } | undefined,
+): boolean {
+  if (!member) return false;
+  return member.inherited === true || member.origin === "inherited-global";
+}
+
+function DepartmentMembersCard({
+  departmentId,
+  inheritedFrom,
+}: {
+  departmentId: string;
+  /** Nome do global pai, para o selo "herdado de ...". */
+  inheritedFrom?: string | null;
+}) {
   const members = useDepartmentMembers(departmentId);
+  const effectiveQuery = useDepartmentEffective(departmentId);
   const add = useAddDepartmentMember();
   const remove = useRemoveDepartmentMember();
   const users = useIamUsers();
   const [userId, setUserId] = useState("");
 
-  const memberIds = new Set((members.data ?? []).map((m) => m.userId));
+  const effective = useMemo(
+    () => normalizeDepartmentEffective(effectiveQuery.data),
+    [effectiveQuery.data],
+  );
+
+  const ownMembers = members.data ?? [];
+  const ownIds = new Set(ownMembers.map((m) => m.userId));
+  const effectiveById = useMemo(
+    () => new Map((effective?.team ?? []).map((member) => [member.userId, member])),
+    [effective],
+  );
+  // Membros efetivos marcados como herdados e que NÃO estão na equipe própria.
+  const inheritedMembers = (effective?.team ?? []).filter(
+    (member) => isInheritedMember(member) && !ownIds.has(member.userId),
+  );
+  const inheritedIds = new Set(inheritedMembers.map((member) => member.userId));
+
   const options = [
     { value: "", label: "Selecione um usuário..." },
     ...(users.data ?? [])
-      .filter((u) => !memberIds.has(u.id))
+      .filter((u) => !ownIds.has(u.id) && !inheritedIds.has(u.id))
       .map((u) => ({ value: u.id, label: u.fullName || u.login || u.email })),
   ];
 
@@ -220,25 +710,53 @@ function DepartmentMembersCard({ departmentId }: { departmentId: string }) {
       />
       <div className="space-y-3">
         {members.isLoading && <Loading />}
-        {(members.data ?? []).map((m) => (
-          <div key={m.id} className="flex items-center justify-between rounded-lg bg-surface-light px-3 py-2">
-            <span className="text-sm text-foreground">{m.userName ?? m.userId}</span>
-            <button
-              type="button"
-              aria-label="Remover membro"
-              className="p-1 text-muted hover:text-danger"
-              onClick={() =>
-                remove.mutate(
-                  { departmentId, userId: m.userId },
-                  { onError: () => toast.error("Erro ao remover membro") },
-                )
-              }
+        {ownMembers.map((m) => {
+          const inherited = isInheritedMember(effectiveById.get(m.userId));
+
+          return (
+            <div
+              key={m.id}
+              className="flex items-center justify-between rounded-lg bg-surface-light px-3 py-2"
             >
-              <Trash2 className="h-4 w-4" />
-            </button>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-sm text-foreground">{m.userName ?? m.userId}</span>
+                {inherited && <InheritedOriginBadge origin="inherited-global" inheritedFrom={inheritedFrom} />}
+              </div>
+              <button
+                type="button"
+                aria-label="Remover membro"
+                className="p-1 text-muted hover:text-danger"
+                onClick={() =>
+                  remove.mutate(
+                    { departmentId, userId: m.userId },
+                    { onError: () => toast.error("Erro ao remover membro") },
+                  )
+                }
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </div>
+          );
+        })}
+
+        {inheritedMembers.map((member) => (
+          <div
+            key={"inherited-" + member.userId}
+            className="flex items-center justify-between rounded-lg border border-dashed border-accent/40 bg-accent/5 px-3 py-2"
+          >
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm text-foreground">{member.userName ?? member.userId}</span>
+              <InheritedOriginBadge
+                origin="inherited-global"
+                inheritedFrom={member.sourceDepartmentName ?? inheritedFrom}
+              />
+              {member.isActive === false && <Badge color="slate">inativo</Badge>}
+            </div>
+            <span className="text-xs text-muted">gerenciado no global</span>
           </div>
         ))}
-        {(members.data?.length ?? 0) === 0 && !members.isLoading && (
+
+        {ownMembers.length === 0 && inheritedMembers.length === 0 && !members.isLoading && (
           <p className="text-sm text-muted">Nenhum membro cadastrado.</p>
         )}
         <div className="flex flex-wrap items-end gap-2 border-t border-border pt-3">
@@ -273,6 +791,8 @@ export default function DepartmentDetailPage() {
 
   const departmentQuery = useDepartment(departmentId);
   const clientsQuery = useClients();
+  const globalsQuery = useGlobalDepartments();
+  const effectiveQuery = useDepartmentEffective(departmentId);
 
   const updateDepartment = useUpdateDepartment();
   const deleteDepartment = useDeleteDepartment();
@@ -280,6 +800,8 @@ export default function DepartmentDetailPage() {
   const [tab, setTab] = useState<DepartmentTab>("general");
   const [form, setForm] = useState<UpdateDepartmentRequest | null>(null);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  /** Erros de validação do último save (422/400), exibidos no formulário. */
+  const [saveErrors, setSaveErrors] = useState<string[]>([]);
   // Semeadura do form: só quando muda o departamento; refetch não sobrescreve
   // edições pendentes do usuário.
   const seededDepartmentIdRef = useRef<string | null>(null);
@@ -293,30 +815,24 @@ export default function DepartmentDetailPage() {
     [clientsQuery.data],
   );
 
+  const effective = useMemo(
+    () => normalizeDepartmentEffective(effectiveQuery.data),
+    [effectiveQuery.data],
+  );
+
+  // Re-semeia quando o departamento muda ou quando a config efetiva chega
+  // (a origem por campo só existe depois do GET /effective). Edições pendentes
+  // do usuário nunca são sobrescritas.
   useEffect(() => {
     if (!departmentQuery.data) return;
 
     const entityChanged = seededDepartmentIdRef.current !== departmentQuery.data.id;
     if (!entityChanged && dirtyRef.current) return;
 
-    setForm({
-      name: departmentQuery.data.name,
-      description: departmentQuery.data.description,
-      inheritFromGlobalId: departmentQuery.data.inheritFromGlobalId,
-      sortOrder: departmentQuery.data.sortOrder,
-      isActive: departmentQuery.data.isActive,
-      assignmentStrategy: departmentQuery.data.assignmentStrategy ?? 0,
-      aiAssignmentMode: departmentQuery.data.aiAssignmentMode ?? 0,
-      aiAssignmentMinConfidence: departmentQuery.data.aiAssignmentMinConfidence ?? 0.6,
-      aiAssignmentFallbackStrategy: departmentQuery.data.aiAssignmentFallbackStrategy ?? 1,
-      aiAssignmentMaxCandidates: departmentQuery.data.aiAssignmentMaxCandidates ?? 8,
-      aiAssignmentWeightsJson: departmentQuery.data.aiAssignmentWeightsJson ?? null,
-      aiAssignmentInstructions: departmentQuery.data.aiAssignmentInstructions ?? null,
-      aiAssignmentUseAffinity: departmentQuery.data.aiAssignmentUseAffinity ?? true,
-    });
+    setForm(buildDepartmentForm(departmentQuery.data, effective));
     seededDepartmentIdRef.current = departmentQuery.data.id;
     if (entityChanged) dirtyRef.current = false;
-  }, [departmentQuery.data]);
+  }, [departmentQuery.data, effective]);
 
   if (!departmentId) {
     return (
@@ -345,6 +861,56 @@ export default function DepartmentDetailPage() {
     ? clientsById.get(department.clientId) ?? "Cliente"
     : null;
 
+  // Departamento global não herda de ninguém (só é herdado).
+  const isGlobalScope = !department.clientId;
+  const canInherit = !isGlobalScope;
+  const origins = effective?.origins ?? {};
+  const effectiveConfig = effective?.config ?? {};
+  const globals = globalsQuery.data ?? [];
+  const inheritanceOptions = buildInheritanceOptions(globals, department.id);
+  const parentGlobal = globals.find((global) => global.id === form.inheritFromGlobalId) ?? null;
+  const inheritedFromName =
+    parentGlobal?.name ??
+    department.inheritFromGlobalName ??
+    effective?.parentName ??
+    (form.inheritFromGlobalId ? "departamento global" : null);
+
+  // Avisos do backend (ciclo/auto-herança/pai inativo/escopo) + erros de save.
+  const inheritanceAlerts = Array.from(
+    new Set([
+      ...(effective?.warnings ?? []),
+      ...(department.inheritanceWarnings ?? []),
+      ...saveErrors,
+    ]),
+  ).filter(Boolean);
+
+  const fieldOrigin = (key: string): DepartmentFieldOrigin | undefined => origins[key];
+
+  /** Atualiza um campo de override (null = voltar a herdar do global). */
+  const setOverride = (
+    key: keyof UpdateDepartmentRequest,
+    value: number | boolean | string | null,
+  ) => {
+    markDirty();
+    setForm((current) => (current ? { ...current, [key]: value } : current));
+  };
+
+  const ownStrategy = form.assignmentStrategy ?? 0;
+  const strategyOrigin = origins.assignmentStrategy;
+  // Só fica travado quando existe de fato herança do global (departamento
+  // global nunca fica com o select desabilitado).
+  const strategyInherited = canInherit && strategyOrigin === "inherited-global";
+  const effectiveStrategy = strategyInherited
+    ? Number(effectiveConfig.assignmentStrategy ?? 0) || 0
+    : ownStrategy;
+
+  const weightsInherited = origins.aiAssignmentWeightsJson === "inherited-global";
+  const weights = parseWeights(
+    weightsInherited
+      ? fieldText(effectiveConfig.aiAssignmentWeightsJson, "")
+      : form.aiAssignmentWeightsJson,
+  );
+
   const valid = form.name.trim().length >= 2;
 
   async function handleSave() {
@@ -357,23 +923,22 @@ export default function DepartmentDetailPage() {
     }
 
     try {
+      // buildDepartmentUpdatePayload mantém null explícito nos campos de
+      // herança/override (ausente ≠ null no patch semântico do backend).
       await updateDepartment.mutateAsync({
         id: department.id,
-        data: {
-          ...currentForm,
-          name: currentForm.name.trim(),
-          description: currentForm.description?.trim() || null,
-          inheritFromGlobalId: currentForm.inheritFromGlobalId ?? null,
-          sortOrder: Math.max(0, Number(currentForm.sortOrder || 0)),
-          isActive: currentForm.isActive ?? true,
-          assignmentStrategy: currentForm.assignmentStrategy ?? 0,
-        },
+        data: buildDepartmentUpdatePayload(currentForm),
       });
+      setSaveErrors([]);
       dirtyRef.current = false;
       toast.success("Departamento atualizado com sucesso.");
       void departmentQuery.refetch();
-    } catch {
-      toast.error("Erro ao atualizar departamento.");
+      void effectiveQuery.refetch();
+    } catch (error) {
+      // 422 (e o 400 legado) traz a mensagem de validação da herança.
+      const validation = parseDepartmentValidationErrors(error);
+      setSaveErrors(validation.messages);
+      toast.error(validation.messages[0] ?? "Erro ao atualizar departamento.");
     }
   }
 
@@ -515,19 +1080,92 @@ function handleDelete() {
                 }}
               />
 
-              <Select
-                label="Auto-atribuição de chamados"
-                options={ASSIGNMENT_OPTIONS}
-                value={String(form.assignmentStrategy ?? 0)}
-                onChange={(event) => {
-                  markDirty();
-                  setForm((current) =>
-                    current ? { ...current, assignmentStrategy: Number(event.target.value) } : current,
-                  );
-                }}
-              />
+              <div className="space-y-3 rounded-xl border border-border bg-surface-light px-4 py-4">
+                <div>
+                  <p className="text-sm font-medium text-foreground">Herança do departamento global</p>
+                  <p className="mt-1 text-xs text-muted">
+                    {isGlobalScope
+                      ? "Departamento global não herda de outro departamento — ele é a origem da herança."
+                      : "Ao herdar, a equipe do global é somada à sua e os campos de triagem não definidos aqui passam a vir do global."}
+                  </p>
+                </div>
 
-              {Number(form.assignmentStrategy ?? 0) === 3 && (
+                <Select
+                  label="Herdar de"
+                  options={inheritanceOptions}
+                  value={form.inheritFromGlobalId ?? ""}
+                  disabled={isGlobalScope || globalsQuery.isLoading}
+                  hint={
+                    isGlobalScope
+                      ? "Somente departamentos de cliente podem herdar."
+                      : "Apenas departamentos globais aparecem nesta lista. \"Nenhum\" desfaz a herança."
+                  }
+                  onChange={(event) => {
+                    markDirty();
+                    setSaveErrors([]);
+                    setForm((current) =>
+                      current
+                        ? { ...current, inheritFromGlobalId: event.target.value || null }
+                        : current,
+                    );
+                  }}
+                />
+
+                {globalsQuery.isError && !isGlobalScope && (
+                  <p className="text-xs text-warning">
+                    Não foi possível carregar os departamentos globais. Recarregue a página para
+                    editar a herança.
+                  </p>
+                )}
+
+                {inheritedFromName && !isGlobalScope && (
+                  <p className="text-xs text-muted">
+                    Herdando de <span className="text-foreground">{inheritedFromName}</span>.
+                  </p>
+                )}
+
+                <DepartmentInheritanceAlerts messages={inheritanceAlerts} />
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <p className="text-sm font-medium text-muted-foreground">
+                    Auto-atribuição de chamados
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <InheritedOriginBadge
+                      origin={fieldOrigin("assignmentStrategy")}
+                      inheritedFrom={inheritedFromName}
+                    />
+                    {canInherit && (
+                      <InheritableFieldToggle
+                        checked={strategyInherited}
+                        onChange={(next) => {
+                          if (next) {
+                            setOverride("assignmentStrategy", null);
+                            return;
+                          }
+                          setOverride("assignmentStrategy", effectiveStrategy);
+                        }}
+                      />
+                    )}
+                  </div>
+                </div>
+                <Select
+                  label="Estratégia"
+                  options={ASSIGNMENT_OPTIONS}
+                  value={String(effectiveStrategy)}
+                  disabled={strategyInherited}
+                  onChange={(event) => {
+                    markDirty();
+                    setForm((current) =>
+                      current ? { ...current, assignmentStrategy: Number(event.target.value) } : current,
+                    );
+                  }}
+                />
+              </div>
+
+              {effectiveStrategy === 3 && (
                 <div className="space-y-4 rounded-xl border border-primary/30 bg-primary/5 p-4">
                   <div>
                     <p className="text-sm font-medium text-foreground">Triagem por IA</p>
@@ -536,113 +1174,84 @@ function handleDelete() {
                       chamado com métricas, afinidade e competências dos membros da equipe.
                       Exige a integração de IA habilitada nas configurações do servidor.
                     </p>
+                    <p className="mt-1 text-xs text-muted">
+                      Os campos com "Herdar" marcado vêm do departamento global. Desmarque para
+                      sobrescrever aqui; marque de novo para voltar a herdar.
+                    </p>
                   </div>
 
-                  <Select
-                    label="Como aplicar a decisão"
-                    options={AI_MODE_OPTIONS}
-                    value={String(form.aiAssignmentMode ?? 0)}
-                    onChange={(event) => {
-                      markDirty();
-                      setForm((current) =>
-                        current ? { ...current, aiAssignmentMode: Number(event.target.value) } : current,
-                      );
-                    }}
-                  />
-
-                  <Select
-                    label="Fallback quando a IA não decide"
-                    options={AI_FALLBACK_OPTIONS}
-                    value={String(form.aiAssignmentFallbackStrategy ?? 1)}
-                    onChange={(event) => {
-                      markDirty();
-                      setForm((current) =>
-                        current ? { ...current, aiAssignmentFallbackStrategy: Number(event.target.value) } : current,
-                      );
-                    }}
-                  />
-
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <Input
-                      label="Confiança mínima (0 a 1)"
-                      type="number"
-                      min="0"
-                      max="1"
-                      step="0.05"
-                      value={String(form.aiAssignmentMinConfidence ?? 0.6)}
-                      onChange={(event) => {
-                        markDirty();
-                        setForm((current) =>
-                          current ? { ...current, aiAssignmentMinConfidence: Number(event.target.value || 0) } : current,
-                        );
-                      }}
-                    />
-                    <Input
-                      label="Máximo de candidatos"
-                      type="number"
-                      min="1"
-                      max="20"
-                      value={String(form.aiAssignmentMaxCandidates ?? 8)}
-                      onChange={(event) => {
-                        markDirty();
-                        setForm((current) =>
-                          current ? { ...current, aiAssignmentMaxCandidates: Number(event.target.value || 1) } : current,
-                        );
-                      }}
-                    />
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    {TRIAGE_FIELD_DEFS.filter(
+                      (def) => def.group === "triage" && def.key !== "aiAssignmentInstructions",
+                    ).map((def) => (
+                      <TriageInheritableField
+                        key={def.key}
+                        def={def}
+                        ownValue={form[def.key]}
+                        effectiveValue={effectiveConfig[def.key]}
+                        origin={fieldOrigin(def.key)}
+                        inheritedFrom={inheritedFromName}
+                        canInherit={canInherit}
+                        onChange={(value) => setOverride(def.key, value)}
+                        onInherit={() => setOverride(def.key, null)}
+                      />
+                    ))}
                   </div>
 
-                  <label className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <input
-                      type="checkbox"
-                      checked={form.aiAssignmentUseAffinity ?? true}
-                      onChange={(event) => {
-                        markDirty();
-                        setForm((current) =>
-                          current ? { ...current, aiAssignmentUseAffinity: event.target.checked } : current,
-                        );
-                      }}
-                      className="rounded border-border bg-surface-light"
-                    />
-                    Usar afinidade com chamados semelhantes já resolvidos
-                  </label>
-
-                  <Input
-                    label="Orientações para a IA (opcional)"
-                    value={form.aiAssignmentInstructions ?? ""}
-                    onChange={(event) => {
-                      markDirty();
-                      setForm((current) =>
-                        current ? { ...current, aiAssignmentInstructions: event.target.value || null } : current,
-                      );
-                    }}
-                    placeholder="Ex.: priorize quem domina rede para chamados do cliente X"
+                  <TriageInheritableField
+                    def={TRIAGE_FIELDS_BY_KEY.get("aiAssignmentInstructions")!}
+                    ownValue={form.aiAssignmentInstructions}
+                    effectiveValue={effectiveConfig.aiAssignmentInstructions}
+                    origin={fieldOrigin("aiAssignmentInstructions")}
+                    inheritedFrom={inheritedFromName}
+                    canInherit={canInherit}
+                    onChange={(value) => setOverride("aiAssignmentInstructions", value)}
+                    onInherit={() => setOverride("aiAssignmentInstructions", null)}
                   />
 
-                  <div>
-                    <p className="mb-2 text-xs uppercase tracking-wide text-muted">Pesos do score</p>
-                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                      {WEIGHT_FIELDS.map((field) => {
-                        const weights = parseWeights(form.aiAssignmentWeightsJson);
-                        return (
-                          <Input
-                            key={field.key}
-                            label={field.label}
-                            type="number"
-                            min="0"
-                            max="1"
-                            step="0.05"
-                            value={String(weights[field.key])}
-                            onChange={(event) => {
-                              markDirty();
-                              const next = { ...weights, [field.key]: Number(event.target.value || 0) };
-                              setForm((current) =>
-                                current ? { ...current, aiAssignmentWeightsJson: JSON.stringify(next) } : current,
-                              );
+                  <div className="space-y-2">
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <p className="text-xs uppercase tracking-wide text-muted">Pesos do score</p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <InheritedOriginBadge
+                          origin={fieldOrigin("aiAssignmentWeightsJson")}
+                          inheritedFrom={inheritedFromName}
+                        />
+                        {canInherit && (
+                          <InheritableFieldToggle
+                            checked={weightsInherited}
+                            onChange={(next) => {
+                              if (next) {
+                                setOverride("aiAssignmentWeightsJson", null);
+                                return;
+                              }
+                              // Sobrescrever a partir dos pesos efetivos exibidos.
+                              setOverride("aiAssignmentWeightsJson", JSON.stringify(weights));
                             }}
                           />
-                        );
-                      })}
+                        )}
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                      {WEIGHT_FIELDS.map((field) => (
+                        <Input
+                          key={field.key}
+                          label={field.label}
+                          type="number"
+                          min="0"
+                          max="1"
+                          step="0.05"
+                          value={String(weights[field.key])}
+                          disabled={weightsInherited}
+                          onChange={(event) => {
+                            const next = {
+                              ...weights,
+                              [field.key]: Number(event.target.value || 0),
+                            };
+                            setOverride("aiAssignmentWeightsJson", JSON.stringify(next));
+                          }}
+                        />
+                      ))}
                     </div>
                   </div>
 
@@ -655,124 +1264,20 @@ function handleDelete() {
                       </p>
                     </div>
 
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <Select
-                        label="Competências: modo"
-                        options={LEARNING_MODE_OPTIONS}
-                        value={String(form.aiSkillLearningMode ?? 1)}
-                        onChange={(event) => {
-                          markDirty();
-                          setForm((current) =>
-                            current ? { ...current, aiSkillLearningMode: Number(event.target.value) } : current,
-                          );
-                        }}
-                      />
-                      <Select
-                        label="Pesos: modo"
-                        options={LEARNING_MODE_OPTIONS}
-                        value={String(form.aiWeightLearningMode ?? 1)}
-                        onChange={(event) => {
-                          markDirty();
-                          setForm((current) =>
-                            current ? { ...current, aiWeightLearningMode: Number(event.target.value) } : current,
-                          );
-                        }}
-                      />
-                      <Input
-                        label="Evidência mínima (chamados)"
-                        type="number"
-                        min="1"
-                        max="100"
-                        value={String(form.aiSkillMinEvidence ?? 3)}
-                        onChange={(event) => {
-                          markDirty();
-                          setForm((current) =>
-                            current ? { ...current, aiSkillMinEvidence: Number(event.target.value || 1) } : current,
-                          );
-                        }}
-                      />
-                      <Input
-                        label="Máx. competências por atendente"
-                        type="number"
-                        min="1"
-                        max="30"
-                        value={String(form.aiSkillMaxTags ?? 12)}
-                        onChange={(event) => {
-                          markDirty();
-                          setForm((current) =>
-                            current ? { ...current, aiSkillMaxTags: Number(event.target.value || 1) } : current,
-                          );
-                        }}
-                      />
-                      <Input
-                        label="Ciclo de calibração (dias)"
-                        type="number"
-                        min="1"
-                        max="90"
-                        value={String(form.aiWeightCycleDays ?? 7)}
-                        onChange={(event) => {
-                          markDirty();
-                          setForm((current) =>
-                            current ? { ...current, aiWeightCycleDays: Number(event.target.value || 1) } : current,
-                          );
-                        }}
-                      />
-                      <Input
-                        label="Ajuste máx. por ciclo"
-                        type="number"
-                        min="0.01"
-                        max="0.5"
-                        step="0.01"
-                        value={String(form.aiWeightMaxDeltaPerCycle ?? 0.1)}
-                        onChange={(event) => {
-                          markDirty();
-                          setForm((current) =>
-                            current ? { ...current, aiWeightMaxDeltaPerCycle: Number(event.target.value || 0.01) } : current,
-                          );
-                        }}
-                      />
-                      <Input
-                        label="Peso mínimo"
-                        type="number"
-                        min="0.01"
-                        max="1"
-                        step="0.01"
-                        value={String(form.aiWeightMin ?? 0.05)}
-                        onChange={(event) => {
-                          markDirty();
-                          setForm((current) =>
-                            current ? { ...current, aiWeightMin: Number(event.target.value || 0.01) } : current,
-                          );
-                        }}
-                      />
-                      <Input
-                        label="Peso máximo"
-                        type="number"
-                        min="0.01"
-                        max="1"
-                        step="0.01"
-                        value={String(form.aiWeightMax ?? 0.5)}
-                        onChange={(event) => {
-                          markDirty();
-                          setForm((current) =>
-                            current ? { ...current, aiWeightMax: Number(event.target.value || 0.01) } : current,
-                          );
-                        }}
-                      />
-                      <Input
-                        label="Teto de tokens da triagem"
-                        type="number"
-                        min="200"
-                        max="32768"
-                        step="100"
-                        value={String(form.aiAssignmentMaxOutputTokens ?? 1200)}
-                        onChange={(event) => {
-                          markDirty();
-                          setForm((current) =>
-                            current ? { ...current, aiAssignmentMaxOutputTokens: Number(event.target.value || 200) } : current,
-                          );
-                        }}
-                      />
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      {TRIAGE_FIELD_DEFS.filter((def) => def.group === "learning").map((def) => (
+                        <TriageInheritableField
+                          key={def.key}
+                          def={def}
+                          ownValue={form[def.key]}
+                          effectiveValue={effectiveConfig[def.key]}
+                          origin={fieldOrigin(def.key)}
+                          inheritedFrom={inheritedFromName}
+                          canInherit={canInherit}
+                          onChange={(value) => setOverride(def.key, value)}
+                          onInherit={() => setOverride(def.key, null)}
+                        />
+                      ))}
                     </div>
                   </div>
                 </div>
@@ -845,7 +1350,10 @@ function handleDelete() {
         </Card>
       ) : (
         <div className="grid gap-6">
-          <DepartmentMembersCard departmentId={department.id} />
+          <DepartmentMembersCard
+            departmentId={department.id}
+            inheritedFrom={inheritedFromName ?? undefined}
+          />
           <DepartmentAssignmentTeamCard departmentId={department.id} />
           <DepartmentLearningCard departmentId={department.id} />
         </div>

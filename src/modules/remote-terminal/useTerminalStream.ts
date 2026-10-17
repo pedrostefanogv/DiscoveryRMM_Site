@@ -1,5 +1,14 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
 import type { CompletionRequest, CompletionResponse } from './terminalInput';
+import {
+    acquire,
+    publish,
+    release,
+    sub,
+    type PoolErrorInfo,
+    type PoolStateEvent,
+    type PooledNatsSocket,
+} from '../remote-nats/natsSocketPool';
 
 interface UseTerminalStreamOptions {
     natsSubject: string;
@@ -15,10 +24,11 @@ interface UseTerminalStreamOptions {
      */
     getFreshCredentials?: () => Promise<string>;
     /**
-     * Sinal imperativo de reconexão: quando muda, o hook derruba o socket atual
-     * e reconecta no MESMO componente — preservando o xterm (scrollback) e o
-     * lastSeq (o agente reenvia só o que faltou, em vez de reenviar o anel).
-     * Substitui a remontagem por `key` que a página fazia no reconnect.
+     * Sinal imperativo de reconexão: quando muda, o hook derruba a conexão
+     * atual e reconecta no MESMO componente — preservando o xterm
+     * (scrollback) e o lastSeq (o agente reenvia só o que faltou, em vez de
+     * reenviar o anel). Substitui a remontagem por `key` que a página fazia
+     * no reconnect.
      */
     reconnectToken?: number;
 }
@@ -118,37 +128,20 @@ interface UseTerminalStreamReturn {
     error: string | null;
 }
 
-const CRLF = new Uint8Array([13, 10]);
-
 // Limites da fila de input pendente (WS caído/CONNECTING). Não é para acumular
 // indefinidamente: o excesso é REPORTADO (não descartado em silêncio).
 const MAX_PENDING_INPUT = 512;
-const MAX_PENDING_INPUT_BYTES = 1 << 20; // 1 MB de mensagens prontas
+const MAX_PENDING_INPUT_BYTES = 1 << 20; // 1 MB de payloads prontos
 
 // Um PUB com mais que isto de UTF-8 é fatiado: o agente rejeita PUBs acima de
 // 32 KB de base64 (~24 KB de texto) e antes o paste grande era engolido.
 const MAX_INPUT_CHUNK_BYTES = 16 * 1024;
 
-// Teto do buffer do protocolo NATS. Um frame anunciado com tamanho absurdo (ou
-// um servidor quebrado) acumularia memória no browser sem limite.
-const MAX_PROTOCOL_BUFFER_BYTES = 4 * 1024 * 1024;
-
-function appendBytes(left: Uint8Array<ArrayBufferLike>, right: Uint8Array<ArrayBufferLike>): Uint8Array<ArrayBufferLike> {
-    const result = new Uint8Array(left.length + right.length);
-    result.set(left);
-    result.set(right, left.length);
-    return result;
-}
-
-// findCrlf procura o CRLF a partir de `from` (cursor). Sem o cursor, cada
-// mensagem revarria o buffer desde o início: com um prefixo longo sem CRLF o
-// custo vira O(n²). O chamador avança o cursor e o zera quando consome bytes.
-function findCrlf(data: Uint8Array<ArrayBufferLike>, from = 0): number {
-    for (let i = Math.max(0, from); i <= data.length - CRLF.length; i++) {
-        if (data[i] === CRLF[0] && data[i + 1] === CRLF[1]) return i;
-    }
-    return -1;
-}
+// Orçamento de reconexão automática: base/limite do backoff exponencial (o
+// pool aplica o jitter) e o número de tentativas antes de desistir.
+const RECONNECT_BASE_DELAY_MS = 1000;
+const RECONNECT_MAX_DELAY_MS = 16000;
+const MAX_RECONNECT_ATTEMPTS = 5;
 
 /**
  * Fatiamento por limite de BYTES sem quebrar runa UTF-8: itera por code point
@@ -175,12 +168,6 @@ export function chunkUtf8(input: string, maxBytes: number = MAX_INPUT_CHUNK_BYTE
     return out;
 }
 
-// Monta um frame do protocolo NATS (PUB) com o comprimento em BYTES.
-function buildPub(subject: string, payload: string): string {
-    const len = new TextEncoder().encode(payload).length;
-    return `PUB ${subject} ${len}\r\n${payload}\r\n`;
-}
-
 // Codifica string UTF-8 → base64. btoa() puro falha com caracteres fora do
 // Latin-1 (acentos, emoji, símbolos) com InvalidCharacterError, o que quebrava
 // o envio de input do terminal remoto silenciosamente.
@@ -192,8 +179,8 @@ function toBase64(input: string): string {
 }
 
 // Decodifica base64 → bytes. A decodificação UTF-8 usa um TextDecoder
-// PERSISTENTE com { stream: true } (ver connect) — um decoder novo por
-// mensagem quebraria um caractere multi-byte dividido entre mensagens (U+FFFD).
+// PERSISTENTE por conexão com { stream: true } — um decoder novo por mensagem
+// quebraria um caractere multi-byte dividido entre mensagens (U+FFFD).
 function base64ToBytes(b64: string): Uint8Array<ArrayBufferLike> {
     const binary = atob(b64);
     const bytes = new Uint8Array(binary.length);
@@ -213,7 +200,7 @@ export function useTerminalStream({
 }: UseTerminalStreamOptions): UseTerminalStreamReturn {
     const [isConnected, setIsConnected] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const wsRef = useRef<WebSocket | null>(null);
+    const socketRef = useRef<PooledNatsSocket | null>(null);
     const outputCallbacksRef = useRef<Set<(data: string) => void>>(new Set());
     const exitCallbacksRef = useRef<Set<(reason: string) => void>>(new Set());
     const readyCallbacksRef = useRef<Set<(info: TerminalReadyInfo) => void>>(new Set());
@@ -221,9 +208,6 @@ export function useTerminalStream({
     const resetCallbacksRef = useRef<Set<() => void>>(new Set());
     const statsCallbacksRef = useRef<Set<(info: TerminalStatsInfo) => void>>(new Set());
     const completionCallbacksRef = useRef<Set<(res: CompletionResponse) => void>>(new Set());
-    const reconnectAttemptsRef = useRef(0);
-    const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const mountedRef = useRef(true);
 
     // JWT mutável: o reconnect automático precisa poder trocar a credencial
     // (o valor da prop só muda quando o pai refaz o fetch / remonta o viewer).
@@ -239,13 +223,11 @@ export function useTerminalStream({
     // ResizeObserver não dispara porque o fit não mudou o tamanho).
     const lastDimsRef = useRef<{ cols: number; rows: number } | null>(null);
 
-    // Fila de input (FIFO limitada) e último resize (coalescido).
+    // Fila de input (FIFO limitada) e último resize (coalescido). Guardamos o
+    // PAYLOAD JSON, não o frame: o framing PUB é responsabilidade do pool.
     const pendingInputRef = useRef<string[]>([]);
     const pendingInputBytesRef = useRef(0);
-    const pendingResizeRef = useRef<string | null>(null);
-
-    const maxReconnect = 5;
-    const delays = [1000, 2000, 4000, 8000, 16000];
+    const pendingResizeRef = useRef<{ cols: number; rows: number } | null>(null);
 
     // Normaliza UUIDs (remove hífens) para bater com o Agent
     const subj = natsSubject.replace(/-/g, '');
@@ -266,373 +248,278 @@ export function useTerminalStream({
         errorCallbacksRef.current.forEach(cb => cb(info));
     }, []);
 
-    const connect = useCallback(() => {
-        if (!mountedRef.current) return;
-        try {
-            // FIX 2026-09-17: barra final no path (nginx 308 "/nats" -> "/nats/" e o
-            // browser nao segue redirect em WebSocket -> CloseEvent 1006).
-            const normalizedUrl = natsUrl && !natsUrl.endsWith('/') ? natsUrl + '/' : natsUrl;
-            const wsUrl = `${normalizedUrl}?access_token=${encodeURIComponent(jwtRef.current)}`;
-            const ws = new WebSocket(wsUrl);
-            ws.binaryType = 'arraybuffer';
-            wsRef.current = ws;
-            authenticatedRef.current = false;
+    useEffect(() => {
+        let mounted = true;
+        let utf8Stream = new TextDecoder('utf-8');
 
-            let protocolBuffer: Uint8Array<ArrayBufferLike> = new Uint8Array();
-            let connectSent = false;
-            let authenticated = false;
-            // Cursor do CRLF e MSG já cabeçalhada aguardando o corpo: evitam
-            // revarrer/parsear o buffer inteiro a cada chunk de um payload
-            // grande (o custo anterior era O(n²) por payload fatiado).
-            let scanFrom = 0;
-            let pendingMsg: { subject: string; end: number } | null = null;
-
-            // Decoder UTF-8 PERSISTENTE por conexão ({ stream: true }): o
-            // term.out pode dividir um caractere multi-byte entre mensagens
-            // (o agent já retém runas incompletas como 1ª defesa; aqui qualquer
-            // runa que ainda atravesse uma mensagem é concluída na próxima,
-            // sem U+FFFD). Reconexão cria novo decoder (estado limpo).
-            const utf8Stream = new TextDecoder('utf-8');
-            // Decoder do CABEÇALHO do protocolo, reutilizado por mensagem (o
-            // anterior criava um TextDecoder novo a cada onmessage).
-            const protoDecoder = new TextDecoder();
-
-            const sendProtocol = (cmd: string) => ws?.send(new TextEncoder().encode(`${cmd}\r\n`));
-
-            const handleTermOut = (payload: string) => {
-                try {
-                    const parsed = JSON.parse(payload);
-                    if (!parsed || typeof parsed !== 'object') {
-                        outputCallbacksRef.current.forEach(cb => cb(payload));
-                        return;
-                    }
-                    if (parsed.exit) {
-                        exitCallbacksRef.current.forEach(cb => cb(String(parsed.reason ?? 'shell encerrado')));
-                        return;
-                    }
-                    if (parsed.error) {
-                        errorCallbacksRef.current.forEach(cb => cb({
-                            code: String(parsed.code ?? 'terminal_error'),
-                            reason: String(parsed.reason ?? 'erro no terminal'),
-                        }));
-                        return;
-                    }
-                    if (parsed.reset) {
-                        // NÃO mexe em lastSeqRef: o viewer só pode assumir
-                        // continuidade até o último seq que ELE recebeu. O agent
-                        // manda apenas `requestedFrom` (a posição que não pôde
-                        // cobrir); adotar outro valor pularia um frame.
-                        resetCallbacksRef.current.forEach(cb => cb());
-                        return;
-                    }
-                    if (typeof parsed.data === 'string') {
-                        if (typeof parsed.seq === 'number') lastSeqRef.current = parsed.seq;
-                        try {
-                            const decoded = utf8Stream.decode(base64ToBytes(parsed.data), { stream: true });
-                            outputCallbacksRef.current.forEach(cb => cb(decoded));
-                        } catch {
-                            outputCallbacksRef.current.forEach(cb => cb(parsed.data));
-                        }
-                        return;
-                    }
-                    if (parsed.shells && Array.isArray(parsed.shells)) {
-                        // term.ready — shells disponíveis + console pronto
-                        readyCallbacksRef.current.forEach(cb => cb(parsed as TerminalReadyInfo));
-                    }
-                } catch {
+        const handleTermOut = (payload: string) => {
+            try {
+                const parsed = JSON.parse(payload);
+                if (!parsed || typeof parsed !== 'object') {
                     outputCallbacksRef.current.forEach(cb => cb(payload));
+                    return;
                 }
-            };
-
-            const handleSessionEvent = (payload: string) => {
-                try {
-                    const ev = JSON.parse(payload);
-                    if (!ev || typeof ev !== 'object') return;
-                    if (ev.eventType === 'error') {
-                        // .event era publicado pelo agente SEM nenhum assinante:
-                        // falha de start/erro de sessão ficava invisível.
-                        errorCallbacksRef.current.forEach(cb => cb({
-                            code: String((ev.data && ev.data.code) || 'session_error'),
-                            reason: String((ev.data && ev.data.error) ?? 'erro na sessão remota'),
-                        }));
-                    } else if (ev.eventType === 'closed') {
-                        exitCallbacksRef.current.forEach(cb => cb(String((ev.data && ev.data.reason) ?? 'sessão encerrada')));
-                    }
-                } catch { /* payload de evento inválido — ignora */ }
-            };
-
-            const handleStats = (payload: string) => {
-                try {
-                    const parsed = JSON.parse(payload);
-                    if (!parsed || typeof parsed !== 'object') return;
-                    statsCallbacksRef.current.forEach(cb => cb(parsed as TerminalStatsInfo));
-                } catch { /* stats inválido — ignora (telemetria é best-effort) */ }
-            };
-
-            const handleCompletionRes = (payload: string) => {
-                try {
-                    const parsed = JSON.parse(payload);
-                    if (!parsed || typeof parsed !== 'object') return;
-                    if (typeof parsed.reqId !== 'string') return;
-                    const res: CompletionResponse = {
-                        reqId: parsed.reqId,
-                        ok: Boolean(parsed.ok),
-                        error: typeof parsed.error === 'string' ? parsed.error : undefined,
-                        replacementIndex: Number.isFinite(parsed.replacementIndex) ? Number(parsed.replacementIndex) : 0,
-                        replacementLength: Number.isFinite(parsed.replacementLength) ? Number(parsed.replacementLength) : 0,
-                        matches: Array.isArray(parsed.matches)
-                            ? parsed.matches.filter((m: unknown) => !!m && typeof m === 'object')
-                            : [],
-                        totalCount: Number.isFinite(parsed.totalCount) ? Number(parsed.totalCount) : 0,
-                        page: Number.isFinite(parsed.page) ? Number(parsed.page) : 0,
-                        pageSize: Number.isFinite(parsed.pageSize) ? Number(parsed.pageSize) : 0,
-                        hasMore: Boolean(parsed.hasMore),
-                    };
-                    completionCallbacksRef.current.forEach(cb => cb(res));
-                } catch { /* completion.res inválido — ignora */ }
-            };
-
-            const decoder = protoDecoder;
-
-            // consumePending conclui o corpo de uma MSG já cabeçalhada. Devolve
-            // false quando ainda faltam bytes — sem re-parsear o header nem
-            // revarrer o buffer a cada chunk (era o custo O(n²) do payload
-            // grande que chega fatiado em várias mensagens do WebSocket).
-            const consumePending = (): boolean => {
-                if (pendingMsg === null) return true;
-                if (protocolBuffer.length < pendingMsg.end) return false;
-                const subject = pendingMsg.subject;
-                const payload = decoder.decode(protocolBuffer.slice(0, pendingMsg.end - 2));
-                protocolBuffer = protocolBuffer.slice(pendingMsg.end);
-                pendingMsg = null;
-                scanFrom = 0;
-                if (subject.endsWith('.event')) {
-                    handleSessionEvent(payload);
-                } else if (subject.endsWith('.stats')) {
-                    handleStats(payload);
-                } else if (subject.endsWith('.completion.res')) {
-                    handleCompletionRes(payload);
-                } else {
-                    // .term.out / .term.ready (saída, ready, erro, reset, exit)
-                    handleTermOut(payload);
+                if (parsed.exit) {
+                    exitCallbacksRef.current.forEach(cb => cb(String(parsed.reason ?? 'shell encerrado')));
+                    return;
                 }
-                return true;
-            };
-
-            const processProtocol = () => {
-                if (!consumePending()) return;
-
-                while (mountedRef.current) {
-                    const lineEnd = findCrlf(protocolBuffer, scanFrom);
-                    if (lineEnd < 0) {
-                        // Sem CRLF: a próxima busca recomeça no fim (um CRLF pode
-                        // começar no último byte) em vez de revarrer o buffer.
-                        scanFrom = protocolBuffer.length > 0 ? protocolBuffer.length - 1 : 0;
-                        return;
-                    }
-
-                    const line = decoder.decode(protocolBuffer.slice(0, lineEnd));
-                    const tokens = line.trim().split(/\s+/);
-
-                    if (tokens[0] === 'MSG') {
-                        const plI = tokens.length === 5 ? 4 : 3;
-                        const plN = Number.parseInt(tokens[plI] ?? '0', 10);
-                        if (!Number.isInteger(plN) || plN < 0) {
-                            setError(`NATS protocolo inválido: ${line}`);
-                            ws?.close(4000, 'Invalid MSG');
-                            return;
-                        }
-                        // Consome só o HEADER; o corpo (plN + CRLF) fica pendente.
-                        protocolBuffer = protocolBuffer.slice(lineEnd + 2);
-                        scanFrom = 0;
-                        pendingMsg = { subject: tokens[1] ?? '', end: plN + 2 };
-                        if (!consumePending()) return;
-                        continue;
-                    }
-
-                    protocolBuffer = protocolBuffer.slice(lineEnd + 2);
-                    scanFrom = 0;
-
-                    if (tokens[0] === 'INFO') {
-                        sendProtocol(`CONNECT ${JSON.stringify({
-                            lang: 'discovery-web',
-                            version: '1.0',
-                            protocol: 1,
-                            headers: true,
-                            verbose: true,
-                            auth_token: jwtRef.current,
-                        })}`);
-                        connectSent = true;
-                        continue;
-                    }
-
-                    if (tokens[0] === '+OK') {
-                        if (connectSent && !authenticated) {
-                            authenticated = true;
-                            authenticatedRef.current = true;
-                            reconnectAttemptsRef.current = 0;
-                            setIsConnected(true);
-                            setError(null);
-                            sendProtocol(`SUB ${outSubject} 1`);
-                            sendProtocol(`SUB ${readySubject} 2`);
-                            sendProtocol(`SUB ${eventSubject} 3`);
-                            // Contrato v3 (B/D): assina telemetria e respostas de
-                            // completions no MESMO WebSocket NATS.
-                            sendProtocol(`SUB ${statsSubject} 4`);
-                            sendProtocol(`SUB ${completionResSubject} 5`);
-                            // Handshake: o ready do agente é publicado UMA vez no
-                            // start da sessão; sem o hello, um viewer que assinou
-                            // depois (ou reconectou) ficava sem shells/dimensões.
-                            // lastSeq faz o agente reenviar o que se perdeu.
-                            const hello: Record<string, unknown> = {
-                                hello: true,
-                                lastSeq: lastSeqRef.current,
-                            };
-                            if (lastDimsRef.current) {
-                                hello.cols = lastDimsRef.current.cols;
-                                hello.rows = lastDimsRef.current.rows;
-                            }
-                            ws?.send(buildPub(inSubject, JSON.stringify(hello)));
-                            // Drena o resize pendente e a fila de input.
-                            if (pendingResizeRef.current) {
-                                ws?.send(pendingResizeRef.current);
-                                pendingResizeRef.current = null;
-                            }
-                            const pending = pendingInputRef.current;
-                            pendingInputRef.current = [];
-                            pendingInputBytesRef.current = 0;
-                            for (const msg of pending) ws?.send(msg);
-                        }
-                        continue;
-                    }
-
-                    if (tokens[0] === 'PING') { sendProtocol('PONG'); continue; }
-                    if (tokens[0] === '-ERR') {
-                        const reason = line.replace(/^-ERR\s*/i, '').replace(/^['"]|['"]$/g, '');
-                        setError(`NATS: ${reason}`);
-                        reportError({ code: 'nats_error', reason });
-                        ws?.close(4000, 'NATS protocol error');
-                        return;
-                    }
+                if (parsed.error) {
+                    errorCallbacksRef.current.forEach(cb => cb({
+                        code: String(parsed.code ?? 'terminal_error'),
+                        reason: String(parsed.reason ?? 'erro no terminal'),
+                    }));
+                    return;
                 }
-            };
+                if (parsed.reset) {
+                    // NÃO mexe em lastSeqRef: o viewer só pode assumir
+                    // continuidade até o último seq que ELE recebeu. O agent
+                    // manda apenas `requestedFrom` (a posição que não pôde
+                    // cobrir); adotar outro valor pularia um frame.
+                    resetCallbacksRef.current.forEach(cb => cb());
+                    return;
+                }
+                if (typeof parsed.data === 'string') {
+                    if (typeof parsed.seq === 'number') lastSeqRef.current = parsed.seq;
+                    try {
+                        const decoded = utf8Stream.decode(base64ToBytes(parsed.data), { stream: true });
+                        outputCallbacksRef.current.forEach(cb => cb(decoded));
+                    } catch {
+                        outputCallbacksRef.current.forEach(cb => cb(parsed.data));
+                    }
+                    return;
+                }
+                if (parsed.shells && Array.isArray(parsed.shells)) {
+                    // term.ready — shells disponíveis + console pronto
+                    readyCallbacksRef.current.forEach(cb => cb(parsed as TerminalReadyInfo));
+                }
+            } catch {
+                outputCallbacksRef.current.forEach(cb => cb(payload));
+            }
+        };
 
-            ws.onopen = () => { /* aguarda INFO */ };
+        const handleSessionEvent = (payload: string) => {
+            try {
+                const ev = JSON.parse(payload);
+                if (!ev || typeof ev !== 'object') return;
+                if (ev.eventType === 'error') {
+                    // .event era publicado pelo agente SEM nenhum assinante:
+                    // falha de start/erro de sessão ficava invisível.
+                    errorCallbacksRef.current.forEach(cb => cb({
+                        code: String((ev.data && ev.data.code) || 'session_error'),
+                        reason: String((ev.data && ev.data.error) ?? 'erro na sessão remota'),
+                    }));
+                } else if (ev.eventType === 'closed') {
+                    exitCallbacksRef.current.forEach(cb => cb(String((ev.data && ev.data.reason) ?? 'sessão encerrada')));
+                }
+            } catch { /* payload de evento inválido — ignora */ }
+        };
 
-            // Guarda de socket OBSoLETO: em StrictMode (e ao trocar natsUrl/
-            // subj) a conexão anterior é fechada e uma nova é criada; os
-            // eventos da anterior chegam DEPOIS e derrubavam a nova
-            // (isConnected=false, authenticatedRef=false e um reconnect extra).
-            const isStale = () => wsRef.current !== ws;
+        const handleStats = (payload: string) => {
+            try {
+                const parsed = JSON.parse(payload);
+                if (!parsed || typeof parsed !== 'object') return;
+                statsCallbacksRef.current.forEach(cb => cb(parsed as TerminalStatsInfo));
+            } catch { /* stats inválido — ignora (telemetria é best-effort) */ }
+        };
 
-            ws.onmessage = (event) => {
-                if (!mountedRef.current || isStale()) return;
-                // Aceita string, ArrayBuffer e views (Uint8Array): alguns
-                // ambientes entregam a view binária em vez do ArrayBuffer cru,
-                // e `instanceof ArrayBuffer` falha entre realms. ArrayBuffer.isView
-                // é independente de realm.
-                const bytes = typeof event.data === 'string'
-                    ? new Uint8Array(new TextEncoder().encode(event.data))
-                    : event.data instanceof ArrayBuffer
-                        ? new Uint8Array(event.data)
-                        : ArrayBuffer.isView(event.data)
-                            ? new Uint8Array(event.data.buffer, event.data.byteOffset, event.data.byteLength)
-                            : new Uint8Array();
-                if (bytes.length === 0) return;
-                protocolBuffer = appendBytes(protocolBuffer, bytes);
-                if (protocolBuffer.length > MAX_PROTOCOL_BUFFER_BYTES) {
+        const handleCompletionRes = (payload: string) => {
+            try {
+                const parsed = JSON.parse(payload);
+                if (!parsed || typeof parsed !== 'object') return;
+                if (typeof parsed.reqId !== 'string') return;
+                const res: CompletionResponse = {
+                    reqId: parsed.reqId,
+                    ok: Boolean(parsed.ok),
+                    error: typeof parsed.error === 'string' ? parsed.error : undefined,
+                    replacementIndex: Number.isFinite(parsed.replacementIndex) ? Number(parsed.replacementIndex) : 0,
+                    replacementLength: Number.isFinite(parsed.replacementLength) ? Number(parsed.replacementLength) : 0,
+                    matches: Array.isArray(parsed.matches)
+                        ? parsed.matches.filter((m: unknown) => !!m && typeof m === 'object')
+                        : [],
+                    totalCount: Number.isFinite(parsed.totalCount) ? Number(parsed.totalCount) : 0,
+                    page: Number.isFinite(parsed.page) ? Number(parsed.page) : 0,
+                    pageSize: Number.isFinite(parsed.pageSize) ? Number(parsed.pageSize) : 0,
+                    hasMore: Boolean(parsed.hasMore),
+                };
+                completionCallbacksRef.current.forEach(cb => cb(res));
+            } catch { /* completion.res inválido — ignora */ }
+        };
+
+        const applyPoolError = (info: PoolErrorInfo) => {
+            switch (info.code) {
+                case 'nats_error':
+                    setError(`NATS: ${info.reason}`);
+                    reportError({ code: 'nats_error', reason: info.reason });
+                    return;
+                case 'protocol_error':
+                    setError(`NATS protocolo inválido: ${info.reason}`);
+                    return;
+                case 'protocol_overflow':
                     setError('Resposta NATS excessiva — conexão encerrada.');
                     reportError({
                         code: 'protocol_overflow',
-                        reason: 'Buffer do protocolo NATS acima do limite.',
+                        reason: info.reason,
                     });
-                    ws?.close(4000, 'Protocol buffer overflow');
                     return;
-                }
-                processProtocol();
-            };
-
-            ws.onerror = () => { /* tratado no onclose */ };
-            ws.onclose = () => {
-                if (!mountedRef.current || isStale()) return;
-                authenticatedRef.current = false;
-                setIsConnected(false);
-                if (reconnectAttemptsRef.current < maxReconnect) {
-                    const delay = delays[reconnectAttemptsRef.current] ?? delays[delays.length - 1];
-                    reconnectTimerRef.current = setTimeout(async () => {
-                        reconnectAttemptsRef.current++;
-                        // Credencial nova ANTES de reconectar: o JWT do viewer
-                        // tem TTL próprio e reusar o antigo caía em -ERR até
-                        // esgotar as tentativas.
-                        const refresh = freshCredsRef.current;
-                        if (refresh) {
-                            try {
-                                const next = await refresh();
-                                if (next) jwtRef.current = next;
-                            } catch { /* melhor esforço: tenta com o JWT atual */ }
-                        }
-                        connect();
-                    }, delay);
-                } else {
-                    setError('Conexão NATS perdida — verifique o servidor.');
-                }
-            };
-        } catch (err) {
-            setError(err instanceof Error ? err.message : 'Falha ao conectar');
-            reconnectTimerRef.current = setTimeout(() => connect(), 5000);
-        }
-    }, [natsUrl, subj, inSubject, outSubject, readySubject, eventSubject, statsSubject, completionResSubject, reportError]);
-
-    useEffect(() => {
-        mountedRef.current = true;
-        reconnectAttemptsRef.current = 0;
-        connect();
-        return () => {
-            mountedRef.current = false;
-            if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
-            if (wsRef.current) wsRef.current.close();
+                case 'socket_error':
+                    setError(info.reason);
+                    return;
+                default:
+                    reportError({ code: info.code, reason: info.reason });
+            }
         };
-    }, [connect]);
+
+        // Handshake após cada +OK (inclusive reconexão): SUBs são refeitos pelo
+        // pool ANTES deste evento, então o hello pode publicar na hora.
+        const sendHello = () => {
+            const socket = socketRef.current;
+            if (!socket || !socket.isOpen()) return;
+            const hello: Record<string, unknown> = {
+                hello: true,
+                lastSeq: lastSeqRef.current,
+            };
+            if (lastDimsRef.current) {
+                hello.cols = lastDimsRef.current.cols;
+                hello.rows = lastDimsRef.current.rows;
+            }
+            publish(socket, inSubject, JSON.stringify(hello));
+            // Drena o resize pendente e a fila de input.
+            const resize = pendingResizeRef.current;
+            if (resize) {
+                pendingResizeRef.current = null;
+                publish(socket, inSubject, JSON.stringify(resize));
+            }
+            const pending = pendingInputRef.current;
+            pendingInputRef.current = [];
+            pendingInputBytesRef.current = 0;
+            for (const payload of pending) publish(socket, inSubject, payload);
+        };
+
+        const onPoolState = (event: PoolStateEvent) => {
+            if (!mounted) return;
+            switch (event.state) {
+                case 'open':
+                    authenticatedRef.current = true;
+                    // Conexão nova (o pool pode ter reconectado): decoder UTF-8
+                    // também novo, sem estado de stream da conexão anterior.
+                    utf8Stream = new TextDecoder('utf-8');
+                    setIsConnected(true);
+                    setError(null);
+                    sendHello();
+                    return;
+                case 'error':
+                    if (event.error) applyPoolError(event.error);
+                    return;
+                case 'reconnecting':
+                case 'connecting':
+                    authenticatedRef.current = false;
+                    setIsConnected(false);
+                    return;
+                case 'closed':
+                    authenticatedRef.current = false;
+                    setIsConnected(false);
+                    if (event.reason === 'retries_exhausted') {
+                        setError('Conexão NATS perdida — verifique o servidor.');
+                    }
+                    return;
+                default:
+                    return;
+            }
+        };
+
+        const socket = acquire({
+            url: natsUrl,
+            jwt: jwtRef.current,
+            maxReconnectAttempts: MAX_RECONNECT_ATTEMPTS,
+            reconnectBaseDelayMs: RECONNECT_BASE_DELAY_MS,
+            reconnectMaxDelayMs: RECONNECT_MAX_DELAY_MS,
+            // O pool chama isto antes de cada tentativa automática. Lemos o ref
+            // (e não a prop) para não congelar o callback da primeira render.
+            getFreshCredentials: async () => {
+                const refresh = freshCredsRef.current;
+                if (!refresh) return jwtRef.current;
+                try {
+                    const next = await refresh();
+                    if (next) jwtRef.current = next;
+                } catch {
+                    // melhor esforço: tenta com o JWT atual
+                }
+                return jwtRef.current;
+            },
+        });
+        socketRef.current = socket;
+
+        const offState = socket.onState(onPoolState);
+
+        const unsubscribers = [
+            sub(socket, outSubject, handleTermOut),
+            sub(socket, readySubject, handleTermOut),
+            sub(socket, eventSubject, handleSessionEvent),
+            sub(socket, statsSubject, handleStats),
+            sub(socket, completionResSubject, handleCompletionRes),
+        ];
+
+        // Conexão JÁ aberta por outra instância (pool compartilhado): o evento
+        // 'open' aconteceu antes deste subscribe, então repetimos o handshake.
+        if (socket.isOpen()) onPoolState({ state: 'open' });
+
+        return () => {
+            mounted = false;
+            offState();
+            for (const off of unsubscribers) off();
+            if (socketRef.current === socket) socketRef.current = null;
+            authenticatedRef.current = false;
+            release(socket);
+        };
+    }, [
+        natsUrl,
+        subj,
+        inSubject,
+        outSubject,
+        readySubject,
+        eventSubject,
+        statsSubject,
+        completionResSubject,
+        reportError,
+    ]);
 
     // Reconexão IMPERATIVA (botão "Reconectar"): sem remontar o componente, para
-    // não perder o buffer do xterm nem o lastSeq. O socket atual é descartado
-    // como "obsoleto" (wsRef=null antes do close) para a guarda de socket
-    // obsoleto ignorar o onclose dele e não agendar um reconnect duplicado.
+    // não perder o buffer do xterm nem o lastSeq. O pool invalida a geração
+    // atual e abre outra conexão mantendo as assinaturas — o onclose da antiga
+    // é ignorado pela guarda de socket obsoleto do pool.
     const reconnectTokenRef = useRef(reconnectToken);
     useEffect(() => {
         if (reconnectTokenRef.current === reconnectToken) return;
         reconnectTokenRef.current = reconnectToken;
-        if (!mountedRef.current) return;
-        if (reconnectTimerRef.current) {
-            clearTimeout(reconnectTimerRef.current);
-            reconnectTimerRef.current = null;
-        }
-        const old = wsRef.current;
-        wsRef.current = null;
+        const socket = socketRef.current;
+        if (!socket) return;
         authenticatedRef.current = false;
         setIsConnected(false);
-        try { old?.close(); } catch { /* socket já fechado */ }
-        reconnectAttemptsRef.current = 0;
-        connect();
-    }, [reconnectToken, connect]);
+        socket.reconnect();
+        // reconnect() muda a identidade do socket no pool; o ref do hook
+        // continua apontando para a MESMA instância (assinaturas preservadas).
+    }, [reconnectToken]);
 
     const sendData = useCallback((data: string) => {
-        const ws = wsRef.current;
-        const open = !!ws && ws.readyState === WebSocket.OPEN && authenticatedRef.current;
+        const socket = socketRef.current;
+        const open = !!socket && socket.isOpen();
         // Paste grande é fatiado: cada PUB fica abaixo do limite do agente.
-        const frames = chunkUtf8(data).map(
-            (part) => buildPub(inSubject, JSON.stringify({ data: toBase64(part) })),
+        const payloads = chunkUtf8(data).map(
+            (part) => JSON.stringify({ data: toBase64(part) }),
         );
-        if (open) {
-            for (const frame of frames) ws!.send(frame);
+        if (open && socket) {
+            for (const payload of payloads) publish(socket, inSubject, payload);
             return;
         }
         // Offline: ou o input INTEIRO cabe na fila, ou nada é enviado — um
         // paste parcial executaria metade do comando no shell (pior que não
         // enviar). O descarte é sempre reportado.
-        const bytes = frames.reduce((acc, frame) => acc + frame.length, 0);
+        const bytes = payloads.reduce(
+            (acc, payload) => acc + new TextEncoder().encode(payload).length,
+            0,
+        );
         if (
-            pendingInputRef.current.length + frames.length > MAX_PENDING_INPUT ||
+            pendingInputRef.current.length + payloads.length > MAX_PENDING_INPUT ||
             pendingInputBytesRef.current + bytes > MAX_PENDING_INPUT_BYTES
         ) {
             reportError({
@@ -641,7 +528,7 @@ export function useTerminalStream({
             });
             return;
         }
-        pendingInputRef.current.push(...frames);
+        pendingInputRef.current.push(...payloads);
         pendingInputBytesRef.current += bytes;
     }, [inSubject, reportError]);
 
@@ -652,21 +539,20 @@ export function useTerminalStream({
         // envenenaria o ConPTY e as dimensões do hello (lastDimsRef).
         if (cols <= 0 || rows <= 0) return;
         lastDimsRef.current = { cols, rows };
-        const msg = buildPub(inSubject, JSON.stringify({ cols, rows }));
-        const ws = wsRef.current;
-        if (ws && ws.readyState === WebSocket.OPEN && authenticatedRef.current) {
-            ws.send(msg);
+        const socket = socketRef.current;
+        if (socket && socket.isOpen()) {
+            publish(socket, inSubject, JSON.stringify({ cols, rows }));
         } else {
-            pendingResizeRef.current = msg;
+            pendingResizeRef.current = { cols, rows };
         }
     }, [inSubject]);
 
     // Publica 'completion.req' (C). Sem socket autenticado não há resposta
     // possível: descarta em silêncio (o popup simplesmente não abre).
     const sendCompletionRequest = useCallback((req: CompletionRequest) => {
-        const ws = wsRef.current;
-        if (!ws || ws.readyState !== WebSocket.OPEN || !authenticatedRef.current) return;
-        ws.send(buildPub(completionReqSubject, JSON.stringify(req)));
+        const socket = socketRef.current;
+        if (!socket || !socket.isOpen()) return;
+        publish(socket, completionReqSubject, JSON.stringify(req));
     }, [completionReqSubject]);
 
     const onOutput = useCallback((callback: (data: string) => void) => {

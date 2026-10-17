@@ -16,6 +16,7 @@ import {
   completionKeystrokes,
   detectPrompt,
   promptRequiresMask,
+  utf16IndexToRuneIndex,
   type CompletionRequest,
   type CompletionResponse,
   type PromptKind,
@@ -648,6 +649,13 @@ export default function RemoteTerminal({
 
   // Linha/cursor atuais: no legacy usa o buffer local do editor; no ConPTY lê
   // a linha do buffer do xterm (o shell edita o buffer remoto).
+  //
+  // UNIDADES: o cursor devolvido aqui é o do FRONT (UTF-16 no legacy; COLUNA do
+  // xterm no ConPTY). O contrato de completion com o agente é em RUNAS — a
+  // conversão acontece em requestCompletion/applyCompletionMatch. No ConPTY a
+  // coluna é célula do terminal (caractere largo = 2 células), então a
+  // conversão é uma APROXIMAÇÃO: exata para ASCII, podendo variar por
+  // caractere largo antes do cursor.
   const getCompletionInput = useCallback((): { input: string; cursor: number } => {
     const backend = backendRef.current;
     if (backend === 'legacy' || backend === 'none') {
@@ -700,7 +708,10 @@ export default function RemoteTerminal({
     const req: CompletionRequest = {
       reqId,
       input,
-      cursor,
+      // O agente conta o cursor em RUNAS (Go: utf8.RuneCountInString). Enviar
+      // UTF-16 adiantava o índice em 1 por emoji/astral e o replacement voltava
+      // deslocado, corrompendo a linha.
+      cursor: utf16IndexToRuneIndex(input, cursor),
       forward,
       page,
       pageSize: COMPLETION_PAGE_SIZE,
@@ -725,8 +736,9 @@ export default function RemoteTerminal({
       // Buffer local do editor: substitui [replacementIndex, +length).
       legacyEditorRef.current?.setLine(result.line, result.cursor);
     } else {
-      // ConPTY: o shell edita o buffer remoto; envia os keystrokes.
-      const keystrokes = completionKeystrokes(cursor, res, index);
+      // ConPTY: o shell edita o buffer remoto; envia os keystrokes. A linha
+      // entra na conversão runas→UTF-16 do replacementIndex.
+      const keystrokes = completionKeystrokes(input, cursor, res, index);
       if (keystrokes) sendData(keystrokes);
     }
     closeCompletion();

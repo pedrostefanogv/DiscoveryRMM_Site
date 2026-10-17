@@ -42,7 +42,24 @@ export type {
 } from "./tickets";
 export { logsApi } from "./logs";
 export { workflowApi } from "./workflow";
-export { departmentsApi } from "./departments";
+export {
+  departmentsApi,
+  buildInheritanceOptions,
+  buildDepartmentUpdatePayload,
+  filterGlobalDepartments,
+  isMissingEndpointError,
+  normalizeDepartmentEffective,
+  normalizeDepartmentList,
+  normalizeDepartmentOrigin,
+  parseDepartmentValidationErrors,
+  DEPARTMENT_OVERRIDE_FIELDS,
+} from "./departments";
+export type {
+  DepartmentEffectiveView,
+  DepartmentFieldOrigin,
+  DepartmentInheritanceOption,
+  DepartmentValidationErrors,
+} from "./departments";
 export { ticketAssignmentApi } from "./ticket-assignment";
 export { backgroundProcessingApi } from "./background-processing";
 export { workflowProfilesApi } from "./workflowProfiles";

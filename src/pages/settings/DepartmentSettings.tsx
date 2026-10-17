@@ -1,9 +1,14 @@
 import { useMemo, useState } from "react";
-import { ArrowRight, Building2, Globe, Plus, Users } from "lucide-react";
+import { ArrowRight, Building2, Globe, Link2, Plus, Users } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
-import { useDepartments, useCreateDepartment } from "@/hooks/useDepartments";
+import {
+  useDepartments,
+  useCreateDepartment,
+  useGlobalDepartments,
+} from "@/hooks/useDepartments";
 import { useClients } from "@/hooks/useClients";
+import { buildInheritanceOptions, parseDepartmentValidationErrors } from "@/api";
 import {
   Badge,
   Button,
@@ -27,18 +32,51 @@ const EMPTY_CREATE_FORM: CreateDepartmentRequest = {
   sortOrder: 0,
 };
 
+/** Valor do filtro: todos os escopos (é o default da listagem). */
+export const ALL_DEPARTMENTS_SCOPE = "";
+/** Valor do filtro: apenas departamentos globais (ClientId nulo). */
+export const GLOBAL_DEPARTMENTS_SCOPE = "__global__";
+
+/**
+ * Opções do filtro de escopo.
+ *
+ * A listagem é filtrada no client: GET /departments sem clientId devolve todos
+ * os departamentos (globais + clientes). Antes o rótulo dizia "Global + todos
+ * os clientes" mas o parâmetro ia vazio — e o backend devolvia só os globais.
+ */
+export function buildDepartmentScopeOptions(
+  clients: Array<{ id: string; name: string }>,
+): { value: string; label: string }[] {
+  return [
+    { value: ALL_DEPARTMENTS_SCOPE, label: "Todos os departamentos (globais + clientes)" },
+    { value: GLOBAL_DEPARTMENTS_SCOPE, label: "Somente globais (sem cliente)" },
+    ...clients.map((client) => ({ value: client.id, label: client.name })),
+  ];
+}
+
+/** Aplica o filtro de escopo sobre a lista já carregada. */
+export function filterDepartmentsByScope<T extends { clientId: string | null }>(
+  departments: T[],
+  scope: string,
+): T[] {
+  if (scope === GLOBAL_DEPARTMENTS_SCOPE) {
+    return departments.filter((department) => !department.clientId);
+  }
+  // "" = todos os escopos: é exatamente o que a API devolve sem clientId.
+  if (!scope) return departments;
+  return departments.filter((department) => department.clientId === scope);
+}
+
 export default function DepartmentSettings() {
   const navigate = useNavigate();
 
-  const [clientId, setClientId] = useState("");
+  const [scope, setScope] = useState(ALL_DEPARTMENTS_SCOPE);
   const [searchTerm, setSearchTerm] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
 
-  const depts = useDepartments({
-    clientId: clientId || undefined,
-    includeGlobal: true,
-    activeOnly: false,
-  });
+  // Uma única consulta (sem clientId) devolve globais + clientes; o filtro de
+  // escopo é aplicado sobre a lista, então o rótulo sempre bate com o exibido.
+  const depts = useDepartments({ includeGlobal: true, activeOnly: false });
   const clients = useClients();
 
   const clientsById = useMemo(
@@ -46,14 +84,8 @@ export default function DepartmentSettings() {
     [clients.data],
   );
 
-  const clientOpts = useMemo(
-    () => [
-      { value: "", label: "Global + todos os clientes" },
-      ...(clients.data ?? []).map((client) => ({
-        value: client.id,
-        label: client.name,
-      })),
-    ],
+  const scopeOpts = useMemo(
+    () => buildDepartmentScopeOptions(clients.data ?? []),
     [clients.data],
   );
 
@@ -68,11 +100,21 @@ export default function DepartmentSettings() {
     [depts.data],
   );
 
+  const departmentsById = useMemo(
+    () => new Map(sortedDepartments.map((department) => [department.id, department])),
+    [sortedDepartments],
+  );
+
+  const scopedDepartments = useMemo(
+    () => filterDepartmentsByScope(sortedDepartments, scope),
+    [scope, sortedDepartments],
+  );
+
   const filteredDepartments = useMemo(() => {
     const term = searchTerm.trim().toLocaleLowerCase("pt-BR");
-    if (!term) return sortedDepartments;
+    if (!term) return scopedDepartments;
 
-    return sortedDepartments.filter((department) => {
+    return scopedDepartments.filter((department) => {
       const clientName = department.clientId
         ? clientsById.get(department.clientId) ?? ""
         : "global";
@@ -87,14 +129,14 @@ export default function DepartmentSettings() {
         .toLocaleLowerCase("pt-BR")
         .includes(term);
     });
-  }, [clientsById, searchTerm, sortedDepartments]);
+  }, [clientsById, searchTerm, scopedDepartments]);
 
-  const totalDepartments = sortedDepartments.length;
-  const globalDepartments = sortedDepartments.filter(
+  const totalDepartments = scopedDepartments.length;
+  const globalDepartments = scopedDepartments.filter(
     (department) => !department.clientId,
   ).length;
   const clientDepartments = totalDepartments - globalDepartments;
-  const inactiveDepartments = sortedDepartments.filter(
+  const inactiveDepartments = scopedDepartments.filter(
     (department) => !department.isActive,
   ).length;
 
@@ -135,10 +177,11 @@ export default function DepartmentSettings() {
       <Card>
         <div className="grid gap-4 md:grid-cols-[minmax(240px,320px)_minmax(0,1fr)]">
           <Select
-            label="Filtrar por cliente"
-            options={clientOpts}
-            value={clientId}
-            onChange={(event) => setClientId(event.target.value)}
+            label="Filtrar por escopo"
+            options={scopeOpts}
+            value={scope}
+            onChange={(event) => setScope(event.target.value)}
+            hint="A lista mostra exatamente o escopo escolhido."
           />
           <Input
             label="Buscar departamento"
@@ -177,6 +220,9 @@ export default function DepartmentSettings() {
             const clientName = department.clientId
               ? clientsById.get(department.clientId) ?? "Cliente"
               : null;
+            const inheritedFrom = department.inheritFromGlobalId
+              ? departmentsById.get(department.inheritFromGlobalId)
+              : null;
 
             return (
               <button
@@ -202,6 +248,12 @@ export default function DepartmentSettings() {
                     <Badge color={department.isActive ? "success" : "warning"}>
                       {department.isActive ? "Ativo" : "Inativo"}
                     </Badge>
+                    {department.inheritFromGlobalId && (
+                      <Badge color="primary">
+                        <Link2 className="mr-1 h-3 w-3" />
+                        herda de {inheritedFrom?.name ?? "global"}
+                      </Badge>
+                    )}
                   </div>
                   <p className="mt-1 truncate text-xs text-muted">
                     {department.description || "Sem descrição"}
@@ -242,7 +294,10 @@ function CreateDepartmentModal({
   onCreated: (department: Department) => void;
 }) {
   const create = useCreateDepartment();
+  // Só consulta os globais quando o modal abre (evita request na listagem).
+  const globals = useGlobalDepartments(open);
   const [form, setForm] = useState<CreateDepartmentRequest>({ ...EMPTY_CREATE_FORM });
+  const [createErrors, setCreateErrors] = useState<string[]>([]);
 
   const clientOpts = useMemo(
     () => [
@@ -252,11 +307,19 @@ function CreateDepartmentModal({
     [clients],
   );
 
+  // Departamento global não herda: só listamos os globais quando há cliente.
+  const isGlobalScope = !form.clientId;
+  const inheritanceOptions = useMemo(
+    () => buildInheritanceOptions(globals.data, null),
+    [globals.data],
+  );
+
   const valid = form.name.trim().length >= 2;
 
   function closeAndReset() {
     onClose();
     setForm({ ...EMPTY_CREATE_FORM });
+    setCreateErrors([]);
   }
 
   async function handleSubmit() {
@@ -270,14 +333,20 @@ function CreateDepartmentModal({
         clientId: form.clientId,
         name: form.name.trim(),
         description: form.description?.trim() || null,
-        inheritFromGlobalId: null,
+        // null explícito = sem herança (não é "campo ausente").
+        inheritFromGlobalId: isGlobalScope ? null : form.inheritFromGlobalId ?? null,
         sortOrder: Math.max(0, Number(form.sortOrder || 0)),
       });
       toast.success("Departamento criado com sucesso.");
       closeAndReset();
       onCreated(created);
-    } catch {
-      toast.error("Erro ao criar departamento (nome duplicado?).");
+    } catch (error) {
+      const validation = parseDepartmentValidationErrors(
+        error,
+        "Erro ao criar departamento (nome duplicado?).",
+      );
+      setCreateErrors(validation.messages);
+      toast.error(validation.messages[0] ?? "Erro ao criar departamento.");
     }
   }
 
@@ -288,13 +357,45 @@ function CreateDepartmentModal({
           label="Cliente"
           options={clientOpts}
           value={form.clientId ?? ""}
-          onChange={(event) =>
+          onChange={(event) => {
+            const nextClientId = event.target.value || null;
+            setCreateErrors([]);
             setForm((current) => ({
               ...current,
-              clientId: event.target.value || null,
-            }))
-          }
+              clientId: nextClientId,
+              // Global não herda: limpa a herança ao trocar para escopo global.
+              inheritFromGlobalId: nextClientId ? current.inheritFromGlobalId : null,
+            }));
+          }}
         />
+        <Select
+          label="Herdar de (opcional)"
+          options={inheritanceOptions}
+          value={form.inheritFromGlobalId ?? ""}
+          disabled={isGlobalScope || globals.isLoading}
+          hint={
+            isGlobalScope
+              ? "Departamento global não herda de outro departamento."
+              : "Apenas departamentos globais. \"Nenhum\" cria sem herança."
+          }
+          onChange={(event) => {
+            setCreateErrors([]);
+            setForm((current) => ({
+              ...current,
+              inheritFromGlobalId: event.target.value || null,
+            }));
+          }}
+        />
+        {createErrors.length > 0 && (
+          <div role="alert" className="rounded-xl border border-danger/40 bg-danger/10 p-3 text-sm">
+            <p className="font-medium text-danger">Não foi possível criar o departamento</p>
+            <ul className="mt-1 list-disc space-y-1 pl-5 text-muted-foreground">
+              {createErrors.map((message) => (
+                <li key={message}>{message}</li>
+              ))}
+            </ul>
+          </div>
+        )}
         <Input
           label="Nome *"
           value={form.name}

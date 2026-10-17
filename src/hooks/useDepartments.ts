@@ -1,5 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { departmentsApi } from "@/api";
+import {
+  departmentsApi,
+  filterGlobalDepartments,
+  isMissingEndpointError,
+} from "@/api";
 import type {
   CreateDepartmentRequest,
   CursorPageDto,
@@ -18,6 +22,7 @@ const KEYS = {
   }) => [...KEYS.all, "list", params] as const,
   global: [...["departments"], "global"] as const,
   detail: (id: string) => [...KEYS.all, "detail", id] as const,
+  effective: (id: string) => [...KEYS.all, "effective", id] as const,
 };
 
 function normalizeArray<T>(data: CursorPageDto<T> | T[]): T[] {
@@ -45,10 +50,40 @@ export function useDepartments(
   });
 }
 
-export function useGlobalDepartments() {
+/**
+ * Departamentos globais (usados no select "Herdar de").
+ *
+ * O client já trata 404/405 de GET /departments/global caindo para a listagem
+ * filtrada; aqui só garantimos que a tela não entre em loop de retry enquanto
+ * o backend não publica o endpoint.
+ */
+export function useGlobalDepartments(enabled = true) {
   return useQuery({
     queryKey: KEYS.global,
     queryFn: () => departmentsApi.listGlobal(),
+    select: (data) => filterGlobalDepartments(normalizeArray(data)),
+    enabled,
+    retry: false,
+    staleTime: 60_000,
+  });
+}
+
+export function useDepartmentEffective(departmentId: string, enabled = true) {
+  return useQuery({
+    queryKey: KEYS.effective(departmentId),
+    queryFn: async () => {
+      try {
+        return await departmentsApi.effective(departmentId);
+      } catch (error) {
+        // Endpoint ainda não publicado: a tela cai para os dados do próprio
+        // departamento (sem selos de origem), em vez de mostrar erro.
+        if (isMissingEndpointError(error)) return null;
+        throw error;
+      }
+    },
+    enabled: !!departmentId && enabled,
+    retry: false,
+    staleTime: 30_000,
   });
 }
 
@@ -79,6 +114,7 @@ export function useUpdateDepartment() {
     onSuccess: (_d, vars) => {
       qc.invalidateQueries({ queryKey: KEYS.list({}) });
       qc.invalidateQueries({ queryKey: KEYS.detail(vars.id) });
+      qc.invalidateQueries({ queryKey: KEYS.effective(vars.id) });
       qc.invalidateQueries({ queryKey: KEYS.global });
     },
   });
@@ -212,6 +248,8 @@ export function useDeleteDepartment() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: KEYS.list({}) });
       qc.invalidateQueries({ queryKey: KEYS.global });
+      // A herança de outros departamentos pode apontar para o excluído.
+      qc.invalidateQueries({ queryKey: KEYS.all });
     },
   });
 }
