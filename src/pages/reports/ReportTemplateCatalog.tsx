@@ -27,6 +27,11 @@ const DATASET_ICONS: Record<string, string> = {
   ticketEscalations: "⏫",
   customFields: "🏷️",
   knowledgeBase: "📖",
+  windowsUpdates: "🩹",
+  patchCompliance: "✅",
+  patchApprovals: "🛡️",
+  patchApprovalAudit: "🧾",
+  agents: "🖥️",
 };
 
 const BUILT_IN_TEMPLATES = [
@@ -93,6 +98,46 @@ const BUILT_IN_TEMPLATES = [
     icon: "🎫",
     datasets: ["tickets", "agentHardware"],
     category: "Suporte",
+  },
+  {
+    id: "patch-pending",
+    name: "Patches Pendentes por Agente",
+    description: "Atualizações do Windows pendentes por agente, com severidade, classificação e aprovação.",
+    icon: "🩹",
+    datasets: ["windowsUpdates"],
+    category: "Patches",
+  },
+  {
+    id: "patch-compliance",
+    name: "Conformidade de Patches",
+    description: "Conformidade por agente: pendentes acionáveis, críticas, recusadas e reinício pendente.",
+    icon: "✅",
+    datasets: ["patchCompliance"],
+    category: "Patches",
+  },
+  {
+    id: "patch-approvals",
+    name: "Aprovações de Patches",
+    description: "Regras de aprovação/recusa de atualizações por escopo, com motivo e responsável.",
+    icon: "🛡️",
+    datasets: ["patchApprovals"],
+    category: "Patches",
+  },
+  {
+    id: "patch-approval-audit",
+    name: "Auditoria de Aprovações de Patches",
+    description: "Histórico de mudanças de aprovação (usuário, IP e motivo).",
+    icon: "🧾",
+    datasets: ["patchApprovalAudit"],
+    category: "Patches",
+  },
+  {
+    id: "agent-inventory",
+    name: "Inventário de Agentes",
+    description: "Frota com status, SO, versão do agente, usuário logado e reinício pendente.",
+    icon: "🖥️",
+    datasets: ["agents"],
+    category: "Inventário",
   },
 ];
 

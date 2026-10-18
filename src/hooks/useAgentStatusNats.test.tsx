@@ -232,6 +232,17 @@ describe("useAgentStatusNats invalidação de queries", () => {
     });
     expect(prefixOnly).toHaveLength(0);
 
+    // Regressão: o summary do dashboard tem UM dono (useDashboardRealtime).
+    // Invalidar `["dashboard"]` aqui também duplicava a requisição por evento.
+    const dashboardInvalidations = invalidateSpy.mock.calls.filter((call) => {
+      const opts = call[0] as { queryKey?: unknown[] } | undefined;
+      return (
+        Array.isArray(opts?.queryKey) &&
+        opts.queryKey[0] === "dashboard"
+      );
+    });
+    expect(dashboardInvalidations).toHaveLength(0);
+
     // Reconciliação estreita do detail presente (throttle de 60s)
     const detailInvalidations = invalidateSpy.mock.calls.filter((call) => {
       const opts = call[0] as { queryKey?: unknown[] } | undefined;

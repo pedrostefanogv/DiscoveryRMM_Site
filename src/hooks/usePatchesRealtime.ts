@@ -3,8 +3,18 @@ import { useQueryClient } from "@tanstack/react-query";
 import { getNatsService, type DashboardEvent } from "@/api/nats";
 import { realtimeConfig } from "@/config/realtime";
 import { buildDashboardNatsSubjects } from "@/utils/natsSubjects";
+import { invalidateThrottled } from "@/utils/invalidationThrottle";
 
 const NATS_ENABLED = realtimeConfig.useNats && realtimeConfig.natsEnabled;
+
+/**
+ * Um scan/instalação da frota publica UM evento por agente. Sem throttle, uma
+ * varredura de N agentes disparava N refetches em rajada do inventário de
+ * patches (e do prefixo ["agents"] inteiro) — na página inicial isso era o
+ * snapshot de patches sendo buscado várias vezes em poucos segundos.
+ */
+const PATCHES_INVALIDATE_MIN_INTERVAL_MS = 10_000;
+const AGENTS_INVALIDATE_MIN_INTERVAL_MS = 15_000;
 
 const PATCH_EVENT_TYPES = new Set([
   "PatchScanCompleted",
@@ -44,9 +54,21 @@ export function usePatchesRealtime(enabled = true) {
       const eventType = typeof event.eventType === "string" ? event.eventType : "";
       if (!PATCH_EVENT_TYPES.has(eventType)) return;
 
-      void queryClient.invalidateQueries({ queryKey: ["patches"] });
-      void queryClient.invalidateQueries({ queryKey: ["agentWindowsUpdates"] });
-      void queryClient.invalidateQueries({ queryKey: ["agents"] });
+      invalidateThrottled(
+        queryClient,
+        ["patches"],
+        PATCHES_INVALIDATE_MIN_INTERVAL_MS,
+      );
+      invalidateThrottled(
+        queryClient,
+        ["agentWindowsUpdates"],
+        PATCHES_INVALIDATE_MIN_INTERVAL_MS,
+      );
+      invalidateThrottled(
+        queryClient,
+        ["agents"],
+        AGENTS_INVALIDATE_MIN_INTERVAL_MS,
+      );
     };
 
     void (async () => {

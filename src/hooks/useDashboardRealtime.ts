@@ -7,6 +7,7 @@ import {
   buildDashboardNatsSubjects,
   type DashboardNatsScope,
 } from "@/utils/natsSubjects";
+import { invalidateThrottled } from "@/utils/invalidationThrottle";
 
 type GlobalScope = "global";
 type ClientScope = { clientId: string };
@@ -14,6 +15,18 @@ type SiteScope = { clientId: string; siteId: string };
 export type DashboardRealtimeScope = GlobalScope | ClientScope | SiteScope;
 
 const NATS_ENABLED = realtimeConfig.useNats && realtimeConfig.natsEnabled;
+
+/**
+ * Janela mínima entre dois refetches do summary causados por eventos NATS.
+ *
+ * O backend serve o summary de um cache de 45 s (DashboardService,
+ * AbsoluteCacheTtlSeconds = 45): refetch mais rápido que isso devolve o MESMO
+ * payload — no HAR, duas respostas com 15 s de diferença traziam o mesmo
+ * `generatedAtUtc`. 30 s mantém o painel responsivo sem transformar heartbeat
+ * em tráfego inútil; a coalescência garante que a última invalidação da janela
+ * nunca é perdida. Subir para 45 s elimina 100% dos payloads repetidos.
+ */
+const DASHBOARD_REALTIME_MIN_INTERVAL_MS = 30_000;
 
 function buildQueryKey(
   scope: DashboardRealtimeScope,
@@ -100,14 +113,22 @@ function eventMatchesScope(
  * Subscribes to dashboard realtime events via NATS and invalidates
  * the scoped dashboard query when matching events arrive.
  */
+export interface UseDashboardRealtimeOptions {
+  /** Intervalo mínimo entre refetches disparados por eventos (default 30 s). */
+  invalidateMinIntervalMs?: number;
+}
+
 export function useDashboardRealtime(
   scope: DashboardRealtimeScope,
   window: DashboardWindow,
   enabled = true,
+  options: UseDashboardRealtimeOptions = {},
 ) {
   const queryClient = useQueryClient();
   const scopeKey = toScopeKey(scope);
   const stableScope = useMemo<DashboardRealtimeScope>(() => scope, [scopeKey]);
+  const invalidateMinIntervalMs =
+    options.invalidateMinIntervalMs ?? DASHBOARD_REALTIME_MIN_INTERVAL_MS;
 
   useEffect(() => {
     if (!enabled || !NATS_ENABLED || !realtimeConfig.natsUrl) {
@@ -137,7 +158,9 @@ export function useDashboardRealtime(
     const onDashboardEvent = (event: DashboardEvent | Record<string, unknown>) => {
       if (disposed) return;
       if (!eventMatchesScope(event, stableScope)) return;
-      void queryClient.invalidateQueries({ queryKey });
+      // Coalescido e compartilhado com os demais hooks (ver
+      // utils/invalidationThrottle): eventos em rajada viram um único refetch.
+      invalidateThrottled(queryClient, queryKey, invalidateMinIntervalMs);
     };
 
     void (async () => {
@@ -165,5 +188,5 @@ export function useDashboardRealtime(
         natsService.unsubscribe(subject, onDashboardEvent);
       });
     };
-  }, [enabled, queryClient, stableScope, window]);
+  }, [enabled, queryClient, stableScope, window, invalidateMinIntervalMs]);
 }

@@ -25,6 +25,7 @@ import { useAuthorization } from '@/auth/authorization';
 import { useDashboardRealtime } from '@/hooks/useDashboardRealtime';
 import { P2PMetricsCard } from '@/components/agents/P2PMetricsCard';
 import { ObjectStorageCard } from '@/components/platform/ObjectStorageCard';
+import { AgentUpdatesInventoryCard } from '@/components/dashboard/AgentUpdatesInventoryCard';
 import { StatCard, Card, CardHeader, Badge, Button, SkeletonDashboard, ErrorDisplay } from '@/components/ui';
 import { getRealtimeStats } from '@/api';
 import { useSoftwareInventorySnapshot } from '@/hooks/useSoftwareInventory';
@@ -129,7 +130,9 @@ export default function Dashboard() {
   const softwareSnapshot = useSoftwareInventorySnapshot('global', undefined, undefined, {
     refetchInterval: 300_000,
   });
-  // Conformidade de patches (Windows Update) da frota global.
+  // Conformidade de patches (Windows Update) da frota global. Alimenta o KPI
+  // "Conformidade de patches" e o card "Atualizações & Inventário dos Agentes"
+  // (uma única query para os dois — o card não adiciona requisição à home).
   const patchSnapshot = usePatchSnapshot('global');
   usePatchesRealtime(canViewPatches);
   const realtimeStats = useQuery({
@@ -439,6 +442,18 @@ export default function Dashboard() {
           />
         </button>
       </div>
+
+      {/* Atualizações & Inventário dos Agentes: detalhamento do que o KPI de
+          conformidade só resume em %. Reaproveita o snapshot já consultado. */}
+      {canViewPatches && (
+        <AgentUpdatesInventoryCard
+          snapshot={patchSnapshot.data}
+          isLoading={patchSnapshot.isLoading}
+          isError={patchSnapshot.isError}
+          isFetching={patchSnapshot.isFetching}
+          onRefresh={() => void patchSnapshot.refetch()}
+        />
+      )}
 
       {/* Linha 2 – Saúde dos Agentes + Comandos */}
       <div className="grid gap-6 lg:grid-cols-2">

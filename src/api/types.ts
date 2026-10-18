@@ -3007,6 +3007,12 @@ export enum ReportDatasetType {
   CustomFields = 21,
   TicketAnswers = 23,
   KnowledgeBase = 22,
+  // Gerenciador de Patches do Windows (WUA) e inventário/estado dos agentes.
+  WindowsUpdates = 24,
+  PatchCompliance = 25,
+  PatchApprovals = 26,
+  PatchApprovalAudit = 27,
+  Agents = 28,
 }
 
 export enum ReportFormat {

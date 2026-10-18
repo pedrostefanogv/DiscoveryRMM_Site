@@ -46,6 +46,11 @@ const DATASET_LABELS: Record<ReportDatasetType, string> = {
   [ReportDatasetType.CustomFields]: "Campos Personalizados",
   [ReportDatasetType.KnowledgeBase]: "Base de Conhecimento",
   [ReportDatasetType.TicketAnswers]: "Respostas do Questionário",
+  [ReportDatasetType.WindowsUpdates]: "Atualizações do Windows",
+  [ReportDatasetType.PatchCompliance]: "Conformidade de Patches",
+  [ReportDatasetType.PatchApprovals]: "Aprovações de Patches",
+  [ReportDatasetType.PatchApprovalAudit]: "Auditoria de Aprovações de Patches",
+  [ReportDatasetType.Agents]: "Agentes (inventário e estado)",
 };
 
 function getDatasetLabel(datasetType: ReportDatasetTypeValue): string {
@@ -96,6 +101,15 @@ function getDatasetLabel(datasetType: ReportDatasetTypeValue): string {
       "custom-fields": "Campos Personalizados",
       knowledgebase: "Base de Conhecimento",
       "knowledge-base": "Base de Conhecimento",
+      windowsupdates: "Atualizações do Windows",
+      "windows-updates": "Atualizações do Windows",
+      patchcompliance: "Conformidade de Patches",
+      "patch-compliance": "Conformidade de Patches",
+      patchapprovals: "Aprovações de Patches",
+      "patch-approvals": "Aprovações de Patches",
+      patchapprovalaudit: "Auditoria de Aprovações de Patches",
+      "patch-approval-audit": "Auditoria de Aprovações de Patches",
+      agents: "Agentes (inventário e estado)",
     };
     return stringLabels[lower] ?? normalized;
   }

@@ -7,6 +7,12 @@ export const BUILT_IN_TEMPLATE_ID_BY_SLUG: Record<string, string> = {
   "site-overview": "a0000001-0000-0000-0000-000000000006",
   "automation-by-device": "a0000001-0000-0000-0000-000000000007",
   "tickets-by-device": "a0000001-0000-0000-0000-000000000008",
+  // Templates de patches/agentes (M232).
+  "patch-pending": "a0000003-0000-0000-0000-000000000001",
+  "patch-compliance": "a0000003-0000-0000-0000-000000000002",
+  "patch-approvals": "a0000003-0000-0000-0000-000000000003",
+  "patch-approval-audit": "a0000003-0000-0000-0000-000000000004",
+  "agent-inventory": "a0000003-0000-0000-0000-000000000005",
 };
 
 export function resolveBuiltInTemplateId(slug: string | null | undefined): string | null {

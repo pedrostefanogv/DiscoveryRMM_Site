@@ -190,6 +190,20 @@ describe('Dashboard', () => {
     expect(screen.getByText('Info/Debug')).toBeTruthy();
   });
 
+  it('mostra o card de Atualizações & Inventário dos Agentes com o snapshot de patches', () => {
+    mocks.summary = makeSummary();
+    mocks.realtime = makeRealtime();
+
+    renderDashboard();
+
+    expect(screen.getByText('Atualizações & Inventário dos Agentes')).toBeTruthy();
+    // Tiles do detalhamento (inventário de patches) além do % do KPI.
+    expect(screen.getByText('Aprovadas')).toBeTruthy();
+    expect(screen.getByText('Sem decisão')).toBeTruthy();
+    expect(screen.getByText('Falhas 24h')).toBeTruthy();
+    expect(screen.getByText(/de 0 agentes reportaram/)).toBeTruthy();
+  });
+
   it('renderiza o card de Object Storage (que não entra no refresh global)', () => {
     mocks.summary = makeSummary();
     mocks.realtime = makeRealtime();

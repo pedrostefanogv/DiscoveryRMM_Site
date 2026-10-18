@@ -64,6 +64,11 @@ const DATASET_LABELS: Record<ReportDatasetType, string> = {
   [ReportDatasetType.CustomFields]: "Campos Personalizados",
   [ReportDatasetType.KnowledgeBase]: "Base de Conhecimento",
   [ReportDatasetType.TicketAnswers]: "Respostas do Questionário",
+  [ReportDatasetType.WindowsUpdates]: "Atualizações do Windows",
+  [ReportDatasetType.PatchCompliance]: "Conformidade de Patches",
+  [ReportDatasetType.PatchApprovals]: "Aprovações de Patches",
+  [ReportDatasetType.PatchApprovalAudit]: "Auditoria de Aprovações de Patches",
+  [ReportDatasetType.Agents]: "Agentes (inventário e estado)",
 };
 
 const FORMAT_LABELS: Record<ReportFormat, string> = {

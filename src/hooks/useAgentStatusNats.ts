@@ -18,6 +18,7 @@ import {
   buildDashboardNatsSubjects,
   type DashboardNatsScope,
 } from "@/utils/natsSubjects";
+import { invalidateThrottled as invalidateThrottledShared } from "@/utils/invalidationThrottle";
 import {
   natsLogger,
   natsTelemetryLogger,
@@ -247,10 +248,11 @@ const GLOBAL_PONG_SUBJECT = (
   import.meta.env.VITE_NATS_GLOBAL_PONG_SUBJECT ?? "tenant.global.pong"
 ).trim();
 const INVALIDATE_MIN_INTERVAL_MS = 1_500;
-const DASHBOARD_INVALIDATE_MIN_INTERVAL_MS = 5_000;
-// /realtime/stats é telemetria pesada (threadpool, GC, business): invalidar a
-// cada evento gerava até ~0,7 req/s por aba. 15s é suficiente para agregados.
-const REALTIME_STATS_INVALIDATE_MIN_INTERVAL_MS = 15_000;
+// /realtime/stats é telemetria pesada (probe TCP do NATS, PING no Redis, ping
+// no banco, threadpool, GC). Invalidar a cada evento gerava até ~0,7 req/s por
+// aba PARA DADOS QUE MUDAM EM MINUTOS (uptime, working set, contadores de GC).
+// 60 s é suficiente para um card de infraestrutura e derruba 4x esse tráfego.
+const REALTIME_STATS_INVALIDATE_MIN_INTERVAL_MS = 60_000;
 const BOOTSTRAP_DEBOUNCE_MS = 250;
 
 function isIncompleteAgentScope(scope: AgentRealtimeScope): boolean {
@@ -266,32 +268,43 @@ function resetRealtimeUiStateIfIdle() {
   setServerPongState(null, null);
 }
 
+type InvalidateFn = (
+  queryKey: string[],
+  minIntervalMs?: number,
+) => void;
+
 function createInvalidateThrottler(
   queryClient: ReturnType<typeof useQueryClient>,
-) {
-  const lastInvalidationByKey = new Map<string, number>();
-
-  return (queryKey: string[], minIntervalMs = INVALIDATE_MIN_INTERVAL_MS) => {
-    const now = Date.now();
-    const key = queryKey.join("|");
-    const last = lastInvalidationByKey.get(key) ?? 0;
-    if (now - last < minIntervalMs) return;
-
-    lastInvalidationByKey.set(key, now);
-    void queryClient.invalidateQueries({ queryKey });
+): InvalidateFn {
+  // Estado do throttle vive em utils/invalidationThrottle, indexado por
+  // QueryClient: assim este hook e o useDashboardRealtime compartilham a MESMA
+  // janela por query key em vez de cada um ter a sua (o que dobrava a chamada
+  // por evento no dashboard).
+  return (queryKey, minIntervalMs = INVALIDATE_MIN_INTERVAL_MS) => {
+    invalidateThrottledShared(queryClient, queryKey, minIntervalMs);
   };
 }
 
-function invalidateDashboardQueries(
+/**
+ * Invalida as queries afetadas por um evento do barramento.
+ *
+ * IMPORTANTE: o summary do dashboard NÃO é invalidado aqui. Quem é dono dele é
+ * o `useDashboardRealtime`, montado exatamente nas páginas que exibem summary
+ * (global, cliente e site). Antes os dois hooks invalidavam `["dashboard"]` a
+ * cada heartbeat e o mesmo evento gerava duas requisições de
+ * /dashboard/global/summary com ~4 ms de diferença (visível no HAR).
+ * O que fica aqui é apenas o que este hook é dono: telemetria do processo,
+ * coleções de agentes e logs.
+ */
+function invalidateEventQueries(
   normalizedType: string,
-  invalidateThrottled: (queryKey: string[], minIntervalMs?: number) => void,
+  invalidateThrottled: InvalidateFn,
 ) {
   const isHeartbeatLike =
     normalizedType === "agentheartbeat" ||
     normalizedType === "agentstatuschanged";
 
   if (isHeartbeatLike) {
-    invalidateThrottled(["dashboard"], DASHBOARD_INVALIDATE_MIN_INTERVAL_MS);
     invalidateThrottled(
       ["realtime", "stats"],
       REALTIME_STATS_INVALIDATE_MIN_INTERVAL_MS,
@@ -314,7 +327,6 @@ function invalidateDashboardQueries(
     normalizedType === "agentconnected" ||
     normalizedType === "agentdisconnected"
   ) {
-    invalidateThrottled(["dashboard"], DASHBOARD_INVALIDATE_MIN_INTERVAL_MS);
     invalidateThrottled(
       ["realtime", "stats"],
       REALTIME_STATS_INVALIDATE_MIN_INTERVAL_MS,
@@ -611,7 +623,7 @@ export function useAgentStatusNats(
       // O heartbeat já é aplicado otimisticamente acima; aqui só reconciliamos
       // o detail do agente com o servidor, no máximo 1x por minuto.
       invalidateThrottled(["agents", "detail", heartbeatAgentId], 60_000);
-      invalidateDashboardQueries("agentheartbeat", invalidateThrottled);
+      invalidateEventQueries("agentheartbeat", invalidateThrottled);
     };
 
     const handleDashboardEvent = (event: DashboardEvent) => {
@@ -695,7 +707,7 @@ export function useAgentStatusNats(
         // Status change é raro (online↔offline): reconcilia só o detail do
         // agente afetado — nunca o prefixo ["agents"] inteiro.
         invalidateThrottled(["agents", "detail", agentId], 5_000);
-        invalidateDashboardQueries(normalizedType, invalidateThrottled);
+        invalidateEventQueries(normalizedType, invalidateThrottled);
         return;
       }
 
@@ -707,7 +719,7 @@ export function useAgentStatusNats(
           }
         }
 
-        invalidateDashboardQueries(normalizedType, invalidateThrottled);
+        invalidateEventQueries(normalizedType, invalidateThrottled);
         return;
       }
 
@@ -775,12 +787,12 @@ export function useAgentStatusNats(
           }
         }
 
-        invalidateDashboardQueries(normalizedType, invalidateThrottled);
+        invalidateEventQueries(normalizedType, invalidateThrottled);
         return;
       }
 
       if (!normalizedType) return;
-      invalidateDashboardQueries(normalizedType, invalidateThrottled);
+      invalidateEventQueries(normalizedType, invalidateThrottled);
     };
 
     const handleGlobalPong = (message: DashboardEvent) => {
