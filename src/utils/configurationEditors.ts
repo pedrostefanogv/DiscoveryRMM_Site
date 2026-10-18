@@ -19,6 +19,7 @@ export type EditableFieldKind =
 export type EditableFieldGroup =
   | "features"
   | "policy"
+  | "remoteAccess"
   | "agent"
   | "tokens"
   | "advanced"
@@ -57,23 +58,23 @@ export const APP_STORE_POLICY_OPTIONS: { value: string; label: string }[] = [
 
 /** Modo de autorização do acesso remoto (RemoteConsentMode no backend). */
 export const REMOTE_CONSENT_MODE_OPTIONS: { value: string; label: string }[] = [
-  { value: "0", label: "0 - Desligado (sem aviso nem pedido)" },
-  { value: "1", label: "1 - Apenas notificar (avisa e conecta)" },
-  { value: "2", label: "2 - Solicitar autorização (aguarda decisão)" },
+  { value: "Off", label: "Desligado (sem aviso nem pedido)" },
+  { value: "NotifyOnly", label: "Apenas notificar (avisa e conecta)" },
+  { value: "Prompt", label: "Solicitar autorização (aguarda decisão)" },
 ];
 
 /** Ação quando a contagem regressiva termina sem resposta. */
 export const REMOTE_CONSENT_TIMEOUT_ACTION_OPTIONS: { value: string; label: string }[] = [
-  { value: "0", label: "0 - Negar automaticamente" },
-  { value: "1", label: "1 - Aprovar automaticamente" },
+  { value: "Deny", label: "Negar automaticamente" },
+  { value: "Approve", label: "Aprovar automaticamente" },
 ];
 
 const REMOTE_CONSENT_FIELDS: EditableField[] = [
   {
     key: "remoteConsentMode",
     label: "Autorização de Acesso Remoto (desktop)",
-    kind: "policy",
-    group: "policy",
+    kind: "select",
+    group: "remoteAccess",
     options: REMOTE_CONSENT_MODE_OPTIONS,
     description:
       "Vale apenas para sessões de área de trabalho. Terminal, arquivos, proxy e processos não pedem autorização.",
@@ -82,15 +83,15 @@ const REMOTE_CONSENT_FIELDS: EditableField[] = [
     key: "remoteConsentTimeoutSeconds",
     label: "Timeout da Autorização",
     kind: "number",
-    group: "policy",
+    group: "remoteAccess",
     unit: "segundos",
     description: "Contagem regressiva do prompt (10–600 segundos).",
   },
   {
     key: "remoteConsentTimeoutAction",
     label: "Ação ao Final da Contagem",
-    kind: "policy",
-    group: "policy",
+    kind: "select",
+    group: "remoteAccess",
     options: REMOTE_CONSENT_TIMEOUT_ACTION_OPTIONS,
     description: "Aprova ou nega automaticamente quando o usuário não responde.",
   },
@@ -98,7 +99,7 @@ const REMOTE_CONSENT_FIELDS: EditableField[] = [
     key: "remoteConsentShowBanner",
     label: "Banner Durante a Sessão",
     kind: "boolean",
-    group: "policy",
+    group: "remoteAccess",
     description:
       "Exibe o banner local (operador + tempo + Desconectar) no computador acessado. Ele não aparece no stream remoto.",
   },
@@ -106,7 +107,7 @@ const REMOTE_CONSENT_FIELDS: EditableField[] = [
     key: "remoteConsentMessage",
     label: "Mensagem do Prompt",
     kind: "string",
-    group: "policy",
+    group: "remoteAccess",
     description:
       "Placeholders: {operator}, {client}, {site}, {agent}. Máximo 500 caracteres.",
   },
@@ -114,7 +115,7 @@ const REMOTE_CONSENT_FIELDS: EditableField[] = [
     key: "remoteConsentBannerText",
     label: "Texto do Banner",
     kind: "string",
-    group: "policy",
+    group: "remoteAccess",
     description:
       "Placeholders: {operator}, {client}, {site}, {agent}. Máximo 500 caracteres.",
   },
@@ -910,12 +911,27 @@ export function formatFieldValue(
       if (value === "PreApproved") return "1";
       if (value === "All") return "2";
     }
+    if (fieldKey === "remoteConsentMode") {
+      if (value === "0") return "Off";
+      if (value === "1") return "NotifyOnly";
+      if (value === "2") return "Prompt";
+    }
+    if (fieldKey === "remoteConsentTimeoutAction") {
+      if (value === "0") return "Deny";
+      if (value === "1") return "Approve";
+    }
     return value;
   }
 
   if (typeof value === "number" || typeof value === "boolean") {
     if (fieldKey === "appStorePolicy") {
       return String(value);
+    }
+    if (fieldKey === "remoteConsentMode") {
+      return ["Off", "NotifyOnly", "Prompt"][value as number] ?? String(value);
+    }
+    if (fieldKey === "remoteConsentTimeoutAction") {
+      return ["Deny", "Approve"][value as number] ?? String(value);
     }
     return String(value);
   }

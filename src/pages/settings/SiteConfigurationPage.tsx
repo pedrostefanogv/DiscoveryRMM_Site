@@ -215,6 +215,7 @@ export default function SiteConfigurationPage() {
 
   const featureFields = siteEditableFields.filter((field) => field.group === "features");
   const policyFields = siteEditableFields.filter((field) => field.group === "policy");
+  const remoteAccessFields = siteEditableFields.filter((field) => field.group === "remoteAccess");
   const agentFields = siteEditableFields.filter((field) => field.group === "agent");
   const advancedFields = siteEditableFields.filter((field) => field.group === "advanced");
   const siteProfileFields = siteEditableFields.filter((field) => field.group === "siteProfile");
@@ -384,6 +385,21 @@ export default function SiteConfigurationPage() {
             >
               <div className="space-y-4">
                 {policyFields.map((field) =>
+                  renderFieldEditor(field.key, field.label, field.kind),
+                )}
+              </div>
+            </ConfigurationSectionCard>
+          )}
+
+          {remoteAccessFields.length > 0 && (
+            <ConfigurationSectionCard
+              title="Autorização de Acesso Remoto"
+              subtitle="Prompt de consentimento no endpoint e banner local nas sessões de área de trabalho."
+              icon={<ShieldCheck className="h-4 w-4" />}
+              iconClassName={tintedIcon.emerald}
+            >
+              <div className="space-y-4">
+                {remoteAccessFields.map((field) =>
                   renderFieldEditor(field.key, field.label, field.kind),
                 )}
               </div>

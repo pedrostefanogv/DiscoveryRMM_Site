@@ -78,6 +78,7 @@ interface FormValues {
 type SectionKey =
   | "features"
   | "policy"
+  | "remoteAccess"
   | "agent"
   | "storage"
   | "nats"
@@ -124,6 +125,7 @@ export default function ServerConfigurationPage() {
   const [collapsedSections, setCollapsedSections] = useState<Record<SectionKey, boolean>>({
     features: false,
     policy: false,
+    remoteAccess: false,
     agent: false,
     storage: false,
     nats: false,
@@ -471,6 +473,7 @@ export default function ServerConfigurationPage() {
 
   const featureFields = serverEditableFields.filter((f) => f.group === "features");
   const policyFields = serverEditableFields.filter((f) => f.group === "policy");
+  const remoteAccessFields = serverEditableFields.filter((f) => f.group === "remoteAccess");
   const agentFields = serverEditableFields.filter((f) => f.group === "agent");
   const natsFields = serverEditableFields.filter((f) => f.group === "nats");
   const hiddenAdvancedFieldKeys = new Set(["brandingSettingsJson"]);
@@ -596,7 +599,9 @@ export default function ServerConfigurationPage() {
         disableInheritance
         description={field.description}
         unit={field.unit}
-        options={field.kind === "select" ? agentHomeTabOptions : undefined}
+        options={
+          field.key === "agentHomeTab" ? agentHomeTabOptions : field.options
+        }
         onValueChange={(next) => {
           markPending(field.key);
           setValue(`values.${field.key}` as never, next as never, {
@@ -900,6 +905,25 @@ export default function ServerConfigurationPage() {
               </div>
               <div className="flex-1">
                 {policyFields.map((field) => renderFieldEditor(field))}
+              </div>
+            </div>
+          )}
+        </Card>
+
+        {/* Autorização de acesso remoto (desktop) */}
+        <Card>
+          <CardHeader
+            title="Autorização de Acesso Remoto"
+            subtitle="Prompt de consentimento no endpoint e banner local durante sessões de área de trabalho."
+            action={renderSectionAction("remoteAccess")}
+          />
+          {!collapsedSections.remoteAccess && (
+            <div className="flex items-start gap-3">
+              <div className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${tintedIcon.emerald}`}>
+                <ShieldCheck className="h-4 w-4" />
+              </div>
+              <div className="flex-1">
+                {remoteAccessFields.map((field) => renderFieldEditor(field))}
               </div>
             </div>
           )}

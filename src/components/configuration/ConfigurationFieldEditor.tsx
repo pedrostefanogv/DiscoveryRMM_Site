@@ -253,7 +253,6 @@ export function ConfigurationFieldEditor({
           disabled={inputDisabled}
           options={APP_STORE_POLICY_OPTIONS}
           error={error}
-          hint="Controla o que os agentes podem instalar. Em níveis inferiores, deixe herdado para usar a política do servidor."
         />
       );
     }
@@ -284,7 +283,6 @@ export function ConfigurationFieldEditor({
           disabled={inputDisabled}
           options={selectOptions}
           error={error}
-          hint="Aba aberta pelo agent ao iniciar. Se a aba escolhida estiver desativada para o agente, ele abre a aba Status."
         />
       );
     }
