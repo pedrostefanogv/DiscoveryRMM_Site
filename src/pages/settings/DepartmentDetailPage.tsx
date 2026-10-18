@@ -466,6 +466,41 @@ export function TriageInheritableField({
 }
 
 /**
+ * Origem de um campo no GET /effective.
+ *
+ * O backend pode expor a chave com ou sem o sufixo `Override`
+ * (ex.: `assignmentStrategy` ou `assignmentStrategyOverride`) — as duas são
+ * aceitas para a tela não perder o selo nem o null de herança.
+ */
+function readEffectiveOrigin(
+  effective: DepartmentEffectiveView | null,
+  key: string,
+): DepartmentFieldOrigin | undefined {
+  return effective?.origins?.[key] ?? effective?.origins?.[`${key}Override`];
+}
+
+/**
+ * A estratégia de auto-atribuição (`assignmentStrategy`) está herdada?
+ *
+ * O backend passou a herdar esse campo. Fonte preferencial: a origem no
+ * /effective (campo com ou sem o sufixo Override). Reserva para quando o
+ * endpoint ainda não está publicado (404): `assignmentStrategyOverride === null`
+ * no próprio departamento, desde que exista herança configurada.
+ */
+export function isAssignmentStrategyInherited(
+  department: Department,
+  effective: DepartmentEffectiveView | null,
+): boolean {
+  const origin = readEffectiveOrigin(effective, "assignmentStrategy");
+  if (origin) return origin === "inherited-global";
+
+  return (
+    department.assignmentStrategyOverride === null &&
+    Boolean(department.inheritFromGlobalId)
+  );
+}
+
+/**
  * Form inicial a partir do departamento + configuração efetiva.
  *
  * Só a origem "inherited-global" vira null (= herdar). A origem "default" NÃO é
@@ -477,7 +512,8 @@ export function buildDepartmentForm(
   department: Department,
   effective: DepartmentEffectiveView | null,
 ): UpdateDepartmentRequest {
-  const inheritedOrDefault = (key: string) => effective?.origins?.[key] === "inherited-global";
+  const inheritedOrDefault = (key: string) =>
+    readEffectiveOrigin(effective, key) === "inherited-global";
 
   const decor = <T,>(key: string, value: T | null | undefined, fallback: T): T | null =>
     inheritedOrDefault(key) ? null : value ?? fallback;
@@ -489,7 +525,9 @@ export function buildDepartmentForm(
     sortOrder: department.sortOrder,
     isActive: department.isActive,
     // null = herdar a estratégia do global (o form mostra o valor efetivo).
-    assignmentStrategy: inheritedOrDefault("assignmentStrategy")
+    // O buildDepartmentUpdatePayload converte esse null em
+    // `assignmentStrategyOverride: null` e omite o valor base (B3).
+    assignmentStrategy: isAssignmentStrategyInherited(department, effective)
       ? null
       : department.assignmentStrategy ?? 0,
     aiAssignmentMode: decor("aiAssignmentMode", department.aiAssignmentMode, 0),
@@ -904,15 +942,27 @@ export default function DepartmentDetailPage() {
   };
 
   const ownStrategy = form.assignmentStrategy ?? 0;
-  const strategyOrigin = origins.assignmentStrategy;
-  // Só fica travado quando existe de fato herança do global (departamento
-  // global nunca fica com o select desabilitado).
-  const strategyInherited = canInherit && strategyOrigin === "inherited-global";
+  const strategyOrigin = origins.assignmentStrategy ?? origins.assignmentStrategyOverride;
+  // A fonte da verdade é o FORM (`null` = herdar), semeado pelo
+  // buildDepartmentForm e atualizado pelo toggle "Herdar": derivar só da origem
+  // do /effective deixava o toggle/select dessincronizados até o refetch.
+  // Departamento global nunca herda, então nunca fica travado.
+  const strategyInherited =
+    canInherit && (form.assignmentStrategy === null || form.assignmentStrategy === undefined);
   const effectiveStrategy = strategyInherited
     ? Number(effectiveConfig.assignmentStrategy ?? 0) || 0
     : ownStrategy;
+  // Selo coerente com o que o formulário vai salvar: herdado mostra "herdado
+  // de ..." e, ao desmarcar "Herdar", passa a "definido aqui" na hora.
+  const strategyBadgeOrigin: DepartmentFieldOrigin | undefined = strategyInherited
+    ? "inherited-global"
+    : strategyOrigin === "inherited-global"
+      ? "own"
+      : strategyOrigin;
 
-  const weightsInherited = origins.aiAssignmentWeightsJson === "inherited-global";
+  const weightsInherited =
+    (origins.aiAssignmentWeightsJson ?? origins.aiAssignmentWeightsJsonOverride) ===
+    "inherited-global";
   const weights = parseWeights(
     weightsInherited
       ? fieldText(effectiveConfig.aiAssignmentWeightsJson, "")
@@ -1106,7 +1156,7 @@ function handleDelete() {
                   hint={
                     isGlobalScope
                       ? "Somente departamentos de cliente podem herdar."
-                      : "Apenas departamentos globais aparecem nesta lista. \"Nenhum\" desfaz a herança."
+                      : "Apenas departamentos globais aparecem nesta lista. Globais inativos ficam marcados como (inativo) e não podem ser escolhidos. \"Nenhum\" desfaz a herança."
                   }
                   onChange={(event) => {
                     markDirty();
@@ -1142,7 +1192,7 @@ function handleDelete() {
                   </p>
                   <div className="flex flex-wrap items-center gap-2">
                     <InheritedOriginBadge
-                      origin={fieldOrigin("assignmentStrategy")}
+                      origin={strategyBadgeOrigin}
                       inheritedFrom={inheritedFromName}
                     />
                     {canInherit && (
@@ -1164,6 +1214,11 @@ function handleDelete() {
                   options={ASSIGNMENT_OPTIONS}
                   value={String(effectiveStrategy)}
                   disabled={strategyInherited}
+                  hint={
+                    strategyInherited
+                      ? 'Valor herdado do departamento global. Desmarque "Herdar" para definir aqui.'
+                      : 'Aplicada aos chamados novos deste departamento.'
+                  }
                   onChange={(event) => {
                     markDirty();
                     setForm((current) =>

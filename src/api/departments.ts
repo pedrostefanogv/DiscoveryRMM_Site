@@ -227,12 +227,30 @@ function normalizeEffectiveMember(
 export interface DepartmentInheritanceOption {
   value: string;
   label: string;
+  /** Opção visível porém não selecionável (ex.: global inativo). */
+  disabled?: boolean;
+}
+
+/** Departamento global inativo (lista antiga pode omitir `isActive`). */
+export function isInactiveGlobal(department: Department): boolean {
+  return department.isActive === false;
+}
+
+/** Rótulo de um global inativo: continua visível, mas marcado. */
+export function inheritanceOptionLabel(department: Department): string {
+  return isInactiveGlobal(department)
+    ? `${department.name} (inativo)`
+    : department.name;
 }
 
 /**
  * Opções do select "Herdar de": apenas departamentos GLOBAIS (ClientId nulo),
  * com "Nenhum" (null) para desfazer. Departamento global não herda — a tela
  * desabilita o select nesse caso.
+ *
+ * Globais INATIVOS continuam na lista (para o valor já salvo não "sumir" da
+ * tela), mas aparecem marcados com "(inativo)" e `disabled`: nunca dá para
+ * escolher um global inativo como pai.
  */
 export function buildInheritanceOptions(
   globals: Department[] | undefined,
@@ -249,7 +267,11 @@ export function buildInheritanceOptions(
       return true;
     })
     .sort((left, right) => left.name.localeCompare(right.name, "pt-BR"))
-    .map((department) => ({ value: department.id, label: department.name }));
+    .map((department) => ({
+      value: department.id,
+      label: inheritanceOptionLabel(department),
+      disabled: isInactiveGlobal(department),
+    }));
 
   return [{ value: "", label: "Nenhum (sem herança)" }, ...options];
 }
@@ -273,9 +295,21 @@ export function buildDepartmentUpdatePayload(
     isActive: form.isActive ?? true,
   };
 
-  // assignmentStrategy também aceita null (= herdar); só cai em 0 quando o
-  // campo não foi informado.
-  if (payload.assignmentStrategy === undefined) payload.assignmentStrategy = 0;
+  // assignmentStrategy agora é herdável (o backend passou a resolvê-lo como os
+  // demais campos de herança): `null` no formulário = herdar do global pai.
+  // Nesse caso o payload leva SOMENTE `assignmentStrategyOverride: null` e NÃO
+  // envia o valor base — enviar o base sobrescreveria a herança. Quando a
+  // estratégia é própria, o valor base continua indo (compatibilidade com o
+  // backend que só conhece esse campo) e o override vai junto, para o backend
+  // novo conseguir sair da herança.
+  if (payload.assignmentStrategy === undefined || payload.assignmentStrategy === null) {
+    payload.assignmentStrategyOverride = null;
+    delete payload.assignmentStrategy;
+  } else {
+    const strategy = Math.trunc(Number(payload.assignmentStrategy)) || 0;
+    payload.assignmentStrategy = strategy;
+    payload.assignmentStrategyOverride = strategy;
+  }
 
   // O backend expõe os overrides de herança como `${campo}Override` (Optional):
   // AUSENTE = "não mexe", null = "volta a herdar", valor = sobrescreve. Por isso

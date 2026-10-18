@@ -851,6 +851,15 @@ export interface Department extends DepartmentAiAssignmentSettings {
   sortOrder: number;
   isActive: boolean;
   assignmentStrategy?: number;
+  /**
+   * Override herdável da estratégia de auto-atribuição (aditivo).
+   *
+   * O backend passou a herdar `assignmentStrategy` do departamento global pai:
+   * `null` = herdar, valor = estratégia própria, ausente = backend antigo (não
+   * sabe do campo). A tela usa este campo como reserva quando o
+   * GET /departments/{id}/effective ainda não está publicado.
+   */
+  assignmentStrategyOverride?: number | null;
 }
 
 /**
@@ -2250,8 +2259,19 @@ export interface UpdateDepartmentRequest extends DepartmentAiAssignmentSettings 
   inheritFromGlobalId: string | null;
   sortOrder: number;
   isActive: boolean;
-  /** Idem: null = herdar a estratégia do global (quando o backend suportar). */
+  /**
+   * Valor base da estratégia de auto-atribuição.
+   *
+   * Continua sendo enviado quando a estratégia é PRÓPRIA (compatibilidade com
+   * o backend que só conhece este campo). Quando a estratégia é herdada a tela
+   * NÃO envia este campo — manda apenas `assignmentStrategyOverride: null`.
+   */
   assignmentStrategy?: number | null;
+  /**
+   * Override herdável da estratégia (aditivo): `null` = herdar do global pai,
+   * valor = estratégia própria. Ausente = "não mexe" no patch semântico.
+   */
+  assignmentStrategyOverride?: number | null;
 }
 
 export interface CreateWorkflowProfileRequest {

@@ -389,7 +389,7 @@ function CreateDepartmentModal({
           hint={
             isGlobalScope
               ? "Departamento global não herda de outro departamento."
-              : "Apenas departamentos globais. \"Nenhum\" cria sem herança."
+              : "Apenas departamentos globais. Globais inativos aparecem como (inativo) e não podem ser escolhidos. \"Nenhum\" cria sem herança."
           }
           onChange={(event) => {
             setCreateErrors([]);

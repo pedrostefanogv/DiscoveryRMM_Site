@@ -51,9 +51,11 @@ import {
   buildDepartmentForm,
   DepartmentInheritanceAlerts,
   InheritedOriginBadge,
+  isAssignmentStrategyInherited,
   isInheritedMember,
   TriageInheritableField,
 } from './DepartmentDetailPage';
+import { Select } from '@/components/ui';
 import {
   ALL_DEPARTMENTS_SCOPE,
   DEPARTMENT_LIST_PARAMS,
@@ -106,6 +108,37 @@ describe('select "Herdar de"', () => {
   it('não oferece o próprio departamento (auto-herança)', () => {
     const options = buildInheritanceOptions(globals, 'g1');
     expect(options.some((option) => option.value === 'g1')).toBe(false);
+  });
+
+  it('não permite escolher global inativo: opção desabilitada e marcada', () => {
+    const withInactive = [
+      department({ id: 'g1', name: 'Suporte Global', clientId: null }),
+      department({ id: 'g2', name: 'NOC', clientId: null }),
+      department({ id: 'g0', name: 'Antigo', clientId: null, isActive: false }),
+      department({ id: 'c1', name: 'Cliente X', clientId: 'client-1' }),
+    ];
+
+    const options = buildInheritanceOptions(withInactive, 'd2');
+    const inactive = options.find((option) => option.value === 'g0');
+
+    // Continua visível (para o valor já salvo não "sumir" da tela), porém
+    // marcado e desabilitado: o usuário nunca consegue escolher um inativo.
+    expect(inactive).toBeDefined();
+    expect(inactive?.disabled).toBe(true);
+    expect(inactive?.label).toBe('Antigo (inativo)');
+    expect(options.filter((option) => !option.disabled).map((option) => option.value)).toEqual([
+      '',
+      'g2',
+      'g1',
+    ]);
+
+    // E o <select> renderiza a opção realmente desabilitada.
+    render(
+      <Select label="Herdar de" options={options} value="" onChange={() => {}} />,
+    );
+    const rendered = screen.getByRole('option', { name: 'Antigo (inativo)' }) as HTMLOptionElement;
+    expect(rendered.disabled).toBe(true);
+    cleanup();
   });
 
   it('mostra "herdado de <global>" só quando a origem é herdada', () => {
@@ -301,6 +334,84 @@ describe('desfazer herança no update', () => {
     expect(form.aiSkillMinEvidence).toBe(9);
     expect(form.aiWeightMax).toBe(0.5);
   });});
+
+describe('estratégia de auto-atribuição herdada (B3)', () => {
+  it('herdada vira assignmentStrategyOverride null e NÃO envia o valor base', () => {
+    const effective = normalizeDepartmentEffective({
+      // O backend passou a herdar assignmentStrategy; a origem vem no /effective
+      // (com ou sem o sufixo Override).
+      origins: { assignmentStrategy: 'inherited-global' },
+      config: { assignmentStrategy: 3 },
+    });
+
+    const form = buildDepartmentForm(
+      department({
+        clientId: 'client-1',
+        inheritFromGlobalId: 'g1',
+        assignmentStrategy: 0,
+      }),
+      effective,
+    );
+
+    // null = herdar: a tela mostra o valor efetivo e não fixa um valor próprio.
+    expect(form.assignmentStrategy).toBeNull();
+
+    const payload = buildDepartmentUpdatePayload(form) as unknown as Record<string, unknown>;
+    expect(payload.assignmentStrategyOverride).toBeNull();
+    expect('assignmentStrategy' in payload).toBe(false);
+
+    const json = JSON.stringify(payload);
+    expect(json).toContain('"assignmentStrategyOverride":null');
+    expect(json).not.toContain('"assignmentStrategy":');
+  });
+
+  it('estratégia própria continua enviando o valor base (compatibilidade)', () => {
+    const form = buildDepartmentForm(
+      department({ clientId: 'client-1', assignmentStrategy: 2 }),
+      null,
+    );
+
+    expect(form.assignmentStrategy).toBe(2);
+
+    const payload = buildDepartmentUpdatePayload(form) as unknown as Record<string, unknown>;
+    // Valor base preservado (backend antigo) + override aditivo (backend novo).
+    expect(payload.assignmentStrategy).toBe(2);
+    expect(payload.assignmentStrategyOverride).toBe(2);
+  });
+
+  it('aceita a origem exposta com o sufixo Override no /effective', () => {
+    const effective = normalizeDepartmentEffective({
+      origins: { assignmentStrategyOverride: 'inherited-global' },
+      config: { assignmentStrategy: 1 },
+    });
+
+    const inherited = department({
+      clientId: 'client-1',
+      inheritFromGlobalId: 'g1',
+      assignmentStrategy: 3,
+    });
+
+    expect(isAssignmentStrategyInherited(inherited, effective)).toBe(true);
+    expect(buildDepartmentForm(inherited, effective).assignmentStrategy).toBeNull();
+  });
+
+  it('sem /effective (404) usa assignmentStrategyOverride null do departamento', () => {
+    const inherited = department({
+      clientId: 'client-1',
+      inheritFromGlobalId: 'g1',
+      assignmentStrategy: 0,
+      assignmentStrategyOverride: null,
+    });
+
+    expect(isAssignmentStrategyInherited(inherited, null)).toBe(true);
+    expect(buildDepartmentForm(inherited, null).assignmentStrategy).toBeNull();
+
+    // Backend antigo (campo ausente) mantém o comportamento anterior: valor próprio.
+    const legacy = department({ clientId: 'client-1', assignmentStrategy: 3 });
+    expect(isAssignmentStrategyInherited(legacy, null)).toBe(false);
+    expect(buildDepartmentForm(legacy, null).assignmentStrategy).toBe(3);
+  });
+});
 
 describe('erro de validação (422)', () => {
   it('renderiza a mensagem do backend no formulário', () => {
