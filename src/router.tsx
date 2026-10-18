@@ -59,6 +59,7 @@ const ServerConfigurationPage = lazy(() => import('@/pages/settings/ServerConfig
 const ClientConfigurationPage = lazy(() => import('@/pages/settings/ClientConfigurationPage'));
 const SiteConfigurationPage = lazy(() => import('@/pages/settings/SiteConfigurationPage'));
 const EffectiveConfigurationPage = lazy(() => import('@/pages/settings/EffectiveConfigurationPage'));
+const RemoteConsentSettings = lazy(() => import('@/pages/settings/RemoteConsentSettings'));
 const ConfigurationAudit = lazy(() => import('@/pages/settings/ConfigurationAudit'));
 const AgentLabelsSettings = lazy(() => import('@/pages/settings/AgentLabelsSettings'));
 const AgentUpdatesPage = lazy(() => import('@/pages/settings/AgentUpdatesPage'));
@@ -525,6 +526,14 @@ export const router = createBrowserRouter([
         element: (
           <PermissionGate anyOf={['settings.*', 'settings.read', 'admin.*']}>
             <LazyPage><EffectiveConfigurationPage /></LazyPage>
+          </PermissionGate>
+        ),
+      },
+      {
+        path: 'settings/remote-consent',
+        element: (
+          <PermissionGate anyOf={['settings.*', 'settings.read', 'admin.*', 'identity.*']}>
+            <LazyPage><RemoteConsentSettings /></LazyPage>
           </PermissionGate>
         ),
       },

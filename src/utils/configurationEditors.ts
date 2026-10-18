@@ -55,6 +55,71 @@ export const APP_STORE_POLICY_OPTIONS: { value: string; label: string }[] = [
   { value: "2", label: "2 - Todos (qualquer aplicativo autorizado)" },
 ];
 
+/** Modo de autorização do acesso remoto (RemoteConsentMode no backend). */
+export const REMOTE_CONSENT_MODE_OPTIONS: { value: string; label: string }[] = [
+  { value: "0", label: "0 - Desligado (sem aviso nem pedido)" },
+  { value: "1", label: "1 - Apenas notificar (avisa e conecta)" },
+  { value: "2", label: "2 - Solicitar autorização (aguarda decisão)" },
+];
+
+/** Ação quando a contagem regressiva termina sem resposta. */
+export const REMOTE_CONSENT_TIMEOUT_ACTION_OPTIONS: { value: string; label: string }[] = [
+  { value: "0", label: "0 - Negar automaticamente" },
+  { value: "1", label: "1 - Aprovar automaticamente" },
+];
+
+const REMOTE_CONSENT_FIELDS: EditableField[] = [
+  {
+    key: "remoteConsentMode",
+    label: "Autorização de Acesso Remoto (desktop)",
+    kind: "policy",
+    group: "policy",
+    options: REMOTE_CONSENT_MODE_OPTIONS,
+    description:
+      "Vale apenas para sessões de área de trabalho. Terminal, arquivos, proxy e processos não pedem autorização.",
+  },
+  {
+    key: "remoteConsentTimeoutSeconds",
+    label: "Timeout da Autorização",
+    kind: "number",
+    group: "policy",
+    unit: "segundos",
+    description: "Contagem regressiva do prompt (10–600 segundos).",
+  },
+  {
+    key: "remoteConsentTimeoutAction",
+    label: "Ação ao Final da Contagem",
+    kind: "policy",
+    group: "policy",
+    options: REMOTE_CONSENT_TIMEOUT_ACTION_OPTIONS,
+    description: "Aprova ou nega automaticamente quando o usuário não responde.",
+  },
+  {
+    key: "remoteConsentShowBanner",
+    label: "Banner Durante a Sessão",
+    kind: "boolean",
+    group: "policy",
+    description:
+      "Exibe o banner local (operador + tempo + Desconectar) no computador acessado. Ele não aparece no stream remoto.",
+  },
+  {
+    key: "remoteConsentMessage",
+    label: "Mensagem do Prompt",
+    kind: "string",
+    group: "policy",
+    description:
+      "Placeholders: {operator}, {client}, {site}, {agent}. Máximo 500 caracteres.",
+  },
+  {
+    key: "remoteConsentBannerText",
+    label: "Texto do Banner",
+    kind: "string",
+    group: "policy",
+    description:
+      "Placeholders: {operator}, {client}, {site}, {agent}. Máximo 500 caracteres.",
+  },
+];
+
 /**
  * Rótulos (i18n) e fallback local das abas da página inicial do agent.
  *
@@ -345,6 +410,7 @@ export const serverEditableFields: EditableField[] = [
     description:
       "Controla quais aplicativos os agentes podem instalar: Desativado (nenhum), Pré-aprovados (lista whitelist) ou Todos.",
   },
+  ...REMOTE_CONSENT_FIELDS,
   {
     key: "inventoryIntervalHours",
     label: "Intervalo de Inventário",
@@ -636,6 +702,7 @@ export const clientEditableFields: EditableField[] = [
     kind: "policy",
     group: "policy",
   },
+  ...REMOTE_CONSENT_FIELDS,
   {
     key: "aiIntegrationSettingsJson",
     label: "Integração com IA",
@@ -750,6 +817,7 @@ export const siteEditableFields: EditableField[] = [
     kind: "policy",
     group: "policy",
   },
+  ...REMOTE_CONSENT_FIELDS,
   {
     key: "aiIntegrationSettingsJson",
     label: "Integração com IA",

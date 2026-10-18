@@ -46,6 +46,27 @@ export interface RemoteSessionResponse {
     sessionActive?: boolean;
     /** Motivo do encerramento quando sessionActive=false. */
     endReason?: string | null;
+    /** Sessão de desktop exige autorização do usuário local. */
+    consentRequired?: boolean;
+    /** pending | granted | denied | not_required | timeout-denied... */
+    consentStatus?: string | null;
+    consentDeadlineAtUtc?: string | null;
+    consentMessage?: string | null;
+    consentPolicySource?: string | null;
+}
+
+export interface RemoteSessionConsentStatus {
+    sessionId: string;
+    status: string;
+    required: boolean;
+    consentStatus: string;
+    deadlineUtc?: string | null;
+    decidedAtUtc?: string | null;
+    outcome?: string | null;
+    reason?: string | null;
+    auto?: boolean | null;
+    policySource?: string | null;
+    promptBackend?: string | null;
 }
 
 export interface RemoteSessionLiveness {
@@ -112,6 +133,10 @@ export const remoteSessionsApi = {
     /** Lista sessões ativas para um agent. */
     getActiveSessions: (agentId: string): Promise<ActiveSession[]> =>
         api.get<ActiveSession[]>(`${BASE}/${agentId}/active`),
+
+    /** Estado do consentimento (polling enquanto o usuário local decide). */
+    getConsentStatus: (agentId: string, sessionId: string): Promise<RemoteSessionConsentStatus> =>
+        api.get<RemoteSessionConsentStatus>(`${BASE}/${agentId}/${sessionId}/consent`),
 
     /** Obtém credenciais NATS (JWT + NKey) para o viewer se conectar ao stream. */
     getSessionCredentials: (agentId: string, sessionId: string): Promise<SessionCredentials> =>

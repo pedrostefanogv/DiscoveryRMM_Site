@@ -146,6 +146,15 @@ export { p2pApi } from "./p2p";
 export { objectStorageApi } from "./object-storage";
 export type { ObjectStorageTelemetryDto, ObjectStorageTrafficDto, ObjectStorageMode } from "./object-storage";
 export { remoteSessionsApi } from "./remote-sessions";
+export { remoteConsentApi } from "./remote-consent";
+export type {
+  RemoteConsentEffective,
+  RemoteConsentOverride,
+  RemoteConsentOverrideRequest,
+  RemoteConsentSubjectType,
+  RemoteConsentMode,
+  RemoteConsentTimeoutAction,
+} from "./remote-consent";
 export { authApi } from "./auth";
 export { iamApi } from "./iam";
 export { customFieldsApi } from "./custom-fields";

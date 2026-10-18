@@ -34,6 +34,7 @@ import {
   type CrossTabMessage,
 } from '@/auth/crossTabSync';
 import { realtimeConfig, resolveNatsWsUrl } from '@/config/realtime';
+import RemoteConsentNotice from '@/modules/remote-screen/RemoteConsentNotice';
 import { openAgentSupportChatWindow } from './agentSupportChatLauncher';
 
 type Tab = 'screen' | 'terminal' | 'files' | 'proxy' | 'processes' | 'services';
@@ -347,6 +348,16 @@ export default function RemoteSession() {
   const [forcePromptTab, setForcePromptTab] = useState<Tab | null>(null);
   const [forcePromptConnecting, setForcePromptConnecting] = useState(false);
 
+  // Consentimento do usuário local (somente desktop): o viewer só conecta
+  // depois do "granted". O polling alimenta o overlay com a contagem.
+  const [consentWait, setConsentWait] = useState<{
+    sessionId: string;
+    message: string;
+    policySource?: string | null;
+    remaining: number;
+  } | null>(null);
+  const consentCancelledRef = useRef(false);
+
   const screenSession = sessions.screen;
 
   // Processos e Serviços compartilham o MESMO subject/sessão (kind 'processes'
@@ -394,6 +405,75 @@ export default function RemoteSession() {
     setForcePromptTab(null);
     setForcePromptConnecting(false);
   }, []);
+
+  // Aguarda a decisão do usuário do computador antes de buscar credenciais/
+  // montar o viewer. Lança erro quando negado, cancelado ou expirado.
+  const waitForConsent = useCallback(async (
+    session: { sessionId: string; consentDeadlineAtUtc?: string | null; consentMessage?: string | null; consentPolicySource?: string | null },
+  ) => {
+    const deadline = session.consentDeadlineAtUtc
+      ? new Date(session.consentDeadlineAtUtc).getTime()
+      : Date.now() + 60_000;
+    const message = session.consentMessage || 'Solicitação de acesso remoto enviada ao usuário do computador.';
+    consentCancelledRef.current = false;
+    setConsentWait({
+      sessionId: session.sessionId,
+      message,
+      policySource: session.consentPolicySource,
+      remaining: Math.max(0, Math.ceil((deadline - Date.now()) / 1000)),
+    });
+
+    try {
+      for (;;) {
+        if (consentCancelledRef.current) {
+          throw new Error('Solicitação de autorização cancelada.');
+        }
+
+        let status;
+        try {
+          status = await remoteSessionsApi.getConsentStatus(agentId, session.sessionId);
+        } catch (err) {
+          if (consentCancelledRef.current) throw new Error('Solicitação de autorização cancelada.');
+          throw err;
+        }
+
+        const consent = String(status.consentStatus ?? '').toLowerCase();
+        if (consent === 'granted' || consent === 'not_required' || status.status === 'active') {
+          return;
+        }
+        if (
+          consent.includes('denied') ||
+          status.status === 'denied' ||
+          status.status === 'closed' ||
+          status.status === 'expired'
+        ) {
+          const reason = status.reason || status.outcome || consent;
+          throw new Error(
+            reason.includes('timeout')
+              ? 'O tempo para autorização expirou e a conexão foi negada.'
+              : 'O usuário não autorizou o acesso remoto.',
+          );
+        }
+
+        const remaining = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+        setConsentWait((prev) => (prev ? { ...prev, remaining } : prev));
+        if (Date.now() > deadline + 5_000) {
+          throw new Error('O tempo para autorização expirou.');
+        }
+        await new Promise((resolve) => setTimeout(resolve, 1_000));
+      }
+    } finally {
+      setConsentWait(null);
+    }
+  }, [agentId]);
+
+  const cancelConsentWait = useCallback(async () => {
+    consentCancelledRef.current = true;
+    const current = consentWait;
+    if (current) {
+      try { await remoteSessionsApi.stopSession(agentId, current.sessionId); } catch { /* best-effort */ }
+    }
+  }, [agentId, consentWait]);
 
   // ── Inicia a sessão de uma aba sob demanda ──
   // `force` permite sobrepor uma sessão ativa existente do mesmo agent (o
@@ -470,6 +550,12 @@ export default function RemoteSession() {
 
       if (!session.natsSubject) {
         throw new Error('Sessão criada sem subject NATS.');
+      }
+
+      // Desktop com autorização obrigatória: espera o usuário local decidir
+      // ANTES de pedir credenciais/conectar o viewer.
+      if (session.consentRequired && session.consentStatus === 'pending') {
+        await waitForConsent(session);
       }
 
       // Obtém credenciais NATS para o viewer conectar.
@@ -569,8 +655,14 @@ export default function RemoteSession() {
     if (!s) return;
     try {
       const active = await remoteSessionsApi.getActiveSessions(agentId);
-      const stillActive = active.some((a) => a.sessionId === s.sessionId);
+      const current = active.find((a) => a.sessionId === s.sessionId);
+      const stillActive = !!current;
       if (stillActive) {
+        // Sessão ainda aguardando autorização: reabre a espera em vez de tentar
+        // credenciais (o backend devolveria 409 consent_pending).
+        if (current?.status === 'pending_consent') {
+          await waitForConsent({ sessionId: s.sessionId });
+        }
         // Sessão viva — refetch das credenciais NATS antes de remontar: o JWT
         // do viewer tem TTL próprio; reutilizar um jwt expirado colocava o
         // reconnect em loop de auth (-ERR) até esgotar as tentativas. A API
@@ -597,7 +689,7 @@ export default function RemoteSession() {
       // Falha ao consultar — tenta remontar mesmo assim.
       setReconnectKeys((prev) => ({ ...prev, [tab]: (prev[tab] ?? 0) + 1 }));
     }
-  }, [sessions, agentId, startTabSession]);
+  }, [sessions, agentId, startTabSession, waitForConsent]);
 
   // ── Encerra a sessão de uma aba ──
   const stopTabSession = useCallback(async (tab: Tab) => {
@@ -861,6 +953,13 @@ export default function RemoteSession() {
     const active = (Object.values(sessions).filter(Boolean) as TabSession[]);
     const seen = new Set<string>();
     const unique = active.filter((s) => (seen.has(s.sessionId) ? false : (seen.add(s.sessionId), true)));
+    // A sessão ainda em consentimento não está em sessions (o viewer só é
+    // montado depois do "granted"): encerra explicitamente para não deixar um
+    // prompt pendente no endpoint.
+    if (consentWait && !seen.has(consentWait.sessionId)) {
+      consentCancelledRef.current = true;
+      unique.push({ sessionId: consentWait.sessionId } as TabSession);
+    }
     await Promise.allSettled(
       unique.map((s) => remoteSessionsApi.stopSession(agentId, s.sessionId)),
     );
@@ -966,6 +1065,14 @@ export default function RemoteSession() {
 
   return (
     <div className="flex flex-col h-screen bg-background text-foreground">
+      {consentWait && (
+        <RemoteConsentNotice
+          message={consentWait.message}
+          remainingSeconds={consentWait.remaining}
+          policySource={consentWait.policySource}
+          onCancel={() => { void cancelConsentWait(); }}
+        />
+      )}
       {/* Header */}
       <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-4 px-4 py-2 bg-surface border-b border-border">
         <div aria-hidden className="min-w-0" />
