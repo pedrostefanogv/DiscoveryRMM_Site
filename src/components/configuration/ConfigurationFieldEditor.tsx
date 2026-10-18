@@ -96,6 +96,7 @@ export function ConfigurationFieldEditor({
 
   const numberRanges: Record<string, { min: number; max: number }> = {
     inventoryIntervalHours: { min: 1, max: 168 },
+    remoteConsentTimeoutSeconds: { min: 10, max: 600 },
     agentHeartbeatIntervalSeconds: { min: 10, max: 3600 },
     agentOnlineGraceSeconds: { min: 60, max: 3600 },
   };

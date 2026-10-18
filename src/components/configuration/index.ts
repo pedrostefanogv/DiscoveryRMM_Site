@@ -2,6 +2,15 @@ export { InheritableFieldToggle } from "./InheritableFieldToggle";
 export { EffectiveValueBadge } from "./EffectiveValueBadge";
 export { ConfigDiffViewer } from "./ConfigDiffViewer";
 export { ConfigurationFieldEditor } from "./ConfigurationFieldEditor";
+export {
+  REMOTE_CONSENT_FIELD_KEYS,
+  RemoteAccessConsentSection,
+} from "./RemoteAccessConsentSection";
+export type {
+  RemoteAccessConsentSectionProps,
+  RemoteConsentFieldKey,
+  RemoteConsentFieldState,
+} from "./RemoteAccessConsentSection";
 export { ConfigHealthCard } from "./ConfigHealthCard";
 export { LockedFieldsEditor, parseLockedFields, toApiFieldName } from "./LockedFieldsEditor";
 export {

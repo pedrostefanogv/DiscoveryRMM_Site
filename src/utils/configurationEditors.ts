@@ -72,7 +72,7 @@ export const REMOTE_CONSENT_TIMEOUT_ACTION_OPTIONS: { value: string; label: stri
 const REMOTE_CONSENT_FIELDS: EditableField[] = [
   {
     key: "remoteConsentMode",
-    label: "Autorização de Acesso Remoto (desktop)",
+    label: "Modo de autorização",
     kind: "select",
     group: "remoteAccess",
     options: REMOTE_CONSENT_MODE_OPTIONS,
@@ -81,43 +81,44 @@ const REMOTE_CONSENT_FIELDS: EditableField[] = [
   },
   {
     key: "remoteConsentTimeoutSeconds",
-    label: "Timeout da Autorização",
+    label: "Tempo para o usuário responder",
     kind: "number",
     group: "remoteAccess",
     unit: "segundos",
-    description: "Contagem regressiva do prompt (10–600 segundos).",
+    description:
+      "Contagem regressiva do prompt. De 10 a 600 segundos (padrão do servidor: 60).",
   },
   {
     key: "remoteConsentTimeoutAction",
-    label: "Ação ao Final da Contagem",
+    label: "Se o usuário não responder",
     kind: "select",
     group: "remoteAccess",
     options: REMOTE_CONSENT_TIMEOUT_ACTION_OPTIONS,
-    description: "Aprova ou nega automaticamente quando o usuário não responde.",
+    description: "Aprova ou nega automaticamente quando a contagem termina sem decisão.",
   },
   {
     key: "remoteConsentShowBanner",
-    label: "Banner Durante a Sessão",
+    label: "Banner durante a sessão",
     kind: "boolean",
     group: "remoteAccess",
     description:
-      "Exibe o banner local (operador + tempo + Desconectar) no computador acessado. Ele não aparece no stream remoto.",
+      "Exibe a faixa local (texto + operador + tempo de sessão) no computador acessado. A desconexão fica no ícone da bandeja e a faixa não aparece no stream remoto.",
   },
   {
     key: "remoteConsentMessage",
-    label: "Mensagem do Prompt",
+    label: "Mensagem do prompt",
     kind: "string",
     group: "remoteAccess",
     description:
-      "Placeholders: {operator}, {client}, {site}, {agent}. Máximo 500 caracteres.",
+      "Texto exibido na janela de consentimento (usado apenas no modo Solicitar autorização). Placeholders: {operator}, {client}, {site}, {agent}. Máximo 500 caracteres.",
   },
   {
     key: "remoteConsentBannerText",
-    label: "Texto do Banner",
+    label: "Texto do banner",
     kind: "string",
     group: "remoteAccess",
     description:
-      "Placeholders: {operator}, {client}, {site}, {agent}. Máximo 500 caracteres.",
+      "Texto principal da faixa exibida durante a sessão; o agent acrescenta o operador quando o texto não o cita. Placeholders: {operator}, {client}, {site}, {agent}. Máximo 500 caracteres.",
   },
 ];
 
@@ -948,6 +949,15 @@ export function validateFieldValue(
 
   if (kind === "string") {
     if (
+      fieldKey === "remoteConsentMessage" ||
+      fieldKey === "remoteConsentBannerText"
+    ) {
+      return value.length <= 500
+        ? true
+        : "Máximo de 500 caracteres para o texto de consentimento";
+    }
+
+    if (
       fieldKey === "natsServerHostInternal" ||
       fieldKey === "natsServerHostExternal"
     ) {
@@ -976,6 +986,9 @@ export function validateFieldValue(
     const numeric = Number(trimmed);
     const ranges: Record<string, [number, number]> = {
       inventoryIntervalHours: [1, 168],
+      // Limite validado no backend (ConfigurationService.CheckRange) para o
+      // prompt de consentimento de acesso remoto.
+      remoteConsentTimeoutSeconds: [10, 600],
       agentHeartbeatIntervalSeconds: [10, 3600],
       agentOnlineGraceSeconds: [60, 3600],
       objectStorageUrlTtlHours: [1, 168],
@@ -986,6 +999,11 @@ export function validateFieldValue(
     const fieldRange = fieldKey ? ranges[fieldKey] : undefined;
     if (fieldRange && (numeric < fieldRange[0] || numeric > fieldRange[1])) {
       return `Valor fora da faixa permitida (${fieldRange[0]}..${fieldRange[1]})`;
+    }
+
+    // A API desserializa RemoteConsentTimeoutSeconds como int?: 15.5 gera 400.
+    if (fieldKey === "remoteConsentTimeoutSeconds" && !Number.isInteger(numeric)) {
+      return "Use um número inteiro de segundos";
     }
 
     return true;
