@@ -102,6 +102,19 @@ export default function RemoteConsentSettings() {
     ];
   }, [form?.subjectType, groupsQuery.data, usersQuery.data]);
 
+  const clientName = (clientId?: string | null) =>
+    (clientsQuery.data ?? []).find((client) => client.id === clientId)?.name ?? "—";
+
+  const siteName = (siteId?: string | null) =>
+    (allSitesQuery.data ?? []).find((site) => site.id === siteId)?.name
+    ?? (siteId ? siteId : "—");
+
+  const scopeLabel = (item: RemoteConsentOverride) => {
+    if (!item.clientId && !item.siteId) return "Global";
+    if (item.siteId) return `Site: ${siteName(item.siteId)}`;
+    return `Cliente: ${clientName(item.clientId)}`;
+  };
+
   const subjectName = (item: RemoteConsentOverride) => {
     const source = item.subjectType === "UserGroup" ? groupsQuery.data : usersQuery.data;
     const found = (source ?? []).find((candidate) => candidate.id === item.subjectId);
@@ -130,6 +143,8 @@ export default function RemoteConsentSettings() {
     id: item.id,
     subjectType: item.subjectType,
     subjectId: item.subjectId,
+    clientId: item.clientId ?? "",
+    siteId: item.siteId ?? "",
     mode: item.mode ?? "",
     timeoutSeconds: item.timeoutSeconds ? String(item.timeoutSeconds) : "",
     timeoutAction: item.timeoutAction ?? "",
@@ -200,7 +215,7 @@ export default function RemoteConsentSettings() {
               <div key={item.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
                 <div>
                   <p className="text-sm font-medium text-foreground">
-                    {subjectName(item)} <span className="text-xs text-muted">({item.subjectType === "User" ? "Usuário" : "Grupo"})</span>
+                    {subjectName(item)} <span className="text-xs text-muted">({item.subjectType === "User" ? "Usuário" : "Grupo"} · {scopeLabel(item)})</span>
                   </p>
                   <p className="text-xs text-muted">
                     modo: {item.mode ?? "herda"} · timeout: {item.timeoutSeconds ?? "herda"}s · ação: {item.timeoutAction ?? "herda"} · banner: {item.showBanner === null || item.showBanner === undefined ? "herda" : item.showBanner ? "sim" : "não"}
@@ -262,6 +277,27 @@ export default function RemoteConsentSettings() {
               </label>
               <label className="text-xs text-muted">Usuário/Grupo
                 <Select value={form.subjectId} onChange={(event) => setForm({ ...form, subjectId: event.target.value })} options={subjectOptions} />
+              </label>
+              <label className="text-xs text-muted">Cliente (opcional)
+                <Select
+                  value={form.clientId}
+                  onChange={(event) => setForm({ ...form, clientId: event.target.value, siteId: "" })}
+                  options={[
+                    { value: "", label: "Todos os clientes" },
+                    ...((clientsQuery.data ?? []).map((client) => ({ value: client.id, label: client.name }))),
+                  ]}
+                />
+              </label>
+              <label className="text-xs text-muted">Site (opcional)
+                <Select
+                  value={form.siteId}
+                  disabled={!form.clientId}
+                  onChange={(event) => setForm({ ...form, siteId: event.target.value })}
+                  options={[
+                    { value: "", label: form.clientId ? "Todos os sites do cliente" : "Escolha um cliente primeiro" },
+                    ...((formSitesQuery.data ?? []).map((site) => ({ value: site.id, label: site.name }))),
+                  ]}
+                />
               </label>
               <label className="text-xs text-muted">Modo
                 <Select value={form.mode} onChange={(event) => setForm({ ...form, mode: event.target.value as FormState["mode"] })} options={MODE_OPTIONS} />
