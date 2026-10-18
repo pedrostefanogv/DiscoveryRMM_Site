@@ -104,7 +104,11 @@ function statusMessage(session: TicketChatSession | null | undefined): string | 
         ? "A máquina já está em outro chat de suporte."
         : session.declinedReason === "timeout"
           ? "O convite expirou sem resposta na máquina."
-          : "O usuário recusou o chat.";
+          : session.declinedReason === "replaced"
+            ? "O convite foi substituído por uma conversa mais recente na mesma máquina."
+            : session.declinedReason === "no_ui"
+              ? "O agent não tinha interface na máquina para mostrar o convite."
+              : "O usuário recusou o chat.";
     case "Expired":
       return "O convite expirou. Inicie uma nova conversa.";
     case "Ended":
