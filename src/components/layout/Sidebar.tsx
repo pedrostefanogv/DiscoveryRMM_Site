@@ -15,6 +15,7 @@ import {
   FileBarChart,
   Wrench,
   ShieldCheck,
+  ShieldAlert,
 } from 'lucide-react';
 import { useTheme } from '@/theme/ThemeContext';
 import { useAuthorization } from '@/auth/authorization';
@@ -36,6 +37,14 @@ const softwareLinks = [
   { to: '/software/inventory', label: 'Inventário Detalhado' },
   { to: '/software/automation', label: 'Automação de software' },
   { to: '/software/store', label: 'Loja de aplicativos' },
+];
+
+const patchesLinks = [
+  { to: '/patches', label: 'Visão geral' },
+  { to: '/patches/inventory', label: 'Inventário por atualização' },
+  { to: '/patches/pending', label: 'Pendências por agente' },
+  { to: '/patches/approvals', label: 'Aprovações e auditoria' },
+  { to: '/patches/policy', label: 'Política' },
 ];
 
 const automationLinks = [
@@ -99,6 +108,7 @@ type SidebarAccordionSection =
   | 'clients'
   | 'tickets'
   | 'software'
+  | 'patches'
   | 'automation'
   | 'reports'
   | 'identity'
@@ -135,6 +145,7 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
   const clientsIsActive =
     location.pathname.startsWith('/clients') || location.pathname.startsWith('/sites');
   const softwareIsActive = location.pathname.startsWith('/software') || location.pathname === '/software-inventory';
+  const patchesIsActive = location.pathname.startsWith('/patches');
   const automationIsActive =
     location.pathname.startsWith('/automation') || location.pathname.startsWith('/settings/agent-labels');
   const reportsIsActive = location.pathname.startsWith('/reports');
@@ -148,12 +159,13 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
     if (clientsIsActive) return 'clients';
     if (ticketsIsActive) return 'tickets';
     if (softwareIsActive) return 'software';
+    if (patchesIsActive) return 'patches';
     if (automationIsActive) return 'automation';
     if (reportsIsActive) return 'reports';
     if (identityIsActive) return 'identity';
     if (settingsIsActive) return 'settings';
     return null;
-  }, [clientsIsActive, ticketsIsActive, softwareIsActive, automationIsActive, reportsIsActive, identityIsActive, settingsIsActive]);
+  }, [clientsIsActive, ticketsIsActive, softwareIsActive, patchesIsActive, automationIsActive, reportsIsActive, identityIsActive, settingsIsActive]);
 
   const [openSection, setOpenSection] = useState<SidebarAccordionSection | null>(() =>
     activeSection,
@@ -162,6 +174,7 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
   const clientsOpen = openSection === 'clients';
   const ticketsOpen = openSection === 'tickets';
   const softwareOpen = openSection === 'software';
+  const patchesOpen = openSection === 'patches';
   const automationOpen = openSection === 'automation';
   const reportsOpen = openSection === 'reports';
   const identityOpen = openSection === 'identity';
@@ -182,6 +195,7 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
     ? visibleTicketsLinks
     : visibleTicketsLinks.filter(({ to }) => to !== '/settings/workflow-profiles');
   const canViewLogs = hasAnyPermission(['logs.*', 'logs.read', 'admin.*']);
+  const canViewPatches = hasAnyPermission(['patches.*', 'patches.read', 'admin.*']);
   const canViewClients = hasAnyPermission(['Clients.View', 'clients.*', 'admin.*']);
   const canViewSites = hasAnyPermission(['Sites.View', 'sites.*', 'admin.*']);
   const visibleClientLinks = clientLinks.filter(({ to }) =>
@@ -208,6 +222,7 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
     clientsIsActive,
     ticketsIsActive,
     softwareIsActive,
+    patchesIsActive,
     automationIsActive,
     reportsIsActive,
     identityIsActive,
@@ -417,6 +432,61 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
                     <NavLink
                       key={to}
                       to={to}
+                      className={({ isActive }) =>
+                        `block rounded-md px-2 py-1.5 text-sm transition-colors ${
+                          isActive
+                            ? 'bg-surface-hover text-foreground'
+                            : 'text-muted hover:bg-surface-light hover:text-foreground'
+                        }`
+                      }
+                    >
+                      {label}
+                    </NavLink>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
+        )}
+
+        {canViewPatches && (
+          <>
+            <button
+              type="button"
+              onClick={() => {
+                if (effectiveCollapsed) {
+                  navigate('/patches');
+                  return;
+                }
+                setOpenSection((prev) => (prev === 'patches' ? null : 'patches'));
+              }}
+              className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+                patchesIsActive
+                  ? 'bg-surface-hover text-foreground'
+                  : 'text-muted hover:bg-surface-light hover:text-foreground'
+              }`}
+              aria-label="Abrir submenu de atualizações"
+              aria-expanded={patchesOpen}
+            >
+              <ShieldAlert className="h-5 w-5 shrink-0" />
+              {!effectiveCollapsed && (
+                <>
+                  <span className="truncate">Atualizações</span>
+                  <span className="ml-auto">
+                    <ChevronDown className={chevronAnimationClass(patchesOpen)} />
+                  </span>
+                </>
+              )}
+            </button>
+
+            {!effectiveCollapsed && (
+              <div className={submenuAnimationClass(patchesOpen)} aria-hidden={!patchesOpen} inert={!patchesOpen}>
+                <div className="ml-8 space-y-1 border-l border-border pl-3 pb-1">
+                  {patchesLinks.map(({ to, label }) => (
+                    <NavLink
+                      key={to}
+                      to={to}
+                      end={to === '/patches'}
                       className={({ isActive }) =>
                         `block rounded-md px-2 py-1.5 text-sm transition-colors ${
                           isActive

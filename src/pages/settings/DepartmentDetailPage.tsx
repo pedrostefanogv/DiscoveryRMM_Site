@@ -701,12 +701,21 @@ function formatDecimal(value?: number | null, digits = 1): string {
   return value.toFixed(digits);
 }
 
-/** Membro efetivo herdado do departamento global pai. */
+/**
+ * Membro efetivo herdado do departamento global pai.
+ *
+ * O /effective devolve `origin: "inherited-global"`; o team-metrics devolve
+ * `origin: "inherited:<departmentId>"`. Ambos contam como herdados.
+ */
 export function isInheritedMember(
-  member: { inherited?: boolean; origin?: DepartmentFieldOrigin } | undefined,
+  member: { inherited?: boolean; origin?: string | null } | undefined,
 ): boolean {
   if (!member) return false;
-  return member.inherited === true || member.origin === "inherited-global";
+  return (
+    member.inherited === true ||
+    member.origin === "inherited-global" ||
+    Boolean(member.origin?.startsWith("inherited:"))
+  );
 }
 
 function DepartmentMembersCard({
@@ -1497,6 +1506,10 @@ function DepartmentAssignmentTeamCard({ departmentId }: { departmentId: string }
 
 export function MemberProfileRow({ member }: { member: DepartmentMemberProfileDto }) {
   const updateProfile = useUpdateDepartmentMemberProfile(member.departmentId);
+  // B2 — membro herdado é gerenciado no global pai. A lista mostra o perfil
+  // (para a IA e para o gestor enxergarem a equipe efetiva), mas a edição fica
+  // bloqueada aqui; o backend responde 422 se alguém tentar mesmo assim.
+  const inherited = isInheritedMember(member);
   const [tags, setTags] = useState(member.skillTags.join(", "));
   const [level, setLevel] = useState(String(member.skillLevel));
   const [maxOpen, setMaxOpen] = useState(
@@ -1508,6 +1521,7 @@ export function MemberProfileRow({ member }: { member: DepartmentMemberProfileDt
   const m = member.metrics;
 
   function handleSave() {
+    if (inherited) return;
     const trimmedMax = maxOpen.trim();
     const payload: UpdateDepartmentMemberProfileRequest = {
       skillTags: tags
@@ -1525,7 +1539,15 @@ export function MemberProfileRow({ member }: { member: DepartmentMemberProfileDt
       { userId: member.userId, data: payload },
       {
         onSuccess: () => toast.success("Perfil do atendente atualizado."),
-        onError: () => toast.error("Erro ao atualizar o perfil do atendente."),
+        onError: (error) => {
+          // 422 do membro herdado vem com a mensagem explicando que o perfil é
+          // gerenciado no global; mostra essa mensagem em vez de um erro genérico.
+          const validation = parseDepartmentValidationErrors(
+            error,
+            "Erro ao atualizar o perfil do atendente.",
+          );
+          toast.error(validation.messages[0] ?? "Erro ao atualizar o perfil do atendente.");
+        },
       },
     );
   }
@@ -1537,10 +1559,18 @@ export function MemberProfileRow({ member }: { member: DepartmentMemberProfileDt
           {member.userName ?? member.userId}
         </span>
         <div className="flex items-center gap-2">
+          {inherited && <Badge color="accent">herdado do global</Badge>}
           {!member.isActive && <Badge color="slate">inativo</Badge>}
           {!member.acceptsAiAssignment && <Badge color="warning">fora da IA</Badge>}
         </div>
       </div>
+
+      {inherited && (
+        <p className="mt-1 text-xs text-muted">
+          Perfil gerenciado no departamento global: edite lá para alterar competências,
+          teto, peso ou opt-out deste atendente.
+        </p>
+      )}
 
       {m && (
         <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-muted sm:grid-cols-4">
@@ -1575,6 +1605,7 @@ export function MemberProfileRow({ member }: { member: DepartmentMemberProfileDt
         <Input
           label="Competências (vírgula)"
           value={tags}
+          disabled={inherited}
           onChange={(event) => setTags(event.target.value)}
           placeholder="rede, impressora, erp"
         />
@@ -1584,6 +1615,7 @@ export function MemberProfileRow({ member }: { member: DepartmentMemberProfileDt
           min="1"
           max="5"
           value={level}
+          disabled={inherited}
           onChange={(event) => setLevel(event.target.value)}
         />
         <Input
@@ -1591,6 +1623,7 @@ export function MemberProfileRow({ member }: { member: DepartmentMemberProfileDt
           type="number"
           min="0"
           value={maxOpen}
+          disabled={inherited}
           onChange={(event) => setMaxOpen(event.target.value)}
           placeholder="sem teto"
         />
@@ -1601,6 +1634,7 @@ export function MemberProfileRow({ member }: { member: DepartmentMemberProfileDt
           max="3"
           step="0.1"
           value={weight}
+          disabled={inherited}
           onChange={(event) => setWeight(event.target.value)}
         />
       </div>
@@ -1610,12 +1644,18 @@ export function MemberProfileRow({ member }: { member: DepartmentMemberProfileDt
           <input
             type="checkbox"
             checked={accepts}
+            disabled={inherited}
             onChange={(event) => setAccepts(event.target.checked)}
             className="rounded border-border bg-surface-light"
           />
           Aceita ser escolhido automaticamente pela IA
         </label>
-        <Button size="sm" loading={updateProfile.isPending} onClick={handleSave}>
+        <Button
+          size="sm"
+          loading={updateProfile.isPending}
+          disabled={inherited}
+          onClick={handleSave}
+        >
           Salvar perfil
         </Button>
       </div>

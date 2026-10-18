@@ -312,6 +312,7 @@ export type AgentDetailDataTab =
   | "tickets"
   | "network"
   | "autostart"
+  | "windowsUpdates"
   | "policies"
   | "logs";
 
@@ -351,6 +352,7 @@ export const AGENT_DETAIL_TAB_SLUGS: Record<AgentDetailDataTab, string> = {
   tickets: "ultimos-chamados",
   network: "rede",
   autostart: "execucao-automatica",
+  windowsUpdates: "atualizacoes",
   policies: "politicas",
   logs: "logs",
 };

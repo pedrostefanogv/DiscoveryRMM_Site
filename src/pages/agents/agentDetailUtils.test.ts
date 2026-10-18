@@ -36,6 +36,7 @@ describe("agentDetailTabSlug", () => {
       tickets: "ultimos-chamados",
       network: "rede",
       autostart: "execucao-automatica",
+      windowsUpdates: "atualizacoes",
       policies: "politicas",
       logs: "logs",
     });

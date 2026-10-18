@@ -14,18 +14,21 @@ import {
   Zap,
   Network,
   RefreshCw,
+  ShieldAlert,
 } from 'lucide-react';
 import type { ComponentType } from 'react';
 import { memo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useIsFetching, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useDashboardSummary } from '@/hooks/useDashboardSummary';
+import { useAuthorization } from '@/auth/authorization';
 import { useDashboardRealtime } from '@/hooks/useDashboardRealtime';
 import { P2PMetricsCard } from '@/components/agents/P2PMetricsCard';
 import { ObjectStorageCard } from '@/components/platform/ObjectStorageCard';
 import { StatCard, Card, CardHeader, Badge, Button, SkeletonDashboard, ErrorDisplay } from '@/components/ui';
 import { getRealtimeStats } from '@/api';
 import { useSoftwareInventorySnapshot } from '@/hooks/useSoftwareInventory';
+import { usePatchSnapshot } from '@/hooks/usePatches';
 import type { DashboardWindow } from '@/api/dashboard';
 
 function formatBytes(value?: number | null): string {
@@ -112,6 +115,8 @@ const TCP_BADGE: Record<HealthState, { color: 'success' | 'danger' | 'slate'; la
 
 export default function Dashboard() {
   const navigate = useNavigate();
+  const { hasAnyPermission } = useAuthorization();
+  const canViewPatches = hasAnyPermission(['patches.*', 'patches.read', 'admin.*']);
   // "range" (e não "window") para não sombrear o objeto global window.
   const [range, setRange] = useState<DashboardWindow>('24h');
   const [isManualRefreshing, setIsManualRefreshing] = useState(false);
@@ -123,6 +128,8 @@ export default function Dashboard() {
   const softwareSnapshot = useSoftwareInventorySnapshot('global', undefined, undefined, {
     refetchInterval: 300_000,
   });
+  // Conformidade de patches (Windows Update) da frota global.
+  const patchSnapshot = usePatchSnapshot('global');
   const realtimeStats = useQuery({
     queryKey: ['realtime', 'stats'],
     queryFn: ({ signal }) => getRealtimeStats({ signal }),
@@ -180,6 +187,7 @@ export default function Dashboard() {
     dashboard.isFetching ||
     realtimeStats.isFetching ||
     softwareSnapshot.isFetching ||
+    patchSnapshot.isFetching ||
     p2pFetching;
 
   const handleRefresh = async () => {
@@ -189,6 +197,7 @@ export default function Dashboard() {
         dashboard.refetch(),
         realtimeStats.refetch(),
         softwareSnapshot.refetch(),
+        patchSnapshot.refetch(),
         queryClient.invalidateQueries({ queryKey: ['p2p'] }),
       ]);
     } finally {
@@ -385,6 +394,30 @@ export default function Dashboard() {
             trend={softwareSnapshot.isError ? <Badge color="danger">indisponível</Badge> : undefined}
           />
         </button>
+        {canViewPatches && (
+        <button
+          type="button"
+          onClick={() => navigate('/patches')}
+          className="text-left"
+          aria-label="Abrir gerenciador de atualizações"
+        >
+          <StatCard
+            icon={ShieldAlert}
+            label="Conformidade de patches"
+            value={patchSnapshot.isLoading ? '\u2014' : (patchSnapshot.data?.compliancePercent ?? 0).toFixed(1) + '%'}
+            tone={(patchSnapshot.data?.criticalPending ?? 0) > 0 ? 'warning' : 'success'}
+            trend={
+              patchSnapshot.isError ? (
+                <Badge color="danger">indisponível</Badge>
+              ) : (
+                <span className="text-xs text-muted">
+                  {patchSnapshot.data?.totalPending ?? 0} pendente(s) · {patchSnapshot.data?.rebootPendingAgents ?? 0} reinício
+                </span>
+              )
+            }
+          />
+        </button>
+        )}
         <button
           type="button"
           onClick={() => navigate('/clients')}

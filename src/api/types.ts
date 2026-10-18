@@ -191,6 +191,12 @@ export interface Agent {
   updatedAt: string;
   /** Preenchido apenas quando o agente está na lixeira (soft delete). */
   deletedAt?: string | null;
+  /** Reinício pendente (Windows Update, CBS, renomeação, arquivos em uso). */
+  pendingReboot?: boolean;
+  /** Motivos do reinício pendente (windows_update, cbs, file_rename, ...). */
+  pendingRebootReasons?: string | null;
+  /** Instante da última sonda de reinício (ISO 8601). */
+  pendingRebootCheckedAt?: string | null;
 }
 
 /** Página da lixeira de agentes (GET /agents/deleted). */
@@ -941,6 +947,12 @@ export interface DepartmentMemberProfileDto {
   weight: number;
   acceptsAiAssignment: boolean;
   metrics: TechnicianMetricsDto | null;
+  /**
+   * Origem do vínculo na equipe efetiva: `"own"` (próprio) ou
+   * `"inherited:<departmentId>"` (herdado do global pai). Campo aditivo do
+   * backend; ausente em respostas antigas = tratar como próprio.
+   */
+  origin?: string | null;
 }
 
 export interface UpdateDepartmentMemberProfileRequest {
@@ -4320,6 +4332,228 @@ export interface TransferAgentResponse {
   isCrossClient: boolean;
   reason: string | null;
 }
+
+// ── Gerenciador de Patches (Windows Update) ───────────────────────────────
+
+export type PatchScope = "global" | "client" | "site";
+export type PatchApprovalScopeType = "Global" | "Client" | "Site" | "Agent";
+export type PatchApprovalActionType = "Approve" | "Deny";
+export type PatchUpdateStatus =
+  | "Pending"
+  | "Installed"
+  | "Approved"
+  | "Denied"
+  | "Installing"
+  | "Failed"
+  | "Superseded"
+  | "NotApplicable";
+export type PatchApprovalState = "Unknown" | "Approved" | "Denied" | "AutoApproved";
+export type PatchEnforcementMode = "Monitor" | "AgentEnforced" | "OsEnforced";
+export type PatchRebootPolicy = "Never" | "Notify" | "MaintenanceWindow";
+
+export interface AgentWindowsUpdate {
+  id: string;
+  updateKey: string;
+  groupKey: string;
+  kbId: string | null;
+  kbIds: string[];
+  title: string;
+  description: string | null;
+  classification: string | null;
+  severity: string | null;
+  isPending: boolean;
+  isInstalled: boolean;
+  isHidden: boolean;
+  requiresReboot: boolean;
+  maxDownloadSize: number | null;
+  supportUrl: string | null;
+  publishedAt: string | null;
+  installedAt: string | null;
+  reportedAt: string;
+  approvalState: PatchApprovalState;
+  approvalSource: string | null;
+  status: PatchUpdateStatus;
+  installResultCode: number | null;
+  installError: string | null;
+  source: string;
+}
+
+export interface AgentWindowsUpdatePage {
+  items: AgentWindowsUpdate[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+  pendingCount: number;
+  installedCount: number;
+}
+
+export interface AgentWindowsUpdateSnapshot {
+  agentId: string;
+  pendingCount: number;
+  installedCount: number;
+  deniedCount: number;
+  approvedCount: number;
+  scanStatus: string;
+  scanError: string | null;
+  scanDurationMs: number | null;
+  lastCollectedAt: string | null;
+  pendingReboot: boolean;
+  pendingRebootReasons: string[];
+  rebootCheckedAt: string | null;
+}
+
+export interface PatchInventoryGroup {
+  groupKey: string;
+  kbIds: string[];
+  title: string;
+  classification: string | null;
+  severity: string | null;
+  publishedAt: string | null;
+  pendingAgents: number;
+  installedAgents: number;
+  deniedAgents: number;
+  reportingAgents: number;
+  firstSeenAt: string | null;
+  lastSeenAt: string | null;
+}
+
+export interface PatchInventoryList {
+  items: PatchInventoryGroup[];
+  nextCursor: string | null;
+  hasMore: boolean;
+}
+
+export interface PatchInventoryAgent {
+  agentId: string;
+  updateKey: string;
+  hostname: string;
+  agentDisplayName: string | null;
+  siteId: string;
+  siteName: string;
+  clientId: string;
+  clientName: string;
+  status: PatchUpdateStatus;
+  approvalState: PatchApprovalState;
+  severity: string | null;
+  requiresReboot: boolean;
+  reportedAt: string;
+  lastSeenAt: string;
+}
+
+export interface PatchInventoryAgentsPage {
+  items: PatchInventoryAgent[];
+  nextCursor: string | null;
+  hasMore: boolean;
+}
+
+export interface PatchPendingAgent {
+  agentId: string;
+  hostname: string;
+  agentDisplayName: string | null;
+  siteId: string;
+  siteName: string;
+  clientId: string;
+  clientName: string;
+  pendingCount: number;
+  criticalCount: number;
+  deniedCount: number;
+  pendingReboot: boolean;
+  scanStatus: string | null;
+  lastScanAt: string | null;
+  lastSeenAt: string | null;
+}
+
+export interface PatchPendingList {
+  items: PatchPendingAgent[];
+  nextCursor: string | null;
+  hasMore: boolean;
+}
+
+export interface PatchScopeSnapshot {
+  totalPending: number;
+  criticalPending: number;
+  deniedPending: number;
+  approvedPending: number;
+  agentsWithPending: number;
+  agentsTotal: number;
+  agentsReporting: number;
+  rebootPendingAgents: number;
+  failedInstallations24h: number;
+  compliancePercent: number;
+  lastScanAt: string | null;
+}
+
+export interface PatchSeverityCount {
+  label: string;
+  count: number;
+}
+
+export interface PatchOverview {
+  snapshot: PatchScopeSnapshot;
+  bySeverity: PatchSeverityCount[];
+  byClassification: PatchSeverityCount[];
+}
+
+export interface PatchApproval {
+  id: string;
+  scopeType: PatchApprovalScopeType;
+  scopeId: string | null;
+  clientId: string | null;
+  siteId: string | null;
+  agentId: string | null;
+  updateKey: string;
+  kbId: string | null;
+  action: PatchApprovalActionType;
+  reason: string | null;
+  createdBy: string | null;
+  updatedBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PatchApprovalAudit {
+  id: string;
+  ruleId: string | null;
+  changeType: string;
+  scopeType: PatchApprovalScopeType;
+  scopeId: string | null;
+  updateKey: string;
+  kbId: string | null;
+  oldAction: PatchApprovalActionType | null;
+  newAction: PatchApprovalActionType | null;
+  reason: string | null;
+  changedBy: string | null;
+  ipAddress: string | null;
+  changedAt: string;
+}
+
+export interface PatchPolicy {
+  id: string;
+  scopeType: PatchApprovalScopeType;
+  scopeId: string | null;
+  clientId: string | null;
+  siteId: string | null;
+  enforcementMode: PatchEnforcementMode;
+  autoApproveClassifications: string[];
+  autoApproveSeverities: string[];
+  autoInstallEnabled: boolean;
+  maintenanceWindowJson: string | null;
+  rebootPolicy: PatchRebootPolicy;
+  rebootAllowed: boolean;
+  maxInstallsPerRun: number;
+  hideDeniedUpdates: boolean;
+  updatedBy: string | null;
+  updatedAt: string;
+}
+
+export interface PatchDispatchResult {
+  success: boolean;
+  dispatched: number;
+  skipped: number;
+  commandIds: string[];
+  message: string;
+}
+
 
 export interface TransferBulkResult {
   results: TransferAgentResponse[];

@@ -1,5 +1,6 @@
 import type { MouseEvent } from 'react';
-import { ShieldCheck, Wifi, WifiOff } from 'lucide-react';
+import { RotateCcw, ShieldCheck, Wifi, WifiOff } from 'lucide-react';
+import { agentRebootTooltip, hasPendingReboot } from '@/utils/agentReboot';
 import { Badge, MetricBar } from '@/components/ui';
 import { formatRelative, getAgentOsIcon, type AgentCardAgent } from './AgentCard';
 import { getAgentLastSeen, isAgentOnlineNow } from '@/utils/agentStatus';
@@ -110,6 +111,16 @@ export function AgentListView({
                   </td>
                 )}
                 <td className="px-4 py-3">
+                  {hasPendingReboot(a) && (
+                    <span className="mr-1 inline-flex" title={agentRebootTooltip(a.pendingRebootReasons)}>
+                      <Badge color="warning">
+                        <span className="flex items-center gap-1">
+                          <RotateCcw className="h-2.5 w-2.5" />
+                          Reinício pendente
+                        </span>
+                      </Badge>
+                    </span>
+                  )}
                   {isZeroTouchPending && canApprove && onApprove ? (
                     <button
                       type="button"

@@ -312,13 +312,22 @@ export function buildDepartmentUpdatePayload(
   }
 
   // O backend expõe os overrides de herança como `${campo}Override` (Optional):
-  // AUSENTE = "não mexe", null = "volta a herdar", valor = sobrescreve. Por isso
-  // o payload envia o sufixo Override sempre presente; o campo base (valor
-  // "próprio") não é enviado por este formulário.
+  // AUSENTE = "não mexe", null = "volta a herdar", valor = sobrescreve.
+  //
+  // Valor NULL/ausente: envia SOMENTE o Override null (herdar) e remove o campo
+  // base — mandar o base fixaria um valor próprio e anularia a herança.
+  // Valor próprio: envia o Override E mantém o campo base. O backend novo dá
+  // precedência ao override (valor efetivo idêntico), e o backend antigo — que
+  // só conhece o campo base — continua salvando a edição (retrocompatibilidade).
   for (const field of DEPARTMENT_OVERRIDE_FIELDS) {
     const overrideKey = `${field}Override`;
-    payload[overrideKey] = payload[field] === undefined ? null : payload[field];
-    delete payload[field];
+    const value = payload[field];
+    if (value === undefined || value === null) {
+      payload[overrideKey] = null;
+      delete payload[field];
+    } else {
+      payload[overrideKey] = value;
+    }
   }
 
   return payload as unknown as UpdateDepartmentRequest;

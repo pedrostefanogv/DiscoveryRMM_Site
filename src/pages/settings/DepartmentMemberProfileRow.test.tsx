@@ -69,4 +69,41 @@ describe('MemberProfileRow', () => {
 
     expect(screen.getByText(/CSAT:/).textContent).toContain('4.3');
   });
+
+  it('bloqueia a edição de membro herdado (gerenciado no global)', () => {
+    const member = {
+      ...memberWithOmittedNulls(),
+      origin: 'inherited:11111111-1111-1111-1111-111111111111',
+    };
+
+    render(<MemberProfileRow member={member} />);
+
+    expect(screen.getByText('herdado do global')).toBeTruthy();
+    expect(screen.getByText(/Perfil gerenciado no departamento global/)).toBeTruthy();
+
+    const tags = screen.getByLabelText('Competências (vírgula)') as HTMLInputElement;
+    const level = screen.getByLabelText('Nível (1-5)') as HTMLInputElement;
+    const maxOpen = screen.getByLabelText('Teto de abertos') as HTMLInputElement;
+    const weight = screen.getByLabelText('Peso (0,1-3)') as HTMLInputElement;
+    const accepts = screen.getByLabelText(
+      'Aceita ser escolhido automaticamente pela IA',
+    ) as HTMLInputElement;
+    const save = screen.getByRole('button', { name: 'Salvar perfil' }) as HTMLButtonElement;
+
+    for (const control of [tags, level, maxOpen, weight, accepts]) {
+      expect(control.disabled).toBe(true);
+    }
+    expect(save.disabled).toBe(true);
+  });
+
+  it('mantém a edição liberada para membro próprio', () => {
+    render(<MemberProfileRow member={memberWithOmittedNulls()} />);
+
+    const tags = screen.getByLabelText('Competências (vírgula)') as HTMLInputElement;
+    const save = screen.getByRole('button', { name: 'Salvar perfil' }) as HTMLButtonElement;
+
+    expect(tags.disabled).toBe(false);
+    expect(save.disabled).toBe(false);
+    expect(screen.queryByText('herdado do global')).toBeNull();
+  });
 });

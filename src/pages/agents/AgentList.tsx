@@ -20,6 +20,7 @@ import { TransferAgentModal } from '@/components/agents/TransferAgentModal';
 import { AgentCard, formatDateBrazil } from '@/components/agents/AgentCard';
 import { AgentListView } from '@/components/agents/AgentListView';
 import PowerActionModal from '@/components/agents/PowerActionModal';
+import UpdatePowerActionModal from '@/components/agents/UpdatePowerActionModal';
 import AgentNotificationModal, { type AgentNotificationPayload } from '@/components/agents/AgentNotificationModal';
 import WakeOnLanModal from '@/components/agents/WakeOnLanModal';
 import type { Agent } from '@/api';
@@ -199,6 +200,7 @@ export default function AgentList() {
   const [updatingAgentId, setUpdatingAgentId] = useState<string | null>(null);
   const [transferAgent, setTransferAgent] = useState<AgentWithClient | null>(null);
   const [powerActionAgent, setPowerActionAgent] = useState<{ agent: AgentWithClient; action: "restart" | "shutdown" } | null>(null);
+  const [updatePowerAction, setUpdatePowerAction] = useState<{ agent: AgentWithClient; action: "restart" | "shutdown" } | null>(null);
   const [wolAgent, setWolAgent] = useState<AgentWithClient | null>(null);
   const [notificationAgent, setNotificationAgent] = useState<AgentWithClient | null>(null);
   const contextMenuRef = useRef<HTMLDivElement | null>(null);
@@ -1378,6 +1380,27 @@ export default function AgentList() {
                       <Power className="h-4 w-4" />
                       Desligar
                     </button>
+                    <div className="my-1 border-t border-border" />
+                    <button
+                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60"
+                      onClick={() => {
+                        setContextMenu(null);
+                        setUpdatePowerAction({ agent: contextMenu.agent, action: 'restart' });
+                      }}
+                    >
+                      <RefreshCw className="h-4 w-4" />
+                      Atualizar e reiniciar
+                    </button>
+                    <button
+                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-600 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60 dark:text-red-300 dark:hover:bg-red-500/10"
+                      onClick={() => {
+                        setContextMenu(null);
+                        setUpdatePowerAction({ agent: contextMenu.agent, action: 'shutdown' });
+                      }}
+                    >
+                      <RefreshCw className="h-4 w-4" />
+                      Atualizar e desligar
+                    </button>
                   </div>
                 )}
               </div>
@@ -1536,6 +1559,16 @@ export default function AgentList() {
           onClose={() => setPowerActionAgent(null)}
           onConfirm={handlePowerActionConfirm}
           isLoading={restartAgent.isPending || shutdownAgent.isPending}
+        />
+      )}
+
+      {updatePowerAction && (
+        <UpdatePowerActionModal
+          open
+          agentId={updatePowerAction.agent.id}
+          agentName={updatePowerAction.agent.displayName ?? updatePowerAction.agent.hostname}
+          action={updatePowerAction.action}
+          onClose={() => setUpdatePowerAction(null)}
         />
       )}
 

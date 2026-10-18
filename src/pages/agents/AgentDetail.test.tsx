@@ -84,6 +84,34 @@ vi.mock('@/hooks/useAgents', () => ({
   useWakeOnLan: () => ({ isPending: false, mutate: vi.fn() }),
 }));
 
+// Aba "Atualizações": o painel/hook usam react-query. Stub para o teste de abas
+// não precisar de QueryClientProvider (a página sempre chama o snapshot p/ badge).
+vi.mock('@/hooks/useAgentWindowsUpdates', () => ({
+  useAgentWindowsUpdates: () => ({ data: { items: [], totalCount: 0, page: 1, pageSize: 25, pendingCount: 0, installedCount: 0 }, isLoading: false, isError: false, refetch: vi.fn() }),
+  useAgentWindowsUpdateSnapshot: () => ({
+    data: {
+      agentId: 'a1',
+      pendingCount: 0,
+      installedCount: 0,
+      deniedCount: 0,
+      approvedCount: 0,
+      scanStatus: 'ok',
+      scanError: null,
+      scanDurationMs: null,
+      lastCollectedAt: null,
+      pendingReboot: false,
+      pendingRebootReasons: [],
+      rebootCheckedAt: null,
+    },
+    isLoading: false,
+  }),
+  useScanAgentWindowsUpdates: () => ({ isPending: false, mutateAsync: vi.fn() }),
+  useSetAgentWindowsUpdateApproval: () => ({ isPending: false, mutateAsync: vi.fn() }),
+  useInstallAgentWindowsUpdate: () => ({ isPending: false, mutateAsync: vi.fn() }),
+  useInstallApprovedWindowsUpdates: () => ({ isPending: false, mutateAsync: vi.fn() }),
+  useBulkAgentWindowsUpdates: () => ({ isPending: false, mutateAsync: vi.fn() }),
+}));
+
 // O card de campos customizados tem teste próprio e depende de react-query/API;
 // aqui ele é substituído para o teste da página continuar focado nas abas.
 vi.mock('@/components/custom-fields/AgentCustomFieldsCard', () => ({
@@ -225,9 +253,9 @@ describe('AgentDetail — abas do agente', () => {
     // Os contadores por aba foram preservados na nova barra.
     expect(screen.getByRole('tab', { name: /Aplicativos/ }).textContent).toContain('42');
     expect(screen.getByRole('tab', { name: /^Labels/ }).textContent).toContain('1');
-    // Portas/Conexões e Inicialização/Tarefas saíram da barra principal: 11 abas
-    // (incluindo a nova "Extras").
-    expect(screen.getAllByRole('tab')).toHaveLength(11);
+    // Portas/Conexões e Inicialização/Tarefas saíram da barra principal: 12 abas
+    // (incluindo "Extras" e a nova "Atualizações").
+    expect(screen.getAllByRole('tab')).toHaveLength(12);
   });
 
   it('mostra o usuário logado no card Informações', async () => {

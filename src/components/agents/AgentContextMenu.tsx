@@ -17,6 +17,7 @@ import { ApiError, agentUpdatesApi } from '@/api';
 import { ConfirmDialog, ContextMenu, type ContextMenuItem } from '@/components/ui';
 import { TransferAgentModal } from '@/components/agents/TransferAgentModal';
 import PowerActionModal from '@/components/agents/PowerActionModal';
+import UpdatePowerActionModal from '@/components/agents/UpdatePowerActionModal';
 import AgentNotificationModal, { type AgentNotificationPayload } from '@/components/agents/AgentNotificationModal';
 import WakeOnLanModal from '@/components/agents/WakeOnLanModal';
 import { useApproveZeroTouch, useDeleteAgent, useRestartAgent, useShutdownAgent, useWakeOnLan } from '@/hooks/useAgents';
@@ -69,6 +70,7 @@ export function AgentContextMenu({ agent, now, position, onClose }: AgentContext
   const [approvingAgentId, setApprovingAgentId] = useState<string | null>(null);
   const [transferAgent, setTransferAgent] = useState<AgentCardAgent | null>(null);
   const [powerActionAgent, setPowerActionAgent] = useState<{ agent: AgentCardAgent; action: 'restart' | 'shutdown' } | null>(null);
+  const [updatePowerAction, setUpdatePowerAction] = useState<{ agent: AgentCardAgent; action: 'restart' | 'shutdown' } | null>(null);
   const [wolAgent, setWolAgent] = useState<AgentCardAgent | null>(null);
   const [notificationAgent, setNotificationAgent] = useState<AgentCardAgent | null>(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
@@ -240,6 +242,19 @@ export function AgentContextMenu({ agent, now, position, onClose }: AgentContext
           danger: true,
           onClick: () => setPowerActionAgent({ agent, action: 'shutdown' }),
         },
+        {
+          key: 'update-restart',
+          label: 'Atualizar e reiniciar',
+          icon: <RefreshCw className="h-4 w-4" />,
+          onClick: () => setUpdatePowerAction({ agent, action: 'restart' }),
+        },
+        {
+          key: 'update-shutdown',
+          label: 'Atualizar e desligar',
+          icon: <RefreshCw className="h-4 w-4" />,
+          danger: true,
+          onClick: () => setUpdatePowerAction({ agent, action: 'shutdown' }),
+        },
         // "Ligar" não aparece com o agente online: o despertar só faz sentido
         // com a máquina desligada, onde o item "Wake-on-LAN" é oferecido abaixo.
       ],
@@ -320,6 +335,16 @@ export function AgentContextMenu({ agent, now, position, onClose }: AgentContext
           onClose={() => setPowerActionAgent(null)}
           onConfirm={handlePowerActionConfirm}
           isLoading={restartAgent.isPending || shutdownAgent.isPending}
+        />
+      )}
+
+      {updatePowerAction && (
+        <UpdatePowerActionModal
+          open
+          agentId={updatePowerAction.agent.id}
+          agentName={updatePowerAction.agent.displayName ?? updatePowerAction.agent.hostname}
+          action={updatePowerAction.action}
+          onClose={() => setUpdatePowerAction(null)}
         />
       )}
 

@@ -3,7 +3,7 @@ import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft, Bell, Cpu, MemoryStick, Ticket as TicketIcon,
   Monitor, Wifi, WifiOff, AppWindow, Search, Clock, HardDrive, Printer, Bug, AlertTriangle, Trash2, ShieldCheck, Plus, Gauge, Power, RotateCcw, Zap, ChevronDown, ChevronRight, RefreshCw, ArrowUpCircle, Info, Copy,
-  Cable, EthernetPort, History, Network, Radio, ScrollText, StickyNote, MessageSquare, Tags,
+  Cable, EthernetPort, History, Network, Radio, ScrollText, StickyNote, MessageSquare, Tags, Download,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getDeleteAgentErrorMessage, useAgent, useAgentHardware, useAgentHardwareComponents, useAgentListeningPortsPage, useAgentOpenSocketsPage, useAgentSoftwarePage, useAgentSoftwareSnapshot, useApproveZeroTouch, useDeleteAgent, useRestartAgent, useShutdownAgent, useWakeOnLan } from '@/hooks/useAgents';
@@ -32,6 +32,8 @@ import AgentNotificationModal, { type AgentNotificationPayload } from '@/compone
 import AgentStartupItemsPanel from '@/components/agents/AgentStartupItemsPanel';
 import AgentScheduledTasksPanel from '@/components/agents/AgentScheduledTasksPanel';
 import AgentPoliciesPanel from '@/components/agents/AgentPoliciesPanel';
+import { AgentWindowsUpdatesPanel } from '@/components/agents/AgentWindowsUpdatesPanel';
+import { useAgentWindowsUpdateSnapshot } from '@/hooks/useAgentWindowsUpdates';
 import WakeOnLanModal from '@/components/agents/WakeOnLanModal';
 import { NotesPanel } from '@/components/notes/NotesPanel';
 import { PinnedNotesCard } from '@/components/notes/PinnedNotesCard';
@@ -76,6 +78,8 @@ interface AgentTabBadges {
   autostart?: number;
   /** Quantidade de políticas de automação aplicáveis ao agente. */
   policies?: number;
+  /** Atualizações do Windows pendentes no agente. */
+  windowsUpdates?: number;
   logs?: number;
 }
 
@@ -112,6 +116,7 @@ function buildAgentDetailTabs(badges: AgentTabBadges = {}): DetailTab<AgentDetai
     { id: 'notes', label: 'Anotações', icon: StickyNote },
     { id: 'labelHistory', label: 'Labels', icon: History, badge: badges.labelHistory },
     { id: 'software', label: 'Aplicativos', icon: AppWindow, badge: badges.software },
+    { id: 'windowsUpdates', label: 'Atualizações', icon: Download, badge: badges.windowsUpdates },
     { id: 'printers', label: 'Impressoras', icon: Printer, badge: badges.printers },
     { id: 'tickets', label: 'Chamados', icon: TicketIcon, badge: badges.tickets },
     { id: 'network', label: 'Rede', icon: Network },
@@ -432,6 +437,9 @@ export default function AgentDetail() {
     onlyUpdates: softwareOnlyUpdates,
   });
   const softwareSnapshot = useAgentSoftwareSnapshot(id!);
+  // Badge da aba "Atualizações" (pendentes do agente). O painel também usa o hook;
+  // o cache do react-query evita request duplicado.
+  const patchSnapshot = useAgentWindowsUpdateSnapshot(id);
   const agentLogs = useLogs({ agentId: id, limit: 10 }, { enabled: activeDataTab === 'logs' });
   const agentTickets = useTickets({ agentId: id, limit: 5 }, { enabled: activeDataTab === 'tickets' });
   // Tick de 15s (antes 5s): re-renderizava a página inteira a cada 5s só para
@@ -1928,6 +1936,7 @@ export default function AgentDetail() {
               : scheduledTasks.length
             : undefined,
           policies: canViewAutomation ? agentPolicies.data?.taskCount : undefined,
+          windowsUpdates: patchSnapshot.data?.pendingCount,
           logs: agentLogs.data ? logsArray.length : undefined,
         })}
         active={activeDataTab}
@@ -2243,6 +2252,12 @@ export default function AgentDetail() {
             ficam fora dele — inclusive "customFields", cujo card já traz o seu. */}
         {activeDataTab !== 'info' && activeDataTab !== 'customFields' && activeDataTab !== 'notes' && activeDataTab !== 'labelHistory' && (
           <Card className="surface-card">
+            {activeDataTab === 'windowsUpdates' && (
+              <div className="w-full min-w-0 max-w-full">
+                <AgentWindowsUpdatesPanel agentId={id!} />
+              </div>
+            )}
+
             {activeDataTab === 'software' && (
               <div style={{ maxHeight: 'min(860px, 75vh)' }} className="w-full min-w-0 max-w-full overflow-x-hidden overflow-y-auto overscroll-auto">
                 <>

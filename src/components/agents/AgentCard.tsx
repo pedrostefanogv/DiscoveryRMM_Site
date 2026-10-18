@@ -10,6 +10,7 @@ import {
   MapPin,
   Monitor,
   Radio,
+  RotateCcw,
   Server,
   ShieldCheck,
   Thermometer,
@@ -18,6 +19,7 @@ import {
   WifiOff,
 } from 'lucide-react';
 import { Badge, MetricBar } from '@/components/ui';
+import { agentRebootTooltip, hasPendingReboot } from '@/utils/agentReboot';
 import type { Agent } from '@/api';
 import { getAgentLastSeen, isAgentOnlineNow } from '@/utils/agentStatus';
 
@@ -127,6 +129,16 @@ export function AgentCard({
           {isZeroTouchPending && (
             <div className="mt-1.5 flex flex-wrap gap-1.5">
               <Badge color="warning">Aguardando aprovação</Badge>
+            </div>
+          )}
+          {hasPendingReboot(agent) && (
+            <div className="mt-1.5 flex flex-wrap gap-1.5" title={agentRebootTooltip(agent.pendingRebootReasons)}>
+              <Badge color="warning">
+                <span className="flex items-center gap-1">
+                  <RotateCcw className="h-2.5 w-2.5" />
+                  Reinício pendente
+                </span>
+              </Badge>
             </div>
           )}
         </div>

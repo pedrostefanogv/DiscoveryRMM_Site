@@ -37,6 +37,11 @@ const SoftwareHome = lazy(() => import('@/pages/software/SoftwareHome'));
 const SoftwareInventory = lazy(() => import('@/pages/software/SoftwareInventory'));
 const SoftwareStore = lazy(() => import('@/pages/software/SoftwareStore'));
 const CustomPackageEditorPage = lazy(() => import('@/pages/software/CustomPackageEditorPage'));
+const PatchesOverview = lazy(() => import('@/pages/patches/PatchesOverview'));
+const PatchesInventory = lazy(() => import('@/pages/patches/PatchesInventory'));
+const PatchesPending = lazy(() => import('@/pages/patches/PatchesPending'));
+const PatchesApprovals = lazy(() => import('@/pages/patches/PatchesApprovals'));
+const PatchesPolicy = lazy(() => import('@/pages/patches/PatchesPolicy'));
 const AutomationHome = lazy(() => import('@/pages/automation/AutomationHome'));
 const AutomationScriptsPage = lazy(() => import('@/pages/automation/AutomationScriptsPage'));
 const AutomationScriptFormPage = lazy(() => import('@/pages/automation/AutomationScriptFormPage'));
@@ -378,6 +383,46 @@ export const router = createBrowserRouter([
       {
         path: 'software-inventory',
         element: <Navigate to="/software/inventory" replace />,
+      },
+      {
+        path: 'patches',
+        element: (
+          <PermissionGate anyOf={['patches.*', 'patches.read', 'admin.*']}>
+            <LazyPage><PatchesOverview /></LazyPage>
+          </PermissionGate>
+        ),
+      },
+      {
+        path: 'patches/inventory',
+        element: (
+          <PermissionGate anyOf={['patches.*', 'patches.read', 'admin.*']}>
+            <LazyPage><PatchesInventory /></LazyPage>
+          </PermissionGate>
+        ),
+      },
+      {
+        path: 'patches/pending',
+        element: (
+          <PermissionGate anyOf={['patches.*', 'patches.read', 'admin.*']}>
+            <LazyPage><PatchesPending /></LazyPage>
+          </PermissionGate>
+        ),
+      },
+      {
+        path: 'patches/approvals',
+        element: (
+          <PermissionGate anyOf={['patches.*', 'patches.read', 'admin.*']}>
+            <LazyPage><PatchesApprovals /></LazyPage>
+          </PermissionGate>
+        ),
+      },
+      {
+        path: 'patches/policy',
+        element: (
+          <PermissionGate anyOf={['patches.*', 'patches.read', 'admin.*']}>
+            <LazyPage><PatchesPolicy /></LazyPage>
+          </PermissionGate>
+        ),
       },
       {
         path: 'automation',

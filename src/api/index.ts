@@ -3,6 +3,8 @@ export { api, ApiError, configureApiClient } from "./client";
 export { clientsApi } from "./clients";
 export { sitesApi } from "./sites";
 export { agentsApi } from "./agents";
+export { patchesApi, patchPolicyApi, patchActionsApi, agentPatchesApi } from "./patches";
+export type { PatchScopeParams, PatchInventoryParams } from "./patches";
 export { agentAlertsApi } from "./agent-alerts";
 export { escalationRulesApi } from "./escalation-rules";
 export { ticketAlertRulesApi } from "./ticket-alert-rules";

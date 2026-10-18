@@ -303,6 +303,8 @@ describe('desfazer herança no update', () => {
     expect('aiAssignmentModeOverride' in payload).toBe(true);
     expect(payload.aiAssignmentModeOverride).toBeNull();
     expect(payload.aiSkillMinEvidenceOverride).toBe(3);
+    // Herdado não envia o base (fixaria o valor e anularia a herança).
+    expect('aiAssignmentMode' in payload).toBe(false);
   });
 
   it('origem "default" mantém o valor-base do departamento (não vira null)', () => {
@@ -322,6 +324,9 @@ describe('desfazer herança no update', () => {
 
     const payload = buildDepartmentUpdatePayload(form) as unknown as Record<string, unknown>;
     expect(payload.aiAssignmentMaxOutputTokensOverride).toBe(3000);
+    // Retrocompatibilidade: o backend antigo só conhece o campo base, então o
+    // valor próprio continua sendo enviado junto do override.
+    expect(payload.aiAssignmentMaxOutputTokens).toBe(3000);
   });
 
   it('sem o endpoint efetivo mantém os valores próprios do departamento', () => {
