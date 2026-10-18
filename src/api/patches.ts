@@ -274,6 +274,15 @@ export const agentPatchesApi = {
     },
   ) => api.post<PatchDispatchResult>(`${agentBase(agentId)}/bulk`, body),
 
+  approvePending: (
+    agentId: string,
+    body?: {
+      action?: "Approve" | "Deny";
+      scope?: PatchApprovalScopeType;
+      reason?: string;
+    },
+  ) => api.post<PatchDispatchResult>(`${agentBase(agentId)}/approve-pending`, body ?? {}),
+
   applyOsPolicy: (agentId: string, body?: { hideDenied?: boolean }) =>
     api.post<PatchDispatchResult>(`${agentBase(agentId)}/os-policy/apply`, body ?? {}),
 

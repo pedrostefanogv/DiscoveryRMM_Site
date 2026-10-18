@@ -7,7 +7,8 @@ import { useClients } from "@/hooks/useClients";
 import { useSites } from "@/hooks/useSites";
 import { useCursorPagination } from "@/hooks/useCursorPagination";
 import { usePatchPending, useScanPatchScope } from "@/hooks/usePatches";
-import { useInstallApprovedWindowsUpdates } from "@/hooks/useAgentWindowsUpdates";
+import { useApproveAgentPendingWindowsUpdates, useInstallApprovedWindowsUpdates } from "@/hooks/useAgentWindowsUpdates";
+import { useAuthorization } from "@/auth/authorization";
 import type { PatchPendingAgent, PatchScope } from "@/api/types";
 import { formatPatchDate, PATCH_SCOPE_OPTIONS } from "./patchesUtils";
 
@@ -32,6 +33,10 @@ export default function PatchesPending() {
   });
   const scan = useScanPatchScope();
   const installApproved = useInstallApprovedWindowsUpdates();
+  const approvePending = useApproveAgentPendingWindowsUpdates();
+  const { hasAnyPermission } = useAuthorization();
+  const canExecute = hasAnyPermission(["Patches.Execute", "patches.*", "admin.*"]);
+  const canApprove = hasAnyPermission(["Patches.Edit", "patches.*", "admin.*"]);
 
   const clientOptions = useMemo(
     () => [{ value: "", label: "Selecione um cliente..." }, ...(clients.data ?? []).map((client) => ({ value: client.id, label: client.name }))],
@@ -51,6 +56,20 @@ export default function PatchesPending() {
       toast.success(result.message);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Falha ao solicitar varredura.");
+    }
+  };
+
+  const handleApprovePending = async (agent: PatchPendingAgent) => {
+    try {
+      const result = await approvePending.mutateAsync({
+        agentId: agent.agentId,
+        action: "Approve",
+        scope: "Agent",
+        reason: "aprovação em lote na página de pendências",
+      });
+      toast.success(result.message);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao aprovar pendências.");
     }
   };
 
@@ -101,8 +120,16 @@ export default function PatchesPending() {
           </Button>
           <Button
             size="sm"
+            variant="secondary"
+            onClick={() => void handleApprovePending(agent)}
+            disabled={approvePending.isPending || !canApprove}
+          >
+            Aprovar pendentes
+          </Button>
+          <Button
+            size="sm"
             onClick={() => void handleInstallApproved(agent)}
-            disabled={installApproved.isPending}
+            disabled={installApproved.isPending || !canExecute}
           >
             Instalar aprovadas
           </Button>

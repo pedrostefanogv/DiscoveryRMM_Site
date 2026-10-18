@@ -6,8 +6,9 @@ import { Badge, Button, Card, CardHeader, DataTable, ErrorDisplay, Input, Loadin
 import { useClients } from "@/hooks/useClients";
 import { useSites } from "@/hooks/useSites";
 import { useCursorPagination } from "@/hooks/useCursorPagination";
-import { usePatchInventory, usePatchInventoryAgents, useScanPatchScope } from "@/hooks/usePatches";
+import { useCreatePatchApproval, useInstallPatchScope, usePatchInventory, usePatchInventoryAgents, useScanPatchScope } from "@/hooks/usePatches";
 import { useSetAgentWindowsUpdateApproval } from "@/hooks/useAgentWindowsUpdates";
+import { useAuthorization } from "@/auth/authorization";
 import type { PatchInventoryAgent, PatchInventoryGroup, PatchScope } from "@/api/types";
 import {
   approvalColor,
@@ -60,6 +61,50 @@ export default function PatchesInventory() {
   });
   const scan = useScanPatchScope();
   const setApproval = useSetAgentWindowsUpdateApproval();
+  const createScopeApproval = useCreatePatchApproval();
+  const installScope = useInstallPatchScope();
+  const { hasAnyPermission } = useAuthorization();
+  const canApprove = hasAnyPermission(["Patches.Edit", "patches.*", "admin.*"]);
+  const canExecute = hasAnyPermission(["Patches.Execute", "patches.*", "admin.*"]);
+
+  const applyScopeApproval = async (group: PatchInventoryGroup, action: "Approve" | "Deny") => {
+    const scopeType = scope === "global" ? "Global" : scope === "client" ? "Client" : "Site";
+    const scopeId = scope === "global" ? null : scope === "client" ? selectedClientId : selectedSiteId;
+    if (scopeType !== "Global" && !scopeId) {
+      toast.error("Selecione o cliente/site.");
+      return;
+    }
+    try {
+      await createScopeApproval.mutateAsync({
+        scopeType,
+        scopeId,
+        updateKey: group.groupKey,
+        action,
+        reason: action === "Deny" ? "recusada no inventário de atualizações" : "aprovada no inventário de atualizações",
+      });
+      toast.success(action === "Deny" ? "Atualização recusada no escopo." : "Atualização aprovada no escopo.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao salvar aprovação.");
+    }
+  };
+
+  const installInScope = async (group: PatchInventoryGroup) => {
+    const scopeId = scope === "global" ? null : scope === "client" ? selectedClientId : selectedSiteId;
+    if (scope !== "global" && !scopeId) {
+      toast.error("Selecione o cliente/site.");
+      return;
+    }
+    try {
+      const result = await installScope.mutateAsync({
+        scope,
+        scopeId,
+        updateKeys: [group.groupKey],
+      });
+      toast.success(result.message);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao instalar atualizações no escopo.");
+    }
+  };
 
   const handleApproval = async (
     agent: PatchInventoryAgent,
@@ -127,18 +172,62 @@ export default function PatchesInventory() {
       header: "",
       className: "text-right",
       render: (item) => (
-        <Button
-          size="sm"
-          variant="secondary"
-          onClick={(event) => {
-            event.stopPropagation();
-            setSelectedGroup(item);
-            agentsPag.reset();
-          }}
-        >
-          <Eye className="h-4 w-4" />
-          Agentes
-        </Button>
+        <div className="flex flex-wrap justify-end gap-1.5">
+          {canApprove && (
+            <>
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  void applyScopeApproval(item, "Approve");
+                }}
+                disabled={createScopeApproval.isPending}
+                title="Aprovar esta atualização no escopo selecionado"
+              >
+                Aprovar
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  void applyScopeApproval(item, "Deny");
+                }}
+                disabled={createScopeApproval.isPending}
+                title="Recusar esta atualização no escopo selecionado"
+              >
+                Recusar
+              </Button>
+            </>
+          )}
+          {canExecute && (
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={(event) => {
+                event.stopPropagation();
+                void installInScope(item);
+              }}
+              disabled={installScope.isPending}
+              title="Instalar as aprovadas desta atualização nos agentes do escopo"
+            >
+              Instalar
+            </Button>
+          )}
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={(event) => {
+              event.stopPropagation();
+              setSelectedGroup(item);
+              agentsPag.reset();
+            }}
+          >
+            <Eye className="h-4 w-4" />
+            Agentes
+          </Button>
+        </div>
       ),
     },
   ];
@@ -175,7 +264,7 @@ export default function PatchesInventory() {
               event.stopPropagation();
               void handleApproval(agent, "approve");
             }}
-            disabled={setApproval.isPending}
+            disabled={setApproval.isPending || !canApprove}
             title="Aprovar para este agente"
           >
             Aprovar
@@ -187,7 +276,7 @@ export default function PatchesInventory() {
               event.stopPropagation();
               void handleApproval(agent, "deny");
             }}
-            disabled={setApproval.isPending}
+            disabled={setApproval.isPending || !canApprove}
             title="Recusar para este agente"
           >
             Recusar

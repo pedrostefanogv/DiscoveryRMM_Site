@@ -2,6 +2,8 @@ import { useMemo, useState } from "react";
 import { Download, RefreshCw, ShieldCheck, ShieldX, AlertTriangle } from "lucide-react";
 import toast from "react-hot-toast";
 import { Badge, Button, ConfirmDialog, DataTable, ErrorDisplay, Input, Loading, Modal, Select, type Column } from "@/components/ui";
+import { useAuthorization } from "@/auth/authorization";
+import { usePatchesRealtime } from "@/hooks/usePatchesRealtime";
 import {
   useAgentWindowsUpdateSnapshot,
   useAgentWindowsUpdates,
@@ -74,6 +76,10 @@ export function AgentWindowsUpdatesPanel({ agentId }: { agentId: string }) {
   const applyOsPolicy = useApplyPatchOsPolicy();
   const rollbackOsPolicy = useRollbackPatchOsPolicy();
   const [confirmOsPolicy, setConfirmOsPolicy] = useState<"apply" | "rollback" | null>(null);
+  const { hasAnyPermission } = useAuthorization();
+  const canApprove = hasAnyPermission(["Patches.Edit", "patches.*", "admin.*"]);
+  const canExecute = hasAnyPermission(["Patches.Execute", "patches.*", "admin.*"]);
+  usePatchesRealtime();
 
   const items = pageQuery.data?.items ?? [];
   const totalCount = pageQuery.data?.totalCount ?? 0;
@@ -227,17 +233,17 @@ export function AgentWindowsUpdatesPanel({ agentId }: { agentId: string }) {
         if (update.isInstalled) return null;
         return (
           <div className="flex flex-wrap justify-end gap-1.5">
-            <Button size="sm" variant="secondary" onClick={() => openApproval(update, "approve")} title="Aprovar">
+            <Button size="sm" variant="secondary" onClick={() => openApproval(update, "approve")} title="Aprovar" disabled={!canApprove}>
               <ShieldCheck className="h-3.5 w-3.5" />
             </Button>
-            <Button size="sm" variant="secondary" onClick={() => openApproval(update, "deny")} title="Recusar">
+            <Button size="sm" variant="secondary" onClick={() => openApproval(update, "deny")} title="Recusar" disabled={!canApprove}>
               <ShieldX className="h-3.5 w-3.5" />
             </Button>
-            <Button size="sm" onClick={() => openInstall(update, false)} disabled={install.isPending}>
+            <Button size="sm" onClick={() => openInstall(update, false)} disabled={install.isPending || !canExecute}>
               Instalar
             </Button>
             {update.approvalState === "Denied" && (
-              <Button size="sm" variant="danger" onClick={() => openInstall(update, true)} disabled={install.isPending}>
+              <Button size="sm" variant="danger" onClick={() => openInstall(update, true)} disabled={install.isPending || !canExecute}>
                 Forçar
               </Button>
             )}
@@ -274,18 +280,18 @@ export function AgentWindowsUpdatesPanel({ agentId }: { agentId: string }) {
           </Button>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Button variant="secondary" onClick={() => void handleScan()} disabled={scan.isPending}>
+          <Button variant="secondary" onClick={() => void handleScan()} disabled={scan.isPending || !canExecute}>
             <RefreshCw className="h-4 w-4" />
             {scan.isPending ? "Verificando..." : "Verificar atualizações"}
           </Button>
-          <Button onClick={() => setConfirmInstallApproved(true)} disabled={installApproved.isPending}>
+          <Button onClick={() => setConfirmInstallApproved(true)} disabled={installApproved.isPending || !canExecute}>
             <Download className="h-4 w-4" />
             Instalar aprovadas
           </Button>
-          <Button variant="secondary" onClick={() => setConfirmOsPolicy("apply")} disabled={applyOsPolicy.isPending}>
+          <Button variant="secondary" onClick={() => setConfirmOsPolicy("apply")} disabled={applyOsPolicy.isPending || !canExecute}>
             Aplicar no SO
           </Button>
-          <Button variant="ghost" onClick={() => setConfirmOsPolicy("rollback")} disabled={rollbackOsPolicy.isPending}>
+          <Button variant="ghost" onClick={() => setConfirmOsPolicy("rollback")} disabled={rollbackOsPolicy.isPending || !canExecute}>
             Reverter SO
           </Button>
         </div>
@@ -314,7 +320,7 @@ export function AgentWindowsUpdatesPanel({ agentId }: { agentId: string }) {
         <Select label="Status" fullWidth={false} value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value); setPage(1); }} options={PATCH_STATUS_OPTIONS} />
         <Button variant="secondary" onClick={() => { setSearchApplied(searchInput.trim()); setPage(1); }}>Filtrar</Button>
         {view === "pending" && items.length > 0 && (
-          <Button variant="secondary" onClick={() => void handleApproveAllVisible()} disabled={bulk.isPending}>
+          <Button variant="secondary" onClick={() => void handleApproveAllVisible()} disabled={bulk.isPending || !canApprove}>
             Aprovar visíveis
           </Button>
         )}

@@ -25,6 +25,7 @@ export * from "./useClients";
 export * from "./useSites";
 export * from "./useAgents";
 export * from "./usePatches";
+export { usePatchesRealtime } from "./usePatchesRealtime";
 export * from "./useAgentWindowsUpdates";
 export * from "./useAgentTransfer";
 export * from "./useAgentAlerts";

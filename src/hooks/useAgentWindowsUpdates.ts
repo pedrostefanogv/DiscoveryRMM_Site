@@ -114,6 +114,24 @@ export function useSetAgentWindowsUpdateApproval() {
   });
 }
 
+export function useApproveAgentPendingWindowsUpdates() {
+  const invalidate = useInvalidateAgentPatches();
+  return useMutation({
+    mutationFn: (input: {
+      agentId: string;
+      action?: "Approve" | "Deny";
+      scope?: PatchApprovalScopeType;
+      reason?: string;
+    }) =>
+      agentPatchesApi.approvePending(input.agentId, {
+        action: input.action,
+        scope: input.scope,
+        reason: input.reason,
+      }),
+    onSuccess: invalidate,
+  });
+}
+
 export function useApplyPatchOsPolicy() {
   const invalidate = useInvalidateAgentPatches();
   return useMutation({

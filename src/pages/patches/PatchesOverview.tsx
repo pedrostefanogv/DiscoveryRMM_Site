@@ -6,6 +6,7 @@ import { Button, Card, CardHeader, DataTable, ErrorDisplay, Loading, PageHeader,
 import { useClients } from "@/hooks/useClients";
 import { useSites } from "@/hooks/useSites";
 import { usePatchOverview, useScanPatchScope } from "@/hooks/usePatches";
+import { usePatchesRealtime } from "@/hooks/usePatchesRealtime";
 import type { PatchScope, PatchSeverityCount } from "@/api/types";
 import { formatPatchDate, PATCH_SCOPE_OPTIONS } from "./patchesUtils";
 
@@ -18,6 +19,7 @@ export default function PatchesOverview() {
   const sites = useSites(selectedClientId || undefined);
   const overview = usePatchOverview(scope, selectedClientId || undefined, selectedSiteId || undefined);
   const scan = useScanPatchScope();
+  usePatchesRealtime();
 
   const snapshot = overview.data?.snapshot;
   const scopeId = scope === "client" ? selectedClientId : scope === "site" ? selectedSiteId : undefined;

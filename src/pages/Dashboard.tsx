@@ -29,6 +29,7 @@ import { StatCard, Card, CardHeader, Badge, Button, SkeletonDashboard, ErrorDisp
 import { getRealtimeStats } from '@/api';
 import { useSoftwareInventorySnapshot } from '@/hooks/useSoftwareInventory';
 import { usePatchSnapshot } from '@/hooks/usePatches';
+import { usePatchesRealtime } from '@/hooks/usePatchesRealtime';
 import type { DashboardWindow } from '@/api/dashboard';
 
 function formatBytes(value?: number | null): string {
@@ -130,6 +131,7 @@ export default function Dashboard() {
   });
   // Conformidade de patches (Windows Update) da frota global.
   const patchSnapshot = usePatchSnapshot('global');
+  usePatchesRealtime(canViewPatches);
   const realtimeStats = useQuery({
     queryKey: ['realtime', 'stats'],
     queryFn: ({ signal }) => getRealtimeStats({ signal }),

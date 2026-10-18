@@ -321,6 +321,23 @@ export const serverEditableFields: EditableField[] = [
       "Permite que agentes sem credenciais se registrem sozinhos pela rede (P2P onboarding). Requer Descoberta de Rede ativa para os agentes se encontrarem.",
   },
   {
+    key: "windowsUpdateEnabled",
+    label: "Gerenciador de Patches (Windows Update)",
+    kind: "boolean",
+    group: "features",
+    description:
+      "Habilita o inventário e a instalação de atualizações do Windows nos agentes. Desligado, o agente não roda scan nem aceita comandos de patch (o inventário já coletado é preservado).",
+  },
+  {
+    key: "windowsUpdateScanIntervalMinutes",
+    label: "Intervalo de Varredura de Patches",
+    kind: "number",
+    group: "agent",
+    description:
+      "Com qual frequência (em minutos) os agentes varrem o Windows Update. Mínimo efetivo no agente: 60 minutos.",
+    unit: "minutos",
+  },
+  {
     key: "appStorePolicy",
     label: "Política da Loja de Aplicativos",
     kind: "policy",

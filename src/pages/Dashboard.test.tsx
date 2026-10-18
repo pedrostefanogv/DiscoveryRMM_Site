@@ -40,6 +40,32 @@ vi.mock('@/hooks/useDashboardSummary', () => ({
 
 vi.mock('@/hooks/useDashboardRealtime', () => ({ useDashboardRealtime: vi.fn() }));
 
+vi.mock('@/hooks/usePatches', () => ({
+  usePatchSnapshot: () => ({
+    data: {
+      totalPending: 0,
+      criticalPending: 0,
+      deniedPending: 0,
+      approvedPending: 0,
+      agentsWithPending: 0,
+      agentsTotal: 0,
+      agentsReporting: 0,
+      rebootPendingAgents: 0,
+      failedInstallations24h: 0,
+      compliancePercent: 100,
+      lastScanAt: null,
+    },
+    isLoading: false,
+    isError: false,
+    isFetching: false,
+    refetch: vi.fn(),
+  }),
+}));
+
+vi.mock('@/auth/authorization', () => ({
+  useAuthorization: () => ({ hasAnyPermission: () => true }),
+}));
+
 vi.mock('@/hooks/useSoftwareInventory', () => ({
   useSoftwareInventorySnapshot: () => ({
     data: { totalInstalled: 699 },
