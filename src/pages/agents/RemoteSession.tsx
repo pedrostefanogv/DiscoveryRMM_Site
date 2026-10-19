@@ -469,7 +469,9 @@ export default function RemoteSession() {
         await new Promise((resolve) => setTimeout(resolve, 1_000));
       }
     } finally {
-      setConsentWait(null);
+      // Só limpa o overlay se ele ainda for DESTA sessão: um novo pedido pode
+      // ter substituído o estado enquanto este loop encerrava.
+      setConsentWait((prev) => (prev && prev.sessionId === session.sessionId ? null : prev));
     }
   }, [agentId]);
 

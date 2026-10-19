@@ -50,7 +50,11 @@ export default function RemoteConsentNotice({
   const [cancelRequested, setCancelRequested] = useState(false);
   useEffect(() => {
     if (durationSeconds <= 0) return;
-    // 60ms dão ao navegador um frame para pintar o anel cheio antes da transição.
+    // Reinicia o anel e o botão de cancelar se o deadline mudar (novo
+    // consentimento na mesma instância) e dá 60ms para o navegador pintar o
+    // anel cheio antes da transição.
+    setDraining(false);
+    setCancelRequested(false);
     const id = window.setTimeout(() => setDraining(true), 60);
     return () => window.clearTimeout(id);
   }, [durationSeconds]);

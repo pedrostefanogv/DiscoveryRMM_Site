@@ -44,6 +44,20 @@ describe('RemoteConsentNotice', () => {
     expect(screen.getByTestId('remote-consent-countdown')).toBeTruthy();
   });
 
+  it('deadline já vencido não quebra (anel mínimo de 1s)', () => {
+    render(
+      <RemoteConsentNotice
+        operator="Ana"
+        timeoutAction="deny"
+        deadlineAt={Date.now() - 5_000}
+        onCancel={() => undefined}
+      />,
+    );
+
+    expect(screen.getByTestId('remote-consent-countdown')).toBeTruthy();
+    expect(screen.getByText('NEGADO')).toBeTruthy();
+  });
+
   it('dispara o cancelamento da solicitação', () => {
     const onCancel = vi.fn();
     render(<RemoteConsentNotice operator="Ana" onCancel={onCancel} />);
