@@ -1,7 +1,7 @@
 import { useSearchParams } from 'react-router-dom';
 import { Button, Card } from '@/components/ui';
 import { ThemeToggle } from '@/components/auth/ThemeToggle';
-import { Film, Image, Gauge, MessageSquare, Monitor } from 'lucide-react';
+import { Film, Image, Gauge, MessageSquare, Monitor, PanelsTopLeft, SlidersHorizontal } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { remoteSessionsApi, type ChangeQualityRequest, type StartRemoteSessionRequest } from '@/api/remote-sessions';
@@ -38,6 +38,13 @@ import RemoteConsentNotice from '@/modules/remote-screen/RemoteConsentNotice';
 import { openAgentSupportChatWindow } from './agentSupportChatLauncher';
 
 type Tab = 'screen' | 'terminal' | 'files' | 'proxy' | 'processes' | 'services';
+type QualityMode = 'high' | 'hd' | 'manual';
+
+// Modo HD: fidelidade máxima de imagem. O perfil "ultra" do backend é
+// (30 FPS, JPEG/WebP 90) e os overrides explícitos abaixo garantem o mesmo
+// resultado no codec WebP, sem a escada adaptativa rebaixar a qualidade.
+const HD_IMAGE_QUALITY = 90;
+const HD_MAX_FPS = 30;
 
 // Sessão ativa de uma aba específica. Cada aba inicia sua própria sessão
 // sob demanda (botão "Conectar") — nada é iniciado automaticamente ao abrir.
@@ -157,10 +164,10 @@ function SessionLivenessBadge({
     <span
       data-testid={`liveness-badge-${tab}`}
       className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium whitespace-nowrap ${tone}`}
-      title={liveness.errorMessage ?? `${label}: ${LIVENESS_LABELS[status] ?? status}`}
+      title={liveness.errorMessage ?? (label ? `${label}: ${LIVENESS_LABELS[status] ?? status}` : (LIVENESS_LABELS[status] ?? status))}
     >
       <span className="inline-block w-1.5 h-1.5 rounded-full bg-current" aria-hidden />
-      {label}: {LIVENESS_LABELS[status] ?? status}
+      {label ? `${label}: ` : ''}{LIVENESS_LABELS[status] ?? status}
     </span>
   );
 }
@@ -227,6 +234,8 @@ export default function RemoteSession() {
   // Liveness por aba: falha terminal (placeholder). livenessAttemptsRef limita
   // a auto-recuperacao a 3 tentativas por sessao.
   const [livenessFailure, setLivenessFailure] = useState<Partial<Record<Tab, string>>>({});
+  // Último status reportado por aba (para o chip compacto refletir o pior caso).
+  const [livenessStatuses, setLivenessStatuses] = useState<Partial<Record<Tab, string>>>({});
   const livenessAttemptsRef = useRef<Partial<Record<Tab, number>>>({});
 
   // Carrega a cadeia de identidade do agente (client → site → hostname).
@@ -284,14 +293,37 @@ export default function RemoteSession() {
   }, [agentId]);
 
   // ── Controles de qualidade em tempo real (apenas aba Tela) ──
-  const [liveQuality] = useState(quality);
+  const [liveQuality, setLiveQuality] = useState(quality);
+  // Perfil a restaurar quando sair do HD (o HD troca o perfil para "ultra").
+  const profileBeforeHdRef = useRef(quality);
   const [liveCodec, setLiveCodec] = useState(codec);
   // null = modo AUTO (a escada do agent define 10-90 de 10 em 10 pela máquina).
   // Só assume valor quando o usuário entra em MANUAL e escolhe uma opção.
   const [liveImageQuality, setLiveImageQuality] = useState<number | null>(null);
   const [liveMaxFps, setLiveMaxFps] = useState(0);
-  const [autoMode, setAutoMode] = useState(true);
+  // Modo de qualidade (sempre visível na barra superior):
+  //  - high   = adaptativo (o agent ajusta a compressão à rede/máquina)
+  //  - hd     = prioriza fidelidade da imagem (WebP 90%, 30 FPS, sem adaptação)
+  //  - manual = o operador escolhe codec / compressão / FPS
+  const [qualityMode, setQualityMode] = useState<QualityMode>('high');
   const [qualityChanging, setQualityChanging] = useState(false);
+  // Snapshot sempre atualizado do modo/parâmetros de qualidade. Usado por
+  // operações assíncronas longas (start da sessão, consentimento, troca de
+  // monitor) para NÃO aplicar valores capturados no clique original.
+  const qualityStateRef = useRef({
+    mode: qualityMode,
+    quality: liveQuality,
+    codec: liveCodec,
+    imageQuality: liveImageQuality,
+    maxFps: liveMaxFps,
+  });
+  qualityStateRef.current = {
+    mode: qualityMode,
+    quality: liveQuality,
+    codec: liveCodec,
+    imageQuality: liveImageQuality,
+    maxFps: liveMaxFps,
+  };
   const [monitorIndex, setMonitorIndex] = useState(0);
   const [monitorChanging, setMonitorChanging] = useState(false);
   const [monitors, setMonitors] = useState<MonitorInfo[]>([]);
@@ -301,6 +333,8 @@ export default function RemoteSession() {
   // Modo do cursor na tela (padrão: somente o cursor local do navegador).
   const [cursorMode, setCursorMode] = useState<'remote' | 'local' | 'both'>('local');
   const screenContainerRef = useRef<HTMLDivElement | null>(null);
+  // Container raiz: alvo do fullscreen "imersivo" (esconde as barras).
+  const rootRef = useRef<HTMLDivElement | null>(null);
   // ── Controles de entrada da tela (moram no RODAPÉ, junto das outras opções) ──
   // O envio depende do WebSocket do viewer: o pai usa o handle imperativo e
   // recebe o estado do bloqueio pelo callback do viewer (fonte: agent).
@@ -310,10 +344,15 @@ export default function RemoteSession() {
   const [specialKeysOpen, setSpecialKeysOpen] = useState(false);
   const lockMenuRef = useRef<HTMLDivElement | null>(null);
   const specialKeysMenuRef = useRef<HTMLDivElement | null>(null);
+  // Popovers compactos da barra superior (sessões e ajustes finos).
+  const [livenessPopoverOpen, setLivenessPopoverOpen] = useState(false);
+  const livenessPopoverRef = useRef<HTMLDivElement | null>(null);
+  const [qualitySettingsOpen, setQualitySettingsOpen] = useState(false);
+  const qualitySettingsRef = useRef<HTMLDivElement | null>(null);
 
-  // Menus do rodapé: fecham ao clicar fora e ao trocar de aba.
+  // Menus/popovers: fecham ao clicar fora e ao trocar de aba.
   useEffect(() => {
-    if (!specialKeysOpen && !lockConfirmOpen) return;
+    if (!specialKeysOpen && !lockConfirmOpen && !livenessPopoverOpen && !qualitySettingsOpen) return;
     const onPointerDown = (e: PointerEvent) => {
       const target = e.target as Node;
       if (specialKeysOpen && !specialKeysMenuRef.current?.contains(target)) {
@@ -322,15 +361,30 @@ export default function RemoteSession() {
       if (lockConfirmOpen && !lockMenuRef.current?.contains(target)) {
         setLockConfirmOpen(false);
       }
+      if (livenessPopoverOpen && !livenessPopoverRef.current?.contains(target)) {
+        setLivenessPopoverOpen(false);
+      }
+      if (qualitySettingsOpen && !qualitySettingsRef.current?.contains(target)) {
+        setQualitySettingsOpen(false);
+      }
     };
     document.addEventListener('pointerdown', onPointerDown);
     return () => document.removeEventListener('pointerdown', onPointerDown);
-  }, [specialKeysOpen, lockConfirmOpen]);
+  }, [specialKeysOpen, lockConfirmOpen, livenessPopoverOpen, qualitySettingsOpen]);
 
   useEffect(() => {
     setSpecialKeysOpen(false);
     setLockConfirmOpen(false);
+    setLivenessPopoverOpen(false);
+    setQualitySettingsOpen(false);
   }, [activeTab]);
+
+  // Sem sessões ativas o chip/popover desaparece; fecha o estado para não
+  // reabrir sozinho quando uma nova sessão for criada.
+  const hasActiveSessions = Object.values(sessions).some(Boolean);
+  useEffect(() => {
+    if (!hasActiveSessions) setLivenessPopoverOpen(false);
+  }, [hasActiveSessions]);
   // Shell ativo do terminal (powershell | cmd). Trocar reinicia a sessão de terminal.
   const [shell, setShell] = useState('powershell');
   const [shellSwitching, setShellSwitching] = useState(false);
@@ -367,6 +421,13 @@ export default function RemoteSession() {
   // processos pode ser reutilizada pela aba serviços (e vice-versa), evitando
   // stop+start desnecessário a cada troca de aba.
   const processSession = sessions.processes ?? sessions.services;
+
+  // O popover de ajustes finos só existe com sessão de tela em modo Manual.
+  // Fecha o estado quando a sessão cai/é encerrada para não reabrir sozinho
+  // numa recriação automática.
+  useEffect(() => {
+    if (!screenSession || qualityMode !== 'manual') setQualitySettingsOpen(false);
+  }, [screenSession, qualityMode]);
 
   const CODECS: { value: NonNullable<ChangeQualityRequest['codec']>; label: string }[] = [
     { value: 'webp', label: 'WebP' },
@@ -483,6 +544,35 @@ export default function RemoteSession() {
     }
   }, [agentId, consentWait]);
 
+  // Aplica o modo HD/Manual a uma sessão de tela recém-criada. Lê o snapshot
+  // MAIS RECENTE (qualityStateRef) — assim uma troca de modo durante o
+  // consentimento/credenciais não é perdida — e tenta 1 reaplicação, porque o
+  // agent pode ainda não ter registrado a sessão quando o comando chega.
+  const applyQualityModeToSession = useCallback(async (sessionId: string) => {
+    const s = qualityStateRef.current;
+    if (s.mode === 'high') return true;
+    const payload: ChangeQualityRequest = s.mode === 'hd'
+      ? { quality: 'ultra', codec: 'webp', imageQuality: HD_IMAGE_QUALITY, maxFps: HD_MAX_FPS, auto: false }
+      : {
+          quality: s.quality as ChangeQualityRequest['quality'],
+          codec: s.codec as NonNullable<ChangeQualityRequest['codec']>,
+          imageQuality: s.imageQuality ?? undefined,
+          maxFps: s.maxFps,
+          auto: false,
+        };
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        await remoteSessionsApi.changeQuality(agentId, sessionId, payload);
+        return true;
+      } catch {
+        if (attempt === 0) {
+          await new Promise((resolve) => setTimeout(resolve, 500));
+        }
+      }
+    }
+    return false;
+  }, [agentId]);
+
   // ── Inicia a sessão de uma aba sob demanda ──
   // `force` permite sobrepor uma sessão ativa existente do mesmo agent (o
   // backend encerra a anterior e cria a nova). No fluxo normal (force=false)
@@ -491,6 +581,14 @@ export default function RemoteSession() {
   const startTabSession = useCallback(async (tab: Tab, force = false) => {
     if (!agentId || connectingTab) return;
     setConnectingTab(tab);
+    // Nova sessão: descarta o status de liveness anterior da aba para o chip
+    // não exibir "vivo" antes do primeiro ping da sessão nova.
+    setLivenessStatuses((prev) => {
+      if (!(tab in prev)) return prev;
+      const next = { ...prev };
+      delete next[tab];
+      return next;
+    });
     setErrorMsg(null);
     setSessionConflict(false);
     setForcePromptTab(null);
@@ -536,12 +634,18 @@ export default function RemoteSession() {
       // 'services' comparte a mesma sessão/subject de 'processes' (backend
       // RemoteSessionKind.Processes). Enviamos o kind 'processes' no request.
       const kind = tab === 'screen' ? 'screen' : tab === 'services' ? 'processes' : tab; // screen | terminal | files | processes | proxy
+      // Sessão de tela nasce já no perfil do modo escolhido (HD = ultra/WebP;
+      // Alto/Manual preservam o perfil padrão do viewer). Lê o snapshot ATUAL:
+      // o run pode ter começado antes de o usuário trocar o modo.
+      const qs = qualityStateRef.current;
+      const startQuality = tab === 'screen' && qs.mode === 'hd' ? 'ultra' : qs.quality;
+      const startCodec = tab === 'screen' && qs.mode === 'hd' ? 'webp' : qs.codec;
       const session = await remoteSessionsApi.startSession(agentId, {
         agentId,
         kind: kind as StartRemoteSessionRequest['kind'],
         transport: transport as StartRemoteSessionRequest['transport'],
-        quality: liveQuality as StartRemoteSessionRequest['quality'],
-        codec: liveCodec as StartRemoteSessionRequest['codec'],
+        quality: startQuality as StartRemoteSessionRequest['quality'],
+        codec: startCodec as StartRemoteSessionRequest['codec'],
         durationMinutes: 30,
         // force=false (default): não mata outras sessões silenciosamente. As
         // sessões concorrentes já foram encerradas acima com stop explícito.
@@ -579,6 +683,17 @@ export default function RemoteSession() {
         natsUrl = resolveNatsWsUrl(creds.natsWssUrl ?? realtimeConfig.natsUrl);
       } catch {
         throw new Error('Falha ao obter credenciais de streaming.');
+      }
+
+      // Aplica o modo HD/Manual à sessão recém-criada. Sem isso o agent inicia
+      // em modo auto (autoStart=true) e a escada adaptativa rebaixaria o HD
+      // para a semente de hardware em ~2s. Falha aqui não derruba a conexão,
+      // mas avisa o operador para ele não confiar em uma UI "HD" que não vale.
+      if (tab === 'screen') {
+        const applied = await applyQualityModeToSession(session.sessionId);
+        if (!applied) {
+          toast.error('Sessão conectada, mas o modo de qualidade não pôde ser aplicado. Selecione o modo novamente.');
+        }
       }
 
       setSessions((prev) => {
@@ -637,7 +752,7 @@ export default function RemoteSession() {
       setConnectingTab(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [agentId, connectingTab, transport, liveQuality, liveCodec, monitorIndex, sessions]);
+  }, [agentId, connectingTab, transport, monitorIndex, sessions, applyQualityModeToSession]);
 
   // Inicia a sessão da aba com força (vinda do aviso de conflito de sessão).
   const confirmForce = useCallback(async (tab: Tab) => {
@@ -819,7 +934,7 @@ export default function RemoteSession() {
     const prevImageQ = liveImageQuality;
     setQualityChanging(true);
     setLiveImageQuality(newImageQ);
-    setAutoMode(false);
+    setQualityMode('manual');
     try {
       await remoteSessionsApi.changeQuality(agentId, screenSession.sessionId, {
         quality: liveQuality as ChangeQualityRequest['quality'],
@@ -840,7 +955,7 @@ export default function RemoteSession() {
     const prevFps = liveMaxFps;
     setQualityChanging(true);
     setLiveMaxFps(newFps);
-    setAutoMode(false);
+    setQualityMode('manual');
     try {
       await remoteSessionsApi.changeQuality(agentId, screenSession.sessionId, {
         quality: liveQuality as ChangeQualityRequest['quality'],
@@ -861,7 +976,7 @@ export default function RemoteSession() {
     const previousCodec = liveCodec;
     setQualityChanging(true);
     setLiveCodec(newCodec);
-    setAutoMode(false);
+    setQualityMode('manual');
     try {
       await remoteSessionsApi.changeQuality(agentId, screenSession.sessionId, {
         quality: liveQuality as ChangeQualityRequest['quality'],
@@ -878,24 +993,86 @@ export default function RemoteSession() {
     }
   }, [qualityChanging, screenSession, agentId, liveQuality, liveCodec, liveImageQuality, liveMaxFps]);
 
-  const handleAutoToggle = useCallback(async () => {
-    if (qualityChanging || !screenSession) return;
-    const newAuto = !autoMode;
+  // Troca do modo de qualidade pela barra superior (Alto / HD / Manual).
+  //  - Alto: religa a adaptação automática do agent (perfil + escada 10-90).
+  //  - HD: fixa WebP 90% / 30 FPS (auto=false) para priorizar a imagem.
+  //  - Manual: mantém os valores atuais e libera os selects de codec/Q/FPS.
+  const handleQualityModeChange = useCallback(async (newMode: QualityMode) => {
+    if (qualityChanging || newMode === qualityMode) return;
+    const prevMode = qualityMode;
+    const prevCodec = liveCodec;
+    const prevImageQ = liveImageQuality;
+    const prevMaxFps = liveMaxFps;
+    // HD troca o perfil do backend para "ultra"; guarda o perfil anterior para
+    // restaurá-lo ao voltar para Alto. Manual mantém o perfil corrente.
+    if (newMode === 'hd') profileBeforeHdRef.current = liveQuality;
+    setQualityMode(newMode);
+    if (newMode !== 'manual') setQualitySettingsOpen(false);
+
+    // Sem sessão de tela ainda: a escolha é aplicada no próximo "Conectar".
+    // Espelha desde já os valores do modo nos selects de ajuste fino, para que
+    // um "Manual" posterior continue de onde o HD parou.
+    if (!screenSession) {
+      if (newMode === 'hd') {
+        setLiveQuality('ultra');
+        setLiveCodec('webp');
+        setLiveImageQuality(HD_IMAGE_QUALITY);
+        setLiveMaxFps(HD_MAX_FPS);
+      } else if (newMode === 'high') {
+        setLiveQuality(profileBeforeHdRef.current);
+        setLiveCodec('webp');
+        setLiveImageQuality(null);
+        setLiveMaxFps(0);
+      }
+      return;
+    }
+
     setQualityChanging(true);
-    setAutoMode(newAuto);
     try {
-      await remoteSessionsApi.changeQuality(agentId, screenSession.sessionId, {
-        quality: liveQuality as ChangeQualityRequest['quality'],
-        codec: (newAuto ? 'webp' : liveCodec) as NonNullable<ChangeQualityRequest['codec']>,
-        auto: newAuto,
-      });
+      if (newMode === 'high') {
+        const restoredProfile = profileBeforeHdRef.current;
+        setLiveQuality(restoredProfile);
+        setLiveImageQuality(null);
+        setLiveMaxFps(0);
+        setLiveCodec('webp');
+        await remoteSessionsApi.changeQuality(agentId, screenSession.sessionId, {
+          quality: restoredProfile as ChangeQualityRequest['quality'],
+          codec: 'webp',
+          auto: true,
+        });
+      } else if (newMode === 'hd') {
+        setLiveQuality('ultra');
+        setLiveImageQuality(HD_IMAGE_QUALITY);
+        setLiveMaxFps(HD_MAX_FPS);
+        setLiveCodec('webp');
+        await remoteSessionsApi.changeQuality(agentId, screenSession.sessionId, {
+          quality: 'ultra',
+          codec: 'webp',
+          imageQuality: HD_IMAGE_QUALITY,
+          maxFps: HD_MAX_FPS,
+          auto: false,
+        });
+      } else {
+        // Manual começa dos valores correntes (se veio do HD, continua em
+        // WebP 90%/30 FPS até o operador ajustar).
+        await remoteSessionsApi.changeQuality(agentId, screenSession.sessionId, {
+          quality: liveQuality as ChangeQualityRequest['quality'],
+          codec: liveCodec as NonNullable<ChangeQualityRequest['codec']>,
+          imageQuality: liveImageQuality ?? undefined,
+          maxFps: liveMaxFps,
+          auto: false,
+        });
+      }
     } catch (err) {
-      setAutoMode(!newAuto);
-      console.error('Falha ao alternar modo auto:', err);
+      setQualityMode(prevMode);
+      setLiveCodec(prevCodec);
+      setLiveImageQuality(prevImageQ);
+      setLiveMaxFps(prevMaxFps);
+      console.error('Falha ao alterar modo de qualidade:', err);
     } finally {
       setQualityChanging(false);
     }
-  }, [qualityChanging, screenSession, agentId, autoMode, liveQuality, liveCodec]);
+  }, [qualityChanging, qualityMode, screenSession, agentId, liveQuality, liveCodec, liveImageQuality, liveMaxFps]);
 
   // Troca de monitor — reinicia a sessão de tela com o monitor selecionado.
   const handleMonitorChange = useCallback(async (newMonitor: number) => {
@@ -909,12 +1086,13 @@ export default function RemoteSession() {
     }
 
     const startNew = async (useForce: boolean) => {
+      const qs = qualityStateRef.current;
       const session = await remoteSessionsApi.startSession(agentId, {
         agentId,
         kind: 'screen',
         transport: transport as StartRemoteSessionRequest['transport'],
-        quality: liveQuality as StartRemoteSessionRequest['quality'],
-        codec: liveCodec as StartRemoteSessionRequest['codec'],
+        quality: (qs.mode === 'hd' ? 'ultra' : qs.quality) as StartRemoteSessionRequest['quality'],
+        codec: (qs.mode === 'hd' ? 'webp' : qs.codec) as StartRemoteSessionRequest['codec'],
         durationMinutes: 30,
         force: useForce,
         monitorIndex: newMonitor,
@@ -933,6 +1111,12 @@ export default function RemoteSession() {
         // a mesma que o chat/dashboard usam) → derivada da própria origem.
         natsUrl = resolveNatsWsUrl(creds.natsWssUrl ?? realtimeConfig.natsUrl);
       } catch { /* sem credenciais */ }
+      // Mantém o modo HD/Manual também após reiniciar a captura (troca de
+      // monitor): a nova sessão nasce em auto e seria rebaixada sem isto.
+      const applied = await applyQualityModeToSession(session.sessionId);
+      if (!applied) {
+        toast.error('Monitor alterado, mas o modo de qualidade não pôde ser reaplicado. Selecione o modo novamente.');
+      }
       setSessions((prev) => ({
         ...prev,
         screen: {
@@ -966,7 +1150,7 @@ export default function RemoteSession() {
     } finally {
       setMonitorChanging(false);
     }
-  }, [monitorChanging, agentId, screenSession, transport, liveQuality, liveCodec]);
+  }, [monitorChanging, agentId, screenSession, transport, applyQualityModeToSession]);
 
   // Timer de expiração removido — a sessão gerencia a própria expiração e o
   // backend encerra quando necessário (viewer recebe onSessionEnded).
@@ -1012,7 +1196,9 @@ export default function RemoteSession() {
   // Alterna o fullscreen da tela (barra de rodapé + Ctrl+F no viewer).
   // O estado é sincronizado pelo listener `fullscreenchange` (cobre Esc/API).
   const toggleScreenFullscreen = useCallback(async () => {
-    const target = screenContainerRef.current ?? document.documentElement;
+    // Fullscreen imersivo: a raiz inteira entra em tela cheia e as barras
+    // superior/rodapé são ocultadas, liberando ~94px de altura.
+    const target = rootRef.current ?? document.documentElement;
     const ok = fullscreenApi.isFullscreen()
       ? await fullscreenApi.exit()
       : await fullscreenApi.request(target);
@@ -1040,6 +1226,7 @@ export default function RemoteSession() {
   // A sessao voltou a responder: limpa a falha (o badge ja mostra o status
   // internamente; aqui so importa destravar o placeholder).
   const handleLivenessStatus = useCallback((tab: Tab, status: string) => {
+    setLivenessStatuses((prev) => (prev[tab] === status ? prev : { ...prev, [tab]: status }));
     if (status === 'alive') {
       // So o agente respondendo zera a auto-recuperacao. Renovacao bem-sucedida
       // NAO serve: a API considera a sessao ativa mesmo com o agent offline —
@@ -1087,9 +1274,18 @@ export default function RemoteSession() {
     { key: 'processes', label: 'Processos' },
     { key: 'proxy', label: 'Proxy' },
   ];
+  const activeLivenessTabs = livenessTabs.filter(({ key }) => !!sessions[key]);
+  // Pior status entre as sessões: falha > desconhecido/conectando/instável > vivo.
+  // Status ausente NÃO é sucesso: o canal de liveness pode nem ter conectado.
+  const livenessStatusList = activeLivenessTabs.map(({ key }) => livenessStatuses[key]);
+  const livenessTone = livenessStatusList.some((s) => s === 'peer-lost' || s === 'expired')
+    ? 'bg-danger'
+    : livenessStatusList.length > 0 && livenessStatusList.every((s) => s === 'alive')
+      ? 'bg-success'
+      : 'bg-warning';
 
   return (
-    <div className="flex flex-col h-screen bg-background text-foreground">
+    <div ref={rootRef} className="relative flex flex-col h-screen bg-background text-foreground">
       {consentWait && (
         <RemoteConsentNotice
           operator={consentWait.operator}
@@ -1099,187 +1295,237 @@ export default function RemoteSession() {
           onCancel={() => { void cancelConsentWait(); }}
         />
       )}
-      {/* Header */}
-      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-4 px-4 py-2 bg-surface border-b border-border">
-        <div aria-hidden className="min-w-0" />
-        <div className="flex flex-wrap items-center justify-center gap-3 min-w-0">
+      {/* Barra superior ÚNICA: identidade do agent + status/liveness +
+          navegação e controles da tela. Antes eram duas barras (header e abas),
+          que consumiam ~36px de altura útil do viewer. */}
+      <div className={`flex flex-wrap items-center gap-2 px-2 py-1.5 bg-surface border-b border-border text-xs ${screenFullscreen && activeTab === 'screen' && screenSession ? 'hidden' : ''}`}>
+        <div className="flex min-w-0 flex-1 items-center gap-2">
           {agentIdentity && (
             <span
-              className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-surface-hover text-foreground/80 text-xs font-medium truncate max-w-[40vw]"
+              className="inline-flex min-w-0 items-center gap-1 px-2 py-0.5 rounded bg-surface-hover text-foreground/80 text-xs font-medium truncate max-w-[28vw]"
               title={`${agentIdentity.hostname} — ${agentIdentity.site}`}
             >
               <span className="text-muted">🖥</span>
-              <span className="text-muted">{agentIdentity.client || '—'}</span>
-              <span className="text-muted-foreground">→</span>
-              <span className="text-muted">{agentIdentity.site || '—'}</span>
-              <span className="text-muted-foreground">→</span>
+              {/* Em janelas estreitas (~1024px) mostra só o hostname; a cadeia
+                  completa Cliente → Site fica visível a partir de xl. */}
+              <span className="hidden text-muted xl:inline">{agentIdentity.client || '—'}</span>
+              <span className="hidden text-muted-foreground xl:inline">→</span>
+              <span className="hidden text-muted xl:inline">{agentIdentity.site || '—'}</span>
+              <span className="hidden text-muted-foreground xl:inline">→</span>
               <strong className="text-foreground">{agentIdentity.hostname}</strong>
             </span>
           )}
           <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium whitespace-nowrap ${isActiveConnected ? 'bg-success/20 text-success' : 'bg-warning/20 text-warning'}`}>
             {isActiveConnected ? 'Conectado' : 'Não conectado'}
           </span>
-          {livenessTabs.map(({ key, label }) => {
-            const session = sessions[key];
-            if (!session) return null;
-            return (
-              <SessionLivenessBadge
-                key={`${key}-${session.sessionId}`}
-                tab={key}
-                label={label}
-                enabled={!livenessFailure[key]}
-                agentId={agentId}
-                session={session}
-                attemptsRef={livenessAttemptsRef}
-                onStatusChange={handleLivenessStatus}
-                onFatal={handleLivenessFatal}
-                onRecreate={handleLivenessRecreate}
-              />
-            );
-          })}
+          {/* Liveness compacto: 1 chip com contador em vez de até 5 badges
+              inline (que quebravam a barra para 2 linhas em 1024px). Os
+              detalhes continuam disponíveis no popover. */}
+          {activeLivenessTabs.length > 0 && (
+            <div ref={livenessPopoverRef} className="relative">
+              <button
+                type="button"
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-surface-hover text-muted-foreground hover:text-foreground"
+                onClick={() => setLivenessPopoverOpen((open) => !open)}
+                aria-expanded={livenessPopoverOpen}
+                aria-haspopup="dialog"
+                title={activeLivenessTabs
+                  .map(({ key, label }) => `${label}: ${LIVENESS_LABELS[livenessStatuses[key] ?? 'idle'] ?? 'desconhecido'}`)
+                  .join(' · ')}
+              >
+                <span className={`inline-block w-1.5 h-1.5 rounded-full ${livenessTone}`} aria-hidden />
+                Sessões ({activeLivenessTabs.length})
+                {livenessTone !== 'bg-success' && <span aria-hidden>⚠</span>}
+              </button>
+              {/* O popover fica SEMPRE montado (só oculto quando fechado):
+                  cada SessionLivenessBadge mantém a conexão de liveness ativa
+                  (ping/renovação). Desmontá-lo ao fechar interromperia o
+                  keepalive e a sessão poderia expirar. */}
+              <div
+                role="dialog"
+                aria-label="Status das sessões"
+                className={`absolute left-0 top-full z-50 mt-1 w-60 flex-col gap-1 rounded border border-border bg-surface p-2 text-xs shadow-lg ${livenessPopoverOpen ? 'flex' : 'hidden'}`}
+              >
+                  {activeLivenessTabs.map(({ key, label }) => {
+                    const session = sessions[key];
+                    if (!session) return null;
+                    return (
+                      <div key={`${key}-${session.sessionId}`} className="flex items-center justify-between gap-2">
+                        <span className="text-muted-foreground">{label}</span>
+                        <SessionLivenessBadge
+                          tab={key}
+                          label=""
+                          enabled={!livenessFailure[key]}
+                          agentId={agentId}
+                          session={session}
+                          attemptsRef={livenessAttemptsRef}
+                          onStatusChange={handleLivenessStatus}
+                          onFatal={handleLivenessFatal}
+                          onRecreate={handleLivenessRecreate}
+                        />
+                      </div>
+                    );
+                  })}
+              </div>
+            </div>
+          )}
         </div>
-        <div className="flex items-center justify-end gap-2 text-xs text-muted-foreground">
+
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {/* Abas como dropdown — mesmo padrão visual do seletor de monitor.
+              O ponto indica que a aba tem sessão ativa. */}
+          <div className="flex items-center gap-0.5">
+            <PanelsTopLeft className="mr-1 h-3.5 w-3.5 text-muted" aria-hidden />
+            <select
+              className="bg-surface border border-border rounded px-1 py-0.5 text-xs text-foreground cursor-pointer hover:border-border-strong"
+              value={activeTab}
+              onChange={(e) => setActiveTab(e.target.value as Tab)}
+              title="Seção do acesso remoto"
+              aria-label="Seção do acesso remoto"
+            >
+              {tabs.map((tab) => {
+                const connected = tab.key === 'processes' || tab.key === 'services'
+                  ? !!processSession
+                  : !!sessions[tab.key];
+                return (
+                  <option key={tab.key} value={tab.key}>
+                    {tab.label}{connected ? ' ●' : ''}
+                  </option>
+                );
+              })}
+            </select>
+          </div>
+
+          {/* Modo de qualidade da tela: Alto (adaptativo) / HD / Manual. */}
+          {activeTab === 'screen' && (
+            <>
+              <div className="flex items-center gap-0.5">
+                <SlidersHorizontal className="mr-1 h-3.5 w-3.5 text-muted" aria-hidden />
+                <select
+                  className="bg-surface border border-border rounded px-1 py-0.5 text-xs text-foreground cursor-pointer hover:border-border-strong disabled:opacity-50"
+                  value={qualityMode}
+                  disabled={qualityChanging || connectingTab === 'screen'}
+                  onChange={(e) => { void handleQualityModeChange(e.target.value as QualityMode); }}
+                  title="Qualidade da imagem: Alto (adaptativo) · HD (prioriza fidelidade) · Manual (ajuste fino)"
+                  aria-label="Modo de qualidade da imagem"
+                >
+                  <option value="high">Alto</option>
+                  <option value="hd">HD</option>
+                  <option value="manual">Manual</option>
+                </select>
+              </div>
+
+              {qualityMode === 'manual' && screenSession && (
+                <div ref={qualitySettingsRef} className="relative">
+                  {/* Ajustes finos em popover: evita 3 selects extras na barra
+                      (que estouravam a largura em janelas de 1024px). */}
+                  <button
+                    type="button"
+                    className="px-2 py-0.5 rounded bg-surface border border-border text-muted-foreground hover:text-foreground"
+                    onClick={() => setQualitySettingsOpen((open) => !open)}
+                    aria-expanded={qualitySettingsOpen}
+                    aria-haspopup="dialog"
+                    title="Ajustes finos de imagem (codec, compressão e FPS)"
+                    aria-label="Ajustes finos de imagem"
+                  >
+                    ⚙
+                  </button>
+                  {qualitySettingsOpen && (
+                    <div
+                      role="dialog"
+                      aria-label="Ajustes finos de imagem"
+                      className="absolute right-0 top-full z-50 mt-1 w-64 space-y-2 rounded border border-border bg-surface p-2 text-xs shadow-lg"
+                    >
+                      <label className="flex items-center justify-between gap-2">
+                        <span className="inline-flex items-center gap-1 text-muted-foreground">
+                          <Film className="h-3.5 w-3.5" aria-hidden /> Codec
+                        </span>
+                        <select
+                          className="w-28 bg-surface border border-border rounded px-1 py-0.5 text-xs text-foreground cursor-pointer hover:border-border-strong disabled:opacity-50"
+                          value={liveCodec}
+                          disabled={qualityChanging}
+                          onChange={(e) => handleCodecChange(e.target.value as NonNullable<ChangeQualityRequest['codec']>)}
+                          title="Escolha o codec"
+                        >
+                          {CODECS.map((c) => (
+                            <option key={c.value} value={c.value}>{c.label}</option>
+                          ))}
+                        </select>
+                      </label>
+
+                      <label className="flex items-center justify-between gap-2">
+                        <span className="inline-flex items-center gap-1 text-muted-foreground">
+                          <Image className="h-3.5 w-3.5" aria-hidden /> Compressão
+                        </span>
+                        <select
+                          className="w-28 bg-surface border border-border rounded px-1 py-0.5 text-xs text-foreground cursor-pointer hover:border-border-strong disabled:opacity-50"
+                          value={liveImageQuality ?? ''}
+                          disabled={qualityChanging}
+                          onChange={(e) => handleImageQualityChange(Number(e.target.value))}
+                          title="Qualidade da imagem (compressão)"
+                        >
+                          {liveImageQuality === null && (
+                            <option value="" disabled>Auto</option>
+                          )}
+                          {IMAGE_QUALITY_PRESETS.map((iq) => (
+                            <option key={iq.value} value={iq.value}>{iq.label}</option>
+                          ))}
+                        </select>
+                      </label>
+
+                      <label className="flex items-center justify-between gap-2">
+                        <span className="inline-flex items-center gap-1 text-muted-foreground">
+                          <Gauge className="h-3.5 w-3.5" aria-hidden /> FPS
+                        </span>
+                        <select
+                          className="w-28 bg-surface border border-border rounded px-1 py-0.5 text-xs text-foreground cursor-pointer hover:border-border-strong disabled:opacity-50"
+                          value={liveMaxFps}
+                          disabled={qualityChanging}
+                          onChange={(e) => handleFpsChange(Number(e.target.value))}
+                          title="Taxa máxima de quadros por segundo"
+                        >
+                          {FPS_PRESETS.map((f) => (
+                            <option key={f.value} value={f.value}>{f.label} FPS</option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {screenSession && (
+                <div className="flex items-center gap-0.5">
+                  <Monitor className="mr-1 h-3.5 w-3.5 text-muted" aria-hidden />
+                  <select
+                    className="max-w-[11rem] bg-surface border border-border rounded px-1 py-0.5 text-xs text-foreground cursor-pointer hover:border-border-strong disabled:opacity-50"
+                    value={monitorIndex}
+                    disabled={monitorChanging}
+                    onChange={(e) => handleMonitorChange(Number(e.target.value))}
+                    title="Monitor capturado (0 = primário). Trocar reinicia a sessão de tela."
+                  >
+                    {monitors.length > 0 ? (
+                      monitors.map((m) => (
+                        <option key={m.index} value={m.index}>
+                          {m.isPrimary ? 'Monitor 1 (primário)' : `Monitor ${m.index + 1}`} — {m.width}x{m.height}
+                        </option>
+                      ))
+                    ) : (
+                      <option value={0}>Monitor 1 (primário)</option>
+                    )}
+                  </select>
+                </div>
+              )}
+            </>
+          )}
+
+          <span className="mx-0.5 h-4 w-px bg-border" />
           <Button variant="danger" size="sm" onClick={handleStop} title="Encerra todas as sessões ativas e fecha esta janela">Fechar</Button>
           <ThemeToggle />
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex items-center gap-1 px-4 py-1.5 bg-surface-light border-b border-border">
-        {tabs.map((tab) => (
-          <button
-            key={tab.key}
-            className={`px-3 py-1 text-xs rounded-t transition-colors ${
-              activeTab === tab.key
-                ? 'bg-surface-hover text-foreground'
-                : 'text-muted-foreground hover:text-foreground hover:bg-surface'
-            }`}
-            onClick={() => setActiveTab(tab.key)}
-          >
-            {tab.label}
-            {(tab.key === 'processes' || tab.key === 'services')
-              ? processSession && (
-                <span className="ml-1.5 inline-block w-1.5 h-1.5 rounded-full bg-success align-middle" title="Sessão ativa" />
-              )
-              : sessions[tab.key] && (
-                <span className="ml-1.5 inline-block w-1.5 h-1.5 rounded-full bg-success align-middle" title="Sessão ativa" />
-              )}
-          </button>
-        ))}
-        {/* Status bar info — controles de qualidade em tempo real (aba Tela) */}
-        {activeTab === 'screen' && screenSession && (
-        <div className="ml-auto flex items-center gap-3 text-xs text-muted-foreground">
-          {/* Auto/Manual toggle */}
-          <div className="flex items-center gap-1">
-            <button
-              className={`px-2 py-0.5 rounded text-xs font-medium transition-colors ${
-                autoMode
-                  ? 'bg-success/20 text-success border border-success/30'
-                  : 'bg-surface text-muted-foreground border border-border hover:text-foreground'
-              }`}
-              onClick={handleAutoToggle}
-              disabled={qualityChanging}
-              title={autoMode ? 'Modo automático: perfil define qualidade/codec/FPS e adapta à rede' : 'Clique para ativar modo automático'}
-            >
-              {autoMode ? '✓ Auto' : 'Auto'}
-            </button>
-            <button
-              className={`px-2 py-0.5 rounded text-xs font-medium transition-colors ${
-                !autoMode
-                  ? 'bg-accent/20 text-accent border border-accent/30'
-                  : 'bg-surface text-muted-foreground border border-border hover:text-foreground'
-              }`}
-              onClick={() => { if (autoMode) handleAutoToggle(); }}
-              disabled={qualityChanging}
-              title="Modo manual: escolha codec, qualidade e FPS"
-            >
-              Manual
-            </button>
-          </div>
 
-          {/* Em Auto: nenhum controle/badge de qualidade (o agent adapta sozinho).
-              Em Manual: controles finos. */}
-          {!autoMode && (
-            <>
-              {/* Codec selector — Manual */}
-              <div className="flex items-center gap-0.5">
-                <Film className="mr-1 h-3.5 w-3.5 text-muted" aria-hidden />
-                <select
-                  className="bg-surface border border-border rounded px-1 py-0.5 text-xs text-foreground cursor-pointer hover:border-border-strong disabled:opacity-50"
-                  value={liveCodec}
-                  disabled={qualityChanging}
-                  onChange={(e) => handleCodecChange(e.target.value as NonNullable<ChangeQualityRequest['codec']>)}
-                  title="Escolha o codec"
-                >
-                  {CODECS.map((c) => (
-                    <option key={c.value} value={c.value}>{c.label}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Image quality selector (compressão) — Manual */}
-              <div className="flex items-center gap-0.5">
-                <Image className="mr-1 h-3.5 w-3.5 text-muted" aria-hidden />
-                <select
-                  className="bg-surface border border-border rounded px-1 py-0.5 text-xs text-foreground cursor-pointer hover:border-border-strong disabled:opacity-50"
-                  value={liveImageQuality ?? ''}
-                  disabled={qualityChanging}
-                  onChange={(e) => handleImageQualityChange(Number(e.target.value))}
-                  title="Qualidade da imagem (compressão)"
-                >
-                  {liveImageQuality === null && (
-                    <option value="" disabled>Auto</option>
-                  )}
-                  {IMAGE_QUALITY_PRESETS.map((iq) => (
-                    <option key={iq.value} value={iq.value}>{iq.label}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* FPS selector — Manual */}
-              <div className="flex items-center gap-0.5">
-                <Gauge className="mr-1 h-3.5 w-3.5 text-muted" aria-hidden />
-                <select
-                  className="bg-surface border border-border rounded px-1 py-0.5 text-xs text-foreground cursor-pointer hover:border-border-strong disabled:opacity-50"
-                  value={liveMaxFps}
-                  disabled={qualityChanging}
-                  onChange={(e) => handleFpsChange(Number(e.target.value))}
-                  title="Taxa máxima de quadros por segundo"
-                >
-                  {FPS_PRESETS.map((f) => (
-                    <option key={f.value} value={f.value}>{f.label} FPS</option>
-                  ))}
-                </select>
-              </div>
-            </>
-          )}
-
-          {/* Monitor selector — troca o monitor capturado (reinicia a sessão de tela) */}
-          <div className="flex items-center gap-0.5">
-            <Monitor className="mr-1 h-3.5 w-3.5 text-muted" aria-hidden />
-            <select
-              className="bg-surface border border-border rounded px-1 py-0.5 text-xs text-foreground cursor-pointer hover:border-border-strong disabled:opacity-50"
-              value={monitorIndex}
-              disabled={monitorChanging}
-              onChange={(e) => handleMonitorChange(Number(e.target.value))}
-              title="Monitor capturado (0 = primário). Trocar reinicia a sessão de tela."
-            >
-              {monitors.length > 0 ? (
-                monitors.map((m) => (
-                  <option key={m.index} value={m.index}>
-                    {m.isPrimary ? 'Monitor 1 (primário)' : `Monitor ${m.index + 1}`} — {m.width}x{m.height}
-                  </option>
-                ))
-              ) : (
-                <option value={0}>Monitor 1 (primário)</option>
-              )}
-            </select>
-          </div>
-        </div>
-        )}
-      </div>
-
-      {/* Main content area */}
       {/* min-h-0: sem ele, o flex-1 não encolhe abaixo do conteúdo (canvas) e o
           viewer calcula o fit com uma altura maior que a viewport — ao reduzir a
           ALTURA da janela a tela remota não redimensionava. */}
@@ -1494,7 +1740,7 @@ export default function RemoteSession() {
       </div>
 
       {/* Barra de rodapé unificada — Reconectar/Encerrar da aba ativa + gravação */}
-      <div className="flex items-center gap-2 px-3 py-1.5 bg-surface border-t border-border text-xs">
+      <div className={`flex items-center gap-2 px-2 py-1.5 bg-surface border-t border-border text-xs ${screenFullscreen && activeTab === 'screen' && screenSession ? 'hidden' : ''}`}>
         {/* Mesmo sem sessão ativa, se houver conflito (sessão presa no agent) o
             botão "Forçar conexão" permanece acessível para sobrepor. */}
         {activeSession && (
@@ -1503,15 +1749,17 @@ export default function RemoteSession() {
               className="px-2 py-1 bg-surface-hover hover:bg-border text-foreground rounded"
               onClick={() => handleReconnect(activeTab)}
               title={`Reconectar a sessão de ${activeTab}`}
+              aria-label={`Reconectar a sessão de ${activeTab}`}
             >
-              ⟳ Reconectar
+              ⟳
             </button>
             <button
               className="px-2 py-1 bg-danger/70 hover:bg-danger text-white rounded"
               onClick={() => stopTabSession(activeTab)}
               title={`Encerrar a sessão de ${activeTab}`}
+              aria-label={`Encerrar a sessão de ${activeTab}`}
             >
-              ⏹ Encerrar
+              ⏹
             </button>
             <span className="mx-1 h-4 w-px bg-border" />
           </>
@@ -1568,17 +1816,29 @@ export default function RemoteSession() {
             <button
               className="px-2 py-1 bg-surface-hover hover:bg-border text-foreground rounded"
               onClick={() => setScreenScale((s) => (s === 'fit' ? '100%' : 'fit'))}
-              title="Alternar escala (Fit / 1:1)"
+              title={screenScale === 'fit' ? 'Escala: Fit (clique para 1:1)' : 'Escala: 1:1 (clique para Fit)'}
+              aria-label={screenScale === 'fit' ? 'Escala Fit; alternar para 1:1' : 'Escala 1:1; alternar para Fit'}
             >
-              {screenScale === 'fit' ? '⊡ Fit' : '⊡ 1:1'}
+              {screenScale === 'fit' ? '⊡' : '1:1'}
             </button>
             <button
               className="px-2 py-1 bg-surface-hover hover:bg-border text-foreground rounded"
               onClick={toggleScreenFullscreen}
-              title="Fullscreen (Ctrl+F)"
+              title="Tela cheia imersiva (Ctrl+F)"
+              aria-label="Alternar tela cheia imersiva"
             >
-              {screenFullscreen ? '⛶ Exit' : '⛶ Full'}
+              {screenFullscreen ? '⤢' : '⛶'}
             </button>
+
+          </>
+        )}
+
+        {/* Grupo direito do rodapé: entrada (Teclas / Bloquear) + Chat.
+            Antes Teclas/Bloquear ficavam à esquerda, longe do Chat e no meio
+            dos controles da tela; agora ficam juntos e ancorados à direita. */}
+        <div className="ml-auto flex items-center gap-2">
+          {activeTab === 'screen' && screenSession && (
+            <>
             <span className="mx-1 h-4 w-px bg-border" />
             {/* Bloqueio da entrada da MÁQUINA REMOTA (KVM lock). O indicador
                 reflete o estado autoritativo do agent; destrava sozinho se a
@@ -1608,7 +1868,7 @@ export default function RemoteSession() {
                 <div
                   role="dialog"
                   aria-label="Confirmar bloqueio de entrada"
-                  className="absolute bottom-full left-0 z-30 mb-1 w-64 rounded border border-border bg-surface p-2 text-xs shadow-lg"
+                  className="absolute bottom-full right-0 z-30 mb-1 w-64 rounded border border-border bg-surface p-2 text-xs shadow-lg"
                 >
                   <p className="mb-1.5 text-foreground">
                     Travar o teclado e o mouse da <strong>máquina remota</strong>?
@@ -1654,7 +1914,7 @@ export default function RemoteSession() {
                 <div
                   role="menu"
                   aria-label="Teclas especiais"
-                  className="absolute bottom-full left-0 z-30 mb-1 max-h-72 w-64 overflow-auto rounded border border-border bg-surface p-1.5 text-xs shadow-lg"
+                  className="absolute bottom-full right-0 z-30 mb-1 max-h-72 w-64 overflow-auto rounded border border-border bg-surface p-1.5 text-xs shadow-lg"
                 >
                   {SPECIAL_KEY_GROUPS.map((group) => (
                     <div key={group.title} className="mb-1.5 last:mb-0">
@@ -1689,26 +1949,21 @@ export default function RemoteSession() {
                 </div>
               )}
             </div>
-          </>
-        )}
-
-        {/* Chat de suporte com a MESMA máquina desta sessão remota. Fica
-            ancorado à direita da barra (ml-auto) para não competir com os
-            controles da aba ativa. O gate de permissão fica no próprio painel
-            do chat (como nas demais janelas dedicadas): aqui o lançador só
-            precisa do agent. */}
-        {agentId && (
-          <button
-            type="button"
-            className="ml-auto inline-flex items-center gap-1 px-2 py-1 bg-surface-hover hover:bg-border text-foreground rounded"
-            onClick={handleOpenSupportChat}
-            title="Abrir o chat de suporte com esta máquina"
-            aria-label="Abrir o chat de suporte com esta máquina"
-          >
-            <MessageSquare className="h-3.5 w-3.5" />
-            Chat
-          </button>
-        )}
+            </>
+          )}
+          {agentId && (
+            <button
+              type="button"
+              className="inline-flex items-center gap-1 px-2 py-1 bg-surface-hover hover:bg-border text-foreground rounded"
+              onClick={handleOpenSupportChat}
+              title="Abrir o chat de suporte com esta máquina"
+              aria-label="Abrir o chat de suporte com esta máquina"
+            >
+              <MessageSquare className="h-3.5 w-3.5" />
+              <span className="hidden xl:inline">Chat</span>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Aviso de conflito de sessão — já existe conexão ativa no agent */}
@@ -1741,6 +1996,20 @@ export default function RemoteSession() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Saída do fullscreen imersivo: as barras estão ocultas, então este
+          botão flutuante garante uma saída visível (Esc também funciona). */}
+      {screenFullscreen && activeTab === 'screen' && (
+        <button
+          type="button"
+          className="absolute top-2 left-2 z-50 inline-flex h-7 w-7 items-center justify-center rounded bg-surface/70 text-sm text-foreground opacity-70 shadow ring-1 ring-border backdrop-blur-sm transition-opacity hover:bg-surface hover:opacity-100"
+          onClick={toggleScreenFullscreen}
+          title="Sair da tela cheia (Esc)"
+          aria-label="Sair da tela cheia"
+        >
+          ⤢
+        </button>
       )}
 
       {/* Error toast */}

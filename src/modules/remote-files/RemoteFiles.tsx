@@ -773,7 +773,7 @@ export default function RemoteFiles({
   return (
     <div className="flex flex-col h-full bg-background text-foreground">
       {/* Toolbar */}
-      <div className="flex items-center gap-1 px-3 py-1.5 bg-surface border-b border-border text-xs">
+      <div className="flex items-center gap-1 px-3 py-1 bg-surface border-b border-border text-xs">
         <FileIcon isDir />
         <input
           value={pathInput}
@@ -950,8 +950,8 @@ export default function RemoteFiles({
                   onClick={() => navigateTo('..')}
                   onContextMenu={(e) => openContextMenu(e, null)}
                 >
-                  <td className="px-3 py-2"><FileIcon parent /></td>
-                  <td className="px-3 py-2 text-muted-foreground">..</td>
+                  <td className="px-3 py-1.5"><FileIcon parent /></td>
+                  <td className="px-3 py-1.5 text-muted-foreground">..</td>
                   <td></td><td></td>
                 </tr>
               )}
@@ -962,8 +962,8 @@ export default function RemoteFiles({
                   onClick={(e) => handleRowClick(f, e)}
                   onContextMenu={(e) => openContextMenu(e, f)}
                 >
-                  <td className="px-3 py-2 whitespace-nowrap"><FileIcon name={f.name} isDir={f.isDir} isLink={f.isLink} isHidden={f.isHidden} /></td>
-                  <td className="px-3 py-2 font-mono whitespace-nowrap" title={f.isLink && f.linkTarget ? `${f.name} → ${f.linkTarget}` : f.isHidden ? `${f.name} (oculto)` : f.name}>
+                  <td className="px-3 py-1.5 whitespace-nowrap"><FileIcon name={f.name} isDir={f.isDir} isLink={f.isLink} isHidden={f.isHidden} /></td>
+                  <td className="px-3 py-1.5 font-mono whitespace-nowrap" title={f.isLink && f.linkTarget ? `${f.name} → ${f.linkTarget}` : f.isHidden ? `${f.name} (oculto)` : f.name}>
                     {f.name}
                     {f.isHidden && (
                       <span
@@ -982,8 +982,8 @@ export default function RemoteFiles({
                       </span>
                     )}
                   </td>
-                  <td className="px-3 py-2 text-right text-muted font-mono text-xs">{f.isDir ? '—' : formatSize(f.size)}</td>
-                  <td className="px-3 py-2 text-right text-muted text-xs">{f.modTime.slice(0, 10)}</td>
+                  <td className="px-3 py-1.5 text-right text-muted font-mono text-xs">{f.isDir ? '—' : formatSize(f.size)}</td>
+                  <td className="px-3 py-1.5 text-right text-muted text-xs">{f.modTime.slice(0, 10)}</td>
                 </tr>
               ))}
             </tbody>

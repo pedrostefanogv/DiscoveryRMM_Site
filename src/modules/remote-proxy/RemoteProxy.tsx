@@ -10,6 +10,13 @@ interface RemoteProxyProps {
 
 type ProxyStatus = 'idle' | 'loading' | 'loaded' | 'blocked' | 'error';
 
+// Acessos rápidos exibidos no select compacto da barra de URL.
+const QUICK_LINKS = [
+  { label: 'Roteador', url: 'http://192.168.1.1/' },
+  { label: 'Router Alt', url: 'http://192.168.0.1/' },
+  { label: 'Impressora', url: 'http://192.168.1.100/' },
+] as const;
+
 export default function RemoteProxy({ sessionId: _sessionId, agentId: _agentId }: RemoteProxyProps) {
   const [url, setUrl] = useState('');
   const [proxyUrl, setProxyUrl] = useState('');
@@ -40,7 +47,7 @@ export default function RemoteProxy({ sessionId: _sessionId, agentId: _agentId }
 
   return (
     <div className="flex flex-col h-full bg-background text-foreground">
-      {/* URL bar */}
+      {/* URL bar (faixa única) com acessos rápidos em select */}
       <div className="flex items-center gap-2 px-3 py-2 bg-surface border-b border-border">
         <form onSubmit={handleSubmit} className="flex flex-1 items-center gap-2">
           <span className="text-muted text-sm">🔗</span>
@@ -57,25 +64,20 @@ export default function RemoteProxy({ sessionId: _sessionId, agentId: _agentId }
           >
             Navegar
           </button>
+          <div className="flex shrink-0 items-center gap-1" role="group" aria-label="Acessos rápidos">
+            {QUICK_LINKS.map(q => (
+              <button
+                key={q.url}
+                type="button"
+                className="rounded px-2 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground"
+                title={`${q.label} — ${q.url}`}
+                onClick={() => { setUrl(q.url); navigate(q.url); }}
+              >
+                {q.label}
+              </button>
+            ))}
+          </div>
         </form>
-      </div>
-
-      {/* Quick links */}
-      <div className="flex gap-1 px-3 py-2 bg-surface-light border-b border-border text-xs">
-        <span className="text-muted mr-2">Acessos rápidos:</span>
-        {[
-          { label: 'Roteador', url: 'http://192.168.1.1/' },
-          { label: 'Router Alt', url: 'http://192.168.0.1/' },
-          { label: 'Impressora', url: 'http://192.168.1.100/' },
-        ].map(q => (
-          <button
-            key={q.url}
-            className="px-2 py-0.5 bg-surface text-muted-foreground rounded hover:bg-surface-hover hover:text-foreground transition-colors"
-            onClick={() => { setUrl(q.url); navigate(q.url); }}
-          >
-            {q.label}
-          </button>
-        ))}
       </div>
 
       {/* Status */}

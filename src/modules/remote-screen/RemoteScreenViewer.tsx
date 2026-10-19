@@ -150,6 +150,17 @@ export default function RemoteScreenViewer({
   const cursorBoxRef = useRef<{ x: number; y: number; w: number; h: number } | null>(null);
   const infoOverlayRef = useRef<HTMLDivElement | null>(null);
   const [infoHovered, setInfoHovered] = useState(false);
+  // Se o ponteiro sair da janela (ou a janela perder o foco) sem um novo
+  // mousemove, o painel expandido ficaria preso aberto sobre a tela remota.
+  useEffect(() => {
+    const reset = () => setInfoHovered(false);
+    document.addEventListener('mouseleave', reset);
+    window.addEventListener('blur', reset);
+    return () => {
+      document.removeEventListener('mouseleave', reset);
+      window.removeEventListener('blur', reset);
+    };
+  }, []);
   const [rtt, setRtt] = useState<number>(0);
   const [fps, setFps] = useState<number>(0);
   const [isPaused, setIsPaused] = useState(false);
@@ -1274,26 +1285,37 @@ export default function RemoteScreenViewer({
         tabIndex={0}
       />
 
-      {/* Info overlay — métricas locais + do agent.
-           Fica quase transparente quando o mouse passa sobre a região,
-           sem bloquear cliques (pointer-events-none). O hover é detectado
-           via coordenadas do mousemove já capturado pelo componente. */}
+      {/* Info overlay — telemetria compacta em 1 linha (FPS, RTT e, com
+           agentMetrics, resolução/qualidade). Ao passar o mouse sobre a
+           região, o estado infoHovered (detectado via coordenadas do
+           mousemove já capturado pelo componente) expande os detalhes:
+           FPS do agent, compressão, encode, frames e total.
+           pointer-events-none preservado: o overlay nunca bloqueia cliques. */}
       <div
         ref={infoOverlayRef}
-        className={`absolute top-2 right-2 flex flex-col gap-1 text-xs bg-surface/70 rounded px-2 py-1.5 backdrop-blur-sm pointer-events-none transition-all duration-300 ${infoHovered ? '!opacity-[0.12] !bg-transparent !backdrop-blur-none' : ''}`}
+        className="absolute top-2 right-2 flex flex-col gap-1 text-xs bg-surface/70 rounded px-2 py-1.5 backdrop-blur-sm pointer-events-none transition-all duration-300"
       >
-        <div className="flex items-center gap-3">
+        <div className="flex max-w-[420px] flex-wrap items-center gap-x-3 gap-y-0.5">
           <span className="text-success font-medium">{fps} FPS</span>
           <span className="text-muted-foreground">{rtt}ms</span>
           {connectionState === 'connecting' && <span className="text-warning animate-pulse">conectando…</span>}
           {connectionState === 'error' && <span className="text-danger">desconectado</span>}
           {isPaused && <span className="text-warning">⏸</span>}
+          {agentMetrics && (
+            <>
+              <span title="Resolução">📐 {agentMetrics.resolution}</span>
+              <span title="Qualidade JPEG">🖼 {agentMetrics.imageQuality}%</span>
+            </>
+          )}
+          {agentMetrics && !infoHovered && (
+            <span className="text-[10px] text-muted-foreground/70" title="Passe o mouse para ver detalhes">
+              ⋯
+            </span>
+          )}
         </div>
-        {agentMetrics && (
-          <div className="flex items-center gap-3 text-[10px] text-muted">
-            <span title="Resolução">📐 {agentMetrics.resolution}</span>
+        {agentMetrics && infoHovered && (
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-muted border-t border-white/10 pt-1 max-w-[360px]">
             <span title="FPS do agent (efetivo/perfil)">🎯 {agentMetrics.effectiveFps}/{agentMetrics.profileFps}FPS</span>
-            <span title="Qualidade JPEG">🖼 {agentMetrics.imageQuality}%</span>
             <span title={`Compressão ${agentMetrics.compressionRatio?.toFixed(1)}:1`}>
               🗜 {agentMetrics.compressionRatio?.toFixed(1)}:1
             </span>

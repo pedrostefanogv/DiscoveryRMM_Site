@@ -222,7 +222,7 @@ export function RemoteServices({ natsSubject, natsUrl, jwt }: RemoteServicesProp
     return (
         <div className="h-full flex flex-col min-h-0 bg-background" onContextMenu={(e) => e.preventDefault()}>
             {/* Barra de ações: busca + atualizar */}
-            <div className="flex items-center gap-1 px-3 py-2 border-b border-border">
+            <div className="flex items-center gap-1 px-3 py-1.5 border-b border-border">
                 <span className="text-sm text-muted-foreground">⚙ Serviços ({services.length})</span>
                 <div className="flex-1" />
                 <input
