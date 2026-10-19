@@ -2732,7 +2732,11 @@ export interface CompleteUploadRequest {
 
 export interface TicketAttachmentSettings {
   enabled: boolean;
+  /** Limite por arquivo nas conversas (comentários, chat do chamado, suporte e IA/LLM). */
   maxFileSizeBytes: number;
+  /** Limite por arquivo no repositório/aba Anexos do chamado (upload grande). */
+  maxLargeFileSizeBytes: number;
+  /** Allowlist ÚNICA de MIME types, aplicada em todos os contextos. */
   allowedContentTypes: string[];
   presignedUploadUrlTtlMinutes: number;
 }

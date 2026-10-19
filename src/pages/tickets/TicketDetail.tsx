@@ -41,7 +41,7 @@ import { useAgentsByClient, useAgentsBySite } from '@/hooks/useAgents';
 import { describeSlaPause, hasPausedShift, resolveSlaExpiryDisplay } from './slaDisplay';
 import { useTicketAnswers } from '@/hooks/useTicketAnswers';
 import { useAutomationTasks } from '@/hooks/useAutomation';
-import { useTicketAttachmentSettings, useServerConfig } from '@/hooks/useConfigurationApi';
+import { useTicketAttachmentSettings } from '@/hooks/useConfigurationApi';
 import { useSiteTicketAttachmentSettings, useClientTicketAttachmentSettings } from '@/hooks/useConfigurationApi';
 import { useWorkflowStates } from '@/hooks/useWorkflow';
 import { useIamUsers } from '@/hooks/useIdentity';
@@ -2164,15 +2164,16 @@ function CommentForm({
   const [isInternal, setIsInternal] = useState(false);
 
   // Anexos do comentário = nível CONVERSA (EntityType "TicketComment"): o
-  // arquivo pertence ao COMENTÁRIO, com limite próprio do servidor (10 MB por
-  // padrão, imagens + PDF). O repositório do chamado (aba Anexos) é outra
-  // família e continua sendo o destino de arquivos grandes/resumíveis.
+  // arquivo pertence ao COMENTÁRIO e usa o TicketAttachmentSettings UNIFICADO
+  // (mesma allowlist de todos os contextos) com o limite de conversas
+  // (maxFileSizeBytes, 10 MB por padrão). O repositório do chamado (aba Anexos)
+  // é outra família e continua sendo o destino de arquivos grandes/resumíveis.
   //
   // O comentário precisa existir antes do anexo (o pai é o comentário), então o
   // envio acontece depois do POST do comentário, com o id devolvido.
   const prepareCommentUpload = usePrepareCommentUpload();
   const completeCommentUpload = useCompleteCommentUpload();
-  const serverConfig = useServerConfig();
+  const attachmentSettingsQuery = useTicketAttachmentSettings();
   const fileRef = useRef<HTMLInputElement>(null);
   type PendingFile = {
     key: string;
@@ -2184,22 +2185,24 @@ function CommentForm({
   const [pending, setPending] = useState<PendingFile[]>([]);
   const uploading = pending.some((item) => item.status === 'uploading');
 
-  // Limite/tipos do nível conversa vêm da configuração do servidor
-  // (ServerConfiguration.AttachmentComment*), editável no console.
+  // Limite/tipos do nível conversa vêm do TicketAttachmentSettings unificado
+  // (comentários, chat do chamado, chat de suporte e chat de IA/LLM).
+  const commentAttachmentsEnabled = attachmentSettingsQuery.data?.enabled !== false;
+
   const commentLimitBytes = useMemo(() => {
-    const raw = (serverConfig.data as { attachmentCommentMaxFileSizeBytes?: number } | undefined)
-      ?.attachmentCommentMaxFileSizeBytes;
+    const raw = attachmentSettingsQuery.data?.maxFileSizeBytes;
     return typeof raw === 'number' && raw > 0 ? raw : 10 * 1024 * 1024;
-  }, [serverConfig.data]);
+  }, [attachmentSettingsQuery.data]);
 
   const commentAllowedTypes = useMemo(() => {
-    const raw = (serverConfig.data as { attachmentCommentAllowedContentTypes?: string } | undefined)
-      ?.attachmentCommentAllowedContentTypes;
-    return (raw ?? 'image/jpeg,image/png,image/webp,application/pdf')
-      .split(',')
-      .map((value) => value.trim().toLowerCase())
-      .filter(Boolean);
-  }, [serverConfig.data]);
+    const raw = attachmentSettingsQuery.data?.allowedContentTypes;
+    const types = Array.isArray(raw)
+      ? raw.map((value) => value.trim().toLowerCase()).filter(Boolean)
+      : [];
+    return types.length > 0
+      ? types
+      : ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+  }, [attachmentSettingsQuery.data]);
 
   const uploadOne = async (commentId: string, entry: PendingFile) => {
     const { file } = entry;
@@ -2251,6 +2254,10 @@ function CommentForm({
 
   const handleFiles = (files: FileList | File[] | null) => {
     if (!files) return;
+    if (!commentAttachmentsEnabled) {
+      toast.error('Anexos estão desabilitados nas configurações do servidor.');
+      return;
+    }
     Array.from(files).forEach((file) => {
       const contentType = (file.type || '').toLowerCase();
       const key = `${file.name}:${file.size}:${Date.now()}:${Math.random().toString(16).slice(2)}`;
@@ -2404,8 +2411,12 @@ function CommentForm({
             size="sm"
             variant="ghost"
             onClick={() => fileRef.current?.click()}
-            disabled={uploading}
-            title="Anexar arquivo ou print (ou cole com Ctrl+V)"
+            disabled={uploading || !commentAttachmentsEnabled}
+            title={
+              commentAttachmentsEnabled
+                ? `Anexar arquivo ou print (ou cole com Ctrl+V). Limite: ${formatBytes(commentLimitBytes)}`
+                : 'Anexos desabilitados nas configurações do servidor'
+            }
           >
             <Paperclip className="h-4 w-4" /> Anexar
           </Button>
@@ -2847,8 +2858,10 @@ function AttachmentsPanel({
   const cfg = settings.data;
   const isEnabled = cfg?.enabled !== false;
 
+  // Allowlist ÚNICA (todos os contextos). O limite da aba Anexos/repositório
+  // do chamado é o de arquivos grandes (maxLargeFileSizeBytes, 2 GB padrão).
   const accept = cfg?.allowedContentTypes?.join(',') ?? 'image/jpeg,image/png,image/webp,application/pdf';
-  const maxBytes = cfg?.maxFileSizeBytes ?? 10485760;
+  const maxBytes = cfg?.maxLargeFileSizeBytes ?? 2147483648;
 
   const handleFiles = (files: FileList | null) => {
     if (!files || !isEnabled) return;

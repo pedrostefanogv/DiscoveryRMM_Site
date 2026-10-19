@@ -450,6 +450,10 @@ export function useUpdateTicketAttachmentSettings() {
       queryClient.invalidateQueries({
         queryKey: configurationQueryKeys.ticketAttachmentSettings,
       });
+      // ConfigHealthCard/edições avançadas leem ticketAttachmentSettingsJson
+      // pelo endpoint de configuração do servidor: sem invalidar, os limites
+      // recém-salvos no card apareciam desatualizados até um refresh manual.
+      queryClient.invalidateQueries({ queryKey: configurationQueryKeys.server });
     },
   });
 }

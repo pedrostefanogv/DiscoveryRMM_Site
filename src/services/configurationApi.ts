@@ -376,6 +376,7 @@ export function parseTicketAttachmentSettings(jsonValue: unknown): TicketAttachm
   const defaults: TicketAttachmentSettings = {
     enabled: true,
     maxFileSizeBytes: 10485760,
+    maxLargeFileSizeBytes: 2147483648,
     allowedContentTypes: ["image/jpeg", "image/png", "image/webp", "application/pdf"],
     presignedUploadUrlTtlMinutes: 15,
   };

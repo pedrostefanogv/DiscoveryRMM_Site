@@ -42,6 +42,18 @@ const STATUS_CLASSES: Record<HealthStatus, string> = {
   unknown: statusSurface.neutral,
 };
 
+/** Limite em MB (conversas) — arredonda para o inteiro mais próximo. */
+function formatConversationLimit(bytes: number): string {
+  const mb = Math.max(1, Math.round(bytes / (1024 * 1024)));
+  return `${mb} MB`;
+}
+
+/** Limite em GB (repositório/aba Anexos) — 1 casa decimal, sem ".0". */
+function formatLargeLimit(bytes: number): string {
+  const gb = bytes / (1024 * 1024 * 1024);
+  return `${Number.isInteger(gb) ? gb.toFixed(0) : gb.toFixed(1)} GB`;
+}
+
 function statusIcon(status: HealthStatus) {
   if (status === "ok") return <CheckCircle2 className="h-4 w-4 shrink-0" />;
   if (status === "error") return <XCircle className="h-4 w-4 shrink-0" />;
@@ -167,7 +179,7 @@ export function ConfigHealthCard({ config }: { config: ServerConfiguration | und
       status: attachments.enabled ? (storageConfigured ? "ok" : "warn") : "warn",
       detail: attachments.enabled
         ? storageConfigured
-          ? `Habilitado — máx. ${Math.round(attachments.maxFileSizeBytes / (1024 * 1024))} MB`
+          ? `Habilitado — conversas até ${formatConversationLimit(attachments.maxFileSizeBytes)} · anexos grandes até ${formatLargeLimit(attachments.maxLargeFileSizeBytes)}`
           : "Habilitado, mas sem Object Storage configurado"
         : "Desabilitado",
     },

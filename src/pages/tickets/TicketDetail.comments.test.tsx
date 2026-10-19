@@ -151,7 +151,14 @@ vi.mock("@/services/configurationApi", async (importOriginal) => {
 
   return {
     ...actual,
-    getTicketAttachmentSettings: () => Promise.resolve({ enabled: false }),
+    getTicketAttachmentSettings: () =>
+      Promise.resolve({
+        enabled: true,
+        maxFileSizeBytes: 10485760,
+        maxLargeFileSizeBytes: 2147483648,
+        allowedContentTypes: ["image/jpeg", "image/png", "image/webp", "application/pdf"],
+        presignedUploadUrlTtlMinutes: 15,
+      }),
   };
 });
 

@@ -264,3 +264,67 @@ describe("página inicial do agent (agentHomeTab)", () => {
     expect(fieldDefault("select")).toBe("status");
   });
 });
+
+describe("validação de TicketAttachmentSettingsJson", () => {
+  const base = {
+    enabled: true,
+    maxFileSizeBytes: 10485760,
+    maxLargeFileSizeBytes: 2147483648,
+    allowedContentTypes: ["image/png"],
+    presignedUploadUrlTtlMinutes: 15,
+  };
+
+  it("aceita o payload completo com maxLargeFileSizeBytes", () => {
+    expect(
+      validateFieldValue(
+        "json",
+        JSON.stringify(base),
+        "ticketAttachmentSettingsJson",
+      ),
+    ).toBe(true);
+  });
+
+  it("mantém retrocompatibilidade quando maxLargeFileSizeBytes está ausente", () => {
+    const { maxLargeFileSizeBytes: _omit, ...legacy } = base;
+    expect(
+      validateFieldValue(
+        "json",
+        JSON.stringify(legacy),
+        "ticketAttachmentSettingsJson",
+      ),
+    ).toBe(true);
+  });
+
+  it("rejeita maxLargeFileSizeBytes menor que maxFileSizeBytes", () => {
+    const result = validateFieldValue(
+      "json",
+      JSON.stringify({ ...base, maxLargeFileSizeBytes: 1024 * 1024 }),
+      "ticketAttachmentSettingsJson",
+    );
+    expect(result).not.toBe(true);
+    expect(String(result)).toMatch(/MaxLargeFileSizeBytes/);
+  });
+
+  it("rejeita maxLargeFileSizeBytes acima de 10GB", () => {
+    const result = validateFieldValue(
+      "json",
+      JSON.stringify({ ...base, maxLargeFileSizeBytes: 11 * 1024 * 1024 * 1024 }),
+      "ticketAttachmentSettingsJson",
+    );
+    expect(result).not.toBe(true);
+  });
+
+  it("aceita maxLargeFileSizeBytes igual ao limite das conversas", () => {
+    expect(
+      validateFieldValue(
+        "json",
+        JSON.stringify({
+          ...base,
+          maxFileSizeBytes: 1024 * 1024 * 1024,
+          maxLargeFileSizeBytes: 1024 * 1024 * 1024,
+        }),
+        "ticketAttachmentSettingsJson",
+      ),
+    ).toBe(true);
+  });
+});

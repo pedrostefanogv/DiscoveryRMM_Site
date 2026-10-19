@@ -550,38 +550,12 @@ export const serverEditableFields: EditableField[] = [
     description:
       "Valida o certificado TLS do endpoint. Desative apenas em ambientes de desenvolvimento com certificados autoassinados.",
   },
-  // ── Anexos por nível (comentário x repositório do chamado) ─────────────
-  // Comentário = conversa (pequeno, com miniatura); chamado = repositório de
-  // arquivos grandes (upload resumível). Os limites ficam no servidor e são
-  // herdados por cliente/site.
-  {
-    key: "attachmentCommentMaxFileSizeBytes",
-    label: "Anexo de comentário — tamanho máx. (bytes)",
-    kind: "number",
-    group: "storage",
-    description: "Limite por arquivo no fluxo de comentários. Padrão: 10485760 (10 MB). Acima disso a UI avisa e sugere enviar em Anexos do chamado.",
-  },
-  {
-    key: "attachmentCommentAllowedContentTypes",
-    label: "Anexo de comentário — tipos permitidos",
-    kind: "string",
-    group: "storage",
-    description: "Lista separada por vírgula (ex.: image/jpeg,image/png,image/webp,application/pdf).",
-  },
-  {
-    key: "attachmentTicketMaxFileSizeBytes",
-    label: "Anexo do chamado — tamanho máx. (bytes)",
-    kind: "number",
-    group: "storage",
-    description: "Repositório de arquivos grandes do chamado. Padrão: 2147483648 (2 GB). Máximo: 10737418240 (10 GB) — mesmo teto do nginx. Acima de ~64 MB o upload usa multipart com retomada.",
-  },
-  {
-    key: "attachmentTicketAllowedContentTypes",
-    label: "Anexo do chamado — tipos permitidos",
-    kind: "string",
-    group: "storage",
-    description: "Lista separada por vírgula (imagens, PDF, zip/7z, exe/msi, log/txt/csv, octet-stream...).",
-  },
+  // ── Anexos do chamado ──────────────────────────────────────────────────
+  // Limites/tipos e allowlist são editados no card dedicado "Anexos de
+  // Tickets" (TicketAttachmentSettingsJson). As colunas antigas
+  // attachmentComment*/attachmentTicket* continuam existindo na API apenas
+  // para compatibilidade e são sincronizadas por esse card — por isso não são
+  // expostas aqui (editá-las não teria efeito sobre a configuração efetiva).
   {
     key: "attachmentTicketTotalQuotaBytes",
     label: "Anexos do chamado — cota total (bytes)",
@@ -1058,6 +1032,13 @@ export function validateFieldValue(
 
         const payload = parsed as Record<string, unknown>;
         const maxFileSizeBytes = Number(payload.maxFileSizeBytes);
+        // Campo novo (limite do repositório/aba Anexos). Ausente = payload
+        // legado: mantém a retrocompatibilidade e não exige o campo.
+        const hasMaxLargeFileSize =
+          payload.maxLargeFileSizeBytes !== undefined &&
+          payload.maxLargeFileSizeBytes !== null &&
+          payload.maxLargeFileSizeBytes !== "";
+        const maxLargeFileSizeBytes = Number(payload.maxLargeFileSizeBytes);
         const presignedTtl = Number(payload.presignedUploadUrlTtlMinutes);
         const allowedContentTypes = payload.allowedContentTypes;
 
@@ -1067,6 +1048,20 @@ export function validateFieldValue(
           maxFileSizeBytes > 1024 * 1024 * 1024
         ) {
           return "MaxFileSizeBytes deve ser maior que 0 e menor ou igual a 1GB";
+        }
+
+        if (hasMaxLargeFileSize) {
+          if (
+            Number.isNaN(maxLargeFileSizeBytes) ||
+            maxLargeFileSizeBytes <= 0 ||
+            maxLargeFileSizeBytes > 10 * 1024 * 1024 * 1024
+          ) {
+            return "MaxLargeFileSizeBytes deve ser maior que 0 e menor ou igual a 10GB";
+          }
+
+          if (maxLargeFileSizeBytes < maxFileSizeBytes) {
+            return "MaxLargeFileSizeBytes deve ser maior ou igual a MaxFileSizeBytes";
+          }
         }
 
         if (Number.isNaN(presignedTtl) || presignedTtl < 1 || presignedTtl > 120) {

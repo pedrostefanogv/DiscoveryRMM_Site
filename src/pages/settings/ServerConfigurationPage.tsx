@@ -1552,28 +1552,109 @@ const ALLOWED_TYPES_DEFAULT = [
   "application/pdf",
 ];
 
-const MIME_PRESETS: { label: string; value: string }[] = [
-  { label: "JPEG", value: "image/jpeg" },
-  { label: "PNG", value: "image/png" },
-  { label: "WebP", value: "image/webp" },
-  { label: "GIF", value: "image/gif" },
-  { label: "PDF", value: "application/pdf" },
-  { label: "Word", value: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" },
-  { label: "Excel", value: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" },
-  { label: "ZIP", value: "application/zip" },
-  { label: "Texto", value: "text/plain" },
-  { label: "CSV", value: "text/csv" },
+// Presets AGRUPADOS por categoria. A allowlist salva é uma só (vale para
+// conversas e para o repositório do chamado); o agrupamento é apenas de UI.
+const MIME_PRESET_GROUPS: {
+  title: string;
+  presets: { label: string; value: string }[];
+}[] = [
+  {
+    title: "Imagens",
+    presets: [
+      { label: "JPEG", value: "image/jpeg" },
+      { label: "PNG", value: "image/png" },
+      { label: "WebP", value: "image/webp" },
+      { label: "GIF", value: "image/gif" },
+      { label: "BMP", value: "image/bmp" },
+      { label: "TIFF", value: "image/tiff" },
+      { label: "SVG", value: "image/svg+xml" },
+      { label: "HEIC", value: "image/heic" },
+      { label: "AVIF", value: "image/avif" },
+    ],
+  },
+  {
+    title: "Office e documentos",
+    presets: [
+      { label: "PDF", value: "application/pdf" },
+      { label: "Word (DOC)", value: "application/msword" },
+      {
+        label: "Word (DOCX)",
+        value:
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      },
+      { label: "Excel (XLS)", value: "application/vnd.ms-excel" },
+      {
+        label: "Excel (XLSX)",
+        value:
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      },
+      { label: "PowerPoint (PPT)", value: "application/vnd.ms-powerpoint" },
+      {
+        label: "PowerPoint (PPTX)",
+        value:
+          "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      },
+      { label: "ODT", value: "application/vnd.oasis.opendocument.text" },
+      {
+        label: "ODS",
+        value: "application/vnd.oasis.opendocument.spreadsheet",
+      },
+      {
+        label: "ODP",
+        value: "application/vnd.oasis.opendocument.presentation",
+      },
+      { label: "RTF", value: "application/rtf" },
+      { label: "Texto", value: "text/plain" },
+      { label: "CSV", value: "text/csv" },
+      { label: "Markdown", value: "text/markdown" },
+      { label: "JSON", value: "application/json" },
+      { label: "XML", value: "application/xml" },
+    ],
+  },
+  {
+    title: "Compactados",
+    presets: [
+      { label: "ZIP", value: "application/zip" },
+      { label: "7-Zip", value: "application/x-7z-compressed" },
+      { label: "RAR", value: "application/x-rar-compressed" },
+      { label: "TAR", value: "application/x-tar" },
+      { label: "GZIP", value: "application/gzip" },
+      { label: "BZIP2", value: "application/x-bzip2" },
+      { label: "XZ", value: "application/x-xz" },
+    ],
+  },
+  {
+    title: "Outros",
+    presets: [
+      { label: "Binário", value: "application/octet-stream" },
+      { label: "Executável Windows", value: "application/x-msdownload" },
+      {
+        label: "PE (Windows)",
+        value: "application/vnd.microsoft.portable-executable",
+      },
+      { label: "MSI", value: "application/x-msi" },
+    ],
+  },
 ];
+
+/** Todos os valores de preset (achatado) — usado p/ separar chips customizados. */
+const MIME_PRESET_VALUES = MIME_PRESET_GROUPS.flatMap((group) =>
+  group.presets.map((preset) => preset.value),
+);
 
 const MIME_TYPE_REGEX = /^[a-z]+\/[a-z0-9!#$&\-^_.+]+$/i;
 const BYTES_PER_MB = 1024 * 1024;
+const BYTES_PER_GB = 1024 * 1024 * 1024;
+const DEFAULT_MAX_LARGE_FILE_SIZE_BYTES = 2147483648; // 2 GB
+const MAX_LARGE_FILE_SIZE_BYTES = 10 * BYTES_PER_GB;
+const MIN_LARGE_FILE_SIZE_BYTES = BYTES_PER_GB / 10; // 0,1 GB
 
 interface TicketAttachmentSettingsCardProps {
   collapsed: boolean;
   onToggleCollapse: () => void;
 }
 
-function TicketAttachmentSettingsCard({
+export function TicketAttachmentSettingsCard({
   collapsed,
   onToggleCollapse,
 }: TicketAttachmentSettingsCardProps) {
@@ -1583,6 +1664,7 @@ function TicketAttachmentSettingsCard({
   const [form, setForm] = useState<TicketAttachmentSettings>({
     enabled: true,
     maxFileSizeBytes: 10485760,
+    maxLargeFileSizeBytes: DEFAULT_MAX_LARGE_FILE_SIZE_BYTES,
     allowedContentTypes: ALLOWED_TYPES_DEFAULT,
     presignedUploadUrlTtlMinutes: 15,
   });
@@ -1604,7 +1686,13 @@ function TicketAttachmentSettingsCard({
 
   useEffect(() => {
     if (query.data && !loaded) {
-      setForm(query.data);
+      // Defensivo: servidores anteriores ao campo novo não o devolvem; o
+      // default de 2 GB evita input vazio/NaN.
+      setForm({
+        ...query.data,
+        maxLargeFileSizeBytes:
+          query.data.maxLargeFileSizeBytes ?? DEFAULT_MAX_LARGE_FILE_SIZE_BYTES,
+      });
       setLoaded(true);
     }
   }, [query.data, loaded]);
@@ -1620,6 +1708,28 @@ function TicketAttachmentSettingsCard({
           : [...f.allowedContentTypes, mime],
       };
     });
+  };
+
+  /** Liga todos os presets de um grupo (sem duplicar). */
+  const selectGroup = (values: string[]) => {
+    setTypesError("");
+    setForm((f) => ({
+      ...f,
+      allowedContentTypes: Array.from(
+        new Set([...f.allowedContentTypes, ...values]),
+      ),
+    }));
+  };
+
+  /** Desliga todos os presets de um grupo (mantém tipos customizados). */
+  const clearGroup = (values: string[]) => {
+    setTypesError("");
+    setForm((f) => ({
+      ...f,
+      allowedContentTypes: f.allowedContentTypes.filter(
+        (type) => !values.includes(type),
+      ),
+    }));
   };
 
   const addCustomType = () => {
@@ -1656,7 +1766,24 @@ function TicketAttachmentSettingsCard({
 
     const maxBytes = Number(form.maxFileSizeBytes);
     if (isNaN(maxBytes) || maxBytes < BYTES_PER_MB || maxBytes > 1073741824) {
-      toast.error("Tamanho máximo deve estar entre 1 MB e 1024 MB.");
+      toast.error("Tamanho máximo (conversas) deve estar entre 1 MB e 1024 MB.");
+      hasError = true;
+    }
+
+    const maxLargeBytes = Number(form.maxLargeFileSizeBytes);
+    if (
+      isNaN(maxLargeBytes) ||
+      maxLargeBytes < MIN_LARGE_FILE_SIZE_BYTES ||
+      maxLargeBytes > MAX_LARGE_FILE_SIZE_BYTES
+    ) {
+      toast.error(
+        "Tamanho máximo de anexos grandes deve estar entre 0,1 GB e 10 GB.",
+      );
+      hasError = true;
+    } else if (maxLargeBytes < maxBytes) {
+      toast.error(
+        "O limite de anexos grandes do chamado deve ser maior ou igual ao limite das conversas.",
+      );
       hasError = true;
     }
 
@@ -1672,6 +1799,7 @@ function TicketAttachmentSettingsCard({
       await mutation.mutateAsync({
         ...form,
         maxFileSizeBytes: maxBytes,
+        maxLargeFileSizeBytes: maxLargeBytes,
         presignedUploadUrlTtlMinutes: ttl,
       });
       toast.success("Configurações de anexos salvas.");
@@ -1758,7 +1886,39 @@ function TicketAttachmentSettingsCard({
               className="w-full rounded-lg border border-border bg-surface-light px-3 py-2 text-sm text-foreground outline-none transition-colors focus:border-primary/50 focus:ring-1 focus:ring-primary/30"
             />
             <p className="text-xs text-muted">
-              Valor salvo: {form.maxFileSizeBytes.toLocaleString("pt-BR")} bytes (máx. 1024 MB)
+              Conversas, IA e comentários. Valor salvo:{" "}
+              {form.maxFileSizeBytes.toLocaleString("pt-BR")} bytes (máx. 1024 MB)
+            </p>
+          </div>
+
+          <div className="space-y-1">
+            <label htmlFor="max-large-file-size-gb" className="block text-sm font-medium text-muted-foreground">
+              Anexos grandes do chamado (GB)
+            </label>
+            <input
+              id="max-large-file-size-gb"
+              type="number"
+              min={0.1}
+              max={10}
+              step={0.1}
+              value={
+                Math.round(
+                  (form.maxLargeFileSizeBytes / BYTES_PER_GB) * 10,
+                ) / 10
+              }
+              onChange={(e) => {
+                const gb = Number(e.target.value);
+                set(
+                  "maxLargeFileSizeBytes",
+                  Number.isFinite(gb) ? Math.round(gb * BYTES_PER_GB) : 0,
+                );
+              }}
+              className="w-full rounded-lg border border-border bg-surface-light px-3 py-2 text-sm text-foreground outline-none transition-colors focus:border-primary/50 focus:ring-1 focus:ring-primary/30"
+            />
+            <p className="text-xs text-muted">
+              Aba Anexos/repositório do chamado. Valor salvo:{" "}
+              {form.maxLargeFileSizeBytes.toLocaleString("pt-BR")} bytes (máx. 10 GB;
+              deve ser ≥ limite das conversas)
             </p>
           </div>
 
@@ -1785,44 +1945,94 @@ function TicketAttachmentSettingsCard({
               Tipos de conteúdo permitidos
             </label>
             <p className="mt-0.5 text-xs text-muted">
-              Clique nos presets para adicionar/remover. Tipos ativos ficam destacados.
+              Allowlist única: vale para comentários, chat do chamado, chat de
+              suporte e chat de IA/LLM, além do repositório de anexos do chamado.
+              Clique nos tipos para adicionar/remover; os ativos ficam
+              destacados.
             </p>
           </div>
 
-          {/* Preset chips */}
-          <div className="flex flex-wrap gap-2">
-            {MIME_PRESETS.map((preset) => {
-              const active = form.allowedContentTypes.includes(preset.value);
+          {/* Presets agrupados por categoria */}
+          <div className="space-y-3">
+            {MIME_PRESET_GROUPS.map((group) => {
+              const groupValues = group.presets.map((preset) => preset.value);
+              const activeCount = groupValues.filter((value) =>
+                form.allowedContentTypes.includes(value),
+              ).length;
               return (
-                <button
-                  key={preset.value}
-                  type="button"
-                  title={preset.value}
-                  onClick={() => toggleType(preset.value)}
-                  className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-all ${
-                    active
-                      ? chipActive
-                      : "border-border bg-surface-hover text-muted hover:border-border-strong hover:text-muted-foreground"
-                  }`}
+                <div
+                  key={group.title}
+                  className="rounded-xl border border-border/70 bg-surface-light/40 p-3"
                 >
-                  {active && (
-                    <svg className="h-2.5 w-2.5" viewBox="0 0 10 10" fill="currentColor">
-                      <circle cx="5" cy="5" r="5" />
-                    </svg>
-                  )}
-                  {preset.label}
-                </button>
+                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-xs font-semibold text-muted-foreground">
+                      {group.title}{" "}
+                      <span className="font-normal text-muted">
+                        ({activeCount}/{groupValues.length})
+                      </span>
+                    </p>
+                    <div className="flex items-center gap-3">
+                      <button
+                        type="button"
+                        aria-label={`Selecionar todos de ${group.title}`}
+                        onClick={() => selectGroup(groupValues)}
+                        className="text-xs text-muted-foreground underline-offset-2 transition-colors hover:text-foreground hover:underline"
+                      >
+                        Selecionar todos
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={`Limpar ${group.title}`}
+                        onClick={() => clearGroup(groupValues)}
+                        className="text-xs text-muted-foreground underline-offset-2 transition-colors hover:text-foreground hover:underline"
+                      >
+                        Limpar
+                      </button>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {group.presets.map((preset) => {
+                      const active = form.allowedContentTypes.includes(
+                        preset.value,
+                      );
+                      return (
+                        <button
+                          key={preset.value}
+                          type="button"
+                          title={preset.value}
+                          onClick={() => toggleType(preset.value)}
+                          className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-all ${
+                            active
+                              ? chipActive
+                              : "border-border bg-surface-hover text-muted hover:border-border-strong hover:text-muted-foreground"
+                          }`}
+                        >
+                          {active && (
+                            <svg
+                              className="h-2.5 w-2.5"
+                              viewBox="0 0 10 10"
+                              fill="currentColor"
+                            >
+                              <circle cx="5" cy="5" r="5" />
+                            </svg>
+                          )}
+                          {preset.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
               );
             })}
           </div>
 
           {/* Active custom types (chips com remoção) */}
           {form.allowedContentTypes.filter(
-            (t) => !MIME_PRESETS.some((p) => p.value === t),
+            (t) => !MIME_PRESET_VALUES.includes(t),
           ).length > 0 && (
             <div className="flex flex-wrap gap-2">
               {form.allowedContentTypes
-                .filter((t) => !MIME_PRESETS.some((p) => p.value === t))
+                .filter((t) => !MIME_PRESET_VALUES.includes(t))
                 .map((mime) => (
                   <span
                     key={mime}
