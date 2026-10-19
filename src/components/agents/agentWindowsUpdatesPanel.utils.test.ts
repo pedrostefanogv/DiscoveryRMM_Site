@@ -6,6 +6,7 @@ import {
   describeProbe,
   describeScanError,
   formatElapsed,
+  formatSkippedReasons,
   isScanFailed,
   normalizeScanStatus,
   scanErrorCodeLabel,
@@ -228,10 +229,28 @@ describe("describePendingEmpty — estado vazio explicativo", () => {
   it("reporta resultados ignorados pela varredura", () => {
     const message = describePendingEmpty(snapshot(), healthOk, {
       skippedCount: 3,
-      skippedReasons: ["drivers"],
+      skippedReasons: { driver: 3 },
     });
     expect(message.description).toContain("3 resultado(s) foram ignorados");
-    expect(message.description).toContain("drivers");
+    expect(message.description).toContain("drivers fora do escopo");
+  });
+});
+
+describe("formatSkippedReasons — mapa motivo → quantidade do agente", () => {
+  it("formata o mapa real (scan.skippedReasons) sem mostrar [object Object]", () => {
+    expect(formatSkippedReasons({ driver: 2, no_identity: 1 })).toBe(
+      "drivers fora do escopo: 2; sem identificador",
+    );
+  });
+
+  it("aceita lista (API/agente antigos) e ignora entradas vazias", () => {
+    expect(formatSkippedReasons(["driver", "  ", "unreadable"])).toBe("driver; unreadable");
+  });
+
+  it("devolve string vazia quando não há motivos", () => {
+    expect(formatSkippedReasons(null)).toBe("");
+    expect(formatSkippedReasons(undefined)).toBe("");
+    expect(formatSkippedReasons({})).toBe("");
   });
 });
 
@@ -263,6 +282,20 @@ describe("describeProbe — diagnóstico do agente", () => {
       "Último resultado de instalação",
     ]);
     expect(flags.find((flag) => flag.label === "Último resultado de instalação")?.tone).toBe("ok");
+  });
+
+  it("aceita serviceState (nome canônico do agente) além de service", () => {
+    const flags = describeProbe(snapshot({ probe: { serviceState: "stopped" } }));
+    expect(flags).toEqual([
+      { label: "Serviço Windows Update", tone: "warning", value: "stopped" },
+    ]);
+  });
+
+  it("trata service=disabled como desabilitado mesmo sem serviceDisabled", () => {
+    const flags = describeProbe(snapshot({ probe: { service: "disabled" } }));
+    expect(flags).toEqual([
+      { label: "Serviço Windows Update", tone: "danger", value: "desabilitado" },
+    ]);
   });
 
   it("marca WUA indisponível como perigo", () => {

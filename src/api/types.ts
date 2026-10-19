@@ -4418,8 +4418,12 @@ export type AgentWindowsUpdateScanStatus =
  * Todos os campos são opcionais: versões antigas do agente/API não os enviam.
  */
 export interface AgentWindowsUpdateProbe {
-  /** Nome/estado do serviço wuauserv (ex.: "running", "disabled", "stopped"). */
+  /**
+   * Estado do serviço wuauserv. A API manda o estado do serviço; o agente usa
+   * `serviceState` no envelope e as duas formas são aceitas.
+   */
   service?: string | null;
+  serviceState?: string | null;
   /** Serviço wuauserv com Start=4 (desabilitado). */
   serviceDisabled?: boolean | null;
   /** Cliente aponta para um servidor WSUS. */
@@ -4460,8 +4464,11 @@ export interface AgentWindowsUpdateSnapshot {
   scanErrorCode?: string | null;
   /** Quantidade de resultados descartados pela varredura (drivers etc.). */
   skippedCount?: number;
-  /** Motivo dos descartes da varredura, para exibir ao operador. */
-  skippedReasons?: string[];
+  /**
+   * Motivo dos descartes da varredura. O agente envia um MAPA motivo → quantidade
+   * (driver, no_identity, unreadable); uma lista é aceita por compatibilidade.
+   */
+  skippedReasons?: string[] | Record<string, number> | null;
   /** Sonda de estado do Windows Update. */
   probe?: AgentWindowsUpdateProbe | null;
   /** COM/WUA utilizável no último scan. */

@@ -264,15 +264,53 @@ export interface PendingEmptyMessage {
   suspicious: boolean;
 }
 
+/**
+ * Normaliza os motivos de descarte da varredura. O agente envia um MAPA
+ * ({ driver: 2 }); versões antigas/JSON diferente podem mandar uma lista.
+ * Objeto inesperado vira string vazia (nunca "[object Object]" na UI).
+ */
+export function formatSkippedReasons(
+  value: string[] | Record<string, number> | null | undefined,
+): string {
+  if (!value) return "";
+  if (Array.isArray(value)) {
+    return value.filter((item) => typeof item === "string" && item.trim().length > 0).map((item) => item.trim()).join("; ");
+  }
+  if (typeof value === "object") {
+    return Object.entries(value)
+      .filter(([key, count]) => typeof key === "string" && key.trim().length > 0 && Number(count) > 0)
+      .map(([key, count]) => {
+        const label = SKIPPED_REASON_LABELS[key] ?? key;
+        return Number(count) > 1 ? `${label}: ${Number(count)}` : label;
+      })
+      .join("; ");
+  }
+  return "";
+}
+
+const SKIPPED_REASON_LABELS: Record<string, string> = {
+  driver: "drivers fora do escopo",
+  no_identity: "sem identificador",
+  unreadable: "itens ilegíveis",
+};
+
 export function describePendingEmpty(
   snapshot: (SnapshotLike & ActivitySnapshotLike) | undefined,
   health: ScanHealth,
-  extras?: { skippedCount?: number | null; skippedReasons?: string[] | null },
+  extras?: {
+    skippedCount?: number | null;
+    /**
+     * A API expõe o mapa motivo → quantidade (`scan.skippedReasons` do agente)
+     * ou, em agentes/API antigos, uma lista de motivos.
+     */
+    skippedReasons?: string[] | Record<string, number> | null;
+  },
 ): PendingEmptyMessage {
   const base = "Nenhuma atualização PENDENTE detectada pela busca do Windows Update.";
+  const reasons = formatSkippedReasons(extras?.skippedReasons);
   const skipped =
     typeof extras?.skippedCount === "number" && extras.skippedCount > 0
-      ? ` ${extras.skippedCount} resultado(s) foram ignorados${extras.skippedReasons && extras.skippedReasons.length > 0 ? ` (${extras.skippedReasons.join("; ")})` : ""}.`
+      ? ` ${extras.skippedCount} resultado(s) foram ignorados${reasons ? ` (${reasons})` : ""}.`
       : "";
 
   if (health.neverScanned || health.failed) {
@@ -336,12 +374,15 @@ export function describeProbe(
     });
   }
 
-  if (probe?.serviceDisabled === true) {
+  // A API manda "service"; o agente usa "serviceState" no envelope — aceitar os
+  // dois evita a linha de serviço sumir dependendo de quem respondeu.
+  const serviceLabel = probe?.service ?? probe?.serviceState ?? null;
+  if (probe?.serviceDisabled === true || serviceLabel?.toLowerCase() === "disabled") {
     flags.push({ label: "Serviço Windows Update", tone: "danger", value: "desabilitado" });
-  } else if (probe?.service) {
-    const service = probe.service.toLowerCase();
+  } else if (serviceLabel) {
+    const service = serviceLabel.toLowerCase();
     const tone: ScanHealthTone = service.includes("run") ? "ok" : "warning";
-    flags.push({ label: "Serviço Windows Update", tone, value: probe.service });
+    flags.push({ label: "Serviço Windows Update", tone, value: serviceLabel });
   }
 
   if (probe?.wsus === true) {
