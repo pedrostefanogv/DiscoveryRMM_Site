@@ -411,6 +411,8 @@ export default function RemoteSession() {
     policySource?: string | null;
     timeoutAction?: string | null;
     deadlineAt: number;
+    /** Fim da janela em que o console ainda aguarda a confirmação do agent. */
+    graceUntilAt?: number | null;
   } | null>(null);
   const consentCancelledRef = useRef(false);
 
@@ -478,11 +480,22 @@ export default function RemoteSession() {
       consentPolicySource?: string | null;
       consentOperator?: string | null;
       consentTimeoutAction?: string | null;
+      consentDecisionGraceSeconds?: number | null;
     },
   ) => {
     const deadline = session.consentDeadlineAtUtc
       ? new Date(session.consentDeadlineAtUtc).getTime()
       : Date.now() + 60_000;
+    // A API aceita a decisão do agent por alguns segundos depois do deadline
+    // (relógio do endpoint, timer do prompt e latência do POST /consent). O
+    // console precisa usar a MESMA janela: encerrar antes gerava o falso
+    // "tempo expirou" enquanto o agent ainda iniciava a sessão. Fallback 15s
+    // cobre uma API antiga que ainda não publica o campo.
+    const graceMs = Math.max(
+      0,
+      (session.consentDecisionGraceSeconds ?? 15) * 1000,
+    );
+    const graceUntilAt = deadline + graceMs;
     consentCancelledRef.current = false;
     setConsentWait({
       sessionId: session.sessionId,
@@ -490,6 +503,7 @@ export default function RemoteSession() {
       policySource: session.consentPolicySource ?? null,
       timeoutAction: session.consentTimeoutAction ?? null,
       deadlineAt: deadline,
+      graceUntilAt,
     });
 
     try {
@@ -524,7 +538,16 @@ export default function RemoteSession() {
           );
         }
 
-        if (Date.now() > deadline + 5_000) {
+        // Depois do deadline continuamos consultando o status autoritativo da
+        // API até o fim da janela de decisão tardia. Se o agent confirmar
+        // (granted/active) dentro dela, a sessão é adotada normalmente em vez
+        // de mostrar erro. Só desistimos quando a própria API também desistiu.
+        if (Date.now() > graceUntilAt) {
+          // Best-effort: não deixa sessão órfã no server/agent se a decisão
+          // não chegou dentro da janela que a API ainda aceitaria.
+          try {
+            await remoteSessionsApi.stopSession(agentId, session.sessionId);
+          } catch { /* best-effort */ }
           throw new Error('O tempo para autorização expirou.');
         }
         await new Promise((resolve) => setTimeout(resolve, 1_000));
@@ -790,6 +813,7 @@ export default function RemoteSession() {
             sessionId: string;
             consentDeadlineAtUtc?: string | null;
             consentPolicySource?: string | null;
+            consentDecisionGraceSeconds?: number | null;
           } = { sessionId: s.sessionId };
           try {
             const consentStatus = await remoteSessionsApi.getConsentStatus(agentId, s.sessionId);
@@ -797,6 +821,7 @@ export default function RemoteSession() {
               sessionId: s.sessionId,
               consentDeadlineAtUtc: consentStatus.deadlineUtc ?? null,
               consentPolicySource: consentStatus.policySource ?? null,
+              consentDecisionGraceSeconds: consentStatus.decisionGraceSeconds ?? null,
             };
           } catch {
             // Sem status: o overlay cai no fallback (animação indeterminada).
@@ -1291,6 +1316,7 @@ export default function RemoteSession() {
         <RemoteConsentNotice
           operator={consentWait.operator}
           deadlineAt={consentWait.deadlineAt}
+          graceUntilAt={consentWait.graceUntilAt}
           timeoutAction={consentWait.timeoutAction}
           policySource={consentWait.policySource}
           onCancel={() => { void cancelConsentWait(); }}

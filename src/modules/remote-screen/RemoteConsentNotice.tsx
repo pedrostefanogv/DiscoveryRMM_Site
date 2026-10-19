@@ -7,6 +7,8 @@ export interface RemoteConsentNoticeProps {
   operator?: string | null;
   /** Timestamp (ms) do deadline da decisão — usado só pela animação. */
   deadlineAt?: number | null;
+  /** Timestamp (ms) até quando o console ainda aguarda a confirmação tardia. */
+  graceUntilAt?: number | null;
   /** Ação padrão quando o tempo expira: approve | deny. */
   timeoutAction?: string | null;
   /** Motivo/origem da política (ex.: "Site"). */
@@ -29,6 +31,7 @@ const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
 export default function RemoteConsentNotice({
   operator,
   deadlineAt,
+  graceUntilAt,
   timeoutAction,
   policySource,
   onCancel,
@@ -48,6 +51,25 @@ export default function RemoteConsentNotice({
   const [draining, setDraining] = useState(false);
   // Evita múltiplos cliques no cancelamento enquanto o overlay ainda está na tela.
   const [cancelRequested, setCancelRequested] = useState(false);
+  // Fase do aviso: contagem → confirmação tardia (o agent pode ter aplicado a
+  // ação padrão alguns segundos depois do deadline) → encerrado.
+  const [phase, setPhase] = useState<"countdown" | "confirming" | "expired">("countdown");
+  useEffect(() => {
+    if (!deadlineAt) return;
+    const update = () => {
+      const now = Date.now();
+      setPhase(
+        now < deadlineAt
+          ? "countdown"
+          : graceUntilAt && now < graceUntilAt
+            ? "confirming"
+            : "expired",
+      );
+    };
+    update();
+    const id = window.setInterval(update, 1_000);
+    return () => window.clearInterval(id);
+  }, [deadlineAt, graceUntilAt]);
   useEffect(() => {
     if (durationSeconds <= 0) return;
     // Reinicia o anel e o botão de cancelar se o deadline mudar (novo
@@ -60,7 +82,7 @@ export default function RemoteConsentNotice({
   }, [durationSeconds]);
 
   const countdown =
-    durationSeconds > 0 ? (
+    phase === "countdown" && durationSeconds > 0 ? (
       <svg
         viewBox="0 0 40 40"
         className="h-10 w-10 shrink-0 -rotate-90"
@@ -123,10 +145,14 @@ export default function RemoteConsentNotice({
               aria-live="polite"
               className="text-sm font-semibold text-foreground"
             >
-              Aguardando o usuário remoto autorizar o acesso
+              {phase === "confirming"
+                ? "Aguardando a confirmação final do computador"
+                : "Aguardando o usuário remoto autorizar o acesso"}
             </p>
             <p className="mt-0.5 text-xs text-muted">
-              O acesso remoto só inicia após a autorização no computador acessado.
+              {phase === "confirming"
+                ? "O tempo do contador terminou. A política pode ter autorizado automaticamente — aguardando o agent confirmar."
+                : "O acesso remoto só inicia após a autorização no computador acessado."}
             </p>
           </div>
         </div>

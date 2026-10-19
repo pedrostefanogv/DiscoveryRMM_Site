@@ -53,6 +53,8 @@ export interface RemoteSessionResponse {
     consentDeadlineAtUtc?: string | null;
     consentMessage?: string | null;
     consentPolicySource?: string | null;
+    /** Janela (s) após o deadline em que o console ainda aguarda a confirmação do agent. */
+    consentDecisionGraceSeconds?: number | null;
 }
 
 export interface RemoteSessionConsentStatus {
@@ -67,6 +69,8 @@ export interface RemoteSessionConsentStatus {
     auto?: boolean | null;
     policySource?: string | null;
     promptBackend?: string | null;
+    /** Janela (s) após o deadline em que a API ainda aceita a decisão do agent. */
+    decisionGraceSeconds?: number | null;
 }
 
 export interface RemoteSessionLiveness {
