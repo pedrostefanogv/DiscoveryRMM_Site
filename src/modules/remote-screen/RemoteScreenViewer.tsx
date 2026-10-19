@@ -151,7 +151,7 @@ export default function RemoteScreenViewer({
   const infoOverlayRef = useRef<HTMLDivElement | null>(null);
   const [infoHovered, setInfoHovered] = useState(false);
   // Se o ponteiro sair da janela (ou a janela perder o foco) sem um novo
-  // mousemove, o painel expandido ficaria preso aberto sobre a tela remota.
+  // mousemove, o overlay ficaria preso esmaecido sobre a tela remota.
   useEffect(() => {
     const reset = () => setInfoHovered(false);
     document.addEventListener('mouseleave', reset);
@@ -1288,12 +1288,17 @@ export default function RemoteScreenViewer({
       {/* Info overlay — telemetria compacta em 1 linha (FPS, RTT e, com
            agentMetrics, resolução/qualidade). Ao passar o mouse sobre a
            região, o estado infoHovered (detectado via coordenadas do
-           mousemove já capturado pelo componente) expande os detalhes:
-           FPS do agent, compressão, encode, frames e total.
+           mousemove já capturado pelo componente) deixa o card quase
+           transparente, para não obstruir a visualização da tela remota.
+           O card NÃO expande no hover (era o que cobria a tela remota). A
+           linha compacta mantém FPS, RTT, resolução e qualidade; os detalhes
+           extras do agent seguem nos titles dos indicadores — como o overlay é
+           pointer-events-none, o tooltip nativo não abre, mas os dados ficam
+           disponíveis caso o card ganhe interação no futuro.
            pointer-events-none preservado: o overlay nunca bloqueia cliques. */}
       <div
         ref={infoOverlayRef}
-        className="absolute top-2 right-2 flex flex-col gap-1 text-xs bg-surface/70 rounded px-2 py-1.5 backdrop-blur-sm pointer-events-none transition-all duration-300"
+        className={`absolute top-2 right-2 flex flex-col gap-1 text-xs bg-surface/70 rounded px-2 py-1.5 backdrop-blur-sm pointer-events-none transition-all duration-300 ${infoHovered ? '!opacity-[0.12] !bg-transparent !backdrop-blur-none' : ''}`}
       >
         <div className="flex max-w-[420px] flex-wrap items-center gap-x-3 gap-y-0.5">
           <span className="text-success font-medium">{fps} FPS</span>
@@ -1304,38 +1309,23 @@ export default function RemoteScreenViewer({
           {agentMetrics && (
             <>
               {/* Sem emoji aqui: o ícone ao lado da resolução confundia com
-                  indicador de qualidade. Rótulos explícitos e curtos. */}
-              <span title="Resolução da tela remota" className="text-muted-foreground">
+                  indicador de qualidade. Rótulos explícitos e curtos. Os
+                  detalhes do agent vão nos titles, para o card continuar
+                  compacto e não precisar expandir no hover. */}
+              <span
+                title={`Resolução da tela remota — agent ${agentMetrics.effectiveFps}/${agentMetrics.profileFps} FPS · frames #${agentMetrics.totalFrames}`}
+                className="text-muted-foreground"
+              >
                 Res. {agentMetrics.resolution}
               </span>
-              <span title="Qualidade da imagem (compressão)">
+              <span
+                title={`Qualidade ${agentMetrics.imageQuality}% · compressão ${agentMetrics.compressionRatio?.toFixed(1)}:1 · encode ${agentMetrics.avgEncodeMs?.toFixed(1)}ms · frames (5s) ${agentMetrics.framesSent5s} enviados / ${agentMetrics.framesSkipped5s} pulados`}
+              >
                 Qual. {agentMetrics.imageQuality}%
               </span>
             </>
           )}
-          {agentMetrics && !infoHovered && (
-            <span className="text-[10px] text-muted-foreground/70" title="Passe o mouse para ver detalhes">
-              ⋯
-            </span>
-          )}
         </div>
-        {agentMetrics && infoHovered && (
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-muted border-t border-white/10 pt-1 max-w-[360px]">
-            <span title="FPS do agent (efetivo/perfil)">
-              Agent {agentMetrics.effectiveFps}/{agentMetrics.profileFps} FPS
-            </span>
-            <span title={`Compressão ${agentMetrics.compressionRatio?.toFixed(1)}:1`}>
-              Compressão {agentMetrics.compressionRatio?.toFixed(1)}:1
-            </span>
-            <span title={`Encode médio: ${agentMetrics.avgEncodeMs?.toFixed(1)}ms`}>
-              Encode {agentMetrics.avgEncodeMs?.toFixed(1)}ms
-            </span>
-            <span title={`Frames (5s): ${agentMetrics.framesSent5s} enviados / ${agentMetrics.framesSkipped5s} pulados`}>
-              Frames {agentMetrics.framesSent5s}/{agentMetrics.framesSkipped5s}
-            </span>
-            <span className="text-muted-foreground">#{agentMetrics.totalFrames}</span>
-          </div>
-        )}
       </div>
 
       {/* Overlay de sessão encerrada (evita tela congelada sem explicação) */}
