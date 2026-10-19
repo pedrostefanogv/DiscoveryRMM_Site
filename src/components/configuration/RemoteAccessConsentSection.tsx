@@ -94,9 +94,20 @@ export interface RemoteConsentFieldState {
   dirty?: boolean;
 }
 
+/** Escopo da configuração, usado nos rótulos de origem ("definido no servidor"...). */
+export type RemoteAccessConsentScope = "server" | "client" | "site";
+
 export interface RemoteAccessConsentSectionProps {
   state: Partial<Record<string, RemoteConsentFieldState>>;
   previewContext?: RemoteConsentPreviewContext;
+  /** Escopo editado. Servidor não tem herança; cliente/site têm. */
+  scope?: RemoteAccessConsentScope;
+  /** Mostra os controles de herança (checkbox "Herdar"/"Definir"). */
+  showInheritance?: boolean;
+  /** Mostra o botão de reset por campo (só existe em cliente/site). */
+  showReset?: boolean;
+  /** Esconde o rodapé de ações (quando a página já tem barra global de salvar). */
+  hideActions?: boolean;
   saving?: boolean;
   resetLoading?: boolean;
   readOnly?: boolean;
@@ -111,6 +122,12 @@ const ORIGIN_LABEL: Record<ConfigurationOrigin, string> = {
   Server: "servidor",
   Client: "cliente",
   Site: "site",
+};
+
+const SCOPE_CHIP_LABEL: Record<RemoteAccessConsentScope, string> = {
+  server: "definido no servidor",
+  client: "definido no cliente",
+  site: "definido neste site",
 };
 
 const MODE_OPTIONS: {
@@ -173,7 +190,15 @@ function fieldOrDefault(
   return state[key] ?? { value: "", inherited: true, origin: "Server" };
 }
 
-function OriginChip({ origin, inherited }: { origin: ConfigurationOrigin; inherited: boolean }) {
+function OriginChip({
+  origin,
+  inherited,
+  scope,
+}: {
+  origin: ConfigurationOrigin;
+  inherited: boolean;
+  scope: RemoteAccessConsentScope;
+}) {
   const className = inherited
     ? "border-border bg-surface-light text-muted"
     : "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300";
@@ -182,7 +207,7 @@ function OriginChip({ origin, inherited }: { origin: ConfigurationOrigin; inheri
     <span
       className={"inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium " + className}
     >
-      {inherited ? "herdado do " + ORIGIN_LABEL[origin] : "definido neste site"}
+      {inherited ? "herdado do " + ORIGIN_LABEL[origin] : SCOPE_CHIP_LABEL[scope]}
     </span>
   );
 }
@@ -233,8 +258,11 @@ interface FieldRowProps {
   label: string;
   description: string;
   state: RemoteConsentFieldState;
+  scope: RemoteAccessConsentScope;
   disabled: boolean;
   inheritDisabled?: boolean;
+  showInheritance: boolean;
+  showReset: boolean;
   onToggleInherit: (next: boolean) => void;
   onOverride: () => void;
   onReset: () => void;
@@ -247,8 +275,11 @@ function FieldRow({
   label,
   description,
   state,
+  scope,
   disabled,
   inheritDisabled,
+  showInheritance,
+  showReset,
   onToggleInherit,
   onOverride,
   onReset,
@@ -261,7 +292,7 @@ function FieldRow({
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
           <p className="text-sm font-medium text-foreground">{label}</p>
-          <OriginChip origin={state.origin} inherited={state.inherited} />
+          <OriginChip origin={state.origin} inherited={state.inherited} scope={scope} />
           {state.dirty && (
             <span className="text-[11px] font-medium text-amber-700 dark:text-amber-300">
               não salvo
@@ -282,7 +313,7 @@ function FieldRow({
         <div className="flex items-start gap-2">
           <div className="min-w-0 flex-1">{children}</div>
           <div className="flex shrink-0 items-center gap-1 pt-1">
-            {!state.locked && (
+            {!state.locked && showReset && (
               <button
                 type="button"
                 onClick={onReset}
@@ -299,14 +330,14 @@ function FieldRow({
 
         {error && <p className="text-[11px] text-danger">{error}</p>}
 
-        {state.inherited && state.dirty && (
+        {showInheritance && state.inherited && state.dirty && (
           <p className="text-[11px] text-muted">
             Ao salvar, este campo volta a herdar do {ORIGIN_LABEL[state.origin]} — o valor acima é o override
             que será descartado.
           </p>
         )}
 
-        {!state.locked && (
+        {showInheritance && !state.locked && (
           <div className="flex flex-wrap items-center justify-between gap-2">
             <label className="inline-flex items-center gap-1.5 text-[11px] text-muted">
               <input
@@ -494,6 +525,10 @@ function ConsentPreview({
 export function RemoteAccessConsentSection({
   state,
   previewContext,
+  scope = "site",
+  showInheritance = true,
+  showReset = true,
+  hideActions = false,
   saving,
   resetLoading,
   readOnly,
@@ -616,12 +651,12 @@ export function RemoteAccessConsentSection({
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex flex-wrap items-center gap-2">
             <p className="text-sm font-semibold text-foreground">Como autorizar a sessão</p>
-            <OriginChip origin={modeState.origin} inherited={modeState.inherited} />
+            <OriginChip origin={modeState.origin} inherited={modeState.inherited} scope={scope} />
             {modeState.dirty && (
               <span className="text-[11px] font-medium text-amber-700 dark:text-amber-300">não salvo</span>
             )}
           </div>
-          {!modeState.locked && (
+          {showInheritance && !modeState.locked && (
             <label className="inline-flex items-center gap-1.5 text-[11px] text-muted">
               <input
                 type="checkbox"
@@ -684,6 +719,9 @@ export function RemoteAccessConsentSection({
         )}
       </div>
 
+      {/* Prompt x (banner + prévia): duas colunas em telas largas. */}
+      <div className="grid gap-4 2xl:grid-cols-2">
+        <div className="space-y-4">
       {/* 2. Prompt */}
       <div className="rounded-xl border border-border bg-surface-light/40 p-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -722,6 +760,9 @@ export function RemoteAccessConsentSection({
               " segundos (padrão 60)."
             }
             state={timeoutState}
+            scope={scope}
+            showInheritance={showInheritance}
+            showReset={showReset}
             disabled={sectionDisabled}
             inheritDisabled={sectionDisabled}
             onToggleInherit={(next) => onToggleInherit(REMOTE_CONSENT_FIELD_KEYS.timeout, next)}
@@ -771,6 +812,9 @@ export function RemoteAccessConsentSection({
             label="Se o usuário não responder"
             description="O que o servidor faz quando a contagem termina sem decisão."
             state={actionState}
+            scope={scope}
+            showInheritance={showInheritance}
+            showReset={showReset}
             disabled={sectionDisabled}
             inheritDisabled={sectionDisabled}
             onToggleInherit={(next) => onToggleInherit(REMOTE_CONSENT_FIELD_KEYS.action, next)}
@@ -816,6 +860,9 @@ export function RemoteAccessConsentSection({
             label="Mensagem do prompt"
             description="Texto exibido na janela de consentimento. Vazio herda o texto do nível superior."
             state={messageState}
+            scope={scope}
+            showInheritance={showInheritance}
+            showReset={showReset}
             disabled={sectionDisabled}
             inheritDisabled={sectionDisabled}
             onToggleInherit={(next) => onToggleInherit(REMOTE_CONSENT_FIELD_KEYS.message, next)}
@@ -854,6 +901,8 @@ export function RemoteAccessConsentSection({
         </div>
       </div>
 
+        </div>
+        <div className="space-y-4">
       {/* 3. Banner */}
       <div className="rounded-xl border border-border bg-surface-light/40 p-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -885,6 +934,9 @@ export function RemoteAccessConsentSection({
           label="Exibir banner"
           description="Ligado, o usuário do computador acessado vê que a sessão está em andamento e pode encerrá-la pelo ícone da bandeja."
           state={bannerState}
+          scope={scope}
+          showInheritance={showInheritance}
+          showReset={showReset}
           disabled={sectionDisabled}
           inheritDisabled={sectionDisabled}
           onToggleInherit={(next) => onToggleInherit(REMOTE_CONSENT_FIELD_KEYS.banner, next)}
@@ -927,6 +979,9 @@ export function RemoteAccessConsentSection({
           label="Texto do banner"
           description="Texto principal da faixa exibida durante a sessão. Vazio herda o texto do nível superior; se o texto não citar o operador, o agent acrescenta o nome no fim."
           state={bannerTextState}
+          scope={scope}
+          showInheritance={showInheritance}
+          showReset={showReset}
           disabled={sectionDisabled}
           inheritDisabled={sectionDisabled}
           onToggleInherit={(next) => onToggleInherit(REMOTE_CONSENT_FIELD_KEYS.bannerText, next)}
@@ -966,8 +1021,11 @@ export function RemoteAccessConsentSection({
         timeoutAction={timeoutAction}
         previewContext={previewContext}
       />
+        </div>
+      </div>
 
       {/* 5. Ações */}
+      {!hideActions && (
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-surface-light px-3 py-2">
         <p className="text-xs text-muted">
           {dirtyCount === 0
@@ -992,6 +1050,7 @@ export function RemoteAccessConsentSection({
           </Button>
         </div>
       </div>
+      )}
     </div>
   );
 }

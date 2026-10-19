@@ -349,12 +349,14 @@ export default function RemoteSession() {
   const [forcePromptConnecting, setForcePromptConnecting] = useState(false);
 
   // Consentimento do usuário local (somente desktop): o viewer só conecta
-  // depois do "granted". O polling alimenta o overlay com a contagem.
+  // depois do "granted". O overlay mostra quem pediu, a ação padrão da política
+  // e um contador VISUAL até o deadline (sem número de segundos na tela).
   const [consentWait, setConsentWait] = useState<{
     sessionId: string;
-    message: string;
+    operator?: string | null;
     policySource?: string | null;
-    remaining: number;
+    timeoutAction?: string | null;
+    deadlineAt: number;
   } | null>(null);
   const consentCancelledRef = useRef(false);
 
@@ -409,18 +411,24 @@ export default function RemoteSession() {
   // Aguarda a decisão do usuário do computador antes de buscar credenciais/
   // montar o viewer. Lança erro quando negado, cancelado ou expirado.
   const waitForConsent = useCallback(async (
-    session: { sessionId: string; consentDeadlineAtUtc?: string | null; consentMessage?: string | null; consentPolicySource?: string | null },
+    session: {
+      sessionId: string;
+      consentDeadlineAtUtc?: string | null;
+      consentPolicySource?: string | null;
+      consentOperator?: string | null;
+      consentTimeoutAction?: string | null;
+    },
   ) => {
     const deadline = session.consentDeadlineAtUtc
       ? new Date(session.consentDeadlineAtUtc).getTime()
       : Date.now() + 60_000;
-    const message = session.consentMessage || 'Solicitação de acesso remoto enviada ao usuário do computador.';
     consentCancelledRef.current = false;
     setConsentWait({
       sessionId: session.sessionId,
-      message,
-      policySource: session.consentPolicySource,
-      remaining: Math.max(0, Math.ceil((deadline - Date.now()) / 1000)),
+      operator: session.consentOperator ?? null,
+      policySource: session.consentPolicySource ?? null,
+      timeoutAction: session.consentTimeoutAction ?? null,
+      deadlineAt: deadline,
     });
 
     try {
@@ -455,8 +463,6 @@ export default function RemoteSession() {
           );
         }
 
-        const remaining = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
-        setConsentWait((prev) => (prev ? { ...prev, remaining } : prev));
         if (Date.now() > deadline + 5_000) {
           throw new Error('O tempo para autorização expirou.');
         }
@@ -661,7 +667,24 @@ export default function RemoteSession() {
         // Sessão ainda aguardando autorização: reabre a espera em vez de tentar
         // credenciais (o backend devolveria 409 consent_pending).
         if (current?.status === 'pending_consent') {
-          await waitForConsent({ sessionId: s.sessionId });
+          // O objeto local (sessions[tab]) não guarda mais o deadline/política
+          // do consentimento; busca no status para o overlay animar o tempo real.
+          let consentMeta: {
+            sessionId: string;
+            consentDeadlineAtUtc?: string | null;
+            consentPolicySource?: string | null;
+          } = { sessionId: s.sessionId };
+          try {
+            const consentStatus = await remoteSessionsApi.getConsentStatus(agentId, s.sessionId);
+            consentMeta = {
+              sessionId: s.sessionId,
+              consentDeadlineAtUtc: consentStatus.deadlineUtc ?? null,
+              consentPolicySource: consentStatus.policySource ?? null,
+            };
+          } catch {
+            // Sem status: o overlay cai no fallback (animação indeterminada).
+          }
+          await waitForConsent(consentMeta);
         }
         // Sessão viva — refetch das credenciais NATS antes de remontar: o JWT
         // do viewer tem TTL próprio; reutilizar um jwt expirado colocava o
@@ -1067,8 +1090,9 @@ export default function RemoteSession() {
     <div className="flex flex-col h-screen bg-background text-foreground">
       {consentWait && (
         <RemoteConsentNotice
-          message={consentWait.message}
-          remainingSeconds={consentWait.remaining}
+          operator={consentWait.operator}
+          deadlineAt={consentWait.deadlineAt}
+          timeoutAction={consentWait.timeoutAction}
           policySource={consentWait.policySource}
           onCancel={() => { void cancelConsentWait(); }}
         />

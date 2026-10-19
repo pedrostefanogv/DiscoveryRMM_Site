@@ -5,6 +5,7 @@ import {
   Building2,
   Bot,
   Clock,
+  MonitorSmartphone,
   RotateCcw,
   Save,
   ShieldCheck,
@@ -18,7 +19,9 @@ import {
   parseBackgroundProcessingSettings,
   ConfigurationPageHeader,
   ConfigurationSectionCard,
+  RemoteAccessConsentSection,
   tintedIcon,
+  type RemoteConsentFieldState,
 } from "@/components/configuration";
 import { Button, ErrorDisplay, Loading, Select } from "@/components/ui";
 import { useClients } from "@/hooks/useClients";
@@ -52,6 +55,9 @@ interface FormValues {
 export default function ClientConfigurationPage() {
   const [clientId, setClientId] = useState("");
   const [inherits, setInherits] = useState<Record<string, boolean>>({});
+  // Campos da seção de acesso remoto alterados e ainda não salvos (salvos de uma
+  // vez, em um único PATCH, em vez de um por campo).
+  const [remoteDirty, setRemoteDirty] = useState<Record<string, boolean>>({});
 
   const clientsQuery = useClients();
   const localQuery = useClientConfig(clientId);
@@ -71,6 +77,14 @@ export default function ClientConfigurationPage() {
   const { setValue, getValues, watch } = useForm<FormValues>({
     defaultValues: { values: {} },
   });
+  // Snapshot reativo de todos os valores (a seção de acesso remoto recebe os
+  // valores como prop e precisa refletir a edição imediatamente).
+  const watchedValues = watch("values") ?? {};
+
+  // Trocar de cliente reinicia os marcadores de "não salvo" da seção de acesso remoto.
+  useEffect(() => {
+    setRemoteDirty({});
+  }, [clientId]);
 
   useEffect(() => {
     if (!localQuery.data) {
@@ -119,8 +133,11 @@ export default function ClientConfigurationPage() {
       }
     }
 
+    normalizeRemoteConsentTextPayloads(payload);
+
     try {
       await putMutation.mutateAsync({ clientId, payload });
+      setRemoteDirty({});
       toast.success("Configuração do cliente salva com PUT");
     } catch (error) {
       toast.error(readEntityError(error, "client"));
@@ -184,6 +201,7 @@ export default function ClientConfigurationPage() {
 
     try {
       await deleteMutation.mutateAsync(clientId);
+      setRemoteDirty({});
       toast.success("Configuração local removida. Herança total restaurada.");
     } catch (error) {
       toast.error(readEntityError(error, "client"));
@@ -192,9 +210,131 @@ export default function ClientConfigurationPage() {
 
   const featureFields = clientEditableFields.filter((field) => field.group === "features");
   const policyFields = clientEditableFields.filter((field) => field.group === "policy");
-  const remoteAccessFields = clientEditableFields.filter((field) => field.group === "remoteAccess");
+  const remoteAccessFields = useMemo(
+    () => clientEditableFields.filter((field) => field.group === "remoteAccess"),
+    [],
+  );
   const agentFields = clientEditableFields.filter((field) => field.group === "agent");
   const advancedFields = clientEditableFields.filter((field) => field.group === "advanced");
+
+  // ── Autorização de acesso remoto (seção dedicada) ──────────────
+  // Calculado a cada render (sem useMemo): o watch() do react-hook-form devolve a
+  // referência viva de _formValues e memoizar por identidade congelaria os campos.
+  const remoteConsentState = (() => {
+    const next: Record<string, RemoteConsentFieldState> = {};
+    for (const field of remoteAccessFields) {
+      const fieldMeta = getFieldMetadata(metadataQuery.data?.fields, field.key);
+      next[field.key] = {
+        value: String(watchedValues[field.key] ?? ""),
+        inherited: !!inherits[field.key],
+        origin: resolveClientOrigin(localQuery.data, field.key),
+        locked: !canEditFieldAtScope(fieldMeta, "client"),
+        lockOwner: getLockOwnerForScope(fieldMeta, "client"),
+        dirty: !!remoteDirty[field.key],
+      };
+    }
+    return next;
+  })();
+
+  const markRemoteDirty = (fieldKey: string) =>
+    setRemoteDirty((previous) => ({ ...previous, [fieldKey]: true }));
+
+  const changeRemoteField = (fieldKey: string, value: string) => {
+    setValue(`values.${fieldKey}` as never, value as never, { shouldDirty: true });
+    markRemoteDirty(fieldKey);
+  };
+
+  const toggleRemoteInherit = (fieldKey: string, inherit: boolean) => {
+    setInherits((previous) => ({ ...previous, [fieldKey]: inherit }));
+    markRemoteDirty(fieldKey);
+
+    if (inherit) {
+      return;
+    }
+
+    // Ao começar a sobrescrever, parte do valor efetivo em vez de zerar o campo.
+    const current = String(getValues(`values.${fieldKey}` as never) ?? "").trim();
+    if (current.length > 0) {
+      return;
+    }
+
+    const effective = formatFieldValue(
+      localQuery.data?.[fieldKey] ?? getEffectiveValue(effectiveQuery.data, fieldKey),
+      fieldKey,
+    );
+    if (effective) {
+      setValue(`values.${fieldKey}` as never, effective as never, { shouldDirty: true });
+    }
+  };
+
+  const saveRemoteAccess = async () => {
+    if (!clientId) {
+      return;
+    }
+
+    const changedKeys = remoteAccessFields
+      .map((field) => field.key)
+      .filter((fieldKey) => remoteDirty[fieldKey]);
+    if (changedKeys.length === 0) {
+      return;
+    }
+
+    const payload: Record<string, ConfigurationValue | null> = {};
+    for (const fieldKey of changedKeys) {
+      const field = remoteAccessFields.find((item) => item.key === fieldKey);
+      if (!field) {
+        continue;
+      }
+
+      const fieldMeta = getFieldMetadata(metadataQuery.data?.fields, fieldKey);
+      if (!canEditFieldAtScope(fieldMeta, "client")) {
+        continue;
+      }
+
+      if (inherits[fieldKey]) {
+        payload[fieldKey] = null;
+        continue;
+      }
+
+      const rawValue = String(getValues(`values.${fieldKey}` as never) ?? "");
+      const validation = validateFieldValue(field.kind, rawValue, fieldKey);
+      if (validation !== true) {
+        toast.error(field.label + ": " + validation);
+        return;
+      }
+      payload[fieldKey] = parseFieldValue(field.kind, rawValue, fieldKey);
+    }
+
+    normalizeRemoteConsentTextPayloads(payload);
+
+    if (Object.keys(payload).length === 0) {
+      return;
+    }
+
+    try {
+      await patchMutation.mutateAsync({ clientId, payload });
+      setRemoteDirty({});
+      toast.success("Autorização de acesso remoto atualizada");
+    } catch (error) {
+      toast.error(readEntityError(error, "client"));
+    }
+  };
+
+  const discardRemoteAccess = () => {
+    const inheritedState = buildInheritedState(localQuery.data, remoteAccessFields);
+    for (const field of remoteAccessFields) {
+      const value =
+        localQuery.data?.[field.key] ?? getEffectiveValue(effectiveQuery.data, field.key);
+      setValue(`values.${field.key}` as never, formatFieldValue(value, field.key) as never);
+      setInherits((previous) => ({ ...previous, [field.key]: inheritedState[field.key] }));
+    }
+    setRemoteDirty({});
+  };
+
+  const resetRemoteField = (fieldKey: string) => {
+    setRemoteDirty((previous) => ({ ...previous, [fieldKey]: false }));
+    void resetProperty(fieldKey);
+  };
 
   const renderFieldEditor = (
     fieldKey: string,
@@ -356,15 +496,24 @@ export default function ClientConfigurationPage() {
           {remoteAccessFields.length > 0 && (
             <ConfigurationSectionCard
               title="Autorização de Acesso Remoto"
-              subtitle="Prompt de consentimento no endpoint e banner local nas sessões de área de trabalho."
-              icon={<ShieldCheck className="h-4 w-4" />}
+              subtitle="Somente sessões de área de trabalho. Terminal, arquivos, proxy e processos não pedem autorização."
+              icon={<MonitorSmartphone className="h-4 w-4" />}
               iconClassName={tintedIcon.emerald}
             >
-              <div className="space-y-4">
-                {remoteAccessFields.map((field) =>
-                  renderFieldEditor(field.key, field.label, field.kind),
-                )}
-              </div>
+              <RemoteAccessConsentSection
+                state={remoteConsentState}
+                previewContext={{
+                  client:
+                    (clientsQuery.data ?? []).find((client) => client.id === clientId)?.name ?? "",
+                }}
+                saving={patchMutation.isPending || putMutation.isPending}
+                resetLoading={resetPropertyMutation.isPending}
+                onChange={changeRemoteField}
+                onToggleInherit={toggleRemoteInherit}
+                onResetField={resetRemoteField}
+                onSave={saveRemoteAccess}
+                onDiscard={discardRemoteAccess}
+              />
             </ConfigurationSectionCard>
           )}
 
@@ -401,6 +550,21 @@ export default function ClientConfigurationPage() {
       )}
     </div>
   );
+}
+
+/**
+ * Texto em branco em cliente/site significa "herdar": o resolvedor do backend
+ * ignora strings em branco, mas gravar "" deixa um override inútil no registro.
+ */
+function normalizeRemoteConsentTextPayloads(
+  payload: Record<string, ConfigurationValue | null>,
+): void {
+  for (const key of ["remoteConsentMessage", "remoteConsentBannerText"]) {
+    const value = payload[key];
+    if (typeof value === "string" && value.trim().length === 0) {
+      payload[key] = null;
+    }
+  }
 }
 
 function readEntityError(error: unknown, entity: "client" | "site"): string {

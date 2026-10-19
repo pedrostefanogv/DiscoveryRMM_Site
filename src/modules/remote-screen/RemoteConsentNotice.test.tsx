@@ -3,28 +3,55 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import RemoteConsentNotice from './RemoteConsentNotice';
 
 describe('RemoteConsentNotice', () => {
-  it('mostra a mensagem, a contagem e a origem da política', () => {
+  it('mostra quem solicitou, a ação padrão (negar) e a política', () => {
     render(
       <RemoteConsentNotice
-        message="Ana solicita acesso remoto."
-        remainingSeconds={42}
+        operator="Ana"
+        timeoutAction="deny"
         policySource="Site"
+        deadlineAt={Date.now() + 42_000}
         onCancel={() => undefined}
       />,
     );
 
-    expect(screen.getByText('Aguardando autorização')).toBeTruthy();
-    expect(screen.getByText('Ana solicita acesso remoto.')).toBeTruthy();
-    expect(screen.getByText('42s')).toBeTruthy();
+    expect(screen.getByText('Aguardando o usuário remoto autorizar o acesso')).toBeTruthy();
+    expect(screen.getByText('Ana solicitou acesso remoto a este computador.')).toBeTruthy();
+    expect(screen.getByText('NEGADO')).toBeTruthy();
     expect(screen.getByText('Política: Site')).toBeTruthy();
+    // Contador é VISUAL (anel animado): nenhum número de segundos na tela.
+    expect(screen.getByTestId('remote-consent-countdown')).toBeTruthy();
+    expect(document.body.textContent).not.toMatch(/\b\d+s\b/);
   });
 
-  it('não mostra contagem negativa e dispara o cancelamento', () => {
-    const onCancel = vi.fn();
-    render(<RemoteConsentNotice remainingSeconds={-5} onCancel={onCancel} />);
+  it('mostra PERMITIDO quando a política aprova no timeout', () => {
+    render(
+      <RemoteConsentNotice
+        operator="Ana"
+        timeoutAction="approve"
+        deadlineAt={Date.now() + 30_000}
+        onCancel={() => undefined}
+      />,
+    );
 
-    expect(screen.getByText('0s')).toBeTruthy();
+    expect(screen.getByText('PERMITIDO')).toBeTruthy();
+  });
+
+  it('sem metadados usa fallback e animação indeterminada', () => {
+    render(<RemoteConsentNotice onCancel={() => undefined} />);
+
+    expect(screen.getByText('Solicitação de acesso remoto enviada ao computador.')).toBeTruthy();
+    expect(screen.getByText(/ação padrão da política será aplicada automaticamente/)).toBeTruthy();
+    expect(screen.getByTestId('remote-consent-countdown')).toBeTruthy();
+  });
+
+  it('dispara o cancelamento da solicitação', () => {
+    const onCancel = vi.fn();
+    render(<RemoteConsentNotice operator="Ana" onCancel={onCancel} />);
+
     fireEvent.click(screen.getByText('Cancelar solicitação'));
     expect(onCancel).toHaveBeenCalledTimes(1);
+    // Após solicitar, o botão entra em "Cancelando..." e não dispara de novo.
+    expect(screen.getByText('Cancelando...')).toBeTruthy();
+    expect((screen.getByText('Cancelando...') as HTMLButtonElement).disabled).toBe(true);
   });
 });

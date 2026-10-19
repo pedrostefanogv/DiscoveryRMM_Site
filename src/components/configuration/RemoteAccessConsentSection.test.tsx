@@ -90,6 +90,22 @@ describe("RemoteAccessConsentSection", () => {
     );
   });
 
+  it("no escopo do servidor não mostra controles de herança", () => {
+    renderSection(buildState(), { scope: "server", showInheritance: false, showReset: false });
+
+    expect(screen.queryByText("Herdar do nível superior")).toBeNull();
+    expect(screen.queryByText("Definir neste site")).toBeNull();
+    expect(screen.queryByText("definido neste site")).toBeNull();
+    expect(screen.getAllByText("definido no servidor").length).toBeGreaterThan(0);
+  });
+
+  it("esconde o rodapé de ações quando a página tem barra global de salvar", () => {
+    renderSection(buildState(), { hideActions: true });
+
+    expect(screen.queryByRole("button", { name: /Salvar alterações/ })).toBeNull();
+    expect(screen.queryByText(/alteração pendente/i)).toBeNull();
+  });
+
   it("explica o efeito combinado da política no resumo", () => {
     renderSection();
 

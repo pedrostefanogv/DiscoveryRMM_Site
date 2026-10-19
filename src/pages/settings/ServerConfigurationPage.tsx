@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import {
   ConfigurationFieldEditor,
+  RemoteAccessConsentSection,
   AiIntegrationCard,
   BackgroundProcessingCard,
   ConfigHealthCard,
@@ -70,6 +71,7 @@ import { parseAIIntegrationSettings } from "@/services/configurationApi";
 import { ApiError } from "@/api";
 import type { ConfigurationValue, TicketAttachmentSettings } from "@/api";
 import type { EditableField } from "@/utils/configurationEditors";
+import type { RemoteConsentFieldState } from "@/components/configuration";
 
 interface FormValues {
   values: Record<string, string>;
@@ -504,6 +506,56 @@ export default function ServerConfigurationPage() {
     String(formValues.values?.objectStorageEndpoint ?? "").trim().length > 0 &&
     String(formValues.values?.objectStorageBucketName ?? "").trim().length > 0;
 
+  // ── Autorização de acesso remoto (seção dedicada) ─────────────────
+  // Calculado a cada render (sem useMemo): o watch() do react-hook-form devolve a
+  // referência viva de _formValues, então memoizar por identidade congelaria os campos.
+  const remoteConsentState: Record<string, RemoteConsentFieldState> = {};
+  for (const field of remoteAccessFields) {
+    remoteConsentState[field.key] = {
+      value: String(formValues.values?.[field.key] ?? ""),
+      // Servidor é a base da herança: não existe "herdar" neste escopo.
+      inherited: false,
+      origin: "Server",
+      locked: false,
+      dirty: pendingKeys.has(field.key),
+    };
+  }
+
+  const saveRemoteConsentFields = async () => {
+    const payload: Record<string, ConfigurationValue> = {};
+    for (const field of remoteAccessFields) {
+      if (!pendingKeys.has(field.key)) continue;
+      const value = String(getValues(`values.${field.key}` as never) ?? "");
+      const validation = validateFieldValue(field.kind, value, field.key);
+      if (validation !== true) {
+        toast.error(field.label + ": " + validation);
+        return;
+      }
+      payload[field.key] = parseFieldValue(field.kind, value, field.key);
+    }
+
+    if (Object.keys(payload).length === 0) return;
+
+    try {
+      await patchMutation.mutateAsync(payload);
+      clearPending(remoteAccessFields.map((field) => field.key));
+      toast.success("Autorização de acesso remoto salva.");
+    } catch (error) {
+      toast.error(readApiError(error));
+    }
+  };
+
+  const discardRemoteConsentFields = () => {
+    const draft = buildServerDraft(serverQuery.data, remoteAccessFields);
+    for (const field of remoteAccessFields) {
+      setValue(`values.${field.key}` as never, draft[field.key] as never, {
+        shouldDirty: false,
+        shouldTouch: false,
+      });
+    }
+    clearPending(remoteAccessFields.map((field) => field.key));
+  };
+
   const renderStorageFieldEditor = (field: EditableField) => {
     const value = formValues.values?.[field.key] ?? "";
     const error = errors.values?.[field.key]?.message;
@@ -914,7 +966,7 @@ export default function ServerConfigurationPage() {
         <Card>
           <CardHeader
             title="Autorização de Acesso Remoto"
-            subtitle="Prompt de consentimento no endpoint e banner local durante sessões de área de trabalho."
+            subtitle="Somente sessões de área de trabalho. Terminal, arquivos, proxy e processos não pedem autorização."
             action={renderSectionAction("remoteAccess")}
           />
           {!collapsedSections.remoteAccess && (
@@ -922,8 +974,26 @@ export default function ServerConfigurationPage() {
               <div className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${tintedIcon.emerald}`}>
                 <ShieldCheck className="h-4 w-4" />
               </div>
-              <div className="flex-1">
-                {remoteAccessFields.map((field) => renderFieldEditor(field))}
+              <div className="min-w-0 flex-1">
+                <RemoteAccessConsentSection
+                  scope="server"
+                  state={remoteConsentState}
+                  showInheritance={false}
+                  showReset={false}
+                  saving={patchMutation.isPending}
+                  onChange={(fieldKey, value) => {
+                    markPending(fieldKey);
+                    setValue(`values.${fieldKey}` as never, value as never, {
+                      shouldDirty: true,
+                      shouldTouch: true,
+                      shouldValidate: true,
+                    });
+                  }}
+                  onToggleInherit={() => undefined}
+                  onResetField={() => undefined}
+                  onSave={() => void saveRemoteConsentFields()}
+                  onDiscard={discardRemoteConsentFields}
+                />
               </div>
             </div>
           )}
