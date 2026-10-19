@@ -38,7 +38,7 @@ import RemoteConsentNotice from '@/modules/remote-screen/RemoteConsentNotice';
 import { openAgentSupportChatWindow } from './agentSupportChatLauncher';
 
 type Tab = 'screen' | 'terminal' | 'files' | 'proxy' | 'processes' | 'services';
-type QualityMode = 'high' | 'hd' | 'manual';
+type QualityMode = 'auto' | 'hd' | 'manual';
 
 // Modo HD: fidelidade máxima de imagem. O perfil "ultra" do backend é
 // (30 FPS, JPEG/WebP 90) e os overrides explícitos abaixo garantem o mesmo
@@ -302,10 +302,10 @@ export default function RemoteSession() {
   const [liveImageQuality, setLiveImageQuality] = useState<number | null>(null);
   const [liveMaxFps, setLiveMaxFps] = useState(0);
   // Modo de qualidade (sempre visível na barra superior):
-  //  - high   = adaptativo (o agent ajusta a compressão à rede/máquina)
+  //  - auto   = adaptativo (o agent ajusta a compressão à máquina/rede)
   //  - hd     = prioriza fidelidade da imagem (WebP 90%, 30 FPS, sem adaptação)
   //  - manual = o operador escolhe codec / compressão / FPS
-  const [qualityMode, setQualityMode] = useState<QualityMode>('high');
+  const [qualityMode, setQualityMode] = useState<QualityMode>('auto');
   const [qualityChanging, setQualityChanging] = useState(false);
   // Snapshot sempre atualizado do modo/parâmetros de qualidade. Usado por
   // operações assíncronas longas (start da sessão, consentimento, troca de
@@ -550,7 +550,7 @@ export default function RemoteSession() {
   // agent pode ainda não ter registrado a sessão quando o comando chega.
   const applyQualityModeToSession = useCallback(async (sessionId: string) => {
     const s = qualityStateRef.current;
-    if (s.mode === 'high') return true;
+    if (s.mode === 'auto') return true;
     const payload: ChangeQualityRequest = s.mode === 'hd'
       ? { quality: 'ultra', codec: 'webp', imageQuality: HD_IMAGE_QUALITY, maxFps: HD_MAX_FPS, auto: false }
       : {
@@ -635,7 +635,7 @@ export default function RemoteSession() {
       // RemoteSessionKind.Processes). Enviamos o kind 'processes' no request.
       const kind = tab === 'screen' ? 'screen' : tab === 'services' ? 'processes' : tab; // screen | terminal | files | processes | proxy
       // Sessão de tela nasce já no perfil do modo escolhido (HD = ultra/WebP;
-      // Alto/Manual preservam o perfil padrão do viewer). Lê o snapshot ATUAL:
+      // Auto/Manual preservam o perfil padrão do viewer). Lê o snapshot ATUAL:
       // o run pode ter começado antes de o usuário trocar o modo.
       const qs = qualityStateRef.current;
       const startQuality = tab === 'screen' && qs.mode === 'hd' ? 'ultra' : qs.quality;
@@ -993,8 +993,9 @@ export default function RemoteSession() {
     }
   }, [qualityChanging, screenSession, agentId, liveQuality, liveCodec, liveImageQuality, liveMaxFps]);
 
-  // Troca do modo de qualidade pela barra superior (Alto / HD / Manual).
-  //  - Alto: religa a adaptação automática do agent (perfil + escada 10-90).
+  // Troca do modo de qualidade pela barra superior (Auto / HD / Manual).
+  //  - Auto: religa a adaptação automática do agent (perfil + escada 10-90 pela
+  //    potência/carga da máquina e bitrate recebido).
   //  - HD: fixa WebP 90% / 30 FPS (auto=false) para priorizar a imagem.
   //  - Manual: mantém os valores atuais e libera os selects de codec/Q/FPS.
   const handleQualityModeChange = useCallback(async (newMode: QualityMode) => {
@@ -1004,7 +1005,7 @@ export default function RemoteSession() {
     const prevImageQ = liveImageQuality;
     const prevMaxFps = liveMaxFps;
     // HD troca o perfil do backend para "ultra"; guarda o perfil anterior para
-    // restaurá-lo ao voltar para Alto. Manual mantém o perfil corrente.
+    // restaurá-lo ao voltar para Auto. Manual mantém o perfil corrente.
     if (newMode === 'hd') profileBeforeHdRef.current = liveQuality;
     setQualityMode(newMode);
     if (newMode !== 'manual') setQualitySettingsOpen(false);
@@ -1018,7 +1019,7 @@ export default function RemoteSession() {
         setLiveCodec('webp');
         setLiveImageQuality(HD_IMAGE_QUALITY);
         setLiveMaxFps(HD_MAX_FPS);
-      } else if (newMode === 'high') {
+      } else if (newMode === 'auto') {
         setLiveQuality(profileBeforeHdRef.current);
         setLiveCodec('webp');
         setLiveImageQuality(null);
@@ -1029,7 +1030,7 @@ export default function RemoteSession() {
 
     setQualityChanging(true);
     try {
-      if (newMode === 'high') {
+      if (newMode === 'auto') {
         const restoredProfile = profileBeforeHdRef.current;
         setLiveQuality(restoredProfile);
         setLiveImageQuality(null);
@@ -1396,7 +1397,7 @@ export default function RemoteSession() {
             </select>
           </div>
 
-          {/* Modo de qualidade da tela: Alto (adaptativo) / HD / Manual. */}
+          {/* Modo de qualidade da tela: Auto (adaptativo) / HD / Manual. */}
           {activeTab === 'screen' && (
             <>
               <div className="flex items-center gap-0.5">
@@ -1406,10 +1407,10 @@ export default function RemoteSession() {
                   value={qualityMode}
                   disabled={qualityChanging || connectingTab === 'screen'}
                   onChange={(e) => { void handleQualityModeChange(e.target.value as QualityMode); }}
-                  title="Qualidade da imagem: Alto (adaptativo) · HD (prioriza fidelidade) · Manual (ajuste fino)"
+                  title="Qualidade da imagem: Auto (adaptativo pela máquina/rede) · HD (prioriza fidelidade) · Manual (ajuste fino)"
                   aria-label="Modo de qualidade da imagem"
                 >
-                  <option value="high">Alto</option>
+                  <option value="auto">Auto</option>
                   <option value="hd">HD</option>
                   <option value="manual">Manual</option>
                 </select>
@@ -1465,7 +1466,7 @@ export default function RemoteSession() {
                           title="Qualidade da imagem (compressão)"
                         >
                           {liveImageQuality === null && (
-                            <option value="" disabled>Auto</option>
+                            <option value="" disabled>Perfil</option>
                           )}
                           {IMAGE_QUALITY_PRESETS.map((iq) => (
                             <option key={iq.value} value={iq.value}>{iq.label}</option>

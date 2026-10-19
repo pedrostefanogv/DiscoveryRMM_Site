@@ -1303,8 +1303,14 @@ export default function RemoteScreenViewer({
           {isPaused && <span className="text-warning">⏸</span>}
           {agentMetrics && (
             <>
-              <span title="Resolução">📐 {agentMetrics.resolution}</span>
-              <span title="Qualidade JPEG">🖼 {agentMetrics.imageQuality}%</span>
+              {/* Sem emoji aqui: o ícone ao lado da resolução confundia com
+                  indicador de qualidade. Rótulos explícitos e curtos. */}
+              <span title="Resolução da tela remota" className="text-muted-foreground">
+                Res. {agentMetrics.resolution}
+              </span>
+              <span title="Qualidade da imagem (compressão)">
+                Qual. {agentMetrics.imageQuality}%
+              </span>
             </>
           )}
           {agentMetrics && !infoHovered && (
@@ -1315,15 +1321,17 @@ export default function RemoteScreenViewer({
         </div>
         {agentMetrics && infoHovered && (
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-muted border-t border-white/10 pt-1 max-w-[360px]">
-            <span title="FPS do agent (efetivo/perfil)">🎯 {agentMetrics.effectiveFps}/{agentMetrics.profileFps}FPS</span>
+            <span title="FPS do agent (efetivo/perfil)">
+              Agent {agentMetrics.effectiveFps}/{agentMetrics.profileFps} FPS
+            </span>
             <span title={`Compressão ${agentMetrics.compressionRatio?.toFixed(1)}:1`}>
-              🗜 {agentMetrics.compressionRatio?.toFixed(1)}:1
+              Compressão {agentMetrics.compressionRatio?.toFixed(1)}:1
             </span>
             <span title={`Encode médio: ${agentMetrics.avgEncodeMs?.toFixed(1)}ms`}>
-              ⚡ {agentMetrics.avgEncodeMs?.toFixed(1)}ms
+              Encode {agentMetrics.avgEncodeMs?.toFixed(1)}ms
             </span>
             <span title={`Frames (5s): ${agentMetrics.framesSent5s} enviados / ${agentMetrics.framesSkipped5s} pulados`}>
-              📊 {agentMetrics.framesSent5s}/{agentMetrics.framesSkipped5s}
+              Frames {agentMetrics.framesSent5s}/{agentMetrics.framesSkipped5s}
             </span>
             <span className="text-muted-foreground">#{agentMetrics.totalFrames}</span>
           </div>
