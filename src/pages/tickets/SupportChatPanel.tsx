@@ -108,7 +108,9 @@ function statusMessage(session: TicketChatSession | null | undefined): string | 
             ? "O convite foi substituído por uma conversa mais recente na mesma máquina."
             : session.declinedReason === "no_ui"
               ? "O agent não tinha interface na máquina para mostrar o convite."
-              : "O usuário recusou o chat.";
+              : session.declinedReason === "user_denied" || !session.declinedReason
+                ? "O usuário recusou o chat (escolheu \"Agora não\" na máquina)."
+                : "O usuário recusou o chat.";
     case "Expired":
       return "O convite expirou. Inicie uma nova conversa.";
     case "Ended":
@@ -175,8 +177,41 @@ export default function SupportChatPanel({
   const realtime = useRealtimeStatus();
   const messagesIntervalMs = realtime.natsConnected ? 5_000 : 3_000;
 
-  const current = useSupportChatCurrent(client, true, realtime.natsConnected ? 10_000 : 5_000);
+  // Intermitência da consulta de estado. Com o convite PENDENTE ela é curta: o
+  // atendente está esperando o usuário responder na máquina e o resultado
+  // (aceite/recusa) chega pelo sinal NATS — quando o sinal se perde (reconexão
+  // do navegador, subject fora da allow-list do token) o painel ficava
+  // "Aguardando confirmação" para sempre: o sintoma "cliquei em Agora não e não
+  // aparece para o suporte". Nas demais fases volta ao ritmo lento (rede de
+  // segurança, não polling de verdade).
+  const [pendingDecision, setPendingDecision] = useState(false);
+  const sessionPollMs = pendingDecision
+    ? (realtime.natsConnected ? 3_000 : 2_000)
+    : (realtime.natsConnected ? 10_000 : 5_000);
+
+  const current = useSupportChatCurrent(client, true, sessionPollMs);
   const activeSession = current.data?.session ?? null;
+
+  const waitingDecision = activeSession?.status === "Pending";
+  useEffect(() => {
+    setPendingDecision(waitingDecision);
+  }, [waitingDecision]);
+
+  useEffect(() => {
+    if (!waitingDecision) return undefined;
+    // Janela do agente (ou aba) voltando ao foco: confere na hora, sem esperar
+    // o próximo tick.
+    const onFocus = () => {
+      void current.refetch();
+    };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onFocus);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onFocus);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [waitingDecision]);
 
   // Quando a conversa termina a sessão sai da consulta (`hasSession` = false) e
   // a thread desaparecia da tela. Guardamos a última sessão para MANTER a

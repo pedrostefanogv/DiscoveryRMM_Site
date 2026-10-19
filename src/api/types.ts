@@ -4386,6 +4386,10 @@ export interface AgentWindowsUpdate {
   installResultCode: number | null;
   installError: string | null;
   source: string;
+  /** Baixada pelo Windows Update mas ainda não instalada (campo opcional do agente). */
+  isDownloaded?: boolean;
+  /** Marcação de obrigatória vinda da busca WUA (campo opcional do agente). */
+  isMandatory?: boolean;
 }
 
 export interface AgentWindowsUpdatePage {
@@ -4397,6 +4401,48 @@ export interface AgentWindowsUpdatePage {
   installedCount: number;
 }
 
+/**
+ * Status normalizado da última varredura do Windows Update no agente.
+ * O backend aceita: ok, partial, error, timeout, unsupported, unknown.
+ */
+export type AgentWindowsUpdateScanStatus =
+  | "ok"
+  | "partial"
+  | "error"
+  | "timeout"
+  | "unsupported"
+  | "unknown";
+
+/**
+ * Sonda barata de estado do Windows Update reportada junto com o inventário.
+ * Todos os campos são opcionais: versões antigas do agente/API não os enviam.
+ */
+export interface AgentWindowsUpdateProbe {
+  /** Nome/estado do serviço wuauserv (ex.: "running", "disabled", "stopped"). */
+  service?: string | null;
+  /** Serviço wuauserv com Start=4 (desabilitado). */
+  serviceDisabled?: boolean | null;
+  /** Cliente aponta para um servidor WSUS. */
+  wsus?: boolean | null;
+  /** Estado de política de WU gerenciada por outra entidade (GPO/Intune). */
+  policyManaged?: boolean | null;
+  /** Status do último resultado "Install" do WU (0 = sucesso). */
+  lastInstallResult?: number | null;
+  /** Última instalação bem-sucedida (Results\Install\LastSuccessTime). */
+  lastInstallSuccessAt?: string | null;
+  /** Download em andamento detectado pela sonda. */
+  downloadInProgress?: boolean | null;
+  /** Percentual do download em andamento, quando informado. */
+  downloadPercent?: number | null;
+  /** Momento da última sonda de estado. */
+  probedAt?: string | null;
+}
+
+/**
+ * Snapshot da aba "Atualizações" do agente.
+ * Os campos depois de `rebootCheckedAt` são OPCIONAIS: o painel tolera a
+ * ausência deles (API/agente antigos) e degrada apenas os avisos.
+ */
 export interface AgentWindowsUpdateSnapshot {
   agentId: string;
   pendingCount: number;
@@ -4410,6 +4456,18 @@ export interface AgentWindowsUpdateSnapshot {
   pendingReboot: boolean;
   pendingRebootReasons: string[];
   rebootCheckedAt: string | null;
+  /** Código estável do erro da última varredura (ex.: "service_disabled"). */
+  scanErrorCode?: string | null;
+  /** Quantidade de resultados descartados pela varredura (drivers etc.). */
+  skippedCount?: number;
+  /** Motivo dos descartes da varredura, para exibir ao operador. */
+  skippedReasons?: string[];
+  /** Sonda de estado do Windows Update. */
+  probe?: AgentWindowsUpdateProbe | null;
+  /** COM/WUA utilizável no último scan. */
+  wuaAvailable?: boolean | null;
+  /** Versão do agente que gerou o último inventário. */
+  agentVersion?: string | null;
 }
 
 export interface PatchInventoryGroup {

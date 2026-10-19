@@ -217,8 +217,12 @@ export const agentPatchesApi = {
   snapshot: (agentId: string) =>
     api.get<AgentWindowsUpdateSnapshot>(`${agentBase(agentId)}/snapshot`),
 
-  scan: (agentId: string) =>
-    api.post<PatchDispatchResult>(`${agentBase(agentId)}/scan`, {}),
+  /**
+   * Pede uma varredura imediata ao agente. `reason` é registrado na auditoria
+   * do comando (ex.: "botão da aba Atualizações", "alerta de varredura desatualizada").
+   */
+  scan: (agentId: string, body?: { reason?: string }) =>
+    api.post<PatchDispatchResult>(`${agentBase(agentId)}/scan`, body ?? {}),
 
   install: (
     agentId: string,

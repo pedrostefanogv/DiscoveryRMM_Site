@@ -1,5 +1,14 @@
-import { useMemo, useState } from "react";
-import { Download, RefreshCw, ShieldCheck, ShieldX, AlertTriangle } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import {
+  AlertTriangle,
+  Clock,
+  Download,
+  Info,
+  Loader2,
+  RefreshCw,
+  ShieldCheck,
+  ShieldX,
+} from "lucide-react";
 import toast from "react-hot-toast";
 import { Badge, Button, ConfirmDialog, DataTable, ErrorDisplay, Input, Loading, Modal, Select, type Column } from "@/components/ui";
 import { useAuthorization } from "@/auth/authorization";
@@ -29,6 +38,30 @@ import {
   statusColor,
   statusLabel,
 } from "@/pages/patches/patchesUtils";
+import {
+  deriveScanHealth,
+  deriveUpdateActivity,
+  describePendingEmpty,
+  describeProbe,
+  formatElapsed,
+  parseTimestamp,
+  type ScanHealth,
+} from "./agentWindowsUpdatesPanel.utils";
+
+/** Quanto tempo o painel acompanha o agente em cadência rápida após pedir uma varredura. */
+const SCAN_FOLLOW_UP_MS = 3 * 60 * 1000;
+
+const HEALTH_TONE_CLASSES: Record<ScanHealth["tone"], string> = {
+  ok: "border-success/40 bg-success/10 text-success",
+  warning: "border-warning/40 bg-warning/10 text-warning",
+  danger: "border-danger/40 bg-danger/10 text-danger",
+};
+
+const PROBE_TONE_CLASSES: Record<ScanHealth["tone"], string> = {
+  ok: "text-success",
+  warning: "text-warning",
+  danger: "text-danger",
+};
 
 type UpdateView = "pending" | "installed";
 
@@ -57,6 +90,17 @@ export function AgentWindowsUpdatesPanel({ agentId }: { agentId: string }) {
   const [installReason, setInstallReason] = useState("");
   const [installPostAction, setInstallPostAction] = useState<"none" | "restart" | "shutdown">("none");
   const [confirmInstallApproved, setConfirmInstallApproved] = useState(false);
+  /** Momento em que a última varredura foi solicitada por este painel. */
+  const [scanRequestedAt, setScanRequestedAt] = useState<number | null>(null);
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  /**
+   * Polling acelerado (15s): enquanto a varredura pedida por este painel não
+   * chegou ou enquanto a máquina está com reinício pendente.
+   */
+  const [fastPolling, setFastPolling] = useState(false);
+
+  const snapshot = useAgentWindowsUpdateSnapshot(agentId, { fastPolling });
+  const data = snapshot.data;
 
   const effectiveStatus = statusFilter || (view === "pending" ? "pending" : "installed");
   const pageQuery = useAgentWindowsUpdates(agentId, {
@@ -67,7 +111,6 @@ export function AgentWindowsUpdatesPanel({ agentId }: { agentId: string }) {
     severity: severity || undefined,
     order: "desc",
   });
-  const snapshot = useAgentWindowsUpdateSnapshot(agentId);
   const scan = useScanAgentWindowsUpdates();
   const approve = useSetAgentWindowsUpdateApproval();
   const install = useInstallAgentWindowsUpdate();
@@ -84,7 +127,6 @@ export function AgentWindowsUpdatesPanel({ agentId }: { agentId: string }) {
   const items = pageQuery.data?.items ?? [];
   const totalCount = pageQuery.data?.totalCount ?? 0;
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
-  const data = snapshot.data;
 
   const pendingApprovedKeys = useMemo(
     () =>
@@ -95,11 +137,77 @@ export function AgentWindowsUpdatesPanel({ agentId }: { agentId: string }) {
     [items],
   );
 
-  const handleScan = async () => {
+  // ── Estado da varredura / atividade ────────────────────────────────────
+  const health = useMemo(() => deriveScanHealth(data, nowMs), [data, nowMs]);
+  const lastCollectedMs = parseTimestamp(data?.lastCollectedAt);
+  const scanRequestedAtMs = scanRequestedAt;
+  /** Snapshot posterior ao pedido de varredura: a resposta daquele clique chegou. */
+  const scanAnswered =
+    scanRequestedAtMs !== null &&
+    (lastCollectedMs !== null && lastCollectedMs >= scanRequestedAtMs);
+
+  /**
+   * Aguardando a varredura pedida por este painel responder. Depois de
+   * SCAN_FOLLOW_UP_MS sem resposta (agente offline/política), desistimos para
+   * o painel voltar à cadência normal e continuar utilizável.
+   */
+  const scanGaveUp =
+    scanRequestedAtMs !== null && scanRequestedAtMs !== undefined && nowMs - scanRequestedAtMs > SCAN_FOLLOW_UP_MS;
+  const followUpActive = scanRequestedAtMs !== null && !scanAnswered && !scanGaveUp;
+
+  /**
+   * Liga/desliga o polling acelerado (15s) do snapshot: enquanto a varredura
+   * pedida não chega e enquanto há reinício pendente. Depois do pedido, o
+   * painel confere o snapshot a cada 15s até ver a resposta do agente.
+   */
+  const shouldFastPoll = followUpActive || data?.pendingReboot === true;
+  useEffect(() => {
+    setFastPolling(shouldFastPoll);
+  }, [shouldFastPoll]);
+
+  // Relógio curto para atualizar o "há N", expirar o follow-up e reavaliar o
+  // banner de varredura desatualizada sem precisar de refresh da página.
+  useEffect(() => {
+    if (!fastPolling && scanRequestedAtMs === null) return;
+    setNowMs(Date.now());
+    const id = window.setInterval(() => setNowMs(Date.now()), 15_000);
+    return () => window.clearInterval(id);
+  }, [fastPolling, scanRequestedAtMs]);
+
+  const activity = useMemo(() => deriveUpdateActivity(data), [data]);
+  const probeFlags = useMemo(() => describeProbe(data), [data]);
+  const scanning = scan.isPending || followUpActive;
+  const scanButtonLabel = scanning
+    ? "Verificando..."
+    : health.alert
+      ? "Verificar atualizações agora"
+      : "Verificar atualizações";
+  /** Aviso quando o pedido de varredura não retornou dentro do tempo esperado. */
+  const followUpTimedOut =
+    scanGaveUp && !health.neverScanned && !scanAnswered && scanRequestedAtMs !== null;
+
+  const emptyMessage = useMemo(
+    () =>
+      describePendingEmpty(data, health, {
+        skippedCount: data?.skippedCount,
+        skippedReasons: data?.skippedReasons,
+      }),
+    [data, health],
+  );
+
+  const handleScan = async (source: "toolbar" | "banner" = "toolbar") => {
     try {
-      await scan.mutateAsync(agentId);
-      toast.success("Varredura de atualizações solicitada ao agente.");
+      setScanRequestedAt(Date.now());
+      setNowMs(Date.now());
+      await scan.mutateAsync({
+        agentId,
+        reason: source === "banner" ? "aba Atualizações (varredura desatualizada)" : "aba Atualizações (manual)",
+      });
+      toast.success(
+        "Varredura solicitada ao agente. A atualização dos dados pode levar alguns segundos.",
+      );
     } catch (error) {
+      setScanRequestedAt(null);
       toast.error(error instanceof Error ? error.message : "Falha ao solicitar varredura.");
     }
   };
@@ -258,6 +366,49 @@ export function AgentWindowsUpdatesPanel({ agentId }: { agentId: string }) {
 
   return (
     <div className="space-y-4">
+      {snapshot.isError && (
+        <div role="alert" className="rounded-xl border border-danger/40 bg-danger/10 p-3 text-sm text-danger">
+          Não foi possível ler o snapshot do Windows Update deste agente.
+          <Button size="sm" variant="secondary" className="ml-2" onClick={() => void snapshot.refetch()}>
+            Tentar de novo
+          </Button>
+        </div>
+      )}
+
+      {/* Alerta de varredura desatualizada / falha / nunca coletada. */}
+      {health.alert && (
+        <div
+          role="alert"
+          className={`flex flex-wrap items-start gap-2 rounded-xl border p-3 text-sm ${HEALTH_TONE_CLASSES[health.tone]}`}
+        >
+          {health.tone === "danger" ? (
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+          ) : (
+            <Clock className="mt-0.5 h-4 w-4 shrink-0" />
+          )}
+          <div className="min-w-0 flex-1">
+            <p className="font-medium">{health.title}</p>
+            <p className="text-xs opacity-90">{health.reason}</p>
+            {data?.scanStatus && !health.neverScanned && (
+              <p className="mt-1 text-[11px] opacity-75">
+                status: {data.scanStatus}
+                {data.scanDurationMs != null ? ` · ${(data.scanDurationMs / 1000).toFixed(1)}s` : ""}
+                {data.scanErrorCode ? ` · código: ${data.scanErrorCode}` : ""}
+              </p>
+            )}
+          </div>
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => void handleScan("banner")}
+            disabled={scanning || !canExecute}
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+            {scanning ? "Verificando..." : "Verificar atualizações"}
+          </Button>
+        </div>
+      )}
+
       {data?.pendingReboot && (
         <div className="flex items-start gap-2 rounded-xl border border-warning/40 bg-warning/10 p-3 text-sm text-warning">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
@@ -265,6 +416,10 @@ export function AgentWindowsUpdatesPanel({ agentId }: { agentId: string }) {
             <p className="font-medium">Reinício pendente</p>
             <p className="text-xs">
               {(data.pendingRebootReasons ?? []).map(rebootReasonLabel).join(", ") || "motivo não informado"}
+            </p>
+            <p className="text-[11px] opacity-80">
+              A busca do Windows Update pode deixar de listar a atualização como pendente até o reinício
+              ser feito. Veja também a aba "Instaladas".
             </p>
           </div>
         </div>
@@ -280,9 +435,21 @@ export function AgentWindowsUpdatesPanel({ agentId }: { agentId: string }) {
           </Button>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Button variant="secondary" onClick={() => void handleScan()} disabled={scan.isPending || !canExecute}>
-            <RefreshCw className="h-4 w-4" />
-            {scan.isPending ? "Verificando..." : "Verificar atualizações"}
+          {activity.key !== "idle" && (
+            <span title={activity.detail} aria-label={activity.label}>
+              <Badge color={activity.tone}>
+                {activity.key === "downloading" ? (
+                  <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                ) : (
+                  <Download className="mr-1 h-3 w-3" />
+                )}
+                {activity.label}
+              </Badge>
+            </span>
+          )}
+          <Button variant="secondary" onClick={() => void handleScan("toolbar")} disabled={scanning || !canExecute}>
+            <RefreshCw className={`h-4 w-4 ${scanning ? "animate-spin" : ""}`} />
+            {scanButtonLabel}
           </Button>
           <Button onClick={() => setConfirmInstallApproved(true)} disabled={installApproved.isPending || !canExecute}>
             <Download className="h-4 w-4" />
@@ -297,11 +464,46 @@ export function AgentWindowsUpdatesPanel({ agentId }: { agentId: string }) {
         </div>
       </div>
 
-      <p className="text-xs text-muted">
-        Última varredura: {formatPatchDate(data?.lastCollectedAt)} · status: {data?.scanStatus ?? "—"}
-        {data?.scanError ? " (" + data.scanError + ")" : ""}
-        {data?.pendingReboot ? " · reinício pendente" : ""}
-      </p>
+      <div className="flex flex-col gap-1 text-xs text-muted">
+        <p>
+          <span className="font-medium text-foreground">Última varredura {formatElapsed(health.ageMs)}</span>
+          {" · "}
+          {formatPatchDate(data?.lastCollectedAt)}
+          {data?.scanDurationMs != null ? ` · durou ${(data.scanDurationMs / 1000).toFixed(1)}s` : ""}
+          {" · status: "}
+          <span className={health.failed ? "text-danger" : health.stale ? "text-warning" : "text-success"}>
+            {data?.scanStatus ?? "unknown"}
+          </span>
+          {data?.skippedCount ? ` · ${data.skippedCount} resultado(s) ignorado(s)` : ""}
+          {followUpActive ? " · aguardando resposta da varredura solicitada" : ""}
+        </p>
+        {data?.scanError && (
+          <p className="text-danger">Falha da última varredura: {data.scanError}</p>
+        )}
+        {followUpTimedOut && (
+          <p className="text-warning">
+            A varredura solicitada há {formatElapsed(nowMs - (scanRequestedAtMs ?? nowMs))} ainda não retornou.
+            O agente pode estar offline ou sem permissão; o inventário exibido continua sendo o anterior.
+          </p>
+        )}
+        {data?.probe && (
+          <p className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <span className="inline-flex items-center gap-1 text-muted">
+              <Info className="h-3 w-3" />
+              Sonda do agente:
+            </span>
+            {probeFlags.length === 0 && <span>sem dados</span>}
+            {probeFlags.map((flag) => (
+              <span key={flag.label} className={PROBE_TONE_CLASSES[flag.tone]}>
+                {flag.label}: <span className="font-medium">{flag.value}</span>
+              </span>
+            ))}
+          </p>
+        )}
+        {data?.probe?.lastInstallSuccessAt && (
+          <p>Última instalação bem-sucedida no WU: {formatPatchDate(data.probe.lastInstallSuccessAt)}</p>
+        )}
+      </div>
 
       <div className="flex flex-wrap items-end gap-2">
         <Input
@@ -326,16 +528,69 @@ export function AgentWindowsUpdatesPanel({ agentId }: { agentId: string }) {
         )}
       </div>
 
-      <DataTable
-        columns={columns}
-        data={items}
-        keyExtractor={(update) => update.id}
-        showPagination={false}
-        emptyMessage={view === "pending" ? "Nenhuma atualização pendente" : "Nenhuma atualização instalada reportada"}
-      />
+      {/* Estado vazio explicativo: a busca WUA padrão só lista o que ainda
+          falta baixar/instalar — vazio não significa "máquina em dia". */}
+      {items.length === 0 && view === "pending" ? (
+        <div
+          className={
+            emptyMessage.suspicious
+              ? "rounded-xl border border-warning/40 bg-warning/10 p-3 text-sm"
+              : "rounded-xl border border-border bg-surface-light p-3 text-sm"
+          }
+        >
+          <p className="font-medium text-foreground">{emptyMessage.title}</p>
+          <p className="mt-1 text-xs text-muted">{emptyMessage.description}</p>
+          {emptyMessage.suspicious && (
+            <div className="mt-2 flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => void handleScan("banner")}
+                disabled={scanning || !canExecute}
+              >
+                <RefreshCw className="h-3.5 w-3.5" />
+                {scanning ? "Verificando..." : "Verificar atualizações"}
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => { setView("installed"); setStatusFilter(""); setPage(1); }}
+              >
+                Ver instaladas ({data?.installedCount ?? 0})
+              </Button>
+            </div>
+          )}
+        </div>
+      ) : items.length === 0 ? (
+        <div className="rounded-xl border border-border bg-surface-light p-3 text-sm">
+          <p className="font-medium text-foreground">
+            {view === "pending"
+              ? "Nenhuma atualização pendente"
+              : "Nenhuma atualização instalada reportada"}
+          </p>
+          {view === "installed" && (
+            <p className="mt-1 text-xs text-muted">
+              O agente reporta as atualizações instaladas pela busca de KBs (Win32_QuickFixEngineering) e
+              pela busca do Windows Update. Se a lista estiver vazia após uma varredura bem-sucedida, o
+              agente pode estar sem permissão de leitura no WMI.
+            </p>
+          )}
+        </div>
+      ) : (
+        <DataTable
+          columns={columns}
+          data={items}
+          keyExtractor={(update) => update.id}
+          showPagination={false}
+          emptyMessage={view === "pending" ? emptyMessage.title : "Nenhuma atualização instalada reportada"}
+        />
+      )}
 
       <div className="flex items-center justify-between text-sm">
-        <span className="text-muted">Página {page} de {totalPages} · {totalCount} registro(s)</span>
+        <span className="text-muted">
+          Página {page} de {totalPages} · {totalCount} registro(s)
+          {pageQuery.isFetching ? " · atualizando..." : ""}
+        </span>
         <div className="flex gap-2">
           <Button size="sm" variant="secondary" onClick={() => setPage((current) => Math.max(1, current - 1))} disabled={page <= 1 || pageQuery.isFetching}>
             Anterior

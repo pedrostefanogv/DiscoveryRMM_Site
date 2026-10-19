@@ -28,12 +28,35 @@ export function useAgentWindowsUpdates(
   });
 }
 
-export function useAgentWindowsUpdateSnapshot(agentId: string | undefined) {
+/** Cadência normal do snapshot quando nada está acontecendo no agente. */
+const SNAPSHOT_IDLE_INTERVAL_MS = 30_000;
+/** Cadência acelerada: varredura recém-solicitada, reinício pendente ou painel aberto acompanhando. */
+const SNAPSHOT_FAST_INTERVAL_MS = 15_000;
+
+export interface AgentWindowsUpdateSnapshotOptions {
+  /**
+   * Acompanhar o agente em cadência acelerada (15s). O painel liga isso quando
+   * acabou de pedir uma varredura ou quando há reinício pendente.
+   */
+  fastPolling?: boolean;
+  /** Desliga o polling (útil em telas que só leem o snapshot uma vez). */
+  polling?: boolean;
+}
+
+export function useAgentWindowsUpdateSnapshot(
+  agentId: string | undefined,
+  options?: AgentWindowsUpdateSnapshotOptions,
+) {
+  const polling = options?.polling !== false;
   return useQuery({
     queryKey: KEYS.snapshot(agentId ?? ""),
     queryFn: () => agentPatchesApi.snapshot(agentId!),
     enabled: Boolean(agentId),
-    refetchInterval: 30_000,
+    refetchInterval: !polling
+      ? false
+      : options?.fastPolling
+        ? SNAPSHOT_FAST_INTERVAL_MS
+        : SNAPSHOT_IDLE_INTERVAL_MS,
     refetchIntervalInBackground: false,
   });
 }
@@ -50,7 +73,10 @@ function useInvalidateAgentPatches() {
 export function useScanAgentWindowsUpdates() {
   const invalidate = useInvalidateAgentPatches();
   return useMutation({
-    mutationFn: (agentId: string) => agentPatchesApi.scan(agentId),
+    mutationFn: (input: string | { agentId: string; reason?: string }) =>
+      typeof input === "string"
+        ? agentPatchesApi.scan(input)
+        : agentPatchesApi.scan(input.agentId, input.reason ? { reason: input.reason } : undefined),
     onSuccess: invalidate,
   });
 }
