@@ -15,6 +15,7 @@ import {
 import { useTicketChatRealtime } from "@/hooks/useTicketChatRealtime";
 import { isImageAttachment, triggerBlobDownload } from "@/utils/chatAttachment";
 import { openTicketChatWindow, PopupBlockedError } from "./ticketChatLauncher";
+import { statusMessage } from "./SupportChatPanel";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Aba "Chat" do chamado — LISTA + HISTÓRICO (somente leitura).
@@ -257,6 +258,14 @@ export default function TicketChatHistory({ ticketId, agentId, clientId, siteId,
 
       {agentMissing && !currentSession && (
         <p className="text-sm text-muted">O chamado não está vinculado a uma máquina.</p>
+      )}
+
+      {/* Motivo do estado final (recusa/expiração/encerramento).
+          Antes a lista só mostrava o selo "Recusado": o atendente precisava
+          deduzir o que aconteceu. A API agora devolve a sessão final, então o
+          motivo chega aqui — inclusive "o usuário escolheu Agora não". */}
+      {statusMessage(currentSession) && (
+        <p className="text-sm text-muted">{statusMessage(currentSession)}</p>
       )}
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,340px)_1fr]">

@@ -96,7 +96,7 @@ function describeError(error: unknown, fallback: string): string {
   return fallback + " — " + detail;
 }
 
-function statusMessage(session: TicketChatSession | null | undefined): string | null {
+export function statusMessage(session: TicketChatSession | null | undefined): string | null {
   if (!session) return null;
   switch (session.status) {
     case "Declined":
@@ -108,11 +108,13 @@ function statusMessage(session: TicketChatSession | null | undefined): string | 
             ? "O convite foi substituído por uma conversa mais recente na mesma máquina."
             : session.declinedReason === "no_ui"
               ? "O agent não tinha interface na máquina para mostrar o convite."
-              : session.declinedReason === "user_denied" || !session.declinedReason
+              : session.declinedReason === "user_dismissed"
+                ? "O aviso do convite ficou sem resposta na máquina do usuário."
+                : session.declinedReason === "user_denied" || !session.declinedReason
                 ? "O usuário recusou o chat (escolheu \"Agora não\" na máquina)."
                 : "O usuário recusou o chat.";
     case "Expired":
-      return "O convite expirou. Inicie uma nova conversa.";
+      return "O convite expirou sem resposta na máquina. Inicie uma nova conversa.";
     case "Ended":
       return session.endReason === "inactivity"
         ? "Conversa encerrada por inatividade."
@@ -192,7 +194,25 @@ export default function SupportChatPanel({
   const current = useSupportChatCurrent(client, true, sessionPollMs);
   const activeSession = current.data?.session ?? null;
 
-  const waitingDecision = activeSession?.status === "Pending";
+  // Última sessão conhecida mantém a conversa visível enquanto a consulta não
+  // devolve nada. O status dela também decide se continuamos verificando.
+  const [lastSession, setLastSession] = useState<TicketChatSession | null>(null);
+  useEffect(() => {
+    if (activeSession) setLastSession(activeSession);
+  }, [activeSession]);
+
+  // "Aguardando confirmação" NÃO pode depender só de activeSession.
+  //
+  // BUG CORRIGIDO: a consulta da sessão corrente devolvia hasSession=false assim
+  // que a sessão saía de Pending/Active. O painel então parava de verificar a
+  // decisão do usuário e ficava congelado no último snapshot "Pending" — mesmo
+  // depois de o usuário clicar em "Agora não" na máquina. O servidor agora
+  // devolve a sessão final (Declined/Expired/Ended); enquanto a última sessão
+  // conhecida ainda estiver Pending mantemos a verificação curta, porque é
+  // justamente a janela em que a resposta pode chegar.
+  const knownStatus = activeSession?.status ?? lastSession?.status ?? null;
+  const waitingDecision = knownStatus === "Pending";
+
   useEffect(() => {
     setPendingDecision(waitingDecision);
   }, [waitingDecision]);
@@ -212,15 +232,6 @@ export default function SupportChatPanel({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [waitingDecision]);
-
-  // Quando a conversa termina a sessão sai da consulta (`hasSession` = false) e
-  // a thread desaparecia da tela. Guardamos a última sessão para MANTER a
-  // conversa visível em leitura: o operador continua lendo o histórico, vê quem
-  // encerrou e a janela não "esvazia" sozinha.
-  const [lastSession, setLastSession] = useState<TicketChatSession | null>(null);
-  useEffect(() => {
-    if (activeSession) setLastSession(activeSession);
-  }, [activeSession]);
 
   const session = activeSession ?? lastSession;
   const sessionId = session?.id;
@@ -528,7 +539,9 @@ export default function SupportChatPanel({
               <p className="text-sm text-muted">
                 {sessionForUi.status === "Active"
                   ? "Nenhuma mensagem ainda. Envie a primeira."
-                  : "Aguardando a confirmação na máquina do usuário."}
+                  : sessionForUi.status === "Pending"
+                    ? "Aguardando a confirmação na máquina do usuário."
+                    : "Nenhuma mensagem nesta conversa."}
               </p>
             )}
 
