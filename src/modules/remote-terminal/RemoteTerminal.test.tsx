@@ -87,7 +87,6 @@ describe('RemoteTerminal — ciclo de vida da sessão', () => {
                 natsSubject="tenant.c1.site.s1.agent.a1.remote.session.sess-1"
                 natsUrl="wss://nats.example/nats/"
                 jwt="jwt-1"
-                nkeySeed=""
             />,
         );
         unmount();
@@ -96,7 +95,7 @@ describe('RemoteTerminal — ciclo de vida da sessão', () => {
 
     it('expõe a identidade da sessão no DOM para diagnóstico/E2E', () => {
         const { container } = render(
-            <RemoteTerminal sessionId="sess-9" agentId="agent-9" natsSubject="s" natsUrl="wss://x/" jwt="j" nkeySeed="" />,
+            <RemoteTerminal sessionId="sess-9" agentId="agent-9" natsSubject="s" natsUrl="wss://x/" jwt="j" />,
         );
         expect(container.querySelector('[data-session-id="sess-9"]')).not.toBeNull();
         expect(container.querySelector('[data-agent-id="agent-9"]')).not.toBeNull();

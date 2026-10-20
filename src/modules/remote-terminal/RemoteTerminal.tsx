@@ -52,7 +52,6 @@ interface RemoteTerminalProps {
   natsSubject?: string;
   natsUrl?: string;
   jwt?: string;
-  nkeySeed?: string;
   /** Reporta o status de conexão ao pai (para exibir na barra de rodapé unificada). */
   onConnectionChange?: (connected: boolean) => void;
   /** Reporta os shells disponíveis ao pai (para popular o seletor de shell). */
@@ -94,14 +93,19 @@ interface TermReadyPayload {
   encoding?: string;
 }
 
-// Últimas dimensões fitadas do terminal, persistem entre sessões da página:
-// o próximo startSession (terminal) já nasce com termCols/termRows corretos
-// (a API/agent suportam — evita console 120×40 + corrida de resize no boot).
-let lastFittedCols = 0;
-let lastFittedRows = 0;
+// Últimas dimensões fitadas do terminal, POR SESSÃO: cada instância guarda as
+// suas dims em ref e as registra no mapa do módulo sob o sessionId (removidas
+// no unmount). Assim o próximo startSession (terminal) nasce com
+// termCols/termRows corretos SEM vazar dims de uma sessão antiga/fechada para
+// outra (antes eram globais de módulo, compartilhadas entre sessões).
+const fittedDimsBySession = new Map<string, { cols: number; rows: number }>();
+let lastFittedSessionId = '';
 /** Dimensões do último fit do terminal remoto (0,0 se nunca fitado). */
 export function getLastFittedTermDims(): { cols: number; rows: number } {
-  return { cols: lastFittedCols, rows: lastFittedRows };
+  const dims = lastFittedSessionId
+    ? fittedDimsBySession.get(lastFittedSessionId)
+    : undefined;
+  return dims ?? { cols: 0, rows: 0 };
 }
 
 
@@ -563,7 +567,6 @@ export default function RemoteTerminal({
   natsSubject = '',
   natsUrl = '',
   jwt = '',
-  nkeySeed = '',
   onConnectionChange,
   onShells,
   getFreshCredentials,
@@ -604,6 +607,24 @@ export default function RemoteTerminal({
   const reqCounterRef = useRef(0);
   const { mode } = useTheme();
 
+  // Dimensões fitadas DESTA instância/sessão (ref por componente) + registro
+  // no mapa do módulo para o startSession nascer no tamanho certo. O cleanup
+  // do efeito abaixo remove o registro: nada vaza para outra sessão.
+  const fittedDimsRef = useRef<{ cols: number; rows: number }>({ cols: 0, rows: 0 });
+  const recordFittedDims = useCallback((cols: number, rows: number) => {
+    // Container oculto (aba inativa) mede 0x0 — nunca registrar como "último fit".
+    if (cols <= 0 || rows <= 0) return;
+    fittedDimsRef.current = { cols, rows };
+    fittedDimsBySession.set(sessionId, { cols, rows });
+    lastFittedSessionId = sessionId;
+  }, [sessionId]);
+  useEffect(() => {
+    return () => {
+      fittedDimsBySession.delete(sessionId);
+      if (lastFittedSessionId === sessionId) lastFittedSessionId = '';
+    };
+  }, [sessionId]);
+
   // Wire NATS stream — console único (subjects fixos term.out / term.in)
   const {
     isConnected,
@@ -622,7 +643,6 @@ export default function RemoteTerminal({
     natsSubject,
     natsUrl,
     jwt,
-    nkeySeed,
     getFreshCredentials,
     reconnectToken,
   });
@@ -820,8 +840,8 @@ export default function RemoteTerminal({
 
     term.open(containerRef.current);
     fitAddon.fit();
-    lastFittedCols = term.cols;
-    lastFittedRows = term.rows;
+    // Nota: o sessionId não entra aqui no efeito de montagem ([]); o registro
+    // por sessão acontece nos efeitos de fit conectado/visível abaixo.
 
     termRef.current = term;
     fitAddonRef.current = fitAddon;
@@ -851,6 +871,10 @@ export default function RemoteTerminal({
           void navigator.clipboard?.writeText(selection).catch(() => {});
           return false;
         }
+        // Sem seleção NÃO há cópia: devolve false para o xterm NÃO processar
+        // (return true aqui emitiria Ctrl+C/SIGINT ao shell, matando o comando
+        // em execução quando o operador só tentava copiar).
+        return false;
       }
       return true;
     });
@@ -882,7 +906,7 @@ export default function RemoteTerminal({
         // Container oculto (aba inativa) mede 0x0 — não guardar como "último
         // fit" e não enviar resize inválido ao agente.
         if (t2 && t2.cols > 0 && t2.rows > 0) {
-          lastFittedCols = t2.cols; lastFittedRows = t2.rows;
+          recordFittedDims(t2.cols, t2.rows);
           // Envia as dimensões reais MESMO sem onResize: quando o fit não muda
           // o tamanho o evento não dispara e o console ficaria no default do
           // agente (120x40) até o usuário redimensionar a janela.
@@ -891,7 +915,7 @@ export default function RemoteTerminal({
       } catch { /* ignore */ }
     }, 50);
     return () => clearTimeout(t);
-  }, [isConnected, sendResize]);
+  }, [isConnected, sendResize, recordFittedDims]);
 
   // term.ready — reporta shells disponíveis ao pai
   useEffect(() => {
@@ -1067,12 +1091,12 @@ export default function RemoteTerminal({
       const term = termRef.current;
       if (term && term.rows > 0) {
         try { term.refresh(0, term.rows - 1); } catch { /* ignore */ }
-        lastFittedCols = term.cols; lastFittedRows = term.rows;
+        recordFittedDims(term.cols, term.rows);
         sendResize(term.cols, term.rows);
       }
     }, 30);
     return () => window.clearTimeout(t);
-  }, [isVisible, sendResize]);
+  }, [isVisible, sendResize, recordFittedDims]);
 
   // Debounce de 200 ms (mesmo padrão do MeshCentral): o ResizeObserver dispara
   // em rajada durante o arraste da janela e cada evento viraria um

@@ -53,6 +53,12 @@ interface TabSession {
   natsSubject: string;
   natsUrl?: string;
   jwt?: string;
+  /**
+   * Semente nkey das credenciais escopadas. Usada DE VERDADE apenas pelo canal
+   * de liveness (useRemoteSessionLiveness → createNatsService). O viewer do
+   * terminal NÃO a consome (useTerminalStream autentica só com JWT) e por isso
+   * não recebe mais esta prop.
+   */
   nkeySeed?: string;
   expiresAtUtc: string;
   kind: string;
@@ -112,6 +118,15 @@ function SessionLivenessBadge({
   // Marca se o agente voltou a responder durante o backoff: evita recriar a
   // sessao sem necessidade quando a queda foi passageira.
   const aliveRef = useRef(false);
+  // Época de recuperação: incrementada no unmount e quando a sessão é
+  // substituída. A tentativa pendente (sleep do backoff) captura a época e
+  // aborta se ela mudou — sem isto um timer velho iniciava/sobrescrevia uma
+  // sessão que o operador já fechou.
+  const recoverEpochRef = useRef(0);
+  useEffect(() => {
+    recoverEpochRef.current += 1;
+    return () => { recoverEpochRef.current += 1; };
+  }, [session.sessionId]);
   const attemptRecover = useCallback(
     async (reason: string) => {
       const attempt = attemptsRef.current[tab] ?? 0;
@@ -120,16 +135,22 @@ function SessionLivenessBadge({
         return;
       }
       attemptsRef.current[tab] = attempt + 1;
+      const epoch = recoverEpochRef.current;
       const delay = [2000, 5000, 10000][attempt] ?? 10000;
       await new Promise((resolve) => setTimeout(resolve, delay));
-      if (aliveRef.current) return;
+      if (epoch !== recoverEpochRef.current || aliveRef.current) return;
       try {
         await onRecreate(tab);
+        // onRecreate passa por awaits longos (consentimento, credenciais) antes
+        // do start forçado: re-verificar a época evita que uma sessão fechada/
+        // substituída DURANTE esse período seja ressuscitada por um recover
+        // obsoleto (força=true derruba sessões no servidor).
+        if (epoch !== recoverEpochRef.current) return;
       } catch {
         onFatal(tab, 'Falha ao recriar a sessão.');
       }
     },
-    [tab, attemptsRef, onFatal, onRecreate],
+    [tab, attemptsRef, session.sessionId, onFatal, onRecreate],
   );
 
   const liveness = useRemoteSessionLiveness({
@@ -507,6 +528,12 @@ export default function RemoteSession() {
     });
 
     try {
+      // Falhas TRANSITÓRIAS de rede na consulta do status não abortam a espera:
+      // o consentimento tem janela de dezenas de segundos e uma resposta 5xx/
+      // timeout momentânea não é uma decisão. Só status DEFINITIVO (granted/
+      // denied/closed/expired — tratados abaixo) ou falhas consecutivas demais
+      // encerram o loop.
+      let pollFailures = 0;
       for (;;) {
         if (consentCancelledRef.current) {
           throw new Error('Solicitação de autorização cancelada.');
@@ -515,9 +542,14 @@ export default function RemoteSession() {
         let status;
         try {
           status = await remoteSessionsApi.getConsentStatus(agentId, session.sessionId);
+          pollFailures = 0;
         } catch (err) {
           if (consentCancelledRef.current) throw new Error('Solicitação de autorização cancelada.');
-          throw err;
+          pollFailures += 1;
+          if (pollFailures >= 5) throw err;
+          // Backoff: 1s, 2s, 4s, 8s entre tentativas de poll.
+          await new Promise((resolve) => setTimeout(resolve, Math.min(1000 * 2 ** (pollFailures - 1), 8000)));
+          continue;
         }
 
         const consent = String(status.consentStatus ?? '').toLowerCase();
@@ -629,29 +661,36 @@ export default function RemoteSession() {
     }
 
     const run = async (useForce: boolean) => {
-      // Com MaxConcurrentSessionsPerAgent=1, abrir uma nova aba substitui a
-      // sessão ativa de OUTRA aba: encerra a anterior explicitamente (stop no
-      // agent + limpa estado) antes de iniciar a nova — comportamento "a aba
-      // ativa substitui", sem orfãs e sem force silencioso no backend.
-      // Processos/Serviços compartilham sessão: a aba irmã não é encerrada
-      // (será sobrescrita com a nova sessão do mesmo kind abaixo).
-      const sibling = tab === 'processes' ? 'services' : tab === 'services' ? 'processes' : null;
-      const others = (Object.entries(sessions) as [Tab, TabSession | undefined][])
-        .filter(([k]) => k !== tab && k !== sibling)
-        .map(([, s]) => s)
-        .filter((s): s is TabSession => !!s);
-      for (const other of others) {
-        try { await remoteSessionsApi.stopSession(agentId, other.sessionId); } catch { /* best-effort */ }
-      }
-      if (others.length > 0) {
-        setSessions((prev) => {
-          const next = { ...prev };
-          for (const other of others) {
-            const key = (Object.entries(prev) as [Tab, TabSession | undefined][]).find(([, s]) => s?.sessionId === other.sessionId)?.[0];
-            if (key) next[key] = undefined;
-          }
-          return next;
-        });
+      // O loop de "stop das outras abas" SÓ roda para conexão EXPLÍCITA do
+      // operador (force=false). A auto-recuperação de liveness usa force=true
+      // e NÃO pode derrubar sessões vivas de outras abas (a recuperação é da
+      // SESSÃO desta aba; o force=true do backend já sobrepõe apenas a sessão
+      // em conflito no agent).
+      if (!useForce) {
+        // Com MaxConcurrentSessionsPerAgent=1, abrir uma nova aba substitui a
+        // sessão ativa de OUTRA aba: encerra a anterior explicitamente (stop no
+        // agent + limpa estado) antes de iniciar a nova — comportamento "a aba
+        // ativa substitui", sem orfãs e sem force silencioso no backend.
+        // Processos/Serviços compartilham sessão: a aba irmã não é encerrada
+        // (será sobrescrita com a nova sessão do mesmo kind abaixo).
+        const sibling = tab === 'processes' ? 'services' : tab === 'services' ? 'processes' : null;
+        const others = (Object.entries(sessions) as [Tab, TabSession | undefined][])
+          .filter(([k]) => k !== tab && k !== sibling)
+          .map(([, s]) => s)
+          .filter((s): s is TabSession => !!s);
+        for (const other of others) {
+          try { await remoteSessionsApi.stopSession(agentId, other.sessionId); } catch { /* best-effort */ }
+        }
+        if (others.length > 0) {
+          setSessions((prev) => {
+            const next = { ...prev };
+            for (const other of others) {
+              const key = (Object.entries(prev) as [Tab, TabSession | undefined][]).find(([, s]) => s?.sessionId === other.sessionId)?.[0];
+              if (key) next[key] = undefined;
+            }
+            return next;
+          });
+        }
       }
 
       // 'services' comparte a mesma sessão/subject de 'processes' (backend
@@ -1642,7 +1681,6 @@ export default function RemoteSession() {
                   natsSubject={sessions.terminal.natsSubject}
                   natsUrl={sessions.terminal.natsUrl}
                   jwt={sessions.terminal.jwt}
-                  nkeySeed={sessions.terminal.nkeySeed}
                   onConnectionChange={setTerminalConnected}
                   onShells={(shells) => setAvailableShells(shells)}
                   // Reconexão automática do WebSocket: busca credencial nova

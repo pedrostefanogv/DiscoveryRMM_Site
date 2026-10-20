@@ -14,13 +14,12 @@ interface UseTerminalStreamOptions {
     natsSubject: string;
     natsUrl: string;
     jwt: string;
-    nkeySeed: string;
     /**
      * Renova as credenciais NATS antes de uma tentativa AUTOMÁTICA de
      * reconexão e devolve o novo JWT. Sem isto o reconnect reusa o JWT da
      * abertura (o do viewer tem TTL próprio): 5 tentativas em `-ERR` e
-     * "Conexão NATS perdida". O caminho manual (botão Reconectar) já refaz o
-     * fetch no componente pai.
+     * "Conexão NATS perdida". O caminho manual (botão Reconectar) refaz o
+     * fetch no componente pai e passa o jwt novo via reconnect(jwt).
      */
     getFreshCredentials?: () => Promise<string>;
     /**
@@ -194,7 +193,6 @@ export function useTerminalStream({
     natsSubject,
     natsUrl,
     jwt,
-    nkeySeed: _nkeySeed,
     getFreshCredentials,
     reconnectToken = 0,
 }: UseTerminalStreamOptions): UseTerminalStreamReturn {
@@ -213,8 +211,6 @@ export function useTerminalStream({
     // (o valor da prop só muda quando o pai refaz o fetch / remonta o viewer).
     const jwtRef = useRef(jwt);
     const freshCredsRef = useRef(getFreshCredentials);
-    // Só publica depois do +OK (PUB antes do CONNECT é inválido no protocolo).
-    const authenticatedRef = useRef(false);
 
     // Último seq de term.out renderizado: vai no hello para o agente reenviar
     // apenas o que o viewer perdeu (-1 = nunca viu nada).
@@ -399,7 +395,6 @@ export function useTerminalStream({
             if (!mounted) return;
             switch (event.state) {
                 case 'open':
-                    authenticatedRef.current = true;
                     // Conexão nova (o pool pode ter reconectado): decoder UTF-8
                     // também novo, sem estado de stream da conexão anterior.
                     utf8Stream = new TextDecoder('utf-8');
@@ -412,11 +407,9 @@ export function useTerminalStream({
                     return;
                 case 'reconnecting':
                 case 'connecting':
-                    authenticatedRef.current = false;
                     setIsConnected(false);
                     return;
                 case 'closed':
-                    authenticatedRef.current = false;
                     setIsConnected(false);
                     if (event.reason === 'retries_exhausted') {
                         setError('Conexão NATS perdida — verifique o servidor.');
@@ -468,7 +461,6 @@ export function useTerminalStream({
             offState();
             for (const off of unsubscribers) off();
             if (socketRef.current === socket) socketRef.current = null;
-            authenticatedRef.current = false;
             release(socket);
         };
     }, [
@@ -493,9 +485,13 @@ export function useTerminalStream({
         reconnectTokenRef.current = reconnectToken;
         const socket = socketRef.current;
         if (!socket) return;
-        authenticatedRef.current = false;
         setIsConnected(false);
-        socket.reconnect();
+        // Passa o JWT ATUAL do ref: o reconnect manual NÃO roda
+        // getFreshCredentials (só o automático roda). Quando o pai refaz o
+        // fetch das credenciais antes de bumpar reconnectToken (botão
+        // Reconectar), o jwt prop chega aqui via jwtRef — sem isto a
+        // reconexão manual reusava um JWT expirado e caía em -ERR.
+        socket.reconnect(jwtRef.current);
         // reconnect() muda a identidade do socket no pool; o ref do hook
         // continua apontando para a MESMA instância (assinaturas preservadas).
     }, [reconnectToken]);

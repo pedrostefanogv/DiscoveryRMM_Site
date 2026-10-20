@@ -29,8 +29,10 @@
  *                       Fan-out de estado: { state: 'open' | 'reconnecting' |
  *                       'closed' | 'error' | 'connecting' }, com attempt /
  *                       reason / error { code, reason } / fatal.
- *   reconnect(socket)   Reconexão IMPERATIVA (botão "Reconectar"): descarta a
- *                       geração atual e abre outra sem perder assinaturas.
+ *   reconnect(socket, freshJwt?)   Reconexão IMPERATIVA (botão "Reconectar"):
+ *                       descarta a geração atual e abre outra sem perder
+ *                       assinaturas. Um JWT novo pode ser passado para a
+ *                       reconexão manual NÃO reusar credencial expirada.
  *
  *   Comportamento de rede: um único WebSocket por chave; CONNECT com
  *   auth_token (mesmas opções do código anterior: lang/version/protocol/
@@ -119,8 +121,13 @@ export interface PooledNatsSocket {
     sub(subject: string, handler: NatsMessageHandler): () => void;
     publish(subject: string, payload: string): boolean;
     onState(handler: (event: PoolStateEvent) => void): () => void;
-    /** Reconexão imperativa (descarta a geração atual, preserva assinaturas). */
-    reconnect(): void;
+    /**
+     * Reconexão imperativa (descarta a geração atual, preserva assinaturas).
+     * freshJwt opcional: substitui o JWT ANTES de abrir a nova conexão —
+     * o caminho manual não roda getFreshCredentials (que só vale para o
+     * reconnect automático), então reusar o JWT antigo expirado caía em -ERR.
+     */
+    reconnect(freshJwt?: string): void;
     /** Decrementa o refcount (idempotente). */
     release(): void;
 }
@@ -314,8 +321,10 @@ class PooledConnection implements PooledNatsSocket {
         };
     }
 
-    reconnect(): void {
+    reconnect(freshJwt?: string): void {
         if (this.disposed || this.refCount === 0) return;
+        // JWT novo da reconexão manual (getFreshCredentials NÃO roda aqui).
+        if (typeof freshJwt === 'string' && freshJwt !== '') this.jwt = freshJwt;
         this.clearReconnectTimer();
         this.attempt = 0;
         this.releaseSocket('manual');
@@ -446,10 +455,11 @@ class PooledConnection implements PooledNatsSocket {
         // de conexão autenticada no NATS).
         const generation = this.generation;
         const refresh = this.refreshCredentials;
+        let nextJwt: string | null = null;
         if (refresh) {
             try {
                 const next = await refresh();
-                if (typeof next === 'string' && next !== '') this.jwt = next;
+                if (typeof next === 'string' && next !== '') nextJwt = next;
             } catch {
                 // Melhor esforço: tenta com o JWT atual.
             }
@@ -458,7 +468,13 @@ class PooledConnection implements PooledNatsSocket {
             this.dispose();
             return;
         }
-        if (generation !== this.generation) return;
+        if (generation !== this.generation) {
+            // Geração trocou durante o refresh (ex.: reconnect manual com jwt
+            // novo). NÃO sobrescrever this.jwt: o jwt fresco do manual vence —
+            // o refresh velho chegando tarde seria usado no CONNECT seguinte.
+            return;
+        }
+        if (nextJwt) this.jwt = nextJwt;
         this.connect();
     }
 

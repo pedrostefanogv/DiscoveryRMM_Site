@@ -99,7 +99,6 @@ const BASE_PROPS: StreamProps = {
     natsSubject: NATS_SUBJECT,
     natsUrl: 'wss://nats.example/nats',
     jwt: 'jwt-1',
-    nkeySeed: '',
     reconnectToken: 0,
 };
 

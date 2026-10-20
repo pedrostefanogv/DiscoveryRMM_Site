@@ -1157,6 +1157,27 @@ export function parseFieldValue(
   }
 
   if (kind === "select") {
+    // Round-trip simétrico com formatFieldValue: selects com armazenamento
+    // NUMÉRICO no backend (RemoteConsentMode/TimeoutAction, serializados como
+    // 0/1/2) aceitam o rótulo do select ("Off", "Deny"...) e devolvem o número
+    // que a API guarda. agentHomeTab e demais selects ficam como string.
+    const numericSelects: Record<string, Record<string, number>> = {
+      remoteConsentMode: { Off: 0, NotifyOnly: 1, Prompt: 2 },
+      remoteConsentTimeoutAction: { Deny: 0, Approve: 1 },
+    };
+    const names = fieldKey ? numericSelects[fieldKey] : undefined;
+    if (names) {
+      // Object.hasOwn evita a prototype chain: "constructor"/"toString" como
+      // texto do usuário devolveriam uma FUNÇÃO como valor parseado.
+      if (Object.hasOwn(names, trimmed)) {
+        return names[trimmed];
+      }
+      // Já veio numérico (em string): devolve como número quando válido.
+      const numeric = Number(trimmed);
+      if (Object.values(names).includes(numeric)) {
+        return numeric;
+      }
+    }
     return trimmed;
   }
 
