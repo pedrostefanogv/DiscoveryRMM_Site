@@ -6,6 +6,8 @@ import { Badge, Button, Card, Loading } from "@/components/ui";
 import { useNotifications } from "@/hooks/useNotifications";
 import type { AppNotification } from "@/api/notifications";
 import { BrowserPushToggle } from "@/components/notifications/BrowserPushToggle";
+import { openTicketChatWindow, ticketChatPopupUrl } from "@/pages/tickets/ticketChatLauncher";
+import { agentSupportChatPopupUrl, openAgentSupportChatWindow } from "@/pages/agents/agentSupportChatLauncher";
 import {
   formatNotificationMessage,
   parseNavigationTarget,
@@ -71,16 +73,50 @@ export function NotificationBell() {
   }, [open]);
 
   const handleNotificationClick = async (item: AppNotification) => {
+    // window.open é SÍNCRONO no clique: precisa acontecer antes de qualquer
+    // await, senão bloqueadores de popup barram a abertura. Chat de suporte
+    // (do chamado ou avulso da máquina) abre em JANELA SEPARADA — o mesmo
+    // padrão dos lançadores do console — em vez de redirecionar esta aba.
+    const target = parseNavigationTarget(item.payloadJson);
+    const isChatTarget = Boolean(target?.ticketId || (target?.agentId && target?.sessionId));
+    let popupOpened = false;
+    let fallbackPath: string | null = null;
+    if (target) {
+      try {
+        if (target.ticketId) {
+          // Mesma conversa de dentro do chamado: a sessão vai na query para a
+          // janela retomar o chat exato apontado pela notificação.
+          openTicketChatWindow(target.ticketId, target.sessionId ?? null);
+          popupOpened = true;
+        } else if (target.agentId && target.sessionId) {
+          // Mesma abertura do menu do agente (AgentContextMenu): autoStart
+          // para a janela retomar/iniciar a conversa.
+          openAgentSupportChatWindow(target.agentId, true);
+          popupOpened = true;
+        }
+      } catch {
+        // Popup bloqueada: abre o MESMO chat na própria aba — as rotas
+        // dedicadas das janelas funcionam como página cheia — em vez de
+        // redirecionar para o detalhe do chamado/agente.
+        if (target.ticketId) {
+          fallbackPath = ticketChatPopupUrl(target.ticketId, target.sessionId ?? null);
+        } else if (target.agentId && target.sessionId) {
+          fallbackPath = agentSupportChatPopupUrl(target.agentId, true);
+        }
+      }
+    }
+
     try {
       await markAsRead(item.id);
     } catch {
       toast.error("Não foi possível marcar a notificação como lida.");
     }
 
-    const target = parseNavigationTarget(item.payloadJson);
     if (target) {
       setOpen(false);
-      navigate(target.path);
+      // Chat: só navega se a janela não abriu (popup bloqueada). Destinos de
+      // agente/cliente seguem navegando na própria aba, como antes.
+      if (fallbackPath || (!isChatTarget && !popupOpened)) navigate(fallbackPath ?? target.path);
     }
   };
 

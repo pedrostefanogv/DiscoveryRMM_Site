@@ -5,6 +5,8 @@ export interface NavigationTarget {
   label: string;
   ticketId?: string;
   ticketTitle?: string;
+  agentId?: string;
+  sessionId?: string;
 }
 
 const GUID_PATTERN =
@@ -44,13 +46,13 @@ export function parseNavigationTarget(
     const sessionId = readText(parsed, "sessionId", "session_id");
 
     if (ticketId) {
-      return { path: `/tickets/${ticketId}`, label: "chamado", ticketId, ticketTitle };
+      return { path: `/tickets/${ticketId}`, label: "chamado", ticketId, ticketTitle, sessionId };
     }
     // Conversa AVULSA (sem chamado): a notificação leva ao chat da máquina.
     if (sessionId && agentId) {
-      return { path: `/agents/${agentId}/support-chat`, label: "chat de suporte" };
+      return { path: `/agents/${agentId}/support-chat`, label: "chat de suporte", agentId, sessionId };
     }
-    if (agentId) return { path: `/agents/${agentId}`, label: "agente" };
+    if (agentId) return { path: `/agents/${agentId}`, label: "agente", agentId };
     if (clientId) return { path: `/clients/${clientId}`, label: "cliente" };
 
     return null;

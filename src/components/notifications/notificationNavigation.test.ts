@@ -32,7 +32,12 @@ describe('parseNavigationTarget', () => {
       }),
     );
 
-    expect(target).toEqual({ path: '/agents/a9/support-chat', label: 'chat de suporte' });
+    expect(target).toEqual({
+      path: '/agents/a9/support-chat',
+      label: 'chat de suporte',
+      agentId: 'a9',
+      sessionId: '9d2c1f4a-1111-4b2c-8d3e-222233334444',
+    });
   });
 
   it('aceita as chaves em snake_case', () => {
@@ -48,6 +53,7 @@ describe('parseNavigationTarget', () => {
     expect(parseNavigationTarget(JSON.stringify({ agentId: 'a1' }))).toEqual({
       path: '/agents/a1',
       label: 'agente',
+      agentId: 'a1',
     });
     expect(parseNavigationTarget(JSON.stringify({ clientId: 'c1' }))).toEqual({
       path: '/clients/c1',

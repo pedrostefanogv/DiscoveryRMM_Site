@@ -21,6 +21,49 @@ function computeInitials(source: string | undefined | null): string {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
+/** SHA-256 do e-mail (padrão do Gravatar) em hexadecimal. */
+async function gravatarHashFromEmail(email: string | undefined | null): Promise<string | null> {
+  const normalized = (email ?? '').trim().toLowerCase();
+  if (!normalized) return null;
+  try {
+    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(normalized));
+    return Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2, '0')).join('');
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Avatar do usuário: foto do Gravatar com base no e-mail, com fallback para
+ * as iniciais quando não há imagem (d=404 + onError).
+ */
+function UserAvatar({ email, initials, className }: { email?: string; initials: string; className: string }) {
+  const [hash, setHash] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    setFailed(false);
+    let cancelled = false;
+    void gravatarHashFromEmail(email).then(nextHash => {
+      if (!cancelled) setHash(nextHash);
+    });
+    return () => { cancelled = true; };
+  }, [email]);
+
+  const avatarClass = className + ' object-cover';
+  if (hash && !failed) {
+    return (
+      <img
+        src={'https://gravatar.com/avatar/' + hash + '?s=96&d=404'}
+        alt={initials}
+        className={avatarClass}
+        onError={() => setFailed(true)}
+      />
+    );
+  }
+  return <span className={className}>{initials}</span>;
+}
+
 interface HeaderProps {
   onMenuClick: () => void;
 }
@@ -162,9 +205,9 @@ export function Header({ onMenuClick }: HeaderProps) {
               aria-label={`Conta de ${displayName}`}
               aria-haspopup="menu"
               aria-expanded={menuOpen}
-              className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-xs font-bold text-foreground ring-1 ring-border transition hover:ring-border-strong focus:outline-none focus:ring-2 focus:ring-primary/60"
+              className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-primary text-xs font-bold text-foreground ring-1 ring-border transition hover:ring-border-strong focus:outline-none focus:ring-2 focus:ring-primary/60"
             >
-              {initials}
+              <UserAvatar email={displayEmail} initials={initials} className="flex h-9 w-9 items-center justify-center" />
             </button>
 
             {menuOpen && (
@@ -173,8 +216,8 @@ export function Header({ onMenuClick }: HeaderProps) {
                 className="absolute right-0 z-30 mt-2 w-60 rounded-lg border border-border bg-surface p-1 shadow-2xl backdrop-blur"
               >
                 <div className="flex items-center gap-3 border-b border-border px-3 py-3">
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-bold text-foreground">
-                    {initials}
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary text-sm font-bold text-foreground">
+                    <UserAvatar email={displayEmail} initials={initials} className="flex h-9 w-9 items-center justify-center" />
                   </span>
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium text-foreground">{displayName}</p>
