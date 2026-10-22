@@ -155,7 +155,7 @@ export default function FirstAccessPage() {
       toast.success("Dados atualizados. Entre novamente com a nova senha para concluir a autenticação.");
       navigate("/auth/login", { replace: true });
     } catch (caught) {
-      // Token de setup expirado (10 min) → reinicia o fluxo de login.
+      // Token de setup expirado (30 min por padrão) → reinicia o fluxo de login.
       if (caught instanceof ApiError && caught.status === 401) {
         toast.error(
           "Sua sessão temporária expirou. Faça login novamente para continuar o primeiro acesso.",

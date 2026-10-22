@@ -25,6 +25,16 @@ export function resolveLoginErrorMessage(error: unknown): string {
   if (error instanceof ApiError && SAFE_AUTH_STATUSES.has(error.status)) {
     const message = error.message?.trim();
     if (message) {
+      // "Credenciais inválidas" cobre usuário inexistente E senha errada (a API
+      // não diferencia por segurança). Acrescenta dica acionável sem expor nada:
+      // causa comum é usar o e-mail quando o cadastro é só o login, ou colar a
+      // senha temporária com espaço extra (a API não faz trim da senha).
+      if (/credenciais inv[áa]lid/i.test(message)) {
+        return (
+          message +
+          " Verifique se este é exatamente o login ou e-mail cadastrado (ex.: use o login, se o e-mail nunca foi cadastrado) e cole a senha sem espaços extras."
+        );
+      }
       return message;
     }
   }
