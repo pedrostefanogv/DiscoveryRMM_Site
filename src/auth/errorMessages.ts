@@ -21,6 +21,21 @@ const SAFE_AUTH_STATUSES = new Set([400, 401, 403, 409, 422, 423, 429]);
  * infraestrutura (502/503/504) ou de rede vira uma orientação genérica e segura,
  * evitando revelar topologia/infra ao usuário.
  */
+/**
+ * Um 401 na asserção de MFA pode significar DUAS coisas:
+ * - código OTP errado ("OTP inválido.") → o usuário pode tentar outro código na
+ *   mesma tela (o token pendente continua válido);
+ * - token pendente expirado (3 min), desafio já consumido ou estado de MFA
+ *   inconsistente → é preciso refazer o login para emitir um novo token.
+ * Diferencia pela mensagem do servidor para não expulsar o usuário do fluxo
+ * quando ele só digitou o código errado.
+ */
+export function isRetryableMfaCodeError(message: string): boolean {
+  return /otp inv[áa]lid|c[óo]digo inv[áa]lid|c[óo]digo de backup|informe o c[óo]digo/i.test(
+    message,
+  );
+}
+
 export function resolveLoginErrorMessage(error: unknown): string {
   if (error instanceof ApiError && SAFE_AUTH_STATUSES.has(error.status)) {
     const message = error.message?.trim();

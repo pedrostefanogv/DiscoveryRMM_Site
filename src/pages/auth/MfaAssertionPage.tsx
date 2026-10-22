@@ -4,6 +4,8 @@ import toast from "react-hot-toast";
 import { Fingerprint, ShieldCheck, ShieldEllipsis, TriangleAlert } from "lucide-react";
 import { ApiError, authApi } from "@/api";
 import { useAuth } from "@/auth/AuthContext";
+import { isRetryableMfaCodeError } from "@/auth/errorMessages";
+import { isTemporaryTokenExpired } from "@/auth/jwtExpiry";
 import {
   describeWebAuthnError,
   ensureWebAuthnSupport,
@@ -41,7 +43,11 @@ export default function MfaAssertionPage() {
     typeof navigator !== "undefined" && /firefox/i.test(navigator.userAgent);
 
   const handleAuthenticateFido2 = async () => {
-    if (!token) {
+    if (!token || isTemporaryTokenExpired(token)) {
+      clearTemporarySession();
+      toast.error(
+        "Seu token temporário de MFA expirou. Faça login novamente para continuar.",
+      );
       navigate("/auth/login", { replace: true });
       return;
     }
@@ -108,16 +114,26 @@ export default function MfaAssertionPage() {
       }
 
       if (caught instanceof ApiError && caught.status === 401) {
+        const serverMessage = caught.message?.trim() ?? "";
+        // Código errado NÃO invalida o token pendente: permite tentar outro código
+        // na mesma tela em vez de expulsar para o login com "token não é mais válido".
+        if (isRetryableMfaCodeError(serverMessage)) {
+          setError(serverMessage);
+          toast.error(serverMessage);
+          setTemporaryStage("mfa-assert-begin");
+          return;
+        }
+
         clearTemporarySession();
         setTemporaryStage("anonymous");
         toast.error(
           "Seu token temporário de MFA não é mais válido. Faça login novamente para emitir um novo token.",
-         );
-         navigate("/auth/login", { replace: true });
-         return;
-       }
+        );
+        navigate("/auth/login", { replace: true });
+        return;
+      }
 
-       const message = describeWebAuthnError(caught);
+      const message = describeWebAuthnError(caught);
       setError(message);
       toast.error(message);
       setTemporaryStage("mfa-assert-begin");
@@ -127,7 +143,11 @@ export default function MfaAssertionPage() {
   };
 
   const handleAuthenticateOtp = async () => {
-    if (!token) {
+    if (!token || isTemporaryTokenExpired(token)) {
+      clearTemporarySession();
+      toast.error(
+        "Seu token temporário de MFA expirou. Faça login novamente para continuar.",
+      );
       navigate("/auth/login", { replace: true });
       return;
     }
@@ -161,19 +181,29 @@ export default function MfaAssertionPage() {
       }
 
       if (caught instanceof ApiError && caught.status === 401) {
+        const serverMessage = caught.message?.trim() ?? "";
+        // Código errado NÃO invalida o token pendente: permite tentar outro código
+        // na mesma tela em vez de expulsar para o login com "token não é mais válido".
+        if (isRetryableMfaCodeError(serverMessage)) {
+          setError(serverMessage);
+          toast.error(serverMessage);
+          setTemporaryStage("mfa-assert-begin");
+          return;
+        }
+
         clearTemporarySession();
         setTemporaryStage("anonymous");
         toast.error(
-           "Seu token temporário de MFA não é mais válido. Faça login novamente para emitir um novo token.",
-         );
-         navigate("/auth/login", { replace: true });
-         return;
-       }
+          "Seu token temporário de MFA não é mais válido. Faça login novamente para emitir um novo token.",
+        );
+        navigate("/auth/login", { replace: true });
+        return;
+      }
 
-       const message =
-         caught instanceof ApiError
-           ? caught.message
-           : "Não foi possível validar o código OTP.";
+      const message =
+        caught instanceof ApiError
+          ? caught.message
+          : "Não foi possível validar o código OTP.";
       setError(message);
       toast.error(message);
       setTemporaryStage("mfa-assert-begin");

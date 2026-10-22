@@ -4,6 +4,7 @@ import toast from "react-hot-toast";
 import { KeyRound, LaptopMinimal, ShieldPlus, ShieldEllipsis } from "lucide-react";
 import { ApiError, authApi } from "@/api";
 import { useAuth } from "@/auth/AuthContext";
+import { isTemporaryTokenExpired } from "@/auth/jwtExpiry";
 import {
   describeWebAuthnError,
   ensureWebAuthnSupport,
@@ -52,7 +53,11 @@ export default function MfaRegistrationPage() {
   };
 
   const onSubmit = async () => {
-    if (!token) {
+    if (!token || isTemporaryTokenExpired(token)) {
+      clearTemporarySession();
+      toast.error(
+        "Seu token temporário de MFA expirou. Faça login novamente para continuar o cadastro.",
+      );
       navigate("/auth/login", { replace: true });
       return;
     }
