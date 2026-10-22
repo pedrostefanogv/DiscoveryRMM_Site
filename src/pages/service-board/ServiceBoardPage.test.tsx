@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 import ServiceBoardPage, { formatAge } from './ServiceBoardPage';
@@ -28,24 +28,73 @@ const SAMPLE: ServiceBoardDto = {
   ],
 };
 
+function mockBoard(data: ServiceBoardDto | undefined, extra: Record<string, unknown> = {}) {
+  (useServiceBoard as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
+    data, isLoading: false, isError: false, isFetching: false, refetch: vi.fn(), ...extra,
+  });
+}
+
+function renderBoard() {
+  return render(
+    <MemoryRouter>
+      <ServiceBoardPage />
+    </MemoryRouter>,
+  );
+}
+
 describe('ServiceBoardPage', () => {
-  it('renderiza as 4 colunas com counts e cards com idade relativa', () => {
-    (useServiceBoard as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
-      data: SAMPLE, isLoading: false, isError: false, isFetching: false, refetch: vi.fn(),
-    });
-    render(
-      <MemoryRouter>
-        <ServiceBoardPage />
-      </MemoryRouter>,
-    );
-    expect(screen.getByText('Chamados')).toBeTruthy();
-    expect(screen.getByText('Automação')).toBeTruthy();
-    expect(screen.getByText('Patches')).toBeTruthy();
-    expect(screen.getByText('Alertas')).toBeTruthy();
+  it('renderiza resumo por tipo e a fila priorizada com idade relativa', () => {
+    mockBoard(SAMPLE);
+    renderBoard();
+    // Rótulo aparece no cartão-resumo e (para itens presentes) na tag da linha.
+    for (const label of ['Chamados', 'Automação', 'Patches', 'Alertas']) {
+      expect(screen.getAllByText(label).length).toBeGreaterThan(0);
+    }
+    // Fila única: os três itens aparecem como linhas.
+    expect(screen.getByTestId('service-board-item-ticket')).toBeTruthy();
+    expect(screen.getByTestId('service-board-item-automation')).toBeTruthy();
+    expect(screen.getByTestId('service-board-item-alert')).toBeTruthy();
     expect(screen.getByText('Impressora não responde')).toBeTruthy();
     // "+3h" para o ticket e "+1d" para a automação (30h)
     expect(screen.getByText('+3h')).toBeTruthy();
     expect(screen.getByText('+1d')).toBeTruthy();
+  });
+
+  it('ordena por prioridade: Crítica antes de Alta antes de sem prioridade', () => {
+    mockBoard(SAMPLE);
+    renderBoard();
+    const rows = screen.getAllByTestId(/service-board-item-/);
+    expect(rows[0].getAttribute('data-testid')).toBe('service-board-item-automation');
+    expect(rows[1].getAttribute('data-testid')).toBe('service-board-item-ticket');
+    expect(rows[2].getAttribute('data-testid')).toBe('service-board-item-alert');
+  });
+
+  it('clicar no cartão de resumo filtra a fila pelo tipo', () => {
+    mockBoard(SAMPLE);
+    renderBoard();
+    fireEvent.click(screen.getByText('Chamados'));
+    expect(screen.queryByTestId('service-board-item-automation')).toBeNull();
+    expect(screen.getByTestId('service-board-item-ticket')).toBeTruthy();
+  });
+
+  it('fila vazia com filtros mostra estado vazio', () => {
+    mockBoard({ ...SAMPLE, items: [] });
+    renderBoard();
+    expect(screen.getByText('Fila vazia')).toBeTruthy();
+  });
+
+  it('avisa quando o limite da API oculta itens', () => {
+    mockBoard(SAMPLE);
+    // counts somam 3 e items têm 3: sem ocultos. Simula truncamento com counts maiores.
+    (useServiceBoard as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
+      data: {
+        ...SAMPLE,
+        counts: { ticket: 5, automation: 4, patch: 2, alert: 1 },
+      },
+      isLoading: false, isError: false, isFetching: false, refetch: vi.fn(),
+    });
+    renderBoard();
+    expect(screen.getByText(/ocultados pelo limite/)).toBeTruthy();
   });
 
   it('formatAge usa horas abaixo de 24 e dias acima', () => {
@@ -55,14 +104,8 @@ describe('ServiceBoardPage', () => {
   });
 
   it('mostra loading enquanto carrega', () => {
-    (useServiceBoard as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
-      data: undefined, isLoading: true, isError: false, isFetching: true, refetch: vi.fn(),
-    });
-    render(
-      <MemoryRouter>
-        <ServiceBoardPage />
-      </MemoryRouter>,
-    );
+    mockBoard(undefined, { isLoading: true, isFetching: true });
+    renderBoard();
     expect(screen.getByText('Service Board')).toBeTruthy();
   });
 });
