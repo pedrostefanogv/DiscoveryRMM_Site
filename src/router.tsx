@@ -42,6 +42,9 @@ const PatchesInventory = lazy(() => import('@/pages/patches/PatchesInventory'));
 const PatchesPending = lazy(() => import('@/pages/patches/PatchesPending'));
 const PatchesApprovals = lazy(() => import('@/pages/patches/PatchesApprovals'));
 const PatchesPolicy = lazy(() => import('@/pages/patches/PatchesPolicy'));
+const PatchesCompliance = lazy(() => import('@/pages/patches/PatchesCompliance'));
+const ServiceBoardPage = lazy(() => import('@/pages/service-board/ServiceBoardPage'));
+const AiCostCockpit = lazy(() => import('@/pages/settings/AiCostCockpit'));
 const AutomationHome = lazy(() => import('@/pages/automation/AutomationHome'));
 const AutomationScriptsPage = lazy(() => import('@/pages/automation/AutomationScriptsPage'));
 const AutomationScriptFormPage = lazy(() => import('@/pages/automation/AutomationScriptFormPage'));
@@ -414,6 +417,26 @@ export const router = createBrowserRouter([
         element: (
           <PermissionGate anyOf={['patches.*', 'patches.read', 'admin.*']}>
             <LazyPage><PatchesApprovals /></LazyPage>
+          </PermissionGate>
+        ),
+      },
+      {
+        path: 'patches/compliance',
+        element: (
+          <PermissionGate anyOf={['patches.*', 'patches.read', 'admin.*']}>
+            <LazyPage><PatchesCompliance /></LazyPage>
+          </PermissionGate>
+        ),
+      },
+      {
+        path: 'service-board',
+        element: <LazyPage><ServiceBoardPage /></LazyPage>,
+      },
+      {
+        path: 'settings/ai-cost',
+        element: (
+          <PermissionGate anyOf={['settings.*', 'settings.read', 'admin.*']}>
+            <LazyPage><AiCostCockpit /></LazyPage>
           </PermissionGate>
         ),
       },

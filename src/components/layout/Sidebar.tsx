@@ -22,6 +22,7 @@ import { useAuthorization } from '@/auth/authorization';
 
 const mainLinks = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
+  { to: '/service-board', icon: LayoutDashboard, label: 'Service Board' },
   { to: '/agents', icon: Monitor, label: 'Agentes' },
   { to: '/tickets', icon: Ticket, label: 'Suporte' },
   { to: '/logs', icon: ScrollText, label: 'Logs' },
@@ -41,6 +42,7 @@ const softwareLinks = [
 
 const patchesLinks = [
   { to: '/patches', label: 'Visão geral' },
+  { to: '/patches/compliance', label: 'Conformidade' },
   { to: '/patches/inventory', label: 'Inventário por atualização' },
   { to: '/patches/pending', label: 'Pendências por agente' },
   { to: '/patches/approvals', label: 'Aprovações e auditoria' },
@@ -76,6 +78,7 @@ const ticketsLinks = [
 
 const settingsLinks = [
   { to: '/settings', label: 'Geral' },
+  { to: '/settings/ai-cost', label: 'Cockpit de custo IA' },
   { to: '/settings/server', label: 'Servidor' },
   { to: '/settings/client', label: 'Cliente' },
   { to: '/settings/site', label: 'Site' },

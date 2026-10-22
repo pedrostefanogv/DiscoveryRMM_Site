@@ -26,6 +26,7 @@ export {
 } from "./support-productivity";
 export type {
   TicketMacroDto,
+  TicketMacroRunbookStep,
   UpsertTicketMacroRequest,
   TicketTemplateDto,
   UpsertTicketTemplateRequest,
@@ -42,6 +43,14 @@ export type {
   CreateTicketRelationRequest,
   TicketRelationDto,
 } from "./tickets";
+export { patchComplianceApi } from "./patchCompliance";
+export type { PatchComplianceParams } from "./patchCompliance";
+export { serviceBoardApi } from "./serviceBoard";
+export type { ServiceBoardParams } from "./serviceBoard";
+export { aiCostApi } from "./aiCost";
+export type { AiCostCockpitParams } from "./aiCost";
+export { runbookApi } from "./runbook";
+export type { RunbookExecuteRequest } from "./runbook";
 export { logsApi } from "./logs";
 export { workflowApi } from "./workflow";
 export {

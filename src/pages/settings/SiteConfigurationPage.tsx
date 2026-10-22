@@ -16,6 +16,8 @@ import { ApiError } from "@/api";
 import type { ConfigurationValue } from "@/api";
 import {
   ConfigurationFieldEditor,
+  MaintenanceWindowCard,
+  McpToolPolicyCard,
   ConfigurationPageHeader,
   ConfigurationSectionCard,
   RemoteAccessConsentSection,
@@ -393,6 +395,24 @@ export default function SiteConfigurationPage() {
     const fieldMeta = getFieldMetadata(siteMetadataQuery.data?.fields, fieldKey);
     const canEditField = canEditFieldAtScope(fieldMeta, "site");
     const fieldDef = siteEditableFields.find((f) => f.key === fieldKey);
+    // Janela de manutenção e política MCP: cards dedicados no modo override.
+    if (fieldKey === "maintenanceWindowJson" || fieldKey === "mcpToolPolicyJson") {
+      const isWindow = fieldKey === "maintenanceWindowJson";
+      const Card = isWindow ? MaintenanceWindowCard : McpToolPolicyCard;
+      return (
+        <Card
+          key={fieldKey}
+          value={value}
+          inheritedFrom={resolveSiteOrigin(localSiteQuery.data, localClientQuery.data, fieldKey) || "Cliente/Servidor"}
+          canManage={canEditField}
+          saving={patchMutation.isPending}
+          onSave={async (json) => {
+            setValue(`values.${fieldKey}` as never, json as never, { shouldDirty: true });
+            await savePartial(fieldKey);
+          }}
+        />
+      );
+    }
 
     return (
       <ConfigurationFieldEditor

@@ -1,13 +1,95 @@
 import { useState } from 'react';
-import { Plus, Pencil, Trash2, Zap } from 'lucide-react';
-import { Badge, Button, Card, CardHeader, ConfirmDialog, ErrorDisplay, Input, Loading, Modal, TextArea } from '@/components/ui';
+import { ArrowDown, ArrowUp, Plus, Pencil, Trash2, Zap } from 'lucide-react';
+import { Badge, Button, Card, CardHeader, ConfirmDialog, ErrorDisplay, Input, Loading, Modal, Select, TextArea } from '@/components/ui';
 import {
   useTicketMacros, useCreateTicketMacro, useUpdateTicketMacro, useDeleteTicketMacro,
 } from '@/hooks/useSupportProductivity';
-import type { TicketMacroDto, UpsertTicketMacroRequest } from '@/api';
+import { useAutomationScripts } from '@/hooks/useAutomation';
+import type { TicketMacroDto, TicketMacroRunbookStep, UpsertTicketMacroRequest } from '@/api';
 import toast from 'react-hot-toast';
 
-const EMPTY: UpsertTicketMacroRequest = { clientId: null, departmentId: null, name: '', description: null, content: '', isActive: true };
+const EMPTY: UpsertTicketMacroRequest = { clientId: null, departmentId: null, name: '', description: null, content: '', isActive: true, runbookSteps: null };
+
+/**
+ * Editor SIMPLES de passos de runbook: adicionar, remover e reordenar passos;
+ * cada passo aponta para um script de automação (api/automation), com args e
+ * label de evidência opcionais.
+ */
+function RunbookStepsEditor({ steps, onChange }: { steps: TicketMacroRunbookStep[]; onChange: (steps: TicketMacroRunbookStep[]) => void }) {
+  const scripts = useAutomationScripts({ activeOnly: true, limit: 200 });
+  const scriptOptions = [
+    { value: '', label: 'Selecione um script...' },
+    ...((scripts.data as { items?: { id: string; name: string }[] } | undefined)?.items ?? []).map((s) => ({ value: s.id, label: s.name })),
+  ];
+
+  const addStep = () => {
+    onChange([...steps, { order: steps.length + 1, automationScriptId: '', argsJson: null, evidenceLabel: null }]);
+  };
+
+  const move = (index: number, delta: number) => {
+    const target = index + delta;
+    if (target < 0 || target >= steps.length) return;
+    const next = steps.slice();
+    const [moved] = next.splice(index, 1);
+    next.splice(target, 0, moved);
+    onChange(next.map((s, i) => ({ ...s, order: i + 1 })));
+  };
+
+  const update = (index: number, patch: Partial<TicketMacroRunbookStep>) => {
+    onChange(steps.map((s, i) => (i === index ? { ...s, ...patch } : s)));
+  };
+
+  return (
+    <div className="space-y-2 rounded-lg border border-border p-3" data-testid="runbook-steps-editor">
+      <div className="flex items-center justify-between">
+        <span className="text-sm font-medium text-foreground">Passos do runbook</span>
+        <Button size="sm" variant="secondary" onClick={addStep} type="button">
+          <Plus className="h-4 w-4" /> Passo
+        </Button>
+      </div>
+      {steps.length === 0 && (
+        <p className="text-xs text-muted">Sem passos — macro de resposta simples.</p>
+      )}
+      {steps.map((step, index) => (
+        <div key={index} className="flex flex-wrap items-center gap-2">
+          <span className="text-xs tabular-nums text-muted">#{index + 1}</span>
+          <Select
+            aria-label={`Script do passo ${index + 1}`}
+            fullWidth={false}
+            className="min-w-[220px] flex-1"
+            value={step.automationScriptId}
+            onChange={(e) => update(index, { automationScriptId: e.target.value })}
+            options={scriptOptions}
+          />
+          <Input
+            aria-label={`Argumentos do passo ${index + 1} (JSON)`}
+            className="w-40"
+            placeholder="args JSON"
+            value={step.argsJson ?? ''}
+            onChange={(e) => update(index, { argsJson: e.target.value || null })}
+          />
+          <Input
+            aria-label={`Evidência do passo ${index + 1}`}
+            className="w-40"
+            placeholder="evidência"
+            value={step.evidenceLabel ?? ''}
+            onChange={(e) => update(index, { evidenceLabel: e.target.value || null })}
+          />
+          <button type="button" aria-label="Mover passo para cima" className="p-1 text-muted hover:text-foreground disabled:opacity-30" disabled={index === 0} onClick={() => move(index, -1)}>
+            <ArrowUp className="h-4 w-4" />
+          </button>
+          <button type="button" aria-label="Mover passo para baixo" className="p-1 text-muted hover:text-foreground disabled:opacity-30" disabled={index === steps.length - 1} onClick={() => move(index, 1)}>
+            <ArrowDown className="h-4 w-4" />
+          </button>
+          <button type="button" aria-label="Remover passo" className="p-1 text-muted hover:text-danger" onClick={() => onChange(steps.filter((_, i) => i !== index).map((s, i) => ({ ...s, order: i + 1 })))}>
+            <Trash2 className="h-4 w-4" />
+          </button>
+        </div>
+      ))}
+      {scripts.isError && <p className="text-xs text-danger">Erro ao carregar scripts de automação.</p>}
+    </div>
+  );
+}
 
 export default function TicketMacrosPage() {
   const macros = useTicketMacros({ includeGlobal: true });
@@ -22,7 +104,7 @@ export default function TicketMacrosPage() {
   const openCreate = () => { setEditId(null); setForm(EMPTY); setOpen(true); };
   const openEdit = (m: TicketMacroDto) => {
     setEditId(m.id);
-    setForm({ clientId: m.clientId, departmentId: m.departmentId, name: m.name, description: m.description, content: m.content, isActive: m.isActive });
+    setForm({ clientId: m.clientId, departmentId: m.departmentId, name: m.name, description: m.description, content: m.content, isActive: m.isActive, runbookSteps: m.runbookSteps ?? null });
     setOpen(true);
   };
 
@@ -82,6 +164,10 @@ export default function TicketMacrosPage() {
             <input type="checkbox" checked={form.isActive} onChange={(e) => setForm((f) => ({ ...f, isActive: e.target.checked }))} className="rounded bg-surface-light border-border" />
             Ativa
           </label>
+          <RunbookStepsEditor
+            steps={form.runbookSteps ?? []}
+            onChange={(steps) => setForm((f) => ({ ...f, runbookSteps: steps.length > 0 ? steps : null }))}
+          />
           <div className="flex justify-end gap-3 pt-2">
             <Button variant="ghost" onClick={() => setOpen(false)}>Cancelar</Button>
             <Button onClick={submit} loading={create.isPending || update.isPending}>Salvar</Button>

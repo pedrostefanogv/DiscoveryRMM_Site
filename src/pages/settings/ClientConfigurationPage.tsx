@@ -16,6 +16,8 @@ import type { ConfigurationValue } from "@/api";
 import {
   ConfigurationFieldEditor,
   BackgroundProcessingCard,
+  MaintenanceWindowCard,
+  McpToolPolicyCard,
   parseBackgroundProcessingSettings,
   ConfigurationPageHeader,
   ConfigurationSectionCard,
@@ -346,6 +348,40 @@ export default function ClientConfigurationPage() {
     const fieldMeta = getFieldMetadata(metadataQuery.data?.fields, fieldKey);
     const canEditField = canEditFieldAtScope(fieldMeta, "client");
     const fieldDef = clientEditableFields.find((f) => f.key === fieldKey);
+
+    // Janela de manutenção e política MCP: cards dedicados no modo override.
+    if (fieldKey === "maintenanceWindowJson") {
+      return (
+        <MaintenanceWindowCard
+          key={fieldKey}
+          value={String(value ?? "")}
+          inheritedFrom={resolveClientOrigin(localQuery.data, fieldKey) || "Servidor"}
+          canManage={canEditFieldAtScope(fieldMeta, "client")}
+          saving={patchMutation.isPending}
+          onSave={async (json) => {
+            setValue(`values.${fieldKey}` as never, json as never, { shouldDirty: true });
+            await patchMutation.mutateAsync({ clientId, payload: { [fieldKey]: json } });
+            toast.success("Janela de manutenção (override) atualizada.");
+          }}
+        />
+      );
+    }
+    if (fieldKey === "mcpToolPolicyJson") {
+      return (
+        <McpToolPolicyCard
+          key={fieldKey}
+          value={String(value ?? "")}
+          inheritedFrom={resolveClientOrigin(localQuery.data, fieldKey) || "Servidor"}
+          canManage={canEditFieldAtScope(fieldMeta, "client")}
+          saving={patchMutation.isPending}
+          onSave={async (json) => {
+            setValue(`values.${fieldKey}` as never, json as never, { shouldDirty: true });
+            await patchMutation.mutateAsync({ clientId, payload: { [fieldKey]: json } });
+            toast.success("Política de tools MCP (override) atualizada.");
+          }}
+        />
+      );
+    }
 
     // Processamento em segundo plano usa card dedicado no modo override.
     if (fieldKey === "backgroundProcessingSettingsJson") {

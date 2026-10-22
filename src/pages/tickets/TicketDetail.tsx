@@ -27,6 +27,7 @@ import {
 import { useTicketMacros } from '@/hooks/useSupportProductivity';
 import { useAuthorization } from '@/auth/authorization';
 import TicketChatHistory from './TicketChatHistory';
+import { TicketRunbookPanel } from './TicketRunbookPanel';
 import { TicketRatingCard } from '@/components/tickets/TicketRatingCard';
 import { TicketStateBadge } from '@/components/tickets/TicketStateBadge';
 import { WatchersSection } from '@/components/tickets/WatchersSection';
@@ -2365,6 +2366,7 @@ function CommentForm({
           onChange={(event) => applyMacro(event.target.value)}
         />
       )}
+      <TicketRunbookPanel ticketId={ticketId} macros={macrosQuery.data ?? []} />
       {/* O print colado (Ctrl+V) da ferramenta de captura entra como anexo. */}
       <div
         onPaste={(event) => {

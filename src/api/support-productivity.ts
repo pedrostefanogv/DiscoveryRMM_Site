@@ -2,6 +2,18 @@ import { api } from "./client";
 
 // ── Macros (respostas rápidas) ───────────────────────────────────────────
 
+/**
+ * Passo de runbook da macro: roteiro de execução de scripts de automação no
+ * chamado (POST /api/v1/tickets/{ticketId}/runbook/execute). A API serializa
+ * com WhenWritingNull — trate campos opcionais com checagem de veracidade.
+ */
+export interface TicketMacroRunbookStep {
+  order: number;
+  automationScriptId: string;
+  argsJson?: string | null;
+  evidenceLabel?: string | null;
+}
+
 export interface TicketMacroDto {
   id: string;
   clientId: string | null;
@@ -10,6 +22,8 @@ export interface TicketMacroDto {
   description: string | null;
   content: string;
   isActive: boolean;
+  /** Passos de runbook (execução de scripts de automação); ausente/NULL quando a macro não é runbook. */
+  runbookSteps?: TicketMacroRunbookStep[] | null;
   createdBy: string | null;
   createdAt: string;
   updatedAt: string;
@@ -22,6 +36,8 @@ export interface UpsertTicketMacroRequest {
   description: string | null;
   content: string;
   isActive: boolean;
+  /** Passos de runbook (opcional; null = macro de resposta simples). */
+  runbookSteps?: TicketMacroRunbookStep[] | null;
 }
 
 // ── Templates de chamado ─────────────────────────────────────────────────

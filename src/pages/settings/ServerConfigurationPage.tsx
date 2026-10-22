@@ -29,6 +29,8 @@ import {
   ConfigurationFieldEditor,
   RemoteAccessConsentSection,
   AiIntegrationCard,
+  MaintenanceWindowCard,
+  McpToolPolicyCard,
   BackgroundProcessingCard,
   ConfigHealthCard,
   LockedFieldsEditor,
@@ -1305,6 +1307,49 @@ export default function ServerConfigurationPage() {
                   );
                 }
 
+                // Janela de manutenção e política MCP usam cards dedicados
+                if (field.key === "maintenanceWindowJson") {
+                  return (
+                    <div key={field.key} className="flex items-start gap-3">
+                      <div className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${tintedIcon.violet}`}>
+                        <Clock className="h-4 w-4" />
+                      </div>
+                      <div className="min-w-0 flex-1 space-y-1">
+                        <MaintenanceWindowCard
+                          value={String(serverQuery.data?.maintenanceWindowJson ?? "")}
+                          saving={patchMutation.isPending}
+                          onSave={async (json) => {
+                            await patchMutation.mutateAsync({ maintenanceWindowJson: json });
+                            clearPending(["maintenanceWindowJson"]);
+                            toast.success("Janela de manutenção salva.");
+                            serverQuery.refetch();
+                          }}
+                        />
+                      </div>
+                    </div>
+                  );
+                }
+                if (field.key === "mcpToolPolicyJson") {
+                  return (
+                    <div key={field.key} className="flex items-start gap-3">
+                      <div className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${tintedIcon.sky}`}>
+                        <ShieldCheck className="h-4 w-4" />
+                      </div>
+                      <div className="min-w-0 flex-1 space-y-1">
+                        <McpToolPolicyCard
+                          value={String(serverQuery.data?.mcpToolPolicyJson ?? "")}
+                          saving={patchMutation.isPending}
+                          onSave={async (json) => {
+                            await patchMutation.mutateAsync({ mcpToolPolicyJson: json });
+                            clearPending(["mcpToolPolicyJson"]);
+                            toast.success("Política de tools MCP salva.");
+                            serverQuery.refetch();
+                          }}
+                        />
+                      </div>
+                    </div>
+                  );
+                }
                 // IA usa componente dedicado
                 if (field.key === "aiIntegrationSettingsJson") {
                   return (
