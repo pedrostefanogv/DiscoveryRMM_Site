@@ -464,6 +464,20 @@ export const serverEditableFields: EditableField[] = [
       "Chave de API, modelo e parâmetros do provedor de IA. A chave é write-only e só deve ser enviada quando informada novamente.",
   },
   {
+    key: "maintenanceWindowJson",
+    label: "Janela de Manutenção (Reboot/Patches)",
+    kind: "json",
+    group: "policy",
+    description: "Janela em UTC em que patches e reboots podem executar; fora dela o agent adia o comando (deferred_to_window).",
+  },
+  {
+    key: "mcpToolPolicyJson",
+    label: "Política de Tools MCP (Chat do Agent)",
+    kind: "json",
+    group: "policy",
+    description: "Allowlist de tools MCP do chat do agent por escopo; vazia = todas as tools (mode all).",
+  },
+  {
     key: "backgroundProcessingSettingsJson",
     label: "Processamento em Segundo Plano",
     kind: "json",
@@ -688,6 +702,20 @@ export const clientEditableFields: EditableField[] = [
       "ApiKey e write-only: mantenha ausente no JSON e inclua somente quando quiser trocar a chave.",
   },
   {
+    key: "maintenanceWindowJson",
+    label: "Janela de Manutenção (Reboot/Patches)",
+    kind: "json",
+    group: "policy",
+    description: "Override da janela de manutenção do servidor; vazia = herda.",
+  },
+  {
+    key: "mcpToolPolicyJson",
+    label: "Política de Tools MCP (Chat do Agent)",
+    kind: "json",
+    group: "policy",
+    description: "Allowlist de tools MCP do chat do agent por escopo; vazia = todas as tools (mode all).",
+  },
+  {
     key: "backgroundProcessingSettingsJson",
     label: "Processamento em Segundo Plano (override)",
     kind: "json",
@@ -801,6 +829,20 @@ export const siteEditableFields: EditableField[] = [
     group: "advanced",
     description:
       "ApiKey e write-only: mantenha ausente no JSON e inclua somente quando quiser trocar a chave.",
+  },
+  {
+    key: "maintenanceWindowJson",
+    label: "Janela de Manutenção (Reboot/Patches)",
+    kind: "json",
+    group: "policy",
+    description: "Override da janela de manutenção do servidor; vazia = herda.",
+  },
+  {
+    key: "mcpToolPolicyJson",
+    label: "Política de Tools MCP (Chat do Agent)",
+    kind: "json",
+    group: "policy",
+    description: "Allowlist de tools MCP do chat do agent por escopo; vazia = todas as tools (mode all).",
   },
   {
     key: "lockedFieldsJson",
