@@ -121,7 +121,7 @@ describe('modo de notificação', () => {
   });
 
   it('gera rótulos amigáveis', () => {
-    expect(notificationModeLabel('Prompt')).toBe('Prompt PSADT (Continuar/Adiar)');
+    expect(notificationModeLabel('Prompt')).toBe('Prompt nativo (Continuar/Adiar)');
     expect(notificationModeLabel('Toast')).toBe('Toast na interface do agent');
     expect(notificationModeLabel('NativeToast')).toBe('Toast nativo do app');
     expect(notificationModeLabel('Silent')).toBe('Silencioso');

@@ -3932,7 +3932,7 @@ export enum AutomationTaskActionType {
 export enum AutomationNotificationMode {
   /** Nenhuma notificação. */
   Silent = 0,
-  /** Prompt Welcome do PSADT (Continuar/Adiar) — sem autorização, ação padrão continuar. */
+  /** Prompt nativo do agent (Continuar/Adiar) — sem autorização, ação padrão continuar. */
   Prompt = 1,
   /** Toast informativo desenhado pela interface do agent, sem interação. */
   Toast = 2,

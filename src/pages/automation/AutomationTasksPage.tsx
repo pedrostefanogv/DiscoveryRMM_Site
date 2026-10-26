@@ -108,7 +108,7 @@ function actionLabel(value: unknown): string {
 /** Texto usado para ordenar a coluna Notificação (igual ao badge renderizado). */
 function notificationSortLabel(item: AutomationTaskSummary): string {
   const mode = notificationModeFromTask(item.notificationMode, item.requiresApproval);
-  if (mode === AutomationNotificationMode.Prompt) return "Prompt PSADT";
+  if (mode === AutomationNotificationMode.Prompt) return "Prompt nativo";
   if (mode === AutomationNotificationMode.Toast) return "Toast (agent)";
   if (mode === AutomationNotificationMode.NativeToast) return "Toast nativo";
   return "Silenciosa";
@@ -849,7 +849,7 @@ export default function AutomationTasksPage() {
           if (mode === AutomationNotificationMode.Prompt) {
             return (
               <div className="space-y-0.5">
-                <Badge color="warning">Prompt PSADT</Badge>
+                <Badge color="warning">Prompt nativo</Badge>
                 <p className="text-xs text-muted">
                   {item.allowDefer === false ? "sem adiar" : "pode adiar"} · {item.promptTimeoutSeconds ?? 60}s
                 </p>
@@ -2195,7 +2195,7 @@ export default function AutomationTasksPage() {
               label="Como notificar"
               options={[
                 { value: String(AutomationNotificationMode.Silent), label: "Silencioso (sem notificação)" },
-                { value: String(AutomationNotificationMode.Prompt), label: "Prompt PSADT (Continuar / Adiar)" },
+                { value: String(AutomationNotificationMode.Prompt), label: "Prompt nativo do agent (Continuar / Adiar)" },
                 { value: String(AutomationNotificationMode.Toast), label: "Toast na interface do agent (sem interação)" },
                 { value: String(AutomationNotificationMode.NativeToast), label: "Toast nativo do app (igual ao Chat IA)" },
               ]}
@@ -2250,7 +2250,8 @@ export default function AutomationTasksPage() {
 
           {formNotificationMode === AutomationNotificationMode.Prompt && (
             <p className="text-xs text-muted">
-              Welcome do PSADT (Continuar / Adiar), sem ser aprovação: sem resposta, a ação padrão é continuar.
+              Prompt nativo do agent (Continuar / Adiar), sem ser aprovação: sem resposta, a ação padrão é continuar.
+              Os processos listados em "Processos a fechar" são encerrados automaticamente quando o contador expira.
             </p>
           )}
 
@@ -2653,7 +2654,7 @@ export default function AutomationTasksPage() {
                   <p className="text-xs text-muted mb-1">Notificação ao usuário</p>
                   {detailNotificationMode === AutomationNotificationMode.Prompt ? (
                     <div className="space-y-1">
-                      <p className="text-sm text-foreground">Prompt Welcome (PSADT)</p>
+                      <p className="text-sm text-foreground">Prompt nativo (Continuar/Adiar)</p>
                       <p className="text-xs text-muted">
                         {d.allowDefer === false ? "Não pode adiar" : "Pode adiar"} · ação padrão em{" "}
                         {d.promptTimeoutSeconds ?? 60}s

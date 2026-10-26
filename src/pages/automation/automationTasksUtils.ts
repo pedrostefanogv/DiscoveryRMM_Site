@@ -146,7 +146,7 @@ export function notificationModeFromTask(
 export function notificationModeLabel(value: unknown): string {
   switch (normalizeNotificationMode(value)) {
     case AutomationNotificationMode.Prompt:
-      return "Prompt PSADT (Continuar/Adiar)";
+      return "Prompt nativo (Continuar/Adiar)";
     case AutomationNotificationMode.Toast:
       return "Toast na interface do agent";
     case AutomationNotificationMode.NativeToast:
