@@ -215,9 +215,35 @@ export default function RemoteSession() {
     configureApiClient({
       getAccessToken: () => accessTokenRef.current,
       refreshAccessToken: async () => {
-        postCrossTabMessage({ type: 'TOKEN_REQUEST' });
-        await new Promise((resolve) => setTimeout(resolve, 100));
-        return accessTokenRef.current || null;
+        // Espera de verdade pelo broadcast da aba principal: a espera fixa de
+        // 100 ms devolvia o MESMO token revogado, o retry falhava em 401 e a
+        // popup caia em 'Sessao invalida ou revogada' mesmo com aba principal
+        // viva (o refresh la leva mais de 100 ms ou responde so via broadcast).
+        const before = accessTokenRef.current;
+        return await new Promise<string | null>((resolve) => {
+          let settled = false;
+          const stop = onCrossTabMessage((message: CrossTabMessage) => {
+            if (message.type === 'TOKEN_REFRESHED' && message.accessToken && !settled) {
+              settled = true;
+              stop();
+              clearTimeout(timer);
+              resolve(message.accessToken);
+            }
+          });
+          const timer = setTimeout(() => {
+            if (!settled) {
+              settled = true;
+              stop();
+              // So reusa o token atual se ele mudou desde o pedido; se e o
+              // mesmo token que acabou de receber 401, devolve null para o
+              // apiClient tratar como falha de auth (sem retry inutil).
+              resolve(accessTokenRef.current && accessTokenRef.current !== before
+                ? accessTokenRef.current
+                : null);
+            }
+          }, 3_000);
+          postCrossTabMessage({ type: 'TOKEN_REQUEST' });
+        });
       },
       onAuthFailure: () => {
         setErrorMsg('Sessão expirada. Feche esta janela e abra o acesso remoto novamente.');
