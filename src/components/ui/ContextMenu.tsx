@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { Icon } from "@/components/ui";
 import { createPortal } from "react-dom";
-import { ChevronRight } from "lucide-react";
 
 export interface ContextMenuItem {
   key: string;
@@ -187,7 +187,7 @@ function SubmenuItem({
       >
         {item.icon ? <span className="shrink-0">{item.icon}</span> : null}
         <span className="flex-1 truncate">{item.label}</span>
-        <ChevronRight className="h-4 w-4 text-muted" />
+        <Icon name="chevron_right" className="h-4 w-4 text-muted" />
       </button>
       <div
         ref={submenuRef}

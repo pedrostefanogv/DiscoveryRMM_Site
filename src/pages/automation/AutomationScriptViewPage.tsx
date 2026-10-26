@@ -1,8 +1,7 @@
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import toast from "react-hot-toast";
-import { History, Pencil } from "lucide-react";
-import {
+import { Icon,
   Button,
   Card,
   CardHeader,
@@ -107,10 +106,10 @@ export default function AutomationScriptViewPage() {
             document.getElementById("script-audit")?.scrollIntoView({ behavior: "smooth" })
           }
         >
-          <History className="h-4 w-4" /> Auditoria
+          <Icon name="history" className="h-4 w-4" /> Auditoria
         </Button>
         <Button size="sm" onClick={() => navigate(`/automation/scripts/${detail.id}/edit`)}>
-          <Pencil className="h-4 w-4" /> Editar
+          <Icon name="edit" className="h-4 w-4" /> Editar
         </Button>
       </PageHeader>
 

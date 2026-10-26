@@ -1,7 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArchiveRestore, Pencil, Power, Trash2 } from 'lucide-react';
-import {
+import { Icon,
   Button, Card, CardHeader, ConfirmDialog, ErrorDisplay, Loading, PageHeader,
 } from '@/components/ui';
 import {
@@ -134,13 +133,13 @@ export default function TicketTemplateViewPage() {
           {!isDeleted && (
             <>
               <Button size="sm" onClick={() => navigate(`/tickets/templates/${template.id}/edit`)}>
-                <Pencil className="h-4 w-4" /> Editar
+                <Icon name="edit" className="h-4 w-4" /> Editar
               </Button>
               <Button size="sm" variant="secondary" onClick={toggleActive} loading={update.isPending}>
-                <Power className="h-4 w-4" /> {template.isActive ? 'Desativar' : 'Ativar'}
+                <Icon name="power_settings_new" className="h-4 w-4" /> {template.isActive ? 'Desativar' : 'Ativar'}
               </Button>
               <Button size="sm" variant="ghost" onClick={() => setConfirmDelete(true)}>
-                <Trash2 className="h-4 w-4" /> Mover para a lixeira
+                <Icon name="delete" className="h-4 w-4" /> Mover para a lixeira
               </Button>
             </>
           )}
@@ -164,10 +163,10 @@ export default function TicketTemplateViewPage() {
                   )
                 }
               >
-                <ArchiveRestore className="h-4 w-4" /> Restaurar
+                <Icon name="unarchive" className="h-4 w-4" /> Restaurar
               </Button>
               <Button size="sm" variant="ghost" onClick={() => setConfirmPurge(true)}>
-                <Trash2 className="h-4 w-4" /> Excluir definitivamente
+                <Icon name="delete" className="h-4 w-4" /> Excluir definitivamente
               </Button>
             </>
           )}

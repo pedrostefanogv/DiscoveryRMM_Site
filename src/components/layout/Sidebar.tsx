@@ -1,32 +1,17 @@
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
+import { Icon, type MaterialSymbolName } from "@/components/ui";
 import { useEffect, useMemo, useState } from 'react';
-import {
-  LayoutDashboard,
-  Users,
-  Monitor,
-  Ticket,
-  ScrollText,
-  KeyRound,
-  AppWindow,
-  Settings,
-  ChevronLeft,
-  ChevronRight,
-  ChevronDown,
-  FileBarChart,
-  Wrench,
-  ShieldCheck,
-  ShieldAlert,
-} from 'lucide-react';
+
 import { useTheme } from '@/theme/ThemeContext';
 import { useAuthorization } from '@/auth/authorization';
 
-const mainLinks = [
-  { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
-  { to: '/service-board', icon: LayoutDashboard, label: 'Service Board' },
-  { to: '/agents', icon: Monitor, label: 'Agentes' },
-  { to: '/tickets', icon: Ticket, label: 'Suporte' },
-  { to: '/logs', icon: ScrollText, label: 'Logs' },
-  { to: '/deploy', icon: KeyRound, label: 'Deploy' },
+const mainLinks: { to: string; icon: MaterialSymbolName; label: string }[] = [
+  { to: '/', icon: "dashboard", label: 'Dashboard' },
+  { to: '/service-board', icon: "dashboard", label: 'Service Board' },
+  { to: '/agents', icon: "desktop_windows", label: 'Agentes' },
+  { to: '/tickets', icon: "confirmation_number", label: 'Suporte' },
+  { to: '/logs', icon: "article", label: 'Logs' },
+  { to: '/deploy', icon: "key", label: 'Deploy' },
 ];
 
 const clientLinks = [
@@ -270,7 +255,7 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
             }`
           }
         >
-          <LayoutDashboard className="h-5 w-5 shrink-0" />
+          <Icon name="dashboard" className="h-5 w-5 shrink-0" />
           {!effectiveCollapsed && <span className="truncate">Dashboard</span>}
         </NavLink>
 
@@ -293,12 +278,12 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
           aria-label="Abrir submenu de clientes"
           aria-expanded={clientsOpen}
         >
-          <Users className="h-5 w-5 shrink-0" />
+          <Icon name="group" className="h-5 w-5 shrink-0" />
           {!effectiveCollapsed && (
             <>
               <span className="truncate">Clientes</span>
               <span className="ml-auto">
-                <ChevronDown className={chevronAnimationClass(clientsOpen)} />
+                <Icon name="expand_more" className={chevronAnimationClass(clientsOpen)} />
               </span>
             </>
           )}
@@ -329,7 +314,7 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
           </>
         )}
 
-        {visibleMainLinks.map(({ to, icon: Icon, label }) => (
+        {visibleMainLinks.map(({ to, icon, label }) => (
           <NavLink
             key={to}
             to={to}
@@ -342,7 +327,7 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
               }`
             }
           >
-            <Icon className="h-5 w-5 shrink-0" />
+            <Icon name={icon} className="h-5 w-5 shrink-0" />
             {!effectiveCollapsed && <span className="truncate">{label}</span>}
           </NavLink>
         ))}
@@ -364,12 +349,12 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
           aria-label="Abrir submenu de suporte"
           aria-expanded={ticketsOpen}
         >
-          <Ticket className="h-5 w-5 shrink-0" />
+          <Icon name="confirmation_number" className="h-5 w-5 shrink-0" />
           {!effectiveCollapsed && (
             <>
               <span className="truncate">Suporte</span>
               <span className="ml-auto">
-                <ChevronDown className={chevronAnimationClass(ticketsOpen)} />
+                <Icon name="expand_more" className={chevronAnimationClass(ticketsOpen)} />
               </span>
             </>
           )}
@@ -417,12 +402,12 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
               aria-label="Abrir submenu de softwares"
           aria-expanded={softwareOpen}
             >
-              <AppWindow className="h-5 w-5 shrink-0" />
+              <Icon name="web_asset" className="h-5 w-5 shrink-0" />
               {!effectiveCollapsed && (
                 <>
                   <span className="truncate">Softwares</span>
                   <span className="ml-auto">
-                    <ChevronDown className={chevronAnimationClass(softwareOpen)} />
+                    <Icon name="expand_more" className={chevronAnimationClass(softwareOpen)} />
                   </span>
                 </>
               )}
@@ -471,12 +456,12 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
               aria-label="Abrir submenu de atualizações"
               aria-expanded={patchesOpen}
             >
-              <ShieldAlert className="h-5 w-5 shrink-0" />
+              <Icon name="gpp_maybe" className="h-5 w-5 shrink-0" />
               {!effectiveCollapsed && (
                 <>
                   <span className="truncate">Atualizações</span>
                   <span className="ml-auto">
-                    <ChevronDown className={chevronAnimationClass(patchesOpen)} />
+                    <Icon name="expand_more" className={chevronAnimationClass(patchesOpen)} />
                   </span>
                 </>
               )}
@@ -526,12 +511,12 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
               aria-label="Abrir submenu de automação"
           aria-expanded={automationOpen}
             >
-              <Wrench className="h-5 w-5 shrink-0" />
+              <Icon name="build" className="h-5 w-5 shrink-0" />
               {!effectiveCollapsed && (
                 <>
                   <span className="truncate">Automação</span>
                   <span className="ml-auto">
-                    <ChevronDown className={chevronAnimationClass(automationOpen)} />
+                    <Icon name="expand_more" className={chevronAnimationClass(automationOpen)} />
                   </span>
                 </>
               )}
@@ -581,12 +566,12 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
               aria-label="Abrir submenu de relatórios"
           aria-expanded={reportsOpen}
             >
-              <FileBarChart className="h-5 w-5 shrink-0" />
+              <Icon name="insert_chart" className="h-5 w-5 shrink-0" />
               {!effectiveCollapsed && (
                 <>
                   <span className="truncate">Relatórios</span>
                   <span className="ml-auto">
-                    <ChevronDown className={chevronAnimationClass(reportsOpen)} />
+                    <Icon name="expand_more" className={chevronAnimationClass(reportsOpen)} />
                   </span>
                 </>
               )}
@@ -633,12 +618,12 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
           aria-label="Abrir submenu de identidade"
           aria-expanded={identityOpen}
         >
-          <ShieldCheck className="h-5 w-5 shrink-0" />
+          <Icon name="verified_user" className="h-5 w-5 shrink-0" />
           {!effectiveCollapsed && (
             <>
               <span className="truncate">Identidade</span>
               <span className="ml-auto">
-                <ChevronDown className={chevronAnimationClass(identityOpen)} />
+                <Icon name="expand_more" className={chevronAnimationClass(identityOpen)} />
               </span>
             </>
           )}
@@ -685,12 +670,12 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
               aria-label="Abrir submenu de configurações"
           aria-expanded={settingsOpen}
             >
-              <Settings className="h-5 w-5 shrink-0" />
+              <Icon name="settings" className="h-5 w-5 shrink-0" />
               {!effectiveCollapsed && (
                 <>
                   <span className="truncate">Configurações</span>
                   <span className="ml-auto">
-                    <ChevronDown className={chevronAnimationClass(settingsOpen)} />
+                    <Icon name="expand_more" className={chevronAnimationClass(settingsOpen)} />
                   </span>
                 </>
               )}
@@ -729,7 +714,7 @@ export function Sidebar({ collapsed, onToggle, isDesktop, mobileOpen, onCloseMob
           className="flex h-11 w-full items-center justify-center gap-2 text-xs font-medium text-muted transition-colors hover:bg-surface-light hover:text-muted-foreground"
           aria-label={effectiveCollapsed ? 'Expandir sidebar' : 'Recolher sidebar'}
         >
-          {effectiveCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+          {effectiveCollapsed ? <Icon name="chevron_right" className="h-4 w-4" /> : <Icon name="chevron_left" className="h-4 w-4" />}
           {!effectiveCollapsed && <span>Recolher</span>}
         </button>
       </div>

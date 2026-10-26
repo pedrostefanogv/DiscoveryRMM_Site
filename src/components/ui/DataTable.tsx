@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react';
-import { ChevronUp, ChevronDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
+import { Icon } from "@/components/ui";
+
 import { EmptyState } from './EmptyState';
 
 interface Column<T> {
@@ -321,7 +322,7 @@ export function DataTable<T>({
                     >
                       <span className="inline-flex items-center gap-1">
                         {col.header}
-                        {active && (sort?.direction === 'asc' ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />)}
+                        {active && (sort?.direction === 'asc' ? <Icon name="expand_less" className="h-3.5 w-3.5" /> : <Icon name="expand_more" className="h-3.5 w-3.5" />)}
                       </span>
                     </th>
                   );
@@ -399,7 +400,7 @@ export function DataTable<T>({
               className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted hover:bg-surface-light hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
               aria-label="Primeira página"
             >
-              <ChevronsLeft className="h-4 w-4" />
+              <Icon name="keyboard_double_arrow_left" className="h-4 w-4" />
             </button>
             <button
               onClick={() => setPage(p => Math.max(1, p - 1))}
@@ -407,7 +408,7 @@ export function DataTable<T>({
               className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted hover:bg-surface-light hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
               aria-label="Página anterior"
             >
-              <ChevronLeft className="h-4 w-4" />
+              <Icon name="chevron_left" className="h-4 w-4" />
             </button>
             <span className="px-2 text-muted tabular-nums">
               {safePage} / {totalPages}
@@ -418,7 +419,7 @@ export function DataTable<T>({
               className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted hover:bg-surface-light hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
               aria-label="Próxima página"
             >
-              <ChevronRight className="h-4 w-4" />
+              <Icon name="chevron_right" className="h-4 w-4" />
             </button>
             <button
               onClick={() => setPage(totalPages)}
@@ -426,7 +427,7 @@ export function DataTable<T>({
               className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted hover:bg-surface-light hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
               aria-label="Última página"
             >
-              <ChevronsRight className="h-4 w-4" />
+              <Icon name="keyboard_double_arrow_right" className="h-4 w-4" />
             </button>
           </div>
         </div>

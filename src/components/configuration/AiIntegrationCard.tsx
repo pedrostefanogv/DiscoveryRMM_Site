@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import { Bot, CheckCircle2, ChevronDown, ChevronUp, RefreshCw, Search, XCircle } from "lucide-react";
-import { Button, Card, CardHeader, Input, Select } from "@/components/ui";
+import { Icon, Button, Card, CardHeader, Input, Select } from "@/components/ui";
 import { listOpenRouterModels, validateApiKey } from "@/services/configurationApi";
 import type { AIIntegrationSettings } from "@/api";
 
@@ -327,7 +326,7 @@ export function AiIntegrationCard({ aiSettings, onSave, saving }: Props) {
             <div className="space-y-1">
               <label className="block text-sm font-medium text-muted-foreground">
                 API Key (Chat + Embeddings){" "}
-                {fetching && <RefreshCw className="inline h-3 w-3 animate-spin text-muted" />}
+                {fetching && <Icon name="refresh" className="inline h-3 w-3 animate-spin text-muted" />}
               </label>
               <div className="flex gap-2">
                 <Input
@@ -338,12 +337,12 @@ export function AiIntegrationCard({ aiSettings, onSave, saving }: Props) {
                   className="flex-1"
                 />
                 <Button type="button" size="sm" variant="ghost" onClick={handleValidateKey} disabled={validating || !apiKey.trim()}>
-                  {validating ? <RefreshCw className="h-3 w-3 animate-spin" /> : "Validar"}
+                  {validating ? <Icon name="refresh" className="h-3 w-3 animate-spin" /> : "Validar"}
                 </Button>
-                {keyValid === true && <CheckCircle2 className="h-5 w-5 self-center text-green-600 dark:text-green-400" />}
+                {keyValid === true && <Icon name="check_circle" className="h-5 w-5 self-center text-green-600 dark:text-green-400" />}
                 {keyValid === false && (
                   <span title={keyError ?? ""}>
-                    <XCircle className="h-5 w-5 self-center text-red-600 dark:text-red-400" />
+                    <Icon name="cancel" className="h-5 w-5 self-center text-red-600 dark:text-red-400" />
                   </span>
                 )}
               </div>
@@ -374,12 +373,12 @@ export function AiIntegrationCard({ aiSettings, onSave, saving }: Props) {
                 )}
                 {fetchError && !fetching && <span className="ml-2 text-amber-600 dark:text-amber-400">(offline)</span>}
               </span>
-              {expandedChat ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              {expandedChat ? <Icon name="expand_less" className="h-4 w-4" /> : <Icon name="expand_more" className="h-4 w-4" />}
             </button>
             {expandedChat && (
               <div className="mt-2 space-y-2 p-2">
                 <div className="relative">
-                  <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted" />
+                  <Icon name="search" className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted" />
                   <Input
                     value={chatSearch}
                     onChange={(e) => setChatSearch(e.target.value)}
@@ -433,12 +432,12 @@ export function AiIntegrationCard({ aiSettings, onSave, saving }: Props) {
                   </span>
                 )}
               </span>
-              {expandedEmbed ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              {expandedEmbed ? <Icon name="expand_less" className="h-4 w-4" /> : <Icon name="expand_more" className="h-4 w-4" />}
             </button>
             {expandedEmbed && (
               <div className="mt-2 space-y-2 p-2">
                 <div className="relative">
-                  <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted" />
+                  <Icon name="search" className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted" />
                   <Input
                     value={embedSearch}
                     onChange={(e) => setEmbedSearch(e.target.value)}
@@ -566,7 +565,7 @@ export function AiIntegrationCard({ aiSettings, onSave, saving }: Props) {
             onClick={() => setExpandedAdvanced(!expandedAdvanced)}
           >
             <span>Configuração Avançada (Parâmetros)</span>
-            {expandedAdvanced ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            {expandedAdvanced ? <Icon name="expand_less" className="h-4 w-4" /> : <Icon name="expand_more" className="h-4 w-4" />}
           </button>
           {expandedAdvanced && (
             <div className="mt-2 grid gap-3 p-2">
@@ -648,7 +647,7 @@ export function AiIntegrationCard({ aiSettings, onSave, saving }: Props) {
 
       <div className="flex flex-wrap justify-end gap-2">
         <Button type="button" size="sm" onClick={handleSave} disabled={saving}>
-          {saving ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Bot className="h-3.5 w-3.5" />} Salvar
+          {saving ? <Icon name="refresh" className="h-3.5 w-3.5 animate-spin" /> : <Icon name="smart_toy" className="h-3.5 w-3.5" />} Salvar
         </Button>
       </div>
     </Card>

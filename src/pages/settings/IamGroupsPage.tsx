@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
-import { Link2, Plus, Trash2, UserPlus } from "lucide-react";
+
 import toast from "react-hot-toast";
-import {
+import { Icon,
   Badge,
   Button,
   Card,
@@ -109,7 +109,7 @@ export default function IamGroupsPage() {
                   void handleDelete(item);
                 }}
               >
-                <Trash2 className="h-4 w-4" />
+                <Icon name="delete" className="h-4 w-4" />
               </Button>
             )}
           </div>
@@ -166,7 +166,7 @@ export default function IamGroupsPage() {
           action={
             canWrite ? (
               <Button size="sm" onClick={() => setCreateOpen(true)}>
-                <Plus className="h-4 w-4" /> Novo grupo
+                <Icon name="add" className="h-4 w-4" /> Novo grupo
               </Button>
             ) : undefined
           }
@@ -286,7 +286,7 @@ function GroupAssignmentsPanel({
             <Select options={memberOptions} value={memberUserId} onChange={(e) => setMemberUserId(e.target.value)} />
           </div>
           <Button size="sm" onClick={() => void addMemberSubmit()} loading={addMember.isPending} disabled={!memberUserId}>
-            <UserPlus className="h-4 w-4" /> Adicionar
+            <Icon name="person_add" className="h-4 w-4" /> Adicionar
           </Button>
         </div>
 
@@ -310,7 +310,7 @@ function GroupAssignmentsPanel({
                     })
                   }
                 >
-                  <Trash2 className="h-4 w-4" />
+                  <Icon name="delete" className="h-4 w-4" />
                 </Button>
               </div>
             ))}
@@ -356,7 +356,7 @@ function GroupAssignmentsPanel({
             loading={assignRole.isPending}
             disabled={!roleAssignment.roleId}
           >
-            <Link2 className="h-4 w-4" /> Vincular role
+            <Icon name="link" className="h-4 w-4" /> Vincular role
           </Button>
         </div>
 
@@ -383,7 +383,7 @@ function GroupAssignmentsPanel({
                     })
                   }
                 >
-                  <Trash2 className="h-4 w-4" />
+                  <Icon name="delete" className="h-4 w-4" />
                 </Button>
               </div>
             ))}

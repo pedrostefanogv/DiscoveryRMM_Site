@@ -1,9 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import {
-  Plus, Pencil, Trash2, LayoutTemplate, Globe, Building2, ArchiveRestore, Power, Undo2, Eye,
-} from 'lucide-react';
-import { Badge, Button, Card, CardHeader, ConfirmDialog, ErrorDisplay, Loading } from '@/components/ui';
+import { Icon, Badge, Button, Card, CardHeader, ConfirmDialog, ErrorDisplay, Loading } from '@/components/ui';
 import {
   useAdminTicketTemplates, useDeleteTicketTemplate, usePurgeTicketTemplate,
   useRestoreTicketTemplate, useUpdateTicketTemplate,
@@ -120,14 +117,14 @@ export default function TicketTemplatesPage() {
                 Mostrar inativos
               </label>
               <Button type="button" size="sm" variant="secondary" onClick={() => { setShowTrash(true); setShowInactive(false); }}>
-                <Trash2 className="h-4 w-4" /> Lixeira
+                <Icon name="delete" className="h-4 w-4" /> Lixeira
               </Button>
-              <Button size="sm" onClick={openCreate}><Plus className="h-4 w-4" /> Novo template</Button>
+              <Button size="sm" onClick={openCreate}><Icon name="add" className="h-4 w-4" /> Novo template</Button>
             </>
           )}
           {showTrash && (
             <Button type="button" size="sm" variant="secondary" onClick={() => setShowTrash(false)}>
-              <Undo2 className="h-4 w-4" /> Voltar ao catálogo
+              <Icon name="undo" className="h-4 w-4" /> Voltar ao catálogo
             </Button>
           )}
         </div>
@@ -149,8 +146,8 @@ export default function TicketTemplatesPage() {
               <div key={t.id} className="flex items-start gap-3 py-3">
                 <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-surface-light">
                   {isDeleted
-                    ? <ArchiveRestore className="h-4 w-4 text-muted" />
-                    : <LayoutTemplate className="h-4 w-4 text-muted" />}
+                    ? <Icon name="unarchive" className="h-4 w-4 text-muted" />
+                    : <Icon name="view_quilt" className="h-4 w-4 text-muted" />}
                 </div>
                 <div className="min-w-0 flex-1">
                   {/* Título é o nome exibido; a chave é o identificador. */}
@@ -167,11 +164,11 @@ export default function TicketTemplatesPage() {
                   <div className="mt-1 flex flex-wrap items-center gap-1.5">
                     {t.clientId ? (
                       <Badge color="slate">
-                        <Building2 className="mr-0.5 inline h-3 w-3" />
+                        <Icon name="apartment" className="mr-0.5 inline h-3 w-3" />
                         {clientMap.get(t.clientId) ?? 'Cliente'}
                       </Badge>
                     ) : (
-                      <Badge color="slate"><Globe className="mr-0.5 inline h-3 w-3" />Global</Badge>
+                      <Badge color="slate"><Icon name="public" className="mr-0.5 inline h-3 w-3" />Global</Badge>
                     )}
                     {t.departmentId && <Badge color="accent">Departamento</Badge>}
                     {questionCount > 0 && <Badge color="success">{questionCount} pergunta(s)</Badge>}
@@ -199,7 +196,7 @@ export default function TicketTemplatesPage() {
                           )
                         }
                       >
-                        <ArchiveRestore className="h-4 w-4" /> Restaurar
+                        <Icon name="unarchive" className="h-4 w-4" /> Restaurar
                       </Button>
                       <button
                         onClick={() => setDetailsTarget(t)}
@@ -207,7 +204,7 @@ export default function TicketTemplatesPage() {
                         title="Ver dados (somente leitura)"
                         className="p-1 text-muted hover:text-foreground"
                       >
-                        <Eye className="h-4 w-4" />
+                        <Icon name="visibility" className="h-4 w-4" />
                       </button>
                       <button
                         onClick={() => setPurgeTarget(t)}
@@ -215,7 +212,7 @@ export default function TicketTemplatesPage() {
                         title="Excluir definitivamente"
                         className="p-1 text-muted hover:text-danger"
                       >
-                        <Trash2 className="h-4 w-4" />
+                        <Icon name="delete" className="h-4 w-4" />
                       </button>
                     </>
                   ) : (
@@ -226,7 +223,7 @@ export default function TicketTemplatesPage() {
                         title={t.isActive ? 'Desativar (sai da abertura de chamados)' : 'Ativar template'}
                         className={`p-1 ${t.isActive ? 'text-muted hover:text-warning' : 'text-warning hover:text-success'}`}
                       >
-                        <Power className="h-4 w-4" />
+                        <Icon name="power_settings_new" className="h-4 w-4" />
                       </button>
                       <button
                         onClick={() => setDetailsTarget(t)}
@@ -234,10 +231,10 @@ export default function TicketTemplatesPage() {
                         title="Ver dados (somente leitura)"
                         className="p-1 text-muted hover:text-foreground"
                       >
-                        <Eye className="h-4 w-4" />
+                        <Icon name="visibility" className="h-4 w-4" />
                       </button>
-                      <button onClick={() => openEdit(t)} aria-label="Editar" className="p-1 text-muted hover:text-foreground"><Pencil className="h-4 w-4" /></button>
-                      <button onClick={() => setDeleteTarget(t)} aria-label="Excluir" title="Mover para a lixeira" className="p-1 text-muted hover:text-danger"><Trash2 className="h-4 w-4" /></button>
+                      <button onClick={() => openEdit(t)} aria-label="Editar" className="p-1 text-muted hover:text-foreground"><Icon name="edit" className="h-4 w-4" /></button>
+                      <button onClick={() => setDeleteTarget(t)} aria-label="Excluir" title="Mover para a lixeira" className="p-1 text-muted hover:text-danger"><Icon name="delete" className="h-4 w-4" /></button>
                     </>
                   )}
                 </div>

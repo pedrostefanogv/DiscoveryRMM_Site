@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 
-import { AlertTriangle, Shield } from 'lucide-react';
 
-import { Badge, Button, Loading } from '@/components/ui';
+import { Icon, Badge, Button, Loading } from '@/components/ui';
 import {
   CustomFieldDataType,
   CustomFieldScopeType,
@@ -176,7 +175,7 @@ export function TicketFieldsSection({
         // Falha do schema (403/500) não pode virar fallback silencioso de
         // somente leitura: sem a definição não há input nem validação.
         <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-surface-light px-4 py-3">
-          <AlertTriangle className="h-4 w-4 text-danger" />
+          <Icon name="warning" className="h-4 w-4 text-danger" />
           <p className="text-sm text-muted">
             Não foi possível carregar os campos deste departamento.
           </p>
@@ -223,7 +222,7 @@ export function TicketFieldsSection({
                     {row.isRequired && <Badge color="accent">Obrigatório</Badge>}
                     {row.field?.isInternal && (
                       <Badge color="accent">
-                        <Shield className="mr-0.5 inline h-3 w-3" />
+                        <Icon name="shield" className="mr-0.5 inline h-3 w-3" />
                         Interno
                       </Badge>
                     )}

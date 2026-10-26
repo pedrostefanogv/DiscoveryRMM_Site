@@ -1,24 +1,17 @@
 import { useCallback } from "react";
+import { Icon, type MaterialSymbolName } from "@/components/ui";
 import { useNavigate } from "react-router-dom";
-import {
-  Building2,
-  Layers,
-  Loader2,
-  Monitor,
-  Package,
-  Search,
-  Ticket,
-} from "lucide-react";
+
 import type { UniversalSearchResult } from "@/api";
 
 // ── Icon map ──────────────────────────────────────────
 
-const ENTITY_ICONS: Record<string, typeof Monitor> = {
-  agents: Monitor,
-  clients: Building2,
-  sites: Layers,
-  tickets: Ticket,
-  software: Package,
+const ENTITY_ICONS: Record<string, MaterialSymbolName> = {
+agents: "desktop_windows",
+clients: "apartment",
+sites: "layers",
+tickets: "confirmation_number",
+software: "inventory_2",
 };
 
 const ENTITY_COLORS: Record<string, string> = {
@@ -30,7 +23,7 @@ const ENTITY_COLORS: Record<string, string> = {
 };
 
 function getEntityIcon(entityType: string) {
-  return ENTITY_ICONS[entityType] ?? Search;
+  return ENTITY_ICONS[entityType] ?? "search";
 }
 
 function getEntityColor(entityType: string) {
@@ -95,7 +88,7 @@ export function SearchPalette({
         {/* Loading */}
         {loading && (
           <div className="flex items-center justify-center gap-2 py-6">
-            <Loader2 className="h-5 w-5 animate-spin text-primary" />
+            <Icon name="progress_activity" className="h-5 w-5 animate-spin text-primary" />
             <span className="text-sm text-muted">Buscando...</span>
           </div>
         )}
@@ -110,7 +103,7 @@ export function SearchPalette({
         {/* Empty state — query >= 3 chars, loaded, no results */}
         {!loading && !error && query.trim().length >= 3 && !hasResults && (
           <div className="flex flex-col items-center gap-2 py-6">
-            <Search className="h-6 w-6 text-muted" strokeWidth={1.5} />
+            <Icon name="search" className="h-6 w-6 text-muted" strokeWidth={1.5} />
             <p className="text-sm text-muted">
               Nenhum resultado encontrado para &ldquo;{query.trim()}&rdquo;
             </p>
@@ -120,14 +113,14 @@ export function SearchPalette({
         {/* Results */}
         {hasResults &&
           results.groups.map((group) => {
-            const Icon = getEntityIcon(group.entityType);
+            
             const color = getEntityColor(group.entityType);
 
             return (
               <div key={group.entityType} className="mb-2 last:mb-0">
                 {/* Group header */}
                 <div className="flex items-center gap-2 px-3 py-1.5">
-                  <Icon className={`h-4 w-4 ${color}`} strokeWidth={1.5} />
+                  <Icon name={getEntityIcon(group.entityType)} className={`h-4 w-4 ${color}`} />
                   <span className="text-xs font-semibold uppercase tracking-wider text-muted">
                     {group.label}
                   </span>
@@ -153,7 +146,7 @@ export function SearchPalette({
                       <div
                         className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-border bg-surface-light ${color}`}
                       >
-                        <Icon className="h-3.5 w-3.5" strokeWidth={1.5} />
+                        <Icon name={getEntityIcon(group.entityType)} className="h-3.5 w-3.5" />
                       </div>
 
                       <div className="min-w-0 flex-1">

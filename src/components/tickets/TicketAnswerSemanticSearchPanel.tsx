@@ -1,6 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { FileText, Sparkles } from 'lucide-react';
-import { Badge } from '@/components/ui';
+import { Icon, Badge } from '@/components/ui';
 import { useTicketAnswerSearch } from '@/hooks/useTicketAnswerSearch';
 
 interface TicketAnswerSemanticSearchPanelProps {
@@ -41,7 +40,7 @@ export function TicketAnswerSemanticSearchPanel({
     <div className="mt-2 overflow-hidden rounded-xl border border-border bg-surface-light">
       <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-1.5">
         <span className="flex items-center gap-1.5 text-xs text-muted">
-          <Sparkles className="h-3.5 w-3.5" />
+          <Icon name="auto_awesome" className="h-3.5 w-3.5" />
           Respostas do questionário
         </span>
         {mode && (
@@ -66,7 +65,7 @@ export function TicketAnswerSemanticSearchPanel({
               >
                 <span className="min-w-0 flex-1">
                   <span className="flex items-center gap-1 text-sm font-medium text-foreground">
-                    <FileText className="h-3.5 w-3.5 shrink-0 text-muted" />
+                    <Icon name="description" className="h-3.5 w-3.5 shrink-0 text-muted" />
                     <span className="truncate">{hit.ticketTitle}</span>
                   </span>
                   <span className="mt-0.5 block truncate text-xs text-muted">

@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react';
-import { UserPlus, UserMinus } from 'lucide-react';
-import { Badge, Button, Input, Loading } from '@/components/ui';
+import { Icon, Badge, Button, Input, Loading } from '@/components/ui';
 import {
   useAddTicketWatcher, useRemoveTicketWatcher, useTicketWatchers,
 } from '@/hooks/useTickets';
@@ -128,7 +127,7 @@ export function WatchersSection({
           onClick={() => (isAdding ? closeAddWatcher() : setIsAdding(true))}
           aria-label="Adicionar watcher"
         >
-          <UserPlus className="h-4 w-4" />
+          <Icon name="person_add" className="h-4 w-4" />
         </Button>
       </div>
 
@@ -163,7 +162,7 @@ export function WatchersSection({
                         loading={removingWatcherId === watcher.userId}
                         aria-label={`Remover watcher ${displayName}`}
                       >
-                        <UserMinus className="h-4 w-4" />
+                        <Icon name="person_remove" className="h-4 w-4" />
                       </Button>
                     </div>
                   </div>
@@ -208,7 +207,7 @@ export function WatchersSection({
                               selected ? 'bg-primary/10 text-foreground' : 'text-muted-foreground hover:bg-surface-hover/60'
                             }`}
                           >
-                            <UserPlus className={`h-3.5 w-3.5 shrink-0 ${selected ? 'text-primary' : 'text-muted'}`} />
+                            <Icon name="person_add" className={`h-3.5 w-3.5 shrink-0 ${selected ? 'text-primary' : 'text-muted'}`} />
                             <span className="min-w-0 flex-1 truncate">{label}</span>
                             {user.email && user.email !== label && (
                               <span className="shrink-0 truncate text-xs text-muted">{user.email}</span>

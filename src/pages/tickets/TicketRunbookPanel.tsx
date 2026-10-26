@@ -1,7 +1,6 @@
 import { useMemo, useState } from "react";
-import { Play, Zap } from "lucide-react";
 import toast from "react-hot-toast";
-import { Badge, Button, Select } from "@/components/ui";
+import { Icon, Badge, Button, Select } from "@/components/ui";
 import { useExecuteRunbook } from "@/hooks/useRunbook";
 import type { RunbookStepResultDto } from "@/api/runbook";
 import type { TicketMacroDto } from "@/api/support-productivity";
@@ -39,7 +38,7 @@ export function TicketRunbookPanel({ ticketId, macros }: { ticketId: string; mac
   return (
     <div className="rounded-lg border border-border bg-surface p-3" data-testid="runbook-panel">
       <div className="flex flex-wrap items-center gap-2">
-        <Zap className="h-4 w-4 text-muted" />
+        <Icon name="bolt" className="h-4 w-4 text-muted" />
         <span className="text-sm font-medium text-foreground">Runbook</span>
         <Select
           aria-label="Selecionar runbook"
@@ -61,7 +60,7 @@ export function TicketRunbookPanel({ ticketId, macros }: { ticketId: string; mac
           disabled={!selectedMacro || execute.isPending}
           loading={execute.isPending}
         >
-          <Play className="h-4 w-4" />
+          <Icon name="play_arrow" className="h-4 w-4" />
           {execute.isPending ? "Executando..." : "Executar runbook"}
         </Button>
       </div>

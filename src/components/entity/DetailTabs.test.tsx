@@ -1,13 +1,12 @@
 import { fireEvent, render, screen } from '@testing-library/react';
-import { Building2, Monitor } from 'lucide-react';
 import { describe, expect, it, vi } from 'vitest';
 import { DetailTabs, resolveDetailTab, type DetailTab } from './DetailTabs';
 
 type Id = 'sites' | 'agentes';
 
 const TABS: DetailTab<Id>[] = [
-  { id: 'sites', label: 'Sites', icon: Building2 },
-  { id: 'agentes', label: 'Agentes', icon: Monitor },
+  { id: 'sites', label: 'Sites', icon: "apartment" },
+  { id: 'agentes', label: 'Agentes', icon: "desktop_windows" },
 ];
 
 const IDS: Id[] = ['sites', 'agentes'];
@@ -68,8 +67,8 @@ describe('DetailTabs', () => {
     render(
       <DetailTabs
         tabs={[
-          { id: 'sites', label: 'Sites', icon: Building2, badge: 3 },
-          { id: 'agentes', label: 'Agentes', icon: Monitor },
+          { id: 'sites', label: 'Sites', icon: "apartment", badge: 3 },
+          { id: 'agentes', label: 'Agentes', icon: "desktop_windows" },
         ]}
         active="sites"
         onChange={() => {}}

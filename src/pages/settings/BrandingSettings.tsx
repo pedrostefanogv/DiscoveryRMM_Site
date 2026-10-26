@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
-import { RotateCcw, Save } from "lucide-react";
-import { Button, Card, CardHeader, ErrorDisplay, Input, Loading } from "@/components/ui";
+import { Icon, Button, Card, CardHeader, ErrorDisplay, Input, Loading } from "@/components/ui";
 import { ApiError } from "@/api";
 import { statusSurface } from "@/components/configuration";
 import { usePatchServerConfig, useServerConfig } from "@/hooks/useConfigurationApi";
@@ -127,11 +126,11 @@ export default function BrandingSettings() {
             {dirty ? "Alterações não salvas" : "Sem alterações pendentes"}
           </span>
           <Button size="sm" variant="ghost" onClick={handleReset} disabled={!dirty}>
-            <RotateCcw className="h-3.5 w-3.5" />
+            <Icon name="restart_alt" className="h-3.5 w-3.5" />
             Restaurar padrão
           </Button>
           <Button size="sm" onClick={handleSave} loading={patchMutation.isPending} disabled={!dirty}>
-            <Save className="h-3.5 w-3.5" />
+            <Icon name="save" className="h-3.5 w-3.5" />
             Salvar
           </Button>
         </div>

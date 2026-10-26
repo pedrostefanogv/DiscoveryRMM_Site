@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { Eye, RefreshCw } from "lucide-react";
-import { Button, Card, DataTable, Loading } from "@/components/ui";
+
+import { Icon, Button, Card, DataTable, Loading } from "@/components/ui";
 import type { Column } from "@/components/ui";
 import { previewReportData } from "@/api/reports";
 import { ReportDatasetType } from "@/api/types";
@@ -48,7 +48,7 @@ export function ReportPreview({
         onClick={loadPreview}
         disabled={isLoading}
       >
-        <Eye className="h-4 w-4" />
+        <Icon name="visibility" className="h-4 w-4" />
         {isLoading ? "Carregando..." : "Visualizar Prévia"}
       </Button>
     );
@@ -97,7 +97,7 @@ export function ReportPreview({
           onClick={loadPreview}
           disabled={isLoading}
         >
-          <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
+          <Icon name="refresh" className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
           Atualizar
         </Button>
       </div>

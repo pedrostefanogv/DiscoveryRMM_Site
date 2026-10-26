@@ -1,6 +1,5 @@
 import { useState } from 'react';
-import { CheckCircle2, Package, Search, X } from 'lucide-react';
-import { Button } from '@/components/ui';
+import { Icon, Button } from '@/components/ui';
 import { softwareInventoryApi } from '@/api/software-inventory';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { useQuery } from '@tanstack/react-query';
@@ -56,7 +55,7 @@ export function SoftwareInventoryPicker({ value, onChange, disabled }: SoftwareI
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="flex items-center gap-1.5 text-sm font-medium text-foreground">
-              <CheckCircle2 className="h-4 w-4 shrink-0 text-success" aria-hidden="true" />
+              <Icon name="check_circle" className="h-4 w-4 shrink-0 text-success" aria-hidden="true" />
               <span className="truncate">{value.name}</span>
             </p>
             <p className="mt-0.5 text-xs text-muted-foreground">
@@ -71,7 +70,7 @@ export function SoftwareInventoryPicker({ value, onChange, disabled }: SoftwareI
             onClick={() => onChange(null)}
             title="Remover vínculo com o app do inventário"
           >
-            <X className="h-4 w-4" /> Trocar
+            <Icon name="close" className="h-4 w-4" /> Trocar
           </Button>
         </div>
       </div>
@@ -85,7 +84,7 @@ export function SoftwareInventoryPicker({ value, onChange, disabled }: SoftwareI
           Buscar app no inventário
         </label>
         <div className="relative">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" aria-hidden="true" />
+          <Icon name="search" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" aria-hidden="true" />
           <input
             id="inventory-software-search"
             type="search"
@@ -104,7 +103,7 @@ export function SoftwareInventoryPicker({ value, onChange, disabled }: SoftwareI
               title="Limpar busca"
               className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted hover:text-foreground"
             >
-              <X className="h-3.5 w-3.5" />
+              <Icon name="close" className="h-3.5 w-3.5" />
             </button>
           )}
         </div>
@@ -148,7 +147,7 @@ export function SoftwareInventoryPicker({ value, onChange, disabled }: SoftwareI
                 }
                 className="flex w-full items-start gap-2 rounded-lg border border-border bg-surface-light px-3 py-2 text-left transition-colors hover:border-primary/50 hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <Package className="mt-0.5 h-4 w-4 shrink-0 text-muted" aria-hidden="true" />
+                <Icon name="inventory_2" className="mt-0.5 h-4 w-4 shrink-0 text-muted" aria-hidden="true" />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm text-foreground">{item.name}</span>
                   <span className="block truncate text-xs text-muted">

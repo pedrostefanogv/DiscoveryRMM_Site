@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
-import { Play, Download, Clock, CheckCircle, XCircle, Code2, Lightbulb, Info } from "lucide-react";
+
 import {
   useReportTemplate,
   useRunReport,
@@ -9,7 +9,7 @@ import {
   useSites,
   useAgentsBySite,
 } from "@/hooks";
-import { Button, Card, Loading, Badge, Input } from "@/components/ui";
+import { Icon, Button, Card, Loading, Badge, Input } from "@/components/ui";
 import {
   ReportFormat,
   ReportExecutionStatus,
@@ -102,22 +102,22 @@ const STATUS_CONFIG = {
   [ReportExecutionStatus.Pending]: {
     label: "Pendente",
     color: "slate" as const,
-    icon: Clock,
+    icon: "schedule",
   },
   [ReportExecutionStatus.Running]: {
     label: "Processando",
     color: "primary" as const,
-    icon: Clock,
+    icon: "schedule",
   },
   [ReportExecutionStatus.Completed]: {
     label: "Concluído",
     color: "success" as const,
-    icon: CheckCircle,
+    icon: "check_circle",
   },
   [ReportExecutionStatus.Failed]: {
     label: "Falhou",
     color: "danger" as const,
-    icon: XCircle,
+    icon: "cancel",
   },
 };
 
@@ -769,7 +769,7 @@ export default function RunReport() {
       {template.data.instructions && (
         <Card className="border-l-4 border-l-primary">
           <div className="flex gap-3">
-            <Info className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
+            <Icon name="info" className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
             <div>
               <h3 className="text-sm font-semibold text-foreground mb-1">Instruções</h3>
               <p className="text-sm text-muted-foreground whitespace-pre-wrap">
@@ -793,12 +793,12 @@ export default function RunReport() {
             >
               {advancedMode ? (
                 <>
-                  <Lightbulb className="h-4 w-4" />
+                  <Icon name="lightbulb" className="h-4 w-4" />
                   Modo Guiado
                 </>
               ) : (
                 <>
-                  <Code2 className="h-4 w-4" />
+                  <Icon name="code" className="h-4 w-4" />
                   Modo JSON
                 </>
               )}
@@ -917,7 +917,7 @@ export default function RunReport() {
                       size="sm"
                       onClick={() => applyPreset(preset)}
                     >
-                      <Lightbulb className="h-3 w-3" />
+                      <Icon name="lightbulb" className="h-3 w-3" />
                       {(preset as any).name}
                     </Button>
                   ))}
@@ -949,7 +949,7 @@ export default function RunReport() {
                 ) : (
                   <div className="rounded-lg border border-yellow-500/20 bg-yellow-500/10 p-4">
                     <div className="flex gap-2 items-start">
-                      <Info className="h-5 w-5 text-yellow-600 dark:text-yellow-400 flex-shrink-0 mt-0.5" />
+                      <Icon name="info" className="h-5 w-5 text-yellow-600 dark:text-yellow-400 flex-shrink-0 mt-0.5" />
                       <div>
                         <p className="text-sm font-medium text-yellow-600 dark:text-yellow-400 mb-1">
                           Nenhum filtro configurado
@@ -973,7 +973,7 @@ export default function RunReport() {
                 disabled={runMutation.isPending || isProcessing}
                 className="w-full"
               >
-                <Play className="h-4 w-4" />
+                <Icon name="play_arrow" className="h-4 w-4" />
                 {runMutation.isPending ? "Executando..." : "Executar Relatório"}
               </Button>
             </div>
@@ -1055,7 +1055,7 @@ export default function RunReport() {
                     }
                   }}
                 >
-                  <Download className="h-4 w-4" />
+                  <Icon name="download" className="h-4 w-4" />
                   {isDownloading ? "Baixando..." : "Baixar Relatório"}
                 </Button>
               )}

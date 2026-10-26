@@ -1,6 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { AlertTriangle } from 'lucide-react';
-import { Button, Input, Modal } from '@/components/ui';
+import { Icon, Button, Input, Modal } from '@/components/ui';
 
 interface ConfirmDialogProps {
   open: boolean;
@@ -52,7 +51,7 @@ export function ConfirmDialog({
     <Modal open={open} onClose={onClose} title={title}>
       <div className="space-y-4">
         <div className="flex items-start gap-3 rounded-lg border border-danger/30 bg-danger/10 p-3 text-sm text-foreground">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-danger" aria-hidden="true" />
+          <Icon name="warning" className="mt-0.5 h-4 w-4 shrink-0 text-danger" aria-hidden="true" />
           <div className="min-w-0">{message}</div>
         </div>
 

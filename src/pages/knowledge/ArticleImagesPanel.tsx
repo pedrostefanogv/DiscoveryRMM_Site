@@ -1,6 +1,5 @@
 import { useState } from 'react';
-import { Eraser, ImageOff, ImagePlus, MapPin, Trash2 } from 'lucide-react';
-import { Badge, Button, Card, ErrorDisplay, Loading } from '@/components/ui';
+import { Icon, Badge, Button, Card, ErrorDisplay, Loading } from '@/components/ui';
 import type { KbImageListItem } from '@/api';
 import {
   KB_IMAGE_SIZE_MAX_PX,
@@ -162,7 +161,7 @@ function ImageRow({
           />
         ) : (
           <span className="flex h-16 w-24 items-center justify-center rounded border border-border bg-background">
-            <ImageOff className="h-5 w-5 text-muted" aria-hidden="true" />
+            <Icon name="hide_image" className="h-5 w-5 text-muted" aria-hidden="true" />
           </span>
         )}
 
@@ -216,7 +215,7 @@ function ImageRow({
           </div>
 
           <div className="flex flex-wrap items-center gap-1 text-xs text-muted">
-            <MapPin className="h-3.5 w-3.5" aria-hidden="true" />
+            <Icon name="location_on" className="h-3.5 w-3.5" aria-hidden="true" />
             {locations.length === 0 ? (
               <span>não usada em nenhum texto</span>
             ) : (
@@ -263,7 +262,7 @@ function ImageRow({
             }}
             title={`Inserir "${image.fileName}" no fim de ${activeLabel}`}
           >
-            <ImagePlus className="h-4 w-4" />
+            <Icon name="add_photo_alternate" className="h-4 w-4" />
           </Button>
 
           <Button
@@ -282,7 +281,7 @@ function ImageRow({
             }}
             title="Excluir (recuperável por 30 dias)"
           >
-            <Trash2 className="h-4 w-4" />
+            <Icon name="delete" className="h-4 w-4" />
           </Button>
 
           {canDeletePermanently && (
@@ -309,7 +308,7 @@ function ImageRow({
               }}
               title="Excluir definitivamente (sem recuperação)"
             >
-              <Eraser className="h-4 w-4" />
+              <Icon name="ink_eraser" className="h-4 w-4" />
             </Button>
           )}
         </div>

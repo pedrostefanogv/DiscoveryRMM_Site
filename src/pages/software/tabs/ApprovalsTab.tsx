@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import toast from 'react-hot-toast';
-import { ShieldCheck, Plus, Trash2 } from 'lucide-react';
-import { Badge, Button, Card, ErrorDisplay, Loading, Modal, Select } from '@/components/ui';
+
+import { Icon, Badge, Button, Card, ErrorDisplay, Loading, Modal, Select } from '@/components/ui';
 import { useClients } from '@/hooks/useClients';
 import { useSites } from '@/hooks/useSites';
 import { useAppStoreApprovals, useDeleteApproval } from '@/hooks/useAppStore';
@@ -94,7 +94,7 @@ export function ApprovalsTab() {
               <div className="w-48"><Select label="Site" options={siteOptions} value={selectedSiteId} onChange={(e) => setSelectedSiteId(e.target.value)} /></div>
             </>
           )}
-          <div className="ml-auto"><Button onClick={() => setNewRuleOpen(true)}><Plus className="h-4 w-4" /> Nova Regra</Button></div>
+          <div className="ml-auto"><Button onClick={() => setNewRuleOpen(true)}><Icon name="add" className="h-4 w-4" /> Nova Regra</Button></div>
         </div>
         {/* O seletor de agente é um bloco próprio: dentro da barra de filtros ele
             esticava a linha (itens alinhados pela base) e quebrava o card. */}
@@ -125,7 +125,7 @@ export function ApprovalsTab() {
         {query.isError && <ErrorDisplay message="Erro ao carregar regras." onRetry={() => query.refetch()} />}
         {query.data && query.data.items.length === 0 && (
           <div className="flex flex-col items-center py-16 text-muted">
-            <ShieldCheck className="mb-3 h-10 w-10 opacity-30" />
+            <Icon name="verified_user" className="mb-3 h-10 w-10 opacity-30" />
             <p className="text-sm">Nenhuma regra encontrada para este escopo.</p>
             {/* A regra criada para um pacote Custom não aparece com "Tipo" Winget —
                 era exatamente a dúvida de quem criou a regra. */}
@@ -157,7 +157,7 @@ export function ApprovalsTab() {
                   aria-label={`Remover regra ${rule.packageId}`}
                   onClick={() => setDeleteTarget(rule)}
                 >
-                  <Trash2 className="h-4 w-4" />
+                  <Icon name="delete" className="h-4 w-4" />
                 </Button>
               </div>
             ))}

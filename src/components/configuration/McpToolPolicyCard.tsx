@@ -1,6 +1,5 @@
 import { useState } from "react";
-import { Save, ShieldCheck } from "lucide-react";
-import { Button } from "@/components/ui";
+import { Icon, Button } from "@/components/ui";
 import { parseMcpToolPolicy, serializeMcpToolPolicy, type McpToolPolicyConfig } from "./maintenancePolicy";
 
 interface Props {
@@ -38,7 +37,7 @@ export function McpToolPolicyCard({ value, saving, canManage, onSave, inheritedF
   return (
     <div className="space-y-3 rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
       <div className="flex items-center gap-2">
-        <ShieldCheck className="h-4 w-4 text-emerald-500" />
+        <Icon name="verified_user" className="h-4 w-4 text-emerald-500" />
         <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
           Política de tools MCP (chat do agent)
         </span>
@@ -97,7 +96,7 @@ export function McpToolPolicyCard({ value, saving, canManage, onSave, inheritedF
       )}
 
       <Button size="sm" onClick={save} disabled={readOnly || !dirty}>
-        <Save className="mr-1 h-4 w-4" />
+        <Icon name="save" className="mr-1 h-4 w-4" />
         Salvar política
       </Button>
     </div>

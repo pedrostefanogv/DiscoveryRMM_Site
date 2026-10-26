@@ -1,16 +1,5 @@
 import { useState } from "react";
-import {
-  Activity,
-  Bot,
-  CheckCircle2,
-  Cloud,
-  FileStack,
-  Loader2,
-  RefreshCw,
-  Wifi,
-  XCircle,
-} from "lucide-react";
-import { Button, Card, CardHeader } from "@/components/ui";
+import { Icon, Button, Card, CardHeader } from "@/components/ui";
 import type { ServerConfiguration } from "@/api";
 import {
   parseTicketAttachmentSettings,
@@ -55,9 +44,9 @@ function formatLargeLimit(bytes: number): string {
 }
 
 function statusIcon(status: HealthStatus) {
-  if (status === "ok") return <CheckCircle2 className="h-4 w-4 shrink-0" />;
-  if (status === "error") return <XCircle className="h-4 w-4 shrink-0" />;
-  return <Activity className="h-4 w-4 shrink-0" />;
+  if (status === "ok") return <Icon name="check_circle" className="h-4 w-4 shrink-0" />;
+  if (status === "error") return <Icon name="cancel" className="h-4 w-4 shrink-0" />;
+  return <Icon name="monitoring" className="h-4 w-4 shrink-0" />;
 }
 
 export function ConfigHealthCard({ config }: { config: ServerConfiguration | undefined }) {
@@ -128,7 +117,7 @@ export function ConfigHealthCard({ config }: { config: ServerConfiguration | und
     {
       key: "storage",
       label: "Object Storage (S3/MinIO)",
-      icon: <Cloud className="h-4 w-4" />,
+      icon: <Icon name="cloud" className="h-4 w-4" />,
       status: storageResult
         ? storageResult.success
           ? "ok"
@@ -147,7 +136,7 @@ export function ConfigHealthCard({ config }: { config: ServerConfiguration | und
     {
       key: "nats",
       label: "NATS (realtime)",
-      icon: <Wifi className="h-4 w-4" />,
+      icon: <Icon name="wifi" className="h-4 w-4" />,
       status: natsResult ? (natsResult.ok ? "ok" : "error") : natsEnabled ? "unknown" : "warn",
       detail: natsResult
         ? natsResult.ok
@@ -162,7 +151,7 @@ export function ConfigHealthCard({ config }: { config: ServerConfiguration | und
     {
       key: "ai",
       label: "Inteligência Artificial",
-      icon: <Bot className="h-4 w-4" />,
+      icon: <Icon name="smart_toy" className="h-4 w-4" />,
       status: aiResult ? (aiResult.ok ? "ok" : "error") : aiConfigured ? "unknown" : "warn",
       detail: aiResult
         ? aiResult.ok
@@ -175,7 +164,7 @@ export function ConfigHealthCard({ config }: { config: ServerConfiguration | und
     {
       key: "attachments",
       label: "Anexos de tickets",
-      icon: <FileStack className="h-4 w-4" />,
+      icon: <Icon name="layers" className="h-4 w-4" />,
       status: attachments.enabled ? (storageConfigured ? "ok" : "warn") : "warn",
       detail: attachments.enabled
         ? storageConfigured
@@ -194,7 +183,7 @@ export function ConfigHealthCard({ config }: { config: ServerConfiguration | und
         subtitle="Testa as integrações configuradas neste servidor"
         action={
           <Button size="sm" variant="secondary" onClick={runAll} loading={isBusy} disabled={isBusy}>
-            <RefreshCw className="h-3.5 w-3.5" />
+            <Icon name="refresh" className="h-3.5 w-3.5" />
             Testar tudo
           </Button>
         }
@@ -208,7 +197,7 @@ export function ConfigHealthCard({ config }: { config: ServerConfiguration | und
           >
             <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-background/70 dark:bg-black/10">
               {isBusy && item.status === "unknown" ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
+                <Icon name="progress_activity" className="h-4 w-4 animate-spin" />
               ) : (
                 item.icon
               )}

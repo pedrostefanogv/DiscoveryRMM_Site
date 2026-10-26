@@ -1,22 +1,3 @@
-import {
-  Users,
-  Monitor,
-  Ticket,
-  AlertTriangle,
-  AppWindow,
-  Server,
-  Database,
-  Activity,
-  Cpu,
-  CheckCircle2,
-  XCircle,
-  Clock,
-  Zap,
-  Network,
-  RefreshCw,
-  ShieldAlert,
-} from 'lucide-react';
-import type { ComponentType } from 'react';
 import { memo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useIsFetching, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -26,7 +7,7 @@ import { useDashboardRealtime } from '@/hooks/useDashboardRealtime';
 import { P2PMetricsCard } from '@/components/agents/P2PMetricsCard';
 import { ObjectStorageCard } from '@/components/platform/ObjectStorageCard';
 import { AgentUpdatesInventoryCard } from '@/components/dashboard/AgentUpdatesInventoryCard';
-import { StatCard, Card, CardHeader, Badge, Button, SkeletonDashboard, ErrorDisplay } from '@/components/ui';
+import { Icon, type MaterialSymbolName, StatCard, Card, CardHeader, Badge, Button, SkeletonDashboard, ErrorDisplay } from '@/components/ui';
 import { getRealtimeStats } from '@/api';
 import { useSoftwareInventorySnapshot } from '@/hooks/useSoftwareInventory';
 import { usePatchSnapshot } from '@/hooks/usePatches';
@@ -302,7 +283,7 @@ export default function Dashboard() {
             title="Atualizar dados do dashboard"
             aria-label="Atualizar dados do dashboard"
           >
-            <RefreshCw className="h-4 w-4" />
+            <Icon name="refresh" className="h-4 w-4" />
           </Button>
         </div>
       </div>
@@ -316,7 +297,7 @@ export default function Dashboard() {
             (hasDangerAlert ? 'border-danger/30 bg-danger/10' : 'border-warning/30 bg-warning/10')
           }
         >
-          <AlertTriangle className={'h-4 w-4 shrink-0 ' + (hasDangerAlert ? 'text-danger' : 'text-warning')} />
+          <Icon name="warning" className={'h-4 w-4 shrink-0 ' + (hasDangerAlert ? 'text-danger' : 'text-warning')} />
           <span className="font-medium text-foreground">Atenção:</span>
           {alerts.map((alert) =>
             alert.onClick ? (
@@ -340,7 +321,7 @@ export default function Dashboard() {
         </div>
       ) : (
         <div role="status" className="flex items-center gap-2 rounded-xl border border-success/30 bg-success/10 px-4 py-2 text-sm text-success">
-          <CheckCircle2 className="h-4 w-4 shrink-0" />
+          <Icon name="check_circle" className="h-4 w-4 shrink-0" />
           Nenhum alerta crítico na janela de {rangeLabel.toLowerCase()}.
         </div>
       )}
@@ -354,7 +335,7 @@ export default function Dashboard() {
           aria-label="Abrir página de agentes"
         >
           <StatCard
-            icon={Monitor}
+            icon="desktop_windows"
             label="Agentes"
             value={agentsTotal}
             tone="accent"
@@ -372,7 +353,7 @@ export default function Dashboard() {
           aria-label="Abrir página de chamados"
         >
           <StatCard
-            icon={Ticket}
+            icon="confirmation_number"
             label="Chamados Abertos"
             value={ticketsOpen}
             tone="warning"
@@ -392,7 +373,7 @@ export default function Dashboard() {
           aria-label="Abrir inventário de softwares"
         >
           <StatCard
-            icon={AppWindow}
+            icon="web_asset"
             label="Softwares instalados"
             value={softwareSnapshot.isLoading ? '\u2014' : totalInstalledSoftware}
             tone="success"
@@ -407,7 +388,7 @@ export default function Dashboard() {
           aria-label="Abrir gerenciador de atualizações"
         >
           <StatCard
-            icon={ShieldAlert}
+            icon="gpp_maybe"
             label="Conformidade de patches"
             value={patchSnapshot.isLoading ? '\u2014' : (patchSnapshot.data?.compliancePercent ?? 0).toFixed(1) + '%'}
             tone={(patchSnapshot.data?.criticalPending ?? 0) > 0 ? 'warning' : 'success'}
@@ -430,7 +411,7 @@ export default function Dashboard() {
           aria-label="Abrir página de clientes"
         >
           <StatCard
-            icon={Users}
+            icon="group"
             label="Clientes"
             value={ds?.clients.total ?? '\u2014'}
             tone="primary"
@@ -497,20 +478,20 @@ export default function Dashboard() {
             subtitle={`Execuções na janela • ${rangeLabel}`}
           />
           <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
-            <MetricTile label="Pending" value={cmds?.pending ?? 0} icon={Clock} />
-            <MetricTile label="Sent" value={cmds?.sent ?? 0} icon={Zap} />
-            <MetricTile label="Running" value={cmds?.running ?? 0} icon={Activity} />
-            <MetricTile label="Completed" value={cmds?.completed ?? 0} icon={CheckCircle2} />
+            <MetricTile label="Pending" value={cmds?.pending ?? 0} icon="schedule" />
+            <MetricTile label="Sent" value={cmds?.sent ?? 0} icon="bolt" />
+            <MetricTile label="Running" value={cmds?.running ?? 0} icon="monitoring" />
+            <MetricTile label="Completed" value={cmds?.completed ?? 0} icon="check_circle" />
             <MetricTile
               label="Falhas*"
               value={cmds?.failed ?? 0}
-              icon={XCircle}
+              icon="cancel"
               title="Falhas agregam Failed + Timeout + Canceladas (por isso o total fecha)."
             />
-            <MetricTile label="Total" value={cmds?.total ?? 0} icon={Cpu} />
+            <MetricTile label="Total" value={cmds?.total ?? 0} icon="memory" />
             <div className="rounded-lg bg-surface-light px-3 py-2 text-sm">
               <div className="flex items-center gap-1.5 text-muted">
-                <Zap className="h-3.5 w-3.5" />
+                <Icon name="bolt" className="h-3.5 w-3.5" />
                 <span>Sucesso</span>
               </div>
               <p className={`mt-1 text-base font-semibold ${(cmds?.successRate ?? 0) >= 80 ? 'text-success' : 'text-danger'}`}>
@@ -529,20 +510,20 @@ export default function Dashboard() {
             subtitle={`Execuções na janela • ${rangeLabel}`}
           />
           <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
-            <MetricTile label="Dispatched" value={auto?.dispatched ?? 0} icon={Zap} />
-            <MetricTile label="Acknowledged" value={auto?.acknowledged ?? 0} icon={Activity} />
-            <MetricTile label="Completed" value={auto?.completed ?? 0} icon={CheckCircle2} />
-            <MetricTile label="Failed" value={auto?.failed ?? 0} icon={XCircle} />
+            <MetricTile label="Dispatched" value={auto?.dispatched ?? 0} icon="bolt" />
+            <MetricTile label="Acknowledged" value={auto?.acknowledged ?? 0} icon="monitoring" />
+            <MetricTile label="Completed" value={auto?.completed ?? 0} icon="check_circle" />
+            <MetricTile label="Failed" value={auto?.failed ?? 0} icon="cancel" />
             <MetricTile
               label="Canceladas"
               value={auto?.cancelled ?? 0}
-              icon={XCircle}
+              icon="cancel"
               title="Canceladas contam no total, mas ficam fora da taxa de sucesso."
             />
-            <MetricTile label="Total" value={auto?.total ?? 0} icon={Cpu} />
+            <MetricTile label="Total" value={auto?.total ?? 0} icon="memory" />
             <div className="rounded-lg bg-surface-light px-3 py-2 text-sm">
               <div className="flex items-center gap-1.5 text-muted">
-                <Zap className="h-3.5 w-3.5" />
+                <Icon name="bolt" className="h-3.5 w-3.5" />
                 <span>Sucesso</span>
               </div>
               <p className={`mt-1 text-base font-semibold ${(auto?.successRate ?? 0) >= 80 ? 'text-success' : 'text-danger'}`}>
@@ -560,28 +541,28 @@ export default function Dashboard() {
           <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
             <div className="rounded-lg bg-danger/10 px-3 py-2" title="Erros agregam Error + Fatal.">
               <div className="flex items-center gap-1.5">
-                <AlertTriangle className="h-3.5 w-3.5 text-danger" />
+                <Icon name="warning" className="h-3.5 w-3.5 text-danger" />
                 <span className="text-muted">Erros/Fatal</span>
               </div>
               <p className="mt-1 text-2xl font-bold text-foreground">{logs?.error ?? 0}</p>
             </div>
             <div className="rounded-lg bg-warning/10 px-3 py-2">
               <div className="flex items-center gap-1.5">
-                <AlertTriangle className="h-3.5 w-3.5 text-warning" />
+                <Icon name="warning" className="h-3.5 w-3.5 text-warning" />
                 <span className="text-muted">Avisos</span>
               </div>
               <p className="mt-1 text-2xl font-bold text-foreground">{logs?.warn ?? 0}</p>
             </div>
             <div className="rounded-lg bg-surface-light px-3 py-2" title="Info agregar Info + Debug + Trace.">
               <div className="flex items-center gap-1.5 text-muted">
-                <Activity className="h-3.5 w-3.5" />
+                <Icon name="monitoring" className="h-3.5 w-3.5" />
                 <span>Info/Debug</span>
               </div>
               <p className="mt-1 text-2xl font-bold text-foreground">{logs?.info ?? 0}</p>
             </div>
             <div className="rounded-lg bg-surface-light px-3 py-2">
               <div className="flex items-center gap-1.5 text-muted">
-                <Database className="h-3.5 w-3.5" />
+                <Icon name="database" className="h-3.5 w-3.5" />
                 <span>Total</span>
               </div>
               <p className="mt-1 text-2xl font-bold text-foreground">{logs?.total ?? 0}</p>
@@ -607,14 +588,14 @@ export default function Dashboard() {
           )}
           <div className="space-y-3 text-sm">
             <HealthRow
-              icon={Activity}
+              icon="monitoring"
               label="NATS"
               state={healthState(realtime?.natsConnected)}
               detail={realtime?.natsConnectionState}
             />
 
             <HealthRow
-              icon={Network}
+              icon="lan"
               label="NATS TCP"
               state={healthState(realtime?.natsTcpReachable)}
               labels={TCP_BADGE}
@@ -626,14 +607,14 @@ export default function Dashboard() {
             />
 
             <HealthRow
-              icon={Database}
+              icon="database"
               label="Redis"
               state={healthState(realtime?.redisConnected)}
               detail={typeof realtime?.redisPingMs === 'number' ? `${realtime.redisPingMs} ms` : undefined}
             />
 
             <HealthRow
-              icon={Server}
+              icon="dns"
               label="Banco de dados"
               state={healthState(database?.connected)}
               detail={database?.provider ?? undefined}
@@ -662,10 +643,10 @@ export default function Dashboard() {
               : 'Uso de recursos do backend'}
           />
           <div className="grid grid-cols-2 gap-3 text-sm">
-            <MetricTile label="Working Set" value={workingSet} icon={Cpu} />
-            <MetricTile label="GC Heap" value={gcHeap} icon={Database} />
-            <MetricTile label="Threads" value={processMetrics?.threadCount ?? '\u2014'} icon={Activity} />
-            <MetricTile label="Uptime" value={formatUptime(uptimeValue)} icon={Server} />
+            <MetricTile label="Working Set" value={workingSet} icon="memory" />
+            <MetricTile label="GC Heap" value={gcHeap} icon="database" />
+            <MetricTile label="Threads" value={processMetrics?.threadCount ?? '\u2014'} icon="monitoring" />
+            <MetricTile label="Uptime" value={formatUptime(uptimeValue)} icon="dns" />
           </div>
           <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-muted">
             <div className="rounded-lg bg-surface-light px-3 py-2">
@@ -744,13 +725,13 @@ const StatusBar = memo(function StatusBar({
 });
 
 const HealthRow = memo(function HealthRow({
-  icon: Icon,
+  icon,
   label,
   state,
   detail,
   labels = HEALTH_BADGE,
 }: {
-  icon: ComponentType<{ className?: string }>;
+  icon: MaterialSymbolName;
   label: string;
   state: HealthState;
   detail?: string | null;
@@ -760,7 +741,7 @@ const HealthRow = memo(function HealthRow({
   return (
     <div className="flex items-center justify-between rounded-lg bg-surface-light px-3 py-2">
       <span className="flex items-center gap-2 text-muted-foreground">
-        <Icon className="h-4 w-4" /> {label}
+        <Icon name={icon} className="h-4 w-4" /> {label}
       </span>
       <div className="flex items-center gap-2">
         <Badge color={badge.color}>{badge.label}</Badge>
@@ -773,18 +754,18 @@ const HealthRow = memo(function HealthRow({
 const MetricTile = memo(function MetricTile({
   label,
   value,
-  icon: Icon,
+  icon,
   title,
 }: {
   label: string;
   value: string | number;
-  icon: ComponentType<{ className?: string }>;
+  icon: MaterialSymbolName;
   title?: string;
 }) {
   return (
     <div className="rounded-lg bg-surface-light px-3 py-2" title={title}>
       <div className="flex items-center gap-1.5 text-muted">
-        <Icon className="h-3.5 w-3.5" />
+        <Icon name={icon} className="h-3.5 w-3.5" />
         <span>{label}</span>
       </div>
       <p className="mt-1 text-base font-semibold text-foreground">{value}</p>

@@ -1,27 +1,5 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
-import {
-  AlertTriangle,
-  BarChart3,
-  Bookmark,
-  Building2,
-  CalendarDays,
-  ChevronDown,
-  ChevronUp,
-  CircleDot,
-  CircleUserRound,
-  Clock,
-  Filter,
-  Monitor,
-  Pencil,
-  Plus,
-  Save,
-  Tag,
-  Ticket as TicketIcon,
-  Trash2,
-  UserRound,
-  Users,
-} from 'lucide-react';
 import { useAuth } from '@/auth/AuthContext';
 import { getUserIdFromJwt } from '@/auth/jwt';
 import {
@@ -47,7 +25,7 @@ import {
   useTicketSavedViews,
   useUpdateTicketSavedView,
 } from '@/hooks/useTicketSavedViews';
-import { Button, Card, ConfirmDialog, DataTable, Badge, Loading, Modal, Input, Select, Tooltip } from '@/components/ui';
+import { Icon, Button, Card, ConfirmDialog, DataTable, Badge, Loading, Modal, Input, Select, Tooltip } from '@/components/ui';
 import { TicketAnswerMatch } from '@/api';
 import type {
   CreateTicketRequest,
@@ -626,7 +604,7 @@ export default function TicketList() {
       header: 'Título',
       render: (ticket) => (
         <div className="flex items-center gap-3">
-          <TicketIcon className="h-4 w-4 shrink-0 text-primary" />
+          <Icon name="confirmation_number" className="h-4 w-4 shrink-0 text-primary" />
           <div className="min-w-0">
             <p className="truncate font-medium text-foreground">{ticket.title}</p>
             <p className="truncate text-xs text-muted">{ticket.category ?? 'Sem categoria'}</p>
@@ -734,7 +712,7 @@ export default function TicketList() {
               <Badge color={isClosed ? 'slate' : 'success'}>{isClosed ? 'Encerrado' : 'Aberto'}</Badge>
               {previewTicket.category && (
                 <Badge color="slate">
-                  <Tag className="mr-1 inline h-3 w-3" />
+                  <Icon name="sell" className="mr-1 inline h-3 w-3" />
                   {previewTicket.category}
                 </Badge>
               )}
@@ -749,33 +727,33 @@ export default function TicketList() {
 
         <div className="grid gap-2 sm:grid-cols-2">
           <TicketHoverInfo
-            icon={<Building2 className="h-3.5 w-3.5" />}
+            icon={<Icon name="apartment" className="h-3.5 w-3.5" />}
             label="Cliente"
             value={clientLabel}
           />
           <TicketHoverInfo
-            icon={<CircleDot className="h-3.5 w-3.5" />}
+            icon={<Icon name="radio_button_checked" className="h-3.5 w-3.5" />}
             label="Estado"
             value={stateLabel}
             stateColor={state?.color}
           />
           <TicketHoverInfo
-            icon={<UserRound className="h-3.5 w-3.5" />}
+            icon={<Icon name="person" className="h-3.5 w-3.5" />}
             label="Responsável"
             value={assigneeLabel}
           />
           <TicketHoverInfo
-            icon={<CircleUserRound className="h-3.5 w-3.5" />}
+            icon={<Icon name="account_circle" className="h-3.5 w-3.5" />}
             label="Solicitante"
             value={requesterLabel}
           />
           <TicketHoverInfo
-            icon={<Monitor className="h-3.5 w-3.5" />}
+            icon={<Icon name="desktop_windows" className="h-3.5 w-3.5" />}
             label="Máquina vinculada"
             value={linkedMachineLabel}
           />
           <TicketHoverInfo
-            icon={<Users className="h-3.5 w-3.5" />}
+            icon={<Icon name="group" className="h-3.5 w-3.5" />}
             label="Watchers"
             value={watcherSummary}
           />
@@ -783,11 +761,11 @@ export default function TicketList() {
 
         <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t border-border pt-2 text-[11px] text-muted">
           <span className="inline-flex items-center gap-1.5">
-            <CalendarDays className="h-3.5 w-3.5" />
+            <Icon name="calendar_month" className="h-3.5 w-3.5" />
             Criado em {new Date(previewTicket.createdAt).toLocaleString('pt-BR')}
           </span>
           <span className="inline-flex items-center gap-1.5">
-            <Clock className="h-3.5 w-3.5" />
+            <Icon name="schedule" className="h-3.5 w-3.5" />
             Atualizado {formatRelativeTime(previewTicket.updatedAt)}
           </span>
         </div>
@@ -1139,7 +1117,7 @@ export default function TicketList() {
           </p>
         </div>
         <Button onClick={() => setModalOpen(true)}>
-          <Plus className="h-4 w-4" /> Novo Chamado
+          <Icon name="add" className="h-4 w-4" /> Novo Chamado
         </Button>
       </div>
 
@@ -1184,12 +1162,12 @@ export default function TicketList() {
       <Card>
         <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-center gap-2">
-            <Filter className="h-4 w-4 text-muted" />
+            <Icon name="filter_alt" className="h-4 w-4 text-muted" />
             <h2 className="text-base font-semibold text-foreground">Filtros e visões salvas</h2>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Button variant="secondary" onClick={openCreateSavedViewModal} disabled={!currentUserId}>
-              <Save className="h-4 w-4" /> Salvar visao atual
+              <Icon name="save" className="h-4 w-4" /> Salvar visao atual
             </Button>
             <Button
               variant="ghost"
@@ -1198,9 +1176,9 @@ export default function TicketList() {
               disabled={savedViewsQuery.isLoading || savedViews.length === 0}
               aria-expanded={savedViewsExpanded}
             >
-              <Bookmark className="h-4 w-4" />
+              <Icon name="bookmark" className="h-4 w-4" />
               {savedViewsExpanded ? 'Ocultar visões salvas' : `Ver visões salvas (${savedViews.length})`}
-              {savedViewsExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              {savedViewsExpanded ? <Icon name="expand_less" className="h-4 w-4" /> : <Icon name="expand_more" className="h-4 w-4" />}
             </Button>
           </div>
         </div>
@@ -1253,10 +1231,10 @@ export default function TicketList() {
             onClick={() => setAdvancedFiltersExpanded((current) => !current)}
             aria-expanded={advancedFiltersExpanded}
           >
-            <Filter className="h-4 w-4" />
+            <Icon name="filter_alt" className="h-4 w-4" />
             Filtros avançados
             {advancedFiltersActiveCount > 0 && <Badge color="accent">{advancedFiltersActiveCount}</Badge>}
-            {advancedFiltersExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            {advancedFiltersExpanded ? <Icon name="expand_less" className="h-4 w-4" /> : <Icon name="expand_more" className="h-4 w-4" />}
           </Button>
           {advancedFiltersActiveCount > 0 && !advancedFiltersExpanded && (
             <span className="text-xs text-muted">Filtros ativos: {advancedFilterSummary}.</span>
@@ -1375,7 +1353,7 @@ export default function TicketList() {
           <div className="mt-4"><Loading /></div>
         ) : savedViewsQuery.isError ? (
           <div className="mt-4 flex items-center gap-3 rounded-xl border border-border bg-surface-light px-4 py-3">
-            <AlertTriangle className="h-4 w-4 text-danger" />
+            <Icon name="warning" className="h-4 w-4 text-danger" />
             <p className="text-sm text-muted">Não foi possível carregar as visões salvas.</p>
             <Button size="sm" variant="ghost" onClick={() => savedViewsQuery.refetch()}>
               Tentar novamente
@@ -1385,7 +1363,7 @@ export default function TicketList() {
           <div className="mt-4 rounded-xl border border-border bg-surface-light p-3 sm:p-4">
             <div className="mb-3 flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
-                <Bookmark className="h-4 w-4 text-muted" />
+                <Icon name="bookmark" className="h-4 w-4 text-muted" />
                 <h3 className="text-sm font-semibold text-foreground">Visões salvas</h3>
               </div>
               <Badge color="slate">{savedViews.length}</Badge>
@@ -1423,7 +1401,7 @@ export default function TicketList() {
                         {canManage && (
                           <>
                             <Button size="sm" variant="ghost" onClick={() => openEditSavedViewModal(view)}>
-                              <Pencil className="h-4 w-4" />
+                              <Icon name="edit" className="h-4 w-4" />
                             </Button>
                             <Button
                               size="sm"
@@ -1431,7 +1409,7 @@ export default function TicketList() {
                               onClick={() => void handleDeleteSavedView(view)}
                               loading={deletingSavedViewId === view.id}
                             >
-                              <Trash2 className="h-4 w-4" />
+                              <Icon name="delete" className="h-4 w-4" />
                             </Button>
                           </>
                         )}
@@ -1450,7 +1428,7 @@ export default function TicketList() {
           <Loading />
         ) : tickets.isError ? (
           <div className="flex flex-col items-center gap-3 py-12">
-            <AlertTriangle className="h-8 w-8 text-danger" />
+            <Icon name="warning" className="h-8 w-8 text-danger" />
             <p className="text-sm text-muted">Erro ao carregar chamados</p>
             <Button size="sm" variant="ghost" onClick={() => tickets.refetch()}>
               Tentar novamente
@@ -1458,7 +1436,7 @@ export default function TicketList() {
           </div>
         ) : visibleTickets.length === 0 ? (
           <div className="py-12 text-center">
-            <TicketIcon className="mx-auto mb-3 h-10 w-10 text-muted" />
+            <Icon name="confirmation_number" className="mx-auto mb-3 h-10 w-10 text-muted" />
             <p className="text-muted">Nenhum chamado encontrado</p>
           </div>
         ) : (
@@ -1601,7 +1579,7 @@ export default function TicketList() {
           </label>
           <div className="rounded-xl border border-border bg-surface-light px-4 py-3 text-sm text-muted">
             <div className="mb-2 flex items-center gap-2 text-muted-foreground">
-              <BarChart3 className="h-4 w-4" />
+              <Icon name="bar_chart" className="h-4 w-4" />
               <span className="font-medium">Resumo dos filtros atuais</span>
             </div>
             <p>

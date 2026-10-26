@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react";
-import { Coins, Cpu, DollarSign, RefreshCw, Server, TrendingUp } from "lucide-react";
-import {
+import { Icon,
   Badge,
   Button,
   Card,
@@ -146,7 +145,7 @@ export default function AiCostCockpit() {
           onClick={() => void cockpit.refetch()}
           disabled={cockpit.isFetching}
         >
-          <RefreshCw className="h-4 w-4" />
+          <Icon name="refresh" className="h-4 w-4" />
           Atualizar
         </Button>
       </PageHeader>
@@ -169,25 +168,25 @@ export default function AiCostCockpit() {
         <>
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <StatCard
-              icon={Cpu}
+              icon="memory"
               label="Requisições"
               value={formatNumber(totals?.requests ?? 0)}
               tone="primary"
             />
             <StatCard
-              icon={Server}
+              icon="dns"
               label="Tokens de entrada"
               value={formatNumber(totals?.inputTokens ?? 0)}
               tone="accent"
             />
             <StatCard
-              icon={TrendingUp}
+              icon="trending_up"
               label="Tokens de saída"
               value={formatNumber(totals?.outputTokens ?? 0)}
               tone="accent"
             />
             <StatCard
-              icon={DollarSign}
+              icon="attach_money"
               label="Custo total (USD)"
               value={formatUsd(totals?.costUsd ?? 0)}
               tone="warning"
@@ -223,7 +222,7 @@ export default function AiCostCockpit() {
             />
             <div className="px-4 pb-3">
               <Badge color="slate">
-                <Coins className="mr-1 h-3 w-3" />
+                <Icon name="paid" className="mr-1 h-3 w-3" />
                 Orçamento em vermelho indica 100%+ do mensal consumido
               </Badge>
             </div>

@@ -1,6 +1,5 @@
 import { useMemo, type ReactNode } from 'react';
-import { Info, Package, RefreshCw, ShieldCheck, Zap } from 'lucide-react';
-import {
+import { Icon,
   Badge,
   Button,
   DataTable,
@@ -351,7 +350,7 @@ export default function AgentPoliciesPanel({
               loading={isForcing}
               title='Pedir ao agent para sincronizar as políticas agora'
             >
-              <Zap className='h-4 w-4' />
+              <Icon name="bolt" className='h-4 w-4' />
               Forçar sincronização
             </Button>
           ) : null}
@@ -362,14 +361,14 @@ export default function AgentPoliciesPanel({
             loading={isRefreshing}
             title='Consultar novamente as políticas aplicáveis a este agente'
           >
-            <RefreshCw className='h-4 w-4' />
+            <Icon name="refresh" className='h-4 w-4' />
             Atualizar
           </Button>
         </div>
       </div>
 
       <p className='mb-3 flex items-start gap-2 rounded-lg border border-border bg-surface-light px-3 py-2 text-xs text-muted'>
-        <ShieldCheck className='mt-0.5 h-3.5 w-3.5 shrink-0' />
+        <Icon name="verified_user" className='mt-0.5 h-3.5 w-3.5 shrink-0' />
         <span>
           Este é o conjunto que o agent recebe no policy-sync (políticas globais, do cliente, do site
           e do próprio agente, já filtradas pelas tags do dispositivo).
@@ -431,7 +430,7 @@ export default function AgentPoliciesPanel({
       {canView && preload.length > 0 && (
         <div className='mt-4 rounded-lg border border-border bg-surface-light px-3 py-3'>
           <p className='flex items-center gap-2 text-sm font-medium text-foreground'>
-            <Package className='h-4 w-4' />
+            <Icon name="inventory_2" className='h-4 w-4' />
             Pré-carga P2P ({preload.length})
           </p>
           <p className='mt-0.5 text-xs text-muted'>
@@ -448,7 +447,7 @@ export default function AgentPoliciesPanel({
       )}
 
       <p className='mt-3 flex items-center gap-2 text-xs text-muted'>
-        <Info className='h-3.5 w-3.5' />
+        <Icon name="info" className='h-3.5 w-3.5' />
         Passe o mouse sobre uma política para ver gatilhos, tags, notificação e script.
       </p>
     </div>

@@ -1,16 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import {
-  AlertTriangle,
-  BellRing,
-  CalendarDays,
-  Clock3,
-  ExternalLink,
-  Pencil,
-  Plus,
-  TimerReset,
-  Trash2,
-} from "lucide-react";
+
 import toast from "react-hot-toast";
 import type {
   Client,
@@ -21,7 +11,7 @@ import type {
   UserDto,
   WorkflowProfile,
 } from "@/api";
-import {
+import { Icon,
   Badge,
   Button,
   Card,
@@ -969,7 +959,7 @@ export default function TicketSlaPage() {
         </div>
         <div className="flex flex-wrap gap-2">
           <Button variant="secondary" onClick={() => setIsHelpModalOpen(true)}>
-            <Clock3 className="h-4 w-4" />
+            <Icon name="schedule" className="h-4 w-4" />
             Guia rápido
           </Button>
           <Badge color="primary">Calendários úteis</Badge>
@@ -1005,7 +995,7 @@ export default function TicketSlaPage() {
             subtitle="Liste e filtre calendários. Edição detalhada e feriados ficam em modal."
             action={
               <Button variant="secondary" onClick={openCreateCalendarModal}>
-                <Plus className="h-4 w-4" />
+                <Icon name="add" className="h-4 w-4" />
                 Novo calendário
               </Button>
             }
@@ -1085,7 +1075,7 @@ export default function TicketSlaPage() {
                       variant="secondary"
                       onClick={() => openEditCalendarModal(calendar.id)}
                     >
-                      <Pencil className="h-4 w-4" />
+                      <Icon name="edit" className="h-4 w-4" />
                       Editar
                     </Button>
                     <Button
@@ -1093,7 +1083,7 @@ export default function TicketSlaPage() {
                       variant="secondary"
                       onClick={() => openHolidayModal(calendar.id)}
                     >
-                      <CalendarDays className="h-4 w-4" />
+                      <Icon name="calendar_month" className="h-4 w-4" />
                       Feriados
                     </Button>
                   </div>
@@ -1113,11 +1103,11 @@ export default function TicketSlaPage() {
                   variant="secondary"
                   onClick={() => navigate("/settings/workflow-profiles")}
                 >
-                  <ExternalLink className="h-4 w-4" />
+                  <Icon name="open_in_new" className="h-4 w-4" />
                   Gerenciar perfis
                 </Button>
                 <Button variant="secondary" onClick={openCreateRuleModal}>
-                  <Plus className="h-4 w-4" />
+                  <Icon name="add" className="h-4 w-4" />
                   Nova regra
                 </Button>
               </div>
@@ -1145,7 +1135,7 @@ export default function TicketSlaPage() {
 
           {workflowProfiles.length === 0 && (
             <div className="mt-3 flex items-start gap-3 rounded-xl border border-warning/30 bg-warning/10 p-4 text-sm text-muted-foreground">
-              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+              <Icon name="warning" className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
               <div>
                 <p className="font-medium text-warning">Nenhum workflow profile cadastrado</p>
                 <p className="mt-1 text-muted">
@@ -1157,7 +1147,7 @@ export default function TicketSlaPage() {
           )}
           {!selectedWorkflowProfileId && workflowProfiles.length > 0 && (
             <div className="mt-3 flex items-start gap-3 rounded-xl border border-border bg-surface-light p-4 text-sm text-muted-foreground">
-              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+              <Icon name="warning" className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
               <p>
                 As regras são sempre listadas por workflow profile. Selecione um perfil acima
                 para ver (e editar) as regras dele, inclusive as inativas.
@@ -1225,7 +1215,7 @@ export default function TicketSlaPage() {
                           setIsRuleModalOpen(true);
                         }}
                       >
-                        <Pencil className="h-4 w-4" />
+                        <Icon name="edit" className="h-4 w-4" />
                         Editar
                       </Button>
                     </div>
@@ -1399,7 +1389,7 @@ export default function TicketSlaPage() {
                 onClick={() => void handleSaveCalendar()}
                 loading={createCalendar.isPending || updateCalendar.isPending}
               >
-                <CalendarDays className="h-4 w-4" />
+                <Icon name="calendar_month" className="h-4 w-4" />
                 {editingCalendarId ? "Salvar calendário" : "Criar calendário"}
               </Button>
               {editingCalendarId && (
@@ -1407,7 +1397,7 @@ export default function TicketSlaPage() {
                   variant="secondary"
                   onClick={() => openHolidayModal(editingCalendarId)}
                 >
-                  <CalendarDays className="h-4 w-4" />
+                  <Icon name="calendar_month" className="h-4 w-4" />
                   Gerenciar feriados
                 </Button>
               )}
@@ -1422,7 +1412,7 @@ export default function TicketSlaPage() {
                   }
                   loading={deleteCalendar.isPending}
                 >
-                  <Trash2 className="h-4 w-4" />
+                  <Icon name="delete" className="h-4 w-4" />
                   Excluir calendário
                 </Button>
               )}
@@ -1528,9 +1518,9 @@ export default function TicketSlaPage() {
                   loading={addHoliday.isPending || updateHoliday.isPending}
                 >
                   {editingHolidayId ? (
-                    <Pencil className="h-4 w-4" />
+                    <Icon name="edit" className="h-4 w-4" />
                   ) : (
-                    <Plus className="h-4 w-4" />
+                    <Icon name="add" className="h-4 w-4" />
                   )}
                   {editingHolidayId ? "Salvar feriado" : "Adicionar feriado"}
                 </Button>
@@ -1580,7 +1570,7 @@ export default function TicketSlaPage() {
                     </div>
                     <div className="flex shrink-0 gap-2">
                       <Button size="sm" variant="secondary" onClick={() => startEditHoliday(holiday)}>
-                        <Pencil className="h-4 w-4" />
+                        <Icon name="edit" className="h-4 w-4" />
                         Editar
                       </Button>
                       <Button
@@ -1589,7 +1579,7 @@ export default function TicketSlaPage() {
                         onClick={() => void handleDeleteHoliday(holiday.id, holiday.name)}
                         loading={deleteHoliday.isPending}
                       >
-                        <Trash2 className="h-4 w-4" />
+                        <Icon name="delete" className="h-4 w-4" />
                         Remover
                       </Button>
                     </div>
@@ -1608,7 +1598,7 @@ export default function TicketSlaPage() {
       >
         {workflowProfiles.length === 0 ? (
           <div className="flex items-start gap-3 rounded-xl border border-warning/30 bg-warning/10 p-4 text-sm">
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+            <Icon name="warning" className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
             <div>
               <p className="font-medium text-warning">Workflow profiles necessários</p>
               <p className="mt-1 text-muted">
@@ -1621,7 +1611,7 @@ export default function TicketSlaPage() {
                   variant="secondary"
                   onClick={() => navigate("/settings/workflow-profiles")}
                 >
-                  <ExternalLink className="h-4 w-4" />
+                  <Icon name="open_in_new" className="h-4 w-4" />
                   Ir para Workflow Profiles
                 </Button>
               </div>
@@ -1768,7 +1758,7 @@ export default function TicketSlaPage() {
                 onClick={() => void handleSaveRule()}
                 loading={createRule.isPending || updateRule.isPending}
               >
-                <BellRing className="h-4 w-4" />
+                <Icon name="notifications_active" className="h-4 w-4" />
                 {editingRuleId ? "Salvar regra" : "Criar regra"}
               </Button>
               {editingRuleId && (
@@ -1782,13 +1772,13 @@ export default function TicketSlaPage() {
                   }
                   loading={deleteRule.isPending}
                 >
-                  <Trash2 className="h-4 w-4" />
+                  <Icon name="delete" className="h-4 w-4" />
                   Excluir regra
                 </Button>
               )}
               {(editingRuleId || ruleForm.workflowProfileId) && (
                 <Button variant="ghost" onClick={() => resetRuleForm()}>
-                  <TimerReset className="h-4 w-4" />
+                  <Icon name="restart_alt" className="h-4 w-4" />
                   Limpar formulário
                 </Button>
               )}
@@ -1808,7 +1798,7 @@ export default function TicketSlaPage() {
       >
         <div className="space-y-3 text-sm text-muted-foreground">
           <div className="flex items-start gap-3 rounded-xl border border-border bg-surface-light p-4">
-            <CalendarDays className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+            <Icon name="calendar_month" className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
             <div>
               <p className="font-medium text-foreground">1. Calendário de SLA</p>
               <p className="mt-1 text-muted">
@@ -1822,7 +1812,7 @@ export default function TicketSlaPage() {
             </div>
           </div>
           <div className="flex items-start gap-3 rounded-xl border border-border bg-surface-light p-4">
-            <Clock3 className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
+            <Icon name="schedule" className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
             <div>
               <p className="font-medium text-foreground">2. Workflow Profile</p>
               <p className="mt-1 text-muted">
@@ -1831,7 +1821,7 @@ export default function TicketSlaPage() {
             </div>
           </div>
           <div className="flex items-start gap-3 rounded-xl border border-border bg-surface-light p-4">
-            <BellRing className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+            <Icon name="notifications_active" className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
             <div>
               <p className="font-medium text-foreground">3. Regra de escalonamento</p>
               <p className="mt-1 text-muted">

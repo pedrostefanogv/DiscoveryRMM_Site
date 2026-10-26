@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Trash2, UserCheck } from 'lucide-react';
-import { Button, Input, Modal } from '@/components/ui';
+import { Icon, Button, Input, Modal } from '@/components/ui';
 import type { UserDto } from '@/api';
 
 /**
@@ -76,7 +75,7 @@ export function RequesterPickerModal({
                     selected ? 'bg-primary/10 text-foreground' : 'text-muted-foreground hover:bg-surface-hover/60'
                   }`}
                 >
-                  <UserCheck className={`h-3.5 w-3.5 shrink-0 ${selected ? 'text-primary' : 'text-muted'}`} />
+                  <Icon name="how_to_reg" className={`h-3.5 w-3.5 shrink-0 ${selected ? 'text-primary' : 'text-muted'}`} />
                   <span className="min-w-0 flex-1 truncate">{label}</span>
                   {user.email && user.email !== label && (
                     <span className="shrink-0 truncate text-xs text-muted">{user.email}</span>
@@ -94,7 +93,7 @@ export function RequesterPickerModal({
             disabled={!pending}
             onClick={() => setPending(null)}
           >
-            <Trash2 className="h-4 w-4" /> Remover solicitante
+            <Icon name="delete" className="h-4 w-4" /> Remover solicitante
           </Button>
           <div className="flex gap-2">
             <Button type="button" variant="ghost" onClick={onClose}>Cancelar</Button>

@@ -1,10 +1,10 @@
 import { useId, type KeyboardEvent, type ReactNode } from 'react';
-import type { LucideIcon } from 'lucide-react';
+import { Icon, type MaterialSymbolName } from "@/components/ui";
 
 export interface DetailTab<Id extends string> {
   id: Id;
   label: string;
-  icon: LucideIcon;
+  icon: MaterialSymbolName;
   /**
    * Contador/rótulo curto exibido ao lado do texto (ex.: quantidade de itens).
    * Opcional: as abas de Clientes/Sites usam só texto.
@@ -69,7 +69,7 @@ export function DetailTabs<Id extends string>({
       aria-label={ariaLabel}
       className="inline-flex flex-wrap rounded-xl border border-border bg-surface-light p-1"
     >
-      {tabs.map(({ id, label, icon: Icon, badge }, index) => {
+      {tabs.map(({ id, label, icon, badge }, index) => {
         const isActive = id === active;
         return (
           <button
@@ -84,7 +84,7 @@ export function DetailTabs<Id extends string>({
             onKeyDown={(event) => handleKeyDown(event, index)}
             className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${isActive ? 'bg-primary/20 text-foreground' : 'text-muted hover:text-foreground'}`}
           >
-            <Icon className="mr-1.5 inline h-4 w-4" aria-hidden="true" />
+            <Icon name={icon} className="mr-1.5 inline h-4 w-4" aria-hidden="true" />
             {label}
             {badge !== undefined && badge !== null ? (
               <span className="ml-1.5 rounded-full bg-surface-hover/60 px-2 py-0.5 text-xs text-muted-foreground">

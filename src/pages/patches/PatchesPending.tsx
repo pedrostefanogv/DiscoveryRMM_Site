@@ -1,8 +1,7 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Download, RefreshCw, RotateCcw } from "lucide-react";
 import toast from "react-hot-toast";
-import { Badge, Button, Card, CardHeader, DataTable, ErrorDisplay, Input, Loading, PageHeader, Select, type Column } from "@/components/ui";
+import { Icon, Badge, Button, Card, CardHeader, DataTable, ErrorDisplay, Input, Loading, PageHeader, Select, type Column } from "@/components/ui";
 import { useClients } from "@/hooks/useClients";
 import { useSites } from "@/hooks/useSites";
 import { useCursorPagination } from "@/hooks/useCursorPagination";
@@ -99,7 +98,7 @@ export default function PatchesPending() {
     ) },
     { key: "denied", header: "Recusadas", className: "text-right tabular-nums", render: (agent) => agent.deniedCount },
     { key: "reboot", header: "Reinício", render: (agent) => (
-      agent.pendingReboot ? <Badge color="warning"><RotateCcw className="mr-1 h-3 w-3" />Pendente</Badge> : <span className="text-xs text-muted">—</span>
+      agent.pendingReboot ? <Badge color="warning"><Icon name="restart_alt" className="mr-1 h-3 w-3" />Pendente</Badge> : <span className="text-xs text-muted">—</span>
     ) },
     { key: "scan", header: "Último scan", render: (agent) => (
       <div>
@@ -148,11 +147,11 @@ export default function PatchesPending() {
         description="Agentes com patches pendentes. Use a aba do agente para aprovar/recusar cada KB."
       >
         <Button variant="secondary" onClick={() => void list.refetch()} disabled={list.isFetching}>
-          <RefreshCw className="h-4 w-4" />
+          <Icon name="refresh" className="h-4 w-4" />
           Atualizar
         </Button>
         <Button onClick={() => void handleScan()} disabled={!canQuery || scan.isPending}>
-          <Download className="h-4 w-4" />
+          <Icon name="download" className="h-4 w-4" />
           {scan.isPending ? "Solicitando..." : "Verificar atualizações"}
         </Button>
       </PageHeader>

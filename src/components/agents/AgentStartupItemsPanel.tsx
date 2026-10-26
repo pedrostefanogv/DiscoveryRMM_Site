@@ -1,15 +1,6 @@
 import { useCallback, useMemo, useState, type MouseEvent, type ReactNode } from 'react';
-import {
-  Ban,
-  Copy,
-  Info,
-  Play,
-  RefreshCw,
-  Search,
-  ShieldAlert,
-} from 'lucide-react';
 import toast from 'react-hot-toast';
-import { Badge, Button, DataTable, EmptyState, Input, Loading, Modal, Select, type Column } from '@/components/ui';
+import { Icon, Badge, Button, DataTable, EmptyState, Input, Loading, Modal, Select, type Column } from '@/components/ui';
 import { ContextMenu, type ContextMenuItem } from '@/components/ui/ContextMenu';
 import type { StartupItemActionRequest, StartupItemInfo } from '@/api';
 import { ApiError } from '@/api';
@@ -182,7 +173,7 @@ export default function AgentStartupItemsPanel({
         {
           key: 'details',
           label: 'Ver detalhes',
-          icon: <Info className='h-4 w-4' />,
+          icon: <Icon name="info" className='h-4 w-4' />,
           onClick: () => {
             const item = menu.item;
             setMenu(null);
@@ -197,9 +188,9 @@ export default function AgentStartupItemsPanel({
               : 'Desabilitar na inicialização',
           icon:
             menu.item.status?.toLowerCase() === 'disabled' ? (
-              <Play className='h-4 w-4' />
+              <Icon name="play_arrow" className='h-4 w-4' />
             ) : (
-              <Ban className='h-4 w-4' />
+              <Icon name="block" className='h-4 w-4' />
             ),
           // Comando vai pelo dispatcher: offline entra na fila e é entregue no
           // reconhecimento (a reentrega roda em segundo plano).
@@ -210,7 +201,7 @@ export default function AgentStartupItemsPanel({
         {
           key: 'copy',
           label: 'Copiar caminho',
-          icon: <Copy className='h-4 w-4' />,
+          icon: <Icon name="content_copy" className='h-4 w-4' />,
           onClick: () => copyPath(menu.item),
           separatorBefore: true,
         },
@@ -314,21 +305,21 @@ export default function AgentStartupItemsPanel({
               : 'Solicitar nova coleta ao agent'
           }
         >
-          <RefreshCw className='h-4 w-4' />
+          <Icon name="refresh" className='h-4 w-4' />
           Atualizar
         </Button>
       </div>
 
       {!canManage && (
         <p className='mb-3 flex items-center gap-2 rounded-lg border border-border bg-surface-light px-3 py-2 text-xs text-muted'>
-          <ShieldAlert className='h-3.5 w-3.5 shrink-0' />
+          <Icon name="gpp_maybe" className='h-3.5 w-3.5 shrink-0' />
           Você possui permissão somente leitura — o menu de contexto fica desabilitado.
         </p>
       )}
 
       <div className='mb-4 grid gap-2 sm:grid-cols-[1fr_240px]'>
         <div className='relative'>
-          <Search className='pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted' />
+          <Icon name="search" className='pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted' />
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -440,7 +431,7 @@ export default function AgentStartupItemsPanel({
       </Modal>
 
       <p className='mt-3 flex items-center gap-2 text-xs text-muted'>
-        <Info className='h-3.5 w-3.5' />
+        <Icon name="info" className='h-3.5 w-3.5' />
         Passe o mouse sobre um item para ver os detalhes ou clique com o botão direito para ver
         detalhes, habilitar/desabilitar ou copiar o caminho.
       </p>

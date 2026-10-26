@@ -1,7 +1,6 @@
 import { useMemo, useState } from "react";
-import { ChevronDown, ChevronUp, GitCompare } from "lucide-react";
 import type { ConfigurationValue } from "@/api";
-import { Button, Input, Modal, Select, TextArea } from "@/components/ui";
+import { Icon, Button, Input, Modal, Select, TextArea } from "@/components/ui";
 import {
   AGENT_HOME_TAB_OPTIONS,
   APP_STORE_POLICY_OPTIONS,
@@ -415,9 +414,9 @@ export function ConfigurationFieldEditor({
               >
                 <span>Configuração avançada (Chat)</span>
                 {showAiAdvanced ? (
-                  <ChevronUp className="h-4 w-4" />
+                  <Icon name="expand_less" className="h-4 w-4" />
                 ) : (
-                  <ChevronDown className="h-4 w-4" />
+                  <Icon name="expand_more" className="h-4 w-4" />
                 )}
               </button>
 
@@ -470,9 +469,9 @@ export function ConfigurationFieldEditor({
               >
                 <span>Configuração de Embedding</span>
                 {showAiEmbedding ? (
-                  <ChevronUp className="h-4 w-4" />
+                  <Icon name="expand_less" className="h-4 w-4" />
                 ) : (
-                  <ChevronDown className="h-4 w-4" />
+                  <Icon name="expand_more" className="h-4 w-4" />
                 )}
               </button>
 
@@ -658,7 +657,7 @@ export function ConfigurationFieldEditor({
         onClick={() => setShowDiff(true)}
         title="Comparar valor local com efetivo"
       >
-        <GitCompare className="h-3.5 w-3.5" />
+        <Icon name="compare_arrows" className="h-3.5 w-3.5" />
         <span className="hidden sm:inline">Comparar</span>
       </Button>
       <Button size="sm" onClick={onSavePatch} loading={saving} disabled={isReadOnly}>

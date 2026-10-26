@@ -1,16 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import {
-  AlertTriangle,
-  Clock,
-  Download,
-  Info,
-  Loader2,
-  RefreshCw,
-  ShieldCheck,
-  ShieldX,
-} from "lucide-react";
+
 import toast from "react-hot-toast";
-import { Badge, Button, ConfirmDialog, DataTable, ErrorDisplay, Input, Loading, Modal, Select, type Column } from "@/components/ui";
+import { Icon, Badge, Button, ConfirmDialog, DataTable, ErrorDisplay, Input, Loading, Modal, Select, type Column } from "@/components/ui";
 import { useAuthorization } from "@/auth/authorization";
 import { usePatchesRealtime } from "@/hooks/usePatchesRealtime";
 import {
@@ -342,10 +333,10 @@ export function AgentWindowsUpdatesPanel({ agentId }: { agentId: string }) {
         return (
           <div className="flex flex-wrap justify-end gap-1.5">
             <Button size="sm" variant="secondary" onClick={() => openApproval(update, "approve")} title="Aprovar" disabled={!canApprove}>
-              <ShieldCheck className="h-3.5 w-3.5" />
+              <Icon name="verified_user" className="h-3.5 w-3.5" />
             </Button>
             <Button size="sm" variant="secondary" onClick={() => openApproval(update, "deny")} title="Recusar" disabled={!canApprove}>
-              <ShieldX className="h-3.5 w-3.5" />
+              <Icon name="gpp_bad" className="h-3.5 w-3.5" />
             </Button>
             <Button size="sm" onClick={() => openInstall(update, false)} disabled={install.isPending || !canExecute}>
               Instalar
@@ -382,9 +373,9 @@ export function AgentWindowsUpdatesPanel({ agentId }: { agentId: string }) {
           className={`flex flex-wrap items-start gap-2 rounded-xl border p-3 text-sm ${HEALTH_TONE_CLASSES[health.tone]}`}
         >
           {health.tone === "danger" ? (
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+            <Icon name="warning" className="mt-0.5 h-4 w-4 shrink-0" />
           ) : (
-            <Clock className="mt-0.5 h-4 w-4 shrink-0" />
+            <Icon name="schedule" className="mt-0.5 h-4 w-4 shrink-0" />
           )}
           <div className="min-w-0 flex-1">
             <p className="font-medium">{health.title}</p>
@@ -403,7 +394,7 @@ export function AgentWindowsUpdatesPanel({ agentId }: { agentId: string }) {
             onClick={() => void handleScan("banner")}
             disabled={scanning || !canExecute}
           >
-            <RefreshCw className="h-3.5 w-3.5" />
+            <Icon name="refresh" className="h-3.5 w-3.5" />
             {scanning ? "Verificando..." : "Verificar atualizações"}
           </Button>
         </div>
@@ -411,7 +402,7 @@ export function AgentWindowsUpdatesPanel({ agentId }: { agentId: string }) {
 
       {data?.pendingReboot && (
         <div className="flex items-start gap-2 rounded-xl border border-warning/40 bg-warning/10 p-3 text-sm text-warning">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+          <Icon name="warning" className="mt-0.5 h-4 w-4 shrink-0" />
           <div>
             <p className="font-medium">Reinício pendente</p>
             <p className="text-xs">
@@ -439,20 +430,20 @@ export function AgentWindowsUpdatesPanel({ agentId }: { agentId: string }) {
             <span title={activity.detail} aria-label={activity.label}>
               <Badge color={activity.tone}>
                 {activity.key === "downloading" ? (
-                  <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                  <Icon name="progress_activity" className="mr-1 h-3 w-3 animate-spin" />
                 ) : (
-                  <Download className="mr-1 h-3 w-3" />
+                  <Icon name="download" className="mr-1 h-3 w-3" />
                 )}
                 {activity.label}
               </Badge>
             </span>
           )}
           <Button variant="secondary" onClick={() => void handleScan("toolbar")} disabled={scanning || !canExecute}>
-            <RefreshCw className={`h-4 w-4 ${scanning ? "animate-spin" : ""}`} />
+            <Icon name="refresh" className={`h-4 w-4 ${scanning ? "animate-spin" : ""}`} />
             {scanButtonLabel}
           </Button>
           <Button onClick={() => setConfirmInstallApproved(true)} disabled={installApproved.isPending || !canExecute}>
-            <Download className="h-4 w-4" />
+            <Icon name="download" className="h-4 w-4" />
             Instalar aprovadas
           </Button>
           <Button variant="secondary" onClick={() => setConfirmOsPolicy("apply")} disabled={applyOsPolicy.isPending || !canExecute}>
@@ -489,7 +480,7 @@ export function AgentWindowsUpdatesPanel({ agentId }: { agentId: string }) {
         {data?.probe && (
           <p className="flex flex-wrap items-center gap-x-3 gap-y-1">
             <span className="inline-flex items-center gap-1 text-muted">
-              <Info className="h-3 w-3" />
+              <Icon name="info" className="h-3 w-3" />
               Sonda do agente:
             </span>
             {probeFlags.length === 0 && <span>sem dados</span>}
@@ -548,7 +539,7 @@ export function AgentWindowsUpdatesPanel({ agentId }: { agentId: string }) {
                 onClick={() => void handleScan("banner")}
                 disabled={scanning || !canExecute}
               >
-                <RefreshCw className="h-3.5 w-3.5" />
+                <Icon name="refresh" className="h-3.5 w-3.5" />
                 {scanning ? "Verificando..." : "Verificar atualizações"}
               </Button>
               <Button

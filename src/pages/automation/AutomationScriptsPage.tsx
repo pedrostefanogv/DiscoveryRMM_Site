@@ -1,8 +1,7 @@
 import { useMemo, useState, type MouseEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
-import { Eye, History, Pencil, Trash2 } from "lucide-react";
-import {
+import { Icon,
   Badge,
   Button,
   Card,
@@ -102,25 +101,25 @@ export default function AutomationScriptsPage() {
       {
         key: "view",
         label: "Abrir detalhes",
-        icon: <Eye className="h-4 w-4" />,
+        icon: <Icon name="visibility" className="h-4 w-4" />,
         onClick: () => navigate(`/automation/scripts/${script.id}`),
       },
       {
         key: "edit",
         label: "Editar",
-        icon: <Pencil className="h-4 w-4" />,
+        icon: <Icon name="edit" className="h-4 w-4" />,
         onClick: () => navigate(`/automation/scripts/${script.id}/edit`),
       },
       {
         key: "audit",
         label: "Auditoria",
-        icon: <History className="h-4 w-4" />,
+        icon: <Icon name="history" className="h-4 w-4" />,
         onClick: () => setAuditScriptId(script.id),
       },
       {
         key: "delete",
         label: "Excluir",
-        icon: <Trash2 className="h-4 w-4" />,
+        icon: <Icon name="delete" className="h-4 w-4" />,
         danger: true,
         separatorBefore: true,
         onClick: () => {

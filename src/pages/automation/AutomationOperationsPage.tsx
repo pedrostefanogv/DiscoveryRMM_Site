@@ -1,25 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import toast from "react-hot-toast";
-import {
-  Activity,
-  Ban,
-  Building2,
-  CheckCircle2,
-  Clock,
-  Copy,
-  Download,
-  ExternalLink,
-  Layers,
-  RefreshCw,
-  RotateCcw,
-  ServerCog,
-  Wifi,
-  WifiOff,
-  X,
-  XCircle,
-} from "lucide-react";
-import {
+import { Icon,
   Badge,
   Button,
   Card,
@@ -693,7 +675,7 @@ export default function AutomationOperationsPage() {
                 className="rounded p-0.5 text-muted transition-colors hover:text-foreground"
                 aria-label="Copiar correlation id"
               >
-                <Copy className="h-3.5 w-3.5" />
+                <Icon name="content_copy" className="h-3.5 w-3.5" />
               </button>
             </div>
           ) : (
@@ -718,7 +700,7 @@ export default function AutomationOperationsPage() {
                   : "Sem permissão para executar automações"
               }
             >
-              <Ban className="h-3.5 w-3.5" />
+              <Icon name="block" className="h-3.5 w-3.5" />
               Cancelar
             </Button>
           ) : (
@@ -735,7 +717,7 @@ export default function AutomationOperationsPage() {
                       : "Sem permissão para executar automações"
                   }
                 >
-                  <RotateCcw className="h-3.5 w-3.5" />
+                  <Icon name="restart_alt" className="h-3.5 w-3.5" />
                   Reenviar
                 </Button>
               ) : (
@@ -764,7 +746,7 @@ export default function AutomationOperationsPage() {
             to={`/agents/${agentId}`}
             className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-surface-light px-3 py-2 text-sm text-foreground transition-colors hover:bg-surface-hover"
           >
-            <ExternalLink className="h-4 w-4" />
+            <Icon name="open_in_new" className="h-4 w-4" />
             Abrir detalhe do agent
           </Link>
         )}
@@ -784,7 +766,7 @@ export default function AutomationOperationsPage() {
             aria-pressed={scopeMode === "agent"}
             onClick={() => setScopeMode("agent")}
           >
-            <ServerCog className="h-3.5 w-3.5" />
+            <Icon name="dns" className="h-3.5 w-3.5" />
             Agente único
           </Button>
           <Button
@@ -793,7 +775,7 @@ export default function AutomationOperationsPage() {
             aria-pressed={scopeMode === "site"}
             onClick={() => setScopeMode("site")}
           >
-            <Layers className="h-3.5 w-3.5" />
+            <Icon name="layers" className="h-3.5 w-3.5" />
             Site inteiro
           </Button>
           <Button
@@ -802,7 +784,7 @@ export default function AutomationOperationsPage() {
             aria-pressed={scopeMode === "client"}
             onClick={() => setScopeMode("client")}
           >
-            <Building2 className="h-3.5 w-3.5" />
+            <Icon name="apartment" className="h-3.5 w-3.5" />
             Cliente inteiro
           </Button>
         </div>
@@ -854,9 +836,9 @@ export default function AutomationOperationsPage() {
             {currentAgent ? (
               <>
                 {currentAgent.isOnline ? (
-                  <Wifi className="h-4 w-4 text-success" />
+                  <Icon name="wifi" className="h-4 w-4 text-success" />
                 ) : (
-                  <WifiOff className="h-4 w-4 text-muted" />
+                  <Icon name="wifi_off" className="h-4 w-4 text-muted" />
                 )}
                 <span className="font-medium text-foreground">
                   {currentAgent.displayName ?? currentAgent.hostname}
@@ -868,7 +850,7 @@ export default function AutomationOperationsPage() {
               </>
             ) : (
               <>
-                <ServerCog className="h-4 w-4 text-muted" />
+                <Icon name="dns" className="h-4 w-4 text-muted" />
                 <span className="text-muted">
                   {needsAgentResolution && agentDetail.isLoading
                     ? "Resolvendo agente do link…"
@@ -1021,11 +1003,11 @@ export default function AutomationOperationsPage() {
             subtitle={`${bulkResult.scope === "site" ? "Site" : "Cliente"} ${shortId(bulkResult.scopeId)} · correlation ${bulkResult.correlationId}`}
           />
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <StatCard icon={CheckCircle2} label="Enviados agora" value={bulkResult.dispatched} tone="success" />
-            <StatCard icon={Clock} label="Na fila (offline)" value={bulkResult.queued} tone="accent" />
-            <StatCard icon={XCircle} label="Falhas" value={bulkResult.failed} tone="warning" />
+            <StatCard icon="check_circle" label="Enviados agora" value={bulkResult.dispatched} tone="success" />
+            <StatCard icon="schedule" label="Na fila (offline)" value={bulkResult.queued} tone="accent" />
+            <StatCard icon="cancel" label="Falhas" value={bulkResult.failed} tone="warning" />
             <StatCard
-              icon={WifiOff}
+              icon="wifi_off"
               label="Ignorados"
               value={bulkResult.skippedOffline + bulkResult.skippedMaintenance}
               tone="primary"
@@ -1066,7 +1048,7 @@ export default function AutomationOperationsPage() {
               }
               onClick={() => setCorrelationFilter(bulkResult.correlationId)}
             >
-              <Layers className="h-3.5 w-3.5" />
+              <Icon name="layers" className="h-3.5 w-3.5" />
               Filtrar histórico por este lote
             </Button>
             <Button variant="secondary" size="sm" onClick={() => setBulkResult(null)}>
@@ -1099,7 +1081,7 @@ export default function AutomationOperationsPage() {
           <div className="space-y-4">
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <StatCard
-                icon={Activity}
+                icon="monitoring"
                 label={`Execuções (máx. ${limit})`}
                 value={summary.total}
                 tone="primary"
@@ -1110,7 +1092,7 @@ export default function AutomationOperationsPage() {
                 }}
               />
               <StatCard
-                icon={RefreshCw}
+                icon="refresh"
                 label="Em andamento"
                 value={summary.pending}
                 tone="accent"
@@ -1118,7 +1100,7 @@ export default function AutomationOperationsPage() {
                 onClick={handleTogglePending}
               />
               <StatCard
-                icon={XCircle}
+                icon="cancel"
                 label="Falhas"
                 value={summary.failed}
                 tone="warning"
@@ -1126,7 +1108,7 @@ export default function AutomationOperationsPage() {
                 onClick={handleToggleFailures}
               />
               <StatCard
-                icon={CheckCircle2}
+                icon="check_circle"
                 label="Sucesso"
                 value={
                   summary.completed + summary.failed === 0
@@ -1173,11 +1155,11 @@ export default function AutomationOperationsPage() {
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex flex-wrap items-center gap-2">
                 <Button variant="secondary" size="sm" onClick={handleToggleFailures} aria-pressed={onlyFailures}>
-                  <XCircle className="h-3.5 w-3.5" />
+                  <Icon name="cancel" className="h-3.5 w-3.5" />
                   Somente falhas
                 </Button>
                 <Button variant="secondary" size="sm" onClick={handleTogglePending} aria-pressed={onlyPending}>
-                  <Clock className="h-3.5 w-3.5" />
+                  <Icon name="schedule" className="h-3.5 w-3.5" />
                   Somente em andamento
                 </Button>
                 {correlationFilter && (
@@ -1189,24 +1171,24 @@ export default function AutomationOperationsPage() {
                       className="rounded p-0.5 transition-colors hover:text-foreground"
                       aria-label="Limpar filtro de lote"
                     >
-                      <X className="h-3 w-3" />
+                      <Icon name="close" className="h-3 w-3" />
                     </button>
                   </span>
                 )}
                 {summary.pending > 0 && (
                   <span className="flex items-center gap-1.5 text-xs text-muted">
-                    <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                    <Icon name="refresh" className="h-3.5 w-3.5 animate-spin" />
                     Atualizando a cada 3s
                   </span>
                 )}
               </div>
               <div className="flex items-center gap-2">
                 <Button variant="secondary" size="sm" onClick={() => void executions.refetch()}>
-                  <RefreshCw className="h-3.5 w-3.5" />
+                  <Icon name="refresh" className="h-3.5 w-3.5" />
                   Atualizar
                 </Button>
                 <Button variant="secondary" size="sm" onClick={handleExportCsv}>
-                  <Download className="h-3.5 w-3.5" />
+                  <Icon name="download" className="h-3.5 w-3.5" />
                   Exportar CSV
                 </Button>
               </div>

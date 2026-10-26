@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { ChevronDown, ChevronRight, FileStack, FileText, Home, Plus, Trash2 } from 'lucide-react';
-import { Button } from '@/components/ui';
+
+import { Icon, Button } from '@/components/ui';
 import type { ArticlePageTreeNode } from '@/api';
 import { useArticlePages, useDeleteArticlePage } from '@/hooks';
 import toast from 'react-hot-toast';
@@ -90,9 +90,9 @@ export default function ArticlePagesManager({
               aria-label={isCollapsed ? 'Expandir' : 'Recolher'}
             >
               {isCollapsed ? (
-                <ChevronRight className="h-3.5 w-3.5" />
+                <Icon name="chevron_right" className="h-3.5 w-3.5" />
               ) : (
-                <ChevronDown className="h-3.5 w-3.5" />
+                <Icon name="expand_more" className="h-3.5 w-3.5" />
               )}
             </button>
           ) : (
@@ -100,9 +100,9 @@ export default function ArticlePagesManager({
           )}
 
           {hasChildren ? (
-            <FileStack className="h-4 w-4 shrink-0 text-primary" />
+            <Icon name="layers" className="h-4 w-4 shrink-0 text-primary" />
           ) : (
-            <FileText className="h-4 w-4 shrink-0 text-muted" />
+            <Icon name="description" className="h-4 w-4 shrink-0 text-muted" />
           )}
 
           <span className="min-w-0 flex-1 truncate">{node.title}</span>
@@ -117,7 +117,7 @@ export default function ArticlePagesManager({
               }}
               aria-label="Excluir página"
             >
-              <Trash2 className="h-3.5 w-3.5" />
+              <Icon name="delete" className="h-3.5 w-3.5" />
             </button>
           </div>
         </div>
@@ -134,7 +134,7 @@ export default function ArticlePagesManager({
       <div className="flex items-center justify-between">
         <p className="text-sm font-medium text-foreground">Páginas do artigo</p>
         <Button size="sm" variant="ghost" onClick={onCreatePage}>
-          <Plus className="h-4 w-4" /> Nova página
+          <Icon name="add" className="h-4 w-4" /> Nova página
         </Button>
       </div>
 
@@ -155,7 +155,7 @@ export default function ArticlePagesManager({
             onClick={onSelectHome}
           >
             <span className="w-4 shrink-0" />
-            <Home className="h-4 w-4 shrink-0 text-primary" />
+            <Icon name="home" className="h-4 w-4 shrink-0 text-primary" />
             <span className="min-w-0 flex-1 truncate font-medium">{homeLabel}</span>
           </div>
 

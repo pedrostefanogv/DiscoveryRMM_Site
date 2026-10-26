@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Pin, Plus, Save, X } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { Badge, Button, Card, CardHeader, ErrorDisplay, Loading, TextArea } from '@/components/ui';
+import { Icon, Badge, Button, Card, CardHeader, ErrorDisplay, Loading, TextArea } from '@/components/ui';
 import { useAgentNotesAll, useCreateAgentNote } from '@/hooks/useNotes';
 
 interface PinnedNotesCardProps {
@@ -110,7 +109,7 @@ export function PinnedNotesCard({ agentId, onViewAll }: PinnedNotesCardProps) {
                 aria-label={showCreateForm ? 'Fechar formulário' : 'Incluir anotação'}
                 title={showCreateForm ? 'Fechar formulário' : 'Incluir anotação'}
               >
-                {showCreateForm ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+                {showCreateForm ? <Icon name="close" className="h-4 w-4" /> : <Icon name="add" className="h-4 w-4" />}
                 Incluir
               </Button>
             ) : null}
@@ -130,7 +129,7 @@ export function PinnedNotesCard({ agentId, onViewAll }: PinnedNotesCardProps) {
                 <div key={note.id} className="rounded-lg border border-border bg-surface-light p-3">
                   <div className="mb-1 flex items-center gap-2">
                     <Badge color="warning" className="text-[10px]">
-                      <Pin className="h-3 w-3" />
+                      <Icon name="push_pin" className="h-3 w-3" />
                       Fixada
                     </Badge>
                     <span className="truncate text-xs font-medium text-foreground">
@@ -178,11 +177,11 @@ export function PinnedNotesCard({ agentId, onViewAll }: PinnedNotesCardProps) {
               <div className="flex justify-end gap-2">
                 {hasPinned && (
                   <Button size="sm" variant="ghost" onClick={() => setShowCreateForm(false)}>
-                    <X className="h-4 w-4" /> Cancelar
+                    <Icon name="close" className="h-4 w-4" /> Cancelar
                   </Button>
                 )}
                 <Button size="sm" onClick={handleCreate} loading={createNote.isPending}>
-                  <Save className="h-4 w-4" /> Salvar anotação
+                  <Icon name="save" className="h-4 w-4" /> Salvar anotação
                 </Button>
               </div>
             </div>

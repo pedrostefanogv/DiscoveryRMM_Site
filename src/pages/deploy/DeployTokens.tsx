@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
-import { Download, KeyRound } from 'lucide-react';
-import { Badge, Button, Card, CardHeader, Input, Modal, Select, TextArea } from '@/components/ui';
+
+import { Icon, Badge, Button, Card, CardHeader, Input, Modal, Select, TextArea } from '@/components/ui';
 import {
   useCreateDeployTokenAndDownload,
   useDeployTokens,
@@ -460,7 +460,7 @@ export default function DeployTokens() {
             onClick={handleDownloadGenericInstaller}
             loading={downloadGenericInstaller.isPending}
           >
-            <Download className="h-4 w-4" />
+            <Icon name="download" className="h-4 w-4" />
             Baixar instalador zero-touch
           </Button>
           <Button
@@ -607,7 +607,7 @@ export default function DeployTokens() {
                   onClick={() => setCreateModalOpen(true)}
                   disabled={!selectedClientId}
                 >
-                  <KeyRound className="h-4 w-4" />
+                  <Icon name="key" className="h-4 w-4" />
                   Gerar token
                 </Button>
                 <Button
@@ -615,7 +615,7 @@ export default function DeployTokens() {
                   loading={createAndDownload.isPending}
                   disabled={!selectedClientId || !selectedSiteId}
                 >
-                  <Download className="h-4 w-4" />
+                  <Icon name="download" className="h-4 w-4" />
                   {installerType === 'offline' ? 'Baixar pacote completo (.exe)' : 'Baixar instalador mínimo (.exe)'}
                 </Button>
               </div>

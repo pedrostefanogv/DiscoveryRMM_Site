@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
-import { ArrowRight, Building2, AlertTriangle, Loader2 } from "lucide-react";
+
 import toast from "react-hot-toast";
-import { Modal, Button, Select, Input } from "@/components/ui";
+import { Icon, Modal, Button, Select, Input } from "@/components/ui";
 import { useClients } from "@/hooks/useClients";
 import { useSites } from "@/hooks/useSites";
 import { useTransferAgent, useValidateTransfer } from "@/hooks/useAgentTransfer";
@@ -98,7 +98,7 @@ export function TransferAgentModal({ open, onClose, agent }: TransferAgentModalP
         {agent && (
           <div className="rounded-lg border border-border bg-surface-light p-3">
             <p className="flex items-center gap-2 text-sm font-medium text-foreground">
-              <Building2 className="h-4 w-4 text-muted" />
+              <Icon name="apartment" className="h-4 w-4 text-muted" />
               {agent.displayName ?? agent.hostname}
             </p>
             <p className="mt-1 text-xs text-muted">
@@ -139,7 +139,7 @@ export function TransferAgentModal({ open, onClose, agent }: TransferAgentModalP
                 <p className="font-medium text-primary">Transferência viável</p>
                 <div className="flex items-center gap-2 text-foreground">
                   <span className="text-muted">{validation.previousSiteName}</span>
-                  <ArrowRight className="h-4 w-4 text-primary" />
+                  <Icon name="arrow_forward" className="h-4 w-4 text-primary" />
                   <span className="text-primary">{validation.targetSiteName}</span>
                 </div>
                 <div className="text-xs text-muted">
@@ -152,7 +152,7 @@ export function TransferAgentModal({ open, onClose, agent }: TransferAgentModalP
                 </div>
                 {validation.isCrossClient && (
                   <div className="flex items-center gap-1.5 rounded bg-warning/15 px-2 py-1 text-xs text-warning mt-2">
-                    <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                    <Icon name="warning" className="h-3.5 w-3.5 shrink-0" />
                     Transferência entre clientes diferentes. As permissões de acesso remoto serão reconciliadas em segundo plano.
                   </div>
                 )}
@@ -171,7 +171,7 @@ export function TransferAgentModal({ open, onClose, agent }: TransferAgentModalP
         {/* Loading validation */}
         {validateQuery.isFetching && (
           <div className="flex items-center gap-2 text-sm text-muted">
-            <Loader2 className="h-4 w-4 animate-spin" />
+            <Icon name="progress_activity" className="h-4 w-4 animate-spin" />
             Validando transferência...
           </div>
         )}

@@ -1,7 +1,6 @@
-import { Copy } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { CustomFieldSchemaItem } from '@/api';
-import { Button } from '@/components/ui';
+import { Icon, Button } from '@/components/ui';
 import { isSchemaValueCopyable, schemaValueText } from './customFieldSchemaValue';
 
 interface Props {
@@ -59,7 +58,7 @@ export function AgentPinnedCustomFields({ items }: Props) {
                   title="Copiar valor"
                   onClick={() => void handleCopy(item)}
                 >
-                  <Copy className="h-3.5 w-3.5" />
+                  <Icon name="content_copy" className="h-3.5 w-3.5" />
                 </Button>
               ) : null}
             </div>

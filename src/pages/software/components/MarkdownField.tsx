@@ -1,8 +1,5 @@
-import { useId, useState, type ComponentType } from 'react';
-import {
-  Bold, Code, Heading, Italic, Link2, List, ListOrdered, SquareCode,
-} from 'lucide-react';
-import { TextArea } from '@/components/ui';
+import { useId, useState } from 'react';
+import { Icon, TextArea, type MaterialSymbolName } from '@/components/ui';
 import { LazyMarkdown } from '@/components/ui/LazyMarkdown';
 
 /**
@@ -136,17 +133,17 @@ function toggleHeading(text: string, start: number, end: number): Edit {
 const TOOLBAR: {
   key: string;
   label: string;
-  icon: ComponentType<{ className?: string }>;
+  icon: MaterialSymbolName;
   run: (text: string, start: number, end: number) => Edit;
 }[] = [
-  { key: 'bold', label: 'Negrito', icon: Bold, run: (t, s, e) => wrapInline(t, s, e, '**', '**', 'texto') },
-  { key: 'italic', label: 'Itálico', icon: Italic, run: (t, s, e) => wrapInline(t, s, e, '_', '_', 'texto') },
-  { key: 'heading', label: 'Título', icon: Heading, run: toggleHeading },
-  { key: 'bullet-list', label: 'Lista com marcadores', icon: List, run: (t, s, e) => prefixLines(t, s, e, '- ') },
-  { key: 'ordered-list', label: 'Lista numerada', icon: ListOrdered, run: (t, s, e) => prefixLines(t, s, e, '1. ') },
-  { key: 'link', label: 'Link', icon: Link2, run: (t, s, e) => wrapInline(t, s, e, '[', '](https://)', 'texto do link') },
-  { key: 'inline-code', label: 'Código inline', icon: Code, run: (t, s, e) => wrapInline(t, s, e, '`', '`', 'código') },
-  { key: 'code-block', label: 'Bloco de código', icon: SquareCode, run: codeBlock },
+  { key: 'bold', label: 'Negrito', icon: "format_bold", run: (t, s, e) => wrapInline(t, s, e, '**', '**', 'texto') },
+  { key: 'italic', label: 'Itálico', icon: "format_italic", run: (t, s, e) => wrapInline(t, s, e, '_', '_', 'texto') },
+  { key: 'heading', label: 'Título', icon: "title", run: toggleHeading },
+  { key: 'bullet-list', label: 'Lista com marcadores', icon: "list", run: (t, s, e) => prefixLines(t, s, e, '- ') },
+  { key: 'ordered-list', label: 'Lista numerada', icon: "format_list_numbered", run: (t, s, e) => prefixLines(t, s, e, '1. ') },
+  { key: 'link', label: 'Link', icon: "link", run: (t, s, e) => wrapInline(t, s, e, '[', '](https://)', 'texto do link') },
+  { key: 'inline-code', label: 'Código inline', icon: "code", run: (t, s, e) => wrapInline(t, s, e, '`', '`', 'código') },
+  { key: 'code-block', label: 'Bloco de código', icon: "code", run: codeBlock },
 ];
 
 /**
@@ -232,8 +229,7 @@ export function MarkdownField({
         {mode === 'edit' && (
           <div role="toolbar" aria-label="Formatação Markdown" className="flex flex-wrap items-center gap-0.5">
             {TOOLBAR.map((item) => {
-              const Icon = item.icon;
-              return (
+                            return (
                 <button
                   key={item.key}
                   type="button"
@@ -243,7 +239,7 @@ export function MarkdownField({
                   aria-label={item.label}
                   className="rounded-lg border border-transparent p-1.5 text-muted transition-colors hover:border-border hover:bg-surface-light hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  <Icon className="h-4 w-4" />
+                  <Icon name={item.icon} className="h-4 w-4" />
                 </button>
               );
             })}

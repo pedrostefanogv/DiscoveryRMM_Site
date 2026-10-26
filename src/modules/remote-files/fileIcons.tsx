@@ -1,26 +1,5 @@
-import {
-  AppWindow,
-  ArrowUpRight,
-  Binary,
-  BookText,
-  Cog,
-  Database,
-  File,
-  FileArchive,
-  FileCode,
-  FileImage,
-  FileSpreadsheet,
-  FileText,
-  FileType,
-  Folder,
-  FolderUp,
-  HardDrive,
-  Music,
-  Presentation,
-  ScrollText,
-  Video,
-  type LucideIcon,
-} from 'lucide-react';
+
+import { Icon, type MaterialSymbolName } from '@/components/ui';
 
 /**
  * Classificacao visual de arquivos do navegador remoto.
@@ -94,27 +73,27 @@ const EXTENSION_KINDS: Record<string, FileKind> = {
   bin: 'binary', dat: 'binary', bak: 'binary', tmp: 'binary', dump: 'binary',
 };
 
-const KIND_VISUALS: Record<FileKind, { Icon: LucideIcon; className: string; label: string }> = {
-  folder: { Icon: Folder, className: 'text-amber-500', label: 'Pasta' },
-  parent: { Icon: FolderUp, className: 'text-muted', label: 'Pasta superior' },
-  archive: { Icon: FileArchive, className: 'text-violet-500', label: 'Arquivo compactado' },
-  database: { Icon: Database, className: 'text-cyan-500', label: 'Banco de dados' },
-  log: { Icon: ScrollText, className: 'text-sky-500', label: 'Arquivo de log' },
-  text: { Icon: FileText, className: 'text-muted', label: 'Arquivo de texto' },
-  code: { Icon: FileCode, className: 'text-emerald-500', label: 'Script / codigo' },
-  config: { Icon: Cog, className: 'text-teal-500', label: 'Configuracao' },
-  sheet: { Icon: FileSpreadsheet, className: 'text-green-500', label: 'Planilha' },
-  document: { Icon: BookText, className: 'text-blue-500', label: 'Documento' },
-  pdf: { Icon: BookText, className: 'text-rose-500', label: 'Documento PDF' },
-  slide: { Icon: Presentation, className: 'text-orange-500', label: 'Apresentacao' },
-  image: { Icon: FileImage, className: 'text-pink-500', label: 'Imagem' },
-  video: { Icon: Video, className: 'text-purple-500', label: 'Video' },
-  audio: { Icon: Music, className: 'text-fuchsia-500', label: 'Audio' },
-  executable: { Icon: AppWindow, className: 'text-orange-400', label: 'Executavel' },
-  font: { Icon: FileType, className: 'text-indigo-500', label: 'Fonte' },
-  disk: { Icon: HardDrive, className: 'text-yellow-500', label: 'Imagem de disco' },
-  binary: { Icon: Binary, className: 'text-red-500', label: 'Arquivo binario' },
-  file: { Icon: File, className: 'text-muted', label: 'Arquivo' },
+const KIND_VISUALS: Record<FileKind, { icon: MaterialSymbolName; className: string; label: string }> = {
+  folder: { icon: "folder", className: 'text-amber-500', label: 'Pasta' },
+  parent: { icon: "drive_folder_upload", className: 'text-muted', label: 'Pasta superior' },
+  archive: { icon: "folder_zip", className: 'text-violet-500', label: 'Arquivo compactado' },
+  database: { icon: "database", className: 'text-cyan-500', label: 'Banco de dados' },
+  log: { icon: "article", className: 'text-sky-500', label: 'Arquivo de log' },
+  text: { icon: "description", className: 'text-muted', label: 'Arquivo de texto' },
+  code: { icon: "code", className: 'text-emerald-500', label: 'Script / codigo' },
+  config: { icon: "settings", className: 'text-teal-500', label: 'Configuracao' },
+  sheet: { icon: "table", className: 'text-green-500', label: 'Planilha' },
+  document: { icon: "menu_book", className: 'text-blue-500', label: 'Documento' },
+  pdf: { icon: "menu_book", className: 'text-rose-500', label: 'Documento PDF' },
+  slide: { icon: "present_to_all", className: 'text-orange-500', label: 'Apresentacao' },
+  image: { icon: "image", className: 'text-pink-500', label: 'Imagem' },
+  video: { icon: "videocam", className: 'text-purple-500', label: 'Video' },
+  audio: { icon: "music_note", className: 'text-fuchsia-500', label: 'Audio' },
+  executable: { icon: "web_asset", className: 'text-orange-400', label: 'Executavel' },
+  font: { icon: "description", className: 'text-indigo-500', label: 'Fonte' },
+  disk: { icon: "storage", className: 'text-yellow-500', label: 'Imagem de disco' },
+  binary: { icon: "code", className: 'text-red-500', label: 'Arquivo binario' },
+  file: { icon: "draft", className: 'text-muted', label: 'Arquivo' },
 };
 
 /** Extensao em minusculas, sem o ponto. String vazia quando nao ha extensao. */
@@ -154,7 +133,6 @@ interface FileIconProps {
  */
 export function FileIcon({ name = '', isDir = false, isLink = false, parent = false, isHidden = false, className }: FileIconProps) {
   const visual = parent ? KIND_VISUALS.parent : KIND_VISUALS[fileKindOf(name, isDir)];
-  const Icon = visual.Icon;
   const label = isHidden ? `${visual.label} (oculto)` : visual.label;
   return (
     <span
@@ -163,9 +141,9 @@ export function FileIcon({ name = '', isDir = false, isLink = false, parent = fa
       aria-label={label}
       role="img"
     >
-      <Icon className={'h-4 w-4 ' + visual.className} strokeWidth={1.75} aria-hidden="true" />
+      <Icon name={visual.icon} className={'h-4 w-4 ' + visual.className} aria-hidden="true" />
       {isLink && (
-        <ArrowUpRight
+        <Icon name="arrow_outward"
           className="absolute -bottom-1 -right-1 h-2.5 w-2.5 rounded-full bg-surface text-accent"
           strokeWidth={2.5}
           aria-hidden="true"

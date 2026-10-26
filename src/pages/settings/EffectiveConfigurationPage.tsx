@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react";
-import { Building2, Lock, MapPin, RefreshCw } from "lucide-react";
-import { Badge, Button, Card, CardHeader, ErrorDisplay, Loading, Select } from "@/components/ui";
+import { Icon, Badge, Button, Card, CardHeader, ErrorDisplay, Loading, Select } from "@/components/ui";
 import { statusSurface, toApiFieldName } from "@/components/configuration";
 import { useClients } from "@/hooks/useClients";
 import { useSites } from "@/hooks/useSites";
@@ -142,7 +141,7 @@ export default function EffectiveConfigurationPage() {
               subtitle={scopeLabel ? `Resolvido no escopo: ${scopeLabel}` : undefined}
               action={
                 <Button size="sm" variant="ghost" onClick={() => query.refetch()}>
-                  <RefreshCw className="h-3.5 w-3.5" />
+                  <Icon name="refresh" className="h-3.5 w-3.5" />
                   Atualizar
                 </Button>
               }
@@ -207,7 +206,7 @@ export default function EffectiveConfigurationPage() {
                     key={field}
                     className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 font-mono text-xs ${statusSurface.danger}`}
                   >
-                    <Lock className="h-3 w-3" />
+                    <Icon name="lock" className="h-3 w-3" />
                     {field}
                   </span>
                 ))}
@@ -217,12 +216,12 @@ export default function EffectiveConfigurationPage() {
 
           <div className="flex flex-wrap gap-2 text-xs text-muted">
             <span className="inline-flex items-center gap-1.5">
-              <Building2 className="h-3.5 w-3.5" />
+              <Icon name="apartment" className="h-3.5 w-3.5" />
               Escopo resolvido em {new Date(resolved.resolvedAt).toLocaleString()}
             </span>
             {siteId && (
               <span className="inline-flex items-center gap-1.5">
-                <MapPin className="h-3.5 w-3.5" />
+                <Icon name="location_on" className="h-3.5 w-3.5" />
                 Site {siteId}
               </span>
             )}

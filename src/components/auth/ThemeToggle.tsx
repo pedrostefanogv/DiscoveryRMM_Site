@@ -1,5 +1,6 @@
-import { Sun, Moon } from 'lucide-react';
+
 import { useTheme } from '@/theme/ThemeContext';
+import { Icon } from "@/components/ui";
 
 /**
  * Botão toggle para alternar entre tema claro e escuro.
@@ -16,7 +17,7 @@ export function ThemeToggle() {
       aria-label={mode === 'dark' ? 'Mudar para tema claro' : 'Mudar para tema escuro'}
       title={mode === 'dark' ? 'Tema claro' : 'Tema escuro'}
     >
-      {mode === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+      {mode === 'dark' ? <Icon name="light_mode" className="h-4 w-4" /> : <Icon name="dark_mode" className="h-4 w-4" />}
     </button>
   );
 }

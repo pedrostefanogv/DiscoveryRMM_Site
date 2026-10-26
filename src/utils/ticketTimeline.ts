@@ -1,79 +1,47 @@
-import type { ComponentType } from 'react';
-import {
-  Activity,
-  AlertTriangle,
-  ArrowUpCircle,
-  Bell,
-  Bot,
-  BookOpen,
-  Building2,
-  CheckCircle2,
-  CircleUserRound,
-  Clock,
-  Cpu,
-  FileText,
-  Flag,
-  GitBranch,
-  GitMerge,
-  Link,
-  Link2,
-  MessageSquare,
-  MessageSquareOff,
-  MessagesSquare,
-  Monitor,
-  PlusCircle,
-  RotateCcw,
-  Sparkles,
-  Star,
-  Tag,
-  Trash2,
-  Unlink,
-  UserPlus,
-  XCircle,
-} from 'lucide-react';
 import type { TicketActivityType, TicketTimelineEntry } from '@/api';
+import type { MaterialSymbolName } from '@/components/ui';
 
 export type TimelineTone = 'neutral' | 'success' | 'warning' | 'danger' | 'accent';
 
 export interface TimelineMeta {
   label: string;
-  icon: ComponentType<{ className?: string }>;
+  icon: MaterialSymbolName;
   tone: TimelineTone;
 }
 
 /** Rótulo, ícone e tom visual de cada tipo de evento da timeline. */
 export const TIMELINE_META: Record<TicketActivityType, TimelineMeta> = {
-  Created: { label: 'Chamado criado', icon: PlusCircle, tone: 'accent' },
-  StateChanged: { label: 'Estado alterado', icon: GitBranch, tone: 'neutral' },
-  Assigned: { label: 'Responsável alterado', icon: UserPlus, tone: 'neutral' },
-  Commented: { label: 'Comentário', icon: MessageSquare, tone: 'neutral' },
-  SlaWarning: { label: 'Aviso de SLA', icon: Clock, tone: 'warning' },
-  SlaBreached: { label: 'SLA violado', icon: AlertTriangle, tone: 'danger' },
-  Escalated: { label: 'Chamado escalado', icon: ArrowUpCircle, tone: 'warning' },
-  Reopened: { label: 'Chamado reaberto', icon: RotateCcw, tone: 'accent' },
-  DepartmentChanged: { label: 'Departamento alterado', icon: Building2, tone: 'neutral' },
-  PriorityChanged: { label: 'Prioridade alterada', icon: Flag, tone: 'neutral' },
-  DescriptionUpdated: { label: 'Descrição atualizada', icon: FileText, tone: 'neutral' },
-  CategoryChanged: { label: 'Categoria alterada', icon: Tag, tone: 'neutral' },
-  Deleted: { label: 'Chamado excluído', icon: Trash2, tone: 'danger' },
-  RemoteSessionStarted: { label: 'Sessão remota iniciada', icon: Monitor, tone: 'accent' },
-  RemoteSessionEnded: { label: 'Sessão remota encerrada', icon: Monitor, tone: 'neutral' },
-  AutomationLinked: { label: 'Automação vinculada', icon: Link, tone: 'neutral' },
-  AutomationApproved: { label: 'Automação aprovada', icon: CheckCircle2, tone: 'success' },
-  AutomationRejected: { label: 'Automação rejeitada', icon: XCircle, tone: 'danger' },
-  AutoCreatedFromAlert: { label: 'Criado por alerta', icon: Bell, tone: 'accent' },
-  TicketMerged: { label: 'Chamados mesclados', icon: GitMerge, tone: 'neutral' },
-  TicketRelationAdded: { label: 'Relacionamento adicionado', icon: Link2, tone: 'neutral' },
-  TicketRelationRemoved: { label: 'Relacionamento removido', icon: Unlink, tone: 'neutral' },
-  KnowledgeLinked: { label: 'Artigo vinculado', icon: BookOpen, tone: 'neutral' },
-  KnowledgeUnlinked: { label: 'Artigo desvinculado', icon: BookOpen, tone: 'neutral' },
-  Rated: { label: 'Chamado avaliado', icon: Star, tone: 'warning' },
-  RequesterChanged: { label: 'Solicitante alterado', icon: CircleUserRound, tone: 'neutral' },
-  AgentChanged: { label: 'Máquina alterada', icon: Cpu, tone: 'neutral' },
-  AiAssigned: { label: 'Atribuído pela IA', icon: Bot, tone: 'accent' },
-  AiAssignmentSuggested: { label: 'Sugestão da IA', icon: Sparkles, tone: 'accent' },
-  ChatStarted: { label: 'Chat de suporte iniciado', icon: MessagesSquare, tone: 'accent' },
-  ChatEnded: { label: 'Chat de suporte encerrado', icon: MessageSquareOff, tone: 'neutral' },
+  Created: { label: 'Chamado criado', icon: "add_circle", tone: 'accent' },
+  StateChanged: { label: 'Estado alterado', icon: "account_tree", tone: 'neutral' },
+  Assigned: { label: 'Responsável alterado', icon: "person_add", tone: 'neutral' },
+  Commented: { label: 'Comentário', icon: "chat", tone: 'neutral' },
+  SlaWarning: { label: 'Aviso de SLA', icon: "schedule", tone: 'warning' },
+  SlaBreached: { label: 'SLA violado', icon: "warning", tone: 'danger' },
+  Escalated: { label: 'Chamado escalado', icon: "arrow_circle_up", tone: 'warning' },
+  Reopened: { label: 'Chamado reaberto', icon: "restart_alt", tone: 'accent' },
+  DepartmentChanged: { label: 'Departamento alterado', icon: "apartment", tone: 'neutral' },
+  PriorityChanged: { label: 'Prioridade alterada', icon: "flag", tone: 'neutral' },
+  DescriptionUpdated: { label: 'Descrição atualizada', icon: "description", tone: 'neutral' },
+  CategoryChanged: { label: 'Categoria alterada', icon: "sell", tone: 'neutral' },
+  Deleted: { label: 'Chamado excluído', icon: "delete", tone: 'danger' },
+  RemoteSessionStarted: { label: 'Sessão remota iniciada', icon: "desktop_windows", tone: 'accent' },
+  RemoteSessionEnded: { label: 'Sessão remota encerrada', icon: "desktop_windows", tone: 'neutral' },
+  AutomationLinked: { label: 'Automação vinculada', icon: "link", tone: 'neutral' },
+  AutomationApproved: { label: 'Automação aprovada', icon: "check_circle", tone: 'success' },
+  AutomationRejected: { label: 'Automação rejeitada', icon: "cancel", tone: 'danger' },
+  AutoCreatedFromAlert: { label: 'Criado por alerta', icon: "notifications", tone: 'accent' },
+  TicketMerged: { label: 'Chamados mesclados', icon: "merge", tone: 'neutral' },
+  TicketRelationAdded: { label: 'Relacionamento adicionado', icon: "link", tone: 'neutral' },
+  TicketRelationRemoved: { label: 'Relacionamento removido', icon: "link_off", tone: 'neutral' },
+  KnowledgeLinked: { label: 'Artigo vinculado', icon: "menu_book", tone: 'neutral' },
+  KnowledgeUnlinked: { label: 'Artigo desvinculado', icon: "menu_book", tone: 'neutral' },
+  Rated: { label: 'Chamado avaliado', icon: "star", tone: 'warning' },
+  RequesterChanged: { label: 'Solicitante alterado', icon: "account_circle", tone: 'neutral' },
+  AgentChanged: { label: 'Máquina alterada', icon: "memory", tone: 'neutral' },
+  AiAssigned: { label: 'Atribuído pela IA', icon: "smart_toy", tone: 'accent' },
+  AiAssignmentSuggested: { label: 'Sugestão da IA', icon: "auto_awesome", tone: 'accent' },
+  ChatStarted: { label: 'Chat de suporte iniciado', icon: "forum", tone: 'accent' },
+  ChatEnded: { label: 'Chat de suporte encerrado', icon: "chat_bubble_off", tone: 'neutral' },
 };
 
 /** Fallback para tipos que a API venha a adicionar antes do front. */
@@ -81,7 +49,7 @@ export function timelineMetaFor(type: string): TimelineMeta {
   return (
     (TIMELINE_META as Record<string, TimelineMeta>)[type] ?? {
       label: type || 'Evento',
-      icon: Activity,
+      icon: "monitoring",
       tone: 'neutral',
     }
   );

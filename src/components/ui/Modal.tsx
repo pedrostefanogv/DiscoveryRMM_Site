@@ -1,6 +1,6 @@
 import { useEffect, useRef, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
+import { Icon } from "@/components/ui";
 import { createPortal } from 'react-dom';
-import { X } from 'lucide-react';
 
 // Contador de modais abertos: com modais aninhados (ex.: formulário aberto
 // dentro de outro modal), fechar o interno não pode liberar o scroll do body
@@ -135,7 +135,7 @@ export function Modal({ open, onClose, title, children, maxWidth = 'max-w-lg' }:
             aria-label="Fechar"
             className="rounded-lg p-1 text-muted-foreground hover:bg-surface-light hover:text-foreground transition-colors"
           >
-            <X className="h-5 w-5" />
+            <Icon name="close" className="h-5 w-5" />
           </button>
         </div>
         {/* Body — rola quando o conteúdo excede a viewport (modais longos). */}

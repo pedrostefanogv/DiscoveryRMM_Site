@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { ChevronDown, ChevronRight, FileStack, FileText, Home } from 'lucide-react';
+import { Icon } from "@/components/ui";
+
 import type { ArticlePageTreeNode } from '@/api';
 
 interface ArticlePagesTreeProps {
@@ -70,9 +71,9 @@ export default function ArticlePagesTree({
               aria-label={isCollapsed ? 'Expandir' : 'Recolher'}
             >
               {isCollapsed ? (
-                <ChevronRight className="h-3.5 w-3.5" />
+                <Icon name="chevron_right" className="h-3.5 w-3.5" />
               ) : (
-                <ChevronDown className="h-3.5 w-3.5" />
+                <Icon name="expand_more" className="h-3.5 w-3.5" />
               )}
             </button>
           ) : (
@@ -80,9 +81,9 @@ export default function ArticlePagesTree({
           )}
 
           {isFolder ? (
-            <FileStack className="h-4 w-4 shrink-0 text-primary" />
+            <Icon name="layers" className="h-4 w-4 shrink-0 text-primary" />
           ) : (
-            <FileText className="h-4 w-4 shrink-0 text-muted" />
+            <Icon name="description" className="h-4 w-4 shrink-0 text-muted" />
           )}
 
           <span className="min-w-0 flex-1 truncate">{node.title}</span>
@@ -112,7 +113,7 @@ export default function ArticlePagesTree({
           onClick={onSelectHome}
         >
           <span className="w-4 shrink-0" />
-          <Home className="h-4 w-4 shrink-0 text-primary" />
+          <Icon name="home" className="h-4 w-4 shrink-0 text-primary" />
           <span className="min-w-0 flex-1 truncate font-medium">{homeLabel}</span>
         </div>
       )}

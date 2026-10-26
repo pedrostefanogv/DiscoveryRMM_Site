@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
-import { Plus, RefreshCw, Trash2 } from "lucide-react";
-import { Button, Card, CardHeader, ErrorDisplay, Loading, Select } from "@/components/ui";
+import { Icon, Button, Card, CardHeader, ErrorDisplay, Loading, Select } from "@/components/ui";
 import { useAllSites, useClients, useIamGroups, useIamUsers, useSites } from "@/hooks";
 import {
   remoteConsentApi,
@@ -204,7 +203,7 @@ export default function RemoteConsentSettings() {
         <CardHeader
           title="Overrides por usuário ou grupo"
           subtitle="Campos em branco herdam do nível superior. O override do usuário vence os grupos."
-          action={<Button size="sm" onClick={openCreate}><Plus className="mr-1 h-4 w-4" />Novo override</Button>}
+          action={<Button size="sm" onClick={openCreate}><Icon name="add" className="mr-1 h-4 w-4" />Novo override</Button>}
         />
         {error ? <ErrorDisplay message={error} /> : null}
         {loading ? <Loading /> : (
@@ -223,7 +222,7 @@ export default function RemoteConsentSettings() {
                 </div>
                 <div className="flex gap-2">
                   <Button size="sm" variant="ghost" onClick={() => openEdit(item)}>Editar</Button>
-                  <Button size="sm" variant="ghost" onClick={() => void remove(item)}><Trash2 className="h-4 w-4" /></Button>
+                  <Button size="sm" variant="ghost" onClick={() => void remove(item)}><Icon name="delete" className="h-4 w-4" /></Button>
                 </div>
               </div>
             ))}
@@ -235,7 +234,7 @@ export default function RemoteConsentSettings() {
         <CardHeader
           title="Política efetiva (preview)"
           subtitle="Informe um agente e, opcionalmente, um usuário para ver a política e a origem de cada campo."
-          action={<Button size="sm" variant="ghost" onClick={() => void loadEffective()}><RefreshCw className="mr-1 h-4 w-4" />Resolver</Button>}
+          action={<Button size="sm" variant="ghost" onClick={() => void loadEffective()}><Icon name="refresh" className="mr-1 h-4 w-4" />Resolver</Button>}
         />
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="text-xs text-muted">

@@ -1,16 +1,8 @@
 import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import {
-  Download,
-  Clock,
-  CheckCircle,
-  XCircle,
-  FileText,
-  AlertCircle,
-  Loader2,
-} from "lucide-react";
+
 import { useReportExecutions, useReportDownload, useReportTemplates } from "@/hooks";
-import { Button, Card, DataTable, Badge, Loading } from "@/components/ui";
+import { Icon, Button, Card, DataTable, Badge, Loading } from "@/components/ui";
 import type { ReportExecution } from "@/api/types";
 import type { Column } from "@/components/ui";
 import { ReportExecutionStatus, ReportFormat } from "@/api/types";
@@ -19,24 +11,24 @@ const STATUS_CONFIG = {
   [ReportExecutionStatus.Pending]: {
     label: "Pendente",
     color: "slate" as const,
-    icon: Clock,
+    icon: "schedule",
   },
   [ReportExecutionStatus.Running]: {
     label: "Processando",
     color: "primary" as const,
-    icon: Clock,
+    icon: "schedule",
   },
   [ReportExecutionStatus.Completed]: {
     label: "Concluído",
     color: "success" as const,
-    icon: CheckCircle,
+    icon: "check_circle",
   },
   [ReportExecutionStatus.Failed]: {
     label: "Falhou",
     color: "danger" as const,
-    icon: XCircle,
+    icon: "cancel",
   },
-};
+} as const;
 
 const FORMAT_LABELS: Record<ReportFormat, string> = {
   [ReportFormat.Xlsx]: "Excel",
@@ -133,7 +125,7 @@ export default function ReportExecutionList() {
         return (
           <div className="flex items-center gap-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/20">
-              <FileText className="h-4 w-4 text-primary" />
+              <Icon name="description" className="h-4 w-4 text-primary" />
             </div>
             <div>
               <p className="font-medium text-foreground text-sm">
@@ -196,10 +188,9 @@ export default function ReportExecutionList() {
         if (!config) {
           return <Badge color="slate">Desconhecido</Badge>;
         }
-        const Icon = config.icon;
-        return (
+                return (
           <Badge color={config.color}>
-            <Icon className="h-3 w-3" />
+            <Icon name={config.icon} className="h-3 w-3" />
             {config.label}
           </Badge>
         );
@@ -239,13 +230,13 @@ export default function ReportExecutionList() {
             <div className="min-w-44 space-y-1">
               <div className="flex items-center gap-2 text-xs">
                 {progress.status === "running" && (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+                  <Icon name="progress_activity" className="h-3.5 w-3.5 animate-spin text-primary" />
                 )}
                 {progress.status === "completed" && (
-                  <CheckCircle className="h-3.5 w-3.5 text-success" />
+                  <Icon name="check_circle" className="h-3.5 w-3.5 text-success" />
                 )}
                 {progress.status === "error" && (
-                  <AlertCircle className="h-3.5 w-3.5 text-danger" />
+                  <Icon name="error" className="h-3.5 w-3.5 text-danger" />
                 )}
 
                 {progress.status === "running" && (
@@ -277,7 +268,7 @@ export default function ReportExecutionList() {
               downloadReport(e.id, { clientId });
             }}
           >
-            <Download className="h-4 w-4" />
+            <Icon name="download" className="h-4 w-4" />
           </Button>
         ) : null;
       },

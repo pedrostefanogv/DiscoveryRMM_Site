@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from "react";
-import { Pin, Trash2, Save, X, Plus, ChevronUp, Settings2, Pencil, ChevronDown } from "lucide-react";
-import { Card, CardHeader, Button, Badge, TextArea, Loading, ErrorDisplay } from "@/components/ui";
+
+import { Icon, Card, CardHeader, Button, Badge, TextArea, Loading, ErrorDisplay } from "@/components/ui";
 import {
   useClientNotesPage,
   useSiteNotesPage,
@@ -218,7 +218,7 @@ export function NotesPanel({
               onClick={() => setShowCreateForm((v) => !v)}
               aria-label={showCreateForm ? "Fechar formulário" : `Nova ${singular}`}
             >
-              {showCreateForm ? <ChevronUp className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+              {showCreateForm ? <Icon name="expand_less" className="h-4 w-4" /> : <Icon name="add" className="h-4 w-4" />}
             </Button>
           ) : undefined
         }
@@ -257,11 +257,11 @@ export function NotesPanel({
                       </label>
                       <div className="flex justify-end gap-2">
                         <Button variant="ghost" size="sm" onClick={cancelEdit}>
-                          <X className="h-4 w-4" />
+                          <Icon name="close" className="h-4 w-4" />
                           Cancelar
                         </Button>
                         <Button size="sm" onClick={submitEdit} loading={isEditing}>
-                          <Save className="h-4 w-4" />
+                          <Icon name="save" className="h-4 w-4" />
                           Salvar
                         </Button>
                       </div>
@@ -274,7 +274,7 @@ export function NotesPanel({
                             <p className="truncate text-sm font-medium text-foreground">{note.author ?? "Sem autor"}</p>
                             {note.isPinned && (
                               <Badge color="warning" className="text-[10px]">
-                                <Pin className="h-3 w-3" />
+                                <Icon name="push_pin" className="h-3 w-3" />
                                 Fixada
                               </Badge>
                             )}
@@ -293,7 +293,7 @@ export function NotesPanel({
                               aria-haspopup="true"
                               aria-expanded={openMenuId === note.id}
                             >
-                              <Settings2 className="h-4 w-4" />
+                              <Icon name="tune" className="h-4 w-4" />
                             </Button>
                             {openMenuId === note.id && (
                               <div
@@ -304,7 +304,7 @@ export function NotesPanel({
                                   className="flex w-full items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-surface-hover transition-colors"
                                   onClick={() => handleMenuEdit(note)}
                                 >
-                                  <Pencil className="h-3.5 w-3.5 text-muted" />
+                                  <Icon name="edit" className="h-3.5 w-3.5 text-muted" />
                                   Editar
                                 </button>
                                 <button
@@ -312,7 +312,7 @@ export function NotesPanel({
                                   onClick={() => handleMenuDelete(note.id)}
                                   disabled={isDeleting}
                                 >
-                                  <Trash2 className="h-3.5 w-3.5" />
+                                  <Icon name="delete" className="h-3.5 w-3.5" />
                                   Excluir
                                 </button>
                               </div>
@@ -339,7 +339,7 @@ export function NotesPanel({
                   onClick={() => notesQuery.fetchNextPage()}
                   loading={isFetchingNextPage}
                 >
-                  <ChevronDown className="h-4 w-4" />
+                  <Icon name="expand_more" className="h-4 w-4" />
                   Carregar mais {plural}
                 </Button>
               </div>
@@ -367,7 +367,7 @@ export function NotesPanel({
             <div className="flex justify-end gap-2">
               {hasNotes && (
                 <Button size="sm" variant="ghost" onClick={() => setShowCreateForm(false)}>
-                  <X className="h-4 w-4" /> Cancelar
+                  <Icon name="close" className="h-4 w-4" /> Cancelar
                 </Button>
               )}
               <Button size="sm" onClick={handleCreate} loading={isCreating}>

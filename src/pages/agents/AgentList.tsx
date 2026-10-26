@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useLayoutEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Monitor, Wifi, WifiOff, LayoutGrid, List, Bug, Trash2, ShieldCheck, ArrowUp, ArrowDown, RefreshCw, Move, RotateCcw, Power, Zap, ChevronRight, Bell, ArchiveRestore, MessageSquare, Filter } from 'lucide-react';
+
 import { useQueries } from '@tanstack/react-query';
 import { useAgentLabelUsage, useAgentIdsByLabel, useAgentLabelsByAgentIds } from '@/hooks/useAgentLabels';
 import { useAgentCustomFieldMap } from '@/hooks/useCustomFields';
@@ -15,7 +15,7 @@ import { useClients } from '@/hooks/useClients';
 import { useAllSites } from '@/hooks/useSites';
 import { getDeleteAgentErrorMessage, getPurgeAgentErrorMessage, useApproveZeroTouch, useDeleteAgent, useDeletedAgents, usePurgeAgent, useRestartAgent, useRestoreAgent, useShutdownAgent, useWakeOnLan } from '@/hooks/useAgents';
 import { ApiError, agentUpdatesApi, agentsApi } from '@/api';
-import { Badge, ErrorDisplay, Input, Select, StatCard, Modal, PageHeader, SkeletonCard, EmptyState, Button, ConfirmDialog } from '@/components/ui';
+import { Icon, Badge, ErrorDisplay, Input, Select, StatCard, Modal, PageHeader, SkeletonCard, EmptyState, Button, ConfirmDialog } from '@/components/ui';
 import { TransferAgentModal } from '@/components/agents/TransferAgentModal';
 import { AgentCard, formatDateBrazil } from '@/components/agents/AgentCard';
 import { AgentListView } from '@/components/agents/AgentListView';
@@ -829,7 +829,7 @@ export default function AgentList() {
       {/* StatCards */}
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
-          icon={Monitor}
+          icon="desktop_windows"
           label="Total de Agentes"
           value={agentsWithStableIp.length}
           tone="primary"
@@ -840,7 +840,7 @@ export default function AgentList() {
           active={filterStatus === 'all' && filterProvisioning === 'all'}
         />
         <StatCard
-          icon={Wifi}
+          icon="wifi"
           label="Online"
           value={totalOnline}
           tone="success"
@@ -859,7 +859,7 @@ export default function AgentList() {
           }
         />
         <StatCard
-          icon={WifiOff}
+          icon="wifi_off"
           label="Offline"
           value={totalOffline}
           tone="warning"
@@ -878,7 +878,7 @@ export default function AgentList() {
           }
         />
         <StatCard
-          icon={ShieldCheck}
+          icon="verified_user"
           label="Aguardando autorização/aprovação"
           value={totalPendingApproval}
           tone="accent"
@@ -946,7 +946,7 @@ export default function AgentList() {
                   : 'border-border bg-surface-light text-foreground hover:bg-surface-hover'
               }`}
             >
-              <Filter className="h-4 w-4" />
+              <Icon name="filter_alt" className="h-4 w-4" />
               {advancedFilterCount > 0 && (
                 <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold leading-none text-white">
                   {advancedFilterCount}
@@ -965,14 +965,14 @@ export default function AgentList() {
               className={`flex h-9 w-9 items-center justify-center transition-colors ${viewMode === 'card' ? 'bg-primary/20 text-primary' : 'bg-surface-light text-muted hover:text-foreground'}`}
               title="Visualização em cards"
             >
-              <LayoutGrid className="h-4 w-4" />
+              <Icon name="grid_view" className="h-4 w-4" />
             </button>
             <button
               onClick={() => setViewMode('list')}
               className={`flex h-9 w-9 items-center justify-center transition-colors ${viewMode === 'list' ? 'bg-primary/20 text-primary' : 'bg-surface-light text-muted hover:text-foreground'}`}
               title="Visualização em lista"
             >
-              <List className="h-4 w-4" />
+              <Icon name="list" className="h-4 w-4" />
             </button>
           </div>
           )}
@@ -1026,7 +1026,7 @@ export default function AgentList() {
             title={sortDirection === 'asc' ? 'Ordenação crescente' : 'Ordenação decrescente'}
             aria-label={sortDirection === 'asc' ? 'Ordenação crescente' : 'Ordenação decrescente'}
           >
-            {sortDirection === 'asc' ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />}
+            {sortDirection === 'asc' ? <Icon name="arrow_upward" className="h-4 w-4" /> : <Icon name="arrow_downward" className="h-4 w-4" />}
           </button>
           <button
             type="button"
@@ -1074,7 +1074,7 @@ export default function AgentList() {
           <ErrorDisplay onRetry={() => deletedAgents.refetch()} />
         ) : deletedItems.length === 0 ? (
           <EmptyState
-            icon={Trash2}
+            icon="delete"
             title="A lixeira está vazia"
             description="Agentes excluídos aparecem aqui e podem ser restaurados ou removidos definitivamente."
           />
@@ -1138,7 +1138,7 @@ export default function AgentList() {
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-3">
                             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-danger/10">
-                              <ArchiveRestore className="h-4 w-4 text-danger" />
+                              <Icon name="unarchive" className="h-4 w-4 text-danger" />
                             </div>
                             <div className="min-w-0">
                               <p className="truncate font-medium text-foreground">{displayName}</p>
@@ -1165,7 +1165,7 @@ export default function AgentList() {
                               loading={restoringAgentId === agent.id}
                               disabled={restoreAgent.isPending || purgeAgent.isPending}
                             >
-                              <ArchiveRestore className="h-4 w-4" /> Restaurar
+                              <Icon name="unarchive" className="h-4 w-4" /> Restaurar
                             </Button>
                             <Button
                               size="sm"
@@ -1173,7 +1173,7 @@ export default function AgentList() {
                               onClick={() => openPurgeAgentModal(trashAgent)}
                               disabled={restoreAgent.isPending || purgeAgent.isPending}
                             >
-                              <Trash2 className="h-4 w-4" /> Excluir definitivamente
+                              <Icon name="delete" className="h-4 w-4" /> Excluir definitivamente
                             </Button>
                           </div>
                         </td>
@@ -1191,7 +1191,7 @@ export default function AgentList() {
         </div>
       ) : filtered.length === 0 ? (
         <EmptyState
-          icon={Monitor}
+          icon="desktop_windows"
           title={agentsWithStableIp.length === 0 ? 'Nenhum agente encontrado' : 'Nenhum agente corresponde aos filtros'}
           description={agentsWithStableIp.length === 0 ? 'Nenhum dispositivo registrado no sistema.' : 'Tente ajustar os filtros de busca.'}
           action={(search || filterClient || filterStatus !== 'all' || filterProvisioning !== 'all' || filterLabel || filterCustomField) ? {
@@ -1275,7 +1275,7 @@ export default function AgentList() {
             {contextAgentOffline && (
               <div className="border-b border-border bg-surface-hover/60 px-3 py-1.5 text-[11px] leading-snug text-muted">
                 <span className="flex items-center gap-2">
-                  <WifiOff className="h-3.5 w-3.5 shrink-0" />
+                  <Icon name="wifi_off" className="h-3.5 w-3.5 shrink-0" />
                   Agente offline
                 </span>
                 <span className="mt-0.5 block">Sessões ao vivo indisponíveis; comandos entram na fila.</span>
@@ -1289,7 +1289,7 @@ export default function AgentList() {
               disabled={!contextAgentOnline}
               title={contextAgentOnline ? undefined : offlineHint}
             >
-              <Monitor className="h-4 w-4" />
+              <Icon name="desktop_windows" className="h-4 w-4" />
               Acesso remoto
               {!contextAgentOnline && <MenuTag label="offline" />}
             </button>
@@ -1299,7 +1299,7 @@ export default function AgentList() {
               disabled={!contextAgentOnline}
               title={contextAgentOnline ? undefined : offlineHint}
             >
-              <MessageSquare className="h-4 w-4" />
+              <Icon name="chat" className="h-4 w-4" />
               Abrir chat
               {!contextAgentOnline && <MenuTag label="offline" />}
             </button>
@@ -1311,7 +1311,7 @@ export default function AgentList() {
               disabled={!contextAgentOnline || remoteDebugAgentId === contextMenu.agent.id}
               title={contextAgentOnline ? undefined : offlineHint}
             >
-              <Bug className="h-4 w-4" />
+              <Icon name="bug_report" className="h-4 w-4" />
               {remoteDebugAgentId === contextMenu.agent.id ? 'Abrindo debug...' : 'Ver debug'}
               {!contextAgentOnline && <MenuTag label="offline" />}
             </button>
@@ -1323,7 +1323,7 @@ export default function AgentList() {
               disabled={updatingAgentId === contextMenu.agent.id}
               title={contextAgentOnline ? undefined : offlineQueueHint}
             >
-              <RefreshCw className="h-4 w-4" />
+              <Icon name="refresh" className="h-4 w-4" />
               {updatingAgentId === contextMenu.agent.id ? 'Disparando update...' : 'Atualizar agente'}
               {!contextAgentOnline && <MenuTag label="na fila" />}
             </button>
@@ -1335,7 +1335,7 @@ export default function AgentList() {
                 ? 'Sem permissão para executar ações no agente'
                 : contextAgentOnline ? undefined : offlineQueueHint}
             >
-              <Bell className="h-4 w-4" />
+              <Icon name="notifications" className="h-4 w-4" />
               Enviar notificação
               {!canExecuteAgent && <Badge>sem permissão</Badge>}
               {canExecuteAgent && !contextAgentOnline && <MenuTag label="na fila" />}
@@ -1354,9 +1354,9 @@ export default function AgentList() {
                   onFocus={event => openPowerSubmenu(event.currentTarget)}
                   className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-amber-700 transition-colors hover:bg-amber-50 dark:text-amber-300 dark:hover:bg-amber-500/10"
                 >
-                  <Zap className="h-4 w-4" />
+                  <Icon name="bolt" className="h-4 w-4" />
                   Energia
-                  <ChevronRight className="ml-auto h-4 w-4" />
+                  <Icon name="chevron_right" className="ml-auto h-4 w-4" />
                 </button>
                 {powerSubmenuOpen && powerSubmenuAnchor && (
                   <div
@@ -1370,14 +1370,14 @@ export default function AgentList() {
                       className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60"
                       onClick={() => handleRestartAgent(contextMenu.agent)}
                     >
-                      <RotateCcw className="h-4 w-4" />
+                      <Icon name="restart_alt" className="h-4 w-4" />
                       Reiniciar
                     </button>
                     <button
                       className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-600 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60 dark:text-red-300 dark:hover:bg-red-500/10"
                       onClick={() => handleShutdownAgent(contextMenu.agent)}
                     >
-                      <Power className="h-4 w-4" />
+                      <Icon name="power_settings_new" className="h-4 w-4" />
                       Desligar
                     </button>
                     <div className="my-1 border-t border-border" />
@@ -1388,7 +1388,7 @@ export default function AgentList() {
                         setUpdatePowerAction({ agent: contextMenu.agent, action: 'restart' });
                       }}
                     >
-                      <RefreshCw className="h-4 w-4" />
+                      <Icon name="refresh" className="h-4 w-4" />
                       Atualizar e reiniciar
                     </button>
                     <button
@@ -1398,7 +1398,7 @@ export default function AgentList() {
                         setUpdatePowerAction({ agent: contextMenu.agent, action: 'shutdown' });
                       }}
                     >
-                      <RefreshCw className="h-4 w-4" />
+                      <Icon name="refresh" className="h-4 w-4" />
                       Atualizar e desligar
                     </button>
                   </div>
@@ -1411,7 +1411,7 @@ export default function AgentList() {
                 onClick={() => handleWakeOnLan(contextMenu.agent)}
                 disabled={wakeOnLan.isPending}
               >
-                <Zap className="h-4 w-4" />
+                <Icon name="bolt" className="h-4 w-4" />
                 {wakeOnLan.isPending ? 'Enviando...' : 'Wake-on-LAN'}
               </button>
             )}
@@ -1423,7 +1423,7 @@ export default function AgentList() {
                 }}
                 disabled={approvingAgentId === contextMenu.agent.id}
               >
-                <ShieldCheck className="h-4 w-4" />
+                <Icon name="verified_user" className="h-4 w-4" />
                 {approvingAgentId === contextMenu.agent.id ? 'Aprovando...' : 'Aprovar Zero-Touch'}
               </button>
             )}
@@ -1434,7 +1434,7 @@ export default function AgentList() {
                   openTransferAgentModal(contextMenu.agent);
                 }}
               >
-                <Move className="h-4 w-4" />
+                <Icon name="open_with" className="h-4 w-4" />
                 Transferir agente
               </button>
             )}
@@ -1446,7 +1446,7 @@ export default function AgentList() {
                 }}
                 disabled={deleteAgent.isPending}
               >
-                <Trash2 className="h-4 w-4" />
+                <Icon name="delete" className="h-4 w-4" />
                 {deletingAgentId === contextMenu.agent.id ? 'Movendo...' : 'Mover para a lixeira'}
               </button>
             )}

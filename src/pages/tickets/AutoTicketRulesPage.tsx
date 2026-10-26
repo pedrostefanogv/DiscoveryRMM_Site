@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { Zap, Plus, Pencil, Trash2, Power, PowerOff } from 'lucide-react';
-import {
+
+import { Icon,
   Badge,
   Button,
   Card,
@@ -14,7 +14,7 @@ import {
   TextArea,
   Select,
 } from '@/components/ui';
-import { AlertTriangle } from 'lucide-react';
+
 import { autoTicketRulesApi } from '@/api';
 import { TICKET_PRIORITY_META } from '@/utils/labels';
 import type { TicketPriority } from '@/api';
@@ -123,13 +123,13 @@ export default function AutoTicketRulesPage() {
           </p>
         </div>
         <Button onClick={() => setShowCreate(true)} disabled={showCreate || !!editingId}>
-          <Plus className="w-4 h-4 mr-2" />
+          <Icon name="add" className="w-4 h-4 mr-2" />
           Nova Regra
         </Button>
       </div>
 
       <div className="flex items-start gap-3 rounded-xl border border-warning/30 bg-warning/10 p-4 text-sm">
-        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+        <Icon name="warning" className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
         <div>
           <p className="font-medium text-warning">Recurso em elaboração</p>
           <p className="mt-1 text-muted-foreground">
@@ -192,7 +192,7 @@ export default function AutoTicketRulesPage() {
       {rules.length === 0 ? (
         <Card>
           <div className="p-8 text-center text-muted-foreground">
-            <Zap className="w-12 h-12 mx-auto mb-4 opacity-50" />
+            <Icon name="bolt" className="w-12 h-12 mx-auto mb-4 opacity-50" />
             <p>Nenhuma regra configurada</p>
             <p className="text-sm">Crie regras para automatizar a criação de tickets</p>
           </div>
@@ -227,7 +227,7 @@ export default function AutoTicketRulesPage() {
                       onClick={() => toggleMutation.mutate({ id: rule.id, enable: !rule.isEnabled })}
                       title={rule.isEnabled ? 'Desativar' : 'Ativar'}
                     >
-                      {rule.isEnabled ? <PowerOff className="w-4 h-4" /> : <Power className="w-4 h-4" />}
+                      {rule.isEnabled ? <Icon name="power_settings_new" className="w-4 h-4" /> : <Icon name="power_settings_new" className="w-4 h-4" />}
                     </Button>
                     <Button
                       variant="ghost"
@@ -249,7 +249,7 @@ export default function AutoTicketRulesPage() {
                       }}
                       title="Editar"
                     >
-                      <Pencil className="w-4 h-4" />
+                      <Icon name="edit" className="w-4 h-4" />
                     </Button>
                     <Button
                       variant="ghost"
@@ -257,7 +257,7 @@ export default function AutoTicketRulesPage() {
                       onClick={() => setDeleteTarget(rule)}
                       title="Excluir"
                     >
-                      <Trash2 className="w-4 h-4 text-danger" />
+                      <Icon name="delete" className="w-4 h-4 text-danger" />
                     </Button>
                   </div>
                 </div>

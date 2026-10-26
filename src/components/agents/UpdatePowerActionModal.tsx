@@ -1,6 +1,5 @@
-import { Download, Power, RotateCcw } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { Button, Modal } from '@/components/ui';
+import { Icon, Button, Modal } from '@/components/ui';
 import { useAgentWindowsUpdateSnapshot, useInstallApprovedWindowsUpdates } from '@/hooks/useAgentWindowsUpdates';
 
 interface UpdatePowerActionModalProps {
@@ -52,7 +51,7 @@ export default function UpdatePowerActionModal({
     <Modal open={open} onClose={onClose} title={`Atualizar e ${actionLabel}`}>
       <div className="space-y-4">
         <div className="flex items-center gap-3 rounded-xl border border-border bg-surface-light p-3">
-          {action === 'restart' ? <RotateCcw className="h-5 w-5 text-primary" /> : <Power className="h-5 w-5 text-danger" />}
+          {action === 'restart' ? <Icon name="restart_alt" className="h-5 w-5 text-primary" /> : <Icon name="power_settings_new" className="h-5 w-5 text-danger" />}
           <div className="text-sm">
             <p className="font-medium text-foreground">{agentName}</p>
             <p className="text-muted">
@@ -66,7 +65,7 @@ export default function UpdatePowerActionModal({
         ) : (
           <ul className="space-y-1 text-sm">
             <li className="flex items-center gap-2">
-              <Download className="h-4 w-4 text-success" />
+              <Icon name="download" className="h-4 w-4 text-success" />
               <span><strong>{approvedCount}</strong> aprovada(s) será(ão) instalada(s)</span>
             </li>
             <li className="text-muted">

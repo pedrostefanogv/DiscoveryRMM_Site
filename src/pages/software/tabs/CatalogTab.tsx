@@ -1,12 +1,8 @@
 import { useState, useRef, useEffect, type MouseEvent as ReactMouseEvent } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import {
-  Search, ShieldCheck, ChevronLeft, ChevronRight,
-  Package, RefreshCw, RotateCcw, X, LayoutGrid, LayoutList, Info, ExternalLink,
-  Plus, Pencil, Trash2, MoreVertical,
-} from 'lucide-react';
-import {
+
+import { Icon,
   Badge, Button, Card, ConfirmDialog, ContextMenu, ErrorDisplay, Input, Loading, Modal, Select,
   type ContextMenuItem,
 } from '@/components/ui';
@@ -227,7 +223,7 @@ export function CatalogTab() {
         {
           key: 'details',
           label: 'Detalhes',
-          icon: <Info className="h-4 w-4" />,
+          icon: <Icon name="info" className="h-4 w-4" />,
           onClick: () => setDetailsTarget(contextMenu.pkg),
         },
         ...(isCustomPackage(contextMenu.pkg)
@@ -235,14 +231,14 @@ export function CatalogTab() {
               {
                 key: 'edit',
                 label: 'Editar',
-                icon: <Pencil className="h-4 w-4" />,
+                icon: <Icon name="edit" className="h-4 w-4" />,
                 separatorBefore: true,
                 onClick: () => openEditPackage(contextMenu.pkg),
               } satisfies ContextMenuItem,
               {
                 key: 'delete',
                 label: 'Excluir',
-                icon: <Trash2 className="h-4 w-4" />,
+                icon: <Icon name="delete" className="h-4 w-4" />,
                 danger: true,
                 onClick: () => setDeletingCustom(contextMenu.pkg),
               } satisfies ContextMenuItem,
@@ -308,7 +304,7 @@ export function CatalogTab() {
             <p className="mt-2">
               Ao confirmar, voce declara que leu e concorda com os Termos de Uso:{' '}
               <a href="https://chocolatey.org/terms" target="_blank" rel="noreferrer noopener" className="inline-flex items-center gap-1 text-primary hover:underline">
-                https://chocolatey.org/terms <ExternalLink className="h-3.5 w-3.5" />
+                https://chocolatey.org/terms <Icon name="open_in_new" className="h-3.5 w-3.5" />
               </a>
             </p>
           </div>
@@ -334,12 +330,12 @@ export function CatalogTab() {
             <div>
               <label className="mb-1.5 block text-sm font-medium text-muted-foreground">Busca</label>
               <div className="relative">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+                <Icon name="search" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
                 <input className="w-full rounded-lg border border-border bg-surface-light py-2 pl-9 pr-8 text-sm text-foreground placeholder-muted outline-none transition-colors focus:border-primary/50 focus:ring-1 focus:ring-primary/30"
                   placeholder="Nome ou ID do pacote..." value={searchInput} onChange={(e) => setSearchInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSearchEnter()} />
                 {searchInput && (
                   <button type="button" onClick={resetFilters} aria-label="Limpar busca" title="Limpar busca" className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted hover:text-foreground">
-                    <X className="h-3.5 w-3.5" />
+                    <Icon name="close" className="h-3.5 w-3.5" />
                   </button>
                 )}
               </div>
@@ -353,27 +349,27 @@ export function CatalogTab() {
             <div className="flex overflow-hidden rounded-lg border border-border">
               <button type="button" onClick={() => setViewMode('list')} title="Visualização em lista"
                 className={`flex items-center px-3 py-2 transition-colors ${viewMode === 'list' ? 'bg-primary/20 text-primary' : 'text-muted hover:bg-surface-light hover:text-foreground'}`}>
-                <LayoutList className="h-4 w-4" />
+                <Icon name="view_list" className="h-4 w-4" />
               </button>
               <button type="button" onClick={() => setViewMode('card')} title="Visualização em cards"
                 className={`flex items-center px-3 py-2 transition-colors ${viewMode === 'card' ? 'bg-primary/20 text-primary' : 'text-muted hover:bg-surface-light hover:text-foreground'}`}>
-                <LayoutGrid className="h-4 w-4" />
+                <Icon name="grid_view" className="h-4 w-4" />
               </button>
             </div>
           </div>
-          <Button variant="ghost" onClick={resetFilters} title="Limpar filtros"><RotateCcw className="h-4 w-4" /></Button>
+          <Button variant="ghost" onClick={resetFilters} title="Limpar filtros"><Icon name="restart_alt" className="h-4 w-4" /></Button>
           {isCustom && (
             <Button
               variant="primary"
               onClick={() => navigate('/software/store/custom/new')}
               title="Cadastrar um novo modelo custom na loja"
             >
-              <Plus className="h-4 w-4" /> Novo modelo custom
+              <Icon name="add" className="h-4 w-4" /> Novo modelo custom
             </Button>
           )}
           {(isChocolatey || isWinget) && (
             <Button variant="primary" onClick={handleSyncRequest} loading={isSyncingThis} disabled={syncingType !== null && !isSyncingThis} title={`Sincronizar catálogo ${syncLabel}`}>
-              <RefreshCw className="h-4 w-4" /> {isSyncingThis ? 'Sincronizando...' : 'Sincronizar Catálogo'}
+              <Icon name="refresh" className="h-4 w-4" /> {isSyncingThis ? 'Sincronizando...' : 'Sincronizar Catálogo'}
             </Button>
           )}
         </div>
@@ -400,9 +396,9 @@ export function CatalogTab() {
             {query.isFetching && !query.data ? 'Carregando...' : query.data ? query.data.items.length > 0 ? `${query.data.items.length} pacote(s) na página ${page}${searchApplied ? ` — "${searchApplied}"` : ''}` : 'Nenhum pacote encontrado' : 'Catálogo'}
           </span>
           <div className="flex items-center gap-1">
-            <Button variant="ghost" size="sm" onClick={handlePrev} disabled={page <= 1}><ChevronLeft className="h-4 w-4" /></Button>
+            <Button variant="ghost" size="sm" onClick={handlePrev} disabled={page <= 1}><Icon name="chevron_left" className="h-4 w-4" /></Button>
             <span className="min-w-[3rem] text-center text-xs text-muted">Pág. {page}</span>
-            <Button variant="ghost" size="sm" onClick={handleNext} disabled={!hasMore || query.isFetching}><ChevronRight className="h-4 w-4" /></Button>
+            <Button variant="ghost" size="sm" onClick={handleNext} disabled={!hasMore || query.isFetching}><Icon name="chevron_right" className="h-4 w-4" /></Button>
           </div>
         </div>
 
@@ -411,14 +407,14 @@ export function CatalogTab() {
 
         {query.data && query.data.items.length === 0 && (
           <div className="flex flex-col items-center py-16 text-muted">
-            <Package className="mb-3 h-10 w-10 opacity-30" />
+            <Icon name="inventory_2" className="mb-3 h-10 w-10 opacity-30" />
             <p className="text-sm">{(isChocolatey || isWinget) && isCatalogEmpty ? `Catálogo ${syncLabel} ainda não sincronizado.` : 'Nenhum pacote encontrado.'}</p>
             {(isChocolatey || isWinget) && isCatalogEmpty && (
-              <Button className="mt-3" onClick={handleSyncRequest} loading={syncCatalog.isPending}><RefreshCw className="h-4 w-4" /> Sincronizar catálogo agora</Button>
+              <Button className="mt-3" onClick={handleSyncRequest} loading={syncCatalog.isPending}><Icon name="refresh" className="h-4 w-4" /> Sincronizar catálogo agora</Button>
             )}
             {isCustom && (
               <Button className="mt-3" onClick={() => navigate('/software/store/custom/new')}>
-                <Plus className="h-4 w-4" /> Cadastrar primeiro modelo custom
+                <Icon name="add" className="h-4 w-4" /> Cadastrar primeiro modelo custom
               </Button>
             )}
             {searchApplied && <button type="button" onClick={resetFilters} className="mt-3 text-xs text-primary hover:underline">Limpar busca</button>}
@@ -450,7 +446,7 @@ export function CatalogTab() {
                   {pkg.description && <div className="mt-1"><MarkdownDescription content={pkg.description} variant="preview" /></div>}
                 </div>
                 <div className="flex flex-shrink-0 items-center gap-2">
-                  <Button variant="ghost" size="sm" onClick={() => setDetailsTarget(pkg)}><Info className="h-4 w-4" /> Detalhes</Button>
+                  <Button variant="ghost" size="sm" onClick={() => setDetailsTarget(pkg)}><Icon name="info" className="h-4 w-4" /> Detalhes</Button>
                   {isCustomPackage(pkg) && (
                     <Button
                       variant="ghost"
@@ -460,10 +456,10 @@ export function CatalogTab() {
                       onMouseDown={(event) => event.stopPropagation()}
                       onClick={(event) => togglePackageMenuFromButton(event.currentTarget.getBoundingClientRect(), pkg)}
                     >
-                      <MoreVertical className="h-4 w-4" />
+                      <Icon name="more_vert" className="h-4 w-4" />
                     </Button>
                   )}
-                  <Button size="sm" onClick={() => setApprovalTarget(pkg)}><ShieldCheck className="h-4 w-4" /> Aprovar / Negar</Button>
+                  <Button size="sm" onClick={() => setApprovalTarget(pkg)}><Icon name="verified_user" className="h-4 w-4" /> Aprovar / Negar</Button>
                 </div>
               </div>
             ))}
@@ -493,7 +489,7 @@ export function CatalogTab() {
                   {pkg.category && <Badge color="primary">{pkg.category}</Badge>}
                 </div>
                 <div className="flex items-center gap-2 pt-1">
-                  <Button variant="ghost" size="sm" className="flex-1" onClick={() => setDetailsTarget(pkg)}><Info className="h-4 w-4" /> Detalhes</Button>
+                  <Button variant="ghost" size="sm" className="flex-1" onClick={() => setDetailsTarget(pkg)}><Icon name="info" className="h-4 w-4" /> Detalhes</Button>
                   {isCustomPackage(pkg) && (
                     <Button
                       variant="ghost"
@@ -503,10 +499,10 @@ export function CatalogTab() {
                       onMouseDown={(event) => event.stopPropagation()}
                       onClick={(event) => togglePackageMenuFromButton(event.currentTarget.getBoundingClientRect(), pkg)}
                     >
-                      <MoreVertical className="h-4 w-4" />
+                      <Icon name="more_vert" className="h-4 w-4" />
                     </Button>
                   )}
-                  <Button size="sm" className="flex-1" onClick={() => setApprovalTarget(pkg)}><ShieldCheck className="h-4 w-4" /> Aprovar</Button>
+                  <Button size="sm" className="flex-1" onClick={() => setApprovalTarget(pkg)}><Icon name="verified_user" className="h-4 w-4" /> Aprovar</Button>
                 </div>
               </div>
             ))}

@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Link2, Search, Trash2 } from 'lucide-react';
-import { Badge, Button, Input, Loading, Select } from '@/components/ui';
+import { Icon, Badge, Button, Input, Loading, Select } from '@/components/ui';
 import {
   useCreateTicketRelation, useDeleteTicketRelation, useTicketRelations, useTickets,
 } from '@/hooks/useTickets';
@@ -110,7 +109,7 @@ export function TicketRelationsSection({ ticketId }: { ticketId: string }) {
           aria-label="Novo vínculo"
           title="Novo vínculo"
         >
-          <Link2 className="h-4 w-4" />
+          <Icon name="link" className="h-4 w-4" />
         </Button>
       </div>
 
@@ -159,7 +158,7 @@ export function TicketRelationsSection({ ticketId }: { ticketId: string }) {
                     }
                     className="p-1 text-muted transition-colors hover:text-danger"
                   >
-                    <Trash2 className="h-4 w-4" />
+                    <Icon name="delete" className="h-4 w-4" />
                   </button>
                 </div>
               </li>
@@ -214,7 +213,7 @@ export function TicketRelationsSection({ ticketId }: { ticketId: string }) {
                       selected?.id === ticket.id ? 'bg-primary/10 text-foreground' : 'text-muted-foreground'
                     }`}
                   >
-                    <Search className="h-3.5 w-3.5 shrink-0 text-muted" />
+                    <Icon name="search" className="h-3.5 w-3.5 shrink-0 text-muted" />
                     <span className="min-w-0 flex-1 truncate">{ticket.title}</span>
                     <code className="shrink-0 font-mono text-xs text-muted">{shortId(ticket.id)}</code>
                     {ticket.closedAt && <Badge color="success">Encerrado</Badge>}
@@ -245,7 +244,7 @@ export function TicketRelationsSection({ ticketId }: { ticketId: string }) {
           loading={create.isPending}
           disabled={!selected}
         >
-          <Link2 className="h-4 w-4" /> Vincular chamado
+          <Icon name="link" className="h-4 w-4" /> Vincular chamado
         </Button>
 
         <div className="flex justify-end">

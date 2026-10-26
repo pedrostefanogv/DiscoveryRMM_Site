@@ -1,11 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import {
-  AlertCircle, ArrowLeft, CheckCircle2, FileArchive, Image as ImageIcon, Loader2, Package, RotateCcw, Save, Search,
-  Terminal, Trash2, Upload, X,
-} from 'lucide-react';
-import { Button, Card, ConfirmDialog, ErrorDisplay, Input, Loading, Modal, Select, TextArea } from '@/components/ui';
+import { Icon, Button, Card, ConfirmDialog, ErrorDisplay, Input, Loading, Modal, Select, TextArea } from '@/components/ui';
 import {
   ASSET_MULTIPART_MIN_BYTES,
   appStoreApi,
@@ -250,7 +246,7 @@ function PublishedAssetInfo({
             {isNew ? 'Novo instalador (enviado agora)' : 'Instalador publicado'}
           </p>
           <p className="mt-0.5 flex items-center gap-2 text-sm font-medium text-foreground">
-            <Package className="h-4 w-4 shrink-0 text-primary" />
+            <Icon name="inventory_2" className="h-4 w-4 shrink-0 text-primary" />
             <span className="truncate" title={fileName}>
               {fileName}
             </span>
@@ -294,7 +290,7 @@ function PublishedAssetInfo({
           </code>
           {checksum && (
             <Button variant="ghost" size="sm" onClick={copyChecksum} title="Copiar o SHA-256">
-              {copied ? <CheckCircle2 className="h-3.5 w-3.5" /> : null}
+              {copied ? <Icon name="check_circle" className="h-3.5 w-3.5" /> : null}
               {copied ? 'Copiado' : 'Copiar'}
             </Button>
           )}
@@ -344,13 +340,13 @@ function AssetUploadPanel({
       <div className="flex items-center justify-between gap-3">
         <span className="flex min-w-0 items-center gap-2 text-sm font-medium text-foreground">
           {isError ? (
-            <AlertCircle className="h-4 w-4 shrink-0 text-danger" />
+            <Icon name="error" className="h-4 w-4 shrink-0 text-danger" />
           ) : isUploading ? (
-            <Loader2 className="h-4 w-4 shrink-0 animate-spin text-primary" />
+            <Icon name="progress_activity" className="h-4 w-4 shrink-0 animate-spin text-primary" />
           ) : isCanceled ? (
-            <AlertCircle className="h-4 w-4 shrink-0 text-warning" />
+            <Icon name="error" className="h-4 w-4 shrink-0 text-warning" />
           ) : (
-            <CheckCircle2 className="h-4 w-4 shrink-0 text-success" />
+            <Icon name="check_circle" className="h-4 w-4 shrink-0 text-success" />
           )}
           <span className="truncate">
             {isError
@@ -394,7 +390,7 @@ function AssetUploadPanel({
               {eta ? ` · ≈ ${eta} restantes` : ''}
             </p>
             <Button variant="ghost" size="sm" onClick={onCancel} title="Cancelar o envio (o progresso é preservado)">
-              <X className="h-3.5 w-3.5" /> Cancelar
+              <Icon name="close" className="h-3.5 w-3.5" /> Cancelar
             </Button>
           </div>
         </>
@@ -405,10 +401,10 @@ function AssetUploadPanel({
           <p className="min-w-0 flex-1 text-xs text-danger">{upload.error}</p>
           <div className="flex items-center gap-2">
             <Button variant="ghost" size="sm" onClick={onDiscard} title="Descartar as partes já enviadas">
-              <Trash2 className="h-3.5 w-3.5" /> Descartar
+              <Icon name="delete" className="h-3.5 w-3.5" /> Descartar
             </Button>
             <Button variant="ghost" size="sm" onClick={onRetry} disabled={!isError}>
-              <RotateCcw className="h-3.5 w-3.5" /> Tentar novamente
+              <Icon name="restart_alt" className="h-3.5 w-3.5" /> Tentar novamente
             </Button>
           </div>
         </div>
@@ -423,10 +419,10 @@ function AssetUploadPanel({
           </p>
           <div className="flex items-center gap-2">
             <Button variant="ghost" size="sm" onClick={onDiscard} title="Descartar as partes já enviadas">
-              <Trash2 className="h-3.5 w-3.5" /> Descartar
+              <Icon name="delete" className="h-3.5 w-3.5" /> Descartar
             </Button>
             <Button variant="ghost" size="sm" onClick={onRetry}>
-              <RotateCcw className="h-3.5 w-3.5" /> Continuar envio
+              <Icon name="restart_alt" className="h-3.5 w-3.5" /> Continuar envio
             </Button>
           </div>
         </div>
@@ -1210,7 +1206,7 @@ export default function CustomPackageEditorPage() {
           onRetry={() => packageQuery.refetch()}
         />
         <Button variant="ghost" onClick={() => navigate(BACK_TO_STORE_PATH)}>
-          <ArrowLeft className="h-4 w-4" /> Voltar para a loja
+          <Icon name="arrow_back" className="h-4 w-4" /> Voltar para a loja
         </Button>
       </div>
     );
@@ -1257,7 +1253,7 @@ export default function CustomPackageEditorPage() {
           </p>
         </div>
         <Button variant="ghost" onClick={handleCancel} disabled={submitting}>
-          <ArrowLeft className="h-4 w-4" /> Voltar para a loja
+          <Icon name="arrow_back" className="h-4 w-4" /> Voltar para a loja
         </Button>
       </div>
 
@@ -1315,7 +1311,7 @@ export default function CustomPackageEditorPage() {
           <div className="space-y-6 lg:pl-6">
             <div>
               <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground">
-                <ImageIcon className="h-4 w-4" /> Ícone / capa
+                <Icon name="image" className="h-4 w-4" /> Ícone / capa
               </h2>
               <div className="flex flex-wrap items-start gap-3">
                 {(iconFile || form.iconUrl) && (
@@ -1352,7 +1348,7 @@ export default function CustomPackageEditorPage() {
                       }
                       title={canAttachFiles ? undefined : 'Salve o cadastro do pacote antes de enviar a imagem'}
                     >
-                      <Upload className="h-4 w-4" />
+                      <Icon name="upload" className="h-4 w-4" />
                       {iconFile || iconAsset || loaded?.icon ? 'Trocar imagem' : 'Enviar imagem'}
                       <input
                         type="file"
@@ -1380,7 +1376,7 @@ export default function CustomPackageEditorPage() {
                           setIconUpload(null);
                         }}
                       >
-                        <X className="h-3.5 w-3.5" /> Remover seleção
+                        <Icon name="close" className="h-3.5 w-3.5" /> Remover seleção
                       </button>
                     )}
 
@@ -1392,7 +1388,7 @@ export default function CustomPackageEditorPage() {
                         onClick={() => setConfirmDeleteIconOpen(true)}
                         title="Excluir o ícone publicado no object storage"
                       >
-                        <Trash2 className="h-4 w-4" /> Excluir ícone
+                        <Icon name="delete" className="h-4 w-4" /> Excluir ícone
                       </Button>
                     )}
                   </div>
@@ -1429,7 +1425,7 @@ export default function CustomPackageEditorPage() {
       {/* Instalador */}
       <Card>
         <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground">
-          <Package className="h-4 w-4" /> Instalador
+          <Icon name="inventory_2" className="h-4 w-4" /> Instalador
         </h2>
 
         <div className="flex flex-wrap items-center gap-3">
@@ -1441,7 +1437,7 @@ export default function CustomPackageEditorPage() {
             }
             title={canAttachFiles ? undefined : 'Salve o cadastro do pacote antes de anexar o arquivo'}
           >
-            <Upload className="h-4 w-4" />
+            <Icon name="upload" className="h-4 w-4" />
             {hasPublishedFile || installerFile ? 'Trocar instalador' : 'Selecionar instalador'}
             <input
               type="file"
@@ -1464,7 +1460,7 @@ export default function CustomPackageEditorPage() {
               onClick={() => setConfirmDeleteFileOpen(true)}
               title="Excluir o instalador publicado no object storage"
             >
-              <Trash2 className="h-4 w-4" /> Excluir instalador
+              <Icon name="delete" className="h-4 w-4" /> Excluir instalador
             </Button>
           )}
 
@@ -1482,13 +1478,13 @@ export default function CustomPackageEditorPage() {
                 setInstallerUpload(null);
               }}
             >
-              <X className="h-3.5 w-3.5" /> Remover seleção
+              <Icon name="close" className="h-3.5 w-3.5" /> Remover seleção
             </button>
           )}
 
           {installerUpload?.status === 'uploading' ? (
             <span className="inline-flex items-center gap-1 text-xs text-primary">
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              <Icon name="progress_activity" className="h-3.5 w-3.5 animate-spin" />
               enviando {installerUpload.percent}%…
             </span>
           ) : installerUpload?.status === 'error' ? (
@@ -1512,7 +1508,7 @@ export default function CustomPackageEditorPage() {
           />
           <span>
             <span className="flex items-center gap-1 font-medium">
-              <FileArchive className="h-3.5 w-3.5" /> O arquivo é um ZIP
+              <Icon name="folder_zip" className="h-3.5 w-3.5" /> O arquivo é um ZIP
             </span>
             <span className="text-xs text-muted-foreground">
               O agent extrai o conteúdo no host antes de executar o comando; {'{{installerDir}}'} passa a apontar para a pasta extraída.
@@ -1536,7 +1532,7 @@ export default function CustomPackageEditorPage() {
       {/* Comandos */}
       <Card>
         <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground">
-          <Terminal className="h-4 w-4" /> Comandos
+          <Icon name="terminal" className="h-4 w-4" /> Comandos
         </h2>
 
         <PlaceholderHelp />
@@ -1617,7 +1613,7 @@ export default function CustomPackageEditorPage() {
       {/* Detecção / inventário */}
       <Card>
         <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground">
-          <Search className="h-4 w-4" /> Detecção / inventário
+          <Icon name="search" className="h-4 w-4" /> Detecção / inventário
         </h2>
 
         <div className="space-y-4">
@@ -1716,7 +1712,7 @@ export default function CustomPackageEditorPage() {
                 : undefined
             }
           >
-            <Save className="h-4 w-4" />
+            <Icon name="save" className="h-4 w-4" />
             {isEditing ? 'Salvar alterações' : 'Cadastrar pacote'}
           </Button>
         </div>

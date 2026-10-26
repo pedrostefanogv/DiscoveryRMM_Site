@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { ArrowDown, ArrowUp, ChevronDown, ClipboardPaste, Copy, Download, FileArchive, FolderPlus, HardDrive, PackageOpen, Pencil, RefreshCw, Scissors, Trash, Upload, X } from 'lucide-react';
+import { Icon } from "@/components/ui";
+
 import { useFilesStream, decodeFileData, type DriveInfo, type FilesResponse, type FilesReadyInfo } from './useFilesStream';
 import { FileIcon } from './fileIcons';
 
@@ -804,9 +805,9 @@ export default function RemoteFiles({
               aria-haspopup="menu"
               aria-expanded={driveMenuOpen}
             >
-              <HardDrive className="h-3.5 w-3.5" aria-hidden="true" />
+              <Icon name="storage" className="h-3.5 w-3.5" aria-hidden="true" />
               <span className="font-mono">{currentDrive || 'Disco'}</span>
-              <ChevronDown className="h-3 w-3" aria-hidden="true" />
+              <Icon name="expand_more" className="h-3 w-3" aria-hidden="true" />
             </button>
             {driveMenuOpen && (
               <div
@@ -831,7 +832,7 @@ export default function RemoteFiles({
                       title={d.ready ? `Abrir ${d.root}` : `${d.root} sem mídia`}
                     >
                       <span className="flex items-center gap-2">
-                        <HardDrive className={`h-3.5 w-3.5 shrink-0 ${isCurrent ? 'text-accent' : 'text-muted-foreground'}`} aria-hidden="true" />
+                        <Icon name="storage" className={`h-3.5 w-3.5 shrink-0 ${isCurrent ? 'text-accent' : 'text-muted-foreground'}`} aria-hidden="true" />
                         <span className={`font-mono ${isCurrent ? 'text-accent' : 'text-foreground'}`}>{d.root}</span>
                         <span className="min-w-0 flex-1 truncate text-muted-foreground">
                           {d.label || driveTypeLabel(d.type)}
@@ -856,7 +857,7 @@ export default function RemoteFiles({
           title="Atualizar"
           aria-label="Atualizar"
         >
-          <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
+          <Icon name="refresh" className="h-3.5 w-3.5" aria-hidden="true" />
         </button>
         <button
           className="inline-flex items-center gap-1 px-2 py-1 bg-surface-hover text-muted-foreground rounded hover:bg-border hover:text-foreground disabled:opacity-50"
@@ -864,7 +865,7 @@ export default function RemoteFiles({
           disabled={busy !== null || !isConnected}
           title="Nova pasta"
         >
-          <FolderPlus className="h-3.5 w-3.5" aria-hidden="true" />
+          <Icon name="create_new_folder" className="h-3.5 w-3.5" aria-hidden="true" />
           Pasta
         </button>
         <button
@@ -873,7 +874,7 @@ export default function RemoteFiles({
           disabled={busy !== null || !isConnected}
           title="Enviar arquivo para o PC remoto"
         >
-          <Upload className="h-3.5 w-3.5" aria-hidden="true" />
+          <Icon name="upload" className="h-3.5 w-3.5" aria-hidden="true" />
           Upload
         </button>
         <input
@@ -893,7 +894,7 @@ export default function RemoteFiles({
             disabled={busy !== null || !isConnected}
             title={`Colar ${clipboard.cut ? '(recortado)' : '(copiado)'}: ${clipboard.path}`}
           >
-            <ClipboardPaste className="h-3.5 w-3.5" aria-hidden="true" />
+            <Icon name="content_paste" className="h-3.5 w-3.5" aria-hidden="true" />
             Colar {clipboard.cut ? '(mover)' : ''}
           </button>
         )}
@@ -1006,7 +1007,7 @@ export default function RemoteFiles({
                   className="inline-flex items-center gap-2 w-full px-3 py-1.5 text-foreground hover:bg-surface-hover"
                   onClick={() => runCtx(() => handleDownload(ctxMenu.entry!))}
                 >
-                  <Download className="h-3.5 w-3.5" aria-hidden="true" />
+                  <Icon name="download" className="h-3.5 w-3.5" aria-hidden="true" />
                   Baixar
                 </button>
               )}
@@ -1014,14 +1015,14 @@ export default function RemoteFiles({
                 className="inline-flex items-center gap-2 w-full px-3 py-1.5 text-foreground hover:bg-surface-hover"
                 onClick={() => runCtx(() => { selectedPaths.size > 1 ? handleCopySelection() : handleCopy(ctxMenu.entry!); })}
               >
-                <Copy className="h-3.5 w-3.5" aria-hidden="true" />
+                <Icon name="content_copy" className="h-3.5 w-3.5" aria-hidden="true" />
                 {selectedPaths.size > 1 ? `Copiar (${selectedPaths.size})` : 'Copiar'}
               </button>
               <button
                 className="inline-flex items-center gap-2 w-full px-3 py-1.5 text-foreground hover:bg-surface-hover"
                 onClick={() => runCtx(() => { selectedPaths.size > 1 ? handleCutSelection() : handleCut(ctxMenu.entry!); })}
               >
-                <Scissors className="h-3.5 w-3.5" aria-hidden="true" />
+                <Icon name="content_cut" className="h-3.5 w-3.5" aria-hidden="true" />
                 {selectedPaths.size > 1 ? `Recortar (${selectedPaths.size})` : 'Recortar'}
               </button>
               {selectedPaths.size <= 1 && (
@@ -1030,7 +1031,7 @@ export default function RemoteFiles({
                     className="inline-flex items-center gap-2 w-full px-3 py-1.5 text-foreground hover:bg-surface-hover"
                     onClick={() => runCtx(() => handleRename(ctxMenu.entry!))}
                   >
-                    <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+                    <Icon name="edit" className="h-3.5 w-3.5" aria-hidden="true" />
                     Renomear
                   </button>
                   {!ctxMenu.entry.isDir && ctxMenu.entry.name.toLowerCase().endsWith('.zip') && (
@@ -1038,7 +1039,7 @@ export default function RemoteFiles({
                       className="inline-flex items-center gap-2 w-full px-3 py-1.5 text-foreground hover:bg-surface-hover"
                       onClick={() => runCtx(() => handleUnzip(ctxMenu.entry!))}
                     >
-                      <PackageOpen className="h-3.5 w-3.5" aria-hidden="true" />
+                      <Icon name="all_inbox" className="h-3.5 w-3.5" aria-hidden="true" />
                       Descompactar
                     </button>
                   )}
@@ -1048,7 +1049,7 @@ export default function RemoteFiles({
                 className="inline-flex items-center gap-2 w-full px-3 py-1.5 text-foreground hover:bg-surface-hover"
                 onClick={() => runCtx(() => { selectedPaths.size > 1 ? handleZipSelection() : handleZip(ctxMenu.entry!); })}
               >
-                <FileArchive className="h-3.5 w-3.5" aria-hidden="true" />
+                <Icon name="folder_zip" className="h-3.5 w-3.5" aria-hidden="true" />
                 {selectedPaths.size > 1 ? `Compactar (${selectedPaths.size})` : 'Compactar (.zip)'}
               </button>
               <div className="my-1 border-t border-border" />
@@ -1056,7 +1057,7 @@ export default function RemoteFiles({
                 className="inline-flex items-center gap-2 w-full px-3 py-1.5 text-danger hover:bg-danger/20"
                 onClick={() => runCtx(() => { selectedPaths.size > 1 ? handleDeleteSelection() : handleDelete(ctxMenu.entry!); })}
               >
-                <Trash className="h-3.5 w-3.5" aria-hidden="true" />
+                <Icon name="delete" className="h-3.5 w-3.5" aria-hidden="true" />
                 {selectedPaths.size > 1 ? `Apagar (${selectedPaths.size})` : 'Apagar'}
               </button>
             </>
@@ -1067,21 +1068,21 @@ export default function RemoteFiles({
                 className="inline-flex items-center gap-2 w-full px-3 py-1.5 text-foreground hover:bg-surface-hover"
                 onClick={() => runCtx(handleMkdir)}
               >
-                <FolderPlus className="h-3.5 w-3.5" aria-hidden="true" />
+                <Icon name="create_new_folder" className="h-3.5 w-3.5" aria-hidden="true" />
                 Nova pasta
               </button>
               <button
                 className="inline-flex items-center gap-2 w-full px-3 py-1.5 text-foreground hover:bg-surface-hover"
                 onClick={() => runCtx(() => fileInputRef.current?.click())}
               >
-                <Upload className="h-3.5 w-3.5" aria-hidden="true" />
+                <Icon name="upload" className="h-3.5 w-3.5" aria-hidden="true" />
                 Upload
               </button>
               <button
                 className="inline-flex items-center gap-2 w-full px-3 py-1.5 text-foreground hover:bg-surface-hover"
                 onClick={() => runCtx(handleRefresh)}
               >
-                <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
+                <Icon name="refresh" className="h-3.5 w-3.5" aria-hidden="true" />
                 Atualizar
               </button>
               {clipboard && (
@@ -1089,7 +1090,7 @@ export default function RemoteFiles({
                   className="inline-flex items-center gap-2 w-full px-3 py-1.5 text-accent hover:bg-surface-hover"
                   onClick={() => runCtx(handlePaste)}
                 >
-                  <ClipboardPaste className="h-3.5 w-3.5" aria-hidden="true" />
+                  <Icon name="content_paste" className="h-3.5 w-3.5" aria-hidden="true" />
                   Colar {clipboard.cut ? '(mover)' : ''}
                 </button>
               )}
@@ -1151,7 +1152,7 @@ function TransferProgressBar({ transfer, onCancel }: { transfer: TransferState; 
     <div className="px-3 py-2 bg-surface border-b border-border text-xs">
       <div className="flex items-center justify-between gap-2 mb-1">
         <span className="flex min-w-0 items-center gap-1 text-foreground">
-          {isUpload ? <ArrowUp className="h-3.5 w-3.5 shrink-0" aria-hidden="true" /> : <ArrowDown className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />}
+          {isUpload ? <Icon name="arrow_upward" className="h-3.5 w-3.5 shrink-0" aria-hidden="true" /> : <Icon name="arrow_downward" className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />}
           <span className="truncate">{transfer.name}</span>
         </span>
         <span className="text-muted-foreground whitespace-nowrap">
@@ -1162,7 +1163,7 @@ function TransferProgressBar({ transfer, onCancel }: { transfer: TransferState; 
           onClick={onCancel}
           title={`Cancelar ${isUpload ? 'upload' : 'download'}`}
         >
-          <X className="h-3.5 w-3.5" aria-hidden="true" />
+          <Icon name="close" className="h-3.5 w-3.5" aria-hidden="true" />
           Cancelar
         </button>
       </div>

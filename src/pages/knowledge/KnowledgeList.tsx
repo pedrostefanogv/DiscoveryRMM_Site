@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import {
+import { Icon,
   Badge,
   Button,
   Card,
@@ -15,7 +15,6 @@ import type { ArticleStatus, ArticleListPage, KnowledgeArticle, KnowledgeSearchM
 import { useCursorPagination } from '@/hooks/useCursorPagination';
 import { useClients, useDeleteKnowledgeArticle, useDepartments, useKnowledgeAllArticles, useKnowledgeSearch, usePublishKnowledgeArticle, useSites, useUnpublishKnowledgeArticle } from '@/hooks';
 import { useAuthorization } from '@/auth/authorization';
-import { BookOpen, ChevronDown, ChevronUp, Eye, Filter, Pencil, Plus, Search, Send, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 const SEARCH_MODE_OPTIONS: Array<{ value: KnowledgeSearchMode; label: string }> = [
@@ -382,7 +381,7 @@ export default function KnowledgeList() {
       render: (article) => (
         <div className="flex items-center gap-3">
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/20">
-            <BookOpen className="h-4 w-4 text-primary" />
+            <Icon name="menu_book" className="h-4 w-4 text-primary" />
           </div>
           <div>
             <p className="font-medium text-foreground">{article.title}</p>
@@ -498,7 +497,7 @@ export default function KnowledgeList() {
         </div>
         {canCreateArticle && (
           <Button onClick={() => navigate('/knowledge/new')}>
-            <Plus className="h-4 w-4" /> Novo Artigo
+            <Icon name="add" className="h-4 w-4" /> Novo Artigo
           </Button>
         )}
       </div>
@@ -528,7 +527,7 @@ export default function KnowledgeList() {
                 title="Buscar na base"
                 aria-label="Buscar na base"
               >
-                <Search className="h-4 w-4" />
+                <Icon name="search" className="h-4 w-4" />
                 Buscar
               </Button>
               {hasSemanticSearch && (
@@ -552,10 +551,10 @@ export default function KnowledgeList() {
             onClick={() => setAdvancedFiltersExpanded((current) => !current)}
             aria-expanded={advancedFiltersExpanded}
           >
-            <Filter className="h-4 w-4" />
+            <Icon name="filter_alt" className="h-4 w-4" />
             Filtros avançados da listagem
             {advancedFiltersActiveCount > 0 && <Badge color="accent">{advancedFiltersActiveCount}</Badge>}
-            {advancedFiltersExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            {advancedFiltersExpanded ? <Icon name="expand_less" className="h-4 w-4" /> : <Icon name="expand_more" className="h-4 w-4" />}
           </Button>
 
           {advancedFiltersActiveCount > 0 && !advancedFiltersExpanded && (
@@ -788,7 +787,7 @@ export default function KnowledgeList() {
                 setContextMenu(null);
               }}
             >
-              <Eye className="h-4 w-4" />
+              <Icon name="visibility" className="h-4 w-4" />
               Visualizar artigo
             </button>
 
@@ -800,7 +799,7 @@ export default function KnowledgeList() {
                   setContextMenu(null);
                 }}
               >
-                <Pencil className="h-4 w-4" />
+                <Icon name="edit" className="h-4 w-4" />
                 Editar artigo
               </button>
             )}
@@ -811,7 +810,7 @@ export default function KnowledgeList() {
                 onClick={() => onTogglePublish(contextMenu.article)}
                 disabled={publishMutation.isPending || unpublishMutation.isPending}
               >
-                <Send className="h-4 w-4" />
+                <Icon name="send" className="h-4 w-4" />
                 {contextMenu.article.status === 'Draft' ? 'Publicar artigo' : 'Despublicar artigo'}
               </button>
             )}
@@ -822,7 +821,7 @@ export default function KnowledgeList() {
                 onClick={() => onDelete(contextMenu.article)}
                 disabled={deleteMutation.isPending}
               >
-                <Trash2 className="h-4 w-4" />
+                <Icon name="delete" className="h-4 w-4" />
                 Excluir artigo
               </button>
             )}

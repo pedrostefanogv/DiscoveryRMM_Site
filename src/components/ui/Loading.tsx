@@ -1,4 +1,5 @@
-import { Loader2 } from 'lucide-react';
+import { Icon } from "@/components/ui";
+
 
 interface LoadingProps {
   message?: string;
@@ -12,7 +13,7 @@ export function Loading({ message = 'Carregando...', variant = 'spinner', size =
   return (
     <div className="flex flex-col items-center justify-center gap-3 py-20" role="status" aria-label={message}>
       {variant === 'spinner' ? (
-        <Loader2 className={`${sizeMap[size]} animate-spin text-primary`} />
+        <Icon name="progress_activity" className={`${sizeMap[size]} animate-spin text-primary`} />
       ) : (
         <div className="flex items-center gap-1.5">
           {[0, 1, 2].map(i => (

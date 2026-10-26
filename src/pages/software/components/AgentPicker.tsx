@@ -1,6 +1,6 @@
 import { useId, useState } from 'react';
-import { Search, Wifi, WifiOff, X } from 'lucide-react';
-import { Select } from '@/components/ui';
+
+import { Icon, Select } from '@/components/ui';
 import { useClients } from '@/hooks/useClients';
 import { useSites } from '@/hooks/useSites';
 import { useAgentsBySite } from '@/hooks/useAgents';
@@ -122,7 +122,7 @@ export function AgentPicker({
       {siteId && (
         <div className="space-y-1">
           <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted" />
+            <Icon name="search" className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted" />
             <input
               className="w-full rounded-lg border border-border bg-surface-light py-2 pl-8 pr-3 text-sm text-foreground placeholder-muted outline-none transition-colors focus:border-primary/50 focus:ring-1 focus:ring-primary/30"
               placeholder="Buscar agente..."
@@ -155,9 +155,9 @@ export function AgentPicker({
                     }`}
                   >
                     {agent.isOnline ? (
-                      <Wifi className="h-3.5 w-3.5 flex-shrink-0 text-success" />
+                      <Icon name="wifi" className="h-3.5 w-3.5 flex-shrink-0 text-success" />
                     ) : (
-                      <WifiOff className="h-3.5 w-3.5 flex-shrink-0 text-muted" />
+                      <Icon name="wifi_off" className="h-3.5 w-3.5 flex-shrink-0 text-muted" />
                     )}
                     <div className="min-w-0 flex-1">
                       <div className="truncate text-sm font-medium text-foreground">{agentPrimary(agent)}</div>
@@ -175,9 +175,9 @@ export function AgentPicker({
       {value && (
         <div className="flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/10 px-3 py-2">
           {selectedAgent?.isOnline ? (
-            <Wifi className="h-3.5 w-3.5 flex-shrink-0 text-success" />
+            <Icon name="wifi" className="h-3.5 w-3.5 flex-shrink-0 text-success" />
           ) : (
-            <WifiOff className="h-3.5 w-3.5 flex-shrink-0 text-muted" />
+            <Icon name="wifi_off" className="h-3.5 w-3.5 flex-shrink-0 text-muted" />
           )}
           <div className="min-w-0 flex-1">
             <div className="truncate text-sm font-medium text-foreground" title={selectedPrimary}>
@@ -200,7 +200,7 @@ export function AgentPicker({
             className="rounded p-0.5 text-muted transition-colors hover:text-foreground"
             aria-label="Limpar agente"
           >
-            <X className="h-3.5 w-3.5" />
+            <Icon name="close" className="h-3.5 w-3.5" />
           </button>
         </div>
       )}

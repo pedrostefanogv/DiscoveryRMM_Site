@@ -1,28 +1,28 @@
 import { Link } from 'react-router-dom';
-import { AppWindow, Store, Wrench } from 'lucide-react';
-import { Button, Card, CardHeader } from '@/components/ui';
 
-const cards = [
+import { Icon, Button, Card, CardHeader, type MaterialSymbolName } from '@/components/ui';
+
+const cards: { title: string; description: string; to: string; cta: string; icon: MaterialSymbolName }[] = [
   {
     title: 'Apps',
     description: 'Inventario detalhado com filtros por cliente, site e busca de software.',
     to: '/software/inventory',
     cta: 'Abrir Inventario Detalhado',
-    icon: AppWindow,
+    icon: "web_asset",
   },
   {
     title: 'Automação',
      description: 'Scripts, tarefas e operações de automação centralizadas.',
      to: '/automation',
      cta: 'Abrir Automação',
-    icon: Wrench,
+    icon: "build",
   },
   {
     title: 'Loja de Apps',
      description: 'Loja e distribuição de apps.',
     to: '/software/store',
     cta: 'Abrir Loja de Apps',
-    icon: Store,
+    icon: "storefront",
   },
 ];
 
@@ -36,13 +36,12 @@ export default function SoftwareHome() {
 
       <div className="grid gap-4 lg:grid-cols-3">
         {cards.map((card) => {
-          const Icon = card.icon;
-          return (
+                    return (
             <Card key={card.to}>
               <CardHeader
                 title={card.title}
                 subtitle={card.description}
-                action={<Icon className="h-4 w-4 text-muted" />}
+                action={<Icon name={card.icon} className="h-4 w-4 text-muted" />}
               />
 
               <Link to={card.to}>

@@ -1,6 +1,5 @@
 import { useState } from 'react';
-import { ShieldCheck, ClipboardList, Package } from 'lucide-react';
-import { Button, Card } from '@/components/ui';
+import { Icon, Button, Card } from '@/components/ui';
 import { CatalogTab } from './tabs/CatalogTab';
 import { ApprovalsTab } from './tabs/ApprovalsTab';
 import { AuditTab } from './tabs/AuditTab';
@@ -27,19 +26,19 @@ export default function SoftwareStore() {
             variant={tab === 'catalog' ? 'primary' : 'ghost'}
             onClick={() => setTab('catalog')}
           >
-            <Package className="h-4 w-4" /> Catálogo
+            <Icon name="inventory_2" className="h-4 w-4" /> Catálogo
           </Button>
           <Button
             variant={tab === 'approvals' ? 'primary' : 'ghost'}
             onClick={() => setTab('approvals')}
           >
-            <ShieldCheck className="h-4 w-4" /> Aprovações
+            <Icon name="verified_user" className="h-4 w-4" /> Aprovações
           </Button>
           <Button
             variant={tab === 'audit' ? 'primary' : 'ghost'}
             onClick={() => setTab('audit')}
           >
-            <ClipboardList className="h-4 w-4" /> Auditoria
+            <Icon name="assignment" className="h-4 w-4" /> Auditoria
           </Button>
         </div>
       </Card>

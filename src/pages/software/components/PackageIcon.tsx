@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Package } from 'lucide-react';
+import { Icon } from "@/components/ui";
+
 import { buildIconCandidates } from '../softwareStoreUtils';
 
 export function PackageIcon({
@@ -39,7 +40,7 @@ export function PackageIcon({
           }}
         />
       ) : null}
-      <Package
+      <Icon name="inventory_2"
         className="h-5 w-5 text-muted"
         style={{ display: currentSource ? 'none' : undefined }}
       />

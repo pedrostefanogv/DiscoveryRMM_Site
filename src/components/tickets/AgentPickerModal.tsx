@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Monitor, Trash2 } from 'lucide-react';
-import { Button, Input, Loading, Modal } from '@/components/ui';
+import { Icon, Button, Input, Loading, Modal } from '@/components/ui';
 import type { Agent } from '@/api';
 
 /**
@@ -84,7 +83,7 @@ export function AgentPickerModal({
                     selected ? 'bg-primary/10 text-foreground' : 'text-muted-foreground hover:bg-surface-hover/60'
                   }`}
                 >
-                  <Monitor className={`h-3.5 w-3.5 shrink-0 ${selected ? 'text-primary' : 'text-muted'}`} />
+                  <Icon name="desktop_windows" className={`h-3.5 w-3.5 shrink-0 ${selected ? 'text-primary' : 'text-muted'}`} />
                   <span className="min-w-0 flex-1 truncate">{label}</span>
                   {agent.hostname && agent.hostname !== label && (
                     <span className="shrink-0 truncate text-xs text-muted">{agent.hostname}</span>
@@ -97,7 +96,7 @@ export function AgentPickerModal({
 
         <div className="flex items-center justify-between gap-2">
           <Button type="button" variant="ghost" disabled={!pending} onClick={() => setPending(null)}>
-            <Trash2 className="h-4 w-4" /> Remover agent
+            <Icon name="delete" className="h-4 w-4" /> Remover agent
           </Button>
           <div className="flex gap-2">
             <Button type="button" variant="ghost" onClick={onClose}>Cancelar</Button>

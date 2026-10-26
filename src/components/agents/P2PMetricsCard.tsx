@@ -1,18 +1,5 @@
-import {
-  Activity,
-  CheckCircle2,
-  Database,
-  Download,
-  Gauge,
-  Network,
-  PackageCheck,
-  RefreshCw,
-  Server,
-  ShieldCheck,
-  Upload,
-} from 'lucide-react';
 import { useP2POverview } from '@/hooks/useP2POverview';
-import { Badge, Button, Card, CardHeader, Skeleton } from '@/components/ui';
+import { Icon, Badge, Button, Card, CardHeader, Skeleton } from '@/components/ui';
 import type { P2PScope } from '@/api/p2p';
 import { DASHBOARD_WINDOW_HOURS, type DashboardWindow } from '@/api/dashboard';
 
@@ -125,7 +112,7 @@ export function P2PMetricsCard({ scope = 'global', window = '24h' }: P2PMetricsC
             onClick={() => void overview.refetch()}
             loading={overview.isFetching}
           >
-            <RefreshCw className="h-4 w-4" />
+            <Icon name="refresh" className="h-4 w-4" />
             Atualizar
           </Button>
         }
@@ -139,7 +126,7 @@ export function P2PMetricsCard({ scope = 'global', window = '24h' }: P2PMetricsC
         </div>
       ) : overview.isError || !overview.data ? (
         <div className="flex flex-col items-center justify-center gap-2 rounded-lg bg-surface-light px-4 py-6 text-center">
-          <Network className="h-6 w-6 text-danger" />
+          <Icon name="lan" className="h-6 w-6 text-danger" />
           <p className="text-sm font-medium text-muted-foreground">
             Não foi possível carregar as métricas P2P
           </p>
@@ -150,7 +137,7 @@ export function P2PMetricsCard({ scope = 'global', window = '24h' }: P2PMetricsC
         </div>
       ) : !hasTelemetry ? (
         <div className="flex flex-col items-center justify-center gap-2 rounded-lg bg-surface-light px-4 py-6 text-center">
-          <Network className="h-6 w-6 text-muted" />
+          <Icon name="lan" className="h-6 w-6 text-muted" />
           <p className="text-sm font-medium text-muted-foreground">
             Sem telemetria P2P nesta janela
           </p>
@@ -163,23 +150,23 @@ export function P2PMetricsCard({ scope = 'global', window = '24h' }: P2PMetricsC
       ) : (
         <div className="space-y-4">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {kpiCard(<Server className="h-3.5 w-3.5" />, 'Agentes ativos', formatNumber(kpis?.activeAgents), 'accent')}
-            {kpiCard(<ShieldCheck className="h-3.5 w-3.5" />, 'Seeders ativos', formatNumber(kpis?.activeSeeders), 'primary')}
+            {kpiCard(<Icon name="dns" className="h-3.5 w-3.5" />, 'Agentes ativos', formatNumber(kpis?.activeAgents), 'accent')}
+            {kpiCard(<Icon name="verified_user" className="h-3.5 w-3.5" />, 'Seeders ativos', formatNumber(kpis?.activeSeeders), 'primary')}
             {kpiCard(
-              <Gauge className="h-3.5 w-3.5" />,
+              <Icon name="speed" className="h-3.5 w-3.5" />,
               'Success rate',
               replicationsStarted > 0 ? formatPercent(kpis?.replicationSuccessRate) : '\u2014',
               'success',
             )}
             {/* Presença tem TTL fixo de 2h no servidor (independente da janela). */}
-            {kpiCard(<Database className="h-3.5 w-3.5" />, 'Artefatos com peers (2h)', formatNumber(kpis?.artifactsWithPeers), 'accent')}
-            {kpiCard(<Activity className="h-3.5 w-3.5" />, 'Replicações iniciadas', formatNumber(kpis?.replicationsStartedDelta), 'slate')}
-            {kpiCard(<CheckCircle2 className="h-3.5 w-3.5" />, 'Replicações concluídas', formatNumber(kpis?.replicationsSucceededDelta), 'success')}
-            {kpiCard(<Upload className="h-3.5 w-3.5" />, 'Bytes servidos', formatBytes(kpis?.bytesServedDelta), 'warning')}
-            {kpiCard(<Download className="h-3.5 w-3.5" />, 'Bytes baixados', formatBytes(kpis?.bytesDownloadedDelta), 'primary')}
+            {kpiCard(<Icon name="database" className="h-3.5 w-3.5" />, 'Artefatos com peers (2h)', formatNumber(kpis?.artifactsWithPeers), 'accent')}
+            {kpiCard(<Icon name="monitoring" className="h-3.5 w-3.5" />, 'Replicações iniciadas', formatNumber(kpis?.replicationsStartedDelta), 'slate')}
+            {kpiCard(<Icon name="check_circle" className="h-3.5 w-3.5" />, 'Replicações concluídas', formatNumber(kpis?.replicationsSucceededDelta), 'success')}
+            {kpiCard(<Icon name="upload" className="h-3.5 w-3.5" />, 'Bytes servidos', formatBytes(kpis?.bytesServedDelta), 'warning')}
+            {kpiCard(<Icon name="download" className="h-3.5 w-3.5" />, 'Bytes baixados', formatBytes(kpis?.bytesDownloadedDelta), 'primary')}
             {/* Tráfego evitado: o agent consulta o estado real antes de pré-carregar. */}
             {kpiCard(
-              <PackageCheck className="h-3.5 w-3.5" />,
+              <Icon name="inventory" className="h-3.5 w-3.5" />,
               'Pré-cargas evitadas (já instalado)',
               formatNumber(kpis?.preloadSkippedFinalStateDelta),
               'accent',
@@ -188,14 +175,14 @@ export function P2PMetricsCard({ scope = 'global', window = '24h' }: P2PMetricsC
 
           <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-3">
             <div className="flex items-center gap-2">
-              <Network className="h-3.5 w-3.5 text-muted" />
+              <Icon name="lan" className="h-3.5 w-3.5 text-muted" />
               <span className="text-xs text-muted">Pressão de fila</span>
               <span className="text-sm font-medium text-foreground">
                 {typeof kpis?.queuePressure === 'number' ? formatPercent(kpis.queuePressure * 100) : '\u2014'}
               </span>
             </div>
             <div className="flex items-center gap-2">
-              <Activity className="h-3.5 w-3.5 text-muted" />
+              <Icon name="monitoring" className="h-3.5 w-3.5 text-muted" />
               <span className="text-xs text-muted">Saúde da rede</span>
               <Badge color={health.color}>{health.label}</Badge>
             </div>

@@ -1,8 +1,9 @@
 import { memo, type ReactNode } from 'react';
-import type { LucideIcon } from 'lucide-react';
+import { Icon, type MaterialSymbolName } from "@/components/ui";
+
 
 interface StatCardProps {
-  icon: LucideIcon;
+  icon: MaterialSymbolName;
   label: string;
   value: string | number;
   trend?: ReactNode;
@@ -18,7 +19,7 @@ const toneMap: Record<NonNullable<StatCardProps['tone']>, { bg: string; icon: st
   warning: { bg: 'bg-warning/15', icon: 'text-warning' },
 };
 
-export const StatCard = memo(function StatCard({ icon: Icon, label, value, trend, tone = 'primary', onClick, active = false }: StatCardProps) {
+export const StatCard = memo(function StatCard({ icon, label, value, trend, tone = 'primary', onClick, active = false }: StatCardProps) {
   const styles = toneMap[tone];
   const baseClassName = 'glass-card flex items-center gap-4 rounded-xl border border-border bg-surface p-5 h-full';
 
@@ -31,7 +32,7 @@ export const StatCard = memo(function StatCard({ icon: Icon, label, value, trend
         className={`${baseClassName} cursor-pointer text-left transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:bg-surface-light/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${active ? 'border-primary/40 bg-surface-light/80 ring-1 ring-primary/30' : ''}`}
       >
         <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${styles.bg} ring-1 ring-black/10 dark:ring-white/5`}>
-          <Icon className={`h-6 w-6 ${styles.icon}`} />
+          <Icon name={icon} className={`h-6 w-6 ${styles.icon}`} />
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-xs font-medium uppercase tracking-wider text-muted">{label}</p>
@@ -45,7 +46,7 @@ export const StatCard = memo(function StatCard({ icon: Icon, label, value, trend
   return (
     <div className={baseClassName}>
       <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${styles.bg} ring-1 ring-border`}>
-        <Icon className={`h-6 w-6 ${styles.icon}`} />
+        <Icon name={icon} className={`h-6 w-6 ${styles.icon}`} />
       </div>
       <div className="min-w-0 flex-1">
         <p className="text-xs font-medium uppercase tracking-wider text-muted">{label}</p>

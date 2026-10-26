@@ -1,7 +1,6 @@
 import { useMemo, useState } from "react";
-import { KeyRound, Pencil, Plus, Shield, Trash2, Unlock, UserCog } from "lucide-react";
 import toast from "react-hot-toast";
-import {
+import { Icon,
   Badge,
   Button,
   Card,
@@ -117,7 +116,7 @@ export default function IamUsersPage() {
                   setPasswordTarget(item);
                 }}
               >
-                <Shield className="h-4 w-4" /> Senha
+                <Icon name="shield" className="h-4 w-4" /> Senha
               </Button>
             )}
             {canView && (
@@ -129,7 +128,7 @@ export default function IamUsersPage() {
                   setSecurityTarget(item);
                 }}
               >
-                <KeyRound className="h-4 w-4" /> Segurança
+                <Icon name="key" className="h-4 w-4" /> Segurança
               </Button>
             )}
             {canEdit && (
@@ -141,7 +140,7 @@ export default function IamUsersPage() {
                   setEditTarget(item);
                 }}
               >
-                <Pencil className="h-4 w-4" /> Editar
+                <Icon name="edit" className="h-4 w-4" /> Editar
               </Button>
             )}
             {canDelete && (
@@ -153,7 +152,7 @@ export default function IamUsersPage() {
                   void handleDelete(item);
                 }}
               >
-                <Trash2 className="h-4 w-4" /> Desativar
+                <Icon name="delete" className="h-4 w-4" /> Desativar
               </Button>
             )}
           </div>
@@ -206,7 +205,7 @@ export default function IamUsersPage() {
           action={
               canEdit ? (
               <Button size="sm" onClick={() => setCreateOpen(true)}>
-                <Plus className="h-4 w-4" /> Novo usuário
+                <Icon name="add" className="h-4 w-4" /> Novo usuário
               </Button>
             ) : undefined
           }
@@ -416,7 +415,7 @@ function UserSecurityModal({
                         loading={revokeMfaKey.isPending}
                         disabled={hasPendingMutation}
                       >
-                        <Trash2 className="h-4 w-4" /> Remover
+                        <Icon name="delete" className="h-4 w-4" /> Remover
                       </Button>
                     )}
                   </div>
@@ -444,7 +443,7 @@ function UserSecurityModal({
                 loading={forcePasswordReset.isPending}
                 disabled={hasPendingMutation}
               >
-                <UserCog className="h-4 w-4" /> Forçar troca de senha
+                <Icon name="manage_accounts" className="h-4 w-4" /> Forçar troca de senha
               </Button>
               <Button
                 variant="ghost"
@@ -452,7 +451,7 @@ function UserSecurityModal({
                 loading={unlockUser.isPending}
                 disabled={hasPendingMutation}
               >
-                <Unlock className="h-4 w-4" /> Desbloquear conta
+                <Icon name="lock_open" className="h-4 w-4" /> Desbloquear conta
               </Button>
               <Button
                 variant="danger"
@@ -460,7 +459,7 @@ function UserSecurityModal({
                 loading={revokeMfaAll.isPending}
                 disabled={hasPendingMutation}
               >
-                <Shield className="h-4 w-4" /> Revogar MFA
+                <Icon name="shield" className="h-4 w-4" /> Revogar MFA
               </Button>
             </>
           )}
@@ -695,7 +694,7 @@ function ChangePasswordModal({
         <div className="flex justify-end gap-3 pt-2">
           <Button variant="ghost" onClick={onClose}>Cancelar</Button>
           <Button onClick={() => void submit()} loading={loading} disabled={!valid}>
-            <UserCog className="h-4 w-4" /> Atualizar senha
+            <Icon name="manage_accounts" className="h-4 w-4" /> Atualizar senha
           </Button>
         </div>
       </div>

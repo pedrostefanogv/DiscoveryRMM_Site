@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, FileText, History, Home, Save, Send } from 'lucide-react';
-import {
+
+import { Icon,
   Badge,
   Button,
   Card,
@@ -548,7 +548,7 @@ export default function KnowledgeEditor() {
             onClick={() => navigate('/knowledge')}
             className="mb-2 inline-flex items-center gap-2 text-sm text-muted transition-colors hover:text-foreground"
           >
-            <ArrowLeft className="h-4 w-4" /> Voltar
+            <Icon name="arrow_back" className="h-4 w-4" /> Voltar
           </button>
           <h1 className="text-2xl font-bold text-foreground">
             {isEdit ? 'Editar artigo' : 'Novo artigo'}
@@ -697,7 +697,7 @@ export default function KnowledgeEditor() {
                   }}
                   className="inline-flex items-center gap-2 text-sm text-muted transition-colors hover:text-foreground"
                 >
-                  <History className="h-4 w-4" />
+                  <Icon name="history" className="h-4 w-4" />
                   Histórico de versões ({detailQuery.data?.currentVersionNumber ?? 0})
                 </button>
                 {showVersions && (
@@ -777,9 +777,9 @@ export default function KnowledgeEditor() {
               <div className="mb-3 flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
                   {isEditingPage ? (
-                    <FileText className="h-4 w-4 text-muted" />
+                    <Icon name="description" className="h-4 w-4 text-muted" />
                   ) : (
-                    <Home className="h-4 w-4 text-primary" />
+                    <Icon name="home" className="h-4 w-4 text-primary" />
                   )}
                   <h3 className="text-sm font-semibold text-foreground">
                     {isCreatingPage
@@ -863,9 +863,9 @@ export default function KnowledgeEditor() {
                 loading={createMutation.isPending || updateMutation.isPending || publishMutation.isPending}
                 disabled={!valid}
               >
-                {form.targetStatus === 'Published' && <Send className="h-4 w-4" />}
-                {form.targetStatus === 'Draft' && <Save className="h-4 w-4" />}
-                {form.targetStatus === 'Internal' && <Save className="h-4 w-4" />}
+                {form.targetStatus === 'Published' && <Icon name="send" className="h-4 w-4" />}
+                {form.targetStatus === 'Draft' && <Icon name="save" className="h-4 w-4" />}
+                {form.targetStatus === 'Internal' && <Icon name="save" className="h-4 w-4" />}
                 {form.targetStatus === 'Draft' && 'Salvar rascunho'}
                 {form.targetStatus === 'Published' && 'Salvar e publicar'}
                 {form.targetStatus === 'Internal' && 'Salvar como Interno'}

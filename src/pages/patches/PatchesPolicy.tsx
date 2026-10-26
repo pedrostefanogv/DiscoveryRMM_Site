@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { Save } from "lucide-react";
 import toast from "react-hot-toast";
-import { Button, Card, CardHeader, ErrorDisplay, Input, Loading, PageHeader, Select } from "@/components/ui";
+import { Icon, Button, Card, CardHeader, ErrorDisplay, Input, Loading, PageHeader, Select } from "@/components/ui";
 import { useClients } from "@/hooks/useClients";
 import { useSites } from "@/hooks/useSites";
 import { usePatchPolicy, useUpdatePatchPolicy } from "@/hooks/usePatches";
@@ -138,7 +137,7 @@ export default function PatchesPolicy() {
     <div className="space-y-6">
       <PageHeader title="Política de patches" description="Enforcement, auto-aprovação e janela de manutenção por escopo.">
         <Button onClick={() => void handleSave()} disabled={!enabled || policy.isLoading || updatePolicy.isPending}>
-          <Save className="h-4 w-4" />
+          <Icon name="save" className="h-4 w-4" />
           {updatePolicy.isPending ? "Salvando..." : "Salvar"}
         </Button>
       </PageHeader>

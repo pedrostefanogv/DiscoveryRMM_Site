@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { AlertTriangle, Bell, Pencil, Plus, Power, Trash2 } from 'lucide-react';
+
 import toast from 'react-hot-toast';
 import {
   AlertScopeType,
@@ -9,7 +9,7 @@ import {
   type UpsertTicketAlertRuleRequest,
   type WorkflowState,
 } from '@/api';
-import {
+import { Icon,
   Badge,
   Button,
   Card,
@@ -333,7 +333,7 @@ export default function TicketAlertsPage() {
               subtitle="Preencha o conteudo do alerta e vincule a regra a um workflow state."
               action={
                 <Button variant="secondary" onClick={handleResetForm}>
-                  <Plus className="h-4 w-4" />
+                  <Icon name="add" className="h-4 w-4" />
                   Nova regra
                 </Button>
               }
@@ -474,7 +474,7 @@ export default function TicketAlertsPage() {
 
             <div className="mt-6 flex flex-wrap gap-3">
               <Button onClick={handleSubmit} loading={isSaving}>
-                <Bell className="h-4 w-4" />
+                <Icon name="notifications" className="h-4 w-4" />
                 {editingRuleId ? 'Salvar alterações' : 'Criar regra'}
               </Button>
               {editingRuleId && (
@@ -493,19 +493,19 @@ export default function TicketAlertsPage() {
 
             <div className="space-y-3 text-sm text-muted-foreground">
               <div className="flex items-start gap-3 rounded-xl border border-border bg-surface-light p-4">
-                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+                <Icon name="warning" className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
                 <p>
                   O disparo ocorre automaticamente quando o ticket entra no workflow state configurado.
                 </p>
               </div>
               <div className="flex items-start gap-3 rounded-xl border border-border bg-surface-light p-4">
-                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+                <Icon name="warning" className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
                 <p>
                   Para Toast, o backend aceita timeout de 5, 15 ou 30 segundos. Para Modal, o timeout e ignorado.
                 </p>
               </div>
               <div className="flex items-start gap-3 rounded-xl border border-border bg-surface-light p-4">
-                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+                <Icon name="warning" className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
                 <p>
                   O escopo preferencial usa o contexto do ticket e faz fallback conforme os dados disponíveis no servidor.
                 </p>
@@ -575,7 +575,7 @@ export default function TicketAlertsPage() {
 
                     <div className="mt-4 flex flex-wrap gap-2">
                       <Button variant="secondary" size="sm" onClick={() => handleStartEdit(rule)}>
-                        <Pencil className="h-4 w-4" />
+                        <Icon name="edit" className="h-4 w-4" />
                         Editar
                       </Button>
                       <Button
@@ -584,7 +584,7 @@ export default function TicketAlertsPage() {
                         onClick={() => void handleToggle(rule)}
                         loading={toggleRule.isPending}
                       >
-                        <Power className="h-4 w-4" />
+                        <Icon name="power_settings_new" className="h-4 w-4" />
                         {rule.isEnabled ? 'Desativar' : 'Ativar'}
                       </Button>
                       <Button
@@ -593,7 +593,7 @@ export default function TicketAlertsPage() {
                         onClick={() => void handleDelete(rule)}
                         loading={deleteRule.isPending}
                       >
-                        <Trash2 className="h-4 w-4" />
+                        <Icon name="delete" className="h-4 w-4" />
                         Excluir
                       </Button>
                     </div>

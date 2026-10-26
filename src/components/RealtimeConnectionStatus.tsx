@@ -1,5 +1,6 @@
+import { Icon } from "@/components/ui";
 ﻿import { useRealtimeStatus } from '@/hooks/useRealtimeStatus';
-import { AlertTriangle, Wifi, WifiOff } from 'lucide-react';
+
 
 export function RealtimeConnectionStatus() {
   const status = useRealtimeStatus();
@@ -43,9 +44,9 @@ export function RealtimeConnectionStatus() {
     <div className="flex items-center gap-2">
       <div className={`flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium ${toneClasses}`}>
         {isConnected ? (
-          <Wifi className="h-3 w-3" />
+          <Icon name="wifi" className="h-3 w-3" />
         ) : (
-          <WifiOff className="h-3 w-3" />
+          <Icon name="wifi_off" className="h-3 w-3" />
         )}
         <span>
           {providers.length > 0
@@ -66,7 +67,7 @@ export function RealtimeConnectionStatus() {
               : (status.natsLastErrorMessage ?? 'Erro NATS')
           }
         >
-          <AlertTriangle className="h-3 w-3" />
+          <Icon name="warning" className="h-3 w-3" />
           <span>{isAuthError ? 'Credencial NATS rejeitada' : 'Falha de rede NATS'}</span>
         </div>
       )}
@@ -82,7 +83,7 @@ export function RealtimeConnectionStatus() {
       )}
       {isServerOverloaded && (
         <div className="flex items-center gap-1 rounded-full bg-amber-100 px-2 py-1 text-xs font-medium text-amber-800 dark:bg-amber-950 dark:text-amber-200">
-          <AlertTriangle className="h-3 w-3" />
+          <Icon name="warning" className="h-3 w-3" />
           <span>Servidor sobrecarregado</span>
         </div>
       )}

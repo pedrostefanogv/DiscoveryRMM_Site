@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { ArrowRight, Building2, Globe, Link2, Plus, Users } from "lucide-react";
+
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import {
@@ -9,7 +9,7 @@ import {
 } from "@/hooks/useDepartments";
 import { useClients } from "@/hooks/useClients";
 import { buildInheritanceOptions, parseDepartmentValidationErrors } from "@/api";
-import {
+import { Icon,
   Badge,
   Button,
   Card,
@@ -175,16 +175,16 @@ export default function DepartmentSettings() {
         description="Estruture atendimento por cliente e mantenha cada departamento com uma URL própria para consulta e configuração."
       >
         <Button onClick={() => setCreateOpen(true)}>
-          <Plus className="h-4 w-4" />
+          <Icon name="add" className="h-4 w-4" />
           Novo departamento
         </Button>
       </PageHeader>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard icon={Building2} label="Total" value={totalDepartments} tone="primary" />
-        <StatCard icon={Globe} label="Globais" value={globalDepartments} tone="accent" />
-        <StatCard icon={Users} label="Por cliente" value={clientDepartments} tone="success" />
-        <StatCard icon={Building2} label="Inativos" value={inactiveDepartments} tone="warning" />
+        <StatCard icon="apartment" label="Total" value={totalDepartments} tone="primary" />
+        <StatCard icon="public" label="Globais" value={globalDepartments} tone="accent" />
+        <StatCard icon="group" label="Por cliente" value={clientDepartments} tone="success" />
+        <StatCard icon="apartment" label="Inativos" value={inactiveDepartments} tone="warning" />
       </div>
 
       <Card>
@@ -246,9 +246,9 @@ export default function DepartmentSettings() {
               >
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-surface/60 ring-1 ring-black/15 dark:ring-white/10">
                   {department.clientId ? (
-                    <Building2 className="h-5 w-5 text-accent" />
+                    <Icon name="apartment" className="h-5 w-5 text-accent" />
                   ) : (
-                    <Globe className="h-5 w-5 text-primary" />
+                    <Icon name="public" className="h-5 w-5 text-primary" />
                   )}
                 </div>
 
@@ -263,7 +263,7 @@ export default function DepartmentSettings() {
                     </Badge>
                     {department.inheritFromGlobalId && (
                       <Badge color="primary">
-                        <Link2 className="mr-1 h-3 w-3" />
+                        <Icon name="link" className="mr-1 h-3 w-3" />
                         herda de {inheritedFrom?.name ?? "global"}
                       </Badge>
                     )}
@@ -278,7 +278,7 @@ export default function DepartmentSettings() {
                   <p className="text-sm font-semibold text-foreground">#{department.sortOrder}</p>
                 </div>
 
-                <ArrowRight className="h-4 w-4 shrink-0 text-muted transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
+                <Icon name="arrow_forward" className="h-4 w-4 shrink-0 text-muted transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
               </button>
             );
           })}

@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Building2, Monitor, Plus } from 'lucide-react';
+
 import { useClients } from '@/hooks/useClients';
 import { useAllSites, useDeleteSite, useRestartSite, useShutdownSite, useWakeOnLanSite } from '@/hooks/useSites';
 import { useAgentsBySite } from '@/hooks/useAgents';
-import { Badge, Button, Card, ConfirmDialog, DataTable, ErrorDisplay, Input, Loading, PageHeader, Select, StatCard } from '@/components/ui';
+import { Icon, Badge, Button, Card, ConfirmDialog, DataTable, ErrorDisplay, Input, Loading, PageHeader, Select, StatCard } from '@/components/ui';
 import { type Site, type SiteWakeOnLanResponse } from '@/api';
 import { useAuthorization } from '@/auth/authorization';
 import type { Column } from '@/components/ui';
@@ -100,7 +100,7 @@ export default function SiteList() {
       render: (site) => (
         <div className="flex items-center gap-3">
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-accent/20">
-            <Building2 className="h-4 w-4 text-accent" />
+            <Icon name="apartment" className="h-4 w-4 text-accent" />
           </div>
           <div>
             <p className="font-medium text-foreground">{site.name}</p>
@@ -312,17 +312,17 @@ export default function SiteList() {
         </label>
         {canCreate && (
           <Button onClick={() => setModalOpen(true)}>
-            <Plus className="h-4 w-4" /> Novo Site
+            <Icon name="add" className="h-4 w-4" /> Novo Site
           </Button>
         )}
       </PageHeader>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard icon={Building2} label="Total de sites" value={sites.length} tone="accent" />
-        <StatCard icon={Building2} label="Sites ativos" value={activeSites} tone="success" />
-        <StatCard icon={Building2} label="Sites inativos" value={inactiveSites} tone="warning" />
+        <StatCard icon="apartment" label="Total de sites" value={sites.length} tone="accent" />
+        <StatCard icon="apartment" label="Sites ativos" value={activeSites} tone="success" />
+        <StatCard icon="apartment" label="Sites inativos" value={inactiveSites} tone="warning" />
         <StatCard
-          icon={Monitor}
+          icon="desktop_windows"
           label="Agentes nos sites"
           value={totalAgents}
           tone="primary"

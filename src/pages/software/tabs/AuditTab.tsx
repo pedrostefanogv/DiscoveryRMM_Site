@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { Search, ClipboardList, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
-import { Badge, Button, Card, ErrorDisplay, Input, Loading, Select } from '@/components/ui';
+
+import { Icon, Badge, Button, Card, ErrorDisplay, Input, Loading, Select } from '@/components/ui';
 import { useAppStoreAudit } from '@/hooks/useAppStore';
 import { useCursorPagination } from '@/hooks/useCursorPagination';
 import { AppApprovalActionType, AppApprovalAuditChangeType, AppInstallationType } from '@/api/types';
@@ -72,8 +72,8 @@ export function AuditTab() {
           <div className="w-44"><Input label="Até" type="datetime-local" value={changedTo} onChange={(e) => setChangedTo(e.target.value)} /></div>
           <div className="w-40"><Select label="Tipo de alteração" options={changeTypeOptions} value={changeType} onChange={(e) => setChangeType(e.target.value)} /></div>
           <div className="w-40"><Select label="Itens por página" options={limitOptions} value={String(limit)} onChange={(e) => setLimit(Number(e.target.value))} /></div>
-          <Button onClick={applyFilters}><Search className="h-4 w-4" /> Filtrar</Button>
-          <Button variant="ghost" onClick={resetFilters}><RefreshCw className="h-4 w-4" /></Button>
+          <Button onClick={applyFilters}><Icon name="search" className="h-4 w-4" /> Filtrar</Button>
+          <Button variant="ghost" onClick={resetFilters}><Icon name="refresh" className="h-4 w-4" /></Button>
         </div>
       </Card>
 
@@ -81,16 +81,16 @@ export function AuditTab() {
         <div className="border-b border-border px-5 py-4 flex items-center justify-between">
           <span className="text-sm font-medium text-foreground">{query.data ? `${query.data.returnedItems} evento(s)` : 'Histórico de auditoria'}</span>
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={auditPag.goToPrev} disabled={auditPag.page <= 1}><ChevronLeft className="h-4 w-4" /></Button>
+            <Button variant="ghost" size="sm" onClick={auditPag.goToPrev} disabled={auditPag.page <= 1}><Icon name="chevron_left" className="h-4 w-4" /></Button>
             <span className="text-xs text-muted">Pág. {auditPag.page}</span>
-            <Button variant="ghost" size="sm" onClick={() => auditPag.goToNext(query.data?.nextCursor)} disabled={!query.data?.hasMore}><ChevronRight className="h-4 w-4" /></Button>
+            <Button variant="ghost" size="sm" onClick={() => auditPag.goToNext(query.data?.nextCursor)} disabled={!query.data?.hasMore}><Icon name="chevron_right" className="h-4 w-4" /></Button>
           </div>
         </div>
         {query.isLoading && <Loading />}
         {query.isError && <ErrorDisplay message="Erro ao carregar auditoria." onRetry={() => query.refetch()} />}
         {query.data && query.data.items.length === 0 && (
           <div className="flex flex-col items-center py-16 text-muted">
-            <ClipboardList className="mb-3 h-10 w-10 opacity-30" />
+            <Icon name="assignment" className="mb-3 h-10 w-10 opacity-30" />
             <p className="text-sm">Nenhum evento encontrado.</p>
             <p className="mt-1 max-w-md text-center text-xs text-muted">
               O filtro &quot;Tipo&quot; mostra só eventos do tipo de instalação selecionado — eventos de Winget, Chocolatey e Custom

@@ -4,8 +4,8 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useLocation, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
-import { ArrowRight, LockKeyhole, UserRound, AlertTriangle } from "lucide-react";
-import { Button, Card, CardHeader, Input } from "@/components/ui";
+
+import { Icon, Button, Card, CardHeader, Input } from "@/components/ui";
 import { useAuth } from "@/auth/AuthContext";
 import { resolveLoginErrorMessage } from "@/auth/errorMessages";
 
@@ -106,24 +106,24 @@ export default function LoginPage() {
 
         {submitError && (
           <div className="flex items-start gap-3 rounded-xl border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-red-800 dark:text-red-100">
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-danger" />
+            <Icon name="warning" className="mt-0.5 h-4 w-4 shrink-0 text-danger" />
             <span>{submitError}</span>
           </div>
         )}
 
         <div className="rounded-xl border border-border bg-surface-light p-4 text-sm text-muted space-y-2">
           <div className="flex items-start gap-3">
-            <UserRound className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+            <Icon name="person" className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
             <span>Caso não seja possível acessar o sistema, revise suas credenciais e consulte o administrador.</span>
           </div>
           <div className="flex items-start gap-3">
-            <LockKeyhole className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
+            <Icon name="lock" className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
             <span>Quando necessário, o login seguirá automaticamente para a configuração da autenticação em duas etapas.</span>
           </div>
         </div>
 
         <Button type="submit" className="w-full" size="lg" loading={isSubmitting}>
-          <ArrowRight className="h-4 w-4" /> Entrar
+          <Icon name="arrow_forward" className="h-4 w-4" /> Entrar
         </Button>
       </form>
     </Card>

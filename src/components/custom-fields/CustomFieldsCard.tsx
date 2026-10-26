@@ -1,13 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Copy, Info, Pin } from 'lucide-react';
 import {
   CustomFieldDataType,
   getCustomFieldDataTypeLabel,
   parseCustomFieldValue,
   type CustomFieldSchemaItem,
 } from '@/api';
-import { Badge, Button, Card, CardHeader, Input, Select, Tooltip } from '@/components/ui';
+import { Icon, Badge, Button, Card, CardHeader, Input, Select, Tooltip } from '@/components/ui';
 import {
   isSchemaValueCopyable,
   parseSchemaValue,
@@ -140,7 +139,7 @@ export function CustomFieldsCard({ items, isLoading, isError, canEdit, title, su
                             aria-label="Campo destacado"
                             className="inline-flex text-accent"
                           >
-                            <Pin className="h-3.5 w-3.5" />
+                            <Icon name="push_pin" className="h-3.5 w-3.5" />
                           </span>
                         </Tooltip>
                       ) : null}
@@ -173,7 +172,7 @@ export function CustomFieldsCard({ items, isLoading, isError, canEdit, title, su
                             title="Copiar valor"
                             onClick={() => void handleCopy(item)}
                           >
-                            <Copy className="h-4 w-4" />
+                            <Icon name="content_copy" className="h-4 w-4" />
                           </Button>
                         ) : null}
                       </div>
@@ -190,7 +189,7 @@ export function CustomFieldsCard({ items, isLoading, isError, canEdit, title, su
                             title="Copiar valor"
                             onClick={() => void handleCopy(item)}
                           >
-                            <Copy className="h-4 w-4" />
+                            <Icon name="content_copy" className="h-4 w-4" />
                           </Button>
                         ) : null}
                       </div>
@@ -274,7 +273,7 @@ function FieldInfoButton({ item }: { item: CustomFieldSchemaItem }) {
         aria-label={summary}
         className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-muted transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
       >
-        <Info className="h-3.5 w-3.5" />
+        <Icon name="info" className="h-3.5 w-3.5" />
       </button>
     </Tooltip>
   );

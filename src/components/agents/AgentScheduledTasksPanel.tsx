@@ -1,20 +1,6 @@
 import { useCallback, useMemo, useState, type MouseEvent, type ReactNode } from 'react';
-import {
-  Ban,
-  CalendarClock,
-  Clock,
-  Copy,
-  Info,
-  Pencil,
-  Play,
-  RefreshCw,
-  Search,
-  ShieldAlert,
-  Trash2,
-  Zap,
-} from 'lucide-react';
 import toast from 'react-hot-toast';
-import {
+import { Icon,
   Badge,
   Button,
   DataTable,
@@ -329,7 +315,7 @@ export default function AgentScheduledTasksPanel({
         {
           key: 'details',
           label: 'Ver detalhes',
-          icon: <Info className='h-4 w-4' />,
+          icon: <Icon name="info" className='h-4 w-4' />,
           onClick: () => {
             const task = menu.task;
             setMenu(null);
@@ -344,9 +330,9 @@ export default function AgentScheduledTasksPanel({
               : 'Desabilitar tarefa',
           icon:
             menu.task.state?.toLowerCase() === 'disabled' ? (
-              <Play className='h-4 w-4' />
+              <Icon name="play_arrow" className='h-4 w-4' />
             ) : (
-              <Ban className='h-4 w-4' />
+              <Icon name="block" className='h-4 w-4' />
             ),
           // Comando vai pelo dispatcher: offline entra na fila.
           disabled: !canManage,
@@ -360,14 +346,14 @@ export default function AgentScheduledTasksPanel({
         {
           key: 'run',
           label: 'Executar agora',
-          icon: <Zap className='h-4 w-4' />,
+          icon: <Icon name="bolt" className='h-4 w-4' />,
           disabled: !canManage,
           onClick: () => runNow(menu.task),
         },
         {
           key: 'edit',
           label: 'Editar gatilho/ação',
-          icon: <Pencil className='h-4 w-4' />,
+          icon: <Icon name="edit" className='h-4 w-4' />,
           disabled: !canManage,
           separatorBefore: true,
           onClick: () => openEdit(menu.task),
@@ -375,13 +361,13 @@ export default function AgentScheduledTasksPanel({
         {
           key: 'copy',
           label: 'Copiar caminho da tarefa',
-          icon: <Copy className='h-4 w-4' />,
+          icon: <Icon name="content_copy" className='h-4 w-4' />,
           onClick: () => copyTaskId(menu.task),
         },
         {
           key: 'delete',
           label: 'Excluir tarefa',
-          icon: <Trash2 className='h-4 w-4' />,
+          icon: <Icon name="delete" className='h-4 w-4' />,
           danger: true,
           disabled: !canManage,
           separatorBefore: true,
@@ -521,21 +507,21 @@ export default function AgentScheduledTasksPanel({
               : 'Solicitar nova coleta ao agent'
           }
         >
-          <RefreshCw className='h-4 w-4' />
+          <Icon name="refresh" className='h-4 w-4' />
           Atualizar
         </Button>
       </div>
 
       {!canManage && (
         <p className='mb-3 flex items-center gap-2 rounded-lg border border-border bg-surface-light px-3 py-2 text-xs text-muted'>
-          <ShieldAlert className='h-3.5 w-3.5 shrink-0' />
+          <Icon name="gpp_maybe" className='h-3.5 w-3.5 shrink-0' />
           Você possui permissão somente leitura — o menu de contexto fica desabilitado.
         </p>
       )}
 
       <div className='mb-4 grid gap-2 sm:grid-cols-[1fr_240px]'>
         <div className='relative'>
-          <Search className='pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted' />
+          <Icon name="search" className='pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted' />
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -742,7 +728,7 @@ export default function AgentScheduledTasksPanel({
             </details>
 
             <p className='flex items-start gap-2 text-xs text-muted'>
-              <CalendarClock className='mt-0.5 h-3.5 w-3.5 shrink-0' />
+              <Icon name="event" className='mt-0.5 h-3.5 w-3.5 shrink-0' />
               A edição substitui o gatilho principal da tarefa no agent via PowerShell (Set-ScheduledTask).
             </p>
 
@@ -759,7 +745,7 @@ export default function AgentScheduledTasksPanel({
       </Modal>
 
       <p className='mt-3 flex items-center gap-2 text-xs text-muted'>
-        <Clock className='h-3.5 w-3.5' />
+        <Icon name="schedule" className='h-3.5 w-3.5' />
         Passe o mouse sobre uma tarefa para ver os detalhes ou clique com o botão direito para ver
         detalhes, habilitar, desabilitar, executar, editar ou excluir.
       </p>

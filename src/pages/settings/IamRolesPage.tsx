@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
-import { KeyRound, Plus, Trash2 } from "lucide-react";
+
 import toast from "react-hot-toast";
-import {
+import { Icon,
   Badge,
   Button,
   Card,
@@ -173,7 +173,7 @@ export default function IamRolesPage() {
                   void handleDelete(item);
                 }}
               >
-                <Trash2 className="h-4 w-4" />
+                <Icon name="delete" className="h-4 w-4" />
               </Button>
             )}
           </div>
@@ -231,7 +231,7 @@ export default function IamRolesPage() {
           action={
             canWrite ? (
               <Button size="sm" onClick={() => setCreateOpen(true)}>
-                <Plus className="h-4 w-4" /> Nova role
+                <Icon name="add" className="h-4 w-4" /> Nova role
               </Button>
             ) : undefined
           }
@@ -387,7 +387,7 @@ function RolePermissionsPanel({
             />
             </div>
             <Button size="sm" onClick={() => void assignPermission()} loading={addPermission.isPending} disabled={!selectedPermissionId}>
-              <KeyRound className="h-4 w-4" /> Atribuir
+              <Icon name="key" className="h-4 w-4" /> Atribuir
             </Button>
           </div>
           <p className="text-xs text-muted">
@@ -423,7 +423,7 @@ function RolePermissionsPanel({
                   }
                   disabled={!permissionId}
                 >
-                  <Trash2 className="h-4 w-4" />
+                  <Icon name="delete" className="h-4 w-4" />
                 </Button>
               )}
             </div>

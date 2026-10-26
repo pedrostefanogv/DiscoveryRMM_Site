@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
-import { KeyRound, LaptopMinimal, ShieldPlus, ShieldEllipsis } from "lucide-react";
+
 import { ApiError, authApi } from "@/api";
 import { useAuth } from "@/auth/AuthContext";
 import { isTemporaryTokenExpired } from "@/auth/jwtExpiry";
@@ -11,7 +11,7 @@ import {
   parseRegistrationOptions,
   serializeRegistrationCredential,
 } from "@/auth/webauthn";
-import { Button, Card, CardHeader, Input } from "@/components/ui";
+import { Icon, Button, Card, CardHeader, Input } from "@/components/ui";
 
 function resolveRoleMfaRequirement(roleMfaRequirement: string | undefined) {
   if (roleMfaRequirement === "Totp") return "Totp";
@@ -234,16 +234,16 @@ export default function MfaRegistrationPage() {
         <div className="rounded-2xl border border-border bg-surface-light p-4 text-sm text-muted-foreground">
           <div className="flex items-start gap-3">
             {isTotpFlow ? (
-              <ShieldEllipsis className="mt-0.5 h-4 w-4 text-primary" />
+              <Icon name="gpp_maybe" className="mt-0.5 h-4 w-4 text-primary" />
             ) : (
-              <LaptopMinimal className="mt-0.5 h-4 w-4 text-primary" />
+              <Icon name="laptop_mac" className="mt-0.5 h-4 w-4 text-primary" />
             )}
             {isTotpFlow
               ? "Escaneie o QR code (ou use o URI), gere o código e confirme para finalizar o cadastro OTP."
               : "Use um nome amigavel para distinguir passkeys, chaves fisicas e autenticadores de plataforma."}
           </div>
           <div className="mt-3 flex items-start gap-3">
-            <KeyRound className="mt-0.5 h-4 w-4 text-accent" />
+            <Icon name="key" className="mt-0.5 h-4 w-4 text-accent" />
             Informe um nome amigavel para a chave, que será exibido no painel de gerenciamento de MFA.
           </div>
         </div>
@@ -255,7 +255,7 @@ export default function MfaRegistrationPage() {
         )}
 
         <Button type="submit" className="w-full" size="lg" loading={isSubmitting}>
-          <ShieldPlus className="h-4 w-4" />
+          <Icon name="add_moderator" className="h-4 w-4" />
           {isTotpFlow
             ? totpSetupData
               ? " Confirmar OTP"

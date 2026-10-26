@@ -1,8 +1,7 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Download, Eye, RefreshCw } from "lucide-react";
 import toast from "react-hot-toast";
-import { Badge, Button, Card, CardHeader, DataTable, ErrorDisplay, Input, Loading, Modal, PageHeader, Select, type Column } from "@/components/ui";
+import { Icon, Badge, Button, Card, CardHeader, DataTable, ErrorDisplay, Input, Loading, Modal, PageHeader, Select, type Column } from "@/components/ui";
 import { useClients } from "@/hooks/useClients";
 import { useSites } from "@/hooks/useSites";
 import { useCursorPagination } from "@/hooks/useCursorPagination";
@@ -224,7 +223,7 @@ export default function PatchesInventory() {
               agentsPag.reset();
             }}
           >
-            <Eye className="h-4 w-4" />
+            <Icon name="visibility" className="h-4 w-4" />
             Agentes
           </Button>
         </div>
@@ -296,11 +295,11 @@ export default function PatchesInventory() {
         description="Visão por atualização (KB) com contagem de agentes pendentes/instalados e drill-down."
       >
         <Button variant="secondary" onClick={() => void list.refetch()} disabled={list.isFetching}>
-          <RefreshCw className="h-4 w-4" />
+          <Icon name="refresh" className="h-4 w-4" />
           Atualizar
         </Button>
         <Button onClick={() => void handleScan()} disabled={!canQuery || scan.isPending}>
-          <Download className="h-4 w-4" />
+          <Icon name="download" className="h-4 w-4" />
           {scan.isPending ? "Solicitando..." : "Verificar atualizações"}
         </Button>
       </PageHeader>

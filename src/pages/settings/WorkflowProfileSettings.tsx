@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Plus, Trash2, Pencil, Clock } from 'lucide-react';
+
 import {
   useWorkflowProfiles,
   useCreateWorkflowProfile,
@@ -9,7 +9,7 @@ import {
 import { useDepartments } from '@/hooks/useDepartments';
 import { useSlaCalendars } from '@/hooks/useSlaCalendars';
 import { useClients } from '@/hooks/useClients';
-import { Card, CardHeader, Button, Modal, Input, Select, Badge, Loading, ErrorDisplay } from '@/components/ui';
+import { Icon, Card, CardHeader, Button, Modal, Input, Select, Badge, Loading, ErrorDisplay } from '@/components/ui';
 import type { WorkflowProfile, CreateWorkflowProfileRequest, UpdateWorkflowProfileRequest, TicketPriority } from '@/api';
 import toast from 'react-hot-toast';
 
@@ -75,7 +75,7 @@ export default function WorkflowProfileSettings() {
             <Select label="Filtrar por cliente" options={clientOpts} value={clientId} onChange={e => setClientId(e.target.value)} />
           </div>
           <Button size="sm" onClick={() => setCreateOpen(true)}>
-            <Plus className="h-4 w-4" /> Novo Perfil
+            <Icon name="add" className="h-4 w-4" /> Novo Perfil
           </Button>
         </div>
       </Card>
@@ -139,7 +139,7 @@ function ProfileRow({ profile, deptName, clientName, calendarName, onEdit }: { p
   return (
     <div className="flex items-center gap-4 py-3">
       <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-surface-light">
-        <Clock className="h-4 w-4 text-muted" />
+        <Icon name="schedule" className="h-4 w-4 text-muted" />
       </div>
       <div className="flex-1 min-w-0">
         <p className="font-medium text-foreground">{profile.name}</p>
@@ -155,10 +155,10 @@ function ProfileRow({ profile, deptName, clientName, calendarName, onEdit }: { p
         {clientName ? <Badge color="accent">{clientName}</Badge> : <Badge color="slate">Global</Badge>}
         {!profile.isActive && <Badge color="warning">Inativo</Badge>}
         <button onClick={onEdit} aria-label="Editar" className="p-1 text-muted hover:text-foreground transition-colors">
-          <Pencil className="h-4 w-4" />
+          <Icon name="edit" className="h-4 w-4" />
         </button>
         <button onClick={handleDelete} aria-label="Excluir" className="p-1 text-muted hover:text-danger transition-colors">
-          <Trash2 className="h-4 w-4" />
+          <Icon name="delete" className="h-4 w-4" />
         </button>
       </div>
     </div>

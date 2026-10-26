@@ -1,20 +1,7 @@
 import { useState } from 'react';
-import {
-  Bell,
-  Bug,
-  MessageSquare,
-  Monitor,
-  Move,
-  Power,
-  RefreshCw,
-  RotateCcw,
-  ShieldCheck,
-  Trash2,
-  Zap,
-} from 'lucide-react';
 import toast from 'react-hot-toast';
 import { ApiError, agentUpdatesApi } from '@/api';
-import { ConfirmDialog, ContextMenu, type ContextMenuItem } from '@/components/ui';
+import { Icon, ConfirmDialog, ContextMenu, type ContextMenuItem } from '@/components/ui';
 import { TransferAgentModal } from '@/components/agents/TransferAgentModal';
 import PowerActionModal from '@/components/agents/PowerActionModal';
 import UpdatePowerActionModal from '@/components/agents/UpdatePowerActionModal';
@@ -178,7 +165,7 @@ export function AgentContextMenu({ agent, now, position, onClose }: AgentContext
     {
       key: 'remote',
       label: 'Acesso remoto',
-      icon: <Monitor className="h-4 w-4" />,
+      icon: <Icon name="desktop_windows" className="h-4 w-4" />,
       // Sessão ao vivo: sem o agent online a sessão não conecta.
       disabled: !canReachAgent,
       hint: canReachAgent ? undefined : offlineLiveHint,
@@ -187,7 +174,7 @@ export function AgentContextMenu({ agent, now, position, onClose }: AgentContext
     {
       key: 'chat',
       label: 'Abrir chat',
-      icon: <MessageSquare className="h-4 w-4" />,
+      icon: <Icon name="chat" className="h-4 w-4" />,
       // Conversa avulsa exige a máquina online no servidor. Usa o sinal
       // conservador: o status do banco pode ficar defasado da UI por ~3min.
       disabled: !canReachAgent,
@@ -197,7 +184,7 @@ export function AgentContextMenu({ agent, now, position, onClose }: AgentContext
     {
       key: 'debug',
       label: remoteDebugAgentId === agent.id ? 'Abrindo debug...' : 'Ver debug',
-      icon: <Bug className="h-4 w-4" />,
+      icon: <Icon name="bug_report" className="h-4 w-4" />,
       // Console de debug é uma sessão ao vivo (stream NATS + liveness).
       disabled: remoteDebugAgentId === agent.id || !canReachAgent,
       hint: canReachAgent ? undefined : offlineLiveHint,
@@ -206,7 +193,7 @@ export function AgentContextMenu({ agent, now, position, onClose }: AgentContext
     {
       key: 'update',
       label: updatingAgentId === agent.id ? 'Disparando update...' : 'Atualizar agente',
-      icon: <RefreshCw className="h-4 w-4" />,
+      icon: <Icon name="refresh" className="h-4 w-4" />,
       // Comando persistido pelo dispatcher: funciona offline (entrega depois).
       disabled: updatingAgentId === agent.id,
       hint: canReachAgent ? undefined : offlineQueueHint,
@@ -215,7 +202,7 @@ export function AgentContextMenu({ agent, now, position, onClose }: AgentContext
     {
       key: 'notify',
       label: 'Enviar notificação',
-      icon: <Bell className="h-4 w-4" />,
+      icon: <Icon name="notifications" className="h-4 w-4" />,
       // Comando persistido: só a permissão bloqueia; offline entra na fila.
       disabled: !canExecuteAgent,
       hint: !canExecuteAgent ? 'sem permissão' : canReachAgent ? undefined : offlineQueueHint,
@@ -227,31 +214,31 @@ export function AgentContextMenu({ agent, now, position, onClose }: AgentContext
     items.push({
       key: 'power',
       label: 'Energia',
-      icon: <Zap className="h-4 w-4" />,
+      icon: <Icon name="bolt" className="h-4 w-4" />,
       children: [
         {
           key: 'restart',
           label: 'Reiniciar',
-          icon: <RotateCcw className="h-4 w-4" />,
+          icon: <Icon name="restart_alt" className="h-4 w-4" />,
           onClick: () => setPowerActionAgent({ agent, action: 'restart' }),
         },
         {
           key: 'shutdown',
           label: 'Desligar',
-          icon: <Power className="h-4 w-4" />,
+          icon: <Icon name="power_settings_new" className="h-4 w-4" />,
           danger: true,
           onClick: () => setPowerActionAgent({ agent, action: 'shutdown' }),
         },
         {
           key: 'update-restart',
           label: 'Atualizar e reiniciar',
-          icon: <RefreshCw className="h-4 w-4" />,
+          icon: <Icon name="refresh" className="h-4 w-4" />,
           onClick: () => setUpdatePowerAction({ agent, action: 'restart' }),
         },
         {
           key: 'update-shutdown',
           label: 'Atualizar e desligar',
-          icon: <RefreshCw className="h-4 w-4" />,
+          icon: <Icon name="refresh" className="h-4 w-4" />,
           danger: true,
           onClick: () => setUpdatePowerAction({ agent, action: 'shutdown' }),
         },
@@ -263,7 +250,7 @@ export function AgentContextMenu({ agent, now, position, onClose }: AgentContext
     items.push({
       key: 'wol',
       label: wakeOnLan.isPending ? 'Enviando...' : 'Wake-on-LAN',
-      icon: <Zap className="h-4 w-4" />,
+      icon: <Icon name="bolt" className="h-4 w-4" />,
       disabled: wakeOnLan.isPending,
       onClick: () => setWolAgent(agent),
     });
@@ -273,7 +260,7 @@ export function AgentContextMenu({ agent, now, position, onClose }: AgentContext
     items.push({
       key: 'approve',
       label: approvingAgentId === agent.id ? 'Aprovando...' : 'Aprovar Zero-Touch',
-      icon: <ShieldCheck className="h-4 w-4" />,
+      icon: <Icon name="verified_user" className="h-4 w-4" />,
       disabled: approvingAgentId === agent.id,
       onClick: () => { void handleApproveZeroTouch(); },
     });
@@ -283,13 +270,13 @@ export function AgentContextMenu({ agent, now, position, onClose }: AgentContext
     items.push({
       key: 'transfer',
       label: 'Transferir agente',
-      icon: <Move className="h-4 w-4" />,
+      icon: <Icon name="open_with" className="h-4 w-4" />,
       onClick: () => setTransferAgent(agent),
     });
     items.push({
       key: 'delete',
       label: 'Mover para a lixeira',
-      icon: <Trash2 className="h-4 w-4" />,
+      icon: <Icon name="delete" className="h-4 w-4" />,
       danger: true,
       separatorBefore: true,
       disabled: deleteAgent.isPending,

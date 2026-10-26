@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { AppWindow, Monitor, Pencil, Ticket as TicketIcon, Trash2, Bell, BookOpen, ScrollText, Users } from 'lucide-react';
 import { SiteCustomFieldsCard } from '@/components/custom-fields/SiteCustomFieldsCard';
 import { useClient } from '@/hooks/useClients';
 import { useSite, useDeleteSite } from '@/hooks/useSites';
@@ -13,7 +12,7 @@ import { useNowTick } from '@/hooks/useNowTick';
 import { useSoftwareInventorySnapshot } from '@/hooks/useSoftwareInventory';
 import { useSendScopeNotification } from '@/hooks/useAgentAlerts';
 import { useAuthorization } from '@/auth/authorization';
-import { Badge, Button, Card, CardHeader, ConfirmDialog, ErrorDisplay, Loading, PageHeader, StatCard, EmptyState } from '@/components/ui';
+import { Icon, Badge, Button, Card, CardHeader, ConfirmDialog, ErrorDisplay, Loading, PageHeader, StatCard, EmptyState } from '@/components/ui';
 import { NotesPanel } from '@/components/notes/NotesPanel';
 import { AgentCollectionView } from '@/components/agents/AgentCollectionView';
 import { AgentContextMenu } from '@/components/agents/AgentContextMenu';
@@ -42,9 +41,9 @@ type SiteTab = 'chamados' | 'logs' | 'agentes';
 const SITE_TAB_IDS: SiteTab[] = ['chamados', 'logs', 'agentes'];
 
 const SITE_TABS: DetailTab<SiteTab>[] = [
-  { id: 'chamados', label: 'Chamados', icon: TicketIcon },
-  { id: 'logs', label: 'Logs', icon: ScrollText },
-  { id: 'agentes', label: 'Agentes', icon: Monitor },
+  { id: 'chamados', label: 'Chamados', icon: "confirmation_number" },
+  { id: 'logs', label: 'Logs', icon: "article" },
+  { id: 'agentes', label: 'Agentes', icon: "desktop_windows" },
 ];
 
 export default function SiteDetail() {
@@ -255,17 +254,17 @@ export default function SiteDetail() {
                 : 'Enviar notificação para todos os agentes do site'
           }
         >
-          <Bell className="h-4 w-4" /> Notificar
+          <Icon name="notifications" className="h-4 w-4" /> Notificar
         </Button>
         <Button
           size="sm"
           variant="ghost"
           onClick={() => navigate(`/knowledge?clientId=${currentClient.id}`)}
         >
-          <BookOpen className="h-4 w-4" /> Conhecimento
+          <Icon name="menu_book" className="h-4 w-4" /> Conhecimento
         </Button>
         <Button size="sm" variant="ghost" onClick={() => setEditSiteOpen(true)}>
-          <Pencil className="h-4 w-4" /> Editar
+          <Icon name="edit" className="h-4 w-4" /> Editar
         </Button>
         <Button
           variant="danger"
@@ -274,13 +273,13 @@ export default function SiteDetail() {
           aria-label="Excluir site"
           title="Excluir site"
         >
-          <Trash2 className="h-4 w-4" />
+          <Icon name="delete" className="h-4 w-4" />
         </Button>
       </PageHeader>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
-          icon={Monitor}
+          icon="desktop_windows"
           label="Agentes"
           value={agents.isLoading ? '—' : totalAgents}
           tone="primary"
@@ -295,7 +294,7 @@ export default function SiteDetail() {
           }
         />
         <StatCard
-          icon={TicketIcon}
+          icon="confirmation_number"
           label="Chamados do site"
           value={dashboard.isLoading ? (tickets.isLoading ? '—' : totalTickets) : dashboard.data?.tickets.open ?? totalTickets}
           tone="warning"
@@ -310,14 +309,14 @@ export default function SiteDetail() {
           }
         />
         <StatCard
-          icon={AppWindow}
+          icon="web_asset"
           label="Softwares instalados"
           value={softwareSnapshot.isLoading ? '—' : totalInstalledSoftware}
           tone="success"
           onClick={() => scrollToSection('site-software')}
         />
         <StatCard
-          icon={ScrollText}
+          icon="article"
           label={`Logs ${range}`}
           value={dashboard.isLoading ? (logs.isLoading ? '—' : recentLogs.length) : dashboard.data?.logs.total ?? recentLogs.length}
           tone="accent"
@@ -441,13 +440,13 @@ export default function SiteDetail() {
               subtitle={`${onlineAgents} de ${totalAgents} online`}
               action={
                 <Button size="sm" variant="ghost" onClick={() => navigate('/agents')}>
-                  <Users className="h-4 w-4" /> Gerenciar
+                  <Icon name="group" className="h-4 w-4" /> Gerenciar
                 </Button>
               }
             />
             {totalAgents === 0 && !agents.isLoading ? (
               <EmptyState
-                icon={Monitor}
+                icon="desktop_windows"
                 title="Nenhum agente neste site"
                 description="Gere um token de deploy no cliente para instalar agentes neste site."
                 action={{ label: 'Ver tokens de deploy', onClick: () => navigate('/deploy') }}

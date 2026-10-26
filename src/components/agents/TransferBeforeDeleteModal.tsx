@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
-import { Building2, AlertTriangle, Monitor, Loader2 } from "lucide-react";
+
 import toast from "react-hot-toast";
-import { Modal, Button, Select, Input } from "@/components/ui";
+import { Icon, Modal, Button, Select, Input } from "@/components/ui";
 import { useClients } from "@/hooks/useClients";
 import { useSites } from "@/hooks/useSites";
 import { useTransferBulkAgents } from "@/hooks/useAgentTransfer";
@@ -135,7 +135,7 @@ export function TransferBeforeDeleteModal({
         {/* Aviso */}
         <div className="rounded-lg border border-warning/30 bg-warning/10 p-3">
           <div className="flex items-start gap-2">
-            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-warning" />
+            <Icon name="warning" className="mt-0.5 h-5 w-5 shrink-0 text-warning" />
             <div>
               <p className="font-medium text-warning">
                 {entityType === "site"
@@ -154,7 +154,7 @@ export function TransferBeforeDeleteModal({
         {/* Resumo dos agentes */}
         <div className="rounded-lg border border-border bg-surface-light p-3">
           <div className="flex items-center gap-2 text-sm text-foreground">
-            <Monitor className="h-4 w-4 text-muted" />
+            <Icon name="desktop_windows" className="h-4 w-4 text-muted" />
             <span className="font-medium">{agentIds.length} agente(s)</span>
             <span className="text-muted">serão transferidos</span>
           </div>
@@ -175,7 +175,7 @@ export function TransferBeforeDeleteModal({
 
         {entityType === "client" && selectedClient && (
           <div className="flex items-center gap-2 rounded-lg bg-surface-light px-3 py-2 text-sm text-muted-foreground">
-            <Building2 className="h-4 w-4 text-muted" />
+            <Icon name="apartment" className="h-4 w-4 text-muted" />
             Cliente de destino: <span className="font-medium text-foreground">{selectedClient.name}</span>
           </div>
         )}
@@ -201,7 +201,7 @@ export function TransferBeforeDeleteModal({
         {/* Loading state */}
         {transferBulk.isPending && (
           <div className="flex items-center gap-2 rounded-lg bg-primary/10 px-3 py-2 text-sm text-primary">
-            <Loader2 className="h-4 w-4 animate-spin" />
+            <Icon name="progress_activity" className="h-4 w-4 animate-spin" />
             Transferindo {agentIds.length} agente(s)...
           </div>
         )}

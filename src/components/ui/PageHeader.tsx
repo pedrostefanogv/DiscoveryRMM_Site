@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { ArrowLeft } from 'lucide-react';
+import { Icon } from "@/components/ui";
 
 interface PageHeaderProps {
   title: string;
@@ -29,7 +29,7 @@ export function PageHeader({
           aria-label={backLabel}
           className="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-transparent text-muted-foreground transition-colors hover:border-border hover:bg-surface-light hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
         >
-          <ArrowLeft className="h-4 w-4" />
+          <Icon name="arrow_back" className="h-4 w-4" />
         </button>
       )}
       <div className="flex min-w-0 flex-1 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

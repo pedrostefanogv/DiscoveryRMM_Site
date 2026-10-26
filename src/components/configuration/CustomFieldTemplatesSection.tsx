@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Plus, Pencil, Trash2, Lock, Sparkles, Globe, Building2, Layers } from 'lucide-react';
-import {
+import { Icon,
   Badge,
   Button,
   Card,
@@ -108,7 +107,7 @@ export function CustomFieldTemplatesSection({ embedded = false }: { embedded?: b
     if (template.clientId) {
       return (
         <Badge color="accent">
-          <Building2 className="mr-0.5 inline h-3 w-3" />
+          <Icon name="apartment" className="mr-0.5 inline h-3 w-3" />
           {clientsById.get(template.clientId) ?? 'Cliente'}
         </Badge>
       );
@@ -116,14 +115,14 @@ export function CustomFieldTemplatesSection({ embedded = false }: { embedded?: b
     if (template.departmentId) {
       return (
         <Badge color="warning">
-          <Layers className="mr-0.5 inline h-3 w-3" />
+          <Icon name="layers" className="mr-0.5 inline h-3 w-3" />
           Departamento
         </Badge>
       );
     }
     return (
       <Badge color="slate">
-        <Globe className="mr-0.5 inline h-3 w-3" />
+        <Icon name="public" className="mr-0.5 inline h-3 w-3" />
         Global
       </Badge>
     );
@@ -158,7 +157,7 @@ export function CustomFieldTemplatesSection({ embedded = false }: { embedded?: b
           <p className="text-xs text-muted">
             {templates.length} modelo(s) — {templates.filter((t) => t.isBuiltIn).length} built-in.
           </p>
-          <Button size="sm" onClick={openCreate}><Plus className="h-4 w-4" /> Novo modelo</Button>
+          <Button size="sm" onClick={openCreate}><Icon name="add" className="h-4 w-4" /> Novo modelo</Button>
         </div>
       </div>
 
@@ -185,7 +184,7 @@ export function CustomFieldTemplatesSection({ embedded = false }: { embedded?: b
                   <Badge color="slate">{getCustomFieldDataTypeLabel(template.dataType)}</Badge>
                   {template.defaultIsRequired && <Badge color="warning">Obrigatório</Badge>}
                   {template.isBuiltIn && (
-                    <Badge color="accent"><Sparkles className="mr-0.5 inline h-3 w-3" />Built-in</Badge>
+                    <Badge color="accent"><Icon name="auto_awesome" className="mr-0.5 inline h-3 w-3" />Built-in</Badge>
                   )}
                   {!template.isActive && <Badge color="danger">Inativo</Badge>}
                 </div>
@@ -201,7 +200,7 @@ export function CustomFieldTemplatesSection({ embedded = false }: { embedded?: b
               </div>
               <div className="flex shrink-0 items-center gap-1">
                 <button onClick={() => openEdit(template)} aria-label="Editar" className="p-1 text-muted hover:text-foreground transition-colors">
-                  <Pencil className="h-4 w-4" />
+                  <Icon name="edit" className="h-4 w-4" />
                 </button>
                 <button
                   onClick={() => setDeleteTarget(template)}
@@ -210,7 +209,7 @@ export function CustomFieldTemplatesSection({ embedded = false }: { embedded?: b
                   title={template.isBuiltIn ? 'Modelos built-in não podem ser excluídos (apenas desativados pela API)' : 'Desativar'}
                   className="p-1 text-muted hover:text-danger transition-colors disabled:cursor-not-allowed disabled:opacity-40"
                 >
-                  {template.isBuiltIn ? <Lock className="h-4 w-4" /> : <Trash2 className="h-4 w-4" />}
+                  {template.isBuiltIn ? <Icon name="lock" className="h-4 w-4" /> : <Icon name="delete" className="h-4 w-4" />}
                 </button>
               </div>
             </div>

@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Copy, KeyRound } from 'lucide-react';
-import { Badge, Button, Input, Modal, Select, TextArea } from '@/components/ui';
+import { Icon, Badge, Button, Input, Modal, Select, TextArea } from '@/components/ui';
 import { useCreateDeployToken } from '@/hooks/useDeployTokens';
 import type { DeployToken } from '@/api';
 import toast from 'react-hot-toast';
@@ -144,7 +143,7 @@ export function CreateDeployTokenModal({
             </div>
             <div className="flex justify-end">
               <Button variant="secondary" onClick={handleCopy}>
-                <Copy className="h-4 w-4" /> Copiar Token
+                <Icon name="content_copy" className="h-4 w-4" /> Copiar Token
               </Button>
             </div>
           </div>
@@ -153,7 +152,7 @@ export function CreateDeployTokenModal({
         <div className="flex justify-end gap-3 pt-2">
           <Button variant="ghost" onClick={onClose}>Cancelar</Button>
           <Button onClick={handleCreate} loading={create.isPending} disabled={sites.length === 0}>
-            <KeyRound className="h-4 w-4" /> Gerar Token
+            <Icon name="key" className="h-4 w-4" /> Gerar Token
           </Button>
         </div>
       </div>

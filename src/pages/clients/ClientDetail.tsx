@@ -1,20 +1,5 @@
 import { useMemo, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import {
-  Plus,
-  Monitor,
-  Trash2,
-  AppWindow,
-  Building2,
-  Ticket as TicketIcon,
-  KeyRound,
-  BookOpen,
-  Pencil,
-  Bell,
-  StickyNote,
-  Users,
-  ScrollText,
-} from 'lucide-react';
 import { ClientCustomFieldsCard } from '@/components/custom-fields/ClientCustomFieldsCard';
 import { useClient, useDeleteClient } from '@/hooks/useClients';
 import { useSites } from '@/hooks/useSites';
@@ -27,7 +12,7 @@ import { useNowTick } from '@/hooks/useNowTick';
 import { useSoftwareInventorySnapshot } from '@/hooks/useSoftwareInventory';
 import { useSendScopeNotification } from '@/hooks/useAgentAlerts';
 import { useAuthorization } from '@/auth/authorization';
-import { Button, Card, CardHeader, Badge, Loading, ErrorDisplay, Modal, StatCard, PageHeader, ConfirmDialog, EmptyState } from '@/components/ui';
+import { Icon, Button, Card, CardHeader, Badge, Loading, ErrorDisplay, Modal, StatCard, PageHeader, ConfirmDialog, EmptyState } from '@/components/ui';
 import { NotesPanel } from '@/components/notes/NotesPanel';
 import { ClientFormModal } from '@/components/entity/ClientFormModal';
 import { SiteFormModal } from '@/components/entity/SiteFormModal';
@@ -58,10 +43,10 @@ type ClientTab = 'sites' | 'chamados' | 'logs' | 'agentes';
 const CLIENT_TAB_IDS: ClientTab[] = ['sites', 'chamados', 'logs', 'agentes'];
 
 const CLIENT_TABS: DetailTab<ClientTab>[] = [
-  { id: 'sites', label: 'Sites', icon: Building2 },
-  { id: 'chamados', label: 'Chamados', icon: TicketIcon },
-  { id: 'logs', label: 'Logs', icon: ScrollText },
-  { id: 'agentes', label: 'Agentes', icon: Monitor },
+  { id: 'sites', label: 'Sites', icon: "apartment" },
+  { id: 'chamados', label: 'Chamados', icon: "confirmation_number" },
+  { id: 'logs', label: 'Logs', icon: "article" },
+  { id: 'agentes', label: 'Agentes', icon: "desktop_windows" },
 ];
 
 export default function ClientDetail() {
@@ -261,17 +246,17 @@ export default function ClientDetail() {
                 : 'Enviar notificação para todos os agentes'
           }
         >
-          <Bell className="h-4 w-4" /> Notificar
+          <Icon name="notifications" className="h-4 w-4" /> Notificar
         </Button>
         <Button
           size="sm"
           variant="ghost"
           onClick={() => navigate(`/knowledge?clientId=${c.id}`)}
         >
-          <BookOpen className="h-4 w-4" /> Conhecimento
+          <Icon name="menu_book" className="h-4 w-4" /> Conhecimento
         </Button>
         <Button size="sm" variant="ghost" onClick={() => setEditClientOpen(true)}>
-          <Pencil className="h-4 w-4" /> Editar
+          <Icon name="edit" className="h-4 w-4" /> Editar
         </Button>
         <Button
           variant="danger"
@@ -280,14 +265,14 @@ export default function ClientDetail() {
           aria-label="Excluir cliente"
           title="Excluir cliente"
         >
-          <Trash2 className="h-4 w-4" />
+          <Icon name="delete" className="h-4 w-4" />
         </Button>
       </PageHeader>
 
       {/* Stat Cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
-          icon={Monitor}
+          icon="desktop_windows"
           label="Agentes"
           value={agents.isLoading ? '—' : totalAgents}
           tone="primary"
@@ -302,7 +287,7 @@ export default function ClientDetail() {
           }
         />
         <StatCard
-          icon={Building2}
+          icon="apartment"
           label="Sites"
           value={sites.isLoading ? '—' : totalSites}
           tone="accent"
@@ -315,14 +300,14 @@ export default function ClientDetail() {
           }
         />
         <StatCard
-          icon={AppWindow}
+          icon="web_asset"
           label="Softwares instalados"
           value={softwareSnapshot.isLoading ? '—' : totalInstalledSoftware}
           tone="success"
           onClick={() => scrollToSection('client-software')}
         />
         <StatCard
-          icon={TicketIcon}
+          icon="confirmation_number"
           label="Chamados"
           value={tickets.isLoading ? '—' : totalTickets}
           tone="warning"
@@ -412,7 +397,7 @@ export default function ClientDetail() {
               subtitle={`${totalSites} total · ${activeSites} ativo(s)`}
               action={
                 <Button size="sm" variant="ghost" onClick={() => setSiteModalOpen(true)} aria-label="Cadastrar site">
-                  <Plus className="h-4 w-4" />
+                  <Icon name="add" className="h-4 w-4" />
                 </Button>
               }
             />
@@ -430,7 +415,7 @@ export default function ClientDetail() {
                       className="flex min-w-0 flex-1 items-center gap-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 rounded-md"
                       aria-label={`Abrir dashboard do site ${site.name}`}
                     >
-                      <Building2 className="h-4 w-4 shrink-0 text-accent" aria-hidden="true" />
+                      <Icon name="apartment" className="h-4 w-4 shrink-0 text-accent" aria-hidden="true" />
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-sm font-medium text-foreground">{site.name}</span>
                         <span className="block truncate text-xs text-muted">
@@ -447,7 +432,7 @@ export default function ClientDetail() {
                       aria-label={`Notas do site ${site.name}`}
                       title="Notas do site"
                     >
-                      <StickyNote className="h-4 w-4" />
+                      <Icon name="sticky_note_2" className="h-4 w-4" />
                     </Button>
                     <Badge color={site.isActive ? 'success' : 'slate'}>{site.isActive ? 'Ativo' : 'Inativo'}</Badge>
                   </div>
@@ -456,7 +441,7 @@ export default function ClientDetail() {
               {sites.isLoading && <p className="text-sm text-muted">Carregando...</p>}
               {totalSites === 0 && !sites.isLoading && (
                 <EmptyState
-                  icon={Building2}
+                  icon="apartment"
                   title="Nenhum site cadastrado"
                   description="Cadastre um site para organizar os agentes deste cliente."
                   action={{ label: 'Cadastrar site', onClick: () => setSiteModalOpen(true) }}
@@ -494,7 +479,7 @@ export default function ClientDetail() {
               action={
                 <div className="flex items-center gap-2">
                   <Button size="sm" variant="ghost" onClick={() => navigate('/agents')}>
-                    <Users className="h-4 w-4" /> Gerenciar
+                    <Icon name="group" className="h-4 w-4" /> Gerenciar
                   </Button>
                   <Button
                     size="sm"
@@ -503,14 +488,14 @@ export default function ClientDetail() {
                     aria-label="Criar token de deploy"
                     title="Criar token de deploy"
                   >
-                    <KeyRound className="h-4 w-4" /> Deploy
+                    <Icon name="key" className="h-4 w-4" /> Deploy
                   </Button>
                 </div>
               }
             />
             {totalAgents === 0 && !agents.isLoading ? (
               <EmptyState
-                icon={Monitor}
+                icon="desktop_windows"
                 title="Nenhum agente neste cliente"
                 description="Gere um token de deploy para instalar o agente nas máquinas."
                 action={{ label: 'Criar token de deploy', onClick: () => setDeployModalOpen(true) }}

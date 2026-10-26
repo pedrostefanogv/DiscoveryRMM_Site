@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "react-hot-toast";
-import { ExternalLink, Paperclip, RefreshCw, X } from "lucide-react";
 import { apiFetchResponse } from "@/api/client";
 import { ticketChatApi, type TicketChatAttachment, type TicketChatMessage, type TicketChatSession } from "@/api/ticket-chat";
-import { Button } from "@/components/ui";
+import { Icon, Button } from "@/components/ui";
 import {
   useCurrentTicketChat,
   useEndTicketChat,
@@ -233,19 +232,19 @@ export default function TicketChatHistory({ ticketId, agentId, clientId, siteId,
         <div className="flex items-center gap-2">
           {currentSession?.status === "Pending" && canManage && (
             <Button size="sm" variant="ghost" onClick={() => handleRetry(currentSession.id)} disabled={retry.isPending}>
-              <RefreshCw className="h-4 w-4" /> Reenviar convite
+              <Icon name="refresh" className="h-4 w-4" /> Reenviar convite
             </Button>
           )}
           {currentSession && (
             <Button size="sm" variant="ghost" onClick={() => openWindow(currentSession.id)}>
-              <ExternalLink className="h-4 w-4" /> Abrir janela do chat
+              <Icon name="open_in_new" className="h-4 w-4" /> Abrir janela do chat
             </Button>
           )}
           {currentSession?.status === "Active" && canManage && (
             // Botão de verdade (sólido, vermelho): o Button ghost com ícone de
             // quadrado vazio parecia um checkbox desmarcado.
             <Button size="sm" variant="danger" onClick={() => handleEnd(currentSession.id)} disabled={end.isPending}>
-              <X className="h-4 w-4" /> Encerrar
+              <Icon name="close" className="h-4 w-4" /> Encerrar
             </Button>
           )}
           {canStart && (
@@ -402,7 +401,7 @@ export default function TicketChatHistory({ ticketId, agentId, clientId, siteId,
                             }
                             className="flex items-center gap-1 rounded-lg border border-border bg-surface-light px-2 py-1 text-xs text-foreground hover:border-primary/60"
                           >
-                            <Paperclip className="h-3 w-3" /> {attachment.fileName}
+                            <Icon name="attach_file" className="h-3 w-3" /> {attachment.fileName}
                           </button>
                         ))}
                       </div>
@@ -437,7 +436,7 @@ export default function TicketChatHistory({ ticketId, agentId, clientId, siteId,
               className="absolute -right-2 -top-2 rounded-full bg-surface p-1 text-foreground shadow"
               aria-label="Fechar"
             >
-              <X className="h-4 w-4" />
+              <Icon name="close" className="h-4 w-4" />
             </button>
             <img
               src={lightbox.url}

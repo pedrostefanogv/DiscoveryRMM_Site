@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { CalendarClock, Plus, Pencil, Trash2, Clock, FileText } from 'lucide-react';
-import {
+
+import { Icon,
   Badge,
   Button,
   Card,
@@ -135,7 +135,7 @@ export default function ReportSchedulesPage() {
           </p>
         </div>
         <Button onClick={() => setShowCreate(true)} disabled={showCreate || !!editingId}>
-          <Plus className="w-4 h-4 mr-2" />
+          <Icon name="add" className="w-4 h-4 mr-2" />
           Novo Agendamento
         </Button>
       </div>
@@ -253,7 +253,7 @@ export default function ReportSchedulesPage() {
       {schedules.length === 0 ? (
         <Card>
           <div className="p-8 text-center text-muted-foreground">
-            <CalendarClock className="w-12 h-12 mx-auto mb-4 opacity-50" />
+            <Icon name="event" className="w-12 h-12 mx-auto mb-4 opacity-50" />
             <p>Nenhum agendamento configurado</p>
             <p className="text-sm">Crie agendamentos para gerar relatórios automaticamente</p>
           </div>
@@ -273,11 +273,11 @@ export default function ReportSchedulesPage() {
                     </div>
                     <div className="flex flex-wrap gap-3 mt-2 text-sm text-muted-foreground">
                       <span className="flex items-center gap-1">
-                        <Clock className="w-3.5 h-3.5" />
+                        <Icon name="schedule" className="w-3.5 h-3.5" />
                         {formatSchedule(schedule)}
                       </span>
                       <span className="flex items-center gap-1">
-                        <FileText className="w-3.5 h-3.5" />
+                        <Icon name="description" className="w-3.5 h-3.5" />
                         {FORMAT_LABELS[Number(schedule.format)] ?? String(schedule.format)}
                       </span>
                     </div>
@@ -309,7 +309,7 @@ export default function ReportSchedulesPage() {
                       }}
                       title="Editar"
                     >
-                      <Pencil className="w-4 h-4" />
+                      <Icon name="edit" className="w-4 h-4" />
                     </Button>
                     <Button
                       variant="ghost"
@@ -320,7 +320,7 @@ export default function ReportSchedulesPage() {
                       }}
                       title="Excluir"
                     >
-                      <Trash2 className="w-4 h-4 text-danger" />
+                      <Icon name="delete" className="w-4 h-4 text-danger" />
                     </Button>
                   </div>
                 </div>

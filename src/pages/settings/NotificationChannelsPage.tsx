@@ -1,6 +1,5 @@
 import { useState } from 'react';
-import { Plus, Pencil, Trash2, Bell } from 'lucide-react';
-import { Badge, Button, Card, CardHeader, ConfirmDialog, ErrorDisplay, Input, Loading, Modal, Select, TextArea } from '@/components/ui';
+import { Icon, Badge, Button, Card, CardHeader, ConfirmDialog, ErrorDisplay, Input, Loading, Modal, Select, TextArea } from '@/components/ui';
 import {
   useNotificationChannels, useCreateNotificationChannel, useUpdateNotificationChannel, useDeleteNotificationChannel,
 } from '@/hooks/useSupportProductivity';
@@ -52,7 +51,7 @@ export default function NotificationChannelsPage() {
           <h1 className="text-2xl font-bold text-foreground">Notificações multicanal</h1>
           <p className="text-sm text-muted">Envie eventos de chamados para webhooks e e-mail, além do in-app.</p>
         </div>
-        <Button size="sm" onClick={openCreate}><Plus className="h-4 w-4" /> Novo canal</Button>
+        <Button size="sm" onClick={openCreate}><Icon name="add" className="h-4 w-4" /> Novo canal</Button>
       </div>
 
       <Card>
@@ -63,7 +62,7 @@ export default function NotificationChannelsPage() {
           {(channels.data ?? []).map((c) => (
             <div key={c.id} className="flex items-start gap-3 py-3">
               <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-surface-light">
-                <Bell className="h-4 w-4 text-muted" />
+                <Icon name="notifications" className="h-4 w-4 text-muted" />
               </div>
               <div className="min-w-0 flex-1">
                 <p className="font-medium text-foreground">{c.name}</p>
@@ -71,8 +70,8 @@ export default function NotificationChannelsPage() {
               </div>
               <div className="flex items-center gap-2">
                 {!c.isActive && <Badge color="warning">Inativo</Badge>}
-                <button onClick={() => openEdit(c)} aria-label="Editar" className="p-1 text-muted hover:text-foreground"><Pencil className="h-4 w-4" /></button>
-                <button onClick={() => setDeleteTarget(c)} aria-label="Excluir" className="p-1 text-muted hover:text-danger"><Trash2 className="h-4 w-4" /></button>
+                <button onClick={() => openEdit(c)} aria-label="Editar" className="p-1 text-muted hover:text-foreground"><Icon name="edit" className="h-4 w-4" /></button>
+                <button onClick={() => setDeleteTarget(c)} aria-label="Excluir" className="p-1 text-muted hover:text-danger"><Icon name="delete" className="h-4 w-4" /></button>
               </div>
             </div>
           ))}

@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Zap, Loader2, Wifi, WifiOff, Info } from "lucide-react";
+import { Icon } from "@/components/ui";
+
 import toast from "react-hot-toast";
 import type { Agent, WakeOnLanResponse } from "@/api";
 
@@ -50,7 +51,7 @@ export default function WakeOnLanModal({
         {/* Header */}
         <div className="mb-5 flex items-center gap-3">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-violet-500/15 text-violet-600 dark:text-violet-400">
-            <Zap className="h-5 w-5" />
+            <Icon name="bolt" className="h-5 w-5" />
           </div>
           <div>
             <h3 className="text-lg font-semibold text-foreground">Wake-on-LAN</h3>
@@ -61,9 +62,9 @@ export default function WakeOnLanModal({
         {/* Status */}
         <div className="mb-4 flex items-center gap-2 rounded-lg border border-border bg-surface-light p-3">
           {isOnline ? (
-            <Wifi className="h-4 w-4 text-success" />
+            <Icon name="wifi" className="h-4 w-4 text-success" />
           ) : (
-            <WifiOff className="h-4 w-4 text-muted" />
+            <Icon name="wifi_off" className="h-4 w-4 text-muted" />
           )}
           <span className="text-sm text-muted-foreground">
             O agente está{" "}
@@ -75,7 +76,7 @@ export default function WakeOnLanModal({
 
         {/* Info */}
         <div className="mb-4 flex items-start gap-2 rounded-lg border border-violet-500/20 bg-violet-500/10 p-3">
-          <Info className="mt-0.5 h-4 w-4 shrink-0 text-violet-600 dark:text-violet-400" />
+          <Icon name="info" className="mt-0.5 h-4 w-4 shrink-0 text-violet-600 dark:text-violet-400" />
           <div className="text-xs text-violet-700 dark:text-violet-300 space-y-1">
             <p>
               O comando será enviado para <strong>todos os agentes online</strong> no
@@ -121,7 +122,7 @@ export default function WakeOnLanModal({
             disabled={isLoading}
             className="flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
+            {isLoading && <Icon name="progress_activity" className="h-4 w-4 animate-spin" />}
             {isLoading ? "Enviando..." : "Enviar Magic Packet"}
           </button>
         </div>

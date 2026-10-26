@@ -1,5 +1,5 @@
 import { useMemo, useState, type MouseEvent } from 'react';
-import { LayoutGrid, List, Search } from 'lucide-react';
+import { Icon } from "@/components/ui";
 import { AgentCard, type AgentCardAgent } from './AgentCard';
 import { AgentListView } from './AgentListView';
 import { isAgentOnlineNow } from '@/utils/agentStatus';
@@ -101,7 +101,7 @@ export function AgentCollectionView({
               ))}
             </div>
             <div className="relative sm:w-56">
-              <Search
+              <Icon name="search"
                 className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted"
                 aria-hidden="true"
               />
@@ -127,7 +127,7 @@ export function AgentCollectionView({
             className={`flex h-9 w-9 items-center justify-center transition-colors ${viewMode === 'card' ? 'bg-primary/20 text-primary' : 'bg-surface-light text-muted hover:text-foreground'}`}
             title="Visualização em cards"
           >
-            <LayoutGrid className="h-4 w-4" />
+            <Icon name="grid_view" className="h-4 w-4" />
           </button>
           <button
             type="button"
@@ -136,7 +136,7 @@ export function AgentCollectionView({
             className={`flex h-9 w-9 items-center justify-center transition-colors ${viewMode === 'list' ? 'bg-primary/20 text-primary' : 'bg-surface-light text-muted hover:text-foreground'}`}
             title="Visualização em lista"
           >
-            <List className="h-4 w-4" />
+            <Icon name="list" className="h-4 w-4" />
           </button>
         </div>
       </div>

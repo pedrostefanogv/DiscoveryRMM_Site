@@ -4,11 +4,10 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
-import { CheckCircle2, KeyRound, UserRoundPen } from "lucide-react";
 import { ApiError, authApi } from "@/api";
 import { useAuth } from "@/auth/AuthContext";
 import { PASSWORD_RULES, passwordSchema } from "@/auth/passwordPolicy";
-import { Button, Card, CardHeader, Input, Loading } from "@/components/ui";
+import { Icon, Button, Card, CardHeader, Input, Loading } from "@/components/ui";
 
 const firstAccessSchema = z
   .object({
@@ -231,12 +230,12 @@ export default function FirstAccessPage() {
 
         <div className="rounded-xl border border-border bg-surface-light p-4 text-sm text-muted-foreground">
           <div className="mb-3 flex items-center gap-2 font-medium text-foreground">
-            <KeyRound className="h-4 w-4 text-primary" /> Politica minima de senha
+            <Icon name="key" className="h-4 w-4 text-primary" /> Politica minima de senha
           </div>
           <ul className="space-y-2">
             {PASSWORD_RULES.map((rule) => (
               <li key={rule} className="flex items-start gap-2">
-                <CheckCircle2 className="mt-0.5 h-4 w-4 text-accent" />
+                <Icon name="check_circle" className="mt-0.5 h-4 w-4 text-accent" />
                 <span>{rule}</span>
               </li>
             ))}
@@ -245,7 +244,7 @@ export default function FirstAccessPage() {
 
         <div className="rounded-xl border border-border bg-surface-light p-4 text-sm text-muted-foreground">
           <div className="flex items-start gap-3">
-            <UserRoundPen className="mt-0.5 h-4 w-4 text-primary" />
+            <Icon name="person_edit" className="mt-0.5 h-4 w-4 text-primary" />
             A API continua sendo a fonte de verdade para conflitos de login, e-mail e política final de senha.
           </div>
         </div>

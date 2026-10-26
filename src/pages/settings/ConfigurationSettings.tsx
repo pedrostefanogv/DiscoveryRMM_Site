@@ -1,22 +1,5 @@
 import { Link } from "react-router-dom";
-import {
-  ArrowRight,
-  BadgeCheck,
-  Bell,
-  Building2,
-  Database,
-  Layers,
-  ListChecks,
-  MapPin,
-  Palette,
-  ScrollText,
-  Server,
-  ShieldAlert,
-  Tags,
-  UploadCloud,
-  Workflow,
-} from "lucide-react";
-import { Card } from "@/components/ui";
+import { Icon, Card } from "@/components/ui";
 
 interface SettingsCard {
   title: string;
@@ -40,31 +23,31 @@ const groups: SettingsGroup[] = [
         title: "Configuração do Servidor",
         description: "Valores base para todos os clientes e sites.",
         to: "/settings/server",
-        icon: <Server className="h-5 w-5" />,
+        icon: <Icon name="dns" className="h-5 w-5" />,
       },
       {
         title: "Configuração de Cliente",
         description: "Sobrescritas por cliente. Nunca sobrescreve o que está bloqueado.",
         to: "/settings/client",
-        icon: <Building2 className="h-5 w-5" />,
+        icon: <Icon name="apartment" className="h-5 w-5" />,
       },
       {
         title: "Configuração de Site",
         description: "Sobrescritas por site, herdando de cliente e servidor.",
         to: "/settings/site",
-        icon: <MapPin className="h-5 w-5" />,
+        icon: <Icon name="location_on" className="h-5 w-5" />,
       },
       {
         title: "Configuração Efetiva",
         description: "Simulador de herança: valor efetivo e origem de cada campo.",
         to: "/settings/effective",
-        icon: <Layers className="h-5 w-5" />,
+        icon: <Icon name="layers" className="h-5 w-5" />,
       },
       {
         title: "Autorização de Acesso Remoto",
         description: "Prompt de consentimento, timeout e overrides por usuário/grupo.",
         to: "/settings/remote-consent",
-        icon: <ShieldAlert className="h-5 w-5" />,
+        icon: <Icon name="gpp_maybe" className="h-5 w-5" />,
       },
     ],
   },
@@ -76,25 +59,25 @@ const groups: SettingsGroup[] = [
         title: "Workflow",
         description: "Estados, transições e regras do fluxo de atendimento.",
         to: "/settings/workflow",
-        icon: <Workflow className="h-5 w-5" />,
+        icon: <Icon name="schema" className="h-5 w-5" />,
       },
       {
         title: "Workflow Profiles",
         description: "Perfis de workflow por escopo, com SLA associado.",
         to: "/settings/workflow-profiles",
-        icon: <ListChecks className="h-5 w-5" />,
+        icon: <Icon name="checklist" className="h-5 w-5" />,
       },
       {
         title: "Notificações",
         description: "Canais de notificação e eventos disparados.",
         to: "/settings/notifications",
-        icon: <Bell className="h-5 w-5" />,
+        icon: <Icon name="notifications" className="h-5 w-5" />,
       },
       {
         title: "Labels Automáticas",
         description: "Regras de rotulagem automática aplicadas aos agentes.",
         to: "/settings/agent-labels",
-        icon: <Tags className="h-5 w-5" />,
+        icon: <Icon name="sell" className="h-5 w-5" />,
       },
     ],
   },
@@ -106,25 +89,25 @@ const groups: SettingsGroup[] = [
         title: "Campos Personalizados",
         description: "Defina campos por escopo e gerencie valores por entidade.",
         to: "/settings/custom-fields",
-        icon: <BadgeCheck className="h-5 w-5" />,
+        icon: <Icon name="verified" className="h-5 w-5" />,
       },
       {
         title: "Agent Updates",
         description: "Canais, rollout e janelas de atualização do agente.",
         to: "/settings/agent-updates",
-        icon: <UploadCloud className="h-5 w-5" />,
+        icon: <Icon name="cloud_upload" className="h-5 w-5" />,
       },
       {
         title: "Auditoria de Configurações",
         description: "Histórico de alterações por entidade, campo e usuário.",
         to: "/settings/audit",
-        icon: <ScrollText className="h-5 w-5" />,
+        icon: <Icon name="article" className="h-5 w-5" />,
       },
       {
         title: "Manutenção do Banco de Dados",
         description: "Sanitização de inconsistências e reparos de dados.",
         to: "/settings/database-maintenance",
-        icon: <Database className="h-5 w-5" />,
+        icon: <Icon name="database" className="h-5 w-5" />,
       },
     ],
   },
@@ -136,7 +119,7 @@ const groups: SettingsGroup[] = [
         title: "Branding",
         description: "Nome da aplicação, logo e cores padrão.",
         to: "/settings/branding",
-        icon: <Palette className="h-5 w-5" />,
+        icon: <Icon name="palette" className="h-5 w-5" />,
       },
     ],
   },
@@ -177,7 +160,7 @@ export default function ConfigurationSettings() {
                       <p className="text-sm font-semibold text-foreground">{card.title}</p>
                       <p className="mt-0.5 text-xs text-muted">{card.description}</p>
                     </div>
-                    <ArrowRight className="mt-1 h-4 w-4 shrink-0 text-muted transition-transform group-hover:translate-x-0.5" />
+                    <Icon name="arrow_forward" className="mt-1 h-4 w-4 shrink-0 text-muted transition-transform group-hover:translate-x-0.5" />
                   </div>
                 </Card>
               </Link>

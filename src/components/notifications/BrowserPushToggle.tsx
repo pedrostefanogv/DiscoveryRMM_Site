@@ -1,6 +1,5 @@
-import { BellOff, BellRing, Loader2, Send } from "lucide-react";
 import toast from "react-hot-toast";
-import { Badge, Button } from "@/components/ui";
+import { Icon, Badge, Button } from "@/components/ui";
 import { useWebPushState } from "@/hooks/useWebPush";
 import {
   disableWebPush,
@@ -109,7 +108,7 @@ export function BrowserPushToggle() {
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
           <p className="flex items-center gap-2 text-sm font-medium text-foreground">
-            <BellRing className="h-4 w-4 text-primary" />
+            <Icon name="notifications_active" className="h-4 w-4 text-primary" />
             Notificacoes do navegador
             <Badge color="primary">Ativo</Badge>
           </p>
@@ -126,7 +125,7 @@ export function BrowserPushToggle() {
             aria-label="Enviar notificacao de teste"
             title="Enviar notificacao de teste"
           >
-            <Send className="h-4 w-4" />
+            <Icon name="send" className="h-4 w-4" />
           </Button>
           <Button
             size="sm"
@@ -136,7 +135,7 @@ export function BrowserPushToggle() {
             aria-label="Desativar notificacoes do navegador"
             title="Desativar notificacoes do navegador"
           >
-            <BellOff className="h-4 w-4" />
+            <Icon name="notifications_off" className="h-4 w-4" />
           </Button>
         </div>
       </div>
@@ -147,7 +146,7 @@ export function BrowserPushToggle() {
     <div className="flex items-center justify-between gap-3">
       <div className="min-w-0">
         <p className="flex items-center gap-2 text-sm font-medium text-foreground">
-          <BellOff className="h-4 w-4 text-muted" />
+          <Icon name="notifications_off" className="h-4 w-4 text-muted" />
           Notificacoes do navegador
         </p>
         <p className="mt-1 text-xs text-muted">
@@ -155,7 +154,7 @@ export function BrowserPushToggle() {
         </p>
       </div>
       <Button size="sm" disabled={busy} onClick={() => void handleEnable()}>
-        {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+        {busy ? <Icon name="progress_activity" className="h-4 w-4 animate-spin" /> : null}
         Ativar
       </Button>
     </div>

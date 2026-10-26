@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
-import { KeyRound, LockKeyhole, Pencil, ShieldCheck, Trash2, UserCircle2 } from "lucide-react";
-import { Badge, Button, Card, CardHeader, ErrorDisplay, Input, Loading, Modal, Select } from "@/components/ui";
+import { Icon, Badge, Button, Card, CardHeader, ErrorDisplay, Input, Loading, Modal, Select } from "@/components/ui";
 import { ApiError, authApi } from "@/api";
 import { useAuth } from "@/auth/AuthContext";
 import { PASSWORD_RULES, validatePassword } from "@/auth/passwordPolicy";
@@ -410,7 +409,7 @@ export default function ProfilePage() {
         <Card className="border-border bg-surface/40">
           <div className="flex items-start gap-3">
             <div className="rounded-xl bg-primary/15 p-3 text-primary">
-              <UserCircle2 className="h-5 w-5" />
+              <Icon name="account_circle" className="h-5 w-5" />
             </div>
             <div>
               <p className="text-sm text-muted">Conta</p>
@@ -423,7 +422,7 @@ export default function ProfilePage() {
         <Card className="border-border bg-surface/40">
           <div className="flex items-start gap-3">
             <div className="rounded-xl bg-accent/15 p-3 text-accent">
-              <ShieldCheck className="h-5 w-5" />
+              <Icon name="verified_user" className="h-5 w-5" />
             </div>
             <div>
               <p className="text-sm text-muted">Sessão</p>
@@ -440,7 +439,7 @@ export default function ProfilePage() {
         <Card className="border-border bg-surface/40">
           <div className="flex items-start gap-3">
             <div className="rounded-xl bg-success/15 p-3 text-success">
-              <KeyRound className="h-5 w-5" />
+              <Icon name="key" className="h-5 w-5" />
             </div>
             <div>
               <p className="text-sm text-muted">MFA</p>
@@ -518,7 +517,7 @@ export default function ProfilePage() {
                 }
                 loading={registeringKey}
               >
-                <KeyRound className="h-4 w-4" />
+                <Icon name="key" className="h-4 w-4" />
                 {activeRegisterMethod === "Totp"
                   ? totpSetup
                     ? " Confirmar OTP"
@@ -588,7 +587,7 @@ export default function ProfilePage() {
                           setRenameValue(key.name);
                         }}
                       >
-                        <Pencil className="h-4 w-4" /> Renomear
+                        <Icon name="edit" className="h-4 w-4" /> Renomear
                       </Button>
                       <Button
                         variant="ghost"
@@ -596,7 +595,7 @@ export default function ProfilePage() {
                         onClick={() => void runWithStepUp((token) => removeKey(key, token))}
                         disabled={deleteMfaKey.isPending}
                       >
-                        <Trash2 className="h-4 w-4" /> Remover
+                        <Icon name="delete" className="h-4 w-4" /> Remover
                       </Button>
                     </>
                   )}
@@ -623,7 +622,7 @@ export default function ProfilePage() {
         <CardHeader title="Alterar senha" subtitle="Use sua senha atual para definir uma nova senha" />
         <div className="mb-4 rounded-xl border border-border bg-surface-light p-3 text-xs text-muted">
           <div className="flex items-start gap-2">
-            <LockKeyhole className="mt-0.5 h-4 w-4 text-primary" />
+            <Icon name="lock" className="mt-0.5 h-4 w-4 text-primary" />
             <div>
               <p className="mb-1">A senha precisa atender à política mínima:</p>
               <ul className="list-inside list-disc space-y-0.5">

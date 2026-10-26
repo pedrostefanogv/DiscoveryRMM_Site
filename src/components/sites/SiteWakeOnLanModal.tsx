@@ -1,6 +1,6 @@
-import { Zap, Info } from "lucide-react";
+
 import toast from "react-hot-toast";
-import { Modal, Button } from "@/components/ui";
+import { Icon, Modal, Button } from "@/components/ui";
 import type { SiteWakeOnLanResponse } from "@/api";
 
 interface SiteWakeOnLanModalProps {
@@ -38,7 +38,7 @@ export default function SiteWakeOnLanModal({
         {/* Header icon + info */}
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-violet-500/15 text-violet-600 dark:text-violet-400">
-            <Zap className="h-5 w-5" />
+            <Icon name="bolt" className="h-5 w-5" />
           </div>
           <div>
             <p className="font-semibold text-foreground">{siteName}</p>
@@ -50,7 +50,7 @@ export default function SiteWakeOnLanModal({
 
         {/* Info */}
         <div className="flex items-start gap-2 rounded-lg border border-violet-500/20 bg-violet-500/10 p-3">
-          <Info className="mt-0.5 h-4 w-4 shrink-0 text-violet-600 dark:text-violet-400" />
+          <Icon name="info" className="mt-0.5 h-4 w-4 shrink-0 text-violet-600 dark:text-violet-400" />
           <div className="text-xs text-muted-foreground space-y-1">
             <p>
               O Magic Packet será enviado para <strong className="text-foreground">

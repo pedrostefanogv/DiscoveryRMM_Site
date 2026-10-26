@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useBlocker, useNavigate, useParams } from 'react-router-dom';
-import { Save } from 'lucide-react';
 import toast from 'react-hot-toast';
-import {
+import { Icon,
   Button,
   Card,
   CardHeader,
@@ -372,7 +371,7 @@ function ScriptForm({ editId, initial }: { editId: string | null; initial: Scrip
           Cancelar
         </Button>
         <Button type="submit" loading={isSaving}>
-          <Save className="h-4 w-4" /> {editId ? 'Salvar' : 'Criar'}
+          <Icon name="save" className="h-4 w-4" /> {editId ? 'Salvar' : 'Criar'}
         </Button>
       </div>
 

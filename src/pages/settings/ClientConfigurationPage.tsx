@@ -1,16 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import toast from "react-hot-toast";
-import {
-  Building2,
-  Bot,
-  Clock,
-  MonitorSmartphone,
-  RotateCcw,
-  Save,
-  ShieldCheck,
-  Store,
-} from "lucide-react";
 import { ApiError } from "@/api";
 import type { ConfigurationValue } from "@/api";
 import {
@@ -25,7 +15,7 @@ import {
   tintedIcon,
   type RemoteConsentFieldState,
 } from "@/components/configuration";
-import { Button, ErrorDisplay, Loading, Select } from "@/components/ui";
+import { Icon, Button, ErrorDisplay, Loading, Select } from "@/components/ui";
 import { useClients } from "@/hooks/useClients";
 import {
   useClientConfig,
@@ -448,7 +438,7 @@ export default function ClientConfigurationPage() {
         actions={
           <>
             <Button size="sm" variant="secondary" onClick={saveFull} loading={putMutation.isPending}>
-              <Save className="h-3.5 w-3.5" />
+              <Icon name="save" className="h-3.5 w-3.5" />
               Salvar tudo
             </Button>
             <Button
@@ -457,7 +447,7 @@ export default function ClientConfigurationPage() {
               onClick={removeLocalConfig}
               loading={deleteMutation.isPending}
             >
-              <RotateCcw className="h-3.5 w-3.5" />
+              <Icon name="restart_alt" className="h-3.5 w-3.5" />
               Restaurar herança
             </Button>
           </>
@@ -467,7 +457,7 @@ export default function ClientConfigurationPage() {
       <ConfigurationSectionCard
         title="Escopo de Cliente"
         subtitle="Selecione o cliente para editar apenas configurações válidas neste escopo."
-        icon={<Building2 className="h-4 w-4" />}
+        icon={<Icon name="apartment" className="h-4 w-4" />}
         iconClassName={tintedIcon.violet}
       >
         {clientsQuery.isLoading && <Loading message="Carregando clientes..." />}
@@ -503,7 +493,7 @@ export default function ClientConfigurationPage() {
             <ConfigurationSectionCard
               title="Funcionalidades do Sistema"
               subtitle="Ative ou desative módulos que impactam os agentes e sites desse cliente."
-              icon={<ShieldCheck className="h-4 w-4" />}
+              icon={<Icon name="verified_user" className="h-4 w-4" />}
               iconClassName={tintedIcon.sky}
             >
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -518,7 +508,7 @@ export default function ClientConfigurationPage() {
             <ConfigurationSectionCard
               title="Política da Loja de Aplicativos"
               subtitle="Define quais aplicativos podem ser instalados pelos agentes."
-              icon={<Store className="h-4 w-4" />}
+              icon={<Icon name="storefront" className="h-4 w-4" />}
               iconClassName={tintedIcon.violet}
             >
               <div className="space-y-4">
@@ -533,7 +523,7 @@ export default function ClientConfigurationPage() {
             <ConfigurationSectionCard
               title="Autorização de Acesso Remoto"
               subtitle="Somente sessões de área de trabalho. Terminal, arquivos, proxy e processos não pedem autorização."
-              icon={<MonitorSmartphone className="h-4 w-4" />}
+              icon={<Icon name="devices" className="h-4 w-4" />}
               iconClassName={tintedIcon.emerald}
             >
               <RemoteAccessConsentSection
@@ -557,7 +547,7 @@ export default function ClientConfigurationPage() {
             <ConfigurationSectionCard
               title="Intervalos e Comportamento do Agente"
               subtitle="Frequência de heartbeat, detecção de offline e coleta de inventário no escopo do cliente."
-              icon={<Clock className="h-4 w-4" />}
+              icon={<Icon name="schedule" className="h-4 w-4" />}
               iconClassName={tintedIcon.emerald}
             >
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -572,7 +562,7 @@ export default function ClientConfigurationPage() {
             <ConfigurationSectionCard
               title="Configurações Avançadas"
               subtitle="Auto-update e IA estruturada no escopo do cliente."
-              icon={<Bot className="h-4 w-4" />}
+              icon={<Icon name="smart_toy" className="h-4 w-4" />}
               iconClassName={tintedIcon.blue}
             >
               <div className="space-y-4">

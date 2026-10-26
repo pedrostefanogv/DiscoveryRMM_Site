@@ -43,7 +43,7 @@ describe("composer do chat de suporte — caixa única e controle remoto", () =>
     const remote = source("RemoteSession.tsx");
     expect(remote).toContain("openAgentSupportChatWindow(agentId, true)");
     expect(remote).toContain("Abrir o chat de suporte com esta máquina");
-    expect(remote).toContain("MessageSquare");
+    expect(remote).toContain('<Icon name="chat"');
   });
 
   it("os dois pontos de entrada informam o agent da máquina ao painel", () => {

@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Building2 } from 'lucide-react';
-import { Button, Input, Loading, Modal } from '@/components/ui';
+import { Icon, Button, Input, Loading, Modal } from '@/components/ui';
 import type { Department } from '@/api';
 
 /**
@@ -77,7 +76,7 @@ export function DepartmentPickerModal({
               : 'border-border text-muted-foreground hover:bg-surface-hover/60'
           }`}
         >
-          <Building2 className="h-3.5 w-3.5 shrink-0" />
+          <Icon name="apartment" className="h-3.5 w-3.5 shrink-0" />
           <span className="min-w-0 flex-1 truncate">Sem departamento</span>
           {selectedId === null && (
             <span className="shrink-0 text-[10px] uppercase tracking-wide text-muted">atual</span>
@@ -106,7 +105,7 @@ export function DepartmentPickerModal({
                     selected ? 'bg-primary/10 text-foreground' : 'text-muted-foreground hover:bg-surface-hover/60'
                   }`}
                 >
-                  <Building2 className={`h-3.5 w-3.5 shrink-0 ${selected ? 'text-primary' : 'text-muted'}`} />
+                  <Icon name="apartment" className={`h-3.5 w-3.5 shrink-0 ${selected ? 'text-primary' : 'text-muted'}`} />
                   <span className="min-w-0 flex-1 truncate">{department.name}</span>
                   {department.clientId == null && (
                     <span className="shrink-0 rounded-full border border-border px-1.5 text-[10px] uppercase tracking-wide text-muted">

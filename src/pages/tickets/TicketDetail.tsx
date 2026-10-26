@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect, useLayoutEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Send, Lock, Unlock, Clock, Activity, BookOpen, Paperclip, Upload, File, CheckCircle, XCircle, Loader2, Wrench, Copy, RotateCcw, ClipboardList, UserCog, UserCheck, RefreshCw, Monitor, Building2, Trash2 } from 'lucide-react';
 import { MarkdownViewer } from '@/components/ui/MarkdownViewer';
 import { useAuth } from '@/auth/AuthContext';
 import { getUserIdFromJwt, getUserNameFromJwt } from '@/auth/jwt';
@@ -59,7 +58,7 @@ import {
   useTicketAiSummary,
   useTicketAiTriage,
 } from '@/hooks/useTicketAi';
-import { Button, Card, CardHeader, Badge, Loading, ErrorDisplay, TextArea, Select, Input, ImageLightbox } from '@/components/ui';
+import { Icon, Button, Card, CardHeader, Badge, Loading, ErrorDisplay, TextArea, Select, Input, ImageLightbox } from '@/components/ui';
 import { ticketsApi } from '@/api';
 import type {
   AutomationTaskSummary,
@@ -217,7 +216,7 @@ export default function TicketDetail() {
           aria-label="Voltar"
           className="mt-1 rounded-lg p-2 text-muted hover:bg-surface-light hover:text-foreground"
         >
-          <ArrowLeft className="h-5 w-5" />
+          <Icon name="arrow_back" className="h-5 w-5" />
         </button>
         <div className="flex-1 min-w-0">
           <h1 className="text-2xl font-bold text-foreground truncate">{t.title}</h1>
@@ -233,7 +232,7 @@ export default function TicketDetail() {
           )}
           <ReopenButton ticketId={t.id} isClosed={Boolean(t.closedAt) || currentState?.isFinal === true} />
           <Button size="sm" variant="ghost" onClick={() => navigate(knowledgeUrl)}>
-            <BookOpen className="h-4 w-4" /> Conhecimento
+            <Icon name="menu_book" className="h-4 w-4" /> Conhecimento
           </Button>
           <DeleteTicketButton ticketId={t.id} title={t.title} />
         </div>
@@ -277,7 +276,7 @@ export default function TicketDetail() {
                 className={`px-4 py-3 text-sm font-medium transition-colors ${tab === 'timeline' ? 'border-b-2 border-primary text-foreground' : 'text-muted hover:text-foreground'}`}
                 onClick={() => setTab('timeline')}
               >
-                <Activity className="inline h-4 w-4 mr-1" />
+                <Icon name="monitoring" className="inline h-4 w-4 mr-1" />
                 Timeline
               </button>
               {attachmentsEnabled && (
@@ -285,7 +284,7 @@ export default function TicketDetail() {
                   className={`px-4 py-3 text-sm font-medium transition-colors ${tab === 'attachments' ? 'border-b-2 border-primary text-foreground' : 'text-muted hover:text-foreground'}`}
                   onClick={() => setTab('attachments')}
                 >
-                  <Paperclip className="inline h-4 w-4 mr-1" />
+                  <Icon name="attach_file" className="inline h-4 w-4 mr-1" />
                   Anexos
                 </button>
               )}
@@ -293,7 +292,7 @@ export default function TicketDetail() {
                 className={`px-4 py-3 text-sm font-medium transition-colors ${tab === 'automation' ? 'border-b-2 border-primary text-foreground' : 'text-muted hover:text-foreground'}`}
                 onClick={() => setTab('automation')}
               >
-                <Wrench className="inline h-4 w-4 mr-1" />
+                <Icon name="build" className="inline h-4 w-4 mr-1" />
                 Automação
               </button>
               <button
@@ -306,7 +305,7 @@ export default function TicketDetail() {
                 className={`px-4 py-3 text-sm font-medium transition-colors ${tab === 'chat' ? 'border-b-2 border-primary text-foreground' : 'text-muted hover:text-foreground'}`}
                 onClick={() => setTab('chat')}
               >
-                <Monitor className="inline h-4 w-4 mr-1" />
+                <Icon name="desktop_windows" className="inline h-4 w-4 mr-1" />
                 Chat
               </button>
             </div>
@@ -610,7 +609,7 @@ function TicketAiPanel({
                       )
                     }
                   >
-                    <Copy className="h-4 w-4" /> Copiar saida
+                    <Icon name="content_copy" className="h-4 w-4" /> Copiar saida
                   </Button>
                 </div>
               </>
@@ -632,7 +631,7 @@ function TicketAiPanel({
                     )
                   }
                 >
-                  <Copy className="h-4 w-4" /> Copiar saida
+                  <Icon name="content_copy" className="h-4 w-4" /> Copiar saida
                 </Button>
               </div>
             )}
@@ -682,7 +681,7 @@ function TicketAiPanel({
                   )
                 }
               >
-                <Copy className="h-4 w-4" /> Copiar resumo
+                <Icon name="content_copy" className="h-4 w-4" /> Copiar resumo
               </Button>
             </div>
             <TicketAiMetadata data={summary.data} />
@@ -732,7 +731,7 @@ function TicketAiPanel({
                   )
                 }
               >
-                <Copy className="h-4 w-4" /> Copiar resposta
+                <Icon name="content_copy" className="h-4 w-4" /> Copiar resposta
               </Button>
               <Button
                 size="sm"
@@ -981,7 +980,7 @@ function AutomationLinksPanel({
     <div className="space-y-4">
       <div className="rounded-xl border border-border bg-surface-light p-4">
         <div className="mb-3 flex items-center gap-2">
-          <Wrench className="h-4 w-4 text-muted" />
+          <Icon name="build" className="h-4 w-4 text-muted" />
           <div>
             <h3 className="text-sm font-semibold text-foreground">Solicitar automação</h3>
              <p className="text-xs text-muted">
@@ -1025,7 +1024,7 @@ function AutomationLinksPanel({
             loading={createLink.isPending}
             disabled={!selectedTaskId}
           >
-            <Wrench className="h-4 w-4" /> Vincular automação
+            <Icon name="build" className="h-4 w-4" /> Vincular automação
           </Button>
         </div>
       </div>
@@ -1176,7 +1175,7 @@ function ReopenButton({ ticketId, isClosed }: { ticketId: string; isClosed: bool
 
   return (
     <Button size="sm" variant="secondary" onClick={handleReopen} loading={reopen.isPending}>
-      <RotateCcw className="h-4 w-4" /> Reabrir
+      <Icon name="restart_alt" className="h-4 w-4" /> Reabrir
     </Button>
   );
 }
@@ -1208,7 +1207,7 @@ export function TicketOpeningSection({ ticket }: { ticket: Ticket }) {
       <div className="space-y-4">
         <div className="flex flex-wrap items-center gap-2">
           <Badge color={templateRemoved ? 'warning' : 'accent'}>
-            <ClipboardList className="mr-0.5 inline h-3 w-3" />
+            <Icon name="assignment" className="mr-0.5 inline h-3 w-3" />
             {ticket.templateName}
           </Badge>
           {templateRemoved && (
@@ -1297,7 +1296,7 @@ function DeleteTicketButton({ ticketId, title }: { ticketId: string; title: stri
       title="Excluir chamado"
       className="text-danger hover:bg-danger/10"
     >
-      <Trash2 className="h-4 w-4" /> Excluir
+      <Icon name="delete" className="h-4 w-4" /> Excluir
     </Button>
   );
 }
@@ -1484,7 +1483,7 @@ function TicketSummaryPanel({
     if (sla.isLoading) {
       return (
         <div className="flex items-center gap-2 text-muted">
-          <Clock className="h-4 w-4 animate-pulse" />
+          <Icon name="schedule" className="h-4 w-4 animate-pulse" />
           <span className="text-sm">Carregando SLA...</span>
         </div>
       );
@@ -1569,7 +1568,7 @@ function TicketSummaryPanel({
                 title="Alterar estado"
                 className="shrink-0 rounded-lg p-1 text-muted transition-colors hover:bg-surface-light hover:text-foreground"
               >
-                <RefreshCw className="h-4 w-4" />
+                <Icon name="refresh" className="h-4 w-4" />
               </button>
             </div>
             {stateEditing && (
@@ -1629,7 +1628,7 @@ function TicketSummaryPanel({
                 title={requesterUserId ? 'Alterar solicitante' : 'Vincular solicitante'}
                 className="shrink-0 rounded-lg p-1 text-muted transition-colors hover:bg-surface-light hover:text-foreground"
               >
-                <UserCog className="h-4 w-4" />
+                <Icon name="manage_accounts" className="h-4 w-4" />
               </button>
             </div>
           </dd>
@@ -1654,7 +1653,7 @@ function TicketSummaryPanel({
                 title={agentId ? 'Alterar agent' : 'Vincular agent'}
                 className="shrink-0 rounded-lg p-1 text-muted transition-colors hover:bg-surface-light hover:text-foreground"
               >
-                <Monitor className="h-4 w-4" />
+                <Icon name="desktop_windows" className="h-4 w-4" />
               </button>
             </div>
           </dd>
@@ -1679,7 +1678,7 @@ function TicketSummaryPanel({
                 title="Alterar departamento"
                 className="shrink-0 rounded-lg p-1 text-muted transition-colors hover:bg-surface-light hover:text-foreground"
               >
-                <Building2 className="h-4 w-4" />
+                <Icon name="apartment" className="h-4 w-4" />
               </button>
             </div>
           </dd>
@@ -1705,7 +1704,7 @@ function TicketSummaryPanel({
                   title="Assumir este chamado"
                   className="shrink-0 rounded-lg p-1 text-muted transition-colors hover:bg-surface-light hover:text-foreground disabled:opacity-50"
                 >
-                  <UserCheck className="h-4 w-4" />
+                  <Icon name="how_to_reg" className="h-4 w-4" />
                 </button>
               )}
             </div>
@@ -1733,7 +1732,7 @@ function TicketSummaryPanel({
 
       <div className="mt-4 border-t border-border pt-4">
         <div className="mb-2 flex items-center gap-2 text-muted-foreground">
-          <Clock className="h-4 w-4" />
+          <Icon name="schedule" className="h-4 w-4" />
           <p className="text-sm font-medium">SLA</p>
         </div>
         {renderSlaContent()}
@@ -1997,10 +1996,10 @@ function CommentsPanel({
                 <div className="mt-1 flex items-center gap-2 text-xs text-muted">
                   <span className="text-sm font-medium text-foreground">{c.author}</span>
                   <span className="text-xs text-muted">{new Date(c.createdAt).toLocaleString('pt-BR')}</span>
-                  {c.isInternal && <Badge color="warning"><Lock className="mr-1 h-3 w-3" />Interno</Badge>}
+                  {c.isInternal && <Badge color="warning"><Icon name="lock" className="mr-1 h-3 w-3" />Interno</Badge>}
                   {deleted && (
                     <Badge color="danger">
-                      <Trash2 className="mr-1 h-3 w-3" />
+                      <Icon name="delete" className="mr-1 h-3 w-3" />
                       Excluído{c.deletedBy ? ` por ${c.deletedBy}` : ''}
                     </Badge>
                   )}
@@ -2011,7 +2010,7 @@ function CommentsPanel({
                       onClick={() => handleDeleteComment(c.id)}
                       title="Excluir comentário"
                     >
-                      <Trash2 className="h-3 w-3" />
+                      <Icon name="delete" className="h-3 w-3" />
                       Excluir
                     </button>
                   )}
@@ -2088,14 +2087,13 @@ function TimelinePanel({
           <div className="space-y-3">
             {group.items.map((entry) => {
               const meta = timelineMetaFor(entry.activityType);
-              const Icon = meta.icon;
 
               return (
                 <div key={entry.id} className="flex gap-3">
                   <div
                     className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${TIMELINE_TONE_CLASS[meta.tone]}`}
                   >
-                    <Icon className="h-3.5 w-3.5" />
+                    <Icon name={meta.icon} className="h-3.5 w-3.5" />
                   </div>
 
                   <div className="min-w-0 flex-1">
@@ -2383,13 +2381,13 @@ function CommentForm({
         <div className="flex flex-wrap gap-2">
           {pending.map((item) => (
             <span key={item.key} className="flex items-center gap-2 rounded-lg border border-border bg-surface-light px-2 py-1 text-xs">
-              <Paperclip className="h-3 w-3" />
+              <Icon name="attach_file" className="h-3 w-3" />
               <span className="max-w-[180px] truncate">{item.fileName}</span>
-              {item.status === 'uploading' && <Loader2 className="h-3 w-3 animate-spin" />}
-              {item.status === 'done' && <CheckCircle className="h-3 w-3 text-success" />}
+              {item.status === 'uploading' && <Icon name="progress_activity" className="h-3 w-3 animate-spin" />}
+              {item.status === 'done' && <Icon name="check_circle" className="h-3 w-3 text-success" />}
               {item.status === 'error' && (
                 <>
-                  <XCircle className="h-3 w-3 text-danger" />
+                  <Icon name="cancel" className="h-3 w-3 text-danger" />
                   <span className="text-danger" title={item.error}>falhou</span>
                 </>
               )}
@@ -2420,16 +2418,16 @@ function CommentForm({
                 : 'Anexos desabilitados nas configurações do servidor'
             }
           >
-            <Paperclip className="h-4 w-4" /> Anexar
+            <Icon name="attach_file" className="h-4 w-4" /> Anexar
           </Button>
           <label className="flex items-center gap-2 text-sm text-muted">
             <input type="checkbox" checked={isInternal} onChange={e => setIsInternal(e.target.checked)} className="rounded bg-surface-light border-border" />
-            {isInternal ? <Lock className="h-3.5 w-3.5" /> : <Unlock className="h-3.5 w-3.5" />}
+            {isInternal ? <Icon name="lock" className="h-3.5 w-3.5" /> : <Icon name="lock_open" className="h-3.5 w-3.5" />}
             Nota interna
           </label>
         </div>
         <Button size="sm" onClick={handleSubmit} loading={addComment.isPending} disabled={content.trim().length < 3 || uploading}>
-          <Send className="h-4 w-4" /> Enviar
+          <Icon name="send" className="h-4 w-4" /> Enviar
         </Button>
       </div>
     </div>
@@ -2490,7 +2488,7 @@ function AttachmentThumb({ ticketId, commentId, attachment, size = 'md' }: {
   }, [ticketId, commentId, attachment.id, isImage]);
 
   if (!isImage || !url) {
-    return <File className="h-4 w-4 shrink-0 text-muted" />;
+    return <Icon name="draft" className="h-4 w-4 shrink-0 text-muted" />;
   }
 
   return (
@@ -2625,7 +2623,7 @@ function AttachmentPreviewButton({
             className="h-8 w-8 shrink-0 rounded border border-border object-cover"
           />
         ) : (
-          <File className="h-4 w-4 shrink-0 text-muted" />
+          <Icon name="draft" className="h-4 w-4 shrink-0 text-muted" />
         )}
         <span className={fileNameClassName}>{attachment.fileName}</span>
       </button>
@@ -2957,12 +2955,12 @@ function AttachmentsPanel({
   };
 
   const STATUS_ICON: Record<UploadStatus, React.ReactNode> = {
-    idle: <Upload className="h-4 w-4 text-muted" />,
-    preparing: <Loader2 className="h-4 w-4 animate-spin text-sky-600 dark:text-sky-400" />,
-    uploading: <Loader2 className="h-4 w-4 animate-spin text-sky-600 dark:text-sky-400" />,
-    confirming: <Loader2 className="h-4 w-4 animate-spin text-sky-600 dark:text-sky-400" />,
-    done: <CheckCircle className="h-4 w-4 text-success" />,
-    error: <XCircle className="h-4 w-4 text-danger" />,
+    idle: <Icon name="upload" className="h-4 w-4 text-muted" />,
+    preparing: <Icon name="progress_activity" className="h-4 w-4 animate-spin text-sky-600 dark:text-sky-400" />,
+    uploading: <Icon name="progress_activity" className="h-4 w-4 animate-spin text-sky-600 dark:text-sky-400" />,
+    confirming: <Icon name="progress_activity" className="h-4 w-4 animate-spin text-sky-600 dark:text-sky-400" />,
+    done: <Icon name="check_circle" className="h-4 w-4 text-success" />,
+    error: <Icon name="cancel" className="h-4 w-4 text-danger" />,
   };
 
   const STATUS_LABEL: Record<UploadStatus, string> = {
@@ -2999,7 +2997,7 @@ function AttachmentsPanel({
             onDragOver={(e) => e.preventDefault()}
             onDrop={(e) => { e.preventDefault(); handleFiles(e.dataTransfer.files); }}
           >
-            <Paperclip className="h-6 w-6 text-muted" />
+            <Icon name="attach_file" className="h-6 w-6 text-muted" />
             <p className="text-sm text-muted">
               Arraste arquivos aqui ou{' '}
               <span className="text-primary underline">clique para selecionar</span>
@@ -3023,7 +3021,7 @@ function AttachmentsPanel({
             <div className="space-y-2">
               {queue.map((entry, idx) => (
                 <div key={idx} className="flex items-center gap-3 rounded-lg border border-border bg-surface-light px-3 py-2">
-                  <File className="h-4 w-4 shrink-0 text-muted" />
+                  <Icon name="draft" className="h-4 w-4 shrink-0 text-muted" />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm text-foreground">{entry.file.name}</p>
                     <p className="text-xs text-muted">{formatBytes(entry.file.size)}</p>
@@ -3039,7 +3037,7 @@ function AttachmentsPanel({
                     aria-label={`Remover ${entry.file.name} da fila`}
                     onClick={() => setQueue((q) => q.filter((_item, index) => index !== idx))}
                   >
-                    <XCircle className="h-4 w-4" />
+                    <Icon name="cancel" className="h-4 w-4" />
                   </Button>
                 </div>
               ))}
@@ -3051,7 +3049,7 @@ function AttachmentsPanel({
                   loading={uploading}
                   disabled={!queue.some((e) => e.status === 'idle')}
                 >
-                  <Upload className="h-4 w-4" /> Enviar todos
+                  <Icon name="upload" className="h-4 w-4" /> Enviar todos
                 </Button>
               </div>
             </div>

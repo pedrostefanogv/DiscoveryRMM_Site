@@ -1,23 +1,8 @@
 import { useId } from "react";
 import type { ReactNode } from "react";
-import {
-  AlertTriangle,
-  Ban,
-  Bell,
-  Check,
-  Clock,
-  Lock,
-  Monitor,
-  RotateCcw,
-  Save,
-  ShieldCheck,
-  ShieldOff,
-  Timer,
-  Undo2,
-} from "lucide-react";
 import type { ConfigurationOrigin } from "@/api";
 import type { RemoteConsentMode, RemoteConsentTimeoutAction } from "@/api/remote-consent";
-import { Button, Input, TextArea } from "@/components/ui";
+import { Icon, Button, Input, TextArea } from "@/components/ui";
 import {
   selectedIcon,
   selectedSurface,
@@ -178,9 +163,9 @@ const ACTION_OPTIONS: {
 const TIMEOUT_PRESETS = [15, 30, 60, 120];
 
 function modeIcon(mode: RemoteConsentMode): ReactNode {
-  if (mode === "Off") return <ShieldOff className="h-4 w-4" />;
-  if (mode === "NotifyOnly") return <Bell className="h-4 w-4" />;
-  return <ShieldCheck className="h-4 w-4" />;
+  if (mode === "Off") return <Icon name="gpp_bad" className="h-4 w-4" />;
+  if (mode === "NotifyOnly") return <Icon name="notifications" className="h-4 w-4" />;
+  return <Icon name="verified_user" className="h-4 w-4" />;
 }
 
 function fieldOrDefault(
@@ -303,7 +288,7 @@ function FieldRow({
 
         {state.locked ? (
           <p className="mt-2 flex items-center gap-1 text-xs text-warning">
-            <Lock className="h-3 w-3" />
+            <Icon name="lock" className="h-3 w-3" />
             Bloqueado{state.lockOwner ? " por " + state.lockOwner : ""} para este escopo.
           </p>
         ) : null}
@@ -322,7 +307,7 @@ function FieldRow({
                 aria-label={"Restaurar " + label}
                 className="rounded-md border border-transparent p-1 text-muted transition-colors hover:border-border hover:bg-surface-light hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30"
               >
-                <RotateCcw className="h-3.5 w-3.5" />
+                <Icon name="restart_alt" className="h-3.5 w-3.5" />
               </button>
             )}
           </div>
@@ -424,14 +409,14 @@ function ConsentPreview({
             <div className="mx-auto w-full max-w-md rounded-xl border border-border bg-surface p-4 shadow-sm">
               <div className="flex items-start gap-2.5">
                 <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-500/15 text-amber-600 dark:text-amber-300">
-                  <ShieldCheck className="h-5 w-5" />
+                  <Icon name="verified_user" className="h-5 w-5" />
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-semibold text-foreground">Autorização de acesso remoto</p>
                   <p className="text-[11px] text-muted">Discovery · {siteName}</p>
                 </div>
                 <span className="inline-flex items-center gap-1 rounded-full bg-rose-500/15 px-2 py-0.5 font-mono text-[11px] font-semibold text-rose-700 dark:text-rose-300">
-                  <Clock className="h-3 w-3" />
+                  <Icon name="schedule" className="h-3 w-3" />
                   {formatRemoteConsentCountdown(timeoutSeconds)}
                 </span>
               </div>
@@ -463,7 +448,7 @@ function ConsentPreview({
             <div className="mx-auto w-full max-w-md rounded-xl border border-border bg-surface p-3 shadow-sm">
               <div className="flex items-start gap-2.5">
                 <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-sky-500/15 text-sky-600 dark:text-sky-300">
-                  <Bell className="h-4 w-4" />
+                  <Icon name="notifications" className="h-4 w-4" />
                 </span>
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-foreground">Sem prompt: a sessão conecta direto</p>
@@ -701,7 +686,7 @@ export function RemoteAccessConsentSection({
                       (selected ? "border-sky-500 bg-sky-500 text-white" : "border-border-strong")
                     }
                   >
-                    {selected ? <Check className="h-3 w-3" /> : null}
+                    {selected ? <Icon name="check" className="h-3 w-3" /> : null}
                   </span>
                 </div>
                 <p className="text-sm font-medium text-foreground">{option.title}</p>
@@ -713,7 +698,7 @@ export function RemoteAccessConsentSection({
 
         {modeState.locked && (
           <p className="mt-2 flex items-center gap-1 text-xs text-warning">
-            <Lock className="h-3 w-3" />
+            <Icon name="lock" className="h-3 w-3" />
             Modo bloqueado{modeState.lockOwner ? " por " + modeState.lockOwner : ""} neste escopo.
           </p>
         )}
@@ -727,7 +712,7 @@ export function RemoteAccessConsentSection({
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex flex-wrap items-center gap-2">
             <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-500/15 text-amber-600 dark:text-amber-300">
-              <Timer className="h-4 w-4" />
+              <Icon name="timer" className="h-4 w-4" />
             </span>
             <div>
               <p className="text-sm font-semibold text-foreground">Prompt de consentimento</p>
@@ -740,7 +725,7 @@ export function RemoteAccessConsentSection({
 
         {promptHasNoEffect && (
           <p className="mt-3 flex items-start gap-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-2.5 py-1.5 text-[11px] text-amber-800 dark:text-amber-200">
-            <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
+            <Icon name="warning" className="mt-0.5 h-3 w-3 shrink-0" />
             <span>
               O tempo e a ação automática só valem no modo <strong>Solicitar autorização</strong>; a mensagem
               aparece apenas no prompt — no modo <strong>Apenas notificar</strong> o agent não exibe texto nenhum.
@@ -844,7 +829,7 @@ export function RemoteAccessConsentSection({
                         (selected ? selectedIcon : unselectedIcon)
                       }
                     >
-                      {option.value === "Approve" ? <Check className="h-3.5 w-3.5" /> : <Ban className="h-3.5 w-3.5" />}
+                      {option.value === "Approve" ? <Icon name="check" className="h-3.5 w-3.5" /> : <Icon name="block" className="h-3.5 w-3.5" />}
                     </span>
                     <span className="min-w-0">
                       <span className="block text-xs font-medium text-foreground">{option.title}</span>
@@ -908,7 +893,7 @@ export function RemoteAccessConsentSection({
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex flex-wrap items-center gap-2">
             <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-sky-500/15 text-sky-600 dark:text-sky-300">
-              <Monitor className="h-4 w-4" />
+              <Icon name="desktop_windows" className="h-4 w-4" />
             </span>
             <div>
               <p className="text-sm font-semibold text-foreground">Banner durante a sessão</p>
@@ -922,7 +907,7 @@ export function RemoteAccessConsentSection({
 
         {bannerHasNoEffect && (
           <p className="mt-3 flex items-start gap-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-2.5 py-1.5 text-[11px] text-amber-800 dark:text-amber-200">
-            <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
+            <Icon name="warning" className="mt-0.5 h-3 w-3 shrink-0" />
             <span>
               No modo <strong>Desligado</strong> o agent não exibe banner nem ícone de sessão. O ajuste fica
               salvo para quando o modo mudar.
@@ -1041,11 +1026,11 @@ export function RemoteAccessConsentSection({
             onClick={onDiscard}
             disabled={dirtyCount === 0 || !!saving}
           >
-            <Undo2 className="h-3.5 w-3.5" />
+            <Icon name="undo" className="h-3.5 w-3.5" />
             Descartar
           </Button>
           <Button size="sm" onClick={onSave} loading={saving} disabled={dirtyCount === 0}>
-            <Save className="h-3.5 w-3.5" />
+            <Icon name="save" className="h-3.5 w-3.5" />
             Salvar alterações
           </Button>
         </div>

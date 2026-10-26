@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import toast from "react-hot-toast";
-import { Plus, Pencil, Trash2, Shield } from "lucide-react";
-import {
+
+import { Icon,
   Badge,
   Button,
   ErrorDisplay,
@@ -288,7 +288,7 @@ function FieldRow({
               {field.isRequired && <Badge color="warning">Obrigatório</Badge>}
               {field.isInternal && (
                 <Badge color="accent">
-                  <Shield className="h-3 w-3 mr-0.5 inline" />
+                  <Icon name="shield" className="h-3 w-3 mr-0.5 inline" />
                   Interno
                 </Badge>
               )}
@@ -320,14 +320,14 @@ function FieldRow({
               aria-label="Editar"
               className="p-1 text-muted hover:text-foreground transition-colors"
             >
-              <Pencil className="h-4 w-4" />
+              <Icon name="edit" className="h-4 w-4" />
             </button>
             <button
               onClick={handleDelete}
               aria-label="Remover"
               className="p-1 text-muted hover:text-danger transition-colors"
             >
-              <Trash2 className="h-4 w-4" />
+              <Icon name="delete" className="h-4 w-4" />
             </button>
           </div>
         </div>
@@ -363,7 +363,7 @@ function CreateFieldButton({
   return (
     <>
       <Button size="sm" onClick={() => setOpen(true)}>
-        <Plus className="h-4 w-4" /> Adicionar Campo
+        <Icon name="add" className="h-4 w-4" /> Adicionar Campo
       </Button>
       {open && (
         <FieldFormModal
@@ -827,7 +827,7 @@ function FieldFormModal({
               onChange={(e) => setForm((f) => ({ ...f, isInternal: e.target.checked }))}
               className="rounded bg-surface-light border-border"
             />
-            <Shield className="h-3.5 w-3.5" />
+            <Icon name="shield" className="h-3.5 w-3.5" />
             Campo Interno (visível apenas para atendentes)
           </label>
           <label className="flex items-center gap-2 text-sm text-muted-foreground">

@@ -1,5 +1,4 @@
-import { Ticket as TicketIcon } from 'lucide-react';
-import { Badge, Button, Card, CardHeader } from '@/components/ui';
+import { Icon, Badge, Button, Card, CardHeader } from '@/components/ui';
 import { getTicketPriorityMeta } from '@/utils/labels';
 import type { Ticket } from '@/api';
 
@@ -49,7 +48,7 @@ export function RecentTicketsCard({
               }}
               className="flex cursor-pointer items-center gap-3 rounded-lg bg-surface-light px-3 py-2 transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
             >
-              <TicketIcon className="h-4 w-4 shrink-0 text-warning" aria-hidden="true" />
+              <Icon name="confirmation_number" className="h-4 w-4 shrink-0 text-warning" aria-hidden="true" />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium text-foreground">{ticket.title}</p>
                 <p className="text-xs text-muted">{ticket.category ?? 'Sem categoria'}</p>

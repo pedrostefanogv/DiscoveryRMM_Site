@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Power, RotateCcw, AlertTriangle, Loader2 } from "lucide-react";
+import { Icon } from "@/components/ui";
+
 import toast from "react-hot-toast";
 import type { Agent } from "@/api";
 
@@ -26,7 +27,7 @@ export default function PowerActionModal({
   const isRestart = action === "restart";
   const title = isRestart ? "Reiniciar agente" : "Desligar agente";
   const defaultDelay = isRestart ? 15 : 30;
-  const Icon = isRestart ? RotateCcw : Power;
+  const actionIcon = isRestart ? "restart_alt" : "power_settings_new";
 
   const [delaySeconds, setDelaySeconds] = useState(defaultDelay);
   const [force, setForce] = useState(false);
@@ -66,7 +67,7 @@ export default function PowerActionModal({
                 : "bg-red-500/15 text-red-700 dark:text-red-400"
             }`}
           >
-            <Icon className="h-5 w-5" />
+            <Icon name={actionIcon} className="h-5 w-5" />
           </div>
           <div>
             <h3 className="text-lg font-semibold text-foreground">{title}</h3>
@@ -78,7 +79,7 @@ export default function PowerActionModal({
 
         {/* Warning */}
         <div className="mb-4 flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-50 p-3 dark:border-amber-500/20 dark:bg-amber-500/10">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+          <Icon name="warning" className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
           <p className="text-xs text-amber-800 dark:text-amber-300">
             {isRestart
               ? "O agente será reiniciado após o tempo configurado. Certifique-se de que não há tarefas críticas em execução."
@@ -172,7 +173,7 @@ export default function PowerActionModal({
                 : "bg-red-600 hover:bg-red-500"
             }`}
           >
-            {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
+            {isLoading && <Icon name="progress_activity" className="h-4 w-4 animate-spin" />}
             {isLoading
               ? "Enviando..."
               : `${isRestart ? "Reiniciar" : "Desligar"} em ${delaySeconds}s`}

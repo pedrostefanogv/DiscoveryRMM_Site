@@ -1,7 +1,6 @@
 import { useState } from "react";
-import { Bot, Sparkles } from "lucide-react";
 import toast from "react-hot-toast";
-import { Badge, Button } from "@/components/ui";
+import { Icon, Badge, Button } from "@/components/ui";
 import {
   useApplyTicketAssignment,
   usePreviewTicketAssignment,
@@ -39,7 +38,7 @@ export function TicketAiAssignmentCard({ ticketId }: { ticketId: string }) {
   return (
     <div>
       <div className="mb-2 flex items-center gap-2 text-muted-foreground">
-        <Bot className="h-4 w-4" />
+        <Icon name="smart_toy" className="h-4 w-4" />
         <p className="text-sm font-medium">Triagem por IA</p>
       </div>
 
@@ -120,7 +119,7 @@ export function TicketAiAssignmentCard({ ticketId }: { ticketId: string }) {
             })
           }
         >
-          <Sparkles className="mr-1.5 inline h-3.5 w-3.5" />
+          <Icon name="auto_awesome" className="mr-1.5 inline h-3.5 w-3.5" />
           Sugerir com IA
         </Button>
         <Button

@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
-import { Download } from "lucide-react";
+
 import type { ConfigurationAuditEntry } from "@/api";
-import { Badge, Button, Card, CardHeader, ErrorDisplay, Input, Loading, Select } from "@/components/ui";
+import { Icon, Badge, Button, Card, CardHeader, ErrorDisplay, Input, Loading, Select } from "@/components/ui";
 import { useClients } from "@/hooks/useClients";
 import { useAllSites } from "@/hooks/useSites";
 import {
@@ -208,7 +208,7 @@ export default function ConfigurationAudit() {
               onClick={() => exportCsv(sortedEntries)}
               disabled={sortedEntries.length === 0}
             >
-              <Download className="h-3.5 w-3.5" />
+              <Icon name="download" className="h-3.5 w-3.5" />
               Exportar CSV
             </Button>
           }

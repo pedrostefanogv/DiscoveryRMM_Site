@@ -1,20 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
-import {
-  AlertTriangle,
-  ArrowLeft,
-  Building2,
-  Globe,
-  ListTodo,
-  Settings,
-  Trash2,
-  Users,
-} from "lucide-react";
+
 import { useNavigate, useParams } from "react-router-dom";
 import toast from "react-hot-toast";
 import { DepartmentCustomFieldsSection } from "@/components/configuration/DepartmentCustomFieldsSection";
 import { InheritableFieldToggle } from "@/components/configuration/InheritableFieldToggle";
-import {
+import { Icon,
   Badge,
   Button,
   Card,
@@ -140,7 +131,7 @@ export function DepartmentInheritanceAlerts({
   return (
     <div role="alert" className="rounded-xl border border-warning/40 bg-warning/10 p-3 text-sm">
       <p className="flex items-center gap-2 font-medium text-warning">
-        <AlertTriangle className="h-4 w-4" />
+        <Icon name="warning" className="h-4 w-4" />
         Herança do departamento
       </p>
       <ul className="mt-1 list-disc space-y-1 pl-5 text-muted-foreground">
@@ -788,7 +779,7 @@ function DepartmentMembersCard({
                   )
                 }
               >
-                <Trash2 className="h-4 w-4" />
+                <Icon name="delete" className="h-4 w-4" />
               </button>
             </div>
           );
@@ -1036,26 +1027,26 @@ function handleDelete() {
         description={desc}
       >
         <Button variant="ghost" onClick={() => navigate("/tickets/departments")}>
-          <ArrowLeft className="h-4 w-4" />
+          <Icon name="arrow_back" className="h-4 w-4" />
           Voltar para listagem
         </Button>
       </PageHeader>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <StatCard
-          icon={department.clientId ? Building2 : Globe}
+          icon={department.clientId ? "apartment" : "public"}
           label="Escopo"
           value={clientName ?? "Global"}
           tone={department.clientId ? "accent" : "primary"}
         />
         <StatCard
-          icon={Building2}
+          icon="apartment"
           label="Ordem"
           value={`#${department.sortOrder}`}
           tone="warning"
         />
         <StatCard
-          icon={Settings}
+          icon="settings"
           label="Status"
           value={department.isActive ? "Ativo" : "Inativo"}
           tone={department.isActive ? "success" : "warning"}
@@ -1072,7 +1063,7 @@ function handleDelete() {
               : "text-muted hover:text-foreground"
           }`}
         >
-          <Settings className="mr-1.5 inline h-4 w-4" />
+          <Icon name="settings" className="mr-1.5 inline h-4 w-4" />
           Geral
         </button>
         <button
@@ -1084,7 +1075,7 @@ function handleDelete() {
               : "text-muted hover:text-foreground"
           }`}
         >
-          <ListTodo className="mr-1.5 inline h-4 w-4" />
+          <Icon name="fact_check" className="mr-1.5 inline h-4 w-4" />
           Campos customizados
         </button>
         <button
@@ -1096,7 +1087,7 @@ function handleDelete() {
               : "text-muted hover:text-foreground"
           }`}
         >
-          <Users className="mr-1.5 inline h-4 w-4" />
+          <Icon name="group" className="mr-1.5 inline h-4 w-4" />
           Equipe
         </button>
       </div>
@@ -1406,7 +1397,7 @@ function handleDelete() {
                 onClick={() => void handleDelete()}
                 loading={deleteDepartment.isPending}
               >
-                <Trash2 className="h-4 w-4" />
+                <Icon name="delete" className="h-4 w-4" />
                 Excluir departamento
               </Button>
             </div>

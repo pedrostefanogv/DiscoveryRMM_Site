@@ -1,10 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import {
-  ArrowLeft, Bell, Cpu, MemoryStick, Ticket as TicketIcon,
-  Monitor, Wifi, WifiOff, AppWindow, Search, Clock, HardDrive, Printer, Bug, AlertTriangle, Trash2, ShieldCheck, Plus, Gauge, Power, RotateCcw, Zap, ChevronDown, ChevronRight, RefreshCw, ArrowUpCircle, Info, Copy,
-  Cable, EthernetPort, History, Network, Radio, ScrollText, StickyNote, MessageSquare, Tags, Download,
-} from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getDeleteAgentErrorMessage, useAgent, useAgentHardware, useAgentHardwareComponents, useAgentListeningPortsPage, useAgentOpenSocketsPage, useAgentSoftwarePage, useAgentSoftwareSnapshot, useApproveZeroTouch, useDeleteAgent, useRestartAgent, useShutdownAgent, useWakeOnLan } from '@/hooks/useAgents';
 import {
@@ -25,7 +20,7 @@ import {
 } from './agentDetailUtils';
 import { useTickets } from '@/hooks/useTickets';
 import { useLogs } from '@/hooks/useLogs';
-import { Button, Card, CardHeader, Badge, Loading, ErrorDisplay, Input, ConfirmDialog, Select, DataTable, Modal, StatCard, AgentHeartbeatCard, Tooltip, ContextMenu, type ContextMenuItem, type Column } from '@/components/ui';
+import { Icon, Button, Card, CardHeader, Badge, Loading, ErrorDisplay, Input, ConfirmDialog, Select, DataTable, Modal, StatCard, AgentHeartbeatCard, Tooltip, ContextMenu, type ContextMenuItem, type Column } from '@/components/ui';
 import { ensureArray } from '@/utils/ensureArray';
 import PowerActionModal from '@/components/agents/PowerActionModal';
 import AgentNotificationModal, { type AgentNotificationPayload } from '@/components/agents/AgentNotificationModal';
@@ -102,7 +97,7 @@ interface AgentAutostartBadges {
  */
 function buildAgentDetailTabs(badges: AgentTabBadges = {}): DetailTab<AgentDetailDataTab>[] {
   return [
-    { id: 'info', label: 'Info', icon: Info },
+    { id: 'info', label: 'Info', icon: "info" },
     {
       // Visão completa dos campos customizados: o card "Informações" mostra só
       // os destaques (isPinned) de forma resumida; aqui aparece tudo, com tipo,
@@ -110,16 +105,16 @@ function buildAgentDetailTabs(badges: AgentTabBadges = {}): DetailTab<AgentDetai
       // adicionais".
       id: 'customFields',
       label: 'Extras',
-      icon: Tags,
+      icon: "sell",
       badge: badges.customFields,
     },
-    { id: 'notes', label: 'Anotações', icon: StickyNote },
-    { id: 'labelHistory', label: 'Labels', icon: History, badge: badges.labelHistory },
-    { id: 'software', label: 'Aplicativos', icon: AppWindow, badge: badges.software },
-    { id: 'windowsUpdates', label: 'Atualizações', icon: Download, badge: badges.windowsUpdates },
-    { id: 'printers', label: 'Impressoras', icon: Printer, badge: badges.printers },
-    { id: 'tickets', label: 'Chamados', icon: TicketIcon, badge: badges.tickets },
-    { id: 'network', label: 'Rede', icon: Network },
+    { id: 'notes', label: 'Anotações', icon: "sticky_note_2" },
+    { id: 'labelHistory', label: 'Labels', icon: "history", badge: badges.labelHistory },
+    { id: 'software', label: 'Aplicativos', icon: "web_asset", badge: badges.software },
+    { id: 'windowsUpdates', label: 'Atualizações', icon: "download", badge: badges.windowsUpdates },
+    { id: 'printers', label: 'Impressoras', icon: "print", badge: badges.printers },
+    { id: 'tickets', label: 'Chamados', icon: "confirmation_number", badge: badges.tickets },
+    { id: 'network', label: 'Rede', icon: "lan" },
     {
       // "Inicialização" e "Tarefas Agendadas" descrevem o mesmo assunto (o que
       // o host executa sozinho) e ficam agrupadas numa aba só. O rótulo é
@@ -128,11 +123,11 @@ function buildAgentDetailTabs(badges: AgentTabBadges = {}): DetailTab<AgentDetai
       // sub-aba ativa (a que abre ao clicar); cada sub-aba mostra o seu total.
       id: 'autostart',
       label: 'Autoruns',
-      icon: Zap,
+      icon: "bolt",
       badge: badges.autostart,
     },
-    { id: 'policies', label: 'Políticas', icon: ShieldCheck, badge: badges.policies },
-    { id: 'logs', label: 'Logs', icon: ScrollText, badge: badges.logs },
+    { id: 'policies', label: 'Políticas', icon: "verified_user", badge: badges.policies },
+    { id: 'logs', label: 'Logs', icon: "article", badge: badges.logs },
   ];
 }
 
@@ -142,8 +137,8 @@ function buildAgentDetailTabs(badges: AgentTabBadges = {}): DetailTab<AgentDetai
  */
 function buildAgentAutostartTabs(badges: AgentAutostartBadges = {}): DetailTab<AgentAutostartView>[] {
   return [
-    { id: 'startupItems', label: 'Inicialização', icon: Power, badge: badges.startupItems },
-    { id: 'scheduledTasks', label: 'Tarefas Agendadas', icon: Clock, badge: badges.scheduledTasks },
+    { id: 'startupItems', label: 'Inicialização', icon: "power_settings_new", badge: badges.startupItems },
+    { id: 'scheduledTasks', label: 'Tarefas Agendadas', icon: "schedule", badge: badges.scheduledTasks },
   ];
 }
 
@@ -153,9 +148,9 @@ function buildAgentAutostartTabs(badges: AgentAutostartBadges = {}): DetailTab<A
  */
 function buildAgentNetworkTabs(badges: AgentNetworkBadges = {}): DetailTab<AgentNetworkView>[] {
   return [
-    { id: 'adapters', label: 'Adaptadores', icon: EthernetPort, badge: badges.adapters },
-    { id: 'listeningPorts', label: 'Portas em Escuta', icon: Radio, badge: badges.listeningPorts },
-    { id: 'openSockets', label: 'Conexões Abertas', icon: Cable, badge: badges.openSockets },
+    { id: 'adapters', label: 'Adaptadores', icon: "settings_ethernet", badge: badges.adapters },
+    { id: 'listeningPorts', label: 'Portas em Escuta', icon: "podcasts", badge: badges.listeningPorts },
+    { id: 'openSockets', label: 'Conexões Abertas', icon: "cable", badge: badges.openSockets },
   ];
 }
 
@@ -1370,7 +1365,7 @@ export default function AgentDetail() {
             {item.name}
           </span>
           {updatingSoftwareId === item.inventoryId && (
-            <RefreshCw className="h-3.5 w-3.5 shrink-0 animate-spin text-primary" aria-label="Processando" />
+            <Icon name="refresh" className="h-3.5 w-3.5 shrink-0 animate-spin text-primary" aria-label="Processando" />
           )}
         </div>
       ),
@@ -1399,7 +1394,7 @@ export default function AgentDetail() {
         {
           key: 'details',
           label: 'Ver detalhes',
-          icon: <Info className="h-4 w-4" />,
+          icon: <Icon name="info" className="h-4 w-4" />,
           onClick: () => {
             const item = softwareMenu.item;
             setSoftwareMenu(null);
@@ -1409,7 +1404,7 @@ export default function AgentDetail() {
         {
           key: 'copy',
           label: 'Copiar nome',
-          icon: <Copy className="h-4 w-4" />,
+          icon: <Icon name="content_copy" className="h-4 w-4" />,
           onClick: () => {
             const item = softwareMenu.item;
             setSoftwareMenu(null);
@@ -1422,7 +1417,7 @@ export default function AgentDetail() {
               {
                 key: 'update',
                 label: 'Atualizar aplicativo',
-                icon: <ArrowUpCircle className="h-4 w-4" />,
+                icon: <Icon name="arrow_circle_up" className="h-4 w-4" />,
                 separatorBefore: true,
                 disabled: !canExecuteAgent || updatingSoftwareId !== null,
                 hint: !canExecuteAgent
@@ -1443,7 +1438,7 @@ export default function AgentDetail() {
               {
                 key: 'uninstall',
                 label: 'Desinstalar aplicativo',
-                icon: <Trash2 className="h-4 w-4" />,
+                icon: <Icon name="delete" className="h-4 w-4" />,
                 danger: true,
                 disabled: !canExecuteAgent || updatingSoftwareId !== null,
                 hint: !canExecuteAgent
@@ -1467,7 +1462,7 @@ export default function AgentDetail() {
       {/* Header */}
       <div className="flex items-center gap-4">
         <button onClick={handleGoBack} aria-label="Voltar" className="rounded-lg p-2 text-muted hover:bg-surface-light hover:text-foreground">
-          <ArrowLeft className="h-5 w-5" />
+          <Icon name="arrow_back" className="h-5 w-5" />
         </button>
         <div className="flex-1">
           <h1 className="text-2xl font-bold text-foreground">{a.displayName ?? a.hostname}</h1>
@@ -1475,7 +1470,7 @@ export default function AgentDetail() {
         </div>
         <Badge color={isOnlineNow ? 'success' : 'slate'}>
           <span className="flex items-center gap-1">
-            {isOnlineNow ? <Wifi className="h-3 w-3" /> : <WifiOff className="h-3 w-3" />}
+            {isOnlineNow ? <Icon name="wifi" className="h-3 w-3" /> : <Icon name="wifi_off" className="h-3 w-3" />}
             {isOnlineNow ? 'Online' : 'Offline'}
           </span>
         </Badge>
@@ -1490,9 +1485,9 @@ export default function AgentDetail() {
             variant="ghost"
             onClick={() => setIsPowerMenuOpen((current) => !current)}
           >
-            <Power className="h-4 w-4" />
+            <Icon name="power_settings_new" className="h-4 w-4" />
             Ações
-            <ChevronDown className="h-4 w-4" />
+            <Icon name="expand_more" className="h-4 w-4" />
           </Button>
           {isPowerMenuOpen && (
             <div className="absolute right-0 top-full z-50 mt-2 min-w-[220px] rounded-lg border border-border bg-surface shadow-xl">
@@ -1506,7 +1501,7 @@ export default function AgentDetail() {
                 disabled={isOpeningRemoteControl || !canReachAgent}
                 title={canReachAgent ? undefined : offlineLiveHint}
               >
-                <Monitor className="h-4 w-4" />
+                <Icon name="desktop_windows" className="h-4 w-4" />
                 {isOpeningRemoteControl ? 'Abrindo remoto...' : 'Controle remoto'}
                 {!canReachAgent && <span aria-hidden="true" className="ml-auto rounded bg-surface-hover px-1.5 py-0.5 text-[10px] text-muted-foreground">offline</span>}
               </button>
@@ -1520,7 +1515,7 @@ export default function AgentDetail() {
                 disabled={!canReachAgent}
                 title={canReachAgent ? undefined : offlineLiveHint}
               >
-                <MessageSquare className="h-4 w-4" />
+                <Icon name="chat" className="h-4 w-4" />
                 Abrir chat
                 {!canReachAgent && <span aria-hidden="true" className="ml-auto rounded bg-surface-hover px-1.5 py-0.5 text-[10px] text-muted-foreground">offline</span>}
               </button>
@@ -1533,7 +1528,7 @@ export default function AgentDetail() {
                   ? 'Sem permissão para executar ações no agente'
                   : canReachAgent ? undefined : offlineQueueHint}
               >
-                <Bell className="h-4 w-4" />
+                <Icon name="notifications" className="h-4 w-4" />
                 Enviar notificação
                 {!canReachAgent && <span aria-hidden="true" className="ml-auto rounded bg-surface-hover px-1.5 py-0.5 text-[10px] text-muted-foreground">na fila</span>}
               </button>
@@ -1550,7 +1545,7 @@ export default function AgentDetail() {
                 disabled={isOpeningRemoteDebug || !canReachAgent}
                 title={canReachAgent ? undefined : offlineLiveHint}
               >
-                <Bug className="h-4 w-4" />
+                <Icon name="bug_report" className="h-4 w-4" />
                 {isOpeningRemoteDebug ? 'Abrindo debug...' : 'Ver Debug'}
                 {!canReachAgent && <span aria-hidden="true" className="ml-auto rounded bg-surface-hover px-1.5 py-0.5 text-[10px] text-muted-foreground">offline</span>}
               </button>
@@ -1564,7 +1559,7 @@ export default function AgentDetail() {
                 disabled={isTriggeringAgentUpdate}
                 title={canReachAgent ? undefined : offlineQueueHint}
               >
-                <RefreshCw className="h-4 w-4" />
+                <Icon name="refresh" className="h-4 w-4" />
                 {isTriggeringAgentUpdate ? 'Atualizando...' : 'Atualizar agente'}
                 {!canReachAgent && <span aria-hidden="true" className="ml-auto rounded bg-surface-hover px-1.5 py-0.5 text-[10px] text-muted-foreground">na fila</span>}
               </button>
@@ -1576,7 +1571,7 @@ export default function AgentDetail() {
                   navigate(`/automation/operations?agentId=${a.id}`);
                 }}
               >
-                <AppWindow className="h-4 w-4" />
+                <Icon name="web_asset" className="h-4 w-4" />
                 Automação
               </button>
 
@@ -1593,9 +1588,9 @@ export default function AgentDetail() {
                     className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-warning transition-colors hover:bg-warning/10 dark:text-amber-300 dark:hover:bg-amber-500/10"
                     disabled={restartAgent.isPending || shutdownAgent.isPending}
                   >
-                    <Zap className="h-4 w-4" />
+                    <Icon name="bolt" className="h-4 w-4" />
                     Energia
-                    <ChevronRight className="ml-auto h-4 w-4" />
+                    <Icon name="chevron_right" className="ml-auto h-4 w-4" />
                   </button>
                   {powerSubmenuOpen && (
                     <div className="absolute right-full top-0 z-50 min-w-[180px] overflow-hidden rounded-lg border border-border bg-surface shadow-xl">
@@ -1605,7 +1600,7 @@ export default function AgentDetail() {
                         onClick={() => handleOpenPowerAction('restart')}
                         disabled={restartAgent.isPending || shutdownAgent.isPending}
                       >
-                        <RotateCcw className="h-4 w-4" />
+                        <Icon name="restart_alt" className="h-4 w-4" />
                         Reiniciar
                       </button>
                       <button
@@ -1614,7 +1609,7 @@ export default function AgentDetail() {
                         onClick={() => handleOpenPowerAction('shutdown')}
                         disabled={restartAgent.isPending || shutdownAgent.isPending}
                       >
-                        <Power className="h-4 w-4" />
+                        <Icon name="power_settings_new" className="h-4 w-4" />
                         Desligar
                       </button>
                       {/* "Ligar" não aparece com o agente online: o despertar
@@ -1630,7 +1625,7 @@ export default function AgentDetail() {
                   onClick={handleOpenWakeOnLan}
                   disabled={wakeOnLan.isPending}
                 >
-                  <Zap className="h-4 w-4" />
+                  <Icon name="bolt" className="h-4 w-4" />
                   {wakeOnLan.isPending ? 'Enviando Wake-on-LAN...' : 'Wake-on-LAN'}
                 </button>
               )}
@@ -1645,7 +1640,7 @@ export default function AgentDetail() {
                   }}
                   disabled={isApprovingZeroTouch}
                 >
-                  <ShieldCheck className="h-4 w-4" />
+                  <Icon name="verified_user" className="h-4 w-4" />
                   {isApprovingZeroTouch ? 'Aprovando...' : 'Aprovar Zero-Touch'}
                 </button>
               )}
@@ -1660,7 +1655,7 @@ export default function AgentDetail() {
                   }}
                   disabled={deleteAgent.isPending}
                 >
-                  <Trash2 className="h-4 w-4" />
+                  <Icon name="delete" className="h-4 w-4" />
                   {deleteAgent.isPending ? 'Movendo...' : 'Mover para a lixeira'}
                 </button>
               )}
@@ -1702,7 +1697,7 @@ export default function AgentDetail() {
         >
           <div className="glass-card flex h-full items-center gap-4 rounded-xl border border-border bg-surface p-5">
             <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary/15 ring-1 ring-black/10 dark:ring-white/5">
-              <Cpu className="h-6 w-6 text-primary" />
+              <Icon name="memory" className="h-6 w-6 text-primary" />
             </div>
             <div className="min-w-0 flex-1">
               <p className="truncate text-xs font-medium text-muted" title={processorModelFull ?? undefined}>
@@ -1714,7 +1709,7 @@ export default function AgentDetail() {
         </Tooltip>
         <div className="h-full [&>div]:h-full">
           <StatCard
-            icon={MemoryStick}
+            icon="memory"
             label="Memória RAM"
             value={formatBytes(hw.data?.hardware?.totalMemoryBytes ?? null)}
             tone="accent"
@@ -1761,7 +1756,7 @@ export default function AgentDetail() {
         >
           <div className="h-full [&>div]:h-full">
             <StatCard
-              icon={Gauge}
+              icon="speed"
               label="MachineScore"
               value={machineScore === null ? '\u2014' : machineScore}
               tone={machineScoreTone}
@@ -1805,7 +1800,7 @@ export default function AgentDetail() {
                   setShowLabelPicker(prev => !prev);
                 }}
               >
-                <Plus className="h-5 w-5" />
+                <Icon name="add" className="h-5 w-5" />
               </Button>
 
               {showLabelPicker ? (
@@ -1884,7 +1879,7 @@ export default function AgentDetail() {
                           title="Remover label manual"
                           onClick={() => void handleRemoveManualLabel(item.id)}
                         >
-                          <Trash2 className="h-3 w-3" />
+                          <Icon name="delete" className="h-3 w-3" />
                         </button>
                       ) : null}
                     </Badge>
@@ -1911,7 +1906,7 @@ export default function AgentDetail() {
         >
           <div className="glass-card flex h-full items-center gap-4 rounded-xl border border-border bg-surface p-5">
             <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-success/15 ring-1 ring-black/10 dark:ring-white/5">
-              <AppWindow className="h-6 w-6 text-success" />
+              <Icon name="web_asset" className="h-6 w-6 text-success" />
             </div>
             <div className="min-w-0 flex-1">
               <p className="text-3xl font-bold text-foreground tabular-nums">{softwareTotalInstalled}</p>
@@ -2016,7 +2011,7 @@ export default function AgentDetail() {
                             }}
                             loading={isApprovingZeroTouch}
                           >
-                            <ShieldCheck className="h-4 w-4" />
+                            <Icon name="verified_user" className="h-4 w-4" />
                             Aprovar
                           </Button>
                         )}
@@ -2074,7 +2069,7 @@ export default function AgentDetail() {
                     <div>
                       <div className="mb-1 flex items-center justify-between text-xs">
                         <span className="flex items-center gap-1 text-muted">
-                          <HardDrive className="h-3.5 w-3.5" />
+                          <Icon name="storage" className="h-3.5 w-3.5" />
                           Utilização
                         </span>
                         <span className={`font-medium ${getDiskStatusTextClass(diskUsagePercent)}`}>{diskUsagePercent ?? 0}%</span>
@@ -2223,7 +2218,7 @@ export default function AgentDetail() {
                   aria-label="Atualizar histórico de labels"
                   title="Atualizar histórico de labels"
                 >
-                  <RefreshCw className={`h-4 w-4 ${isLoadingLabels ? 'animate-spin' : ''}`} /> Atualizar
+                  <Icon name="refresh" className={`h-4 w-4 ${isLoadingLabels ? 'animate-spin' : ''}`} /> Atualizar
                 </Button>
               }
             />
@@ -2287,7 +2282,7 @@ export default function AgentDetail() {
                           : 'Mostrar apenas aplicativos com atualização pendente'
                       }
                     >
-                      <ArrowUpCircle className="h-4 w-4" />
+                      <Icon name="arrow_circle_up" className="h-4 w-4" />
                       Com atualização
                       <span className="ml-1 rounded-full bg-black/10 px-1.5 text-xs">{softwareUpdatesTotal}</span>
                     </Button>
@@ -2303,7 +2298,7 @@ export default function AgentDetail() {
                         : 'Solicitar nova coleta de software ao agente'
                     }
                   >
-                    <RefreshCw className="h-4 w-4" />
+                    <Icon name="refresh" className="h-4 w-4" />
                     Atualizar
                   </Button>
                   </div>
@@ -2316,7 +2311,7 @@ export default function AgentDetail() {
                   <>
                     {softwareSnapshot.data?.updatedAt && (
                       <div className="mb-3 flex items-center justify-end gap-2 text-xs text-muted">
-                        <Clock className="h-3.5 w-3.5" />
+                        <Icon name="schedule" className="h-3.5 w-3.5" />
                         <span>Última coleta: <span className="text-muted-foreground">{formatDate(softwareSnapshot.data.updatedAt)}</span></span>
                       </div>
                     )}
@@ -2349,7 +2344,7 @@ export default function AgentDetail() {
                         onChange={(e) => handleSoftwareLimitChange(e.target.value)}
                       />
                       <Button type="submit" variant="secondary" size="sm">
-                        <Search className="h-4 w-4" />
+                        <Icon name="search" className="h-4 w-4" />
                         Buscar
                       </Button>
                       <Button type="button" variant="ghost" size="sm" onClick={handleClearSoftwareSearch}>
@@ -2459,7 +2454,7 @@ export default function AgentDetail() {
                             <div className="flex items-start justify-between gap-2">
                               <div className="min-w-0 flex-1">
                                 <div className="flex items-center gap-2">
-                                  <TicketIcon className="h-3.5 w-3.5 shrink-0 text-muted" />
+                                  <Icon name="confirmation_number" className="h-3.5 w-3.5 shrink-0 text-muted" />
                                   <p className="truncate text-sm font-medium text-foreground">
                                     {ticket.title}
                                   </p>
@@ -2502,7 +2497,7 @@ export default function AgentDetail() {
                         : 'Solicitar nova coleta de impressoras ao agente'
                     }
                   >
-                    <RefreshCw className="h-4 w-4" />
+                    <Icon name="refresh" className="h-4 w-4" />
                     Atualizar
                   </Button>
                 </div>
@@ -2527,7 +2522,7 @@ export default function AgentDetail() {
 
                         <div className="mt-2 grid gap-2 text-xs text-muted sm:grid-cols-2">
                           <span className="flex items-center gap-1">
-                            <Printer className="h-3.5 w-3.5" />
+                            <Icon name="print" className="h-3.5 w-3.5" />
                             {printer.isNetworkPrinter ? 'Rede' : 'Local'}
                           </span>
                           <span>{printer.portName ? `Porta: ${printer.portName}` : 'Porta não informada'}</span>
@@ -2635,13 +2630,13 @@ export default function AgentDetail() {
                               : 'Solicitar nova coleta de portas ao agente'
                           }
                         >
-                          <RefreshCw className="h-4 w-4" />
+                          <Icon name="refresh" className="h-4 w-4" />
                           Atualizar
                         </Button>
                       </div>
                       {portsTotalCount >= LISTENING_PORTS_BACKEND_LIMIT && (
                         <div className="mb-3 flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-400">
-                          <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                          <Icon name="warning" className="h-3.5 w-3.5 shrink-0" />
                           Lista truncada pelo backend no limite de {LISTENING_PORTS_BACKEND_LIMIT} itens. Podem existir mais portas em escuta.
                         </div>
                       )}
@@ -2657,7 +2652,7 @@ export default function AgentDetail() {
                           onChange={(e) => handlePortsLimitChange(e.target.value)}
                         />
                         <Button type="submit" variant="secondary" size="sm">
-                          <Search className="h-4 w-4" />
+                          <Icon name="search" className="h-4 w-4" />
                           Buscar
                         </Button>
                         <Button type="button" variant="ghost" size="sm" onClick={handleClearPortsSearch}>
@@ -2735,13 +2730,13 @@ export default function AgentDetail() {
                               : 'Solicitar nova coleta de conexões ao agente'
                           }
                         >
-                          <RefreshCw className="h-4 w-4" />
+                          <Icon name="refresh" className="h-4 w-4" />
                           Atualizar
                         </Button>
                       </div>
                       {socketsTotalCount >= OPEN_SOCKETS_BACKEND_LIMIT && (
                         <div className="mb-3 flex items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
-                          <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                          <Icon name="warning" className="h-3.5 w-3.5 shrink-0" />
                           Lista truncada pelo backend no limite de {OPEN_SOCKETS_BACKEND_LIMIT} itens. Podem existir mais conexões abertas.
                         </div>
                       )}
@@ -2762,7 +2757,7 @@ export default function AgentDetail() {
                           onChange={(e) => handleSocketsLimitChange(e.target.value)}
                         />
                         <Button type="submit" variant="secondary" size="sm">
-                          <Search className="h-4 w-4" />
+                          <Icon name="search" className="h-4 w-4" />
                           Buscar
                         </Button>
                         <Button type="button" variant="ghost" size="sm" onClick={handleClearSocketsSearch}>
@@ -3017,7 +3012,7 @@ export default function AgentDetail() {
               }}
               loading={updatingSoftwareId !== null && updatingSoftwareId === pendingUnapprovedUpdate?.inventoryId}
             >
-              <ArrowUpCircle className="h-4 w-4" />
+              <Icon name="arrow_circle_up" className="h-4 w-4" />
               Atualizar mesmo assim
             </Button>
           </div>
@@ -3083,7 +3078,7 @@ export default function AgentDetail() {
                   : 'Digite o nome do aplicativo para liberar a desinstalação'
               }
             >
-              <Trash2 className="h-4 w-4" />
+              <Icon name="delete" className="h-4 w-4" />
               Desinstalar
             </Button>
           </div>
@@ -3154,7 +3149,7 @@ export default function AgentDetail() {
                   }}
                   disabled={!canExecuteAgent || updatingSoftwareId !== null}
                 >
-                  <ArrowUpCircle className="h-4 w-4" />
+                  <Icon name="arrow_circle_up" className="h-4 w-4" />
                   Atualizar
                 </Button>
               )}
@@ -3168,7 +3163,7 @@ export default function AgentDetail() {
                   }}
                   disabled={!canExecuteAgent || updatingSoftwareId !== null}
                 >
-                  <Trash2 className="h-4 w-4" />
+                  <Icon name="delete" className="h-4 w-4" />
                   Desinstalar
                 </Button>
               )}

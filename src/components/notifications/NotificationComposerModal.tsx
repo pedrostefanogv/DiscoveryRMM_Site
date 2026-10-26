@@ -1,16 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import {
-  Bell,
-  Loader2,
-  MessageSquare,
-  Send,
-  Clock,
-  AlertTriangle,
-  Info,
-  HelpCircle,
-  XCircle,
-  Users,
-} from "lucide-react";
+import { Icon, type MaterialSymbolName } from "@/components/ui";
 import toast from "react-hot-toast";
 
 export type NotificationMode = "wait" | "timeout" | "toast";
@@ -71,11 +60,11 @@ const MODES: { value: NotificationMode; label: string; description: string }[] =
   },
 ];
 
-const ICONS: { value: NotificationIcon; label: string; Icon: typeof Info }[] = [
-  { value: "info", label: "Informação", Icon: Info },
-  { value: "warning", label: "Aviso", Icon: AlertTriangle },
-  { value: "error", label: "Erro", Icon: XCircle },
-  { value: "question", label: "Pergunta", Icon: HelpCircle },
+const ICONS: { value: NotificationIcon; label: string; Icon: MaterialSymbolName }[] = [
+  { value: "info", label: "Informação", Icon: "info" },
+  { value: "warning", label: "Aviso", Icon: "warning" },
+  { value: "error", label: "Erro", Icon: "cancel" },
+  { value: "question", label: "Pergunta", Icon: "help" },
 ];
 
 const inputClass =
@@ -166,7 +155,7 @@ export default function NotificationComposerModal({
       >
         <div className="mb-5 flex items-center gap-3">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-primary">
-            <Bell className="h-5 w-5" />
+            <Icon name="notifications" className="h-5 w-5" />
           </div>
           <div className="min-w-0">
             <h3 className="text-lg font-semibold text-foreground">{heading}</h3>
@@ -185,7 +174,7 @@ export default function NotificationComposerModal({
           >
             {recipientCount > 0 ? (
               <>
-                <Users className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />
+                <Icon name="group" className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />
                 <span>
                   A notificação será enviada para <strong className="text-foreground">{recipientCount}</strong>{" "}
                   agente{recipientCount === 1 ? "" : "s"} de {recipientScopeLabel}.
@@ -193,7 +182,7 @@ export default function NotificationComposerModal({
               </>
             ) : (
               <>
-                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warning" aria-hidden="true" />
+                <Icon name="warning" className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warning" aria-hidden="true" />
                 <span>Nenhum agente encontrado em {recipientScopeLabel}. Cadastre/instale um agente antes de notificar.</span>
               </>
             )}
@@ -265,7 +254,7 @@ export default function NotificationComposerModal({
               Fechar automaticamente após (segundos)
             </label>
             <div className="flex items-center gap-2">
-              <Clock className="h-4 w-4 text-muted" />
+              <Icon name="schedule" className="h-4 w-4 text-muted" />
               <input
                 id="notif-timeout"
                 type="number"
@@ -285,7 +274,7 @@ export default function NotificationComposerModal({
         <fieldset className="mb-6">
           <legend className="mb-1.5 block text-sm font-medium text-muted-foreground">Ícone</legend>
           <div className="flex flex-wrap gap-2">
-            {ICONS.map(({ value, label, Icon }) => (
+            {ICONS.map(({ value, label, Icon: iconName }) => (
               <button
                 key={value}
                 type="button"
@@ -297,7 +286,7 @@ export default function NotificationComposerModal({
                     : "border-border text-muted-foreground hover:bg-surface-hover"
                 }`}
               >
-                <Icon className="h-4 w-4" />
+                <Icon name={iconName} className="h-4 w-4" />
                 {label}
               </button>
             ))}
@@ -306,7 +295,7 @@ export default function NotificationComposerModal({
 
         <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="flex items-center gap-1.5 text-xs text-muted">
-            <MessageSquare className="h-3.5 w-3.5" />
+            <Icon name="chat" className="h-3.5 w-3.5" />
             Exibido na sessão do usuário via PSADT
           </p>
           <div className="flex items-center justify-end gap-3">
@@ -324,7 +313,7 @@ export default function NotificationComposerModal({
               disabled={!canSubmit}
               className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+              {isLoading ? <Icon name="progress_activity" className="h-4 w-4 animate-spin" /> : <Icon name="send" className="h-4 w-4" />}
               {isLoading ? "Enviando..." : "Enviar"}
             </button>
           </div>

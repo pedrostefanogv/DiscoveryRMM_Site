@@ -1,6 +1,5 @@
 import { useState } from "react";
-import { Clock, Save } from "lucide-react";
-import { Button, Input } from "@/components/ui";
+import { Icon, Button, Input } from "@/components/ui";
 import {
   DAY_LABELS,
   parseMaintenanceWindow,
@@ -42,7 +41,7 @@ export function MaintenanceWindowCard({ value, saving, canManage, onSave, inheri
     <div className="space-y-3 rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Clock className="h-4 w-4 text-indigo-500" />
+          <Icon name="schedule" className="h-4 w-4 text-indigo-500" />
           <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
             Janela de manutenção (reboot/patches)
           </span>
@@ -127,7 +126,7 @@ export function MaintenanceWindowCard({ value, saving, canManage, onSave, inheri
       )}
 
       <Button size="sm" onClick={save} disabled={readOnly || !dirty}>
-        <Save className="mr-1 h-4 w-4" />
+        <Icon name="save" className="mr-1 h-4 w-4" />
         Salvar janela
       </Button>
     </div>

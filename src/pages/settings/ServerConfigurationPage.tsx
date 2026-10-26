@@ -2,30 +2,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import toast from "react-hot-toast";
 import {
-  Activity,
-  AlertTriangle,
-  Bot,
-  ChevronDown,
-  ChevronUp,
-  CheckCircle2,
-  Clock,
-  Cloud,
-  Download,
-  FileStack,
-  Handshake,
-  HardDrive,
-  Layers,
-  Lock,
-  RotateCcw,
-  Save,
-  ShieldCheck,
-  Store,
-  Upload,
-  Wifi,
-  XCircle,
-  Zap,
-} from "lucide-react";
-import {
   ConfigurationFieldEditor,
   RemoteAccessConsentSection,
   AiIntegrationCard,
@@ -45,7 +21,7 @@ import {
   unselectedIcon,
   unselectedSurface,
 } from "@/components/configuration";
-import { Button, Card, CardHeader, ErrorDisplay, Input, Loading, Modal } from "@/components/ui";
+import { Icon, Button, Card, CardHeader, ErrorDisplay, Input, Loading, Modal } from "@/components/ui";
 import {
   useExportServerConfig,
   useImportServerConfig,
@@ -90,14 +66,14 @@ type SectionKey =
   | "advanced";
 
 const featureIcons: Record<string, React.ReactNode> = {
-  recoveryEnabled: <HardDrive className="h-4 w-4" />,
-  discoveryEnabled: <Wifi className="h-4 w-4" />,
-  p2PFilesEnabled: <Layers className="h-4 w-4" />,
-  cloudBootstrapEnabled: <Cloud className="h-4 w-4" />,
-  chatAIEnabled: <Bot className="h-4 w-4" />,
-  supportEnabled: <Activity className="h-4 w-4" />,
-  knowledgeBaseEnabled: <ShieldCheck className="h-4 w-4" />,
-  zeroTouchEnabled: <Handshake className="h-4 w-4" />,
+  recoveryEnabled: <Icon name="storage" className="h-4 w-4" />,
+  discoveryEnabled: <Icon name="wifi" className="h-4 w-4" />,
+  p2PFilesEnabled: <Icon name="layers" className="h-4 w-4" />,
+  cloudBootstrapEnabled: <Icon name="cloud" className="h-4 w-4" />,
+  chatAIEnabled: <Icon name="smart_toy" className="h-4 w-4" />,
+  supportEnabled: <Icon name="monitoring" className="h-4 w-4" />,
+  knowledgeBaseEnabled: <Icon name="verified_user" className="h-4 w-4" />,
+  zeroTouchEnabled: <Icon name="handshake" className="h-4 w-4" />,
 };
 
 export default function ServerConfigurationPage() {
@@ -462,7 +438,7 @@ export default function ServerConfigurationPage() {
         className="inline-flex items-center gap-1 rounded-md border border-border bg-surface-light px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:border-border-strong hover:text-foreground"
       >
         {collapsed ? "Expandir" : "Recolher"}
-        {collapsed ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronUp className="h-3.5 w-3.5" />}
+        {collapsed ? <Icon name="expand_more" className="h-3.5 w-3.5" /> : <Icon name="expand_less" className="h-3.5 w-3.5" />}
       </button>
     );
   };
@@ -785,7 +761,7 @@ export default function ServerConfigurationPage() {
             isEnabled ? selectedIcon : unselectedIcon
           }`}
         >
-          {featureIcons[field.key] ?? <Zap className="h-4 w-4" />}
+          {featureIcons[field.key] ?? <Icon name="bolt" className="h-4 w-4" />}
         </div>
 
         <div className="min-w-0 flex-1">
@@ -797,7 +773,7 @@ export default function ServerConfigurationPage() {
           )}
           {dependencyIssue && (
             <p className="mt-1 flex items-start gap-1 text-xs text-amber-700 dark:text-amber-300">
-              <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
+              <Icon name="warning" className="mt-0.5 h-3 w-3 shrink-0" />
               <span>{dependencyIssue}</span>
             </p>
           )}
@@ -849,7 +825,7 @@ export default function ServerConfigurationPage() {
               onClick={handleExport}
               loading={exportMutation.isPending}
             >
-              <Download className="h-3.5 w-3.5" />
+              <Icon name="download" className="h-3.5 w-3.5" />
               Exportar
             </Button>
             <Button
@@ -860,7 +836,7 @@ export default function ServerConfigurationPage() {
                 setImportOpen(true);
               }}
             >
-              <Upload className="h-3.5 w-3.5" />
+              <Icon name="upload" className="h-3.5 w-3.5" />
               Importar
             </Button>
             <Button
@@ -877,7 +853,7 @@ export default function ServerConfigurationPage() {
               onClick={() => setConfirmSave(true)}
               disabled={pendingKeys.size === 0}
             >
-              <Save className="h-3.5 w-3.5" />
+              <Icon name="save" className="h-3.5 w-3.5" />
               Salvar alterações
             </Button>
             <Button
@@ -888,7 +864,7 @@ export default function ServerConfigurationPage() {
                 setConfirmReset(true);
               }}
             >
-              <RotateCcw className="h-3.5 w-3.5" />
+              <Icon name="restart_alt" className="h-3.5 w-3.5" />
               Restaurar padrões
             </Button>
           </div>
@@ -955,7 +931,7 @@ export default function ServerConfigurationPage() {
           {!collapsedSections.policy && (
             <div className="flex items-start gap-3">
               <div className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${tintedIcon.violet}`}>
-                <Store className="h-4 w-4" />
+                <Icon name="storefront" className="h-4 w-4" />
               </div>
               <div className="flex-1">
                 {policyFields.map((field) => renderFieldEditor(field))}
@@ -974,7 +950,7 @@ export default function ServerConfigurationPage() {
           {!collapsedSections.remoteAccess && (
             <div className="flex items-start gap-3">
               <div className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${tintedIcon.emerald}`}>
-                <ShieldCheck className="h-4 w-4" />
+                <Icon name="verified_user" className="h-4 w-4" />
               </div>
               <div className="min-w-0 flex-1">
                 <RemoteAccessConsentSection
@@ -1011,7 +987,7 @@ export default function ServerConfigurationPage() {
           {!collapsedSections.agent && (
             <div className="flex items-start gap-3">
               <div className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${tintedIcon.emerald}`}>
-                <Clock className="h-4 w-4" />
+                <Icon name="schedule" className="h-4 w-4" />
               </div>
               <div className="grid flex-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
                 {agentFields.map((field) => (
@@ -1101,7 +1077,7 @@ export default function ServerConfigurationPage() {
 
               <div className="flex flex-wrap items-center justify-end gap-3 border-t border-border pt-4">
                 <Button size="sm" onClick={saveStorageFields} loading={savingStorage}>
-                  <Save className="h-3.5 w-3.5" />
+                  <Icon name="save" className="h-3.5 w-3.5" />
                   Salvar
                 </Button>
                 <Button
@@ -1111,7 +1087,7 @@ export default function ServerConfigurationPage() {
                   loading={testStorageMutation.isPending}
                   disabled={savingStorage}
                 >
-                  <Cloud className="h-3.5 w-3.5" />
+                  <Icon name="cloud" className="h-3.5 w-3.5" />
                   Testar Conexão
                 </Button>
               </div>
@@ -1124,12 +1100,12 @@ export default function ServerConfigurationPage() {
                 >
                   {testResult.success ? (
                     <>
-                      <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+                      <Icon name="check_circle" className="mt-0.5 h-4 w-4 shrink-0" />
                       <span>Conexão OK — {testResult.latencyMs}ms</span>
                     </>
                   ) : (
                     <>
-                      <XCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                      <Icon name="cancel" className="mt-0.5 h-4 w-4 shrink-0" />
                       <div>
                         <p className="font-medium">
                           {!testResult.configurationValid
@@ -1170,7 +1146,7 @@ export default function ServerConfigurationPage() {
 
               <div className="flex flex-wrap items-center justify-end gap-3 border-t border-border pt-4">
                 <Button size="sm" onClick={saveNatsFields} loading={savingNats}>
-                  <Save className="h-3.5 w-3.5" />
+                  <Icon name="save" className="h-3.5 w-3.5" />
                   Salvar
                 </Button>
                 <Button
@@ -1180,7 +1156,7 @@ export default function ServerConfigurationPage() {
                   loading={testNatsMutation.isPending}
                   disabled={savingNats}
                 >
-                  <Wifi className="h-3.5 w-3.5" />
+                  <Icon name="wifi" className="h-3.5 w-3.5" />
                   Testar Conexão
                 </Button>
               </div>
@@ -1193,7 +1169,7 @@ export default function ServerConfigurationPage() {
                 >
                   {natsTestResult.ok ? (
                     <>
-                      <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+                      <Icon name="check_circle" className="mt-0.5 h-4 w-4 shrink-0" />
                       <div>
                         <p>
                           Conexão OK{typeof natsTestResult.latencyMs === "number" ? ` — ${natsTestResult.latencyMs}ms` : ""}
@@ -1203,7 +1179,7 @@ export default function ServerConfigurationPage() {
                     </>
                   ) : (
                     <>
-                      <XCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                      <Icon name="cancel" className="mt-0.5 h-4 w-4 shrink-0" />
                       <div>
                         <p className="font-medium">Falha na conexão</p>
                         <p className="mt-1 text-xs">Host testado: {natsTestResult.host}</p>
@@ -1261,7 +1237,7 @@ export default function ServerConfigurationPage() {
                   return (
                     <div key={field.key} className="flex items-start gap-3">
                       <div className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${tintedIcon.emerald}`}>
-                        <Activity className="h-4 w-4" />
+                        <Icon name="monitoring" className="h-4 w-4" />
                       </div>
                       <div className="min-w-0 flex-1 space-y-1">
                         <BackgroundProcessingCard
@@ -1287,7 +1263,7 @@ export default function ServerConfigurationPage() {
                   return (
                     <div key={field.key} className="flex items-start gap-3">
                       <div className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${tintedIcon.red}`}>
-                        <Lock className="h-4 w-4" />
+                        <Icon name="lock" className="h-4 w-4" />
                       </div>
                       <div className="min-w-0 flex-1">
                         <LockedFieldsEditor
@@ -1312,7 +1288,7 @@ export default function ServerConfigurationPage() {
                   return (
                     <div key={field.key} className="flex items-start gap-3">
                       <div className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${tintedIcon.violet}`}>
-                        <Clock className="h-4 w-4" />
+                        <Icon name="schedule" className="h-4 w-4" />
                       </div>
                       <div className="min-w-0 flex-1 space-y-1">
                         <MaintenanceWindowCard
@@ -1333,7 +1309,7 @@ export default function ServerConfigurationPage() {
                   return (
                     <div key={field.key} className="flex items-start gap-3">
                       <div className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${tintedIcon.sky}`}>
-                        <ShieldCheck className="h-4 w-4" />
+                        <Icon name="verified_user" className="h-4 w-4" />
                       </div>
                       <div className="min-w-0 flex-1 space-y-1">
                         <McpToolPolicyCard
@@ -1355,7 +1331,7 @@ export default function ServerConfigurationPage() {
                   return (
                     <div key={field.key} className="flex items-start gap-3">
                       <div className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${tintedIcon.purple}`}>
-                        <Bot className="h-4 w-4" />
+                        <Icon name="smart_toy" className="h-4 w-4" />
                       </div>
                       <div className="min-w-0 flex-1 space-y-1">
                         <AiIntegrationCard
@@ -1373,8 +1349,8 @@ export default function ServerConfigurationPage() {
                   );
                 }
                 const icons: Record<string, React.ReactNode> = {
-                  aiIntegrationSettingsJson: <Bot className="h-4 w-4" />,
-                  lockedFieldsJson: <Lock className="h-4 w-4" />,
+                  aiIntegrationSettingsJson: <Icon name="smart_toy" className="h-4 w-4" />,
+                  lockedFieldsJson: <Icon name="lock" className="h-4 w-4" />,
                 };
                 const colors: Record<string, string> = {
                   aiIntegrationSettingsJson: tintedIcon.purple,
@@ -1387,7 +1363,7 @@ export default function ServerConfigurationPage() {
                         colors[field.key] ?? "bg-surface-light text-muted"
                       }`}
                     >
-                      {icons[field.key] ?? <Layers className="h-4 w-4" />}
+                      {icons[field.key] ?? <Icon name="layers" className="h-4 w-4" />}
                     </div>
                     <div className="min-w-0 flex-1 space-y-1">
                       {field.description && (
@@ -1415,7 +1391,7 @@ export default function ServerConfigurationPage() {
       >
         <div className="space-y-4">
           <div className="flex items-start gap-3 rounded-lg border border-red-500/20 bg-red-500/10 p-3">
-            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-red-600 dark:text-red-400" />
+            <Icon name="warning" className="mt-0.5 h-5 w-5 shrink-0 text-red-600 dark:text-red-400" />
             <p className="text-sm text-red-700 dark:text-red-300">
               Esta ação irá apagar todas as configurações personalizadas do servidor e restaurar
               os valores padrão do sistema. A operação não pode ser desfeita.
@@ -1444,7 +1420,7 @@ export default function ServerConfigurationPage() {
               loading={resetMutation.isPending}
               disabled={resetConfirmText.trim().toUpperCase() !== "RESET"}
             >
-              <RotateCcw className="h-3.5 w-3.5" />
+              <Icon name="restart_alt" className="h-3.5 w-3.5" />
               Confirmar reset
             </Button>
           </div>
@@ -1496,7 +1472,7 @@ export default function ServerConfigurationPage() {
               }}
               loading={patchMutation.isPending}
             >
-              <Save className="h-3.5 w-3.5" />
+              <Icon name="save" className="h-3.5 w-3.5" />
               Confirmar e salvar
             </Button>
           </div>
@@ -1554,7 +1530,7 @@ export default function ServerConfigurationPage() {
               loading={importMutation.isPending}
               disabled={!importText.trim()}
             >
-              <Upload className="h-3.5 w-3.5" />
+              <Icon name="upload" className="h-3.5 w-3.5" />
               Importar
             </Button>
           </div>
@@ -1725,7 +1701,7 @@ export function TicketAttachmentSettingsCard({
       className="inline-flex items-center gap-1 rounded-md border border-border bg-surface-light px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:border-border-strong hover:text-foreground"
     >
       {collapsed ? "Expandir" : "Recolher"}
-      {collapsed ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronUp className="h-3.5 w-3.5" />}
+      {collapsed ? <Icon name="expand_more" className="h-3.5 w-3.5" /> : <Icon name="expand_less" className="h-3.5 w-3.5" />}
     </button>
   );
 
@@ -1889,7 +1865,7 @@ export function TicketAttachmentSettingsCard({
               form.enabled ? selectedIcon : unselectedIcon
             }`}
           >
-            <FileStack className="h-4 w-4" />
+            <Icon name="layers" className="h-4 w-4" />
           </div>
           <div className="min-w-0 flex-1">
             <p className={`text-sm font-medium ${form.enabled ? "text-foreground" : "text-muted"}`}>
@@ -2147,7 +2123,7 @@ export function TicketAttachmentSettingsCard({
 
         <div className="flex justify-end">
           <Button size="sm" onClick={handleSave} loading={mutation.isPending}>
-            <Save className="h-3.5 w-3.5" />
+            <Icon name="save" className="h-3.5 w-3.5" />
             Salvar Configurações de Anexos
           </Button>
         </div>

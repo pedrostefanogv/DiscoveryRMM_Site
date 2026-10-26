@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { Activity, ArrowDownToLine, Gauge, History, Play, XCircle } from "lucide-react";
 import toast from "react-hot-toast";
-import { Badge, Button, Card, CardHeader, Input } from "@/components/ui";
+import { Icon, Badge, Button, Card, CardHeader, Input } from "@/components/ui";
 import { jobsApi } from "@/api";
 import type { BackgroundProcessingSettings, ProcessingScopeStateDto } from "@/api";
 import {
@@ -239,7 +238,7 @@ export function BackgroundProcessingCard({
         {(["metrics", "triage"] as SectionKey[]).map((section) => (
           <div key={section} className="space-y-3 rounded-xl border border-border bg-surface-light p-3">
             <div className="flex items-center gap-2 text-muted-foreground">
-              {section === "metrics" ? <Gauge className="h-4 w-4" /> : <Activity className="h-4 w-4" />}
+              {section === "metrics" ? <Icon name="speed" className="h-4 w-4" /> : <Icon name="monitoring" className="h-4 w-4" />}
               <p className="text-sm font-medium">
                 {section === "metrics" ? "Métricas por atendente" : "Triagem por IA"}
               </p>
@@ -313,7 +312,7 @@ export function BackgroundProcessingCard({
 
         <div className="space-y-3 rounded-xl border border-border p-3">
           <div className="flex items-center gap-2 text-muted-foreground">
-            <History className="h-4 w-4" />
+            <Icon name="history" className="h-4 w-4" />
             <p className="text-sm font-medium">Últimos ciclos</p>
           </div>
 
@@ -353,7 +352,7 @@ export function BackgroundProcessingCard({
                   .catch(() => toast.error("Não foi possível disparar o ciclo de métricas."))
               }
             >
-              <Play className="mr-1.5 h-3.5 w-3.5" />
+              <Icon name="play_arrow" className="mr-1.5 h-3.5 w-3.5" />
               Rodar métricas agora
             </Button>
             <Button
@@ -367,7 +366,7 @@ export function BackgroundProcessingCard({
                   .catch(() => toast.error("Não foi possível disparar o ciclo de triagem."))
               }
             >
-              <Play className="mr-1.5 h-3.5 w-3.5" />
+              <Icon name="play_arrow" className="mr-1.5 h-3.5 w-3.5" />
               Rodar triagem agora
             </Button>
 
@@ -387,7 +386,7 @@ export function BackgroundProcessingCard({
                   )
                 }
               >
-                <XCircle className="mr-1.5 h-3.5 w-3.5" />
+                <Icon name="cancel" className="mr-1.5 h-3.5 w-3.5" />
                 Cancelar backfill
               </Button>
             ) : (
@@ -407,7 +406,7 @@ export function BackgroundProcessingCard({
                   );
                 }}
               >
-                <ArrowDownToLine className="mr-1.5 h-3.5 w-3.5" />
+                <Icon name="download" className="mr-1.5 h-3.5 w-3.5" />
                 Backfill de snapshots
               </Button>
             )}

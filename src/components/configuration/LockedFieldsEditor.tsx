@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react";
-import { Lock, ShieldAlert } from "lucide-react";
-import { Button } from "@/components/ui";
+import { Icon, Button } from "@/components/ui";
 import { useServerLocksImpact } from "@/hooks/useConfigurationApi";
 import type { ConfigurationLockImpact } from "@/services/configurationApi";
 import type { EditableField } from "@/utils/configurationEditors";
@@ -100,7 +99,7 @@ export function LockedFieldsEditor({ value, fields, onChange, disabled }: Locked
           loading={impactMutation.isPending}
           disabled={disabled || selectedNames.length === 0}
         >
-          <ShieldAlert className="h-3.5 w-3.5" />
+          <Icon name="gpp_maybe" className="h-3.5 w-3.5" />
           Ver impacto ({selectedNames.length})
         </Button>
       </div>
@@ -123,7 +122,7 @@ export function LockedFieldsEditor({ value, fields, onChange, disabled }: Locked
                   : "border-border bg-surface-light text-muted hover:border-border-strong"
               }`}
             >
-              <Lock className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${selected ? statusText.danger : "text-muted"}`} />
+              <Icon name="lock" className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${selected ? statusText.danger : "text-muted"}`} />
               <span className="min-w-0">
                 <span className="block font-medium">{field.label}</span>
                 <span className="block font-mono text-[11px] text-muted">{apiName}</span>

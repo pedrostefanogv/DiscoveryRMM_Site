@@ -1,5 +1,5 @@
-import { History } from "lucide-react";
-import { Card, Badge, Loading } from "@/components/ui";
+
+import { Icon, Card, Badge, Loading } from "@/components/ui";
 import { useReportTemplateHistory } from "@/hooks";
 import { ReportFormat, ReportDatasetType, type ReportDatasetTypeValue, type ReportFormatValue } from "@/api/types";
 
@@ -149,7 +149,7 @@ export function ReportTemplateHistoryPanel({ templateId, limit = 50 }: ReportTem
     <Card>
       <div className="mb-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <History className="h-4 w-4 text-muted-foreground" />
+          <Icon name="history" className="h-4 w-4 text-muted-foreground" />
           <h3 className="text-sm font-semibold text-foreground">
             Histórico de Versões
           </h3>

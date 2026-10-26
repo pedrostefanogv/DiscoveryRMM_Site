@@ -1,6 +1,5 @@
 import { useState } from 'react';
-import { Plus, Trash2, ClipboardList, ChevronDown, ChevronUp } from 'lucide-react';
-import { Badge, Button, Input, Select, TextArea } from '@/components/ui';
+import { Icon, Badge, Button, Input, Select, TextArea } from '@/components/ui';
 import { CustomFieldDataType, getCustomFieldDataTypeLabel } from '@/api';
 import { useCustomFieldTemplates } from '@/hooks/useCustomFieldTemplates';
 import { fieldMaskPlaceholder } from '@/utils/fieldMask';
@@ -129,7 +128,7 @@ export function TemplateQuestionsEditor({
       <div className="mb-1 flex items-start justify-between gap-3">
         <div>
           <p className="flex items-center gap-1.5 text-xs font-medium text-muted">
-            <ClipboardList className="h-3.5 w-3.5" />
+            <Icon name="assignment" className="h-3.5 w-3.5" />
             Questionário do modelo
           </p>
           <p className="mt-0.5 text-xs text-muted">
@@ -138,7 +137,7 @@ export function TemplateQuestionsEditor({
           </p>
         </div>
         <Button type="button" size="sm" variant="secondary" onClick={add}>
-          <Plus className="h-4 w-4" /> Pergunta
+          <Icon name="add" className="h-4 w-4" /> Pergunta
         </Button>
       </div>
 
@@ -180,7 +179,7 @@ export function TemplateQuestionsEditor({
                     aria-label={isOpen ? `Recolher pergunta ${index + 1}` : `Expandir pergunta ${index + 1}`}
                     className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-1 py-0.5 text-left transition-colors hover:bg-surface-hover/40"
                   >
-                    {isOpen ? <ChevronUp className="h-4 w-4 shrink-0 text-muted" /> : <ChevronDown className="h-4 w-4 shrink-0 text-muted" />}
+                    {isOpen ? <Icon name="expand_less" className="h-4 w-4 shrink-0 text-muted" /> : <Icon name="expand_more" className="h-4 w-4 shrink-0 text-muted" />}
                     <span className="shrink-0 text-xs font-semibold uppercase tracking-wider text-muted">
                       Pergunta {index + 1}
                     </span>
@@ -198,7 +197,7 @@ export function TemplateQuestionsEditor({
                     aria-label="Remover pergunta"
                     className="shrink-0 p-1 text-muted transition-colors hover:text-danger"
                   >
-                    <Trash2 className="h-4 w-4" />
+                    <Icon name="delete" className="h-4 w-4" />
                   </button>
                 </div>
 

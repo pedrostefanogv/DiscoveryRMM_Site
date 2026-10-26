@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
-import {
+import { Icon,
   Badge,
   Button,
   Card,
@@ -69,7 +69,7 @@ import { useAppStoreCatalog } from "@/hooks/useAppStore";
 import { useAgentCustomFieldMap } from "@/hooks/useCustomFields";
 import { useAutoKey } from "@/hooks/useAutoKey";
 import { fieldKeyError } from "@/utils/fieldKey";
-import { Search, LayoutGrid, List, Eye, Pencil, ScrollText, Trash2, RotateCcw, Info, CalendarClock } from "lucide-react";
+
 
 function buildCorrelationId(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
@@ -759,20 +759,20 @@ export default function AutomationTasksPage() {
       {
         key: "details",
         label: "Ver detalhes",
-        icon: <Eye className="h-4 w-4" />,
+        icon: <Icon name="visibility" className="h-4 w-4" />,
         onClick: () => setDetailTaskId(item.id),
       },
       {
         key: "edit",
         label: "Editar",
-        icon: <Pencil className="h-4 w-4" />,
+        icon: <Icon name="edit" className="h-4 w-4" />,
         disabled: deleted,
         onClick: () => openEditFor(item),
       },
       {
         key: "audit",
         label: "Auditoria",
-        icon: <ScrollText className="h-4 w-4" />,
+        icon: <Icon name="article" className="h-4 w-4" />,
         onClick: () => setAuditTaskId(item.id),
       },
     ];
@@ -780,7 +780,7 @@ export default function AutomationTasksPage() {
       items.push({
         key: "restore",
         label: "Reativar",
-        icon: <RotateCcw className="h-4 w-4" />,
+        icon: <Icon name="restart_alt" className="h-4 w-4" />,
         onClick: () => {
           setRestoreTask(item);
           setRestoreConfirmationText("");
@@ -790,7 +790,7 @@ export default function AutomationTasksPage() {
       items.push({
         key: "delete",
         label: "Excluir",
-        icon: <Trash2 className="h-4 w-4" />,
+        icon: <Icon name="delete" className="h-4 w-4" />,
         danger: true,
         separatorBefore: true,
         onClick: () => {
@@ -1901,7 +1901,7 @@ export default function AutomationTasksPage() {
                   aria-label="Pesquisar pacote"
                   title="Pesquisar pacote"
                 >
-                  <Search className="h-4 w-4" />
+                  <Icon name="search" className="h-4 w-4" />
                 </Button>
               </div>
               <p className="text-xs text-muted">PackageId: {form.packageId || "-"}</p>
@@ -1939,7 +1939,7 @@ export default function AutomationTasksPage() {
                   aria-label="Pesquisar tags"
                   title="Pesquisar tags"
                 >
-                  <Search className="h-4 w-4" />
+                  <Icon name="search" className="h-4 w-4" />
                 </Button>
               </div>
             </div>
@@ -1972,7 +1972,7 @@ export default function AutomationTasksPage() {
               onClick={() => setTriggersHelpOpen(true)}
               title="Como funcionam os triggers?"
             >
-              <Info className="h-3.5 w-3.5" />
+              <Icon name="info" className="h-3.5 w-3.5" />
               Como funcionam?
             </button>
           </div>
@@ -2013,7 +2013,7 @@ export default function AutomationTasksPage() {
                 className="inline-flex shrink-0 items-center gap-1 rounded-full border border-border bg-surface px-2 py-0.5 text-xs text-muted transition-colors hover:bg-surface-hover hover:text-foreground"
                 onClick={() => setCronAssistantOpen((v) => !v)}
               >
-                <CalendarClock className="h-3.5 w-3.5" />
+                <Icon name="event" className="h-3.5 w-3.5" />
                 {cronAssistantOpen ? "Ocultar assistente" : "Assistente de agendamento"}
               </button>
             </div>
@@ -2390,7 +2390,7 @@ export default function AutomationTasksPage() {
                 }`}
                 title="Visualização em lista"
               >
-                <List className="h-4 w-4" />
+                <Icon name="list" className="h-4 w-4" />
               </button>
               <button
                 type="button"
@@ -2402,7 +2402,7 @@ export default function AutomationTasksPage() {
                 }`}
                 title="Visualização em cards"
               >
-                <LayoutGrid className="h-4 w-4" />
+                <Icon name="grid_view" className="h-4 w-4" />
               </button>
             </div>
           </div>

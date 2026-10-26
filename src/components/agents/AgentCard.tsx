@@ -1,24 +1,5 @@
 import type { KeyboardEvent, MouseEvent } from 'react';
-import {
-  Activity,
-  Apple,
-  ArrowDown,
-  ArrowUp,
-  Building2,
-  Clock,
-  HardDrive,
-  MapPin,
-  Monitor,
-  Radio,
-  RotateCcw,
-  Server,
-  ShieldCheck,
-  Thermometer,
-  User,
-  Wifi,
-  WifiOff,
-} from 'lucide-react';
-import { Badge, MetricBar } from '@/components/ui';
+import { Icon, Badge, MetricBar } from '@/components/ui';
 import { agentRebootTooltip, hasPendingReboot } from '@/utils/agentReboot';
 import type { Agent } from '@/api';
 import { getAgentLastSeen, isAgentOnlineNow } from '@/utils/agentStatus';
@@ -28,14 +9,14 @@ export type AgentCardAgent = Agent & { clientName: string; clientId: string; sit
 
 /** Ícone do SO usado no card (extraído do AgentList para reuso). */
 export function getAgentOsIcon(os: string | null | undefined) {
-  if (!os) return <Monitor className="h-5 w-5 text-primary" />;
+  if (!os) return <Icon name="desktop_windows" className="h-5 w-5 text-primary" />;
   const lower = os.toLowerCase();
-  if (lower.includes('windows')) return <Monitor className="h-5 w-5 text-primary" />;
+  if (lower.includes('windows')) return <Icon name="desktop_windows" className="h-5 w-5 text-primary" />;
   if (lower.includes('linux') || lower.includes('ubuntu') || lower.includes('debian') || lower.includes('centos')) {
-    return <Server className="h-5 w-5 text-accent" />;
+    return <Icon name="dns" className="h-5 w-5 text-accent" />;
   }
-  if (lower.includes('mac') || lower.includes('darwin')) return <Apple className="h-5 w-5 text-foreground" />;
-  return <Monitor className="h-5 w-5 text-primary" />;
+  if (lower.includes('mac') || lower.includes('darwin')) return <Icon name="phone_iphone" className="h-5 w-5 text-foreground" />;
+  return <Icon name="desktop_windows" className="h-5 w-5 text-primary" />;
 }
 
 export function formatDateBrazil(value: string): string {
@@ -112,7 +93,7 @@ export function AgentCard({
       <div className="absolute right-4 top-4">
         <Badge color={online ? 'success' : 'slate'}>
           <span className="flex items-center gap-1">
-            {online ? <Wifi className="h-2.5 w-2.5" /> : <WifiOff className="h-2.5 w-2.5" />}
+            {online ? <Icon name="wifi" className="h-2.5 w-2.5" /> : <Icon name="wifi_off" className="h-2.5 w-2.5" />}
             {online ? 'Online' : 'Offline'}
           </span>
         </Badge>
@@ -135,7 +116,7 @@ export function AgentCard({
             <div className="mt-1.5 flex flex-wrap gap-1.5" title={agentRebootTooltip(agent.pendingRebootReasons)}>
               <Badge color="warning">
                 <span className="flex items-center gap-1">
-                  <RotateCcw className="h-2.5 w-2.5" />
+                  <Icon name="restart_alt" className="h-2.5 w-2.5" />
                   Reinício pendente
                 </span>
               </Badge>
@@ -145,7 +126,7 @@ export function AgentCard({
       </div>
       <div className="space-y-1.5 text-xs">
         <div className="flex items-center gap-2 text-muted">
-          <Activity className="h-3.5 w-3.5 shrink-0 text-muted" />
+          <Icon name="monitoring" className="h-3.5 w-3.5 shrink-0 text-muted" />
           <span className="truncate">{agent.operatingSystem ?? '—'}{agent.osVersion ? ` · ${agent.osVersion}` : ''}</span>
         </div>
         <div className="flex items-center gap-2 text-muted">
@@ -154,17 +135,17 @@ export function AgentCard({
         </div>
         {/* Cliente → Site → Usuário logado, na mesma linha. */}
         <div className="flex min-w-0 items-center gap-2 text-muted">
-          {showClient && <Building2 className="h-3.5 w-3.5 shrink-0 text-muted" />}
+          {showClient && <Icon name="apartment" className="h-3.5 w-3.5 shrink-0 text-muted" />}
           {showClient && <span className="truncate">{agent.clientName}</span>}
           {showClient && showSite && agent.siteName && <span className="text-muted/50">·</span>}
           {showSite && agent.siteName && (
             <>
-              <MapPin className="h-3 w-3 shrink-0 text-muted" />
+              <Icon name="location_on" className="h-3 w-3 shrink-0 text-muted" />
               <span className="truncate">{agent.siteName}</span>
             </>
           )}
           {(showClient || (showSite && agent.siteName)) && <span className="text-muted/50">·</span>}
-          <User className="h-3.5 w-3.5 shrink-0 text-muted" />
+          <Icon name="person" className="h-3.5 w-3.5 shrink-0 text-muted" />
           <span
             className="truncate"
             title={
@@ -187,12 +168,12 @@ export function AgentCard({
         <div className="flex items-center gap-3 text-muted pt-0.5">
           {agent.heartbeatMetrics?.p2pPeers != null && (
             <span className="flex items-center gap-1 text-[10px]">
-              <Radio className="h-3 w-3" />
+              <Icon name="podcasts" className="h-3 w-3" />
               {agent.heartbeatMetrics.p2pPeers} peers
             </span>
           )}
           <span className="flex items-center gap-1 text-[10px]">
-            <Clock className="h-3 w-3" />
+            <Icon name="schedule" className="h-3 w-3" />
             {relativeTime.text}
           </span>
           {agent.heartbeatMetrics?.cpuTemperatureCelsius != null && (() => {
@@ -200,7 +181,7 @@ export function AgentCard({
             const tempColor = t > 80 ? 'text-danger' : t > 60 ? 'text-warning' : '';
             return (
               <span className={`flex items-center gap-1 text-[10px] ${tempColor}`}>
-                <Thermometer className="h-3 w-3" />
+                <Icon name="device_thermostat" className="h-3 w-3" />
                 {Math.round(t)}°C
               </span>
             );
@@ -210,7 +191,7 @@ export function AgentCard({
             const colorClass = pct >= 90 ? 'text-danger' : pct >= 70 ? 'text-warning' : '';
             return (
               <span className={`flex items-center gap-1 text-[10px] ${colorClass}`}>
-                <HardDrive className="h-3 w-3" />
+                <Icon name="storage" className="h-3 w-3" />
                 {Math.round(pct)}%
               </span>
             );
@@ -224,7 +205,7 @@ export function AgentCard({
               <div className="flex items-stretch gap-2">
                 <span className="shrink-0 text-xs text-muted min-w-[2rem]">HDD</span>
                 <div className="flex flex-1 items-center gap-1.5">
-                  <ArrowUp className="h-3 w-3 shrink-0 text-cyan-600 dark:text-cyan-400" />
+                  <Icon name="arrow_upward" className="h-3 w-3 shrink-0 text-cyan-600 dark:text-cyan-400" />
                   <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-cyan-500/20">
                     <div
                       className="h-full rounded-full bg-cyan-500 transition-all duration-500"
@@ -236,7 +217,7 @@ export function AgentCard({
                   </span>
                 </div>
                 <div className="flex flex-1 items-center gap-1.5">
-                  <ArrowDown className="h-3 w-3 shrink-0 text-amber-600 dark:text-amber-400" />
+                  <Icon name="arrow_downward" className="h-3 w-3 shrink-0 text-amber-600 dark:text-amber-400" />
                   <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-amber-500/20">
                     <div
                       className="h-full rounded-full bg-amber-500 transition-all duration-500"
@@ -264,7 +245,7 @@ export function AgentCard({
             disabled={isApproving}
             className="inline-flex items-center gap-1 rounded-md border border-warning/40 bg-warning/10 px-2.5 py-1 text-xs font-medium text-warning transition-colors hover:bg-warning/20 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            <ShieldCheck className="h-3.5 w-3.5" />
+            <Icon name="verified_user" className="h-3.5 w-3.5" />
             {isApproving ? 'Aprovando...' : 'Aprovar'}
           </button>
         </div>

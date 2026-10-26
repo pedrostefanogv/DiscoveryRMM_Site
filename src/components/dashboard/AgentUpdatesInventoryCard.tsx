@@ -1,17 +1,6 @@
 import { memo } from "react";
 import { useNavigate } from "react-router-dom";
-import {
-  AlertTriangle,
-  ArrowRight,
-  Ban,
-  CheckCircle2,
-  Download,
-  RefreshCw,
-  RotateCcw,
-  ShieldAlert,
-} from "lucide-react";
-import type { LucideIcon } from "lucide-react";
-import { Badge, Button, Card, CardHeader, MetricBar } from "@/components/ui";
+import { Icon, Badge, Button, Card, CardHeader, MetricBar, type MaterialSymbolName } from "@/components/ui";
 import type { PatchScopeSnapshot } from "@/api/types";
 
 /**
@@ -44,7 +33,7 @@ function complianceTone(value: number): "success" | "warning" | "danger" {
 interface TileProps {
   label: string;
   value: number | string;
-  icon: LucideIcon;
+  icon: MaterialSymbolName;
   tone?: "default" | "danger" | "warning" | "success";
   title?: string;
 }
@@ -62,7 +51,7 @@ const toneClasses: Record<
 const MetricTile = memo(function MetricTile({
   label,
   value,
-  icon: Icon,
+  icon,
   tone = "default",
   title,
 }: TileProps) {
@@ -70,7 +59,7 @@ const MetricTile = memo(function MetricTile({
   return (
     <div className={`rounded-lg px-3 py-2 ${classes.box}`} title={title}>
       <div className="flex items-center gap-1.5 text-muted">
-        <Icon className={`h-3.5 w-3.5 ${classes.icon}`} />
+        <Icon name={icon} className={`h-3.5 w-3.5 ${classes.icon}`} />
         <span className="text-xs">{label}</span>
       </div>
       <p className={`mt-1 text-xl font-bold tabular-nums ${classes.value}`}>{value}</p>
@@ -137,7 +126,7 @@ export function AgentUpdatesInventoryCard({
               title="Atualizar inventário de atualizações"
               disabled={!onRefresh}
             >
-              <RefreshCw className="h-4 w-4" />
+              <Icon name="refresh" className="h-4 w-4" />
             </Button>
             <Button
               variant="secondary"
@@ -145,7 +134,7 @@ export function AgentUpdatesInventoryCard({
               onClick={() => navigate("/patches/inventory")}
             >
               Gerenciador
-              <ArrowRight className="h-4 w-4" />
+              <Icon name="arrow_forward" className="h-4 w-4" />
             </Button>
           </div>
         }
@@ -154,7 +143,7 @@ export function AgentUpdatesInventoryCard({
       {isError ? (
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger">
           <span className="flex items-center gap-2">
-            <AlertTriangle className="h-4 w-4" />
+            <Icon name="warning" className="h-4 w-4" />
             Não foi possível carregar o inventário de atualizações.
           </span>
           {onRefresh && (
@@ -197,41 +186,41 @@ export function AgentUpdatesInventoryCard({
             <MetricTile
               label="Pendentes"
               value={isLoading ? "—" : totalPending}
-              icon={ShieldAlert}
+              icon="gpp_maybe"
               title="Atualizações pendentes detectadas no inventário da frota."
             />
             <MetricTile
               label="Críticas"
               value={isLoading ? "—" : criticalPending}
-              icon={AlertTriangle}
+              icon="warning"
               tone={criticalPending > 0 ? "danger" : "success"}
               title="Pendências classificadas como críticas/importantes."
             />
             <MetricTile
               label="Aprovadas"
               value={isLoading ? "—" : approvedPending}
-              icon={CheckCircle2}
+              icon="check_circle"
               tone="success"
               title="Pendências já aprovadas para instalação."
             />
             <MetricTile
               label="Sem decisão"
               value={isLoading ? "—" : awaitingDecision}
-              icon={Ban}
+              icon="block"
               tone={awaitingDecision > 0 ? "warning" : "default"}
               title="Pendências que ainda aguardam aprovação/negação do operador."
             />
             <MetricTile
               label="Reboot"
               value={isLoading ? "—" : rebootPendingAgents}
-              icon={RotateCcw}
+              icon="restart_alt"
               tone={rebootPendingAgents > 0 ? "warning" : "default"}
               title="Agentes com reinício pendente após instalação."
             />
             <MetricTile
               label="Falhas 24h"
               value={isLoading ? "—" : failedInstallations24h}
-              icon={Download}
+              icon="download"
               tone={failedInstallations24h > 0 ? "danger" : "default"}
               title="Instalações de patch que falharam nas últimas 24 horas."
             />

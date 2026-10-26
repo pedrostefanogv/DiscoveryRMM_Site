@@ -1,5 +1,5 @@
-import { Badge, Button, ErrorDisplay, Loading, Modal } from '@/components/ui';
-import { ExternalLink, FileArchive, FileBox, Hash, Pencil, Search, Terminal, Trash2 } from 'lucide-react';
+import { Icon, Badge, Button, ErrorDisplay, Loading, Modal } from '@/components/ui';
+
 import { useAppStorePackage } from '@/hooks/useAppStore';
 import {
   AppCommandKind, AppDetectionMode, AppInstallationType, type AppStoreCatalogPackage,
@@ -134,7 +134,7 @@ export function PackageDetailsModal({ open, onClose, pkg, installationType, onEd
             {isCustomPackage && (
               <div className="rounded-xl border border-border bg-surface-light p-3">
                 <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted">
-                  <FileBox className="h-3.5 w-3.5" /> Instalador publicado
+                  <Icon name="archive" className="h-3.5 w-3.5" /> Instalador publicado
                 </div>
 
                 {details.hasFile ? (
@@ -146,7 +146,7 @@ export function PackageDetailsModal({ open, onClose, pkg, installationType, onEd
                       {details.extractZip && (
                         <Badge color="warning">
                           <span className="inline-flex items-center gap-1">
-                            <FileArchive className="h-3 w-3" /> ZIP — extrair no host
+                            <Icon name="folder_zip" className="h-3 w-3" /> ZIP — extrair no host
                           </span>
                         </Badge>
                       )}
@@ -165,7 +165,7 @@ export function PackageDetailsModal({ open, onClose, pkg, installationType, onEd
 
                     {shortChecksum(details.fileChecksum) && (
                       <div className="flex items-center gap-1.5 text-xs text-muted">
-                        <Hash className="h-3 w-3" />
+                        <Icon name="tag" className="h-3 w-3" />
                         <span className="text-muted-foreground">Checksum:</span>
                         <span className="font-mono text-foreground" title={details.fileChecksum ?? ''}>
                           {shortChecksum(details.fileChecksum)}
@@ -188,7 +188,7 @@ export function PackageDetailsModal({ open, onClose, pkg, installationType, onEd
             {isCustomPackage && (
               <div className="rounded-xl border border-border bg-surface-light p-3">
                 <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted">
-                  <Search className="h-3.5 w-3.5" /> Detecção
+                  <Icon name="search" className="h-3.5 w-3.5" /> Detecção
                 </div>
                 <div className="mt-2 space-y-1 text-sm text-foreground">
                   <p>{detectionSummary}</p>
@@ -210,7 +210,7 @@ export function PackageDetailsModal({ open, onClose, pkg, installationType, onEd
             {isCustomPackage && (
               <div className="rounded-xl border border-border bg-surface-light p-3">
                 <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted">
-                  <Terminal className="h-3.5 w-3.5" /> Comandos
+                  <Icon name="terminal" className="h-3.5 w-3.5" /> Comandos
                 </div>
 
                 <div className="mt-2 space-y-2">
@@ -264,17 +264,17 @@ export function PackageDetailsModal({ open, onClose, pkg, installationType, onEd
                   rel="noreferrer"
                   className="inline-flex items-center gap-1.5 rounded-lg border border-primary/40 bg-primary/10 px-3 py-2 text-sm font-medium text-primary hover:bg-primary/20"
                 >
-                  <ExternalLink className="h-4 w-4" /> Site do app
+                  <Icon name="open_in_new" className="h-4 w-4" /> Site do app
                 </a>
               )}
               {isCustomPackage && onEdit && (
                 <Button variant="ghost" onClick={onEdit}>
-                  <Pencil className="h-4 w-4" /> Editar
+                  <Icon name="edit" className="h-4 w-4" /> Editar
                 </Button>
               )}
               {isCustomPackage && onDelete && (
                 <Button variant="danger" onClick={onDelete}>
-                  <Trash2 className="h-4 w-4" /> Excluir
+                  <Icon name="delete" className="h-4 w-4" /> Excluir
                 </Button>
               )}
               <Button variant="ghost" onClick={onClose}>Fechar</Button>

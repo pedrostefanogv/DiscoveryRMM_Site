@@ -1,8 +1,7 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Activity, Database, Play, RefreshCw, Search, ShieldAlert, Trash2, Wrench } from "lucide-react";
 import toast from "react-hot-toast";
-import { Badge, Button, Card, CardHeader, ConfirmDialog, Select } from "@/components/ui";
+import { Icon, Badge, Button, Card, CardHeader, ConfirmDialog, Select } from "@/components/ui";
 import {
   useDatabaseHealth,
   useDatabaseMaintenanceRuns,
@@ -144,7 +143,7 @@ export default function DatabaseMaintenanceSettings() {
         <div className="space-y-4">
           <div className="rounded-lg border border-border bg-surface-light p-3 text-sm">
             <div className="mb-2 flex items-center gap-2 font-medium text-foreground">
-              <ShieldAlert className="h-4 w-4 text-warning" />
+              <Icon name="gpp_maybe" className="h-4 w-4 text-warning" />
               Verificações executadas
             </div>
             {checksQuery.isLoading ? (
@@ -174,7 +173,7 @@ export default function DatabaseMaintenanceSettings() {
               loading={isDryRunPending}
               onClick={() => run(true)}
             >
-              <Search className="h-4 w-4" />
+              <Icon name="search" className="h-4 w-4" />
               Verificar (sem alterar)
             </Button>
             <Button
@@ -183,7 +182,7 @@ export default function DatabaseMaintenanceSettings() {
               loading={isApplyPending}
               onClick={() => setConfirmOpen(true)}
             >
-              <Play className="h-4 w-4" />
+              <Icon name="play_arrow" className="h-4 w-4" />
               Aplicar correções
             </Button>
           </div>
@@ -260,7 +259,7 @@ export default function DatabaseMaintenanceSettings() {
         <div className="space-y-4">
           <div className="rounded-lg border border-border bg-surface-light p-3 text-sm">
             <div className="mb-2 flex items-center gap-2 font-medium text-foreground">
-              <ShieldAlert className="h-4 w-4 text-warning" />
+              <Icon name="gpp_maybe" className="h-4 w-4 text-warning" />
               Verificações executadas
             </div>
             {storageChecksQuery.isLoading ? (
@@ -305,7 +304,7 @@ export default function DatabaseMaintenanceSettings() {
               loading={isStorageDryRunPending}
               onClick={() => runStorage(true)}
             >
-              <Search className="h-4 w-4" />
+              <Icon name="search" className="h-4 w-4" />
               Analisar (sem apagar)
             </Button>
             <Button
@@ -314,7 +313,7 @@ export default function DatabaseMaintenanceSettings() {
               loading={isStorageApplyPending}
               onClick={() => setConfirmStorageOpen(true)}
             >
-              <Trash2 className="h-4 w-4" />
+              <Icon name="delete" className="h-4 w-4" />
               Limpar órfãos
             </Button>
           </div>
@@ -437,7 +436,7 @@ export default function DatabaseMaintenanceSettings() {
               loading={healthQuery.isFetching}
               onClick={() => healthQuery.refetch()}
             >
-              <RefreshCw className="h-4 w-4" />
+              <Icon name="refresh" className="h-4 w-4" />
               Atualizar
             </Button>
           }
@@ -452,7 +451,7 @@ export default function DatabaseMaintenanceSettings() {
           <div className="space-y-3">
             <div className="flex flex-wrap gap-2 text-xs">
               <Badge color="slate">
-                <Database className="mr-1 h-3 w-3" /> banco {formatBytes(health.databaseSizeBytes)}
+                <Icon name="database" className="mr-1 h-3 w-3" /> banco {formatBytes(health.databaseSizeBytes)}
               </Badge>
               <Badge color="slate">tabelas {formatBytes(health.totalTableSizeBytes)}</Badge>
               <Badge color="slate">{health.tables.length} tabelas</Badge>
@@ -510,7 +509,7 @@ export default function DatabaseMaintenanceSettings() {
               loading={runMaintenance.isPending}
               onClick={() => setConfirmMaintenanceOpen(true)}
             >
-              <Wrench className="h-4 w-4" />
+              <Icon name="build" className="h-4 w-4" />
               Executar agora
             </Button>
           }
@@ -527,7 +526,7 @@ export default function DatabaseMaintenanceSettings() {
                 className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border p-3 text-xs"
               >
                 <span className="flex items-center gap-2 font-medium text-foreground">
-                  <Activity className="h-4 w-4 text-muted" />
+                  <Icon name="monitoring" className="h-4 w-4 text-muted" />
                   {formatDateTime(run.startedAtUtc)}
                 </span>
                 <span className="flex flex-wrap items-center gap-2">

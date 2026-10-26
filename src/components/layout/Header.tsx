@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { LogOut, Menu, Search, User } from 'lucide-react';
+import { Icon } from "@/components/ui";
+
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/auth/AuthContext';
 import { useMyProfile } from '@/hooks/useIdentity';
@@ -153,11 +154,11 @@ export function Header({ onMenuClick }: HeaderProps) {
             className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-surface-light text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground lg:hidden"
             aria-label="Abrir menu lateral"
           >
-            <Menu className="h-4 w-4" />
+            <Icon name="menu" className="h-4 w-4" />
           </button>
 
           <div className="relative hidden max-w-md flex-1 sm:block" ref={searchContainerRef}>
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+            <Icon name="search" className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
             <input
               type="text"
               placeholder="Buscar agentes, clientes, chamados..."
@@ -235,7 +236,7 @@ export function Header({ onMenuClick }: HeaderProps) {
                   }}
                   className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-surface-hover"
                 >
-                  <User className="h-4 w-4" /> Meu perfil
+                  <Icon name="person" className="h-4 w-4" /> Meu perfil
                 </button>
                 <button
                   type="button"
@@ -246,7 +247,7 @@ export function Header({ onMenuClick }: HeaderProps) {
                   }}
                   className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-red-700 transition-colors hover:bg-danger/20 dark:text-red-200"
                 >
-                  <LogOut className="h-4 w-4" /> Sair
+                  <Icon name="logout" className="h-4 w-4" /> Sair
                 </button>
               </div>
             )}

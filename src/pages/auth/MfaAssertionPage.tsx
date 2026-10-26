@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
-import { Fingerprint, ShieldCheck, ShieldEllipsis, TriangleAlert } from "lucide-react";
+
 import { ApiError, authApi } from "@/api";
 import { useAuth } from "@/auth/AuthContext";
 import { isRetryableMfaCodeError } from "@/auth/errorMessages";
@@ -12,7 +12,7 @@ import {
   parseAssertionOptions,
   serializeAssertionCredential,
 } from "@/auth/webauthn";
-import { Button, Card, CardHeader, Input } from "@/components/ui";
+import { Icon, Button, Card, CardHeader, Input } from "@/components/ui";
 
 function resolveRoleMfaRequirement(roleMfaRequirement: string | undefined) {
   if (roleMfaRequirement === "Totp") return "Totp";
@@ -227,9 +227,9 @@ export default function MfaAssertionPage() {
         <div className="rounded-2xl border border-border bg-surface-light p-5 text-sm text-muted-foreground">
           <div className="flex items-start gap-3">
             {isTotpFlow ? (
-              <ShieldEllipsis className="mt-0.5 h-5 w-5 text-primary" />
+              <Icon name="gpp_maybe" className="mt-0.5 h-5 w-5 text-primary" />
             ) : (
-              <Fingerprint className="mt-0.5 h-5 w-5 text-primary" />
+              <Icon name="fingerprint" className="mt-0.5 h-5 w-5 text-primary" />
             )}
             {isTotpFlow
                ? "Seu perfil exige OTP. Digite o código do autenticador — ou um código de backup, caso tenha perdido o dispositivo."
@@ -255,7 +255,7 @@ export default function MfaAssertionPage() {
         {error && (
           <div className="rounded-2xl border border-danger/30 bg-danger/10 p-4 text-sm text-red-800 dark:text-red-100">
             <div className="flex items-start gap-3">
-              <TriangleAlert className="mt-0.5 h-4 w-4" />
+              <Icon name="warning" className="mt-0.5 h-4 w-4" />
               {error}
             </div>
           </div>
@@ -267,7 +267,7 @@ export default function MfaAssertionPage() {
           loading={isRunning}
           onClick={isTotpFlow ? handleAuthenticateOtp : handleAuthenticateFido2}
         >
-          <ShieldCheck className="h-4 w-4" />
+          <Icon name="verified_user" className="h-4 w-4" />
           {isTotpFlow ? "Validar OTP" : "Iniciar validação FIDO2"}
         </Button>
       </div>

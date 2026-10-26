@@ -1,7 +1,6 @@
 import type { MouseEvent } from 'react';
-import { RotateCcw, ShieldCheck, Wifi, WifiOff } from 'lucide-react';
 import { agentRebootTooltip, hasPendingReboot } from '@/utils/agentReboot';
-import { Badge, MetricBar } from '@/components/ui';
+import { Icon, Badge, MetricBar } from '@/components/ui';
 import { formatRelative, getAgentOsIcon, type AgentCardAgent } from './AgentCard';
 import { getAgentLastSeen, isAgentOnlineNow } from '@/utils/agentStatus';
 
@@ -115,7 +114,7 @@ export function AgentListView({
                     <span className="mr-1 inline-flex" title={agentRebootTooltip(a.pendingRebootReasons)}>
                       <Badge color="warning">
                         <span className="flex items-center gap-1">
-                          <RotateCcw className="h-2.5 w-2.5" />
+                          <Icon name="restart_alt" className="h-2.5 w-2.5" />
                           Reinício pendente
                         </span>
                       </Badge>
@@ -131,7 +130,7 @@ export function AgentListView({
                       disabled={isApprovingId === a.id}
                       className="inline-flex items-center gap-1 rounded-md border border-warning/40 bg-warning/10 px-2 py-1 text-xs font-medium text-warning transition-colors hover:bg-warning/20 disabled:cursor-not-allowed disabled:opacity-60"
                     >
-                      <ShieldCheck className="h-3.5 w-3.5" />
+                      <Icon name="verified_user" className="h-3.5 w-3.5" />
                       {isApprovingId === a.id ? 'Aprovando...' : 'Aprovar'}
                     </button>
                   ) : isZeroTouchPending ? (
@@ -139,7 +138,7 @@ export function AgentListView({
                   ) : (
                     <Badge color={online ? 'success' : 'slate'}>
                       <span className="flex items-center gap-1">
-                        {online ? <Wifi className="h-2.5 w-2.5" /> : <WifiOff className="h-2.5 w-2.5" />}
+                        {online ? <Icon name="wifi" className="h-2.5 w-2.5" /> : <Icon name="wifi_off" className="h-2.5 w-2.5" />}
                         {online ? 'Online' : 'Offline'}
                       </span>
                     </Badge>

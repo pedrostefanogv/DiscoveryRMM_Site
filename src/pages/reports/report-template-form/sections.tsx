@@ -1,6 +1,6 @@
 import type { Dispatch, SetStateAction } from "react";
-import { Eye, Plus, Save, Trash2, X } from "lucide-react";
-import { Button, Card, Input, TextArea } from "@/components/ui";
+
+import { Icon, Button, Card, Input, TextArea } from "@/components/ui";
 import { ReportTemplateHistoryPanel } from "@/components/reports/ReportTemplateHistoryPanel";
 import type { PreviewMode, ReportAutocompleteItem, ReportDatasetTypeValue, ResponseDisposition, ScopeTypeString } from "@/api/types";
 import { ALIGN_OPTIONS, DATASET_SECTION_SOURCES } from "./data";
@@ -45,7 +45,7 @@ export function TemplateFormHeader({ isEdit, onBack }: HeaderProps) {
         </p>
       </div>
       <Button variant="ghost" onClick={onBack}>
-        <X className="h-4 w-4" /> Voltar
+        <Icon name="close" className="h-4 w-4" /> Voltar
       </Button>
     </div>
   );
@@ -275,7 +275,7 @@ export function LayoutBuilderTopSection({
         <h2 className="text-lg font-semibold text-foreground">Layout Builder</h2>
         <div className="flex gap-2">
           <Button type="button" variant="secondary" size="sm" onClick={handleAddColumn}>
-            <Plus className="h-4 w-4" /> Coluna
+            <Icon name="add" className="h-4 w-4" /> Coluna
           </Button>
           <select
             aria-label="Adicionar seção"
@@ -460,7 +460,7 @@ export function LayoutBuilderTopSection({
                     setAutocompleteAlias(selectedDataset.defaultAlias);
                   }}
                 >
-                  <Plus className="h-4 w-4" /> Ativar multi-source
+                  <Icon name="add" className="h-4 w-4" /> Ativar multi-source
                 </Button>
               ) : (
                 <>
@@ -489,7 +489,7 @@ export function LayoutBuilderTopSection({
                       }));
                     }}
                   >
-                    <Plus className="h-4 w-4" /> Fonte adicional
+                    <Icon name="add" className="h-4 w-4" /> Fonte adicional
                   </Button>
                   <Button
                     type="button"
@@ -772,7 +772,7 @@ export function LayoutBuilderTopSection({
                           }))
                         }
                       >
-                        <Trash2 className="h-4 w-4 text-danger" />
+                        <Icon name="delete" className="h-4 w-4 text-danger" />
                       </Button>
                     </div>
                     {joinSuggestions.length > 0 && index > 0 && (
@@ -1033,7 +1033,7 @@ export function LayoutBuilderDetailsSection({
                       }))
                     }
                   >
-                    <Trash2 className="h-4 w-4 text-danger" />
+                    <Icon name="delete" className="h-4 w-4 text-danger" />
                   </Button>
                 </td>
               </tr>
@@ -1065,7 +1065,7 @@ export function LayoutBuilderDetailsSection({
                     }))
                   }
                 >
-                  <Plus className="h-4 w-4" /> Item
+                  <Icon name="add" className="h-4 w-4" /> Item
                 </Button>
               </div>
               <p className="mb-3 text-xs text-muted">Lista de campos exibidos no detalhe de cada grupo.</p>
@@ -1119,7 +1119,7 @@ export function LayoutBuilderDetailsSection({
                         }))
                       }
                     >
-                      <Trash2 className="h-4 w-4 text-danger" />
+                      <Icon name="delete" className="h-4 w-4 text-danger" />
                     </Button>
                   </div>
                 ))}
@@ -1150,7 +1150,7 @@ export function LayoutBuilderDetailsSection({
                     }))
                   }
                 >
-                  <Plus className="h-4 w-4" /> Item
+                  <Icon name="add" className="h-4 w-4" /> Item
                 </Button>
               </div>
               <p className="mb-3 text-xs text-muted">Totalizadores gerais no rodapé do relatório.</p>
@@ -1224,7 +1224,7 @@ export function LayoutBuilderDetailsSection({
                         }))
                       }
                     >
-                      <Trash2 className="h-4 w-4 text-danger" />
+                      <Icon name="delete" className="h-4 w-4 text-danger" />
                     </Button>
                   </div>
                 ))}
@@ -1255,7 +1255,7 @@ export function LayoutBuilderDetailsSection({
                     }))
                   }
                 >
-                  <Plus className="h-4 w-4" /> Item
+                  <Icon name="add" className="h-4 w-4" /> Item
                 </Button>
               </div>
               <p className="mb-3 text-xs text-muted">Totalizadores exibidos ao final de cada grupo.</p>
@@ -1328,7 +1328,7 @@ export function LayoutBuilderDetailsSection({
                         }))
                       }
                     >
-                      <Trash2 className="h-4 w-4 text-danger" />
+                      <Icon name="delete" className="h-4 w-4 text-danger" />
                     </Button>
                   </div>
                 ))}
@@ -1389,7 +1389,7 @@ export function LayoutBuilderDetailsSection({
                 </datalist>
                 <div className="flex items-end justify-end gap-2 pb-1">
                   <Button type="button" size="sm" variant="secondary" onClick={() => handleAddSectionColumn(sectionIndex)}>
-                    <Plus className="h-4 w-4" /> Coluna
+                    <Icon name="add" className="h-4 w-4" /> Coluna
                   </Button>
                   <Button
                     type="button"
@@ -1402,7 +1402,7 @@ export function LayoutBuilderDetailsSection({
                       }))
                     }
                   >
-                    <Trash2 className="h-4 w-4 text-danger" />
+                    <Icon name="delete" className="h-4 w-4 text-danger" />
                   </Button>
                 </div>
               </div>
@@ -1526,7 +1526,7 @@ export function LayoutBuilderDetailsSection({
                               }))
                             }
                           >
-                            <Trash2 className="h-4 w-4 text-danger" />
+                            <Icon name="delete" className="h-4 w-4 text-danger" />
                           </Button>
                         </td>
                       </tr>
@@ -1783,7 +1783,7 @@ export function PreviewCard({
       <div className="mb-4 flex items-center justify-between">
         <h2 className="text-lg font-semibold text-foreground">Preview</h2>
         <Button type="button" onClick={onPreview} loading={loadingPreview}>
-          <Eye className="h-4 w-4" /> Gerar preview
+          <Icon name="visibility" className="h-4 w-4" /> Gerar preview
         </Button>
       </div>
 
@@ -2202,7 +2202,7 @@ export function TemplateFormActionBar({ isEdit, loading, onCancel }: TemplateFor
         Cancelar
       </Button>
       <Button type="submit" loading={loading} disabled={loading}>
-        <Save className="h-4 w-4" /> {isEdit ? "Atualizar template" : "Criar template"}
+        <Icon name="save" className="h-4 w-4" /> {isEdit ? "Atualizar template" : "Criar template"}
       </Button>
     </div>
   );

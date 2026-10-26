@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
-import { Wrench } from 'lucide-react';
-import { Button, Card, CardHeader } from '@/components/ui';
+
+import { Icon, Button, Card, CardHeader } from '@/components/ui';
 
 export default function SoftwareAutomation() {
   return (
@@ -20,7 +20,7 @@ export default function SoftwareAutomation() {
 
         <div className="rounded-lg border border-border bg-surface-light p-4">
           <div className="mb-2 flex items-center gap-2 text-muted-foreground">
-            <Wrench className="h-4 w-4" />
+            <Icon name="build" className="h-4 w-4" />
             <span className="text-sm">Status atual: módulo de automação ativo em nova navegação</span>
           </div>
           <p className="text-sm text-muted">

@@ -1,7 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { AlertTriangle, CheckCircle2, RefreshCw, ShieldCheck, XCircle } from "lucide-react";
-import {
+import { Icon,
   Badge,
   Button,
   Card,
@@ -127,7 +126,7 @@ export default function PatchesCompliance() {
           onClick={() => void compliance.refetch()}
           disabled={compliance.isFetching}
         >
-          <RefreshCw className="h-4 w-4" />
+          <Icon name="refresh" className="h-4 w-4" />
           Atualizar
         </Button>
       </PageHeader>
@@ -151,32 +150,32 @@ export default function PatchesCompliance() {
           <div className="flex items-center gap-3">
             <span className="text-sm text-muted">Score global</span>
             <Badge color={scoreBadgeColor(totals?.score ?? 0)}>
-              <ShieldCheck className="mr-1 h-3.5 w-3.5" />
+              <Icon name="verified_user" className="mr-1 h-3.5 w-3.5" />
               {(Math.round((totals?.score ?? 0) * 10) / 10).toFixed(1)}
             </Badge>
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <StatCard
-              icon={ShieldCheck}
+              icon="verified_user"
               label="Agentes"
               value={totals?.agents ?? 0}
               tone="primary"
             />
             <StatCard
-              icon={CheckCircle2}
+              icon="check_circle"
               label="Em conformidade"
               value={totals?.compliant ?? 0}
               tone="success"
             />
             <StatCard
-              icon={AlertTriangle}
+              icon="warning"
               label="Patches pendentes"
               value={totals?.pendingPatches ?? 0}
               tone="warning"
             />
             <StatCard
-              icon={XCircle}
+              icon="cancel"
               label="Falhas de instalação"
               value={totals?.failedPatches ?? 0}
               tone="warning"

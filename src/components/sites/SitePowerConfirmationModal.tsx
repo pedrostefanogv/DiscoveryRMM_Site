@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { AlertTriangle } from "lucide-react";
-import { Modal, Button, Input } from "@/components/ui";
+
+import { Icon, Modal, Button, Input } from "@/components/ui";
 
 export type SitePowerAction = "restart" | "shutdown";
 
@@ -62,7 +62,7 @@ export default function SitePowerConfirmationModal({
         {/* Aviso */}
         <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-4">
           <div className="flex items-start gap-3">
-            <AlertTriangle className="mt-0.5 h-6 w-6 shrink-0 text-amber-600 dark:text-amber-400" />
+            <Icon name="warning" className="mt-0.5 h-6 w-6 shrink-0 text-amber-600 dark:text-amber-400" />
             <div>
               <p className="font-semibold text-amber-700 dark:text-amber-400">
                 Esta ação afetará TODOS os agentes do site

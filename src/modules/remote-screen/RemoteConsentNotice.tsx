@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ShieldCheck } from "lucide-react";
-import { Button } from "@/components/ui";
+import { Icon, Button } from "@/components/ui";
 
 export interface RemoteConsentNoticeProps {
   /** Nome do operador que solicitou o acesso (resolvido no servidor). */
@@ -136,7 +135,7 @@ export default function RemoteConsentNotice({
       <div className="mx-4 w-full max-w-md rounded-xl border border-border bg-surface p-5 shadow-xl">
         <div className="mb-3 flex items-start gap-3">
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-warning/20 text-warning">
-            <ShieldCheck className="h-5 w-5" />
+            <Icon name="verified_user" className="h-5 w-5" />
           </span>
           <div className="min-w-0">
             <p

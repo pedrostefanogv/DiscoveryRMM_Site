@@ -10,8 +10,8 @@ import {
   type ComponentProps,
   type DragEvent,
 } from 'react';
+import { Icon } from "@/components/ui";
 import toast from 'react-hot-toast';
-import { ImagePlus } from 'lucide-react';
 import type { Components } from 'react-markdown';
 import { useTheme } from '@/theme/ThemeContext';
 import {
@@ -229,7 +229,7 @@ export function MarkdownEditor({
       {
         name: 'insert-image',
         keyCommand: 'insert-image',
-        icon: <ImagePlus className="h-4 w-4" aria-hidden="true" />,
+        icon: <Icon name="add_photo_alternate" className="h-4 w-4" aria-hidden="true" />,
         buttonProps: {
           'aria-label': 'Inserir imagem',
           title: imagesDisabled ? disabledReason : 'Inserir imagem',

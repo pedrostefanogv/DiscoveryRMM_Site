@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { AppWindow, Eye, Search } from "lucide-react";
-import { Card, CardHeader, DataTable, ErrorDisplay, Input, Loading, Select, StatCard, Button, Modal, Badge, type Column } from "@/components/ui";
+
+import { Icon, Card, CardHeader, DataTable, ErrorDisplay, Input, Loading, Select, StatCard, Button, Modal, Badge, type Column } from "@/components/ui";
 import { useClients } from "@/hooks/useClients";
 import { useSites } from "@/hooks/useSites";
 import { useSoftwareInventoryList, useSoftwareInventorySnapshot, useSoftwareInstallations, type SoftwareInventoryScope } from "@/hooks/useSoftwareInventory";
@@ -161,7 +161,7 @@ export default function SoftwareInventory() {
           aria-label={`Ver detalhes de ${item.name}`}
           title="Ver detalhes de instalação"
         >
-          <Eye className="h-4 w-4" />
+          <Icon name="visibility" className="h-4 w-4" />
         </button>
       ),
     },
@@ -207,10 +207,10 @@ export default function SoftwareInventory() {
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard icon={AppWindow} label="Instalados" value={totalInstalled} tone="primary" />
-        <StatCard icon={AppWindow} label="Softwares distintos" value={totalSoftware} tone="accent" />
-        <StatCard icon={AppWindow} label="Agents distintos" value={totalAgents} tone="success" />
-        <StatCard icon={AppWindow} label="Última coleta" value={snapshot.data?.lastCollectedAt ? new Date(snapshot.data.lastCollectedAt).toLocaleDateString("pt-BR") : "\u2014"} tone="warning" />
+        <StatCard icon="web_asset" label="Instalados" value={totalInstalled} tone="primary" />
+        <StatCard icon="web_asset" label="Softwares distintos" value={totalSoftware} tone="accent" />
+        <StatCard icon="web_asset" label="Agents distintos" value={totalAgents} tone="success" />
+        <StatCard icon="web_asset" label="Última coleta" value={snapshot.data?.lastCollectedAt ? new Date(snapshot.data.lastCollectedAt).toLocaleDateString("pt-BR") : "\u2014"} tone="warning" />
       </div>
 
       <Card>
@@ -238,7 +238,7 @@ export default function SoftwareInventory() {
               placeholder="Buscar por nome, fabricante ou origem (todos os termos)"
           />
           <Button type="submit" variant="secondary" size="sm">
-            <Search className="h-4 w-4" />
+            <Icon name="search" className="h-4 w-4" />
             Buscar
           </Button>
           <Button type="button" variant="ghost" size="sm" onClick={handleClearSearch}>

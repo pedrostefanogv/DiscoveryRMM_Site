@@ -1,12 +1,11 @@
 import { useMemo, useState, type ReactNode } from 'react';
-import { Plus, Trash2, ArrowRight, Pencil, Info, GripVertical } from 'lucide-react';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, rectSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useWorkflowStates, useWorkflowTransitions, useCreateWorkflowState, useUpdateWorkflowState, useDeleteWorkflowState, useCreateWorkflowTransition, useDeleteWorkflowTransition } from '@/hooks/useWorkflow';
 import { useClients } from '@/hooks/useClients';
 import { useTicketKpi } from '@/hooks/useTicketKpi';
-import { Card, CardHeader, Badge, Button, Modal, Input, Select, Loading, ErrorDisplay } from '@/components/ui';
+import { Icon, Card, CardHeader, Badge, Button, Modal, Input, Select, Loading, ErrorDisplay } from '@/components/ui';
 import { TicketStateBadge, stateColorVars } from '@/components/tickets/TicketStateBadge';
 import type { WorkflowState } from '@/api';
 import { buildStateTicketCounts, buildWorkflowReorder, sortStatesByOrder } from './workflowUtils';
@@ -105,7 +104,7 @@ export default function WorkflowSettings() {
               subtitle={`${orderedStates.length} estados — arraste pelo ícone para reordenar`}
               action={
                 <Button size="sm" onClick={() => setStateModalOpen(true)} disabled={reordering}>
-                  <Plus className="h-4 w-4" /> Novo Estado
+                  <Icon name="add" className="h-4 w-4" /> Novo Estado
                 </Button>
               }
             />
@@ -137,7 +136,7 @@ export default function WorkflowSettings() {
               subtitle={`${transitions.data?.length ?? 0} transições`}
               action={
                 <Button size="sm" onClick={() => setTransModalOpen(true)}>
-                  <Plus className="h-4 w-4" /> Nova Transição
+                  <Icon name="add" className="h-4 w-4" /> Nova Transição
                 </Button>
               }
             />
@@ -183,7 +182,7 @@ export default function WorkflowSettings() {
 function FieldHint({ text, className = '' }: { text: string; className?: string }) {
   return (
     <p className={`flex items-start gap-1 text-xs leading-relaxed text-muted ${className}`}>
-      <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+      <Icon name="info" className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
       <span className="min-w-0 break-words">{text}</span>
     </p>
   );
@@ -277,7 +276,7 @@ function StateCard({ state, ticketCount, showCount, reorderDisabled, onEdit }: {
         title="Arraste para reordenar"
         className="cursor-grab self-stretch px-0.5 text-muted transition-colors hover:text-foreground active:cursor-grabbing"
       >
-        <GripVertical className="h-4 w-4" />
+        <Icon name="drag_indicator" className="h-4 w-4" />
       </button>
       <div className="min-w-0 flex-1">
         {/* Prévia exatamente como o estado aparece na lista de chamados. */}
@@ -296,10 +295,10 @@ function StateCard({ state, ticketCount, showCount, reorderDisabled, onEdit }: {
         </div>
       </div>
       <button onClick={onEdit} aria-label="Editar estado" title="Editar estado" className="p-1 text-muted hover:text-foreground transition-colors">
-        <Pencil className="h-4 w-4" />
+        <Icon name="edit" className="h-4 w-4" />
       </button>
       <button onClick={handleDelete} aria-label="Excluir estado" className="p-1 text-muted hover:text-danger transition-colors">
-        <Trash2 className="h-4 w-4" />
+        <Icon name="delete" className="h-4 w-4" />
       </button>
     </div>
   );
@@ -314,7 +313,7 @@ function TransitionRow({ id, name, fromName, fromColor, toName, toColor }: { id:
         <span className="state-dot h-2 w-2 shrink-0 rounded-full" style={stateColorVars(fromColor)} aria-hidden="true" />
         {fromName}
       </span>
-      <ArrowRight className="h-4 w-4 text-muted" />
+      <Icon name="arrow_forward" className="h-4 w-4 text-muted" />
       <span className="flex items-center gap-1.5 text-sm text-foreground">
         <span className="state-dot h-2 w-2 shrink-0 rounded-full" style={stateColorVars(toColor)} aria-hidden="true" />
         {toName}
@@ -329,7 +328,7 @@ function TransitionRow({ id, name, fromName, fromColor, toName, toColor }: { id:
         aria-label="Excluir transição"
         className="p-1 text-muted hover:text-danger transition-colors"
       >
-        <Trash2 className="h-3.5 w-3.5" />
+        <Icon name="delete" className="h-3.5 w-3.5" />
       </button>
     </div>
   );

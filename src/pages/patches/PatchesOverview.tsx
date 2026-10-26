@@ -1,8 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Activity, AlertTriangle, CheckCircle2, Clock, Download, RefreshCw, ShieldAlert, Ban } from "lucide-react";
 import toast from "react-hot-toast";
-import { Button, Card, CardHeader, DataTable, ErrorDisplay, Loading, PageHeader, Select, StatCard, Badge, type Column } from "@/components/ui";
+import { Icon, Button, Card, CardHeader, DataTable, ErrorDisplay, Loading, PageHeader, Select, StatCard, Badge, type Column } from "@/components/ui";
 import { useClients } from "@/hooks/useClients";
 import { useSites } from "@/hooks/useSites";
 import { usePatchOverview, useScanPatchScope } from "@/hooks/usePatches";
@@ -62,11 +61,11 @@ export default function PatchesOverview() {
         description="Inventário de patches, aprovações e conformidade da frota (WUA)."
       >
         <Button variant="secondary" onClick={() => void overview.refetch()} disabled={overview.isFetching}>
-          <RefreshCw className="h-4 w-4" />
+          <Icon name="refresh" className="h-4 w-4" />
           Atualizar
         </Button>
         <Button onClick={() => void handleScan()} disabled={!canQuery || scan.isPending}>
-          <Download className="h-4 w-4" />
+          <Icon name="download" className="h-4 w-4" />
           {scan.isPending ? "Solicitando..." : "Verificar atualizações"}
         </Button>
       </PageHeader>
@@ -116,12 +115,12 @@ export default function PatchesOverview() {
       ) : (
         <>
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
-            <StatCard icon={CheckCircle2} label="Conformidade" value={(snapshot?.compliancePercent ?? 0).toFixed(1) + "%"} tone="success" />
-            <StatCard icon={ShieldAlert} label="Pendentes" value={snapshot?.totalPending ?? 0} tone="primary" />
-            <StatCard icon={AlertTriangle} label="Críticas" value={snapshot?.criticalPending ?? 0} tone="warning" />
-            <StatCard icon={Ban} label="Recusadas" value={snapshot?.deniedPending ?? 0} tone="warning" />
-            <StatCard icon={Clock} label="Reinício pendente" value={snapshot?.rebootPendingAgents ?? 0} tone="warning" />
-            <StatCard icon={Activity} label="Agentes reportando" value={(snapshot?.agentsReporting ?? 0) + "/" + (snapshot?.agentsTotal ?? 0)} tone="accent" />
+            <StatCard icon="check_circle" label="Conformidade" value={(snapshot?.compliancePercent ?? 0).toFixed(1) + "%"} tone="success" />
+            <StatCard icon="gpp_maybe" label="Pendentes" value={snapshot?.totalPending ?? 0} tone="primary" />
+            <StatCard icon="warning" label="Críticas" value={snapshot?.criticalPending ?? 0} tone="warning" />
+            <StatCard icon="block" label="Recusadas" value={snapshot?.deniedPending ?? 0} tone="warning" />
+            <StatCard icon="schedule" label="Reinício pendente" value={snapshot?.rebootPendingAgents ?? 0} tone="warning" />
+            <StatCard icon="monitoring" label="Agentes reportando" value={(snapshot?.agentsReporting ?? 0) + "/" + (snapshot?.agentsTotal ?? 0)} tone="accent" />
           </div>
 
           <Card>

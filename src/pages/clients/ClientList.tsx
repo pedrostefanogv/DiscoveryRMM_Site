@@ -1,11 +1,10 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQueries } from '@tanstack/react-query';
-import { Plus, Building2 } from 'lucide-react';
 import { useClients } from '@/hooks/useClients';
 import { useAllSites } from '@/hooks/useSites';
 import { useAuthorization } from '@/auth/authorization';
-import { Button, Card, DataTable, Badge, Loading, ErrorDisplay, Input, StatCard, PageHeader } from '@/components/ui';
+import { Icon, Button, Card, DataTable, Badge, Loading, ErrorDisplay, Input, StatCard, PageHeader } from '@/components/ui';
 import { ClientFormModal } from '@/components/entity/ClientFormModal';
 import { agentsApi, type Client } from '@/api';
 import type { Column } from '@/components/ui';
@@ -78,7 +77,7 @@ export default function ClientList() {
       render: c => (
         <div className="flex items-center gap-3">
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/20">
-            <Building2 className="h-4 w-4 text-primary" aria-hidden="true" />
+            <Icon name="apartment" className="h-4 w-4 text-primary" aria-hidden="true" />
           </div>
           <div className="min-w-0">
             <p className="font-medium text-foreground">{c.name}</p>
@@ -136,15 +135,15 @@ export default function ClientList() {
         </label>
         {canCreate && (
           <Button onClick={() => setModalOpen(true)}>
-            <Plus className="h-4 w-4" /> Novo Cliente
+            <Icon name="add" className="h-4 w-4" /> Novo Cliente
           </Button>
         )}
       </PageHeader>
 
       <div className="grid gap-4 sm:grid-cols-3">
-        <StatCard icon={Building2} label="Total de clientes" value={allData.length} tone="accent" />
-        <StatCard icon={Building2} label="Clientes ativos" value={activeClients} tone="success" />
-        <StatCard icon={Building2} label="Clientes inativos" value={inactiveClients} tone="warning" />
+        <StatCard icon="apartment" label="Total de clientes" value={allData.length} tone="accent" />
+        <StatCard icon="apartment" label="Clientes ativos" value={activeClients} tone="success" />
+        <StatCard icon="apartment" label="Clientes inativos" value={inactiveClients} tone="warning" />
       </div>
 
       <Card>

@@ -1,5 +1,4 @@
-import { Activity, AlertTriangle, CheckCircle2, Monitor, Ticket as TicketIcon, XCircle } from 'lucide-react';
-import { Card, CardHeader } from '@/components/ui';
+import { Icon, Card, CardHeader } from '@/components/ui';
 import type { DashboardSummaryDto } from '@/api/dashboard';
 
 interface DashboardSummaryCardProps {
@@ -16,7 +15,7 @@ export function DashboardSummaryCard({ data, title, subtitle }: DashboardSummary
       <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
         <div className="rounded-lg bg-surface-light px-3 py-2">
           <div className="flex items-center gap-1.5 text-muted">
-            <Monitor className="h-3.5 w-3.5" aria-hidden="true" />
+            <Icon name="desktop_windows" className="h-3.5 w-3.5" aria-hidden="true" />
             <span>Agentes</span>
           </div>
           <p className="mt-1 text-base font-semibold text-foreground">
@@ -25,7 +24,7 @@ export function DashboardSummaryCard({ data, title, subtitle }: DashboardSummary
           </p>
           {data.agents.error > 0 && (
             <p className="mt-0.5 flex items-center gap-1 text-xs text-danger">
-              <AlertTriangle className="h-3 w-3" aria-hidden="true" />
+              <Icon name="warning" className="h-3 w-3" aria-hidden="true" />
               {data.agents.error} em erro
             </p>
           )}
@@ -33,7 +32,7 @@ export function DashboardSummaryCard({ data, title, subtitle }: DashboardSummary
 
         <div className="rounded-lg bg-surface-light px-3 py-2">
           <div className="flex items-center gap-1.5 text-muted">
-            <TicketIcon className="h-3.5 w-3.5" aria-hidden="true" />
+            <Icon name="confirmation_number" className="h-3.5 w-3.5" aria-hidden="true" />
             <span>Chamados</span>
           </div>
           <p className="mt-1 text-base font-semibold text-foreground">
@@ -42,7 +41,7 @@ export function DashboardSummaryCard({ data, title, subtitle }: DashboardSummary
           </p>
           {data.tickets.slaBreachedOpen > 0 && (
             <p className="mt-0.5 flex items-center gap-1 text-xs text-danger">
-              <AlertTriangle className="h-3 w-3" aria-hidden="true" />
+              <Icon name="warning" className="h-3 w-3" aria-hidden="true" />
               {data.tickets.slaBreachedOpen} SLA violado
             </p>
           )}
@@ -50,7 +49,7 @@ export function DashboardSummaryCard({ data, title, subtitle }: DashboardSummary
 
         <div className="rounded-lg bg-surface-light px-3 py-2">
           <div className="flex items-center gap-1.5 text-muted">
-            <Activity className="h-3.5 w-3.5" aria-hidden="true" />
+            <Icon name="monitoring" className="h-3.5 w-3.5" aria-hidden="true" />
             <span>Comandos</span>
           </div>
           {data.commands.total > 0 ? (
@@ -68,9 +67,9 @@ export function DashboardSummaryCard({ data, title, subtitle }: DashboardSummary
         <div className="rounded-lg bg-surface-light px-3 py-2">
           <div className="flex items-center gap-1.5 text-muted">
             {data.automation.total > 0 && data.automation.failed > 0 ? (
-              <XCircle className="h-3.5 w-3.5 text-danger" aria-hidden="true" />
+              <Icon name="cancel" className="h-3.5 w-3.5 text-danger" aria-hidden="true" />
             ) : (
-              <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
+              <Icon name="check_circle" className="h-3.5 w-3.5" aria-hidden="true" />
             )}
             <span>Automação</span>
           </div>

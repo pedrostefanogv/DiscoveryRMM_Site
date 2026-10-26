@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Bell, CheckCheck, RefreshCw, Trash2, X } from "lucide-react";
+
 import toast from "react-hot-toast";
-import { Badge, Button, Card, Loading } from "@/components/ui";
+import { Icon, Badge, Button, Card, Loading } from "@/components/ui";
 import { useNotifications } from "@/hooks/useNotifications";
 import type { AppNotification } from "@/api/notifications";
 import { BrowserPushToggle } from "@/components/notifications/BrowserPushToggle";
@@ -164,7 +164,7 @@ export function NotificationBell() {
         aria-label="Abrir notificações"
         aria-expanded={open}
       >
-        <Bell className="h-4 w-4" />
+        <Icon name="notifications" className="h-4 w-4" />
         {unreadCount > 0 && (
           <Badge color="danger">{unreadCount > 99 ? "99+" : unreadCount}</Badge>
         )}
@@ -183,16 +183,16 @@ export function NotificationBell() {
 
               <div className="flex gap-2">
                 <Button variant="ghost" size="sm" onClick={() => void refetch()}>
-                  <RefreshCw className={`h-4 w-4 ${isFetching ? "animate-spin" : ""}`} />
+                  <Icon name="refresh" className={`h-4 w-4 ${isFetching ? "animate-spin" : ""}`} />
                 </Button>
                 <Button variant="ghost" size="sm" onClick={() => void handleMarkAllAsRead()}>
-                  <CheckCheck className="h-4 w-4" />
+                  <Icon name="done_all" className="h-4 w-4" />
                 </Button>
                 <Button variant="ghost" size="sm" onClick={handleDismissReadAll}>
-                  <Trash2 className="h-4 w-4" />
+                  <Icon name="delete" className="h-4 w-4" />
                 </Button>
                 <Button variant="ghost" size="sm" onClick={() => setOpen(false)}>
-                  <X className="h-4 w-4" />
+                  <Icon name="close" className="h-4 w-4" />
                 </Button>
               </div>
             </div>
@@ -247,7 +247,7 @@ export function NotificationBell() {
                               void handleDismissNotification(item.id);
                             }}
                           >
-                            <X className="h-3.5 w-3.5" />
+                            <Icon name="close" className="h-3.5 w-3.5" />
                           </button>
                         ) : null}
                       </div>

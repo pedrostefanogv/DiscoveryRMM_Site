@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { Package, RefreshCw, Rocket } from 'lucide-react';
-import {
+
+import { Icon,
   Badge,
   Button,
   Card,
@@ -85,11 +85,11 @@ export default function AgentUpdatesPage() {
         </div>
         <div className="flex gap-2">
           <Button variant="secondary" onClick={handleSyncRepository} disabled={syncLoading}>
-            <RefreshCw className={`w-4 h-4 mr-2 ${syncLoading ? 'animate-spin' : ''}`} />
+            <Icon name="refresh" className={`w-4 h-4 mr-2 ${syncLoading ? 'animate-spin' : ''}`} />
             Sincronizar
           </Button>
           <Button onClick={handleSyncAndBuild} disabled={syncLoading}>
-            <Rocket className="w-4 h-4 mr-2" />
+            <Icon name="rocket_launch" className="w-4 h-4 mr-2" />
             Sync + Build
           </Button>
         </div>
@@ -131,7 +131,7 @@ export default function AgentUpdatesPage() {
         <CardHeader title="Releases" />
         {releases.length === 0 ? (
           <div className="p-8 text-center text-muted-foreground">
-            <Package className="w-12 h-12 mx-auto mb-4 opacity-50" />
+            <Icon name="inventory_2" className="w-12 h-12 mx-auto mb-4 opacity-50" />
             <p>Nenhuma release disponível</p>
             <p className="text-sm">Sincronize o repositório para obter releases</p>
           </div>
@@ -173,7 +173,7 @@ export default function AgentUpdatesPage() {
                         }
                       }}
                     >
-                      <Rocket className="w-4 h-4 mr-1" />
+                      <Icon name="rocket_launch" className="w-4 h-4 mr-1" />
                       Promover
                     </Button>
                   )}

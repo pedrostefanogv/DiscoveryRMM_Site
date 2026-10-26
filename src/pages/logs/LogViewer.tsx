@@ -1,11 +1,11 @@
 import { useMemo, useState } from 'react';
-import { AlertCircle, AlertTriangle, Bug, Check, ChevronDown, ChevronUp, Clipboard, Info, RefreshCw, Shield } from 'lucide-react';
+
 import { LogLevel, LogSource, LogType } from '@/api';
 import { getLogLevelMeta } from '@/utils/labels';
 import type { LogEntry, LogsQuery } from '@/api';
 import { useLogScopeOptions, useLogSummary, useLogsPage } from '@/hooks/useLogs';
 import { readDataField } from './logDataUtils';
-import { Badge, Button, Card, CardHeader, ErrorDisplay, Input, Loading, PageHeader, Select } from '@/components/ui';
+import { Icon, Badge, Button, Card, CardHeader, ErrorDisplay, Input, Loading, PageHeader, Select } from '@/components/ui';
 
 const initialFilters: LogsQuery = {
   limit: 50,
@@ -345,7 +345,7 @@ export default function LogViewer() {
         description="Monitoramento operacional com foco em triagem rápida e investigação progressiva"
       >
         <Button variant="ghost" onClick={refreshData} loading={logs.isFetching || summary.isFetching}>
-          <RefreshCw className="h-4 w-4" />
+          <Icon name="refresh" className="h-4 w-4" />
           Atualizar
         </Button>
       </PageHeader>
@@ -473,7 +473,7 @@ export default function LogViewer() {
             onClick={() => setShowAdvancedFilters(current => !current)}
             aria-expanded={showAdvancedFilters ? 'true' : 'false'}
           >
-            {showAdvancedFilters ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            {showAdvancedFilters ? <Icon name="expand_less" className="h-4 w-4" /> : <Icon name="expand_more" className="h-4 w-4" />}
             <span>{showAdvancedFilters ? 'Ocultar filtros avançados' : 'Mostrar filtros avançados'}</span>
           </button>
           <span className="text-xs text-muted">
@@ -587,7 +587,7 @@ export default function LogViewer() {
               size="sm"
               onClick={() => setShowDetailedAnalytics(current => !current)}
             >
-              {showDetailedAnalytics ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              {showDetailedAnalytics ? <Icon name="expand_less" className="h-4 w-4" /> : <Icon name="expand_more" className="h-4 w-4" />}
               {showDetailedAnalytics ? 'Ocultar detalhes' : 'Exibir detalhes'}
             </Button>
           </div>
@@ -752,7 +752,7 @@ function LogRow({
                 className="inline-flex items-center gap-1 rounded-full border border-border px-2 py-1 transition-colors hover:bg-surface-hover"
               >
                 <span>Trace: {traceId}</span>
-                {copiedField === 'traceId' ? <Check className="h-3.5 w-3.5 text-success" /> : <Clipboard className="h-3.5 w-3.5" />}
+                {copiedField === 'traceId' ? <Icon name="check" className="h-3.5 w-3.5 text-success" /> : <Icon name="content_paste" className="h-3.5 w-3.5" />}
               </button>
             ) : null}
             {correlationId ? (
@@ -762,7 +762,7 @@ function LogRow({
                 className="inline-flex items-center gap-1 rounded-full border border-border px-2 py-1 transition-colors hover:bg-surface-hover"
               >
                 <span>Corr: {correlationId}</span>
-                {copiedField === 'correlationId' ? <Check className="h-3.5 w-3.5 text-success" /> : <Clipboard className="h-3.5 w-3.5" />}
+                {copiedField === 'correlationId' ? <Icon name="check" className="h-3.5 w-3.5 text-success" /> : <Icon name="content_paste" className="h-3.5 w-3.5" />}
               </button>
             ) : null}
             {queryString ? <span className="rounded-full border border-border px-2 py-1">Query: {queryString}</span> : null}
@@ -776,7 +776,7 @@ function LogRow({
               className="inline-flex items-center gap-1 text-xs text-muted hover:text-foreground"
               onClick={() => setShowData(current => !current)}
             >
-              {showData ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+              {showData ? <Icon name="expand_less" className="h-3.5 w-3.5" /> : <Icon name="expand_more" className="h-3.5 w-3.5" />}
               <span>{showData ? 'Ocultar contexto JSON' : 'Mostrar contexto JSON'}</span>
             </button>
             {showData ? (
@@ -794,12 +794,12 @@ function LogRow({
 function LogIcon({ level }: { level: LogLevel }) {
   const cls = 'h-4 w-4 shrink-0 mt-0.5';
   switch (level) {
-    case LogLevel.Fatal: return <Shield className={`${cls} text-danger`} />;
-    case LogLevel.Error: return <AlertCircle className={`${cls} text-danger`} />;
-    case LogLevel.Warn: return <AlertTriangle className={`${cls} text-warning`} />;
-    case LogLevel.Trace: return <RefreshCw className={`${cls} text-muted`} />;
-    case LogLevel.Debug: return <Bug className={`${cls} text-muted`} />;
-    default: return <Info className={`${cls} text-primary`} />;
+    case LogLevel.Fatal: return <Icon name="shield" className={`${cls} text-danger`} />;
+    case LogLevel.Error: return <Icon name="error" className={`${cls} text-danger`} />;
+    case LogLevel.Warn: return <Icon name="warning" className={`${cls} text-warning`} />;
+    case LogLevel.Trace: return <Icon name="refresh" className={`${cls} text-muted`} />;
+    case LogLevel.Debug: return <Icon name="bug_report" className={`${cls} text-muted`} />;
+    default: return <Icon name="info" className={`${cls} text-primary`} />;
   }
 }
 

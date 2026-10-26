@@ -1,16 +1,7 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  ChevronDown,
-  ChevronUp,
-  CircleSlash,
-  Pencil,
-  RotateCcw,
-  Save,
-  ShieldAlert,
-} from "lucide-react";
 import toast from "react-hot-toast";
-import {
+import { Icon,
   Badge,
   Button,
   Card,
@@ -530,7 +521,7 @@ export default function McpToolsSettings() {
                       )}
                       {tool.locked && (
                         <Badge color="danger">
-                          <ShieldAlert className="mr-1 h-3 w-3" aria-hidden="true" /> Bloqueado
+                          <Icon name="gpp_maybe" className="mr-1 h-3 w-3" aria-hidden="true" /> Bloqueado
                         </Badge>
                       )}
                       {!tool.isEnabled && <Badge color="danger">Desabilitado</Badge>}
@@ -544,9 +535,9 @@ export default function McpToolsSettings() {
                       aria-expanded={isExpanded}
                     >
                       {isExpanded ? (
-                        <ChevronUp className="h-3.5 w-3.5" aria-hidden="true" />
+                        <Icon name="expand_less" className="h-3.5 w-3.5" aria-hidden="true" />
                       ) : (
-                        <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
+                        <Icon name="expand_more" className="h-3.5 w-3.5" aria-hidden="true" />
                       )}
                       {isExpanded ? "Ocultar detalhes" : "O que faz e quando usar"}
                     </button>
@@ -610,7 +601,7 @@ export default function McpToolsSettings() {
                             : `Editar a política de ${tool.name}`
                         }
                       >
-                        <Pencil className="h-3.5 w-3.5" aria-hidden="true" /> Editar
+                        <Icon name="edit" className="h-3.5 w-3.5" aria-hidden="true" /> Editar
                       </Button>
 
                       {tool.overriddenHere ? (
@@ -621,11 +612,11 @@ export default function McpToolsSettings() {
                           loading={resetMutation.isPending && resetMutation.variables === tool.name}
                           title="Remove a sobrescrita local e volta a herdar."
                         >
-                          <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" /> Herdar
+                          <Icon name="restart_alt" className="h-3.5 w-3.5" aria-hidden="true" /> Herdar
                         </Button>
                       ) : (
                         <span className="inline-flex w-[5.5rem] items-center gap-1 text-xs text-muted lg:justify-end">
-                          <CircleSlash className="h-3.5 w-3.5" aria-hidden="true" /> herdando
+                          <Icon name="do_not_disturb_on" className="h-3.5 w-3.5" aria-hidden="true" /> herdando
                         </span>
                       )}
                     </div>
@@ -668,7 +659,7 @@ export default function McpToolsSettings() {
 
             {editingLockedByParent && (
               <div className="flex items-start gap-2 rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-xs text-foreground">
-                <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-danger" aria-hidden="true" />
+                <Icon name="gpp_maybe" className="mt-0.5 h-4 w-4 shrink-0 text-danger" aria-hidden="true" />
                 <span>
                   Esta política está <strong>bloqueada por um nível superior</strong>. Remova o bloqueio no escopo
                   de origem para poder editá-la aqui.
@@ -824,7 +815,7 @@ export default function McpToolsSettings() {
                   loading={resetMutation.isPending && resetMutation.variables === editing.name}
                   title="Remove a sobrescrita local e volta a herdar."
                 >
-                  <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" /> Herdar
+                  <Icon name="restart_alt" className="h-3.5 w-3.5" aria-hidden="true" /> Herdar
                 </Button>
               )}
               <Button
@@ -832,7 +823,7 @@ export default function McpToolsSettings() {
                 disabled={!isDirty(editing) || editingLockedByParent || editingLimitsInvalid}
                 loading={saveMutation.isPending && saveMutation.variables?.tool.name === editing.name}
               >
-                <Save className="h-3.5 w-3.5" aria-hidden="true" /> Salvar
+                <Icon name="save" className="h-3.5 w-3.5" aria-hidden="true" /> Salvar
               </Button>
             </div>
           </div>

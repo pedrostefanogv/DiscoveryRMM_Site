@@ -1,6 +1,5 @@
 import { useState } from 'react';
-import { ArrowDown, ArrowUp, Plus, Pencil, Trash2, Zap } from 'lucide-react';
-import { Badge, Button, Card, CardHeader, ConfirmDialog, ErrorDisplay, Input, Loading, Modal, Select, TextArea } from '@/components/ui';
+import { Icon, Badge, Button, Card, CardHeader, ConfirmDialog, ErrorDisplay, Input, Loading, Modal, Select, TextArea } from '@/components/ui';
 import {
   useTicketMacros, useCreateTicketMacro, useUpdateTicketMacro, useDeleteTicketMacro,
 } from '@/hooks/useSupportProductivity';
@@ -44,7 +43,7 @@ function RunbookStepsEditor({ steps, onChange }: { steps: TicketMacroRunbookStep
       <div className="flex items-center justify-between">
         <span className="text-sm font-medium text-foreground">Passos do runbook</span>
         <Button size="sm" variant="secondary" onClick={addStep} type="button">
-          <Plus className="h-4 w-4" /> Passo
+          <Icon name="add" className="h-4 w-4" /> Passo
         </Button>
       </div>
       {steps.length === 0 && (
@@ -76,13 +75,13 @@ function RunbookStepsEditor({ steps, onChange }: { steps: TicketMacroRunbookStep
             onChange={(e) => update(index, { evidenceLabel: e.target.value || null })}
           />
           <button type="button" aria-label="Mover passo para cima" className="p-1 text-muted hover:text-foreground disabled:opacity-30" disabled={index === 0} onClick={() => move(index, -1)}>
-            <ArrowUp className="h-4 w-4" />
+            <Icon name="arrow_upward" className="h-4 w-4" />
           </button>
           <button type="button" aria-label="Mover passo para baixo" className="p-1 text-muted hover:text-foreground disabled:opacity-30" disabled={index === steps.length - 1} onClick={() => move(index, 1)}>
-            <ArrowDown className="h-4 w-4" />
+            <Icon name="arrow_downward" className="h-4 w-4" />
           </button>
           <button type="button" aria-label="Remover passo" className="p-1 text-muted hover:text-danger" onClick={() => onChange(steps.filter((_, i) => i !== index).map((s, i) => ({ ...s, order: i + 1 })))}>
-            <Trash2 className="h-4 w-4" />
+            <Icon name="delete" className="h-4 w-4" />
           </button>
         </div>
       ))}
@@ -125,7 +124,7 @@ export default function TicketMacrosPage() {
           <h1 className="text-2xl font-bold text-foreground">Macros de resposta</h1>
           <p className="text-sm text-muted">Respostas rápidas reutilizáveis em comentários. Variáveis: {'{cliente}'}, {'{ticket_id}'}, {'{tecnico}'}.</p>
         </div>
-        <Button size="sm" onClick={openCreate}><Plus className="h-4 w-4" /> Nova macro</Button>
+        <Button size="sm" onClick={openCreate}><Icon name="add" className="h-4 w-4" /> Nova macro</Button>
       </div>
 
       <Card>
@@ -136,7 +135,7 @@ export default function TicketMacrosPage() {
           {(macros.data ?? []).map((m) => (
             <div key={m.id} className="flex items-start gap-3 py-3">
               <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-surface-light">
-                <Zap className="h-4 w-4 text-muted" />
+                <Icon name="bolt" className="h-4 w-4 text-muted" />
               </div>
               <div className="min-w-0 flex-1">
                 <p className="font-medium text-foreground">{m.name}</p>
@@ -144,8 +143,8 @@ export default function TicketMacrosPage() {
               </div>
               <div className="flex items-center gap-2">
                 {!m.isActive && <Badge color="warning">Inativa</Badge>}
-                <button onClick={() => openEdit(m)} aria-label="Editar" className="p-1 text-muted hover:text-foreground"><Pencil className="h-4 w-4" /></button>
-                <button onClick={() => setDeleteTarget(m)} aria-label="Excluir" className="p-1 text-muted hover:text-danger"><Trash2 className="h-4 w-4" /></button>
+                <button onClick={() => openEdit(m)} aria-label="Editar" className="p-1 text-muted hover:text-foreground"><Icon name="edit" className="h-4 w-4" /></button>
+                <button onClick={() => setDeleteTarget(m)} aria-label="Excluir" className="p-1 text-muted hover:text-danger"><Icon name="delete" className="h-4 w-4" /></button>
               </div>
             </div>
           ))}

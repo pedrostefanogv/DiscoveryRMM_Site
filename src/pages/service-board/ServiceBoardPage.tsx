@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { AlarmClock, Bell, Bot, ChevronRight, RefreshCw, ShieldAlert, Ticket as TicketIcon } from "lucide-react";
-import {
+import { Icon,
+  type MaterialSymbolName,
   Badge,
   Button,
   EmptyState,
@@ -19,11 +19,11 @@ import type {
   ServiceBoardItemKind,
 } from "@/api/serviceBoard";
 
-const KIND_META: Record<ServiceBoardItemKind, { label: string; icon: typeof TicketIcon }> = {
-  ticket: { label: "Chamado", icon: TicketIcon },
-  automation: { label: "Automação", icon: Bot },
-  patch: { label: "Patch", icon: ShieldAlert },
-  alert: { label: "Alerta", icon: Bell },
+const KIND_META: Record<ServiceBoardItemKind, { label: string; icon: MaterialSymbolName }> = {
+  ticket: { label: "Chamado", icon: "confirmation_number" },
+  automation: { label: "Automação", icon: "smart_toy" },
+  patch: { label: "Patch", icon: "gpp_maybe" },
+  alert: { label: "Alerta", icon: "notifications" },
 };
 
 const KIND_ORDER: ServiceBoardItemKind[] = ["ticket", "automation", "patch", "alert"];
@@ -71,8 +71,7 @@ function priorityRank(priority: string | null): number {
 
 function QueueRow({ item }: { item: ServiceBoardItemDto }) {
   const meta = KIND_META[item.kind];
-  const Icon = meta.icon;
-  const severity = priorityRank(item.priority) >= 4 ? "border-l-danger" : priorityRank(item.priority) === 3 ? "border-l-warning" : "border-l-transparent";
+    const severity = priorityRank(item.priority) >= 4 ? "border-l-danger" : priorityRank(item.priority) === 3 ? "border-l-warning" : "border-l-transparent";
   return (
     <Link
       to={item.deepLink}
@@ -80,7 +79,7 @@ function QueueRow({ item }: { item: ServiceBoardItemDto }) {
       className={`group flex items-center gap-3 border-l-4 ${severity} rounded-r-lg border-y border-r border-border bg-surface px-3 py-2.5 transition-colors hover:bg-surface-light`}
     >
       <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-surface-light ring-1 ring-border">
-        <Icon className="h-4 w-4 text-muted" />
+        <Icon name={meta.icon} className="h-4 w-4 text-muted" />
       </span>
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span className="flex items-center gap-2">
@@ -96,10 +95,10 @@ function QueueRow({ item }: { item: ServiceBoardItemDto }) {
         </span>
       </span>
       <span className="flex shrink-0 items-center gap-1 text-[11px] tabular-nums text-muted" title="Idade do item">
-        <AlarmClock className="h-3 w-3" />
+        <Icon name="alarm" className="h-3 w-3" />
         {formatAge(item.ageHours)}
       </span>
-      <ChevronRight className="h-4 w-4 shrink-0 text-muted opacity-0 transition-opacity group-hover:opacity-100" />
+      <Icon name="chevron_right" className="h-4 w-4 shrink-0 text-muted opacity-0 transition-opacity group-hover:opacity-100" />
     </Link>
   );
 }
@@ -158,7 +157,7 @@ export default function ServiceBoardPage() {
         description="Fila priorizada do que precisa de atenção: chamados, automações, patches e alertas (atualiza a cada 30s)."
       >
         <Button variant="secondary" onClick={() => void board.refetch()} disabled={board.isFetching}>
-          <RefreshCw className="h-4 w-4" />
+          <Icon name="refresh" className="h-4 w-4" />
           Atualizar
         </Button>
       </PageHeader>

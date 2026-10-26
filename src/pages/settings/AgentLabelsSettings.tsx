@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import toast from 'react-hot-toast';
-import { Layers, Clock, HardDrive, Monitor, Filter, Tags, CheckCircle2, XCircle } from 'lucide-react';
-import { Badge, Button, Card, CardHeader, ErrorDisplay, Input, Loading, Modal, Select, TextArea } from '@/components/ui';
+
+import { Icon, Badge, Button, Card, CardHeader, ErrorDisplay, Input, Loading, Modal, Select, TextArea } from '@/components/ui';
 import { agentsApi, clientsApi, sitesApi, type Agent, type Client, type Site } from '@/api';
 import { agentLabelsApi } from '@/modules/agent-labels/api';
 import {
@@ -1561,7 +1561,7 @@ export default function AgentLabelsSettings() {
 
           {sortedRules.length === 0 ? (
             <div className="flex flex-col items-center gap-3 py-12">
-              <Layers className="h-10 w-10 text-muted" />
+              <Icon name="layers" className="h-10 w-10 text-muted" />
               <p className="text-sm text-muted">Nenhuma regra cadastrada.</p>
               <Button size="sm" onClick={startCreateRule}>Criar primeira regra</Button>
             </div>
@@ -1587,33 +1587,33 @@ export default function AgentLabelsSettings() {
 
                         {summary ? (
                           <div className="mt-2 flex items-start gap-2 rounded-lg bg-background/40 px-3 py-2">
-                            <Filter className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted" />
+                            <Icon name="filter_alt" className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted" />
                             <p className="text-xs text-muted font-mono leading-relaxed">{summary}</p>
                           </div>
                         ) : null}
 
                         <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-muted">
                           <span className="inline-flex items-center gap-1">
-                            <Clock className="h-3 w-3" />
+                            <Icon name="schedule" className="h-3 w-3" />
                             {formatDateTime(rule.updatedAt)}
                           </span>
                           <span className="inline-flex items-center gap-1">
-                            <Tags className="h-3 w-3" />
+                            <Icon name="sell" className="h-3 w-3" />
                             {getAgentLabelApplyModeLabel(rule.applyMode)}
                           </span>
                           <span className="inline-flex items-center gap-1" title="Condições">
-                            <Filter className="h-3 w-3" />
+                            <Icon name="filter_alt" className="h-3 w-3" />
                             {stats.conditions}
                           </span>
                           {stats.groups > 0 ? (
                             <span className="inline-flex items-center gap-1" title="Grupos">
-                              <Layers className="h-3 w-3" />
+                              <Icon name="layers" className="h-3 w-3" />
                               {stats.groups}
                             </span>
                           ) : null}
                           {stats.disks > 0 ? (
                             <span className="inline-flex items-center gap-1" title="Grupos de Disco">
-                              <HardDrive className="h-3 w-3" />
+                              <Icon name="storage" className="h-3 w-3" />
                               {stats.disks}
                             </span>
                           ) : null}
@@ -1631,20 +1631,20 @@ export default function AgentLabelsSettings() {
 
                     <div className="mt-4 flex flex-wrap gap-2 border-t border-border pt-4">
                       <Button size="sm" variant="secondary" onClick={() => startViewRule(rule)}>
-                        <Clock className="h-3.5 w-3.5" /> Visualizar
+                        <Icon name="schedule" className="h-3.5 w-3.5" /> Visualizar
                       </Button>
                       <Button size="sm" variant="ghost" onClick={() => void handleToggleRule(rule)}>
                         {rule.isEnabled ? (
-                          <><XCircle className="h-3.5 w-3.5" /> Desabilitar</>
+                          <><Icon name="cancel" className="h-3.5 w-3.5" /> Desabilitar</>
                         ) : (
-                          <><CheckCircle2 className="h-3.5 w-3.5" /> Habilitar</>
+                          <><Icon name="check_circle" className="h-3.5 w-3.5" /> Habilitar</>
                         )}
                       </Button>
                       <Button size="sm" variant="secondary" onClick={() => openAgentsModal(rule)}>
-                        <Monitor className="h-3.5 w-3.5" /> Ver Agentes
+                        <Icon name="desktop_windows" className="h-3.5 w-3.5" /> Ver Agentes
                       </Button>
                       <Button size="sm" variant="ghost" onClick={() => void openVersionHistory(rule)}>
-                        <Clock className="h-3.5 w-3.5" /> Histórico
+                        <Icon name="schedule" className="h-3.5 w-3.5" /> Histórico
                       </Button>
                     </div>
                   </div>
@@ -1689,7 +1689,7 @@ export default function AgentLabelsSettings() {
                     title="Remover proteção"
                     onClick={() => void handleRemoveProtectedLabel(item.id, item.label)}
                   >
-                    <XCircle className="h-3 w-3" />
+                    <Icon name="cancel" className="h-3 w-3" />
                   </button>
                 </span>
               ))}

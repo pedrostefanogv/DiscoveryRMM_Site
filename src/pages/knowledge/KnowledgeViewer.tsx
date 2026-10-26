@@ -1,18 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import {
-  ArrowLeft,
-  Building2,
-  CalendarClock,
-  Clock3,
-  FilePenLine,
-  Globe2,
-  Layers,
-  MapPinned,
-  UserRound,
-} from 'lucide-react';
+
 import { MarkdownViewer } from '@/components/ui/MarkdownViewer';
-import { Badge, Button, Card, ErrorDisplay, Loading } from '@/components/ui';
+import { Icon, Badge, Button, Card, ErrorDisplay, Loading } from '@/components/ui';
 import type { ArticlePageTreeNode, ArticleStatus, KnowledgeArticle } from '@/api';
 import { useAuthorization } from '@/auth/authorization';
 import {
@@ -187,7 +177,7 @@ export default function KnowledgeViewer() {
           aria-label="Voltar"
           className="mt-1 rounded-lg p-2 text-muted hover:bg-surface-light hover:text-foreground"
         >
-          <ArrowLeft className="h-5 w-5" />
+          <Icon name="arrow_back" className="h-5 w-5" />
         </button>
         <div className="flex-1 min-w-0">
           <h1 className="text-2xl font-bold text-foreground truncate">
@@ -211,7 +201,7 @@ export default function KnowledgeViewer() {
               size="sm"
               onClick={() => navigate(`/knowledge/${article.id}/edit`)}
             >
-              <FilePenLine className="h-4 w-4" /> Editar artigo
+              <Icon name="edit_note" className="h-4 w-4" /> Editar artigo
             </Button>
           )}
         </div>
@@ -278,7 +268,7 @@ export default function KnowledgeViewer() {
 
             <div className="space-y-3 text-sm text-muted-foreground">
               <div className="flex items-start gap-2">
-                <UserRound className="mt-0.5 h-4 w-4 text-muted" />
+                <Icon name="person" className="mt-0.5 h-4 w-4 text-muted" />
                 <div>
                   <p className="text-xs uppercase tracking-wide text-muted">Autor</p>
                   <p className="text-foreground">{article.createdBy ?? 'Nao informado'}</p>
@@ -286,7 +276,7 @@ export default function KnowledgeViewer() {
               </div>
 
               <div className="flex items-start gap-2">
-                <FilePenLine className="mt-0.5 h-4 w-4 text-muted" />
+                <Icon name="edit_note" className="mt-0.5 h-4 w-4 text-muted" />
                 <div>
                   <p className="text-xs uppercase tracking-wide text-muted">Ultima edicao</p>
                   <p className="text-foreground">{article.lastEditedBy ?? article.createdBy ?? 'Nao informado'}</p>
@@ -295,7 +285,7 @@ export default function KnowledgeViewer() {
               </div>
 
               <div className="flex items-start gap-2">
-                <Clock3 className="mt-0.5 h-4 w-4 text-muted" />
+                <Icon name="schedule" className="mt-0.5 h-4 w-4 text-muted" />
                 <div>
                   <p className="text-xs uppercase tracking-wide text-muted">Leitura estimada</p>
                   <p className="text-foreground">{metadata.readingMinutes} min</p>
@@ -303,7 +293,7 @@ export default function KnowledgeViewer() {
               </div>
 
               <div className="flex items-start gap-2">
-                <CalendarClock className="mt-0.5 h-4 w-4 text-muted" />
+                <Icon name="event" className="mt-0.5 h-4 w-4 text-muted" />
                 <div>
                   <p className="text-xs uppercase tracking-wide text-muted">Criado em</p>
                   <p className="text-foreground">{formatDate(article.createdAt)}</p>
@@ -311,7 +301,7 @@ export default function KnowledgeViewer() {
               </div>
 
               <div className="flex items-start gap-2">
-                <Globe2 className="mt-0.5 h-4 w-4 text-muted" />
+                <Icon name="public" className="mt-0.5 h-4 w-4 text-muted" />
                 <div>
                   <p className="text-xs uppercase tracking-wide text-muted">Cliente</p>
                   <p className="text-foreground">{metadata.clientName}</p>
@@ -319,7 +309,7 @@ export default function KnowledgeViewer() {
               </div>
 
               <div className="flex items-start gap-2">
-                <MapPinned className="mt-0.5 h-4 w-4 text-muted" />
+                <Icon name="location_on" className="mt-0.5 h-4 w-4 text-muted" />
                 <div>
                   <p className="text-xs uppercase tracking-wide text-muted">Site</p>
                   <p className="text-foreground">{metadata.siteName}</p>
@@ -327,7 +317,7 @@ export default function KnowledgeViewer() {
               </div>
 
               <div className="flex items-start gap-2">
-                <Building2 className="mt-0.5 h-4 w-4 text-muted" />
+                <Icon name="apartment" className="mt-0.5 h-4 w-4 text-muted" />
                 <div>
                   <p className="text-xs uppercase tracking-wide text-muted">Departamento</p>
                   <p className="text-foreground">{metadata.departmentName}</p>
@@ -359,7 +349,7 @@ export default function KnowledgeViewer() {
               </div>
               <div className="col-span-2 rounded-lg border border-border bg-surface-light p-2">
                 <p className="inline-flex items-center gap-1 text-muted">
-                  <Layers className="h-3.5 w-3.5" /> Publicacao
+                  <Icon name="layers" className="h-3.5 w-3.5" /> Publicacao
                 </p>
                 <p className="mt-1 text-sm text-foreground">
                   {article.publishedAt ? `Ultima publicacao em ${formatDate(article.publishedAt)}` : 'Ainda nao publicado'}

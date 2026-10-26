@@ -1,7 +1,6 @@
 import { useMemo, useState } from "react";
-import { Plus, RefreshCw, Trash2 } from "lucide-react";
 import toast from "react-hot-toast";
-import { Badge, Button, Card, CardHeader, DataTable, ErrorDisplay, Input, Loading, Modal, PageHeader, Select, type Column } from "@/components/ui";
+import { Icon, Badge, Button, Card, CardHeader, DataTable, ErrorDisplay, Input, Loading, Modal, PageHeader, Select, type Column } from "@/components/ui";
 import { useClients } from "@/hooks/useClients";
 import { useSites } from "@/hooks/useSites";
 import {
@@ -120,7 +119,7 @@ export default function PatchesApprovals() {
       className: "text-right",
       render: (rule) => (
         <Button size="sm" variant="danger" onClick={() => void handleDelete(rule)} disabled={deleteApproval.isPending}>
-          <Trash2 className="h-4 w-4" />
+          <Icon name="delete" className="h-4 w-4" />
           Remover
         </Button>
       ),
@@ -144,11 +143,11 @@ export default function PatchesApprovals() {
     <div className="space-y-6">
       <PageHeader title="Aprovações de atualizações" description="Aprove ou recuse KBs por escopo (Global → Cliente → Site → Agente).">
         <Button variant="secondary" onClick={() => void (tab === "rules" ? approvals.refetch() : audit.refetch())}>
-          <RefreshCw className="h-4 w-4" />
+          <Icon name="refresh" className="h-4 w-4" />
           Atualizar
         </Button>
         <Button onClick={() => setCreateOpen(true)}>
-          <Plus className="h-4 w-4" />
+          <Icon name="add" className="h-4 w-4" />
           Nova aprovação
         </Button>
       </PageHeader>

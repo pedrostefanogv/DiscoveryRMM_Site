@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
+import { Icon } from "@/components/ui";
 import { createPortal } from 'react-dom';
-import { X } from 'lucide-react';
 
 interface ImageLightboxProps {
   open: boolean;
@@ -72,7 +72,7 @@ export function ImageLightbox({ open, src, alt, onClose, onError }: ImageLightbo
         onClick={onClose}
         className="absolute right-4 top-4 rounded-lg bg-surface/90 p-2 text-muted-foreground transition-colors hover:bg-surface-light hover:text-foreground"
       >
-        <X className="h-5 w-5" />
+        <Icon name="close" className="h-5 w-5" />
       </button>
       <img
         src={src}

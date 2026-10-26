@@ -1,7 +1,7 @@
 import { useSearchParams } from 'react-router-dom';
-import { Button, Card } from '@/components/ui';
+import { Icon, Button, Card } from '@/components/ui';
 import { ThemeToggle } from '@/components/auth/ThemeToggle';
-import { Film, Image, Gauge, MessageSquare, Monitor, PanelsTopLeft, SlidersHorizontal } from 'lucide-react';
+
 import { toast } from 'react-hot-toast';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { remoteSessionsApi, type ChangeQualityRequest, type StartRemoteSessionRequest } from '@/api/remote-sessions';
@@ -1441,7 +1441,7 @@ export default function RemoteSession() {
           {/* Abas como dropdown — mesmo padrão visual do seletor de monitor.
               O ponto indica que a aba tem sessão ativa. */}
           <div className="flex items-center gap-0.5">
-            <PanelsTopLeft className="mr-1 h-3.5 w-3.5 text-muted" aria-hidden />
+            <Icon name="dashboard" className="mr-1 h-3.5 w-3.5 text-muted" aria-hidden />
             <select
               className="bg-surface border border-border rounded px-1 py-0.5 text-xs text-foreground cursor-pointer hover:border-border-strong"
               value={activeTab}
@@ -1466,7 +1466,7 @@ export default function RemoteSession() {
           {activeTab === 'screen' && (
             <>
               <div className="flex items-center gap-0.5">
-                <SlidersHorizontal className="mr-1 h-3.5 w-3.5 text-muted" aria-hidden />
+                <Icon name="tune" className="mr-1 h-3.5 w-3.5 text-muted" aria-hidden />
                 <select
                   className="bg-surface border border-border rounded px-1 py-0.5 text-xs text-foreground cursor-pointer hover:border-border-strong disabled:opacity-50"
                   value={qualityMode}
@@ -1504,7 +1504,7 @@ export default function RemoteSession() {
                     >
                       <label className="flex items-center justify-between gap-2">
                         <span className="inline-flex items-center gap-1 text-muted-foreground">
-                          <Film className="h-3.5 w-3.5" aria-hidden /> Codec
+                          <Icon name="movie" className="h-3.5 w-3.5" aria-hidden /> Codec
                         </span>
                         <select
                           className="w-28 bg-surface border border-border rounded px-1 py-0.5 text-xs text-foreground cursor-pointer hover:border-border-strong disabled:opacity-50"
@@ -1521,7 +1521,7 @@ export default function RemoteSession() {
 
                       <label className="flex items-center justify-between gap-2">
                         <span className="inline-flex items-center gap-1 text-muted-foreground">
-                          <Image className="h-3.5 w-3.5" aria-hidden /> Compressão
+                          <Icon name="image" className="h-3.5 w-3.5" aria-hidden /> Compressão
                         </span>
                         <select
                           className="w-28 bg-surface border border-border rounded px-1 py-0.5 text-xs text-foreground cursor-pointer hover:border-border-strong disabled:opacity-50"
@@ -1541,7 +1541,7 @@ export default function RemoteSession() {
 
                       <label className="flex items-center justify-between gap-2">
                         <span className="inline-flex items-center gap-1 text-muted-foreground">
-                          <Gauge className="h-3.5 w-3.5" aria-hidden /> FPS
+                          <Icon name="speed" className="h-3.5 w-3.5" aria-hidden /> FPS
                         </span>
                         <select
                           className="w-28 bg-surface border border-border rounded px-1 py-0.5 text-xs text-foreground cursor-pointer hover:border-border-strong disabled:opacity-50"
@@ -1562,7 +1562,7 @@ export default function RemoteSession() {
 
               {screenSession && (
                 <div className="flex items-center gap-0.5">
-                  <Monitor className="mr-1 h-3.5 w-3.5 text-muted" aria-hidden />
+                  <Icon name="desktop_windows" className="mr-1 h-3.5 w-3.5 text-muted" aria-hidden />
                   <select
                     className="max-w-[11rem] bg-surface border border-border rounded px-1 py-0.5 text-xs text-foreground cursor-pointer hover:border-border-strong disabled:opacity-50"
                     value={monitorIndex}
@@ -2024,7 +2024,7 @@ export default function RemoteSession() {
               title="Abrir o chat de suporte com esta máquina"
               aria-label="Abrir o chat de suporte com esta máquina"
             >
-              <MessageSquare className="h-3.5 w-3.5" />
+              <Icon name="chat" className="h-3.5 w-3.5" />
               <span className="hidden xl:inline">Chat</span>
             </button>
           )}

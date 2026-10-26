@@ -1,7 +1,6 @@
-import { HardDrive, RefreshCw, ShieldCheck, TriangleAlert } from 'lucide-react';
 import { useObjectStorageTelemetry } from '@/hooks/useObjectStorageTelemetry';
 import { useNowTick } from '@/hooks/useNowTick';
-import { Badge, Button, Card, CardHeader, Skeleton } from '@/components/ui';
+import { Icon, Badge, Button, Card, CardHeader, Skeleton } from '@/components/ui';
 import type { ObjectStorageTelemetryDto } from '@/api/object-storage';
 
 /**
@@ -103,7 +102,7 @@ export function ObjectStorageCard() {
             onClick={() => void overview.refetch()}
             loading={overview.isFetching}
           >
-            <RefreshCw className="h-4 w-4" />
+            <Icon name="refresh" className="h-4 w-4" />
             Atualizar
           </Button>
         }
@@ -117,14 +116,14 @@ export function ObjectStorageCard() {
         </div>
       ) : overview.isError || !data ? (
         <div className="flex flex-col items-center justify-center gap-2 rounded-lg bg-surface-light px-4 py-6 text-center">
-          <HardDrive className="h-6 w-6 text-danger" />
+          <Icon name="storage" className="h-6 w-6 text-danger" />
           <p className="text-sm font-medium text-muted-foreground">Não foi possível carregar a telemetria do storage</p>
           <p className="max-w-md text-xs text-muted">Verifique a conexão com a API e tente novamente.</p>
           <Button variant="secondary" size="sm" onClick={() => void overview.refetch()}>Tentar novamente</Button>
         </div>
       ) : !data.configured ? (
         <div className="flex flex-col items-center justify-center gap-2 rounded-lg bg-surface-light px-4 py-6 text-center">
-          <HardDrive className="h-6 w-6 text-warning" />
+          <Icon name="storage" className="h-6 w-6 text-warning" />
           <p className="text-sm font-medium text-muted-foreground">Object storage não configurado</p>
           <p className="max-w-md text-xs text-muted">
             Configure bucket, endpoint e credenciais em Configurações → Servidor para habilitar o storage de objetos.
@@ -137,7 +136,7 @@ export function ObjectStorageCard() {
             <Badge color="slate">{modeLabel(data.mode)}</Badge>
             {data.throttled && (
               <Badge color="warning">
-                <TriangleAlert className="mr-1 h-3 w-3" aria-hidden="true" />
+                <Icon name="warning" className="mr-1 h-3 w-3" aria-hidden="true" />
                 Circuit breaker aberto ({data.consecutiveFailures} falha{data.consecutiveFailures !== 1 ? 's' : ''})
               </Badge>
             )}
@@ -177,7 +176,7 @@ export function ObjectStorageCard() {
 
           <div>
             <div className="mb-2 flex items-center gap-2 text-xs text-muted">
-              <ShieldCheck className="h-3.5 w-3.5" />
+              <Icon name="verified_user" className="h-3.5 w-3.5" />
               <span className="font-medium">Tráfego observado (métricas passivas, sem chamadas extras ao S3)</span>
             </div>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -198,7 +197,7 @@ export function ObjectStorageCard() {
 
           <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-3 text-xs text-muted">
             <span className="flex items-center gap-1.5">
-              <HardDrive className="h-3.5 w-3.5" />
+              <Icon name="storage" className="h-3.5 w-3.5" />
               {probeWindow
                 ? `Probe ativo: 1 HEAD de bucket a cada ~${probeWindow} min; nenhuma listagem é executada.`
                 : 'Probe ativo cacheado; nenhuma listagem é executada.'}

@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useBlocker, useNavigate, useParams } from 'react-router-dom';
-import { ArchiveRestore, Save } from 'lucide-react';
-import {
+import { Icon,
   Button, Card, CardHeader, ConfirmDialog, ErrorDisplay, Input, Loading, PageHeader, Select, TextArea,
 } from '@/components/ui';
 import {
@@ -115,7 +114,7 @@ export default function TicketTemplateFormPage() {
                 )
               }
             >
-              <ArchiveRestore className="h-4 w-4" /> Restaurar template
+              <Icon name="unarchive" className="h-4 w-4" /> Restaurar template
             </Button>
             <Button variant="ghost" onClick={backToList}>Voltar para templates</Button>
           </div>
@@ -430,7 +429,7 @@ function TicketTemplateForm({
 
       <div className="sticky bottom-0 z-10 -mx-4 -mb-8 flex justify-end gap-3 border-t border-border bg-surface/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
         <Button type="button" variant="ghost" onClick={backToList}>Cancelar</Button>
-        <Button type="submit" loading={isSaving}><Save className="h-4 w-4" /> Salvar</Button>
+        <Button type="submit" loading={isSaving}><Icon name="save" className="h-4 w-4" /> Salvar</Button>
       </div>
 
       <ConfirmDialog

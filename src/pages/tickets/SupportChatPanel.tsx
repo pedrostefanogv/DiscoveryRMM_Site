@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "react-hot-toast";
-import { Monitor, Paperclip, RefreshCw, Send, X } from "lucide-react";
 import { apiFetchResponse } from "@/api/client";
 import type { TicketChatAttachment, TicketChatMessage, TicketChatSession } from "@/api/ticket-chat";
-import { Button } from "@/components/ui";
+import { Icon, Button } from "@/components/ui";
 import {
   useEndSupportChat,
   useRetrySupportChatInvite,
@@ -503,14 +502,14 @@ export default function SupportChatPanel({
         <div className="flex items-center gap-2">
           {sessionForUi?.status === "Pending" && canManage && (
             <Button size="sm" variant="ghost" onClick={handleRetry} disabled={retry.isPending}>
-              <RefreshCw className="h-4 w-4" /> Reenviar convite
+              <Icon name="refresh" className="h-4 w-4" /> Reenviar convite
             </Button>
           )}
           {sessionForUi?.status === "Active" && canManage && (
             // Botão de verdade (sólido, vermelho): antes era um Button ghost com
             // ícone de quadrado vazio e parecia um checkbox desmarcado.
             <Button size="sm" variant="danger" onClick={handleEnd} disabled={end.isPending}>
-              <X className="h-4 w-4" /> Encerrar
+              <Icon name="close" className="h-4 w-4" /> Encerrar
             </Button>
           )}
           {canStart && (
@@ -614,7 +613,7 @@ export default function SupportChatPanel({
                         className="h-10 w-10 rounded object-cover"
                       />
                     ) : (
-                      <Paperclip className="h-3 w-3" />
+                      <Icon name="attach_file" className="h-3 w-3" />
                     )}
                     <span className="max-w-[180px] truncate">{item.fileName}</span>
                     {!item.attachmentId ? <span className="text-muted">enviando…</span> : null}
@@ -671,7 +670,7 @@ export default function SupportChatPanel({
                     aria-label="Abrir o controle remoto desta máquina"
                     className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 disabled:cursor-not-allowed disabled:opacity-45"
                   >
-                    <Monitor className="h-4 w-4" />
+                    <Icon name="desktop_windows" className="h-4 w-4" />
                   </button>
                 )}
                 <button
@@ -682,7 +681,7 @@ export default function SupportChatPanel({
                   aria-label="Anexar arquivo ou print"
                   className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 disabled:cursor-not-allowed disabled:opacity-45"
                 >
-                  <Paperclip className="h-4 w-4" />
+                  <Icon name="attach_file" className="h-4 w-4" />
                 </button>
                 <button
                   type="button"
@@ -692,7 +691,7 @@ export default function SupportChatPanel({
                   aria-label="Enviar mensagem"
                   className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary text-white transition-all hover:bg-primary/90 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 disabled:cursor-not-allowed disabled:opacity-45"
                 >
-                  <Send className="h-4 w-4" />
+                  <Icon name="send" className="h-4 w-4" />
                 </button>
               </div>
             </div>
@@ -801,7 +800,7 @@ function MessageAttachmentPreview({
       title={attachment.fileName + (isImage ? " (clique para ampliar)" : " (clique para baixar)")}
       className="flex items-center gap-1 rounded-lg border border-border bg-surface-light px-2 py-1 text-xs text-foreground hover:border-primary/60"
     >
-      <Paperclip className="h-3 w-3" /> {attachment.fileName}
+      <Icon name="attach_file" className="h-3 w-3" /> {attachment.fileName}
     </button>
   );
 }
