@@ -546,6 +546,39 @@ const TERM_THEME_LIGHT = {
   brightWhite: '#f8fafc',
 };
 
+// ── Tema por shell ──
+// Base claro/escuro + ACENTO (cursor) pela identidade do shell do term.ready
+// (shellKind): PowerShell (azul), cmd (âmbar), wsl:<distro> (laranja Ubuntu),
+// zsh/bash (verde), desconhecido (neutro). options.theme é mutável no xterm
+// v5 — atualizado sem recriar a instância (buffer/histórico preservados).
+type TermMode = 'dark' | 'light';
+
+const SHELL_ACCENTS: Record<string, { dark: string; light: string }> = {
+  powershell: { dark: '#38bdf8', light: '#2563eb' }, // azul do PS
+  cmd: { dark: '#facc15', light: '#b45309' },        // âmbar clássico do cmd
+  wsl: { dark: '#fb923c', light: '#ea580c' },        // laranja Ubuntu/WSL
+  zsh: { dark: '#4ade80', light: '#16a34a' },        // verde do zsh
+  bash: { dark: '#4ade80', light: '#16a34a' },
+};
+
+// resolveShellAccentKey normaliza o shellKind do agent ("powershell", "cmd",
+// "wsl:Ubuntu-22.04", "zsh") na chave da tabela de acentos.
+function resolveShellAccentKey(shellKind: string | null | undefined): string {
+  const k = (shellKind ?? '').toLowerCase();
+  if (k.startsWith('wsl')) return 'wsl';
+  if (Object.prototype.hasOwnProperty.call(SHELL_ACCENTS, k)) return k;
+  return '';
+}
+
+// themeFor devolve o tema combinado modo (claro/escuro) + shell.
+function themeFor(mode: TermMode, shellKind: string | null | undefined) {
+  const base = mode === 'dark' ? TERM_THEME_DARK : TERM_THEME_LIGHT;
+  const key = resolveShellAccentKey(shellKind);
+  if (!key) return base;
+  const accent = SHELL_ACCENTS[key];
+  return { ...base, cursor: accent[mode === 'dark' ? 'dark' : 'light'] };
+}
+
 // Formata a telemetria do agent para o painel discreto de métricas.
 function formatCount(value: number | undefined): string {
   return Number.isFinite(value) ? String(value) : '—';
@@ -823,7 +856,7 @@ export default function RemoteTerminal({
       cursorBlink: true,
       fontSize: 14,
       fontFamily: '"Cascadia Code", "Fira Code", "JetBrains Mono", monospace',
-      theme: mode === 'dark' ? TERM_THEME_DARK : TERM_THEME_LIGHT,
+      theme: themeFor(mode, shellKindRef.current),
       allowProposedApi: true,
       scrollback: 5000,
     });
@@ -887,12 +920,13 @@ export default function RemoteTerminal({
     };
   }, []);
 
-  // Atualiza o tema do terminal ao alternar claro/escuro SEM recriar a
-  // instância (preserva o buffer/histórico da sessão ativa).
+  // Atualiza o tema do terminal ao alternar claro/escuro OU ao trocar o shell
+  // (term.ready shellKind) SEM recriar a instância — preserva o buffer/histó
+  // rico. O acento (cursor) segue o shell selecionado (tema por shell).
   useEffect(() => {
     if (!termRef.current) return;
-    termRef.current.options.theme = mode === 'dark' ? TERM_THEME_DARK : TERM_THEME_LIGHT;
-  }, [mode]);
+    termRef.current.options.theme = themeFor(mode, shellInfo.shellKind);
+  }, [mode, shellInfo.shellKind]);
 
 
   // Re-aplica o fit quando a conexão abre (garante resize correto para o agent).
