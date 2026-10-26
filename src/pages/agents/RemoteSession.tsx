@@ -962,6 +962,9 @@ export default function RemoteSession() {
     if ((newShell === shell && nextRunAs === undefined) || shellSwitching || !agentId) return;
     setShellSwitching(true);
     setErrorMsg(null);
+    // Snapshot p/ reverter o seletor se a troca falhar (o onChange já setou
+    // o estado — em falha o console ativo continua com a identidade antiga).
+    const prevRunAs = terminalRunAsRef.current;
 
     // Encerra a sessão de terminal atual (se houver) — ambos os caminhos (normal
     // e force) dependem de uma shell válida; encerra antes de tentar.
@@ -982,7 +985,9 @@ export default function RemoteSession() {
         shell: newShell,
         // Mesma lógica do startTabSession: console já nasce no tamanho do fit.
         ...(() => { const d = getLastFittedTermDims(); return d.cols > 0 && d.rows > 0 ? { termCols: d.cols, termRows: d.rows } : {}; })(),
-        runAs: nextRunAs,
+        // Sem nextRunAs (troca de shell apenas): MANTÉM o run-as atual —
+        // reiniciar o console não pode derrubar a identidade escolhida.
+        runAs: nextRunAs ?? terminalRunAsRef.current,
       });
       if (!session.natsSubject) {
         throw new Error('Sessão criada sem subject NATS.');
@@ -1023,10 +1028,15 @@ export default function RemoteSession() {
       await startNew(false);
     } catch (err) {
       // Sessão órfã no agent → refaz UMA vez com force=true (encerra e cria nova).
+      let failed = true;
       if (isSessionConflictError(err)) {
-        try { await startNew(true); }
+        try { await startNew(true); failed = false; }
         catch { /* reporta o erro original abaixo */ }
-      } else {
+      }
+      if (failed) {
+        // Reverte o seletor de identidade: a sessão continua (ou voltou a
+        // não existir) com o run-as anterior — o estado não pode mentir.
+        if (nextRunAs) setTerminalRunAs(prevRunAs);
         setErrorMsg(err instanceof Error ? err.message : 'Falha ao trocar de shell.');
       }
     } finally {
