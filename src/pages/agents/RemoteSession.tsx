@@ -434,6 +434,14 @@ export default function RemoteSession() {
   }, [hasActiveSessions]);
   // Shell ativo do terminal (powershell | cmd). Trocar reinicia a sessão de terminal.
   const [shell, setShell] = useState('powershell');
+  // Run-as do terminal: "user" (identidade do usuário logado — default do
+  // agent) ou "system". O agent confirma o efetivo no term.ready (runAs).
+  const [terminalRunAs, setTerminalRunAs] = useState<'user' | 'system'>('user');
+  // Ref espelho do terminalRunAs: os payloads de start vivem dentro de
+  // useCallback com deps longas — o ref garante o valor ATUAL na hora do
+  // request, sem risco de valor obsoleto.
+  const terminalRunAsRef = useRef<'user' | 'system'>('user');
+  useEffect(() => { terminalRunAsRef.current = terminalRunAs; }, [terminalRunAs]);
   const [shellSwitching, setShellSwitching] = useState(false);
   // Shells disponíveis reportados pelo agent via term.ready (populará o seletor).
   const [availableShells, setAvailableShells] = useState<string[]>([]);
@@ -746,6 +754,9 @@ export default function RemoteSession() {
         ...(tab === 'terminal'
           ? (() => { const d = getLastFittedTermDims(); return d.cols > 0 && d.rows > 0 ? { termCols: d.cols, termRows: d.rows } : {}; })()
           : {}),
+        // Run-as do terminal: "user" (identidade do usuário logado — default)
+        // ou "system". Enviado só na aba terminal (aditivo; agent valida).
+        ...(tab === 'terminal' ? { runAs: terminalRunAsRef.current } : {}),
       });
 
       if (!session.natsSubject) {
@@ -944,8 +955,11 @@ export default function RemoteSession() {
   }, [agentId, sessions]);
 
   // ── Troca de shell do terminal: reinicia a sessão de terminal com o novo shell ──
-  const handleSwitchShell = useCallback(async (newShell: string) => {
-    if (newShell === shell || shellSwitching || !agentId) return;
+  // nextRunAs: identidade alvo do console. Quando informado, a sessão é
+  // reiniciada MESMO com o mesmo shell (trocar SYSTEM↔Usuário exige um novo
+  // console — a identidade é fixada no spawn do shell).
+  const handleSwitchShell = useCallback(async (newShell: string, nextRunAs?: 'user' | 'system') => {
+    if ((newShell === shell && nextRunAs === undefined) || shellSwitching || !agentId) return;
     setShellSwitching(true);
     setErrorMsg(null);
 
@@ -968,6 +982,7 @@ export default function RemoteSession() {
         shell: newShell,
         // Mesma lógica do startTabSession: console já nasce no tamanho do fit.
         ...(() => { const d = getLastFittedTermDims(); return d.cols > 0 && d.rows > 0 ? { termCols: d.cols, termRows: d.rows } : {}; })(),
+        runAs: nextRunAs,
       });
       if (!session.natsSubject) {
         throw new Error('Sessão criada sem subject NATS.');
@@ -986,6 +1001,7 @@ export default function RemoteSession() {
         throw new Error('Falha ao obter credenciais de streaming.');
       }
       setShell(newShell);
+      if (nextRunAs) setTerminalRunAs(nextRunAs);
       setSessions((prev) => ({
         ...prev,
         terminal: {
@@ -1871,6 +1887,22 @@ export default function RemoteSession() {
                   {s.startsWith('wsl:') ? s.replace('wsl:', 'WSL: ') : s === 'powershell' ? 'PowerShell' : s === 'cmd' ? 'CMD' : s}
                 </option>
               ))}
+            </select>
+            <select
+              value={terminalRunAs}
+              disabled={shellSwitching}
+              onChange={(e) => {
+                const next = e.target.value as 'user' | 'system';
+                if (next === terminalRunAsRef.current) return;
+                setTerminalRunAs(next);
+                // Console ativo: reinicia com a nova identidade (mesmo shell).
+                if (sessions.terminal && !shellSwitching) void handleSwitchShell(shell, next);
+              }}
+              className="bg-surface border border-border rounded px-1 py-0.5 text-foreground text-xs disabled:opacity-50"
+              title="Identidade do console: Usuário = usuário logado; SYSTEM = conta de serviço"
+            >
+              <option value="user">Usuário</option>
+              <option value="system">SYSTEM</option>
             </select>
             {shellSwitching && <span className="text-muted">trocar shell…</span>}
             <span className={`inline-flex items-center gap-1 ${terminalConnected ? 'text-success' : 'text-danger'}`}>

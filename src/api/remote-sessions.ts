@@ -18,6 +18,8 @@ export interface StartRemoteSessionRequest {
     shell?: string;
     /** Colunas iniciais do terminal. Default: 120. */
     termCols?: number;
+    /** Identidade do console do terminal: "user" (usuário logado — default) | "system". */
+    runAs?: string;
     /** Linhas iniciais do terminal. Default: 40. */
     termRows?: number;
     /** Raiz do explorador de arquivos no agent. Default: C:\\. */
