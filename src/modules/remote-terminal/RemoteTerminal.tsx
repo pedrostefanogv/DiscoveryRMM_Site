@@ -7,7 +7,6 @@ import { ClipboardAddon } from '@xterm/addon-clipboard';
 import {
   useTerminalStream,
   type TerminalErrorInfo,
-  type TerminalStatsInfo,
 } from './useTerminalStream';
 import CompletionPopup from './CompletionPopup';
 import {
@@ -592,19 +591,8 @@ function themeFor(mode: TermMode, shellKind: string | null | undefined) {
   return { ...base, cursor: accent[mode === 'dark' ? 'dark' : 'light'] };
 }
 
-// Formata a telemetria do agent para o painel discreto de métricas.
-function formatCount(value: number | undefined): string {
-  return Number.isFinite(value) ? String(value) : '—';
-}
-
-function formatUptime(ms: number | undefined): string {
-  if (!Number.isFinite(ms) || (ms as number) <= 0) return '—';
-  const total = Math.floor((ms as number) / 1000);
-  const h = Math.floor(total / 3600);
-  const m = Math.floor((total % 3600) / 60);
-  const s = total % 60;
-  return h > 0 ? `${h}h${m}m` : m > 0 ? `${m}m${s}s` : `${s}s`;
-}
+// Painel de métricas removido (2026-10-27): os formatadores de telemetria
+// (formatCount/formatUptime) saíram junto com o painel.
 
 // Console único — um terminal por sessão de suporte remoto.
 export default function RemoteTerminal({
@@ -683,7 +671,6 @@ export default function RemoteTerminal({
     onReady,
     onError,
     onReset,
-    onStats,
     onCompletion,
     error,
   } = useTerminalStream({
@@ -702,11 +689,11 @@ export default function RemoteTerminal({
     backend: null,
     shellKind: null,
   });
+  // T4: telemetria do agent (.stats) continua publicada pelo agente, mas o
+  // painel de métricas do viewer foi REMOVIDO (pedido 2026-10-27) — poluía o
+  // console. O subject segue disponível p/ diagnóstico externo.
   // T2: sinal visual do modo prompt (não polui a UI por padrão: só quando ativo).
   const [promptKind, setPromptKind] = useState<PromptKind | null>(null);
-  // T4: telemetria do agent. Painel fechado por padrão.
-  const [stats, setStats] = useState<TerminalStatsInfo | null>(null);
-  const [showStats, setShowStats] = useState(false);
   // T1: popup de completions.
   const [completion, setCompletion] = useState<CompletionResponse | null>(null);
   const [completionIndex, setCompletionIndex] = useState(0);
@@ -1042,13 +1029,6 @@ export default function RemoteTerminal({
     return unsubscribe;
   }, [onOutput]);
 
-  // T4: telemetria 'stats' (agent->viewer). Best-effort: não altera a UI por
-  // padrão — só alimenta o painel quando o usuário o abre.
-  useEffect(() => {
-    const unsubscribe = onStats((info: TerminalStatsInfo) => setStats(info));
-    return unsubscribe;
-  }, [onStats]);
-
   // T1: respostas 'completion.res' roteadas por reqId (respostas velhas são
   // descartadas para não reabrir um popup já fechado).
   useEffect(() => {
@@ -1282,47 +1262,15 @@ export default function RemoteTerminal({
         />
       )}
 
-      {/* T4: painel de métricas — FECHADO por padrão (não polui a UI). */}
-      {showStats && (
-        <div
-          data-testid="terminal-stats-panel"
-          className="border-t border-border bg-surface-light px-3 py-1.5 text-[11px] text-muted-foreground"
-        >
-          <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 sm:grid-cols-4">
-            <span>framesOut: <b className="text-foreground">{formatCount(stats?.framesOut)}</b></span>
-            <span>bytesOut: <b className="text-foreground">{formatCount(stats?.bytesOut)}</b></span>
-            <span>inputRejected: <b className="text-foreground">{formatCount(stats?.inputRejected)}</b></span>
-          <span>inputRateLimited: <b className="text-foreground">{formatCount(stats?.inputRateLimited)}</b></span>
-          <span>resizeRateLimited: <b className="text-foreground">{formatCount(stats?.resizeRateLimited)}</b></span>
-          <span>pipeDroppedBytes: <b className="text-foreground">{formatCount(stats?.pipeDroppedBytes)}</b></span>
-            <span>flushHolds: <b className="text-foreground">{formatCount(stats?.flushHolds)}</b></span>
-            <span>publishErrors: <b className="text-foreground">{formatCount(stats?.publishErrors)}</b></span>
-            <span>replayResets: <b className="text-foreground">{formatCount(stats?.replayResets)}</b></span>
-            <span>uptime: <b className="text-foreground">{formatUptime(stats?.uptimeMs)}</b></span>
-            <span>avgFlushBytes: <b className="text-foreground">{formatCount(stats?.avgFlushBytes)}</b></span>
-          </div>
-          <div className="mt-0.5 text-[10px]">
-            backend: {shellInfo.backend ?? '—'} · shellKind: {shellInfo.shellKind ?? '—'} · capabilities:{' '}
-            {supportsCompletion ? 'v1' : 'ausente'}
-          </div>
-        </div>
-      )}
+      {/* Painel de métricas REMOVIDO (pedido 2026-10-27): poluía o console.
+          A telemetria (.stats) continua publicada pelo agente p/ diagnóstico. */}
 
-      {/* Rodapé discreto: diagnóstico + métricas + completions. */}
+      {/* Rodapé discreto: diagnóstico + completions. */}
       <div className="flex items-center justify-end gap-2 border-t border-border px-2 py-0.5 text-[10px] text-muted-foreground">
         <span data-testid="terminal-diagnostics">
           {shellInfo.backend ?? 'backend?'}
           {shellInfo.shellKind ? ` · ${shellInfo.shellKind}` : ''}
         </span>
-        <button
-          type="button"
-          data-testid="terminal-stats-toggle"
-          aria-expanded={showStats}
-          onClick={() => setShowStats((value) => !value)}
-          className="rounded border border-border px-1.5 py-0.5 hover:bg-surface-hover"
-        >
-          Métricas
-        </button>
         <button
           type="button"
           data-testid="terminal-completions-toggle"
