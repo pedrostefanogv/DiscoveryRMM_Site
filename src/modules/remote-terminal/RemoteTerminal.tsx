@@ -54,6 +54,17 @@ interface RemoteTerminalProps {
   jwt?: string;
   /** Reporta o status de conexão ao pai (para exibir na barra de rodapé unificada). */
   onConnectionChange?: (connected: boolean) => void;
+  /**
+   * Status composto para a UI de fases: NATS conectado NÃO significa shell
+   * pronto. O verde só pode aparecer quando ready=true (term.ready recebido).
+   */
+  onStatus?: (status: {
+    natsConnected: boolean;
+    ready: boolean;
+    backend?: string;
+    shellKind?: string;
+    startupMs?: number;
+  }) => void;
   /** Reporta os shells disponíveis ao pai (para popular o seletor de shell). */
   onShells?: (shells: string[]) => void;
   /**
@@ -91,6 +102,8 @@ interface TermReadyPayload {
   supportsResize?: boolean;
   supportsCompletionQuery?: boolean;
   encoding?: string;
+  /** Tempo (ms) do remotesessionstart recebido até o ready (aditivo). */
+  startupMs?: number;
 }
 
 // Últimas dimensões fitadas do terminal, POR SESSÃO: cada instância guarda as
@@ -602,6 +615,7 @@ export default function RemoteTerminal({
   jwt = '',
   onConnectionChange,
   onShells,
+  onStatus,
   getFreshCredentials,
   reconnectToken,
   isVisible = true,
@@ -697,6 +711,13 @@ export default function RemoteTerminal({
   const [completion, setCompletion] = useState<CompletionResponse | null>(null);
   const [completionIndex, setCompletionIndex] = useState(0);
   const [completionStyle, setCompletionStyle] = useState<{ left: number; top: number }>({ left: 0, top: 0 });
+  // Fase real do console: NATS conectado NÃO é shell pronto. O verde da barra
+  // só pode aparecer depois do term.ready (antes o operador via "Conectado" com
+  // a tela vazia durante toda a escada do ConPTY).
+  const [shellReady, setShellReady] = useState(false);
+  const [startupMs, setStartupMs] = useState<number | undefined>(undefined);
+  const onStatusRef = useRef(onStatus);
+  useEffect(() => { onStatusRef.current = onStatus; }, [onStatus]);
 
   // ── T1/T2: helpers de completions e modo prompt (ConPTY) ────────────────
 
@@ -989,6 +1010,8 @@ export default function RemoteTerminal({
         backend: info.backend ?? backendRef.current,
         shellKind: typeof info.shellKind === 'string' ? info.shellKind : null,
       });
+      setShellReady(true);
+      setStartupMs(typeof info.startupMs === 'number' ? info.startupMs : undefined);
     });
     return unsubscribe;
   }, [onReady, onShells]);
@@ -1154,11 +1177,19 @@ export default function RemoteTerminal({
 
   useEffect(() => {
     onConnectionChange?.(isConnected);
-  }, [isConnected, onConnectionChange]);
+    onStatusRef.current?.({
+      natsConnected: isConnected,
+      ready: shellReady,
+      backend: backendRef.current ?? undefined,
+      shellKind: shellKindRef.current ?? undefined,
+      startupMs,
+    });
+  }, [isConnected, shellReady, startupMs, onConnectionChange]);
 
   // Mostra aviso de shell encerrado
   useEffect(() => {
     const unsubscribe = onExit((reason: string) => {
+      setShellReady(false);
       termRef.current?.writeln(`\r\n\x1b[1;33m── Shell encerrado: ${reason} ──\x1b[0m\r\n`);
     });
     return unsubscribe;
@@ -1169,6 +1200,7 @@ export default function RemoteTerminal({
   // mensagem, e o operador sem saber o que aconteceu.
   useEffect(() => {
     const unsubscribe = onError((info: TerminalErrorInfo) => {
+      setShellReady(false);
       setTerminalError(info);
       termRef.current?.writeln(`\r\n\x1b[1;31m── Erro no terminal (${info.code}): ${info.reason} ──\x1b[0m\r\n`);
     });

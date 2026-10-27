@@ -57,6 +57,12 @@ export interface RemoteSessionResponse {
     consentPolicySource?: string | null;
     /** Janela (s) após o deadline em que o console ainda aguarda a confirmação do agent. */
     consentDecisionGraceSeconds?: number | null;
+    /**
+     * Credenciais NATS do viewer já emitidas no start (sessões sem consentimento
+     * pendente). Evita um POST /nats-credentials extra no caminho crítico do
+     * terminal. Ausente em APIs antigas — o front mantém o fallback.
+     */
+    viewerCredentials?: SessionCredentials;
 }
 
 export interface RemoteSessionConsentStatus {

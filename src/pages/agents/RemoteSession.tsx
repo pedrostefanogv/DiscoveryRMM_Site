@@ -446,7 +446,13 @@ export default function RemoteSession() {
   // Shells disponíveis reportados pelo agent via term.ready (populará o seletor).
   const [availableShells, setAvailableShells] = useState<string[]>([]);
   // Status de conexão do terminal (reportado pelo RemoteTerminal).
-  const [terminalConnected, setTerminalConnected] = useState(false);
+  const [terminalStatus, setTerminalStatus] = useState<{
+    natsConnected: boolean;
+    ready: boolean;
+    backend?: string;
+    shellKind?: string;
+    startupMs?: number;
+  }>({ natsConnected: false, ready: false });
   // Sinaliza que o backend rejeitou a criação de sessão por já existir uma
   // ativa no agent (conflito). Mantém visível a ação "Forçar conexão" mesmo
   // sem uma sessão no estado local — caso comum quando outra janela/fluxo
@@ -712,9 +718,11 @@ export default function RemoteSession() {
           .filter(([k]) => k !== tab && k !== sibling)
           .map(([, s]) => s)
           .filter((s): s is TabSession => !!s);
-        for (const other of others) {
-          try { await remoteSessionsApi.stopSession(agentId, other.sessionId); } catch { /* best-effort */ }
-        }
+        // Stops em PARALELO (backlog 2026-10-27): cada stop é um POST ao
+        // servidor; em série somavam RTTs no caminho crítico de troca de aba.
+        await Promise.allSettled(
+          others.map((other) => remoteSessionsApi.stopSession(agentId, other.sessionId)),
+        );
         if (others.length > 0) {
           setSessions((prev) => {
             const next = { ...prev };
@@ -769,19 +777,28 @@ export default function RemoteSession() {
         await waitForConsent(session);
       }
 
-      // Obtém credenciais NATS para o viewer conectar.
+      // Credenciais NATS: preferir as já emitidas no start (2026-10-27) para
+      // não pagar um POST extra no caminho crítico. O fallback mantém
+      // compatibilidade com API antiga e com sessões que exigem consentimento.
       let jwt: string | undefined;
       let nkeySeed: string | undefined;
       let natsUrl: string | undefined;
-      try {
-        const creds = await remoteSessionsApi.getSessionCredentials(agentId, session.sessionId);
-        jwt = creds.jwt;
-        nkeySeed = creds.nkeySeed;
+      const embeddedCreds = session.viewerCredentials;
+      if (embeddedCreds?.jwt) {
+        jwt = embeddedCreds.jwt;
+        nkeySeed = embeddedCreds.nkeySeed;
         // Ordem: URL da sessão (painel) → URL do build do site (VITE_NATS_URL,
         // a mesma que o chat/dashboard usam) → derivada da própria origem.
-        natsUrl = resolveNatsWsUrl(creds.natsWssUrl ?? realtimeConfig.natsUrl);
-      } catch {
-        throw new Error('Falha ao obter credenciais de streaming.');
+        natsUrl = resolveNatsWsUrl(embeddedCreds.natsWssUrl ?? session.natsWssUrl ?? realtimeConfig.natsUrl);
+      } else {
+        try {
+          const creds = await remoteSessionsApi.getSessionCredentials(agentId, session.sessionId);
+          jwt = creds.jwt;
+          nkeySeed = creds.nkeySeed;
+          natsUrl = resolveNatsWsUrl(creds.natsWssUrl ?? realtimeConfig.natsUrl);
+        } catch {
+          throw new Error('Falha ao obter credenciais de streaming.');
+        }
       }
 
       // Aplica o modo HD/Manual à sessão recém-criada. Sem isso o agent inicia
@@ -949,7 +966,7 @@ export default function RemoteSession() {
       setSessions((prev) => ({ ...prev, [tab]: undefined }));
     }
     // Reseta o status de conexão do terminal ao encerrar a sessão.
-    if (tab === 'terminal') setTerminalConnected(false);
+    if (tab === 'terminal') setTerminalStatus({ natsConnected: false, ready: false });
     // Ao encerrar explicitamente, não há mais sessão presa — limpa o conflito.
     setSessionConflict(false);
   }, [agentId, sessions]);
@@ -995,15 +1012,21 @@ export default function RemoteSession() {
       let jwt: string | undefined;
       let nkeySeed: string | undefined;
       let natsUrl: string | undefined;
-      try {
-        const creds = await remoteSessionsApi.getSessionCredentials(agentId, session.sessionId);
-        jwt = creds.jwt;
-        nkeySeed = creds.nkeySeed;
-        // Ordem: URL da sessão (painel) → URL do build do site (VITE_NATS_URL,
-        // a mesma que o chat/dashboard usam) → derivada da própria origem.
-        natsUrl = resolveNatsWsUrl(creds.natsWssUrl ?? realtimeConfig.natsUrl);
-      } catch {
-        throw new Error('Falha ao obter credenciais de streaming.');
+      if (session.viewerCredentials?.jwt) {
+        jwt = session.viewerCredentials.jwt;
+        nkeySeed = session.viewerCredentials.nkeySeed;
+        natsUrl = resolveNatsWsUrl(session.viewerCredentials.natsWssUrl ?? session.natsWssUrl ?? realtimeConfig.natsUrl);
+      } else {
+        try {
+          const creds = await remoteSessionsApi.getSessionCredentials(agentId, session.sessionId);
+          jwt = creds.jwt;
+          nkeySeed = creds.nkeySeed;
+          // Ordem: URL da sessão (painel) → URL do build do site (VITE_NATS_URL,
+          // a mesma que o chat/dashboard usam) → derivada da própria origem.
+          natsUrl = resolveNatsWsUrl(creds.natsWssUrl ?? realtimeConfig.natsUrl);
+        } catch {
+          throw new Error('Falha ao obter credenciais de streaming.');
+        }
       }
       setShell(newShell);
       if (nextRunAs) setTerminalRunAs(nextRunAs);
@@ -1220,14 +1243,20 @@ export default function RemoteSession() {
       let jwt: string | undefined;
       let nkeySeed: string | undefined;
       let natsUrl: string | undefined;
-      try {
-        const creds = await remoteSessionsApi.getSessionCredentials(agentId, session.sessionId);
-        jwt = creds.jwt;
-        nkeySeed = creds.nkeySeed;
-        // Ordem: URL da sessão (painel) → URL do build do site (VITE_NATS_URL,
-        // a mesma que o chat/dashboard usam) → derivada da própria origem.
-        natsUrl = resolveNatsWsUrl(creds.natsWssUrl ?? realtimeConfig.natsUrl);
-      } catch { /* sem credenciais */ }
+      if (session.viewerCredentials?.jwt) {
+        jwt = session.viewerCredentials.jwt;
+        nkeySeed = session.viewerCredentials.nkeySeed;
+        natsUrl = resolveNatsWsUrl(session.viewerCredentials.natsWssUrl ?? session.natsWssUrl ?? realtimeConfig.natsUrl);
+      } else {
+        try {
+          const creds = await remoteSessionsApi.getSessionCredentials(agentId, session.sessionId);
+          jwt = creds.jwt;
+          nkeySeed = creds.nkeySeed;
+          // Ordem: URL da sessão (painel) → URL do build do site (VITE_NATS_URL,
+          // a mesma que o chat/dashboard usam) → derivada da própria origem.
+          natsUrl = resolveNatsWsUrl(creds.natsWssUrl ?? realtimeConfig.natsUrl);
+        } catch { /* sem credenciais */ }
+      }
       // Mantém o modo HD/Manual também após reiniciar a captura (troca de
       // monitor): a nova sessão nasce em auto e seria rebaixada sem isto.
       const applied = await applyQualityModeToSession(session.sessionId);
@@ -1733,7 +1762,7 @@ export default function RemoteSession() {
                   natsSubject={sessions.terminal.natsSubject}
                   natsUrl={sessions.terminal.natsUrl}
                   jwt={sessions.terminal.jwt}
-                  onConnectionChange={setTerminalConnected}
+                  onStatus={setTerminalStatus}
                   onShells={(shells) => setAvailableShells(shells)}
                   // Reconexão automática do WebSocket: busca credencial nova
                   // (o JWT do viewer tem TTL próprio) em vez de reusar a antiga.
@@ -1915,10 +1944,28 @@ export default function RemoteSession() {
               <option value="system">SYSTEM</option>
             </select>
             {shellSwitching && <span className="text-muted">trocar shell…</span>}
-            <span className={`inline-flex items-center gap-1 ${terminalConnected ? 'text-success' : 'text-danger'}`}>
-              <span className={`w-1.5 h-1.5 rounded-full ${terminalConnected ? 'bg-success' : 'bg-danger'}`} />
-              {terminalConnected ? 'Conectado' : 'Desconectado'}
-            </span>
+            {(() => {
+              // Verde só com o shell PRONTO (term.ready). NATS conectado sem
+              // ready = "Preparando console…" (a escada do ConPTY pode levar
+              // ~1,5 s em máquinas com AV). Antes o operador via "Conectado"
+              // com a tela vazia durante toda a espera.
+              const ready = terminalStatus.ready;
+              const connecting = terminalStatus.natsConnected && !ready;
+              const cls = ready ? 'text-success' : connecting ? 'text-warning' : 'text-danger';
+              const dot = ready ? 'bg-success' : connecting ? 'bg-warning' : 'bg-danger';
+              const label = ready ? 'Conectado' : connecting ? 'Preparando console…' : 'Desconectado';
+              const title = [
+                terminalStatus.backend ? `backend=${terminalStatus.backend}` : '',
+                terminalStatus.shellKind ? `shell=${terminalStatus.shellKind}` : '',
+                typeof terminalStatus.startupMs === 'number' ? `startup=${terminalStatus.startupMs}ms` : '',
+              ].filter(Boolean).join(' · ');
+              return (
+                <span className={`inline-flex items-center gap-1 ${cls}`} title={title || undefined}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${dot}`} />
+                  {label}
+                </span>
+              );
+            })()}
             <span className="mx-1 h-4 w-px bg-border" />
           </>
         )}
