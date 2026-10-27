@@ -1,9 +1,16 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
+import {
+    createNatsService,
+    type NatsCredentialsResponse,
+    type NatsService,
+} from '@/api/nats';
 
 interface UseFilesStreamOptions {
     natsSubject: string;
     natsUrl: string;
     jwt: string;
+    /** Seed NKey do viewer (credencial escopada da sessão). */
+    nkeySeed?: string;
 }
 
 interface UseFilesStreamReturn {
@@ -90,41 +97,22 @@ function bytesToBase64(bytes: Uint8Array): string {
 let _seq = 0;
 function nextReqId() { return `f${++_seq}`; }
 
-const CRLF = new Uint8Array([13, 10]);
-
-function appendBytes(left: Uint8Array<ArrayBufferLike>, right: Uint8Array<ArrayBufferLike>): Uint8Array<ArrayBufferLike> {
-    const result = new Uint8Array(left.length + right.length);
-    result.set(left);
-    result.set(right, left.length);
-    return result;
-}
-
-function findCrlf(data: Uint8Array<ArrayBufferLike>): number {
-    for (let i = 0; i <= data.length - CRLF.length; i++) {
-        if (data[i] === CRLF[0] && data[i + 1] === CRLF[1]) return i;
-    }
-    return -1;
-}
-
-const MAX_RECONNECT_ATTEMPTS = 5;
-const RECONNECT_DELAYS = [1000, 2000, 4000, 8000, 16000];
-
-export function useFilesStream({ natsSubject, natsUrl, jwt }: UseFilesStreamOptions): UseFilesStreamReturn {
+export function useFilesStream({ natsSubject, natsUrl, jwt, nkeySeed = '' }: UseFilesStreamOptions): UseFilesStreamReturn {
     const [isConnected, setIsConnected] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const wsRef = useRef<WebSocket | null>(null);
     const pendingRef = useRef<Map<string, { resolve: (r: FilesResponse) => void; reject: (e: Error) => void }>>(new Map());
     const readyCallbacksRef = useRef<Set<(info: FilesReadyInfo) => void>>(new Set());
     const progressCallbacksRef = useRef<Set<(info: FilesProgressInfo) => void>>(new Set());
-    const reconnectAttemptsRef = useRef(0);
-    const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const mountedRef = useRef(true);
     // Waiters resolvidos quando o handshake NATS completa (+OK): permite
     // enfileirar envios feitos antes do socket estar pronto em vez de falhar
     // com "WebSocket offline" (a lista nunca carregava).
     const readyWaitersRef = useRef<Array<{ resolve: () => void; reject: (e: Error) => void }>>([]);
 
-    // Normaliza UUIDs (remove hífens) para bater com o Agent (stripHyphens)
+    // Transporte nats.js (NatsService): o mesmo cliente comprovado no trace
+    // do servidor (Cloudflare → túnel → auth callout → entrega).
+    const serviceRef = useRef<NatsService | null>(null);
+    const jwtRef = useRef(jwt);
     const subj = natsSubject.replace(/-/g, '');
     const reqSubject = `${subj}.files.req`;
     const respSubject = `${subj}.files.resp`;
@@ -142,164 +130,91 @@ export function useFilesStream({ natsSubject, natsUrl, jwt }: UseFilesStreamOpti
         });
     }), []);
 
-    const connect = useCallback(() => {
-        if (!mountedRef.current || !subj || !natsUrl || !jwt) return;
-        try {
-            // FIX 2026-09-17: barra final no path (nginx 308 "/nats" -> "/nats/" e o
-            // browser nao segue redirect em WebSocket -> CloseEvent 1006).
-            const normalizedUrl = natsUrl && !natsUrl.endsWith('/') ? natsUrl + '/' : natsUrl;
-            const ws = new WebSocket(`${normalizedUrl}?access_token=${encodeURIComponent(jwt)}`);
-            ws.binaryType = 'arraybuffer';
-            wsRef.current = ws;
+    useEffect(() => { jwtRef.current = jwt; }, [jwt]);
 
-            let protocolBuffer: Uint8Array<ArrayBufferLike> = new Uint8Array();
-            let connectSent = false;
-            let authenticated = false;
+    // ── Transporte NatsService ──
+    useEffect(() => {
+        const subjectAllowList = [respSubject, readySubject, progressSubject];
+        const buildCreds = (token: string): NatsCredentialsResponse => ({
+            jwt: token,
+            nkeySeed,
+            publicKey: '',
+            expiresAtUtc: new Date(Date.now() + 60 * 60_000).toISOString(),
+            publishSubjects: [reqSubject],
+            subscribeSubjects: subjectAllowList,
+        });
+        const service = createNatsService({
+            url: natsUrl,
+            enabled: true,
+            authMode: 'jwt_credentials',
+            credentialsProvider: async () => buildCreds(jwtRef.current),
+            scopeMode: 'preserve',
+        });
+        serviceRef.current = service;
+        service.setPreSuppliedCredentials(buildCreds(jwt));
 
-            const sendProtocol = (cmd: string) => ws?.send(new TextEncoder().encode(`${cmd}\r\n`));
-
-            const processProtocol = () => {
-                const decoder = new TextDecoder();
-                while (mountedRef.current) {
-                    const lineEnd = findCrlf(protocolBuffer);
-                    if (lineEnd < 0) return;
-
-                    const line = decoder.decode(protocolBuffer.slice(0, lineEnd));
-                    const tokens = line.trim().split(/\s+/);
-
-                    if (tokens[0] === 'MSG') {
-                        const plI = tokens.length === 5 ? 4 : 3;
-                        const plN = Number.parseInt(tokens[plI] ?? '0', 10);
-                        if (!Number.isInteger(plN) || plN < 0) {
-                            setError(`NATS protocolo inválido: ${line}`);
-                            ws?.close(4000, 'Invalid MSG');
-                            return;
-                        }
-                        const ps = lineEnd + 2;
-                        const pe = ps + plN;
-                        if (protocolBuffer.length < pe + 2) return;
-
-                        const payload = decoder.decode(protocolBuffer.slice(ps, pe));
-                        protocolBuffer = protocolBuffer.slice(pe + 2);
-
-                        try {
-                            const parsed = JSON.parse(payload) as Record<string, unknown>;
-                            // files.ready — o agente notifica que o subscribe em files.req
-                            // está ativo (evita a race em que o primeiro list chega antes).
-                            if (parsed && typeof parsed === 'object' && 'status' in parsed && !('requestId' in parsed)) {
-                                readyCallbacksRef.current.forEach(cb => cb(parsed as unknown as FilesReadyInfo));
-                                continue;
-                            }
-                            // files.progress — progresso de copy/move/zip/unzip.
-                            if (parsed && typeof parsed === 'object' && 'loaded' in parsed && 'total' in parsed && 'requestId' in parsed) {
-                                progressCallbacksRef.current.forEach(cb => cb(parsed as unknown as FilesProgressInfo));
-                                continue;
-                            }
-                            const r = parsed as unknown as FilesResponse;
-                            // O requestId está no PAYLOAD JSON (não no header MSG).
-                            const rid = r.requestId;
-                            if (rid && pendingRef.current.has(rid)) {
-                                const pend = pendingRef.current.get(rid)!;
-                                pendingRef.current.delete(rid);
-                                pend.resolve(r);
-                            }
-                        } catch { /* payload não-JSON — ignora */ }
-                        continue;
-                    }
-
-                    protocolBuffer = protocolBuffer.slice(lineEnd + 2);
-
-                    if (tokens[0] === 'INFO') {
-                        sendProtocol(`CONNECT ${JSON.stringify({ lang: 'discovery-web', version: '1.0', protocol: 1, headers: true, verbose: true, auth_token: jwt })}`);
-                        connectSent = true;
-                        continue;
-                    }
-
-                    if (tokens[0] === '+OK') {
-                        if (connectSent && !authenticated) {
-                            authenticated = true;
-                            reconnectAttemptsRef.current = 0;
-                            setIsConnected(true);
-                            setError(null);
-                            const waiters = readyWaitersRef.current;
-                            readyWaitersRef.current = [];
-                            waiters.forEach((w) => w.resolve());
-                            sendProtocol(`SUB ${respSubject} 1`);
-                            sendProtocol(`SUB ${readySubject} 2`);
-                            sendProtocol(`SUB ${progressSubject} 3`);
-                        }
-                        continue;
-                    }
-
-                    if (tokens[0] === 'PING') { sendProtocol('PONG'); continue; }
-                    if (tokens[0] === '-ERR') {
-                        setError(`NATS: ${line.replace(/^-ERR\s*/i, '').replace(/^['"]|['"]$/g, '')}`);
-                        ws?.close(4000, 'NATS protocol error');
-                        return;
-                    }
-                }
-            };
-
-            ws.onopen = () => { /* aguarda INFO */ };
-
-            ws.onmessage = (event) => {
-                if (!mountedRef.current) return;
-                const bytes = typeof event.data === 'string'
-                    ? new Uint8Array(new TextEncoder().encode(event.data))
-                    : event.data instanceof ArrayBuffer
-                        ? new Uint8Array(event.data)
-                        : new Uint8Array();
-                if (bytes.length === 0) return;
-                protocolBuffer = appendBytes(protocolBuffer, bytes);
-                processProtocol();
-            };
-
-            ws.onerror = () => { /* tratado no onclose */ };
-
-            ws.onclose = () => {
-                if (!mountedRef.current) return;
+        const offState = service.onConnectionStateChange((state) => {
+            if (!mountedRef.current) return;
+            if (state === 'connected') {
+                setIsConnected(true);
+                setError(null);
+                const waiters = readyWaitersRef.current;
+                readyWaitersRef.current = [];
+                waiters.forEach((w) => w.resolve());
+            } else if (state === 'auth_error') {
+                setError('Autenticação NATS expirada ou recusada.');
                 setIsConnected(false);
                 const lost = readyWaitersRef.current;
                 readyWaitersRef.current = [];
-                lost.forEach((w) => w.reject(new Error('Conexão NATS perdida')));
-                // Rejeita pendentes para não deixar promises presas
-                pendingRef.current.forEach((pend) => pend.reject(new Error('Conexão NATS perdida')));
-                pendingRef.current.clear();
-                if (reconnectAttemptsRef.current < MAX_RECONNECT_ATTEMPTS) {
-                    const delay = RECONNECT_DELAYS[reconnectAttemptsRef.current] ?? RECONNECT_DELAYS[RECONNECT_DELAYS.length - 1];
-                    reconnectTimerRef.current = setTimeout(() => {
-                        reconnectAttemptsRef.current++;
-                        connect();
-                    }, delay);
-                } else {
-                    setError('Conexão NATS perdida — verifique o servidor.');
-                }
-            };
-        } catch (err) {
-            setError(err instanceof Error ? err.message : 'Falha ao conectar');
-            reconnectTimerRef.current = setTimeout(() => connect(), 5000);
-        }
-    }, [natsUrl, jwt, subj, respSubject, readySubject]);
+                lost.forEach((w) => w.reject(new Error('Autenticação NATS falhou')));
+            } else if (state === 'disconnected') {
+                setIsConnected(false);
+            }
+        });
 
-    useEffect(() => {
-        mountedRef.current = true;
-        reconnectAttemptsRef.current = 0;
-        connect();
-        return () => {
-            mountedRef.current = false;
-            if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
-            if (wsRef.current) wsRef.current.close();
+        const handleResp = (parsed: Record<string, unknown>) => {
+            const r = parsed as unknown as FilesResponse;
+            const rid = r.requestId;
+            if (rid && pendingRef.current.has(rid)) {
+                const pend = pendingRef.current.get(rid)!;
+                pendingRef.current.delete(rid);
+                pend.resolve(r);
+            }
         };
-    }, [connect]);
+        const handleReady = (parsed: Record<string, unknown>) => {
+            readyCallbacksRef.current.forEach(cb => cb(parsed as unknown as FilesReadyInfo));
+        };
+        const handleProgress = (parsed: Record<string, unknown>) => {
+            progressCallbacksRef.current.forEach(cb => cb(parsed as unknown as FilesProgressInfo));
+        };
+
+        void (async () => {
+            await service.connect();
+            if (!mountedRef.current) return;
+            await service.subscribe(respSubject, handleResp as never);
+            await service.subscribe(readySubject, handleReady as never);
+            await service.subscribe(progressSubject, handleProgress as never);
+        })();
+
+        return () => {
+            offState();
+            if (serviceRef.current === service) serviceRef.current = null;
+            void service.dispose().catch(() => { /* teardown best-effort */ });
+        };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [natsUrl, jwt, nkeySeed, subj, reqSubject, respSubject, readySubject, progressSubject]);
+
+
 
     const sendRequest = useCallback(async (action: string, path: string, data?: Uint8Array, extra?: Record<string, unknown>): Promise<FilesResponse> => {
-        // Aguarda o handshake NATS em vez de falhar quando o socket ainda nao
-        // abriu (load disparado no mount).
-        if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+        // Aguarda o handshake NATS em vez de falhar quando o service ainda
+        // não conectou (load disparado no mount).
+        if (!serviceRef.current || !serviceRef.current.isConnected()) {
             await waitForReady();
         }
         return new Promise((resolve, reject) => {
-            if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) { reject(new Error('WebSocket offline')); return; }
+            const service = serviceRef.current;
+            if (!service || !service.isConnected()) { reject(new Error('NATS offline')); return; }
             const rid = nextReqId();
             // Timeout por request: o timer é limpo ao resolver/rejeitar, evitando
             // acúmulo de timers órfãos em transferências com milhares de chunks.
@@ -323,8 +238,10 @@ export function useFilesStream({ natsSubject, natsUrl, jwt }: UseFilesStreamOpti
                 ...(data && data.length > 0 ? { data: bytesToBase64(data) } : {}),
                 ...(extra ?? {}),
             });
-            const bytes = new TextEncoder().encode(pl);
-            wsRef.current.send(`PUB ${reqSubject} ${bytes.length}\r\n${pl}\r\n`);
+            void service.publish(reqSubject, JSON.parse(pl)).catch((e: Error) => {
+                pendingRef.current.delete(rid);
+                reject(e);
+            });
         });
     }, [reqSubject, waitForReady]);
 
