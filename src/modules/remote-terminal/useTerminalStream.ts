@@ -1,14 +1,12 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
 import type { CompletionRequest, CompletionResponse } from './terminalInput';
 import {
-    acquire,
-    publish,
-    release,
-    sub,
-    type PoolErrorInfo,
-    type PoolStateEvent,
-    type PooledNatsSocket,
-} from '../remote-nats/natsSocketPool';
+    createNatsService,
+    type DashboardEvent,
+    type NatsConnectionState,
+    type NatsCredentialsResponse,
+    type NatsService,
+} from '@/api/nats';
 
 interface UseTerminalStreamOptions {
     natsSubject: string;
@@ -136,11 +134,6 @@ const MAX_PENDING_INPUT_BYTES = 1 << 20; // 1 MB de payloads prontos
 // 32 KB de base64 (~24 KB de texto) e antes o paste grande era engolido.
 const MAX_INPUT_CHUNK_BYTES = 16 * 1024;
 
-// Orçamento de reconexão automática: base/limite do backoff exponencial (o
-// pool aplica o jitter) e o número de tentativas antes de desistir.
-const RECONNECT_BASE_DELAY_MS = 1000;
-const RECONNECT_MAX_DELAY_MS = 16000;
-const MAX_RECONNECT_ATTEMPTS = 5;
 
 /**
  * Fatiamento por limite de BYTES sem quebrar runa UTF-8: itera por code point
@@ -198,7 +191,7 @@ export function useTerminalStream({
 }: UseTerminalStreamOptions): UseTerminalStreamReturn {
     const [isConnected, setIsConnected] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const socketRef = useRef<PooledNatsSocket | null>(null);
+    const serviceRef = useRef<NatsService | null>(null);
     const outputCallbacksRef = useRef<Set<(data: string) => void>>(new Set());
     const exitCallbacksRef = useRef<Set<(reason: string) => void>>(new Set());
     const readyCallbacksRef = useRef<Set<(info: TerminalReadyInfo) => void>>(new Set());
@@ -220,7 +213,7 @@ export function useTerminalStream({
     const lastDimsRef = useRef<{ cols: number; rows: number } | null>(null);
 
     // Fila de input (FIFO limitada) e último resize (coalescido). Guardamos o
-    // PAYLOAD JSON, não o frame: o framing PUB é responsabilidade do pool.
+    // PAYLOAD JSON: o framing PUB é responsabilidade do cliente NATS.
     const pendingInputRef = useRef<string[]>([]);
     const pendingInputBytesRef = useRef(0);
     const pendingResizeRef = useRef<{ cols: number; rows: number } | null>(null);
@@ -248,222 +241,220 @@ export function useTerminalStream({
         let mounted = true;
         let utf8Stream = new TextDecoder('utf-8');
 
-        const handleTermOut = (payload: string) => {
-            try {
-                const parsed = JSON.parse(payload);
-                if (!parsed || typeof parsed !== 'object') {
-                    outputCallbacksRef.current.forEach(cb => cb(payload));
-                    return;
-                }
-                if (parsed.exit) {
-                    exitCallbacksRef.current.forEach(cb => cb(String(parsed.reason ?? 'shell encerrado')));
-                    return;
-                }
-                if (parsed.error) {
-                    errorCallbacksRef.current.forEach(cb => cb({
-                        code: String(parsed.code ?? 'terminal_error'),
-                        reason: String(parsed.reason ?? 'erro no terminal'),
-                    }));
-                    return;
-                }
-                if (parsed.reset) {
-                    // NÃO mexe em lastSeqRef: o viewer só pode assumir
-                    // continuidade até o último seq que ELE recebeu. O agent
-                    // manda apenas `requestedFrom` (a posição que não pôde
-                    // cobrir); adotar outro valor pularia um frame.
-                    resetCallbacksRef.current.forEach(cb => cb());
-                    return;
-                }
-                if (typeof parsed.data === 'string') {
-                    if (typeof parsed.seq === 'number') lastSeqRef.current = parsed.seq;
-                    try {
-                        const decoded = utf8Stream.decode(base64ToBytes(parsed.data), { stream: true });
-                        outputCallbacksRef.current.forEach(cb => cb(decoded));
-                    } catch {
-                        outputCallbacksRef.current.forEach(cb => cb(parsed.data));
-                    }
-                    return;
-                }
-                if (parsed.shells && Array.isArray(parsed.shells)) {
-                    // term.ready — shells disponíveis + console pronto
-                    readyCallbacksRef.current.forEach(cb => cb(parsed as TerminalReadyInfo));
-                }
-            } catch {
-                outputCallbacksRef.current.forEach(cb => cb(payload));
+        const handleTermOut = (parsed: Record<string, unknown>) => {
+            if (!parsed || typeof parsed !== 'object') return;
+            if (parsed.exit) {
+                exitCallbacksRef.current.forEach(cb => cb(String(parsed.reason ?? 'shell encerrado')));
+                return;
             }
-        };
-
-        const handleSessionEvent = (payload: string) => {
-            try {
-                const ev = JSON.parse(payload);
-                if (!ev || typeof ev !== 'object') return;
-                if (ev.eventType === 'error') {
-                    // .event era publicado pelo agente SEM nenhum assinante:
-                    // falha de start/erro de sessão ficava invisível.
-                    errorCallbacksRef.current.forEach(cb => cb({
-                        code: String((ev.data && ev.data.code) || 'session_error'),
-                        reason: String((ev.data && ev.data.error) ?? 'erro na sessão remota'),
-                    }));
-                } else if (ev.eventType === 'closed') {
-                    exitCallbacksRef.current.forEach(cb => cb(String((ev.data && ev.data.reason) ?? 'sessão encerrada')));
-                }
-            } catch { /* payload de evento inválido — ignora */ }
-        };
-
-        const handleStats = (payload: string) => {
-            try {
-                const parsed = JSON.parse(payload);
-                if (!parsed || typeof parsed !== 'object') return;
-                statsCallbacksRef.current.forEach(cb => cb(parsed as TerminalStatsInfo));
-            } catch { /* stats inválido — ignora (telemetria é best-effort) */ }
-        };
-
-        const handleCompletionRes = (payload: string) => {
-            try {
-                const parsed = JSON.parse(payload);
-                if (!parsed || typeof parsed !== 'object') return;
-                if (typeof parsed.reqId !== 'string') return;
-                const res: CompletionResponse = {
-                    reqId: parsed.reqId,
-                    ok: Boolean(parsed.ok),
-                    error: typeof parsed.error === 'string' ? parsed.error : undefined,
-                    replacementIndex: Number.isFinite(parsed.replacementIndex) ? Number(parsed.replacementIndex) : 0,
-                    replacementLength: Number.isFinite(parsed.replacementLength) ? Number(parsed.replacementLength) : 0,
-                    matches: Array.isArray(parsed.matches)
-                        ? parsed.matches.filter((m: unknown) => !!m && typeof m === 'object')
-                        : [],
-                    totalCount: Number.isFinite(parsed.totalCount) ? Number(parsed.totalCount) : 0,
-                    page: Number.isFinite(parsed.page) ? Number(parsed.page) : 0,
-                    pageSize: Number.isFinite(parsed.pageSize) ? Number(parsed.pageSize) : 0,
-                    hasMore: Boolean(parsed.hasMore),
-                };
-                completionCallbacksRef.current.forEach(cb => cb(res));
-            } catch { /* completion.res inválido — ignora */ }
-        };
-
-        const applyPoolError = (info: PoolErrorInfo) => {
-            switch (info.code) {
-                case 'nats_error':
-                    setError(`NATS: ${info.reason}`);
-                    reportError({ code: 'nats_error', reason: info.reason });
-                    return;
-                case 'protocol_error':
-                    setError(`NATS protocolo inválido: ${info.reason}`);
-                    return;
-                case 'protocol_overflow':
-                    setError('Resposta NATS excessiva — conexão encerrada.');
-                    reportError({
-                        code: 'protocol_overflow',
-                        reason: info.reason,
-                    });
-                    return;
-                case 'socket_error':
-                    setError(info.reason);
-                    return;
-                default:
-                    reportError({ code: info.code, reason: info.reason });
+            if (parsed.error) {
+                errorCallbacksRef.current.forEach(cb => cb({
+                    code: String(parsed.code ?? 'terminal_error'),
+                    reason: String(parsed.reason ?? 'erro no terminal'),
+                }));
+                return;
             }
-        };
-
-        // Handshake após cada +OK (inclusive reconexão): SUBs são refeitos pelo
-        // pool ANTES deste evento, então o hello pode publicar na hora.
-        const sendHello = () => {
-            const socket = socketRef.current;
-            if (!socket || !socket.isOpen()) return;
-            const hello: Record<string, unknown> = {
-                hello: true,
-                lastSeq: lastSeqRef.current,
-            };
-            if (lastDimsRef.current) {
-                hello.cols = lastDimsRef.current.cols;
-                hello.rows = lastDimsRef.current.rows;
+            if (parsed.reset) {
+                // NAO mexe em lastSeqRef: o viewer so pode assumir
+                // continuidade ate o ultimo seq que ELE recebeu. O agent
+                // manda apenas `requestedFrom`; adotar outro valor pularia frame.
+                resetCallbacksRef.current.forEach(cb => cb());
+                return;
             }
-            publish(socket, inSubject, JSON.stringify(hello));
-            // Drena o resize pendente e a fila de input.
-            const resize = pendingResizeRef.current;
-            if (resize) {
-                pendingResizeRef.current = null;
-                publish(socket, inSubject, JSON.stringify(resize));
-            }
-            const pending = pendingInputRef.current;
-            pendingInputRef.current = [];
-            pendingInputBytesRef.current = 0;
-            for (const payload of pending) publish(socket, inSubject, payload);
-        };
-
-        const onPoolState = (event: PoolStateEvent) => {
-            if (!mounted) return;
-            switch (event.state) {
-                case 'open':
-                    // Conexão nova (o pool pode ter reconectado): decoder UTF-8
-                    // também novo, sem estado de stream da conexão anterior.
-                    utf8Stream = new TextDecoder('utf-8');
-                    setIsConnected(true);
-                    setError(null);
-                    sendHello();
-                    return;
-                case 'error':
-                    if (event.error) applyPoolError(event.error);
-                    return;
-                case 'reconnecting':
-                case 'connecting':
-                    setIsConnected(false);
-                    return;
-                case 'closed':
-                    setIsConnected(false);
-                    if (event.reason === 'retries_exhausted') {
-                        setError('Conexão NATS perdida — verifique o servidor.');
-                    }
-                    return;
-                default:
-                    return;
-            }
-        };
-
-        const socket = acquire({
-            url: natsUrl,
-            jwt: jwtRef.current,
-            maxReconnectAttempts: MAX_RECONNECT_ATTEMPTS,
-            reconnectBaseDelayMs: RECONNECT_BASE_DELAY_MS,
-            reconnectMaxDelayMs: RECONNECT_MAX_DELAY_MS,
-            // O pool chama isto antes de cada tentativa automática. Lemos o ref
-            // (e não a prop) para não congelar o callback da primeira render.
-            getFreshCredentials: async () => {
-                const refresh = freshCredsRef.current;
-                if (!refresh) return jwtRef.current;
+            if (typeof parsed.data === 'string') {
+                if (typeof parsed.seq === 'number') lastSeqRef.current = parsed.seq;
                 try {
-                    const next = await refresh();
-                    if (next) jwtRef.current = next;
+                    const decoded = utf8Stream.decode(base64ToBytes(parsed.data), { stream: true });
+                    outputCallbacksRef.current.forEach(cb => cb(decoded));
                 } catch {
-                    // melhor esforço: tenta com o JWT atual
+                    outputCallbacksRef.current.forEach(cb => cb(String(parsed.data)));
                 }
-                return jwtRef.current;
-            },
-        });
-        socketRef.current = socket;
-
-        const offState = socket.onState(onPoolState);
-
-        const unsubscribers = [
-            sub(socket, outSubject, handleTermOut),
-            sub(socket, readySubject, handleTermOut),
-            sub(socket, eventSubject, handleSessionEvent),
-            sub(socket, statsSubject, handleStats),
-            sub(socket, completionResSubject, handleCompletionRes),
-        ];
-
-        // Conexão JÁ aberta por outra instância (pool compartilhado): o evento
-        // 'open' aconteceu antes deste subscribe, então repetimos o handshake.
-        if (socket.isOpen()) onPoolState({ state: 'open' });
-
-        return () => {
-            mounted = false;
-            offState();
-            for (const off of unsubscribers) off();
-            if (socketRef.current === socket) socketRef.current = null;
-            release(socket);
+                return;
+            }
+            if (parsed.shells && Array.isArray(parsed.shells)) {
+                // term.ready — shells disponiveis + console pronto
+                readyCallbacksRef.current.forEach(cb => cb(parsed as unknown as TerminalReadyInfo));
+            }
         };
-    }, [
+
+        const handleSessionEvent = (parsed: Record<string, unknown>) => {
+            if (!parsed || typeof parsed !== 'object') return;
+            const data = (parsed.data ?? {}) as Record<string, unknown>;
+            if (parsed.eventType === 'error') {
+                // .event era publicado pelo agente SEM nenhum assinante:
+                // falha de start/erro de sessao ficava invisivel.
+                errorCallbacksRef.current.forEach(cb => cb({
+                    code: String(data.code ?? 'session_error'),
+                    reason: String(data.error ?? 'erro na sessao remota'),
+                }));
+            } else if (parsed.eventType === 'closed') {
+                exitCallbacksRef.current.forEach(cb => cb(String(data.reason ?? 'sessao encerrada')));
+            }
+        };
+
+        const handleStats = (parsed: Record<string, unknown>) => {
+            if (!parsed || typeof parsed !== 'object') return;
+            statsCallbacksRef.current.forEach(cb => cb(parsed as unknown as TerminalStatsInfo));
+        };
+
+        const handleCompletionRes = (parsed: Record<string, unknown>) => {
+            if (!parsed || typeof parsed !== 'object') return;
+            if (typeof parsed.reqId !== 'string') return;
+            const res: CompletionResponse = {
+                reqId: parsed.reqId,
+                ok: Boolean(parsed.ok),
+                error: typeof parsed.error === 'string' ? parsed.error : undefined,
+                replacementIndex: Number.isFinite(parsed.replacementIndex) ? Number(parsed.replacementIndex) : 0,
+                replacementLength: Number.isFinite(parsed.replacementLength) ? Number(parsed.replacementLength) : 0,
+                matches: Array.isArray(parsed.matches) ? (parsed.matches.filter((m: unknown) => !!m && typeof m === 'object') as CompletionResponse['matches']) : [],
+                totalCount: Number.isFinite(parsed.totalCount) ? Number(parsed.totalCount) : 0,
+                page: Number.isFinite(parsed.page) ? Number(parsed.page) : 0,
+                pageSize: Number.isFinite(parsed.pageSize) ? Number(parsed.pageSize) : 0,
+                hasMore: Boolean(parsed.hasMore),
+            };
+            completionCallbacksRef.current.forEach(cb => cb(res));
+        };
+
+    // allow-list CLIENT-SIDE (o NatsService bloqueia subscribe fora dela; o
+    // servidor aplica a propria via JWT reemitido).
+    const subjectAllowList = [outSubject, readySubject, statsSubject, eventSubject, completionResSubject];
+
+    const buildCreds = (token: string): NatsCredentialsResponse => ({
+        jwt: token,
+        nkeySeed: '',
+        publicKey: '',
+        expiresAtUtc: new Date(Date.now() + 60 * 60_000).toISOString(),
+        publishSubjects: [],
+        subscribeSubjects: subjectAllowList,
+    });
+
+    const service = createNatsService({
+        url: natsUrl,
+        enabled: true,
+        authMode: 'jwt_credentials',
+        credentialsProvider: async () => {
+            // Reconexao automatica do service: busca JWT FRESCO (o do viewer
+            // tem TTL proprio) em vez de reusar o expirado.
+            const refresh = freshCredsRef.current;
+            const token = refresh ? await refresh() : jwtRef.current;
+            jwtRef.current = token;
+            return buildCreds(token);
+        },
+        scopeMode: 'preserve',
+    });
+    serviceRef.current = service;
+
+    // Handshake do console: hello com lastSeq (replay) + drenagem das filas
+    // de input/resize. Chamado a cada 'connected' (mount e reconexoes).
+    const sendHello = () => {
+        const svc = serviceRef.current;
+        if (!svc || !svc.isConnected()) return;
+        const hello: Record<string, unknown> = {
+            hello: true,
+            lastSeq: lastSeqRef.current,
+        };
+        if (lastDimsRef.current) {
+            hello.cols = lastDimsRef.current.cols;
+            hello.rows = lastDimsRef.current.rows;
+        }
+        void svc.publish(inSubject, hello).catch(() => { /* best-effort */ });
+        const resize = pendingResizeRef.current;
+        if (resize) {
+            pendingResizeRef.current = null;
+            void svc.publish(inSubject, resize).catch(() => { /* best-effort */ });
+        }
+        const pending = pendingInputRef.current;
+        pendingInputRef.current = [];
+        pendingInputBytesRef.current = 0;
+        for (const payload of pending) {
+            void svc.publish(inSubject, JSON.parse(payload)).catch(() => { /* best-effort */ });
+        }
+    };
+    // Handshake (hello + drenagem das filas) a cada 'connected' — inclusive
+    // reconexoes internas do service (os SUBs sao restaurados antes do
+    // 'connected' e o agente reenvia o que faltou via lastSeq).
+    const onState = (state: NatsConnectionState) => {
+        if (!mounted) return;
+        switch (state) {
+            case 'connected': {
+                utf8Stream = new TextDecoder('utf-8');
+                setIsConnected(true);
+                setError(null);
+                sendHello();
+                return;
+            }
+            case 'auth_error': {
+                setIsConnected(false);
+                reportError({ code: 'nats_error', reason: 'Autenticacao NATS expirada ou recusada.' });
+                return;
+            }
+            case 'reconnecting':
+            case 'connecting':
+            case 'disconnected':
+                setIsConnected(false);
+                return;
+            default:
+                return;
+        }
+    };
+    const offState = service.onConnectionStateChange(onState);
+
+    // Falha de auth (JWT expirado no meio da sessao): busca credencial fresca
+    // e reconecta — em vez de auth_error terminal.
+    const offAuth = service.onAuthError(() => {
+        if (!mounted) return;
+        void (async () => {
+            try {
+                const refresh = freshCredsRef.current;
+                const token = refresh ? await refresh() : jwtRef.current;
+                jwtRef.current = token;
+                service.setPreSuppliedCredentials(buildCreds(token));
+                await service.forceReconnect();
+            } catch {
+                // sem credencial fresca: o estado auth_error permanece
+            }
+        })();
+    });
+
+    // Assinaturas registradas ANTES do connect(): o connect() restaura as
+    // NATS subscriptions a partir dos listeners e so depois emite
+    // 'connected' — nenhum frame inicial e perdido.
+    // Os handlers do terminal recebem o payload JÁ parseado pelo NatsService
+    // (JSON.parse em api/nats.ts) — o cast alinha com a assinatura do serviço.
+    type NatsHandler = (event: DashboardEvent) => void;
+    const subjectHandlers: Array<[string, NatsHandler]> = [
+        [outSubject, handleTermOut as unknown as NatsHandler],
+        [readySubject, handleTermOut as unknown as NatsHandler],
+        [eventSubject, handleSessionEvent as unknown as NatsHandler],
+        [statsSubject, handleStats as unknown as NatsHandler],
+        [completionResSubject, handleCompletionRes as unknown as NatsHandler],
+    ];
+    for (const [subject, handler] of subjectHandlers) {
+        service.subscribe(subject, handler, { connectIfNeeded: false }).catch(() => {
+            // o connect() subsequente restaura as assinaturas via restoreSubscriptions
+        });
+    }
+
+    void (async () => {
+        const ok = await service.connect();
+        if (!mounted) return;
+        if (!ok) {
+            setIsConnected(false);
+            setError('Conexao NATS perdida — verifique o servidor.');
+        }
+    })();
+
+    return () => {
+        mounted = false;
+        offState();
+        offAuth();
+        for (const [subject, handler] of subjectHandlers) {
+            try { service.unsubscribe(subject, handler); } catch { /* teardown best-effort */ }
+        }
+        if (serviceRef.current === service) serviceRef.current = null;
+        void service.dispose().catch(() => { /* teardown best-effort */ });
+    };
+}, [
         natsUrl,
         subj,
         inSubject,
@@ -475,6 +466,7 @@ export function useTerminalStream({
         reportError,
     ]);
 
+
     // Reconexão IMPERATIVA (botão "Reconectar"): sem remontar o componente, para
     // não perder o buffer do xterm nem o lastSeq. O pool invalida a geração
     // atual e abre outra conexão mantendo as assinaturas — o onclose da antiga
@@ -483,28 +475,43 @@ export function useTerminalStream({
     useEffect(() => {
         if (reconnectTokenRef.current === reconnectToken) return;
         reconnectTokenRef.current = reconnectToken;
-        const socket = socketRef.current;
-        if (!socket) return;
+        const service = serviceRef.current;
+        if (!service) return;
         setIsConnected(false);
-        // Passa o JWT ATUAL do ref: o reconnect manual NÃO roda
-        // getFreshCredentials (só o automático roda). Quando o pai refaz o
-        // fetch das credenciais antes de bumpar reconnectToken (botão
-        // Reconectar), o jwt prop chega aqui via jwtRef — sem isto a
-        // reconexão manual reusava um JWT expirado e caía em -ERR.
-        socket.reconnect(jwtRef.current);
-        // reconnect() muda a identidade do socket no pool; o ref do hook
-        // continua apontando para a MESMA instância (assinaturas preservadas).
+        // Busca SEMPRE credencial fresca (o JWT do viewer tem TTL próprio) e
+        // reconecta: as assinaturas são restauradas pelo connect() a partir
+        // dos listeners, preservando o xterm e o lastSeq do replay.
+        void (async () => {
+            try {
+                const refresh = freshCredsRef.current;
+                const token = refresh ? await refresh() : jwtRef.current;
+                jwtRef.current = token;
+                service.setPreSuppliedCredentials({
+                    jwt: token,
+                    nkeySeed: '',
+                    publicKey: '',
+                    expiresAtUtc: new Date(Date.now() + 60 * 60_000).toISOString(),
+                    publishSubjects: [],
+                    subscribeSubjects: [],
+                });
+                await service.forceReconnect();
+            } catch {
+                // sem credencial fresca: o reconnect automático segue
+            }
+        })();
     }, [reconnectToken]);
 
     const sendData = useCallback((data: string) => {
-        const socket = socketRef.current;
-        const open = !!socket && socket.isOpen();
+        const service = serviceRef.current;
+        const open = !!service && service.isConnected();
         // Paste grande é fatiado: cada PUB fica abaixo do limite do agente.
         const payloads = chunkUtf8(data).map(
             (part) => JSON.stringify({ data: toBase64(part) }),
         );
-        if (open && socket) {
-            for (const payload of payloads) publish(socket, inSubject, payload);
+        if (open && service) {
+            for (const payload of payloads) {
+                void service.publish(inSubject, JSON.parse(payload)).catch(() => { /* best-effort */ });
+            }
             return;
         }
         // Offline: ou o input INTEIRO cabe na fila, ou nada é enviado — um
@@ -535,9 +542,9 @@ export function useTerminalStream({
         // envenenaria o ConPTY e as dimensões do hello (lastDimsRef).
         if (cols <= 0 || rows <= 0) return;
         lastDimsRef.current = { cols, rows };
-        const socket = socketRef.current;
-        if (socket && socket.isOpen()) {
-            publish(socket, inSubject, JSON.stringify({ cols, rows }));
+        const service = serviceRef.current;
+        if (service && service.isConnected()) {
+            void service.publish(inSubject, { cols, rows }).catch(() => { /* best-effort */ });
         } else {
             pendingResizeRef.current = { cols, rows };
         }
@@ -546,9 +553,9 @@ export function useTerminalStream({
     // Publica 'completion.req' (C). Sem socket autenticado não há resposta
     // possível: descarta em silêncio (o popup simplesmente não abre).
     const sendCompletionRequest = useCallback((req: CompletionRequest) => {
-        const socket = socketRef.current;
-        if (!socket || !socket.isOpen()) return;
-        publish(socket, completionReqSubject, JSON.stringify(req));
+        const service = serviceRef.current;
+        if (!service || !service.isConnected()) return;
+        void service.publish(completionReqSubject, { ...req }).catch(() => { /* best-effort */ });
     }, [completionReqSubject]);
 
     const onOutput = useCallback((callback: (data: string) => void) => {

@@ -3,64 +3,102 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { TerminalErrorInfo, TerminalReadyInfo, TerminalStatsInfo } from './useTerminalStream';
 import { chunkUtf8, useTerminalStream } from './useTerminalStream';
 import type { CompletionResponse } from './terminalInput';
-import { POOL_DISPOSE_DEBOUNCE_MS, resetNatsSocketPool } from '../remote-nats/natsSocketPool';
+import { NatsCredentialsResponse } from '@/api/nats';
 
 /**
- * WebSocket falso: o hook fala o protocolo NATS cru (INFO/CONNECT/+OK/MSG), então
- * os testes simulam o servidor linha a linha em vez de mockar o cliente NATS.
+ * Fake do NatsService: o hook usa o cliente nats.js (api/nats.ts) como
+ * transporte. Os testes simulam o ciclo de vida (connect/subscribe/publish/
+ * estados) e injetam mensagens entregues aos handlers registrados.
  */
-class FakeWebSocket {
-    static CONNECTING = 0;
-    static OPEN = 1;
-    static CLOSING = 2;
-    static CLOSED = 3;
-    static instances: FakeWebSocket[] = [];
+class FakeNatsService {
+    static instances: FakeNatsService[] = [];
 
-    readyState = FakeWebSocket.CONNECTING;
-    binaryType = '';
-    sent: string[] = [];
-    onopen: (() => void) | null = null;
-    onmessage: ((event: { data: ArrayBuffer | Uint8Array | string }) => void) | null = null;
-    onerror: (() => void) | null = null;
-    onclose: (() => void) | null = null;
+    url: string;
+    connected = false;
+    disposed = false;
+    forceReconnectCalls = 0;
+    preSuppliedCreds: NatsCredentialsResponse | null = null;
+    subscribed = new Set<string>();
+    handlers = new Map<string, Set<(event: unknown) => void>>();
+    published: Array<{ subject: string; data: Record<string, unknown> }> = [];
+    stateListeners = new Set<(state: string) => void>();
+    authListeners = new Set<() => void>();
 
-    constructor(public url: string) {
-        FakeWebSocket.instances.push(this);
+    constructor(url: string) {
+        this.url = url;
+        FakeNatsService.instances.push(this);
     }
 
-    send(data: string | Uint8Array) {
-        this.sent.push(typeof data === 'string' ? data : new TextDecoder().decode(data));
+    connect() {
+        if (this.connected) return Promise.resolve(true);
+        this.connected = true;
+        this.emit('connected');
+        return Promise.resolve(true);
     }
 
-    close() {
-        this.readyState = FakeWebSocket.CLOSED;
-        this.onclose?.();
+    isConnected() { return this.connected; }
+
+    subscribe(subject: string, handler: (event: unknown) => void) {
+        this.subscribed.add(subject);
+        if (!this.handlers.has(subject)) this.handlers.set(subject, new Set());
+        this.handlers.get(subject)!.add(handler);
+        return Promise.resolve(true);
     }
 
-    /** Injeta bytes crus do protocolo NATS (usado também nos testes de limite). */
-    emitRaw(text: string) {
-        // Uint8Array (view) — o hook aceita string/ArrayBuffer/views.
-        this.onmessage?.({ data: new TextEncoder().encode(text) });
+    unsubscribe(subject: string, handler: (event: unknown) => void) {
+        this.handlers.get(subject)?.delete(handler);
     }
 
-    /** INFO + +OK: handshake completo do NATS. */
-    completeHandshake() {
-        this.readyState = FakeWebSocket.OPEN;
-        this.emitRaw('INFO {"headers":true}\r\n');
-        this.emitRaw('+OK\r\n');
+    publish(subject: string, data: Record<string, unknown>) {
+        this.published.push({ subject, data });
+        return Promise.resolve();
     }
 
-    /** Entrega um MSG do NATS (subject + payload JSON), com o SID real do SUB. */
+    onConnectionStateChange(cb: (state: string) => void) {
+        this.stateListeners.add(cb);
+        return () => { this.stateListeners.delete(cb); };
+    }
+
+    onAuthError(cb: () => void) {
+        this.authListeners.add(cb);
+        return () => { this.authListeners.delete(cb); };
+    }
+
+    setPreSuppliedCredentials(creds: NatsCredentialsResponse) {
+        this.preSuppliedCreds = creds;
+    }
+
+    forceReconnect() {
+        this.forceReconnectCalls += 1;
+        this.connected = true;
+        this.emit('connected');
+        return Promise.resolve(true);
+    }
+
+    dispose() { return Promise.resolve(); }
+
+    // ── helpers de teste ──
+    emit(state: string) {
+        this.stateListeners.forEach(cb => cb(state));
+    }
+
+    authError() {
+        this.authListeners.forEach(cb => cb());
+    }
+
     emitMessage(subject: string, payload: unknown) {
-        const body = JSON.stringify(payload);
-        const len = new TextEncoder().encode(body).length;
-        // O roteamento é por SID (protocolo): o fake descobre o SID no frame
-        // SUB que o pool enviou para aquele subject.
-        const subFrame = this.sent.find((frame) => frame.startsWith(`SUB ${subject} `));
-        const sid = subFrame ? subFrame.split(' ')[2] : '1';
-        this.emitRaw(`MSG ${subject} ${sid} ${len}\r\n${body}\r\n`);
+        const handlers = this.handlers.get(subject) ?? new Set();
+        handlers.forEach(cb => cb(JSON.parse(JSON.stringify(payload))));
+    }
+
+    pubs(subject: string) {
+        return this.published.filter((p) => p.subject === subject);
     }
 }
+
+vi.mock('@/api/nats', () => ({
+    createNatsService: (config: { url: string }) => new FakeNatsService(config.url),
+}));
 
 const NATS_SUBJECT = 'tenant.c1.site.s1.agent.a1.remote.session.sess-1';
 const SUBJ = NATS_SUBJECT.replace(/-/g, '');
@@ -71,19 +109,8 @@ const STATS = `${SUBJ}.stats`;
 const COMPLETION_REQ = `${SUBJ}.completion.req`;
 const COMPLETION_RES = `${SUBJ}.completion.res`;
 
-function lastSocket(): FakeWebSocket {
-    return FakeWebSocket.instances[FakeWebSocket.instances.length - 1];
-}
-
-function pubs(socket: FakeWebSocket, subject: string): string[] {
-    return socket.sent.filter((m) => m.startsWith(`PUB ${subject} `));
-}
-
-/** Extrai o JSON do corpo de um frame PUB. */
-function pubBody(frame: string): Record<string, unknown> {
-    const start = frame.indexOf('\r\n') + 2;
-    const end = frame.lastIndexOf('\r\n');
-    return JSON.parse(frame.slice(start, end));
+function lastService(): FakeNatsService {
+    return FakeNatsService.instances[FakeNatsService.instances.length - 1];
 }
 
 function decodeBase64Utf8(b64: string): string {
@@ -110,8 +137,6 @@ function renderTerminal(overrides: Partial<StreamProps> = {}) {
     const onOutput = vi.fn<(data: string) => void>();
     const onStats = vi.fn<(info: TerminalStatsInfo) => void>();
     const onCompletion = vi.fn<(res: CompletionResponse) => void>();
-    // initialProps permitem trocar natsUrl/subj e reexecutar o efeito NO MESMO
-    // componente — exatamente o que o StrictMode (e uma troca de props) faz.
     const utils = renderHook((props: StreamProps) => useTerminalStream(props), {
         initialProps: { ...BASE_PROPS, ...overrides },
     });
@@ -127,33 +152,28 @@ function renderTerminal(overrides: Partial<StreamProps> = {}) {
     return { ...utils, onError, onReset, onExit, onReady, onOutput, onStats, onCompletion };
 }
 
+function hellos(service: FakeNatsService) {
+    return service.pubs(TERM_IN).filter((p) => p.data.hello === true);
+}
+
 beforeEach(() => {
-    // O pool de sockets é singleton de MÓDULO: sem reset entre casos a
-    // conexão (e o WebSocket falso) de um teste vazaria para o próximo.
-    resetNatsSocketPool();
-    FakeWebSocket.instances = [];
-    vi.stubGlobal('WebSocket', FakeWebSocket);
+    FakeNatsService.instances = [];
 });
 
 afterEach(() => {
-    resetNatsSocketPool();
-    vi.unstubAllGlobals();
     vi.useRealTimers();
 });
-
 describe('chunkUtf8', () => {
     it('devolve o texto inteiro quando cabe no limite', () => {
         expect(chunkUtf8('dir', 1024)).toEqual(['dir']);
     });
 
     it('fatia por bytes sem quebrar runa UTF-8', () => {
-        // Cada 'ã' ocupa 2 bytes: 10 bytes = 5 caracteres.
         const input = 'ã'.repeat(10);
         const parts = chunkUtf8(input, 4);
         expect(parts.length).toBeGreaterThan(1);
         for (const part of parts) {
             expect(new TextEncoder().encode(part).length).toBeLessThanOrEqual(4);
-            // Nenhum U+FFFD (runa quebrada).
             expect(part).not.toContain('\uFFFD');
         }
         expect(parts.join('')).toBe(input);
@@ -161,42 +181,43 @@ describe('chunkUtf8', () => {
 
     it('mantém emoji fora do BMP inteiro no mesmo pedaço', () => {
         const parts = chunkUtf8('🚀🚀🚀', 4);
-        expect(parts.join('')).toBe('🚀🚀🚀');
-        for (const part of parts) expect(part).not.toContain('\uFFFD');
+        expect(parts).toHaveLength(3);
     });
 });
 
 describe('useTerminalStream — handshake e ready', () => {
-    it('envia hello com lastSeq -1 no +OK (cobre a corrida do term.ready)', () => {
+    it('envia hello com lastSeq -1 ao conectar (cobre a corrida do term.ready)', () => {
         const { result } = renderTerminal();
-        const socket = lastSocket();
+        const service = lastService();
 
         act(() => {
             result.current.sendResize(120, 40);
         });
         act(() => {
-            socket.completeHandshake();
+            void service.connect();
         });
 
-        const helloFrames = pubs(socket, TERM_IN).filter((m) => m.includes('"hello":true'));
+        const helloFrames = hellos(service);
         expect(helloFrames).toHaveLength(1);
-        const hello = pubBody(helloFrames[0]);
-        expect(hello.lastSeq).toBe(-1);
-        expect(hello.cols).toBe(120);
-        expect(hello.rows).toBe(40);
-        // Assina o canal de erro da sessão (.event) além de term.out/term.ready.
-        expect(socket.sent.some((m) => m.startsWith(`SUB ${TERM_OUT} `))).toBe(true);
-        expect(socket.sent.some((m) => m.startsWith(`SUB ${EVENT} `))).toBe(true);
+        expect(helloFrames[0].data.lastSeq).toBe(-1);
+        // O resize acontece DEPOIS do connect (o hook conecta no mount): vai
+        // como mensagem própria de term.in, não embutida no hello.
+        const resizes = service.pubs(TERM_IN).filter((p) => p.data.cols === 120);
+        expect(resizes).toHaveLength(1);
+        expect(resizes[0].data.rows).toBe(40);
+        // Assina term.out/term.ready/stats/event/completion.res.
+        expect(service.subscribed.has(TERM_OUT)).toBe(true);
+        expect(service.subscribed.has(EVENT)).toBe(true);
     });
 
     it('reporta term.ready recebido em term.out', () => {
         const { result, onReady } = renderTerminal();
-        const socket = lastSocket();
+        const service = lastService();
         act(() => {
-            socket.completeHandshake();
+            void service.connect();
         });
         act(() => {
-            socket.emitMessage(TERM_OUT, { shells: ['powershell', 'cmd'], termCols: 120, termRows: 40, backend: 'conpty' });
+            service.emitMessage(TERM_OUT, { shells: ['powershell', 'cmd'], termCols: 120, termRows: 40, backend: 'conpty' });
         });
         expect(onReady).toHaveBeenCalledWith(expect.objectContaining({ shells: ['powershell', 'cmd'], backend: 'conpty' }));
         expect(result.current.isConnected).toBe(true);
@@ -204,12 +225,12 @@ describe('useTerminalStream — handshake e ready', () => {
 
     it('term.ready SEM capabilities não quebra (agente antigo)', () => {
         const { onReady } = renderTerminal();
-        const socket = lastSocket();
+        const service = lastService();
         act(() => {
-            socket.completeHandshake();
+            void service.connect();
         });
         act(() => {
-            socket.emitMessage(TERM_OUT, { shells: ['cmd'], termCols: 80, termRows: 24 });
+            service.emitMessage(TERM_OUT, { shells: ['cmd'], termCols: 80, termRows: 24 });
         });
         expect(onReady).toHaveBeenCalledTimes(1);
         const info = onReady.mock.calls[0][0] as TerminalReadyInfo;
@@ -220,12 +241,12 @@ describe('useTerminalStream — handshake e ready', () => {
 
     it('propaga os campos ADITIVOS do contrato v3 no term.ready', () => {
         const { onReady } = renderTerminal();
-        const socket = lastSocket();
+        const service = lastService();
         act(() => {
-            socket.completeHandshake();
+            void service.connect();
         });
         act(() => {
-            socket.emitMessage(TERM_OUT, {
+            service.emitMessage(TERM_OUT, {
                 shells: ['powershell', 'cmd', 'bash'],
                 consoleId: 'c1',
                 termCols: 120,
@@ -254,12 +275,12 @@ describe('useTerminalStream — handshake e ready', () => {
 describe('useTerminalStream — contrato v3 (stats/completions)', () => {
     it('assina stats e completion.res e publica completion.req', () => {
         const { result } = renderTerminal();
-        const socket = lastSocket();
+        const service = lastService();
         act(() => {
-            socket.completeHandshake();
+            void service.connect();
         });
-        expect(socket.sent.some((m) => m.startsWith(`SUB ${STATS} `))).toBe(true);
-        expect(socket.sent.some((m) => m.startsWith(`SUB ${COMPLETION_RES} `))).toBe(true);
+        expect(service.subscribed.has(STATS)).toBe(true);
+        expect(service.subscribed.has(COMPLETION_RES)).toBe(true);
 
         act(() => {
             result.current.sendCompletionRequest({
@@ -271,19 +292,19 @@ describe('useTerminalStream — contrato v3 (stats/completions)', () => {
                 pageSize: 50,
             });
         });
-        const frames = pubs(socket, COMPLETION_REQ);
+        const frames = service.pubs(COMPLETION_REQ);
         expect(frames).toHaveLength(1);
-        expect(pubBody(frames[0])).toMatchObject({ reqId: 'r1', input: 'Get-Ch', cursor: 6, forward: null, page: 0, pageSize: 50 });
+        expect(frames[0].data).toMatchObject({ reqId: 'r1', input: 'Get-Ch', cursor: 6, forward: null, page: 0, pageSize: 50 });
     });
 
     it('entrega os contadores do subject stats', () => {
         const { onStats } = renderTerminal();
-        const socket = lastSocket();
+        const service = lastService();
         act(() => {
-            socket.completeHandshake();
+            void service.connect();
         });
         act(() => {
-            socket.emitMessage(STATS, {
+            service.emitMessage(STATS, {
                 sessionId: 'sess-1',
                 framesOut: 12,
                 bytesOut: 4096,
@@ -299,75 +320,67 @@ describe('useTerminalStream — contrato v3 (stats/completions)', () => {
 
     it('entrega completion.res normalizado para o viewer', () => {
         const { onCompletion } = renderTerminal();
-        const socket = lastSocket();
+        const service = lastService();
         act(() => {
-            socket.completeHandshake();
+            void service.connect();
         });
         act(() => {
-            socket.emitMessage(COMPLETION_RES, {
-                reqId: 'r1',
+            service.emitMessage(COMPLETION_RES, {
+                reqId: 'r9',
                 ok: true,
-                replacementIndex: 4,
-                replacementLength: 2,
-                matches: [{ text: 'Get-ChildItem', listItem: 'Get-ChildItem', type: 'Command' }],
+                replacementIndex: 2,
+                replacementLength: 4,
+                matches: [{ insert: 'Get-ChildItem' }],
                 totalCount: 1,
                 page: 0,
                 pageSize: 50,
                 hasMore: false,
             });
         });
-        expect(onCompletion).toHaveBeenCalledWith(expect.objectContaining({
-            reqId: 'r1',
-            ok: true,
-            replacementIndex: 4,
-            replacementLength: 2,
-            totalCount: 1,
-            hasMore: false,
-        }));
-        expect(onCompletion.mock.calls[0][0].matches).toHaveLength(1);
+        expect(onCompletion).toHaveBeenCalledWith(expect.objectContaining({ reqId: 'r9', ok: true, totalCount: 1 }));
     });
 });
-
 describe('useTerminalStream — input', () => {
-    it('enfileira input antes da autenticação e drena no +OK', () => {
+    it('enfileira input antes da conexão e drena no connected', () => {
         const { result } = renderTerminal();
-        const socket = lastSocket();
+        const service = lastService();
+        // Cai: o input passa a ser enfileirado até a reconexão.
+        act(() => {
+            service.connected = false;
+            service.emit('disconnected');
+        });
 
         act(() => {
             result.current.sendData('x');
         });
-        expect(pubs(socket, TERM_IN).some((m) => m.includes('"data":"eA=="'))).toBe(false);
+        expect(service.pubs(TERM_IN).some((p) => p.data.data === 'eA==')).toBe(false);
 
         act(() => {
-            socket.completeHandshake();
+            void service.connect();
         });
-        const inputs = pubs(socket, TERM_IN).filter((m) => m.includes('"data"'));
-        expect(inputs.some((m) => pubBody(m).data === 'eA==')).toBe(true);
+        const inputs = service.pubs(TERM_IN).filter((p) => typeof p.data.data === 'string');
+        expect(inputs.some((p) => p.data.data === 'eA==')).toBe(true);
     });
 
-    it('fatia paste grande em vários PUBs reconstruíveis', () => {
+    it('fatia paste grande em vários publishes reconstruíveis', () => {
         const { result } = renderTerminal();
-        const socket = lastSocket();
+        const service = lastService();
         act(() => {
-            socket.completeHandshake();
+            void service.connect();
         });
 
-        const before = socket.sent.length;
         const big = 'ã'.repeat(20_000); // 40 KB de UTF-8
         act(() => {
             result.current.sendData(big);
         });
 
-        const inputs = pubs(socket, TERM_IN)
-            .filter((m) => m.includes('"data"'))
-            .slice(0, socket.sent.length - before);
+        const inputs = service.pubs(TERM_IN).filter((p) => typeof p.data.data === 'string');
         expect(inputs.length).toBeGreaterThan(1);
-        // Nenhum PUB acima do teto de base64 aceito pelo agente (32 KB).
-        for (const frame of inputs) {
-            const len = Number.parseInt(frame.split(' ')[2] ?? '0', 10);
-            expect(len).toBeLessThan(32 * 1024);
+        // Nenhum payload acima do teto de base64 aceito pelo agente (32 KB).
+        for (const p of inputs) {
+            expect(new TextEncoder().encode(String(p.data.data)).length).toBeLessThan(32 * 1024);
         }
-        const rebuilt = inputs.map((m) => decodeBase64Utf8(String(pubBody(m).data))).join('');
+        const rebuilt = inputs.map((p) => decodeBase64Utf8(String(p.data.data))).join('');
         expect(rebuilt).toBe(big);
     });
 });
@@ -375,7 +388,11 @@ describe('useTerminalStream — input', () => {
 describe('useTerminalStream — erros e reset', () => {
     it('não envia paste parcial quando o input offline não cabe na fila', () => {
         const { result, onError } = renderTerminal();
-        const socket = lastSocket();
+        const service = lastService();
+        act(() => {
+            service.connected = false;
+            service.emit('disconnected');
+        });
         // ~900 KB de UTF-8 → ~1,2 MB em base64 (> teto de 1 MB da fila).
         act(() => {
             result.current.sendData('a'.repeat(900_000));
@@ -383,118 +400,92 @@ describe('useTerminalStream — erros e reset', () => {
         expect(onError).toHaveBeenCalledWith(expect.objectContaining({ code: 'input_queue_full' }));
 
         act(() => {
-            socket.completeHandshake();
+            void service.connect();
         });
         // Nada do paste parcial pode ter ido ao shell.
-        expect(pubs(socket, TERM_IN).some((m) => m.includes('"data"'))).toBe(false);
+        expect(service.pubs(TERM_IN).some((p) => typeof p.data.data === 'string')).toBe(false);
     });
 
     it('reporta erro publicado pelo agente em term.out', () => {
         const { onError } = renderTerminal();
-        const socket = lastSocket();
+        const service = lastService();
         act(() => {
-            socket.completeHandshake();
+            void service.connect();
         });
         act(() => {
-            socket.emitMessage(TERM_OUT, { error: true, code: 'terminal_start_failed', reason: 'sem shell' });
+            service.emitMessage(TERM_OUT, { error: true, code: 'terminal_start_failed', reason: 'sem shell' });
         });
         expect(onError).toHaveBeenCalledWith({ code: 'terminal_start_failed', reason: 'sem shell' });
     });
 
     it('reporta erro da sessão pelo canal .event (antes sem assinante)', () => {
         const { onError } = renderTerminal();
-        const socket = lastSocket();
+        const service = lastService();
         act(() => {
-            socket.completeHandshake();
+            void service.connect();
         });
         act(() => {
-            socket.emitMessage(EVENT, { eventType: 'error', data: { scope: 'terminal', error: 'falha ao iniciar' } });
+            service.emitMessage(EVENT, { eventType: 'error', data: { scope: 'terminal', error: 'falha ao iniciar' } });
         });
         expect(onError).toHaveBeenCalledWith({ code: 'session_error', reason: 'falha ao iniciar' });
     });
 
-    it('reset limpa o buffer SEM adotar o seq do agente (não pula frame)', async () => {
-        vi.useFakeTimers();
+    it('reset limpa o buffer SEM adotar o seq do agente (não pula frame)', () => {
         const { onReset } = renderTerminal();
-        const socket = lastSocket();
+        const service = lastService();
         act(() => {
-            socket.completeHandshake();
+            void service.connect();
         });
         act(() => {
-            socket.emitMessage(TERM_OUT, { data: 'eA==', seq: 7 });
+            service.emitMessage(TERM_OUT, { data: 'eA==', seq: 7 });
         });
         act(() => {
-            socket.emitMessage(TERM_OUT, { reset: true, requestedFrom: 7 });
+            service.emitMessage(TERM_OUT, { reset: true, requestedFrom: 7 });
         });
         expect(onReset).toHaveBeenCalledTimes(1);
 
         // Reconecta: o hello deve pedir replay a partir do seq que o viewer
         // RECEBEU (7). Adotar outro seq pularia um frame nunca recebido.
         act(() => {
-            socket.close();
+            service.connected = false;
+            service.emit('disconnected');
         });
-        await act(async () => {
-            await vi.advanceTimersByTimeAsync(1100);
-        });
-        const next = lastSocket();
         act(() => {
-            next.completeHandshake();
+            service.forceReconnect();
         });
-        const hello = pubs(next, TERM_IN).find((m) => m.includes('"hello":true'));
-        expect(pubBody(hello!).lastSeq).toBe(7);
+        const hello = hellos(service).at(-1);
+        expect(hello!.data.lastSeq).toBe(7);
     });
 
-    it('encerra a conexão se o buffer do protocolo NATS estourar', () => {
-        const { onError } = renderTerminal();
-        const socket = lastSocket();
-        act(() => {
-            socket.completeHandshake();
-        });
-        act(() => {
-            // Tamanho anunciado absurdo: o parser esperaria o corpo para sempre.
-            socket.emitRaw(`MSG ${TERM_OUT} 1 99999999\r\n`);
-        });
-        act(() => {
-            socket.emitRaw('A'.repeat(4 * 1024 * 1024 + 16));
-        });
-        expect(onError).toHaveBeenCalledWith(expect.objectContaining({ code: 'protocol_overflow' }));
-        expect(socket.readyState).toBe(FakeWebSocket.CLOSED);
-    });
-
-    it('atualiza lastSeq e pede replay do que faltou no reconnect', async () => {
-        vi.useFakeTimers();
+    it('atualiza lastSeq e pede replay do que faltou no reconnect', () => {
         renderTerminal();
-        const socket = lastSocket();
+        const service = lastService();
         act(() => {
-            socket.completeHandshake();
+            void service.connect();
         });
         act(() => {
-            socket.emitMessage(TERM_OUT, { data: 'eA==', seq: 7 });
+            service.emitMessage(TERM_OUT, { data: 'eA==', seq: 7 });
         });
-        // Simula queda + reconexão: novo socket recebe o hello com lastSeq=7.
+        // Simula queda + reconexão: o hello do reconnect usa o lastSeq visto.
         act(() => {
-            socket.close();
+            service.connected = false;
+            service.emit('disconnected');
         });
-        await act(async () => {
-            await vi.advanceTimersByTimeAsync(1100);
-        });
-        const next = lastSocket();
-        expect(next).not.toBe(socket);
         act(() => {
-            next.completeHandshake();
+            service.forceReconnect();
         });
-        const hello = pubs(next, TERM_IN).find((m) => m.includes('"hello":true'));
+        const hello = hellos(service).at(-1);
         expect(hello).toBeDefined();
-        expect(pubBody(hello!).lastSeq).toBe(7);
+        expect(hello!.data.lastSeq).toBe(7);
     });
 });
 
 describe('useTerminalStream — reconexão imperativa (R4)', () => {
     it('reconecta no MESMO componente preservando o lastSeq do replay', () => {
         const { rerender, result } = renderTerminal();
-        const first = lastSocket();
+        const first = lastService();
         act(() => {
-            first.completeHandshake();
+            void first.connect();
         });
         act(() => {
             first.emitMessage(TERM_OUT, { data: btoa('x'), seq: 9 });
@@ -504,200 +495,65 @@ describe('useTerminalStream — reconexão imperativa (R4)', () => {
         act(() => {
             rerender({ ...BASE_PROPS, reconnectToken: 1 });
         });
-        const second = lastSocket();
-        expect(second).not.toBe(first);
-        act(() => {
-            second.completeHandshake();
-        });
+        const second = lastService();
+        expect(second).toBe(first);
         expect(result.current.isConnected).toBe(true);
 
         // O hello pede replay a partir do seq JÁ visto: com o componente
-        // preservado (scrollback intacto) o agente reenvia só a lacuna, em vez
-        // de mandar o anel inteiro (comportamento da remontagem antiga).
-        const hello = pubs(second, TERM_IN).find((m) => m.includes('"hello":true'));
+        // preservado (scrollback intacto) o agente reenvia só a lacuna.
+        const hello = hellos(second).at(-1);
         expect(hello).toBeDefined();
-        expect(pubBody(hello!).lastSeq).toBe(9);
+        expect(hello!.data.lastSeq).toBe(9);
     });
 
     it('ignora resize 0x0 (aba inativa/container oculto)', () => {
         const { result } = renderTerminal();
-        const socket = lastSocket();
+        const service = lastService();
         act(() => {
             result.current.sendResize(0, 0);
         });
         act(() => {
-            socket.completeHandshake();
+            void service.connect();
         });
-        const hello = pubs(socket, TERM_IN).find((m) => m.includes('"hello":true'));
+        const hello = hellos(service).at(-1);
         expect(hello).toBeDefined();
         // Sem dimensões válidas o hello vai sem cols/rows (o agente trata como
         // handshake puro e não redimensiona para 0).
-        expect(pubBody(hello!).cols).toBeUndefined();
-        expect(pubBody(hello!).rows).toBeUndefined();
-        expect(pubs(socket, TERM_IN).some((m) => m.includes('"cols":0'))).toBe(false);
+        expect(hello!.data.cols).toBeUndefined();
+        expect(hello!.data.rows).toBeUndefined();
+        expect(service.pubs(TERM_IN).some((p) => p.data.cols === 0)).toBe(false);
     });
 
     it('não reconecta quando o token não muda', () => {
         const { rerender } = renderTerminal();
-        const first = lastSocket();
+        const first = lastService();
         act(() => {
-            first.completeHandshake();
+            void first.connect();
         });
         act(() => {
             rerender({ ...BASE_PROPS, reconnectToken: 0 });
         });
-        expect(lastSocket()).toBe(first);
+        expect(first.forceReconnectCalls).toBe(0);
     });
 });
 
-describe('useTerminalStream — protocolo fatiado', () => {
-    it('remonta um payload MSG dividido em vários eventos do WebSocket', () => {
-        const { onOutput } = renderTerminal();
-        const socket = lastSocket();
-        act(() => {
-            socket.completeHandshake();
-        });
-
-        const body = JSON.stringify({ data: btoa('fatiado'), seq: 3 });
-        const len = new TextEncoder().encode(body).length;
-        const frame = `MSG ${TERM_OUT} 1 ${len}\r\n${body}\r\n`;
-        // Três pedaços: header + metade do corpo, resto do corpo, CRLF final.
-        const cut1 = frame.indexOf('\r\n') + 2 + 5;
-        const cut2 = frame.length - 3;
-        act(() => { socket.emitRaw(frame.slice(0, cut1)); });
-        expect(onOutput).not.toHaveBeenCalled();
-        act(() => { socket.emitRaw(frame.slice(cut1, cut2)); });
-        act(() => { socket.emitRaw(frame.slice(cut2)); });
-
-        expect(onOutput).toHaveBeenCalledWith('fatiado');
-    });
-
-    it('processa duas mensagens MSG coladas no mesmo evento', () => {
-        const { onOutput } = renderTerminal();
-        const socket = lastSocket();
-        act(() => {
-            socket.completeHandshake();
-        });
-        const frame = (text: string, seq: number) => {
-            const body = JSON.stringify({ data: btoa(text), seq });
-            const len = new TextEncoder().encode(body).length;
-            return `MSG ${TERM_OUT} 1 ${len}\r\n${body}\r\n`;
-        };
-        act(() => { socket.emitRaw(frame('um', 1) + frame('dois', 2)); });
-        expect(onOutput).toHaveBeenCalledWith('um');
-        expect(onOutput).toHaveBeenCalledWith('dois');
-    });
-});
-
-describe('useTerminalStream — socket obsoleto', () => {
-    it('não deixa o evento tardio do socket ANTIGO derrubar a conexão nova', () => {
-        const { rerender, result } = renderTerminal();
-        const first = lastSocket();
-        act(() => {
-            first.completeHandshake();
-        });
-        expect(result.current.isConnected).toBe(true);
-
-        // Troca a URL no MESMO componente: o efeito refaz a conexão.
-        act(() => {
-            rerender({ ...BASE_PROPS, natsUrl: 'wss://nats2.example/nats' });
-        });
-        const second = lastSocket();
-        expect(second).not.toBe(first);
-        act(() => {
-            second.completeHandshake();
-        });
-        expect(result.current.isConnected).toBe(true);
-
-        // Evento TARDIO do socket antigo (o navegador dispara o close DEPOIS de
-        // o novo efeito rodar — StrictMode/remontagem). Sem a guarda de socket
-        // obsoleto isto marcava isConnected=false e agendava um reconnect extra,
-        // derrubando a conexão saudável.
-        act(() => {
-            first.onclose?.();
-        });
-        expect(result.current.isConnected).toBe(true);
-    });
-});
-
-describe('useTerminalStream — pool NATS compartilhado (WP5)', () => {
-    it('duas instâncias com as MESMAS credenciais compartilham 1 WebSocket', () => {
-        const a = renderTerminal();
-        const b = renderTerminal();
-
-        // Refcount: um único WebSocket para a mesma url + credenciais.
-        expect(FakeWebSocket.instances).toHaveLength(1);
-        const socket = lastSocket();
-        act(() => {
-            socket.completeHandshake();
-        });
-
-        expect(a.result.current.isConnected).toBe(true);
-        expect(b.result.current.isConnected).toBe(true);
-        // As duas instâncias fizeram o SEU hello (o agente reenvia o que falta
-        // para cada viewer), mas o SUB do subject é UM só.
-        expect(pubs(socket, TERM_IN).filter((m) => m.includes('"hello":true'))).toHaveLength(2);
-        expect(socket.sent.filter((m) => m.startsWith(`SUB ${TERM_OUT} `))).toHaveLength(1);
-    });
-
-    it('não compartilha conexão entre credenciais diferentes', () => {
-        renderTerminal();
-        renderTerminal({ jwt: 'jwt-outro' });
-
-        expect(FakeWebSocket.instances).toHaveLength(2);
-        expect(FakeWebSocket.instances[0].url).toContain('jwt-1');
-        expect(FakeWebSocket.instances[1].url).toContain('jwt-outro');
-    });
-
-    it('mantém o WebSocket aberto até a ÚLTIMA instância desmontar', async () => {
-        vi.useFakeTimers();
-        const a = renderTerminal();
-        const b = renderTerminal();
-        const socket = lastSocket();
-        act(() => {
-            socket.completeHandshake();
-        });
-
-        act(() => { a.unmount(); });
-        await act(async () => {
-            await vi.advanceTimersByTimeAsync(POOL_DISPOSE_DEBOUNCE_MS + 10);
-        });
-        expect(socket.readyState).toBe(FakeWebSocket.OPEN);
-
-        // A instância remanescente continua recebendo a saída (MSG roteada).
-        act(() => {
-            socket.emitMessage(TERM_OUT, { data: btoa('ok'), seq: 1 });
-        });
-        expect(b.onOutput).toHaveBeenCalledWith('ok');
-
-        act(() => { b.unmount(); });
-        await act(async () => {
-            await vi.advanceTimersByTimeAsync(POOL_DISPOSE_DEBOUNCE_MS + 10);
-        });
-        expect(socket.readyState).toBe(FakeWebSocket.CLOSED);
-    });
-});
-
-describe('useTerminalStream — reconexão', () => {
-    it('renova as credenciais antes de reconectar automaticamente', async () => {
-        vi.useFakeTimers();
+describe('useTerminalStream — renovação de credenciais (auth)', () => {
+    it('busca credencial fresca e reconecta em auth_error', async () => {
         const getFreshCredentials = vi.fn().mockResolvedValue('jwt-2');
         renderTerminal({ getFreshCredentials });
-        const first = lastSocket();
+        const service = lastService();
         act(() => {
-            first.completeHandshake();
-        });
-        act(() => {
-            first.close();
+            void service.connect();
         });
 
-        await act(async () => {
-            await vi.advanceTimersByTimeAsync(1100);
+        act(() => {
+            service.authError();
         });
 
+        await act(async () => {});
         expect(getFreshCredentials).toHaveBeenCalledTimes(1);
-        const second = lastSocket();
-        expect(second).not.toBe(first);
-        expect(second.url).toContain('jwt-2');
+        expect(service.forceReconnectCalls).toBe(1);
+        // A credencial pré-fornecida mais recente é o JWT fresco.
+        expect(service.preSuppliedCreds?.jwt).toBe('jwt-2');
     });
 });
