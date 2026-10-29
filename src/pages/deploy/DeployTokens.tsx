@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 
-import { Icon, Badge, Button, Card, CardHeader, Input, Modal, Select, TextArea } from '@/components/ui';
+import { Icon, Badge, Button, Card, CardHeader, Input, Modal, Pagination, Select, TextArea } from '@/components/ui';
 import {
   useCreateDeployTokenAndDownload,
   useDeployTokens,
@@ -811,38 +811,25 @@ export default function DeployTokens() {
                     );
                   })}
 
-                  <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3">
-                    <div className="text-sm text-muted">
-                      Página {page} de {totalPages}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Select
-                        label="Itens por página"
-                        value={String(pageSize)}
-                        onChange={e => setPageSize(Number(e.target.value) || 10)}
-                        options={[
-                          { value: '10', label: '10 por página' },
-                          { value: '20', label: '20 por página' },
-                          { value: '50', label: '50 por página' },
-                        ]}
-                      />
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setPage(current => Math.max(1, current - 1))}
-                        disabled={page <= 1}
-                      >
-                        Anterior
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setPage(current => Math.min(totalPages, current + 1))}
-                        disabled={page >= totalPages}
-                      >
-                        Próxima
-                      </Button>
-                    </div>
+                  <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3">
+                    <Select
+                      label="Itens por página"
+                      value={String(pageSize)}
+                      onChange={e => setPageSize(Number(e.target.value) || 10)}
+                      options={[
+                        { value: '10', label: '10 por página' },
+                        { value: '20', label: '20 por página' },
+                        { value: '50', label: '50 por página' },
+                      ]}
+                    />
+                    <Pagination
+                      className="flex-1"
+                      page={page}
+                      totalPages={totalPages}
+                      onPageChange={setPage}
+                      totalItems={filteredTokens.length}
+                      pageSize={pageSize}
+                    />
                   </div>
                 </div>
               )}

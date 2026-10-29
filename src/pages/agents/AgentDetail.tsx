@@ -20,7 +20,7 @@ import {
 } from './agentDetailUtils';
 import { useTickets } from '@/hooks/useTickets';
 import { useLogs } from '@/hooks/useLogs';
-import { Icon, Button, Card, CardHeader, Badge, Loading, ErrorDisplay, Input, ConfirmDialog, Select, DataTable, Modal, StatCard, AgentHeartbeatCard, Tooltip, ContextMenu, type ContextMenuItem, type Column } from '@/components/ui';
+import { Icon, Button, Card, CardHeader, Badge, Loading, ErrorDisplay, Input, ConfirmDialog, Select, DataTable, Modal, Pagination, StatCard, AgentHeartbeatCard, Tooltip, ContextMenu, type ContextMenuItem, type Column } from '@/components/ui';
 import { ensureArray } from '@/utils/ensureArray';
 import PowerActionModal from '@/components/agents/PowerActionModal';
 import AgentNotificationModal, { type AgentNotificationPayload } from '@/components/agents/AgentNotificationModal';
@@ -28,7 +28,6 @@ import AgentStartupItemsPanel from '@/components/agents/AgentStartupItemsPanel';
 import AgentScheduledTasksPanel from '@/components/agents/AgentScheduledTasksPanel';
 import AgentPoliciesPanel from '@/components/agents/AgentPoliciesPanel';
 import { AgentWindowsUpdatesPanel } from '@/components/agents/AgentWindowsUpdatesPanel';
-import { useAgentWindowsUpdateSnapshot } from '@/hooks/useAgentWindowsUpdates';
 import WakeOnLanModal from '@/components/agents/WakeOnLanModal';
 import { NotesPanel } from '@/components/notes/NotesPanel';
 import { PinnedNotesCard } from '@/components/notes/PinnedNotesCard';
@@ -61,41 +60,11 @@ import { buildCorrelationId } from '@/pages/automation/automationTasksUtils';
 
 // formatBytes, formatDate, formatSocketFamily — importadas de ./agentDetailUtils
 
-/** Contadores exibidos ao lado do rótulo de cada aba (undefined = sem contador). */
-interface AgentTabBadges {
-  /** Campos customizados visíveis no portal (webRead) para este agente. */
-  customFields?: number;
-  labelHistory?: number;
-  software?: number;
-  printers?: number;
-  tickets?: number;
-  /** Total da sub-aba ATIVA de "Autoruns" (não a soma das duas). */
-  autostart?: number;
-  /** Quantidade de políticas de automação aplicáveis ao agente. */
-  policies?: number;
-  /** Atualizações do Windows pendentes no agente. */
-  windowsUpdates?: number;
-  logs?: number;
-}
-
-/** Contadores das sub-abas de rede. */
-interface AgentNetworkBadges {
-  adapters?: number;
-  listeningPorts?: number;
-  openSockets?: number;
-}
-
-/** Contadores das sub-abas de "Autoruns". */
-interface AgentAutostartBadges {
-  startupItems?: number;
-  scheduledTasks?: number;
-}
-
 /**
  * Abas do detalhe do agente, no mesmo "segmented control" usado em
  * Clientes/Sites (DetailTabs). "Info" é a aba principal e a aba inicial.
  */
-function buildAgentDetailTabs(badges: AgentTabBadges = {}): DetailTab<AgentDetailDataTab>[] {
+function buildAgentDetailTabs(): DetailTab<AgentDetailDataTab>[] {
   return [
     { id: 'info', label: 'Info', icon: "info" },
     {
@@ -106,28 +75,25 @@ function buildAgentDetailTabs(badges: AgentTabBadges = {}): DetailTab<AgentDetai
       id: 'customFields',
       label: 'Extras',
       icon: "sell",
-      badge: badges.customFields,
     },
     { id: 'notes', label: 'Anotações', icon: "sticky_note_2" },
-    { id: 'labelHistory', label: 'Labels', icon: "history", badge: badges.labelHistory },
-    { id: 'software', label: 'Aplicativos', icon: "web_asset", badge: badges.software },
-    { id: 'windowsUpdates', label: 'Atualizações', icon: "download", badge: badges.windowsUpdates },
-    { id: 'printers', label: 'Impressoras', icon: "print", badge: badges.printers },
-    { id: 'tickets', label: 'Chamados', icon: "confirmation_number", badge: badges.tickets },
+    { id: 'labelHistory', label: 'Labels', icon: "history" },
+    { id: 'software', label: 'Aplicativos', icon: "web_asset" },
+    { id: 'windowsUpdates', label: 'Atualizações', icon: "download" },
+    { id: 'printers', label: 'Impressoras', icon: "print" },
+    { id: 'tickets', label: 'Chamados', icon: "confirmation_number" },
     { id: 'network', label: 'Rede', icon: "lan" },
     {
       // "Inicialização" e "Tarefas Agendadas" descrevem o mesmo assunto (o que
       // o host executa sozinho) e ficam agrupadas numa aba só. O rótulo é
       // compacto ("Autoruns") para não alargar a barra; o slug da URL segue
-      // "execucao-automatica" (contrato de deep link). O contador reflete a
-      // sub-aba ativa (a que abre ao clicar); cada sub-aba mostra o seu total.
+      // "execucao-automatica" (contrato de deep link).
       id: 'autostart',
       label: 'Autoruns',
       icon: "bolt",
-      badge: badges.autostart,
     },
-    { id: 'policies', label: 'Políticas', icon: "verified_user", badge: badges.policies },
-    { id: 'logs', label: 'Logs', icon: "article", badge: badges.logs },
+    { id: 'policies', label: 'Políticas', icon: "verified_user" },
+    { id: 'logs', label: 'Logs', icon: "article" },
   ];
 }
 
@@ -135,10 +101,10 @@ function buildAgentDetailTabs(badges: AgentTabBadges = {}): DetailTab<AgentDetai
  * Sub-abas da aba "Autoruns": itens de inicialização (registro,
  * pastas Startup e serviços automáticos) e tarefas agendadas do Windows.
  */
-function buildAgentAutostartTabs(badges: AgentAutostartBadges = {}): DetailTab<AgentAutostartView>[] {
+function buildAgentAutostartTabs(): DetailTab<AgentAutostartView>[] {
   return [
-    { id: 'startupItems', label: 'Inicialização', icon: "power_settings_new", badge: badges.startupItems },
-    { id: 'scheduledTasks', label: 'Tarefas Agendadas', icon: "schedule", badge: badges.scheduledTasks },
+    { id: 'startupItems', label: 'Inicialização', icon: "power_settings_new" },
+    { id: 'scheduledTasks', label: 'Tarefas Agendadas', icon: "schedule" },
   ];
 }
 
@@ -146,11 +112,11 @@ function buildAgentAutostartTabs(badges: AgentAutostartBadges = {}): DetailTab<A
  * Sub-abas da aba "Rede": adaptadores, portas em escuta e conexões abertas.
  * Reaproveita o mesmo segmented control da barra principal.
  */
-function buildAgentNetworkTabs(badges: AgentNetworkBadges = {}): DetailTab<AgentNetworkView>[] {
+function buildAgentNetworkTabs(): DetailTab<AgentNetworkView>[] {
   return [
-    { id: 'adapters', label: 'Adaptadores', icon: "settings_ethernet", badge: badges.adapters },
-    { id: 'listeningPorts', label: 'Portas em Escuta', icon: "podcasts", badge: badges.listeningPorts },
-    { id: 'openSockets', label: 'Conexões Abertas', icon: "cable", badge: badges.openSockets },
+    { id: 'adapters', label: 'Adaptadores', icon: "settings_ethernet" },
+    { id: 'listeningPorts', label: 'Portas em Escuta', icon: "podcasts" },
+    { id: 'openSockets', label: 'Conexões Abertas', icon: "cable" },
   ];
 }
 
@@ -432,9 +398,6 @@ export default function AgentDetail() {
     onlyUpdates: softwareOnlyUpdates,
   });
   const softwareSnapshot = useAgentSoftwareSnapshot(id!);
-  // Badge da aba "Atualizações" (pendentes do agente). O painel também usa o hook;
-  // o cache do react-query evita request duplicado.
-  const patchSnapshot = useAgentWindowsUpdateSnapshot(id);
   const agentLogs = useLogs({ agentId: id, limit: 10 }, { enabled: activeDataTab === 'logs' });
   const agentTickets = useTickets({ agentId: id, limit: 5 }, { enabled: activeDataTab === 'tickets' });
   // Tick de 15s (antes 5s): re-renderizava a página inteira a cada 5s só para
@@ -669,8 +632,6 @@ export default function AgentDetail() {
   const portsLimitNum = listeningPortsLimit === 'max' ? LISTENING_PORTS_MAX_PAGE_SIZE : Number(listeningPortsLimit);
   const portsPageIndex = portsCursors.length;
   const portsTotalPages = Math.max(1, Math.ceil(portsTotalCount / portsLimitNum));
-  const canGoPrevPortsPage = portsPageIndex > 1;
-  const canGoNextPortsPage = Boolean(portsPageQuery.data?.hasMore && portsPageQuery.data?.nextCursor);
   const resetPortsPagination = () => setPortsCursors([undefined]);
   const goToNextPortsPage = () => {
     const next = portsPageQuery.data?.nextCursor;
@@ -697,8 +658,6 @@ export default function AgentDetail() {
   const socketsLimitNum = openSocketsLimit === 'max' ? OPEN_SOCKETS_MAX_PAGE_SIZE : Number(openSocketsLimit);
   const socketsPageIndex = socketsCursors.length;
   const socketsTotalPages = Math.max(1, Math.ceil(socketsTotalCount / socketsLimitNum));
-  const canGoPrevSocketsPage = socketsPageIndex > 1;
-  const canGoNextSocketsPage = Boolean(socketsPageQuery.data?.hasMore && socketsPageQuery.data?.nextCursor);
   const resetSocketsPagination = () => setSocketsCursors([undefined]);
   const goToNextSocketsPage = () => {
     const next = socketsPageQuery.data?.nextCursor;
@@ -747,8 +706,6 @@ export default function AgentDetail() {
   // a energia imediata (restart/shutdown), que são disruptivas por natureza.
   const offlineQueueHint = 'agente offline — o comando entra na fila e é entregue quando ele reconectar';
   const isZeroTouchPending = aWithHeartbeat.zeroTouchPending === true;
-  const canGoPrevSoftwarePage = safeSoftwarePage > 1;
-  const canGoNextSoftwarePage = safeSoftwarePage < softwareTotalPages;
   const disks = hw.data?.disks ?? [];
   const totalDiskBytes = disks.reduce((acc, disk) => acc + (disk.totalSizeBytes ?? 0), 0);
   const freeDiskBytes = disks.reduce((acc, disk) => acc + (disk.freeSpaceBytes ?? 0), 0);
@@ -1142,9 +1099,6 @@ export default function AgentDetail() {
     await agent.refetch();
     return response;
   };
-
-  const goToNextSoftwarePage = () => setSoftwarePage((p) => Math.min(p + 1, softwareTotalPages));
-  const goToPreviousSoftwarePage = () => setSoftwarePage((p) => Math.max(1, p - 1));
 
   // -- On-demand data refresh handlers ----------------------------------
 
@@ -1917,23 +1871,7 @@ export default function AgentDetail() {
 
       {/* Abas do agente: Info (principal) · Anotações · Histórico de labels · dados */}
       <DetailTabs
-        tabs={buildAgentDetailTabs({
-          customFields: agentCustomFields.data?.length,
-          labelHistory: labelHistory.length,
-          software: softwareTotalCount,
-          printers: hwComponents.data ? printers.length : undefined,
-          tickets: agentTickets.data ? (agentTickets.data?.items?.length ?? 0) : undefined,
-          // O badge da aba unificada segue a sub-aba ativa — a mesma que abre ao
-          // clicar na aba (o slug na querystring define qual).
-          autostart: hwComponents.data
-            ? activeAutostartView === 'startupItems'
-              ? startupItems.length
-              : scheduledTasks.length
-            : undefined,
-          policies: canViewAutomation ? agentPolicies.data?.taskCount : undefined,
-          windowsUpdates: patchSnapshot.data?.pendingCount,
-          logs: agentLogs.data ? logsArray.length : undefined,
-        })}
+        tabs={buildAgentDetailTabs()}
         active={activeDataTab}
         onChange={handleSelectDataTab}
         ariaLabel="Seções do agente"
@@ -2352,33 +2290,6 @@ export default function AgentDetail() {
                       </Button>
                     </form>
 
-                    {softwareItems.length > 0 && (
-                      <div className="mb-4 flex items-center justify-between gap-3">
-                        <p className="text-xs text-muted">
-                          Página {safeSoftwarePage} de {softwareTotalPages} · {softwareTotalCount} itens no total
-                          {softwareOnlyUpdates ? ' · somente com atualização' : ''}
-                          {softwareSearchApplied ? ` | filtro: "${softwareSearchApplied}"` : ''}
-                        </p>
-                        <div className="flex items-center gap-2">
-                          <Button variant="secondary" size="sm" onClick={goToPreviousSoftwarePage} disabled={!canGoPrevSoftwarePage}>
-                            Voltar
-                          </Button>
-                          <div className="rounded-md border border-border px-3 py-1 text-xs text-muted-foreground">
-                            {safeSoftwarePage}
-                          </div>
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={goToNextSoftwarePage}
-                            disabled={!canGoNextSoftwarePage}
-                            loading={software.isFetching}
-                          >
-                            Avançar
-                          </Button>
-                        </div>
-                      </div>
-                    )}
-
                     <div style={{ minHeight: '400px' }} className="relative">
                       <DataTable
                         columns={softwareColumns}
@@ -2397,29 +2308,16 @@ export default function AgentDetail() {
                         maxHeight="min(640px, 55vh)"
                       />
                     </div>
-                    <div className="mt-4 flex items-center justify-between gap-3">
-                      <p className="text-xs text-muted">
-                        Página {safeSoftwarePage} de {softwareTotalPages} · {softwareTotalCount} itens no total
-                        {softwareSearchApplied ? ` | filtro: "${softwareSearchApplied}"` : ''}
-                      </p>
-                      <div className="flex items-center gap-2">
-                        <Button variant="secondary" size="sm" onClick={goToPreviousSoftwarePage} disabled={!canGoPrevSoftwarePage}>
-                          Voltar
-                        </Button>
-                        <div className="rounded-md border border-border px-3 py-1 text-xs text-muted-foreground">
-                          {safeSoftwarePage}
-                        </div>
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          onClick={goToNextSoftwarePage}
-                          disabled={!canGoNextSoftwarePage}
-                          loading={software.isFetching}
-                        >
-                          Avançar
-                        </Button>
-                      </div>
-                    </div>
+                    {softwareItems.length > 0 && (
+                      <Pagination
+                        className="mt-4"
+                        page={safeSoftwarePage}
+                        totalPages={softwareTotalPages}
+                        onPageChange={setSoftwarePage}
+                        totalItems={softwareTotalCount}
+                        pageSize={softwarePageSize}
+                      />
+                    )}
                   </>
                 )}
                 </>
@@ -2544,11 +2442,7 @@ export default function AgentDetail() {
             {activeDataTab === 'network' && (
               <div className="space-y-4">
                 <DetailTabs
-                  tabs={buildAgentNetworkTabs({
-                    adapters: hw.data?.networkAdapters?.length,
-                    listeningPorts: portsTotalCount,
-                    openSockets: socketsTotalCount,
-                  })}
+                  tabs={buildAgentNetworkTabs()}
                   active={activeNetworkView}
                   onChange={handleSelectNetworkView}
                   ariaLabel="Seções de rede do agente"
@@ -2659,25 +2553,6 @@ export default function AgentDetail() {
                           Limpar
                         </Button>
                       </form>
-                      {portsPageItems.length > 0 && (
-                        <div className="mb-4 flex items-center justify-between gap-3">
-                          <p className="text-xs text-muted">
-                            Página {portsPageIndex} de {portsTotalPages} · {portsTotalCount} itens no total
-                            {listeningPortsSearchApplied ? ` | filtro: "${listeningPortsSearchApplied}"` : ''}
-                          </p>
-                          <div className="flex items-center gap-2">
-                            <Button variant="secondary" size="sm" onClick={goToPreviousPortsPage} disabled={!canGoPrevPortsPage}>
-                              Voltar
-                            </Button>
-                            <div className="rounded-md border border-border px-3 py-1 text-xs text-muted-foreground">
-                              {portsPageIndex}
-                            </div>
-                            <Button variant="secondary" size="sm" onClick={goToNextPortsPage} disabled={!canGoNextPortsPage || portsPageQuery.isFetching} loading={portsPageQuery.isFetching}>
-                              Avançar
-                            </Button>
-                          </div>
-                        </div>
-                      )}
                       <div style={{ minHeight: '400px' }} className="relative">
                         <DataTable
                           columns={listeningPortColumns}
@@ -2689,23 +2564,18 @@ export default function AgentDetail() {
                         />
                       </div>
                       {portsPageItems.length > 0 && (
-                        <div className="mt-4 flex items-center justify-between gap-3">
-                          <p className="text-xs text-muted">
-                            Página {portsPageIndex} de {portsTotalPages} · {portsTotalCount} itens no total
-                            {listeningPortsSearchApplied ? ` | filtro: "${listeningPortsSearchApplied}"` : ''}
-                          </p>
-                          <div className="flex items-center gap-2">
-                            <Button variant="secondary" size="sm" onClick={goToPreviousPortsPage} disabled={!canGoPrevPortsPage}>
-                              Voltar
-                            </Button>
-                            <div className="rounded-md border border-border px-3 py-1 text-xs text-muted-foreground">
-                              {portsPageIndex}
-                            </div>
-                            <Button variant="secondary" size="sm" onClick={goToNextPortsPage} disabled={!canGoNextPortsPage || portsPageQuery.isFetching} loading={portsPageQuery.isFetching}>
-                              Avançar
-                            </Button>
-                          </div>
-                        </div>
+                        <Pagination
+                          className="mt-4"
+                          page={portsPageIndex}
+                          totalPages={portsTotalPages}
+                          onPageChange={(target) => {
+                            if (target < portsPageIndex) goToPreviousPortsPage();
+                            else if (target > portsPageIndex) goToNextPortsPage();
+                          }}
+                          totalItems={portsTotalCount}
+                          pageSize={Number(listeningPortsLimit)}
+                          showFirstLast={false}
+                        />
                       )}
                       </>
                     </div>
@@ -2764,25 +2634,6 @@ export default function AgentDetail() {
                           Limpar
                         </Button>
                       </form>
-                      {socketsPageItems.length > 0 && (
-                        <div className="mb-4 flex items-center justify-between gap-3">
-                          <p className="text-xs text-muted">
-                            Página {socketsPageIndex} de {socketsTotalPages} · {socketsTotalCount} itens no total
-                            {openSocketsSearchApplied ? ` | filtro: "${openSocketsSearchApplied}"` : ''}
-                          </p>
-                          <div className="flex items-center gap-2">
-                            <Button variant="secondary" size="sm" onClick={goToPreviousSocketsPage} disabled={!canGoPrevSocketsPage}>
-                              Voltar
-                            </Button>
-                            <div className="rounded-md border border-border px-3 py-1 text-xs text-muted-foreground">
-                              {socketsPageIndex}
-                            </div>
-                            <Button variant="secondary" size="sm" onClick={goToNextSocketsPage} disabled={!canGoNextSocketsPage || socketsPageQuery.isFetching} loading={socketsPageQuery.isFetching}>
-                              Avançar
-                            </Button>
-                          </div>
-                        </div>
-                      )}
                       <div style={{ minHeight: '400px' }} className="relative">
                         <DataTable
                           columns={openSocketColumns}
@@ -2794,23 +2645,18 @@ export default function AgentDetail() {
                         />
                       </div>
                       {socketsPageItems.length > 0 && (
-                        <div className="mt-4 flex items-center justify-between gap-3">
-                          <p className="text-xs text-muted">
-                            Página {socketsPageIndex} de {socketsTotalPages} · {socketsTotalCount} itens no total
-                            {openSocketsSearchApplied ? ` | filtro: "${openSocketsSearchApplied}"` : ''}
-                          </p>
-                          <div className="flex items-center gap-2">
-                            <Button variant="secondary" size="sm" onClick={goToPreviousSocketsPage} disabled={!canGoPrevSocketsPage}>
-                              Voltar
-                            </Button>
-                            <div className="rounded-md border border-border px-3 py-1 text-xs text-muted-foreground">
-                              {socketsPageIndex}
-                            </div>
-                            <Button variant="secondary" size="sm" onClick={goToNextSocketsPage} disabled={!canGoNextSocketsPage || socketsPageQuery.isFetching} loading={socketsPageQuery.isFetching}>
-                              Avançar
-                            </Button>
-                          </div>
-                        </div>
+                        <Pagination
+                          className="mt-4"
+                          page={socketsPageIndex}
+                          totalPages={socketsTotalPages}
+                          onPageChange={(target) => {
+                            if (target < socketsPageIndex) goToPreviousSocketsPage();
+                            else if (target > socketsPageIndex) goToNextSocketsPage();
+                          }}
+                          totalItems={socketsTotalCount}
+                          pageSize={Number(openSocketsLimit)}
+                          showFirstLast={false}
+                        />
                       )}
                       </>
                     </div>
@@ -2822,10 +2668,7 @@ export default function AgentDetail() {
             {activeDataTab === 'autostart' && (
               <div className="space-y-4">
                 <DetailTabs
-                  tabs={buildAgentAutostartTabs({
-                    startupItems: hwComponents.data ? startupItems.length : undefined,
-                    scheduledTasks: hwComponents.data ? scheduledTasks.length : undefined,
-                  })}
+                  tabs={buildAgentAutostartTabs()}
                   active={activeAutostartView}
                   onChange={handleSelectAutostartView}
                   ariaLabel="Seções de execução automática do agente"

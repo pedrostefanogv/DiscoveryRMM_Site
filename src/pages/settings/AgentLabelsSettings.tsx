@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import toast from 'react-hot-toast';
 
-import { Icon, Badge, Button, Card, CardHeader, ErrorDisplay, Input, Loading, Modal, Select, TextArea } from '@/components/ui';
+import { Icon, Badge, Button, Card, CardHeader, ErrorDisplay, Input, Loading, Modal, Pagination, Select, TextArea } from '@/components/ui';
 import { agentsApi, clientsApi, sitesApi, type Agent, type Client, type Site } from '@/api';
 import { agentLabelsApi } from '@/modules/agent-labels/api';
 import {
@@ -1910,29 +1910,16 @@ export default function AgentLabelsSettings() {
                 )}
 
                 {appliedAgentsTotal > APPLIED_PAGE_SIZE ? (
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs text-muted">
-                      Página {appliedPage} de {appliedTotalPages}
-                    </span>
-                    <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        disabled={appliedPage <= 1 || isLoadingAppliedAgents}
-                        onClick={() => { if (agentsModalRule) void handleLoadAppliedAgents(agentsModalRule, appliedPage - 1); }}
-                      >
-                        Anterior
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        disabled={appliedPage >= appliedTotalPages || isLoadingAppliedAgents}
-                        onClick={() => { if (agentsModalRule) void handleLoadAppliedAgents(agentsModalRule, appliedPage + 1); }}
-                      >
-                        Próxima
-                      </Button>
-                    </div>
-                  </div>
+                  <Pagination
+                    page={appliedPage}
+                    totalPages={appliedTotalPages}
+                    onPageChange={(target) => {
+                      if (!agentsModalRule) return;
+                      void handleLoadAppliedAgents(agentsModalRule, target);
+                    }}
+                    totalItems={appliedAgentsTotal}
+                    pageSize={APPLIED_PAGE_SIZE}
+                  />
                 ) : null}
               </>
             )}

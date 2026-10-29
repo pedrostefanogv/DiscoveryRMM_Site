@@ -357,7 +357,7 @@ export default function AgentStartupItemsPanel({
           onRowContextMenu={openMenu}
           rowHoverCard={renderItemDetails}
           rowHoverDelayMs={1500}
-          showPagination={false}
+          pageSize={15}
           emptyMessage='Nenhum item de inicialização encontrado'
           maxHeight='min(560px, 52vh)'
           fixedLayout

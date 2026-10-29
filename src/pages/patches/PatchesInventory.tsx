@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
-import { Icon, Badge, Button, Card, CardHeader, DataTable, ErrorDisplay, Input, Loading, Modal, PageHeader, Select, type Column } from "@/components/ui";
+import { Icon, Badge, Button, Card, CardHeader, DataTable, ErrorDisplay, Input, Loading, Modal, PageHeader, Pagination, Select, type Column } from "@/components/ui";
 import { useClients } from "@/hooks/useClients";
 import { useSites } from "@/hooks/useSites";
 import { useCursorPagination } from "@/hooks/useCursorPagination";
@@ -383,13 +383,20 @@ export default function PatchesInventory() {
               emptyMessage="Nenhuma atualização inventariada"
             />
           </div>
-          <div className="flex items-center justify-between border-t border-border px-4 py-3 text-sm">
-            <span className="text-muted">Página {pag.page} · {list.data?.items.length ?? 0} atualização(ões)</span>
-            <div className="flex gap-2">
-              <Button size="sm" variant="secondary" onClick={pag.goToPrev} disabled={pag.page <= 1 || list.isFetching}>Anterior</Button>
-              <Button size="sm" variant="secondary" onClick={() => pag.goToNext(list.data?.nextCursor)} disabled={!list.data?.hasMore || list.isFetching}>Próxima</Button>
-            </div>
-          </div>
+          <Pagination
+            className="border-t border-border px-4 py-3"
+            page={pag.page}
+            totalPages={1}
+            onPageChange={() => {}}
+            itemLabel={`${list.data?.items.length ?? 0} atualização(ões)`}
+            cursor={{
+              hasPrev: pag.page > 1,
+              hasNext: Boolean(list.data?.hasMore),
+              onPrev: pag.goToPrev,
+              onNext: () => pag.goToNext(list.data?.nextCursor),
+              loading: list.isFetching,
+            }}
+          />
         </Card>
       )}
 
@@ -416,13 +423,18 @@ export default function PatchesInventory() {
                 showPagination={false}
                 emptyMessage="Nenhum agente neste escopo possui esta atualização"
               />
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted">Página {agentsPag.page}</span>
-                <div className="flex gap-2">
-                  <Button size="sm" variant="secondary" onClick={agentsPag.goToPrev} disabled={agentsPag.page <= 1}>Anterior</Button>
-                  <Button size="sm" variant="secondary" onClick={() => agentsPag.goToNext(agents.data?.nextCursor)} disabled={!agents.data?.hasMore}>Próxima</Button>
-                </div>
-              </div>
+              <Pagination
+                page={agentsPag.page}
+                totalPages={1}
+                onPageChange={() => {}}
+                cursor={{
+                  hasPrev: agentsPag.page > 1,
+                  hasNext: Boolean(agents.data?.hasMore),
+                  onPrev: agentsPag.goToPrev,
+                  onNext: () => agentsPag.goToNext(agents.data?.nextCursor),
+                  loading: agents.isFetching,
+                }}
+              />
             </>
           )}
         </div>

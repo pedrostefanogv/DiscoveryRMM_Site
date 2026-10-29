@@ -420,7 +420,7 @@ export default function AgentPoliciesPanel({
           keyExtractor={(policy) => policy.taskId}
           rowHoverCard={renderDetails}
           rowHoverDelayMs={1500}
-          showPagination={false}
+          pageSize={15}
           emptyMessage='Nenhuma política de automação encontrada'
           maxHeight='min(560px, 52vh)'
           fixedLayout

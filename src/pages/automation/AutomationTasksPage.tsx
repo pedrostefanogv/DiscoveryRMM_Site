@@ -11,6 +11,7 @@ import { Icon,
   Input,
   Loading,
   Modal,
+  Pagination,
   Select,
   TextArea,
   ContextMenu,
@@ -1627,14 +1628,13 @@ export default function AutomationTasksPage() {
                 setContextMenu({ x: event.clientX, y: event.clientY, item });
               }}
             />
-            <div className="mt-4 flex justify-end gap-2">
-              <Button size="sm" variant="secondary" disabled={!canPrev} onClick={goToPrevPage}>
-                Anterior
-              </Button>
-              <Button size="sm" variant="secondary" disabled={!canNext} onClick={goToNextPage}>
-                Proxima
-              </Button>
-            </div>
+            <Pagination
+              className="mt-4"
+              page={page}
+              totalPages={1}
+              onPageChange={() => {}}
+              cursor={{ hasPrev: canPrev, hasNext: canNext, onPrev: goToPrevPage, onNext: goToNextPage, loading: list.isFetching }}
+            />
           </>
         )}
       </Card>

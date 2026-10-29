@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import { Icon } from "@/components/ui";
 
 import { EmptyState } from './EmptyState';
+import { Pagination } from './Pagination';
 
 interface Column<T> {
   key: string;
@@ -389,48 +390,13 @@ export function DataTable<T>({
       )}
 
       {showPagination && totalPages > 1 && (
-        <div className="flex items-center justify-between text-sm">
-          <p className="text-muted">
-            Mostrando {(safePage - 1) * pageSize + 1}–{Math.min(safePage * pageSize, sorted.length)} de {sorted.length}
-          </p>
-          <div className="flex items-center gap-1">
-            <button
-              onClick={() => setPage(1)}
-              disabled={safePage === 1}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted hover:bg-surface-light hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-              aria-label="Primeira página"
-            >
-              <Icon name="keyboard_double_arrow_left" className="h-4 w-4" />
-            </button>
-            <button
-              onClick={() => setPage(p => Math.max(1, p - 1))}
-              disabled={safePage === 1}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted hover:bg-surface-light hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-              aria-label="Página anterior"
-            >
-              <Icon name="chevron_left" className="h-4 w-4" />
-            </button>
-            <span className="px-2 text-muted tabular-nums">
-              {safePage} / {totalPages}
-            </span>
-            <button
-              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-              disabled={safePage === totalPages}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted hover:bg-surface-light hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-              aria-label="Próxima página"
-            >
-              <Icon name="chevron_right" className="h-4 w-4" />
-            </button>
-            <button
-              onClick={() => setPage(totalPages)}
-              disabled={safePage === totalPages}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted hover:bg-surface-light hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-              aria-label="Última página"
-            >
-              <Icon name="keyboard_double_arrow_right" className="h-4 w-4" />
-            </button>
-          </div>
-        </div>
+        <Pagination
+          page={safePage}
+          totalPages={totalPages}
+          onPageChange={setPage}
+          totalItems={sorted.length}
+          pageSize={pageSize}
+        />
       )}
     </div>
   );

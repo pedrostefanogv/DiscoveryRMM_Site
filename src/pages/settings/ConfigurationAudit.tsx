@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 
 import type { ConfigurationAuditEntry } from "@/api";
-import { Icon, Badge, Button, Card, CardHeader, ErrorDisplay, Input, Loading, Select } from "@/components/ui";
+import { Icon, Badge, Button, Card, CardHeader, ErrorDisplay, Input, Loading, Pagination, Select } from "@/components/ui";
 import { useClients } from "@/hooks/useClients";
 import { useAllSites } from "@/hooks/useSites";
 import {
@@ -234,24 +234,14 @@ export default function ConfigurationAudit() {
             </div>
 
             {pageCount > 1 && (
-              <div className="mt-4 flex justify-end gap-2">
-                <button
-                  type="button"
-                  className="rounded-lg border border-border px-3 py-1.5 text-sm text-muted-foreground disabled:opacity-40"
-                  onClick={() => setPage((prev) => Math.max(1, prev - 1))}
-                  disabled={currentPage === 1}
-                >
-                  Anterior
-                </button>
-                <button
-                  type="button"
-                  className="rounded-lg border border-border px-3 py-1.5 text-sm text-muted-foreground disabled:opacity-40"
-                  onClick={() => setPage((prev) => Math.min(pageCount, prev + 1))}
-                  disabled={currentPage === pageCount}
-                >
-                  Próxima
-                </button>
-              </div>
+              <Pagination
+                className="mt-4"
+                page={currentPage}
+                totalPages={pageCount}
+                onPageChange={setPage}
+                totalItems={sortedEntries.length}
+                pageSize={PAGE_SIZE}
+              />
             )}
           </>
         )}

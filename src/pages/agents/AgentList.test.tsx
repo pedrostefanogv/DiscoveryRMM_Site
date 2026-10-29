@@ -315,14 +315,14 @@ describe('AgentList — lixeira e filtros', () => {
     selectDeletedView();
     await screen.findByText('EXCLUIDO-01');
 
-    expect(screen.getByText('Página 1 de 2')).toBeTruthy();
+    expect(screen.getByText('1 / 2')).toBeTruthy();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Próxima' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Próxima página' }));
 
     await waitFor(() =>
       expect(deletedParamsMock).toHaveBeenLastCalledWith(expect.objectContaining({ page: 2 })),
     );
-    expect(screen.getByText('Página 2 de 2')).toBeTruthy();
+    expect(screen.getByText('2 / 2')).toBeTruthy();
   });
 
   it('recolhe labels, campo customizado e ordenação na barra principal', () => {

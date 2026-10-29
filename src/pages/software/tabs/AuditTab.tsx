@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-import { Icon, Badge, Button, Card, ErrorDisplay, Input, Loading, Select } from '@/components/ui';
+import { Icon, Badge, Button, Card, ErrorDisplay, Input, Loading, Pagination, Select } from '@/components/ui';
 import { useAppStoreAudit } from '@/hooks/useAppStore';
 import { useCursorPagination } from '@/hooks/useCursorPagination';
 import { AppApprovalActionType, AppApprovalAuditChangeType, AppInstallationType } from '@/api/types';
@@ -80,11 +80,18 @@ export function AuditTab() {
       <Card padding={false}>
         <div className="border-b border-border px-5 py-4 flex items-center justify-between">
           <span className="text-sm font-medium text-foreground">{query.data ? `${query.data.returnedItems} evento(s)` : 'Histórico de auditoria'}</span>
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={auditPag.goToPrev} disabled={auditPag.page <= 1}><Icon name="chevron_left" className="h-4 w-4" /></Button>
-            <span className="text-xs text-muted">Pág. {auditPag.page}</span>
-            <Button variant="ghost" size="sm" onClick={() => auditPag.goToNext(query.data?.nextCursor)} disabled={!query.data?.hasMore}><Icon name="chevron_right" className="h-4 w-4" /></Button>
-          </div>
+          <Pagination
+            page={auditPag.page}
+            totalPages={1}
+            onPageChange={() => {}}
+            cursor={{
+              hasPrev: auditPag.page > 1,
+              hasNext: Boolean(query.data?.hasMore),
+              onPrev: auditPag.goToPrev,
+              onNext: () => auditPag.goToNext(query.data?.nextCursor),
+              loading: query.isFetching,
+            }}
+          />
         </div>
         {query.isLoading && <Loading />}
         {query.isError && <ErrorDisplay message="Erro ao carregar auditoria." onRetry={() => query.refetch()} />}

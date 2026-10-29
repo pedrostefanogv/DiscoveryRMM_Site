@@ -5,6 +5,7 @@ export { Button } from "./Button";
 export { Card, CardHeader } from "./Card";
 export { Badge } from "./Badge";
 export { DataTable, type Column } from "./DataTable";
+export { Pagination } from "./Pagination";
 export { Modal } from "./Modal";
 export { ImageLightbox } from "./ImageLightbox";
 export { ContextMenu, type ContextMenuItem } from "./ContextMenu";

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import { Icon, Card, CardHeader, DataTable, ErrorDisplay, Input, Loading, Select, StatCard, Button, Modal, Badge, type Column } from "@/components/ui";
+import { Icon, Card, CardHeader, DataTable, ErrorDisplay, Input, Loading, Pagination, Select, StatCard, Button, Modal, Badge, type Column } from "@/components/ui";
 import { useClients } from "@/hooks/useClients";
 import { useSites } from "@/hooks/useSites";
 import { useSoftwareInventoryList, useSoftwareInventorySnapshot, useSoftwareInstallations, type SoftwareInventoryScope } from "@/hooks/useSoftwareInventory";
@@ -260,24 +260,19 @@ export default function SoftwareInventory() {
           <ErrorDisplay onRetry={() => list.refetch()} />
         ) : (
           <div className="p-5">
-            {/* Paginação superior */}
-            <div className="flex items-center justify-between gap-3">
-              <p className="text-xs text-muted">{paginationInfoText}</p>
-
-              <div className="flex items-center gap-2">
-                <Button variant="secondary" size="sm" onClick={pag.goToPrev} disabled={!canPrev}>
-                  Voltar
-                </Button>
-
-                <span className="px-2 text-xs tabular-nums text-muted">
-                  {hasActiveSearch ? currentPage : `${currentPage} / ~${estimatedTotalPages}`}
-                </span>
-
-                <Button variant="secondary" size="sm" onClick={() => pag.goToNext(list.data?.nextCursor)} disabled={!canNext} loading={list.isFetching}>
-                  Avançar
-                </Button>
-              </div>
-            </div>
+            <Pagination
+              page={currentPage}
+              totalPages={hasActiveSearch ? currentPage : estimatedTotalPages}
+              onPageChange={() => {}}
+              itemLabel={paginationInfoText}
+              cursor={{
+                hasPrev: canPrev,
+                hasNext: canNext,
+                onPrev: pag.goToPrev,
+                onNext: () => pag.goToNext(list.data?.nextCursor),
+                loading: list.isFetching,
+              }}
+            />
 
             <div className="mt-3">
               <DataTable
@@ -289,24 +284,20 @@ export default function SoftwareInventory() {
               />
             </div>
 
-            {/* Paginação inferior */}
-            <div className="mt-4 flex items-center justify-between gap-3">
-              <p className="text-xs text-muted">{paginationInfoText}</p>
-
-              <div className="flex items-center gap-2">
-                <Button variant="secondary" size="sm" onClick={pag.goToPrev} disabled={!canPrev}>
-                  Voltar
-                </Button>
-
-                <span className="px-2 text-xs tabular-nums text-muted">
-                  {hasActiveSearch ? currentPage : `${currentPage} / ~${estimatedTotalPages}`}
-                </span>
-
-                <Button variant="secondary" size="sm" onClick={() => pag.goToNext(list.data?.nextCursor)} disabled={!canNext} loading={list.isFetching}>
-                  Avançar
-                </Button>
-              </div>
-            </div>
+            <Pagination
+              className="mt-4"
+              page={currentPage}
+              totalPages={hasActiveSearch ? currentPage : estimatedTotalPages}
+              onPageChange={() => {}}
+              itemLabel={paginationInfoText}
+              cursor={{
+                hasPrev: canPrev,
+                hasNext: canNext,
+                onPrev: pag.goToPrev,
+                onNext: () => pag.goToNext(list.data?.nextCursor),
+                loading: list.isFetching,
+              }}
+            />
           </div>
         )}
       </Card>
@@ -375,26 +366,19 @@ export default function SoftwareInventory() {
               )}
             </div>
 
-            <div className="flex items-center justify-between gap-3">
-              <p className="text-xs text-muted">
-                {detailsRows.length} instalação(ões) nesta página
-              </p>
-              <div className="flex items-center gap-2">
-                <Button variant="secondary" size="sm" onClick={detailsPag.goToPrev} disabled={!detailsCanPrev}>
-                  Voltar
-                </Button>
-                <span className="px-2 text-xs tabular-nums text-muted">Página {detailsPag.page}</span>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => detailsPag.goToNext(installations.data?.nextCursor)}
-                  disabled={!detailsCanNext}
-                  loading={installations.isFetching}
-                >
-                  Avançar
-                </Button>
-              </div>
-            </div>
+            <Pagination
+              page={detailsPag.page}
+              totalPages={1}
+              onPageChange={() => {}}
+              itemLabel={`${detailsRows.length} instalação(ões) nesta página`}
+              cursor={{
+                hasPrev: detailsCanPrev,
+                hasNext: detailsCanNext,
+                onPrev: detailsPag.goToPrev,
+                onNext: () => detailsPag.goToNext(installations.data?.nextCursor),
+                loading: installations.isFetching,
+              }}
+            />
           </div>
         )}
       </Modal>

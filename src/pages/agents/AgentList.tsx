@@ -15,7 +15,7 @@ import { useClients } from '@/hooks/useClients';
 import { useAllSites } from '@/hooks/useSites';
 import { getDeleteAgentErrorMessage, getPurgeAgentErrorMessage, useApproveZeroTouch, useDeleteAgent, useDeletedAgents, usePurgeAgent, useRestartAgent, useRestoreAgent, useShutdownAgent, useWakeOnLan } from '@/hooks/useAgents';
 import { ApiError, agentUpdatesApi, agentsApi } from '@/api';
-import { Icon, Badge, ErrorDisplay, Input, Select, StatCard, Modal, PageHeader, SkeletonCard, EmptyState, Button, ConfirmDialog } from '@/components/ui';
+import { Icon, Badge, ErrorDisplay, Input, Select, StatCard, Modal, PageHeader, SkeletonCard, EmptyState, Button, ConfirmDialog, Pagination } from '@/components/ui';
 import { TransferAgentModal } from '@/components/agents/TransferAgentModal';
 import { AgentCard, formatDateBrazil } from '@/components/agents/AgentCard';
 import { AgentListView } from '@/components/agents/AgentListView';
@@ -1086,27 +1086,13 @@ export default function AgentList() {
                 {deletedItems.length < deletedTotal ? ' (mostrando ' + deletedItems.length + ' nesta página)' : ''}
               </p>
               {deletedTotalPages > 1 && (
-                <div className="flex items-center gap-2">
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    disabled={deletedPage <= 1}
-                    onClick={() => setDeletedPage(page => Math.max(1, page - 1))}
-                  >
-                    Anterior
-                  </Button>
-                  <span className="text-xs text-muted">
-                    Página {deletedPage} de {deletedTotalPages}
-                  </span>
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    disabled={deletedPage >= deletedTotalPages}
-                    onClick={() => setDeletedPage(page => page + 1)}
-                  >
-                    Próxima
-                  </Button>
-                </div>
+                <Pagination
+                  page={deletedPage}
+                  totalPages={deletedTotalPages}
+                  onPageChange={setDeletedPage}
+                  totalItems={deletedTotal}
+                  pageSize={DELETED_PAGE_SIZE}
+                />
               )}
             </div>
             <div className="overflow-hidden rounded-xl border border-border bg-surface">

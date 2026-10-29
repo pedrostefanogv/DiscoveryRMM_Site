@@ -250,9 +250,9 @@ describe('AgentDetail — abas do agente', () => {
     expect(screen.getByText('192.168.10.77')).toBeTruthy();
     expect(screen.getByTestId('pinned-notes')).toBeTruthy();
     expect(screen.queryByTestId('notes-panel')).toBeNull();
-    // Os contadores por aba foram preservados na nova barra.
-    expect(screen.getByRole('tab', { name: /Aplicativos/ }).textContent).toContain('42');
-    expect(screen.getByRole('tab', { name: /^Labels/ }).textContent).toContain('1');
+    // As abas mostram apenas o título — sem contadores ao lado do rótulo.
+    expect(screen.getByRole('tab', { name: /Aplicativos/ }).textContent).toBe('Aplicativos');
+    expect(screen.getByRole('tab', { name: /^Labels/ }).textContent).toBe('Labels');
     // Portas/Conexões e Inicialização/Tarefas saíram da barra principal: 12 abas
     // (incluindo "Extras" e a nova "Atualizações").
     expect(screen.getAllByRole('tab')).toHaveLength(12);
@@ -347,28 +347,26 @@ describe('AgentDetail — abas do agente', () => {
     expect(screen.getByRole('tab', { name: /^Inicialização/ }).getAttribute('aria-selected')).toBe('true');
   });
 
-  it('badge da aba unificada reflete a sub-aba de tarefas quando ativa', async () => {
+  it('aba unificada Autoruns não exibe contador no rótulo', async () => {
     await renderPage('?tab=tarefas-agendadas');
 
-    const badge = screen.getByRole('tab', { name: /Autoruns/ }).textContent ?? '';
-    expect(badge).toContain('1');
-    expect(badge).not.toContain('2');
+    const autoruns = screen.getByRole('tab', { name: /Autoruns/ });
+    expect(autoruns.textContent).toBe('Autoruns');
   });
 
-  it('badge da aba unificada reflete a sub-aba de inicialização quando ativa', async () => {
+  it('aba Autoruns mantém apenas o título na sub-aba de inicialização', async () => {
     await renderPage('?tab=inicializacao');
 
-    const badge = screen.getByRole('tab', { name: /Autoruns/ }).textContent ?? '';
-    expect(badge).toContain('2');
-    expect(badge).not.toContain('1');
+    const autoruns = screen.getByRole('tab', { name: /Autoruns/ });
+    expect(autoruns.textContent).toBe('Autoruns');
   });
 
-  it('abre a aba Políticas pelo deep link com o contador de políticas', async () => {
+  it('abre a aba Políticas pelo deep link', async () => {
     await renderPage('?tab=politicas');
 
     const tab = screen.getByRole('tab', { name: /Políticas/ });
     expect(tab.getAttribute('aria-selected')).toBe('true');
-    expect(tab.textContent).toContain('3');
+    expect(tab.textContent).toBe('Políticas');
   });
 
   it('troca para Tarefas Agendadas dentro da aba Autoruns', async () => {
@@ -388,12 +386,12 @@ describe('AgentDetail — abas do agente', () => {
     expect(screen.queryByText('TeamViewer ID:')).toBeNull();
   });
 
-  it('abre a aba Extras pelo deep link, com o contador de campos', async () => {
+  it('abre a aba Extras pelo deep link', async () => {
     await renderPage('?tab=campos-customizados');
 
     const tab = screen.getByRole('tab', { name: /Extras/ });
     expect(tab.getAttribute('aria-selected')).toBe('true');
-    expect(tab.textContent).toContain('2');
+    expect(tab.textContent).toBe('Extras');
     expect(screen.queryByTestId('pinned-notes')).toBeNull();
   });
 

@@ -8,6 +8,7 @@ import { Icon,
   ErrorDisplay,
   Input,
   Loading,
+  Pagination,
   Select,
 } from '@/components/ui';
 import type { Column } from '@/components/ui';
@@ -720,55 +721,33 @@ export default function KnowledgeList() {
               emptyMessage="Nenhum artigo encontrado para os filtros selecionados."
               showPagination={false}
             />
-            <div className="flex items-center justify-between border-t border-border px-4 py-3">
-              <p className="text-xs text-muted">
-                {totalItems} artigo(s) • {pageSize} por página • página {currentPage}
-                {hasArticleListPage && listPage?.hasMore
-                  ? ` • mais itens disponíveis`
-                  : !hasArticleListPage
-                    ? ` de ${totalPages}`
-                    : ''}
-              </p>
-              <div className="flex gap-2">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    if (hasArticleListPage) {
-                      knowledgePag.goToPrev();
-                    } else {
-                      setPage((prev) => Math.max(1, prev - 1));
-                    }
-                  }}
-                  disabled={
-                    hasArticleListPage
-                      ? knowledgePag.page <= 1
-                      : currentPage === 1
-                  }
-                >
-                  Anterior
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    if (hasArticleListPage && listPage?.nextCursor) {
-                      knowledgePag.goToNext(listPage.nextCursor);
-                    } else if (!hasArticleListPage) {
-                      setPage((prev) => Math.min(totalPages, prev + 1));
-                    }
-                  }}
-                  disabled={
-                    hasArticleListPage
-                      ? (!listPage?.hasMore || !listPage?.nextCursor || listQuery.isFetching)
-                      : (currentPage === totalPages || listQuery.isFetching)
-                  }
-                  loading={listQuery.isFetching}
-                >
-                  Próxima
-                </Button>
-              </div>
-            </div>
+            {hasArticleListPage ? (
+              <Pagination
+                className="border-t border-border px-4 py-3"
+                page={knowledgePag.page}
+                totalPages={1}
+                onPageChange={() => {}}
+                itemLabel={`${totalItems} artigo(s)${listPage?.hasMore ? ' • mais itens disponíveis' : ''}`}
+                cursor={{
+                  hasPrev: knowledgePag.page > 1,
+                  hasNext: Boolean(listPage?.hasMore && listPage?.nextCursor),
+                  onPrev: knowledgePag.goToPrev,
+                  onNext: () => {
+                    if (listPage?.nextCursor) knowledgePag.goToNext(listPage.nextCursor);
+                  },
+                  loading: listQuery.isFetching,
+                }}
+              />
+            ) : (
+              <Pagination
+                className="border-t border-border px-4 py-3"
+                page={currentPage}
+                totalPages={totalPages}
+                onPageChange={setPage}
+                totalItems={totalItems}
+                pageSize={pageSize}
+              />
+            )}
           </div>
         )}
       </Card>

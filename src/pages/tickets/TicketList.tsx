@@ -25,7 +25,7 @@ import {
   useTicketSavedViews,
   useUpdateTicketSavedView,
 } from '@/hooks/useTicketSavedViews';
-import { Icon, Button, Card, ConfirmDialog, DataTable, Badge, Loading, Modal, Input, Select, Tooltip } from '@/components/ui';
+import { Icon, Button, Card, ConfirmDialog, DataTable, Badge, Loading, Modal, Input, Pagination, Select, Tooltip } from '@/components/ui';
 import { TicketAnswerMatch } from '@/api';
 import type {
   CreateTicketRequest,
@@ -971,52 +971,46 @@ export default function TicketList() {
 
   const renderPaginationBar = (position: 'top' | 'bottom') => (
     <div
-      className={`flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-xs text-muted ${
+      className={`flex flex-wrap items-center justify-between gap-3 px-4 py-3 ${
         position === 'top' ? 'border-b border-border' : 'border-t border-border'
       }`}
     >
-      <div className="flex items-center gap-3">
-        <label className="flex items-center gap-2">
-          <span className="text-muted">Por pagina</span>
-          <select
-            value={String(pageSize)}
-            onChange={(event) => {
-              setPageSize(Number(event.target.value));
-              setHoverPreviewTicketId(null);
-              resetPagination();
-            }}
-            className="rounded-lg border border-border bg-surface-light px-2 py-1 text-xs text-foreground outline-none transition-colors focus-visible:border-primary/60 focus-visible:ring-2 focus-visible:ring-primary/30"
-            aria-label="Quantidade de chamados por pagina"
-          >
-            {PAGE_SIZE_OPTIONS.map((value) => (
-              <option
-                key={value}
-                value={value}
-                className="bg-white text-slate-900 dark:bg-surface dark:text-foreground"
-              >
-                {value}
-              </option>
-            ))}
-          </select>
-        </label>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={goToPrevPage}
-          disabled={!hasPrevPage || tickets.isFetching}
+      <label className="flex items-center gap-2 text-xs text-muted">
+        <span>Por página</span>
+        <select
+          value={String(pageSize)}
+          onChange={(event) => {
+            setPageSize(Number(event.target.value));
+            setHoverPreviewTicketId(null);
+            resetPagination();
+          }}
+          className="rounded-lg border border-border bg-surface-light px-2 py-1 text-xs text-foreground outline-none transition-colors focus-visible:border-primary/60 focus-visible:ring-2 focus-visible:ring-primary/30"
+          aria-label="Quantidade de chamados por página"
         >
-          Anterior
-        </Button>
-        <span className="min-w-16 text-center">Pagina {page}</span>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={goToNextPage}
-          disabled={!hasNextPage || tickets.isFetching}
-        >
-          Proxima
-        </Button>
-      </div>
+          {PAGE_SIZE_OPTIONS.map((value) => (
+            <option
+              key={value}
+              value={value}
+              className="bg-white text-slate-900 dark:bg-surface dark:text-foreground"
+            >
+              {value}
+            </option>
+          ))}
+        </select>
+      </label>
+      <Pagination
+        className="flex-1 justify-end"
+        page={page}
+        totalPages={1}
+        onPageChange={() => {}}
+        cursor={{
+          hasPrev: hasPrevPage,
+          hasNext: hasNextPage,
+          onPrev: goToPrevPage,
+          onNext: goToNextPage,
+          loading: tickets.isFetching,
+        }}
+      />
     </div>
   );
 

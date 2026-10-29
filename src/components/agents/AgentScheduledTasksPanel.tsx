@@ -557,7 +557,7 @@ export default function AgentScheduledTasksPanel({
           onRowContextMenu={openMenu}
           rowHoverCard={renderTaskDetails}
           rowHoverDelayMs={1500}
-          showPagination={false}
+          pageSize={15}
           emptyMessage='Nenhuma tarefa agendada encontrada'
           maxHeight='min(560px, 52vh)'
           fixedLayout

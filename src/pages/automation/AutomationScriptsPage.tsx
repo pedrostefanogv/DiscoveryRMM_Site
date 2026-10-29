@@ -13,6 +13,7 @@ import { Icon,
   ErrorDisplay,
   Loading,
   Modal,
+  Pagination,
   Select,
 } from "@/components/ui";
 import { type AutomationScriptSummary } from "@/api";
@@ -276,14 +277,13 @@ export default function AutomationScriptsPage() {
               fixedLayout
               flush
             />
-            <div className="mt-4 flex justify-end gap-2">
-              <Button size="sm" variant="secondary" disabled={!canPrev} onClick={goToPrevPage}>
-                Anterior
-              </Button>
-              <Button size="sm" variant="secondary" disabled={!canNext} onClick={goToNextPage}>
-                Proxima
-              </Button>
-            </div>
+            <Pagination
+              className="mt-4"
+              page={page}
+              totalPages={1}
+              onPageChange={() => {}}
+              cursor={{ hasPrev: canPrev, hasNext: canNext, onPrev: goToPrevPage, onNext: goToNextPage, loading: list.isFetching }}
+            />
           </>
         )}
       </Card>

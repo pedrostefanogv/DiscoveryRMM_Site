@@ -3,9 +3,19 @@ import { ApiError } from "@/api";
 import { GENERIC_AUTH_ERROR_MESSAGE, resolveLoginErrorMessage } from "./errorMessages";
 
 describe("resolveLoginErrorMessage", () => {
-  it("mantém a mensagem do servidor para erros de credencial (401)", () => {
+  it("mantém a mensagem do servidor para erros de credencial (401) e acrescenta dica acionável", () => {
     const error = new ApiError(401, "Credenciais inválidas.");
-    expect(resolveLoginErrorMessage(error)).toBe("Credenciais inválidas.");
+    const message = resolveLoginErrorMessage(error);
+    // A mensagem do servidor é preservada como prefixo...
+    expect(message.startsWith("Credenciais inválidas.")).toBe(true);
+    // ...seguida de orientação sem expor detalhes de infraestrutura.
+    expect(message).toContain("login ou e-mail cadastrado");
+    expect(message).toContain("senha sem espaços extras");
+  });
+
+  it("não duplica a dica quando o servidor já devolveu orientação", () => {
+    const error = new ApiError(401, "Credenciais inválidas. Verifique seu login.");
+    expect(resolveLoginErrorMessage(error).match(/Verifique se este é exatamente/g)).toHaveLength(1);
   });
 
   it("mantém a mensagem do servidor para bloqueio temporário (429)", () => {

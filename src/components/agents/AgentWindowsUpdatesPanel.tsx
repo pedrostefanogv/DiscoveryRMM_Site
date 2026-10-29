@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import toast from "react-hot-toast";
-import { Icon, Badge, Button, ConfirmDialog, DataTable, ErrorDisplay, Input, Loading, Modal, Select, type Column } from "@/components/ui";
+import { Icon, Badge, Button, ConfirmDialog, DataTable, ErrorDisplay, Input, Loading, Modal, Pagination, Select, type Column } from "@/components/ui";
 import { useAuthorization } from "@/auth/authorization";
 import { usePatchesRealtime } from "@/hooks/usePatchesRealtime";
 import {
@@ -577,20 +577,13 @@ export function AgentWindowsUpdatesPanel({ agentId }: { agentId: string }) {
         />
       )}
 
-      <div className="flex items-center justify-between text-sm">
-        <span className="text-muted">
-          Página {page} de {totalPages} · {totalCount} registro(s)
-          {pageQuery.isFetching ? " · atualizando..." : ""}
-        </span>
-        <div className="flex gap-2">
-          <Button size="sm" variant="secondary" onClick={() => setPage((current) => Math.max(1, current - 1))} disabled={page <= 1 || pageQuery.isFetching}>
-            Anterior
-          </Button>
-          <Button size="sm" variant="secondary" onClick={() => setPage((current) => Math.min(totalPages, current + 1))} disabled={page >= totalPages || pageQuery.isFetching}>
-            Próxima
-          </Button>
-        </div>
-      </div>
+      <Pagination
+        page={page}
+        totalPages={totalPages}
+        onPageChange={setPage}
+        totalItems={totalCount}
+        pageSize={pageSize}
+      />
 
       <Modal open={approvalModal !== null} onClose={() => setApprovalModal(null)} title={approvalModal?.action === "deny" ? "Recusar atualização" : "Aprovar atualização"}>
         <div className="space-y-3">
