@@ -1,3 +1,4 @@
+import { formatBytes as formatBytesBase } from '@/utils/format';
 import { Icon, Badge, Button, ErrorDisplay, Loading, Modal } from '@/components/ui';
 
 import { useAppStorePackage } from '@/hooks/useAppStore';
@@ -26,17 +27,7 @@ function truncateCommand(value: string, max = 400): string {
 }
 
 
-function formatBytes(value?: number | null): string {
-  if (!value || value <= 0) return '—';
-  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-  let size = value;
-  let unit = 0;
-  while (size >= 1024 && unit < units.length - 1) {
-    size /= 1024;
-    unit++;
-  }
-  return `${size.toFixed(size >= 10 || unit === 0 ? 0 : 1)} ${units[unit]}`;
-}
+const formatBytes = (value?: number | null) => formatBytesBase(value);
 
 function shortChecksum(value?: string | null): string {
   const trimmed = (value ?? '').trim();

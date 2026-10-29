@@ -1,3 +1,4 @@
+import { formatBytes as formatBytesBase } from '@/utils/format';
 import { memo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useIsFetching, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -16,15 +17,7 @@ import { usePatchSnapshot } from '@/hooks/usePatches';
 import { usePatchesRealtime } from '@/hooks/usePatchesRealtime';
 import type { DashboardWindow } from '@/api/dashboard';
 
-function formatBytes(value?: number | null): string {
-  if (value == null) return '\u2014';
-  // 0 e um valor observavel (nenhum uso), nao "sem dado".
-  if (value <= 0) return '0 B';
-  const gb = value / (1024 ** 3);
-  if (gb >= 1) return `${gb.toFixed(2)} GB`;
-  const mb = value / (1024 ** 2);
-  return `${mb.toFixed(0)} MB`;
-}
+const formatBytes = (value?: number | null) => formatBytesBase(value, '0 B');
 
 function formatUptime(uptime?: string | number | null): string {
   if (uptime === null || uptime === undefined) return '\u2014';

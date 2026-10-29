@@ -1,4 +1,4 @@
-import { formatDateTime, formatDate } from '@/utils/format';
+import { formatDateTime, formatDate, formatBytes as formatBytesBase } from '@/utils/format';
 import { useState, useRef, useEffect, useLayoutEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useParams, useNavigate } from 'react-router-dom';
@@ -2435,11 +2435,7 @@ interface FileEntry {
   error?: string;
 }
 
-function formatBytes(bytes: number) {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / 1048576).toFixed(1)} MB`;
-}
+const formatBytes = (bytes: number) => formatBytesBase(bytes, '0 B');
 
 /**
  * Miniatura do anexo: imagens são baixadas pela API autenticada (blob) e

@@ -101,7 +101,11 @@ export function formatDateCompact(
   });
 }
 
-/** Tamanho em bytes legível (ex.: "12,3 MB", "1,2 GB"). */
+/**
+ * REGRA ÚNICA de exibição de tamanhos no app: unidades B → KB → MB → GB → TB,
+ * 0 casas decimais para valores >= 10 e 1 casa para valores < 10 (ex.: 1.5 MB,
+ * 12 GB). Para "zero é observável" (ex.: tráfego), passe `fallback = '0 B'`.
+ */
 export function formatBytes(
   value: number | null | undefined,
   fallback: string = EMPTY_VALUE,

@@ -1,3 +1,4 @@
+import { formatBytes as formatBytesBase } from '@/utils/format';
 import { useObjectStorageTelemetry } from '@/hooks/useObjectStorageTelemetry';
 import { useNowTick } from '@/hooks/useNowTick';
 import { Icon, Badge, Button, Card, CardHeader, Skeleton } from '@/components/ui';
@@ -30,15 +31,7 @@ const HEALTH_BADGE: Record<HealthState, { color: 'success' | 'danger' | 'slate';
   unknown: { color: 'slate', label: 'Não verificado' },
 };
 
-function formatBytes(value?: number | null): string {
-  if (value == null) return '—';
-  // 0 e um valor observavel (nenhuma transferencia), nao "sem dado".
-  if (value <= 0) return '0 B';
-  if (value >= 1024 ** 3) return `${(value / 1024 ** 3).toFixed(2)} GB`;
-  if (value >= 1024 ** 2) return `${(value / 1024 ** 2).toFixed(0)} MB`;
-  if (value >= 1024) return `${(value / 1024).toFixed(0)} KB`;
-  return `${value} B`;
-}
+const formatBytes = (value?: number | null) => formatBytesBase(value, '0 B');
 
 function formatPercent(value?: number | null): string {
   if (typeof value !== 'number' || !Number.isFinite(value)) return '—';

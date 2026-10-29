@@ -14,6 +14,11 @@ interface ArticlePagesTreeProps {
   homeActive?: boolean;
   /** Callback ao selecionar a home. */
   onSelectHome?: () => void;
+  /**
+   * Quando informado, exibe o botão de excluir em cada página (modo edição).
+   * A confirmação e a chamada da API ficam com quem usa o componente.
+   */
+  onDelete?: (pageId: string, title: string) => void;
 }
 
 /**
@@ -31,6 +36,7 @@ export default function ArticlePagesTree({
   homeLabel,
   homeActive = false,
   onSelectHome,
+  onDelete,
 }: ArticlePagesTreeProps) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 
@@ -98,8 +104,24 @@ export default function ArticlePagesTree({
 
           <span className="min-w-0 flex-1 truncate">{node.title}</span>
 
-          {node.childCount > 0 && (
-            <span className="shrink-0 text-xs text-muted">{node.childCount}</span>
+          {onDelete ? (
+            <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+              <button
+                type="button"
+                className="rounded p-1 text-muted hover:text-danger"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onDelete(node.id, node.title);
+                }}
+                aria-label="Excluir página"
+              >
+                <Icon name="delete" className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          ) : (
+            node.childCount > 0 && (
+              <span className="shrink-0 text-xs text-muted">{node.childCount}</span>
+            )
           )}
         </div>
 

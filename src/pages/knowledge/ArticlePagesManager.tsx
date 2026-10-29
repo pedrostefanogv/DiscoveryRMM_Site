@@ -1,7 +1,5 @@
-import { useState } from 'react';
-
 import { Icon, Button } from '@/components/ui';
-import type { ArticlePageTreeNode } from '@/api';
+import ArticlePagesTree from './ArticlePagesTree';
 import { useArticlePages, useDeleteArticlePage } from '@/hooks';
 import toast from 'react-hot-toast';
 
@@ -41,17 +39,6 @@ export default function ArticlePagesManager({
   const pagesQuery = useArticlePages(articleId);
   const deleteMutation = useDeleteArticlePage(articleId);
 
-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
-
-  const toggle = (id: string) => {
-    setCollapsed((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-
   const handleDelete = (pageId: string, title: string) => {
     if (!window.confirm(`Excluir a página "${title}" e todas as suas sub-páginas?`)) return;
     deleteMutation.mutate(pageId, {
@@ -61,82 +48,6 @@ export default function ArticlePagesManager({
       },
       onError: () => toast.error('Falha ao excluir página.'),
     });
-  };
-
-  const renderNode = (node: ArticlePageTreeNode, depth: number) => {
-    const hasChildren = node.children.length > 0;
-    const isCollapsed = collapsed.has(node.id);
-    const isActive = node.id === activePageId;
-
-    return (
-      <div key={node.id}>
-        <div
-          className={`group flex cursor-pointer items-center gap-1.5 rounded-md px-2 py-1.5 text-sm transition-colors ${
-            isActive
-              ? 'bg-primary/15 text-primary'
-              : 'text-foreground hover:bg-surface-hover'
-          }`}
-          style={{ paddingLeft: `${8 + depth * 16}px` }}
-          role="treeitem"
-          aria-selected={isActive}
-          aria-expanded={hasChildren ? !isCollapsed : undefined}
-          tabIndex={isActive ? 0 : -1}
-          onClick={() => onSelectPage(node.id)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter' || event.key === ' ') {
-              event.preventDefault();
-              onSelectPage(node.id);
-            }
-          }}
-        >
-          {hasChildren ? (
-            <button
-              type="button"
-              className="shrink-0 rounded p-0.5 text-muted hover:text-foreground"
-              onClick={(event) => {
-                event.stopPropagation();
-                toggle(node.id);
-              }}
-              aria-label={isCollapsed ? 'Expandir' : 'Recolher'}
-            >
-              {isCollapsed ? (
-                <Icon name="chevron_right" className="h-3.5 w-3.5" />
-              ) : (
-                <Icon name="expand_more" className="h-3.5 w-3.5" />
-              )}
-            </button>
-          ) : (
-            <span className="w-4 shrink-0" />
-          )}
-
-          {hasChildren ? (
-            <Icon name="layers" className="h-4 w-4 shrink-0 text-primary" />
-          ) : (
-            <Icon name="description" className="h-4 w-4 shrink-0 text-muted" />
-          )}
-
-          <span className="min-w-0 flex-1 truncate">{node.title}</span>
-
-          <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-            <button
-              type="button"
-              className="rounded p-1 text-muted hover:text-danger"
-              onClick={(event) => {
-                event.stopPropagation();
-                handleDelete(node.id, node.title);
-              }}
-              aria-label="Excluir página"
-            >
-              <Icon name="delete" className="h-3.5 w-3.5" />
-            </button>
-          </div>
-        </div>
-
-        {hasChildren && !isCollapsed && (
-          <div>{node.children.map((child) => renderNode(child, depth + 1))}</div>
-        )}
-      </div>
-    );
   };
 
   return (
@@ -153,37 +64,16 @@ export default function ArticlePagesManager({
       ) : pagesQuery.isError ? (
         <p className="text-sm text-muted">Falha ao carregar páginas.</p>
       ) : (
-        <div className="space-y-0.5" role="tree" aria-label="Páginas do artigo">
-          {/* Home (artigo principal) */}
-          <div
-            className={`group flex cursor-pointer items-center gap-1.5 rounded-md px-2 py-1.5 text-sm transition-colors ${
-              homeActive
-                ? 'bg-primary/15 text-primary'
-                : 'text-foreground hover:bg-surface-hover'
-            }`}
-            style={{ paddingLeft: '8px' }}
-            role="treeitem"
-            aria-selected={homeActive}
-            tabIndex={homeActive ? 0 : -1}
-            onClick={onSelectHome}
-            onKeyDown={(event: React.KeyboardEvent<HTMLDivElement>) => {
-              if (event.key === 'Enter' || event.key === ' ') {
-                event.preventDefault();
-                onSelectHome?.();
-              }
-            }}
-          >
-            <span className="w-4 shrink-0" />
-            <Icon name="home" className="h-4 w-4 shrink-0 text-primary" />
-            <span className="min-w-0 flex-1 truncate font-medium">{homeLabel}</span>
-          </div>
-
-          {(pagesQuery.data ?? []).length > 0 && (
-            <div className="ml-3 border-l border-border pl-1">
-              {(pagesQuery.data ?? []).map((node) => renderNode(node, 0))}
-            </div>
-          )}
-        </div>
+        <ArticlePagesTree
+          nodes={pagesQuery.data ?? []}
+          activePageId={activePageId}
+          onSelect={onSelectPage}
+          homeLabel={homeLabel}
+          homeActive={homeActive}
+          onSelectHome={onSelectHome}
+          maxDepth={Number.MAX_SAFE_INTEGER}
+          onDelete={handleDelete}
+        />
       )}
     </div>
   );

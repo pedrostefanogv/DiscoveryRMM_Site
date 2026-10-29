@@ -1,3 +1,4 @@
+import { formatBytes as formatBytesBase } from '@/utils/format';
 import { useP2POverview } from '@/hooks/useP2POverview';
 import { Icon, Badge, Button, Card, CardHeader, Skeleton } from '@/components/ui';
 import type { P2PScope } from '@/api/p2p';
@@ -6,15 +7,7 @@ import { DASHBOARD_WINDOW_HOURS, type DashboardWindow } from '@/api/dashboard';
 type Tone = 'slate' | 'primary' | 'success' | 'warning' | 'danger' | 'accent';
 type BadgeColor = Tone;
 
-function formatBytes(value?: number | null): string {
-  if (value == null) return '\u2014';
-  // 0 é um valor observável (nenhuma transferência na janela), não "sem dado".
-  if (value <= 0) return '0 B';
-  if (value >= 1024 ** 3) return `${(value / 1024 ** 3).toFixed(2)} GB`;
-  if (value >= 1024 ** 2) return `${(value / 1024 ** 2).toFixed(0)} MB`;
-  if (value >= 1024) return `${(value / 1024).toFixed(0)} KB`;
-  return `${value} B`;
-}
+const formatBytes = (value?: number | null) => formatBytesBase(value, '0 B');
 
 function formatNumber(value?: number | null): string {
   if (value == null) return '\u2014';

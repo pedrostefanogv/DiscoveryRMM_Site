@@ -1,3 +1,4 @@
+import { formatDate } from '@/utils/format';
 import { useMemo, useState } from "react";
 import { Icon,
   Badge,
@@ -198,10 +199,11 @@ export default function AiCostCockpit() {
               title="Custo por cliente"
               subtitle={
                 cockpit.data
-                  ? `Período: ${new Date(cockpit.data.fromUtc).toLocaleDateString("pt-BR")} a ${new Date(cockpit.data.toUtc).toLocaleDateString("pt-BR")}`
+                  ? `Período: ${formatDate(cockpit.data.fromUtc)} a ${formatDate(cockpit.data.toUtc)}`
                   : undefined
               }
             />
+            {/* Paginação desativada de propósito: agregação curta (≤5 linhas). */}
             <DataTable
               columns={clientColumns}
               data={cockpit.data?.byClient ?? []}
@@ -213,6 +215,7 @@ export default function AiCostCockpit() {
 
           <Card>
             <CardHeader title="Top ferramentas" subtitle="Ferramentas (tools) com maior custo no período" />
+            {/* Idem: agregação curta, sem paginação. */}
             <DataTable
               columns={toolColumns}
               data={cockpit.data?.topTools ?? []}

@@ -88,7 +88,8 @@ describe('P2PMetricsCard', () => {
     expect(screen.getByText('3')).toBeTruthy();
     expect(screen.getByText('80.0%')).toBeTruthy();
     expect(screen.getByText('20.0%')).toBeTruthy();
-    expect(screen.getByText('2.00 GB')).toBeTruthy();
+    // Regra única de formatação (utils/format): 0–1 casa decimal adaptativa.
+    expect(screen.getByText('2.0 GB')).toBeTruthy();
     expect(screen.getByText('Saudável')).toBeTruthy();
     expect(screen.getByText('4')).toBeTruthy();
   });

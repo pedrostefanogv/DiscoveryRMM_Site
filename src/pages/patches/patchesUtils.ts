@@ -1,3 +1,4 @@
+import { formatBytes as formatBytesBase } from '@/utils/format';
 import type { PatchApprovalState, PatchScope, PatchUpdateStatus } from "@/api/types";
 
 export function formatPatchDate(value: string | null | undefined): string {
@@ -140,8 +141,5 @@ export const PATCH_STATUS_OPTIONS = [
 ];
 
 export function formatBytes(bytes: number | null | undefined): string {
-  if (!bytes || bytes <= 0) return "\u2014";
-  const mb = bytes / (1024 * 1024);
-  if (mb >= 1024) return `${(mb / 1024).toFixed(1)} GB`;
-  return `${mb.toFixed(0)} MB`;
+  return formatBytesBase(bytes);
 }
