@@ -110,7 +110,9 @@ export default function IamGroupsPage() {
                   event.stopPropagation();
                   void handleDelete(item);
                 }}
-              >
+                  aria-label="Excluir grupo"
+                  title="Excluir grupo"
+                >
                 <Icon name="delete" className="h-4 w-4" />
               </Button>
             )}
@@ -306,6 +308,8 @@ function GroupAssignmentsPanel({
                       onError: (error) => toast.error(getErrorMessage(error, "Falha ao remover membro.")),
                     })
                   }
+                  aria-label="Remover membro do grupo"
+                  title="Remover membro do grupo"
                 >
                   <Icon name="delete" className="h-4 w-4" />
                 </Button>
@@ -379,6 +383,8 @@ function GroupAssignmentsPanel({
                       onError: (error) => toast.error(getErrorMessage(error, "Falha ao remover vínculo.")),
                     })
                   }
+                  aria-label="Remover escopo do grupo"
+                  title="Remover escopo do grupo"
                 >
                   <Icon name="delete" className="h-4 w-4" />
                 </Button>

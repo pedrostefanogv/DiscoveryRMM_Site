@@ -174,6 +174,8 @@ export default function IamRolesPage() {
                   event.stopPropagation();
                   void handleDelete(item);
                 }}
+                aria-label="Excluir role"
+                title="Excluir role"
               >
                 <Icon name="delete" className="h-4 w-4" />
               </Button>
@@ -419,7 +421,9 @@ function RolePermissionsPanel({
                     })
                   }
                   disabled={!permissionId}
-                >
+                  aria-label="Remover permissão"
+                title="Remover permissão"
+              >
                   <Icon name="delete" className="h-4 w-4" />
                 </Button>
               )}

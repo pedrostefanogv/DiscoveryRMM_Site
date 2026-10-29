@@ -73,7 +73,7 @@ export function AuditTab() {
           <div className="w-40"><Select label="Tipo de alteração" options={changeTypeOptions} value={changeType} onChange={(e) => setChangeType(e.target.value)} /></div>
           <div className="w-40"><Select label="Itens por página" options={limitOptions} value={String(limit)} onChange={(e) => setLimit(Number(e.target.value))} /></div>
           <Button onClick={applyFilters}><Icon name="search" className="h-4 w-4" /> Filtrar</Button>
-          <Button variant="ghost" onClick={resetFilters}><Icon name="refresh" className="h-4 w-4" /></Button>
+          <Button variant="ghost" onClick={resetFilters} aria-label="Limpar filtros" title="Limpar filtros"><Icon name="refresh" className="h-4 w-4" aria-hidden="true" /></Button>
         </div>
       </Card>
 

@@ -183,16 +183,40 @@ export function NotificationBell() {
               </div>
 
               <div className="flex gap-2">
-                <Button variant="ghost" size="sm" onClick={() => void refetch()}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => void refetch()}
+                  aria-label="Atualizar notificações"
+                  title="Atualizar notificações"
+                >
                   <Icon name="refresh" className={`h-4 w-4 ${isFetching ? "animate-spin" : ""}`} />
                 </Button>
-                <Button variant="ghost" size="sm" onClick={() => void handleMarkAllAsRead()}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => void handleMarkAllAsRead()}
+                  aria-label="Marcar todas como lidas"
+                  title="Marcar todas como lidas"
+                >
                   <Icon name="done_all" className="h-4 w-4" />
                 </Button>
-                <Button variant="ghost" size="sm" onClick={handleDismissReadAll}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleDismissReadAll}
+                  aria-label="Dispensar notificações lidas"
+                  title="Dispensar notificações lidas"
+                >
                   <Icon name="delete" className="h-4 w-4" />
                 </Button>
-                <Button variant="ghost" size="sm" onClick={() => setOpen(false)}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setOpen(false)}
+                  aria-label="Fechar notificações"
+                  title="Fechar notificações"
+                >
                   <Icon name="close" className="h-4 w-4" />
                 </Button>
               </div>

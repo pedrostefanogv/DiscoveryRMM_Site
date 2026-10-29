@@ -396,9 +396,9 @@ export function CatalogTab() {
             {query.isFetching && !query.data ? 'Carregando...' : query.data ? query.data.items.length > 0 ? `${query.data.items.length} pacote(s) na página ${page}${searchApplied ? ` — "${searchApplied}"` : ''}` : 'Nenhum pacote encontrado' : 'Catálogo'}
           </span>
           <div className="flex items-center gap-1">
-            <Button variant="ghost" size="sm" onClick={handlePrev} disabled={page <= 1}><Icon name="chevron_left" className="h-4 w-4" /></Button>
+            <Button variant="ghost" size="sm" onClick={handlePrev} disabled={page <= 1} aria-label="Página anterior" title="Página anterior"><Icon name="chevron_left" className="h-4 w-4" aria-hidden="true" /></Button>
             <span className="min-w-[3rem] text-center text-xs text-muted">Pág. {page}</span>
-            <Button variant="ghost" size="sm" onClick={handleNext} disabled={!hasMore || query.isFetching}><Icon name="chevron_right" className="h-4 w-4" /></Button>
+            <Button variant="ghost" size="sm" onClick={handleNext} disabled={!hasMore || query.isFetching} aria-label="Próxima página" title="Próxima página"><Icon name="chevron_right" className="h-4 w-4" aria-hidden="true" /></Button>
           </div>
         </div>
 

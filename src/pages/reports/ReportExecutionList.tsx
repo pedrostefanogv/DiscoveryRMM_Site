@@ -265,12 +265,14 @@ export default function ReportExecutionList() {
           <Button
             variant="ghost"
             size="sm"
+            aria-label="Baixar relatório"
+            title="Baixar relatório"
             onClick={(event) => {
               event.stopPropagation();
               downloadReport(e.id, { clientId });
             }}
           >
-            <Icon name="download" className="h-4 w-4" />
+            <Icon name="download" className="h-4 w-4" aria-hidden="true" />
           </Button>
         ) : null;
       },

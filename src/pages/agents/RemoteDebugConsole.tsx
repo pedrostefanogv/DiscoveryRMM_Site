@@ -1283,7 +1283,7 @@ export default function RemoteDebugConsole() {
                 <div
                   role="dialog"
                   aria-label="Detalhes da sessão"
-                  className="absolute bottom-full right-0 z-30 mb-1 w-80 rounded-xl border border-border bg-surface p-3 text-[11px] shadow-xl"
+                  className="absolute top-full right-0 z-30 mt-1 w-80 rounded-xl border border-border bg-surface p-3 text-[11px] shadow-xl"
                 >
                   <p className="mb-1 font-medium text-foreground">Detalhes da sessão</p>
                   <dl className="space-y-1 font-mono text-muted">
@@ -1299,7 +1299,9 @@ export default function RemoteDebugConsole() {
                   <button
                     type="button"
                     onClick={() => {
-                      void navigator.clipboard.writeText(`${lastSequence ?? ""} ${subject ?? ""}`);
+                      navigator.clipboard
+                        .writeText(`${lastSequence ?? ""} ${subject ?? ""}`)
+                        .catch(() => undefined);
                     }}
                     className="mt-2 text-[10px] text-primary underline-offset-2 hover:underline"
                   >

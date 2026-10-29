@@ -1392,14 +1392,22 @@ export default function TicketList() {
                         </Button>
                         {canManage && (
                           <>
-                            <Button size="sm" variant="ghost" onClick={() => openEditSavedViewModal(view)}>
-                              <Icon name="edit" className="h-4 w-4" />
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => openEditSavedViewModal(view)}
+                              aria-label="Editar visão"
+                              title="Editar visão"
+                            >
+                              <Icon name="edit" className="h-4 w-4" aria-hidden="true" />
                             </Button>
                             <Button
                               size="sm"
                               variant="danger"
                               onClick={() => void handleDeleteSavedView(view)}
                               loading={deletingSavedViewId === view.id}
+                              aria-label="Excluir visão"
+                              title="Excluir visão"
                             >
                               <Icon name="delete" className="h-4 w-4" />
                             </Button>

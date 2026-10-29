@@ -766,6 +766,8 @@ export function LayoutBuilderTopSection({
                             dataSources: prev.dataSources.filter((_, itemIndex) => itemIndex !== index),
                           }))
                         }
+                      
+                        aria-label="Remover condição do filtro"
                       >
                         <Icon name="delete" className="h-4 w-4 text-danger" />
                       </Button>
@@ -1027,7 +1029,9 @@ export function LayoutBuilderDetailsSection({
                         columns: prev.columns.filter((_, itemIndex) => itemIndex !== index),
                       }))
                     }
-                  >
+                  
+                        aria-label="Remover coluna"
+                      >
                     <Icon name="delete" className="h-4 w-4 text-danger" />
                   </Button>
                 </td>
@@ -1113,7 +1117,9 @@ export function LayoutBuilderDetailsSection({
                           groupDetails: prev.groupDetails.filter((_, idx) => idx !== index),
                         }))
                       }
-                    >
+                    
+                        aria-label="Remover opção"
+                      >
                       <Icon name="delete" className="h-4 w-4 text-danger" />
                     </Button>
                   </div>
@@ -1218,7 +1224,9 @@ export function LayoutBuilderDetailsSection({
                           summaries: prev.summaries.filter((_, idx) => idx !== index),
                         }))
                       }
-                    >
+                    
+                        aria-label="Remover agregação"
+                      >
                       <Icon name="delete" className="h-4 w-4 text-danger" />
                     </Button>
                   </div>
@@ -1322,7 +1330,9 @@ export function LayoutBuilderDetailsSection({
                           groupSummaries: prev.groupSummaries.filter((_, idx) => idx !== index),
                         }))
                       }
-                    >
+                    
+                        aria-label="Remover agregação"
+                      >
                       <Icon name="delete" className="h-4 w-4 text-danger" />
                     </Button>
                   </div>
@@ -1396,7 +1406,9 @@ export function LayoutBuilderDetailsSection({
                         sections: prev.sections.filter((_, idx) => idx !== sectionIndex),
                       }))
                     }
-                  >
+                  
+                        aria-label="Remover coluna"
+                      >
                     <Icon name="delete" className="h-4 w-4 text-danger" />
                   </Button>
                 </div>
@@ -1520,7 +1532,9 @@ export function LayoutBuilderDetailsSection({
                                 ),
                               }))
                             }
-                          >
+                          
+                        aria-label="Remover opção"
+                      >
                             <Icon name="delete" className="h-4 w-4 text-danger" />
                           </Button>
                         </td>

@@ -219,7 +219,7 @@ export default function RemoteConsentSettings() {
                 </div>
                 <div className="flex gap-2">
                   <Button size="sm" variant="ghost" onClick={() => openEdit(item)}>Editar</Button>
-                  <Button size="sm" variant="ghost" onClick={() => void remove(item)}><Icon name="delete" className="h-4 w-4" /></Button>
+                  <Button size="sm" variant="ghost" onClick={() => void remove(item)} aria-label="Remover exceção" title="Remover exceção"><Icon name="delete" className="h-4 w-4" aria-hidden="true" /></Button>
                 </div>
               </div>
             ))}
