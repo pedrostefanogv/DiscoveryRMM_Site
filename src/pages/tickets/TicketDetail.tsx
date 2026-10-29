@@ -58,7 +58,9 @@ import {
   useTicketAiSummary,
   useTicketAiTriage,
 } from '@/hooks/useTicketAi';
-import { Icon, Button, Card, CardHeader, Badge, Loading, ErrorDisplay, TextArea, Select, Input, ImageLightbox } from '@/components/ui';
+import { Icon, Button, Card, CardHeader, Badge, Loading, ErrorDisplay, TextArea, Select, Input, ImageLightbox,
+PageHeader,
+} from '@/components/ui';
 import { ticketsApi } from '@/api';
 import type {
   AutomationTaskSummary,
@@ -210,33 +212,21 @@ export default function TicketDetail() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-start gap-4">
-        <button
-          onClick={() => navigate('/tickets')}
-          aria-label="Voltar"
-          className="mt-1 rounded-lg p-2 text-muted hover:bg-surface-light hover:text-foreground"
-        >
-          <Icon name="arrow_back" className="h-5 w-5" />
-        </button>
-        <div className="flex-1 min-w-0">
-          <h1 className="text-2xl font-bold text-foreground truncate">{t.title}</h1>
-          <p className="text-sm text-muted">
-            Criado em {new Date(t.createdAt).toLocaleDateString('pt-BR')}
-            {t.closedAt && `  Encerrado em ${new Date(t.closedAt).toLocaleDateString('pt-BR')}`}
-          </p>
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <Badge color={p.color}>{p.label}</Badge>
-          {currentState && (
-            <TicketStateBadge name={currentState.name} color={currentState.color} />
-          )}
-          <ReopenButton ticketId={t.id} isClosed={Boolean(t.closedAt) || currentState?.isFinal === true} />
-          <Button size="sm" variant="ghost" onClick={() => navigate(knowledgeUrl)}>
-            <Icon name="menu_book" className="h-4 w-4" /> Conhecimento
-          </Button>
-          <DeleteTicketButton ticketId={t.id} title={t.title} />
-        </div>
-      </div>
+      <PageHeader
+        title={t.title}
+        description={`Criado em ${new Date(t.createdAt).toLocaleDateString('pt-BR')}${t.closedAt ? ` · Encerrado em ${new Date(t.closedAt).toLocaleDateString('pt-BR')}` : ''}`}
+        onBack={() => navigate('/tickets')}
+      >
+        <Badge color={p.color}>{p.label}</Badge>
+        {currentState && (
+          <TicketStateBadge name={currentState.name} color={currentState.color} />
+        )}
+        <ReopenButton ticketId={t.id} isClosed={Boolean(t.closedAt) || currentState?.isFinal === true} />
+        <Button size="sm" variant="ghost" onClick={() => navigate(knowledgeUrl)}>
+          <Icon name="menu_book" className="h-4 w-4" /> Conhecimento
+        </Button>
+        <DeleteTicketButton ticketId={t.id} title={t.title} />
+      </PageHeader>
 
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Main content */}

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Card, CardHeader, Badge, Loading, ErrorDisplay, Input, Select } from '@/components/ui';
+import {  Card, CardHeader, Badge, Loading, ErrorDisplay, Input, Select, PageHeader } from '@/components/ui';
 import { useTicketCsat } from '@/hooks/useSupportProductivity';
 import { useClients } from '@/hooks/useClients';
 import { useDepartments } from '@/hooks/useDepartments';
@@ -35,10 +35,7 @@ export default function TicketCsatPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Satisfação (CSAT)</h1>
-        <p className="text-sm text-muted">Avaliação dos chamados encerrados no período.</p>
-      </div>
+      <PageHeader title="Satisfação (CSAT)" description="Avaliação dos chamados encerrados no período." />
 
       <Card>
         <div className="grid gap-3 sm:grid-cols-4">

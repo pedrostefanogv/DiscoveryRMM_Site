@@ -1,16 +1,11 @@
 import { Link } from 'react-router-dom';
 
-import { Icon, Button, Card, CardHeader } from '@/components/ui';
+import {  Icon, Button, Card, CardHeader, PageHeader } from '@/components/ui';
 
 export default function SoftwareAutomation() {
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Automação de Softwares</h1>
-        <p className="text-sm text-muted">
-          Esta página foi mantida por compatibilidade. O novo módulo de automação fica em área própria.
-        </p>
-      </div>
+      <PageHeader title="Automação de Softwares" description="Esta página foi mantida por compatibilidade. O novo módulo de automação fica em área própria." />
 
       <Card>
         <CardHeader

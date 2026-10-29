@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
-import { Icon, Badge, Button, Card, CardHeader, ErrorDisplay, Input, Loading, Modal, Select } from "@/components/ui";
+import { Icon, Badge, Button, Card, CardHeader, ErrorDisplay, Input, Loading, Modal, Select,
+PageHeader,
+} from "@/components/ui";
 import { ApiError, authApi } from "@/api";
 import { useAuth } from "@/auth/AuthContext";
 import { PASSWORD_RULES, validatePassword } from "@/auth/passwordPolicy";
@@ -398,12 +400,7 @@ export default function ProfilePage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Meu perfil</h1>
-        <p className="text-sm text-muted">
-          Atualize seus dados de acesso e acompanhe o status de segurança da sua conta.
-        </p>
-      </div>
+      <PageHeader title="Meu perfil" description="Atualize seus dados de acesso e acompanhe o status de segurança da sua conta." />
 
       <div className="grid gap-4 lg:grid-cols-3">
         <Card className="border-border bg-surface/40">

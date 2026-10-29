@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Icon, Badge, Button, Card, CardHeader, ConfirmDialog, ErrorDisplay, Input, Loading, Modal, Select, TextArea } from '@/components/ui';
+import { Icon, Badge, Button, Card, CardHeader, ConfirmDialog, ErrorDisplay, Input, Loading, Modal, Select, TextArea, PageHeader } from '@/components/ui';
 import {
   useTicketMacros, useCreateTicketMacro, useUpdateTicketMacro, useDeleteTicketMacro,
 } from '@/hooks/useSupportProductivity';
@@ -119,13 +119,12 @@ export default function TicketMacrosPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Macros de resposta</h1>
-          <p className="text-sm text-muted">Respostas rápidas reutilizáveis em comentários. Variáveis: {'{cliente}'}, {'{ticket_id}'}, {'{tecnico}'}.</p>
-        </div>
+      <PageHeader
+        title="Macros de resposta"
+        description={"Respostas rápidas reutilizáveis em comentários. Variáveis: {cliente}, {ticket_id}, {tecnico}."}
+      >
         <Button size="sm" onClick={openCreate}><Icon name="add" className="h-4 w-4" /> Nova macro</Button>
-      </div>
+      </PageHeader>
 
       <Card>
         <CardHeader title="Macros" subtitle={`${macros.data?.length ?? 0} macro(s)`} />

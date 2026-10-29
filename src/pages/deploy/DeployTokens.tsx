@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 
-import { Icon, Badge, Button, Card, CardHeader, Input, Modal, Pagination, Select, TextArea } from '@/components/ui';
+import {  Icon, Badge, Button, Card, CardHeader, Input, Modal, Pagination, Select, TextArea, PageHeader } from '@/components/ui';
 import {
   useCreateDeployTokenAndDownload,
   useDeployTokens,
@@ -450,10 +450,7 @@ export default function DeployTokens() {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Instalação de Agentes</h1>
-          <p className="text-sm text-muted">Console de provisionamento com criação e gestão operacional de deploy tokens.</p>
-        </div>
+        <PageHeader title="Instalação de Agentes" description="Console de provisionamento com criação e gestão operacional de deploy tokens." />
         <div className="flex flex-wrap items-center gap-2">
           <Button
             variant="secondary"

@@ -11,6 +11,7 @@ import { Icon,
   Input,
   Loading,
   Select,
+PageHeader,
 } from '@/components/ui';
 import { reportSchedulesApi } from '@/api';
 import type { ReportSchedule, CreateReportScheduleRequest, UpdateReportScheduleRequest } from '@/api';
@@ -127,18 +128,15 @@ export default function ReportSchedulesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Agendamentos de Relatórios</h1>
-          <p className="text-muted-foreground mt-1">
-            Configure a geração automática de relatórios em intervalos programados
-          </p>
-        </div>
+      <PageHeader
+        title="Agendamentos de Relatórios"
+        description="Configure a geração automática de relatórios em intervalos programados"
+      >
         <Button onClick={() => setShowCreate(true)} disabled={showCreate || !!editingId}>
           <Icon name="add" className="w-4 h-4 mr-2" />
           Novo Agendamento
         </Button>
-      </div>
+      </PageHeader>
 
       {(showCreate || editingId) && (
         <Card>

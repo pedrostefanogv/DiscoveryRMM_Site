@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Badge, Button, Card, CardHeader, ErrorDisplay, Input, Loading, Modal, Select, TextArea } from '@/components/ui';
+import {  Badge, Button, Card, CardHeader, ErrorDisplay, Input, Loading, Modal, Select, TextArea, PageHeader } from '@/components/ui';
 import {
   CustomFieldDataType,
   CustomFieldRuntimeAccessMode,
@@ -449,10 +449,7 @@ export default function CustomFieldsSettings() {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Custom Fields</h1>
-          <p className="text-sm text-muted">Gerencie definições por escopo e os valores por Servidor, Cliente, Site e Agente. Campos de Ticket sao preenchidos dentro do chamado.</p>
-        </div>
+        <PageHeader title="Custom Fields" description="Gerencie definições por escopo e os valores por Servidor, Cliente, Site e Agente. Campos de Ticket são preenchidos dentro do chamado." />
         <div className="flex flex-wrap items-center gap-2">
           <Button variant="secondary" onClick={() => setTemplatesModalOpen(true)}>Modelos</Button>
           <Button onClick={openCreateDefinition}>Novo Campo</Button>

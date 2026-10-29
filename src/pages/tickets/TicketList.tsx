@@ -25,7 +25,7 @@ import {
   useTicketSavedViews,
   useUpdateTicketSavedView,
 } from '@/hooks/useTicketSavedViews';
-import { Icon, Button, Card, ConfirmDialog, DataTable, Badge, Loading, Modal, Input, Pagination, Select, Tooltip } from '@/components/ui';
+import { Icon, Button, Card, ConfirmDialog, DataTable, Badge, Loading, Modal, Input, PageHeader, Pagination, Select, Tooltip } from '@/components/ui';
 import { TicketAnswerMatch } from '@/api';
 import type {
   CreateTicketRequest,
@@ -1103,17 +1103,14 @@ export default function TicketList() {
 
   return (
     <div ref={pageRef} className="relative space-y-6">
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Chamados</h1>
-          <p className="text-sm text-muted">
-            {visibleTickets.length} chamados na página {page}
-          </p>
-        </div>
+      <PageHeader
+        title="Chamados"
+        description={`${visibleTickets.length} chamados na página ${page}`}
+      >
         <Button onClick={() => setModalOpen(true)}>
           <Icon name="add" className="h-4 w-4" /> Novo Chamado
         </Button>
-      </div>
+      </PageHeader>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
         <KpiTile

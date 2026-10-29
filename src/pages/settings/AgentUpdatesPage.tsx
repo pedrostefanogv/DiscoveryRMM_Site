@@ -9,6 +9,7 @@ import { Icon,
   CardHeader,
   ErrorDisplay,
   Loading,
+  PageHeader,
 } from '@/components/ui';
 import { agentUpdatesApi } from '@/api';
 
@@ -76,24 +77,19 @@ export default function AgentUpdatesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Atualizações de Agentes</h1>
-          <p className="text-muted-foreground mt-1">
-            Gerencie releases e acompanhe o rollout de atualizações dos agentes
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="secondary" onClick={handleSyncRepository} disabled={syncLoading}>
-            <Icon name="refresh" className={`w-4 h-4 mr-2 ${syncLoading ? 'animate-spin' : ''}`} />
-            Sincronizar
-          </Button>
-          <Button onClick={handleSyncAndBuild} disabled={syncLoading}>
-            <Icon name="rocket_launch" className="w-4 h-4 mr-2" />
-            Sync + Build
-          </Button>
-        </div>
-      </div>
+      <PageHeader
+        title="Atualizações de Agentes"
+        description="Gerencie releases e acompanhe o rollout de atualizações dos agentes"
+      >
+        <Button variant="secondary" onClick={handleSyncRepository} disabled={syncLoading}>
+          <Icon name="refresh" className={`w-4 h-4 mr-2 ${syncLoading ? 'animate-spin' : ''}`} />
+          Sincronizar
+        </Button>
+        <Button onClick={handleSyncAndBuild} disabled={syncLoading}>
+          <Icon name="rocket_launch" className="w-4 h-4 mr-2" />
+          Sync + Build
+        </Button>
+      </PageHeader>
 
       {rollout && (
         <Card>

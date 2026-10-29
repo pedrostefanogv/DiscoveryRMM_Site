@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import toast from 'react-hot-toast';
 
-import { Icon, Badge, Button, Card, CardHeader, ErrorDisplay, Input, Loading, Modal, Pagination, Select, TextArea } from '@/components/ui';
+import {  Icon, Badge, Button, Card, CardHeader, ErrorDisplay, Input, Loading, Modal, Pagination, Select, TextArea, PageHeader } from '@/components/ui';
 import { agentsApi, clientsApi, sitesApi, type Agent, type Client, type Site } from '@/api';
 import { agentLabelsApi } from '@/modules/agent-labels/api';
 import {
@@ -909,12 +909,7 @@ export default function AgentLabelsSettings() {
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Labels Automáticas</h1>
-          <p className="text-sm text-muted">
-            Gerencie regras automáticas com campos nativos e custom fields por Agente, Cliente e Site.
-          </p>
-        </div>
+        <PageHeader title="Labels Automáticas" description="Gerencie regras automáticas com campos nativos e custom fields por Agente, Cliente e Site." />
         {viewMode === 'list' ? (
           <Button size="sm" onClick={startCreateRule}>
             Criar Regra

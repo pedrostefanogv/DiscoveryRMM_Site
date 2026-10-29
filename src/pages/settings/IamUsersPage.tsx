@@ -11,6 +11,7 @@ import { Icon,
   Loading,
   Modal,
   type Column,
+PageHeader,
 } from "@/components/ui";
 import {
   type UserMfaKeyDto,
@@ -191,12 +192,7 @@ export default function IamUsersPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Usuários e Acesso</h1>
-        <p className="text-sm text-muted">
-          Cadastre, atualize e desative usuários. Defina se MFA é obrigatório no onboarding.
-        </p>
-      </div>
+      <PageHeader title="Usuários e Acesso" description="Cadastre, atualize e desative usuários. Defina se MFA é obrigatório no onboarding." />
 
       <Card>
         <CardHeader

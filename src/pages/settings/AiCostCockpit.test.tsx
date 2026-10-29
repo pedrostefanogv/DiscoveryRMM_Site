@@ -38,13 +38,15 @@ describe('AiCostCockpit', () => {
         <AiCostCockpit />
       </MemoryRouter>,
     );
-    expect(screen.getByText('Requisições')).toBeTruthy();
+    // "Requisições" aparece no KPI e no cabeçalho da tabela: valida os dois papéis.
+    expect(screen.getAllByText('Requisições').length).toBeGreaterThan(0);
+    expect(screen.getByRole('columnheader', { name: 'Requisições' })).toBeTruthy();
     expect(screen.getByText('Custo total (USD)')).toBeTruthy();
     // Over-budget client (35/30 >= 100%) usa barra vermelha
     const overBar = document.querySelector('.bg-danger.h-full');
     expect(overBar).not.toBeNull();
     expect(screen.getByText('search_kb')).toBeTruthy();
-    expect(screen.getByText('Sem orçamento')).toBeTruthy();
+    expect(screen.getAllByText('Sem orçamento').length).toBeGreaterThan(0);
   });
 
   it('budgetPercent: null sem orçamento, 100% quando estoura', () => {

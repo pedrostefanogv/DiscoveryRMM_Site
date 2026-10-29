@@ -2,7 +2,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 
 import { MarkdownViewer } from '@/components/ui/MarkdownViewer';
-import { Icon, Badge, Button, Card, ErrorDisplay, Loading } from '@/components/ui';
+import { Icon, Badge, Button, Card, ErrorDisplay, Loading,
+PageHeader,
+} from '@/components/ui';
 import type { ArticlePageTreeNode, ArticleStatus, KnowledgeArticle } from '@/api';
 import { useAuthorization } from '@/auth/authorization';
 import {
@@ -171,41 +173,26 @@ export default function KnowledgeViewer() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start gap-4">
-        <button
-          onClick={() => navigate('/knowledge')}
-          aria-label="Voltar"
-          className="mt-1 rounded-lg p-2 text-muted hover:bg-surface-light hover:text-foreground"
-        >
-          <Icon name="arrow_back" className="h-5 w-5" />
-        </button>
-        <div className="flex-1 min-w-0">
-          <h1 className="text-2xl font-bold text-foreground truncate">
-            {article.title}
-          </h1>
-          <p className="text-sm text-muted">
-            {article.category
-              ? `Categoria: ${article.category}`
-              : 'Sem categoria definida'}
-          </p>
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <Badge color={statusColor(article.status)}>
-            {statusLabel(article.status)}
-          </Badge>
-          <Badge color="accent">{scopeLabel(article)}</Badge>
-          <Badge color="slate">v{article.currentVersionNumber}</Badge>
-          {canEditArticle && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => navigate(`/knowledge/${article.id}/edit`)}
-            >
-              <Icon name="edit_note" className="h-4 w-4" /> Editar artigo
-            </Button>
-          )}
-        </div>
-      </div>
+      <PageHeader
+        title={article.title}
+        description={article.category ? `Categoria: ${article.category}` : 'Sem categoria definida'}
+        onBack={() => navigate('/knowledge')}
+      >
+        <Badge color={statusColor(article.status)}>
+          {statusLabel(article.status)}
+        </Badge>
+        <Badge color="accent">{scopeLabel(article)}</Badge>
+        <Badge color="slate">v{article.currentVersionNumber}</Badge>
+        {canEditArticle && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => navigate(`/knowledge/${article.id}/edit`)}
+          >
+            <Icon name="edit_note" className="h-4 w-4" /> Editar artigo
+          </Button>
+        )}
+      </PageHeader>
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
         <div className="min-w-0 space-y-6">

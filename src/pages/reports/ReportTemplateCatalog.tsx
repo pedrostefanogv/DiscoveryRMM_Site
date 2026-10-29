@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Button } from "@/components/ui";
+import { Button,
+PageHeader,
+} from "@/components/ui";
 import { buildRunReportPath, resolveBuiltInTemplateId } from "./builtInTemplates";
 
 const DATASET_ICONS: Record<string, string> = {
@@ -163,14 +165,7 @@ export function ReportTemplateCatalog() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">
-            📚 Catálogo de Templates Prontos
-          </h1>
-          <p className="text-sm text-muted">
-            Execute templates built-in imediatamente ou crie novos no fluxo guiado.
-          </p>
-        </div>
+        <PageHeader title="📚 Catálogo de Templates Prontos" description="Execute templates built-in imediatamente ou crie novos no fluxo guiado." />
         <div className="flex gap-2">
           <Button onClick={() => navigate("/reports/templates")} variant="secondary">
             Ver Lista de Geração

@@ -1,6 +1,9 @@
 import { Link } from "react-router-dom";
 
-import { Icon, Button, Card, CardHeader, type MaterialSymbolName } from "@/components/ui";
+import { Icon, Button, Card, CardHeader, type MaterialSymbolName,
+
+PageHeader,
+} from "@/components/ui";
 
 const cards: { title: string; description: string; to: string; cta: string; icon: MaterialSymbolName }[] = [
   {
@@ -36,12 +39,7 @@ const cards: { title: string; description: string; to: string; cta: string; icon
 export default function AutomationHome() {
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Automação</h1>
-         <p className="text-sm text-muted">
-           Gerencie scripts, tarefas e operações de execução no ambiente.
-        </p>
-      </div>
+      <PageHeader title="Automação" description="Gerencie scripts, tarefas e operações de execução no ambiente." />
 
       <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-4">
         {cards.map((card) => {

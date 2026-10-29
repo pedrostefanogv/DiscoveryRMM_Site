@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 
-import { Icon, Button, Card, CardHeader, type MaterialSymbolName } from '@/components/ui';
+import {  Icon, Button, Card, CardHeader, type MaterialSymbolName, PageHeader } from '@/components/ui';
 
 const cards: { title: string; description: string; to: string; cta: string; icon: MaterialSymbolName }[] = [
   {
@@ -29,10 +29,7 @@ const cards: { title: string; description: string; to: string; cta: string; icon
 export default function SoftwareHome() {
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Softwares</h1>
-        <p className="text-sm text-muted">Escolha um módulo para gerenciar aplicativos e distribuição.</p>
-      </div>
+      <PageHeader title="Softwares" description="Escolha um módulo para gerenciar aplicativos e distribuição." />
 
       <div className="grid gap-4 lg:grid-cols-3">
         {cards.map((card) => {

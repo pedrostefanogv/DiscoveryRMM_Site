@@ -9,7 +9,7 @@ import {
 import { useDepartments } from '@/hooks/useDepartments';
 import { useSlaCalendars } from '@/hooks/useSlaCalendars';
 import { useClients } from '@/hooks/useClients';
-import { Icon, Card, CardHeader, Button, Modal, Input, Select, Badge, Loading, ErrorDisplay } from '@/components/ui';
+import {  Icon, Card, CardHeader, Button, Modal, Input, Select, Badge, Loading, ErrorDisplay, PageHeader } from '@/components/ui';
 import type { WorkflowProfile, CreateWorkflowProfileRequest, UpdateWorkflowProfileRequest, TicketPriority } from '@/api';
 import toast from 'react-hot-toast';
 
@@ -64,10 +64,7 @@ export default function WorkflowProfileSettings() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Perfis de Workflow</h1>
-        <p className="text-sm text-muted">Configure SLA e prioridade padrão por departamento</p>
-      </div>
+      <PageHeader title="Perfis de Workflow" description="Configure SLA e prioridade padrão por departamento" />
 
       <Card>
         <div className="flex flex-wrap items-end gap-3">

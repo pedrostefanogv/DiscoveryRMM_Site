@@ -13,6 +13,7 @@ import { Icon,
   Loading,
   TextArea,
   Select,
+PageHeader,
 } from '@/components/ui';
 
 import { autoTicketRulesApi } from '@/api';
@@ -115,18 +116,15 @@ export default function AutoTicketRulesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Regras de Criação Automática de Tickets</h1>
-          <p className="text-muted-foreground mt-1">
-            Configure regras para criar tickets automaticamente a partir de eventos de monitoramento
-          </p>
-        </div>
+      <PageHeader
+        title="Regras de Criação Automática de Tickets"
+        description="Configure regras para criar tickets automaticamente a partir de eventos de monitoramento"
+      >
         <Button onClick={() => setShowCreate(true)} disabled={showCreate || !!editingId}>
           <Icon name="add" className="w-4 h-4 mr-2" />
           Nova Regra
         </Button>
-      </div>
+      </PageHeader>
 
       <div className="flex items-start gap-3 rounded-xl border border-warning/30 bg-warning/10 p-4 text-sm">
         <Icon name="warning" className="mt-0.5 h-4 w-4 shrink-0 text-warning" />

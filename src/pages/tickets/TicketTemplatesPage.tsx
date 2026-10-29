@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Icon, Badge, Button, Card, CardHeader, ConfirmDialog, ErrorDisplay, Loading } from '@/components/ui';
+import { Icon, Badge, Button, Card, CardHeader, ConfirmDialog, ErrorDisplay, Loading,
+PageHeader,
+} from '@/components/ui';
 import {
   useAdminTicketTemplates, useDeleteTicketTemplate, usePurgeTicketTemplate,
   useRestoreTicketTemplate, useUpdateTicketTemplate,
@@ -93,42 +95,37 @@ export default function TicketTemplatesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">
-            {showTrash ? 'Templates excluídos' : 'Templates de chamado'}
-          </h1>
-          <p className="text-sm text-muted">
-            {showTrash
-              ? 'Templates na lixeira. Restaure para voltar ao catálogo ou exclua definitivamente.'
-              : 'Pré-preenchem título, descrição, prioridade, categoria e os campos personalizados do departamento na abertura.'}
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {!showTrash && (
-            <>
-              <label className="flex items-center gap-2 text-xs text-muted-foreground">
-                <input
-                  type="checkbox"
-                  checked={showInactive}
-                  onChange={(e) => setShowInactive(e.target.checked)}
-                  className="rounded border-border bg-surface-light"
-                />
-                Mostrar inativos
-              </label>
-              <Button type="button" size="sm" variant="secondary" onClick={() => { setShowTrash(true); setShowInactive(false); }}>
-                <Icon name="delete" className="h-4 w-4" /> Lixeira
-              </Button>
-              <Button size="sm" onClick={openCreate}><Icon name="add" className="h-4 w-4" /> Novo template</Button>
-            </>
-          )}
-          {showTrash && (
-            <Button type="button" size="sm" variant="secondary" onClick={() => setShowTrash(false)}>
-              <Icon name="undo" className="h-4 w-4" /> Voltar ao catálogo
+      <PageHeader
+        title={showTrash ? 'Templates excluídos' : 'Templates de chamado'}
+        description={
+          showTrash
+            ? 'Templates na lixeira. Restaure para voltar ao catálogo ou exclua definitivamente.'
+            : 'Pré-preenchem título, descrição, prioridade, categoria e os campos personalizados do departamento na abertura.'
+        }
+      >
+        {!showTrash && (
+          <>
+            <label className="flex items-center gap-2 text-xs text-muted-foreground">
+              <input
+                type="checkbox"
+                checked={showInactive}
+                onChange={(e) => setShowInactive(e.target.checked)}
+                className="rounded border-border bg-surface-light"
+              />
+              Mostrar inativos
+            </label>
+            <Button type="button" size="sm" variant="secondary" onClick={() => { setShowTrash(true); setShowInactive(false); }}>
+              <Icon name="delete" className="h-4 w-4" /> Lixeira
             </Button>
-          )}
-        </div>
-      </div>
+            <Button size="sm" onClick={openCreate}><Icon name="add" className="h-4 w-4" /> Novo template</Button>
+          </>
+        )}
+        {showTrash && (
+          <Button type="button" size="sm" variant="secondary" onClick={() => setShowTrash(false)}>
+            <Icon name="undo" className="h-4 w-4" /> Voltar ao catálogo
+          </Button>
+        )}
+      </PageHeader>
 
       <Card>
         <CardHeader

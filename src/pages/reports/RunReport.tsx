@@ -9,7 +9,9 @@ import {
   useSites,
   useAgentsBySite,
 } from "@/hooks";
-import { Icon, Button, Card, Loading, Badge, Input } from "@/components/ui";
+import { Icon, Button, Card, Loading, Badge, Input,
+PageHeader,
+} from "@/components/ui";
 import {
   ReportFormat,
   ReportExecutionStatus,
@@ -755,15 +757,11 @@ export default function RunReport() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Executar Relatório</h1>
-          <p className="text-sm text-muted">{template.data.name}</p>
-        </div>
+      <PageHeader title="Executar Relatório" description={template.data.name}>
         <Button variant="ghost" onClick={() => navigate(-1)}>
           Voltar
         </Button>
-      </div>
+      </PageHeader>
 
       {/* Instruções */}
       {template.data.instructions && (

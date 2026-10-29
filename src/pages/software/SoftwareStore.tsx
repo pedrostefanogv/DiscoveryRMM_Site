@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Icon, Button, Card } from '@/components/ui';
+import { Icon, Button, Card, PageHeader } from '@/components/ui';
 import { CatalogTab } from './tabs/CatalogTab';
 import { ApprovalsTab } from './tabs/ApprovalsTab';
 import { AuditTab } from './tabs/AuditTab';
@@ -11,14 +11,10 @@ export default function SoftwareStore() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Loja de Softwares</h1>
-          <p className="mt-1 text-sm text-muted">
-            Catálogo de apps com aprovação por escopo e trilha de auditoria.
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        title="Loja de Softwares"
+        description="Catálogo de apps com aprovação por escopo e trilha de auditoria."
+      />
 
       <Card>
         <div className="flex flex-wrap gap-2">

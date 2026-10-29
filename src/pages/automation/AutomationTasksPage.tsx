@@ -16,6 +16,7 @@ import { Icon,
   TextArea,
   ContextMenu,
   type ContextMenuItem,
+PageHeader,
 } from "@/components/ui";
 import { CustomFieldsUsedByPanel } from "@/components/custom-fields/CustomFieldsUsedByPanel";
 import {
@@ -1275,10 +1276,7 @@ export default function AutomationTasksPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Tarefas de Automação</h1>
-          <p className="text-sm text-muted">Regras operacionais por escopo.</p>
-        </div>
+        <PageHeader title="Tarefas de Automação" description="Regras operacionais por escopo." />
         <Button
           onClick={() => {
               setEditing(null);

@@ -1,7 +1,10 @@
 import { useMemo, useState } from "react";
 
 import type { ConfigurationAuditEntry } from "@/api";
-import { Icon, Badge, Button, Card, CardHeader, ErrorDisplay, Input, Loading, Pagination, Select } from "@/components/ui";
+import { Icon, Badge, Button, Card, CardHeader, ErrorDisplay, Input, Loading, Pagination, Select,
+
+PageHeader,
+} from "@/components/ui";
 import { useClients } from "@/hooks/useClients";
 import { useAllSites } from "@/hooks/useSites";
 import {
@@ -110,12 +113,7 @@ export default function ConfigurationAudit() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Auditoria de Configurações</h1>
-        <p className="text-sm text-muted">
-          Consulte alterações por período, entidade, propriedade e usuário.
-        </p>
-      </div>
+      <PageHeader title="Auditoria de Configurações" description="Consulte alterações por período, entidade, propriedade e usuário." />
 
       <Card>
         <CardHeader title="Filtros" subtitle="Campos opcionais, combináveis" />

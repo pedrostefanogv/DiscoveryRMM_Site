@@ -20,6 +20,7 @@ import { Icon,
   Loading,
   Select,
   TextArea,
+  PageHeader,
 } from '@/components/ui';
 import {
   useCreateTicketAlertRule,
@@ -291,12 +292,7 @@ export default function TicketAlertsPage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Regras de alerta de tickets</h1>
-          <p className="text-sm text-muted">
-            Configure alertas PSADT que sao disparados automaticamente quando o ticket entra em um workflow state.
-          </p>
-        </div>
+        <PageHeader title="Regras de alerta de tickets" description="Configure alertas PSADT que são disparados automaticamente quando o ticket entra em um workflow state." />
         <div className="flex flex-wrap gap-2">
           <Badge color="primary">Workflow</Badge>
           <Badge color="warning">PSADT</Badge>

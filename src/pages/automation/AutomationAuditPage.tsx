@@ -6,6 +6,7 @@ import {
   ErrorDisplay,
   Loading,
   Select,
+PageHeader,
 } from "@/components/ui";
 import {
   useAutomationScriptAudit,
@@ -42,12 +43,7 @@ export default function AutomationAuditPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Auditoria de Automação</h1>
-        <p className="text-sm text-muted">
-          Consulte a trilha funcional de scripts e tarefas com correlation id.
-        </p>
-      </div>
+      <PageHeader title="Auditoria de Automação" description="Consulte a trilha funcional de scripts e tarefas com correlation id." />
 
       <Card>
         <CardHeader title="Filtros" subtitle="Escolha entidade e limite de eventos" />

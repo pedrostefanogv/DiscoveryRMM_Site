@@ -15,6 +15,7 @@ import { Icon,
   Input,
   Loading,
   Modal,
+PageHeader,
 } from "@/components/ui";
 import { ReportTemplateHistoryPanel } from "@/components/reports/ReportTemplateHistoryPanel";
 import type { ReportTemplate } from "@/api/types";
@@ -477,12 +478,7 @@ export default function ReportTemplateList() {
   return (
     <div ref={pageRef} className="relative space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Central de Relatórios</h1>
-          <p className="text-sm text-muted">
-            Gere relatórios diretamente da lista de templates. Dataset inicial fica no fluxo de Novo Template.
-          </p>
-        </div>
+        <PageHeader title="Central de Relatórios" description="Gere relatórios diretamente da lista de templates. Dataset inicial fica no fluxo de Novo Template." />
         <div className="flex flex-wrap items-center gap-3 justify-end">
           <Button
             onClick={() =>

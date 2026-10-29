@@ -21,6 +21,7 @@ import { Icon,
   Loading,
   Modal,
   Select,
+PageHeader,
 } from "@/components/ui";
 import {
   useAddSlaCalendarHoliday,
@@ -951,12 +952,7 @@ export default function TicketSlaPage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">SLA, calendários e escalonamento</h1>
-          <p className="text-sm text-muted">
-            Visualize rapidamente calendários e regras, e abra os detalhes somente quando precisar.
-          </p>
-        </div>
+        <PageHeader title="SLA, calendários e escalonamento" description="Visualize rapidamente calendários e regras, e abra os detalhes somente quando precisar." />
         <div className="flex flex-wrap gap-2">
           <Button variant="secondary" onClick={() => setIsHelpModalOpen(true)}>
             <Icon name="schedule" className="h-4 w-4" />

@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
-import { Icon, Button, Card, CardHeader, ErrorDisplay, Loading, Select } from "@/components/ui";
+import { Icon, Button, Card, CardHeader, ErrorDisplay, Loading, Select,
+PageHeader,
+} from "@/components/ui";
 import { useAllSites, useClients, useIamGroups, useIamUsers, useSites } from "@/hooks";
 import {
   remoteConsentApi,
@@ -192,12 +194,7 @@ export default function RemoteConsentSettings() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Autorização de Acesso Remoto</h1>
-        <p className="text-sm text-muted">
-          Política efetiva: Servidor → Cliente → Site → Grupos → Usuário. Aplica-se somente a sessões de área de trabalho.
-        </p>
-      </div>
+      <PageHeader title="Autorização de Acesso Remoto" description="Política efetiva: Servidor → Cliente → Site → Grupos → Usuário. Aplica-se somente a sessões de área de trabalho." />
 
       <Card>
         <CardHeader

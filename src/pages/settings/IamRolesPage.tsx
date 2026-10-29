@@ -13,6 +13,8 @@ import { Icon,
   Modal,
   Select,
   type Column,
+
+PageHeader,
 } from "@/components/ui";
 import {
   type CreateRoleRequest,
@@ -217,12 +219,7 @@ export default function IamRolesPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Roles e Permissões</h1>
-        <p className="text-sm text-muted">
-          Gerencie roles customizadas e atribua permissões do catálogo disponível na API.
-        </p>
-      </div>
+      <PageHeader title="Roles e Permissões" description="Gerencie roles customizadas e atribua permissões do catálogo disponível na API." />
 
       <Card>
         <CardHeader

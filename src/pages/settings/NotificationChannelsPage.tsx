@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Icon, Badge, Button, Card, CardHeader, ConfirmDialog, ErrorDisplay, Input, Loading, Modal, Select, TextArea } from '@/components/ui';
+import { Icon, Badge, Button, Card, CardHeader, ConfirmDialog, ErrorDisplay, Input, Loading, Modal, Select, TextArea, PageHeader } from '@/components/ui';
 import {
   useNotificationChannels, useCreateNotificationChannel, useUpdateNotificationChannel, useDeleteNotificationChannel,
 } from '@/hooks/useSupportProductivity';
@@ -46,13 +46,12 @@ export default function NotificationChannelsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Notificações multicanal</h1>
-          <p className="text-sm text-muted">Envie eventos de chamados para webhooks e e-mail, além do in-app.</p>
-        </div>
+      <PageHeader
+        title="Notificações multicanal"
+        description="Envie eventos de chamados para webhooks e e-mail, além do in-app."
+      >
         <Button size="sm" onClick={openCreate}><Icon name="add" className="h-4 w-4" /> Novo canal</Button>
-      </div>
+      </PageHeader>
 
       <Card>
         <CardHeader title="Canais" subtitle={`${channels.data?.length ?? 0} canal(is)`} />

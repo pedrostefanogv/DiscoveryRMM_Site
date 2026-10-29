@@ -10,6 +10,7 @@ import { Icon,
   Loading,
   Pagination,
   Select,
+PageHeader,
 } from '@/components/ui';
 import type { Column } from '@/components/ui';
 import type { ArticleStatus, ArticleListPage, KnowledgeArticle, KnowledgeSearchMode, PublishArticleRequest } from '@/api';
@@ -492,10 +493,7 @@ export default function KnowledgeList() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Base de Conhecimento</h1>
-          <p className="text-sm text-muted">Busque artigos rapidamente e abra filtros avançados só quando precisar.</p>
-        </div>
+        <PageHeader title="Base de Conhecimento" description="Busque artigos rapidamente e abra filtros avançados só quando precisar." />
         {canCreateArticle && (
           <Button onClick={() => navigate('/knowledge/new')}>
             <Icon name="add" className="h-4 w-4" /> Novo Artigo

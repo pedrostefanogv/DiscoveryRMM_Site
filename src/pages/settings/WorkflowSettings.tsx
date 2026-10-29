@@ -5,7 +5,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { useWorkflowStates, useWorkflowTransitions, useCreateWorkflowState, useUpdateWorkflowState, useDeleteWorkflowState, useCreateWorkflowTransition, useDeleteWorkflowTransition } from '@/hooks/useWorkflow';
 import { useClients } from '@/hooks/useClients';
 import { useTicketKpi } from '@/hooks/useTicketKpi';
-import { Icon, Card, CardHeader, Badge, Button, Modal, Input, Select, Loading, ErrorDisplay } from '@/components/ui';
+import {  Icon, Card, CardHeader, Badge, Button, Modal, Input, Select, Loading, ErrorDisplay, PageHeader } from '@/components/ui';
 import { TicketStateBadge, stateColorVars } from '@/components/tickets/TicketStateBadge';
 import type { WorkflowState } from '@/api';
 import { buildStateTicketCounts, buildWorkflowReorder, sortStatesByOrder } from './workflowUtils';
@@ -77,10 +77,7 @@ export default function WorkflowSettings() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Workflow</h1>
-        <p className="text-sm text-muted">Gerencie estados e transições de chamados</p>
-      </div>
+      <PageHeader title="Workflow" description="Gerencie estados e transições de chamados" />
 
       <div className="max-w-md">
         <Select

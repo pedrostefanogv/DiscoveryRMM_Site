@@ -1,5 +1,7 @@
 import { useMemo, useState } from "react";
-import { Icon, Badge, Button, Card, CardHeader, ErrorDisplay, Loading, Select } from "@/components/ui";
+import { Icon, Badge, Button, Card, CardHeader, ErrorDisplay, Loading, Select,
+PageHeader,
+} from "@/components/ui";
 import { statusSurface, toApiFieldName } from "@/components/configuration";
 import { useClients } from "@/hooks/useClients";
 import { useSites } from "@/hooks/useSites";
@@ -92,12 +94,7 @@ export default function EffectiveConfigurationPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Configuração Efetiva</h1>
-        <p className="text-sm text-muted">
-          Simulador de herança Server → Client → Site: mostra o valor efetivo e a origem de cada campo.
-        </p>
-      </div>
+      <PageHeader title="Configuração Efetiva" description="Simulador de herança Server → Client → Site: mostra o valor efetivo e a origem de cada campo." />
 
       <Card>
         <CardHeader

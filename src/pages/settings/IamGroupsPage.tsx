@@ -13,6 +13,8 @@ import { Icon,
   Modal,
   Select,
   type Column,
+
+PageHeader,
 } from "@/components/ui";
 import {
   type AssignGroupRoleRequest,
@@ -152,12 +154,7 @@ export default function IamGroupsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Grupos de Usuários</h1>
-        <p className="text-sm text-muted">
-          Organize usuários por grupo e vincule roles por escopo para controlar acesso.
-        </p>
-      </div>
+      <PageHeader title="Grupos de Usuários" description="Organize usuários por grupo e vincule roles por escopo para controlar acesso." />
 
       <Card>
         <CardHeader

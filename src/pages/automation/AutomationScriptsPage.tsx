@@ -15,6 +15,7 @@ import { Icon,
   Modal,
   Pagination,
   Select,
+PageHeader,
 } from "@/components/ui";
 import { type AutomationScriptSummary } from "@/api";
 import { AutomationScriptAuditTrail } from "./AutomationScriptAuditTrail";
@@ -208,13 +209,7 @@ export default function AutomationScriptsPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Scripts de Automação</h1>
-          <p className="text-sm text-muted">
-            Catálogo de scripts reutilizáveis. Clique em um item para consultar; clique com o botão
-            direito para ver as ações.
-          </p>
-        </div>
+        <PageHeader title="Scripts de Automação" description="Catálogo de scripts reutilizáveis. Clique em um item para consultar; clique com o botão direito para ver as ações." />
         <Button onClick={() => navigate("/automation/scripts/new")}>Novo script</Button>
       </div>
 

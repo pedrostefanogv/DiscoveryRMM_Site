@@ -14,6 +14,7 @@ import { Icon,
   Loading,
   Select,
   StatCard,
+PageHeader,
 } from "@/components/ui";
 import {
   ApiError,
@@ -735,12 +736,7 @@ export default function AutomationOperationsPage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Operações de Automação</h1>
-          <p className="text-sm text-muted">
-            Execute tarefas/scripts por agent e acompanhe o histórico.
-          </p>
-        </div>
+        <PageHeader title="Operações de Automação" description="Execute tarefas/scripts por agent e acompanhe o histórico." />
         {agentId && (
           <Link
             to={`/agents/${agentId}`}

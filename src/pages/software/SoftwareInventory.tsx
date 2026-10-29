@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import { Icon, Card, CardHeader, DataTable, ErrorDisplay, Input, Loading, Pagination, Select, StatCard, Button, Modal, Badge, type Column } from "@/components/ui";
+import { Icon, Card, CardHeader, DataTable, ErrorDisplay, Input, Loading, Pagination, Select, StatCard, Button, Modal, Badge, type Column,
+PageHeader,
+} from "@/components/ui";
 import { useClients } from "@/hooks/useClients";
 import { useSites } from "@/hooks/useSites";
 import { useSoftwareInventoryList, useSoftwareInventorySnapshot, useSoftwareInstallations, type SoftwareInventoryScope } from "@/hooks/useSoftwareInventory";
@@ -201,10 +203,7 @@ export default function SoftwareInventory() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Inventário de Softwares</h1>
-        <p className="text-sm text-muted">Consulta global, por cliente e por site</p>
-      </div>
+      <PageHeader title="Inventário de Softwares" description="Consulta global, por cliente e por site" />
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard icon="web_asset" label="Instalados" value={totalInstalled} tone="primary" />

@@ -1,5 +1,7 @@
 import { Link } from "react-router-dom";
-import { Icon, Card } from "@/components/ui";
+import { Icon, Card,
+PageHeader,
+} from "@/components/ui";
 
 interface SettingsCard {
   title: string;
@@ -128,12 +130,7 @@ const groups: SettingsGroup[] = [
 export default function ConfigurationSettings() {
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Configurações</h1>
-        <p className="text-sm text-muted">
-          Gerencie Server, Client e Site com herança Server → Client → Site.
-        </p>
-      </div>
+      <PageHeader title="Configurações" description="Gerencie Server, Client e Site com herança Server → Client → Site." />
 
       {groups.map((group) => (
         <section key={group.title} className="space-y-3">

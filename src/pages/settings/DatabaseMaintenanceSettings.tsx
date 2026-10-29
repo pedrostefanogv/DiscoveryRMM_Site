@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast";
-import { Icon, Badge, Button, Card, CardHeader, ConfirmDialog, Select } from "@/components/ui";
+import { Icon, Badge, Button, Card, CardHeader, ConfirmDialog, Select,
+PageHeader,
+} from "@/components/ui";
 import {
   useDatabaseHealth,
   useDatabaseMaintenanceRuns,
@@ -125,14 +127,7 @@ export default function DatabaseMaintenanceSettings() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Manutenção do Banco de Dados</h1>
-        <p className="text-sm text-muted">
-          Detecta e corrige inconsistências de dados que impedem a operação normal — por
-          exemplo, chamados sem estado de workflow, que não podem ser fechados — e mostra a
-          saúde física do PostgreSQL (índices inválidos, bloat, estatísticas e wraparound).
-        </p>
-      </div>
+      <PageHeader title="Manutenção do Banco de Dados" description="Detecta e corrige inconsistências de dados que impedem a operação normal — por exemplo, chamados sem estado de workflow, que não podem ser fechados — e mostra a saúde física do PostgreSQL (índices inválidos, bloat, estatísticas e wraparound)." />
 
       <Card>
         <CardHeader

@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
-import { Icon, Button, Card, CardHeader, ErrorDisplay, Input, Loading } from "@/components/ui";
+import { Icon, Button, Card, CardHeader, ErrorDisplay, Input, Loading,
+PageHeader,
+} from "@/components/ui";
 import { ApiError } from "@/api";
 import { statusSurface } from "@/components/configuration";
 import { usePatchServerConfig, useServerConfig } from "@/hooks/useConfigurationApi";
@@ -111,12 +113,7 @@ export default function BrandingSettings() {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Branding</h1>
-          <p className="text-sm text-muted">
-            Identidade visual global. É herdada por clientes/sites e enviada aos agentes.
-          </p>
-        </div>
+        <PageHeader title="Branding" description="Identidade visual global. É herdada por clientes/sites e enviada aos agentes." />
         <div className="flex items-center gap-2">
           <span
             className={`rounded-full border px-3 py-1 text-xs ${

@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { Icon, Button, Card, ConfirmDialog, ErrorDisplay, Input, Loading, Modal, Select, TextArea } from '@/components/ui';
+import { Icon, Button, Card, ConfirmDialog, ErrorDisplay, Input, Loading, Modal, Select, TextArea,
+PageHeader,
+} from '@/components/ui';
 import {
   ASSET_MULTIPART_MIN_BYTES,
   appStoreApi,
@@ -1243,19 +1245,12 @@ export default function CustomPackageEditorPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">
-            {isEditing ? 'Editar pacote custom' : 'Novo modelo custom'}
-          </h1>
-          <p className="mt-1 text-sm text-muted">
-            Cadastro manual de um instalador próprio, com script de instalação e detecção para o agent.
-          </p>
-        </div>
-        <Button variant="ghost" onClick={handleCancel} disabled={submitting}>
-          <Icon name="arrow_back" className="h-4 w-4" /> Voltar para a loja
-        </Button>
-      </div>
+      <PageHeader
+        title={isEditing ? 'Editar pacote custom' : 'Novo modelo custom'}
+        description="Cadastro manual de um instalador próprio, com script de instalação e detecção para o agent."
+        onBack={handleCancel}
+        backLabel="Voltar para a loja"
+      />
 
       {/* Cadastro: identificação + ícone/capa + descrição */}
       <Card>
