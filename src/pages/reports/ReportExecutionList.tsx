@@ -2,7 +2,9 @@ import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 
 import { useReportExecutions, useReportDownload, useReportTemplates } from "@/hooks";
-import { Icon, Button, Card, DataTable, Badge, Loading } from "@/components/ui";
+import { Icon, Button, Card, DataTable, Badge, Loading,
+PageHeader,
+} from "@/components/ui";
 import type { ReportExecution } from "@/api/types";
 import type { Column } from "@/components/ui";
 import { ReportExecutionStatus, ReportFormat } from "@/api/types";
@@ -280,11 +282,7 @@ export default function ReportExecutionList() {
   if (executions.isError) {
     return (
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold text-foreground">
-            Histórico de Execuções
-          </h1>
-        </div>
+        <PageHeader title="Histórico de Execuções" />
         <Card>
           <div className="rounded-lg bg-red-500/10 border border-red-500/20 p-4">
             <p className="text-sm text-danger">
@@ -299,11 +297,7 @@ export default function ReportExecutionList() {
   if (!executions.data || executions.data.length === 0) {
     return (
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold text-foreground">
-            Histórico de Execuções
-          </h1>
-        </div>
+        <PageHeader title="Histórico de Execuções" />
         <Card>
           <p className="text-center text-muted">
             Nenhuma execução de relatório encontrada.{!clientId && " Selecione um cliente para ver o histórico."}
@@ -315,15 +309,10 @@ export default function ReportExecutionList() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">
-            Histórico de Execuções
-          </h1>
-          <p className="text-sm text-muted">
-            {executions.data?.length ?? 0} execuções recentes
-          </p>
-        </div>
+      <PageHeader
+        title="Histórico de Execuções"
+        description={`${executions.data?.length ?? 0} execuções recentes`}
+      >
         <div className="flex items-center gap-3">
           <select
             value={limit}
@@ -336,7 +325,7 @@ export default function ReportExecutionList() {
             <option value={100}>100 itens</option>
           </select>
         </div>
-      </div>
+      </PageHeader>
 
       <Card padding={false}>
         <DataTable

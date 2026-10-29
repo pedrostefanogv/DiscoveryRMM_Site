@@ -1,6 +1,6 @@
 import type { Dispatch, SetStateAction } from "react";
 
-import { Icon, Button, Card, Input, TextArea } from "@/components/ui";
+import { Icon, Button, Card, Input, TextArea, PageHeader } from "@/components/ui";
 import { ReportTemplateHistoryPanel } from "@/components/reports/ReportTemplateHistoryPanel";
 import type { PreviewMode, ReportAutocompleteItem, ReportDatasetTypeValue, ResponseDisposition, ScopeTypeString } from "@/api/types";
 import { ALIGN_OPTIONS, DATASET_SECTION_SOURCES } from "./data";
@@ -37,17 +37,12 @@ type HeaderProps = {
 
 export function TemplateFormHeader({ isEdit, onBack }: HeaderProps) {
   return (
-    <div className="flex items-center justify-between gap-3">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">{isEdit ? "Editar Template" : "Novo Template"}</h1>
-        <p className="text-sm text-muted">
-          Builder dinamico de relatorios com preview em HTML e documento.
-        </p>
-      </div>
-      <Button variant="ghost" onClick={onBack}>
-        <Icon name="close" className="h-4 w-4" /> Voltar
-      </Button>
-    </div>
+    <PageHeader
+      title={isEdit ? "Editar Template" : "Novo Template"}
+      description="Builder dinâmico de relatórios com preview em HTML e documento."
+      onBack={onBack}
+      backLabel="Voltar"
+    />
   );
 }
 

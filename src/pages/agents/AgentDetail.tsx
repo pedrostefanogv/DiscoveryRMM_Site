@@ -20,7 +20,9 @@ import {
 } from './agentDetailUtils';
 import { useTickets } from '@/hooks/useTickets';
 import { useLogs } from '@/hooks/useLogs';
-import { Icon, Button, Card, CardHeader, Badge, Loading, ErrorDisplay, Input, ConfirmDialog, Select, DataTable, Modal, Pagination, StatCard, AgentHeartbeatCard, Tooltip, ContextMenu, type ContextMenuItem, type Column } from '@/components/ui';
+import { Icon, Button, Card, CardHeader, Badge, Loading, ErrorDisplay, Input, ConfirmDialog, Select, DataTable, Modal, Pagination, StatCard, AgentHeartbeatCard, Tooltip, ContextMenu, type ContextMenuItem, type Column,
+PageHeader,
+} from '@/components/ui';
 import { ensureArray } from '@/utils/ensureArray';
 import PowerActionModal from '@/components/agents/PowerActionModal';
 import AgentNotificationModal, { type AgentNotificationPayload } from '@/components/agents/AgentNotificationModal';
@@ -1414,14 +1416,11 @@ export default function AgentDetail() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center gap-4">
-        <button onClick={handleGoBack} aria-label="Voltar" className="rounded-lg p-2 text-muted hover:bg-surface-light hover:text-foreground">
-          <Icon name="arrow_back" className="h-5 w-5" />
-        </button>
-        <div className="flex-1">
-          <h1 className="text-2xl font-bold text-foreground">{a.displayName ?? a.hostname}</h1>
-          <p className="text-sm text-muted">{a.hostname} — {a.operatingSystem} {a.osVersion}</p>
-        </div>
+      <PageHeader
+        title={a.displayName ?? a.hostname}
+        description={`${a.hostname} — ${a.operatingSystem ?? ''} ${a.osVersion ?? ''}`.trim()}
+        onBack={handleGoBack}
+      >
         <Badge color={isOnlineNow ? 'success' : 'slate'}>
           <span className="flex items-center gap-1">
             {isOnlineNow ? <Icon name="wifi" className="h-3 w-3" /> : <Icon name="wifi_off" className="h-3 w-3" />}
@@ -1616,7 +1615,7 @@ export default function AgentDetail() {
             </div>
           )}
         </div>
-      </div>
+      </PageHeader>
 
       {/* Live Heartbeat Metrics */}
       <AgentHeartbeatCard metrics={aWithHeartbeat.heartbeatMetrics} showEmpty />

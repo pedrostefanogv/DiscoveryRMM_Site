@@ -3,7 +3,8 @@ import { Icon } from "@/components/ui";
 
 interface PageHeaderProps {
   title: string;
-  description?: string;
+  /** Descrição curta. Aceita nós para casos com estado dinâmico (ex.: "atualizando…"). */
+  description?: ReactNode;
   children?: ReactNode;
   /** Quando informado, renderiza um botão de voltar acessível antes do título. */
   onBack?: () => void;

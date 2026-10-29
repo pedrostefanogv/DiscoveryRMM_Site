@@ -10,6 +10,7 @@ import { Icon,
   Loading,
   MarkdownEditor,
   Select,
+PageHeader,
 } from '@/components/ui';
 import { useArticleImages, useArticlePages, useClients, useCreateKnowledgeArticle, useCreateArticlePage, useDeleteArticleImage, useDepartments, useKnowledgeArticle, useKnowledgeArticleVersions, usePublishKnowledgeArticle, useSites, useUpdateArticlePage, useUpdateKnowledgeArticle, useUploadArticleImage } from '@/hooks';
 import {
@@ -541,22 +542,13 @@ export default function KnowledgeEditor() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <button
-            type="button"
-            onClick={() => navigate('/knowledge')}
-            className="mb-2 inline-flex items-center gap-2 text-sm text-muted transition-colors hover:text-foreground"
-          >
-            <Icon name="arrow_back" className="h-4 w-4" /> Voltar
-          </button>
-          <h1 className="text-2xl font-bold text-foreground">
-            {isEdit ? 'Editar artigo' : 'Novo artigo'}
-          </h1>
-          <p className="text-sm text-muted">Conteúdo em Markdown com preview em tempo real.</p>
-        </div>
+      <PageHeader
+        title={isEdit ? 'Editar artigo' : 'Novo artigo'}
+        description="Conteúdo em Markdown com preview em tempo real."
+        onBack={() => navigate('/knowledge')}
+      >
         {isEdit && detailQuery.data && (
-          <div className="flex items-center gap-3">
+          <>
             <Badge color={statusColor(detailQuery.data.status)}>
               {statusLabel(detailQuery.data.status)}
             </Badge>
@@ -565,9 +557,9 @@ export default function KnowledgeEditor() {
                 v{detailQuery.data.currentVersionNumber}
               </span>
             )}
-          </div>
+          </>
         )}
-      </div>
+      </PageHeader>
 
       <div className="grid gap-6">
         <Card>

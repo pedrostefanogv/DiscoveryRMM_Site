@@ -7,7 +7,9 @@ import { useDashboardRealtime } from '@/hooks/useDashboardRealtime';
 import { P2PMetricsCard } from '@/components/agents/P2PMetricsCard';
 import { ObjectStorageCard } from '@/components/platform/ObjectStorageCard';
 import { AgentUpdatesInventoryCard } from '@/components/dashboard/AgentUpdatesInventoryCard';
-import { Icon, type MaterialSymbolName, StatCard, Card, CardHeader, Badge, Button, SkeletonDashboard, ErrorDisplay } from '@/components/ui';
+import { Icon, type MaterialSymbolName, StatCard, Card, CardHeader, Badge, Button, SkeletonDashboard, ErrorDisplay,
+PageHeader,
+} from '@/components/ui';
 import { getRealtimeStats } from '@/api';
 import { useSoftwareInventorySnapshot } from '@/hooks/useSoftwareInventory';
 import { usePatchSnapshot } from '@/hooks/usePatches';
@@ -236,11 +238,10 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
-      {/* Header + Window Selector */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
-          <p className="text-sm text-muted">
+      <PageHeader
+        title="Dashboard"
+        description={
+          <>
             Visão geral do ambiente
             {ds?.generatedAtUtc && (
               <span
@@ -255,24 +256,25 @@ export default function Dashboard() {
               </span>
             )}
             {isAnyFetching && <span className="ml-2 text-primary">· atualizando…</span>}
-          </p>
-        </div>
+          </>
+        }
+      >
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1 rounded-lg border border-border bg-surface-light p-1">
             {WINDOWS.map(w => (
-            <button
-              key={w.value}
-              type="button"
-              aria-pressed={range === w.value}
-              onClick={() => setRange(w.value)}
-              className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-                range === w.value
-                  ? 'bg-primary/20 text-primary'
-                  : 'text-muted hover:text-foreground'
-              }`}
-            >
-              {w.label}
-            </button>
+              <button
+                key={w.value}
+                type="button"
+                aria-pressed={range === w.value}
+                onClick={() => setRange(w.value)}
+                className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                  range === w.value
+                    ? 'bg-primary/20 text-primary'
+                    : 'text-muted hover:text-foreground'
+                }`}
+              >
+                {w.label}
+              </button>
             ))}
           </div>
           <Button
@@ -286,7 +288,7 @@ export default function Dashboard() {
             <Icon name="refresh" className="h-4 w-4" />
           </Button>
         </div>
-      </div>
+      </PageHeader>
 
       {/* Alertas operacionais */}
       {alerts.length > 0 ? (
