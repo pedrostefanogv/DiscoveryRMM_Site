@@ -1419,7 +1419,7 @@ export default function AgentDetail() {
       {/* Header */}
       <PageHeader
         title={a.displayName ?? a.hostname}
-        description={`${a.hostname} — ${a.operatingSystem ?? ''} ${a.osVersion ?? ''}`.trim()}
+        description={[a.hostname, [a.operatingSystem, a.osVersion].filter(Boolean).join(' ')].filter(Boolean).join(' — ')}
         onBack={handleGoBack}
       >
         <Badge color={isOnlineNow ? 'success' : 'slate'}>
@@ -2574,6 +2574,7 @@ export default function AgentDetail() {
                           }}
                           totalItems={portsTotalCount}
                           pageSize={Number(listeningPortsLimit)}
+                          itemLabel={`${portsTotalCount} no total`}
                           showFirstLast={false}
                         />
                       )}
@@ -2655,6 +2656,7 @@ export default function AgentDetail() {
                           }}
                           totalItems={socketsTotalCount}
                           pageSize={Number(openSocketsLimit)}
+                          itemLabel={`${socketsTotalCount} no total`}
                           showFirstLast={false}
                         />
                       )}

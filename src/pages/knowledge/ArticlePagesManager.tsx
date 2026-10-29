@@ -77,7 +77,17 @@ export default function ArticlePagesManager({
               : 'text-foreground hover:bg-surface-hover'
           }`}
           style={{ paddingLeft: `${8 + depth * 16}px` }}
+          role="treeitem"
+          aria-selected={isActive}
+          aria-expanded={hasChildren ? !isCollapsed : undefined}
+          tabIndex={isActive ? 0 : -1}
           onClick={() => onSelectPage(node.id)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault();
+              onSelectPage(node.id);
+            }
+          }}
         >
           {hasChildren ? (
             <button
@@ -143,7 +153,7 @@ export default function ArticlePagesManager({
       ) : pagesQuery.isError ? (
         <p className="text-sm text-muted">Falha ao carregar páginas.</p>
       ) : (
-        <div className="space-y-0.5">
+        <div className="space-y-0.5" role="tree" aria-label="Páginas do artigo">
           {/* Home (artigo principal) */}
           <div
             className={`group flex cursor-pointer items-center gap-1.5 rounded-md px-2 py-1.5 text-sm transition-colors ${
@@ -152,7 +162,16 @@ export default function ArticlePagesManager({
                 : 'text-foreground hover:bg-surface-hover'
             }`}
             style={{ paddingLeft: '8px' }}
+            role="treeitem"
+            aria-selected={homeActive}
+            tabIndex={homeActive ? 0 : -1}
             onClick={onSelectHome}
+            onKeyDown={(event: React.KeyboardEvent<HTMLDivElement>) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                onSelectHome?.();
+              }
+            }}
           >
             <span className="w-4 shrink-0" />
             <Icon name="home" className="h-4 w-4 shrink-0 text-primary" />

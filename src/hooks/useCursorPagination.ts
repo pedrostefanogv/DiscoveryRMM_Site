@@ -38,14 +38,20 @@ export interface CursorPaginationState {
  * const list = useSomeList({ cursor: pag.cursor, limit: pag.limit });
  *
  * const canNext = Boolean(list.data?.hasMore && list.data?.nextCursor);
- * const canPrev = pag.page > 1;
  *
- * <button onClick={() => pag.goToNext(list.data?.nextCursor)} disabled={!canNext}>
- *   Próxima
- * </button>
- * <button onClick={pag.goToPrev} disabled={!canPrev}>
- *   Anterior
- * </button>
+ * // Use sempre o componente compartilhado (mesmo visual em todo o app).
+ * <Pagination
+ *   page={pag.page}
+ *   totalPages={1}
+ *   onPageChange={() => {}}
+ *   cursor={{
+ *     hasPrev: pag.page > 1,
+ *     hasNext: canNext,
+ *     onPrev: pag.goToPrev,
+ *     onNext: () => pag.goToNext(list.data?.nextCursor),
+ *     loading: list.isFetching,
+ *   }}
+ * />
  * ```
  */
 export function useCursorPagination(

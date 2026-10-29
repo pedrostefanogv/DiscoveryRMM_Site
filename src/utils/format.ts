@@ -19,7 +19,7 @@ export function formatDateBrazil(
   if (!value) return "-";
   const date = typeof value === "string" ? new Date(value) : value;
   if (isNaN(date.getTime())) return "-";
-  return date.toLocaleDateString("pt-BR", DATE_FORMAT);
+  return date.toLocaleString("pt-BR", DATE_FORMAT);
 }
 
 /**

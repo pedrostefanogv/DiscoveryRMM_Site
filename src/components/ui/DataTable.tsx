@@ -149,6 +149,13 @@ export function DataTable<T>({
 
   const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
   const safePage = Math.min(page, totalPages);
+
+  // Quando um filtro reduz a lista, a página corrente pode ficar fora do
+  // intervalo: normaliza o estado para não reabrir numa página vazia depois.
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
+
   const paginated = showPagination ? sorted.slice((safePage - 1) * pageSize, safePage * pageSize) : sorted;
 
   const clearHoverTimeout = () => {
@@ -318,6 +325,14 @@ export function DataTable<T>({
                       key={col.key}
                       style={col.width ? { width: col.width } : undefined}
                       aria-sort={active ? (sort?.direction === 'asc' ? 'ascending' : 'descending') : undefined}
+                      tabIndex={sortable ? 0 : undefined}
+                      onKeyDown={(event) => {
+                        if (!sortable) return;
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault();
+                          handleSort(col);
+                        }
+                      }}
                       className={`whitespace-nowrap px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted ${fixedLayout ? 'overflow-hidden' : ''} ${col.className ?? ''} ${sortable ? 'cursor-pointer select-none hover:text-foreground transition-colors' : ''}`}
                       onClick={() => sortable && handleSort(col)}
                     >

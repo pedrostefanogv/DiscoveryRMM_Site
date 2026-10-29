@@ -1000,7 +1000,7 @@ export default function TicketList() {
         </select>
       </label>
       <Pagination
-        className="flex-1 justify-end"
+        className="flex-1"
         page={page}
         totalPages={1}
         onPageChange={() => {}}

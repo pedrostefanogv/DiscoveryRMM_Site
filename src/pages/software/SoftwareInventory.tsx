@@ -98,9 +98,10 @@ export default function SoftwareInventory() {
   const canPrev = pag.page > 1 && !list.isFetching;
   const canNext = (list.data?.hasMore ?? Boolean(list.data?.nextCursor)) && !list.isFetching;
 
-  const paginationInfoText = hasActiveSearch
-    ? `Página ${currentPage} | ${items.length} item(ns) nesta página | filtro: "${searchApplied}"`
-    : `Página ${currentPage} de ~${estimatedTotalPages} | ${items.length} item(ns) nesta página`;
+  // O `Pagination` já mostra o número da página: aqui vai só o contexto da lista.
+  const paginationContext = hasActiveSearch
+    ? `${items.length} item(ns) nesta página | filtro: "${searchApplied}"`
+    : `${items.length} item(ns) | ~${estimatedTotalPages} pág.`;
 
   const scopeOptions = [
     { value: "global", label: "Global" },
@@ -261,7 +262,7 @@ export default function SoftwareInventory() {
               page={currentPage}
               totalPages={hasActiveSearch ? currentPage : estimatedTotalPages}
               onPageChange={() => {}}
-              itemLabel={paginationInfoText}
+              itemLabel={paginationContext}
               cursor={{
                 hasPrev: canPrev,
                 hasNext: canNext,
@@ -286,7 +287,7 @@ export default function SoftwareInventory() {
               page={currentPage}
               totalPages={hasActiveSearch ? currentPage : estimatedTotalPages}
               onPageChange={() => {}}
-              itemLabel={paginationInfoText}
+              itemLabel={paginationContext}
               cursor={{
                 hasPrev: canPrev,
                 hasNext: canNext,

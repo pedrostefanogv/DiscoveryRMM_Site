@@ -1,4 +1,4 @@
-import { Icon } from "@/components/ui";
+import { Icon } from "./Icon";
 
 /**
  * Componente compartilhado de paginação — o rodapé padrão usado pelo
@@ -73,12 +73,19 @@ export function Pagination(props: PaginationProps) {
     );
   }
 
-  const safePage = Math.min(Math.max(1, page), Math.max(1, totalPages));
-  const safeTotalPages = Math.max(1, totalPages);
+  // Saneamento: totalPages/page podem chegar como NaN/Infinity quando a API
+  // ainda não respondeu (ex.: totalCount indefinido). Sem isso o rodapé
+  // exibiria "Página NaN de NaN".
+  const rawTotalPages = Number.isFinite(totalPages) ? totalPages : 1;
+  const rawPage = Number.isFinite(page) ? page : 1;
+  const safeTotalPages = Math.max(1, rawTotalPages);
+  const safePage = Math.min(Math.max(1, rawPage), safeTotalPages);
 
-  const hasRange = typeof totalItems === 'number' && typeof pageSize === 'number';
+  const hasRange = typeof totalItems === 'number' && typeof pageSize === 'number' && pageSize > 0;
   const summary = hasRange
-    ? `Mostrando ${(safePage - 1) * pageSize! + 1}–${Math.min(safePage * pageSize!, totalItems!)} de ${totalItems!}`
+    ? totalItems! === 0
+      ? 'Nenhum item'
+      : `Mostrando ${(safePage - 1) * pageSize! + 1}–${Math.min(safePage * pageSize!, totalItems!)} de ${totalItems!}`
     : `Página ${safePage} de ${safeTotalPages}${itemLabel ? ` · ${itemLabel}` : ''}`;
 
   return (
