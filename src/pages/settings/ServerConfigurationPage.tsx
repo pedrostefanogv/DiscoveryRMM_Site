@@ -984,7 +984,7 @@ export default function ServerConfigurationPage() {
         </PageHeader>
 
         {/* Índice das seções: evita rolar 2 mil linhas para achar um bloco */}
-        <div className="sticky top-0 z-20 flex flex-wrap items-center gap-1.5 rounded-xl border border-border bg-background/85 px-2 py-1.5 backdrop-blur">
+        <div className="sticky top-16 z-10 flex flex-wrap items-center gap-1.5 rounded-xl border border-border bg-background/90 px-2 py-1.5 backdrop-blur">
           {sectionEntries.map((entry) => (
             <button
               key={entry.key}
@@ -1031,13 +1031,11 @@ export default function ServerConfigurationPage() {
               <p className="text-xs text-muted">Endpoint + bucket para anexos</p>
             </div>
             <div className="rounded-xl border border-border bg-surface-light p-3">
-              <p className="text-xs uppercase tracking-wide text-muted">Alterações pendentes</p>
-              <p className={`mt-1 text-lg font-semibold ${pendingKeys.size > 0 ? statusText.warning : statusText.neutral}`}>
-                {pendingKeys.size}
+              <p className="text-xs uppercase tracking-wide text-muted">Versão da configuração</p>
+              <p className="mt-1 text-lg font-semibold text-foreground">
+                {serverQuery.data?.version ?? "-"}
               </p>
-              <p className="text-xs text-muted">
-                Versão {serverQuery.data?.version ?? "-"} · Branding em /settings/branding
-              </p>
+              <p className="text-xs text-muted">Marca e cores ficam em Branding</p>
             </div>
           </div>
         </Card>
@@ -1045,7 +1043,7 @@ export default function ServerConfigurationPage() {
         <ConfigHealthCard config={serverQuery.data} />
 
         {/* Funcionalidades */}
-        <Card id="server-config-features" className="scroll-mt-24">
+        <Card id="server-config-features" className="scroll-mt-32">
           <CardHeader
             title="Funcionalidades do Sistema"
             subtitle="Ative ou desative módulos globalmente. Clique no card para alternar."
@@ -1059,7 +1057,7 @@ export default function ServerConfigurationPage() {
         </Card>
 
         {/* Política de loja */}
-        <Card id="server-config-policy" className="scroll-mt-24">
+        <Card id="server-config-policy" className="scroll-mt-32">
           <CardHeader
             title="Política da Loja de Aplicativos"
             subtitle="Define quais aplicativos podem ser instalados pelos agentes."
@@ -1078,7 +1076,7 @@ export default function ServerConfigurationPage() {
         </Card>
 
         {/* Autorização de acesso remoto (desktop) */}
-        <Card id="server-config-remoteAccess" className="scroll-mt-24">
+        <Card id="server-config-remoteAccess" className="scroll-mt-32">
           <CardHeader
             title="Autorização de Acesso Remoto"
             subtitle="Somente sessões de área de trabalho. Terminal, arquivos, proxy e processos não pedem autorização."
@@ -1115,7 +1113,7 @@ export default function ServerConfigurationPage() {
         </Card>
 
         {/* Agente */}
-        <Card id="server-config-agent" className="scroll-mt-24">
+        <Card id="server-config-agent" className="scroll-mt-32">
           <CardHeader
             title="Intervalos e Comportamento do Agente"
             subtitle="Frequência de heartbeat, detecção de offline e coleta de inventário."
@@ -1136,7 +1134,7 @@ export default function ServerConfigurationPage() {
         </Card>
 
         {/* Object Storage */}
-        <Card id="server-config-storage" className="scroll-mt-24">
+        <Card id="server-config-storage" className="scroll-mt-32">
           <CardHeader
             title="Armazenamento de Objetos (S3 / MinIO)"
             subtitle="Configuração do backend S3-compatível usado para arquivos de tickets e outros uploads."
@@ -1269,7 +1267,7 @@ export default function ServerConfigurationPage() {
         </Card>
 
         {/* NATS */}
-        <Card id="server-config-nats" className="scroll-mt-24">
+        <Card id="server-config-nats" className="scroll-mt-32">
           <CardHeader
             title="Servidor NATS"
             subtitle="Configuração exclusiva do servidor. Informe apenas host/IP; porta 4222 é fixa."
@@ -1344,7 +1342,7 @@ export default function ServerConfigurationPage() {
         </Card>
 
         {/* Anexos de Tickets */}
-        <div id="server-config-attachments" className="scroll-mt-24">
+        <div id="server-config-attachments" className="scroll-mt-32">
         <TicketAttachmentSettingsCard
           collapsed={collapsedSections.attachments}
           onToggleCollapse={() => toggleSection("attachments")}
@@ -1352,7 +1350,7 @@ export default function ServerConfigurationPage() {
         </div>
 
         {/* Configurações avançadas */}
-        <Card id="server-config-advanced" className="scroll-mt-24">
+        <Card id="server-config-advanced" className="scroll-mt-32">
           <CardHeader
             title="Configurações Avançadas"
             subtitle="IA, auto-update e governança de herança. Branding permanece em /settings/branding."
