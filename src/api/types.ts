@@ -4690,3 +4690,27 @@ export interface ValidateTransferResponse {
   previousClientName: string | null;
   targetClientName: string | null;
 }
+
+
+/** Entrada do catálogo curado de apps de terceiros (WU-21/D24). */
+export interface AppCatalogEntry {
+  id: string;
+  source: string;
+  packageId: string;
+  name: string;
+  publisher: string | null;
+  version: string;
+  installerUrl: string;
+  sha256: string;
+  installerType: string | null;
+  silentArgs: string | null;
+  productCode: string | null;
+  status: "pending" | "active" | "revoked" | string;
+  releaseDate: string | null;
+  notes: string | null;
+  curatedBy: string | null;
+  curatedAt: string;
+  revokedBy: string | null;
+  revokedAt: string | null;
+  updatedAt: string;
+}

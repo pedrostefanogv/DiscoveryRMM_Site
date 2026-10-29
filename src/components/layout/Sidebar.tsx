@@ -32,6 +32,7 @@ const patchesLinks = [
   { to: '/patches/pending', label: 'Pendências por agente' },
   { to: '/patches/approvals', label: 'Aprovações e auditoria' },
   { to: '/patches/policy', label: 'Política' },
+  { to: '/patches/app-catalog', label: 'Catálogo de apps' },
 ];
 
 const automationLinks = [

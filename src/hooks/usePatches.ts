@@ -3,6 +3,7 @@ import {
   patchesApi,
   patchActionsApi,
   patchPolicyApi,
+  appCatalogApi,
   type PatchInventoryParams,
 } from "@/api/patches";
 import type {
@@ -260,6 +261,39 @@ export function useInstallPatchScope() {
       confirm?: boolean;
       postAction?: "none" | "restart" | "shutdown";
     }) => patchActionsApi.install(body),
+    onSuccess: invalidate,
+  });
+}
+
+
+export function useAppCatalog(params: { source?: string; status?: string; search?: string } = {}) {
+  return useQuery({
+    queryKey: ["patches", "app-catalog", params],
+    queryFn: () => appCatalogApi.list(params),
+  });
+}
+
+export function useIngestWingetManifest() {
+  const invalidate = useInvalidatePatches();
+  return useMutation({
+    mutationFn: (manifest: string) => appCatalogApi.ingest(manifest),
+    onSuccess: invalidate,
+  });
+}
+
+export function useActivateCatalogEntry() {
+  const invalidate = useInvalidatePatches();
+  return useMutation({
+    mutationFn: (id: string) => appCatalogApi.activate(id),
+    onSuccess: invalidate,
+  });
+}
+
+export function useRevokeCatalogEntry() {
+  const invalidate = useInvalidatePatches();
+  return useMutation({
+    mutationFn: (input: { id: string; reason?: string }) =>
+      appCatalogApi.revoke(input.id, input.reason),
     onSuccess: invalidate,
   });
 }

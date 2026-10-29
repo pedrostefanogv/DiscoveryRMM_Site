@@ -1,6 +1,7 @@
 import { api } from "./client";
 import type {
   AgentWindowsUpdatePage,
+  AppCatalogEntry,
   AgentWindowsUpdateSnapshot,
   PatchApproval,
   PatchApprovalActionType,
@@ -300,4 +301,27 @@ export const agentPatchesApi = {
 
   rollbackOsPolicy: (agentId: string) =>
     api.post<PatchDispatchResult>(`${agentBase(agentId)}/os-policy/rollback`, {}),
+};
+
+
+export const appCatalogApi = {
+  list: (params: { source?: string; status?: string; search?: string; limit?: number } = {}) =>
+    api.get<AppCatalogEntry[]>(`${BASE}/app-catalog`, {
+      source: params.source,
+      status: params.status,
+      search: params.search,
+      limit: params.limit,
+    }),
+
+  /** Importa um manifesto .installer.yaml (winget-pkgs) como `pending`. */
+  ingest: (manifest: string) =>
+    api.post<AppCatalogEntry>(`${BASE}/app-catalog/ingest`, { manifest }),
+
+  /** Promove uma versão pendente a `active` (curadoria humana). */
+  activate: (id: string) =>
+    api.post<AppCatalogEntry>(`${BASE}/app-catalog/${id}/activate`, {}),
+
+  /** Revoga uma versão (CVE/regressão): sai da auto-aprovação na hora. */
+  revoke: (id: string, reason?: string) =>
+    api.post<AppCatalogEntry>(`${BASE}/app-catalog/${id}/revoke`, { reason }),
 };
