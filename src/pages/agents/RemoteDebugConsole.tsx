@@ -204,6 +204,11 @@ export default function RemoteDebugConsole() {
       : 0,
   );
   const [expired, setExpired] = useState(false);
+  // Popover "Detalhes da sessão": seq/subject saem do fluxo principal e só
+  // aparecem sob demanda (i, ícone de info).
+  const [sessionInfoOpen, setSessionInfoOpen] = useState(false);
+  const sessionInfoRef = useRef<HTMLDivElement | null>(null);
+
   const [copyState, setCopyState] = useState<"idle" | "ok" | "error">("idle");
   const [levelFilters, setLevelFilters] = useState<Record<RemoteDebugLogLevel, boolean>>({
     trace: true,
@@ -239,6 +244,24 @@ export default function RemoteDebugConsole() {
   useEffect(() => {
     autoScrollRef.current = autoScroll;
   }, [autoScroll]);
+  // Fecha o popover ao clicar fora ou com Escape.
+  useEffect(() => {
+    if (!sessionInfoOpen) return;
+    const handleClick = (event: MouseEvent) => {
+      if (sessionInfoRef.current && event.target instanceof Node && !sessionInfoRef.current.contains(event.target)) {
+        setSessionInfoOpen(false);
+      }
+    };
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setSessionInfoOpen(false);
+    };
+    document.addEventListener("mousedown", handleClick);
+    document.addEventListener("keydown", handleKey);
+    return () => {
+      document.removeEventListener("mousedown", handleClick);
+      document.removeEventListener("keydown", handleKey);
+    };
+  }, [sessionInfoOpen]);
 
   const cleanupRef = useRef<(() => void) | null>(null);
   // Limita a recuperação de auth: sem contador, um auth_error persistente
@@ -1243,13 +1266,48 @@ export default function RemoteDebugConsole() {
               </Button>
             </div>
 
-            {/* Metadados técnicos: discretos, só em telas largas */}
-            <span className="hidden items-center gap-2 text-[10px] text-muted tabular-nums lg:flex">
-              <span title={subject}>seq {lastSequence ?? "--"}</span>
-              <span className="max-w-[16rem] truncate" title={subject}>
-                {subject ? `…${subject.slice(-24)}` : "subject: —"}
-              </span>
-            </span>
+            {/* Detalhes técnicos sob demanda (popover) — seq/subject fora do fluxo */}
+            <div className="relative" ref={sessionInfoRef}>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setSessionInfoOpen((open) => !open)}
+                aria-expanded={sessionInfoOpen}
+                aria-haspopup="dialog"
+                aria-label="Detalhes da sessão"
+                title="Detalhes da sessão (seq, subject)"
+              >
+                <Icon name="info" className="h-4 w-4" aria-hidden="true" />
+              </Button>
+              {sessionInfoOpen && (
+                <div
+                  role="dialog"
+                  aria-label="Detalhes da sessão"
+                  className="absolute bottom-full right-0 z-30 mb-1 w-80 rounded-xl border border-border bg-surface p-3 text-[11px] shadow-xl"
+                >
+                  <p className="mb-1 font-medium text-foreground">Detalhes da sessão</p>
+                  <dl className="space-y-1 font-mono text-muted">
+                    <div className="flex gap-2">
+                      <dt className="shrink-0 text-muted-foreground">seq:</dt>
+                      <dd className="min-w-0 break-all tabular-nums">{lastSequence ?? "--"}</dd>
+                    </div>
+                    <div className="flex gap-2">
+                      <dt className="shrink-0 text-muted-foreground">subject:</dt>
+                      <dd className="min-w-0 break-all">{subject || "—"}</dd>
+                    </div>
+                  </dl>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void navigator.clipboard.writeText(`${lastSequence ?? ""} ${subject ?? ""}`);
+                    }}
+                    className="mt-2 text-[10px] text-primary underline-offset-2 hover:underline"
+                  >
+                    copiar subject
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         )}
 

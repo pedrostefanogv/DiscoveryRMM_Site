@@ -541,3 +541,59 @@ describe("RemoteDebugConsole", () => {
   });
 
 });
+
+describe("RemoteDebugConsole — detalhes da sessão", () => {
+  beforeEach(() => {
+    useAuthMock.mockReturnValue({ session: { accessToken: "api-token" } });
+    natsConnectMock.mockReset().mockResolvedValue(true);
+    natsSubscribeMock.mockReset().mockResolvedValue(true);
+    natsUnsubscribeMock.mockReset();
+    natsDiagnosticsMock.mockReset().mockReturnValue({ lastErrorType: null, lastErrorMessage: null, lastErrorAtUtc: null });
+    natsStateMock.mockReset().mockImplementation((listener: (state: string) => void) => {
+      listener("connected");
+      return () => {};
+    });
+    setPreSuppliedCredentialsMock.mockReset();
+    getNatsServiceMock.mockReset().mockReturnValue({
+      connect: natsConnectMock,
+      subscribe: natsSubscribeMock,
+      unsubscribe: natsUnsubscribeMock,
+      onConnectionStateChange: natsStateMock,
+      getConnectionDiagnostics: natsDiagnosticsMock,
+      setPreSuppliedCredentials: setPreSuppliedCredentialsMock,
+      publish: natsPublishMock,
+      onAuthError: natsOnAuthErrorMock,
+      forceReconnect: natsForceReconnectMock,
+    });
+    agentGetMock.mockReset().mockResolvedValue({ id: AGENT_ID, clientId: CLIENT_ID, siteId: SITE_ID, hostname: "AORUSAXV2", displayName: null });
+    clientGetMock.mockReset().mockResolvedValue({ id: CLIENT_ID, name: "TNG Placas" });
+    siteGetMock.mockReset().mockResolvedValue({ id: SITE_ID, name: "Matriz", clientId: CLIENT_ID });
+    startRemoteDebugMock.mockReset();
+    stopRemoteDebugMock.mockReset().mockResolvedValue(undefined);
+    getCredentialsMock.mockReset().mockResolvedValue({ jwt: "jwt-2", nkeySeed: "seed-2", expiresAtUtc: new Date(Date.now() + 3600_000).toISOString() });
+    natsPublishMock.mockReset().mockResolvedValue(undefined);
+    natsOnAuthErrorMock.mockReset().mockReturnValue(() => {});
+    natsForceReconnectMock.mockReset().mockResolvedValue(true);
+    renewRemoteDebugMock.mockReset().mockResolvedValue({ sessionId: "sess-1", expiresAtUtc: new Date(Date.now() + 1200_000).toISOString(), maxExpiresAtUtc: new Date(Date.now() + 3600_000).toISOString(), sessionActive: true });
+    setRemoteDebugLevelMock.mockReset().mockResolvedValue({ sessionId: "sess-1", logLevel: "warn", appliedAtUtc: new Date().toISOString() });
+  });
+
+  afterEach(() => vi.clearAllMocks());
+
+  it("popover abre com seq/subject e fecha com Escape", async () => {
+    renderConsole();
+    await waitFor(() => expect(natsSubscribeMock).toHaveBeenCalled());
+
+    const trigger = screen.getByRole("button", { name: "Detalhes da sessão" });
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+
+    fireEvent.click(trigger);
+    const dialog = screen.getByRole("dialog", { name: "Detalhes da sessão" });
+    expect(dialog).toBeTruthy();
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog", { name: "Detalhes da sessão" })).toBeNull();
+    });
+  });
+});
