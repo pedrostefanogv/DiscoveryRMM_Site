@@ -88,7 +88,7 @@ export function AgentCard({
       onContextMenu={onContextMenu ? (event) => onContextMenu(event, agent) : undefined}
       role={onOpen ? 'button' : undefined}
       tabIndex={onOpen ? 0 : undefined}
-      className="group relative flex flex-col gap-4 rounded-xl border border-border bg-surface p-5 text-left transition-all hover:border-primary/30 hover:bg-surface-light hover:shadow-lg"
+      className="group relative flex flex-col gap-4 rounded-xl border border-border bg-surface p-5 text-left transition-colors hover:border-primary/30 hover:bg-surface-light"
     >
       <div className="absolute right-4 top-4">
         <Badge color={online ? 'success' : 'slate'}>

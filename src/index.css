@@ -329,11 +329,17 @@ select optgroup {
   inherits: false;
 }
 
-/* Glassmorphism card hover */
+/* Card base (glassmorphism): sem reação ao hover por padrão — apenas
+   elementos interativos (clicáveis) devem dar feedback de hover.
+   Use .glass-card-interactive para opt-in do efeito de elevação. */
 .glass-card {
   transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
 }
-.glass-card:hover {
+
+.glass-card-interactive {
+  cursor: pointer;
+}
+.glass-card-interactive:hover {
   transform: translateY(-1px);
   box-shadow: 0 8px 30px rgb(2 6 23 / 0.4), inset 0 1px 0 rgb(255 255 255 / 0.06);
   border-color: rgb(255 255 255 / 0.12);
@@ -341,7 +347,7 @@ select optgroup {
 
 /* No tema claro a sombra/borda claras do hover davam a impressão de card
    "sumindo" (borda branca sobre fundo branco). */
-:root:not(.dark) .glass-card:hover {
+:root:not(.dark) .glass-card-interactive:hover {
   box-shadow: 0 8px 24px rgb(15 23 42 / 0.12), inset 0 1px 0 rgb(255 255 255 / 0.7);
   border-color: var(--color-border-strong);
 }
